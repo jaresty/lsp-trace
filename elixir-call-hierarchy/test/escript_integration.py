@@ -167,14 +167,15 @@ end
         (workspace / "deps" / "compile_fixture" / "mix.exs").write_text(
             """defmodule Mix.Tasks.Compile.MetadataOnly do
   use Mix.Task.Compiler
-  def run(args) do
+  def run(_args) do
     marker = Path.join(System.fetch_env!("MIX_BUILD_PATH"), "metadata-only-pass")
 
     if File.exists?(marker) do
-      Mix.Tasks.Compile.Elixir.run(["--force" | args])
+      File.write!(marker, "forced-but-incomplete")
+      {:noop, []}
     else
       File.mkdir_p!(Path.dirname(marker))
-      File.write!(marker, "incomplete")
+      File.write!(marker, "metadata-only")
       {:noop, []}
     end
   end

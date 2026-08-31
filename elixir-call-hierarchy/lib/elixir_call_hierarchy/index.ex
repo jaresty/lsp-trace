@@ -199,7 +199,11 @@ defmodule ElixirCallHierarchy.Index do
       force_compile_dependency(root, dependency, build_path, env)
 
       if dependency_beams(dependency, build_path) == [] do
-        raise "dependency #{dependency.name} has source modules but produced no BEAM files"
+        repair_dependency(dependency.name, dependency.path, build_path, env)
+      end
+
+      if dependency_beams(dependency, build_path) == [] do
+        raise "dependency #{dependency.name} has source modules but produced no BEAM files after forced compilation"
       end
     end)
   end
