@@ -1,0 +1,129 @@
+package traverse
+
+import (
+	"context"
+	"errors"
+	"sort"
+
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/lsp"
+)
+
+type Client interface {
+	PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error)
+	IncomingCalls(context.Context, lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error)
+}
+
+type Options struct {
+	MaxDepth int
+	MaxNodes int
+}
+type queued struct {
+	item  lsp.CallHierarchyItem
+	node  graph.Node
+	depth int
+}
+
+func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarchyParams, opts Options) graph.Result {
+	result := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: true}}
+	items, err := client.PrepareCallHierarchy(ctx, params)
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", Message: err.Error()})
+		result.Summary.Complete = false
+		return result
+	}
+	if len(items) == 0 {
+		result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.PrepareReturnedNoItem})
+		result.Canonicalize()
+		return result
+	}
+	seen := map[string]graph.Node{}
+	expanded := map[string]bool{}
+	queue := make([]queued, 0, len(items))
+	for _, item := range items {
+		n := node(item)
+		if _, ok := seen[n.ID]; !ok {
+			seen[n.ID] = n
+			queue = append(queue, queued{item: item, node: n})
+		}
+		result.Targets = append(result.Targets, n.ID)
+	}
+	for len(queue) > 0 {
+		sort.Slice(queue, func(i, j int) bool {
+			if queue[i].depth != queue[j].depth {
+				return queue[i].depth < queue[j].depth
+			}
+			return queue[i].node.ID < queue[j].node.ID
+		})
+		q := queue[0]
+		queue = queue[1:]
+		if expanded[q.node.ID] {
+			continue
+		}
+		if opts.MaxDepth > 0 && q.depth >= opts.MaxDepth {
+			result.Frontier = append(result.Frontier, graph.Boundary{NodeID: q.node.ID, Reason: graph.MaxDepth})
+			result.Summary.Complete = false
+			result.Summary.Truncated = true
+			continue
+		}
+		calls, wasNull, err := client.IncomingCalls(ctx, q.item)
+		expanded[q.node.ID] = true
+		if err != nil {
+			reason := graph.ServerError
+			if errors.Is(err, context.DeadlineExceeded) {
+				reason = graph.RequestTimeout
+			}
+			if errors.Is(err, context.Canceled) {
+				reason = graph.Cancelled
+			}
+			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: reason, Message: err.Error()})
+			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: err.Error()})
+			result.Summary.Complete = false
+			continue
+		}
+		if wasNull {
+			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.IncomingReturnedNull})
+			continue
+		}
+		if len(calls) == 0 {
+			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.NoIncomingCalls})
+			continue
+		}
+		for _, call := range calls {
+			caller := node(call.From)
+			if existing, ok := seen[caller.ID]; ok && existing.Item.Name != caller.Item.Name {
+				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.NodeIDCollision})
+				result.Summary.Complete = false
+				continue
+			}
+			_, known := seen[caller.ID]
+			if !known && opts.MaxNodes > 0 && len(seen) >= opts.MaxNodes {
+				result.Frontier = append(result.Frontier, graph.Boundary{NodeID: caller.ID, Reason: graph.MaxNodes})
+				result.Summary.Complete = false
+				result.Summary.Truncated = true
+				continue
+			}
+			if !known {
+				seen[caller.ID] = caller
+				queue = append(queue, queued{item: call.From, node: caller, depth: q.depth + 1})
+			}
+			ranges := make([]graph.Range, len(call.FromRanges))
+			for i, r := range call.FromRanges {
+				ranges[i] = rng(r)
+			}
+			result.Edges = graph.MergeEdge(result.Edges, graph.Edge{CallerNodeID: caller.ID, CalleeNodeID: q.node.ID, CallSites: ranges})
+		}
+	}
+	for _, n := range seen {
+		result.Nodes = append(result.Nodes, n)
+	}
+	result.Canonicalize()
+	return result
+}
+
+func node(i lsp.CallHierarchyItem) graph.Node {
+	return graph.NewNode(graph.Item{Name: i.Name, Kind: i.Kind, Detail: i.Detail, URI: i.URI, Range: rng(i.Range), SelectionRange: rng(i.SelectionRange), Data: i.Data})
+}
+func rng(r lsp.Range) graph.Range {
+	return graph.Range{Start: graph.Position{Line: r.Start.Line, Character: r.Start.Character}, End: graph.Position{Line: r.End.Line, Character: r.End.Character}}
+}
