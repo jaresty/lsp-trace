@@ -51,6 +51,7 @@ jobs:
       - run: mix test
       - run: MIX_ENV=prod mix deps.get --only prod
       - run: MIX_ENV=prod mix escript.build
+      - run: python3 test/escript_integration.py
 
   verify:
     strategy:
