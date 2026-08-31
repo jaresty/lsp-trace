@@ -43,6 +43,8 @@ Optional flags:
 - `--concurrency N`: request concurrency; the sequential MVP accepts only `1`.
 - `--log-level LEVEL`: human diagnostic level: `error`, `warn`, `info`, or `debug` (default `warn`).
 - `--trace-lsp PATH`: opt-in JSON Lines transcript of sent and received JSON-RPC messages with deterministic sequence numbers.
+- `--expand-dispatch-family`: use LSP Type Hierarchy to emit implementation-family relationships separately from call edges.
+- `--expand-topmost-siblings`: use hierarchical document symbols to emit top-level sibling candidates without call, visibility, or equivalence claims.
 - `--output PATH`: write JSON to a mode-`0600` file instead of stdout.
 - `--pretty`: indent JSON output; default is compact JSON.
 

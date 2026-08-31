@@ -113,20 +113,27 @@ type SiblingCandidate struct {
 	Candidate Node   `json:"candidate"`
 }
 
+type DispatchRelationship struct {
+	SeedLabel      string `json:"seed_label"`
+	Interface      Node   `json:"interface"`
+	Implementation Node   `json:"implementation"`
+}
+
 type Result struct {
-	SchemaVersion     string             `json:"schema_version"`
-	Invocation        Invocation         `json:"invocation"`
-	Capabilities      Capabilities       `json:"capabilities"`
-	Targets           []string           `json:"targets"`
-	Nodes             []Node             `json:"nodes"`
-	Edges             []Edge             `json:"edges"`
-	Terminals         []Boundary         `json:"terminals"`
-	Frontier          []Boundary         `json:"frontier"`
-	Diagnostics       []Diagnostic       `json:"diagnostics"`
-	Summary           Summary            `json:"summary"`
-	CapabilityQuality CapabilityQuality  `json:"capability_quality,omitempty"`
-	SiblingCandidates []SiblingCandidate `json:"sibling_candidates,omitempty"`
-	Seeds             []SeedResult       `json:"-"`
+	SchemaVersion         string                 `json:"schema_version"`
+	Invocation            Invocation             `json:"invocation"`
+	Capabilities          Capabilities           `json:"capabilities"`
+	Targets               []string               `json:"targets"`
+	Nodes                 []Node                 `json:"nodes"`
+	Edges                 []Edge                 `json:"edges"`
+	Terminals             []Boundary             `json:"terminals"`
+	Frontier              []Boundary             `json:"frontier"`
+	Diagnostics           []Diagnostic           `json:"diagnostics"`
+	Summary               Summary                `json:"summary"`
+	CapabilityQuality     CapabilityQuality      `json:"capability_quality,omitempty"`
+	SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
+	DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
+	Seeds                 []SeedResult           `json:"-"`
 }
 
 func (r Result) MarshalJSON() ([]byte, error) {
@@ -190,20 +197,21 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Truncated           bool   `json:"truncated"`
 	}
 	return json.Marshal(struct {
-		SchemaVersion     string             `json:"schema_version"`
-		Invocation        Invocation         `json:"invocation"`
-		Capabilities      Capabilities       `json:"capabilities"`
-		CapabilityQuality CapabilityQuality  `json:"capability_quality"`
-		Targets           []string           `json:"targets"`
-		Nodes             []Node             `json:"nodes"`
-		Edges             []Edge             `json:"edges"`
-		Terminals         []Boundary         `json:"terminals"`
-		Frontier          []Boundary         `json:"frontier"`
-		Diagnostics       []Diagnostic       `json:"diagnostics"`
-		SiblingCandidates []SiblingCandidate `json:"sibling_candidates,omitempty"`
-		Seeds             []SeedResult       `json:"seeds,omitempty"`
-		Summary           summaryV2          `json:"summary"`
-	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, r.SiblingCandidates, r.Seeds, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
+		SchemaVersion         string                 `json:"schema_version"`
+		Invocation            Invocation             `json:"invocation"`
+		Capabilities          Capabilities           `json:"capabilities"`
+		CapabilityQuality     CapabilityQuality      `json:"capability_quality"`
+		Targets               []string               `json:"targets"`
+		Nodes                 []Node                 `json:"nodes"`
+		Edges                 []Edge                 `json:"edges"`
+		Terminals             []Boundary             `json:"terminals"`
+		Frontier              []Boundary             `json:"frontier"`
+		Diagnostics           []Diagnostic           `json:"diagnostics"`
+		SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
+		DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
+		Seeds                 []SeedResult           `json:"seeds,omitempty"`
+		Summary               summaryV2              `json:"summary"`
+	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, r.SiblingCandidates, r.DispatchRelationships, r.Seeds, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
 }
 
 func (r *Result) Canonicalize() {
@@ -248,6 +256,26 @@ func (r *Result) Canonicalize() {
 		}
 		return a.Candidate.ID < b.Candidate.ID
 	})
+	sort.Slice(r.DispatchRelationships, func(i, j int) bool {
+		a, b := r.DispatchRelationships[i], r.DispatchRelationships[j]
+		if a.SeedLabel != b.SeedLabel {
+			return a.SeedLabel < b.SeedLabel
+		}
+		if a.Interface.ID != b.Interface.ID {
+			return a.Interface.ID < b.Interface.ID
+		}
+		return a.Implementation.ID < b.Implementation.ID
+	})
+	if len(r.DispatchRelationships) > 0 {
+		out := r.DispatchRelationships[:1]
+		for _, relationship := range r.DispatchRelationships[1:] {
+			last := out[len(out)-1]
+			if relationship.SeedLabel != last.SeedLabel || relationship.Interface.ID != last.Interface.ID || relationship.Implementation.ID != last.Implementation.ID {
+				out = append(out, relationship)
+			}
+		}
+		r.DispatchRelationships = out
+	}
 	if len(r.SiblingCandidates) > 0 {
 		out := r.SiblingCandidates[:1]
 		for _, candidate := range r.SiblingCandidates[1:] {
@@ -348,6 +376,7 @@ func MergeResults(results ...Result) Result {
 		out.Targets = append(out.Targets, result.Targets...)
 		out.Seeds = append(out.Seeds, result.Seeds...)
 		out.SiblingCandidates = append(out.SiblingCandidates, result.SiblingCandidates...)
+		out.DispatchRelationships = append(out.DispatchRelationships, result.DispatchRelationships...)
 		out.Terminals = append(out.Terminals, result.Terminals...)
 		out.Frontier = append(out.Frontier, result.Frontier...)
 		out.Diagnostics = append(out.Diagnostics, result.Diagnostics...)

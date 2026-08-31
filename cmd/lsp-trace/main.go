@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"lsp-trace/internal/dispatch"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/jsonrpc"
 	"lsp-trace/internal/lsp"
@@ -38,7 +39,7 @@ type config struct {
 	maxDepth, maxNodes, concurrency                      int
 	timeout, requestTimeout                              time.Duration
 	logLevel, traceLSP                                   string
-	pretty, topmostSiblings                              bool
+	pretty, topmostSiblings, expandDispatchFamily        bool
 }
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
@@ -86,6 +87,7 @@ func run(args []string) int {
 	}
 	return code
 }
+
 func parse(args []string) (config, error) {
 	var c config
 	fs := flag.NewFlagSet("incoming", flag.ContinueOnError)
@@ -104,7 +106,8 @@ func parse(args []string) (config, error) {
 	fs.IntVar(&c.concurrency, "concurrency", 1, "concurrent requests (MVP requires 1)")
 	fs.StringVar(&c.output, "output", "", "output file")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
-	fs.BoolVar(&c.topmostSiblings, "topmost-siblings", false, "include top-level document symbols as sibling candidates")
+	fs.BoolVar(&c.topmostSiblings, "expand-topmost-siblings", false, "include top-level document symbols as sibling candidates")
+	fs.BoolVar(&c.expandDispatchFamily, "expand-dispatch-family", false, "include implementation-family relationships")
 	fs.StringVar(&c.logLevel, "log-level", "warn", "error, warn, info, or debug")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	if err := fs.Parse(args); err != nil {
@@ -245,6 +248,22 @@ func (c requestTimeoutClient) IncomingCalls(_ context.Context, item lsp.CallHier
 	return c.client.IncomingCalls(ctx, item)
 }
 
+func (c requestTimeoutClient) SupportsTypeHierarchy() bool {
+	return c.client.SupportsTypeHierarchy()
+}
+
+func (c requestTimeoutClient) PrepareTypeHierarchy(_ context.Context, params lsp.PrepareTypeHierarchyParams) ([]lsp.TypeHierarchyItem, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.PrepareTypeHierarchy(ctx, params)
+}
+
+func (c requestTimeoutClient) Subtypes(_ context.Context, item lsp.TypeHierarchyItem) ([]lsp.TypeHierarchyItem, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.Subtypes(ctx, item)
+}
+
 func (c requestTimeoutClient) SupportsDocumentSymbols() bool {
 	return c.client.SupportsDocumentSymbols()
 }
@@ -253,6 +272,28 @@ func (c requestTimeoutClient) DocumentSymbols(_ context.Context, params lsp.Docu
 	ctx, cancel := c.callContext()
 	defer cancel()
 	return c.client.DocumentSymbols(ctx, params)
+}
+
+func resolveDispatchRelationships(ctx context.Context, client dispatch.Client, params lsp.PrepareTypeHierarchyParams, seedLabel string) ([]graph.DispatchRelationship, []graph.Diagnostic) {
+	family := dispatch.Resolve(ctx, client, params)
+	relationships := make([]graph.DispatchRelationship, 0, len(family.Associations))
+	for _, association := range family.Associations {
+		relationships = append(relationships, graph.DispatchRelationship{SeedLabel: seedLabel, Interface: dispatchNode(association.Interface), Implementation: dispatchNode(association.Implementation)})
+	}
+	diagnostics := make([]graph.Diagnostic, 0, len(family.Failures))
+	for _, failure := range family.Failures {
+		diagnostics = append(diagnostics, graph.Diagnostic{Phase: "dispatch", Method: "typeHierarchy/subtypes", Message: failure.Message})
+	}
+	return relationships, diagnostics
+}
+
+func dispatchNode(item lsp.TypeHierarchyItem) graph.Node {
+	return graph.NewNode(graph.Item{
+		Name: item.Name, Kind: item.Kind, Detail: item.Detail, URI: item.URI,
+		Range:          graph.Range{Start: graph.Position{Line: item.Range.Start.Line, Character: item.Range.Start.Character}, End: graph.Position{Line: item.Range.End.Line, Character: item.Range.End.Character}},
+		SelectionRange: graph.Range{Start: graph.Position{Line: item.SelectionRange.Start.Line, Character: item.SelectionRange.Start.Character}, End: graph.Position{Line: item.SelectionRange.End.Line, Character: item.SelectionRange.End.Character}},
+		Data:           item.Data,
+	})
 }
 
 func execute(ctx context.Context, c config) (out graph.Result, code int) {
@@ -402,6 +443,11 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		}
 		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.uri}, Position: lsp.Position{Line: uint32(seed.line - 1), Character: uint32(seed.column - 1)}}
 		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, IncludeTopmostSiblings: c.topmostSiblings})
+		if c.expandDispatchFamily {
+			relationships, diagnostics := resolveDispatchRelationships(ctx, timedClient, params, seed.spec.Label)
+			part.DispatchRelationships = append(part.DispatchRelationships, relationships...)
+			part.Diagnostics = append(part.Diagnostics, diagnostics...)
+		}
 		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...)}
 		for _, node := range part.Nodes {
 			seedResult.ReachedNodeIDs = append(seedResult.ReachedNodeIDs, node.ID)

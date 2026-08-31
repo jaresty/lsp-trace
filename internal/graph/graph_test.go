@@ -220,6 +220,31 @@ func TestResultDynamicEvidenceAlonePreservesCompleteness(t *testing.T) {
 	}
 }
 
+func TestDispatchRelationshipsAreSeparateCanonicalAndV2Only(t *testing.T) {
+	r := Result{SchemaVersion: SchemaVersionV2, DispatchRelationships: []DispatchRelationship{
+		{SeedLabel: "b", Interface: Node{ID: "i"}, Implementation: Node{ID: "z"}},
+		{SeedLabel: "a", Interface: Node{ID: "i"}, Implementation: Node{ID: "x"}},
+		{SeedLabel: "a", Interface: Node{ID: "i"}, Implementation: Node{ID: "x"}},
+	}}
+	r.Canonicalize()
+	if len(r.DispatchRelationships) != 2 || len(r.Edges) != 0 {
+		t.Fatalf("ASSERT_DISPATCH_RELATIONSHIPS_SEPARATE_CANONICAL: relationships=%#v edges=%#v", r.DispatchRelationships, r.Edges)
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil || !bytes.Contains(encoded, []byte(`"dispatch_relationships"`)) {
+		t.Fatalf("ASSERT_V2_EMITS_DISPATCH_RELATIONSHIPS: encoded=%s err=%v", encoded, err)
+	}
+	merged := MergeResults(r, r)
+	if len(merged.DispatchRelationships) != 2 {
+		t.Fatalf("ASSERT_DISPATCH_RELATIONSHIPS_MERGE_DEDUP: relationships=%#v", merged.DispatchRelationships)
+	}
+	r.SchemaVersion = SchemaVersionV1
+	encoded, err = json.Marshal(r)
+	if err != nil || bytes.Contains(encoded, []byte(`"dispatch_relationships"`)) {
+		t.Fatalf("ASSERT_V1_OMITS_DISPATCH_RELATIONSHIPS: encoded=%s err=%v", encoded, err)
+	}
+}
+
 func TestCanonicalizeEquivalentInsertionOrdersProduceIdenticalJSON(t *testing.T) {
 	makeResult := func(reverse bool) Result {
 		nodes := []Node{{ID: "a", Item: Item{URI: "file:///a"}}, {ID: "b", Item: Item{URI: "file:///b"}}}

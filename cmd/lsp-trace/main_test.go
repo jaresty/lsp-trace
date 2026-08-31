@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lsp-trace/internal/lsp"
 )
 
 func validArgs(workspace string) []string {
@@ -48,9 +51,36 @@ func TestParseValidatesFlags(t *testing.T) {
 }
 
 func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
-	cfg, err := parse(append(validArgs(t.TempDir()), "--topmost-siblings"))
+	cfg, err := parse(append(validArgs(t.TempDir()), "--expand-topmost-siblings"))
 	if err != nil || !cfg.topmostSiblings {
 		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_CLI_OPT_IN: enabled=%t err=%v", cfg.topmostSiblings, err)
+	}
+}
+
+func TestParseAcceptsDispatchFamilyOptIn(t *testing.T) {
+	cfg, err := parse(append(validArgs(t.TempDir()), "--expand-dispatch-family"))
+	if err != nil || !cfg.expandDispatchFamily {
+		t.Fatalf("ASSERT_DISPATCH_FAMILY_CLI_OPT_IN: enabled=%t err=%v", cfg.expandDispatchFamily, err)
+	}
+}
+
+type dispatchIntegrationClient struct{}
+
+func (dispatchIntegrationClient) SupportsTypeHierarchy() bool { return true }
+func (dispatchIntegrationClient) PrepareTypeHierarchy(context.Context, lsp.PrepareTypeHierarchyParams) ([]lsp.TypeHierarchyItem, error) {
+	return []lsp.TypeHierarchyItem{{Name: "Contract", URI: "file:///contract", SelectionRange: lsp.Range{End: lsp.Position{Character: 1}}}}, nil
+}
+func (dispatchIntegrationClient) Subtypes(_ context.Context, item lsp.TypeHierarchyItem) ([]lsp.TypeHierarchyItem, error) {
+	if item.Name != "Contract" {
+		return nil, nil
+	}
+	return []lsp.TypeHierarchyItem{{Name: "Implementation", URI: "file:///implementation", SelectionRange: lsp.Range{End: lsp.Position{Character: 1}}}}, nil
+}
+
+func TestResolveDispatchRelationshipsPreservesSeedAndSeparateNodes(t *testing.T) {
+	relationships, diagnostics := resolveDispatchRelationships(context.Background(), dispatchIntegrationClient{}, lsp.PrepareTypeHierarchyParams{}, "entry")
+	if len(relationships) != 1 || relationships[0].SeedLabel != "entry" || relationships[0].Interface.Name != "Contract" || relationships[0].Implementation.Name != "Implementation" || len(diagnostics) != 0 {
+		t.Fatalf("ASSERT_DISPATCH_INTEGRATION_RELATIONSHIP: relationships=%#v diagnostics=%#v", relationships, diagnostics)
 	}
 }
 
