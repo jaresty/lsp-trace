@@ -60,6 +60,17 @@ func ValidateItem(item Item) error {
 	return nil
 }
 
+// ValidateRange rejects reversed ranges and ranges outside their containing item.
+func ValidateRange(r Range, within Range) error {
+	if lessPosition(r.End, r.Start) {
+		return errors.New("call-site range end precedes start")
+	}
+	if lessPosition(r.Start, within.Start) || lessPosition(within.End, r.End) {
+		return errors.New("call-site range is outside caller range")
+	}
+	return nil
+}
+
 // SameNodeIdentity reports whether two nodes have identical stable identity fields.
 func SameNodeIdentity(a, b Node) bool {
 	return a.ID == b.ID &&

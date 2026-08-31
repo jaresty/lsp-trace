@@ -15,8 +15,10 @@ type Client interface {
 }
 
 type Options struct {
-	MaxDepth int
-	MaxNodes int
+	MaxDepth      int
+	MaxNodes      int
+	NodeFactory   func(graph.Item) graph.Node
+	SchemaVersion string
 }
 type queued struct {
 	item  lsp.CallHierarchyItem
@@ -25,7 +27,15 @@ type queued struct {
 }
 
 func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarchyParams, opts Options) graph.Result {
-	result := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: true}}
+	version := opts.SchemaVersion
+	if version == "" {
+		version = graph.SchemaVersion
+	}
+	result := graph.Result{SchemaVersion: version, Summary: graph.Summary{Complete: true}, CapabilityQuality: graph.CapabilityQuality{CrossModuleEdges: graph.Unknown}}
+	newNode := opts.NodeFactory
+	if newNode == nil {
+		newNode = graph.NewNode
+	}
 	items, err := client.PrepareCallHierarchy(ctx, params)
 	if err != nil {
 		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", Message: err.Error()})
@@ -39,6 +49,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		result.Canonicalize()
 		return result
 	}
+	result.CapabilityQuality.PrepareSucceeded = true
 	if len(items) == 0 {
 		result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.PrepareReturnedNoItem})
 		result.Canonicalize()
@@ -48,7 +59,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	expanded := map[string]bool{}
 	queue := make([]queued, 0, len(items))
 	for _, item := range items {
-		n := node(item)
+		n := node(item, newNode)
 		if err := graph.ValidateItem(n.Item); err != nil {
 			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: n.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
 			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", NodeID: n.ID, Message: err.Error()})
@@ -70,6 +81,20 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		})
 		q := queue[0]
 		queue = queue[1:]
+		if err := ctx.Err(); err != nil {
+			reason := graph.Cancelled
+			if errors.Is(err, context.DeadlineExceeded) {
+				reason = graph.GlobalTimeout
+			}
+			result.Summary.Complete = false
+			result.Frontier = append(result.Frontier, graph.Boundary{NodeID: q.node.ID, Reason: reason, Message: err.Error()})
+			for _, pending := range queue {
+				if !expanded[pending.node.ID] {
+					result.Frontier = append(result.Frontier, graph.Boundary{NodeID: pending.node.ID, Reason: reason, Message: err.Error()})
+				}
+			}
+			break
+		}
 		if expanded[q.node.ID] {
 			continue
 		}
@@ -94,19 +119,33 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			result.Summary.Complete = false
 			continue
 		}
+		result.CapabilityQuality.IncomingRequestSuccesses++
 		if wasNull {
 			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.IncomingReturnedNull})
 			continue
 		}
 		if len(calls) == 0 {
-			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.NoIncomingCalls})
+			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.ServerReportedNoIncoming})
 			continue
 		}
 		for _, call := range calls {
-			caller := node(call.From)
+			caller := node(call.From, newNode)
 			if err := graph.ValidateItem(caller.Item); err != nil {
 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: err.Error()})
+				result.Summary.Complete = false
+				continue
+			}
+			invalidRange := error(nil)
+			for _, fromRange := range call.FromRanges {
+				if err := graph.ValidateRange(rng(fromRange), caller.Range); err != nil {
+					invalidRange = err
+					break
+				}
+			}
+			if invalidRange != nil {
+				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.InvalidServerResponse, Message: invalidRange.Error()})
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: invalidRange.Error()})
 				result.Summary.Complete = false
 				continue
 			}
@@ -130,7 +169,11 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			for i, r := range call.FromRanges {
 				ranges[i] = rng(r)
 			}
+			before := len(result.Edges)
 			result.Edges = graph.MergeEdge(result.Edges, graph.Edge{CallerNodeID: caller.ID, CalleeNodeID: q.node.ID, CallSites: ranges})
+			if len(result.Edges) > before && caller.URI != q.node.URI {
+				result.CapabilityQuality.CrossFileEdges++
+			}
 		}
 	}
 	for _, n := range seen {
@@ -140,8 +183,8 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	return result
 }
 
-func node(i lsp.CallHierarchyItem) graph.Node {
-	return graph.NewNode(graph.Item{Name: i.Name, Kind: i.Kind, Detail: i.Detail, URI: i.URI, Range: rng(i.Range), SelectionRange: rng(i.SelectionRange), Data: i.Data})
+func node(i lsp.CallHierarchyItem, factory func(graph.Item) graph.Node) graph.Node {
+	return factory(graph.Item{Name: i.Name, Kind: i.Kind, Detail: i.Detail, URI: i.URI, Range: rng(i.Range), SelectionRange: rng(i.SelectionRange), Data: i.Data})
 }
 func rng(r lsp.Range) graph.Range {
 	return graph.Range{Start: graph.Position{Line: r.Start.Line, Character: r.Start.Character}, End: graph.Position{Line: r.End.Line, Character: r.End.Character}}

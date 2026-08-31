@@ -1,13 +1,23 @@
 package graph
 
-import "sort"
+import (
+	"encoding/json"
+	"sort"
+)
 
-const SchemaVersion = "lsp-trace.graph.v1"
+const (
+	SchemaVersionV1   = "lsp-trace.graph.v1"
+	SchemaVersionV2   = "lsp-trace.graph.v2"
+	SchemaVersion     = SchemaVersionV2
+	CompletenessScope = "SERVER_REPORTED_CALL_HIERARCHY"
+	Unknown           = "UNKNOWN"
+)
 
 type Reason string
 
 const (
 	NoIncomingCalls          Reason = "NO_INCOMING_CALLS"
+	ServerReportedNoIncoming Reason = "SERVER_REPORTED_NO_INCOMING_CALLS"
 	PrepareReturnedNoItem    Reason = "PREPARE_RETURNED_NO_ITEM"
 	IncomingReturnedNull     Reason = "INCOMING_RETURNED_NULL"
 	ExternalURI              Reason = "EXTERNAL_URI"
@@ -46,9 +56,10 @@ type Capabilities struct {
 	CallHierarchyProvider bool `json:"call_hierarchy_provider"`
 }
 type Boundary struct {
-	NodeID  string `json:"node_id,omitempty"`
-	Reason  Reason `json:"reason"`
-	Message string `json:"message,omitempty"`
+	NodeID     string `json:"node_id,omitempty"`
+	Reason     Reason `json:"reason"`
+	Message    string `json:"message,omitempty"`
+	Provenance string `json:"provenance,omitempty"`
 }
 type Diagnostic struct {
 	Phase   string `json:"phase"`
@@ -56,6 +67,15 @@ type Diagnostic struct {
 	NodeID  string `json:"node_id,omitempty"`
 	Message string `json:"message"`
 }
+type CapabilityQuality struct {
+	Advertised               bool   `json:"advertised"`
+	PrepareSucceeded         bool   `json:"prepare_succeeded"`
+	IncomingRequestSuccesses int    `json:"incoming_request_successes"`
+	IncomingEdges            int    `json:"incoming_edges"`
+	CrossFileEdges           int    `json:"cross_file_edges"`
+	CrossModuleEdges         string `json:"cross_module_edges"`
+}
+
 type Summary struct {
 	NodeCount     int  `json:"node_count"`
 	EdgeCount     int  `json:"edge_count"`
@@ -66,16 +86,76 @@ type Summary struct {
 }
 
 type Result struct {
-	SchemaVersion string       `json:"schema_version"`
-	Invocation    Invocation   `json:"invocation"`
-	Capabilities  Capabilities `json:"capabilities"`
-	Targets       []string     `json:"targets"`
-	Nodes         []Node       `json:"nodes"`
-	Edges         []Edge       `json:"edges"`
-	Terminals     []Boundary   `json:"terminals"`
-	Frontier      []Boundary   `json:"frontier"`
-	Diagnostics   []Diagnostic `json:"diagnostics"`
-	Summary       Summary      `json:"summary"`
+	SchemaVersion     string            `json:"schema_version"`
+	Invocation        Invocation        `json:"invocation"`
+	Capabilities      Capabilities      `json:"capabilities"`
+	Targets           []string          `json:"targets"`
+	Nodes             []Node            `json:"nodes"`
+	Edges             []Edge            `json:"edges"`
+	Terminals         []Boundary        `json:"terminals"`
+	Frontier          []Boundary        `json:"frontier"`
+	Diagnostics       []Diagnostic      `json:"diagnostics"`
+	Summary           Summary           `json:"summary"`
+	CapabilityQuality CapabilityQuality `json:"capability_quality,omitempty"`
+}
+
+func (r Result) MarshalJSON() ([]byte, error) {
+	type legacyBoundary struct {
+		NodeID  string `json:"node_id,omitempty"`
+		Reason  Reason `json:"reason"`
+		Message string `json:"message,omitempty"`
+	}
+	if r.SchemaVersion == SchemaVersionV1 {
+		project := func(in []Boundary) []legacyBoundary {
+			if in == nil {
+				return nil
+			}
+			out := make([]legacyBoundary, len(in))
+			for i, b := range in {
+				reason := b.Reason
+				if reason == ServerReportedNoIncoming {
+					reason = NoIncomingCalls
+				}
+				out[i] = legacyBoundary{b.NodeID, reason, b.Message}
+			}
+			return out
+		}
+		return json.Marshal(struct {
+			SchemaVersion string           `json:"schema_version"`
+			Invocation    Invocation       `json:"invocation"`
+			Capabilities  Capabilities     `json:"capabilities"`
+			Targets       []string         `json:"targets"`
+			Nodes         []Node           `json:"nodes"`
+			Edges         []Edge           `json:"edges"`
+			Terminals     []legacyBoundary `json:"terminals"`
+			Frontier      []legacyBoundary `json:"frontier"`
+			Diagnostics   []Diagnostic     `json:"diagnostics"`
+			Summary       Summary          `json:"summary"`
+		}{r.SchemaVersion, r.Invocation, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), r.Diagnostics, r.Summary})
+	}
+	type summaryV2 struct {
+		NodeCount           int    `json:"node_count"`
+		EdgeCount           int    `json:"edge_count"`
+		TerminalCount       int    `json:"terminal_count"`
+		CycleCount          int    `json:"cycle_count"`
+		TraversalComplete   bool   `json:"traversal_complete"`
+		SourceGraphComplete string `json:"source_graph_complete"`
+		CompletenessScope   string `json:"completeness_scope"`
+		Truncated           bool   `json:"truncated"`
+	}
+	return json.Marshal(struct {
+		SchemaVersion     string            `json:"schema_version"`
+		Invocation        Invocation        `json:"invocation"`
+		Capabilities      Capabilities      `json:"capabilities"`
+		CapabilityQuality CapabilityQuality `json:"capability_quality"`
+		Targets           []string          `json:"targets"`
+		Nodes             []Node            `json:"nodes"`
+		Edges             []Edge            `json:"edges"`
+		Terminals         []Boundary        `json:"terminals"`
+		Frontier          []Boundary        `json:"frontier"`
+		Diagnostics       []Diagnostic      `json:"diagnostics"`
+		Summary           summaryV2         `json:"summary"`
+	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
 }
 
 func (r *Result) Canonicalize() {
@@ -131,6 +211,29 @@ func (r *Result) Canonicalize() {
 	r.Summary.EdgeCount = len(r.Edges)
 	r.Summary.TerminalCount = len(r.Terminals)
 	r.Summary.CycleCount = cycleCount(r.Nodes, r.Edges)
+	for i := range r.Terminals {
+		if r.Terminals[i].Provenance == "" {
+			r.Terminals[i].Provenance = boundaryProvenance(r.Terminals[i].Reason)
+		}
+	}
+	for i := range r.Frontier {
+		if r.Frontier[i].Provenance == "" {
+			r.Frontier[i].Provenance = "CLIENT_DERIVED"
+		}
+	}
+	if r.SchemaVersion != SchemaVersionV1 {
+		r.CapabilityQuality.IncomingEdges = len(r.Edges)
+		if r.CapabilityQuality.CrossModuleEdges == "" {
+			r.CapabilityQuality.CrossModuleEdges = Unknown
+		}
+	}
+}
+
+func boundaryProvenance(reason Reason) string {
+	if reason == ServerReportedNoIncoming || reason == IncomingReturnedNull {
+		return "SERVER_REPORTED"
+	}
+	return "CLIENT_DERIVED"
 }
 
 func lessBoundary(a, b Boundary) bool {

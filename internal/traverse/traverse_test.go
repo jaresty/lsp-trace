@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
@@ -142,6 +143,160 @@ func TestIncomingRejectsMalformedPreparedItem(t *testing.T) {
 	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{malformed}}, lsp.PrepareCallHierarchyParams{}, Options{})
 	if r.Summary.Complete || len(r.Nodes) != 0 || len(r.Terminals) != 1 || r.Terminals[0].Reason != graph.InvalidServerResponse {
 		t.Fatalf("ASSERT_INVALID_PREPARED_ITEM_REJECTED: %#v", r)
+	}
+}
+
+func TestIncomingCancellationAccountsEveryQueuedNode(t *testing.T) {
+	leaf, a, b := item("leaf", 8), item("a", 5), item("b", 6)
+	f := &cancellingClient{fakeClient: fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+		"leaf": {{From: a}, {From: b}},
+	}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	f.cancel = cancel
+	r := Incoming(ctx, f, lsp.PrepareCallHierarchyParams{}, Options{})
+	frontier := map[string]graph.Reason{}
+	for _, boundary := range r.Frontier {
+		frontier[boundary.NodeID] = boundary.Reason
+	}
+	if r.Summary.Complete || len(frontier) != 2 {
+		t.Fatalf("ASSERT_CANCELLED_FRONTIER_COMPLETE: frontier=%#v result=%#v", frontier, r)
+	}
+	for id, reason := range frontier {
+		if id == "" || reason != graph.Cancelled {
+			t.Fatalf("ASSERT_CANCELLED_FRONTIER_REASON: %#v", frontier)
+		}
+	}
+}
+
+type cancellingClient struct {
+	fakeClient
+	cancel context.CancelFunc
+}
+
+func (f *cancellingClient) IncomingCalls(ctx context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
+	calls, wasNull, err := f.fakeClient.IncomingCalls(ctx, item)
+	if item.Name == "leaf" {
+		f.cancel()
+	}
+	return calls, wasNull, err
+}
+
+func TestIncomingDeadlineAccountsEveryQueuedNodeAsGlobalTimeout(t *testing.T) {
+	leaf, a, b := item("leaf", 8), item("a", 5), item("b", 6)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+	f := &deadlineClient{fakeClient: fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+		"leaf": {{From: a}, {From: b}},
+	}}}
+	r := Incoming(ctx, f, lsp.PrepareCallHierarchyParams{}, Options{})
+	if len(r.Frontier) != 2 {
+		t.Fatalf("ASSERT_GLOBAL_TIMEOUT_FRONTIER_COMPLETE: %#v", r)
+	}
+	for _, boundary := range r.Frontier {
+		if boundary.Reason != graph.GlobalTimeout {
+			t.Fatalf("ASSERT_GLOBAL_TIMEOUT_FRONTIER_REASON: %#v", r.Frontier)
+		}
+	}
+}
+
+type deadlineClient struct{ fakeClient }
+
+func (f *deadlineClient) IncomingCalls(ctx context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
+	calls, wasNull, err := f.fakeClient.IncomingCalls(ctx, item)
+	if item.Name == "leaf" {
+		<-ctx.Done()
+	}
+	return calls, wasNull, err
+}
+
+func TestIncomingInjectedNodeIDCollisionIsVisibleAndNotMerged(t *testing.T) {
+	leaf, a, b := item("leaf", 8), item("a", 5), item("b", 6)
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {{From: a}, {From: b}}, "a": {}}}
+	factory := func(i graph.Item) graph.Node {
+		n := graph.NewNode(i)
+		if i.Name == "a" || i.Name == "b" {
+			n.ID = "collision"
+		}
+		return n
+	}
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{NodeFactory: factory})
+	collisions := 0
+	for _, boundary := range r.Terminals {
+		if boundary.Reason == graph.NodeIDCollision {
+			collisions++
+		}
+	}
+	if r.Summary.Complete || collisions != 1 || r.Summary.NodeCount != 2 {
+		t.Fatalf("ASSERT_INJECTED_COLLISION_REJECTED: %#v", r)
+	}
+}
+
+func TestIncomingRejectsMalformedCallSiteRange(t *testing.T) {
+	leaf, caller := item("leaf", 8), item("caller", 4)
+	bad := lsp.Range{Start: lsp.Position{Line: 5}, End: lsp.Position{Line: 4}}
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {{From: caller, FromRanges: []lsp.Range{bad}}}}}
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	if r.Summary.Complete || r.Summary.EdgeCount != 0 || len(r.Diagnostics) != 1 || len(r.Terminals) != 1 || r.Terminals[0].Reason != graph.InvalidServerResponse {
+		t.Fatalf("ASSERT_MALFORMED_CALL_SITE_REJECTED: %#v", r)
+	}
+}
+
+func TestIncomingSchemaV2CompletenessTerminalProvenanceAndQuality(t *testing.T) {
+	leaf, caller := item("leaf", 8), item("caller", 4)
+	caller.URI = "file:///w/other.go"
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {{From: caller}}, "caller": {}}}
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["schema_version"] != "lsp-trace.graph.v2" {
+		t.Fatalf("ASSERT_V2_SCHEMA_VERSION: %s", encoded)
+	}
+	summary := got["summary"].(map[string]any)
+	if _, found := summary["complete"]; found {
+		t.Fatalf("ASSERT_V2_REMOVES_UNQUALIFIED_COMPLETE: %s", encoded)
+	}
+	if summary["traversal_complete"] != true || summary["source_graph_complete"] != "UNKNOWN" || summary["completeness_scope"] != "SERVER_REPORTED_CALL_HIERARCHY" {
+		t.Fatalf("ASSERT_V2_SCOPED_COMPLETENESS: %s", encoded)
+	}
+	quality := got["capability_quality"].(map[string]any)
+	if quality["prepare_succeeded"] != true || quality["incoming_request_successes"] != float64(2) || quality["incoming_edges"] != float64(1) || quality["cross_file_edges"] != float64(1) || quality["cross_module_edges"] != "UNKNOWN" {
+		t.Fatalf("ASSERT_V2_CAPABILITY_QUALITY: %s", encoded)
+	}
+	terminals := got["terminals"].([]any)
+	terminal := terminals[0].(map[string]any)
+	if terminal["reason"] != "SERVER_REPORTED_NO_INCOMING_CALLS" || terminal["provenance"] != "SERVER_REPORTED" {
+		t.Fatalf("ASSERT_V2_TERMINAL_PROVENANCE: %s", encoded)
+	}
+}
+
+func TestIncomingSchemaV1CompatibilityProjection(t *testing.T) {
+	leaf := item("leaf", 8)
+	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}}, lsp.PrepareCallHierarchyParams{}, Options{SchemaVersion: "lsp-trace.graph.v1"})
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(encoded, []byte(`"complete":true`)) || !bytes.Contains(encoded, []byte(`"reason":"NO_INCOMING_CALLS"`)) || bytes.Contains(encoded, []byte(`capability_quality`)) {
+		t.Fatalf("ASSERT_V1_COMPATIBILITY: %s", encoded)
+	}
+}
+
+func TestIncomingCanonicalGoldenByteIdentical(t *testing.T) {
+	leaf := item("leaf", 8)
+	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}}, lsp.PrepareCallHierarchyParams{}, Options{})
+	got, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"schema_version":"lsp-trace.graph.v2","invocation":{"workspace_uri":"","target":{"uri":"","line":0,"column":0},"server":{"command":"","arguments":null},"limits":{"max_depth":0,"max_nodes":0,"timeout_ms":0}},"capabilities":{"call_hierarchy_provider":false},"capability_quality":{"advertised":false,"prepare_succeeded":true,"incoming_request_successes":1,"incoming_edges":0,"cross_file_edges":0,"cross_module_edges":"UNKNOWN"},"targets":["f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af"],"nodes":[{"id":"f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af","name":"leaf","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":8,"character":0},"end":{"line":8,"character":4}},"selection_range":{"start":{"line":8,"character":0},"end":{"line":8,"character":4}},"data":{"name":"leaf"}}],"edges":null,"terminals":[{"node_id":"f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af","reason":"SERVER_REPORTED_NO_INCOMING_CALLS","provenance":"SERVER_REPORTED"}],"frontier":null,"diagnostics":null,"summary":{"node_count":1,"edge_count":0,"terminal_count":1,"cycle_count":0,"traversal_complete":true,"source_graph_complete":"UNKNOWN","completeness_scope":"SERVER_REPORTED_CALL_HIERARCHY","truncated":false}}`
+	if !bytes.Equal(got, []byte(want)) {
+		t.Fatalf("ASSERT_CANONICAL_GOLDEN_BYTES: got %s", got)
 	}
 }
 

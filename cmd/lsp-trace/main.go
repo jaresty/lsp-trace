@@ -177,9 +177,12 @@ func execute(ctx context.Context, c config) (graph.Result, int) {
 		return base, 1
 	}
 	base.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()
+	base.CapabilityQuality.Advertised = base.Capabilities.CallHierarchyProvider
+	base.CapabilityQuality.CrossModuleEdges = graph.Unknown
 	if !base.Capabilities.CallHierarchyProvider {
 		base.Terminals = []graph.Boundary{{Reason: graph.UnsupportedCallHierarchy}}
 		base.Summary.TerminalCount = 1
+		base.Canonicalize()
 		_ = client.Shutdown(context.Background())
 		return base, 2
 	}
@@ -195,6 +198,7 @@ func execute(ctx context.Context, c config) (graph.Result, int) {
 	result := traverse.Incoming(ctx, client, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
 	result.Invocation = base.Invocation
 	result.Capabilities = base.Capabilities
+	result.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	if err = client.Shutdown(shutdownCtx); err != nil {
 		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "shutdown", Message: err.Error()})
