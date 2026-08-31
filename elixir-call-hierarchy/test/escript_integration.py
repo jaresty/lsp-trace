@@ -86,6 +86,36 @@ def hierarchy(workspace, cache, source, mix_env):
             process.kill()
 
 
+def expanded_siblings(workspace, cache, source, binary):
+    root = PROJECT.parent
+    subprocess.run(
+        ["go", "build", "-o", str(binary), "./cmd/lsp-trace"],
+        cwd=root,
+        check=True,
+    )
+    base = [
+        str(binary),
+        "incoming",
+        "--workspace", str(workspace),
+        "--server", str(ESCRIPT),
+        "--server-arg", "--stdio",
+        "--server-env", f"XDG_CACHE_HOME={cache}",
+        "--server-env", "MIX_ENV=test",
+        "--server-env", "MIX_TARGET=host",
+        "--at", f"{source}:4:8",
+        "--language-id", "elixir",
+        "--timeout", "60s",
+    ]
+    plain = subprocess.run(base, cwd=root, capture_output=True, text=True, check=False)
+    expanded = subprocess.run(base + ["--expand-topmost-siblings"], cwd=root, capture_output=True, text=True, check=False)
+    require(plain.returncode == 0 and expanded.returncode == 0, "actual Go binary traces through actual escript")
+    plain_graph = json.loads(plain.stdout)
+    expanded_graph = json.loads(expanded.stdout)
+    names = {item["candidate"]["name"] for item in expanded_graph.get("sibling_candidates", [])}
+    require({"leaf/0", "caller/0"}.issubset(names), "actual escript expands callable topmost sibling candidates")
+    require(plain_graph.get("edges") == expanded_graph.get("edges"), "symbol expansion leaves call edges unchanged")
+
+
 def invoke(workspace, cache, request, mix_env, timeout=TIMEOUT):
     env = os.environ.copy()
     env.update(
@@ -310,6 +340,7 @@ end
         )
 
         hierarchy(workspace, cache / "test", source, "test")
+        expanded_siblings(workspace, cache / "test", source, base / "lsp-trace")
         require("\"phase\":\"deps_compile\"" in cold_stderr, "cold initialize profiles dependency compilation")
         require("redefining module Jason" not in cold_stderr, "dependency compilation does not contaminate the escript VM")
         require(not (workspace / "_build").exists(), "workspace has no _build directory")

@@ -36,7 +36,11 @@ defmodule ElixirCallHierarchy.Server do
 
     {Map.put(state, :index, index),
      response(id, %{
-       "capabilities" => %{"callHierarchyProvider" => true, "textDocumentSync" => 1},
+       "capabilities" => %{
+         "callHierarchyProvider" => true,
+         "documentSymbolProvider" => true,
+         "textDocumentSync" => 1
+       },
        "serverInfo" => %{"name" => "elixir-call-hierarchy", "version" => "0.1.0"}
      }), false}
   end
@@ -46,6 +50,21 @@ defmodule ElixirCallHierarchy.Server do
   defp handle(%{"method" => "textDocument/didOpen", "params" => params}, state) do
     document = params["textDocument"]
     {put_in(state, [:documents, document["uri"]], document["text"]), nil, false}
+  end
+
+  defp handle(%{"id" => id, "method" => "textDocument/documentSymbol", "params" => params}, state) do
+    file = uri_path(get_in(params, ["textDocument", "uri"]))
+
+    symbols =
+      state.index
+      |> ElixirCallHierarchy.Index.document_symbols(file)
+      |> Enum.map(fn definition ->
+        definition
+        |> item()
+        |> Map.take(["name", "detail", "kind", "range", "selectionRange"])
+      end)
+
+    {state, response(id, symbols), false}
   end
 
   defp handle(
