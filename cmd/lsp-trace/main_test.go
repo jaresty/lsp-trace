@@ -169,6 +169,9 @@ func TestRuntimeHelperServer(t *testing.T) {
 		}
 		switch msg.Method {
 		case "initialize":
+			if os.Getenv("LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE") == "1" {
+				return
+			}
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
 		case "textDocument/prepareCallHierarchy":
 			time.Sleep(3 * time.Second)
@@ -209,6 +212,32 @@ func readRuntimeMessage(r *bufio.Reader) ([]byte, error) {
 func writeRuntimeResponse(id json.RawMessage, result any) {
 	body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
+}
+
+func TestRunInitializeFailureIsIncomplete(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := append(validArgs(workspace),
+		"--server", os.Args[0],
+		"--server-arg", "-test.run=TestRuntimeHelperServer",
+		"--server-env", "LSP_TRACE_RUNTIME_HELPER=1",
+		"--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1",
+		"--request-timeout", "1s",
+	)
+	stdout, stderr, code := captureRun(t, append([]string{"incoming"}, args...))
+	var result struct {
+		Summary struct {
+			TraversalComplete bool `json:"traversal_complete"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("stdout is not graph JSON: %v; stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if code != 1 || result.Summary.TraversalComplete {
+		t.Fatalf("ASSERT_INITIALIZE_FAILURE_INCOMPLETE: code=%d complete=%t stdout=%s stderr=%s", code, result.Summary.TraversalComplete, stdout, stderr)
+	}
 }
 
 func TestRunRequestTimeoutTraceStderrAndExitPolicy(t *testing.T) {

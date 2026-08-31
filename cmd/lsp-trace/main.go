@@ -343,6 +343,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	done()
 	if err != nil {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "initialize", Method: "initialize", Message: err.Error()})
+		base.Summary.Complete = false
 		return base, 1
 	}
 	base.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()
