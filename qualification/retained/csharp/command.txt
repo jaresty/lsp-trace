@@ -1,0 +1,1 @@
+${REPO}/qualification/evidence/csharp/lsp-trace incoming --workspace ${REPO}/qualification/csharp --server /opt/homebrew/bin/csharp-ls --at ${REPO}/qualification/csharp/Calls.cs:5:23 --pretty

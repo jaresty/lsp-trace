@@ -6,9 +6,9 @@ These TypeScript, C#, and Elixir fixtures qualify the public `lsp-trace incoming
 - **BLOCKED**: a required executable or SDK is unavailable, or the server lacks useful `prepareCallHierarchy`/`incomingCalls` support. This is a retained release blocker/skip, never a pass.
 - **FAIL**: the server ran but setup, capability, command execution, or graph assertions failed.
 
-A PASS requires retained server version, initialize capability response, command, stdout graph, stderr, and assertion report under `qualification/evidence/<language>/`. Evidence is intentionally ignored by Git because it may contain machine paths or opaque server data; attach the directory to the release record. Never promote BLOCKED to PASS based only on fixture presence.
+A PASS requires server version, initialize capability response, command, stdout graph, stderr, and assertion report under `qualification/evidence/<language>/`. Raw evidence is ignored by Git because it may contain machine paths, binaries, or opaque server data. After all required runs pass, run `./scripts/retain-qualification.py`; it refuses non-PASS inputs, excludes binaries, normalizes the repository path to `${REPO}`, and writes reviewable evidence under `qualification/retained/<language>/`. Never promote BLOCKED to PASS based only on fixture presence.
 
-Both fixtures contain branching, recursion, and `StaticButNotExecuted`, a caller behind a runtime branch the fixture entry point does not take. Its possible appearance in Call Hierarchy demonstrates a static language-server report, not observed execution.
+All three fixtures contain branching, recursion, and a static-only caller behind a runtime branch the fixture entry point does not take. Its possible appearance in Call Hierarchy demonstrates a static language-server report, not observed execution.
 
 Run:
 

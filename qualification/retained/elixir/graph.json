@@ -1,0 +1,326 @@
+{
+  "schema_version": "lsp-trace.graph.v1",
+  "invocation": {
+    "workspace_uri": "file://${REPO}/qualification/elixir",
+    "target": {
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "line": 2,
+      "column": 7
+    },
+    "server": {
+      "command": "/opt/homebrew/bin/elixir-ls",
+      "arguments": [
+        "--stdio"
+      ]
+    },
+    "limits": {
+      "max_depth": 100,
+      "max_nodes": 10000,
+      "timeout_ms": 300000
+    }
+  },
+  "capabilities": {
+    "call_hierarchy_provider": true
+  },
+  "targets": [
+    "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326"
+  ],
+  "nodes": [
+    {
+      "id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "name": "LspTraceQualification.Calls.leaf/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 2
+        },
+        "end": {
+          "line": 1,
+          "character": 6
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 1,
+          "character": 2
+        },
+        "end": {
+          "line": 1,
+          "character": 6
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
+      "name": "LspTraceQualification.Calls.left/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 2,
+          "character": 2
+        },
+        "end": {
+          "line": 2,
+          "character": 6
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 2,
+          "character": 2
+        },
+        "end": {
+          "line": 2,
+          "character": 6
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
+      "name": "LspTraceQualification.Calls.right/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 3,
+          "character": 2
+        },
+        "end": {
+          "line": 3,
+          "character": 7
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 3,
+          "character": 2
+        },
+        "end": {
+          "line": 3,
+          "character": 7
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
+      "name": "LspTraceQualification.Calls.recursive/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 4,
+          "character": 2
+        },
+        "end": {
+          "line": 4,
+          "character": 11
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 4,
+          "character": 2
+        },
+        "end": {
+          "line": 4,
+          "character": 11
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
+      "name": "LspTraceQualification.Calls.static_but_not_executed/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 2
+        },
+        "end": {
+          "line": 9,
+          "character": 25
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 9,
+          "character": 2
+        },
+        "end": {
+          "line": 9,
+          "character": 25
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "name": "LspTraceQualification.Calls.entry/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 2
+        },
+        "end": {
+          "line": 13,
+          "character": 7
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 13,
+          "character": 2
+        },
+        "end": {
+          "line": 13,
+          "character": 7
+        }
+      },
+      "data": null
+    }
+  ],
+  "edges": [
+    {
+      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "callee_node_id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 38
+          },
+          "end": {
+            "line": 13,
+            "character": 43
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "callee_node_id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 53
+          },
+          "end": {
+            "line": 13,
+            "character": 62
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "callee_node_id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 24
+          },
+          "end": {
+            "line": 13,
+            "character": 28
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
+      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "call_sites": [
+        {
+          "start": {
+            "line": 3,
+            "character": 24
+          },
+          "end": {
+            "line": 3,
+            "character": 28
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
+      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "call_sites": [
+        {
+          "start": {
+            "line": 10,
+            "character": 63
+          },
+          "end": {
+            "line": 10,
+            "character": 67
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
+      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "call_sites": [
+        {
+          "start": {
+            "line": 4,
+            "character": 28
+          },
+          "end": {
+            "line": 4,
+            "character": 32
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
+      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "call_sites": [
+        {
+          "start": {
+            "line": 2,
+            "character": 23
+          },
+          "end": {
+            "line": 2,
+            "character": 27
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [
+    {
+      "node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "reason": "NO_INCOMING_CALLS"
+    },
+    {
+      "node_id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
+      "reason": "NO_INCOMING_CALLS"
+    }
+  ],
+  "frontier": null,
+  "diagnostics": null,
+  "summary": {
+    "node_count": 6,
+    "edge_count": 7,
+    "terminal_count": 2,
+    "cycle_count": 0,
+    "complete": true,
+    "truncated": false
+  }
+}

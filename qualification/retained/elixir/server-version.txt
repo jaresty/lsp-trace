@@ -1,0 +1,31 @@
+Running /opt/homebrew/Cellar/elixir-ls/0.31.1/libexec/launch.sh
+Preferred shell is zsh, relaunching
+Looking for asdf install
+asdf not found
+Looking for mise executable
+mise executable found at /opt/homebrew/bin/mise, activating
+mise ERROR elixir is a mise bin however it is not currently active. Use `mise use` to activate it in this directory.
+mise ERROR Version: 2026.7.3 macos-arm64 (2026-07-08)
+mise ERROR Run with --verbose or MISE_VERBOSE=1 for more information
+Installing ElixirLS release v0.31.1
+Running in ${REPO}
+Install complete
+Content-Length: 103
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"Started ElixirLS v0.31.1","type":3}}Content-Length: 116
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"Running in ${REPO}","type":3}}Content-Length: 122
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"ElixirLS built with elixir 1.20.3 on OTP 29","type":3}}Content-Length: 143
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"Running on elixir 1.20.3 (compiled with Erlang/OTP 29) on OTP 29","type":3}}Content-Length: 109
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"Protocols are not consolidated","type":3}}Content-Length: 317
+
+{"jsonrpc":"2.0","method":"telemetry/event","params":{"name":"eep48","measurements":{},"properties":{"elixir_ls.eep48":"true","elixir_ls.elixir_release":"1.20","elixir_ls.elixir_version":"1.20.3","elixir_ls.erts_version":"17.0.5","elixir_ls.mix_env":"dev","elixir_ls.mix_target":"host","elixir_ls.otp_release":"29"}}}Content-Length: 217
+
+{"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"Elixir sources not found (checking in /private/tmp/elixir-20260805-4742-qppwm1/elixir-1.20.3). Code navigation to Elixir modules disabled.","type":3}}Content-Length: 336
+
+{"jsonrpc":"2.0","method":"telemetry/event","params":{"name":"elixir_sources","measurements":{},"properties":{"elixir_ls.elixir_release":"1.20","elixir_ls.elixir_sources":"false","elixir_ls.elixir_version":"1.20.3","elixir_ls.erts_version":"17.0.5","elixir_ls.mix_env":"dev","elixir_ls.mix_target":"host","elixir_ls.otp_release":"29"}}}Content-Length: 329
+
+{"jsonrpc":"2.0","method":"telemetry/event","params":{"name":"otp_sources","measurements":{},"properties":{"elixir_ls.elixir_release":"1.20","elixir_ls.elixir_version":"1.20.3","elixir_ls.erts_version":"17.0.5","elixir_ls.mix_env":"dev","elixir_ls.mix_target":"host","elixir_ls.otp_release":"29","elixir_ls.otp_sources":"true"}}}

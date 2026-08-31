@@ -1,0 +1,1 @@
+${REPO}/qualification/evidence/typescript/lsp-trace incoming --workspace ${REPO}/qualification/typescript --server ${REPO}/qualification/typescript/node_modules/.bin/typescript-language-server --server-arg --stdio --at ${REPO}/qualification/typescript/src/calls.ts:1:17 --pretty

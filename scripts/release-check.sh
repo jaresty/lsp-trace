@@ -47,7 +47,13 @@ assert_contains Q-ELIXIR-RECURSION qualification/elixir/lib/calls.ex 'recursive_
 assert_contains Q-ELIXIR-STATIC qualification/elixir/lib/calls.ex 'static_but_not_executed'
 assert_contains Q-ELIXIR-PATH scripts/qualify.sh 'elixir)'
 assert_contains Q-STATE qualification/README.md 'PASS, BLOCKED, or FAIL'
-assert_contains Q-EVIDENCE qualification/README.md 'A PASS requires retained'
+assert_contains Q-EVIDENCE qualification/README.md 'A PASS requires server version'
+assert_contains Q-RETAIN qualification/README.md './scripts/retain-qualification.py'
+for language in typescript csharp elixir; do
+  assert_contains "Q-RETAINED-$language-STATUS" "qualification/retained/$language/status.txt" 'PASS'
+  assert_contains "Q-RETAINED-$language-ASSERTIONS" "qualification/retained/$language/assertions.txt" 'all caller/callee edges retain exact non-empty call-site ranges'
+  assert_contains "Q-RETAINED-$language-GRAPH" "qualification/retained/$language/graph.json" '"schema_version": "lsp-trace.graph.v1"'
+done
 assert_file R-CI .github/workflows/ci.yml
 assert_file R-SECURITY docs/SECURITY.md
 assert_file R-SEMANTICS docs/SEMANTICS.md

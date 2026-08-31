@@ -1,0 +1,3 @@
+capability=true
+exact callers=left,recursive,right,static_but_not_executed
+all caller/callee edges retain exact non-empty call-site ranges

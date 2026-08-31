@@ -1,0 +1,383 @@
+{
+  "schema_version": "lsp-trace.graph.v1",
+  "invocation": {
+    "workspace_uri": "file://${REPO}/qualification/csharp",
+    "target": {
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "line": 5,
+      "column": 23
+    },
+    "server": {
+      "command": "/opt/homebrew/bin/csharp-ls",
+      "arguments": null
+    },
+    "limits": {
+      "max_depth": 100,
+      "max_nodes": 10000,
+      "timeout_ms": 300000
+    }
+  },
+  "capabilities": {
+    "call_hierarchy_provider": true
+  },
+  "targets": [
+    "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84"
+  ],
+  "nodes": [
+    {
+      "id": "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84",
+      "name": "Leaf(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 4,
+          "character": 22
+        },
+        "end": {
+          "line": 4,
+          "character": 26
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 4,
+          "character": 22
+        },
+        "end": {
+          "line": 4,
+          "character": 26
+        }
+      }
+    },
+    {
+      "id": "156263b83f7375d95422d4c8510793bb4decca1fc9fb057d061a81c6da786e56",
+      "name": "Left(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 5,
+          "character": 22
+        },
+        "end": {
+          "line": 5,
+          "character": 26
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 5,
+          "character": 22
+        },
+        "end": {
+          "line": 5,
+          "character": 26
+        }
+      }
+    },
+    {
+      "id": "e2d060a8dbdef85f923425f4e9444b733a7c15662aeac735415ffcaf021cf16b",
+      "name": "Right(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 6,
+          "character": 22
+        },
+        "end": {
+          "line": 6,
+          "character": 27
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 6,
+          "character": 22
+        },
+        "end": {
+          "line": 6,
+          "character": 27
+        }
+      }
+    },
+    {
+      "id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "name": "Recursive(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 7,
+          "character": 22
+        },
+        "end": {
+          "line": 7,
+          "character": 31
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 7,
+          "character": 22
+        },
+        "end": {
+          "line": 7,
+          "character": 31
+        }
+      }
+    },
+    {
+      "id": "f31db76efe523e14224977efe07c23491a14d5279f5552142e509fac17a88c4a",
+      "name": "StaticButNotExecuted(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 22
+        },
+        "end": {
+          "line": 10,
+          "character": 42
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 10,
+          "character": 22
+        },
+        "end": {
+          "line": 10,
+          "character": 42
+        }
+      }
+    },
+    {
+      "id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "name": "Entry(int)",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 22
+        },
+        "end": {
+          "line": 13,
+          "character": 27
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 13,
+          "character": 22
+        },
+        "end": {
+          "line": 13,
+          "character": 27
+        }
+      }
+    },
+    {
+      "id": "c849f7f17f83997ba952e771b0269521f3442aa6162033c9bdf5ddd43820db3e",
+      "name": "Main()",
+      "kind": 6,
+      "detail": "LspTraceQualification.Calls",
+      "uri": "file://${REPO}/qualification/csharp/Calls.cs",
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 23
+        },
+        "end": {
+          "line": 14,
+          "character": 27
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 14,
+          "character": 23
+        },
+        "end": {
+          "line": 14,
+          "character": 27
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "caller_node_id": "156263b83f7375d95422d4c8510793bb4decca1fc9fb057d061a81c6da786e56",
+      "callee_node_id": "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84",
+      "call_sites": [
+        {
+          "start": {
+            "line": 5,
+            "character": 41
+          },
+          "end": {
+            "line": 5,
+            "character": 45
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "callee_node_id": "156263b83f7375d95422d4c8510793bb4decca1fc9fb057d061a81c6da786e56",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 42
+          },
+          "end": {
+            "line": 13,
+            "character": 46
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "callee_node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 71
+          },
+          "end": {
+            "line": 13,
+            "character": 80
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "callee_node_id": "e2d060a8dbdef85f923425f4e9444b733a7c15662aeac735415ffcaf021cf16b",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 56
+          },
+          "end": {
+            "line": 13,
+            "character": 61
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "callee_node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "call_sites": [
+        {
+          "start": {
+            "line": 7,
+            "character": 73
+          },
+          "end": {
+            "line": 7,
+            "character": 82
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "callee_node_id": "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84",
+      "call_sites": [
+        {
+          "start": {
+            "line": 7,
+            "character": 59
+          },
+          "end": {
+            "line": 7,
+            "character": 63
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "c849f7f17f83997ba952e771b0269521f3442aa6162033c9bdf5ddd43820db3e",
+      "callee_node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "call_sites": [
+        {
+          "start": {
+            "line": 14,
+            "character": 51
+          },
+          "end": {
+            "line": 14,
+            "character": 56
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "e2d060a8dbdef85f923425f4e9444b733a7c15662aeac735415ffcaf021cf16b",
+      "callee_node_id": "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84",
+      "call_sites": [
+        {
+          "start": {
+            "line": 6,
+            "character": 42
+          },
+          "end": {
+            "line": 6,
+            "character": 46
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "f31db76efe523e14224977efe07c23491a14d5279f5552142e509fac17a88c4a",
+      "callee_node_id": "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84",
+      "call_sites": [
+        {
+          "start": {
+            "line": 11,
+            "character": 81
+          },
+          "end": {
+            "line": 11,
+            "character": 85
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [
+    {
+      "node_id": "c849f7f17f83997ba952e771b0269521f3442aa6162033c9bdf5ddd43820db3e",
+      "reason": "NO_INCOMING_CALLS"
+    },
+    {
+      "node_id": "f31db76efe523e14224977efe07c23491a14d5279f5552142e509fac17a88c4a",
+      "reason": "NO_INCOMING_CALLS"
+    }
+  ],
+  "frontier": null,
+  "diagnostics": null,
+  "summary": {
+    "node_count": 7,
+    "edge_count": 9,
+    "terminal_count": 2,
+    "cycle_count": 1,
+    "complete": true,
+    "truncated": false
+  }
+}

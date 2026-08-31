@@ -1,0 +1,379 @@
+{
+  "schema_version": "lsp-trace.graph.v1",
+  "invocation": {
+    "workspace_uri": "file://${REPO}/qualification/typescript",
+    "target": {
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "line": 1,
+      "column": 17
+    },
+    "server": {
+      "command": "${REPO}/qualification/typescript/node_modules/.bin/typescript-language-server",
+      "arguments": [
+        "--stdio"
+      ]
+    },
+    "limits": {
+      "max_depth": 100,
+      "max_nodes": 10000,
+      "timeout_ms": 300000
+    }
+  },
+  "capabilities": {
+    "call_hierarchy_provider": true
+  },
+  "targets": [
+    "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8"
+  ],
+  "nodes": [
+    {
+      "id": "999dd5d90fcbdd819c718a93793ae14b763c93c4ae73a198b221e48f0ea48c9a",
+      "name": "calls.ts",
+      "kind": 2,
+      "detail": "src",
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 29,
+          "character": 23
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 0,
+          "character": 0
+        }
+      }
+    },
+    {
+      "id": "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8",
+      "name": "leaf",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 0,
+          "character": 0
+        },
+        "end": {
+          "line": 2,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 0,
+          "character": 16
+        },
+        "end": {
+          "line": 0,
+          "character": 20
+        }
+      }
+    },
+    {
+      "id": "72fc9a25a2c0d4ff015d34781698459a310399b964429d04cca26c169617a184",
+      "name": "left",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 4,
+          "character": 0
+        },
+        "end": {
+          "line": 6,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 4,
+          "character": 16
+        },
+        "end": {
+          "line": 4,
+          "character": 20
+        }
+      }
+    },
+    {
+      "id": "28e4d90d48baf2b7c33670005a21f99726341a4b78394515b56a90fcac41e89f",
+      "name": "right",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 0
+        },
+        "end": {
+          "line": 10,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 8,
+          "character": 16
+        },
+        "end": {
+          "line": 8,
+          "character": 21
+        }
+      }
+    },
+    {
+      "id": "46f0b96ea4ddc224bd3ccdeba0021030617be1f12b8cecdc3d5ff4a0b2ae51cd",
+      "name": "recursive",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 0
+        },
+        "end": {
+          "line": 14,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 12,
+          "character": 16
+        },
+        "end": {
+          "line": 12,
+          "character": 25
+        }
+      }
+    },
+    {
+      "id": "5b8ef425e556b1d2b66def073846efa9614eab57ec9cd6d5646e78cb07d629dc",
+      "name": "staticButNotExecuted",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 0
+        },
+        "end": {
+          "line": 23,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 18,
+          "character": 16
+        },
+        "end": {
+          "line": 18,
+          "character": 36
+        }
+      }
+    },
+    {
+      "id": "95e075dd227a33356cb6f7c72257b5c4c9fd7edcb9d898cdc633ed7498726258",
+      "name": "entry",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/typescript/src/calls.ts",
+      "range": {
+        "start": {
+          "line": 25,
+          "character": 0
+        },
+        "end": {
+          "line": 27,
+          "character": 1
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 25,
+          "character": 16
+        },
+        "end": {
+          "line": 25,
+          "character": 21
+        }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "caller_node_id": "28e4d90d48baf2b7c33670005a21f99726341a4b78394515b56a90fcac41e89f",
+      "callee_node_id": "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8",
+      "call_sites": [
+        {
+          "start": {
+            "line": 9,
+            "character": 9
+          },
+          "end": {
+            "line": 9,
+            "character": 13
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "46f0b96ea4ddc224bd3ccdeba0021030617be1f12b8cecdc3d5ff4a0b2ae51cd",
+      "callee_node_id": "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 22
+          },
+          "end": {
+            "line": 13,
+            "character": 26
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "46f0b96ea4ddc224bd3ccdeba0021030617be1f12b8cecdc3d5ff4a0b2ae51cd",
+      "callee_node_id": "46f0b96ea4ddc224bd3ccdeba0021030617be1f12b8cecdc3d5ff4a0b2ae51cd",
+      "call_sites": [
+        {
+          "start": {
+            "line": 13,
+            "character": 36
+          },
+          "end": {
+            "line": 13,
+            "character": 45
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "5b8ef425e556b1d2b66def073846efa9614eab57ec9cd6d5646e78cb07d629dc",
+      "callee_node_id": "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8",
+      "call_sites": [
+        {
+          "start": {
+            "line": 20,
+            "character": 11
+          },
+          "end": {
+            "line": 20,
+            "character": 15
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "72fc9a25a2c0d4ff015d34781698459a310399b964429d04cca26c169617a184",
+      "callee_node_id": "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8",
+      "call_sites": [
+        {
+          "start": {
+            "line": 5,
+            "character": 9
+          },
+          "end": {
+            "line": 5,
+            "character": 13
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "95e075dd227a33356cb6f7c72257b5c4c9fd7edcb9d898cdc633ed7498726258",
+      "callee_node_id": "28e4d90d48baf2b7c33670005a21f99726341a4b78394515b56a90fcac41e89f",
+      "call_sites": [
+        {
+          "start": {
+            "line": 26,
+            "character": 23
+          },
+          "end": {
+            "line": 26,
+            "character": 28
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "95e075dd227a33356cb6f7c72257b5c4c9fd7edcb9d898cdc633ed7498726258",
+      "callee_node_id": "46f0b96ea4ddc224bd3ccdeba0021030617be1f12b8cecdc3d5ff4a0b2ae51cd",
+      "call_sites": [
+        {
+          "start": {
+            "line": 26,
+            "character": 38
+          },
+          "end": {
+            "line": 26,
+            "character": 47
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "95e075dd227a33356cb6f7c72257b5c4c9fd7edcb9d898cdc633ed7498726258",
+      "callee_node_id": "72fc9a25a2c0d4ff015d34781698459a310399b964429d04cca26c169617a184",
+      "call_sites": [
+        {
+          "start": {
+            "line": 26,
+            "character": 9
+          },
+          "end": {
+            "line": 26,
+            "character": 13
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "999dd5d90fcbdd819c718a93793ae14b763c93c4ae73a198b221e48f0ea48c9a",
+      "callee_node_id": "95e075dd227a33356cb6f7c72257b5c4c9fd7edcb9d898cdc633ed7498726258",
+      "call_sites": [
+        {
+          "start": {
+            "line": 29,
+            "character": 12
+          },
+          "end": {
+            "line": 29,
+            "character": 17
+          }
+        }
+      ]
+    }
+  ],
+  "terminals": [
+    {
+      "node_id": "5b8ef425e556b1d2b66def073846efa9614eab57ec9cd6d5646e78cb07d629dc",
+      "reason": "NO_INCOMING_CALLS"
+    },
+    {
+      "node_id": "999dd5d90fcbdd819c718a93793ae14b763c93c4ae73a198b221e48f0ea48c9a",
+      "reason": "NO_INCOMING_CALLS"
+    }
+  ],
+  "frontier": null,
+  "diagnostics": null,
+  "summary": {
+    "node_count": 7,
+    "edge_count": 9,
+    "terminal_count": 2,
+    "cycle_count": 1,
+    "complete": true,
+    "truncated": false
+  }
+}
