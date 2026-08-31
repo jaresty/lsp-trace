@@ -38,6 +38,22 @@ type CallHierarchyIncomingCall struct {
 }
 
 type PrepareCallHierarchyParams = TextDocumentPositionParams
+type PrepareTypeHierarchyParams = TextDocumentPositionParams
+
+type TypeHierarchyItem struct {
+	Name           string          `json:"name"`
+	Kind           int             `json:"kind"`
+	Tags           []int           `json:"tags,omitempty"`
+	Detail         string          `json:"detail,omitempty"`
+	URI            string          `json:"uri"`
+	Range          Range           `json:"range"`
+	SelectionRange Range           `json:"selectionRange"`
+	Data           json.RawMessage `json:"data,omitempty"`
+}
+
+type TypeHierarchySubtypesParams struct {
+	Item TypeHierarchyItem `json:"item"`
+}
 
 type CallHierarchyIncomingCallsParams struct {
 	Item CallHierarchyItem `json:"item"`
@@ -72,4 +88,5 @@ type InitializeResult struct {
 
 type ServerCapabilities struct {
 	CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider,omitempty"`
+	TypeHierarchyProvider json.RawMessage `json:"typeHierarchyProvider,omitempty"`
 }
