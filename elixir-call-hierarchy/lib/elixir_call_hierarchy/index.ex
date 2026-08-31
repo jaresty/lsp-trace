@@ -162,10 +162,26 @@ defmodule ElixirCallHierarchy.Index do
   end
 
   defp compile_dependencies(root, deps_path, build_path) do
-    env = [{"MIX_DEPS_PATH", deps_path}, {"MIX_BUILD_PATH", build_path}]
+    env = dependency_compiler_env(deps_path, build_path)
     dependencies = active_dependencies(root)
     compile_dependencies(root, dependencies, build_path, env, MapSet.new())
     ensure_dependency_outputs(root, dependencies, build_path, env)
+  end
+
+  defp dependency_compiler_env(deps_path, build_path) do
+    root_dependency_lib = Path.join(build_path, "lib")
+
+    erl_libs =
+      [root_dependency_lib, System.get_env("ERL_LIBS")]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+      |> Enum.join(if(match?({:win32, _}, :os.type()), do: ";", else: ":"))
+
+    [
+      {"MIX_DEPS_PATH", deps_path},
+      {"MIX_BUILD_PATH", build_path},
+      {"ERL_LIBS", erl_libs}
+    ]
   end
 
   defp compile_dependencies(root, dependencies, build_path, env, repaired) do
@@ -257,34 +273,38 @@ defmodule ElixirCallHierarchy.Index do
   defp declared_modules(file) do
     with {:ok, source} <- File.read(file),
          {:ok, ast} <- Code.string_to_quoted(source) do
-      {_ast, {_stack, modules}} =
-        Macro.traverse(ast, {[], []}, &module_pre/2, &module_post/2)
-
-      modules
+      collect_declared_modules(ast, [])
     else
       _ -> []
     end
   end
 
-  defp module_pre({:defmodule, _, [{:__aliases__, _, parts}, _]} = node, {stack, modules}) do
-    module = qualify_module(parts, stack)
-    {node, {[module | stack], [module | modules]}}
+  defp collect_declared_modules({:__block__, _, forms}, stack) do
+    Enum.flat_map(forms, &collect_declared_modules(&1, stack))
   end
 
-  defp module_pre({:defmodule, _, [module, _]} = node, {stack, modules}) when is_atom(module) do
-    module = qualify_module([module], stack)
-    {node, {[module | stack], [module | modules]}}
+  defp collect_declared_modules({:defmodule, _, [name, body]}, stack) do
+    with {:ok, module} <- declared_module_name(name, stack),
+         {:ok, nested} <- Keyword.fetch(body, :do) do
+      [module | collect_declared_modules(nested, [module | stack])]
+    else
+      _ -> []
+    end
   end
 
-  defp module_pre(node, state), do: {node, state}
+  defp collect_declared_modules(_node, _stack), do: []
 
-  defp module_post({:defmodule, _, _} = node, {[_module | stack], modules}),
-    do: {node, {stack, modules}}
+  defp declared_module_name({:__aliases__, _, parts}, stack),
+    do: {:ok, qualify_module(parts, stack)}
 
-  defp module_post(node, state), do: {node, state}
+  defp declared_module_name(module, stack) when is_atom(module),
+    do: {:ok, qualify_module([module], stack)}
 
-  defp qualify_module(parts, [parent | _]) when length(parts) == 1,
-    do: Module.concat([parent | parts])
+  defp declared_module_name(_module, _stack), do: :error
+
+  defp qualify_module([:"Elixir" | _] = parts, _stack), do: Module.concat(parts)
+
+  defp qualify_module(parts, [parent | _]), do: Module.concat([parent | parts])
 
   defp qualify_module(parts, _stack), do: Module.concat(parts)
 

@@ -189,6 +189,17 @@ end
   @support CompileSupport.value()
   @external_resource resource
   @template File.read!(resource)
+
+  if Code.ensure_loaded?(UnavailableOptionalAdapter) do
+    defmodule OptionalAdapter do
+      def available, do: true
+    end
+  end
+
+  defmodule Nested.Helper do
+    def available, do: true
+  end
+
   defmacro instrument(do: expression) do
     template = @template
     quote do: {unquote(template), unquote(expression)}
@@ -214,6 +225,13 @@ end
         {:noop, []}
 
       {:ok, "2"} ->
+        root_lib = Path.join(System.fetch_env!("MIX_BUILD_PATH"), "lib")
+        erl_libs = System.get_env("ERL_LIBS", "")
+
+        unless root_lib in String.split(erl_libs, if(match?({:win32, _}, :os.type()), do: ";", else: ":"), trim: true) do
+          raise "root dependency build path is unavailable to dependency compiler"
+        end
+
         if Code.ensure_loaded?(CompileSupport),
           do: Mix.Tasks.Compile.Elixir.run(["--force" | args]),
           else: raise("transitive dependency module is unavailable")
@@ -333,6 +351,10 @@ end
         require(
             any(cache.rglob("Elixir.CompileFixture.beam")),
             "source-bearing dependency produces its BEAM module",
+        )
+        require(
+            any(cache.rglob("Elixir.CompileFixture.Nested.Helper.beam")),
+            "multi-segment nested dependency module is qualified relative to its parent",
         )
         require(
             any(cache.rglob("compile_fixture/priv/template.txt")),
