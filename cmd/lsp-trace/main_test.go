@@ -47,6 +47,13 @@ func TestParseValidatesFlags(t *testing.T) {
 	}
 }
 
+func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
+	cfg, err := parse(append(validArgs(t.TempDir()), "--topmost-siblings"))
+	if err != nil || !cfg.topmostSiblings {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_CLI_OPT_IN: enabled=%t err=%v", cfg.topmostSiblings, err)
+	}
+}
+
 func TestParseConcurrencyContract(t *testing.T) {
 	if _, err := parse(append(validArgs(t.TempDir()), "--concurrency", "1")); err != nil {
 		t.Fatalf("concurrency 1: %v", err)
