@@ -6,7 +6,11 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-LANGUAGES = ("typescript", "csharp", "elixir")
+EXPECTED_STATUS_PREFIX = {
+    "typescript": "PASS",
+    "csharp": "PASS",
+    "elixir": "BLOCKED:",
+}
 FILES = (
     "status.txt",
     "assertions.txt",
@@ -25,11 +29,12 @@ def main() -> None:
     destination_root = root / "qualification" / "retained"
     marker = "${REPO}"
 
-    for language in LANGUAGES:
+    for language, expected_prefix in EXPECTED_STATUS_PREFIX.items():
         source = source_root / language
         status = source / "status.txt"
-        if not status.is_file() or status.read_text(encoding="utf-8").strip() != "PASS":
-            raise SystemExit(f"{language}: qualification status is not PASS")
+        actual_status = status.read_text(encoding="utf-8").strip() if status.is_file() else ""
+        if not actual_status.startswith(expected_prefix):
+            raise SystemExit(f"{language}: qualification status {actual_status!r} does not start with {expected_prefix!r}")
 
         destination = destination_root / language
         if destination.exists():

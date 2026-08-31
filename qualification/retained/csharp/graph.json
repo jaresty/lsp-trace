@@ -1,5 +1,5 @@
 {
-  "schema_version": "lsp-trace.graph.v1",
+  "schema_version": "lsp-trace.graph.v2",
   "invocation": {
     "workspace_uri": "file://${REPO}/qualification/csharp",
     "target": {
@@ -19,6 +19,14 @@
   },
   "capabilities": {
     "call_hierarchy_provider": true
+  },
+  "capability_quality": {
+    "advertised": true,
+    "prepare_succeeded": true,
+    "incoming_request_successes": 7,
+    "incoming_edges": 9,
+    "cross_file_edges": 0,
+    "cross_module_edges": "UNKNOWN"
   },
   "targets": [
     "c58df44fbd77eb0d701600cb67b4ebf603a1460ebbbb0651a5c59070b1e53d84"
@@ -363,21 +371,80 @@
   "terminals": [
     {
       "node_id": "c849f7f17f83997ba952e771b0269521f3442aa6162033c9bdf5ddd43820db3e",
-      "reason": "NO_INCOMING_CALLS"
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     },
     {
       "node_id": "f31db76efe523e14224977efe07c23491a14d5279f5552142e509fac17a88c4a",
-      "reason": "NO_INCOMING_CALLS"
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     }
   ],
   "frontier": null,
-  "diagnostics": null,
+  "diagnostics": [
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "156263b83f7375d95422d4c8510793bb4decca1fc9fb057d061a81c6da786e56",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "2ac15995eae07fe804b555159ce0aab0879349ebce1b1f7fda9a281a5f654f09",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "5a63d38f9dc15ce36eb2ce7d536e24bfc3a0754339004751ed19a41c85d7b773",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "c849f7f17f83997ba952e771b0269521f3442aa6162033c9bdf5ddd43820db3e",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "e2d060a8dbdef85f923425f4e9444b733a7c15662aeac735415ffcaf021cf16b",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "f31db76efe523e14224977efe07c23491a14d5279f5552142e509fac17a88c4a",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    }
+  ],
   "summary": {
     "node_count": 7,
     "edge_count": 9,
     "terminal_count": 2,
     "cycle_count": 1,
-    "complete": true,
+    "traversal_complete": true,
+    "source_graph_complete": "UNKNOWN",
+    "completeness_scope": "SERVER_REPORTED_CALL_HIERARCHY",
     "truncated": false
   }
 }

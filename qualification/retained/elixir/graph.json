@@ -1,10 +1,10 @@
 {
-  "schema_version": "lsp-trace.graph.v1",
+  "schema_version": "lsp-trace.graph.v2",
   "invocation": {
     "workspace_uri": "file://${REPO}/qualification/elixir",
     "target": {
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
-      "line": 2,
+      "line": 3,
       "column": 7
     },
     "server": {
@@ -22,167 +22,202 @@
   "capabilities": {
     "call_hierarchy_provider": true
   },
+  "capability_quality": {
+    "advertised": true,
+    "prepare_succeeded": true,
+    "incoming_request_successes": 7,
+    "incoming_edges": 9,
+    "cross_file_edges": 0,
+    "cross_module_edges": "UNKNOWN"
+  },
   "targets": [
-    "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326"
+    "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2"
   ],
   "nodes": [
     {
-      "id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
       "name": "LspTraceQualification.Calls.leaf/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 1,
+          "line": 3,
           "character": 2
         },
         "end": {
-          "line": 1,
+          "line": 3,
           "character": 6
         }
       },
       "selection_range": {
         "start": {
-          "line": 1,
+          "line": 3,
           "character": 2
         },
         "end": {
-          "line": 1,
+          "line": 3,
           "character": 6
         }
       },
       "data": null
     },
     {
-      "id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
+      "id": "951bad69e532652dadc5100f9f8871e86aa309e18e6537696b44fbb450961b74",
       "name": "LspTraceQualification.Calls.left/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 2,
+          "line": 5,
           "character": 2
         },
         "end": {
-          "line": 2,
+          "line": 5,
           "character": 6
         }
       },
       "selection_range": {
         "start": {
-          "line": 2,
+          "line": 5,
           "character": 2
         },
         "end": {
-          "line": 2,
+          "line": 5,
           "character": 6
         }
       },
       "data": null
     },
     {
-      "id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
+      "id": "11c7f5d792eb3192f79d9885f4d83a94640945a5374caa8143f37215bb213acf",
       "name": "LspTraceQualification.Calls.right/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 3,
+          "line": 6,
           "character": 2
         },
         "end": {
-          "line": 3,
+          "line": 6,
           "character": 7
         }
       },
       "selection_range": {
         "start": {
-          "line": 3,
+          "line": 6,
           "character": 2
         },
         "end": {
-          "line": 3,
+          "line": 6,
           "character": 7
         }
       },
       "data": null
     },
     {
-      "id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
+      "id": "ce72e75caa1f1180f442ee6819c27c0aba07b75bf0f8fcd7917e1a449d6138ef",
+      "name": "LspTraceQualification.Calls.same_module/1",
+      "kind": 12,
+      "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
+      "range": {
+        "start": {
+          "line": 7,
+          "character": 2
+        },
+        "end": {
+          "line": 7,
+          "character": 13
+        }
+      },
+      "selection_range": {
+        "start": {
+          "line": 7,
+          "character": 2
+        },
+        "end": {
+          "line": 7,
+          "character": 13
+        }
+      },
+      "data": null
+    },
+    {
+      "id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
       "name": "LspTraceQualification.Calls.recursive/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 4,
+          "line": 10,
           "character": 2
         },
         "end": {
-          "line": 4,
+          "line": 10,
           "character": 11
         }
       },
       "selection_range": {
         "start": {
-          "line": 4,
+          "line": 10,
           "character": 2
         },
         "end": {
-          "line": 4,
+          "line": 10,
           "character": 11
         }
       },
       "data": null
     },
     {
-      "id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
+      "id": "a03e6fe50503ae5fb04b13cc9423216e0add488975aca9346e25d3714f1c7fcf",
       "name": "LspTraceQualification.Calls.static_but_not_executed/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 9,
+          "line": 13,
           "character": 2
         },
         "end": {
-          "line": 9,
+          "line": 13,
           "character": 25
         }
       },
       "selection_range": {
         "start": {
-          "line": 9,
+          "line": 13,
           "character": 2
         },
         "end": {
-          "line": 9,
+          "line": 13,
           "character": 25
         }
       },
       "data": null
     },
     {
-      "id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
+      "id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
       "name": "LspTraceQualification.Calls.entry/1",
       "kind": 12,
       "uri": "file://${REPO}/qualification/elixir/lib/calls.ex",
       "range": {
         "start": {
-          "line": 13,
+          "line": 17,
           "character": 2
         },
         "end": {
-          "line": 13,
+          "line": 17,
           "character": 7
         }
       },
       "selection_range": {
         "start": {
-          "line": 13,
+          "line": 17,
           "character": 2
         },
         "end": {
-          "line": 13,
+          "line": 17,
           "character": 7
         }
       },
@@ -191,113 +226,155 @@
   ],
   "edges": [
     {
-      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
-      "callee_node_id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
-      "call_sites": [
-        {
-          "start": {
-            "line": 13,
-            "character": 38
-          },
-          "end": {
-            "line": 13,
-            "character": 43
-          }
-        }
-      ]
-    },
-    {
-      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
-      "callee_node_id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
-      "call_sites": [
-        {
-          "start": {
-            "line": 13,
-            "character": 53
-          },
-          "end": {
-            "line": 13,
-            "character": 62
-          }
-        }
-      ]
-    },
-    {
-      "caller_node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
-      "callee_node_id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
-      "call_sites": [
-        {
-          "start": {
-            "line": 13,
-            "character": 24
-          },
-          "end": {
-            "line": 13,
-            "character": 28
-          }
-        }
-      ]
-    },
-    {
-      "caller_node_id": "54cc7a12d7feea6eec0127bea65acb065c817278131dfb02674a01f69cb4ec30",
-      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
-      "call_sites": [
-        {
-          "start": {
-            "line": 3,
-            "character": 24
-          },
-          "end": {
-            "line": 3,
-            "character": 28
-          }
-        }
-      ]
-    },
-    {
-      "caller_node_id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
-      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "caller_node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
+      "callee_node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
       "call_sites": [
         {
           "start": {
             "line": 10,
-            "character": 63
+            "character": 42
           },
           "end": {
             "line": 10,
-            "character": 67
+            "character": 51
           }
         }
       ]
     },
     {
-      "caller_node_id": "7df116d7b31b8023eee689fbd0c661cd83a3038b29a1400781c41954cd4b17bb",
-      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "caller_node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
+      "callee_node_id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
       "call_sites": [
         {
           "start": {
-            "line": 4,
+            "line": 10,
             "character": 28
           },
           "end": {
-            "line": 4,
+            "line": 10,
             "character": 32
           }
         }
       ]
     },
     {
-      "caller_node_id": "b80e21e9b76c90f738fa68a2e10f2f22afe16baa10e4205da3c86ce8b33d899d",
-      "callee_node_id": "41e9f840b2bbbaa8b0351f684e6a1c8483f882c402ee3cbdace53c7b91271326",
+      "caller_node_id": "11c7f5d792eb3192f79d9885f4d83a94640945a5374caa8143f37215bb213acf",
+      "callee_node_id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
       "call_sites": [
         {
           "start": {
-            "line": 2,
+            "line": 6,
+            "character": 24
+          },
+          "end": {
+            "line": 6,
+            "character": 28
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "951bad69e532652dadc5100f9f8871e86aa309e18e6537696b44fbb450961b74",
+      "callee_node_id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
+      "call_sites": [
+        {
+          "start": {
+            "line": 5,
             "character": 23
           },
           "end": {
-            "line": 2,
+            "line": 5,
             "character": 27
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "a03e6fe50503ae5fb04b13cc9423216e0add488975aca9346e25d3714f1c7fcf",
+      "callee_node_id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
+      "call_sites": [
+        {
+          "start": {
+            "line": 14,
+            "character": 63
+          },
+          "end": {
+            "line": 14,
+            "character": 67
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "ce72e75caa1f1180f442ee6819c27c0aba07b75bf0f8fcd7917e1a449d6138ef",
+      "callee_node_id": "2ed40b993983deb0274939fb976f480b7ab784456df8a12831daca2a841313b2",
+      "call_sites": [
+        {
+          "start": {
+            "line": 7,
+            "character": 30
+          },
+          "end": {
+            "line": 7,
+            "character": 34
+          }
+        },
+        {
+          "start": {
+            "line": 9,
+            "character": 44
+          },
+          "end": {
+            "line": 9,
+            "character": 48
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "callee_node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
+      "call_sites": [
+        {
+          "start": {
+            "line": 17,
+            "character": 53
+          },
+          "end": {
+            "line": 17,
+            "character": 62
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "callee_node_id": "11c7f5d792eb3192f79d9885f4d83a94640945a5374caa8143f37215bb213acf",
+      "call_sites": [
+        {
+          "start": {
+            "line": 17,
+            "character": 38
+          },
+          "end": {
+            "line": 17,
+            "character": 43
+          }
+        }
+      ]
+    },
+    {
+      "caller_node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "callee_node_id": "951bad69e532652dadc5100f9f8871e86aa309e18e6537696b44fbb450961b74",
+      "call_sites": [
+        {
+          "start": {
+            "line": 17,
+            "character": 24
+          },
+          "end": {
+            "line": 17,
+            "character": 28
           }
         }
       ]
@@ -305,22 +382,86 @@
   ],
   "terminals": [
     {
-      "node_id": "4b866b06b7b4cffa0eb76b4128d22e71ed9a492110207c3a4bc83f3254464e78",
-      "reason": "NO_INCOMING_CALLS"
+      "node_id": "a03e6fe50503ae5fb04b13cc9423216e0add488975aca9346e25d3714f1c7fcf",
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     },
     {
-      "node_id": "6d8a9c0e0dd9183e8f3e6e3b641b91257b2dda2f6a0139b7d1e1b96da1c4a46f",
-      "reason": "NO_INCOMING_CALLS"
+      "node_id": "ce72e75caa1f1180f442ee6819c27c0aba07b75bf0f8fcd7917e1a449d6138ef",
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
+    },
+    {
+      "node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     }
   ],
   "frontier": null,
-  "diagnostics": null,
+  "diagnostics": [
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "0aae3029b8164315910b15c47f13e1568647c0c9d30559d88bef919144487168",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "11c7f5d792eb3192f79d9885f4d83a94640945a5374caa8143f37215bb213acf",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "951bad69e532652dadc5100f9f8871e86aa309e18e6537696b44fbb450961b74",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "a03e6fe50503ae5fb04b13cc9423216e0add488975aca9346e25d3714f1c7fcf",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "ce72e75caa1f1180f442ee6819c27c0aba07b75bf0f8fcd7917e1a449d6138ef",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    },
+    {
+      "phase": "traverse",
+      "method": "callHierarchy/incomingCalls",
+      "node_id": "de7355531cb48db0abef5c313b1e55f425f336bba8190afee82f95f32b12a0b9",
+      "message": "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"
+    }
+  ],
   "summary": {
-    "node_count": 6,
-    "edge_count": 7,
-    "terminal_count": 2,
-    "cycle_count": 0,
-    "complete": true,
+    "node_count": 7,
+    "edge_count": 9,
+    "terminal_count": 3,
+    "cycle_count": 1,
+    "traversal_complete": true,
+    "source_graph_complete": "UNKNOWN",
+    "completeness_scope": "SERVER_REPORTED_CALL_HIERARCHY",
     "truncated": false
   }
 }

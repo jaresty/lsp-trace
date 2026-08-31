@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,6 +239,22 @@ func TestIncomingRejectsMalformedCallSiteRange(t *testing.T) {
 	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
 	if r.Summary.Complete || r.Summary.EdgeCount != 0 || len(r.Diagnostics) != 1 || len(r.Terminals) != 1 || r.Terminals[0].Reason != graph.InvalidServerResponse {
 		t.Fatalf("ASSERT_MALFORMED_CALL_SITE_REJECTED: %#v", r)
+	}
+}
+
+func TestIncomingRetainsCallSiteOutsideCallerItemRange(t *testing.T) {
+	leaf, caller := item("leaf", 8), item("caller", 4)
+	outside := lsp.Range{Start: lsp.Position{Line: 5, Character: 2}, End: lsp.Position{Line: 5, Character: 6}}
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+		"leaf":   {{From: caller, FromRanges: []lsp.Range{outside}}},
+		"caller": {},
+	}}
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	if !r.Summary.Complete || r.Summary.EdgeCount != 1 || len(r.Edges[0].CallSites) != 1 {
+		t.Fatalf("ASSERT_OUTSIDE_CALL_SITE_EDGE_RETAINED: %#v", r)
+	}
+	if len(r.Diagnostics) != 1 || !strings.Contains(r.Diagnostics[0].Message, "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE") {
+		t.Fatalf("ASSERT_OUTSIDE_CALL_SITE_WARNING: %#v", r.Diagnostics)
 	}
 }
 

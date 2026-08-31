@@ -137,10 +137,15 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				continue
 			}
 			invalidRange := error(nil)
+			outsideCallerRange := false
 			for _, fromRange := range call.FromRanges {
-				if err := graph.ValidateRange(rng(fromRange), caller.Range); err != nil {
+				normalized := rng(fromRange)
+				if err := graph.ValidateRange(normalized); err != nil {
 					invalidRange = err
 					break
+				}
+				if !graph.RangeContains(caller.Range, normalized) {
+					outsideCallerRange = true
 				}
 			}
 			if invalidRange != nil {
@@ -148,6 +153,9 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: invalidRange.Error()})
 				result.Summary.Complete = false
 				continue
+			}
+			if outsideCallerRange {
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: caller.ID, Message: "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"})
 			}
 			if existing, ok := seen[caller.ID]; ok && !graph.SameNodeIdentity(existing, caller) {
 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.NodeIDCollision})

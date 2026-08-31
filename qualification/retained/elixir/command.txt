@@ -1,1 +1,1 @@
-${REPO}/qualification/evidence/elixir/lsp-trace incoming --workspace ${REPO}/qualification/elixir --server /opt/homebrew/bin/elixir-ls --server-arg --stdio --at ${REPO}/qualification/elixir/lib/calls.ex:2:7 --pretty
+${REPO}/qualification/evidence/elixir/lsp-trace incoming --workspace ${REPO}/qualification/elixir --server /opt/homebrew/bin/elixir-ls --server-arg --stdio --at ${REPO}/qualification/elixir/lib/calls.ex:3:7 --pretty

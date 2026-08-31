@@ -59,4 +59,4 @@ TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract 
 - [Schema compatibility policy](docs/SCHEMA_POLICY.md)
 - [Release checklist](docs/RELEASING.md)
 
-Run `./scripts/release-check.sh` for hermetic release-asset checks. External TypeScript, C#, and ElixirLS qualification and the complete fake-server scenario suite remain release blockers described in [PRD.md](PRD.md).
+Run `./scripts/release-check.sh` for hermetic release-asset checks. Retained TypeScript and C# qualification runs pass. The strengthened ElixirLS cross-module qualification is retained as BLOCKED because the required aliased and fully qualified caller edges were not reported. The hermetic real-stdio fake-server suite runs in normal Go tests.

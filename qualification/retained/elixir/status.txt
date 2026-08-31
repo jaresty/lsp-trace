@@ -1,1 +1,1 @@
-PASS
+BLOCKED: ElixirLS Call Hierarchy lacks an exact same-module or missing cross-module caller edge, multi-clause resolution, or required range; assertions retained

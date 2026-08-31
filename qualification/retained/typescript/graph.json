@@ -1,5 +1,5 @@
 {
-  "schema_version": "lsp-trace.graph.v1",
+  "schema_version": "lsp-trace.graph.v2",
   "invocation": {
     "workspace_uri": "file://${REPO}/qualification/typescript",
     "target": {
@@ -21,6 +21,14 @@
   },
   "capabilities": {
     "call_hierarchy_provider": true
+  },
+  "capability_quality": {
+    "advertised": true,
+    "prepare_succeeded": true,
+    "incoming_request_successes": 7,
+    "incoming_edges": 9,
+    "cross_file_edges": 0,
+    "cross_module_edges": "UNKNOWN"
   },
   "targets": [
     "1e8f0cf107a80f01882c28662d49d75ee6c6987328acd8731abb99ab361a7db8"
@@ -359,11 +367,13 @@
   "terminals": [
     {
       "node_id": "5b8ef425e556b1d2b66def073846efa9614eab57ec9cd6d5646e78cb07d629dc",
-      "reason": "NO_INCOMING_CALLS"
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     },
     {
       "node_id": "999dd5d90fcbdd819c718a93793ae14b763c93c4ae73a198b221e48f0ea48c9a",
-      "reason": "NO_INCOMING_CALLS"
+      "reason": "SERVER_REPORTED_NO_INCOMING_CALLS",
+      "provenance": "SERVER_REPORTED"
     }
   ],
   "frontier": null,
@@ -373,7 +383,9 @@
     "edge_count": 9,
     "terminal_count": 2,
     "cycle_count": 1,
-    "complete": true,
+    "traversal_complete": true,
+    "source_graph_complete": "UNKNOWN",
+    "completeness_scope": "SERVER_REPORTED_CALL_HIERARCHY",
     "truncated": false
   }
 }

@@ -5,6 +5,7 @@ language=${1:-}
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 evidence="$root/qualification/evidence/$language"
 mkdir -p "$evidence"
+rm -f "$evidence"/*
 
 blocked() {
   printf 'BLOCKED: %s\n' "$1" | tee "$evidence/status.txt"
@@ -50,7 +51,7 @@ case "$language" in
     command -v elixir >/dev/null 2>&1 || blocked 'Elixir executable unavailable'
     server=$(find_elixir_ls) || blocked 'ElixirLS executable unavailable (set ELIXIR_LS_COMMAND)'
     ("$server" --version || elixir --version) >"$evidence/server-version.txt" 2>&1 || blocked 'ElixirLS version probe failed'
-    target="$root/qualification/elixir/lib/calls.ex:2:7"
+    target="$root/qualification/elixir/lib/calls.ex:3:7"
     workspace="$root/qualification/elixir"
     server_arg=--stdio
     expected='left,right,same_module,recursive,static_but_not_executed,aliased_cross_file,direct_qualified'
@@ -92,28 +93,35 @@ import json, sys
 with open(sys.argv[1], encoding='utf-8') as f: g=json.load(f)
 expected=set(sys.argv[2].split(','))
 language=sys.argv[3]
-nodes={n['id']: n for n in g['nodes']}
-names={n['name'] for n in g['nodes']}
+def require(condition, message):
+    if not condition:
+        print('FAIL: ' + message)
+        raise SystemExit(1)
+node_list=g.get('nodes') or []
+edge_list=g.get('edges') or []
+nodes={n['id']: n for n in node_list}
+names={n['name'] for n in node_list}
 def matches(name, want):
     return name == want or name.startswith(want + '(') or name.endswith('.' + want + '/1')
 present={want for want in expected if any(matches(name, want) for name in names)}
 missing=sorted(expected-present)
-assert g['schema_version']=='lsp-trace.graph.v1'
-assert g['capabilities']['call_hierarchy_provider'] is True
-assert g['summary']['complete'] is True
-assert not missing, f'missing exact callers: {missing}'
-assert all(e['call_sites'] for e in g['edges'])
+require(g['schema_version'] in {'lsp-trace.graph.v1', 'lsp-trace.graph.v2'}, 'unsupported schema version')
+require(g['capabilities']['call_hierarchy_provider'] is True, 'Call Hierarchy was not advertised')
+summary=g['summary']
+require(summary.get('traversal_complete', summary.get('complete')) is True, 'server-reported traversal is incomplete')
+require(not missing, f'missing exact callers: {missing}')
+require(bool(edge_list) and all(e['call_sites'] for e in edge_list), 'one or more caller edges lack call-site ranges')
 print('protocol support=true')
 print('exact callers=' + ','.join(sorted(expected)))
 if language == 'elixir':
     leaf_ids={node_id for node_id, node in nodes.items() if matches(node['name'], 'leaf')}
-    leaf_callers={nodes[e['caller_node_id']]['name'] for e in g['edges'] if e['callee_node_id'] in leaf_ids}
+    leaf_callers={nodes[e['caller_node_id']]['name'] for e in edge_list if e['callee_node_id'] in leaf_ids}
     required_same={'same_module', 'recursive', 'static_but_not_executed'}
     required_cross={'aliased_cross_file', 'direct_qualified'}
     missing_same=sorted(want for want in required_same if not any(matches(name, want) for name in leaf_callers))
     missing_cross=sorted(want for want in required_cross if not any(matches(name, want) for name in leaf_callers))
-    assert not missing_same, f'missing same-module caller edge: {missing_same}'
-    assert not missing_cross, f'missing cross-module caller edge: {missing_cross}'
+    require(not missing_same, f'missing same-module caller edge: {missing_same}')
+    require(not missing_cross, f'missing cross-module caller edge: {missing_cross}')
     print('same-module resolution=true')
     print('cross-module resolution=true')
     print('multi-clause resolution=true')
