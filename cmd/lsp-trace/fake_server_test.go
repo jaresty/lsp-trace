@@ -60,6 +60,77 @@ func TestSubprocessLifecycleAndHierarchyShapes(t *testing.T) {
 	}
 }
 
+func TestSubprocessLabeledMultipleSeeds(t *testing.T) {
+	for _, scenario := range []string{"multi-two", "multi-duplicate", "multi-mixed"} {
+		t.Run(scenario, func(t *testing.T) {
+			workspace := t.TempDir()
+			if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			seedFile := filepath.Join(t.TempDir(), "seeds.json")
+			body := `{"seeds":[{"label":"interface","at":"main.go:1:1"},{"label":"implementation","at":"main.go:2:1"}]}`
+			if err := os.WriteFile(seedFile, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"incoming", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=" + scenario, "--seed-file", seedFile, "--request-timeout", "500ms", "--timeout", "1s"}
+			stdout, stderr, code := captureRun(t, args)
+			if code != 0 && scenario != "multi-mixed" {
+				t.Fatalf("ASSERT_REPEATABLE_AT_ACCEPTED: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+			}
+			var got struct {
+				Seeds []struct {
+					Label     string       `json:"label"`
+					Requested graph.Target `json:"requested_position"`
+					Prepared  []string     `json:"prepared_target_ids"`
+					Reached   []string     `json:"reached_node_ids"`
+					Failure   any          `json:"failure"`
+				} `json:"seeds"`
+				Nodes   []graph.Node `json:"nodes"`
+				Summary struct {
+					TraversalComplete bool `json:"traversal_complete"`
+				} `json:"summary"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+				t.Fatalf("ASSERT_V2_SEED_PROVENANCE: %v stdout=%q stderr=%q", err, stdout, stderr)
+			}
+			byLabel := map[string]struct {
+				Requested graph.Target
+				Prepared  []string
+				Reached   []string
+				Failure   any
+			}{}
+			for _, seed := range got.Seeds {
+				byLabel[seed.Label] = struct {
+					Requested graph.Target
+					Prepared  []string
+					Reached   []string
+					Failure   any
+				}{seed.Requested, seed.Prepared, seed.Reached, seed.Failure}
+			}
+			_, hasInterface := byLabel["interface"]
+			_, hasImplementation := byLabel["implementation"]
+			if len(got.Seeds) != 2 || !hasInterface || !hasImplementation || byLabel["interface"].Requested.Line != 1 || len(byLabel["implementation"].Prepared) == 0 {
+				t.Fatalf("ASSERT_V2_SEED_PROVENANCE: %#v", got.Seeds)
+			}
+			switch scenario {
+			case "multi-duplicate":
+				left, right := byLabel["interface"].Reached, byLabel["implementation"].Reached
+				if len(got.Nodes) != 1 || len(left) != 1 || len(right) != 1 || left[0] != right[0] {
+					t.Fatalf("ASSERT_DUPLICATE_SEEDS_COLLAPSE: nodes=%#v seeds=%#v", got.Nodes, got.Seeds)
+				}
+			case "multi-mixed":
+				if code != 2 || got.Summary.TraversalComplete || len(got.Nodes) == 0 || byLabel["interface"].Failure == nil || len(byLabel["implementation"].Reached) == 0 {
+					t.Fatalf("ASSERT_FAILED_SEED_INCOMPLETE_WITH_GRAPH: code=%d result=%#v stderr=%s", code, got, stderr)
+				}
+			default:
+				if !got.Summary.TraversalComplete || len(got.Nodes) != 2 {
+					t.Fatalf("ASSERT_FAILED_SEED_CONTINUES: %#v", got)
+				}
+			}
+		})
+	}
+}
+
 func TestSubprocessOpaqueDataAndShuffledOrdering(t *testing.T) {
 	a, codeA := executeFake(t, "shuffle-forward", 500*time.Millisecond)
 	b, codeB := executeFake(t, "shuffle-reverse", 500*time.Millisecond)
@@ -67,6 +138,12 @@ func TestSubprocessOpaqueDataAndShuffledOrdering(t *testing.T) {
 		t.Fatalf("ASSERT_SUBPROCESS_SHUFFLE_SUCCESS: codes=%d/%d", codeA, codeB)
 	}
 	a.Invocation, b.Invocation = graph.Invocation{}, graph.Invocation{}
+	for i := range a.Seeds {
+		a.Seeds[i].Requested = graph.Target{}
+	}
+	for i := range b.Seeds {
+		b.Seeds[i].Requested = graph.Target{}
+	}
 	ja, _ := json.Marshal(a)
 	jb, _ := json.Marshal(b)
 	if string(ja) != string(jb) {
@@ -146,7 +223,23 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				err = writeFake(out, m.ID, nil, nil)
 				break
 			}
-			err = writeFake(out, m.ID, []fakeItem{item("leaf", 0)}, nil)
+			var p struct {
+				Position fakePosition `json:"position"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			if scenario == "multi-mixed" && p.Position.Line == 0 {
+				err = writeFake(out, m.ID, nil, map[string]any{"code": -32002, "message": "seed prepare failure"})
+				break
+			}
+			line := p.Position.Line
+			name := "leaf"
+			if scenario == "multi-two" && line > 0 {
+				name = "second"
+			}
+			if scenario == "multi-duplicate" {
+				line = 0
+			}
+			err = writeFake(out, m.ID, []fakeItem{item(name, line)}, nil)
 		case "callHierarchy/incomingCalls":
 			var p struct {
 				Item fakeItem `json:"item"`
