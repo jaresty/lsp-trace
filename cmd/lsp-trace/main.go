@@ -29,8 +29,9 @@ func (s *stringsFlag) Set(v string) error { *s = append(*s, v); return nil }
 type config struct {
 	workspace, command, at, languageID, output string
 	args, env                                  stringsFlag
-	maxDepth, maxNodes                         int
+	maxDepth, maxNodes, concurrency            int
 	timeout, requestTimeout                    time.Duration
+	logLevel, traceLSP                         string
 	pretty                                     bool
 }
 
@@ -54,6 +55,9 @@ func run(args []string) int {
 	result, code := execute(ctx, cfg)
 	if errors.Is(ctx.Err(), context.Canceled) {
 		code = 130
+	}
+	for _, diagnostic := range result.Diagnostics {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", diagnostic.Phase, diagnostic.Message)
 	}
 	out := os.Stdout
 	var f *os.File
@@ -90,8 +94,11 @@ func parse(args []string) (config, error) {
 	fs.IntVar(&c.maxNodes, "max-nodes", 10000, "maximum nodes; 0 unlimited")
 	fs.DurationVar(&c.timeout, "timeout", 5*time.Minute, "global timeout; 0 unlimited")
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")
+	fs.IntVar(&c.concurrency, "concurrency", 1, "concurrent requests (MVP requires 1)")
 	fs.StringVar(&c.output, "output", "", "output file")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
+	fs.StringVar(&c.logLevel, "log-level", "warn", "error, warn, info, or debug")
+	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -106,6 +113,14 @@ func parse(args []string) (config, error) {
 	}
 	if c.requestTimeout == 0 {
 		return c, errors.New("--request-timeout must be greater than zero")
+	}
+	if c.concurrency != 1 {
+		return c, errors.New("--concurrency must be 1 in the sequential MVP")
+	}
+	switch c.logLevel {
+	case "error", "warn", "info", "debug":
+	default:
+		return c, fmt.Errorf("invalid --log-level %q: want error, warn, info, or debug", c.logLevel)
 	}
 	for _, e := range c.env {
 		if k, _, ok := strings.Cut(e, "="); !ok || k == "" {
@@ -137,7 +152,30 @@ func parseAt(s string) (string, int, int, error) {
 	}
 	return path, line, col, nil
 }
-func execute(ctx context.Context, c config) (graph.Result, int) {
+
+type requestTimeoutClient struct {
+	parent  context.Context
+	timeout time.Duration
+	client  *lsp.Client
+}
+
+func (c requestTimeoutClient) callContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(c.parent, c.timeout)
+}
+
+func (c requestTimeoutClient) PrepareCallHierarchy(_ context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.PrepareCallHierarchy(ctx, params)
+}
+
+func (c requestTimeoutClient) IncomingCalls(_ context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.IncomingCalls(ctx, item)
+}
+
+func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	path, line, col, err := parseAt(c.at)
 	base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}}
 	if err != nil {
@@ -155,14 +193,38 @@ func execute(ctx context.Context, c config) (graph.Result, int) {
 		return base, 1
 	}
 	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: targetURI, Line: line, Column: col}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}}
+	var traceFile *os.File
+	var trace jsonrpc.TraceFunc
+	if c.traceLSP != "" {
+		traceFile, err = os.OpenFile(c.traceLSP, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+		if err != nil {
+			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "trace", Message: err.Error()})
+			return base, 1
+		}
+		defer traceFile.Close()
+		encoder := json.NewEncoder(traceFile)
+		trace = func(event jsonrpc.TraceEvent) {
+			_ = encoder.Encode(event)
+		}
+	}
 	proc, err := server.Start(ctx, c.command, c.args, c.env)
 	if err != nil {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "spawn", Message: err.Error()})
 		return base, 1
 	}
-	conn := jsonrpc.New(proc.Stdout, proc.Stdin)
+	defer func() {
+		_ = proc.Stop(2 * time.Second)
+		captured := proc.Stderr()
+		if c.logLevel == "debug" && captured != "" {
+			fmt.Fprint(os.Stderr, captured)
+		}
+		if captured != "" && !out.Summary.Complete {
+			out.Diagnostics = append(out.Diagnostics, graph.Diagnostic{Phase: "server-stderr", Message: captured})
+			out.Canonicalize()
+		}
+	}()
+	conn := jsonrpc.NewWithTrace(proc.Stdout, proc.Stdin, trace)
 	client := lsp.NewClient(conn)
-	defer proc.Stop(2 * time.Second)
 	req := func() (context.Context, context.CancelFunc) {
 		if c.requestTimeout == 0 {
 			return context.WithCancel(ctx)
@@ -195,11 +257,12 @@ func execute(ctx context.Context, c config) (graph.Result, int) {
 		return base, 1
 	}
 	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: targetURI}, Position: lsp.Position{Line: uint32(line - 1), Character: uint32(col - 1)}}
-	result := traverse.Incoming(ctx, client, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
+	timedClient := requestTimeoutClient{parent: ctx, timeout: c.requestTimeout, client: client}
+	result := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
 	result.Invocation = base.Invocation
 	result.Capabilities = base.Capabilities
 	result.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(ctx, c.requestTimeout)
 	if err = client.Shutdown(shutdownCtx); err != nil {
 		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "shutdown", Message: err.Error()})
 		result.Summary.Complete = false
