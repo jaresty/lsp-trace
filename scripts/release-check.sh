@@ -67,6 +67,13 @@ assert_contains Q-RETAINED-elixir-STATUS qualification/retained/elixir/status.tx
 assert_contains Q-RETAINED-elixir-GRAPH qualification/retained/elixir/graph.json '"schema_version": "lsp-trace.graph.v2"'
 assert_contains Q-RETAINED-elixir-MISSING qualification/retained/elixir/assertions.txt 'missing exact callers'
 assert_file R-CI .github/workflows/ci.yml
+assert_contains R-ELIXIR-CI-JOB .github/workflows/ci.yml 'elixir-companion:'
+assert_contains R-ELIXIR-CI-SETUP .github/workflows/ci.yml 'erlef/setup-beam@v1'
+assert_contains R-ELIXIR-CI-OTP .github/workflows/ci.yml "otp-version: '25.3.2.7'"
+assert_contains R-ELIXIR-CI-VERSION .github/workflows/ci.yml "elixir-version: '1.16.2'"
+assert_contains R-ELIXIR-CI-DEPS .github/workflows/ci.yml 'mix deps.get --only test'
+assert_contains R-ELIXIR-CI-FORMAT .github/workflows/ci.yml 'mix format --check-formatted'
+assert_contains R-ELIXIR-CI-TEST .github/workflows/ci.yml 'mix test'
 assert_file R-SECURITY docs/SECURITY.md
 assert_file R-SEMANTICS docs/SEMANTICS.md
 assert_file R-SCHEMA docs/SCHEMA_POLICY.md

@@ -27,6 +27,29 @@ jobs:
       - name: Check repository cleanliness
         run: test -z "$(git status --porcelain)"
 
+  elixir-companion:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: elixir-call-hierarchy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '25.3.2.7'
+          elixir-version: '1.16.2'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            elixir-call-hierarchy/deps
+            elixir-call-hierarchy/_build
+          key: ${{ runner.os }}-elixir-1.16.2-otp-25.3.2.7-${{ hashFiles('elixir-call-hierarchy/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-elixir-1.16.2-otp-25.3.2.7-
+      - run: mix deps.get --only test
+      - run: mix format --check-formatted
+      - run: mix test
+
   verify:
     strategy:
       matrix:
