@@ -26,13 +26,19 @@ type stringsFlag []string
 func (s *stringsFlag) String() string     { return strings.Join(*s, ",") }
 func (s *stringsFlag) Set(v string) error { *s = append(*s, v); return nil }
 
+type seedSpec struct {
+	Label string `json:"label"`
+	At    string `json:"at"`
+}
+
 type config struct {
-	workspace, command, at, languageID, output string
-	args, env                                  stringsFlag
-	maxDepth, maxNodes, concurrency            int
-	timeout, requestTimeout                    time.Duration
-	logLevel, traceLSP                         string
-	pretty                                     bool
+	workspace, command, at, seedFile, languageID, output string
+	args, env, ats                                       stringsFlag
+	seeds                                                []seedSpec
+	maxDepth, maxNodes, concurrency                      int
+	timeout, requestTimeout                              time.Duration
+	logLevel, traceLSP                                   string
+	pretty                                               bool
 }
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
@@ -88,7 +94,8 @@ func parse(args []string) (config, error) {
 	fs.StringVar(&c.command, "server", "", "language server command")
 	fs.Var(&c.args, "server-arg", "repeatable server argument")
 	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
-	fs.StringVar(&c.at, "at", "", "PATH:LINE:COLUMN")
+	fs.Var(&c.ats, "at", "repeatable PATH:LINE:COLUMN")
+	fs.StringVar(&c.seedFile, "seed-file", "", "JSON file containing labeled seeds")
 	fs.StringVar(&c.languageID, "language-id", "", "document language id")
 	fs.IntVar(&c.maxDepth, "max-depth", 100, "maximum traversal depth; 0 unlimited")
 	fs.IntVar(&c.maxNodes, "max-nodes", 10000, "maximum nodes; 0 unlimited")
@@ -105,8 +112,11 @@ func parse(args []string) (config, error) {
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if c.workspace == "" || c.command == "" || c.at == "" {
-		return c, errors.New("--workspace, --server, and --at are required")
+	if c.workspace == "" || c.command == "" {
+		return c, errors.New("--workspace and --server are required")
+	}
+	if err := loadSeeds(&c); err != nil {
+		return c, err
 	}
 	if c.maxDepth < 0 || c.maxNodes < 0 || c.timeout < 0 || c.requestTimeout < 0 {
 		return c, errors.New("limits and timeouts must be non-negative")
@@ -129,6 +139,65 @@ func parse(args []string) (config, error) {
 	}
 	return c, nil
 }
+
+func loadSeeds(c *config) error {
+	var seeds []seedSpec
+	if c.seedFile != "" {
+		f, err := os.Open(c.seedFile)
+		if err != nil {
+			return fmt.Errorf("read --seed-file: %w", err)
+		}
+		defer f.Close()
+		var payload struct {
+			Seeds []seedSpec `json:"seeds"`
+		}
+		decoder := json.NewDecoder(f)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
+			return fmt.Errorf("invalid --seed-file: %w", err)
+		}
+		seeds = append(seeds, payload.Seeds...)
+	}
+	for i, at := range c.ats {
+		seeds = append(seeds, seedSpec{Label: fmt.Sprintf("seed-%d", i+1), At: at})
+	}
+	if len(seeds) == 0 && c.at != "" {
+		seeds = append(seeds, seedSpec{Label: "seed-1", At: c.at})
+	}
+	if len(seeds) == 0 {
+		return errors.New("at least one seed is required via --at or --seed-file")
+	}
+	labels := map[string]struct{}{}
+	for _, seed := range seeds {
+		if !validSeedLabel(seed.Label) {
+			return fmt.Errorf("invalid seed label %q", seed.Label)
+		}
+		if _, exists := labels[seed.Label]; exists {
+			return fmt.Errorf("duplicate seed label %q", seed.Label)
+		}
+		labels[seed.Label] = struct{}{}
+		if _, _, _, err := parseAt(seed.At); err != nil {
+			return fmt.Errorf("seed %q: %w", seed.Label, err)
+		}
+	}
+	c.seeds = seeds
+	c.at = seeds[0].At
+	return nil
+}
+
+func validSeedLabel(label string) bool {
+	if label == "" {
+		return false
+	}
+	for i, r := range label {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (i > 0 && r >= '0' && r <= '9') || (i > 0 && (r == '-' || r == '_' || r == '.')) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 func parseAt(s string) (string, int, int, error) {
 	last := strings.LastIndex(s, ":")
 	if last < 0 {
@@ -176,23 +245,61 @@ func (c requestTimeoutClient) IncomingCalls(_ context.Context, item lsp.CallHier
 }
 
 func execute(ctx context.Context, c config) (out graph.Result, code int) {
-	path, line, col, err := parseAt(c.at)
-	base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}}
-	if err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "invocation", Message: err.Error()})
-		return base, 1
+	type resolvedSeed struct {
+		spec              seedSpec
+		path, uri, source string
+		line, column      int
 	}
-	workspaceURI, targetURI, resolvedPath, err := source.ResolveTarget(c.workspace, path)
-	if err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "source", Message: err.Error()})
-		return base, 1
+	if len(c.seeds) == 0 {
+		if err := loadSeeds(&c); err != nil {
+			base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}}
+			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "invocation", Message: err.Error()})
+			return base, 1
+		}
 	}
-	text, err := os.ReadFile(resolvedPath)
-	if err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "source", Message: err.Error()})
-		return base, 1
+	base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: true}}
+	parts := make([]graph.Result, 0, len(c.seeds))
+	resolved := make([]resolvedSeed, 0, len(c.seeds))
+	workspaceURI := ""
+	for _, seed := range c.seeds {
+		path, line, col, err := parseAt(seed.At)
+		requested := graph.Target{Line: line, Column: col}
+		failure := func(phase string, err error) {
+			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.Label, Requested: requested, Failure: &graph.SeedFailure{Phase: phase, Message: err.Error()}}}}
+			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: phase, Message: err.Error()})
+			parts = append(parts, part)
+		}
+		if err != nil {
+			failure("invocation", err)
+			continue
+		}
+		wsURI, targetURI, resolvedPath, err := source.ResolveTarget(c.workspace, path)
+		requested.URI = targetURI
+		if err != nil {
+			failure("source", err)
+			continue
+		}
+		text, err := os.ReadFile(resolvedPath)
+		if err != nil {
+			failure("source", err)
+			continue
+		}
+		if workspaceURI == "" {
+			workspaceURI = wsURI
+		}
+		resolved = append(resolved, resolvedSeed{spec: seed, path: path, uri: targetURI, source: string(text), line: line, column: col})
 	}
-	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: targetURI, Line: line, Column: col}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}}
+	limits := graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}
+	if len(resolved) > 0 {
+		first := resolved[0]
+		base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: first.uri, Line: first.line, Column: first.column}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: limits}
+	}
+	if len(resolved) == 0 {
+		result := graph.MergeResults(parts...)
+		result.Invocation = base.Invocation
+		return result, 2
+	}
+	var err error
 	var traceFile *os.File
 	var trace jsonrpc.TraceFunc
 	if c.traceLSP != "" {
@@ -243,22 +350,63 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	base.CapabilityQuality.CrossModuleEdges = graph.Unknown
 	if !base.Capabilities.CallHierarchyProvider {
 		base.Terminals = []graph.Boundary{{Reason: graph.UnsupportedCallHierarchy}}
-		base.Summary.TerminalCount = 1
+		base.Summary.Complete = false
+		for _, seed := range resolved {
+			base.Seeds = append(base.Seeds, graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "capability", Message: string(graph.UnsupportedCallHierarchy)}})
+		}
 		base.Canonicalize()
 		_ = client.Shutdown(context.Background())
 		return base, 2
 	}
-	lang := c.languageID
-	if lang == "" {
-		lang = source.LanguageID(path)
+	opened := map[string]struct{}{}
+	openFailed := map[string]error{}
+	for _, seed := range resolved {
+		if _, ok := opened[seed.uri]; ok {
+			continue
+		}
+		if failure, ok := openFailed[seed.uri]; ok {
+			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: failure.Error()}}}}
+			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: "didOpen", Message: failure.Error()})
+			parts = append(parts, part)
+			continue
+		}
+		lang := c.languageID
+		if lang == "" {
+			lang = source.LanguageID(seed.path)
+		}
+		if err = client.DidOpen(seed.uri, lang, seed.source); err != nil {
+			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: err.Error()}}}}
+			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: "didOpen", Message: err.Error()})
+			parts = append(parts, part)
+			openFailed[seed.uri] = err
+			continue
+		}
+		opened[seed.uri] = struct{}{}
 	}
-	if err = client.DidOpen(targetURI, lang, string(text)); err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "didOpen", Message: err.Error()})
-		return base, 1
-	}
-	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: targetURI}, Position: lsp.Position{Line: uint32(line - 1), Character: uint32(col - 1)}}
 	timedClient := requestTimeoutClient{parent: ctx, timeout: c.requestTimeout, client: client}
-	result := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
+	for _, seed := range resolved {
+		if _, ok := opened[seed.uri]; !ok {
+			continue
+		}
+		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.uri}, Position: lsp.Position{Line: uint32(seed.line - 1), Character: uint32(seed.column - 1)}}
+		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
+		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...)}
+		for _, node := range part.Nodes {
+			seedResult.ReachedNodeIDs = append(seedResult.ReachedNodeIDs, node.ID)
+		}
+		if !part.Summary.Complete {
+			phase, message := "traverse", "seed traversal incomplete"
+			if len(part.Diagnostics) > 0 {
+				phase, message = part.Diagnostics[0].Phase, part.Diagnostics[0].Message
+			}
+			seedResult.Failure = &graph.SeedFailure{Phase: phase, Message: message}
+		}
+		part.Seeds = []graph.SeedResult{seedResult}
+		part.Capabilities = base.Capabilities
+		part.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised
+		parts = append(parts, part)
+	}
+	result := graph.MergeResults(parts...)
 	result.Invocation = base.Invocation
 	result.Capabilities = base.Capabilities
 	result.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised

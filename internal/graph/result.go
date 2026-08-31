@@ -85,6 +85,19 @@ type Summary struct {
 	Truncated     bool `json:"truncated"`
 }
 
+type SeedFailure struct {
+	Phase   string `json:"phase"`
+	Message string `json:"message"`
+}
+
+type SeedResult struct {
+	Label             string       `json:"label"`
+	Requested         Target       `json:"requested_position"`
+	PreparedTargetIDs []string     `json:"prepared_target_ids"`
+	ReachedNodeIDs    []string     `json:"reached_node_ids"`
+	Failure           *SeedFailure `json:"failure,omitempty"`
+}
+
 type Result struct {
 	SchemaVersion     string            `json:"schema_version"`
 	Invocation        Invocation        `json:"invocation"`
@@ -97,6 +110,7 @@ type Result struct {
 	Diagnostics       []Diagnostic      `json:"diagnostics"`
 	Summary           Summary           `json:"summary"`
 	CapabilityQuality CapabilityQuality `json:"capability_quality,omitempty"`
+	Seeds             []SeedResult      `json:"-"`
 }
 
 func (r Result) MarshalJSON() ([]byte, error) {
@@ -154,8 +168,9 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Terminals         []Boundary        `json:"terminals"`
 		Frontier          []Boundary        `json:"frontier"`
 		Diagnostics       []Diagnostic      `json:"diagnostics"`
+		Seeds             []SeedResult      `json:"seeds,omitempty"`
 		Summary           summaryV2         `json:"summary"`
-	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
+	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, r.Seeds, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
 }
 
 func (r *Result) Canonicalize() {
@@ -192,6 +207,14 @@ func (r *Result) Canonicalize() {
 		return a.CalleeNodeID < b.CalleeNodeID
 	})
 	sort.Strings(r.Targets)
+	r.Targets = uniqueStrings(r.Targets)
+	for i := range r.Seeds {
+		sort.Strings(r.Seeds[i].PreparedTargetIDs)
+		r.Seeds[i].PreparedTargetIDs = uniqueStrings(r.Seeds[i].PreparedTargetIDs)
+		sort.Strings(r.Seeds[i].ReachedNodeIDs)
+		r.Seeds[i].ReachedNodeIDs = uniqueStrings(r.Seeds[i].ReachedNodeIDs)
+	}
+	sort.Slice(r.Seeds, func(i, j int) bool { return r.Seeds[i].Label < r.Seeds[j].Label })
 	sort.Slice(r.Terminals, func(i, j int) bool { return lessBoundary(r.Terminals[i], r.Terminals[j]) })
 	sort.Slice(r.Frontier, func(i, j int) bool { return lessBoundary(r.Frontier[i], r.Frontier[j]) })
 	sort.Slice(r.Diagnostics, func(i, j int) bool {
@@ -227,6 +250,84 @@ func (r *Result) Canonicalize() {
 			r.CapabilityQuality.CrossModuleEdges = Unknown
 		}
 	}
+}
+
+func uniqueStrings(in []string) []string {
+	if len(in) == 0 {
+		return in
+	}
+	out := in[:1]
+	for _, value := range in[1:] {
+		if value != out[len(out)-1] {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func MergeResults(results ...Result) Result {
+	out := Result{SchemaVersion: SchemaVersion, Summary: Summary{Complete: true}, CapabilityQuality: CapabilityQuality{CrossModuleEdges: Unknown}}
+	nodes := map[string]Node{}
+	for _, result := range results {
+		if result.SchemaVersion != "" {
+			out.SchemaVersion = result.SchemaVersion
+		}
+		out.Capabilities.CallHierarchyProvider = out.Capabilities.CallHierarchyProvider || result.Capabilities.CallHierarchyProvider
+		out.CapabilityQuality.Advertised = out.CapabilityQuality.Advertised || result.CapabilityQuality.Advertised
+		out.CapabilityQuality.PrepareSucceeded = out.CapabilityQuality.PrepareSucceeded || result.CapabilityQuality.PrepareSucceeded
+		out.CapabilityQuality.IncomingRequestSuccesses += result.CapabilityQuality.IncomingRequestSuccesses
+		out.CapabilityQuality.CrossFileEdges += result.CapabilityQuality.CrossFileEdges
+		out.Summary.Complete = out.Summary.Complete && result.Summary.Complete
+		out.Summary.Truncated = out.Summary.Truncated || result.Summary.Truncated
+		out.Targets = append(out.Targets, result.Targets...)
+		out.Seeds = append(out.Seeds, result.Seeds...)
+		out.Terminals = append(out.Terminals, result.Terminals...)
+		out.Frontier = append(out.Frontier, result.Frontier...)
+		out.Diagnostics = append(out.Diagnostics, result.Diagnostics...)
+		for _, node := range result.Nodes {
+			if existing, ok := nodes[node.ID]; !ok || SameNodeIdentity(existing, node) {
+				nodes[node.ID] = node
+			} else {
+				out.Terminals = append(out.Terminals, Boundary{NodeID: node.ID, Reason: NodeIDCollision})
+				out.Summary.Complete = false
+			}
+		}
+		for _, edge := range result.Edges {
+			out.Edges = MergeEdge(out.Edges, edge)
+		}
+	}
+	for _, node := range nodes {
+		out.Nodes = append(out.Nodes, node)
+	}
+	out.Terminals = uniqueBoundaries(out.Terminals)
+	out.Frontier = uniqueBoundaries(out.Frontier)
+	out.Diagnostics = uniqueDiagnostics(out.Diagnostics)
+	out.Canonicalize()
+	return out
+}
+
+func uniqueBoundaries(in []Boundary) []Boundary {
+	seen := map[Boundary]struct{}{}
+	out := make([]Boundary, 0, len(in))
+	for _, item := range in {
+		if _, ok := seen[item]; !ok {
+			seen[item] = struct{}{}
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func uniqueDiagnostics(in []Diagnostic) []Diagnostic {
+	seen := map[Diagnostic]struct{}{}
+	out := make([]Diagnostic, 0, len(in))
+	for _, item := range in {
+		if _, ok := seen[item]; !ok {
+			seen[item] = struct{}{}
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func boundaryProvenance(reason Reason) string {

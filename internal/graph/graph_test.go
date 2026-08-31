@@ -109,6 +109,60 @@ func TestSameNodeIdentityDetectsFabricatedIDCollision(t *testing.T) {
 	}
 }
 
+func TestResultSchemaSeedProjection(t *testing.T) {
+	r := Result{SchemaVersion: SchemaVersionV2, Seeds: []SeedResult{{Label: "interface", Requested: Target{URI: "file:///a.go", Line: 1, Column: 1}}}}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v2 map[string]any
+	if err := json.Unmarshal(encoded, &v2); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := v2["seeds"]; !ok {
+		t.Fatalf("ASSERT_V2_SEED_PROVENANCE: %s", encoded)
+	}
+
+	r.SchemaVersion = SchemaVersionV1
+	r.Seeds = nil
+	encoded, err = json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v1 map[string]any
+	if err := json.Unmarshal(encoded, &v1); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := v1["seeds"]; ok {
+		t.Fatalf("ASSERT_V1_HAS_NO_SEEDS: %s", encoded)
+	}
+}
+
+func TestMergeResultsCollapsesDuplicateNodesAndPreservesSeedOutcomes(t *testing.T) {
+	node := NewNode(testItem())
+	r1 := Result{
+		SchemaVersion:     SchemaVersionV2,
+		Nodes:             []Node{node},
+		Targets:           []string{node.ID},
+		Terminals:         []Boundary{{NodeID: node.ID, Reason: ServerReportedNoIncoming}},
+		Diagnostics:       []Diagnostic{{Phase: "z", Message: "same"}},
+		Summary:           Summary{Complete: true},
+		CapabilityQuality: CapabilityQuality{PrepareSucceeded: true, IncomingRequestSuccesses: 1, CrossModuleEdges: Unknown},
+		Seeds:             []SeedResult{{Label: "interface", Requested: Target{URI: node.URI, Line: 1, Column: 1}, PreparedTargetIDs: []string{node.ID}, ReachedNodeIDs: []string{node.ID}}},
+	}
+	r2 := r1
+	r2.Seeds = []SeedResult{{Label: "implementation", Requested: Target{URI: node.URI, Line: 2, Column: 1}, PreparedTargetIDs: []string{node.ID}, ReachedNodeIDs: []string{node.ID}, Failure: &SeedFailure{Phase: "prepare", Message: "failed"}}}
+	r2.Summary.Complete = false
+
+	merged := MergeResults(r2, r1)
+	if len(merged.Nodes) != 1 || len(merged.Targets) != 1 || len(merged.Terminals) != 1 || len(merged.Diagnostics) != 1 {
+		t.Fatalf("ASSERT_DUPLICATE_SEEDS_COLLAPSE: %#v", merged)
+	}
+	if merged.Summary.Complete || len(merged.Seeds) != 2 || merged.Seeds[0].Label != "implementation" || merged.Seeds[1].Label != "interface" {
+		t.Fatalf("ASSERT_FAILED_SEED_INCOMPLETE_WITH_GRAPH: %#v", merged)
+	}
+}
+
 func TestCanonicalizeEquivalentInsertionOrdersProduceIdenticalJSON(t *testing.T) {
 	makeResult := func(reverse bool) Result {
 		nodes := []Node{{ID: "a", Item: Item{URI: "file:///a"}}, {ID: "b", Item: Item{URI: "file:///b"}}}

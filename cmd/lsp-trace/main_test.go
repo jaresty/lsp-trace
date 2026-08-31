@@ -92,6 +92,40 @@ func TestParseAcceptsRepeatableFlags(t *testing.T) {
 	}
 }
 
+func TestParseAcceptsRepeatedAtAndSeedFile(t *testing.T) {
+	workspace := t.TempDir()
+	seedFile := filepath.Join(t.TempDir(), "seeds.json")
+	if err := os.WriteFile(seedFile, []byte(`{"seeds":[{"label":"interface","at":"main.go:1:1"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"--workspace", workspace, "--server", "server", "--at", "main.go:1:1", "--at", "main.go:2:1", "--seed-file", seedFile}
+	if _, err := parse(args); err != nil {
+		t.Fatalf("ASSERT_REPEATABLE_AT_ACCEPTED: %v", err)
+	}
+}
+
+func TestParseRejectsZeroSeedsAndInvalidOrDuplicateLabels(t *testing.T) {
+	workspace := t.TempDir()
+	base := []string{"--workspace", workspace, "--server", "server"}
+	if _, err := parse(base); err == nil || !strings.Contains(err.Error(), "seed") {
+		t.Fatalf("ASSERT_SEED_FILE_VALIDATION: zero seeds error=%v", err)
+	}
+	for name, body := range map[string]string{
+		"invalid":   `{"seeds":[{"label":"","at":"main.go:1:1"}]}`,
+		"duplicate": `{"seeds":[{"label":"same","at":"main.go:1:1"},{"label":"same","at":"main.go:2:1"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "seeds.json")
+			if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := parse(append(base, "--seed-file", path)); err == nil || !strings.Contains(err.Error(), "label") {
+				t.Fatalf("ASSERT_SEED_FILE_VALIDATION: %s error=%v", name, err)
+			}
+		})
+	}
+}
+
 func TestParseAt(t *testing.T) {
 	path, line, col, err := parseAt("C:\\src\\file.go:12:34")
 	if err != nil || path != "C:\\src\\file.go" || line != 12 || col != 34 {
