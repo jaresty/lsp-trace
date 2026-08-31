@@ -179,6 +179,10 @@ end
             """defmodule Mix.Tasks.Compile.FixtureMarker do
   use Mix.Task.Compiler
   def run(_) do
+    if Mix.env() == :test and not Code.ensure_loaded?(ActiveTransitive) do
+      raise "active transitive dependency module is unavailable during project compilation"
+    end
+
     File.write!(Path.join(Mix.Project.build_path(), "fixture-compiler-ran"), "ok")
     {:ok, []}
   end

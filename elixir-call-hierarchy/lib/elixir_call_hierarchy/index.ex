@@ -110,12 +110,8 @@ defmodule ElixirCallHierarchy.Index do
         compile_dependencies(root, deps_path, build_path)
       end)
 
-      ElixirCallHierarchy.Profile.measure(profile?, "deps_loadpaths", fn ->
-        add_dependency_paths(build_path)
-      end)
-
       ElixirCallHierarchy.Profile.measure(profile?, "project_compile", fn ->
-        compile_project(root, previous_options)
+        compile_project(root, previous_options, profile?)
       end)
 
       ElixirCallHierarchy.Profile.measure(profile?, "tracer_drain", fn ->
@@ -130,11 +126,16 @@ defmodule ElixirCallHierarchy.Index do
     end
   end
 
-  defp compile_project(root, previous_options) do
+  defp compile_project(root, previous_options, profile?) do
     Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
       Mix.Task.clear()
       config = Path.join(root, "config/config.exs")
       if File.regular?(config), do: Mix.Task.run("loadconfig", [config])
+
+      ElixirCallHierarchy.Profile.measure(profile?, "deps_loadpaths", fn ->
+        Mix.Task.run("deps.loadpaths", ["--no-deps-check"])
+      end)
+
       Code.ensure_loaded!(ElixirCallHierarchy.Tracer)
       Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
 
@@ -254,14 +255,6 @@ defmodule ElixirCallHierarchy.Index do
         IO.puts(:stderr, "mix #{task} failed (exit #{status}):\n#{diagnostic}")
         raise "dependency resource repair failed with exit status #{status}"
     end
-  end
-
-  defp add_dependency_paths(build_path) do
-    build_path
-    |> Path.join("lib/*/ebin")
-    |> Path.wildcard()
-    |> Enum.sort()
-    |> Enum.each(&Code.prepend_path/1)
   end
 
   defp bounded_diagnostic(output) do
