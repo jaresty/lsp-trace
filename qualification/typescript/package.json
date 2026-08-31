@@ -1,0 +1,13 @@
+{
+  "name": "lsp-trace-typescript-qualification",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "typescript": "5.9.2",
+    "typescript-language-server": "4.3.4"
+  }
+}

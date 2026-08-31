@@ -25,4 +25,15 @@ Line and column values are one-based. Graph JSON is written to stdout (or `--out
 
 Language servers run with the invoking user's permissions and may execute project build logic, restore dependencies, access the network, or emit sensitive data. Use only trusted servers and workspaces.
 
-The current implementation includes deterministic graph normalization, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI. External TypeScript and C# interoperability qualification and the complete fake-server scenario suite remain release blockers described in [PRD.md](PRD.md).
+The current implementation includes deterministic graph normalization, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI.
+
+## Qualification and release
+
+TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract are documented in [qualification/README.md](qualification/README.md). A BLOCKED external-server run remains a release blocker; fixture presence alone is not interoperability evidence.
+
+- [Graph semantics](docs/SEMANTICS.md)
+- [Security and trust boundaries](docs/SECURITY.md)
+- [Schema compatibility policy](docs/SCHEMA_POLICY.md)
+- [Release checklist](docs/RELEASING.md)
+
+Run `./scripts/release-check.sh` for hermetic release-asset checks. External TypeScript, C#, and ElixirLS qualification and the complete fake-server scenario suite remain release blockers described in [PRD.md](PRD.md).
