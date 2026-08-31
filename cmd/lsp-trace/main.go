@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -96,11 +95,17 @@ func parse(args []string) (config, error) {
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
+	if fs.NArg() != 0 {
+		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
 	if c.workspace == "" || c.command == "" || c.at == "" {
 		return c, errors.New("--workspace, --server, and --at are required")
 	}
 	if c.maxDepth < 0 || c.maxNodes < 0 || c.timeout < 0 || c.requestTimeout < 0 {
 		return c, errors.New("limits and timeouts must be non-negative")
+	}
+	if c.requestTimeout == 0 {
+		return c, errors.New("--request-timeout must be greater than zero")
 	}
 	for _, e := range c.env {
 		if k, _, ok := strings.Cut(e, "="); !ok || k == "" {
@@ -126,7 +131,11 @@ func parseAt(s string) (string, int, int, error) {
 	if err != nil || col < 1 {
 		return "", 0, 0, fmt.Errorf("invalid column in --at %q", s)
 	}
-	return s[:prev], line, col, nil
+	path := s[:prev]
+	if path == "" {
+		return "", 0, 0, fmt.Errorf("invalid path in --at %q", s)
+	}
+	return path, line, col, nil
 }
 func execute(ctx context.Context, c config) (graph.Result, int) {
 	path, line, col, err := parseAt(c.at)
@@ -135,20 +144,15 @@ func execute(ctx context.Context, c config) (graph.Result, int) {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "invocation", Message: err.Error()})
 		return base, 1
 	}
-	workspaceURI, targetURI, err := source.ResolveTarget(c.workspace, path)
+	workspaceURI, targetURI, resolvedPath, err := source.ResolveTarget(c.workspace, path)
 	if err != nil {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "source", Message: err.Error()})
 		return base, 1
 	}
-	text, err := os.ReadFile(filepath.Clean(path))
+	text, err := os.ReadFile(resolvedPath)
 	if err != nil {
-		if !filepath.IsAbs(path) {
-			text, err = os.ReadFile(filepath.Join(c.workspace, path))
-		}
-		if err != nil {
-			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "source", Message: err.Error()})
-			return base, 1
-		}
+		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "source", Message: err.Error()})
+		return base, 1
 	}
 	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: targetURI, Line: line, Column: col}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}}
 	proc, err := server.Start(ctx, c.command, c.args, c.env)

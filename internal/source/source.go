@@ -21,17 +21,18 @@ func FileURI(path string) (string, error) {
 	}
 	return (&url.URL{Scheme: "file", Path: p}).String(), nil
 }
-func ResolveTarget(workspace, target string) (string, string, error) {
+func ResolveTarget(workspace, target string) (string, string, string, error) {
 	w, err := filepath.Abs(workspace)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
+	w = filepath.Clean(w)
 	info, err := os.Stat(w)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	if !info.IsDir() {
-		return "", "", fmt.Errorf("workspace is not a directory: %s", w)
+		return "", "", "", fmt.Errorf("workspace is not a directory: %s", w)
 	}
 	p := target
 	if !filepath.IsAbs(p) {
@@ -39,18 +40,29 @@ func ResolveTarget(workspace, target string) (string, string, error) {
 	}
 	p, err = filepath.Abs(p)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
+	p = filepath.Clean(p)
 	rel, err := filepath.Rel(w, p)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("target is outside workspace: %s", p)
+		return "", "", "", fmt.Errorf("target is outside workspace: %s", p)
 	}
-	if _, err = os.Stat(p); err != nil {
-		return "", "", err
+	info, err = os.Stat(p)
+	if err != nil {
+		return "", "", "", err
 	}
-	wu, _ := FileURI(w)
-	tu, _ := FileURI(p)
-	return wu, tu, nil
+	if !info.Mode().IsRegular() {
+		return "", "", "", fmt.Errorf("target is not a regular file: %s", p)
+	}
+	wu, err := FileURI(w)
+	if err != nil {
+		return "", "", "", err
+	}
+	tu, err := FileURI(p)
+	if err != nil {
+		return "", "", "", err
+	}
+	return wu, tu, p, nil
 }
 func LanguageID(path string) string {
 	switch strings.ToLower(filepath.Ext(path)) {
