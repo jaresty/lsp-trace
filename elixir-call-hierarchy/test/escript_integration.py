@@ -112,7 +112,21 @@ def main():
         (workspace / "lib").mkdir(parents=True)
         (workspace / "deps").mkdir()
         shutil.copy2(PROJECT / "mix.lock", workspace / "mix.lock")
-        shutil.copytree(PROJECT / "deps" / "jason", workspace / "deps" / "jason")
+        jason = workspace / "deps" / "jason"
+        shutil.copytree(PROJECT / "deps" / "jason", jason)
+        resource = jason / "priv" / "static" / "resource_probe.txt"
+        resource.parent.mkdir(parents=True)
+        resource.write_text("assembled by Mix\n")
+        probe = jason / "lib" / "jason" / "resource_probe.ex"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_text(
+            """defmodule Jason.ResourceProbe do
+  resource = Application.app_dir(:jason, "priv/static/resource_probe.txt")
+  @value File.read!(resource)
+  def value, do: @value
+end
+"""
+        )
         (workspace / "mix.exs").write_text(
             """defmodule EscriptFixture.MixProject do
   use Mix.Project
@@ -123,7 +137,7 @@ end
         source = workspace / "lib" / "calls.ex"
         source.write_text(
             """defmodule EscriptFixture.Calls do
-  def leaf, do: %Jason.DecodeError{}
+  def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}}
   def caller, do: leaf()
 end
 """
