@@ -99,42 +99,37 @@ defmodule ElixirCallHierarchy.Index do
     previous_build = System.get_env("MIX_BUILD_PATH")
     previous_deps = System.get_env("MIX_DEPS_PATH")
     previous_options = Code.compiler_options()
+    previous_code_path = :code.get_path()
+    deps_path = Path.join(root, "deps")
     Process.register(self(), ElixirCallHierarchy.Collector)
     System.put_env("MIX_BUILD_PATH", build_path)
-    System.put_env("MIX_DEPS_PATH", Path.join(root, "deps"))
-    Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
+    System.put_env("MIX_DEPS_PATH", deps_path)
 
     try do
-      File.cd!(root, fn ->
-        Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
-          Mix.Dep.clear_cached()
-          Mix.Task.clear()
+      ElixirCallHierarchy.Profile.measure(profile?, "deps_compile", fn ->
+        compile_dependencies(root, deps_path, build_path)
+      end)
 
-          ElixirCallHierarchy.Profile.measure(profile?, "deps_compile", fn ->
-            Mix.Task.run("deps.compile", [])
-          end)
+      ElixirCallHierarchy.Profile.measure(profile?, "deps_loadpaths", fn ->
+        add_dependency_paths(build_path)
+      end)
 
-          ElixirCallHierarchy.Profile.measure(profile?, "deps_loadpaths", fn ->
-            Mix.Task.reenable("deps.loadpaths")
-            Mix.Task.run("deps.loadpaths", [])
-          end)
+      files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
 
-          files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
+      ElixirCallHierarchy.Profile.measure(profile?, "project_compile", fn ->
+        Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
 
-          ElixirCallHierarchy.Profile.measure(profile?, "project_compile", fn ->
-            case Kernel.ParallelCompiler.compile_to_path(
-                   files,
-                   build_path,
-                   compiler_options()
-                 ) do
-              {:ok, _modules, _warnings} ->
-                :ok
+        try do
+          case Kernel.ParallelCompiler.compile_to_path(files, build_path, compiler_options()) do
+            {:ok, _modules, _warnings} ->
+              :ok
 
-              {:error, errors, warnings} ->
-                raise "workspace compilation failed: #{inspect({errors, warnings})}"
-            end
-          end)
-        end)
+            {:error, errors, warnings} ->
+              raise "workspace compilation failed: #{inspect({errors, warnings})}"
+          end
+        after
+          Code.compiler_options(previous_options)
+        end
       end)
 
       ElixirCallHierarchy.Profile.measure(profile?, "tracer_drain", fn ->
@@ -142,10 +137,41 @@ defmodule ElixirCallHierarchy.Index do
       end)
     after
       Code.compiler_options(previous_options)
+      :code.set_path(previous_code_path)
       Process.unregister(ElixirCallHierarchy.Collector)
       restore_env("MIX_BUILD_PATH", previous_build)
       restore_env("MIX_DEPS_PATH", previous_deps)
     end
+  end
+
+  defp compile_dependencies(root, deps_path, build_path) do
+    env = [{"MIX_DEPS_PATH", deps_path}, {"MIX_BUILD_PATH", build_path}]
+
+    case System.cmd("mix", ["deps.compile"], cd: root, env: env, stderr_to_stdout: true) do
+      {_output, 0} ->
+        :ok
+
+      {output, status} ->
+        diagnostic = bounded_diagnostic(output)
+        IO.puts(:stderr, "mix deps.compile failed (exit #{status}):\n#{diagnostic}")
+        raise "dependency compilation failed with exit status #{status}"
+    end
+  end
+
+  defp add_dependency_paths(build_path) do
+    build_path
+    |> Path.join("lib/*/ebin")
+    |> Path.wildcard()
+    |> Enum.sort()
+    |> Enum.each(&Code.prepend_path/1)
+  end
+
+  defp bounded_diagnostic(output) do
+    limit = 8_192
+
+    if byte_size(output) <= limit,
+      do: output,
+      else: binary_part(output, byte_size(output) - limit, limit)
   end
 
   defp drain(calls, definitions) do

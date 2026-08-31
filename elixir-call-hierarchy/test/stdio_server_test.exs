@@ -58,17 +58,27 @@ defmodule ElixirCallHierarchy.StdioServerTest do
     end
     """)
 
+    previous_code_path = :code.get_path()
+    previous_build_path = System.get_env("MIX_BUILD_PATH")
+    previous_deps_path = System.get_env("MIX_DEPS_PATH")
+    previous_compiler_options = Code.compiler_options()
+
     result =
       try do
         ElixirCallHierarchy.Index.build(workspace)
-        {:ok, File.exists?(Path.join(workspace, "_build"))}
+
+        {:ok, File.exists?(Path.join(workspace, "_build")),
+         :code.get_path() == previous_code_path,
+         System.get_env("MIX_BUILD_PATH") == previous_build_path,
+         System.get_env("MIX_DEPS_PATH") == previous_deps_path,
+         Code.compiler_options() == previous_compiler_options}
       rescue
         error -> {:error, Exception.message(error)}
       after
         File.rm_rf!(workspace)
       end
 
-    assert result == {:ok, false}
+    assert result == {:ok, false, true, true, true, true}
   end
 
   test "initialize advertises call hierarchy", %{workspace: workspace} do
