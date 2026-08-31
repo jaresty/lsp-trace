@@ -136,3 +136,32 @@ func TestIncomingPrepareGenericErrorRemainsDiagnostic(t *testing.T) {
 		t.Fatalf("ASSERT_PREPARE_ERROR_DIAGNOSTIC: %#v", r)
 	}
 }
+
+func TestIncomingRejectsMalformedPreparedItem(t *testing.T) {
+	malformed := item("", 8)
+	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{malformed}}, lsp.PrepareCallHierarchyParams{}, Options{})
+	if r.Summary.Complete || len(r.Nodes) != 0 || len(r.Terminals) != 1 || r.Terminals[0].Reason != graph.InvalidServerResponse {
+		t.Fatalf("ASSERT_INVALID_PREPARED_ITEM_REJECTED: %#v", r)
+	}
+}
+
+func TestIncomingRejectsMalformedCallerAndContinues(t *testing.T) {
+	leaf, valid, malformed := item("leaf", 8), item("valid", 4), item("", 2)
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+		"leaf":  {{From: malformed}, {From: valid}},
+		"valid": {},
+	}}
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	if r.Summary.Complete || r.Summary.NodeCount != 2 || r.Summary.EdgeCount != 1 || len(r.Diagnostics) != 1 || r.Diagnostics[0].Method != "callHierarchy/incomingCalls" {
+		t.Fatalf("ASSERT_INVALID_CALLER_REJECTED_BRANCH_CONTINUES: %#v", r)
+	}
+	found := false
+	for _, terminal := range r.Terminals {
+		if terminal.Reason == graph.InvalidServerResponse {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ASSERT_INVALID_CALLER_BOUNDARY_VISIBLE: %#v", r.Terminals)
+	}
+}

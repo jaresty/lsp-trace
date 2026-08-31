@@ -49,6 +49,12 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	queue := make([]queued, 0, len(items))
 	for _, item := range items {
 		n := node(item)
+		if err := graph.ValidateItem(n.Item); err != nil {
+			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: n.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
+			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", NodeID: n.ID, Message: err.Error()})
+			result.Summary.Complete = false
+			continue
+		}
 		if _, ok := seen[n.ID]; !ok {
 			seen[n.ID] = n
 			queue = append(queue, queued{item: item, node: n})
@@ -98,6 +104,12 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		}
 		for _, call := range calls {
 			caller := node(call.From)
+			if err := graph.ValidateItem(caller.Item); err != nil {
+				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: err.Error()})
+				result.Summary.Complete = false
+				continue
+			}
 			if existing, ok := seen[caller.ID]; ok && !graph.SameNodeIdentity(existing, caller) {
 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.NodeIDCollision})
 				result.Summary.Complete = false
