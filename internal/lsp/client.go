@@ -15,7 +15,7 @@ type Client struct {
 
 func NewClient(conn *jsonrpc.Conn) *Client { return &Client{conn: conn} }
 func (c *Client) Initialize(ctx context.Context, rootURI string) error {
-	params := InitializeParams{ProcessID: os.Getpid(), ClientInfo: ClientInfo{Name: "lsp-trace"}, RootURI: rootURI, Capabilities: map[string]interface{}{"textDocument": map[string]interface{}{"callHierarchy": map[string]interface{}{"dynamicRegistration": false}}}}
+	params := InitializeParams{ProcessID: os.Getpid(), ClientInfo: ClientInfo{Name: "lsp-trace"}, RootURI: rootURI, Capabilities: map[string]interface{}{"textDocument": map[string]interface{}{"callHierarchy": map[string]interface{}{"dynamicRegistration": false}, "documentSymbol": map[string]interface{}{"hierarchicalDocumentSymbolSupport": true}}}}
 	if err := c.conn.Call(ctx, "initialize", params, &c.InitializeResult); err != nil {
 		return err
 	}
@@ -23,6 +23,20 @@ func (c *Client) Initialize(ctx context.Context, rootURI string) error {
 }
 func (c *Client) SupportsCallHierarchy() bool {
 	raw := c.InitializeResult.Capabilities.CallHierarchyProvider
+	if len(raw) == 0 || string(raw) == "null" || string(raw) == "false" {
+		return false
+	}
+	var b bool
+	if json.Unmarshal(raw, &b) == nil {
+		return b
+	}
+	var obj map[string]interface{}
+	return json.Unmarshal(raw, &obj) == nil
+}
+func (c *Client) SupportsDocumentSymbols() bool {
+	return supportsCapability(c.InitializeResult.Capabilities.DocumentSymbolProvider)
+}
+func supportsCapability(raw json.RawMessage) bool {
 	if len(raw) == 0 || string(raw) == "null" || string(raw) == "false" {
 		return false
 	}
@@ -46,6 +60,17 @@ func (c *Client) PrepareCallHierarchy(ctx context.Context, p PrepareCallHierarch
 	}
 	var items []CallHierarchyItem
 	return items, json.Unmarshal(raw, &items)
+}
+func (c *Client) DocumentSymbols(ctx context.Context, p DocumentSymbolParams) ([]DocumentSymbol, error) {
+	var raw json.RawMessage
+	if err := c.conn.Call(ctx, "textDocument/documentSymbol", p, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var symbols []DocumentSymbol
+	return symbols, json.Unmarshal(raw, &symbols)
 }
 func (c *Client) IncomingCalls(ctx context.Context, item CallHierarchyItem) ([]CallHierarchyIncomingCall, bool, error) {
 	var raw json.RawMessage

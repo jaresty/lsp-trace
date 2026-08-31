@@ -14,12 +14,15 @@ import (
 )
 
 type fakeClient struct {
-	targets    []lsp.CallHierarchyItem
-	prepareErr error
-	calls      map[string][]lsp.CallHierarchyIncomingCall
-	callErrs   map[string]error
-	seenData   map[string]json.RawMessage
-	expansions map[string]int
+	targets         []lsp.CallHierarchyItem
+	prepareErr      error
+	calls           map[string][]lsp.CallHierarchyIncomingCall
+	callErrs        map[string]error
+	seenData        map[string]json.RawMessage
+	expansions      map[string]int
+	documentSymbols []lsp.DocumentSymbol
+	symbolSupported bool
+	symbolRequests  int
 }
 
 func (f *fakeClient) PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
@@ -33,6 +36,11 @@ func (f *fakeClient) IncomingCalls(_ context.Context, item lsp.CallHierarchyItem
 		f.expansions[item.Name]++
 	}
 	return f.calls[item.Name], false, f.callErrs[item.Name]
+}
+func (f *fakeClient) SupportsDocumentSymbols() bool { return f.symbolSupported }
+func (f *fakeClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	f.symbolRequests++
+	return f.documentSymbols, nil
 }
 func item(name string, line uint32) lsp.CallHierarchyItem {
 	return lsp.CallHierarchyItem{Name: name, Kind: 12, URI: "file:///w/a.go", Range: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 4}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 4}}, Data: json.RawMessage(`{"name":"` + name + `"}`)}
@@ -314,6 +322,41 @@ func TestIncomingCanonicalGoldenByteIdentical(t *testing.T) {
 	const want = `{"schema_version":"lsp-trace.graph.v2","invocation":{"workspace_uri":"","target":{"uri":"","line":0,"column":0},"server":{"command":"","arguments":null},"limits":{"max_depth":0,"max_nodes":0,"timeout_ms":0}},"capabilities":{"call_hierarchy_provider":false},"capability_quality":{"advertised":false,"prepare_succeeded":true,"incoming_request_successes":1,"incoming_edges":0,"cross_file_edges":0,"cross_module_edges":"UNKNOWN"},"targets":["f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af"],"nodes":[{"id":"f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af","name":"leaf","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":8,"character":0},"end":{"line":8,"character":4}},"selection_range":{"start":{"line":8,"character":0},"end":{"line":8,"character":4}},"data":{"name":"leaf"}}],"edges":null,"terminals":[{"node_id":"f170a06be92aae4db099707bbfd2b3773f84f9f159e5e49d1cb0a9f1bce158af","reason":"SERVER_REPORTED_NO_INCOMING_CALLS","provenance":"SERVER_REPORTED"}],"frontier":null,"diagnostics":null,"summary":{"node_count":1,"edge_count":0,"terminal_count":1,"cycle_count":0,"traversal_complete":true,"source_graph_complete":"UNKNOWN","completeness_scope":"SERVER_REPORTED_CALL_HIERARCHY","truncated":false}}`
 	if !bytes.Equal(got, []byte(want)) {
 		t.Fatalf("ASSERT_CANONICAL_GOLDEN_BYTES: got %s", got)
+	}
+}
+
+func TestIncomingTopmostSiblingCandidatesAreOptInSeparateAndCanonical(t *testing.T) {
+	leaf := item("leaf", 8)
+	rootB := lsp.DocumentSymbol{Name: "B", Kind: 12, Range: item("B", 20).Range, SelectionRange: item("B", 20).SelectionRange}
+	rootA := lsp.DocumentSymbol{Name: "A", Kind: 12, Range: item("A", 1).Range, SelectionRange: item("A", 1).SelectionRange,
+		Children: []lsp.DocumentSymbol{{Name: "nested", Kind: 12, Range: item("nested", 2).Range, SelectionRange: item("nested", 2).SelectionRange}}}
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}, symbolSupported: true,
+		documentSymbols: []lsp.DocumentSymbol{rootB, rootA, rootA}}
+
+	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: leaf.URI}}
+	baseline := Incoming(context.Background(), f, params, Options{})
+	if len(baseline.SiblingCandidates) != 0 || f.symbolRequests != 0 || baseline.Summary.EdgeCount != 0 {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_DEFAULT_OFF_AND_CALLS_UNCHANGED: candidates=%#v requests=%d summary=%#v", baseline.SiblingCandidates, f.symbolRequests, baseline.Summary)
+	}
+
+	got := Incoming(context.Background(), f, params, Options{IncludeTopmostSiblings: true})
+	if f.symbolRequests != 1 || len(got.SiblingCandidates) != 2 {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_OPT_IN_ROOTS_ONLY: requests=%d candidates=%#v", f.symbolRequests, got.SiblingCandidates)
+	}
+	if got.SiblingCandidates[0].Candidate.Name != "A" || got.SiblingCandidates[1].Candidate.Name != "B" {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_CANONICAL_UNIQUE: %#v", got.SiblingCandidates)
+	}
+	if got.Summary.EdgeCount != 0 || len(got.Edges) != 0 {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_NOT_CALL_EDGES: %#v", got.Edges)
+	}
+}
+
+func TestIncomingTopmostSiblingCandidatesSkipUnsupportedServer(t *testing.T) {
+	leaf := item("leaf", 8)
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}, documentSymbols: []lsp.DocumentSymbol{{Name: "A"}}}
+	got := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{IncludeTopmostSiblings: true})
+	if f.symbolRequests != 0 || len(got.SiblingCandidates) != 0 {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_UNSUPPORTED_NO_REQUEST: requests=%d candidates=%#v", f.symbolRequests, got.SiblingCandidates)
 	}
 }
 

@@ -12,13 +12,16 @@ import (
 type Client interface {
 	PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error)
 	IncomingCalls(context.Context, lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error)
+	SupportsDocumentSymbols() bool
+	DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error)
 }
 
 type Options struct {
-	MaxDepth      int
-	MaxNodes      int
-	NodeFactory   func(graph.Item) graph.Node
-	SchemaVersion string
+	MaxDepth               int
+	MaxNodes               int
+	NodeFactory            func(graph.Item) graph.Node
+	SchemaVersion          string
+	IncludeTopmostSiblings bool
 }
 type queued struct {
 	item  lsp.CallHierarchyItem
@@ -50,6 +53,19 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		return result
 	}
 	result.CapabilityQuality.PrepareSucceeded = true
+	if opts.IncludeTopmostSiblings && client.SupportsDocumentSymbols() {
+		symbols, symbolErr := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: params.TextDocument})
+		if symbolErr != nil {
+			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: symbolErr.Error()})
+		} else {
+			for _, symbol := range topmostSymbols(symbols) {
+				candidate := newNode(graph.Item{Name: symbol.Name, Kind: symbol.Kind, Detail: symbol.Detail, URI: params.TextDocument.URI, Range: rng(symbol.Range), SelectionRange: rng(symbol.SelectionRange)})
+				if graph.ValidateItem(candidate.Item) == nil {
+					result.SiblingCandidates = append(result.SiblingCandidates, graph.SiblingCandidate{SeedURI: params.TextDocument.URI, Candidate: candidate})
+				}
+			}
+		}
+	}
 	if len(items) == 0 {
 		result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.PrepareReturnedNoItem})
 		result.Canonicalize()
@@ -189,6 +205,14 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	}
 	result.Canonicalize()
 	return result
+}
+
+func topmostSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
+	// Hierarchical document symbols are a forest. Flattening the forest while
+	// retaining entries without an ancestor selects exactly its roots.
+	out := make([]lsp.DocumentSymbol, len(symbols))
+	copy(out, symbols)
+	return out
 }
 
 func node(i lsp.CallHierarchyItem, factory func(graph.Item) graph.Node) graph.Node {

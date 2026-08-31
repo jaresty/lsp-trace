@@ -38,7 +38,7 @@ type config struct {
 	maxDepth, maxNodes, concurrency                      int
 	timeout, requestTimeout                              time.Duration
 	logLevel, traceLSP                                   string
-	pretty                                               bool
+	pretty, topmostSiblings                              bool
 }
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
@@ -104,6 +104,7 @@ func parse(args []string) (config, error) {
 	fs.IntVar(&c.concurrency, "concurrency", 1, "concurrent requests (MVP requires 1)")
 	fs.StringVar(&c.output, "output", "", "output file")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
+	fs.BoolVar(&c.topmostSiblings, "topmost-siblings", false, "include top-level document symbols as sibling candidates")
 	fs.StringVar(&c.logLevel, "log-level", "warn", "error, warn, info, or debug")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	if err := fs.Parse(args); err != nil {
@@ -242,6 +243,16 @@ func (c requestTimeoutClient) IncomingCalls(_ context.Context, item lsp.CallHier
 	ctx, cancel := c.callContext()
 	defer cancel()
 	return c.client.IncomingCalls(ctx, item)
+}
+
+func (c requestTimeoutClient) SupportsDocumentSymbols() bool {
+	return c.client.SupportsDocumentSymbols()
+}
+
+func (c requestTimeoutClient) DocumentSymbols(_ context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.DocumentSymbols(ctx, params)
 }
 
 func execute(ctx context.Context, c config) (out graph.Result, code int) {
@@ -390,7 +401,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			continue
 		}
 		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.uri}, Position: lsp.Position{Line: uint32(seed.line - 1), Character: uint32(seed.column - 1)}}
-		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes})
+		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, IncludeTopmostSiblings: c.topmostSiblings})
 		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...)}
 		for _, node := range part.Nodes {
 			seedResult.ReachedNodeIDs = append(seedResult.ReachedNodeIDs, node.ID)

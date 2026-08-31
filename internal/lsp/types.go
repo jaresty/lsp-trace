@@ -37,6 +37,19 @@ type CallHierarchyIncomingCall struct {
 	FromRanges []Range           `json:"fromRanges"`
 }
 
+type DocumentSymbol struct {
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           int              `json:"kind"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
+}
+
+type DocumentSymbolParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+}
+
 type PrepareCallHierarchyParams = TextDocumentPositionParams
 
 type CallHierarchyIncomingCallsParams struct {
@@ -71,5 +84,6 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider,omitempty"`
+	CallHierarchyProvider  json.RawMessage `json:"callHierarchyProvider,omitempty"`
+	DocumentSymbolProvider json.RawMessage `json:"documentSymbolProvider,omitempty"`
 }
