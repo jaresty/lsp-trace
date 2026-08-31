@@ -114,22 +114,8 @@ defmodule ElixirCallHierarchy.Index do
         add_dependency_paths(build_path)
       end)
 
-      files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
-
       ElixirCallHierarchy.Profile.measure(profile?, "project_compile", fn ->
-        Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
-
-        try do
-          case Kernel.ParallelCompiler.compile_to_path(files, build_path, compiler_options()) do
-            {:ok, _modules, _warnings} ->
-              :ok
-
-            {:error, errors, warnings} ->
-              raise "workspace compilation failed: #{inspect({errors, warnings})}"
-          end
-        after
-          Code.compiler_options(previous_options)
-        end
+        compile_project(root, previous_options)
       end)
 
       ElixirCallHierarchy.Profile.measure(profile?, "tracer_drain", fn ->
@@ -142,6 +128,25 @@ defmodule ElixirCallHierarchy.Index do
       restore_env("MIX_BUILD_PATH", previous_build)
       restore_env("MIX_DEPS_PATH", previous_deps)
     end
+  end
+
+  defp compile_project(root, previous_options) do
+    Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
+      Mix.Task.clear()
+      config = Path.join(root, "config/config.exs")
+      if File.regular?(config), do: Mix.Task.run("loadconfig", [config])
+      Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
+
+      try do
+        case Mix.Task.run("compile", ["--force", "--no-deps-check"]) do
+          result when elem(result, 0) in [:ok, :noop] -> :ok
+          result -> raise "workspace compilation failed: #{inspect(result)}"
+        end
+      after
+        Code.compiler_options(previous_options)
+        Mix.Task.clear()
+      end
+    end)
   end
 
   defp compile_dependencies(root, deps_path, build_path) do
@@ -288,14 +293,6 @@ defmodule ElixirCallHierarchy.Index do
     after
       0 -> Enum.reverse(calls)
     end
-  end
-
-  defp compiler_options do
-    options = [tracers: [ElixirCallHierarchy.Tracer]]
-
-    if Version.match?(System.version(), ">= 1.20.0"),
-      do: Keyword.put(options, :return_diagnostics, true),
-      else: options
   end
 
   defp function_head({:when, _, [head | _]}), do: function_head(head)
