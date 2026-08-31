@@ -146,18 +146,21 @@ defmodule ElixirCallHierarchy.Index do
 
   defp compile_dependencies(root, deps_path, build_path) do
     env = [{"MIX_DEPS_PATH", deps_path}, {"MIX_BUILD_PATH", build_path}]
-    compile_dependencies(root, deps_path, build_path, env, MapSet.new())
+    dependencies = active_dependencies(root)
+    compile_dependencies(root, dependencies, build_path, env, MapSet.new())
   end
 
-  defp compile_dependencies(root, deps_path, build_path, env, repaired) do
-    pending = dependency_names(deps_path) -- MapSet.to_list(repaired)
+  defp compile_dependencies(root, dependencies, build_path, env, repaired) do
+    pending = Enum.reject(dependencies, &MapSet.member?(repaired, &1.name))
 
     result =
       if MapSet.size(repaired) > 0 and pending == [] do
         {"", 0}
       else
         args =
-          if MapSet.size(repaired) == 0, do: ["deps.compile"], else: ["deps.compile" | pending]
+          if MapSet.size(repaired) == 0,
+            do: ["deps.compile"],
+            else: ["deps.compile" | Enum.map(pending, & &1.name)]
 
         System.cmd("mix", args, cd: root, env: env, stderr_to_stdout: true)
       end
@@ -167,10 +170,10 @@ defmodule ElixirCallHierarchy.Index do
         :ok
 
       {output, status} ->
-        case resource_failure(output, deps_path, build_path, repaired) do
+        case resource_failure(output, dependencies, build_path, repaired) do
           {:ok, app, dependency} ->
             repair_dependency(app, dependency, build_path, env)
-            compile_dependencies(root, deps_path, build_path, env, MapSet.put(repaired, app))
+            compile_dependencies(root, dependencies, build_path, env, MapSet.put(repaired, app))
 
           :error ->
             diagnostic = bounded_diagnostic(output)
@@ -180,16 +183,22 @@ defmodule ElixirCallHierarchy.Index do
     end
   end
 
-  defp dependency_names(deps_path) do
-    deps_path
-    |> Path.join("*")
-    |> Path.wildcard()
-    |> Enum.filter(&File.dir?/1)
-    |> Enum.map(&Path.basename/1)
-    |> Enum.sort()
+  defp active_dependencies(root) do
+    Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
+      Mix.Dep.clear_cached()
+
+      try do
+        Mix.Dep.load_and_cache()
+        |> Enum.map(fn dependency ->
+          %{name: Atom.to_string(dependency.app), path: Path.expand(dependency.opts[:dest])}
+        end)
+      after
+        Mix.Dep.clear_cached()
+      end
+    end)
   end
 
-  defp resource_failure(output, deps_path, build_path, repaired) do
+  defp resource_failure(output, dependencies, build_path, repaired) do
     app =
       ~r/^==> ([a-zA-Z0-9_]+)$/m
       |> Regex.scan(output, capture: :all_but_first)
@@ -199,12 +208,12 @@ defmodule ElixirCallHierarchy.Index do
         _ -> nil
       end
 
-    dependency = app && Path.join(deps_path, app)
+    dependency = app && Enum.find(dependencies, &(&1.name == app))
     expected = app && Path.join([build_path, "lib", app, "priv"])
 
-    if app && !MapSet.member?(repaired, app) && File.dir?(Path.join(dependency, "priv")) &&
-         String.contains?(output, expected) do
-      {:ok, app, dependency}
+    if dependency && !MapSet.member?(repaired, app) &&
+         File.dir?(Path.join(dependency.path, "priv")) && String.contains?(output, expected) do
+      {:ok, app, dependency.path}
     else
       :error
     end
