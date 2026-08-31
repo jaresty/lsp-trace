@@ -56,6 +56,8 @@ assert_file Q-ELIXIR-COMPANION-MIX elixir-call-hierarchy/mix.exs
 assert_contains Q-ELIXIR-COMPANION-ESCRIPT-IGNORE elixir-call-hierarchy/.gitignore '/elixir-call-hierarchy'
 assert_file Q-ELIXIR-COMPANION-SERVER elixir-call-hierarchy/lib/elixir_call_hierarchy/server.ex
 assert_contains Q-ELIXIR-COMPANION-MODE scripts/qualify.sh 'elixir-companion'
+assert_contains Q-ELIXIR-COMPANION-PROFILE elixir-call-hierarchy/README.md '`--profile`'
+assert_contains Q-ELIXIR-COMPANION-PROFILE-FORMAT elixir-call-hierarchy/README.md 'ECH_PROFILE'
 assert_contains Q-ELIXIR-COMPANION-TRUST elixir-call-hierarchy/README.md 'Compiler and macro expansion—including dependency compilation—are executable code'
 assert_contains Q-ELIXIR-COMPANION-COMPLETE elixir-call-hierarchy/README.md 'Completeness is server-relative'
 assert_contains Q-ELIXIR-COMPANION-COALESCE elixir-call-hierarchy/README.md 'coalesced deterministically by `{module, name, arity}`'

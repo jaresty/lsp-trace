@@ -49,12 +49,21 @@ defmodule ElixirCallHierarchy.Cache do
   def load(root, opts \\ []) do
     root = Path.expand(root)
     cache_dir = opts |> Keyword.get(:cache_dir, default_dir()) |> Path.expand()
-    fingerprint = fingerprint(root)
+    profile? = Keyword.get(opts, :profile, false)
+
+    fingerprint =
+      ElixirCallHierarchy.Profile.measure(profile?, "fingerprint", fn -> fingerprint(root) end)
+
     entry = Path.join(cache_dir, fingerprint)
     index_path = Path.join(entry, "index.json")
     reindex? = Keyword.get(opts, :reindex, false)
 
-    case read_index(index_path, fingerprint) do
+    lookup =
+      ElixirCallHierarchy.Profile.measure(profile?, "cache_lookup", fn ->
+        read_index(index_path, fingerprint)
+      end)
+
+    case lookup do
       {:ok, index} when not reindex? -> {:hit, index}
       _ -> locked_load(root, cache_dir, entry, index_path, fingerprint, opts)
     end
@@ -100,28 +109,43 @@ defmodule ElixirCallHierarchy.Cache do
   defp locked_load(root, cache_dir, entry, index_path, fingerprint, opts) do
     File.mkdir_p!(cache_dir)
     lock = entry <> ".lock"
+    profile? = Keyword.get(opts, :profile, false)
 
-    with_lock(lock, fn ->
+    with_lock(lock, profile?, fn ->
       reindex? = Keyword.get(opts, :reindex, false)
 
       if reindex? do
         File.rm_rf!(entry)
       end
 
-      case read_index(index_path, fingerprint) do
-        {:ok, index} when not reindex? -> {:hit, index}
-        _ -> rebuild(root, entry, index_path, fingerprint)
+      lookup =
+        ElixirCallHierarchy.Profile.measure(profile?, "cache_locked_lookup", fn ->
+          read_index(index_path, fingerprint)
+        end)
+
+      case lookup do
+        {:ok, index} when not reindex? ->
+          {:hit, index}
+
+        _ ->
+          ElixirCallHierarchy.Profile.measure(profile?, "cache_rebuild", fn ->
+            rebuild(root, entry, index_path, fingerprint, profile?)
+          end)
       end
     end)
   end
 
-  defp rebuild(root, entry, index_path, fingerprint) do
+  defp rebuild(root, entry, index_path, fingerprint, profile?) do
     File.mkdir_p!(entry)
     build = Path.join(entry, "build")
     File.rm_rf!(build)
     File.mkdir_p!(build)
-    index = Index.build(root, build) |> normalize_index()
-    atomic_write(index_path, encode_index(index, fingerprint))
+    index = Index.build(root, build, profile: profile?) |> normalize_index()
+
+    ElixirCallHierarchy.Profile.measure(profile?, "index_serialize", fn ->
+      atomic_write(index_path, encode_index(index, fingerprint))
+    end)
+
     {:miss, index}
   end
 
@@ -131,14 +155,19 @@ defmodule ElixirCallHierarchy.Cache do
          do: {:ok, index}
   end
 
-  defp with_lock(lock, fun) do
+  defp with_lock(lock, profile?, fun) do
+    started = System.monotonic_time()
     deadline = System.monotonic_time(:millisecond) + @lock_wait_ms
-    acquire_lock(lock, deadline, fun)
+    acquire_lock(lock, deadline, profile?, started, fun)
   end
 
-  defp acquire_lock(lock, deadline, fun) do
+  defp acquire_lock(lock, deadline, profile?, started, fun) do
     case File.mkdir(lock) do
       :ok ->
+        elapsed = System.monotonic_time() - started
+        duration_ms = System.convert_time_unit(elapsed, :native, :microsecond) / 1_000
+        ElixirCallHierarchy.Profile.emit(profile?, "cache_lock_wait", %{duration_ms: duration_ms})
+
         try do
           fun.()
         after
@@ -150,7 +179,7 @@ defmodule ElixirCallHierarchy.Cache do
           raise "timed out waiting for cache lock #{lock}"
         else
           Process.sleep(50)
-          acquire_lock(lock, deadline, fun)
+          acquire_lock(lock, deadline, profile?, started, fun)
         end
 
       {:error, reason} ->

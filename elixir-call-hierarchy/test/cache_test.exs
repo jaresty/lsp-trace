@@ -1,7 +1,9 @@
 defmodule ElixirCallHierarchy.CacheTest do
   use ExUnit.Case, async: false
 
-  alias ElixirCallHierarchy.{Cache, Index}
+  import ExUnit.CaptureIO
+
+  alias ElixirCallHierarchy.{Cache, Index, Profile}
 
   setup do
     base = Path.join(System.tmp_dir!(), "ech-cache-test-#{System.unique_integer([:positive])}")
@@ -17,12 +19,37 @@ defmodule ElixirCallHierarchy.CacheTest do
     %{workspace: workspace, cache: cache}
   end
 
-  test "CLI accepts stdio cache-dir and reindex and rejects unknown options" do
-    assert {:ok, %{stdio: true, cache_dir: "/tmp/cache", reindex: true}} =
+  test "CLI accepts stdio cache-dir reindex and profile and rejects unknown options" do
+    assert {:ok, %{stdio: true, cache_dir: "/tmp/cache", reindex: true, profile: false}} =
              ElixirCallHierarchy.CLI.parse(["--stdio", "--cache-dir", "/tmp/cache", "--reindex"])
+
+    assert {:ok, %{profile: true}} = ElixirCallHierarchy.CLI.parse(["--stdio", "--profile"])
 
     assert {:error, message} = ElixirCallHierarchy.CLI.parse(["--wat"])
     assert message =~ "unknown option"
+  end
+
+  test "profile emits machine-readable phase start and completion on stderr" do
+    output =
+      capture_io(:stderr, fn ->
+        assert Profile.measure(true, "test_phase", fn -> :ok end) == :ok
+      end)
+
+    events =
+      output
+      |> String.split("\n", trim: true)
+      |> Enum.map(fn "ECH_PROFILE " <> json -> Jason.decode!(json) end)
+
+    assert [
+             %{"phase" => "test_phase", "event" => "start"},
+             %{
+               "phase" => "test_phase",
+               "event" => "complete",
+               "duration_ms" => duration
+             }
+           ] = events
+
+    assert is_number(duration) and duration >= 0
   end
 
   test "default cache directory is external and nonempty", %{workspace: workspace} do

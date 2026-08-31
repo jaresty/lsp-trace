@@ -14,14 +14,17 @@ defmodule ElixirCallHierarchy.Index do
     end
   end
 
-  def build(root, build_path) do
+  def build(root, build_path, opts \\ []) do
     root = Path.expand(root)
     File.mkdir_p!(build_path)
+    profile? = Keyword.get(opts, :profile, false)
 
     definitions =
-      root |> Path.join("lib/**/*.ex") |> Path.wildcard() |> Enum.flat_map(&definitions/1)
+      ElixirCallHierarchy.Profile.measure(profile?, "definition_parse", fn ->
+        root |> Path.join("lib/**/*.ex") |> Path.wildcard() |> Enum.flat_map(&definitions/1)
+      end)
 
-    calls = compile(root, definitions, build_path)
+    calls = compile(root, definitions, build_path, profile?)
     %__MODULE__{definitions: definitions, calls: calls, unsupported: []}
   end
 
@@ -92,7 +95,7 @@ defmodule ElixirCallHierarchy.Index do
   defp pre(node, state), do: {node, state}
   defp post(node, state), do: {node, state}
 
-  defp compile(root, definitions, build_path) do
+  defp compile(root, definitions, build_path, profile?) do
     previous_build = System.get_env("MIX_BUILD_PATH")
     previous_deps = System.get_env("MIX_DEPS_PATH")
     previous_options = Code.compiler_options()
@@ -106,27 +109,37 @@ defmodule ElixirCallHierarchy.Index do
         Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
           Mix.Dep.clear_cached()
           Mix.Task.clear()
-          Mix.Task.run("deps.compile", [])
-          Mix.Task.reenable("deps.loadpaths")
-          Mix.Task.run("deps.loadpaths", [])
+
+          ElixirCallHierarchy.Profile.measure(profile?, "deps_compile", fn ->
+            Mix.Task.run("deps.compile", [])
+          end)
+
+          ElixirCallHierarchy.Profile.measure(profile?, "deps_loadpaths", fn ->
+            Mix.Task.reenable("deps.loadpaths")
+            Mix.Task.run("deps.loadpaths", [])
+          end)
 
           files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
 
-          case Kernel.ParallelCompiler.compile_to_path(
-                 files,
-                 build_path,
-                 compiler_options()
-               ) do
-            {:ok, _modules, _warnings} ->
-              :ok
+          ElixirCallHierarchy.Profile.measure(profile?, "project_compile", fn ->
+            case Kernel.ParallelCompiler.compile_to_path(
+                   files,
+                   build_path,
+                   compiler_options()
+                 ) do
+              {:ok, _modules, _warnings} ->
+                :ok
 
-            {:error, errors, warnings} ->
-              raise "workspace compilation failed: #{inspect({errors, warnings})}"
-          end
+              {:error, errors, warnings} ->
+                raise "workspace compilation failed: #{inspect({errors, warnings})}"
+            end
+          end)
         end)
       end)
 
-      drain([], definitions)
+      ElixirCallHierarchy.Profile.measure(profile?, "tracer_drain", fn ->
+        drain([], definitions)
+      end)
     after
       Code.compiler_options(previous_options)
       Process.unregister(ElixirCallHierarchy.Collector)

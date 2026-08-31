@@ -3,10 +3,10 @@
 A clean-room, generic Elixir Call Hierarchy companion server. Build the executable with `mix escript.build`, then run it as:
 
 ```sh
-elixir-call-hierarchy --stdio [--cache-dir PATH] [--reindex]
+elixir-call-hierarchy --stdio [--cache-dir PATH] [--reindex] [--profile]
 ```
 
-`--cache-dir` overrides the compatible per-user cache location. `--reindex` clears and rebuilds only the current fingerprinted entry under its lock. Unknown options are rejected on stderr.
+`--cache-dir` overrides the compatible per-user cache location. `--reindex` clears and rebuilds only the current fingerprinted entry under its lock. `--profile` emits machine-readable `ECH_PROFILE` JSON lines on stderr for fingerprinting, cache lookup and lock wait, dependency compilation/loading, definition parsing, project compilation, tracer draining, index serialization, and total initialization. Unknown options are rejected on stderr.
 
 It supports only `initialize`, `initialized`, `textDocument/didOpen`, `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, `shutdown`, and `exit` over Content-Length framed JSON-RPC stdio.
 

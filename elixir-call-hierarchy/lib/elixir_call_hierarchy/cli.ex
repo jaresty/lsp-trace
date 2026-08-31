@@ -3,13 +3,14 @@ defmodule ElixirCallHierarchy.CLI do
 
   def parse(args) do
     case OptionParser.parse(args,
-           strict: [stdio: :boolean, cache_dir: :string, reindex: :boolean]
+           strict: [stdio: :boolean, cache_dir: :string, reindex: :boolean, profile: :boolean]
          ) do
       {options, [], []} ->
         parsed = %{
           stdio: Keyword.get(options, :stdio, false),
           cache_dir: Keyword.get(options, :cache_dir),
-          reindex: Keyword.get(options, :reindex, false)
+          reindex: Keyword.get(options, :reindex, false),
+          profile: Keyword.get(options, :profile, false)
         }
 
         if parsed.stdio, do: {:ok, parsed}, else: {:error, "--stdio is required"}
@@ -28,7 +29,7 @@ defmodule ElixirCallHierarchy.CLI do
       {:error, message} ->
         IO.puts(
           :stderr,
-          "#{message}\nusage: elixir-call-hierarchy --stdio [--cache-dir PATH] [--reindex]"
+          "#{message}\nusage: elixir-call-hierarchy --stdio [--cache-dir PATH] [--reindex] [--profile]"
         )
 
         System.halt(2)

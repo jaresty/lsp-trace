@@ -18,15 +18,21 @@ defmodule ElixirCallHierarchy.Server do
       uri_path(params["rootUri"] || get_in(params, ["workspaceFolders", Access.at(0), "uri"]))
 
     {:module, Jason.Encode} = Code.ensure_loaded(Jason.Encode)
-    options = Map.get(state, :options, %{cache_dir: nil, reindex: false})
-    cache_options = [reindex: options.reindex]
+    options = Map.get(state, :options, %{cache_dir: nil, reindex: false, profile: false})
+    profile? = Map.get(options, :profile, false)
+    cache_options = [reindex: options.reindex, profile: profile?]
 
     cache_options =
       if options.cache_dir,
         do: Keyword.put(cache_options, :cache_dir, options.cache_dir),
         else: cache_options
 
-    {_status, index} = ElixirCallHierarchy.Cache.load(root, cache_options)
+    {status, index} =
+      ElixirCallHierarchy.Profile.measure(profile?, "initialize_total", fn ->
+        ElixirCallHierarchy.Cache.load(root, cache_options)
+      end)
+
+    ElixirCallHierarchy.Profile.emit(profile?, "cache_result", %{status: status})
 
     {Map.put(state, :index, index),
      response(id, %{
