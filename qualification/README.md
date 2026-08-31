@@ -16,9 +16,12 @@ Run:
 ./scripts/qualify.sh typescript
 ./scripts/qualify.sh csharp
 ./scripts/qualify.sh elixir
+./scripts/qualify.sh elixir-companion
 ```
 
 For ElixirLS distributions that do not install `elixir-ls` or `language_server.sh` on `PATH`, set `ELIXIR_LS_COMMAND` to the executable path. The Elixir fixture targets a multi-clause `leaf/1` and requires same-module direct, recursive, and static-only callers plus cross-file calls from another module through both an alias and a fully qualified module name. The assertion report must separately state `protocol support, same-module resolution, cross-module resolution, and multi-clause resolution`, followed by exact non-empty call-site range coverage. A graph that advertises Call Hierarchy but omits either cross-module caller edge is **BLOCKED**, never PASS.
+
+`elixir-companion` is an opt-in, local-only qualification mode. It builds and invokes the repository companion escript and writes evidence under `qualification/evidence/elixir-companion/`; it does not replace or rewrite the retained ElixirLS BLOCKED evidence under `qualification/retained/elixir/`. The companion assertion report covers same-module, recursive, static-only, aliased cross-file, fully qualified cross-file, multi-clause target resolution, and exact non-empty ranges.
 
 Current retained graphs use `lsp-trace.graph.v2`; callers that need the compatibility projection may still request `lsp-trace.graph.v1`. TypeScript and C# retain PASS evidence. ElixirLS retains a BLOCKED graph and clean assertion report naming the missing aliased and fully qualified cross-module callers; it does not establish cross-module or multi-clause support.
 

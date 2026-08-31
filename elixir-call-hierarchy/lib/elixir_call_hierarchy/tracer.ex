@@ -20,6 +20,35 @@ defmodule ElixirCallHierarchy.Tracer do
           file: to_string(env.file),
           line: metadata[:line],
           column: metadata[:column],
+          call_range: call_range(metadata, target_name),
+          toolchain: toolchain()
+        }
+      })
+    else
+      _ -> :ok
+    end
+
+    :ok
+  end
+
+  def trace({kind, metadata, target_name, target_arity}, env)
+      when kind in [:local_function, :local_macro] do
+    with {caller_name, caller_arity} <- env.function,
+         pid when is_pid(pid) <- Process.whereis(ElixirCallHierarchy.Collector) do
+      send(pid, {
+        :compiler_trace,
+        %ElixirCallHierarchy.Call{
+          kind: kind,
+          caller_module: env.module,
+          caller_name: caller_name,
+          caller_arity: caller_arity,
+          target_module: env.module,
+          target_name: target_name,
+          target_arity: target_arity,
+          file: to_string(env.file),
+          line: metadata[:line],
+          column: metadata[:column],
+          call_range: call_range(metadata, target_name),
           toolchain: toolchain()
         }
       })
@@ -31,6 +60,16 @@ defmodule ElixirCallHierarchy.Tracer do
   end
 
   def trace(_event, _env), do: :ok
+
+  defp call_range(metadata, target_name) do
+    line = max((metadata[:line] || 1) - 1, 0)
+    column = max((metadata[:column] || 1) - 1, 0)
+
+    %{
+      start: %{line: line, character: column},
+      end: %{line: line, character: column + max(String.length(to_string(target_name)), 1)}
+    }
+  end
 
   defp toolchain do
     %{

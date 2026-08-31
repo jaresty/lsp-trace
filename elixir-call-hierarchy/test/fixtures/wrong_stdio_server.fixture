@@ -1,0 +1,94 @@
+#!/usr/bin/env elixir
+
+defmodule WrongStdioServer do
+  def run do
+    case read_message() do
+      {:ok, %{"id" => id, "method" => method, "params" => params}} ->
+        write(%{"jsonrpc" => "2.0", "id" => id, "result" => wrong_result(method, params)})
+        run()
+
+      {:ok, _notification} ->
+        run()
+
+      :eof ->
+        :ok
+    end
+  end
+
+  defp wrong_result("initialize", _params) do
+    provider = if System.get_env("WRONG_BEHAVIOR") == "initialize", do: false, else: true
+    %{"capabilities" => %{"callHierarchyProvider" => provider}}
+  end
+
+  defp wrong_result("textDocument/prepareCallHierarchy", params) do
+    if System.get_env("WRONG_BEHAVIOR") == "prepare" do
+      nil
+    else
+      uri = get_in(params, ["textDocument", "uri"])
+
+      range = %{
+        "start" => %{"line" => 1, "character" => 6},
+        "end" => %{"line" => 2, "character" => 24}
+      }
+
+      [
+        %{
+          "name" => "leaf/1",
+          "kind" => 12,
+          "uri" => uri,
+          "range" => range,
+          "selectionRange" => range,
+          "data" => %{"module" => "Elixir.Fixture.Calls", "name" => "leaf", "arity" => 1}
+        }
+      ]
+    end
+  end
+
+  defp wrong_result("callHierarchy/incomingCalls", _params) do
+    if System.get_env("WRONG_BEHAVIOR") == "incoming_ranges" do
+      Enum.map(
+        ["same_module/1", "recursive/1", "static_only/1", "aliased/1", "qualified/1"],
+        fn name ->
+          range = %{
+            "start" => %{"line" => 0, "character" => 0},
+            "end" => %{"line" => 0, "character" => 1}
+          }
+
+          %{
+            "from" => %{
+              "name" => name,
+              "kind" => 12,
+              "uri" => "file:///wrong.ex",
+              "range" => range,
+              "selectionRange" => range
+            },
+            "fromRanges" => []
+          }
+        end
+      )
+    else
+      []
+    end
+  end
+
+  defp wrong_result("shutdown", _params), do: nil
+  defp wrong_result(_, _params), do: nil
+
+  defp read_message do
+    with line when is_binary(line) <- IO.binread(:stdio, :line),
+         [_, length] <- Regex.run(~r/^Content-Length: (\d+)\r?\n$/, line),
+         "\r\n" <- IO.binread(:stdio, 2),
+         body when is_binary(body) <- IO.binread(:stdio, String.to_integer(length)) do
+      {:ok, Jason.decode!(body)}
+    else
+      :eof -> :eof
+    end
+  end
+
+  defp write(message) do
+    body = Jason.encode!(message)
+    IO.binwrite(:stdio, "Content-Length: #{byte_size(body)}\r\n\r\n#{body}")
+  end
+end
+
+WrongStdioServer.run()
