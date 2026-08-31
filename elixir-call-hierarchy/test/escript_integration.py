@@ -70,7 +70,7 @@ def hierarchy(workspace, cache, source, mix_env):
         process.stdin.write(message("initialize", 1, {"rootUri": workspace.resolve().as_uri()}))
         process.stdin.flush()
         require(read_framed(process.stdout, deadline)["result"]["capabilities"]["callHierarchyProvider"] is True, "initialize advertises call hierarchy")
-        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 1, "character": 7}}))
+        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 2, "character": 7}}))
         process.stdin.flush()
         prepared = read_framed(process.stdout, deadline)["result"]
         require(len(prepared) == 1 and prepared[0]["name"] == "leaf/0", "dependency-bearing workspace prepares leaf/0")
