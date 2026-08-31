@@ -57,6 +57,21 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 	}
 }
 
+func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := runSkill([]string{"get"}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != embeddedSkill {
+		t.Fatalf("ASSERT_EMBEDDED_SKILL_GET: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "name: lsp-trace") || !strings.Contains(stdout.String(), "--expand-dispatch-family") || !strings.Contains(stdout.String(), "--expand-topmost-siblings") {
+		t.Fatalf("ASSERT_EMBEDDED_SKILL_CONTENT: %s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runSkill([]string{"list"}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "usage: lsp-trace skill get") {
+		t.Fatalf("ASSERT_EMBEDDED_SKILL_REJECTS_UNSUPPORTED: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestParseAcceptsDispatchFamilyOptIn(t *testing.T) {
 	cfg, err := parse(append(validArgs(t.TempDir()), "--expand-dispatch-family"))
 	if err != nil || !cfg.expandDispatchFamily {

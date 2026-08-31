@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strconv"
@@ -21,6 +23,9 @@ import (
 	"lsp-trace/internal/source"
 	"lsp-trace/internal/traverse"
 )
+
+//go:embed SKILL.md
+var embeddedSkill string
 
 type stringsFlag []string
 
@@ -44,6 +49,9 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "skill" {
+		return runSkill(args[1:], os.Stdout, os.Stderr)
+	}
 	if len(args) == 0 || args[0] != "incoming" {
 		fmt.Fprintln(os.Stderr, "usage: lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN")
 		return 1
@@ -86,6 +94,18 @@ func run(args []string) int {
 		return 1
 	}
 	return code
+}
+
+func runSkill(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 || args[0] != "get" {
+		fmt.Fprintln(stderr, "usage: lsp-trace skill get")
+		return 1
+	}
+	if _, err := io.WriteString(stdout, embeddedSkill); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
 }
 
 func parse(args []string) (config, error) {

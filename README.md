@@ -52,6 +52,16 @@ Language servers run with the invoking user's permissions and may execute projec
 
 The current implementation includes deterministic graph normalization, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI.
 
+## Embedded skill
+
+Retrieve the binary's static agent skill without network access or installation:
+
+```bash
+lsp-trace skill get
+```
+
+Dynamic skill discovery, listing, and installation are deferred.
+
 ## Qualification and release
 
 TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract are documented in [qualification/README.md](qualification/README.md). Server support is claimed only from retained PASS evidence containing the server version, capability result, command, graph, stderr, and assertions. A BLOCKED or FAIL external-server run remains a release blocker; fixture presence alone is not interoperability evidence.
