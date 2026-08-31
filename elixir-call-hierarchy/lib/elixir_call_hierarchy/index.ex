@@ -28,6 +28,16 @@ defmodule ElixirCallHierarchy.Index do
     %__MODULE__{definitions: definitions, calls: calls, unsupported: []}
   end
 
+  def document_symbols(%__MODULE__{definitions: definitions}, file) do
+    file = Path.expand(file)
+
+    definitions
+    |> Enum.filter(&(&1.file == file))
+    |> Enum.sort_by(fn definition ->
+      {definition.range.start.line, definition.range.start.character, definition.identity}
+    end)
+  end
+
   def prepare(%__MODULE__{definitions: definitions}, file, line) do
     definitions
     |> Enum.filter(
@@ -194,26 +204,28 @@ defmodule ElixirCallHierarchy.Index do
   defp ensure_dependency_outputs(root, dependencies, build_path, env) do
     dependencies
     |> Enum.filter(&source_bearing_dependency?/1)
-    |> Enum.filter(&(dependency_beams(&1, build_path) == []))
+    |> Enum.filter(&(missing_dependency_beams(&1, build_path) != []))
     |> Enum.each(fn dependency ->
       force_output = force_compile_dependency(root, dependency, build_path, env)
 
       repair_output =
-        if dependency_beams(dependency, build_path) == [] do
+        if missing_dependency_beams(dependency, build_path) != [] do
           repair_dependency(dependency.name, dependency.path, build_path, env)
         else
           ""
         end
 
-      if dependency_beams(dependency, build_path) == [] do
+      missing = missing_dependency_beams(dependency, build_path)
+
+      if missing != [] do
         diagnostic = bounded_diagnostic(force_output <> repair_output)
 
         IO.puts(
           :stderr,
-          "dependency #{dependency.name} produced no BEAM files after forced compilation:\n#{diagnostic}"
+          "dependency #{dependency.name} is missing compiled modules #{Enum.join(missing, ", ")} after forced compilation:\n#{diagnostic}"
         )
 
-        raise "dependency #{dependency.name} has source modules but produced no BEAM files after forced compilation"
+        raise "dependency #{dependency.name} has source modules without BEAM output after forced compilation"
       end
     end)
   end
@@ -227,11 +239,54 @@ defmodule ElixirCallHierarchy.Index do
     end)
   end
 
-  defp dependency_beams(dependency, build_path) do
-    build_path
-    |> Path.join("lib/#{dependency.name}/ebin/*.beam")
+  defp missing_dependency_beams(dependency, build_path) do
+    dependency.path
+    |> Path.join("lib/**/*.ex")
     |> Path.wildcard()
+    |> Enum.flat_map(&declared_modules/1)
+    |> Enum.uniq()
+    |> Enum.reject(fn module ->
+      build_path
+      |> Path.join("lib/#{dependency.name}/ebin/#{Atom.to_string(module)}.beam")
+      |> File.regular?()
+    end)
+    |> Enum.map(&Atom.to_string/1)
+    |> Enum.sort()
   end
+
+  defp declared_modules(file) do
+    with {:ok, source} <- File.read(file),
+         {:ok, ast} <- Code.string_to_quoted(source) do
+      {_ast, {_stack, modules}} =
+        Macro.traverse(ast, {[], []}, &module_pre/2, &module_post/2)
+
+      modules
+    else
+      _ -> []
+    end
+  end
+
+  defp module_pre({:defmodule, _, [{:__aliases__, _, parts}, _]} = node, {stack, modules}) do
+    module = qualify_module(parts, stack)
+    {node, {[module | stack], [module | modules]}}
+  end
+
+  defp module_pre({:defmodule, _, [module, _]} = node, {stack, modules}) when is_atom(module) do
+    module = qualify_module([module], stack)
+    {node, {[module | stack], [module | modules]}}
+  end
+
+  defp module_pre(node, state), do: {node, state}
+
+  defp module_post({:defmodule, _, _} = node, {[_module | stack], modules}),
+    do: {node, {stack, modules}}
+
+  defp module_post(node, state), do: {node, state}
+
+  defp qualify_module(parts, [parent | _]) when length(parts) == 1,
+    do: Module.concat([parent | parts])
+
+  defp qualify_module(parts, _stack), do: Module.concat(parts)
 
   defp force_compile_dependency(root, dependency, build_path, env) do
     case System.cmd(
