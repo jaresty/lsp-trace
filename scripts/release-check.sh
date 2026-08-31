@@ -70,7 +70,7 @@ assert_file R-SCHEMA docs/SCHEMA_POLICY.md
 assert_file R-RELEASE docs/RELEASING.md
 assert_file R-PLATFORM .goreleaser.yaml
 assert_contains R-FLAGS README.md '## Flags'
-for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout output pretty; do
+for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"
 done
 assert_contains R-COMPLETE docs/SEMANTICS.md '`summary.complete`'
@@ -79,7 +79,7 @@ assert_contains R-REASONS docs/SCHEMA_POLICY.md '## Reason enum'
 for reason in NO_INCOMING_CALLS PREPARE_RETURNED_NO_ITEM INCOMING_RETURNED_NULL EXTERNAL_URI UNSUPPORTED_CALL_HIERARCHY SERVER_ERROR INVALID_SERVER_RESPONSE REQUEST_TIMEOUT GLOBAL_TIMEOUT CANCELLED MAX_DEPTH MAX_NODES NODE_ID_COLLISION; do
   assert_contains "R-REASON-$reason" docs/SCHEMA_POLICY.md "\`$reason\`"
 done
-assert_contains R-TRACE docs/SECURITY.md '`--trace-lsp` is not implemented'
+assert_contains R-TRACE docs/SECURITY.md '`--trace-lsp PATH` writes an opt-in JSON Lines protocol transcript'
 assert_contains R-TIMEOUT docs/SEMANTICS.md '`GLOBAL_TIMEOUT`'
 assert_contains R-SUPPORT README.md 'retained PASS evidence'
 assert_contains R-DRY-RUN docs/RELEASING.md './scripts/release-check.sh'

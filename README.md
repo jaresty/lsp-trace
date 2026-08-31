@@ -40,10 +40,11 @@ Optional flags:
 - `--max-nodes N`: maximum graph nodes (default `10000`); `0` is unlimited and negative values are rejected.
 - `--timeout DURATION`: global command deadline as a Go duration (default `5m`); `0` is unlimited and negative values are rejected.
 - `--request-timeout DURATION`: per-request deadline (default `30s`); it must be greater than zero.
+- `--concurrency N`: request concurrency; the sequential MVP accepts only `1`.
+- `--log-level LEVEL`: human diagnostic level: `error`, `warn`, `info`, or `debug` (default `warn`).
+- `--trace-lsp PATH`: opt-in JSON Lines transcript of sent and received JSON-RPC messages with deterministic sequence numbers.
 - `--output PATH`: write JSON to a mode-`0600` file instead of stdout.
 - `--pretty`: indent JSON output; default is compact JSON.
-
-Only these flags are implemented. In particular, transcript capture, log-level control, and configurable concurrency described as future work in the PRD are not current CLI flags.
 
 Language servers run with the invoking user's permissions and may execute project build logic, restore dependencies, access the network, or emit sensitive data. Use only trusted servers and workspaces.
 

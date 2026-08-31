@@ -87,7 +87,7 @@ func TestSubprocessFailureTraffic(t *testing.T) {
 	}{
 		{"null", 500 * time.Millisecond, 0, graph.PrepareReturnedNoItem, ""},
 		{"error", 500 * time.Millisecond, 2, graph.ServerError, "traverse"},
-		{"delay", 20 * time.Millisecond, 0, graph.NoIncomingCalls, ""},
+		{"delay", 20 * time.Millisecond, 2, graph.RequestTimeout, ""},
 		{"malformed", 500 * time.Millisecond, 1, "", "initialize"},
 		{"exit-early", 500 * time.Millisecond, 1, "", "initialize"},
 	}
@@ -172,8 +172,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 }
 
 func item(name string, line uint32) fakeItem {
-	r := fakeRange{Start: fakePosition{Line: line}, End: fakePosition{Line: line, Character: 4}}
-	return fakeItem{Name: name, Kind: 12, URI: "file:///workspace/main.go", Range: r, SelectionRange: r, Data: json.RawMessage(`{"opaque":{"token":[1,"two"]},"name":"` + name + `"}`)}
+	r := fakeRange{Start: fakePosition{Line: line}, End: fakePosition{Line: line, Character: 20}}
+	selection := fakeRange{Start: fakePosition{Line: line}, End: fakePosition{Line: line, Character: 4}}
+	return fakeItem{Name: name, Kind: 12, URI: "file:///workspace/main.go", Range: r, SelectionRange: selection, Data: json.RawMessage(`{"opaque":{"token":[1,"two"]},"name":"` + name + `"}`)}
 }
 func incoming(scenario string, it fakeItem) []map[string]any {
 	call := func(from fakeItem) map[string]any {

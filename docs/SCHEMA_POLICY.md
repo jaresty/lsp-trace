@@ -22,6 +22,8 @@ The implementation retains a v1 projection for callers that explicitly request `
 
 Every v1 result contains `schema_version`, `invocation`, `capabilities`, `targets`, `nodes`, `edges`, `terminals`, `frontier`, `diagnostics`, and `summary`. `summary.complete` means only that all discovered server-reported branches reached successful expansion or a natural server response. It does not establish source-graph completeness. `summary.truncated` reports user-bound truncation.
 
+## Reason enum
+
 The v1 reason values are:
 
 - `NO_INCOMING_CALLS`: the server reported no incoming calls for that expansion.
