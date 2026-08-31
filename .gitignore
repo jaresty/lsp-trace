@@ -2,3 +2,4 @@
 /lsp-trace
 /dist/
 /coverage.out
+node_modules/

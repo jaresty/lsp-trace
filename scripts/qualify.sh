@@ -26,11 +26,14 @@ find_elixir_ls() {
 case "$language" in
   typescript)
     command -v node >/dev/null 2>&1 || blocked 'node executable unavailable'
-    command -v typescript-language-server >/dev/null 2>&1 || blocked 'typescript-language-server executable unavailable'
-    server=$(command -v typescript-language-server)
-    "$server" --version >"$evidence/server-version.txt" 2>&1 || blocked 'server version probe failed'
-    target="$root/qualification/typescript/src/calls.ts:2:10"
+    command -v npm >/dev/null 2>&1 || blocked 'npm executable unavailable'
     workspace="$root/qualification/typescript"
+    if [ ! -x "$workspace/node_modules/.bin/typescript-language-server" ]; then
+      (cd "$workspace" && npm ci --ignore-scripts) >"$evidence/setup.txt" 2>&1 || blocked 'pinned TypeScript fixture dependency install failed'
+    fi
+    server="$workspace/node_modules/.bin/typescript-language-server"
+    "$server" --version >"$evidence/server-version.txt" 2>&1 || blocked 'server version probe failed'
+    target="$workspace/src/calls.ts:1:17"
     server_arg=--stdio
     expected='left,right,recursive,staticButNotExecuted'
     ;;
