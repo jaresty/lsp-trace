@@ -49,20 +49,22 @@ defmodule ElixirCallHierarchy.Cache do
   def load(root, opts \\ []) do
     root = Path.expand(root)
     cache_dir = opts |> Keyword.get(:cache_dir, default_dir()) |> Path.expand()
-    entry = Path.join(cache_dir, fingerprint(root))
+    fingerprint = fingerprint(root)
+    entry = Path.join(cache_dir, fingerprint)
     index_path = Path.join(entry, "index.json")
     reindex? = Keyword.get(opts, :reindex, false)
 
-    case read_index(index_path) do
+    case read_index(index_path, fingerprint) do
       {:ok, index} when not reindex? -> {:hit, index}
-      _ -> locked_load(root, cache_dir, entry, index_path, opts)
+      _ -> locked_load(root, cache_dir, entry, index_path, fingerprint, opts)
     end
   end
 
-  def encode_index(%Index{} = index) do
+  def encode_index(%Index{} = index, fingerprint) when is_binary(fingerprint) do
     Jason.encode!(%{
       "schema_version" => @schema_version,
       "indexer_version" => @indexer_version,
+      "fingerprint" => fingerprint,
       "index" => %{
         "definitions" => Enum.map(index.definitions, &encode_definition/1),
         "calls" => Enum.map(index.calls, &encode_call/1),
@@ -71,17 +73,20 @@ defmodule ElixirCallHierarchy.Cache do
     })
   end
 
-  def decode_index(json) when is_binary(json) do
+  def decode_index(json, expected_fingerprint \\ nil) when is_binary(json) do
     with {:ok, value} <- Jason.decode(json),
          %{
            "schema_version" => @schema_version,
            "indexer_version" => @indexer_version,
+           "fingerprint" => fingerprint,
            "index" => %{
              "definitions" => definitions,
              "calls" => calls,
              "unsupported" => unsupported
            }
          } <- value,
+         true <- is_binary(fingerprint),
+         true <- is_nil(expected_fingerprint) or fingerprint == expected_fingerprint,
          true <- is_list(definitions) and is_list(calls) and is_list(unsupported),
          {:ok, definitions} <- map_all(definitions, &decode_definition/1),
          {:ok, calls} <- map_all(calls, &decode_call/1) do
@@ -92,7 +97,7 @@ defmodule ElixirCallHierarchy.Cache do
     end
   end
 
-  defp locked_load(root, cache_dir, entry, index_path, opts) do
+  defp locked_load(root, cache_dir, entry, index_path, fingerprint, opts) do
     File.mkdir_p!(cache_dir)
     lock = entry <> ".lock"
 
@@ -103,26 +108,27 @@ defmodule ElixirCallHierarchy.Cache do
         File.rm_rf!(entry)
       end
 
-      case read_index(index_path) do
+      case read_index(index_path, fingerprint) do
         {:ok, index} when not reindex? -> {:hit, index}
-        _ -> rebuild(root, cache_dir, entry, index_path)
+        _ -> rebuild(root, entry, index_path, fingerprint)
       end
     end)
   end
 
-  defp rebuild(root, cache_dir, entry, index_path) do
+  defp rebuild(root, entry, index_path, fingerprint) do
     File.mkdir_p!(entry)
     build = Path.join(entry, "build")
     File.rm_rf!(build)
     File.mkdir_p!(build)
     index = Index.build(root, build) |> normalize_index()
-    atomic_write(index_path, encode_index(index))
-    increment_count(Path.join(cache_dir, "compile-count"))
+    atomic_write(index_path, encode_index(index, fingerprint))
     {:miss, index}
   end
 
-  defp read_index(path) do
-    with {:ok, json} <- File.read(path), {:ok, index} <- decode_index(json), do: {:ok, index}
+  defp read_index(path, fingerprint) do
+    with {:ok, json} <- File.read(path),
+         {:ok, index} <- decode_index(json, fingerprint),
+         do: {:ok, index}
   end
 
   defp with_lock(lock, fun) do
@@ -156,16 +162,6 @@ defmodule ElixirCallHierarchy.Cache do
     temporary = path <> ".tmp-#{System.unique_integer([:positive])}"
     File.write!(temporary, contents, [:binary, :sync])
     File.rename!(temporary, path)
-  end
-
-  defp increment_count(path) do
-    count =
-      case File.read(path) do
-        {:ok, value} -> value |> String.trim() |> String.to_integer()
-        _ -> 0
-      end
-
-    atomic_write(path, Integer.to_string(count + 1))
   end
 
   defp fingerprint_entries(root, relative) do

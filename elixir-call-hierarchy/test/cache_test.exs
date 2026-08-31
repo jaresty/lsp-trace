@@ -59,9 +59,11 @@ defmodule ElixirCallHierarchy.CacheTest do
     assert Cache.fingerprint(ctx.workspace) == first
   end
 
-  test "JSON index round trips and malformed schema is rejected" do
+  test "JSON index round trips and rejects malformed schema or mismatched fingerprint" do
     index = %Index{definitions: [], calls: [], unsupported: []}
-    assert {:ok, ^index} = index |> Cache.encode_index() |> Cache.decode_index()
+    encoded = Cache.encode_index(index, "fingerprint-one")
+    assert {:ok, ^index} = Cache.decode_index(encoded, "fingerprint-one")
+    assert {:error, :invalid_schema} = Cache.decode_index(encoded, "fingerprint-two")
     assert {:error, :invalid_schema} = Cache.decode_index(~s({"schema_version":999,"index":{}}))
     assert {:error, :invalid_json} = Cache.decode_index("not json")
   end
@@ -76,11 +78,20 @@ defmodule ElixirCallHierarchy.CacheTest do
   end
 
   test "reindex recompiles unchanged inputs", ctx do
-    assert {:miss, %Index{}} = Cache.load(ctx.workspace, cache_dir: ctx.cache)
-    marker = Path.join(ctx.cache, "compile-count")
-    count = read_count(marker)
-    assert {:miss, %Index{}} = Cache.load(ctx.workspace, cache_dir: ctx.cache, reindex: true)
-    assert read_count(marker) == count + 1
+    marker = Path.join(Path.dirname(ctx.workspace), "reindex-side-effect")
+    previous = System.get_env("ECH_COMPILE_SIDE_EFFECT")
+    System.put_env("ECH_COMPILE_SIDE_EFFECT", marker)
+
+    try do
+      assert {:miss, %Index{}} = Cache.load(ctx.workspace, cache_dir: ctx.cache)
+      assert File.read!(marker) == "compiled\n"
+      assert {:miss, %Index{}} = Cache.load(ctx.workspace, cache_dir: ctx.cache, reindex: true)
+      assert File.read!(marker) == "compiled\ncompiled\n"
+    after
+      if previous,
+        do: System.put_env("ECH_COMPILE_SIDE_EFFECT", previous),
+        else: System.delete_env("ECH_COMPILE_SIDE_EFFECT")
+    end
   end
 
   test "corrupt index is a miss and is atomically replaced", ctx do
@@ -88,7 +99,9 @@ defmodule ElixirCallHierarchy.CacheTest do
     index_file = cache_index(ctx)
     File.write!(index_file, "corrupt")
     assert {:miss, %Index{}} = Cache.load(ctx.workspace, cache_dir: ctx.cache)
-    assert {:ok, %Index{}} = index_file |> File.read!() |> Cache.decode_index()
+
+    assert {:ok, %Index{}} =
+             index_file |> File.read!() |> Cache.decode_index(Cache.fingerprint(ctx.workspace))
   end
 
   test "concurrent cold subprocesses compile once", ctx do
@@ -130,13 +143,6 @@ defmodule ElixirCallHierarchy.CacheTest do
     Path.join([ctx.cache, Cache.fingerprint(ctx.workspace), "index.json"])
   end
 
-  defp read_count(path) do
-    case File.read(path) do
-      {:ok, value} -> value |> String.trim() |> String.to_integer()
-      _ -> 0
-    end
-  end
-
   defp tree(path), do: path |> Path.join("**/*") |> Path.wildcard() |> Enum.sort()
 
   defp restore(workspace, "lib/calls.ex"),
@@ -165,6 +171,7 @@ defmodule ElixirCallHierarchy.CacheTest do
 
     defmodule Fixture.Calls do
       @tag #{inspect(tag)}
+      def tag, do: @tag
       def leaf(v), do: v
       def caller(v), do: leaf(v)
     end
