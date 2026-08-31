@@ -1,0 +1,5 @@
+/_build/
+/cover/
+/deps/
+/doc/
+/.elixir_ls/
