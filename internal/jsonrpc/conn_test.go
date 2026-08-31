@@ -118,10 +118,21 @@ func TestReadMessageRejectsInvalidContentLength(t *testing.T) {
 		"X: y\r\n\r\n{}",
 		"Content-Length: -1\r\n\r\n",
 		"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}",
-		"Content-Length: 16777217\r\n\r\n",
 	} {
 		if _, err := readMessage(bufio.NewReader(strings.NewReader(input))); err == nil {
 			t.Errorf("readMessage(%q) succeeded", input)
 		}
+	}
+}
+
+func TestReadMessageRejectsOversizedBodyBeforeReading(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("Content-Length: 16777217\r\n\r\nbody-prefix"))
+	_, err := readMessage(reader)
+	if err == nil || !strings.Contains(err.Error(), "exceeds limit") {
+		t.Fatalf("ASSERT_OVERSIZED_FRAME_LIMIT: error = %v", err)
+	}
+	remaining, _ := reader.Peek(len("body-prefix"))
+	if string(remaining) != "body-prefix" {
+		t.Fatalf("ASSERT_OVERSIZED_FRAME_UNREAD: remaining = %q", remaining)
 	}
 }
