@@ -2,8 +2,9 @@ defmodule LspTraceQualification.Calls do
   def leaf(value), do: value + 1
   def left(value), do: leaf(value)
   def right(value), do: leaf(value)
-  def recursive(value) when value <= 0, do: leaf(value)
-  def recursive(value), do: recursive(value - 1)
+  def recursive(value), do: leaf(value) + recursive_loop(value)
+  defp recursive_loop(value) when value <= 0, do: 0
+  defp recursive_loop(value), do: recursive_loop(value - 1)
 
   # Static-only witness: the normal entry path never takes this branch.
   def static_but_not_executed(value) do

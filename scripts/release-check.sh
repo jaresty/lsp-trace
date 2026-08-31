@@ -43,7 +43,7 @@ assert_file Q-ELIXIR qualification/elixir/lib/calls.ex
 assert_contains Q-ELIXIR-LEAF qualification/elixir/lib/calls.ex 'def leaf'
 assert_contains Q-ELIXIR-LEFT qualification/elixir/lib/calls.ex 'def left'
 assert_contains Q-ELIXIR-RIGHT qualification/elixir/lib/calls.ex 'def right'
-assert_contains Q-ELIXIR-RECURSION qualification/elixir/lib/calls.ex 'recursive(value - 1)'
+assert_contains Q-ELIXIR-RECURSION qualification/elixir/lib/calls.ex 'recursive_loop(value - 1)'
 assert_contains Q-ELIXIR-STATIC qualification/elixir/lib/calls.ex 'static_but_not_executed'
 assert_contains Q-ELIXIR-PATH scripts/qualify.sh 'elixir)'
 assert_contains Q-STATE qualification/README.md 'PASS, BLOCKED, or FAIL'
