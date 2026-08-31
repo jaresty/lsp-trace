@@ -70,7 +70,7 @@ def hierarchy(workspace, cache, source, mix_env):
         process.stdin.write(message("initialize", 1, {"rootUri": workspace.resolve().as_uri()}))
         process.stdin.flush()
         require(read_framed(process.stdout, deadline)["result"]["capabilities"]["callHierarchyProvider"] is True, "initialize advertises call hierarchy")
-        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 2, "character": 7}}))
+        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 3, "character": 7}}))
         process.stdin.flush()
         prepared = read_framed(process.stdout, deadline)["result"]
         require(len(prepared) == 1 and prepared[0]["name"] == "leaf/0", "dependency-bearing workspace prepares leaf/0")
@@ -111,7 +111,7 @@ def invoke(workspace, cache, request, mix_env, timeout=TIMEOUT):
     except subprocess.TimeoutExpired as error:
         raise AssertionError(f"actual escript initialize exceeded {timeout}s") from error
     elapsed = time.monotonic() - started
-    require(result.returncode == 0, f"actual escript exits successfully (stderr={result.stderr[-2000:].decode(errors='replace')!r})")
+    require(result.returncode == 0, f"actual escript exits successfully (stderr={result.stderr[-8000:].decode(errors='replace')!r})")
     return read_message(result.stdout), result.stderr.decode(errors="replace"), elapsed
 
 
@@ -123,6 +123,10 @@ def main():
         cache = base / "cache"
         (workspace / "lib").mkdir(parents=True)
         (workspace / "deps").mkdir()
+        (workspace / "config").mkdir()
+        (workspace / "config" / "config.exs").write_text(
+            'import Config\nconfig :escript_fixture, :compile_value, :configured\n'
+        )
 
         def dependency(name, deps="[]", body="def value, do: :ok"):
             root = workspace / "deps" / name
@@ -172,13 +176,22 @@ end
 """
         )
         (workspace / "mix.exs").write_text(
-            """defmodule EscriptFixture.MixProject do
+            """defmodule Mix.Tasks.Compile.FixtureMarker do
+  use Mix.Task.Compiler
+  def run(_) do
+    File.write!(Path.join(Mix.Project.build_path(), "fixture-compiler-ran"), "ok")
+    {:ok, []}
+  end
+end
+
+defmodule EscriptFixture.MixProject do
   use Mix.Project
   def project do
     [
       app: :escript_fixture,
       version: \"0.1.0\",
       elixir: \"~> 1.16\",
+      compilers: [:fixture_marker] ++ Mix.compilers(),
       deps: [
         {:jason, \"~> 1.4\"},
         {:test_only, path: \"deps/test_only\", only: :test},
@@ -194,7 +207,8 @@ end
         source.write_text(
             """defmodule EscriptFixture.Calls do
   @workspace_version Jason.encode(:workspace_collision, :incompatible, :arity)
-  def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}, @workspace_version}
+  @compile_value Application.compile_env!(:escript_fixture, :compile_value)
+  def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}, @workspace_version, @compile_value}
   def caller, do: leaf()
 end
 """
@@ -226,6 +240,7 @@ end
         require("Unknown dependency prod_only" not in cold_stderr, "test excludes restored prod-only dependency")
         require("Unknown dependency target_only" not in cold_stderr, "host target excludes restored special-target dependency")
         require("undefined function ActiveTransitive.value/0" not in cold_stderr, "active transitive compiles before test-only dependent")
+        require(any(cache.rglob("fixture-compiler-ran")), "workspace custom compiler runs in Mix order")
 
         hierarchy(workspace, cache / "test", source, "test")
         require("\"phase\":\"deps_compile\"" in cold_stderr, "cold initialize profiles dependency compilation")
