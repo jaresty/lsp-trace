@@ -155,6 +155,7 @@ defmodule ElixirCallHierarchy.Index do
     env = [{"MIX_DEPS_PATH", deps_path}, {"MIX_BUILD_PATH", build_path}]
     dependencies = active_dependencies(root)
     compile_dependencies(root, dependencies, build_path, env, MapSet.new())
+    ensure_dependency_outputs(root, dependencies, build_path, env)
   end
 
   defp compile_dependencies(root, dependencies, build_path, env, repaired) do
@@ -186,6 +187,64 @@ defmodule ElixirCallHierarchy.Index do
             diagnostic = bounded_diagnostic(output)
             IO.puts(:stderr, "mix deps.compile failed (exit #{status}):\n#{diagnostic}")
             raise "dependency compilation failed with exit status #{status}"
+        end
+    end
+  end
+
+  defp ensure_dependency_outputs(root, dependencies, build_path, env) do
+    dependencies
+    |> Enum.filter(&source_bearing_dependency?/1)
+    |> Enum.filter(&(dependency_beams(&1, build_path) == []))
+    |> Enum.each(fn dependency ->
+      force_compile_dependency(root, dependency, build_path, env)
+
+      if dependency_beams(dependency, build_path) == [] do
+        raise "dependency #{dependency.name} has source modules but produced no BEAM files"
+      end
+    end)
+  end
+
+  defp source_bearing_dependency?(dependency) do
+    Enum.any?(["lib/**/*.ex", "src/**/*.erl", "src/**/*.xrl", "src/**/*.yrl"], fn pattern ->
+      dependency.path
+      |> Path.join(pattern)
+      |> Path.wildcard()
+      |> Enum.any?()
+    end)
+  end
+
+  defp dependency_beams(dependency, build_path) do
+    build_path
+    |> Path.join("lib/#{dependency.name}/ebin/*.beam")
+    |> Path.wildcard()
+  end
+
+  defp force_compile_dependency(root, dependency, build_path, env) do
+    case System.cmd(
+           "mix",
+           ["deps.compile", dependency.name, "--force"],
+           cd: root,
+           env: env,
+           stderr_to_stdout: true
+         ) do
+      {_output, 0} ->
+        :ok
+
+      {output, status} ->
+        expected_priv = Path.join([build_path, "lib", dependency.name, "priv"])
+
+        if File.dir?(Path.join(dependency.path, "priv")) and
+             String.contains?(output, expected_priv) do
+          repair_dependency(dependency.name, dependency.path, build_path, env)
+        else
+          diagnostic = bounded_diagnostic(output)
+
+          IO.puts(
+            :stderr,
+            "mix deps.compile #{dependency.name} --force failed (exit #{status}):\n#{diagnostic}"
+          )
+
+          raise "forced dependency compilation failed with exit status #{status}"
         end
     end
   end
@@ -241,12 +300,12 @@ defmodule ElixirCallHierarchy.Index do
 
     Enum.each(
       ["compile.erlang", "compile.elixir", "compile.app"],
-      &run_dependency_compiler(&1, dependency, env)
+      &run_dependency_compiler(&1, dependency, env, ["--force"])
     )
   end
 
-  defp run_dependency_compiler(task, dependency, env) do
-    case System.cmd("mix", [task], cd: dependency, env: env, stderr_to_stdout: true) do
+  defp run_dependency_compiler(task, dependency, env, args \\ []) do
+    case System.cmd("mix", [task | args], cd: dependency, env: env, stderr_to_stdout: true) do
       {_output, 0} ->
         :ok
 

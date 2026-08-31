@@ -151,6 +151,47 @@ end
         )
         dependency("prod_only")
         dependency("target_only")
+        dependency(
+            "compile_fixture",
+            body="""resource = Application.app_dir(:compile_fixture, \"priv/template.txt\")
+  @external_resource resource
+  @template File.read!(resource)
+  defmacro instrument(do: expression) do
+    template = @template
+    quote do: {unquote(template), unquote(expression)}
+  end""",
+        )
+        fixture_resource = workspace / "deps" / "compile_fixture" / "priv" / "template.txt"
+        fixture_resource.parent.mkdir(parents=True)
+        fixture_resource.write_text("compiled dependency resource\n")
+        (workspace / "deps" / "compile_fixture" / "mix.exs").write_text(
+            """defmodule Mix.Tasks.Compile.MetadataOnly do
+  use Mix.Task.Compiler
+  def run(args) do
+    marker = Path.join(System.fetch_env!("MIX_BUILD_PATH"), "metadata-only-pass")
+
+    if File.exists?(marker) do
+      Mix.Tasks.Compile.Elixir.run(["--force" | args])
+    else
+      File.mkdir_p!(Path.dirname(marker))
+      File.write!(marker, "incomplete")
+      {:noop, []}
+    end
+  end
+end
+
+defmodule CompileFixture.MixProject do
+  use Mix.Project
+  def project do
+    [
+      app: :compile_fixture,
+      version: "0.1.0",
+      compilers: [:metadata_only, :app]
+    ]
+  end
+end
+"""
+        )
         shutil.copy2(PROJECT / "mix.lock", workspace / "mix.lock")
         jason = workspace / "deps" / "jason"
         shutil.copytree(PROJECT / "deps" / "jason", jason)
@@ -198,6 +239,7 @@ defmodule EscriptFixture.MixProject do
       compilers: [:fixture_marker] ++ Mix.compilers(),
       deps: [
         {:jason, \"~> 1.4\"},
+        {:compile_fixture, path: \"deps/compile_fixture\"},
         {:test_only, path: \"deps/test_only\", only: :test},
         {:prod_only, path: \"deps/prod_only\", only: :prod},
         {:target_only, path: \"deps/target_only\", targets: [:special]}
@@ -213,7 +255,8 @@ end
   @workspace_version Jason.encode(:workspace_collision, :incompatible, :arity)
   @compile_value Application.compile_env!(:escript_fixture, :compile_value)
   def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}, @workspace_version, @compile_value}
-  def caller, do: leaf()
+  require CompileFixture
+  def caller, do: CompileFixture.instrument(do: leaf())
 end
 """
         )
@@ -245,6 +288,14 @@ end
         require("Unknown dependency target_only" not in cold_stderr, "host target excludes restored special-target dependency")
         require("undefined function ActiveTransitive.value/0" not in cold_stderr, "active transitive compiles before test-only dependent")
         require(any(cache.rglob("fixture-compiler-ran")), "workspace custom compiler runs in Mix order")
+        require(
+            any(cache.rglob("Elixir.CompileFixture.beam")),
+            "source-bearing dependency produces its BEAM module",
+        )
+        require(
+            any(cache.rglob("compile_fixture/priv/template.txt")),
+            "dependency compile-time resource is assembled externally",
+        )
 
         hierarchy(workspace, cache / "test", source, "test")
         require("\"phase\":\"deps_compile\"" in cold_stderr, "cold initialize profiles dependency compilation")
