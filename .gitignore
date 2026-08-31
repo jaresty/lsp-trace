@@ -1,0 +1,4 @@
+.DS_Store
+/lsp-trace
+/dist/
+/coverage.out
