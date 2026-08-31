@@ -4,12 +4,24 @@ defmodule ElixirCallHierarchy.Index do
   defstruct definitions: [], calls: [], unsupported: []
 
   def build(root) do
+    temporary =
+      Path.join(System.tmp_dir!(), "elixir-call-hierarchy-#{System.unique_integer([:positive])}")
+
+    try do
+      build(root, Path.join(temporary, "build"))
+    after
+      File.rm_rf!(temporary)
+    end
+  end
+
+  def build(root, build_path) do
     root = Path.expand(root)
+    File.mkdir_p!(build_path)
 
     definitions =
       root |> Path.join("lib/**/*.ex") |> Path.wildcard() |> Enum.flat_map(&definitions/1)
 
-    calls = compile(root, definitions)
+    calls = compile(root, definitions, build_path)
     %__MODULE__{definitions: definitions, calls: calls, unsupported: []}
   end
 
@@ -80,16 +92,12 @@ defmodule ElixirCallHierarchy.Index do
   defp pre(node, state), do: {node, state}
   defp post(node, state), do: {node, state}
 
-  defp compile(root, definitions) do
-    cache =
-      Path.join(System.tmp_dir!(), "elixir-call-hierarchy-#{System.unique_integer([:positive])}")
-
-    File.mkdir_p!(Path.join(cache, "build"))
+  defp compile(root, definitions, build_path) do
     previous_build = System.get_env("MIX_BUILD_PATH")
     previous_deps = System.get_env("MIX_DEPS_PATH")
     previous_options = Code.compiler_options()
     Process.register(self(), ElixirCallHierarchy.Collector)
-    System.put_env("MIX_BUILD_PATH", Path.join(cache, "build"))
+    System.put_env("MIX_BUILD_PATH", build_path)
     System.put_env("MIX_DEPS_PATH", Path.join(root, "deps"))
     Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
 
@@ -106,7 +114,7 @@ defmodule ElixirCallHierarchy.Index do
 
           case Kernel.ParallelCompiler.compile_to_path(
                  files,
-                 Path.join(cache, "build"),
+                 build_path,
                  compiler_options()
                ) do
             {:ok, _modules, _warnings} ->
@@ -124,7 +132,6 @@ defmodule ElixirCallHierarchy.Index do
       Process.unregister(ElixirCallHierarchy.Collector)
       restore_env("MIX_BUILD_PATH", previous_build)
       restore_env("MIX_DEPS_PATH", previous_deps)
-      File.rm_rf!(cache)
     end
   end
 
