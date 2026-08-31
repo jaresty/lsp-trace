@@ -146,15 +146,98 @@ defmodule ElixirCallHierarchy.Index do
 
   defp compile_dependencies(root, deps_path, build_path) do
     env = [{"MIX_DEPS_PATH", deps_path}, {"MIX_BUILD_PATH", build_path}]
+    compile_dependencies(root, deps_path, build_path, env, MapSet.new())
+  end
 
-    case System.cmd("mix", ["deps.compile"], cd: root, env: env, stderr_to_stdout: true) do
+  defp compile_dependencies(root, deps_path, build_path, env, repaired) do
+    pending = dependency_names(deps_path) -- MapSet.to_list(repaired)
+
+    result =
+      if MapSet.size(repaired) > 0 and pending == [] do
+        {"", 0}
+      else
+        args =
+          if MapSet.size(repaired) == 0, do: ["deps.compile"], else: ["deps.compile" | pending]
+
+        System.cmd("mix", args, cd: root, env: env, stderr_to_stdout: true)
+      end
+
+    case result do
+      {_output, 0} ->
+        :ok
+
+      {output, status} ->
+        case resource_failure(output, deps_path, build_path, repaired) do
+          {:ok, app, dependency} ->
+            repair_dependency(app, dependency, build_path, env)
+            compile_dependencies(root, deps_path, build_path, env, MapSet.put(repaired, app))
+
+          :error ->
+            diagnostic = bounded_diagnostic(output)
+            IO.puts(:stderr, "mix deps.compile failed (exit #{status}):\n#{diagnostic}")
+            raise "dependency compilation failed with exit status #{status}"
+        end
+    end
+  end
+
+  defp dependency_names(deps_path) do
+    deps_path
+    |> Path.join("*")
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.map(&Path.basename/1)
+    |> Enum.sort()
+  end
+
+  defp resource_failure(output, deps_path, build_path, repaired) do
+    app =
+      ~r/^==> ([a-zA-Z0-9_]+)$/m
+      |> Regex.scan(output, capture: :all_but_first)
+      |> List.last()
+      |> case do
+        [name] -> name
+        _ -> nil
+      end
+
+    dependency = app && Path.join(deps_path, app)
+    expected = app && Path.join([build_path, "lib", app, "priv"])
+
+    if app && !MapSet.member?(repaired, app) && File.dir?(Path.join(dependency, "priv")) &&
+         String.contains?(output, expected) do
+      {:ok, app, dependency}
+    else
+      :error
+    end
+  end
+
+  defp repair_dependency(app, dependency, build_path, env) do
+    run_dependency_compiler("compile.app", dependency, env)
+
+    Enum.each(["priv", "include"], fn resource ->
+      source = Path.join(dependency, resource)
+
+      if File.dir?(source) do
+        destination = Path.join([build_path, "lib", app, resource])
+        File.rm_rf!(destination)
+        File.cp_r!(source, destination)
+      end
+    end)
+
+    Enum.each(
+      ["compile.erlang", "compile.elixir", "compile.app"],
+      &run_dependency_compiler(&1, dependency, env)
+    )
+  end
+
+  defp run_dependency_compiler(task, dependency, env) do
+    case System.cmd("mix", [task], cd: dependency, env: env, stderr_to_stdout: true) do
       {_output, 0} ->
         :ok
 
       {output, status} ->
         diagnostic = bounded_diagnostic(output)
-        IO.puts(:stderr, "mix deps.compile failed (exit #{status}):\n#{diagnostic}")
-        raise "dependency compilation failed with exit status #{status}"
+        IO.puts(:stderr, "mix #{task} failed (exit #{status}):\n#{diagnostic}")
+        raise "dependency resource repair failed with exit status #{status}"
     end
   end
 
