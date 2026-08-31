@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -242,6 +243,145 @@ func TestDispatchRelationshipsAreSeparateCanonicalAndV2Only(t *testing.T) {
 	encoded, err = json.Marshal(r)
 	if err != nil || bytes.Contains(encoded, []byte(`"dispatch_relationships"`)) {
 		t.Fatalf("ASSERT_V1_OMITS_DISPATCH_RELATIONSHIPS: encoded=%s err=%v", encoded, err)
+	}
+}
+
+func TestV2EvidenceReceiptProjectsDiscoverySemanticsWithStableRelationIdentities(t *testing.T) {
+	makeResult := func(reverse bool) Result {
+		siblings := []SiblingCandidate{
+			{SeedURI: "file:///b.go", Candidate: Node{ID: "candidate-b"}},
+			{SeedURI: "file:///a.go", Candidate: Node{ID: "candidate-a"}},
+		}
+		dispatch := []DispatchRelationship{
+			{SeedLabel: "b", Interface: Node{ID: "interface-b"}, Implementation: Node{ID: "implementation-b"}},
+			{SeedLabel: "a", Interface: Node{ID: "interface-a"}, Implementation: Node{ID: "implementation-a"}},
+		}
+		if reverse {
+			siblings[0], siblings[1] = siblings[1], siblings[0]
+			dispatch[0], dispatch[1] = dispatch[1], dispatch[0]
+		}
+		return Result{
+			SchemaVersion:     SchemaVersionV2,
+			Invocation:        Invocation{Provenance: InvocationProvenance{SourceRevision: "commit-abc"}},
+			SiblingCandidates: siblings, DispatchRelationships: dispatch,
+		}
+	}
+	encode := func(r Result) ([]byte, map[string]any) {
+		t.Helper()
+		r.Canonicalize()
+		encoded, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+		return encoded, decoded
+	}
+
+	firstBytes, first := encode(makeResult(false))
+	secondBytes, _ := encode(makeResult(true))
+	if !bytes.Equal(firstBytes, secondBytes) {
+		t.Fatalf("ASSERT_RECEIPT_CANONICAL_INSERTION_INDEPENDENT: %s != %s", firstBytes, secondBytes)
+	}
+	traceReceipt, traceReceiptOK := first["trace_receipt"].(map[string]any)
+	t.Run("immutable trace receipt", func(t *testing.T) {
+		if !traceReceiptOK || traceReceipt["receipt_version"] != "lsp-trace.receipt.v1" {
+			t.Fatalf("ASSERT_TRACE_RECEIPT_PRESENT: %#v", first)
+		}
+		digest, _ := traceReceipt["content_digest"].(string)
+		if !strings.HasPrefix(digest, "sha256:") {
+			t.Fatalf("ASSERT_TRACE_RECEIPT_DIGEST_DOMAIN: %#v", traceReceipt)
+		}
+		changed := makeResult(false)
+		changed.Invocation.Provenance.SourceRevision = "commit-def"
+		changedBytes, changedDocument := encode(changed)
+		_ = changedBytes
+		changedReceipt, _ := changedDocument["trace_receipt"].(map[string]any)
+		if changedReceipt["content_digest"] == digest {
+			t.Fatalf("ASSERT_TRACE_RECEIPT_COMMITS_PROVENANCE: first=%#v changed=%#v", traceReceipt, changedReceipt)
+		}
+		firstEvidence, _ := first["evidence_receipt"].(map[string]any)
+		changedEvidence, _ := changedDocument["evidence_receipt"].(map[string]any)
+		firstRelations, _ := firstEvidence["relations"].([]any)
+		changedRelations, _ := changedEvidence["relations"].([]any)
+		if len(firstRelations) == 0 || len(changedRelations) == 0 || firstRelations[0].(map[string]any)["relation_id"] == changedRelations[0].(map[string]any)["relation_id"] {
+			t.Fatalf("ASSERT_RELATION_ID_COMMITS_SOURCE_REVISION: first=%#v changed=%#v", firstEvidence, changedEvidence)
+		}
+	})
+	semantics, semanticsOK := first["evidence_semantics"].(map[string]any)
+	t.Run("claim ceiling", func(t *testing.T) {
+		callEdges, _ := semantics["call_edges"].(map[string]any)
+		discovery, _ := semantics["discovery_relations"].(map[string]any)
+		if !semanticsOK || callEdges["evidence_class"] != "SERVER_REPORTED_CALL_HIERARCHY" {
+			t.Fatalf("ASSERT_EVIDENCE_SEMANTICS_PRESENT: %#v", semantics)
+		}
+		if discovery["support_contribution"] != float64(0) {
+			t.Fatalf("ASSERT_DISCOVERY_CLAIM_CEILING_ZERO: %#v", discovery)
+		}
+		unsupported, _ := callEdges["does_not_support"].([]any)
+		if len(unsupported) == 0 {
+			t.Fatalf("ASSERT_CALL_EDGE_CLAIM_CEILING: %#v", callEdges)
+		}
+	})
+	receipt, receiptOK := first["evidence_receipt"].(map[string]any)
+	if !receiptOK {
+		receipt = map[string]any{}
+	}
+	t.Run("receipt present", func(t *testing.T) {
+		if !receiptOK {
+			t.Errorf("ASSERT_V2_EVIDENCE_RECEIPT_PRESENT: %s", firstBytes)
+		}
+	})
+	t.Run("support total zero", func(t *testing.T) {
+		if receipt["support_total"] != float64(0) {
+			t.Errorf("ASSERT_DISCOVERY_SUPPORT_TOTAL_ZERO: %#v", receipt)
+		}
+	})
+	relations, relationsOK := receipt["relations"].([]any)
+	t.Run("projects all discovery relations", func(t *testing.T) {
+		if !relationsOK || len(relations) != 4 {
+			t.Errorf("ASSERT_RECEIPT_PROJECTS_EACH_DISCOVERY_RELATION: %#v", receipt)
+		}
+	})
+	t.Run("relation semantics", func(t *testing.T) {
+		seenIDs := map[string]bool{}
+		if len(relations) == 0 {
+			t.Error("ASSERT_RELATION_IDENTITIES_STABLE_DISTINCT: no projected relations")
+			t.Error("ASSERT_DISCOVERY_RELATION_LABELED_ONLY: no projected relations")
+			t.Error("ASSERT_DISCOVERY_RELATION_SUPPORT_ZERO: no projected relations")
+		}
+		for _, raw := range relations {
+			relation := raw.(map[string]any)
+			id, _ := relation["relation_id"].(string)
+			if !strings.HasPrefix(id, "sha256:") || seenIDs[id] {
+				t.Errorf("ASSERT_RELATION_IDENTITIES_STABLE_DISTINCT: %#v", relations)
+			}
+			seenIDs[id] = true
+			if relation["evidence_role"] != "DISCOVERY_ONLY" || relation["evidence_class"] != "DISCOVERY_NOMINATION" || relation["direction"] == "" || relation["locator"] == "" || relation["source_revision"] != "commit-abc" {
+				t.Errorf("ASSERT_DISCOVERY_RELATION_LABELED_ONLY: %#v", relation)
+			}
+			if relation["support_contribution"] != float64(0) {
+				t.Errorf("ASSERT_DISCOVERY_RELATION_SUPPORT_ZERO: %#v", relation)
+			}
+		}
+	})
+}
+
+func TestV1ProjectionBytesRemainUnchangedByEvidenceReceipt(t *testing.T) {
+	r := Result{
+		SchemaVersion:         SchemaVersionV1,
+		SiblingCandidates:     []SiblingCandidate{{SeedURI: "file:///a.go", Candidate: Node{ID: "candidate"}}},
+		DispatchRelationships: []DispatchRelationship{{SeedLabel: "seed", Interface: Node{ID: "interface"}, Implementation: Node{ID: "implementation"}}},
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"schema_version":"lsp-trace.graph.v1","invocation":{"workspace_uri":"","target":{"uri":"","line":0,"column":0},"server":{"command":"","arguments":null},"limits":{"max_depth":0,"max_nodes":0,"timeout_ms":0}},"capabilities":{"call_hierarchy_provider":false},"targets":null,"nodes":null,"edges":null,"terminals":null,"frontier":null,"diagnostics":null,"summary":{"node_count":0,"edge_count":0,"terminal_count":0,"cycle_count":0,"complete":false,"truncated":false}}`
+	if !bytes.Equal(encoded, []byte(want)) {
+		t.Fatalf("ASSERT_V1_RECEIPT_EXTENSION_BYTE_STABLE: got %s", encoded)
 	}
 }
 

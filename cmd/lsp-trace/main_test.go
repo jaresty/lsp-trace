@@ -50,6 +50,79 @@ func TestParseValidatesFlags(t *testing.T) {
 	}
 }
 
+func TestRunPackagesCallerSuppliedInvocationProvenance(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := append(validArgs(workspace),
+		"--provenance-invocation-id", "run-123",
+		"--provenance-caller", "audit-agent",
+		"--provenance-source", "review-request",
+		"--provenance-source-revision", "commit-abc",
+		"--provenance-server-version", "server-1.2.3",
+		"--provenance-timestamp", "2026-08-31T19:00:00Z",
+		"--provenance-tool-version", "v0.3.0",
+	)
+	stdout, stderr, code := captureRun(t, append([]string{"incoming"}, args...))
+	var receipt struct {
+		Tool struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		} `json:"tool"`
+		Invocation struct {
+			WorkspaceURI string `json:"workspace_uri"`
+			Server       struct {
+				Command string `json:"command"`
+			} `json:"server"`
+			Provenance struct {
+				InvocationID   string `json:"invocation_id"`
+				Caller         string `json:"caller"`
+				Source         string `json:"source"`
+				SourceRevision string `json:"source_revision"`
+				ServerVersion  string `json:"server_version"`
+				Timestamp      string `json:"timestamp"`
+			} `json:"provenance"`
+		} `json:"invocation"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatalf("ASSERT_RECEIPT_STDOUT_JSON: %v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if receipt.Tool.Name != "lsp-trace" || receipt.Tool.Version != "v0.3.0" {
+		t.Fatalf("ASSERT_RECEIPT_TOOL_IDENTITY: tool=%#v stdout=%s", receipt.Tool, stdout)
+	}
+	if receipt.Invocation.WorkspaceURI == "" || receipt.Invocation.Server.Command != "server" {
+		t.Fatalf("ASSERT_RECEIPT_INVOCATION_PARAMETERS: invocation=%#v", receipt.Invocation)
+	}
+	if got := receipt.Invocation.Provenance; got.InvocationID != "run-123" || got.Caller != "audit-agent" || got.Source != "review-request" || got.SourceRevision != "commit-abc" || got.ServerVersion != "server-1.2.3" || got.Timestamp != "2026-08-31T19:00:00Z" {
+		t.Fatalf("ASSERT_CALLER_SUPPLIED_PROVENANCE: provenance=%#v", got)
+	}
+	if code != 1 || !strings.Contains(stderr, "spawn:") {
+		t.Fatalf("ASSERT_RECEIPT_STREAM_CONTRACT: code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
+}
+
+func TestRunUsesUnknownForOmittedInvocationProvenance(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, _ := captureRun(t, append([]string{"incoming"}, validArgs(workspace)...))
+	var receipt struct {
+		Invocation struct {
+			Provenance map[string]string `json:"provenance"`
+		} `json:"invocation"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &receipt); err != nil {
+		t.Fatalf("ASSERT_UNKNOWN_PROVENANCE_STDOUT_JSON: %v stdout=%q", err, stdout)
+	}
+	for _, key := range []string{"invocation_id", "caller", "source", "source_revision", "server_version", "timestamp"} {
+		if receipt.Invocation.Provenance[key] != "UNKNOWN" {
+			t.Fatalf("ASSERT_OMITTED_PROVENANCE_UNKNOWN: key=%s provenance=%#v", key, receipt.Invocation.Provenance)
+		}
+	}
+}
+
 func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 	cfg, err := parse(append(validArgs(t.TempDir()), "--expand-topmost-siblings"))
 	if err != nil || !cfg.topmostSiblings {
@@ -68,7 +141,7 @@ func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 	if code := runSkill([]string{"get"}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != embeddedSkill {
 		t.Fatalf("ASSERT_EMBEDDED_SKILL_GET: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "name: lsp-trace") || !strings.Contains(stdout.String(), "--expand-dispatch-family") || !strings.Contains(stdout.String(), "--expand-topmost-siblings") {
+	if !strings.Contains(stdout.String(), "name: lsp-trace") || !strings.Contains(stdout.String(), "--expand-dispatch-family") || !strings.Contains(stdout.String(), "--expand-topmost-siblings") || !strings.Contains(stdout.String(), "evidence_semantics") || !strings.Contains(stdout.String(), "trace_receipt") || !strings.Contains(stdout.String(), "support_contribution") || !strings.Contains(stdout.String(), "--provenance-source-revision") {
 		t.Fatalf("ASSERT_EMBEDDED_SKILL_CONTENT: %s", stdout.String())
 	}
 	stdout.Reset()

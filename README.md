@@ -45,6 +45,7 @@ Optional flags:
 - `--trace-lsp PATH`: opt-in JSON Lines transcript of sent and received JSON-RPC messages with deterministic sequence numbers.
 - `--expand-dispatch-family`: use LSP Type Hierarchy to emit implementation-family relationships separately from call edges.
 - `--expand-topmost-siblings`: use hierarchical document symbols to emit top-level sibling candidates without call, visibility, or equivalence claims.
+- `--provenance-invocation-id`, `--provenance-caller`, `--provenance-source`, `--provenance-source-revision`, `--provenance-server-version`, `--provenance-timestamp`, and `--provenance-tool-version`: attach caller-supplied receipt metadata; omitted values remain `UNKNOWN` and are never inferred.
 - `--output PATH`: write JSON to a mode-`0600` file instead of stdout.
 - `--pretty`: indent JSON output; default is compact JSON.
 

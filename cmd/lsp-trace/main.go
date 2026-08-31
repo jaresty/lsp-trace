@@ -42,13 +42,16 @@ type seedSpec struct {
 }
 
 type config struct {
-	workspace, command, at, seedFile, languageID, output string
-	args, env, ats                                       stringsFlag
-	seeds                                                []seedSpec
-	maxDepth, maxNodes, concurrency                      int
-	timeout, requestTimeout                              time.Duration
-	logLevel, traceLSP                                   string
-	pretty, topmostSiblings, expandDispatchFamily        bool
+	workspace, command, at, seedFile, languageID, output                   string
+	provenanceInvocationID, provenanceCaller, provenanceSource             string
+	provenanceSourceRevision, provenanceServerVersion, provenanceTimestamp string
+	provenanceToolVersion                                                  string
+	args, env, ats                                                         stringsFlag
+	seeds                                                                  []seedSpec
+	maxDepth, maxNodes, concurrency                                        int
+	timeout, requestTimeout                                                time.Duration
+	logLevel, traceLSP                                                     string
+	pretty, topmostSiblings, expandDispatchFamily                          bool
 }
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
@@ -134,6 +137,13 @@ func parse(args []string) (config, error) {
 	fs.BoolVar(&c.expandDispatchFamily, "expand-dispatch-family", false, "include implementation-family relationships")
 	fs.StringVar(&c.logLevel, "log-level", "warn", "error, warn, info, or debug")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
+	fs.StringVar(&c.provenanceInvocationID, "provenance-invocation-id", "", "caller-supplied invocation identifier")
+	fs.StringVar(&c.provenanceCaller, "provenance-caller", "", "caller-supplied caller identity")
+	fs.StringVar(&c.provenanceSource, "provenance-source", "", "caller-supplied invocation source")
+	fs.StringVar(&c.provenanceSourceRevision, "provenance-source-revision", "", "caller-supplied source revision")
+	fs.StringVar(&c.provenanceServerVersion, "provenance-server-version", "", "caller-supplied server version")
+	fs.StringVar(&c.provenanceTimestamp, "provenance-timestamp", "", "caller-supplied timestamp")
+	fs.StringVar(&c.provenanceToolVersion, "provenance-tool-version", "", "caller-supplied lsp-trace version")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
@@ -321,6 +331,21 @@ func dispatchNode(item lsp.TypeHierarchyItem) graph.Node {
 }
 
 func execute(ctx context.Context, c config) (out graph.Result, code int) {
+	unknownIfEmpty := func(value string) string {
+		if value == "" {
+			return graph.Unknown
+		}
+		return value
+	}
+	provenance := graph.InvocationProvenance{
+		InvocationID:   unknownIfEmpty(c.provenanceInvocationID),
+		Caller:         unknownIfEmpty(c.provenanceCaller),
+		Source:         unknownIfEmpty(c.provenanceSource),
+		SourceRevision: unknownIfEmpty(c.provenanceSourceRevision),
+		ServerVersion:  unknownIfEmpty(c.provenanceServerVersion),
+		Timestamp:      unknownIfEmpty(c.provenanceTimestamp),
+	}
+	tool := graph.ToolIdentity{Name: "lsp-trace", Version: unknownIfEmpty(c.provenanceToolVersion)}
 	type resolvedSeed struct {
 		spec              seedSpec
 		path, uri, source string
@@ -328,12 +353,12 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	}
 	if len(c.seeds) == 0 {
 		if err := loadSeeds(&c); err != nil {
-			base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}}
+			base := graph.Result{SchemaVersion: graph.SchemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: false}}
 			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "invocation", Message: err.Error()})
 			return base, 1
 		}
 	}
-	base := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: true}}
+	base := graph.Result{SchemaVersion: graph.SchemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: true}}
 	parts := make([]graph.Result, 0, len(c.seeds))
 	resolved := make([]resolvedSeed, 0, len(c.seeds))
 	workspaceURI := ""
@@ -368,11 +393,12 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	limits := graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}
 	if len(resolved) > 0 {
 		first := resolved[0]
-		base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: first.uri, Line: first.line, Column: first.column}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: limits}
+		base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: first.uri, Line: first.line, Column: first.column}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: limits, Provenance: provenance}
 	}
 	if len(resolved) == 0 {
 		result := graph.MergeResults(parts...)
 		result.Invocation = base.Invocation
+		result.Tool = base.Tool
 		return result, 2
 	}
 	var err error
@@ -490,6 +516,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	}
 	result := graph.MergeResults(parts...)
 	result.Invocation = base.Invocation
+	result.Tool = base.Tool
 	result.Capabilities = base.Capabilities
 	result.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised
 	shutdownCtx, cancel := context.WithTimeout(ctx, c.requestTimeout)

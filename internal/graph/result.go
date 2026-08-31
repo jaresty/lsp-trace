@@ -1,6 +1,8 @@
 package graph
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"sort"
 )
@@ -46,11 +48,26 @@ type ServerInvocation struct {
 	Command   string   `json:"command"`
 	Arguments []string `json:"arguments"`
 }
+type InvocationProvenance struct {
+	InvocationID   string `json:"invocation_id"`
+	Caller         string `json:"caller"`
+	Source         string `json:"source"`
+	SourceRevision string `json:"source_revision"`
+	ServerVersion  string `json:"server_version"`
+	Timestamp      string `json:"timestamp"`
+}
+
+type ToolIdentity struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type Invocation struct {
-	WorkspaceURI string           `json:"workspace_uri"`
-	Target       Target           `json:"target"`
-	Server       ServerInvocation `json:"server"`
-	Limits       Limits           `json:"limits"`
+	WorkspaceURI string               `json:"workspace_uri"`
+	Target       Target               `json:"target"`
+	Server       ServerInvocation     `json:"server"`
+	Limits       Limits               `json:"limits"`
+	Provenance   InvocationProvenance `json:"provenance,omitempty"`
 }
 type Capabilities struct {
 	CallHierarchyProvider bool `json:"call_hierarchy_provider"`
@@ -119,6 +136,45 @@ type DispatchRelationship struct {
 	Implementation Node   `json:"implementation"`
 }
 
+type EvidenceRelation struct {
+	RelationID           string `json:"relation_id"`
+	RelationKind         string `json:"relation_kind"`
+	EvidenceClass        string `json:"evidence_class"`
+	EvidenceRole         string `json:"evidence_role"`
+	Direction            string `json:"direction"`
+	Locator              string `json:"locator"`
+	SourceRevision       string `json:"source_revision"`
+	SupportContribution  int    `json:"support_contribution"`
+	SeedURI              string `json:"seed_uri,omitempty"`
+	SeedLabel            string `json:"seed_label,omitempty"`
+	CandidateNodeID      string `json:"candidate_node_id,omitempty"`
+	InterfaceNodeID      string `json:"interface_node_id,omitempty"`
+	ImplementationNodeID string `json:"implementation_node_id,omitempty"`
+}
+
+type EvidenceReceipt struct {
+	SupportTotal int                `json:"support_total"`
+	Relations    []EvidenceRelation `json:"relations"`
+}
+
+type ClaimCeiling struct {
+	EvidenceClass       string   `json:"evidence_class"`
+	Supports            []string `json:"supports"`
+	DoesNotSupport      []string `json:"does_not_support"`
+	SupportContribution int      `json:"support_contribution"`
+}
+
+type EvidenceSemantics struct {
+	CallEdges          ClaimCeiling `json:"call_edges"`
+	DiscoveryRelations ClaimCeiling `json:"discovery_relations"`
+}
+
+type TraceReceipt struct {
+	ReceiptVersion string `json:"receipt_version"`
+	ContentDigest  string `json:"content_digest"`
+	DigestScope    string `json:"digest_scope"`
+}
+
 type Result struct {
 	SchemaVersion         string                 `json:"schema_version"`
 	Invocation            Invocation             `json:"invocation"`
@@ -134,6 +190,7 @@ type Result struct {
 	SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
 	DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
 	Seeds                 []SeedResult           `json:"-"`
+	Tool                  ToolIdentity           `json:"-"`
 }
 
 func (r Result) MarshalJSON() ([]byte, error) {
@@ -173,18 +230,38 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			}
 			return out
 		}
+		legacyInvocation := r.Invocation
+		legacyInvocation.Provenance = InvocationProvenance{}
 		return json.Marshal(struct {
-			SchemaVersion string             `json:"schema_version"`
-			Invocation    Invocation         `json:"invocation"`
-			Capabilities  Capabilities       `json:"capabilities"`
-			Targets       []string           `json:"targets"`
-			Nodes         []Node             `json:"nodes"`
-			Edges         []Edge             `json:"edges"`
-			Terminals     []legacyBoundary   `json:"terminals"`
-			Frontier      []legacyBoundary   `json:"frontier"`
-			Diagnostics   []legacyDiagnostic `json:"diagnostics"`
-			Summary       Summary            `json:"summary"`
-		}{r.SchemaVersion, r.Invocation, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), projectDiagnostics(r.Diagnostics), r.Summary})
+			SchemaVersion string `json:"schema_version"`
+			Invocation    struct {
+				WorkspaceURI string           `json:"workspace_uri"`
+				Target       Target           `json:"target"`
+				Server       ServerInvocation `json:"server"`
+				Limits       Limits           `json:"limits"`
+			} `json:"invocation"`
+			Capabilities Capabilities       `json:"capabilities"`
+			Targets      []string           `json:"targets"`
+			Nodes        []Node             `json:"nodes"`
+			Edges        []Edge             `json:"edges"`
+			Terminals    []legacyBoundary   `json:"terminals"`
+			Frontier     []legacyBoundary   `json:"frontier"`
+			Diagnostics  []legacyDiagnostic `json:"diagnostics"`
+			Summary      Summary            `json:"summary"`
+		}{r.SchemaVersion, struct {
+			WorkspaceURI string           `json:"workspace_uri"`
+			Target       Target           `json:"target"`
+			Server       ServerInvocation `json:"server"`
+			Limits       Limits           `json:"limits"`
+		}{legacyInvocation.WorkspaceURI, legacyInvocation.Target, legacyInvocation.Server, legacyInvocation.Limits}, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), projectDiagnostics(r.Diagnostics), r.Summary})
+	}
+	invocation := normalizedInvocation(r.Invocation)
+	tool := r.Tool
+	if tool.Name == "" {
+		tool.Name = "lsp-trace"
+	}
+	if tool.Version == "" {
+		tool.Version = Unknown
 	}
 	type summaryV2 struct {
 		NodeCount           int    `json:"node_count"`
@@ -196,9 +273,12 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		CompletenessScope   string `json:"completeness_scope"`
 		Truncated           bool   `json:"truncated"`
 	}
-	return json.Marshal(struct {
+	type resultV2 struct {
 		SchemaVersion         string                 `json:"schema_version"`
+		Tool                  ToolIdentity           `json:"tool"`
 		Invocation            Invocation             `json:"invocation"`
+		EvidenceSemantics     EvidenceSemantics      `json:"evidence_semantics"`
+		TraceReceipt          *TraceReceipt          `json:"trace_receipt,omitempty"`
 		Capabilities          Capabilities           `json:"capabilities"`
 		CapabilityQuality     CapabilityQuality      `json:"capability_quality"`
 		Targets               []string               `json:"targets"`
@@ -209,9 +289,118 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Diagnostics           []Diagnostic           `json:"diagnostics"`
 		SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
 		DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
+		EvidenceReceipt       *EvidenceReceipt       `json:"evidence_receipt,omitempty"`
 		Seeds                 []SeedResult           `json:"seeds,omitempty"`
 		Summary               summaryV2              `json:"summary"`
-	}{r.SchemaVersion, r.Invocation, r.Capabilities, r.CapabilityQuality, r.Targets, r.Nodes, r.Edges, r.Terminals, r.Frontier, r.Diagnostics, r.SiblingCandidates, r.DispatchRelationships, r.Seeds, summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated}})
+	}
+	payload := resultV2{
+		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: invocation,
+		EvidenceSemantics: evidenceSemantics(),
+		Capabilities:      r.Capabilities, CapabilityQuality: r.CapabilityQuality,
+		Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges, Terminals: r.Terminals,
+		Frontier: r.Frontier, Diagnostics: r.Diagnostics,
+		SiblingCandidates: r.SiblingCandidates, DispatchRelationships: r.DispatchRelationships,
+		EvidenceReceipt: r.evidenceReceipt(invocation.Provenance.SourceRevision), Seeds: r.Seeds,
+		Summary: summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated},
+	}
+	canonical, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	payload.TraceReceipt = &TraceReceipt{
+		ReceiptVersion: "lsp-trace.receipt.v1",
+		ContentDigest:  domainDigest("lsp-trace:trace-receipt:v1", canonical),
+		DigestScope:    "CANONICAL_GRAPH_WITHOUT_TRACE_RECEIPT",
+	}
+	return json.Marshal(payload)
+}
+
+func normalizedInvocation(invocation Invocation) Invocation {
+	values := []*string{
+		&invocation.Provenance.InvocationID,
+		&invocation.Provenance.Caller,
+		&invocation.Provenance.Source,
+		&invocation.Provenance.SourceRevision,
+		&invocation.Provenance.ServerVersion,
+		&invocation.Provenance.Timestamp,
+	}
+	for _, value := range values {
+		if *value == "" {
+			*value = Unknown
+		}
+	}
+	return invocation
+}
+
+func evidenceSemantics() EvidenceSemantics {
+	unsupported := []string{"runtime_execution", "feature_identity", "whole_source_completeness", "independent_source_confirmation"}
+	return EvidenceSemantics{
+		CallEdges: ClaimCeiling{
+			EvidenceClass:       "SERVER_REPORTED_CALL_HIERARCHY",
+			Supports:            []string{"server_reported_caller_callee_relation"},
+			DoesNotSupport:      unsupported,
+			SupportContribution: 1,
+		},
+		DiscoveryRelations: ClaimCeiling{
+			EvidenceClass:       "DISCOVERY_NOMINATION",
+			Supports:            []string{"candidate_for_separate_investigation"},
+			DoesNotSupport:      []string{"caller_callee_relation", "runtime_execution", "feature_identity", "whole_source_completeness"},
+			SupportContribution: 0,
+		},
+	}
+}
+
+func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
+	relations := make([]EvidenceRelation, 0, len(r.SiblingCandidates)+len(r.DispatchRelationships))
+	for _, candidate := range r.SiblingCandidates {
+		relations = append(relations, newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.SeedURI, sourceRevision, candidate.SeedURI, "", candidate.Candidate.ID, "", ""))
+	}
+	for _, relationship := range r.DispatchRelationships {
+		relations = append(relations, newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", relationship.SeedLabel, sourceRevision, "", relationship.SeedLabel, "", relationship.Interface.ID, relationship.Implementation.ID))
+	}
+	if len(relations) == 0 {
+		return nil
+	}
+	sort.Slice(relations, func(i, j int) bool { return relations[i].RelationID < relations[j].RelationID })
+	out := relations[:1]
+	for _, relation := range relations[1:] {
+		if relation.RelationID != out[len(out)-1].RelationID {
+			out = append(out, relation)
+		}
+	}
+	return &EvidenceReceipt{Relations: out}
+}
+
+func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID string) EvidenceRelation {
+	identityInput := struct {
+		Version          string `json:"version"`
+		EvidenceClass    string `json:"evidence_class"`
+		RelationKind     string `json:"relation_kind"`
+		SourceRevision   string `json:"source_revision"`
+		Direction        string `json:"direction"`
+		Locator          string `json:"locator"`
+		SeedURI          string `json:"seed_uri"`
+		SeedLabel        string `json:"seed_label"`
+		CandidateID      string `json:"candidate_node_id"`
+		InterfaceID      string `json:"interface_node_id"`
+		ImplementationID string `json:"implementation_node_id"`
+	}{"lsp-trace.evidence-relation.v1", "DISCOVERY_NOMINATION", kind, sourceRevision, direction, locator, seedURI, seedLabel, candidateID, interfaceID, implementationID}
+	encoded, err := json.Marshal(identityInput)
+	if err != nil {
+		panic(err)
+	}
+	return EvidenceRelation{
+		RelationID:   domainDigest("lsp-trace:evidence-relation:v1", encoded),
+		RelationKind: kind, EvidenceClass: "DISCOVERY_NOMINATION", EvidenceRole: "DISCOVERY_ONLY",
+		Direction: direction, Locator: locator, SourceRevision: sourceRevision, SupportContribution: 0,
+		SeedURI: seedURI, SeedLabel: seedLabel, CandidateNodeID: candidateID, InterfaceNodeID: interfaceID, ImplementationNodeID: implementationID,
+	}
+}
+
+func domainDigest(domain string, payload []byte) string {
+	input := append(append([]byte(domain), 0), payload...)
+	sum := sha256.Sum256(input)
+	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 func (r *Result) Canonicalize() {
