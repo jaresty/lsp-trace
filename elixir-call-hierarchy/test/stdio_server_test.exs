@@ -37,6 +37,40 @@ defmodule ElixirCallHierarchy.StdioServerTest do
     %{workspace: workspace}
   end
 
+  test "index loads restored dependency sources from the disposable workspace and isolates build output" do
+    workspace = Path.join(System.tmp_dir!(), "ech-deps-#{System.unique_integer([:positive])}")
+    project = Path.expand("..", __DIR__)
+    File.mkdir_p!(Path.join(workspace, "lib"))
+    File.mkdir_p!(Path.join(workspace, "deps"))
+    File.cp!(Path.join(project, "mix.lock"), Path.join(workspace, "mix.lock"))
+    File.cp_r!(Path.join(project, "deps/jason"), Path.join(workspace, "deps/jason"))
+
+    File.write!(Path.join(workspace, "mix.exs"), """
+    defmodule DependencyFixture.MixProject do
+      use Mix.Project
+      def project, do: [app: :dependency_fixture, version: "0.1.0", elixir: "~> 1.16", deps: [{:jason, "~> 1.4"}]]
+    end
+    """)
+
+    File.write!(Path.join(workspace, "lib/calls.ex"), """
+    defmodule DependencyFixture.Calls do
+      def leaf, do: %Jason.DecodeError{}
+    end
+    """)
+
+    result =
+      try do
+        ElixirCallHierarchy.Index.build(workspace)
+        {:ok, File.exists?(Path.join(workspace, "_build"))}
+      rescue
+        error -> {:error, Exception.message(error)}
+      after
+        File.rm_rf!(workspace)
+      end
+
+    assert result == {:ok, false}
+  end
+
   test "initialize advertises call hierarchy", %{workspace: workspace} do
     with_server(@wrong, workspace, "initialize", fn port ->
       result = request(port, 1, "initialize", %{"rootUri" => uri(workspace)})

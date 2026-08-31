@@ -90,27 +90,32 @@ defmodule ElixirCallHierarchy.Index do
     previous_options = Code.compiler_options()
     Process.register(self(), ElixirCallHierarchy.Collector)
     System.put_env("MIX_BUILD_PATH", Path.join(cache, "build"))
-    System.put_env("MIX_DEPS_PATH", Path.join(cache, "deps"))
+    System.put_env("MIX_DEPS_PATH", Path.join(root, "deps"))
     Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
 
     try do
-      Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
-        Mix.Task.clear()
-        Mix.Task.run("deps.loadpaths", [])
+      File.cd!(root, fn ->
+        Mix.Project.in_project(:elixir_call_hierarchy_workspace, root, fn _ ->
+          Mix.Dep.clear_cached()
+          Mix.Task.clear()
+          Mix.Task.run("deps.compile", [])
+          Mix.Task.reenable("deps.loadpaths")
+          Mix.Task.run("deps.loadpaths", [])
 
-        files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
+          files = root |> Path.join("lib/**/*.ex") |> Path.wildcard()
 
-        case Kernel.ParallelCompiler.compile_to_path(
-               files,
-               Path.join(cache, "build"),
-               compiler_options()
-             ) do
-          {:ok, _modules, _warnings} ->
-            :ok
+          case Kernel.ParallelCompiler.compile_to_path(
+                 files,
+                 Path.join(cache, "build"),
+                 compiler_options()
+               ) do
+            {:ok, _modules, _warnings} ->
+              :ok
 
-          {:error, errors, warnings} ->
-            raise "workspace compilation failed: #{inspect({errors, warnings})}"
-        end
+            {:error, errors, warnings} ->
+              raise "workspace compilation failed: #{inspect({errors, warnings})}"
+          end
+        end)
       end)
 
       drain([], definitions)

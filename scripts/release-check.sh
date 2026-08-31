@@ -56,7 +56,7 @@ assert_file Q-ELIXIR-COMPANION-MIX elixir-call-hierarchy/mix.exs
 assert_contains Q-ELIXIR-COMPANION-ESCRIPT-IGNORE elixir-call-hierarchy/.gitignore '/elixir-call-hierarchy'
 assert_file Q-ELIXIR-COMPANION-SERVER elixir-call-hierarchy/lib/elixir_call_hierarchy/server.ex
 assert_contains Q-ELIXIR-COMPANION-MODE scripts/qualify.sh 'elixir-companion'
-assert_contains Q-ELIXIR-COMPANION-TRUST elixir-call-hierarchy/README.md 'Compiler and macro expansion are executable code'
+assert_contains Q-ELIXIR-COMPANION-TRUST elixir-call-hierarchy/README.md 'Compiler and macro expansion—including dependency compilation—are executable code'
 assert_contains Q-ELIXIR-COMPANION-COMPLETE elixir-call-hierarchy/README.md 'Completeness is server-relative'
 assert_contains Q-ELIXIR-COMPANION-COALESCE elixir-call-hierarchy/README.md 'coalesced deterministically by `{module, name, arity}`'
 assert_contains Q-ELIXIR-LS-DISTINCT qualification/README.md 'does not replace or rewrite the retained ElixirLS BLOCKED evidence'
