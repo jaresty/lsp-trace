@@ -27,6 +27,10 @@ import (
 //go:embed SKILL.md
 var embeddedSkill string
 
+const usageText = `usage:
+  lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
+  lsp-trace skill get`
+
 type stringsFlag []string
 
 func (s *stringsFlag) String() string     { return strings.Join(*s, ",") }
@@ -53,7 +57,7 @@ func run(args []string) int {
 		return runSkill(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) == 0 || args[0] != "incoming" {
-		fmt.Fprintln(os.Stderr, "usage: lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN")
+		fmt.Fprintln(os.Stderr, usageText)
 		return 1
 	}
 	cfg, err := parse(args[1:])

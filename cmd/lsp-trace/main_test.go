@@ -57,6 +57,12 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 	}
 }
 
+func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
+	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace skill get") {
+		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
+	}
+}
+
 func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := runSkill([]string{"get"}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != embeddedSkill {
