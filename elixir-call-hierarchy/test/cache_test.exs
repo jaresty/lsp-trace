@@ -76,6 +76,21 @@ defmodule ElixirCallHierarchy.CacheTest do
     end
   end
 
+  test "fingerprint includes active Mix target", ctx do
+    previous = System.get_env("MIX_TARGET")
+
+    try do
+      System.put_env("MIX_TARGET", "host")
+      host = Cache.fingerprint(ctx.workspace)
+      System.put_env("MIX_TARGET", "special")
+      refute Cache.fingerprint(ctx.workspace) == host
+    after
+      if previous,
+        do: System.put_env("MIX_TARGET", previous),
+        else: System.delete_env("MIX_TARGET")
+    end
+  end
+
   test "directory symlinks do not escape fingerprint root", ctx do
     outside = Path.join(Path.dirname(ctx.workspace), "outside")
     File.mkdir_p!(outside)
@@ -91,6 +106,11 @@ defmodule ElixirCallHierarchy.CacheTest do
     encoded = Cache.encode_index(index, "fingerprint-one")
     assert {:ok, ^index} = Cache.decode_index(encoded, "fingerprint-one")
     assert {:error, :invalid_schema} = Cache.decode_index(encoded, "fingerprint-two")
+
+    wrong_bundle =
+      encoded |> Jason.decode!() |> Map.put("bundle_version", 999) |> Jason.encode!()
+
+    assert {:error, :invalid_schema} = Cache.decode_index(wrong_bundle, "fingerprint-one")
     assert {:error, :invalid_schema} = Cache.decode_index(~s({"schema_version":999,"index":{}}))
     assert {:error, :invalid_json} = Cache.decode_index("not json")
   end

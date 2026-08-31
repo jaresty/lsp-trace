@@ -70,7 +70,7 @@ def hierarchy(workspace, cache, source, mix_env):
         process.stdin.write(message("initialize", 1, {"rootUri": workspace.resolve().as_uri()}))
         process.stdin.flush()
         require(read_framed(process.stdout, deadline)["result"]["capabilities"]["callHierarchyProvider"] is True, "initialize advertises call hierarchy")
-        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 1, "character": 7}}))
+        process.stdin.write(message("textDocument/prepareCallHierarchy", 2, {"textDocument": {"uri": source.resolve().as_uri()}, "position": {"line": 2, "character": 7}}))
         process.stdin.flush()
         prepared = read_framed(process.stdout, deadline)["result"]
         require(len(prepared) == 1 and prepared[0]["name"] == "leaf/0", "dependency-bearing workspace prepares leaf/0")
@@ -150,6 +150,14 @@ end
         shutil.copy2(PROJECT / "mix.lock", workspace / "mix.lock")
         jason = workspace / "deps" / "jason"
         shutil.copytree(PROJECT / "deps" / "jason", jason)
+        jason_module = jason / "lib" / "jason.ex"
+        jason_module.write_text(
+            jason_module.read_text().replace(
+                "defmodule Jason do\n",
+                "defmodule Jason do\n  def encode(:workspace_collision, :incompatible, :arity), do: {:ok, :workspace_version}\n",
+                1,
+            )
+        )
         resource = jason / "priv" / "static" / "resource_probe.txt"
         resource.parent.mkdir(parents=True)
         resource.write_text("assembled by Mix\n")
@@ -185,15 +193,36 @@ end
         source = workspace / "lib" / "calls.ex"
         source.write_text(
             """defmodule EscriptFixture.Calls do
-  def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}}
+  @workspace_version Jason.encode(:workspace_collision, :incompatible, :arity)
+  def leaf, do: {Jason.ResourceProbe.value(), %Jason.DecodeError{}, @workspace_version}
   def caller, do: leaf()
 end
 """
         )
+        clean_probe = subprocess.run(
+            [
+                shutil.which("elixir"),
+                "-pa",
+                str(cache / "clean-probe" / "lib" / "jason" / "ebin"),
+                "-e",
+                "Code.require_file(\"lib/jason.ex\", System.argv() |> hd()); IO.inspect(Jason.encode(:workspace_collision, :incompatible, :arity))",
+                str(jason),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={**os.environ, "MIX_ENV": "test", "MIX_TARGET": "host"},
+            check=False,
+        )
+        require(
+            clean_probe.returncode == 0 and b"{:ok, :workspace_version}" in clean_probe.stdout,
+            "clean worker uses workspace collision module encode/3",
+        )
         uri = workspace.resolve().as_uri()
         initialize = message("initialize", 1, {"rootUri": uri})
         response, cold_stderr, cold_elapsed = invoke(workspace, cache / "test", initialize, "test")
-        require(response["result"]["capabilities"]["callHierarchyProvider"] is True, "test initialize advertises call hierarchy")
+        require(response["result"]["capabilities"]["callHierarchyProvider"] is True, "actual escript isolates colliding workspace module")
+        require(response["jsonrpc"] == "2.0" and response["id"] == 1, "parent JSON framing survives workspace collision")
+        require("encode/3" not in cold_stderr, "companion Jason remains uncontaminated")
         require("Unknown dependency prod_only" not in cold_stderr, "test excludes restored prod-only dependency")
         require("Unknown dependency target_only" not in cold_stderr, "host target excludes restored special-target dependency")
         require("undefined function ActiveTransitive.value/0" not in cold_stderr, "active transitive compiles before test-only dependent")

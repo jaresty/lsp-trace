@@ -1,10 +1,11 @@
 defmodule ElixirCallHierarchy.Cache do
   @moduledoc false
 
-  alias ElixirCallHierarchy.Index
+  alias ElixirCallHierarchy.{Index, WorkerProcess}
 
-  @schema_version 1
-  @indexer_version 1
+  @schema_version WorkerProcess.schema_version()
+  @indexer_version WorkerProcess.indexer_version()
+  @bundle_version WorkerProcess.bundle_version()
   @lock_wait_ms 30_000
   @excluded_dirs MapSet.new([
                    ".git",
@@ -29,12 +30,14 @@ defmodule ElixirCallHierarchy.Cache do
     identity = [
       "schema=#{@schema_version}",
       "indexer=#{@indexer_version}",
+      "bundle=#{@bundle_version}:#{WorkerProcess.bundle_digest()}",
       "elixir=#{System.version()}",
       "otp=#{System.otp_release()}",
       "mix=#{mix_version()}",
       "os=#{inspect(:os.type())}",
       "arch=#{:erlang.system_info(:system_architecture)}",
       "mix_env=#{Mix.env()}",
+      "mix_target=#{System.get_env("MIX_TARGET") || "host"}",
       "workspace=#{root}"
     ]
 
@@ -73,6 +76,7 @@ defmodule ElixirCallHierarchy.Cache do
     Jason.encode!(%{
       "schema_version" => @schema_version,
       "indexer_version" => @indexer_version,
+      "bundle_version" => @bundle_version,
       "fingerprint" => fingerprint,
       "index" => %{
         "definitions" => Enum.map(index.definitions, &encode_definition/1),
@@ -87,6 +91,7 @@ defmodule ElixirCallHierarchy.Cache do
          %{
            "schema_version" => @schema_version,
            "indexer_version" => @indexer_version,
+           "bundle_version" => @bundle_version,
            "fingerprint" => fingerprint,
            "index" => %{
              "definitions" => definitions,
@@ -140,7 +145,7 @@ defmodule ElixirCallHierarchy.Cache do
     build = Path.join(entry, "build")
     File.rm_rf!(build)
     File.mkdir_p!(build)
-    index = Index.build(root, build, profile: profile?) |> normalize_index()
+    {:ok, index} = WorkerProcess.run(root, entry, fingerprint, profile?)
 
     ElixirCallHierarchy.Profile.measure(profile?, "index_serialize", fn ->
       atomic_write(index_path, encode_index(index, fingerprint))
@@ -229,31 +234,6 @@ defmodule ElixirCallHierarchy.Cache do
     relative = Path.relative_to(path, root)
     digest = :crypto.hash(:sha256, File.read!(path)) |> Base.encode16(case: :lower)
     relative <> "\0" <> digest
-  end
-
-  defp normalize_index(%Index{} = index) do
-    %Index{
-      definitions: Enum.map(index.definitions, &normalize_definition/1),
-      calls: Enum.map(index.calls, &normalize_call/1),
-      unsupported: index.unsupported
-    }
-  end
-
-  defp normalize_definition(definition) do
-    %{
-      definition
-      | identity: encode_identity(definition.identity),
-        kind: Atom.to_string(definition.kind)
-    }
-  end
-
-  defp normalize_call(call) do
-    %{
-      call
-      | caller: encode_identity(call.caller),
-        target: encode_identity(call.target),
-        kind: Atom.to_string(call.kind)
-    }
   end
 
   defp encode_definition(definition) do
