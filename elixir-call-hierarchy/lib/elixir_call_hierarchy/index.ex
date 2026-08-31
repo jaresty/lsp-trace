@@ -196,13 +196,23 @@ defmodule ElixirCallHierarchy.Index do
     |> Enum.filter(&source_bearing_dependency?/1)
     |> Enum.filter(&(dependency_beams(&1, build_path) == []))
     |> Enum.each(fn dependency ->
-      force_compile_dependency(root, dependency, build_path, env)
+      force_output = force_compile_dependency(root, dependency, build_path, env)
+
+      repair_output =
+        if dependency_beams(dependency, build_path) == [] do
+          repair_dependency(dependency.name, dependency.path, build_path, env)
+        else
+          ""
+        end
 
       if dependency_beams(dependency, build_path) == [] do
-        repair_dependency(dependency.name, dependency.path, build_path, env)
-      end
+        diagnostic = bounded_diagnostic(force_output <> repair_output)
 
-      if dependency_beams(dependency, build_path) == [] do
+        IO.puts(
+          :stderr,
+          "dependency #{dependency.name} produced no BEAM files after forced compilation:\n#{diagnostic}"
+        )
+
         raise "dependency #{dependency.name} has source modules but produced no BEAM files after forced compilation"
       end
     end)
@@ -231,15 +241,15 @@ defmodule ElixirCallHierarchy.Index do
            env: env,
            stderr_to_stdout: true
          ) do
-      {_output, 0} ->
-        :ok
+      {output, 0} ->
+        output
 
       {output, status} ->
         expected_priv = Path.join([build_path, "lib", dependency.name, "priv"])
 
         if File.dir?(Path.join(dependency.path, "priv")) and
              String.contains?(output, expected_priv) do
-          repair_dependency(dependency.name, dependency.path, build_path, env)
+          output <> repair_dependency(dependency.name, dependency.path, build_path, env)
         else
           diagnostic = bounded_diagnostic(output)
 
@@ -302,16 +312,32 @@ defmodule ElixirCallHierarchy.Index do
       end
     end)
 
-    Enum.each(
-      ["compile.erlang", "compile.elixir", "compile.app"],
-      &run_dependency_compiler(&1, dependency, env, ["--force"])
-    )
+    run_complete_dependency_compiler(dependency, env)
   end
 
-  defp run_dependency_compiler(task, dependency, env, args \\ []) do
-    case System.cmd("mix", [task | args], cd: dependency, env: env, stderr_to_stdout: true) do
-      {_output, 0} ->
-        :ok
+  defp run_complete_dependency_compiler(dependency, env) do
+    args = ["do", "deps.loadpaths", "--no-deps-check", "+", "compile", "--force"]
+
+    case System.cmd("mix", args, cd: dependency, env: env, stderr_to_stdout: true) do
+      {output, 0} ->
+        output
+
+      {output, status} ->
+        diagnostic = bounded_diagnostic(output)
+
+        IO.puts(
+          :stderr,
+          "mix do deps.loadpaths + compile --force failed (exit #{status}):\n#{diagnostic}"
+        )
+
+        raise "dependency project compilation failed with exit status #{status}"
+    end
+  end
+
+  defp run_dependency_compiler(task, dependency, env) do
+    case System.cmd("mix", [task], cd: dependency, env: env, stderr_to_stdout: true) do
+      {output, 0} ->
+        output
 
       {output, status} ->
         diagnostic = bounded_diagnostic(output)

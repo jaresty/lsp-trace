@@ -151,9 +151,12 @@ end
         )
         dependency("prod_only")
         dependency("target_only")
+        dependency("compile_support")
         dependency(
             "compile_fixture",
+            deps='[{:compile_support, path: "../compile_support"}]',
             body="""resource = Application.app_dir(:compile_fixture, \"priv/template.txt\")
+  @support CompileSupport.value()
   @external_resource resource
   @template File.read!(resource)
   defmacro instrument(do: expression) do
@@ -167,16 +170,23 @@ end
         (workspace / "deps" / "compile_fixture" / "mix.exs").write_text(
             """defmodule Mix.Tasks.Compile.MetadataOnly do
   use Mix.Task.Compiler
-  def run(_args) do
+  def run(args) do
     marker = Path.join(System.fetch_env!("MIX_BUILD_PATH"), "metadata-only-pass")
 
-    if File.exists?(marker) do
-      File.write!(marker, "forced-but-incomplete")
-      {:noop, []}
-    else
-      File.mkdir_p!(Path.dirname(marker))
-      File.write!(marker, "metadata-only")
-      {:noop, []}
+    case File.read(marker) do
+      {:error, :enoent} ->
+        File.mkdir_p!(Path.dirname(marker))
+        File.write!(marker, "1")
+        {:noop, []}
+
+      {:ok, "1"} ->
+        File.write!(marker, "2")
+        {:noop, []}
+
+      {:ok, "2"} ->
+        if Code.ensure_loaded?(CompileSupport),
+          do: Mix.Tasks.Compile.Elixir.run(["--force" | args]),
+          else: raise("transitive dependency module is unavailable")
     end
   end
 end
@@ -187,7 +197,8 @@ defmodule CompileFixture.MixProject do
     [
       app: :compile_fixture,
       version: "0.1.0",
-      compilers: [:metadata_only, :app]
+      compilers: [:metadata_only, :app],
+      deps: [{:compile_support, path: "../compile_support"}]
     ]
   end
 end
