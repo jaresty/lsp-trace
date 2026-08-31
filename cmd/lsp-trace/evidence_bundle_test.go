@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -25,7 +26,7 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 	if code == 0 || stdout != "" || !strings.Contains(stderr, "spawn") {
 		t.Fatalf("ASSERT_P2_INVOCATION_FIXTURE_EXECUTION: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	data, err := os.ReadFile(output)
+	data, err := readSelectedArtifact(output)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,13 +38,17 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 			AggregateFingerprint  string                 `json:"aggregate_fingerprint"`
 			AggregateScope        string                 `json:"aggregate_scope"`
 		} `json:"identity"`
+		ProcessContext graph.ProcessContext `json:"process_context"`
 	}
 	if err := json.Unmarshal(data, &bundle); err != nil {
 		t.Fatal(err)
 	}
 	inv := bundle.Invocation
-	if inv.Limits != (graph.Limits{MaxDepth: 7, MaxNodes: 11, TimeoutMS: 13000}) || inv.RequestTimeoutMS != 17000 || inv.Concurrency != 1 || inv.LanguageID != "go" || !inv.Expansion.TopmostSiblings || !inv.Expansion.DispatchFamily || !inv.Trace.Enabled || inv.Trace.Path != trace || inv.OutputMode != "file" || inv.OutputPath != output || inv.Server.Command != "missing-server" || len(inv.Server.Arguments) != 1 || inv.Server.Arguments[0] != "--stdio" || inv.Server.Environment["TOKEN"] != "declared" {
+	if inv.Limits != (graph.Limits{MaxDepth: 7, MaxNodes: 11, TimeoutMS: 13000}) || inv.RequestTimeoutMS != 17000 || inv.Concurrency != 1 || inv.LanguageID != "go" || !inv.Expansion.TopmostSiblings || !inv.Expansion.DispatchFamily || !inv.Trace.Enabled || inv.Trace.Path != trace || inv.OutputMode != "file" || inv.OutputPath != output || inv.Server.Command != "missing-server" || len(inv.Server.Arguments) != 1 || inv.Server.Arguments[0] != "--stdio" || len(inv.Server.Environment) != 0 {
 		t.Fatalf("ASSERT_P2_COMPLETE_EFFECTIVE_INVOCATION: %#v", inv)
+	}
+	if len(bundle.ProcessContext.Environment) != 1 || bundle.ProcessContext.Environment[0].Name != "TOKEN" || bundle.ProcessContext.Environment[0].Redaction.State != "REDACTED" {
+		t.Fatalf("ASSERT_P1_SECRET_SAFE_ENVIRONMENT_IDENTITY: %#v", bundle.ProcessContext)
 	}
 	if len(inv.Seeds) != 2 || len(bundle.Identity.ResolvedSeeds) != 2 || bundle.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || bundle.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || !strings.HasPrefix(bundle.Identity.AggregateFingerprint, "sha256:") {
 		t.Fatalf("ASSERT_P3_ALL_SEED_IDENTITIES: invocation_seeds=%#v identity=%#v", inv.Seeds, bundle.Identity)
@@ -56,7 +61,7 @@ func TestVerifyRequiresValidDetachedReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	stdout, stderr, code := captureRun(t, []string{"verify", path})
-	if code == 0 || stdout != "" || !strings.Contains(stderr, "receipt") {
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "selector") {
 		t.Errorf("ASSERT_P6_VERIFY_MISSING_SIDECAR: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
@@ -79,28 +84,67 @@ func TestPublishAndVerifyRoundTripAndMutation(t *testing.T) {
 	if err := publishBundle(path, data); err != nil {
 		t.Fatalf("ASSERT_P7_PRIVATE_PUBLICATION: %v", err)
 	}
-	for _, p := range []string{path, path + ".receipt.json"} {
+	selector, err := readGenerationSelector(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generationDir := filepath.Join(dir, selector.Generation)
+	for _, p := range []string{path, generationDir, filepath.Join(generationDir, generationArtifactName), filepath.Join(generationDir, generationReceiptName)} {
 		info, err := os.Stat(p)
 		if err != nil {
-			t.Fatalf("ASSERT_P7_FINAL_MODE_0600: %s err=%v", p, err)
+			t.Fatalf("ASSERT_P7_FINAL_PRIVATE_MODE: %s err=%v", p, err)
 		}
-		if info.Mode().Perm() != 0600 {
-			t.Fatalf("ASSERT_P7_FINAL_MODE_0600: %s mode=%v", p, info.Mode().Perm())
+		if runtime.GOOS != "windows" {
+			want := os.FileMode(0600)
+			if info.IsDir() {
+				want = 0700
+			}
+			if info.Mode().Perm() != want {
+				t.Fatalf("ASSERT_P7_FINAL_PRIVATE_MODE: %s mode=%v want=%v", p, info.Mode().Perm(), want)
+			}
 		}
 	}
-	if residues, err := filepath.Glob(filepath.Join(dir, ".lsp-trace-*-*")); err != nil || len(residues) != 0 {
-		t.Fatalf("ASSERT_P7_STAGING_CLEANUP: residues=%v err=%v", residues, err)
+	for _, pattern := range []string{".lsp-trace-artifact-*", ".lsp-trace-receipt-*", ".lsp-trace-selector-*"} {
+		if residues, err := filepath.Glob(filepath.Join(dir, pattern)); err != nil || len(residues) != 0 {
+			t.Fatalf("ASSERT_P7_STAGING_CLEANUP: pattern=%s residues=%v err=%v", pattern, residues, err)
+		}
 	}
 	stdout, stderr, code := captureRun(t, []string{"verify", path})
 	if code != 0 || stdout != "verified integrity and custody\n" || stderr != "" {
 		t.Fatalf("ASSERT_P6_VERIFY_SUCCESS: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	if err := os.WriteFile(path, append(data, ' '), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(generationDir, generationArtifactName), append(data, ' '), 0600); err != nil {
 		t.Fatal(err)
 	}
 	stdout, stderr, code = captureRun(t, []string{"verify", path})
 	if code == 0 || stdout != "" || !strings.Contains(stderr, "exact-byte integrity mismatch") {
 		t.Fatalf("ASSERT_P6_VERIFY_MUTATION: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestVerifyRejectsDetachedReceiptTrailingJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bundle.json")
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publishBundle(path, data); err != nil {
+		t.Fatal(err)
+	}
+	receiptPath, err := selectedGenerationFile(path, generationReceiptName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := os.ReadFile(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(receiptPath, append(receipt, []byte(`{"receipt_version":"second"}`)...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"verify", path})
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "trailing JSON content") {
+		t.Fatalf("ASSERT_P7_DETACHED_RECEIPT_SINGLE_JSON: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
@@ -113,7 +157,10 @@ func TestVerifyRejectsInvalidReceiptMetadata(t *testing.T) {
 	if err := publishBundle(path, data); err != nil {
 		t.Fatal(err)
 	}
-	receiptPath := path + ".receipt.json"
+	receiptPath, err := selectedGenerationFile(path, generationReceiptName)
+	if err != nil {
+		t.Fatal(err)
+	}
 	receiptData, err := os.ReadFile(receiptPath)
 	if err != nil {
 		t.Fatal(err)
@@ -142,12 +189,57 @@ func TestVerifyRejectsInvalidReceiptMetadata(t *testing.T) {
 	}
 }
 
+func selectedGenerationFile(path, name string) (string, error) {
+	selector, err := readGenerationSelector(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(path), selector.Generation, name), nil
+}
+
+func readSelectedArtifact(path string) ([]byte, error) {
+	artifact, err := selectedGenerationFile(path, generationArtifactName)
+	if err != nil {
+		return nil, err
+	}
+	return os.ReadFile(artifact)
+}
+
 func mapsClone(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
 	for k, v := range in {
 		out[k] = v
 	}
 	return out
+}
+
+func TestV3PublicationSelectsOneCompleteGeneration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundle.json")
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publishBundle(path, data); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := readGenerationSelector(path)
+	if err != nil {
+		t.Fatalf("ASSERT_P1_ATOMIC_GENERATION_SELECTOR: %v", err)
+	}
+	generationDir := filepath.Join(dir, selector.Generation)
+	for _, name := range []string{generationArtifactName, generationReceiptName} {
+		if info, err := os.Stat(filepath.Join(generationDir, name)); err != nil || !info.Mode().IsRegular() {
+			t.Fatalf("ASSERT_P1_COMPLETE_SELECTED_GENERATION: name=%s info=%v err=%v", name, info, err)
+		}
+	}
+	if err := os.Remove(filepath.Join(generationDir, generationReceiptName)); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"verify", path})
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "incomplete selected generation") {
+		t.Fatalf("ASSERT_P5_TRANSITIONAL_GENERATION_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
 }
 
 func TestConcurrentPublicationUsesUniquePrivateStaging(t *testing.T) {
@@ -171,6 +263,14 @@ func TestConcurrentPublicationUsesUniquePrivateStaging(t *testing.T) {
 	}
 }
 
+func TestHistoricalSchemaSurvivesSourceFailureEndToEnd(t *testing.T) {
+	workspace := t.TempDir()
+	stdout, stderr, code := captureRun(t, []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--at", "missing.go:1:1", "--schema", "v2"})
+	if code != 2 || !strings.Contains(stdout, `"schema_version":"lsp-trace.graph.v2"`) || strings.Contains(stdout, `"schema_version":"lsp-trace.graph.v3"`) {
+		t.Fatalf("ASSERT_P6_END_TO_END_HISTORICAL_SCHEMA: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
 func TestHistoricalSchemaOutputRemainsAtomicAndPrivateWithoutV3Sidecar(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
@@ -189,7 +289,7 @@ func TestHistoricalSchemaOutputRemainsAtomicAndPrivateWithoutV3Sidecar(t *testin
 		t.Fatalf("ASSERT_P1_V2_FILE_PUBLICATION_BYTES: %s", data)
 	}
 	info, err := os.Stat(output)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
 		t.Fatalf("ASSERT_P7_V2_FILE_PRIVATE: info=%v err=%v", info, err)
 	}
 	if _, err := os.Stat(output + ".receipt.json"); !os.IsNotExist(err) {
@@ -206,5 +306,18 @@ func TestOutputFailureRetainsCompleteGraph(t *testing.T) {
 	stdout, stderr, code := captureRun(t, []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--at", "main.go:1:1", "--output", bad})
 	if code == 0 || !json.Valid([]byte(stdout)) || !strings.Contains(stderr, "publish") {
 		t.Errorf("ASSERT_P8_PUBLICATION_FAILURE_RETENTION: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	records, err := filepath.Glob(filepath.Join(workspace, ".bundle.json.publication-failure-*.json"))
+	if err != nil || len(records) != 1 {
+		t.Fatalf("ASSERT_P2_DURABLE_STRUCTURED_PUBLICATION_FAILURE: records=%v err=%v", records, err)
+	}
+	failureData, err := os.ReadFile(records[0])
+	var failure struct {
+		Version string `json:"version"`
+		Target  string `json:"target"`
+		Error   string `json:"error"`
+	}
+	if err != nil || json.Unmarshal(failureData, &failure) != nil || failure.Version != "lsp-trace.publication-failure.v1" || failure.Target != bad || failure.Error == "" {
+		t.Fatalf("ASSERT_P2_DURABLE_STRUCTURED_PUBLICATION_FAILURE: failure=%+v err=%v data=%q", failure, err, failureData)
 	}
 }

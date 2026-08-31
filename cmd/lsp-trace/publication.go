@@ -11,6 +11,91 @@ import (
 	"lsp-trace/internal/graph"
 )
 
+const (
+	generationArtifactName = "artifact.json"
+	generationReceiptName  = "receipt.json"
+)
+
+type generationSelector struct {
+	Generation string `json:"generation"`
+}
+
+func readGenerationSelector(path string) (generationSelector, error) {
+	var selector generationSelector
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return selector, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&selector); err != nil {
+		return selector, fmt.Errorf("malformed generation selector: %w", err)
+	}
+	if selector.Generation == "" || filepath.Base(selector.Generation) != selector.Generation {
+		return selector, fmt.Errorf("malformed generation selector: invalid generation")
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return selector, fmt.Errorf("malformed generation selector: trailing JSON content")
+	}
+	return selector, nil
+}
+
+type publicationFailureRecord struct {
+	Version string `json:"version"`
+	Target  string `json:"target"`
+	Error   string `json:"error"`
+	Digest  string `json:"artifact_digest"`
+}
+
+func retainPublicationFailure(path string, data []byte, publishErr error) (string, error) {
+	dir := filepath.Dir(path)
+	for {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no existing ancestor for publication failure record")
+		}
+		dir = parent
+	}
+	record, err := json.Marshal(publicationFailureRecord{
+		Version: "lsp-trace.publication-failure.v1",
+		Target:  path,
+		Error:   publishErr.Error(),
+		Digest:  graph.ExactBytesDigest(data),
+	})
+	if err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(dir, "."+filepath.Base(path)+".publication-failure-*.json")
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	ok := false
+	defer func() {
+		_ = f.Close()
+		if !ok {
+			_ = os.Remove(name)
+		}
+	}()
+	if err := f.Chmod(0600); err != nil {
+		return "", err
+	}
+	if _, err := f.Write(append(record, '\n')); err != nil {
+		return "", err
+	}
+	if err := f.Sync(); err != nil {
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	ok = true
+	return name, nil
+}
+
 type custodyReceipt struct {
 	ReceiptVersion    string `json:"receipt_version"`
 	Digest            string `json:"digest"`
@@ -99,40 +184,78 @@ func publishBundle(path string, data []byte) error {
 		return err
 	}
 	dir := filepath.Dir(path)
-	artifactTemp, err := stage(dir, ".lsp-trace-artifact-*", data)
+	generationDir, err := os.MkdirTemp(dir, ".lsp-trace-generation-*")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(artifactTemp)
-	receiptTemp, err := stage(dir, ".lsp-trace-receipt-*", receipt)
-	if err != nil {
+	selected := false
+	defer func() {
+		if !selected {
+			_ = os.RemoveAll(generationDir)
+		}
+	}()
+	if err := os.Chmod(generationDir, 0700); err != nil {
 		return err
 	}
-	defer os.Remove(receiptTemp)
-	staged, err := os.ReadFile(artifactTemp)
+	artifactPath := filepath.Join(generationDir, generationArtifactName)
+	receiptPath := filepath.Join(generationDir, generationReceiptName)
+	if err := writePrivateSyncedFile(artifactPath, data); err != nil {
+		return err
+	}
+	if err := writePrivateSyncedFile(receiptPath, receipt); err != nil {
+		return err
+	}
+	staged, err := os.ReadFile(artifactPath)
 	if err != nil || !bytes.Equal(staged, data) {
 		return fmt.Errorf("staged artifact byte validation failed: %v", err)
 	}
-	if err = os.Chmod(artifactTemp, 0600); err != nil {
+	if d, err := os.Open(generationDir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	selectorData, err := json.Marshal(generationSelector{Generation: filepath.Base(generationDir)})
+	if err != nil {
 		return err
 	}
-	if err = os.Chmod(receiptTemp, 0600); err != nil {
+	selectorTemp, err := stage(dir, ".lsp-trace-selector-*", append(selectorData, '\n'))
+	if err != nil {
 		return err
 	}
-	// Portable filesystems cannot atomically replace two names together. Replacing the
-	// artifact first and receipt second minimizes exposure; verifiers reject either
-	// transitional mismatch rather than accepting an inconsistent pair.
-	if err = os.Rename(artifactTemp, path); err != nil {
+	defer os.Remove(selectorTemp)
+	if err := os.Rename(selectorTemp, path); err != nil {
 		return err
 	}
-	receiptPath := path + ".receipt.json"
-	if err = os.Rename(receiptTemp, receiptPath); err != nil {
-		return err
-	}
+	selected = true
+	_ = os.Remove(path + ".receipt.json")
 	if d, err := os.Open(dir); err == nil {
 		_ = d.Sync()
 		_ = d.Close()
 	}
+	return nil
+}
+
+func writePrivateSyncedFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	ok := false
+	defer func() {
+		_ = f.Close()
+		if !ok {
+			_ = os.Remove(path)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	ok = true
 	return nil
 }
 func runVerify(args []string, stdout, stderr io.Writer) int {
@@ -141,14 +264,20 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	path := args[0]
-	data, err := os.ReadFile(path)
+	selector, err := readGenerationSelector(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "verify: %v\n", err)
 		return 1
 	}
-	receiptData, err := os.ReadFile(path + ".receipt.json")
+	generationDir := filepath.Join(filepath.Dir(path), selector.Generation)
+	data, err := os.ReadFile(filepath.Join(generationDir, generationArtifactName))
 	if err != nil {
-		fmt.Fprintf(stderr, "verify receipt: %v\n", err)
+		fmt.Fprintf(stderr, "verify: incomplete selected generation: %v\n", err)
+		return 1
+	}
+	receiptData, err := os.ReadFile(filepath.Join(generationDir, generationReceiptName))
+	if err != nil {
+		fmt.Fprintf(stderr, "verify receipt: incomplete selected generation: %v\n", err)
 		return 1
 	}
 	var receipt custodyReceipt
@@ -156,6 +285,10 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&receipt); err != nil {
 		fmt.Fprintf(stderr, "verify receipt: malformed: %v\n", err)
+		return 1
+	}
+	if err = decoder.Decode(&struct{}{}); err != io.EOF {
+		fmt.Fprintln(stderr, "verify receipt: malformed: trailing JSON content")
 		return 1
 	}
 	if receipt.ReceiptVersion != "lsp-trace.byte-custody-receipt.v1" || receipt.DigestScope != graph.ByteDigestScope || receipt.DigestAlgorithm != "SHA-256" || receipt.IntegrityClaim != "INTEGRITY_AND_CUSTODY_ONLY" || receipt.AuthenticityClaim {

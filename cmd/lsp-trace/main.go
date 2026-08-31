@@ -80,6 +80,12 @@ func run(args []string) int {
 		defer cancel()
 	}
 	result, code := execute(ctx, cfg)
+	if cfg.traceLSP != "" {
+		if transcript, readErr := os.ReadFile(cfg.traceLSP); readErr == nil {
+			sum := sha256.Sum256(transcript)
+			result.Invocation.Trace.ContentSHA256 = fmt.Sprintf("sha256:%x", sum[:])
+		}
+	}
 	if errors.Is(ctx.Err(), context.Canceled) {
 		code = 130
 	}
@@ -104,6 +110,12 @@ func run(args []string) int {
 	}
 	if err := publish(cfg.output, data); err != nil {
 		_, _ = os.Stdout.Write(data)
+		recordPath, retainErr := retainPublicationFailure(cfg.output, data, err)
+		if retainErr != nil {
+			fmt.Fprintf(os.Stderr, "publish failure evidence: %v\n", retainErr)
+		} else {
+			fmt.Fprintf(os.Stderr, "publish failure evidence: %s\n", recordPath)
+		}
 		fmt.Fprintf(os.Stderr, "publish: %v\n", err)
 		return 1
 	}
@@ -357,6 +369,10 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		Timestamp:      unknownIfEmpty(c.provenanceTimestamp),
 	}
 	tool := graph.ToolIdentity{Name: "lsp-trace", Version: unknownIfEmpty(c.provenanceToolVersion)}
+	schemaVersion := map[string]string{"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3}[c.schema]
+	if schemaVersion == "" {
+		schemaVersion = graph.SchemaVersionV3
+	}
 	type resolvedSeed struct {
 		spec              seedSpec
 		path, uri, source string
@@ -364,14 +380,10 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	}
 	if len(c.seeds) == 0 {
 		if err := loadSeeds(&c); err != nil {
-			base := graph.Result{SchemaVersion: graph.SchemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: false}}
+			base := graph.Result{SchemaVersion: schemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: false}}
 			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "invocation", Message: err.Error()})
 			return base, 1
 		}
-	}
-	schemaVersion := map[string]string{"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3}[c.schema]
-	if schemaVersion == "" {
-		schemaVersion = graph.SchemaVersionV3
 	}
 	base := graph.Result{SchemaVersion: schemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: true}}
 	parts := make([]graph.Result, 0, len(c.seeds))
@@ -381,7 +393,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		path, line, col, err := parseAt(seed.At)
 		requested := graph.Target{Line: line, Column: col}
 		failure := func(phase string, err error) {
-			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.Label, Requested: requested, Failure: &graph.SeedFailure{Phase: phase, Message: err.Error()}}}}
+			part := graph.Result{SchemaVersion: schemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.Label, Requested: requested, Failure: &graph.SeedFailure{Phase: phase, Message: err.Error()}}}}
 			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: phase, Message: err.Error()})
 			parts = append(parts, part)
 		}
@@ -438,7 +450,10 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	if effectiveLanguageID == "" && len(seeds) > 0 {
 		effectiveLanguageID = seeds[0].LanguageID
 	}
-	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args, Environment: env}, Limits: limits, RequestTimeoutMS: c.requestTimeout.Milliseconds(), Concurrency: c.concurrency, LanguageID: effectiveLanguageID, Expansion: graph.ExpansionConfig{TopmostSiblings: c.topmostSiblings, DispatchFamily: c.expandDispatchFamily}, Trace: graph.TraceConfig{Enabled: c.traceLSP != "", Path: c.traceLSP}, OutputMode: outputMode, OutputPath: c.output, Seeds: seeds, Provenance: provenance}
+	workingDirectory, _ := os.Getwd()
+	effectiveEnvironment := append([]string(nil), os.Environ()...)
+	effectiveEnvironment = append(effectiveEnvironment, c.env...)
+	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: effectiveEnvironment, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args, Environment: env}, Limits: limits, RequestTimeoutMS: c.requestTimeout.Milliseconds(), Concurrency: c.concurrency, LanguageID: effectiveLanguageID, Expansion: graph.ExpansionConfig{TopmostSiblings: c.topmostSiblings, DispatchFamily: c.expandDispatchFamily}, Trace: graph.TraceConfig{Enabled: c.traceLSP != "", Path: c.traceLSP}, OutputMode: outputMode, OutputPath: c.output, Seeds: seeds, Provenance: provenance}
 	if len(resolved) > 0 {
 		first := resolved[0]
 		base.Invocation.WorkspaceURI = workspaceURI
@@ -446,6 +461,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	}
 	if len(resolved) == 0 {
 		result := graph.MergeResults(parts...)
+		result.SchemaVersion = schemaVersion
 		result.Invocation = base.Invocation
 		result.Tool = base.Tool
 		return result, 2
@@ -517,7 +533,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			continue
 		}
 		if failure, ok := openFailed[seed.uri]; ok {
-			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: failure.Error()}}}}
+			part := graph.Result{SchemaVersion: schemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: failure.Error()}}}}
 			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: "didOpen", Message: failure.Error()})
 			parts = append(parts, part)
 			continue
@@ -527,7 +543,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			lang = source.LanguageID(seed.path)
 		}
 		if err = client.DidOpen(seed.uri, lang, seed.source); err != nil {
-			part := graph.Result{SchemaVersion: graph.SchemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: err.Error()}}}}
+			part := graph.Result{SchemaVersion: schemaVersion, Summary: graph.Summary{Complete: false}, Seeds: []graph.SeedResult{{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "didOpen", Message: err.Error()}}}}
 			part.Diagnostics = append(part.Diagnostics, graph.Diagnostic{Phase: "didOpen", Message: err.Error()})
 			parts = append(parts, part)
 			openFailed[seed.uri] = err
@@ -542,12 +558,16 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		}
 		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.uri}, Position: lsp.Position{Line: uint32(seed.line - 1), Character: uint32(seed.column - 1)}}
 		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, IncludeTopmostSiblings: c.topmostSiblings})
+		part.SchemaVersion = schemaVersion
+		for i := range part.SiblingCandidates {
+			part.SiblingCandidates[i].SeedLabel = seed.spec.Label
+		}
 		if c.expandDispatchFamily {
 			relationships, diagnostics := resolveDispatchRelationships(ctx, timedClient, params, seed.spec.Label)
 			part.DispatchRelationships = append(part.DispatchRelationships, relationships...)
 			part.Diagnostics = append(part.Diagnostics, diagnostics...)
 		}
-		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...)}
+		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...), ReachedEdges: append([]graph.Edge(nil), part.Edges...)}
 		for _, node := range part.Nodes {
 			seedResult.ReachedNodeIDs = append(seedResult.ReachedNodeIDs, node.ID)
 		}
@@ -564,6 +584,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		parts = append(parts, part)
 	}
 	result := graph.MergeResults(parts...)
+	result.SchemaVersion = schemaVersion
 	result.Invocation = base.Invocation
 	result.Tool = base.Tool
 	result.Capabilities = base.Capabilities

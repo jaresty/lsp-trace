@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -452,18 +453,31 @@ func TestRunOutputOpenFailureUsesStderrOnly(t *testing.T) {
 	}
 }
 
+func TestCaptureRunDrainsLargeStdout(t *testing.T) {
+	old := embeddedSkill
+	embeddedSkill = strings.Repeat("large-output\n", 1<<17)
+	t.Cleanup(func() { embeddedSkill = old })
+	stdout, stderr, code := captureRun(t, []string{"skill", "get"})
+	if code != 0 || stderr != "" || stdout != embeddedSkill {
+		t.Fatalf("ASSERT_P4_LARGE_STREAM_CAPTURE: code=%d stdout=%d want=%d stderr=%q", code, len(stdout), len(embeddedSkill), stderr)
+	}
+}
+
 func captureRun(t *testing.T, args []string) (string, string, int) {
 	t.Helper()
 	oldOut, oldErr := os.Stdout, os.Stderr
 	outR, outW, _ := os.Pipe()
 	errR, errW, _ := os.Pipe()
 	os.Stdout, os.Stderr = outW, errW
+	var out, stderr bytes.Buffer
+	var drains sync.WaitGroup
+	drains.Add(2)
+	go func() { defer drains.Done(); _, _ = out.ReadFrom(outR) }()
+	go func() { defer drains.Done(); _, _ = stderr.ReadFrom(errR) }()
 	code := run(args)
 	_ = outW.Close()
 	_ = errW.Close()
 	os.Stdout, os.Stderr = oldOut, oldErr
-	var out, stderr bytes.Buffer
-	_, _ = out.ReadFrom(outR)
-	_, _ = stderr.ReadFrom(errR)
+	drains.Wait()
 	return out.String(), stderr.String(), code
 }

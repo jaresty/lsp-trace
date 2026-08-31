@@ -76,23 +76,26 @@ type ExpansionConfig struct {
 	DispatchFamily  bool `json:"dispatch_family"`
 }
 type TraceConfig struct {
-	Enabled bool   `json:"enabled"`
-	Path    string `json:"path,omitempty"`
+	Enabled       bool   `json:"enabled"`
+	Path          string `json:"path,omitempty"`
+	ContentSHA256 string `json:"content_sha256,omitempty"`
 }
 type Invocation struct {
-	WorkspaceURI     string               `json:"workspace_uri"`
-	Target           Target               `json:"target"`
-	Server           ServerInvocation     `json:"server"`
-	Limits           Limits               `json:"limits"`
-	RequestTimeoutMS int64                `json:"request_timeout_ms"`
-	Concurrency      int                  `json:"concurrency"`
-	LanguageID       string               `json:"language_id"`
-	Expansion        ExpansionConfig      `json:"expansion"`
-	Trace            TraceConfig          `json:"trace"`
-	OutputMode       string               `json:"output_mode"`
-	OutputPath       string               `json:"output_path"`
-	Seeds            []InvocationSeed     `json:"seeds"`
-	Provenance       InvocationProvenance `json:"provenance,omitempty"`
+	WorkspaceURI         string               `json:"workspace_uri"`
+	WorkingDirectory     string               `json:"-"`
+	EffectiveEnvironment []string             `json:"-"`
+	Target               Target               `json:"target"`
+	Server               ServerInvocation     `json:"server"`
+	Limits               Limits               `json:"limits"`
+	RequestTimeoutMS     int64                `json:"request_timeout_ms"`
+	Concurrency          int                  `json:"concurrency"`
+	LanguageID           string               `json:"language_id"`
+	Expansion            ExpansionConfig      `json:"expansion"`
+	Trace                TraceConfig          `json:"trace"`
+	OutputMode           string               `json:"output_mode"`
+	OutputPath           string               `json:"output_path"`
+	Seeds                []InvocationSeed     `json:"seeds"`
+	Provenance           InvocationProvenance `json:"provenance,omitempty"`
 }
 type Capabilities struct {
 	CallHierarchyProvider bool `json:"call_hierarchy_provider"`
@@ -147,11 +150,13 @@ type SeedResult struct {
 	Requested         Target       `json:"requested_position"`
 	PreparedTargetIDs []string     `json:"prepared_target_ids"`
 	ReachedNodeIDs    []string     `json:"reached_node_ids"`
+	ReachedEdges      []Edge       `json:"-"`
 	Failure           *SeedFailure `json:"failure,omitempty"`
 }
 
 type SiblingCandidate struct {
 	SeedURI   string `json:"seed_uri"`
+	SeedLabel string `json:"seed_label,omitempty"`
 	Candidate Node   `json:"candidate"`
 }
 
@@ -175,6 +180,8 @@ type EvidenceRelation struct {
 	CandidateNodeID      string `json:"candidate_node_id,omitempty"`
 	InterfaceNodeID      string `json:"interface_node_id,omitempty"`
 	ImplementationNodeID string `json:"implementation_node_id,omitempty"`
+	CallerNodeID         string `json:"caller_node_id,omitempty"`
+	CalleeNodeID         string `json:"callee_node_id,omitempty"`
 }
 
 type EvidenceReceipt struct {
@@ -394,12 +401,15 @@ func evidenceSemantics() EvidenceSemantics {
 }
 
 func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
-	relations := make([]EvidenceRelation, 0, len(r.SiblingCandidates)+len(r.DispatchRelationships))
+	relations := make([]EvidenceRelation, 0, len(r.Edges)+len(r.SiblingCandidates)+len(r.DispatchRelationships))
+	for _, edge := range r.Edges {
+		relations = append(relations, newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, sourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID))
+	}
 	for _, candidate := range r.SiblingCandidates {
-		relations = append(relations, newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.SeedURI, sourceRevision, candidate.SeedURI, "", candidate.Candidate.ID, "", ""))
+		relations = append(relations, newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.SeedURI, sourceRevision, candidate.SeedURI, candidate.SeedLabel, candidate.Candidate.ID, "", "", "", ""))
 	}
 	for _, relationship := range r.DispatchRelationships {
-		relations = append(relations, newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", relationship.SeedLabel, sourceRevision, "", relationship.SeedLabel, "", relationship.Interface.ID, relationship.Implementation.ID))
+		relations = append(relations, newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", relationship.SeedLabel, sourceRevision, "", relationship.SeedLabel, "", relationship.Interface.ID, relationship.Implementation.ID, "", ""))
 	}
 	if len(relations) == 0 {
 		return nil
@@ -411,10 +421,14 @@ func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
 			out = append(out, relation)
 		}
 	}
-	return &EvidenceReceipt{Relations: out}
+	supportTotal := 0
+	for _, relation := range out {
+		supportTotal += relation.SupportContribution
+	}
+	return &EvidenceReceipt{SupportTotal: supportTotal, Relations: out}
 }
 
-func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID string) EvidenceRelation {
+func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID string) EvidenceRelation {
 	identityInput := struct {
 		Version          string `json:"version"`
 		EvidenceClass    string `json:"evidence_class"`
@@ -427,17 +441,39 @@ func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seed
 		CandidateID      string `json:"candidate_node_id"`
 		InterfaceID      string `json:"interface_node_id"`
 		ImplementationID string `json:"implementation_node_id"`
-	}{"lsp-trace.evidence-relation.v1", "DISCOVERY_NOMINATION", kind, sourceRevision, direction, locator, seedURI, seedLabel, candidateID, interfaceID, implementationID}
+		CallerID         string `json:"caller_node_id"`
+		CalleeID         string `json:"callee_node_id"`
+	}{"lsp-trace.evidence-relation.v2", evidenceClassForKind(kind), kind, sourceRevision, direction, locator, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID}
 	encoded, err := json.Marshal(identityInput)
 	if err != nil {
 		panic(err)
 	}
 	return EvidenceRelation{
-		RelationID:   domainDigest("lsp-trace:evidence-relation:v1", encoded),
-		RelationKind: kind, EvidenceClass: "DISCOVERY_NOMINATION", EvidenceRole: "DISCOVERY_ONLY",
-		Direction: direction, Locator: locator, SourceRevision: sourceRevision, SupportContribution: 0,
+		RelationID:   domainDigest("lsp-trace:evidence-relation:v2", encoded),
+		RelationKind: kind, EvidenceClass: evidenceClassForKind(kind), EvidenceRole: evidenceRoleForKind(kind),
+		Direction: direction, Locator: locator, SourceRevision: sourceRevision, SupportContribution: supportForKind(kind),
 		SeedURI: seedURI, SeedLabel: seedLabel, CandidateNodeID: candidateID, InterfaceNodeID: interfaceID, ImplementationNodeID: implementationID,
+		CallerNodeID: callerID, CalleeNodeID: calleeID,
 	}
+}
+
+func evidenceClassForKind(kind string) string {
+	if kind == "CALL_RELATION" {
+		return "SERVER_REPORTED_CALL_HIERARCHY"
+	}
+	return "DISCOVERY_NOMINATION"
+}
+func evidenceRoleForKind(kind string) string {
+	if kind == "CALL_RELATION" {
+		return "CALL_SUPPORT"
+	}
+	return "DISCOVERY_ONLY"
+}
+func supportForKind(kind string) int {
+	if kind == "CALL_RELATION" {
+		return 1
+	}
+	return 0
 }
 
 func domainDigest(domain string, payload []byte) string {
@@ -592,10 +628,10 @@ func uniqueStrings(in []string) []string {
 }
 
 func MergeResults(results ...Result) Result {
-	out := Result{SchemaVersion: SchemaVersion, Summary: Summary{Complete: true}, CapabilityQuality: CapabilityQuality{CrossModuleEdges: Unknown}}
+	out := Result{Summary: Summary{Complete: true}, CapabilityQuality: CapabilityQuality{CrossModuleEdges: Unknown}}
 	nodes := map[string]Node{}
 	for _, result := range results {
-		if result.SchemaVersion != "" {
+		if out.SchemaVersion == "" && result.SchemaVersion != "" {
 			out.SchemaVersion = result.SchemaVersion
 		}
 		out.Capabilities.CallHierarchyProvider = out.Capabilities.CallHierarchyProvider || result.Capabilities.CallHierarchyProvider
@@ -630,6 +666,9 @@ func MergeResults(results ...Result) Result {
 	out.Terminals = uniqueBoundaries(out.Terminals)
 	out.Frontier = uniqueBoundaries(out.Frontier)
 	out.Diagnostics = uniqueDiagnostics(out.Diagnostics)
+	if out.SchemaVersion == "" {
+		out.SchemaVersion = SchemaVersion
+	}
 	out.Canonicalize()
 	return out
 }
