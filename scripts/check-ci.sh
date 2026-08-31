@@ -24,5 +24,11 @@ require CI-PYTHON 'python3 -m py_compile scripts/retain-qualification.py'
 require CI-SHELL 'sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh'
 require CI-RELEASE './scripts/release-check.sh'
 require CI-CLEAN 'git status --porcelain'
+if grep -F -- 'go build -trimpath' "$root/scripts/release-check.sh" >/dev/null; then
+  printf 'PASS CI-RELEASE-DRY-RUN\n'
+else
+  printf 'FAIL CI-RELEASE-DRY-RUN: release-check must execute go build -trimpath\n'
+  failed=1
+fi
 
 exit "$failed"

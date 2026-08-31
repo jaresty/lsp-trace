@@ -19,3 +19,23 @@ V2 also includes language-neutral `capability_quality` observations: `advertised
 ## V1 compatibility
 
 The implementation retains a v1 projection for callers that explicitly request `lsp-trace.graph.v1` through the traversal API. That projection preserves `summary.complete`, maps `SERVER_REPORTED_NO_INCOMING_CALLS` back to `NO_INCOMING_CALLS`, omits provenance and capability-quality fields, and otherwise retains v1 canonical field order and meanings. The CLI emits v2 by default; retained historical v1 artifacts remain valid v1 documents and are not rewritten.
+
+Every v1 result contains `schema_version`, `invocation`, `capabilities`, `targets`, `nodes`, `edges`, `terminals`, `frontier`, `diagnostics`, and `summary`. `summary.complete` means only that all discovered server-reported branches reached successful expansion or a natural server response. It does not establish source-graph completeness. `summary.truncated` reports user-bound truncation.
+
+The v1 reason values are:
+
+- `NO_INCOMING_CALLS`: the server reported no incoming calls for that expansion.
+- `PREPARE_RETURNED_NO_ITEM`: target preparation returned no symbol.
+- `INCOMING_RETURNED_NULL`: the server returned null instead of an incoming-call list.
+- `EXTERNAL_URI`: the item cannot be expanded within the workspace envelope.
+- `UNSUPPORTED_CALL_HIERARCHY`: initialize capabilities do not advertise Call Hierarchy.
+- `SERVER_ERROR`: the server returned an operational error.
+- `INVALID_SERVER_RESPONSE`: a response violated the expected protocol shape.
+- `REQUEST_TIMEOUT`: an LSP request reached its local deadline.
+- `GLOBAL_TIMEOUT`: the traversal-wide deadline expired.
+- `CANCELLED`: traversal context was cancelled.
+- `MAX_DEPTH`: the configured depth bound prevented expansion.
+- `MAX_NODES`: the configured node bound prevented expansion.
+- `NODE_ID_COLLISION`: distinct normalized items produced the same stable identity.
+
+New values may be added within v1, so consumers must preserve or display unknown reasons rather than coercing them. Changing an existing value's meaning requires a schema-major change.

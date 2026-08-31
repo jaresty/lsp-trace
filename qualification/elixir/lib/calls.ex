@@ -1,10 +1,14 @@
 defmodule LspTraceQualification.Calls do
-  def leaf(value), do: value + 1
+  # Multi-clause target: qualification must resolve callers to one logical leaf/1 target.
+  def leaf(value) when is_integer(value), do: value + 1
+  def leaf(value), do: value
+
   def left(value), do: leaf(value)
   def right(value), do: leaf(value)
-  def recursive(value), do: leaf(value) + recursive_loop(value)
-  defp recursive_loop(value) when value <= 0, do: 0
-  defp recursive_loop(value), do: recursive_loop(value - 1)
+  def same_module(value), do: leaf(value)
+
+  def recursive(value) when value <= 0, do: leaf(value)
+  def recursive(value), do: leaf(value) + recursive(value - 1)
 
   # Static-only witness: the normal entry path never takes this branch.
   def static_but_not_executed(value) do

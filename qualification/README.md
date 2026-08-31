@@ -18,6 +18,8 @@ Run:
 ./scripts/qualify.sh elixir
 ```
 
-For ElixirLS distributions that do not install `elixir-ls` or `language_server.sh` on `PATH`, set `ELIXIR_LS_COMMAND` to the executable path. The qualification path records the version probe, capability result, exact expected callers, and non-empty call-site ranges when supported. It never substitutes references, AST inspection, compiler tracing, or language-specific traversal.
+For ElixirLS distributions that do not install `elixir-ls` or `language_server.sh` on `PATH`, set `ELIXIR_LS_COMMAND` to the executable path. The Elixir fixture targets a multi-clause `leaf/1` and requires same-module direct, recursive, and static-only callers plus cross-file calls from another module through both an alias and a fully qualified module name. The assertion report must separately state `protocol support, same-module resolution, cross-module resolution, and multi-clause resolution`, followed by exact non-empty call-site range coverage. A graph that advertises Call Hierarchy but omits either cross-module caller edge is **BLOCKED**, never PASS.
 
-Qualification is opt-in because language servers may restore packages, run project logic, read workspace files, access the network, and emit sensitive data.
+All retained graphs remain `lsp-trace.graph.v1`; qualification strengthens evidence requirements without changing the public schema. Existing files under `qualification/retained/elixir/` predate the cross-module fixture and must remain unchanged until a reviewed live ElixirLS run satisfies the new contract. Their historical PASS records the former same-module contract only and does not establish current cross-module or multi-clause support.
+
+Qualification is opt-in because language servers may restore packages, run project logic, read workspace files, access the network, and emit sensitive data. It never substitutes references, AST inspection, compiler tracing, or language-specific traversal.

@@ -53,7 +53,7 @@ case "$language" in
     target="$root/qualification/elixir/lib/calls.ex:2:7"
     workspace="$root/qualification/elixir"
     server_arg=--stdio
-    expected='left,right,recursive,static_but_not_executed'
+    expected='left,right,same_module,recursive,static_but_not_executed,aliased_cross_file,direct_qualified'
     ;;
   *)
     printf 'usage: %s {typescript|csharp|elixir}\n' "$0" >&2
@@ -87,10 +87,12 @@ if [ "$status" -ne 0 ]; then
 fi
 
 set +e
-python3 - "$evidence/graph.json" "$expected" >"$evidence/assertions.txt" 2>&1 <<'PY'
+python3 - "$evidence/graph.json" "$expected" "$language" >"$evidence/assertions.txt" 2>&1 <<'PY'
 import json, sys
 with open(sys.argv[1], encoding='utf-8') as f: g=json.load(f)
 expected=set(sys.argv[2].split(','))
+language=sys.argv[3]
+nodes={n['id']: n for n in g['nodes']}
 names={n['name'] for n in g['nodes']}
 def matches(name, want):
     return name == want or name.startswith(want + '(') or name.endswith('.' + want + '/1')
@@ -101,15 +103,27 @@ assert g['capabilities']['call_hierarchy_provider'] is True
 assert g['summary']['complete'] is True
 assert not missing, f'missing exact callers: {missing}'
 assert all(e['call_sites'] for e in g['edges'])
-print('capability=true')
+print('protocol support=true')
 print('exact callers=' + ','.join(sorted(expected)))
+if language == 'elixir':
+    leaf_ids={node_id for node_id, node in nodes.items() if matches(node['name'], 'leaf')}
+    leaf_callers={nodes[e['caller_node_id']]['name'] for e in g['edges'] if e['callee_node_id'] in leaf_ids}
+    required_same={'same_module', 'recursive', 'static_but_not_executed'}
+    required_cross={'aliased_cross_file', 'direct_qualified'}
+    missing_same=sorted(want for want in required_same if not any(matches(name, want) for name in leaf_callers))
+    missing_cross=sorted(want for want in required_cross if not any(matches(name, want) for name in leaf_callers))
+    assert not missing_same, f'missing same-module caller edge: {missing_same}'
+    assert not missing_cross, f'missing cross-module caller edge: {missing_cross}'
+    print('same-module resolution=true')
+    print('cross-module resolution=true')
+    print('multi-clause resolution=true')
 print('all caller/callee edges retain exact non-empty call-site ranges')
 PY
 assertion_status=$?
 set -e
 if [ "$assertion_status" -ne 0 ]; then
   if [ "$language" = elixir ]; then
-    blocked 'ElixirLS Call Hierarchy lacks the exact useful callers/ranges required; assertions retained'
+    blocked 'ElixirLS Call Hierarchy lacks an exact same-module or missing cross-module caller edge, multi-clause resolution, or required range; assertions retained'
   fi
   printf 'FAIL: graph assertions failed\n' | tee "$evidence/status.txt"
   exit 1
