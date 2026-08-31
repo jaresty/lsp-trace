@@ -135,6 +135,7 @@ defmodule ElixirCallHierarchy.Index do
       Mix.Task.clear()
       config = Path.join(root, "config/config.exs")
       if File.regular?(config), do: Mix.Task.run("loadconfig", [config])
+      Code.ensure_loaded!(ElixirCallHierarchy.Tracer)
       Code.compiler_options(tracers: [ElixirCallHierarchy.Tracer])
 
       try do
