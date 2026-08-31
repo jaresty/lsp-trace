@@ -14,7 +14,7 @@ New enum values are additive but consumers must treat unknown values as forward-
 
 Every v2 terminal and frontier boundary includes `provenance`, either `CLIENT_DERIVED` or `SERVER_REPORTED`. A successful empty incoming-call response is `SERVER_REPORTED_NO_INCOMING_CALLS`; client limits, validation, timeout, cancellation, capability, and transport classifications are client-derived.
 
-V2 also includes language-neutral `capability_quality` observations: `advertised`, `prepare_succeeded`, `incoming_request_successes`, `incoming_edges`, and `cross_file_edges`. `cross_module_edges` is `"UNKNOWN"` because LSP Call Hierarchy has no language-neutral module boundary. These counters describe observed protocol behavior, not source-graph completeness or language-server correctness.
+V2 also includes language-neutral `capability_quality` observations: `advertised`, `prepare_succeeded`, `incoming_request_successes`, `incoming_edges`, `cross_file_edges`, `unresolved_calls`, and `dynamic_calls`. `cross_module_edges` is `"UNKNOWN"` because LSP Call Hierarchy has no language-neutral module boundary. The evidence counters are derived from diagnostics categorized as `UNRESOLVED_CALL` or `DYNAMIC_CALL`; they describe observed boundaries and never create call edges. Unresolved-call evidence makes traversal incomplete, while dynamic-call evidence alone is advisory. These counters describe observed protocol behavior, not source-graph completeness or language-server correctness.
 
 ## V1 compatibility
 

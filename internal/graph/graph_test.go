@@ -163,6 +163,63 @@ func TestMergeResultsCollapsesDuplicateNodesAndPreservesSeedOutcomes(t *testing.
 	}
 }
 
+func TestResultUnresolvedEvidenceIsCategorizedCountedAndDoesNotFabricateEdges(t *testing.T) {
+	var r Result
+	if err := json.Unmarshal([]byte(`{"schema_version":"lsp-trace.graph.v2","diagnostics":[{"phase":"traverse","node_id":"z","category":"DYNAMIC_CALL","message":"indirect target"},{"phase":"traverse","node_id":"a","category":"UNRESOLVED_CALL","message":"callee unavailable"}]}`), &r); err != nil {
+		t.Fatal(err)
+	}
+	r.SchemaVersion = SchemaVersionV2
+	r.Summary.Complete = true
+	r.Canonicalize()
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	diagnostics := got["diagnostics"].([]any)
+	first := diagnostics[0].(map[string]any)
+	second := diagnostics[1].(map[string]any)
+	if first["category"] != "UNRESOLVED_CALL" || second["category"] != "DYNAMIC_CALL" {
+		t.Fatalf("ASSERT_EVIDENCE_CATEGORIES_CANONICAL: %s", encoded)
+	}
+	quality := got["capability_quality"].(map[string]any)
+	if quality["unresolved_calls"] != float64(1) || quality["dynamic_calls"] != float64(1) {
+		t.Fatalf("ASSERT_EVIDENCE_COUNTERS_EXACT: %s", encoded)
+	}
+	summary := got["summary"].(map[string]any)
+	if summary["traversal_complete"] != false {
+		t.Fatalf("ASSERT_UNRESOLVED_EVIDENCE_INCOMPLETE: %s", encoded)
+	}
+	if edges := got["edges"]; edges != nil {
+		t.Fatalf("ASSERT_EVIDENCE_NEVER_FABRICATES_EDGES: %s", encoded)
+	}
+
+	r.SchemaVersion = SchemaVersionV1
+	encoded, err = json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(encoded, []byte(`"category"`)) || bytes.Contains(encoded, []byte(`"unresolved_calls"`)) || bytes.Contains(encoded, []byte(`"dynamic_calls"`)) {
+		t.Fatalf("ASSERT_V1_OMITS_EVIDENCE_EXTENSION: %s", encoded)
+	}
+}
+
+func TestResultDynamicEvidenceAlonePreservesCompleteness(t *testing.T) {
+	var r Result
+	if err := json.Unmarshal([]byte(`{"schema_version":"lsp-trace.graph.v2","diagnostics":[{"phase":"traverse","category":"DYNAMIC_CALL","message":"runtime dispatch"}]}`), &r); err != nil {
+		t.Fatal(err)
+	}
+	r.SchemaVersion = SchemaVersionV2
+	r.Summary.Complete = true
+	r.Canonicalize()
+	if !r.Summary.Complete {
+		t.Fatal("ASSERT_DYNAMIC_EVIDENCE_REMAINS_ADVISORY: dynamic evidence changed completeness")
+	}
+}
+
 func TestCanonicalizeEquivalentInsertionOrdersProduceIdenticalJSON(t *testing.T) {
 	makeResult := func(reverse bool) Result {
 		nodes := []Node{{ID: "a", Item: Item{URI: "file:///a"}}, {ID: "b", Item: Item{URI: "file:///b"}}}
