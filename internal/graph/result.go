@@ -61,11 +61,19 @@ type Boundary struct {
 	Message    string `json:"message,omitempty"`
 	Provenance string `json:"provenance,omitempty"`
 }
+type DiagnosticCategory string
+
+const (
+	UnresolvedCall DiagnosticCategory = "UNRESOLVED_CALL"
+	DynamicCall    DiagnosticCategory = "DYNAMIC_CALL"
+)
+
 type Diagnostic struct {
-	Phase   string `json:"phase"`
-	Method  string `json:"method,omitempty"`
-	NodeID  string `json:"node_id,omitempty"`
-	Message string `json:"message"`
+	Phase    string             `json:"phase"`
+	Method   string             `json:"method,omitempty"`
+	NodeID   string             `json:"node_id,omitempty"`
+	Category DiagnosticCategory `json:"category,omitempty"`
+	Message  string             `json:"message"`
 }
 type CapabilityQuality struct {
 	Advertised               bool   `json:"advertised"`
@@ -74,6 +82,8 @@ type CapabilityQuality struct {
 	IncomingEdges            int    `json:"incoming_edges"`
 	CrossFileEdges           int    `json:"cross_file_edges"`
 	CrossModuleEdges         string `json:"cross_module_edges"`
+	UnresolvedCalls          int    `json:"unresolved_calls"`
+	DynamicCalls             int    `json:"dynamic_calls"`
 }
 
 type Summary struct {
@@ -119,6 +129,12 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Reason  Reason `json:"reason"`
 		Message string `json:"message,omitempty"`
 	}
+	type legacyDiagnostic struct {
+		Phase   string `json:"phase"`
+		Method  string `json:"method,omitempty"`
+		NodeID  string `json:"node_id,omitempty"`
+		Message string `json:"message"`
+	}
 	if r.SchemaVersion == SchemaVersionV1 {
 		project := func(in []Boundary) []legacyBoundary {
 			if in == nil {
@@ -134,18 +150,28 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			}
 			return out
 		}
+		projectDiagnostics := func(in []Diagnostic) []legacyDiagnostic {
+			if in == nil {
+				return nil
+			}
+			out := make([]legacyDiagnostic, len(in))
+			for i, d := range in {
+				out[i] = legacyDiagnostic{d.Phase, d.Method, d.NodeID, d.Message}
+			}
+			return out
+		}
 		return json.Marshal(struct {
-			SchemaVersion string           `json:"schema_version"`
-			Invocation    Invocation       `json:"invocation"`
-			Capabilities  Capabilities     `json:"capabilities"`
-			Targets       []string         `json:"targets"`
-			Nodes         []Node           `json:"nodes"`
-			Edges         []Edge           `json:"edges"`
-			Terminals     []legacyBoundary `json:"terminals"`
-			Frontier      []legacyBoundary `json:"frontier"`
-			Diagnostics   []Diagnostic     `json:"diagnostics"`
-			Summary       Summary          `json:"summary"`
-		}{r.SchemaVersion, r.Invocation, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), r.Diagnostics, r.Summary})
+			SchemaVersion string             `json:"schema_version"`
+			Invocation    Invocation         `json:"invocation"`
+			Capabilities  Capabilities       `json:"capabilities"`
+			Targets       []string           `json:"targets"`
+			Nodes         []Node             `json:"nodes"`
+			Edges         []Edge             `json:"edges"`
+			Terminals     []legacyBoundary   `json:"terminals"`
+			Frontier      []legacyBoundary   `json:"frontier"`
+			Diagnostics   []legacyDiagnostic `json:"diagnostics"`
+			Summary       Summary            `json:"summary"`
+		}{r.SchemaVersion, r.Invocation, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), projectDiagnostics(r.Diagnostics), r.Summary})
 	}
 	type summaryV2 struct {
 		NodeCount           int    `json:"node_count"`
@@ -228,6 +254,9 @@ func (r *Result) Canonicalize() {
 		if a.NodeID != b.NodeID {
 			return a.NodeID < b.NodeID
 		}
+		if a.Category != b.Category {
+			return a.Category < b.Category
+		}
 		return a.Message < b.Message
 	})
 	r.Summary.NodeCount = len(r.Nodes)
@@ -246,6 +275,19 @@ func (r *Result) Canonicalize() {
 	}
 	if r.SchemaVersion != SchemaVersionV1 {
 		r.CapabilityQuality.IncomingEdges = len(r.Edges)
+		r.CapabilityQuality.UnresolvedCalls = 0
+		r.CapabilityQuality.DynamicCalls = 0
+		for _, diagnostic := range r.Diagnostics {
+			switch diagnostic.Category {
+			case UnresolvedCall:
+				r.CapabilityQuality.UnresolvedCalls++
+			case DynamicCall:
+				r.CapabilityQuality.DynamicCalls++
+			}
+		}
+		if r.CapabilityQuality.UnresolvedCalls > 0 {
+			r.Summary.Complete = false
+		}
 		if r.CapabilityQuality.CrossModuleEdges == "" {
 			r.CapabilityQuality.CrossModuleEdges = Unknown
 		}
