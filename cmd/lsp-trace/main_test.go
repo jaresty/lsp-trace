@@ -171,7 +171,7 @@ func TestRuntimeHelperServer(t *testing.T) {
 		case "initialize":
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
 		case "textDocument/prepareCallHierarchy":
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(3 * time.Second)
 			writeRuntimeResponse(msg.ID, []any{})
 		case "shutdown":
 			writeRuntimeResponse(msg.ID, nil)
@@ -221,7 +221,7 @@ func TestRunRequestTimeoutTraceStderrAndExitPolicy(t *testing.T) {
 		"--server", os.Args[0],
 		"--server-arg", "-test.run=TestRuntimeHelperServer",
 		"--server-env", "LSP_TRACE_RUNTIME_HELPER=1",
-		"--request-timeout", "20ms",
+		"--request-timeout", "1s",
 		"--trace-lsp", tracePath,
 		"--log-level", "debug",
 	)

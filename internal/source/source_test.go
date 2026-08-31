@@ -1,6 +1,8 @@
 package source
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,15 +49,22 @@ func TestResolveTargetRejectsInvalidBoundaries(t *testing.T) {
 		workspace string
 		target    string
 		want      string
+		wantErr   error
 	}{
-		{"workspace file", outside, outside, "workspace is not a directory"},
-		{"outside", workspace, outside, "outside workspace"},
-		{"missing", workspace, "missing.go", "no such file"},
-		{"directory target", workspace, "directory", "target is not a regular file"},
+		{name: "workspace file", workspace: outside, target: outside, want: "workspace is not a directory"},
+		{name: "outside", workspace: workspace, target: outside, want: "outside workspace"},
+		{name: "missing", workspace: workspace, target: "missing.go", wantErr: fs.ErrNotExist},
+		{name: "directory target", workspace: workspace, target: "directory", want: "target is not a regular file"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, _, err := ResolveTarget(tt.workspace, tt.target)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("ResolveTarget error = %v, want errors.Is(%v)", err, tt.wantErr)
+				}
+				return
+			}
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tt.want) {
 				t.Fatalf("ResolveTarget error = %v, want %q", err, tt.want)
 			}
