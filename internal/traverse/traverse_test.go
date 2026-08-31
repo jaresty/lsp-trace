@@ -270,7 +270,7 @@ func TestIncomingSchemaV2CompletenessTerminalProvenanceAndQuality(t *testing.T) 
 	leaf, caller := item("leaf", 8), item("caller", 4)
 	caller.URI = "file:///w/other.go"
 	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {{From: caller}}, "caller": {}}}
-	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{SchemaVersion: graph.SchemaVersionV2})
 	encoded, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -312,9 +312,9 @@ func TestIncomingSchemaV1CompatibilityProjection(t *testing.T) {
 	}
 }
 
-func TestIncomingCanonicalGoldenByteIdentical(t *testing.T) {
+func TestIncomingCanonicalV2GoldenByteIdentical(t *testing.T) {
 	leaf := item("leaf", 8)
-	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}}, lsp.PrepareCallHierarchyParams{}, Options{})
+	r := Incoming(context.Background(), &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}}, lsp.PrepareCallHierarchyParams{}, Options{SchemaVersion: graph.SchemaVersionV2})
 	got, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)

@@ -31,7 +31,9 @@ Important options:
 - `--expand-dispatch-family` asks the server's Type Hierarchy for implementation-family members and emits `dispatch_relationships` separately from call edges.
 - `--expand-topmost-siblings` asks for document symbols and emits top-level callable candidates in `sibling_candidates`; candidates do not imply calls, visibility, or equivalence.
 - `--max-depth`, `--max-nodes`, `--timeout`, and `--request-timeout` bound traversal.
-- `--output` writes graph JSON to a file; otherwise JSON goes to stdout. Diagnostics go to stderr.
+- `--output` privately publishes graph JSON; v3 also publishes a detached `.receipt.json` sidecar, while explicit v1/v2 publish only their historical graph projection. Otherwise pure graph JSON goes to stdout. Diagnostics go to stderr.
+- `--schema v1|v2|v3` selects compatibility; v3 is default and explicit v1/v2 retain historical projections.
+- `lsp-trace verify PATH` validates the exact-byte sidecar and embedded semantic receipt offline; success prints no graph.
 - `--provenance-invocation-id`, `--provenance-caller`, `--provenance-source`, `--provenance-source-revision`, `--provenance-server-version`, `--provenance-timestamp`, and `--provenance-tool-version` add caller-supplied receipt metadata. Omitted values remain `UNKNOWN`; the tool never infers them from Git, the clock, the environment, or the server.
 
 ## Interpret results honestly
@@ -42,7 +44,9 @@ Important options:
 - `evidence_semantics` is the machine-readable claim ceiling. Call edges support only a server-reported caller-to-callee relation; they do not establish runtime execution, feature identity, whole-source completeness, or independent source confirmation.
 - Discovery records use `evidence_class: "DISCOVERY_NOMINATION"` and `support_contribution: 0`. They nominate separate investigation and contribute no caller/callee support.
 - `evidence_receipt` assigns domain-separated canonical `sha256:` identities to discovery relations using the caller-supplied source revision, direction, locator, evidence class, relation kind, and semantic endpoints.
-- `trace_receipt.content_digest` commits to the canonical v2 graph with `trace_receipt` omitted to avoid self-reference. Verify this digest before treating the document as unchanged; it proves content identity, not source truth or runtime behavior.
+- In v3, `trace_receipt.content_digest` commits to canonical semantic content with the receipt omitted; `PATH.receipt.json` separately commits to exact serialized bytes. These establish integrity/custody only, not authenticity, signature, source truth, or runtime behavior.
+- V3 identity labels caller provenance `CALLER_ASSERTED` and derives only resolved seed URI/content digests plus an aggregate scoped `RESOLVED_SEED_CONTENTS`. Failed seeds are not identities.
+- V3 records explicit server environment declarations but never the ambient process environment. Automatic redaction is false; custodians must control access to arguments, environment values, paths, opaque data, diagnostics, server stderr, and trace transcripts.
 - `traversal_complete` is scoped to server-reported Call Hierarchy under the requested limits.
 - `source_graph_complete` remains `UNKNOWN`.
 - Unresolved evidence marks traversal incomplete; dynamic-call evidence is advisory and never fabricates edges.

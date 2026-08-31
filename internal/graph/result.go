@@ -10,7 +10,8 @@ import (
 const (
 	SchemaVersionV1   = "lsp-trace.graph.v1"
 	SchemaVersionV2   = "lsp-trace.graph.v2"
-	SchemaVersion     = SchemaVersionV2
+	SchemaVersionV3   = "lsp-trace.graph.v3"
+	SchemaVersion     = SchemaVersionV3
 	CompletenessScope = "SERVER_REPORTED_CALL_HIERARCHY"
 	Unknown           = "UNKNOWN"
 )
@@ -45,8 +46,9 @@ type Target struct {
 	Column int    `json:"column"`
 }
 type ServerInvocation struct {
-	Command   string   `json:"command"`
-	Arguments []string `json:"arguments"`
+	Command     string            `json:"command"`
+	Arguments   []string          `json:"arguments"`
+	Environment map[string]string `json:"environment,omitempty"`
 }
 type InvocationProvenance struct {
 	InvocationID   string `json:"invocation_id"`
@@ -62,12 +64,35 @@ type ToolIdentity struct {
 	Version string `json:"version"`
 }
 
+type InvocationSeed struct {
+	Label         string `json:"label"`
+	At            string `json:"at"`
+	ResolvedURI   string `json:"resolved_uri,omitempty"`
+	ContentSHA256 string `json:"content_sha256,omitempty"`
+	LanguageID    string `json:"language_id"`
+}
+type ExpansionConfig struct {
+	TopmostSiblings bool `json:"topmost_siblings"`
+	DispatchFamily  bool `json:"dispatch_family"`
+}
+type TraceConfig struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path,omitempty"`
+}
 type Invocation struct {
-	WorkspaceURI string               `json:"workspace_uri"`
-	Target       Target               `json:"target"`
-	Server       ServerInvocation     `json:"server"`
-	Limits       Limits               `json:"limits"`
-	Provenance   InvocationProvenance `json:"provenance,omitempty"`
+	WorkspaceURI     string               `json:"workspace_uri"`
+	Target           Target               `json:"target"`
+	Server           ServerInvocation     `json:"server"`
+	Limits           Limits               `json:"limits"`
+	RequestTimeoutMS int64                `json:"request_timeout_ms"`
+	Concurrency      int                  `json:"concurrency"`
+	LanguageID       string               `json:"language_id"`
+	Expansion        ExpansionConfig      `json:"expansion"`
+	Trace            TraceConfig          `json:"trace"`
+	OutputMode       string               `json:"output_mode"`
+	OutputPath       string               `json:"output_path"`
+	Seeds            []InvocationSeed     `json:"seeds"`
+	Provenance       InvocationProvenance `json:"provenance,omitempty"`
 }
 type Capabilities struct {
 	CallHierarchyProvider bool `json:"call_hierarchy_provider"`
@@ -205,6 +230,9 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		NodeID  string `json:"node_id,omitempty"`
 		Message string `json:"message"`
 	}
+	if r.SchemaVersion == SchemaVersionV3 {
+		return r.marshalV3()
+	}
 	if r.SchemaVersion == SchemaVersionV1 {
 		project := func(in []Boundary) []legacyBoundary {
 			if in == nil {
@@ -273,10 +301,20 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		CompletenessScope   string `json:"completeness_scope"`
 		Truncated           bool   `json:"truncated"`
 	}
+	type invocationV2 struct {
+		WorkspaceURI string `json:"workspace_uri"`
+		Target       Target `json:"target"`
+		Server       struct {
+			Command   string   `json:"command"`
+			Arguments []string `json:"arguments"`
+		} `json:"server"`
+		Limits     Limits               `json:"limits"`
+		Provenance InvocationProvenance `json:"provenance,omitempty"`
+	}
 	type resultV2 struct {
 		SchemaVersion         string                 `json:"schema_version"`
 		Tool                  ToolIdentity           `json:"tool"`
-		Invocation            Invocation             `json:"invocation"`
+		Invocation            invocationV2           `json:"invocation"`
 		EvidenceSemantics     EvidenceSemantics      `json:"evidence_semantics"`
 		TraceReceipt          *TraceReceipt          `json:"trace_receipt,omitempty"`
 		Capabilities          Capabilities           `json:"capabilities"`
@@ -293,8 +331,13 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Seeds                 []SeedResult           `json:"seeds,omitempty"`
 		Summary               summaryV2              `json:"summary"`
 	}
+	legacyServer := struct {
+		Command   string   `json:"command"`
+		Arguments []string `json:"arguments"`
+	}{invocation.Server.Command, invocation.Server.Arguments}
+	legacyInvocation := invocationV2{invocation.WorkspaceURI, invocation.Target, legacyServer, invocation.Limits, invocation.Provenance}
 	payload := resultV2{
-		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: invocation,
+		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: legacyInvocation,
 		EvidenceSemantics: evidenceSemantics(),
 		Capabilities:      r.Capabilities, CapabilityQuality: r.CapabilityQuality,
 		Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges, Terminals: r.Terminals,

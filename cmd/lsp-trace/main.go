@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -29,6 +30,7 @@ var embeddedSkill string
 
 const usageText = `usage:
   lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
+  lsp-trace verify PATH
   lsp-trace skill get`
 
 type stringsFlag []string
@@ -42,7 +44,7 @@ type seedSpec struct {
 }
 
 type config struct {
-	workspace, command, at, seedFile, languageID, output                   string
+	workspace, command, at, seedFile, languageID, output, schema           string
 	provenanceInvocationID, provenanceCaller, provenanceSource             string
 	provenanceSourceRevision, provenanceServerVersion, provenanceTimestamp string
 	provenanceToolVersion                                                  string
@@ -58,6 +60,9 @@ func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
 	if len(args) > 0 && args[0] == "skill" {
 		return runSkill(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "verify" {
+		return runVerify(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) == 0 || args[0] != "incoming" {
 		fmt.Fprintln(os.Stderr, usageText)
@@ -81,23 +86,25 @@ func run(args []string) int {
 	for _, diagnostic := range result.Diagnostics {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", diagnostic.Phase, diagnostic.Message)
 	}
-	out := os.Stdout
-	var f *os.File
-	if cfg.output != "" {
-		f, err = os.OpenFile(cfg.output, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
-		if err != nil {
+	data, err := marshalResult(result, cfg.pretty)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if cfg.output == "" {
+		if _, err := os.Stdout.Write(data); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		defer f.Close()
-		out = f
+		return code
 	}
-	enc := json.NewEncoder(out)
-	if cfg.pretty {
-		enc.SetIndent("", "  ")
+	publish := publishArtifact
+	if result.SchemaVersion == graph.SchemaVersionV3 {
+		publish = publishBundle
 	}
-	if err := enc.Encode(result); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := publish(cfg.output, data); err != nil {
+		_, _ = os.Stdout.Write(data)
+		fmt.Fprintf(os.Stderr, "publish: %v\n", err)
 		return 1
 	}
 	return code
@@ -132,6 +139,7 @@ func parse(args []string) (config, error) {
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")
 	fs.IntVar(&c.concurrency, "concurrency", 1, "concurrent requests (MVP requires 1)")
 	fs.StringVar(&c.output, "output", "", "output file")
+	fs.StringVar(&c.schema, "schema", "v3", "output schema: v1, v2, or v3")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
 	fs.BoolVar(&c.topmostSiblings, "expand-topmost-siblings", false, "include top-level document symbols as sibling candidates")
 	fs.BoolVar(&c.expandDispatchFamily, "expand-dispatch-family", false, "include implementation-family relationships")
@@ -161,6 +169,9 @@ func parse(args []string) (config, error) {
 	}
 	if c.requestTimeout == 0 {
 		return c, errors.New("--request-timeout must be greater than zero")
+	}
+	if c.schema != "v1" && c.schema != "v2" && c.schema != "v3" {
+		return c, errors.New("--schema must be v1, v2, or v3")
 	}
 	if c.concurrency != 1 {
 		return c, errors.New("--concurrency must be 1 in the sequential MVP")
@@ -358,7 +369,11 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			return base, 1
 		}
 	}
-	base := graph.Result{SchemaVersion: graph.SchemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: true}}
+	schemaVersion := map[string]string{"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3}[c.schema]
+	if schemaVersion == "" {
+		schemaVersion = graph.SchemaVersionV3
+	}
+	base := graph.Result{SchemaVersion: schemaVersion, Tool: tool, Invocation: graph.Invocation{Provenance: provenance}, Summary: graph.Summary{Complete: true}}
 	parts := make([]graph.Result, 0, len(c.seeds))
 	resolved := make([]resolvedSeed, 0, len(c.seeds))
 	workspaceURI := ""
@@ -391,9 +406,43 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		resolved = append(resolved, resolvedSeed{spec: seed, path: path, uri: targetURI, source: string(text), line: line, column: col})
 	}
 	limits := graph.Limits{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, TimeoutMS: c.timeout.Milliseconds()}
+	env := map[string]string{}
+	for _, declaration := range c.env {
+		k, v, _ := strings.Cut(declaration, "=")
+		env[k] = v
+	}
+	resolvedByLabel := map[string]resolvedSeed{}
+	for _, s := range resolved {
+		resolvedByLabel[s.spec.Label] = s
+	}
+	seeds := make([]graph.InvocationSeed, 0, len(c.seeds))
+	for _, spec := range c.seeds {
+		path, _, _, _ := parseAt(spec.At)
+		languageID := c.languageID
+		if languageID == "" {
+			languageID = source.LanguageID(path)
+		}
+		item := graph.InvocationSeed{Label: spec.Label, At: spec.At, LanguageID: languageID}
+		if rs, ok := resolvedByLabel[spec.Label]; ok {
+			sum := sha256.Sum256([]byte(rs.source))
+			item.ResolvedURI = rs.uri
+			item.ContentSHA256 = fmt.Sprintf("sha256:%x", sum[:])
+		}
+		seeds = append(seeds, item)
+	}
+	outputMode := "stdout"
+	if c.output != "" {
+		outputMode = "file"
+	}
+	effectiveLanguageID := c.languageID
+	if effectiveLanguageID == "" && len(seeds) > 0 {
+		effectiveLanguageID = seeds[0].LanguageID
+	}
+	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args, Environment: env}, Limits: limits, RequestTimeoutMS: c.requestTimeout.Milliseconds(), Concurrency: c.concurrency, LanguageID: effectiveLanguageID, Expansion: graph.ExpansionConfig{TopmostSiblings: c.topmostSiblings, DispatchFamily: c.expandDispatchFamily}, Trace: graph.TraceConfig{Enabled: c.traceLSP != "", Path: c.traceLSP}, OutputMode: outputMode, OutputPath: c.output, Seeds: seeds, Provenance: provenance}
 	if len(resolved) > 0 {
 		first := resolved[0]
-		base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, Target: graph.Target{URI: first.uri, Line: first.line, Column: first.column}, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args}, Limits: limits, Provenance: provenance}
+		base.Invocation.WorkspaceURI = workspaceURI
+		base.Invocation.Target = graph.Target{URI: first.uri, Line: first.line, Column: first.column}
 	}
 	if len(resolved) == 0 {
 		result := graph.MergeResults(parts...)

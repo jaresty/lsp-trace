@@ -447,8 +447,8 @@ func TestRunOutputOpenFailureUsesStderrOnly(t *testing.T) {
 	}
 	args := append(validArgs(workspace), "--output", filepath.Join(workspace, "missing", "result.json"))
 	stdout, stderr, code := captureRun(t, append([]string{"incoming"}, args...))
-	if code != 1 || stdout != "" || stderr == "" {
-		t.Fatalf("stdout=%q stderr=%q code=%d", stdout, stderr, code)
+	if code != 1 || !json.Valid([]byte(stdout)) || !strings.Contains(stderr, "publish:") {
+		t.Fatalf("ASSERT_OUTPUT_PUBLICATION_FAILURE_RETENTION: stdout=%q stderr=%q code=%d", stdout, stderr, code)
 	}
 }
 

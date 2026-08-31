@@ -1,12 +1,20 @@
 # Schema compatibility policy
 
-Canonical output declares `schema_version: lsp-trace.graph.v1`. Within v1, field meanings and enum meanings are stable. Additive optional fields may be introduced in a minor release only when existing consumers can ignore them. Removing or renaming fields, changing requiredness, changing edge orientation or identity rules, or changing an existing enum's meaning requires a new schema major version.
+Canonical output defaults to `schema_version: lsp-trace.graph.v3`. Explicit `--schema v1` and `--schema v2` retain their exact historical projections. Within each major, field meanings and enum meanings are stable. Additive optional fields may be introduced in a minor release only when existing consumers can ignore them. Removing or renaming fields, changing requiredness, changing edge orientation or identity rules, or changing an existing enum's meaning requires a new schema major version.
 
 New enum values are additive but consumers must treat unknown values as forward-compatible rather than silently mapping them to an existing reason. Canonical ordering and the exclusion of wall-clock metadata remain compatibility obligations. Release review must identify schema-affecting changes and update golden tests, documentation, and the major version together when required.
 
+## Schema v3
+
+`lsp-trace.graph.v3` is the unconditional evidence-bundle contract. It records effective limits, global and request timeouts, concurrency, language ID, expansion and trace configuration, server command/arguments, only explicitly declared server environment values, output mode, and every original labeled seed. Resolved seeds additionally carry URI and SHA-256 content digest. Caller provenance is classified `CALLER_ASSERTED`; the aggregate identity is domain-separated and scoped only to `RESOLVED_SEED_CONTENTS`. Failed seeds remain failures and are excluded. No Git, clock, tool-version, server-version, or whole-workspace verification is claimed.
+
+Before issuing its embedded semantic receipt, v3 rejects duplicate call-node IDs and dangling targets, edge endpoints, terminal/frontier IDs, and seed prepared/reached IDs. Sibling and dispatch discovery records contain independent embedded nodes; their IDs must match their embedded node identity, but those nodes intentionally need not appear in call `nodes`.
+
+The embedded receipt uses domain `lsp-trace:semantic-bundle:v3` and scope `CANONICAL_SEMANTIC_BUNDLE_WITHOUT_RECEIPT`. File publication adds `PATH.receipt.json`, whose digest uses domain `lsp-trace:serialized-output-bytes:v1` and scope `EXACT_SERIALIZED_OUTPUT_BYTES`. Both are integrity/custody mechanisms, not authentication or signatures.
+
 ## Schema v2
 
-`lsp-trace.graph.v2` is the default canonical output. It removes the unqualified `summary.complete` field and replaces it with:
+`lsp-trace.graph.v2` is preserved when explicitly selected and retains the d153ce8 canonical behavior. It removes the unqualified `summary.complete` field and replaces it with:
 
 - `traversal_complete`: whether every discovered server-reported branch was expanded or explicitly bounded.
 - `source_graph_complete: "UNKNOWN"`: the client cannot prove that the language server reported the complete source graph.
@@ -28,7 +36,7 @@ V2 also includes language-neutral `capability_quality` observations: `advertised
 
 ## V1 compatibility
 
-The implementation retains a v1 projection for callers that explicitly request `lsp-trace.graph.v1` through the traversal API. That projection preserves `summary.complete`, maps `SERVER_REPORTED_NO_INCOMING_CALLS` back to `NO_INCOMING_CALLS`, omits tool identity, invocation and boundary provenance, and capability-quality fields, and otherwise retains v1 canonical field order and meanings. The CLI emits v2 by default; retained historical v1 artifacts remain valid v1 documents and are not rewritten.
+The implementation retains a v1 projection for callers that explicitly request `lsp-trace.graph.v1` through the traversal API. That projection preserves `summary.complete`, maps `SERVER_REPORTED_NO_INCOMING_CALLS` back to `NO_INCOMING_CALLS`, omits tool identity, invocation and boundary provenance, and capability-quality fields, and otherwise retains v1 canonical field order and meanings. The CLI emits v3 by default; retained historical v1 and v2 artifacts remain valid documents and are not rewritten.
 
 Every v1 result contains `schema_version`, `invocation`, `capabilities`, `targets`, `nodes`, `edges`, `terminals`, `frontier`, `diagnostics`, and `summary`. `summary.complete` means only that all discovered server-reported branches reached successful expansion or a natural server response. It does not establish source-graph completeness. `summary.truncated` reports user-bound truncation.
 

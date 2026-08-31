@@ -12,6 +12,12 @@ The qualification fixtures include `StaticButNotExecuted`, whose call is behind 
 
 A terminal records a node that was expanded or intentionally stopped; a frontier records a discovered node that remains unexpanded. Reasons are stable machine-readable values defined by the schema policy. `MAX_DEPTH` and `MAX_NODES` identify user bounds. The global `--timeout` bounds the whole command and produces `GLOBAL_TIMEOUT` when traversal-wide time expires; `--request-timeout` bounds each LSP request and produces `REQUEST_TIMEOUT`. Cancellation surfaces as `CANCELLED`, and an interrupt causes exit status `130` after JSON emission when possible.
 
+## V3 custody and identity
+
+V3 preserves server-relative completeness, caller-to-callee call edges, zero-support discovery nominations, and valid zero-discovery output. Caller metadata is explicitly `CALLER_ASSERTED`. Tool-derived identity is limited to successfully resolved seed URI/content-digest pairs and a domain-separated aggregate scoped `RESOLVED_SEED_CONTENTS`; failures never become identities, and no repository, clock, server, version, or workspace-wide truth is inferred.
+
+The embedded semantic digest commits to canonical bundle meaning. The detached sidecar commits separately to exact serialized bytes. `lsp-trace verify PATH` checks both offline and emits no graph on success. Neither digest authenticates who produced the bundle.
+
 ## Traversal completeness and provenance
 
 The v2 graph document is also the invocation receipt. Its `invocation` object packages the effective workspace, target, server command and arguments, and traversal limits. Its `tool` object identifies `lsp-trace`. Invocation provenance is caller-authoritative: the provenance flags for invocation ID, caller, source, source revision, server version, timestamp, and tool version are copied exactly, while omitted values are `"UNKNOWN"`. No invocation provenance is inferred from ambient process, repository, current clock, resolved path, language server, or CI state. These receipt additions do not change the stream contract: stdout remains one graph JSON document and diagnostics remain on stderr.

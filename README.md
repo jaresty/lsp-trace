@@ -46,8 +46,13 @@ Optional flags:
 - `--expand-dispatch-family`: use LSP Type Hierarchy to emit implementation-family relationships separately from call edges.
 - `--expand-topmost-siblings`: use hierarchical document symbols to emit top-level sibling candidates without call, visibility, or equivalence claims.
 - `--provenance-invocation-id`, `--provenance-caller`, `--provenance-source`, `--provenance-source-revision`, `--provenance-server-version`, `--provenance-timestamp`, and `--provenance-tool-version`: attach caller-supplied receipt metadata; omitted values remain `UNKNOWN` and are never inferred.
-- `--output PATH`: write JSON to a mode-`0600` file instead of stdout.
+- `--output PATH`: privately publish JSON with mode `0600`; v3 also publishes `PATH.receipt.json` with mode `0600`.
+- `--schema v1|v2|v3`: select output schema; v3 is the default, while explicit v1/v2 retain their historical projections.
 - `--pretty`: indent JSON output; default is compact JSON.
+
+Verify a published v3 bundle offline with `lsp-trace verify PATH`. Success prints only `verified integrity and custody` and exits 0; malformed, missing, or mismatched artifact/sidecar receipts print a concise error to stderr and exit 1. Verification establishes integrity and custody, not authenticity or a signature.
+
+Publication marshals the complete graph before writing, stages exclusive mode-`0600` files in the destination directory, syncs them, and atomically replaces the artifact. V3 validates the staged semantic bundle and then replaces its detached sidecar. Portable rename APIs cannot replace two names as one transaction: during the narrow two-rename boundary, verification rejects a mismatched pair. Explicit v1/v2 output remains a private atomic graph file without a v3 sidecar. If publication fails after traversal, the complete marshaled graph is retained on stdout when writable, the publication error is reported on stderr, and the command fails.
 
 Language servers run with the invoking user's permissions and may execute project build logic, restore dependencies, access the network, or emit sensitive data. Use only trusted servers and workspaces.
 
