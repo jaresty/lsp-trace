@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"net/url"
 	"sort"
 )
 
@@ -36,6 +38,37 @@ type Edge struct {
 	CallerNodeID string  `json:"caller_node_id"`
 	CalleeNodeID string  `json:"callee_node_id"`
 	CallSites    []Range `json:"call_sites"`
+}
+
+// ValidateItem validates identity-bearing call hierarchy item fields.
+func ValidateItem(item Item) error {
+	if item.Name == "" {
+		return errors.New("missing item name")
+	}
+	u, err := url.Parse(item.URI)
+	if err != nil || !u.IsAbs() {
+		return errors.New("invalid item URI")
+	}
+	if lessPosition(item.Range.End, item.Range.Start) {
+		return errors.New("item range end precedes start")
+	}
+	if lessPosition(item.SelectionRange.End, item.SelectionRange.Start) ||
+		lessPosition(item.SelectionRange.Start, item.Range.Start) ||
+		lessPosition(item.Range.End, item.SelectionRange.End) {
+		return errors.New("selection range is outside item range")
+	}
+	return nil
+}
+
+// SameNodeIdentity reports whether two nodes have identical stable identity fields.
+func SameNodeIdentity(a, b Node) bool {
+	return a.ID == b.ID &&
+		a.Name == b.Name && a.Kind == b.Kind && a.Detail == b.Detail && a.URI == b.URI &&
+		a.Range == b.Range && a.SelectionRange == b.SelectionRange
+}
+
+func lessPosition(a, b Position) bool {
+	return a.Line < b.Line || (a.Line == b.Line && a.Character < b.Character)
 }
 
 func NewNode(item Item) Node {

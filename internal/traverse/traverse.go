@@ -30,6 +30,13 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	if err != nil {
 		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", Message: err.Error()})
 		result.Summary.Complete = false
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.RequestTimeout, Message: err.Error()})
+		case errors.Is(err, context.Canceled):
+			result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.Cancelled, Message: err.Error()})
+		}
+		result.Canonicalize()
 		return result
 	}
 	if len(items) == 0 {
@@ -91,7 +98,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		}
 		for _, call := range calls {
 			caller := node(call.From)
-			if existing, ok := seen[caller.ID]; ok && existing.Item.Name != caller.Item.Name {
+			if existing, ok := seen[caller.ID]; ok && !graph.SameNodeIdentity(existing, caller) {
 				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.NodeIDCollision})
 				result.Summary.Complete = false
 				continue

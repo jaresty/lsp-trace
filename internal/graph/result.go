@@ -79,6 +79,9 @@ type Result struct {
 }
 
 func (r *Result) Canonicalize() {
+	for i := range r.Edges {
+		r.Edges[i].CallSites = mergeRanges(nil, r.Edges[i].CallSites)
+	}
 	sort.Slice(r.Nodes, func(i, j int) bool {
 		a, b := r.Nodes[i], r.Nodes[j]
 		if a.URI != b.URI {
@@ -109,19 +112,89 @@ func (r *Result) Canonicalize() {
 		return a.CalleeNodeID < b.CalleeNodeID
 	})
 	sort.Strings(r.Targets)
-	sort.Slice(r.Terminals, func(i, j int) bool {
-		if r.Terminals[i].NodeID != r.Terminals[j].NodeID {
-			return r.Terminals[i].NodeID < r.Terminals[j].NodeID
+	sort.Slice(r.Terminals, func(i, j int) bool { return lessBoundary(r.Terminals[i], r.Terminals[j]) })
+	sort.Slice(r.Frontier, func(i, j int) bool { return lessBoundary(r.Frontier[i], r.Frontier[j]) })
+	sort.Slice(r.Diagnostics, func(i, j int) bool {
+		a, b := r.Diagnostics[i], r.Diagnostics[j]
+		if a.Phase != b.Phase {
+			return a.Phase < b.Phase
 		}
-		return r.Terminals[i].Reason < r.Terminals[j].Reason
-	})
-	sort.Slice(r.Frontier, func(i, j int) bool {
-		if r.Frontier[i].NodeID != r.Frontier[j].NodeID {
-			return r.Frontier[i].NodeID < r.Frontier[j].NodeID
+		if a.Method != b.Method {
+			return a.Method < b.Method
 		}
-		return r.Frontier[i].Reason < r.Frontier[j].Reason
+		if a.NodeID != b.NodeID {
+			return a.NodeID < b.NodeID
+		}
+		return a.Message < b.Message
 	})
 	r.Summary.NodeCount = len(r.Nodes)
 	r.Summary.EdgeCount = len(r.Edges)
 	r.Summary.TerminalCount = len(r.Terminals)
+	r.Summary.CycleCount = cycleCount(r.Nodes, r.Edges)
+}
+
+func lessBoundary(a, b Boundary) bool {
+	if a.NodeID != b.NodeID {
+		return a.NodeID < b.NodeID
+	}
+	if a.Reason != b.Reason {
+		return a.Reason < b.Reason
+	}
+	return a.Message < b.Message
+}
+
+func cycleCount(nodes []Node, edges []Edge) int {
+	adj := make(map[string][]string, len(nodes))
+	selfLoop := make(map[string]bool)
+	for _, edge := range edges {
+		adj[edge.CallerNodeID] = append(adj[edge.CallerNodeID], edge.CalleeNodeID)
+		if edge.CallerNodeID == edge.CalleeNodeID {
+			selfLoop[edge.CallerNodeID] = true
+		}
+	}
+	index := 0
+	indices := make(map[string]int, len(nodes))
+	lowlink := make(map[string]int, len(nodes))
+	onStack := make(map[string]bool, len(nodes))
+	stack := make([]string, 0, len(nodes))
+	cycles := 0
+	var visit func(string)
+	visit = func(v string) {
+		indices[v], lowlink[v] = index, index
+		index++
+		stack = append(stack, v)
+		onStack[v] = true
+		for _, w := range adj[v] {
+			if _, ok := indices[w]; !ok {
+				visit(w)
+				if lowlink[w] < lowlink[v] {
+					lowlink[v] = lowlink[w]
+				}
+			} else if onStack[w] && indices[w] < lowlink[v] {
+				lowlink[v] = indices[w]
+			}
+		}
+		if lowlink[v] != indices[v] {
+			return
+		}
+		size := 0
+		for {
+			w := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			onStack[w] = false
+			size++
+			if w == v {
+				break
+			}
+		}
+		if size > 1 || selfLoop[v] {
+			cycles++
+		}
+	}
+	for _, node := range nodes {
+		if _, ok := indices[node.ID]; !ok {
+			visit(node.ID)
+		}
+	}
+	return cycles
 }
