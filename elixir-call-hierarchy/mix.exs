@@ -7,9 +7,11 @@ defmodule ElixirCallHierarchy.MixProject do
       version: "0.1.0",
       elixir: "~> 1.16",
       start_permanent: Mix.env() == :prod,
-      deps: []
+      escript: [main_module: ElixirCallHierarchy.CLI, name: "elixir-call-hierarchy"],
+      test_ignore_filters: ["fixtures/*"],
+      deps: [{:jason, "~> 1.4"}]
     ]
   end
 
-  def application, do: [extra_applications: [:logger]]
+  def application, do: [extra_applications: [:logger, :mix]]
 end

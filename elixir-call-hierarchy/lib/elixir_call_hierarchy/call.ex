@@ -12,12 +12,19 @@ defmodule ElixirCallHierarchy.Call do
     :file,
     :line,
     :column,
+    :call_range,
     :toolchain
   ]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          kind: :remote_function | :remote_macro | :imported_function | :imported_macro,
+          kind:
+            :remote_function
+            | :remote_macro
+            | :imported_function
+            | :imported_macro
+            | :local_function
+            | :local_macro,
           caller_module: module(),
           caller_name: atom(),
           caller_arity: non_neg_integer(),
@@ -27,6 +34,7 @@ defmodule ElixirCallHierarchy.Call do
           file: String.t(),
           line: pos_integer() | nil,
           column: pos_integer() | nil,
+          call_range: %{start: map(), end: map()},
           toolchain: %{elixir: String.t(), otp: String.t(), mix: String.t()}
         }
 end

@@ -47,17 +47,23 @@ case "$language" in
     server_arg=
     expected='Left,Right,Recursive,StaticButNotExecuted'
     ;;
-  elixir)
+  elixir|elixir-companion)
     command -v elixir >/dev/null 2>&1 || blocked 'Elixir executable unavailable'
-    server=$(find_elixir_ls) || blocked 'ElixirLS executable unavailable (set ELIXIR_LS_COMMAND)'
-    ("$server" --version || elixir --version) >"$evidence/server-version.txt" 2>&1 || blocked 'ElixirLS version probe failed'
+    if [ "$language" = elixir-companion ]; then
+      (cd "$root/elixir-call-hierarchy" && mix escript.build) >"$evidence/setup.txt" 2>&1 || blocked 'companion escript build failed'
+      server="$root/elixir-call-hierarchy/elixir-call-hierarchy"
+      "$server" 2>"$evidence/server-version.txt" || true
+    else
+      server=$(find_elixir_ls) || blocked 'ElixirLS executable unavailable (set ELIXIR_LS_COMMAND)'
+      ("$server" --version || elixir --version) >"$evidence/server-version.txt" 2>&1 || blocked 'ElixirLS version probe failed'
+    fi
     target="$root/qualification/elixir/lib/calls.ex:3:7"
     workspace="$root/qualification/elixir"
     server_arg=--stdio
     expected='left,right,same_module,recursive,static_but_not_executed,aliased_cross_file,direct_qualified'
     ;;
   *)
-    printf 'usage: %s {typescript|csharp|elixir}\n' "$0" >&2
+    printf 'usage: %s {typescript|csharp|elixir|elixir-companion}\n' "$0" >&2
     exit 1
     ;;
 esac
@@ -102,7 +108,7 @@ edge_list=g.get('edges') or []
 nodes={n['id']: n for n in node_list}
 names={n['name'] for n in node_list}
 def matches(name, want):
-    return name == want or name.startswith(want + '(') or name.endswith('.' + want + '/1')
+    return name == want or name == want + '/1' or name.startswith(want + '(') or name.endswith('.' + want + '/1')
 present={want for want in expected if any(matches(name, want) for name in names)}
 missing=sorted(expected-present)
 require(g['schema_version'] in {'lsp-trace.graph.v1', 'lsp-trace.graph.v2'}, 'unsupported schema version')
@@ -113,7 +119,7 @@ require(not missing, f'missing exact callers: {missing}')
 require(bool(edge_list) and all(e['call_sites'] for e in edge_list), 'one or more caller edges lack call-site ranges')
 print('protocol support=true')
 print('exact callers=' + ','.join(sorted(expected)))
-if language == 'elixir':
+if language in {'elixir', 'elixir-companion'}:
     leaf_ids={node_id for node_id, node in nodes.items() if matches(node['name'], 'leaf')}
     leaf_callers={nodes[e['caller_node_id']]['name'] for e in edge_list if e['callee_node_id'] in leaf_ids}
     required_same={'same_module', 'recursive', 'static_but_not_executed'}
@@ -130,7 +136,7 @@ PY
 assertion_status=$?
 set -e
 if [ "$assertion_status" -ne 0 ]; then
-  if [ "$language" = elixir ]; then
+  if [ "$language" = elixir ] || [ "$language" = elixir-companion ]; then
     blocked 'ElixirLS Call Hierarchy lacks an exact same-module or missing cross-module caller edge, multi-clause resolution, or required range; assertions retained'
   fi
   printf 'FAIL: graph assertions failed\n' | tee "$evidence/status.txt"
