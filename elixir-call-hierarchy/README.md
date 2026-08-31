@@ -3,14 +3,18 @@
 A clean-room, generic Elixir Call Hierarchy companion server. Build the executable with `mix escript.build`, then run it as:
 
 ```sh
-elixir-call-hierarchy --stdio
+elixir-call-hierarchy --stdio [--cache-dir PATH] [--reindex]
 ```
+
+`--cache-dir` overrides the compatible per-user cache location. `--reindex` clears and rebuilds only the current fingerprinted entry under its lock. Unknown options are rejected on stderr.
 
 It supports only `initialize`, `initialized`, `textDocument/didOpen`, `textDocument/prepareCallHierarchy`, `callHierarchy/incomingCalls`, `shutdown`, and `exit` over Content-Length framed JSON-RPC stdio.
 
 ## Index and trust boundary
 
-On initialize the server uses `rootUri` (or the first workspace folder), reads restored dependency sources from the disposable workspace's `deps/` directory, and invokes Mix plus the standard Elixir parallel compiler with a compiler tracer. `MIX_BUILD_PATH` is redirected to a temporary directory, so project and dependency build artifacts never enter the workspace; the temporary build is removed afterward. The authoritative source repository must be materialized read-only or copied into the disposable workspace before invocation.
+On initialize the server uses `rootUri` (or the first workspace folder), reads already-restored dependency sources from the workspace's `deps/` directory, and invokes Mix plus the standard Elixir parallel compiler with a compiler tracer. It never runs `deps.get`. `MIX_DEPS_PATH` remains the workspace `deps/`, while `MIX_BUILD_PATH` is a stable fingerprinted directory under an external user cache, so project and dependency build artifacts never enter the workspace.
+
+The cache identity covers cache/indexer schema, Elixir/OTP/Mix, OS and architecture, `MIX_ENV`, workspace identity, and deterministic content digests for `mix.exs`, `mix.lock`, `config/`, `lib/`, and restored `deps/` sources. VCS/build junk and directory symlinks are excluded. Indexes use validated versioned JSON; corrupt entries rebuild atomically. An entry-specific bounded cross-process lock performs a second hit check, so a valid hit loads the complete persisted index without compiling dependencies or project files again. The authoritative source repository must still be trusted: a cold miss executes compiler and macro code.
 
 Calls come only from compiler tracer events (`remote_function`, `remote_macro`, `imported_function`, `imported_macro`, `local_function`, and `local_macro`). Source AST traversal identifies function and macro definition boundaries only; it never treats textual references as calls. Compiler and macro expansion—including dependency compilation—are executable code and may have side effects, so initialize must be treated with the same trust as compiling the workspace. Tests use disposable workspaces, including a hermetic restored-dependency fixture.
 

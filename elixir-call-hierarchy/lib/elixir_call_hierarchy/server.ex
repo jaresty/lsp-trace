@@ -18,7 +18,15 @@ defmodule ElixirCallHierarchy.Server do
       uri_path(params["rootUri"] || get_in(params, ["workspaceFolders", Access.at(0), "uri"]))
 
     {:module, Jason.Encode} = Code.ensure_loaded(Jason.Encode)
-    index = ElixirCallHierarchy.Index.build(root)
+    options = Map.get(state, :options, %{cache_dir: nil, reindex: false})
+    cache_options = [reindex: options.reindex]
+
+    cache_options =
+      if options.cache_dir,
+        do: Keyword.put(cache_options, :cache_dir, options.cache_dir),
+        else: cache_options
+
+    {_status, index} = ElixirCallHierarchy.Cache.load(root, cache_options)
 
     {Map.put(state, :index, index),
      response(id, %{
@@ -46,7 +54,7 @@ defmodule ElixirCallHierarchy.Server do
 
   defp handle(%{"id" => id, "method" => "callHierarchy/incomingCalls", "params" => params}, state) do
     data = get_in(params, ["item", "data"])
-    target = %{identity: {module(data["module"]), String.to_atom(data["name"]), data["arity"]}}
+    target = %{identity: [data["module"], data["name"], data["arity"]]}
 
     incoming =
       state.index
@@ -75,7 +83,7 @@ defmodule ElixirCallHierarchy.Server do
   defp item(nil), do: nil
 
   defp item(definition) do
-    {module, name, arity} = definition.identity
+    [module, name, arity] = identity_strings(definition.identity)
     range = json_range(definition.range)
 
     %{
@@ -86,8 +94,8 @@ defmodule ElixirCallHierarchy.Server do
       "range" => range,
       "selectionRange" => range,
       "data" => %{
-        "module" => Atom.to_string(module),
-        "name" => Atom.to_string(name),
+        "module" => module,
+        "name" => name,
         "arity" => arity
       }
     }
@@ -120,10 +128,13 @@ defmodule ElixirCallHierarchy.Server do
   defp response(id, result), do: %{"jsonrpc" => "2.0", "id" => id, "result" => result}
   defp json_range(range), do: %{"start" => stringify(range.start), "end" => stringify(range.end)}
   defp stringify(position), do: %{"line" => position.line, "character" => position.character}
-  defp kind(kind) when kind in [:defmacro, :defmacrop], do: 12
+  defp kind(kind) when kind in [:defmacro, :defmacrop, "defmacro", "defmacrop"], do: 12
   defp kind(_), do: 12
-  defp module("Elixir." <> _ = name), do: String.to_atom(name)
-  defp module(name), do: Module.concat([name])
+
+  defp identity_strings({module, name, arity}),
+    do: [Atom.to_string(module), Atom.to_string(name), arity]
+
+  defp identity_strings([module, name, arity]), do: [module, name, arity]
   defp uri_path(nil), do: nil
   defp uri_path("file://" <> path), do: URI.decode(path)
   defp path_uri(path), do: "file://" <> URI.encode(path)
