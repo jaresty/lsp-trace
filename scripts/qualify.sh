@@ -43,7 +43,7 @@ case "$language" in
     "$server" --version >"$evidence/server-version.txt" 2>&1 || blocked 'server version probe failed'
     target="$root/qualification/csharp/Calls.cs:5:23"
     workspace="$root/qualification/csharp"
-    server_arg=--stdio
+    server_arg=
     expected='Left,Right,Recursive,StaticButNotExecuted'
     ;;
   elixir)
@@ -63,9 +63,14 @@ esac
 
 binary="$evidence/lsp-trace"
 (cd "$root" && go build -o "$binary" ./cmd/lsp-trace)
-printf '%s\n' "$binary incoming --workspace $workspace --server $server --server-arg $server_arg --at $target" >"$evidence/command.txt"
+set -- "$binary" incoming --workspace "$workspace" --server "$server"
+if [ -n "$server_arg" ]; then
+  set -- "$@" --server-arg "$server_arg"
+fi
+set -- "$@" --at "$target" --pretty
+printf '%s\n' "$*" >"$evidence/command.txt"
 set +e
-"$binary" incoming --workspace "$workspace" --server "$server" --server-arg "$server_arg" --at "$target" --pretty >"$evidence/graph.json" 2>"$evidence/stderr.txt"
+"$@" >"$evidence/graph.json" 2>"$evidence/stderr.txt"
 status=$?
 set -e
 if [ "$status" -eq 2 ]; then
@@ -87,7 +92,9 @@ import json, sys
 with open(sys.argv[1], encoding='utf-8') as f: g=json.load(f)
 expected=set(sys.argv[2].split(','))
 names={n['name'] for n in g['nodes']}
-present={want for want in expected if any(name == want or name.endswith('.' + want + '/1') for name in names)}
+def matches(name, want):
+    return name == want or name.startswith(want + '(') or name.endswith('.' + want + '/1')
+present={want for want in expected if any(matches(name, want) for name in names)}
 missing=sorted(expected-present)
 assert g['schema_version']=='lsp-trace.graph.v1'
 assert g['capabilities']['call_hierarchy_provider'] is True
