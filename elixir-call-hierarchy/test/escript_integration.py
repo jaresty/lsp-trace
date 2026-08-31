@@ -50,8 +50,13 @@ def read_framed(stream, deadline):
     return json.loads(body)
 
 
-def hierarchy(workspace, cache, source):
-    env = {**os.environ, "XDG_CACHE_HOME": str(cache)}
+def hierarchy(workspace, cache, source, mix_env):
+    env = {
+        **os.environ,
+        "XDG_CACHE_HOME": str(cache),
+        "MIX_ENV": mix_env,
+        "MIX_TARGET": "host",
+    }
     process = subprocess.Popen(
         [str(ESCRIPT), "--stdio"],
         stdin=subprocess.PIPE,
@@ -81,9 +86,16 @@ def hierarchy(workspace, cache, source):
             process.kill()
 
 
-def invoke(workspace, cache, request, timeout=TIMEOUT):
+def invoke(workspace, cache, request, mix_env, timeout=TIMEOUT):
     env = os.environ.copy()
-    env.update({"XDG_CACHE_HOME": str(cache), "ECH_PROFILE": "1"})
+    env.update(
+        {
+            "XDG_CACHE_HOME": str(cache),
+            "ECH_PROFILE": "1",
+            "MIX_ENV": mix_env,
+            "MIX_TARGET": "host",
+        }
+    )
     started = time.monotonic()
     try:
         result = subprocess.run(
@@ -111,6 +123,30 @@ def main():
         cache = base / "cache"
         (workspace / "lib").mkdir(parents=True)
         (workspace / "deps").mkdir()
+
+        def dependency(name, deps="[]", body="def value, do: :ok"):
+            root = workspace / "deps" / name
+            (root / "lib").mkdir(parents=True)
+            module = "".join(part.capitalize() for part in name.split("_"))
+            (root / "mix.exs").write_text(
+                f"""defmodule {module}.MixProject do
+  use Mix.Project
+  def project, do: [app: :{name}, version: \"0.1.0\", deps: {deps}]
+end
+"""
+            )
+            (root / "lib" / f"{name}.ex").write_text(
+                f"defmodule {module} do\n  {body}\nend\n"
+            )
+
+        dependency("active_transitive")
+        dependency(
+            "test_only",
+            '[{:active_transitive, path: "../active_transitive"}]',
+            "@value ActiveTransitive.value()\n  def value, do: @value",
+        )
+        dependency("prod_only")
+        dependency("target_only")
         shutil.copy2(PROJECT / "mix.lock", workspace / "mix.lock")
         jason = workspace / "deps" / "jason"
         shutil.copytree(PROJECT / "deps" / "jason", jason)
@@ -130,7 +166,19 @@ end
         (workspace / "mix.exs").write_text(
             """defmodule EscriptFixture.MixProject do
   use Mix.Project
-  def project, do: [app: :escript_fixture, version: \"0.1.0\", elixir: \"~> 1.16\", deps: [{:jason, \"~> 1.4\"}]]
+  def project do
+    [
+      app: :escript_fixture,
+      version: \"0.1.0\",
+      elixir: \"~> 1.16\",
+      deps: [
+        {:jason, \"~> 1.4\"},
+        {:test_only, path: \"deps/test_only\", only: :test},
+        {:prod_only, path: \"deps/prod_only\", only: :prod},
+        {:target_only, path: \"deps/target_only\", targets: [:special]}
+      ]
+    ]
+  end
 end
 """
         )
@@ -144,16 +192,23 @@ end
         )
         uri = workspace.resolve().as_uri()
         initialize = message("initialize", 1, {"rootUri": uri})
-        response, cold_stderr, cold_elapsed = invoke(workspace, cache, initialize)
-        require(response["result"]["capabilities"]["callHierarchyProvider"] is True, "initialize advertises call hierarchy")
+        response, cold_stderr, cold_elapsed = invoke(workspace, cache / "test", initialize, "test")
+        require(response["result"]["capabilities"]["callHierarchyProvider"] is True, "test initialize advertises call hierarchy")
+        require("Unknown dependency prod_only" not in cold_stderr, "test excludes restored prod-only dependency")
+        require("Unknown dependency target_only" not in cold_stderr, "host target excludes restored special-target dependency")
+        require("undefined function ActiveTransitive.value/0" not in cold_stderr, "active transitive compiles before test-only dependent")
 
-        hierarchy(workspace, cache, source)
+        hierarchy(workspace, cache / "test", source, "test")
         require("\"phase\":\"deps_compile\"" in cold_stderr, "cold initialize profiles dependency compilation")
         require("redefining module Jason" not in cold_stderr, "dependency compilation does not contaminate the escript VM")
         require(not (workspace / "_build").exists(), "workspace has no _build directory")
         require(any(cache.rglob("index.json")), "cache artifact is outside workspace")
 
-        warm_response, warm_stderr, warm_elapsed = invoke(workspace, cache, initialize)
+        prod_response, prod_stderr, _ = invoke(workspace, cache / "prod", initialize, "prod")
+        require(prod_response["result"]["capabilities"]["callHierarchyProvider"] is True, "prod initialize advertises call hierarchy")
+        require("Unknown dependency test_only" not in prod_stderr, "prod excludes restored test-only dependency")
+
+        warm_response, warm_stderr, warm_elapsed = invoke(workspace, cache / "test", initialize, "test")
         require(warm_response["result"]["capabilities"]["callHierarchyProvider"] is True, "warm initialize succeeds")
         require("\"status\":\"hit\"" in warm_stderr, "warm initialize reports a cache hit")
         require("\"phase\":\"deps_compile\"" not in warm_stderr, "warm initialize does not recompile dependencies")
