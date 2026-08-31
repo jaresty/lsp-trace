@@ -49,6 +49,28 @@ func writePeer(t *testing.T, c net.Conn, m peerMessage) {
 	}
 }
 
+func TestClientNullCallHierarchyResponses(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := NewClient(jsonrpc.New(clientConn, clientConn))
+	go func() {
+		r := bufio.NewReader(serverConn)
+		for range 2 {
+			m := readPeer(t, r)
+			writePeer(t, serverConn, peerMessage{JSONRPC: "2.0", ID: m.ID, Result: json.RawMessage(`null`)})
+		}
+	}()
+	items, err := client.PrepareCallHierarchy(context.Background(), PrepareCallHierarchyParams{})
+	if err != nil || items != nil {
+		t.Fatalf("ASSERT_NULL_PREPARE_ACCEPTED: items=%#v err=%v", items, err)
+	}
+	calls, wasNull, err := client.IncomingCalls(context.Background(), CallHierarchyItem{})
+	if err != nil || calls != nil || !wasNull {
+		t.Fatalf("ASSERT_NULL_INCOMING_ACCEPTED: calls=%#v wasNull=%v err=%v", calls, wasNull, err)
+	}
+}
+
 func TestClientLifecycleSequence(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()

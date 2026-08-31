@@ -41,7 +41,7 @@ func (c *Client) PrepareCallHierarchy(ctx context.Context, p PrepareCallHierarch
 	if err := c.conn.Call(ctx, "textDocument/prepareCallHierarchy", p, &raw); err != nil {
 		return nil, err
 	}
-	if string(raw) == "null" {
+	if len(raw) == 0 || string(raw) == "null" {
 		return nil, nil
 	}
 	var items []CallHierarchyItem
@@ -52,7 +52,7 @@ func (c *Client) IncomingCalls(ctx context.Context, item CallHierarchyItem) ([]C
 	if err := c.conn.Call(ctx, "callHierarchy/incomingCalls", CallHierarchyIncomingCallsParams{Item: item}, &raw); err != nil {
 		return nil, false, err
 	}
-	if string(raw) == "null" {
+	if len(raw) == 0 || string(raw) == "null" {
 		return nil, true, nil
 	}
 	var calls []CallHierarchyIncomingCall
