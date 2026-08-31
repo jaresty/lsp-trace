@@ -49,6 +49,8 @@ jobs:
       - run: mix deps.get --only test
       - run: mix format --check-formatted
       - run: mix test
+      - run: MIX_ENV=prod mix deps.get --only prod
+      - run: MIX_ENV=prod mix escript.build
 
   verify:
     strategy:

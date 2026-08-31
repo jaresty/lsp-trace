@@ -53,6 +53,7 @@ assert_contains Q-ELIXIR-QUALIFIED qualification/elixir/lib/cross_module_callers
 assert_contains Q-ELIXIR-BLOCKED scripts/qualify.sh 'missing cross-module caller edge'
 assert_contains Q-ELIXIR-EVIDENCE qualification/README.md 'protocol support, same-module resolution, cross-module resolution, and multi-clause resolution'
 assert_file Q-ELIXIR-COMPANION-MIX elixir-call-hierarchy/mix.exs
+assert_contains Q-ELIXIR-COMPANION-ESCRIPT-IGNORE elixir-call-hierarchy/.gitignore '/elixir-call-hierarchy'
 assert_file Q-ELIXIR-COMPANION-SERVER elixir-call-hierarchy/lib/elixir_call_hierarchy/server.ex
 assert_contains Q-ELIXIR-COMPANION-MODE scripts/qualify.sh 'elixir-companion'
 assert_contains Q-ELIXIR-COMPANION-TRUST elixir-call-hierarchy/README.md 'Compiler and macro expansion are executable code'
@@ -81,6 +82,7 @@ assert_contains R-ELIXIR-CI-VERSION .github/workflows/ci.yml "elixir-version: '1
 assert_contains R-ELIXIR-CI-DEPS .github/workflows/ci.yml 'mix deps.get --only test'
 assert_contains R-ELIXIR-CI-FORMAT .github/workflows/ci.yml 'mix format --check-formatted'
 assert_contains R-ELIXIR-CI-TEST .github/workflows/ci.yml 'mix test'
+assert_contains R-ELIXIR-CI-ESCRIPT .github/workflows/ci.yml 'mix escript.build'
 assert_file R-SECURITY docs/SECURITY.md
 assert_file R-SEMANTICS docs/SEMANTICS.md
 assert_file R-SCHEMA docs/SCHEMA_POLICY.md
