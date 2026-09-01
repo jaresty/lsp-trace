@@ -44,11 +44,32 @@ defmodule ElixirCallHierarchy.StdioServerTest do
     File.mkdir_p!(Path.join(workspace, "deps"))
     File.cp!(Path.join(project, "mix.lock"), Path.join(workspace, "mix.lock"))
     File.cp_r!(Path.join(project, "deps/jason"), Path.join(workspace, "deps/jason"))
+    File.mkdir_p!(Path.join(workspace, "deps/compile_fixture/lib"))
+
+    File.write!(Path.join(workspace, "deps/compile_fixture/mix.exs"), """
+    defmodule CompileFixture.MixProject do
+      use Mix.Project
+      def project, do: [app: :compile_fixture, version: "0.1.0", deps: [{:jason, path: "../jason"}]]
+    end
+    """)
+
+    File.write!(Path.join(workspace, "deps/compile_fixture/lib/compile_fixture.ex"), """
+    defmodule CompileFixture do
+      def decode_error, do: %Jason.DecodeError{}
+    end
+    """)
 
     File.write!(Path.join(workspace, "mix.exs"), """
     defmodule DependencyFixture.MixProject do
       use Mix.Project
-      def project, do: [app: :dependency_fixture, version: "0.1.0", elixir: "~> 1.16", deps: [{:jason, "~> 1.4"}]]
+      def project do
+        [
+          app: :dependency_fixture,
+          version: "0.1.0",
+          elixir: "~> 1.16",
+          deps: [{:jason, "~> 1.4"}, {:compile_fixture, path: "deps/compile_fixture"}]
+        ]
+      end
     end
     """)
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -239,6 +240,22 @@ func TestParseAcceptsRepeatableFlags(t *testing.T) {
 	}
 }
 
+func TestParseRejectsDuplicateServerEnvNames(t *testing.T) {
+	for _, declarations := range [][]string{{"TOKEN=one", "TOKEN=one"}, {"TOKEN=one", "TOKEN=two"}} {
+		args := append(validArgs(t.TempDir()), "--server-env", declarations[0], "--server-env", declarations[1])
+		stdout, stderr, code := captureRun(t, append([]string{"incoming"}, args...))
+		if code != 1 || stdout != "" || strings.TrimSpace(stderr) != `duplicate --server-env name "TOKEN"` {
+			t.Fatalf("ASSERT_DUPLICATE_SERVER_ENV_PARSE_REJECTION: declarations=%v code=%d stdout=%q stderr=%q", declarations, code, stdout, stderr)
+		}
+	}
+}
+
+func TestParseAcceptsDistinctServerEnvNames(t *testing.T) {
+	if _, err := parse(append(validArgs(t.TempDir()), "--server-env", "TOKEN=one", "--server-env", "OTHER=two")); err != nil {
+		t.Fatalf("ASSERT_DISTINCT_SERVER_ENV_NAMES_PASS: %v", err)
+	}
+}
+
 func TestParseAcceptsRepeatedAtAndSeedFile(t *testing.T) {
 	workspace := t.TempDir()
 	seedFile := filepath.Join(t.TempDir(), "seeds.json")
@@ -361,6 +378,118 @@ func writeRuntimeResponse(id json.RawMessage, result any) {
 	fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
 }
 
+func assertMixedFailureSeeds(t *testing.T, resultJSON []byte, globalPhase string) {
+	t.Helper()
+	var got struct {
+		SchemaVersion string `json:"schema_version"`
+		Invocation    struct {
+			Seeds []struct {
+				Label string `json:"label"`
+			} `json:"seeds"`
+		} `json:"invocation"`
+		Seeds []struct {
+			Label   string `json:"label"`
+			Failure *struct {
+				Phase string `json:"phase"`
+			} `json:"failure"`
+		} `json:"seeds"`
+		Summary struct {
+			TraversalComplete bool `json:"traversal_complete"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(resultJSON, &got); err != nil {
+		t.Fatalf("ASSERT_MIXED_FAILURE_SERIALIZES: %v: %s", err, resultJSON)
+	}
+	phases := map[string]string{}
+	resultLabels := map[string]struct{}{}
+	for _, seed := range got.Seeds {
+		if _, duplicate := resultLabels[seed.Label]; duplicate {
+			t.Fatalf("ASSERT_MIXED_PREFLIGHT_GLOBAL_UNIQUE_RESULT_LABELS: %#v", got.Seeds)
+		}
+		resultLabels[seed.Label] = struct{}{}
+		if seed.Failure != nil {
+			phases[seed.Label] = seed.Failure.Phase
+		}
+	}
+	invocationLabels := map[string]struct{}{}
+	for _, seed := range got.Invocation.Seeds {
+		invocationLabels[seed.Label] = struct{}{}
+	}
+	if got.SchemaVersion != "lsp-trace.graph.v3" || len(got.Invocation.Seeds) != 2 || len(got.Seeds) != 2 || !reflect.DeepEqual(invocationLabels, resultLabels) || phases["bad"] != "source" || phases["good"] != globalPhase || got.Summary.TraversalComplete {
+		t.Fatalf("ASSERT_MIXED_PREFLIGHT_GLOBAL_ONE_RESULT_PER_SEED: schema=%q invocation=%#v seeds=%#v phases=%#v complete=%v", got.SchemaVersion, got.Invocation.Seeds, got.Seeds, phases, got.Summary.TraversalComplete)
+	}
+}
+
+func TestRunMixedSourceAndSpawnFailurePreservesEverySeed(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, _ := captureRun(t, []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--seed-file", writeMixedSeedFile(t)})
+	assertMixedFailureSeeds(t, []byte(stdout), "spawn")
+}
+
+func TestRunMixedSourceAndTraceOpenFailurePreservesEverySeed(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, _ := captureRun(t, []string{"incoming", "--workspace", workspace, "--server", "server", "--seed-file", writeMixedSeedFile(t), "--trace-lsp", t.TempDir()})
+	assertMixedFailureSeeds(t, []byte(stdout), "trace")
+}
+
+func writeMixedSeedFile(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "seeds.json")
+	if err := os.WriteFile(path, []byte(`{"seeds":[{"label":"bad","at":"missing.go:1:1"},{"label":"good","at":"good.go:1:1"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func assertPublishedMixedFailure(t *testing.T, args []string, globalPhase string) {
+	t.Helper()
+	output := filepath.Join(t.TempDir(), "bundle.json")
+	stdout, stderr, code := captureRun(t, append(args, "--output", output))
+	if code == 0 || stdout != "" {
+		t.Fatalf("ASSERT_MIXED_FAILURE_PUBLISH_EXIT: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	artifact, err := readSelectedArtifact(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertMixedFailureSeeds(t, artifact, globalPhase)
+	verifyOut, verifyErr, verifyCode := captureRun(t, []string{"verify", output})
+	if verifyCode != 0 || verifyOut != "verified integrity and custody\n" || verifyErr != "" {
+		t.Fatalf("ASSERT_MIXED_FAILURE_PUBLISH_VERIFY: code=%d stdout=%q stderr=%q", verifyCode, verifyOut, verifyErr)
+	}
+}
+
+func TestMixedMissingSourceAndSpawnPreservesEverySeedResult(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertPublishedMixedFailure(t, []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--seed-file", writeMixedSeedFile(t)}, "spawn")
+}
+
+func TestMixedMissingSourceAndTraceOpenPreservesEverySeedResult(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertPublishedMixedFailure(t, []string{"incoming", "--workspace", workspace, "--server", "server", "--seed-file", writeMixedSeedFile(t), "--trace-lsp", t.TempDir()}, "trace")
+}
+
+func TestMixedMissingSourceAndInitializePreservesEverySeedResult(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"incoming", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=TestRuntimeHelperServer", "--server-env", "LSP_TRACE_RUNTIME_HELPER=1", "--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1", "--seed-file", writeMixedSeedFile(t), "--request-timeout", "1s"}
+	assertPublishedMixedFailure(t, args, "initialize")
+}
+
 func TestRunInitializeFailureIsIncomplete(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
@@ -385,6 +514,16 @@ func TestRunInitializeFailureIsIncomplete(t *testing.T) {
 	if code != 1 || result.Summary.TraversalComplete {
 		t.Fatalf("ASSERT_INITIALIZE_FAILURE_INCOMPLETE: code=%d complete=%t stdout=%s stderr=%s", code, result.Summary.TraversalComplete, stdout, stderr)
 	}
+}
+
+func TestRunMixedSourceAndInitializeFailurePreservesEverySeed(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "good.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"incoming", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=TestRuntimeHelperServer", "--server-env", "LSP_TRACE_RUNTIME_HELPER=1", "--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1", "--seed-file", writeMixedSeedFile(t), "--request-timeout", "1s"}
+	stdout, _, _ := captureRun(t, args)
+	assertMixedFailureSeeds(t, []byte(stdout), "initialize")
 }
 
 func TestRunRequestTimeoutTraceStderrAndExitPolicy(t *testing.T) {

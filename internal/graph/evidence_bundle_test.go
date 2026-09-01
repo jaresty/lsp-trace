@@ -65,8 +65,8 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 		},
 		Nodes: []Node{n1, n2}, Targets: []string{n2.ID}, Edges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}},
 		Seeds: []SeedResult{
-			{Label: "first", ReachedNodeIDs: []string{n1.ID}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
-			{Label: "second", ReachedNodeIDs: []string{n1.ID}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
+			{Label: "first", ReachedNodeIDs: []string{n1.ID}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", n1.ID+"->"+n2.ID, "", "", "", n1.ID, n2.ID)}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
+			{Label: "second", ReachedNodeIDs: []string{n1.ID}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", n1.ID+"->"+n2.ID, "", "", "", n1.ID, n2.ID)}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
 		},
 		SiblingCandidates: []SiblingCandidate{
 			{SeedURI: "file:///w/a.go", SeedLabel: "first", Candidate: n1},
@@ -334,8 +334,8 @@ func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *t
 		Nodes: []Node{n1, n2, n3, n4},
 		Edges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}, {CallerNodeID: n3.ID, CalleeNodeID: n4.ID}},
 		Seeds: []SeedResult{
-			{Label: "a", ReachedNodeIDs: []string{n1.ID, n2.ID}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
-			{Label: "b", ReachedNodeIDs: []string{n3.ID, n4.ID}, ReachedEdges: []Edge{{CallerNodeID: n3.ID, CalleeNodeID: n4.ID}}},
+			{Label: "a", ReachedNodeIDs: []string{n1.ID, n2.ID}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", n1.ID+"->"+n2.ID, "", "", "", n1.ID, n2.ID)}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
+			{Label: "b", ReachedNodeIDs: []string{n3.ID, n4.ID}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", n3.ID+"->"+n4.ID, "", "", "", n3.ID, n4.ID)}, ReachedEdges: []Edge{{CallerNodeID: n3.ID, CalleeNodeID: n4.ID}}},
 		},
 		Summary: Summary{Complete: true},
 	}
@@ -371,8 +371,8 @@ func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *t
 		{"duplicate explicit environment name", "duplicate explicit environment name", func(b *bundleV3) {
 			b.ProcessContext.Environment = append(b.ProcessContext.Environment, b.ProcessContext.Environment[0])
 		}},
-		{"cross-seed primary relation", "outside exact seed membership", func(b *bundleV3) {
-			b.Seeds[0].ReachedRelationIDs = append([]string(nil), b.Seeds[1].ReachedRelationIDs...)
+		{"unknown primary relation", "unknown call relation", func(b *bundleV3) {
+			b.Seeds[0].ReachedRelationIDs = []string{"sha256:unknown"}
 			b.SeedMemberships = projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
 		}},
 	}
@@ -387,6 +387,94 @@ func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *t
 				t.Fatalf("mutation accepted or wrong error: %v", err)
 			}
 		})
+	}
+}
+
+func TestMarshalV3RejectsInvalidExactSeedJoin(t *testing.T) {
+	r := Result{SchemaVersion: SchemaVersionV3, Invocation: Invocation{Seeds: []InvocationSeed{{Label: "expected", At: "a.go:1:1"}}}}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "seed join mismatch") {
+		t.Fatalf("ASSERT_MARSHAL_V3_EXACT_SEED_JOIN: %v", err)
+	}
+}
+
+func TestV3MarshalDoesNotInferSeedRelationsFromMergedEdges(t *testing.T) {
+	caller := NewNode(Item{Name: "caller", URI: "file:///w/caller.go"})
+	calleeA := NewNode(Item{Name: "callee-a", URI: "file:///w/a.go"})
+	calleeB := NewNode(Item{Name: "callee-b", URI: "file:///w/b.go"})
+	edgeA := Edge{CallerNodeID: caller.ID, CalleeNodeID: calleeA.ID}
+	edgeB := Edge{CallerNodeID: caller.ID, CalleeNodeID: calleeB.ID}
+	wrongID := canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+calleeB.ID, "", "", "", caller.ID, calleeB.ID)
+	r := Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation:    Invocation{Seeds: []InvocationSeed{{Label: "seed-a", At: "a.go:1:1"}}},
+		Nodes:         []Node{caller, calleeA, calleeB},
+		Edges:         []Edge{edgeA, edgeB},
+		Seeds: []SeedResult{{
+			Label: "seed-a", ReachedNodeIDs: []string{caller.ID, calleeA.ID},
+			ReachedEdges: []Edge{edgeA}, ReachedRelationIDs: []string{wrongID},
+		}},
+	}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), `seed join mismatch: exact call relations for "seed-a"`) {
+		t.Fatalf("ASSERT_MARSHAL_DOES_NOT_INFER_FROM_MERGED_EDGES: %v", err)
+	}
+}
+
+func TestCanonicalizeDoesNotCreateEmptyDiscoveryMembershipLabels(t *testing.T) {
+	node := NewNode(Item{Name: "candidate", URI: "file:///w/a.go"})
+	r := Result{SiblingCandidates: []SiblingCandidate{{Candidate: node}}, DispatchRelationships: []DispatchRelationship{{Interface: node, Implementation: node}}}
+	r.Canonicalize()
+	if len(r.SiblingCandidates[0].SeedLabels) != 0 || len(r.DispatchRelationships[0].SeedLabels) != 0 {
+		t.Fatalf("ASSERT_NO_EMPTY_DISCOVERY_SEED_MEMBERSHIPS: siblings=%#v dispatch=%#v", r.SiblingCandidates, r.DispatchRelationships)
+	}
+}
+
+func TestSharedCallerDistinctCalleesPreserveSeedRelationsOrderInvariant(t *testing.T) {
+	caller := NewNode(Item{Name: "caller", URI: "file:///w/caller.go"})
+	calleeA := NewNode(Item{Name: "callee-a", URI: "file:///w/a.go"})
+	calleeB := NewNode(Item{Name: "callee-b", URI: "file:///w/b.go"})
+	edgeA := Edge{CallerNodeID: caller.ID, CalleeNodeID: calleeA.ID}
+	edgeB := Edge{CallerNodeID: caller.ID, CalleeNodeID: calleeB.ID}
+	part := func(label string, edge Edge) Result {
+		id := canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
+		return Result{SchemaVersion: SchemaVersionV3, Nodes: []Node{caller, calleeA, calleeB}, Edges: []Edge{edge}, Seeds: []SeedResult{{Label: label, ReachedNodeIDs: []string{caller.ID, edge.CalleeNodeID}, ReachedEdges: []Edge{edge}, ReachedRelationIDs: []string{id}}}, Summary: Summary{Complete: true}}
+	}
+	marshal := func(invocation []InvocationSeed, results ...Result) bundleV3 {
+		merged := MergeResults(results...)
+		merged.Invocation.Seeds = invocation
+		encoded, err := json.Marshal(merged)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bundle bundleV3
+		if err := json.Unmarshal(encoded, &bundle); err != nil {
+			t.Fatal(err)
+		}
+		return bundle
+	}
+	seedA := InvocationSeed{Label: "a", At: "a.go:1:1"}
+	seedB := InvocationSeed{Label: "b", At: "b.go:1:1"}
+	forward := marshal([]InvocationSeed{seedA, seedB}, part("a", edgeA), part("b", edgeB))
+	reverse := marshal([]InvocationSeed{seedB, seedA}, part("b", edgeB), part("a", edgeA))
+	if !reflect.DeepEqual(forward.Edges, reverse.Edges) || !reflect.DeepEqual(forward.Seeds, reverse.Seeds) || !reflect.DeepEqual(forward.SeedMemberships, reverse.SeedMemberships) {
+		t.Fatalf("ASSERT_SHARED_CALLER_DISTINCT_CALLEES_ORDER_INVARIANT: forward=%#v reverse=%#v", forward, reverse)
+	}
+	bySeed := map[string][]string{}
+	for _, membership := range forward.SeedMemberships {
+		if membership.EvidenceKind == "CALL_RELATION" {
+			bySeed[membership.SeedLabel] = append(bySeed[membership.SeedLabel], membership.EndpointID)
+		}
+	}
+	global := map[string]struct{}{}
+	for _, edge := range forward.Edges {
+		global[edge.RelationID] = struct{}{}
+	}
+	if len(global) != 2 || len(bySeed["a"]) != 1 || len(bySeed["b"]) != 1 || bySeed["a"][0] == bySeed["b"][0] {
+		t.Fatalf("ASSERT_SHARED_CALLER_EXACT_PER_SEED_MEMBERSHIPS: global=%#v memberships=%#v", global, bySeed)
+	}
+	for _, ids := range bySeed {
+		if _, exists := global[ids[0]]; !exists {
+			t.Fatalf("ASSERT_SHARED_CALLER_MEMBERSHIP_GLOBAL_FOREIGN_KEY: global=%#v memberships=%#v", global, bySeed)
+		}
 	}
 }
 
@@ -411,10 +499,12 @@ func TestPrimaryRelationIDsAreV3Only(t *testing.T) {
 	caller := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
 	callee := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})
 	base := Result{
+		Invocation:            Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "a.go:1:1"}}},
+		Seeds:                 []SeedResult{{Label: "seed"}},
 		Nodes:                 []Node{caller, callee},
 		Edges:                 MergeEdge(nil, Edge{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}),
-		SiblingCandidates:     []SiblingCandidate{{RelationID: canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", caller.ID, "", "", "", ""), Candidate: caller}},
-		DispatchRelationships: []DispatchRelationship{{RelationID: canonicalRelationID("DISPATCH_ASSOCIATION", "INTERFACE_TO_IMPLEMENTATION", caller.ID+"->"+callee.ID, "", caller.ID, callee.ID, "", ""), Interface: caller, Implementation: callee}},
+		SiblingCandidates:     []SiblingCandidate{{RelationID: canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", caller.ID, "", "", "", ""), SeedLabel: "seed", Candidate: caller}},
+		DispatchRelationships: []DispatchRelationship{{RelationID: canonicalRelationID("DISPATCH_ASSOCIATION", "INTERFACE_TO_IMPLEMENTATION", caller.ID+"->"+callee.ID, "", caller.ID, callee.ID, "", ""), SeedLabel: "seed", Interface: caller, Implementation: callee}},
 		Summary:               Summary{Complete: true},
 	}
 	for _, schema := range []string{SchemaVersionV1, SchemaVersionV2, SchemaVersionV3} {
@@ -449,11 +539,14 @@ func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
 	callee := NewNode(Item{Name: "callee", URI: "file:///w/callee.go"})
 	candidate := NewNode(Item{Name: "candidate", URI: "file:///w/candidate.go"})
 	r := Result{
-		SchemaVersion:         SchemaVersionV3,
-		Invocation:            Invocation{Seeds: []InvocationSeed{{Label: "seed-a", At: "a.go:1:1"}, {Label: "seed-b", At: "b.go:1:1"}}, Provenance: InvocationProvenance{SourceRevision: "rev"}},
-		Nodes:                 []Node{caller, callee},
-		Edges:                 []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}},
-		Seeds:                 []SeedResult{{Label: "seed-a", ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}}, {Label: "seed-b", ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}}},
+		SchemaVersion: SchemaVersionV3,
+		Invocation:    Invocation{Seeds: []InvocationSeed{{Label: "seed-a", At: "a.go:1:1"}, {Label: "seed-b", At: "b.go:1:1"}}, Provenance: InvocationProvenance{SourceRevision: "rev"}},
+		Nodes:         []Node{caller, callee},
+		Edges:         []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}},
+		Seeds: []SeedResult{
+			{Label: "seed-a", ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}, ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}},
+			{Label: "seed-b", ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}, ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}},
+		},
 		SiblingCandidates:     []SiblingCandidate{{SeedURI: "file:///w/a.go", SeedLabel: "seed-a", Candidate: candidate}, {SeedURI: "file:///w/b.go", SeedLabel: "seed-b", Candidate: candidate}},
 		DispatchRelationships: []DispatchRelationship{{SeedLabel: "seed-a", Interface: caller, Implementation: callee}, {SeedLabel: "seed-b", Interface: caller, Implementation: callee}},
 		Summary:               Summary{Complete: true},

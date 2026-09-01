@@ -137,7 +137,14 @@ func TestSubprocessOpaqueDataAndShuffledOrdering(t *testing.T) {
 	if codeA != 0 || codeB != 0 {
 		t.Fatalf("ASSERT_SUBPROCESS_SHUFFLE_SUCCESS: codes=%d/%d", codeA, codeB)
 	}
-	a.Invocation, b.Invocation = graph.Invocation{}, graph.Invocation{}
+	normalizedInvocation := func(result graph.Result) graph.Invocation {
+		seeds := make([]graph.InvocationSeed, 0, len(result.Seeds))
+		for _, seed := range result.Seeds {
+			seeds = append(seeds, graph.InvocationSeed{Label: seed.Label, At: seed.Label + ":1:1"})
+		}
+		return graph.Invocation{Seeds: seeds}
+	}
+	a.Invocation, b.Invocation = normalizedInvocation(a), normalizedInvocation(b)
 	for i := range a.Seeds {
 		a.Seeds[i].Requested = graph.Target{}
 	}

@@ -129,13 +129,6 @@ func sensitivityPolicy() SensitivityPolicy {
 func (r Result) marshalV3() ([]byte, error) {
 	// Producer and verifier must project from the same canonical graph state.
 	r.Canonicalize()
-	for i := range r.Seeds {
-		for _, edge := range r.Seeds[i].ReachedEdges {
-			r.Seeds[i].ReachedRelationIDs = append(r.Seeds[i].ReachedRelationIDs, canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, "", "", "", edge.CallerNodeID, edge.CalleeNodeID))
-		}
-		sort.Strings(r.Seeds[i].ReachedRelationIDs)
-		r.Seeds[i].ReachedRelationIDs = uniqueStrings(r.Seeds[i].ReachedRelationIDs)
-	}
 	if err := r.ValidateReferences(); err != nil {
 		return nil, err
 	}
@@ -166,10 +159,17 @@ func (r Result) marshalV3() ([]byte, error) {
 	}
 	processContext := projectProcessContext(inv.Server.Environment, inv.EffectiveEnvironment, inv.WorkingDirectory)
 	inv.Server.Environment = nil
+	receipt := r.evidenceReceipt(inv.Provenance.SourceRevision)
+	if err := validateProducerSeedRelations(r.Seeds); err != nil {
+		return nil, err
+	}
+	if err := validateSeedJoins(inv.Seeds, r.Seeds, r.SiblingCandidates, r.DispatchRelationships, receipt); err != nil {
+		return nil, err
+	}
 	sem := semanticV3{
 		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: inv, Identity: identity,
 		SensitivityPolicy: sensitivityPolicy(),
-		ProcessContext:    processContext, EvidenceSemantics: evidenceSemantics(), EvidenceReceipt: r.evidenceReceipt(inv.Provenance.SourceRevision),
+		ProcessContext:    processContext, EvidenceSemantics: evidenceSemantics(), EvidenceReceipt: receipt,
 		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.Edges, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
 		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges,
 		Terminals: r.Terminals, Frontier: r.Frontier, Diagnostics: r.Diagnostics, SiblingCandidates: r.SiblingCandidates,
@@ -537,6 +537,24 @@ func ValidateSemanticBundle(data []byte) error {
 	return nil
 }
 
+func validateProducerSeedRelations(results []SeedResult) error {
+	for _, result := range results {
+		if result.ReachedEdges == nil {
+			continue
+		}
+		expected := make([]string, 0, len(result.ReachedEdges))
+		for _, edge := range result.ReachedEdges {
+			expected = append(expected, canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, "", "", "", edge.CallerNodeID, edge.CalleeNodeID))
+		}
+		sort.Strings(expected)
+		expected = uniqueStrings(expected)
+		if !reflect.DeepEqual(result.ReachedRelationIDs, expected) {
+			return fmt.Errorf("seed join mismatch: exact call relations for %q", result.Label)
+		}
+	}
+	return nil
+}
+
 func validateSeedJoins(invocation []InvocationSeed, results []SeedResult, siblings []SiblingCandidate, dispatches []DispatchRelationship, receipt *EvidenceReceipt) error {
 	invocationLabels := make(map[string]struct{}, len(invocation))
 	for _, seed := range invocation {
@@ -563,17 +581,10 @@ func validateSeedJoins(invocation []InvocationSeed, results []SeedResult, siblin
 			return fmt.Errorf("seed join mismatch: duplicate result label %q", result.Label)
 		}
 		resultLabels[result.Label] = struct{}{}
-		reachedNodes := make(map[string]struct{}, len(result.ReachedNodeIDs))
-		for _, nodeID := range result.ReachedNodeIDs {
-			reachedNodes[nodeID] = struct{}{}
-		}
 		for _, relationID := range result.ReachedRelationIDs {
 			relation, exists := relations[relationID]
 			if !exists || relation.RelationKind != "CALL_RELATION" {
 				return fmt.Errorf("seed join mismatch: unknown call relation %q", relationID)
-			}
-			if _, exact := reachedNodes[relation.CallerNodeID]; !exact {
-				return fmt.Errorf("seed join mismatch: call relation %q outside exact seed membership for %q", relationID, result.Label)
 			}
 		}
 	}

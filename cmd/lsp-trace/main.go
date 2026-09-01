@@ -193,10 +193,16 @@ func parse(args []string) (config, error) {
 	default:
 		return c, fmt.Errorf("invalid --log-level %q: want error, warn, info, or debug", c.logLevel)
 	}
+	environmentNames := make(map[string]struct{}, len(c.env))
 	for _, e := range c.env {
-		if k, _, ok := strings.Cut(e, "="); !ok || k == "" {
+		k, _, ok := strings.Cut(e, "=")
+		if !ok || k == "" {
 			return c, fmt.Errorf("invalid --server-env %q", e)
 		}
+		if _, duplicate := environmentNames[k]; duplicate {
+			return c, fmt.Errorf("duplicate --server-env name %q", k)
+		}
+		environmentNames[k] = struct{}{}
 	}
 	return c, nil
 }
@@ -466,14 +472,23 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		result.Tool = base.Tool
 		return result, 2
 	}
-	failResolved := func(phase string, err error) {
+	earlyFailure := func(phase string, err error) graph.Result {
+		global := graph.Result{SchemaVersion: schemaVersion, Summary: graph.Summary{Complete: false}}
+		global.Diagnostics = append(global.Diagnostics, graph.Diagnostic{Phase: phase, Message: err.Error()})
 		for _, seed := range resolved {
-			base.Seeds = append(base.Seeds, graph.SeedResult{
+			global.Seeds = append(global.Seeds, graph.SeedResult{
 				Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column},
 				Failure: &graph.SeedFailure{Phase: phase, Message: err.Error()},
 			})
 		}
-		base.Summary.Complete = false
+		resultParts := append(append([]graph.Result(nil), parts...), global)
+		result := graph.MergeResults(resultParts...)
+		result.SchemaVersion = schemaVersion
+		result.Invocation = base.Invocation
+		result.Tool = base.Tool
+		result.Capabilities = base.Capabilities
+		result.CapabilityQuality.Advertised = base.CapabilityQuality.Advertised
+		return result
 	}
 	var err error
 	var traceFile *os.File
@@ -481,9 +496,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	if c.traceLSP != "" {
 		traceFile, err = os.OpenFile(c.traceLSP, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
-			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "trace", Message: err.Error()})
-			failResolved("trace", err)
-			return base, 1
+			return earlyFailure("trace", err), 1
 		}
 		defer traceFile.Close()
 		encoder := json.NewEncoder(traceFile)
@@ -493,9 +506,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	}
 	proc, err := server.Start(ctx, c.command, c.args, c.env)
 	if err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "spawn", Message: err.Error()})
-		failResolved("spawn", err)
-		return base, 1
+		return earlyFailure("spawn", err), 1
 	}
 	defer func() {
 		_ = proc.Stop(2 * time.Second)
@@ -520,12 +531,16 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	err = client.Initialize(rctx, workspaceURI)
 	done()
 	if err != nil {
-		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "initialize", Method: "initialize", Message: err.Error()})
-		failResolved("initialize", err)
-		if errors.Is(err, context.DeadlineExceeded) {
-			return base, 2
+		result := earlyFailure("initialize", err)
+		for i := range result.Diagnostics {
+			if result.Diagnostics[i].Phase == "initialize" && result.Diagnostics[i].Message == err.Error() {
+				result.Diagnostics[i].Method = "initialize"
+			}
 		}
-		return base, 1
+		if errors.Is(err, context.DeadlineExceeded) {
+			return result, 2
+		}
+		return result, 1
 	}
 	base.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()
 	base.CapabilityQuality.Advertised = base.Capabilities.CallHierarchyProvider
@@ -581,7 +596,13 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			part.DispatchRelationships = append(part.DispatchRelationships, relationships...)
 			part.Diagnostics = append(part.Diagnostics, diagnostics...)
 		}
+		part.Canonicalize()
 		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...), ReachedEdges: append([]graph.Edge(nil), part.Edges...)}
+		if schemaVersion == graph.SchemaVersionV3 {
+			for _, edge := range part.Edges {
+				seedResult.ReachedRelationIDs = append(seedResult.ReachedRelationIDs, edge.RelationID)
+			}
+		}
 		for _, node := range part.Nodes {
 			seedResult.ReachedNodeIDs = append(seedResult.ReachedNodeIDs, node.ID)
 		}

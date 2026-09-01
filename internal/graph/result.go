@@ -543,11 +543,17 @@ func (r *Result) Canonicalize() {
 	}
 	for i := range r.SiblingCandidates {
 		r.SiblingCandidates[i].RelationID = canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", r.SiblingCandidates[i].Candidate.ID, r.SiblingCandidates[i].Candidate.ID, "", "", "", "")
-		r.SiblingCandidates[i].SeedLabels = uniqueStrings(append(r.SiblingCandidates[i].SeedLabels, r.SiblingCandidates[i].SeedLabel))
+		if r.SiblingCandidates[i].SeedLabel != "" {
+			r.SiblingCandidates[i].SeedLabels = append(r.SiblingCandidates[i].SeedLabels, r.SiblingCandidates[i].SeedLabel)
+		}
+		r.SiblingCandidates[i].SeedLabels = uniqueStrings(r.SiblingCandidates[i].SeedLabels)
 	}
 	for i := range r.DispatchRelationships {
 		r.DispatchRelationships[i].RelationID = canonicalRelationID("DISPATCH_ASSOCIATION", "ASSOCIATION", r.DispatchRelationships[i].Interface.ID+"->"+r.DispatchRelationships[i].Implementation.ID, "", r.DispatchRelationships[i].Interface.ID, r.DispatchRelationships[i].Implementation.ID, "", "")
-		r.DispatchRelationships[i].SeedLabels = uniqueStrings(append(r.DispatchRelationships[i].SeedLabels, r.DispatchRelationships[i].SeedLabel))
+		if r.DispatchRelationships[i].SeedLabel != "" {
+			r.DispatchRelationships[i].SeedLabels = append(r.DispatchRelationships[i].SeedLabels, r.DispatchRelationships[i].SeedLabel)
+		}
+		r.DispatchRelationships[i].SeedLabels = uniqueStrings(r.DispatchRelationships[i].SeedLabels)
 	}
 	sort.Slice(r.Nodes, func(i, j int) bool {
 		a, b := r.Nodes[i], r.Nodes[j]

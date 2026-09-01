@@ -164,7 +164,11 @@ defmodule ElixirCallHierarchy.Index do
   defp compile_dependencies(root, deps_path, build_path) do
     env = dependency_compiler_env(deps_path, build_path)
     dependencies = active_dependencies(root)
-    compile_dependencies(root, dependencies, build_path, env, MapSet.new())
+
+    Enum.each(dependencies, fn dependency ->
+      compile_dependencies(root, dependencies, [dependency], build_path, env, MapSet.new())
+    end)
+
     ensure_dependency_outputs(root, dependencies, build_path, env)
   end
 
@@ -184,8 +188,8 @@ defmodule ElixirCallHierarchy.Index do
     ]
   end
 
-  defp compile_dependencies(root, dependencies, build_path, env, repaired) do
-    pending = Enum.reject(dependencies, &MapSet.member?(repaired, &1.name))
+  defp compile_dependencies(root, dependencies, targets, build_path, env, repaired) do
+    pending = Enum.reject(targets, &MapSet.member?(repaired, &1.name))
 
     result =
       if MapSet.size(repaired) > 0 and pending == [] do
@@ -207,7 +211,15 @@ defmodule ElixirCallHierarchy.Index do
         case resource_failure(output, dependencies, build_path, repaired) do
           {:ok, app, dependency} ->
             repair_dependency(app, dependency, build_path, env)
-            compile_dependencies(root, dependencies, build_path, env, MapSet.put(repaired, app))
+
+            compile_dependencies(
+              root,
+              dependencies,
+              targets,
+              build_path,
+              env,
+              MapSet.put(repaired, app)
+            )
 
           :error ->
             diagnostic = bounded_diagnostic(output)
