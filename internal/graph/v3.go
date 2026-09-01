@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -20,10 +21,10 @@ const (
 )
 
 type BundleIdentity struct {
-	CallerProvenanceClass string           `json:"caller_provenance_class"`
-	ResolvedSeeds         []InvocationSeed `json:"resolved_seeds"`
-	AggregateFingerprint  string           `json:"aggregate_fingerprint,omitempty"`
-	AggregateScope        string           `json:"aggregate_scope"`
+	CallerProvenanceClass      string           `json:"caller_provenance_class"`
+	ResolvedSeeds              []InvocationSeed `json:"resolved_seeds"`
+	ResolvedSeedContentsDigest string           `json:"resolved_seed_contents_digest,omitempty"`
+	AggregateScope             string           `json:"aggregate_scope"`
 }
 type SensitivityPolicy struct {
 	Covered                           []string `json:"covered"`
@@ -36,17 +37,17 @@ type Redaction struct {
 	Reason string `json:"reason"`
 }
 type EnvironmentIdentity struct {
-	Name      string    `json:"name"`
-	Identity  string    `json:"identity"`
-	Redaction Redaction `json:"redaction"`
+	Name                                string    `json:"name"`
+	EnvironmentNameProcessContextDigest string    `json:"environment_name_process_context_digest"`
+	Redaction                           Redaction `json:"redaction"`
 }
 type ProcessContext struct {
-	Environment                       []EnvironmentIdentity `json:"environment"`
-	EffectiveEnvironmentIdentity      string                `json:"effective_environment_identity"`
-	EffectiveEnvironmentVariableCount int                   `json:"effective_environment_variable_count"`
-	WorkingDirectoryIdentity          string                `json:"working_directory_identity"`
-	AmbientEnvironmentState           string                `json:"ambient_environment_state"`
-	Redaction                         Redaction             `json:"redaction"`
+	Environment                              []EnvironmentIdentity `json:"environment"`
+	EffectiveEnvironmentProcessContextDigest string                `json:"effective_environment_process_context_digest"`
+	EffectiveEnvironmentVariableCount        int                   `json:"effective_environment_variable_count"`
+	WorkingDirectoryProcessContextDigest     string                `json:"working_directory_process_context_digest"`
+	AmbientEnvironmentState                  string                `json:"ambient_environment_state"`
+	Redaction                                Redaction             `json:"redaction"`
 }
 type SeedMembership struct {
 	MembershipID string `json:"membership_id"`
@@ -56,15 +57,15 @@ type SeedMembership struct {
 	EndpointID   string `json:"endpoint_id"`
 }
 type ReplayArtifact struct {
-	Kind      string    `json:"kind"`
-	Locator   string    `json:"locator"`
-	State     string    `json:"state"`
-	Digest    string    `json:"digest,omitempty"`
-	Redaction Redaction `json:"redaction"`
+	Kind                     string    `json:"kind"`
+	Locator                  string    `json:"locator"`
+	State                    string    `json:"state"`
+	ReplayInputContentDigest string    `json:"replay_input_content_digest,omitempty"`
+	Redaction                Redaction `json:"redaction"`
 }
 type ReplayInputManifest struct {
-	ManifestID string           `json:"manifest_id"`
-	Artifacts  []ReplayArtifact `json:"artifacts"`
+	ReplayInputManifestDigest string           `json:"replay_input_manifest_digest"`
+	Artifacts                 []ReplayArtifact `json:"artifacts"`
 }
 type PortableLocator struct {
 	NodeID    string    `json:"node_id"`
@@ -106,12 +107,27 @@ type semanticV3 struct {
 	Seeds                 []SeedResult           `json:"seeds,omitempty"`
 	Summary               summaryV3              `json:"summary"`
 }
+type semanticReceiptV3 struct {
+	ReceiptVersion           string `json:"receipt_version"`
+	SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
+	DigestScope              string `json:"digest_scope"`
+}
 type bundleV3 struct {
 	semanticV3
-	TraceReceipt TraceReceipt `json:"trace_receipt"`
+	TraceReceipt semanticReceiptV3 `json:"trace_receipt"`
 }
 
 func (r Result) marshalV3() ([]byte, error) {
+	// Producer and verifier must project from the same canonical graph state.
+	r.Canonicalize()
+	for i := range r.Seeds {
+		for _, edge := range r.Seeds[i].ReachedEdges {
+			relation := newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, r.Invocation.Provenance.SourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
+			r.Seeds[i].ReachedRelationIDs = append(r.Seeds[i].ReachedRelationIDs, relation.RelationID)
+		}
+		sort.Strings(r.Seeds[i].ReachedRelationIDs)
+		r.Seeds[i].ReachedRelationIDs = uniqueStrings(r.Seeds[i].ReachedRelationIDs)
+	}
 	if err := r.ValidateReferences(); err != nil {
 		return nil, err
 	}
@@ -138,15 +154,15 @@ func (r Result) marshalV3() ([]byte, error) {
 	aggInput, _ := json.Marshal(resolved)
 	identity := BundleIdentity{CallerProvenanceClass: "CALLER_ASSERTED", ResolvedSeeds: resolved, AggregateScope: "RESOLVED_SEED_CONTENTS"}
 	if len(resolved) > 0 {
-		identity.AggregateFingerprint = domainDigest(ResolvedSeedsDomain, aggInput)
+		identity.ResolvedSeedContentsDigest = domainDigest(ResolvedSeedsDomain, aggInput)
 	}
 	processContext := projectProcessContext(inv.Server.Environment, inv.EffectiveEnvironment, inv.WorkingDirectory)
 	inv.Server.Environment = nil
 	sem := semanticV3{
 		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: inv, Identity: identity,
-		SensitivityPolicy: SensitivityPolicy{[]string{"invocation_arguments", "explicit_environment_names", "workspace_source_output_paths", "opaque_node_data", "diagnostics", "captured_server_stderr", "trace_transcripts"}, true, "BUNDLE_CUSTODIAN", false},
+		SensitivityPolicy: SensitivityPolicy{[]string{"invocation_arguments", "explicit_environment_names", "workspace_source_output_paths", "opaque_node_data", "diagnostics", "captured_server_stderr", "trace_transcripts"}, false, "BUNDLE_CUSTODIAN", false},
 		ProcessContext:    processContext, EvidenceSemantics: evidenceSemantics(), EvidenceReceipt: r.evidenceReceipt(inv.Provenance.SourceRevision),
-		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
+		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.Edges, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
 		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges,
 		Terminals: r.Terminals, Frontier: r.Frontier, Diagnostics: r.Diagnostics, SiblingCandidates: r.SiblingCandidates,
 		DispatchRelationships: r.DispatchRelationships, Seeds: r.Seeds,
@@ -156,7 +172,7 @@ func (r Result) marshalV3() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(bundleV3{sem, TraceReceipt{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}})
+	return json.Marshal(bundleV3{sem, semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}})
 }
 
 func projectProcessContext(environment map[string]string, effectiveEnvironment []string, workingDirectory string) ProcessContext {
@@ -168,15 +184,15 @@ func projectProcessContext(environment map[string]string, effectiveEnvironment [
 	effective := normalizedEnvironment(effectiveEnvironment)
 	encoded, _ := json.Marshal(effective)
 	out := ProcessContext{
-		Environment:                       make([]EnvironmentIdentity, 0, len(names)),
-		EffectiveEnvironmentIdentity:      domainDigest("lsp-trace:effective-environment:v1", encoded),
-		EffectiveEnvironmentVariableCount: len(effective),
-		WorkingDirectoryIdentity:          domainDigest("lsp-trace:working-directory:v1", []byte(workingDirectory)),
-		AmbientEnvironmentState:           "IDENTIFIED_NOT_EMBEDDED",
-		Redaction:                         Redaction{State: "REDACTED", Reason: "EFFECTIVE_PROCESS_CONTEXT_NOT_EMBEDDED"},
+		Environment:                              make([]EnvironmentIdentity, 0, len(names)),
+		EffectiveEnvironmentProcessContextDigest: domainDigest("lsp-trace:effective-environment:v1", encoded),
+		EffectiveEnvironmentVariableCount:        len(effective),
+		WorkingDirectoryProcessContextDigest:     domainDigest("lsp-trace:working-directory:v1", []byte(filepath.ToSlash(filepath.Clean(workingDirectory)))),
+		AmbientEnvironmentState:                  "IDENTIFIED_NOT_EMBEDDED",
+		Redaction:                                Redaction{State: "REDACTED", Reason: "EFFECTIVE_PROCESS_CONTEXT_NOT_EMBEDDED"},
 	}
 	for _, name := range names {
-		out.Environment = append(out.Environment, EnvironmentIdentity{Name: name, Identity: domainDigest("lsp-trace:environment-name:v1", []byte(name)), Redaction: Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}})
+		out.Environment = append(out.Environment, EnvironmentIdentity{Name: name, EnvironmentNameProcessContextDigest: domainDigest("lsp-trace:environment-name:v1", []byte(name)), Redaction: Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}})
 	}
 	return out
 }
@@ -202,12 +218,12 @@ func normalizedEnvironment(environment []string) []string {
 }
 
 func validateProcessContext(context ProcessContext) error {
-	if context.AmbientEnvironmentState != "IDENTIFIED_NOT_EMBEDDED" || context.EffectiveEnvironmentVariableCount < 0 || !strings.HasPrefix(context.EffectiveEnvironmentIdentity, "sha256:") || !strings.HasPrefix(context.WorkingDirectoryIdentity, "sha256:") || context.Redaction != (Redaction{State: "REDACTED", Reason: "EFFECTIVE_PROCESS_CONTEXT_NOT_EMBEDDED"}) {
+	if context.AmbientEnvironmentState != "IDENTIFIED_NOT_EMBEDDED" || context.EffectiveEnvironmentVariableCount < 0 || !strings.HasPrefix(context.EffectiveEnvironmentProcessContextDigest, "sha256:") || !strings.HasPrefix(context.WorkingDirectoryProcessContextDigest, "sha256:") || context.Redaction != (Redaction{State: "REDACTED", Reason: "EFFECTIVE_PROCESS_CONTEXT_NOT_EMBEDDED"}) {
 		return fmt.Errorf("process context mismatch")
 	}
 	last := ""
 	for _, identity := range context.Environment {
-		if identity.Name == "" || identity.Name < last || identity.Identity != domainDigest("lsp-trace:environment-name:v1", []byte(identity.Name)) || identity.Redaction != (Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}) {
+		if identity.Name == "" || identity.Name < last || identity.EnvironmentNameProcessContextDigest != domainDigest("lsp-trace:environment-name:v1", []byte(identity.Name)) || identity.Redaction != (Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}) {
 			return fmt.Errorf("process context mismatch")
 		}
 		last = identity.Name
@@ -215,7 +231,7 @@ func validateProcessContext(context ProcessContext) error {
 	return nil
 }
 
-func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResult, siblings []SiblingCandidate, dispatches []DispatchRelationship, sourceRevision string) []SeedMembership {
+func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResult, _ []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship, sourceRevision string) []SeedMembership {
 	byLabel := make(map[string]InvocationSeed, len(invocationSeeds))
 	for _, seed := range invocationSeeds {
 		byLabel[seed.Label] = seed
@@ -229,17 +245,17 @@ func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResu
 		for _, endpoint := range result.ReachedNodeIDs {
 			out = append(out, newSeedMembership(seed, "REACHED_NODE", endpoint))
 		}
-		for _, edge := range result.ReachedEdges {
-			relation := newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, sourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
-			out = append(out, newSeedMembership(seed, "CALL_RELATION", relation.RelationID))
+		for _, relationID := range result.ReachedRelationIDs {
+			out = append(out, newSeedMembership(seed, "CALL_RELATION", relationID))
 		}
 	}
 	for _, sibling := range siblings {
-		out = append(out, newSeedMembership(byLabel[sibling.SeedLabel], "SIBLING_CANDIDATE", sibling.Candidate.ID))
+		relation := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", sibling.SeedURI, sourceRevision, sibling.SeedURI, sibling.SeedLabel, sibling.Candidate.ID, "", "", "", "")
+		out = append(out, newSeedMembership(byLabel[sibling.SeedLabel], "SIBLING_CANDIDATE", relation.RelationID))
 	}
 	for _, dispatch := range dispatches {
-		endpoint := dispatch.Interface.ID + "->" + dispatch.Implementation.ID
-		out = append(out, newSeedMembership(byLabel[dispatch.SeedLabel], "DISPATCH_ASSOCIATION", endpoint))
+		relation := newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", dispatch.SeedLabel, sourceRevision, "", dispatch.SeedLabel, "", dispatch.Interface.ID, dispatch.Implementation.ID, "", "")
+		out = append(out, newSeedMembership(byLabel[dispatch.SeedLabel], "DISPATCH_ASSOCIATION", relation.RelationID))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].MembershipID < out[j].MembershipID })
 	return out
@@ -257,13 +273,13 @@ func projectReplayManifest(inv Invocation, diagnostics []Diagnostic) ReplayInput
 		if seed.ContentSHA256 != "" {
 			state = "PRESENT"
 		}
-		artifacts = append(artifacts, ReplayArtifact{Kind: "SOURCE_ARTIFACT", Locator: canonicalURI(seed.ResolvedURI), State: state, Digest: seed.ContentSHA256, Redaction: Redaction{State: "VISIBLE", Reason: "REPLAY_IDENTITY"}})
+		artifacts = append(artifacts, ReplayArtifact{Kind: "SOURCE_ARTIFACT", Locator: canonicalURI(seed.ResolvedURI), State: state, ReplayInputContentDigest: seed.ContentSHA256, Redaction: Redaction{State: "VISIBLE", Reason: "REPLAY_IDENTITY"}})
 	}
 	traceState, traceDigest := "ABSENT", ""
 	if inv.Trace.Enabled && inv.Trace.ContentSHA256 != "" {
 		traceState, traceDigest = "PRESENT", inv.Trace.ContentSHA256
 	}
-	artifacts = append(artifacts, ReplayArtifact{Kind: "PROTOCOL_TRANSCRIPT", Locator: "lsp-trace://protocol-transcript", State: traceState, Digest: traceDigest, Redaction: Redaction{State: "REDACTED", Reason: "PROTOCOL_CONTENT_NOT_EMBEDDED"}})
+	artifacts = append(artifacts, ReplayArtifact{Kind: "PROTOCOL_TRANSCRIPT", Locator: "lsp-trace://protocol-transcript", State: traceState, ReplayInputContentDigest: traceDigest, Redaction: Redaction{State: "REDACTED", Reason: "PROTOCOL_CONTENT_NOT_EMBEDDED"}})
 	stderrState, stderrDigest := "ABSENT", ""
 	for _, diagnostic := range diagnostics {
 		if diagnostic.Phase == "server-stderr" {
@@ -272,7 +288,7 @@ func projectReplayManifest(inv Invocation, diagnostics []Diagnostic) ReplayInput
 			break
 		}
 	}
-	artifacts = append(artifacts, ReplayArtifact{Kind: "SERVER_STDERR", Locator: "lsp-trace://server-stderr", State: stderrState, Digest: stderrDigest, Redaction: Redaction{State: "REDACTED", Reason: "STDERR_CONTENT_NOT_EMBEDDED"}})
+	artifacts = append(artifacts, ReplayArtifact{Kind: "SERVER_STDERR", Locator: "lsp-trace://server-stderr", State: stderrState, ReplayInputContentDigest: stderrDigest, Redaction: Redaction{State: "REDACTED", Reason: "STDERR_CONTENT_NOT_EMBEDDED"}})
 	sort.Slice(artifacts, func(i, j int) bool {
 		if artifacts[i].Kind != artifacts[j].Kind {
 			return artifacts[i].Kind < artifacts[j].Kind
@@ -280,7 +296,7 @@ func projectReplayManifest(inv Invocation, diagnostics []Diagnostic) ReplayInput
 		return artifacts[i].Locator < artifacts[j].Locator
 	})
 	encoded, _ := json.Marshal(artifacts)
-	return ReplayInputManifest{ManifestID: domainDigest("lsp-trace:replay-input-manifest:v1", encoded), Artifacts: artifacts}
+	return ReplayInputManifest{ReplayInputManifestDigest: domainDigest("lsp-trace:replay-input-manifest:v1", encoded), Artifacts: artifacts}
 }
 
 func projectPortableLocators(nodes []Node) []PortableLocator {
@@ -311,8 +327,11 @@ func canonicalURI(raw string) string {
 func (r Result) ValidateReferences() error {
 	ids := map[string]struct{}{}
 	for _, n := range r.Nodes {
+		if NewNode(n.Item).ID != n.ID {
+			return fmt.Errorf("invalid canonical node id %q", n.ID)
+		}
 		if _, ok := ids[n.ID]; ok {
-			return fmt.Errorf("duplicate node id %q", n.ID)
+			return fmt.Errorf("duplicate canonical node %q", n.ID)
 		}
 		ids[n.ID] = struct{}{}
 	}
@@ -330,6 +349,7 @@ func (r Result) ValidateReferences() error {
 			return err
 		}
 	}
+	edges := map[string]struct{}{}
 	for _, e := range r.Edges {
 		if err := need("edge caller", e.CallerNodeID); err != nil {
 			return err
@@ -337,6 +357,13 @@ func (r Result) ValidateReferences() error {
 		if err := need("edge callee", e.CalleeNodeID); err != nil {
 			return err
 		}
+		canonicalSites := mergeRanges(nil, e.CallSites)
+		encoded, _ := json.Marshal(canonicalSites)
+		key := e.CallerNodeID + "\x00" + e.CalleeNodeID + "\x00" + string(encoded)
+		if _, ok := edges[key]; ok {
+			return fmt.Errorf("duplicate canonical edge %s->%s", e.CallerNodeID, e.CalleeNodeID)
+		}
+		edges[key] = struct{}{}
 	}
 	for _, b := range append(append([]Boundary{}, r.Terminals...), r.Frontier...) {
 		if err := need("boundary", b.NodeID); err != nil {
@@ -391,7 +418,7 @@ func ValidateSemanticBundle(data []byte) error {
 		SchemaVersion: b.SchemaVersion, Targets: b.Targets, Nodes: b.Nodes, Edges: b.Edges,
 		Terminals: b.Terminals, Frontier: b.Frontier, Diagnostics: b.Diagnostics, Seeds: b.Seeds,
 		SiblingCandidates: b.SiblingCandidates, DispatchRelationships: b.DispatchRelationships,
-		Summary:      Summary{Complete: b.Summary.TraversalComplete, Truncated: b.Summary.Truncated},
+		Summary:      Summary{Complete: true, Truncated: b.Summary.Truncated},
 		Capabilities: b.Capabilities, CapabilityQuality: b.CapabilityQuality,
 	}
 	if err := verified.ValidateReferences(); err != nil {
@@ -402,24 +429,37 @@ func ValidateSemanticBundle(data []byte) error {
 		return err
 	}
 	expectedReceipt := verified.evidenceReceipt(b.Invocation.Provenance.SourceRevision)
-	expectedMemberships := projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
+	if err := validateSeedJoins(b.Invocation.Seeds, b.Seeds, b.SiblingCandidates, b.DispatchRelationships, expectedReceipt); err != nil {
+		return err
+	}
+	expectedMemberships := projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
 	expectedManifest := projectReplayManifest(b.Invocation, b.Diagnostics)
 	expectedLocators := projectPortableLocators(b.Nodes)
-	if !reflect.DeepEqual(b.EvidenceReceipt, expectedReceipt) ||
-		!reflect.DeepEqual(b.SeedMemberships, expectedMemberships) ||
-		!reflect.DeepEqual(b.ReplayInputManifest, expectedManifest) ||
-		!reflect.DeepEqual(b.PortableLocators, expectedLocators) {
-		return fmt.Errorf("replay identity mismatch")
+	if !reflect.DeepEqual(b.EvidenceReceipt, expectedReceipt) {
+		return fmt.Errorf("replay identity mismatch: evidence receipt")
+	}
+	if !reflect.DeepEqual(b.SeedMemberships, expectedMemberships) {
+		return fmt.Errorf("replay identity mismatch: seed memberships")
+	}
+	if !reflect.DeepEqual(b.ReplayInputManifest, expectedManifest) {
+		return fmt.Errorf("replay identity mismatch: input manifest")
+	}
+	if !reflect.DeepEqual(b.PortableLocators, expectedLocators) {
+		return fmt.Errorf("replay identity mismatch: portable locators")
 	}
 	if b.Summary.NodeCount != verified.Summary.NodeCount ||
+		b.Summary.TraversalComplete != verified.Summary.Complete ||
 		b.Summary.EdgeCount != verified.Summary.EdgeCount ||
 		b.Summary.TerminalCount != verified.Summary.TerminalCount ||
 		b.Summary.CycleCount != verified.Summary.CycleCount ||
+		b.CapabilityQuality.Advertised != verified.CapabilityQuality.Advertised ||
+		b.CapabilityQuality.PrepareSucceeded != verified.CapabilityQuality.PrepareSucceeded ||
+		b.CapabilityQuality.IncomingRequestSuccesses != verified.CapabilityQuality.IncomingRequestSuccesses ||
 		b.CapabilityQuality.IncomingEdges != verified.CapabilityQuality.IncomingEdges ||
+		b.CapabilityQuality.CrossFileEdges != verified.CapabilityQuality.CrossFileEdges ||
 		b.CapabilityQuality.UnresolvedCalls != verified.CapabilityQuality.UnresolvedCalls ||
 		b.CapabilityQuality.DynamicCalls != verified.CapabilityQuality.DynamicCalls ||
-		(b.Summary.TraversalComplete && (b.Summary.Truncated || len(b.Frontier) > 0 || verified.CapabilityQuality.UnresolvedCalls > 0)) ||
-		b.Capabilities.CallHierarchyProvider != b.CapabilityQuality.Advertised {
+		b.CapabilityQuality.CrossModuleEdges != verified.CapabilityQuality.CrossModuleEdges {
 		return fmt.Errorf("derived semantic mismatch")
 	}
 	resolved := make([]InvocationSeed, 0)
@@ -439,17 +479,72 @@ func ValidateSemanticBundle(data []byte) error {
 		input, _ := json.Marshal(resolved)
 		aggregate = domainDigest(ResolvedSeedsDomain, input)
 	}
-	if b.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || b.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || b.Identity.AggregateFingerprint != aggregate || !reflect.DeepEqual(b.Identity.ResolvedSeeds, resolved) {
+	if b.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || b.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || b.Identity.ResolvedSeedContentsDigest != aggregate || !reflect.DeepEqual(b.Identity.ResolvedSeeds, resolved) {
 		return fmt.Errorf("bundle identity mismatch")
 	}
 	receipt := b.TraceReceipt
-	b.TraceReceipt = TraceReceipt{}
+	b.TraceReceipt = semanticReceiptV3{}
 	canonical, err := json.Marshal(b.semanticV3)
 	if err != nil {
 		return err
 	}
-	if receipt.ReceiptVersion != "lsp-trace.semantic-receipt.v1" || receipt.DigestScope != SemanticDigestScope || receipt.ContentDigest != domainDigest(SemanticDigestDomain, canonical) {
+	if receipt.ReceiptVersion != "lsp-trace.semantic-receipt.v1" || receipt.DigestScope != SemanticDigestScope || receipt.SemanticCommitmentDigest != domainDigest(SemanticDigestDomain, canonical) {
 		return fmt.Errorf("embedded semantic receipt mismatch")
+	}
+	return nil
+}
+
+func validateSeedJoins(invocation []InvocationSeed, results []SeedResult, siblings []SiblingCandidate, dispatches []DispatchRelationship, receipt *EvidenceReceipt) error {
+	invocationLabels := make(map[string]struct{}, len(invocation))
+	for _, seed := range invocation {
+		if seed.Label == "" {
+			return fmt.Errorf("seed join mismatch: empty invocation label")
+		}
+		if _, duplicate := invocationLabels[seed.Label]; duplicate {
+			return fmt.Errorf("seed join mismatch: duplicate invocation label %q", seed.Label)
+		}
+		invocationLabels[seed.Label] = struct{}{}
+	}
+	resultLabels := make(map[string]struct{}, len(results))
+	relationKinds := map[string]string{}
+	if receipt != nil {
+		for _, relation := range receipt.Relations {
+			relationKinds[relation.RelationID] = relation.RelationKind
+		}
+	}
+	for _, result := range results {
+		if _, exists := invocationLabels[result.Label]; !exists {
+			return fmt.Errorf("seed join mismatch: result label %q has no invocation seed", result.Label)
+		}
+		if _, duplicate := resultLabels[result.Label]; duplicate {
+			return fmt.Errorf("seed join mismatch: duplicate result label %q", result.Label)
+		}
+		resultLabels[result.Label] = struct{}{}
+		for _, relationID := range result.ReachedRelationIDs {
+			if relationKinds[relationID] != "CALL_RELATION" {
+				return fmt.Errorf("seed join mismatch: unknown call relation %q", relationID)
+			}
+		}
+	}
+	if len(results) > 0 {
+		if len(results) != len(invocation) {
+			return fmt.Errorf("seed join mismatch: invocation/result cardinality")
+		}
+		for label := range invocationLabels {
+			if _, exists := resultLabels[label]; !exists {
+				return fmt.Errorf("seed join mismatch: missing result for %q", label)
+			}
+		}
+	}
+	for _, sibling := range siblings {
+		if _, exists := invocationLabels[sibling.SeedLabel]; !exists {
+			return fmt.Errorf("seed join mismatch: sibling label %q", sibling.SeedLabel)
+		}
+	}
+	for _, dispatch := range dispatches {
+		if _, exists := invocationLabels[dispatch.SeedLabel]; !exists {
+			return fmt.Errorf("seed join mismatch: dispatch label %q", dispatch.SeedLabel)
+		}
 	}
 	return nil
 }

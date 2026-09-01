@@ -31,15 +31,19 @@ func TestV3EvidenceBundleContract(t *testing.T) {
 		t.Errorf("ASSERT_P3_CALLER_ASSERTED: identity=%v", identity)
 	}
 	policy, _ := got["sensitivity_policy"].(map[string]any)
-	if policy["automatic_redaction"] != true {
-		t.Errorf("ASSERT_P1_EXPLICIT_AUTOMATIC_REDACTION: policy=%v", policy)
+	if policy["automatic_redaction"] != false {
+		t.Errorf("ASSERT_DISCLOSURE_AUTOMATIC_REDACTION_FALSE: policy=%v", policy)
 	}
 	wantCovered := []any{"invocation_arguments", "explicit_environment_names", "workspace_source_output_paths", "opaque_node_data", "diagnostics", "captured_server_stderr", "trace_transcripts"}
 	if covered, _ := policy["covered"].([]any); !reflect.DeepEqual(covered, wantCovered) || policy["access_control_responsibility"] != "BUNDLE_CUSTODIAN" || policy["ambient_process_environment_recorded"] != false {
 		t.Errorf("ASSERT_P9_EXACT_SENSITIVITY_POLICY: policy=%v", policy)
 	}
-	if _, ok := got["trace_receipt"]; !ok {
-		t.Errorf("ASSERT_P5_EMBEDDED_SEMANTIC_RECEIPT: missing")
+	traceReceipt, ok := got["trace_receipt"].(map[string]any)
+	if !ok || traceReceipt["semantic_commitment_digest"] == nil {
+		t.Errorf("ASSERT_DIGEST_ROLE_SEMANTIC_COMMITMENT: receipt=%v", got["trace_receipt"])
+	}
+	if traceReceipt["content_digest"] != nil {
+		t.Errorf("ASSERT_DIGEST_ROLE_GENERIC_NAMES_ABSENT: receipt=%v", traceReceipt)
 	}
 }
 
@@ -82,8 +86,18 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 	inv := got["invocation"].(map[string]any)
 	server := inv["server"].(map[string]any)
 	processContext, _ := got["process_context"].(map[string]any)
-	if strings.Contains(string(encoded), "ambient-secret") || strings.Contains(string(encoded), "/private/workspace") || server["environment"] != nil || processContext["ambient_environment_state"] != "IDENTIFIED_NOT_EMBEDDED" || processContext["effective_environment_variable_count"] != float64(2) || !strings.HasPrefix(processContext["effective_environment_identity"].(string), "sha256:") || !strings.HasPrefix(processContext["working_directory_identity"].(string), "sha256:") {
-		t.Errorf("ASSERT_P1_EFFECTIVE_PROCESS_IDENTITY_SECRET_SAFE: %s", encoded)
+	effectiveDigest, effectiveOK := processContext["effective_environment_process_context_digest"].(string)
+	workingDigest, workingOK := processContext["working_directory_process_context_digest"].(string)
+	if strings.Contains(string(encoded), "ambient-secret") || strings.Contains(string(encoded), "/private/workspace") || server["environment"] != nil || processContext["ambient_environment_state"] != "IDENTIFIED_NOT_EMBEDDED" || processContext["effective_environment_variable_count"] != float64(2) || !effectiveOK || !workingOK || !strings.HasPrefix(effectiveDigest, "sha256:") || !strings.HasPrefix(workingDigest, "sha256:") {
+		t.Errorf("ASSERT_DIGEST_ROLE_PROCESS_CONTEXT: %s", encoded)
+	}
+	environmentEntries, _ := processContext["environment"].([]any)
+	if processContext["effective_environment_identity"] != nil || processContext["working_directory_identity"] != nil || len(environmentEntries) != 1 || environmentEntries[0].(map[string]any)["environment_name_process_context_digest"] == nil || environmentEntries[0].(map[string]any)["identity"] != nil {
+		t.Errorf("ASSERT_DIGEST_ROLE_GENERIC_NAMES_ABSENT: process_context=%v", processContext)
+	}
+	identity, _ := got["identity"].(map[string]any)
+	if identity["resolved_seed_contents_digest"] == nil || identity["aggregate_fingerprint"] != nil {
+		t.Errorf("ASSERT_DIGEST_ROLE_GENERIC_NAMES_ABSENT: identity=%v", identity)
 	}
 	receipt, _ := got["evidence_receipt"].(map[string]any)
 	relations, _ := receipt["relations"].([]any)
@@ -114,9 +128,15 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 	for _, raw := range artifacts {
 		a := raw.(map[string]any)
 		states[a["kind"].(string)] = a["state"].(string)
+		if a["state"] == "PRESENT" && a["replay_input_content_digest"] == nil || a["digest"] != nil {
+			t.Errorf("ASSERT_DIGEST_ROLE_GENERIC_NAMES_ABSENT: artifact=%v", a)
+		}
 	}
-	if manifest["manifest_id"] == nil || states["SOURCE_ARTIFACT"] != "PRESENT" || states["PROTOCOL_TRANSCRIPT"] != "ABSENT" || states["SERVER_STDERR"] != "ABSENT" {
-		t.Errorf("ASSERT_P5_REPLAY_MANIFEST_EXPLICIT_STATES: %#v", manifest)
+	if manifest["replay_input_manifest_digest"] == nil || states["SOURCE_ARTIFACT"] != "PRESENT" || states["PROTOCOL_TRANSCRIPT"] != "ABSENT" || states["SERVER_STDERR"] != "ABSENT" {
+		t.Errorf("ASSERT_DIGEST_ROLE_REPLAY_INPUT_CONTENT: %#v", manifest)
+	}
+	if manifest["manifest_id"] != nil {
+		t.Errorf("ASSERT_DIGEST_ROLE_GENERIC_NAMES_ABSENT: manifest=%v", manifest)
 	}
 	locators, _ := got["portable_locators"].([]any)
 	if len(locators) == 0 || !strings.HasPrefix(locators[0].(map[string]any)["locator"].(string), "file:///w/") || locators[0].(map[string]any)["redaction"] == nil {
@@ -150,12 +170,12 @@ func TestValidateSemanticBundleRejectsRehashedIdentityMismatch(t *testing.T) {
 	if err := json.Unmarshal(encoded, &bundle); err != nil {
 		t.Fatal(err)
 	}
-	bundle.Identity.AggregateFingerprint = "sha256:forged"
+	bundle.Identity.ResolvedSeedContentsDigest = "sha256:forged"
 	canonical, err := json.Marshal(bundle.semanticV3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle.TraceReceipt = TraceReceipt{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
 	mutated, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +200,7 @@ func TestValidateSemanticBundleRejectsRehashedDanglingReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle.TraceReceipt = TraceReceipt{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
 	mutated, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
@@ -206,13 +226,72 @@ func TestValidateSemanticBundleRejectsRehashedDerivedSemanticMismatch(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle.TraceReceipt = TraceReceipt{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
 	mutated, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "derived semantic mismatch") {
 		t.Fatalf("ASSERT_P2_VERIFY_RECOMPUTES_DERIVED_SEMANTICS: %v", err)
+	}
+}
+
+func TestValidateSemanticBundleRejectsRehashedFalseCompleteness(t *testing.T) {
+	encoded, err := json.Marshal(Result{SchemaVersion: SchemaVersionV3, Summary: Summary{Complete: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle bundleV3
+	if err := json.Unmarshal(encoded, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	bundle.Summary.TraversalComplete = false
+	canonical, _ := json.Marshal(bundle.semanticV3)
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	mutated, _ := json.Marshal(bundle)
+	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "derived semantic mismatch") {
+		t.Fatalf("ASSERT_SYMMETRIC_COMPLETENESS_REJECTS_FALSE: %v", err)
+	}
+}
+
+func TestValidateSemanticBundleRecomputesEveryCapabilityCounter(t *testing.T) {
+	n1 := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
+	n2 := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})
+	r := Result{SchemaVersion: SchemaVersionV3, Capabilities: Capabilities{CallHierarchyProvider: true}, CapabilityQuality: CapabilityQuality{Advertised: true, PrepareSucceeded: true, IncomingRequestSuccesses: 1, CrossModuleEdges: Unknown}, Targets: []string{n2.ID}, Nodes: []Node{n1, n2}, Edges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}, Summary: Summary{Complete: true}}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSemanticBundle(encoded); err != nil {
+		t.Fatalf("valid capability baseline rejected: %v", err)
+	}
+	var base bundleV3
+	if err := json.Unmarshal(encoded, &base); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*CapabilityQuality)
+	}{
+		{"prepare_succeeded", func(q *CapabilityQuality) { q.PrepareSucceeded = !q.PrepareSucceeded }},
+		{"incoming_request_successes", func(q *CapabilityQuality) { q.IncomingRequestSuccesses++ }},
+		{"incoming_edges", func(q *CapabilityQuality) { q.IncomingEdges++ }},
+		{"cross_file_edges", func(q *CapabilityQuality) { q.CrossFileEdges++ }},
+		{"cross_module_edges", func(q *CapabilityQuality) { q.CrossModuleEdges = "FORGED" }},
+		{"unresolved_calls", func(q *CapabilityQuality) { q.UnresolvedCalls++ }},
+		{"dynamic_calls", func(q *CapabilityQuality) { q.DynamicCalls++ }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bundle := base
+			tc.mutate(&bundle.CapabilityQuality)
+			canonical, _ := json.Marshal(bundle.semanticV3)
+			bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+			mutated, _ := json.Marshal(bundle)
+			if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "derived semantic mismatch") {
+				t.Fatalf("ASSERT_ALL_CAPABILITY_COUNTERS_RECOMPUTED_%s: %v", strings.ToUpper(tc.name), err)
+			}
+		})
 	}
 }
 
@@ -225,18 +304,51 @@ func TestValidateSemanticBundleRejectsRehashedReplayIdentityMismatch(t *testing.
 	if err := json.Unmarshal(encoded, &bundle); err != nil {
 		t.Fatal(err)
 	}
-	bundle.ReplayInputManifest.ManifestID = "sha256:forged"
+	bundle.ReplayInputManifest.ReplayInputManifestDigest = "sha256:forged"
 	canonical, err := json.Marshal(bundle.semanticV3)
 	if err != nil {
 		t.Fatal(err)
 	}
-	bundle.TraceReceipt = TraceReceipt{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
 	mutated, err := json.Marshal(bundle)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "replay identity mismatch") {
 		t.Fatalf("ASSERT_P5_VERIFY_RECOMPUTES_REPLAY_IDENTITY: %v", err)
+	}
+}
+
+func TestV3CanonicalProjectionRoundTripsAndRejectsDuplicateEdges(t *testing.T) {
+	n1 := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
+	n2 := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})
+	r := Result{SchemaVersion: SchemaVersionV3, Nodes: []Node{n2, n1}, Edges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}, Summary: Summary{Complete: true}}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSemanticBundle(encoded); err != nil {
+		t.Fatalf("ASSERT_SEMANTIC_CANONICAL_ROUND_TRIP: %v", err)
+	}
+	r.Edges = append(r.Edges, r.Edges[0])
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "duplicate canonical edge") {
+		t.Fatalf("ASSERT_DUPLICATE_CANONICAL_EDGE_REJECTED: %v", err)
+	}
+}
+
+func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
+	a := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", "rev-a", "file:///w/a.go", "seed-a", "candidate", "", "", "", "")
+	b := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", "rev-b", "file:///w/a.go", "seed-b", "candidate", "", "", "", "")
+	if a.RelationID != b.RelationID {
+		t.Fatalf("ASSERT_SEMANTIC_RELATION_ID_SEED_INDEPENDENT: %s != %s", a.RelationID, b.RelationID)
+	}
+}
+
+func TestProcessContextNormalizesEquivalentWorkingDirectories(t *testing.T) {
+	a := projectProcessContext(nil, nil, "/tmp/work/../work")
+	b := projectProcessContext(nil, nil, "/tmp/work")
+	if a.WorkingDirectoryProcessContextDigest != b.WorkingDirectoryProcessContextDigest {
+		t.Fatalf("ASSERT_PORTABLE_CWD_IDENTITY: %s != %s", a.WorkingDirectoryProcessContextDigest, b.WorkingDirectoryProcessContextDigest)
 	}
 }
 

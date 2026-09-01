@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,12 +35,15 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 	var bundle struct {
 		Invocation graph.Invocation `json:"invocation"`
 		Identity   struct {
-			CallerProvenanceClass string                 `json:"caller_provenance_class"`
-			ResolvedSeeds         []graph.InvocationSeed `json:"resolved_seeds"`
-			AggregateFingerprint  string                 `json:"aggregate_fingerprint"`
-			AggregateScope        string                 `json:"aggregate_scope"`
+			CallerProvenanceClass      string                 `json:"caller_provenance_class"`
+			ResolvedSeeds              []graph.InvocationSeed `json:"resolved_seeds"`
+			ResolvedSeedContentsDigest string                 `json:"resolved_seed_contents_digest"`
+			AggregateScope             string                 `json:"aggregate_scope"`
 		} `json:"identity"`
 		ProcessContext graph.ProcessContext `json:"process_context"`
+		Summary        struct {
+			TraversalComplete bool `json:"traversal_complete"`
+		} `json:"summary"`
 	}
 	if err := json.Unmarshal(data, &bundle); err != nil {
 		t.Fatal(err)
@@ -50,8 +55,11 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 	if len(bundle.ProcessContext.Environment) != 1 || bundle.ProcessContext.Environment[0].Name != "TOKEN" || bundle.ProcessContext.Environment[0].Redaction.State != "REDACTED" {
 		t.Fatalf("ASSERT_P1_SECRET_SAFE_ENVIRONMENT_IDENTITY: %#v", bundle.ProcessContext)
 	}
-	if len(inv.Seeds) != 2 || len(bundle.Identity.ResolvedSeeds) != 2 || bundle.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || bundle.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || !strings.HasPrefix(bundle.Identity.AggregateFingerprint, "sha256:") {
+	if len(inv.Seeds) != 2 || len(bundle.Identity.ResolvedSeeds) != 2 || bundle.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || bundle.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || !strings.HasPrefix(bundle.Identity.ResolvedSeedContentsDigest, "sha256:") {
 		t.Fatalf("ASSERT_P3_ALL_SEED_IDENTITIES: invocation_seeds=%#v identity=%#v", inv.Seeds, bundle.Identity)
+	}
+	if bundle.Summary.TraversalComplete {
+		t.Fatal("ASSERT_SPAWN_FAILURE_CANONICALLY_INCOMPLETE")
 	}
 }
 
@@ -294,6 +302,118 @@ func TestHistoricalSchemaOutputRemainsAtomicAndPrivateWithoutV3Sidecar(t *testin
 	}
 	if _, err := os.Stat(output + ".receipt.json"); !os.IsNotExist(err) {
 		t.Fatalf("ASSERT_P1_V2_NO_V3_SIDECAR: err=%v", err)
+	}
+}
+
+func TestPublicationPropagatesDirectoryDurabilityFailures(t *testing.T) {
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name      string
+		failOpen  func(string) bool
+		failSync  func(string) bool
+		assertion string
+	}{
+		{
+			name:      "generation directory open",
+			failOpen:  func(path string) bool { return strings.Contains(filepath.Base(path), ".lsp-trace-generation-") },
+			assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_OPEN_PROPAGATED",
+		},
+		{
+			name:      "generation directory sync",
+			failSync:  func(path string) bool { return strings.Contains(filepath.Base(path), ".lsp-trace-generation-") },
+			assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_SYNC_PROPAGATED",
+		},
+		{
+			name:      "destination directory open after selector publication",
+			failOpen:  func(path string) bool { return filepath.Base(path) == "destination" },
+			assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_OPEN_PROPAGATED",
+		},
+		{
+			name:      "destination directory sync after selector publication",
+			failSync:  func(path string) bool { return filepath.Base(path) == "destination" },
+			assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_SYNC_PROPAGATED",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := filepath.Join(root, "destination")
+			if err := os.Mkdir(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			originalOpen, originalSync := openPublicationDirectory, syncPublicationDirectory
+			t.Cleanup(func() { openPublicationDirectory, syncPublicationDirectory = originalOpen, originalSync })
+			openPublicationDirectory = func(path string) (*os.File, error) {
+				if tc.failOpen != nil && tc.failOpen(path) {
+					return nil, errors.New(tc.assertion)
+				}
+				return os.Open(path)
+			}
+			syncPublicationDirectory = func(opened *os.File) error {
+				if tc.failSync != nil && tc.failSync(opened.Name()) {
+					return errors.New(tc.assertion)
+				}
+				return opened.Sync()
+			}
+			err := publishBundle(filepath.Join(dir, "bundle.json"), data)
+			if err == nil || !strings.Contains(err.Error(), tc.assertion) {
+				t.Fatalf("%s: err=%v", tc.assertion, err)
+			}
+		})
+	}
+}
+
+func TestPublicationFailureRecordPropagatesDirectorySyncFailure(t *testing.T) {
+	dir := t.TempDir()
+	originalOpen, originalSync := openPublicationDirectory, syncPublicationDirectory
+	t.Cleanup(func() { openPublicationDirectory, syncPublicationDirectory = originalOpen, originalSync })
+	openPublicationDirectory = os.Open
+	syncPublicationDirectory = func(opened *os.File) error {
+		if opened.Name() == dir {
+			return errors.New("ASSERT_DURABILITY_FAILURE_RECORD_DIRECTORY_SYNC_PROPAGATED")
+		}
+		return opened.Sync()
+	}
+	name, err := retainPublicationFailure(filepath.Join(dir, "missing", "bundle.json"), []byte("{}\n"), errors.New("publish failed"))
+	if err == nil || !strings.Contains(err.Error(), "ASSERT_DURABILITY_FAILURE_RECORD_DIRECTORY_SYNC_PROPAGATED") || name != "" {
+		t.Fatalf("ASSERT_DURABILITY_FAILURE_RECORD_DIRECTORY_SYNC_PROPAGATED: name=%q err=%v", name, err)
+	}
+}
+
+func TestExactByteCustodyFieldsAndFailureRecordContract(t *testing.T) {
+	data := []byte("{\"schema_version\":\"lsp-trace.graph.v3\"}\n")
+	receipt, err := receiptBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receiptFields map[string]any
+	if err := json.Unmarshal(receipt, &receiptFields); err != nil || receiptFields["exact_serialized_bytes_digest"] == nil || receiptFields["digest"] != nil {
+		t.Fatalf("ASSERT_DIGEST_ROLE_EXACT_SERIALIZED_BYTES: receipt=%s err=%v", receipt, err)
+	}
+	dir := t.TempDir()
+	name, err := retainPublicationFailure(filepath.Join(dir, "missing", "bundle.json"), data, errors.New("publish failed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	failureData, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var failureFields map[string]any
+	decoder := json.NewDecoder(strings.NewReader(string(failureData)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&failureFields); err != nil || failureFields["exact_serialized_bytes_digest"] == nil || failureFields["artifact_digest"] != nil {
+		t.Fatalf("ASSERT_DIGEST_ROLE_EXACT_SERIALIZED_BYTES: failure=%s err=%v", failureData, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		t.Fatalf("ASSERT_FAILURE_RECORD_PRIVATE_STRICT_JSON: trailing content err=%v data=%q", err, failureData)
+	}
+	info, err := os.Stat(name)
+	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
+		t.Fatalf("ASSERT_FAILURE_RECORD_PRIVATE_STRICT_JSON: info=%v err=%v", info, err)
 	}
 }
 

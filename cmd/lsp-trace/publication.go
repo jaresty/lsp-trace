@@ -16,6 +16,26 @@ const (
 	generationReceiptName  = "receipt.json"
 )
 
+var (
+	openPublicationDirectory = os.Open
+	syncPublicationDirectory = func(dir *os.File) error { return dir.Sync() }
+)
+
+func syncPublishedDirectory(path string) error {
+	dir, err := openPublicationDirectory(path)
+	if err != nil {
+		return fmt.Errorf("open publication directory %q: %w", path, err)
+	}
+	if err := syncPublicationDirectory(dir); err != nil {
+		_ = dir.Close()
+		return fmt.Errorf("sync publication directory %q: %w", path, err)
+	}
+	if err := dir.Close(); err != nil {
+		return fmt.Errorf("close publication directory %q: %w", path, err)
+	}
+	return nil
+}
+
 type generationSelector struct {
 	Generation string `json:"generation"`
 }
@@ -41,10 +61,10 @@ func readGenerationSelector(path string) (generationSelector, error) {
 }
 
 type publicationFailureRecord struct {
-	Version string `json:"version"`
-	Target  string `json:"target"`
-	Error   string `json:"error"`
-	Digest  string `json:"artifact_digest"`
+	Version                    string `json:"version"`
+	Target                     string `json:"target"`
+	Error                      string `json:"error"`
+	ExactSerializedBytesDigest string `json:"exact_serialized_bytes_digest"`
 }
 
 func retainPublicationFailure(path string, data []byte, publishErr error) (string, error) {
@@ -60,10 +80,10 @@ func retainPublicationFailure(path string, data []byte, publishErr error) (strin
 		dir = parent
 	}
 	record, err := json.Marshal(publicationFailureRecord{
-		Version: "lsp-trace.publication-failure.v1",
-		Target:  path,
-		Error:   publishErr.Error(),
-		Digest:  graph.ExactBytesDigest(data),
+		Version:                    "lsp-trace.publication-failure.v1",
+		Target:                     path,
+		Error:                      publishErr.Error(),
+		ExactSerializedBytesDigest: graph.ExactBytesDigest(data),
 	})
 	if err != nil {
 		return "", err
@@ -92,17 +112,20 @@ func retainPublicationFailure(path string, data []byte, publishErr error) (strin
 	if err := f.Close(); err != nil {
 		return "", err
 	}
+	if err := syncPublishedDirectory(dir); err != nil {
+		return "", err
+	}
 	ok = true
 	return name, nil
 }
 
 type custodyReceipt struct {
-	ReceiptVersion    string `json:"receipt_version"`
-	Digest            string `json:"digest"`
-	DigestAlgorithm   string `json:"digest_algorithm"`
-	DigestScope       string `json:"digest_scope"`
-	IntegrityClaim    string `json:"integrity_claim"`
-	AuthenticityClaim bool   `json:"authenticity_claim"`
+	ReceiptVersion             string `json:"receipt_version"`
+	ExactSerializedBytesDigest string `json:"exact_serialized_bytes_digest"`
+	DigestAlgorithm            string `json:"digest_algorithm"`
+	DigestScope                string `json:"digest_scope"`
+	IntegrityClaim             string `json:"integrity_claim"`
+	AuthenticityClaim          bool   `json:"authenticity_claim"`
 }
 
 func marshalResult(result graph.Result, pretty bool) ([]byte, error) {
@@ -168,11 +191,7 @@ func publishArtifact(path string, data []byte) error {
 	if err = os.Remove(path + ".receipt.json"); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return syncPublishedDirectory(dir)
 }
 
 func publishBundle(path string, data []byte) error {
@@ -209,9 +228,8 @@ func publishBundle(path string, data []byte) error {
 	if err != nil || !bytes.Equal(staged, data) {
 		return fmt.Errorf("staged artifact byte validation failed: %v", err)
 	}
-	if d, err := os.Open(generationDir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
+	if err := syncPublishedDirectory(generationDir); err != nil {
+		return err
 	}
 	selectorData, err := json.Marshal(generationSelector{Generation: filepath.Base(generationDir)})
 	if err != nil {
@@ -227,11 +245,7 @@ func publishBundle(path string, data []byte) error {
 	}
 	selected = true
 	_ = os.Remove(path + ".receipt.json")
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return syncPublishedDirectory(dir)
 }
 
 func writePrivateSyncedFile(path string, data []byte) error {
@@ -295,7 +309,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "verify receipt: receipt metadata mismatch")
 		return 1
 	}
-	if receipt.Digest != graph.ExactBytesDigest(data) {
+	if receipt.ExactSerializedBytesDigest != graph.ExactBytesDigest(data) {
 		fmt.Fprintln(stderr, "verify receipt: exact-byte integrity mismatch")
 		return 1
 	}

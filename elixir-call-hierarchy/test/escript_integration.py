@@ -115,6 +115,15 @@ def expanded_siblings(workspace, cache, source, binary):
     require({"leaf/0", "caller/0"}.issubset(names), "actual escript expands callable topmost sibling candidates")
     require(plain_graph.get("edges") == expanded_graph.get("edges"), "symbol expansion leaves call edges unchanged")
 
+    selector = workspace.parent / "verified-v3-bundle.json"
+    published = subprocess.run(base + ["--output", str(selector)], cwd=root, capture_output=True, text=True, check=False)
+    require(published.returncode == 0 and published.stdout == "", "real v3 trace publishes through its semantic verifier")
+    verified = subprocess.run([str(binary), "verify", str(selector)], cwd=root, capture_output=True, text=True, check=False)
+    require(verified.returncode == 0 and verified.stdout == "verified integrity and custody\n" and verified.stderr == "", "published real v3 trace verifies offline")
+    selected = json.loads(selector.read_text())["generation"]
+    artifact = json.loads((selector.parent / selected / "artifact.json").read_text())
+    require(artifact["summary"]["traversal_complete"] is True and len(artifact["nodes"]) > 0 and len(artifact["edges"]) > 0, "published real v3 trace retains complete nonempty graph")
+
 
 def invoke(workspace, cache, request, mix_env, timeout=TIMEOUT):
     env = os.environ.copy()

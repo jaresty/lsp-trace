@@ -146,12 +146,13 @@ type SeedFailure struct {
 }
 
 type SeedResult struct {
-	Label             string       `json:"label"`
-	Requested         Target       `json:"requested_position"`
-	PreparedTargetIDs []string     `json:"prepared_target_ids"`
-	ReachedNodeIDs    []string     `json:"reached_node_ids"`
-	ReachedEdges      []Edge       `json:"-"`
-	Failure           *SeedFailure `json:"failure,omitempty"`
+	Label              string       `json:"label"`
+	Requested          Target       `json:"requested_position"`
+	PreparedTargetIDs  []string     `json:"prepared_target_ids"`
+	ReachedNodeIDs     []string     `json:"reached_node_ids"`
+	ReachedRelationIDs []string     `json:"reached_relation_ids,omitempty"`
+	ReachedEdges       []Edge       `json:"-"`
+	Failure            *SeedFailure `json:"failure,omitempty"`
 }
 
 type SiblingCandidate struct {
@@ -433,17 +434,14 @@ func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seed
 		Version          string `json:"version"`
 		EvidenceClass    string `json:"evidence_class"`
 		RelationKind     string `json:"relation_kind"`
-		SourceRevision   string `json:"source_revision"`
 		Direction        string `json:"direction"`
 		Locator          string `json:"locator"`
-		SeedURI          string `json:"seed_uri"`
-		SeedLabel        string `json:"seed_label"`
 		CandidateID      string `json:"candidate_node_id"`
 		InterfaceID      string `json:"interface_node_id"`
 		ImplementationID string `json:"implementation_node_id"`
 		CallerID         string `json:"caller_node_id"`
 		CalleeID         string `json:"callee_node_id"`
-	}{"lsp-trace.evidence-relation.v2", evidenceClassForKind(kind), kind, sourceRevision, direction, locator, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID}
+	}{"lsp-trace.evidence-relation.v3", evidenceClassForKind(kind), kind, direction, locator, candidateID, interfaceID, implementationID, callerID, calleeID}
 	encoded, err := json.Marshal(identityInput)
 	if err != nil {
 		panic(err)
@@ -522,6 +520,9 @@ func (r *Result) Canonicalize() {
 		if a.SeedURI != b.SeedURI {
 			return a.SeedURI < b.SeedURI
 		}
+		if a.SeedLabel != b.SeedLabel {
+			return a.SeedLabel < b.SeedLabel
+		}
 		return a.Candidate.ID < b.Candidate.ID
 	})
 	sort.Slice(r.DispatchRelationships, func(i, j int) bool {
@@ -548,7 +549,7 @@ func (r *Result) Canonicalize() {
 		out := r.SiblingCandidates[:1]
 		for _, candidate := range r.SiblingCandidates[1:] {
 			last := out[len(out)-1]
-			if candidate.SeedURI != last.SeedURI || candidate.Candidate.ID != last.Candidate.ID {
+			if candidate.SeedURI != last.SeedURI || candidate.SeedLabel != last.SeedLabel || candidate.Candidate.ID != last.Candidate.ID {
 				out = append(out, candidate)
 			}
 		}
@@ -559,6 +560,8 @@ func (r *Result) Canonicalize() {
 		r.Seeds[i].PreparedTargetIDs = uniqueStrings(r.Seeds[i].PreparedTargetIDs)
 		sort.Strings(r.Seeds[i].ReachedNodeIDs)
 		r.Seeds[i].ReachedNodeIDs = uniqueStrings(r.Seeds[i].ReachedNodeIDs)
+		sort.Strings(r.Seeds[i].ReachedRelationIDs)
+		r.Seeds[i].ReachedRelationIDs = uniqueStrings(r.Seeds[i].ReachedRelationIDs)
 	}
 	sort.Slice(r.Seeds, func(i, j int) bool { return r.Seeds[i].Label < r.Seeds[j].Label })
 	sort.Slice(r.Terminals, func(i, j int) bool { return lessBoundary(r.Terminals[i], r.Terminals[j]) })
@@ -594,7 +597,22 @@ func (r *Result) Canonicalize() {
 		}
 	}
 	if r.SchemaVersion != SchemaVersionV1 {
+		r.CapabilityQuality.Advertised = r.Capabilities.CallHierarchyProvider
+		r.CapabilityQuality.PrepareSucceeded = len(r.Targets) > 0
+		r.CapabilityQuality.IncomingRequestSuccesses = canonicalIncomingRequestSuccesses(*r)
 		r.CapabilityQuality.IncomingEdges = len(r.Edges)
+		r.CapabilityQuality.CrossFileEdges = 0
+		nodeURIs := make(map[string]string, len(r.Nodes))
+		for _, node := range r.Nodes {
+			nodeURIs[node.ID] = canonicalURI(node.URI)
+		}
+		for _, edge := range r.Edges {
+			if callerURI, callerOK := nodeURIs[edge.CallerNodeID]; callerOK {
+				if calleeURI, calleeOK := nodeURIs[edge.CalleeNodeID]; calleeOK && callerURI != calleeURI {
+					r.CapabilityQuality.CrossFileEdges++
+				}
+			}
+		}
 		r.CapabilityQuality.UnresolvedCalls = 0
 		r.CapabilityQuality.DynamicCalls = 0
 		for _, diagnostic := range r.Diagnostics {
@@ -605,13 +623,53 @@ func (r *Result) Canonicalize() {
 				r.CapabilityQuality.DynamicCalls++
 			}
 		}
-		if r.CapabilityQuality.UnresolvedCalls > 0 {
-			r.Summary.Complete = false
-		}
-		if r.CapabilityQuality.CrossModuleEdges == "" {
-			r.CapabilityQuality.CrossModuleEdges = Unknown
+		r.CapabilityQuality.CrossModuleEdges = Unknown
+		r.Summary.Complete = canonicalTraversalComplete(*r)
+	}
+}
+
+func canonicalIncomingRequestSuccesses(r Result) int {
+	expanded := map[string]struct{}{}
+	for _, edge := range r.Edges {
+		if edge.CalleeNodeID != "" {
+			expanded[edge.CalleeNodeID] = struct{}{}
 		}
 	}
+	for _, boundary := range r.Terminals {
+		switch boundary.Reason {
+		case NoIncomingCalls, ServerReportedNoIncoming, IncomingReturnedNull:
+			if boundary.NodeID != "" {
+				expanded[boundary.NodeID] = struct{}{}
+			}
+		}
+	}
+	return len(expanded)
+}
+
+func canonicalTraversalComplete(r Result) bool {
+	if r.Summary.Truncated || len(r.Frontier) > 0 || r.CapabilityQuality.UnresolvedCalls > 0 {
+		return false
+	}
+	for _, seed := range r.Seeds {
+		if seed.Failure != nil {
+			return false
+		}
+	}
+	for _, diagnostic := range r.Diagnostics {
+		switch diagnostic.Phase {
+		case "invocation", "source", "trace", "spawn", "initialize", "prepare", "didOpen", "open", "shutdown":
+			return false
+		}
+	}
+	for _, boundary := range r.Terminals {
+		switch boundary.Reason {
+		case NoIncomingCalls, ServerReportedNoIncoming, PrepareReturnedNoItem, IncomingReturnedNull, ExternalURI:
+			// Natural or explicitly bounded traversal outcomes.
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func uniqueStrings(in []string) []string {

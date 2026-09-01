@@ -306,8 +306,8 @@ func TestV2EvidenceReceiptProjectsDiscoverySemanticsWithStableRelationIdentities
 		changedEvidence, _ := changedDocument["evidence_receipt"].(map[string]any)
 		firstRelations, _ := firstEvidence["relations"].([]any)
 		changedRelations, _ := changedEvidence["relations"].([]any)
-		if len(firstRelations) == 0 || len(changedRelations) == 0 || firstRelations[0].(map[string]any)["relation_id"] == changedRelations[0].(map[string]any)["relation_id"] {
-			t.Fatalf("ASSERT_RELATION_ID_COMMITS_SOURCE_REVISION: first=%#v changed=%#v", firstEvidence, changedEvidence)
+		if len(firstRelations) == 0 || len(changedRelations) == 0 || firstRelations[0].(map[string]any)["relation_id"] != changedRelations[0].(map[string]any)["relation_id"] {
+			t.Fatalf("ASSERT_RELATION_ID_IS_SEMANTIC_NOT_REVISION_SALTED: first=%#v changed=%#v", firstEvidence, changedEvidence)
 		}
 	})
 	semantics, semanticsOK := first["evidence_semantics"].(map[string]any)
