@@ -70,7 +70,7 @@ Retrieve the binary's static agent skill without network access or installation:
 lsp-trace skill get
 ```
 
-Dynamic skill discovery, listing, and installation are deferred.
+Dynamic skill discovery, listing, and installation are deferred. The embedded skill also documents labeled seed files and a bounded recipe for turning trace JSON into provisional feature-inventory candidates.
 
 ## Qualification and release
 

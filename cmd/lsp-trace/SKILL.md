@@ -26,6 +26,45 @@ lsp-trace incoming \
 
 `--at` is repeatable. `--seed-file` accepts labeled seeds. Lines and columns are one-based.
 
+### Trace a labeled seed set
+
+Use a seed file when several known source positions should remain distinguishable in one trace. Paths are resolved against `--workspace`; labels must be non-empty and unique. For example, `seeds.json` may contain:
+
+```json
+{"seeds":[
+  {"label":"report-download","at":"src/reports.ts:42:8"},
+  {"label":"scheduled-export","at":"src/export.ts:19:4"}
+]}
+```
+
+Run the labeled set with:
+
+```bash
+lsp-trace incoming \
+  --workspace /path/to/workspace \
+  --server language-server \
+  --seed-file seeds.json \
+  --expand-dispatch-family \
+  --expand-topmost-siblings \
+  --pretty > trace.json
+```
+
+Seed-file entries and repeated `--at` values may be combined. Repeated `--at` values receive generated labels. In v3 output, match each requested seed to its same-label `seeds` result; failed seeds remain represented rather than disappearing.
+
+### Produce a provisional feature inventory
+
+Use the existing trace JSON to create review candidates, not accepted features:
+
+1. Start with labeled positions that have a stated reason for investigation, such as user-facing handlers, operator entry points, or known workflows.
+2. For each same-label seed result, record its requested position, status, and direct `reached_relation_ids`. Do not borrow another seed's relations or treat transitive relations as direct seed support.
+3. Follow `edges` from the seeded callee toward server-reported callers. Record stable node and relation IDs so every candidate remains traceable to the JSON.
+4. Compare seed traces for overlapping callers or subgraphs. Treat overlap as a reason to review a possible shared capability, not as proof that the seeds are one feature.
+5. Keep `dispatch_relationships` and `sibling_candidates` in separate evidence columns. They may nominate related code for investigation but contribute no caller support.
+6. Carry terminals, frontiers, diagnostics, `traversal_complete`, and `source_graph_complete` into the inventory as gaps or boundaries. Never silently interpret omitted or truncated code as absent.
+7. Emit a provisional record with a candidate label, seed labels, supporting call-relation IDs, discovery-only relation IDs, completeness limits, unknowns, and review status.
+
+Call edges, graph overlap, module names, dispatch associations, and sibling nominations do not establish feature identity, runtime use, user value, canonical naming, or acceptance. Product or domain review must decide whether a candidate is a user feature, operator feature, platform capability, shared component, infrastructure, multiple features, or not a feature.
+
 Important options:
 
 - `--expand-dispatch-family` asks the server's Type Hierarchy for implementation-family members and emits `dispatch_relationships` separately from call edges.
