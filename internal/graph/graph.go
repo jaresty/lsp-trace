@@ -35,10 +35,11 @@ type Node struct {
 }
 
 type Edge struct {
-	RelationID   string  `json:"relation_id"`
-	CallerNodeID string  `json:"caller_node_id"`
-	CalleeNodeID string  `json:"callee_node_id"`
-	CallSites    []Range `json:"call_sites"`
+	RelationID        string  `json:"relation_id"`
+	ExecutionBundleID string  `json:"execution_bundle_id,omitempty"`
+	CallerNodeID      string  `json:"caller_node_id"`
+	CalleeNodeID      string  `json:"callee_node_id"`
+	CallSites         []Range `json:"call_sites"`
 }
 
 // ValidateItem validates identity-bearing call hierarchy item fields.

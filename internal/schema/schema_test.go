@@ -82,6 +82,33 @@ func TestV3SliceValidatesOptionalTerminalAndUpwardStartEvidenceFieldTypes(t *tes
 	}
 }
 
+func TestV3SchemaStructurallyAcceptsHistoricalMissingAdditiveProvenance(t *testing.T) {
+	n := graph.NewNode(graph.Item{Name: "legacy", URI: "file:///w/legacy.go"})
+	encoded, err := json.Marshal(graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: []graph.Node{n}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(encoded, &document); err != nil {
+		t.Fatal(err)
+	}
+	delete(document, "execution_bundle_id")
+	identity := document["identity"].(map[string]any)
+	delete(identity, "tool_version_provenance_class")
+	delete(identity, "server_version_provenance_class")
+	for _, raw := range document["portable_locators"].([]any) {
+		delete(raw.(map[string]any), "provenance")
+	}
+	legacy, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = Validate(legacy, "v3")
+	if err == nil || strings.Contains(err.Error(), "schema validation") || !strings.Contains(err.Error(), "semantic validation") {
+		t.Fatalf("ASSERT_HISTORICAL_V3_ADDITIVE_PROVENANCE_STRUCTURALLY_OPTIONAL: %v", err)
+	}
+}
+
 func TestProducerGeneratedV3SlicePassesLayeredValidation(t *testing.T) {
 	n := graph.NewNode(graph.Item{Name: "start", URI: "file:///w/a.go"})
 	result := graph.Result{SchemaVersion: graph.SchemaVersionV3, Invocation: graph.Invocation{Seeds: []graph.InvocationSeed{{Label: "seed", At: "a.go:1:1"}}}, Nodes: []graph.Node{n}, Seeds: []graph.SeedResult{{Label: "seed", PreparedTargetIDs: []string{n.ID}, ReachedNodeIDs: []string{n.ID}}}, Slice: &graph.SliceEvidence{

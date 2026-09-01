@@ -114,6 +114,11 @@ assert_contains R-SKILL-AUTHORITY cmd/lsp-trace/SKILL.md 'Invocation provenance 
 assert_contains R-SKILL-NO-RAW-CUSTODY cmd/lsp-trace/SKILL.md 'The raw server-stderr stream is not retained as a standalone artifact'
 assert_contains R-SLICE-STDERR-RELAY docs/SEMANTICS.md 'captured stderr is relayed before the transport/lifecycle error'
 assert_contains R-SLICE-STDERR-DIAGNOSTIC docs/SEMANTICS.md 'retained and printed as a sensitive `server-stderr` diagnostic'
+assert_contains R-V3-CLOSED-RELATION-KINDS docs/SEMANTICS.md 'Native relation kinds are closed to call relations, dispatch associations, and sibling candidates'
+assert_contains R-V3-EXECUTION-BUNDLE docs/SEMANTICS.md 'This common provenance does not make co-bundled relations independent observations and adds no confidence or support.'
+assert_contains R-V3-LOCATOR-CEILING docs/SEMANTICS.md 'they do not establish runtime behavior or feature correspondence'
+assert_contains R-V3-AUTHORITY-SCOPE docs/SEMANTICS.md 'Source identity is limited to successfully resolved seed URI/content-digest pairs'
+assert_contains R-V3-HISTORICAL-ADDITIVE docs/SCHEMA_POLICY.md 'historical v3 documents that omit them remain structurally and semantically valid'
 assert_contains R-FLAGS README.md '## Flags'
 for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"

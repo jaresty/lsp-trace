@@ -21,10 +21,12 @@ const (
 )
 
 type BundleIdentity struct {
-	CallerProvenanceClass      string           `json:"caller_provenance_class"`
-	ResolvedSeeds              []InvocationSeed `json:"resolved_seeds"`
-	ResolvedSeedContentsDigest string           `json:"resolved_seed_contents_digest,omitempty"`
-	AggregateScope             string           `json:"aggregate_scope"`
+	CallerProvenanceClass        string           `json:"caller_provenance_class"`
+	ToolVersionProvenanceClass   string           `json:"tool_version_provenance_class,omitempty"`
+	ServerVersionProvenanceClass string           `json:"server_version_provenance_class,omitempty"`
+	ResolvedSeeds                []InvocationSeed `json:"resolved_seeds"`
+	ResolvedSeedContentsDigest   string           `json:"resolved_seed_contents_digest,omitempty"`
+	AggregateScope               string           `json:"aggregate_scope"`
 }
 type SensitivityPolicy struct {
 	Covered                           []string `json:"covered"`
@@ -50,11 +52,12 @@ type ProcessContext struct {
 	Redaction                                Redaction             `json:"redaction"`
 }
 type SeedMembership struct {
-	MembershipID string `json:"membership_id"`
-	SeedLabel    string `json:"seed_label"`
-	SeedAt       string `json:"seed_at"`
-	EvidenceKind string `json:"evidence_kind"`
-	EndpointID   string `json:"endpoint_id"`
+	MembershipID      string `json:"membership_id"`
+	ExecutionBundleID string `json:"execution_bundle_id,omitempty"`
+	SeedLabel         string `json:"seed_label"`
+	SeedAt            string `json:"seed_at"`
+	EvidenceKind      string `json:"evidence_kind"`
+	EndpointID        string `json:"endpoint_id"`
 }
 type ReplayArtifact struct {
 	Kind                     string    `json:"kind"`
@@ -67,10 +70,33 @@ type ReplayInputManifest struct {
 	ReplayInputManifestDigest string           `json:"replay_input_manifest_digest"`
 	Artifacts                 []ReplayArtifact `json:"artifacts"`
 }
+type LocatorSource struct {
+	NodeID         string `json:"node_id"`
+	SelectionRange Range  `json:"selection_range"`
+}
+type LocatorDerivation struct {
+	Method  string `json:"method"`
+	Version string `json:"version"`
+}
+type LocatorAuthority struct {
+	Class string `json:"class"`
+	Tool  string `json:"tool"`
+}
+type LocatorSemantics struct {
+	EstablishesRuntimeBehavior       bool `json:"establishes_runtime_behavior"`
+	EstablishesFeatureCorrespondence bool `json:"establishes_feature_correspondence"`
+}
+type LocatorProvenance struct {
+	Source     LocatorSource     `json:"source"`
+	Derivation LocatorDerivation `json:"derivation"`
+	Authority  LocatorAuthority  `json:"authority"`
+	Semantics  LocatorSemantics  `json:"semantics"`
+}
 type PortableLocator struct {
-	NodeID    string    `json:"node_id"`
-	Locator   string    `json:"locator"`
-	Redaction Redaction `json:"redaction"`
+	NodeID     string             `json:"node_id"`
+	Locator    string             `json:"locator"`
+	Provenance *LocatorProvenance `json:"provenance,omitempty"`
+	Redaction  Redaction          `json:"redaction"`
 }
 type summaryV3 struct {
 	NodeCount           int    `json:"node_count"`
@@ -84,6 +110,7 @@ type summaryV3 struct {
 }
 type semanticV3 struct {
 	SchemaVersion         string                 `json:"schema_version"`
+	ExecutionBundleID     string                 `json:"execution_bundle_id,omitempty"`
 	Tool                  ToolIdentity           `json:"tool"`
 	Invocation            Invocation             `json:"invocation"`
 	Identity              BundleIdentity         `json:"identity"`
@@ -154,12 +181,14 @@ func (r Result) marshalV3() ([]byte, error) {
 		return resolved[i].Label < resolved[j].Label
 	})
 	aggInput, _ := json.Marshal(resolved)
-	identity := BundleIdentity{CallerProvenanceClass: "CALLER_ASSERTED", ResolvedSeeds: resolved, AggregateScope: "RESOLVED_SEED_CONTENTS"}
+	identity := BundleIdentity{CallerProvenanceClass: "CALLER_ASSERTED", ToolVersionProvenanceClass: "CALLER_ASSERTED", ServerVersionProvenanceClass: "CALLER_ASSERTED", ResolvedSeeds: resolved, AggregateScope: "RESOLVED_SEED_CONTENTS"}
 	if len(resolved) > 0 {
 		identity.ResolvedSeedContentsDigest = domainDigest(ResolvedSeedsDomain, aggInput)
 	}
 	processContext := projectProcessContext(inv.Server.Environment, inv.EffectiveEnvironment, inv.WorkingDirectory)
 	inv.Server.Environment = nil
+	executionBundleID := semanticExecutionBundleID(inv)
+	edges, siblings, dispatches := projectExecutionBundleRelations(executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
 	receipt := r.evidenceReceipt(inv.Provenance.SourceRevision)
 	if err := validateProducerSeedRelations(r.Seeds); err != nil {
 		return nil, err
@@ -168,13 +197,13 @@ func (r Result) marshalV3() ([]byte, error) {
 		return nil, err
 	}
 	sem := semanticV3{
-		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: inv, Identity: identity,
+		SchemaVersion: r.SchemaVersion, ExecutionBundleID: executionBundleID, Tool: tool, Invocation: inv, Identity: identity,
 		SensitivityPolicy: sensitivityPolicy(),
 		ProcessContext:    processContext, EvidenceSemantics: evidenceSemantics(), EvidenceReceipt: receipt,
-		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.Edges, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
-		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges,
-		Terminals: r.Terminals, Frontier: r.Frontier, Diagnostics: r.Diagnostics, SiblingCandidates: r.SiblingCandidates,
-		DispatchRelationships: r.DispatchRelationships, Seeds: r.Seeds, Slice: r.Slice,
+		SeedMemberships: projectSeedMemberships(executionBundleID, inv.Seeds, r.Seeds, edges, siblings, dispatches, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
+		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: edges,
+		Terminals: r.Terminals, Frontier: r.Frontier, Diagnostics: r.Diagnostics, SiblingCandidates: siblings,
+		DispatchRelationships: dispatches, Seeds: r.Seeds, Slice: r.Slice,
 		Summary: summaryV3{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated},
 	}
 	canonical, err := json.Marshal(sem)
@@ -246,7 +275,40 @@ func validateProcessContext(context ProcessContext) error {
 	return nil
 }
 
-func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResult, _ []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship, _ string) []SeedMembership {
+func semanticExecutionBundleID(inv Invocation) string {
+	canonical := inv
+	canonical.Seeds = append([]InvocationSeed(nil), inv.Seeds...)
+	sort.Slice(canonical.Seeds, func(i, j int) bool {
+		a, b := canonical.Seeds[i], canonical.Seeds[j]
+		if a.ResolvedURI != b.ResolvedURI {
+			return a.ResolvedURI < b.ResolvedURI
+		}
+		if a.At != b.At {
+			return a.At < b.At
+		}
+		return a.Label < b.Label
+	})
+	encoded, _ := json.Marshal(canonical)
+	return domainDigest("lsp-trace:semantic-execution-bundle:v1", encoded)
+}
+
+func projectExecutionBundleRelations(bundleID string, edges []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship) ([]Edge, []SiblingCandidate, []DispatchRelationship) {
+	edges = append([]Edge(nil), edges...)
+	for i := range edges {
+		edges[i].ExecutionBundleID = bundleID
+	}
+	siblings = append([]SiblingCandidate(nil), siblings...)
+	for i := range siblings {
+		siblings[i].ExecutionBundleID = bundleID
+	}
+	dispatches = append([]DispatchRelationship(nil), dispatches...)
+	for i := range dispatches {
+		dispatches[i].ExecutionBundleID = bundleID
+	}
+	return edges, siblings, dispatches
+}
+
+func projectSeedMemberships(bundleID string, invocationSeeds []InvocationSeed, results []SeedResult, _ []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship, _ string) []SeedMembership {
 	byLabel := make(map[string]InvocationSeed, len(invocationSeeds))
 	for _, seed := range invocationSeeds {
 		byLabel[seed.Label] = seed
@@ -255,32 +317,32 @@ func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResu
 	for _, result := range results {
 		seed := byLabel[result.Label]
 		for _, endpoint := range result.PreparedTargetIDs {
-			out = append(out, newSeedMembership(seed, "PREPARED_TARGET", endpoint))
+			out = append(out, newSeedMembership(bundleID, seed, "PREPARED_TARGET", endpoint))
 		}
 		for _, endpoint := range result.ReachedNodeIDs {
-			out = append(out, newSeedMembership(seed, "REACHED_NODE", endpoint))
+			out = append(out, newSeedMembership(bundleID, seed, "REACHED_NODE", endpoint))
 		}
 		for _, relationID := range result.ReachedRelationIDs {
-			out = append(out, newSeedMembership(seed, "CALL_RELATION", relationID))
+			out = append(out, newSeedMembership(bundleID, seed, "CALL_RELATION", relationID))
 		}
 	}
 	for _, sibling := range siblings {
 		for _, label := range sibling.SeedLabels {
-			out = append(out, newSeedMembership(byLabel[label], "SIBLING_CANDIDATE", sibling.RelationID))
+			out = append(out, newSeedMembership(bundleID, byLabel[label], "SIBLING_CANDIDATE", sibling.RelationID))
 		}
 	}
 	for _, dispatch := range dispatches {
 		for _, label := range dispatch.SeedLabels {
-			out = append(out, newSeedMembership(byLabel[label], "DISPATCH_ASSOCIATION", dispatch.RelationID))
+			out = append(out, newSeedMembership(bundleID, byLabel[label], "DISPATCH_ASSOCIATION", dispatch.RelationID))
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].MembershipID < out[j].MembershipID })
 	return out
 }
 
-func newSeedMembership(seed InvocationSeed, kind, endpoint string) SeedMembership {
+func newSeedMembership(bundleID string, seed InvocationSeed, kind, endpoint string) SeedMembership {
 	payload, _ := json.Marshal([]string{seed.Label, seed.At, seed.ResolvedURI, kind, endpoint})
-	return SeedMembership{MembershipID: domainDigest("lsp-trace:seed-membership:v1", payload), SeedLabel: seed.Label, SeedAt: seed.At, EvidenceKind: kind, EndpointID: endpoint}
+	return SeedMembership{MembershipID: domainDigest("lsp-trace:seed-membership:v1", payload), ExecutionBundleID: bundleID, SeedLabel: seed.Label, SeedAt: seed.At, EvidenceKind: kind, EndpointID: endpoint}
 }
 
 func projectReplayManifest(inv Invocation, diagnostics []Diagnostic) ReplayInputManifest {
@@ -321,7 +383,17 @@ func projectPortableLocators(nodes []Node) []PortableLocator {
 	for _, node := range nodes {
 		r := node.SelectionRange
 		locator := fmt.Sprintf("%s#L%d:%d-L%d:%d", canonicalURI(node.URI), r.Start.Line, r.Start.Character, r.End.Line, r.End.Character)
-		out = append(out, PortableLocator{NodeID: node.ID, Locator: locator, Redaction: Redaction{State: "VISIBLE", Reason: "CANONICAL_SOURCE_LOCATION"}})
+		out = append(out, PortableLocator{
+			NodeID:  node.ID,
+			Locator: locator,
+			Provenance: &LocatorProvenance{
+				Source:     LocatorSource{NodeID: node.ID, SelectionRange: node.SelectionRange},
+				Derivation: LocatorDerivation{Method: "CANONICAL_URI_WITH_SELECTION_RANGE", Version: "1"},
+				Authority:  LocatorAuthority{Class: "TOOL_DERIVED", Tool: "lsp-trace"},
+				Semantics:  LocatorSemantics{},
+			},
+			Redaction: Redaction{State: "VISIBLE", Reason: "CANONICAL_SOURCE_LOCATION"},
+		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].NodeID < out[j].NodeID })
 	return out
@@ -532,6 +604,26 @@ func (r Result) ValidateReferences() error {
 	return nil
 }
 
+func validateEvidenceKinds(receipt *EvidenceReceipt, memberships []SeedMembership) error {
+	if receipt != nil {
+		for _, relation := range receipt.Relations {
+			switch relation.RelationKind {
+			case "CALL_RELATION", "DISPATCH_ASSOCIATION", "SIBLING_CANDIDATE":
+			default:
+				return fmt.Errorf("unknown native relation kind %q", relation.RelationKind)
+			}
+		}
+	}
+	for _, membership := range memberships {
+		switch membership.EvidenceKind {
+		case "PREPARED_TARGET", "REACHED_NODE", "CALL_RELATION", "DISPATCH_ASSOCIATION", "SIBLING_CANDIDATE":
+		default:
+			return fmt.Errorf("unknown derived evidence kind %q", membership.EvidenceKind)
+		}
+	}
+	return nil
+}
+
 func ValidateSemanticBundle(data []byte) error {
 	var b bundleV3
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -544,6 +636,35 @@ func ValidateSemanticBundle(data []byte) error {
 	}
 	if b.SchemaVersion != SchemaVersionV3 {
 		return fmt.Errorf("verification requires %s", SchemaVersionV3)
+	}
+	if err := validateEvidenceKinds(b.EvidenceReceipt, b.SeedMemberships); err != nil {
+		return err
+	}
+	if b.ExecutionBundleID != "" {
+		expectedBundleID := semanticExecutionBundleID(b.Invocation)
+		if b.ExecutionBundleID != expectedBundleID {
+			return fmt.Errorf("execution bundle identity mismatch")
+		}
+		for _, relation := range b.Edges {
+			if relation.ExecutionBundleID != expectedBundleID {
+				return fmt.Errorf("execution bundle relation mismatch")
+			}
+		}
+		for _, relation := range b.SiblingCandidates {
+			if relation.ExecutionBundleID != expectedBundleID {
+				return fmt.Errorf("execution bundle relation mismatch")
+			}
+		}
+		for _, relation := range b.DispatchRelationships {
+			if relation.ExecutionBundleID != expectedBundleID {
+				return fmt.Errorf("execution bundle relation mismatch")
+			}
+		}
+		for _, membership := range b.SeedMemberships {
+			if membership.ExecutionBundleID != expectedBundleID {
+				return fmt.Errorf("execution bundle membership mismatch")
+			}
+		}
 	}
 	verified := Result{
 		SchemaVersion: b.SchemaVersion, Targets: b.Targets, Nodes: b.Nodes, Edges: b.Edges,
@@ -581,9 +702,21 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := validateSeedJoins(b.Invocation.Seeds, b.Seeds, verified.SiblingCandidates, verified.DispatchRelationships, expectedReceipt); err != nil {
 		return err
 	}
-	expectedMemberships := projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, verified.SiblingCandidates, verified.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
+	expectedMemberships := projectSeedMemberships(b.ExecutionBundleID, b.Invocation.Seeds, b.Seeds, b.Edges, verified.SiblingCandidates, verified.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
 	expectedManifest := projectReplayManifest(b.Invocation, b.Diagnostics)
 	expectedLocators := projectPortableLocators(b.Nodes)
+	historicalLocators := len(b.PortableLocators) > 0
+	for _, locator := range b.PortableLocators {
+		if locator.Provenance != nil {
+			historicalLocators = false
+			break
+		}
+	}
+	if historicalLocators {
+		for i := range expectedLocators {
+			expectedLocators[i].Provenance = nil
+		}
+	}
 	if !reflect.DeepEqual(b.EvidenceReceipt, expectedReceipt) {
 		return fmt.Errorf("replay identity mismatch: evidence receipt")
 	}
@@ -628,7 +761,10 @@ func ValidateSemanticBundle(data []byte) error {
 		input, _ := json.Marshal(resolved)
 		aggregate = domainDigest(ResolvedSeedsDomain, input)
 	}
-	if b.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || b.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || b.Identity.ResolvedSeedContentsDigest != aggregate || !reflect.DeepEqual(b.Identity.ResolvedSeeds, resolved) {
+	if b.Identity.CallerProvenanceClass != "CALLER_ASSERTED" ||
+		(b.Identity.ToolVersionProvenanceClass != "" && b.Identity.ToolVersionProvenanceClass != "CALLER_ASSERTED") ||
+		(b.Identity.ServerVersionProvenanceClass != "" && b.Identity.ServerVersionProvenanceClass != "CALLER_ASSERTED") ||
+		b.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || b.Identity.ResolvedSeedContentsDigest != aggregate || !reflect.DeepEqual(b.Identity.ResolvedSeeds, resolved) {
 		return fmt.Errorf("bundle identity mismatch")
 	}
 	receipt := b.TraceReceipt

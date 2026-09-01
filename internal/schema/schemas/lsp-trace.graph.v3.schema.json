@@ -6,13 +6,14 @@
   "required": ["schema_version", "tool", "invocation", "identity", "sensitivity_policy", "process_context", "evidence_semantics", "seed_memberships", "replay_input_manifest", "portable_locators", "capabilities", "capability_quality", "targets", "nodes", "edges", "terminals", "frontier", "diagnostics", "summary", "trace_receipt"],
   "properties": {
     "schema_version": {"const": "lsp-trace.graph.v3"},
+    "execution_bundle_id": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "tool": {"type": "object"},
     "invocation": {"$ref": "#/$defs/invocation"},
     "identity": {"$ref": "#/$defs/identity"},
     "sensitivity_policy": {"type": "object"},
     "process_context": {"type": "object", "required": ["environment", "effective_environment_process_context_digest", "effective_environment_variable_count", "working_directory_process_context_digest", "ambient_environment_state", "redaction"]},
     "evidence_semantics": {"type": "object"}, "evidence_receipt": {"type": "object"},
-    "seed_memberships": {"type": ["array", "null"]}, "replay_input_manifest": {"type": "object"}, "portable_locators": {"type": ["array", "null"]},
+    "seed_memberships": {"type": ["array", "null"]}, "replay_input_manifest": {"type": "object"}, "portable_locators": {"type": ["array", "null"], "items": {"$ref": "#/$defs/portableLocator"}},
     "capabilities": {"type": "object"}, "capability_quality": {"type": "object"}, "targets": {"type": ["array", "null"]}, "nodes": {"type": ["array", "null"]}, "edges": {"type": ["array", "null"]},
     "terminals": {"type": ["array", "null"]}, "frontier": {"type": ["array", "null"]}, "diagnostics": {"type": ["array", "null"]}, "sibling_candidates": {"type": ["array", "null"]}, "dispatch_relationships": {"type": ["array", "null"]}, "seeds": {"type": ["array", "null"]},
     "summary": {"type": "object"}, "trace_receipt": {"type": "object"},
@@ -34,8 +35,27 @@
     "identity": {
       "type": "object",
       "required": ["caller_provenance_class", "resolved_seeds", "aggregate_scope"],
-      "properties": {"caller_provenance_class": {"type": "string"}, "resolved_seeds": {"type": ["array", "null"]}, "resolved_seed_contents_digest": {"type": "string"}, "aggregate_scope": {"type": "string"}},
+      "properties": {"caller_provenance_class": {"type": "string"}, "tool_version_provenance_class": {"const": "CALLER_ASSERTED"}, "server_version_provenance_class": {"const": "CALLER_ASSERTED"}, "resolved_seeds": {"type": ["array", "null"]}, "resolved_seed_contents_digest": {"type": "string"}, "aggregate_scope": {"const": "RESOLVED_SEED_CONTENTS"}},
       "additionalProperties": false
+    },
+    "portableLocator": {
+      "type": "object",
+      "required": ["node_id", "locator", "redaction"],
+      "properties": {
+        "node_id": {"type": "string"},
+        "locator": {"type": "string"},
+        "provenance": {
+          "type": "object",
+          "required": ["source", "derivation", "authority", "semantics"],
+          "properties": {
+            "source": {"type": "object", "required": ["node_id", "selection_range"]},
+            "derivation": {"type": "object", "required": ["method", "version"], "properties": {"method": {"const": "CANONICAL_URI_WITH_SELECTION_RANGE"}, "version": {"const": "1"}}},
+            "authority": {"type": "object", "required": ["class", "tool"], "properties": {"class": {"const": "TOOL_DERIVED"}, "tool": {"const": "lsp-trace"}}},
+            "semantics": {"type": "object", "required": ["establishes_runtime_behavior", "establishes_feature_correspondence"], "properties": {"establishes_runtime_behavior": {"const": false}, "establishes_feature_correspondence": {"const": false}}}
+          }
+        },
+        "redaction": {"type": "object"}
+      }
     },
     "sliceLayer": {
       "type": "object",

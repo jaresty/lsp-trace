@@ -31,6 +31,15 @@ func TestV3EvidenceBundleContract(t *testing.T) {
 	if identity["caller_provenance_class"] != "CALLER_ASSERTED" {
 		t.Errorf("ASSERT_P3_CALLER_ASSERTED: identity=%v", identity)
 	}
+	if identity["aggregate_scope"] != "RESOLVED_SEED_CONTENTS" {
+		t.Errorf("ASSERT_WORKSPACE_AUTHORITY_RESOLVED_SEED_SCOPE: identity=%v", identity)
+	}
+	if identity["tool_version_provenance_class"] != "CALLER_ASSERTED" {
+		t.Errorf("ASSERT_TOOL_VERSION_CALLER_ASSERTED: identity=%v", identity)
+	}
+	if identity["server_version_provenance_class"] != "CALLER_ASSERTED" {
+		t.Errorf("ASSERT_SERVER_VERSION_CALLER_ASSERTED: identity=%v", identity)
+	}
 	policy, _ := got["sensitivity_policy"].(map[string]any)
 	if policy["automatic_redaction"] != false {
 		t.Errorf("ASSERT_DISCLOSURE_AUTOMATIC_REDACTION_FALSE: policy=%v", policy)
@@ -143,6 +152,26 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 	if len(locators) == 0 || !strings.HasPrefix(locators[0].(map[string]any)["locator"].(string), "file:///w/") || locators[0].(map[string]any)["redaction"] == nil {
 		t.Errorf("ASSERT_P8_PORTABLE_LOCATOR_REDACTION: %#v", locators)
 	}
+	for _, raw := range locators {
+		locator := raw.(map[string]any)
+		provenance, _ := locator["provenance"].(map[string]any)
+		source, _ := provenance["source"].(map[string]any)
+		derivation, _ := provenance["derivation"].(map[string]any)
+		authority, _ := provenance["authority"].(map[string]any)
+		semantics, _ := provenance["semantics"].(map[string]any)
+		if source["node_id"] != locator["node_id"] || source["selection_range"] == nil {
+			t.Errorf("ASSERT_LOCATOR_PROVENANCE_SOURCE_IDENTITY: %#v", locator)
+		}
+		if derivation["method"] != "CANONICAL_URI_WITH_SELECTION_RANGE" || derivation["version"] != "1" {
+			t.Errorf("ASSERT_LOCATOR_PROVENANCE_DERIVATION_IDENTITY: %#v", locator)
+		}
+		if authority["class"] != "TOOL_DERIVED" || authority["tool"] != "lsp-trace" {
+			t.Errorf("ASSERT_LOCATOR_PROVENANCE_TOOL_AUTHORITY: %#v", locator)
+		}
+		if semantics["establishes_runtime_behavior"] != false || semantics["establishes_feature_correspondence"] != false {
+			t.Errorf("ASSERT_LOCATOR_PROVENANCE_SEMANTIC_CEILING: %#v", locator)
+		}
+	}
 }
 
 func TestReceiptIssuanceRejectsStructurallyInvalidGraph(t *testing.T) {
@@ -183,6 +212,43 @@ func TestValidateSemanticBundleRejectsRehashedIdentityMismatch(t *testing.T) {
 	}
 	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "identity mismatch") {
 		t.Fatalf("ASSERT_P3_VERIFY_REJECTS_REHASHED_IDENTITY_MISMATCH: %v", err)
+	}
+}
+
+func TestValidateSemanticBundleRejectsRehashedAuthorityMismatch(t *testing.T) {
+	encoded, err := json.Marshal(Result{SchemaVersion: SchemaVersionV3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var base bundleV3
+	if err := json.Unmarshal(encoded, &base); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*BundleIdentity)
+	}{
+		{"workspace_scope", func(identity *BundleIdentity) { identity.AggregateScope = "WHOLE_WORKSPACE" }},
+		{"tool_version", func(identity *BundleIdentity) { identity.ToolVersionProvenanceClass = "TOOL_DERIVED" }},
+		{"server_version", func(identity *BundleIdentity) { identity.ServerVersionProvenanceClass = "TOOL_DERIVED" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bundle := base
+			tc.mutate(&bundle.Identity)
+			canonical, marshalErr := json.Marshal(bundle.semanticV3)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+			mutated, marshalErr := json.Marshal(bundle)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			if verifyErr := ValidateSemanticBundle(mutated); verifyErr == nil || !strings.Contains(verifyErr.Error(), "bundle identity mismatch") {
+				t.Fatalf("ASSERT_AUTHORITY_MISMATCH_REJECTED_%s: %v", strings.ToUpper(tc.name), verifyErr)
+			}
+		})
 	}
 }
 
@@ -369,12 +435,21 @@ func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *t
 		{"missing result", "invocation/result cardinality", func(b *bundleV3) { b.Seeds = nil; b.SeedMemberships = nil }},
 		{"sensitivity policy", "sensitivity policy mismatch", func(b *bundleV3) { b.SensitivityPolicy.AutomaticRedaction = true }},
 		{"evidence semantics", "evidence semantics mismatch", func(b *bundleV3) { b.EvidenceSemantics.CallEdges.SupportContribution = 99 }},
+		{"unknown native relation kind", `unknown native relation kind "UNKNOWN_RELATION"`, func(b *bundleV3) {
+			b.EvidenceReceipt.Relations[0].RelationKind = "UNKNOWN_RELATION"
+		}},
+		{"unknown derived evidence kind", `unknown derived evidence kind "UNKNOWN_MEMBERSHIP"`, func(b *bundleV3) {
+			b.SeedMemberships[0].EvidenceKind = "UNKNOWN_MEMBERSHIP"
+		}},
+		{"portable locator derivation", "replay identity mismatch: portable locators", func(b *bundleV3) {
+			b.PortableLocators[0].Provenance.Derivation.Version = "forged"
+		}},
 		{"duplicate explicit environment name", "duplicate explicit environment name", func(b *bundleV3) {
 			b.ProcessContext.Environment = append(b.ProcessContext.Environment, b.ProcessContext.Environment[0])
 		}},
 		{"unknown primary relation", "unknown call relation", func(b *bundleV3) {
 			b.Seeds[0].ReachedRelationIDs = []string{"sha256:unknown"}
-			b.SeedMemberships = projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
+			b.SeedMemberships = projectSeedMemberships(b.ExecutionBundleID, b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
 		}},
 	}
 	for _, tc := range cases {
@@ -382,6 +457,11 @@ func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *t
 			bundle := base
 			bundle.Seeds = append([]SeedResult(nil), base.Seeds...)
 			bundle.SeedMemberships = append([]SeedMembership(nil), base.SeedMemberships...)
+			if base.EvidenceReceipt != nil {
+				receipt := *base.EvidenceReceipt
+				receipt.Relations = append([]EvidenceRelation(nil), base.EvidenceReceipt.Relations...)
+				bundle.EvidenceReceipt = &receipt
+			}
 			bundle.ProcessContext.Environment = append([]EnvironmentIdentity(nil), base.ProcessContext.Environment...)
 			tc.mutate(&bundle)
 			if err := ValidateSemanticBundle(rehash(&bundle)); err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -662,11 +742,149 @@ func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
 	}
 }
 
+func TestV3RelationsAndMembershipsShareStableExecutionBundleIdentity(t *testing.T) {
+	caller := NewNode(Item{Name: "caller", URI: "file:///w/caller.go"})
+	callee := NewNode(Item{Name: "callee", URI: "file:///w/callee.go"})
+	candidate := NewNode(Item{Name: "candidate", URI: "file:///w/candidate.go"})
+	edge := Edge{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}
+	seed := InvocationSeed{Label: "seed", At: "a.go:1:1", ResolvedURI: "file:///w/a.go", ContentSHA256: "sha256:content"}
+	result := Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation: Invocation{Seeds: []InvocationSeed{seed}, Provenance: InvocationProvenance{
+			InvocationID: "invocation-1", Caller: "test", Source: "fixture", SourceRevision: "rev-1",
+		}},
+		Nodes: []Node{caller, callee}, Edges: []Edge{edge},
+		Seeds:                 []SeedResult{{Label: seed.Label, ReachedEdges: []Edge{edge}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}}},
+		SiblingCandidates:     []SiblingCandidate{{SeedLabel: seed.Label, Candidate: candidate}},
+		DispatchRelationships: []DispatchRelationship{{SeedLabel: seed.Label, Interface: caller, Implementation: callee}},
+		Summary:               Summary{Complete: true},
+	}
+	marshal := func(r Result) bundleV3 {
+		t.Helper()
+		encoded, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var bundle bundleV3
+		if err := json.Unmarshal(encoded, &bundle); err != nil {
+			t.Fatal(err)
+		}
+		return bundle
+	}
+
+	first := marshal(result)
+	if first.ExecutionBundleID == "" || len(first.Edges) != 1 || len(first.SiblingCandidates) != 1 || len(first.DispatchRelationships) != 1 || len(first.SeedMemberships) != 3 {
+		t.Fatalf("ASSERT_EXECUTION_BUNDLE_ID_PRESENT: bundle=%#v", first)
+	}
+	if first.Edges[0].ExecutionBundleID != first.ExecutionBundleID || first.SiblingCandidates[0].ExecutionBundleID != first.ExecutionBundleID || first.DispatchRelationships[0].ExecutionBundleID != first.ExecutionBundleID {
+		t.Fatalf("ASSERT_SHARED_EXECUTION_BUNDLE_RELATION_ID: bundle=%q edge=%q sibling=%q dispatch=%q", first.ExecutionBundleID, first.Edges[0].ExecutionBundleID, first.SiblingCandidates[0].ExecutionBundleID, first.DispatchRelationships[0].ExecutionBundleID)
+	}
+	for _, membership := range first.SeedMemberships {
+		if membership.ExecutionBundleID != first.ExecutionBundleID {
+			t.Fatalf("ASSERT_SHARED_EXECUTION_BUNDLE_MEMBERSHIP_ID: bundle=%q membership=%#v", first.ExecutionBundleID, membership)
+		}
+	}
+	originalRelationID, originalMembershipID := first.Edges[0].RelationID, first.SeedMemberships[0].MembershipID
+	second := marshal(result)
+	if second.ExecutionBundleID != first.ExecutionBundleID || second.Edges[0].RelationID != originalRelationID || second.SeedMemberships[0].MembershipID != originalMembershipID {
+		t.Fatalf("ASSERT_EXECUTION_BUNDLE_ID_STABLE_AND_NON_CIRCULAR: first=%#v second=%#v", first, second)
+	}
+	result.Invocation.Provenance.InvocationID = "invocation-2"
+	distinct := marshal(result)
+	if distinct.ExecutionBundleID == first.ExecutionBundleID {
+		t.Fatalf("ASSERT_DISTINCT_EXECUTION_BUNDLE_ID: %q", first.ExecutionBundleID)
+	}
+	firstSemantics, _ := json.Marshal(first.EvidenceSemantics)
+	distinctSemantics, _ := json.Marshal(distinct.EvidenceSemantics)
+	if !bytes.Equal(distinctSemantics, firstSemantics) {
+		t.Fatalf("ASSERT_EXECUTION_BUNDLE_SEMANTIC_NEUTRALITY: first=%s distinct=%s", firstSemantics, distinctSemantics)
+	}
+	legacy := first
+	legacy.ExecutionBundleID = ""
+	legacy.Edges = append([]Edge(nil), first.Edges...)
+	legacy.SiblingCandidates = append([]SiblingCandidate(nil), first.SiblingCandidates...)
+	legacy.DispatchRelationships = append([]DispatchRelationship(nil), first.DispatchRelationships...)
+	legacy.SeedMemberships = append([]SeedMembership(nil), first.SeedMemberships...)
+	for i := range legacy.Edges {
+		legacy.Edges[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.SiblingCandidates {
+		legacy.SiblingCandidates[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.DispatchRelationships {
+		legacy.DispatchRelationships[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.SeedMemberships {
+		legacy.SeedMemberships[i].ExecutionBundleID = ""
+	}
+	legacyCanonical, _ := json.Marshal(legacy.semanticV3)
+	legacy.TraceReceipt.SemanticCommitmentDigest = domainDigest(SemanticDigestDomain, legacyCanonical)
+	legacyBytes, _ := json.Marshal(legacy)
+	if err := ValidateSemanticBundle(legacyBytes); err != nil {
+		t.Fatalf("ASSERT_HISTORICAL_V3_WITHOUT_EXECUTION_BUNDLE_ID: %v", err)
+	}
+
+	first.Edges[0].ExecutionBundleID = "sha256:forged"
+	canonical, _ := json.Marshal(first.semanticV3)
+	first.TraceReceipt.SemanticCommitmentDigest = domainDigest(SemanticDigestDomain, canonical)
+	forged, _ := json.Marshal(first)
+	if err := ValidateSemanticBundle(forged); err == nil || !strings.Contains(err.Error(), "execution bundle relation mismatch") {
+		t.Fatalf("ASSERT_EXECUTION_BUNDLE_FOREIGN_KEY_VALIDATION: %v", err)
+	}
+}
+
 func TestProcessContextNormalizesEquivalentWorkingDirectories(t *testing.T) {
 	a := projectProcessContext(nil, nil, "/tmp/work/../work")
 	b := projectProcessContext(nil, nil, "/tmp/work")
 	if a.WorkingDirectoryProcessContextDigest != b.WorkingDirectoryProcessContextDigest {
 		t.Fatalf("ASSERT_PORTABLE_CWD_IDENTITY: %s != %s", a.WorkingDirectoryProcessContextDigest, b.WorkingDirectoryProcessContextDigest)
+	}
+}
+
+func TestValidateSemanticBundleAcceptsHistoricalV3WithoutAdditiveProvenance(t *testing.T) {
+	n := NewNode(Item{Name: "legacy", URI: "file:///w/legacy.go", SelectionRange: Range{End: Position{Line: 1}}})
+	encoded, err := json.Marshal(Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation:    Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "legacy.go:1:1"}}},
+		Nodes:         []Node{n},
+		Seeds:         []SeedResult{{Label: "seed", ReachedNodeIDs: []string{n.ID}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy bundleV3
+	if err := json.Unmarshal(encoded, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy.ExecutionBundleID = ""
+	legacy.Identity.ToolVersionProvenanceClass = ""
+	legacy.Identity.ServerVersionProvenanceClass = ""
+	for i := range legacy.Edges {
+		legacy.Edges[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.SiblingCandidates {
+		legacy.SiblingCandidates[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.DispatchRelationships {
+		legacy.DispatchRelationships[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.SeedMemberships {
+		legacy.SeedMemberships[i].ExecutionBundleID = ""
+	}
+	for i := range legacy.PortableLocators {
+		legacy.PortableLocators[i].Provenance = nil
+	}
+	canonical, err := json.Marshal(legacy.semanticV3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	legacyEncoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSemanticBundle(legacyEncoded); err != nil {
+		t.Fatalf("ASSERT_HISTORICAL_V3_WITHOUT_ADDITIVE_PROVENANCE: %v", err)
 	}
 }
 

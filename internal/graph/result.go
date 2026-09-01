@@ -156,19 +156,21 @@ type SeedResult struct {
 }
 
 type SiblingCandidate struct {
-	RelationID string   `json:"relation_id"`
-	SeedURI    string   `json:"-"`
-	SeedLabel  string   `json:"-"`
-	SeedLabels []string `json:"-"`
-	Candidate  Node     `json:"candidate"`
+	RelationID        string   `json:"relation_id"`
+	ExecutionBundleID string   `json:"execution_bundle_id,omitempty"`
+	SeedURI           string   `json:"-"`
+	SeedLabel         string   `json:"-"`
+	SeedLabels        []string `json:"-"`
+	Candidate         Node     `json:"candidate"`
 }
 
 type DispatchRelationship struct {
-	RelationID     string   `json:"relation_id"`
-	SeedLabel      string   `json:"-"`
-	SeedLabels     []string `json:"-"`
-	Interface      Node     `json:"interface"`
-	Implementation Node     `json:"implementation"`
+	RelationID        string   `json:"relation_id"`
+	ExecutionBundleID string   `json:"execution_bundle_id,omitempty"`
+	SeedLabel         string   `json:"-"`
+	SeedLabels        []string `json:"-"`
+	Interface         Node     `json:"interface"`
+	Implementation    Node     `json:"implementation"`
 }
 
 type EvidenceRelation struct {
