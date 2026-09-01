@@ -94,6 +94,11 @@ for version in v1 v2 v3; do
 done
 assert_contains R-SCHEMA-GET-DOC README.md 'lsp-trace schema get --schema v1|v2|v3'
 assert_contains R-VALIDATE-DOC README.md 'lsp-trace validate [--schema v1|v2|v3] PATH|-'
+assert_contains R-SKILL-VALIDATE-PRESERVES cmd/lsp-trace/SKILL.md 'Validation does not canonicalize or rewrite input.'
+assert_contains R-SKILL-VALIDATION-LAYERS cmd/lsp-trace/SKILL.md 'V1 and v2 validation is structural; v3 runs structural validation before deeper semantic validation.'
+assert_contains R-SKILL-NO-AUTH cmd/lsp-trace/SKILL.md 'Validation and verification do not authenticate producer identity or prove that a declared process executed.'
+assert_contains R-SKILL-AUTHORITY cmd/lsp-trace/SKILL.md 'Invocation provenance is caller-supplied; normalized identities, digests, and receipts are tool-derived.'
+assert_contains R-SKILL-NO-RAW-CUSTODY cmd/lsp-trace/SKILL.md 'Raw environment values, the working-directory path, and server stderr are intentionally not retained.'
 assert_contains R-FLAGS README.md '## Flags'
 for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"
