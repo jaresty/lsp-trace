@@ -24,6 +24,8 @@ Each successful slice seed records its deterministic causal closure in `reached_
 
 Slice captures server stderr through the same process buffer as `incoming`. If initialization or opening fails before a graph can be published, captured stderr is relayed before the transport/lifecycle error. If a structured slice is incomplete or has an outgoing-request failure, captured text is retained and printed as a sensitive `server-stderr` diagnostic. The raw stream is not a standalone replay artifact, and ordinary complete runs do not retain it.
 
+`SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is a recoverable server-quality diagnostic when the caller, callee, call-site range, and deterministic relation identity remain valid. The relation and server ranges are retained unchanged, traversal continues, and this diagnostic alone does not make the slice incomplete or prevent selector publication. Invalid call-site ranges, malformed or unattributable callers, node-identity collisions, and dangling relation references remain fail-closed structural errors. `source_graph_complete` remains `UNKNOWN`; recoverable containment says nothing about source-wide or runtime completeness.
+
 ## V3 custody and identity
 
 ### Field authority

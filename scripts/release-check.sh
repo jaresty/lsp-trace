@@ -119,6 +119,9 @@ assert_contains R-V3-EXECUTION-BUNDLE docs/SEMANTICS.md 'This common provenance 
 assert_contains R-V3-LOCATOR-CEILING docs/SEMANTICS.md 'they do not establish runtime behavior or feature correspondence'
 assert_contains R-V3-AUTHORITY-SCOPE docs/SEMANTICS.md 'Source identity is limited to successfully resolved seed URI/content-digest pairs'
 assert_contains R-V3-HISTORICAL-ADDITIVE docs/SCHEMA_POLICY.md 'historical v3 documents that omit them remain structurally and semantically valid'
+assert_contains R-SLICE-RANGE-WARNING-RECOVERABLE docs/SEMANTICS.md '`SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is a recoverable server-quality diagnostic'
+assert_contains R-SLICE-RANGE-WARNING-PUBLISH docs/SEMANTICS.md 'this diagnostic alone does not make the slice incomplete or prevent selector publication'
+assert_contains R-SLICE-INVALID-RELATION-CLOSED docs/SEMANTICS.md 'malformed or unattributable callers, node-identity collisions, and dangling relation references remain fail-closed structural errors'
 assert_contains R-FLAGS README.md '## Flags'
 for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"

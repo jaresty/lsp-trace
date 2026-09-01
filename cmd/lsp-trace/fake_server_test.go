@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/schema"
 )
 
 type fakeMessage struct {
@@ -259,6 +260,86 @@ func TestSubprocessSliceSummarizesNoisyDiagnosticsWithoutDroppingEvidence(t *tes
 	}
 	if len(got.Diagnostics) != 4 {
 		t.Fatalf("ASSERT_SLICE_DIAGNOSTIC_EVIDENCE_RETAINED: diagnostics=%#v", got.Diagnostics)
+	}
+}
+
+func TestSubprocessSlicePublishesAttributableOutsideCallerRanges(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\nfunc second() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	selector := filepath.Join(t.TempDir(), "selector.json")
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-range-warning", "--at", "main.go:1:1", "--at", "main.go:2:1", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s", "--output", selector}
+	stdout, stderr, code := captureRun(t, args)
+	if code != 0 || stdout != "" {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_PUBLISH_EXIT: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	artifact, err := readSelectedArtifact(selector)
+	if err != nil {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_SELECTOR_PUBLISHED: %v", err)
+	}
+	if _, err := schema.Validate(artifact, "v3"); err != nil {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_SCHEMA_VALID: %v", err)
+	}
+	var got struct {
+		Diagnostics []graph.Diagnostic `json:"diagnostics"`
+		Edges       []graph.Edge       `json:"edges"`
+		Seeds       []graph.SeedResult `json:"seeds"`
+		Summary     struct {
+			TraversalComplete   bool   `json:"traversal_complete"`
+			SourceGraphComplete string `json:"source_graph_complete"`
+		} `json:"summary"`
+	}
+	if err := json.Unmarshal(artifact, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Edges) != 2 || len(got.Diagnostics) != 2 || len(got.Seeds) != 2 || !got.Summary.TraversalComplete || got.Summary.SourceGraphComplete != graph.Unknown {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_EVIDENCE_RETAINED: edges=%#v diagnostics=%#v seeds=%#v summary=%#v", got.Edges, got.Diagnostics, got.Seeds, got.Summary)
+	}
+	globalRelations := map[string]bool{}
+	for _, edge := range got.Edges {
+		globalRelations[edge.RelationID] = true
+	}
+	reachedRelations := map[string]bool{}
+	for _, seed := range got.Seeds {
+		if seed.Failure != nil || len(seed.ReachedRelationIDs) != 1 {
+			t.Fatalf("ASSERT_SLICE_RANGE_WARNING_SEED_MEMBERSHIP: %#v", got.Seeds)
+		}
+		for _, relationID := range seed.ReachedRelationIDs {
+			reachedRelations[relationID] = true
+		}
+	}
+	if len(globalRelations) != len(reachedRelations) {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_RELATION_UNION: global=%#v reached=%#v", globalRelations, reachedRelations)
+	}
+	if strings.Count(stderr, "traverse: SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE (2 occurrences)") != 1 {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_DIAGNOSTIC_SUMMARY: %q", stderr)
+	}
+	verifyOut, verifyErr, verifyCode := captureRun(t, []string{"verify", selector})
+	if verifyCode != 0 || verifyOut != "verified integrity and custody\n" || verifyErr != "" {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_VERIFY: code=%d stdout=%q stderr=%q", verifyCode, verifyOut, verifyErr)
+	}
+	stdoutArgs := args[:len(args)-2]
+	first, firstErr, firstCode := captureRun(t, stdoutArgs)
+	second, secondErr, secondCode := captureRun(t, stdoutArgs)
+	if firstCode != 0 || secondCode != 0 || first != second || firstErr != secondErr {
+		t.Fatalf("ASSERT_SLICE_RANGE_WARNING_DETERMINISTIC_REPLAY: firstCode=%d secondCode=%d bytesEqual=%v firstErr=%q secondErr=%q", firstCode, secondCode, first == second, firstErr, secondErr)
+	}
+}
+
+func TestSubprocessSliceRejectsUnattributableIncomingRelation(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	selector := filepath.Join(t.TempDir(), "selector.json")
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-range-unattributable", "--at", "main.go:1:1", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s", "--output", selector}
+	stdout, stderr, code := captureRun(t, args)
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "dangling boundary node id") {
+		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_RELATION_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if _, err := os.Stat(selector); !os.IsNotExist(err) {
+		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_SELECTOR_ABSENT: err=%v", err)
 	}
 }
 
@@ -509,7 +590,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			line := p.Position.Line
 			name := "leaf"
-			if strings.HasPrefix(scenario, "slice-membership") {
+			if strings.HasPrefix(scenario, "slice-membership") || strings.HasPrefix(scenario, "slice-range-") {
 				name = fmt.Sprintf("seed-%c", 'a'+p.Position.Line)
 			} else if strings.HasPrefix(scenario, "slice") {
 				name = "start"
@@ -597,6 +678,15 @@ func incoming(scenario string, it fakeItem) []map[string]any {
 		if it.Name == "leaf" {
 			outside := []fakeRange{{Start: fakePosition{Line: 99}, End: fakePosition{Line: 99, Character: 1}}}
 			return []map[string]any{{"from": item("root-a", 2), "fromRanges": outside}, {"from": item("root-b", 3), "fromRanges": outside}}
+		}
+	case "slice-range-warning":
+		if strings.HasPrefix(it.Name, "seed-") {
+			outside := []fakeRange{{Start: fakePosition{Line: it.Range.Start.Line + 20}, End: fakePosition{Line: it.Range.Start.Line + 20, Character: 4}}}
+			return []map[string]any{{"from": item("caller-"+it.Name[5:], it.Range.Start.Line+2), "fromRanges": outside}}
+		}
+	case "slice-range-unattributable":
+		if strings.HasPrefix(it.Name, "seed-") {
+			return []map[string]any{{"from": item("", it.Range.Start.Line+2), "fromRanges": []fakeRange{}}}
 		}
 	case "slice-leaf":
 		if it.Name == "start" {
