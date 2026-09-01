@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json",
+  "title": "lsp-trace graph v3",
+  "type": "object",
+  "required": ["schema_version", "tool", "invocation", "identity", "sensitivity_policy", "process_context", "evidence_semantics", "seed_memberships", "replay_input_manifest", "portable_locators", "capabilities", "capability_quality", "targets", "nodes", "edges", "terminals", "frontier", "diagnostics", "summary", "trace_receipt"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.graph.v3"},
+    "tool": {"type": "object"},
+    "invocation": {"$ref": "#/$defs/invocation"},
+    "identity": {"$ref": "#/$defs/identity"},
+    "sensitivity_policy": {"type": "object"},
+    "process_context": {"type": "object", "required": ["environment", "effective_environment_process_context_digest", "effective_environment_variable_count", "working_directory_process_context_digest", "ambient_environment_state", "redaction"]},
+    "evidence_semantics": {"type": "object"}, "evidence_receipt": {"type": "object"},
+    "seed_memberships": {"type": ["array", "null"]}, "replay_input_manifest": {"type": "object"}, "portable_locators": {"type": ["array", "null"]},
+    "capabilities": {"type": "object"}, "capability_quality": {"type": "object"}, "targets": {"type": ["array", "null"]}, "nodes": {"type": ["array", "null"]}, "edges": {"type": ["array", "null"]},
+    "terminals": {"type": ["array", "null"]}, "frontier": {"type": ["array", "null"]}, "diagnostics": {"type": ["array", "null"]}, "sibling_candidates": {"type": ["array", "null"]}, "dispatch_relationships": {"type": ["array", "null"]}, "seeds": {"type": ["array", "null"]},
+    "summary": {"type": "object"}, "trace_receipt": {"type": "object"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "invocation": {
+      "type": "object",
+      "required": ["workspace_uri", "target", "server", "limits", "request_timeout_ms", "concurrency", "language_id", "expansion", "trace", "output_mode", "output_path", "seeds", "provenance"],
+      "properties": {
+        "workspace_uri": {"type": "string"}, "target": {"type": "object"}, "server": {"type": "object"}, "limits": {"type": "object"},
+        "request_timeout_ms": {"type": "integer", "minimum": 0}, "concurrency": {"type": "integer", "minimum": 0}, "language_id": {"type": "string"},
+        "expansion": {"type": "object"}, "trace": {"type": "object"}, "output_mode": {"type": "string"}, "output_path": {"type": "string"},
+        "seeds": {"type": ["array", "null"]}, "provenance": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "identity": {
+      "type": "object",
+      "required": ["caller_provenance_class", "resolved_seeds", "aggregate_scope"],
+      "properties": {"caller_provenance_class": {"type": "string"}, "resolved_seeds": {"type": ["array", "null"]}, "resolved_seed_contents_digest": {"type": "string"}, "aggregate_scope": {"type": "string"}},
+      "additionalProperties": false
+    }
+  }
+}

@@ -31,6 +31,8 @@ var embeddedSkill string
 const usageText = `usage:
   lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
   lsp-trace verify PATH
+  lsp-trace schema get --schema v1|v2|v3
+  lsp-trace validate [--schema v1|v2|v3] PATH|-
   lsp-trace skill get`
 
 type stringsFlag []string
@@ -63,6 +65,12 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "verify" {
 		return runVerify(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "schema" {
+		return runSchema(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "validate" {
+		return runValidate(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	if len(args) == 0 || args[0] != "incoming" {
 		fmt.Fprintln(os.Stderr, usageText)

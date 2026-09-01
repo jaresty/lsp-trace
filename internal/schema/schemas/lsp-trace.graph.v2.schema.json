@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v2.schema.json",
+  "title": "lsp-trace graph v2",
+  "type": "object",
+  "required": ["schema_version", "invocation", "capabilities", "capability_quality", "targets", "nodes", "edges", "terminals", "frontier", "diagnostics", "summary"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.graph.v2"},
+    "tool": {"type": "object"}, "invocation": {"type": "object"}, "evidence_semantics": {"type": "object"}, "trace_receipt": {"type": "object"},
+    "capabilities": {"type": "object"}, "capability_quality": {"type": "object"},
+    "targets": {"type": ["array", "null"], "items": {"type": "string"}}, "nodes": {"type": ["array", "null"]}, "edges": {"type": ["array", "null"]},
+    "terminals": {"type": ["array", "null"]}, "frontier": {"type": ["array", "null"]}, "diagnostics": {"type": ["array", "null"]},
+    "sibling_candidates": {"type": ["array", "null"]}, "dispatch_relationships": {"type": ["array", "null"]}, "evidence_receipt": {"type": "object"}, "seeds": {"type": ["array", "null"]},
+    "summary": {"type": "object"}
+  },
+  "additionalProperties": false
+}

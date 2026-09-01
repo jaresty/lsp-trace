@@ -89,6 +89,11 @@ assert_file R-SEMANTICS docs/SEMANTICS.md
 assert_file R-SCHEMA docs/SCHEMA_POLICY.md
 assert_file R-RELEASE docs/RELEASING.md
 assert_file R-PLATFORM .goreleaser.yaml
+for version in v1 v2 v3; do
+  assert_file "R-SCHEMA-$version" "internal/schema/schemas/lsp-trace.graph.$version.schema.json"
+done
+assert_contains R-SCHEMA-GET-DOC README.md 'lsp-trace schema get --schema v1|v2|v3'
+assert_contains R-VALIDATE-DOC README.md 'lsp-trace validate [--schema v1|v2|v3] PATH|-'
 assert_contains R-FLAGS README.md '## Flags'
 for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"
@@ -119,4 +124,19 @@ if [ ! -s "$release_tmp/lsp-trace" ]; then
   exit 1
 fi
 printf 'PASS R-DRY-BUILD: hermetic non-publishing release binary\n'
+for version in v1 v2 v3; do
+  "$release_tmp/lsp-trace" schema get --schema "$version" > "$release_tmp/$version.schema.json"
+  if cmp -s "$release_tmp/$version.schema.json" "$root/internal/schema/schemas/lsp-trace.graph.$version.schema.json"; then
+    printf 'PASS R-SCHEMA-%s-BYTES: release binary embeds exact committed schema\n' "$version"
+  else
+    printf 'FAIL R-SCHEMA-%s-BYTES: release binary schema differs from committed bytes\n' "$version"
+    exit 1
+  fi
+done
+if "$release_tmp/lsp-trace" validate --schema v2 "$root/qualification/retained/typescript/graph.json" >/dev/null; then
+  printf 'PASS R-VALIDATE-V2: retained qualification graph passes release validator\n'
+else
+  printf 'FAIL R-VALIDATE-V2: retained qualification graph failed release validator\n'
+  exit 1
+fi
 printf 'RELEASE CHECK PASS\n'

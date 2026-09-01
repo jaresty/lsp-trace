@@ -620,6 +620,55 @@ func TestCaptureRunDrainsLargeStdout(t *testing.T) {
 	}
 }
 
+func TestSchemaGetAndValidateCommands(t *testing.T) {
+	for _, version := range []string{"v1", "v2", "v3"} {
+		version := version
+		t.Run("schema get "+version, func(t *testing.T) {
+			stdout, stderr, code := captureRun(t, []string{"schema", "get", "--schema", version})
+			full := "lsp-trace.graph." + version
+			if code != 0 || stderr != "" || !strings.Contains(stdout, `"$schema": "https://json-schema.org/draft/2020-12/schema"`) || !strings.Contains(stdout, `"const": "`+full+`"`) {
+				t.Errorf("ASSERT_SCHEMA_GET_%s: code=%d stdout=%q stderr=%q", strings.ToUpper(version), code, stdout, stderr)
+			}
+		})
+	}
+
+	valid := filepath.Join(t.TempDir(), "valid-v1.json")
+	validJSON := `{"schema_version":"lsp-trace.graph.v1","invocation":{},"capabilities":{},"targets":[],"nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{}}`
+	if err := os.WriteFile(valid, []byte(validJSON), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("validate autodetect", func(t *testing.T) {
+		stdout, stderr, code := captureRun(t, []string{"validate", valid})
+		if code != 0 || stdout != "valid lsp-trace.graph.v1\n" || stderr != "" {
+			t.Errorf("ASSERT_SCHEMA_VALIDATE_AUTODETECT: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+	t.Run("validate mismatch", func(t *testing.T) {
+		stdout, stderr, code := captureRun(t, []string{"validate", "--schema", "v2", valid})
+		if code == 0 || stdout != "" || !strings.Contains(stderr, "schema version mismatch") {
+			t.Errorf("ASSERT_SCHEMA_VALIDATE_EXPLICIT_MISMATCH: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+	t.Run("validate stdin", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		code := runValidate([]string{"-"}, strings.NewReader(validJSON), &stdout, &stderr)
+		if code != 0 || stdout.String() != "valid lsp-trace.graph.v1\n" || stderr.String() != "" {
+			t.Errorf("ASSERT_SCHEMA_VALIDATE_STDIN: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+		}
+	})
+
+	invalid := filepath.Join(t.TempDir(), "invalid-v1.json")
+	if err := os.WriteFile(invalid, []byte(`{"schema_version":"lsp-trace.graph.v1"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("validate required field", func(t *testing.T) {
+		stdout, stderr, code := captureRun(t, []string{"validate", invalid})
+		if code == 0 || stdout != "" || !strings.Contains(stderr, "schema validation") || !strings.Contains(stderr, "invocation") {
+			t.Errorf("ASSERT_SCHEMA_VALIDATE_REQUIRED_FIELD: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+}
+
 func captureRun(t *testing.T, args []string) (string, string, int) {
 	t.Helper()
 	oldOut, oldErr := os.Stdout, os.Stderr
