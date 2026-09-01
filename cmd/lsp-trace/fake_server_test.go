@@ -80,6 +80,33 @@ func TestSubprocessSliceComposesOutgoingFrontierWithIncomingTraversal(t *testing
 	}
 }
 
+func TestSubprocessSliceSummarizesNoisyDiagnosticsWithoutDroppingEvidence(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-noisy", "--from-file", "main.go", "--down-depth", "1", "--up-depth", "1", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var got struct {
+		Diagnostics []graph.Diagnostic `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("ASSERT_SLICE_NOISY_JSON: %v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if code != 2 {
+		t.Fatalf("ASSERT_SLICE_NOISY_EXIT_PRESERVED: code=%d stderr=%q", code, stderr)
+	}
+	if strings.Count(stderr, "slice-prepare: skipped 2 non-callable document symbols") != 1 {
+		t.Errorf("ASSERT_SLICE_NONCALLABLE_STDERR_SUMMARY: stderr=%q", stderr)
+	}
+	if strings.Count(stderr, "traverse: SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE (2 occurrences)") != 1 {
+		t.Errorf("ASSERT_SLICE_RANGE_STDERR_SUMMARY: stderr=%q", stderr)
+	}
+	if len(got.Diagnostics) != 4 {
+		t.Fatalf("ASSERT_SLICE_DIAGNOSTIC_EVIDENCE_RETAINED: diagnostics=%#v", got.Diagnostics)
+	}
+}
+
 func TestSubprocessSliceExplicitStartModesPreserveSeedLabels(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
@@ -289,7 +316,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				return err
 			}
 			capabilities := map[string]any{"callHierarchyProvider": true}
-			if scenario == "slice" {
+			if scenario == "slice" || scenario == "slice-noisy" {
 				capabilities["documentSymbolProvider"] = true
 			}
 			err = writeFake(out, m.ID, map[string]any{"capabilities": capabilities}, nil)
@@ -297,6 +324,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 		case "textDocument/documentSymbol":
 			if scenario == "slice" {
 				err = writeFake(out, m.ID, []fakeItem{item("start", 0)}, nil)
+			}
+			if scenario == "slice-noisy" {
+				err = writeFake(out, m.ID, []fakeItem{item("start", 0), item("value-a", 1), item("value-b", 2)}, nil)
 			}
 		case "textDocument/prepareCallHierarchy":
 			if scenario == "null" {
@@ -311,9 +341,13 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				err = writeFake(out, m.ID, nil, map[string]any{"code": -32002, "message": "seed prepare failure"})
 				break
 			}
+			if scenario == "slice-noisy" && p.Position.Line > 0 {
+				err = writeFake(out, m.ID, nil, map[string]any{"code": 0, "message": fmt.Sprintf("value-%c is not a function", 'a'+p.Position.Line-1)})
+				break
+			}
 			line := p.Position.Line
 			name := "leaf"
-			if scenario == "slice" {
+			if scenario == "slice" || scenario == "slice-noisy" {
 				name = "start"
 			}
 			if scenario == "multi-two" && line > 0 {
@@ -329,7 +363,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			_ = json.Unmarshal(m.Params, &p)
 			calls := []map[string]any{}
-			if scenario == "slice" && p.Item.Name == "start" {
+			if (scenario == "slice" || scenario == "slice-noisy") && p.Item.Name == "start" {
 				calls = append(calls, map[string]any{"to": item("leaf", 1), "fromRanges": []fakeRange{{Start: fakePosition{Line: 0, Character: 5}, End: fakePosition{Line: 0, Character: 9}}}})
 			}
 			err = writeFake(out, m.ID, calls, nil)
@@ -370,6 +404,11 @@ func incoming(scenario string, it fakeItem) []map[string]any {
 	case "slice":
 		if it.Name == "leaf" {
 			return []map[string]any{call(item("root", 2))}
+		}
+	case "slice-noisy":
+		if it.Name == "leaf" {
+			outside := []fakeRange{{Start: fakePosition{Line: 99}, End: fakePosition{Line: 99, Character: 1}}}
+			return []map[string]any{{"from": item("root-a", 2), "fromRanges": outside}, {"from": item("root-b", 3), "fromRanges": outside}}
 		}
 	case "linear":
 		if it.Name == "leaf" {

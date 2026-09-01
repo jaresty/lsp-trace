@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -137,6 +138,26 @@ func sliceNode(item lsp.CallHierarchyItem) graph.Node {
 		return graph.Range{Start: graph.Position{Line: r.Start.Line, Character: r.Start.Character}, End: graph.Position{Line: r.End.Line, Character: r.End.Character}}
 	}
 	return graph.NewNode(graph.Item{Name: item.Name, Kind: item.Kind, Detail: item.Detail, URI: item.URI, Range: convert(item.Range), SelectionRange: convert(item.SelectionRange), Data: item.Data})
+}
+
+func writeSliceDiagnostics(w io.Writer, diagnostics []graph.Diagnostic) {
+	nonCallable, outsideCallerRange := 0, 0
+	for _, diagnostic := range diagnostics {
+		switch {
+		case diagnostic.Phase == "slice-prepare" && diagnostic.Method == "textDocument/prepareCallHierarchy" && strings.HasSuffix(diagnostic.Message, " is not a function"):
+			nonCallable++
+		case diagnostic.Phase == "traverse" && diagnostic.Method == "callHierarchy/incomingCalls" && diagnostic.Message == "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE":
+			outsideCallerRange++
+		default:
+			fmt.Fprintf(w, "%s: %s\n", diagnostic.Phase, diagnostic.Message)
+		}
+	}
+	if nonCallable > 0 {
+		fmt.Fprintf(w, "slice-prepare: skipped %d non-callable document symbols\n", nonCallable)
+	}
+	if outsideCallerRange > 0 {
+		fmt.Fprintf(w, "traverse: SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE (%d occurrences)\n", outsideCallerRange)
+	}
 }
 
 func runSlice(args []string) int {
@@ -287,9 +308,7 @@ func runSlice(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	for _, diagnostic := range result.Diagnostics {
-		fmt.Fprintf(os.Stderr, "%s: %s\n", diagnostic.Phase, diagnostic.Message)
-	}
+	writeSliceDiagnostics(os.Stderr, result.Diagnostics)
 	if cfg.output == "" {
 		_, err = os.Stdout.Write(data)
 	} else {
