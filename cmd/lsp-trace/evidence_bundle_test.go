@@ -360,7 +360,7 @@ func TestPublicationPropagatesDirectoryDurabilityFailures(t *testing.T) {
 				if tc.failSync != nil && tc.failSync(opened.Name()) {
 					return errors.New(tc.assertion)
 				}
-				return opened.Sync()
+				return originalSync(opened)
 			}
 			err := publishBundle(filepath.Join(dir, "bundle.json"), data)
 			if err == nil || !strings.Contains(err.Error(), tc.assertion) {
@@ -409,7 +409,7 @@ func TestPublicationFailureRecordPropagatesDirectorySyncFailure(t *testing.T) {
 		if opened.Name() == dir {
 			return errors.New("ASSERT_DURABILITY_FAILURE_RECORD_DIRECTORY_SYNC_PROPAGATED")
 		}
-		return opened.Sync()
+		return originalSync(opened)
 	}
 	name, err := retainPublicationFailure(filepath.Join(dir, "missing", "bundle.json"), []byte("{}\n"), errors.New("publish failed"))
 	if err == nil || !strings.Contains(err.Error(), "ASSERT_DURABILITY_FAILURE_RECORD_DIRECTORY_SYNC_PROPAGATED") || name != "" {
