@@ -52,6 +52,8 @@
         "starting_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
         "layers": {"type": ["array", "null"], "items": {"$ref": "#/$defs/sliceLayer"}},
         "frontier_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "outgoing_terminal_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "upward_start_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
         "outgoing_relation_ids": {"type": ["array", "null"], "items": {"type": "string"}}
       },
       "additionalProperties": false

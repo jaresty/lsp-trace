@@ -81,7 +81,7 @@ Validation does not canonicalize or rewrite input. V1 and v2 validation is struc
 
 Validation and verification do not authenticate producer identity or prove that a declared process executed. Invocation provenance is caller-supplied; normalized identities, digests, and receipts are tool-derived.
 
-Raw environment values, the working-directory path, and server stderr are intentionally not retained.
+Raw environment values and the working-directory path are intentionally not retained. The raw server-stderr stream is not retained as a standalone artifact, but captured stderr text may be retained as a sensitive `server-stderr` diagnostic when traversal is incomplete or fails; early slice lifecycle failures relay captured stderr before the transport error.
 
 ## Trace a bounded call-graph slice
 
@@ -96,7 +96,7 @@ lsp-trace slice \
 
 Choose exactly one starting mode: `--from-file FILE` recursively enumerates document symbols; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic labels; `--seed-file FILE` uses the existing labeled seed format. Explicit seed occurrences retain their labels and requested positions even when prepared nodes deduplicate.
 
-The command asks the server which positions prepare as call-hierarchy items, walks server-reported outgoing calls to the exact `--down-depth` layer, deduplicates that frontier by native node identity, and reuses the existing incoming traversal up to `--up-depth`. Both depths count edges; zero disables traversal in that direction. The v3 `slice` section references native node and relation IDs rather than duplicating graph records. A branch ending before the requested downward depth has no exact-depth frontier node.
+The command asks the server which positions prepare as call-hierarchy items and walks server-reported outgoing calls toward the exact `--down-depth` layer. `frontier_node_ids` contains only nodes at that exact depth. `outgoing_terminal_node_ids` contains nodes reached earlier whose `outgoingCalls` request succeeded with an empty result. `upward_start_node_ids` is the native-ID-sorted union of those two sets, and only that union feeds the existing incoming traversal up to `--up-depth`; the command does not traverse upward from every discovered node. Null, failed, timed-out, canceled, or node-budget-truncated outgoing expansion is not a server-reported leaf. Both depths count edges; zero disables traversal in that direction. The v3 `slice` section references native node and relation IDs rather than duplicating graph records.
 
 Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
 
@@ -109,7 +109,7 @@ Treat a slice as a deterministic bounded projection of information reported by t
 - Server-reported authority: capabilities, prepared targets, call edges, Type Hierarchy associations, document-symbol candidates, diagnostics, and opaque server data report what the configured LSP server returned.
 - Custody authority: semantic and exact-byte receipts establish only the documented integrity/custody commitments.
 
-For v3, every original `invocation.seeds` entry has exactly one `seeds` result with the same label, including a failed result when preparation, opening, capability, or traversal fails. A seed result's primary relation IDs are its `reached_relation_ids`: direct canonical call-relation IDs for that exact seed occurrence, never transitive, discovery, or another seed's relations.
+For v3, every original `invocation.seeds` entry has exactly one `seeds` result with the same label, including a failed result when preparation, opening, capability, or traversal fails. In a slice, each successful result's `reached_node_ids` and `reached_relation_ids` are its deterministic causal closure: bounded outgoing reachability from that seed plus incoming reachability from only the upward-start nodes that seed reached. The relation memberships are direct canonical call-relation IDs in that closure, never discovery relations or relations borrowed from an unrelated seed. Shared descendants and callers may belong to multiple seeds, while failed seeds have empty membership and the global graph remains deduplicated. Do not attribute the entire union graph to every seed.
 
 - `edges` contain only server-reported Call Hierarchy caller relationships.
 - `dispatch_relationships` are association evidence, not caller evidence.

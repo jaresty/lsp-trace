@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -140,6 +141,65 @@ func sliceNode(item lsp.CallHierarchyItem) graph.Node {
 	return graph.NewNode(graph.Item{Name: item.Name, Kind: item.Kind, Detail: item.Detail, URI: item.URI, Range: convert(item.Range), SelectionRange: convert(item.SelectionRange), Data: item.Data})
 }
 
+func sliceItemIDs(items []lsp.CallHierarchyItem) []string {
+	ids := make([]string, len(items))
+	for i, item := range items {
+		ids[i] = sliceNode(item).ID
+	}
+	return ids
+}
+
+func sliceClosure(startIDs []string, edges []graph.Edge, outgoing bool, maxDepth int) ([]string, []graph.Edge) {
+	adjacent := map[string][]graph.Edge{}
+	for _, edge := range edges {
+		key := edge.CallerNodeID
+		if !outgoing {
+			key = edge.CalleeNodeID
+		}
+		adjacent[key] = append(adjacent[key], edge)
+	}
+	for key := range adjacent {
+		sort.Slice(adjacent[key], func(i, j int) bool { return adjacent[key][i].RelationID < adjacent[key][j].RelationID })
+	}
+	depth := map[string]int{}
+	queue := append([]string(nil), startIDs...)
+	sort.Strings(queue)
+	for _, id := range queue {
+		depth[id] = 0
+	}
+	reachedEdges := []graph.Edge{}
+	seenRelations := map[string]bool{}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		if depth[id] >= maxDepth {
+			continue
+		}
+		for _, edge := range adjacent[id] {
+			next := edge.CalleeNodeID
+			if !outgoing {
+				next = edge.CallerNodeID
+			}
+			if !seenRelations[edge.RelationID] {
+				seenRelations[edge.RelationID] = true
+				reachedEdges = append(reachedEdges, edge)
+			}
+			if prior, ok := depth[next]; !ok || depth[id]+1 < prior {
+				depth[next] = depth[id] + 1
+				queue = append(queue, next)
+			}
+		}
+		sort.Strings(queue)
+	}
+	nodeIDs := make([]string, 0, len(depth))
+	for id := range depth {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Strings(nodeIDs)
+	sort.Slice(reachedEdges, func(i, j int) bool { return reachedEdges[i].RelationID < reachedEdges[j].RelationID })
+	return nodeIDs, reachedEdges
+}
+
 func writeSliceDiagnostics(w io.Writer, diagnostics []graph.Diagnostic) {
 	nonCallable, outsideCallerRange := 0, 0
 	for _, diagnostic := range diagnostics {
@@ -182,24 +242,48 @@ func runSlice(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	defer proc.Stop(2 * time.Second)
+	stopped := false
+	stopProcess := func() {
+		if !stopped {
+			_ = proc.Stop(2 * time.Second)
+			stopped = true
+		}
+	}
+	defer stopProcess()
+	relayEarlyFailure := func(err error) int {
+		stopProcess()
+		if captured := proc.Stderr(); captured != "" {
+			fmt.Fprint(os.Stderr, captured)
+			if !strings.HasSuffix(captured, "\n") {
+				fmt.Fprintln(os.Stderr)
+			}
+		}
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
 	client := lsp.NewClient(jsonrpc.New(proc.Stdout, proc.Stdin))
 	rctx, done := context.WithTimeout(ctx, cfg.requestTimeout)
 	err = client.Initialize(rctx, workspaceURI)
 	done()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		return relayEarlyFailure(err)
 	}
-	defer client.Shutdown(context.Background())
+	shutDown := false
+	shutdownClient := func() {
+		if !shutDown {
+			_ = client.Shutdown(context.Background())
+			shutDown = true
+		}
+	}
+	defer shutdownClient()
 	opened := map[string]bool{}
 	for _, source := range sources {
 		if opened[source.uri] {
 			continue
 		}
 		if err := client.DidOpen(source.uri, source.lang, source.text); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
+			shutdownClient()
+			return relayEarlyFailure(err)
 		}
 		opened[source.uri] = true
 	}
@@ -234,16 +318,16 @@ func runSlice(args []string) int {
 	down := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: discovery.Nodes, Edges: discovery.Edges, Diagnostics: discovery.Diagnostics, Summary: graph.Summary{Complete: discovery.Complete, Truncated: discovery.Truncated}}
 	down.Canonicalize()
 	up := graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}
-	if len(discovery.FrontierItems) > 0 && cfg.upDepth > 0 {
+	if len(discovery.UpwardStartItems) > 0 && cfg.upDepth > 0 {
 		upMaxNodes := 0
 		if cfg.maxNodes > 0 {
 			remaining := cfg.maxNodes - len(discovery.Nodes)
 			if remaining < 0 {
 				remaining = 0
 			}
-			upMaxNodes = len(discovery.FrontierItems) + remaining
+			upMaxNodes = len(discovery.UpwardStartItems) + remaining
 		}
-		up = traverse.IncomingPrepared(ctx, timed, discovery.FrontierItems, traverse.Options{MaxDepth: cfg.upDepth, MaxNodes: upMaxNodes, SchemaVersion: graph.SchemaVersionV3})
+		up = traverse.IncomingPrepared(ctx, timed, discovery.UpwardStartItems, traverse.Options{MaxDepth: cfg.upDepth, MaxNodes: upMaxNodes, SchemaVersion: graph.SchemaVersionV3})
 	}
 	result := graph.MergeResults(down, up)
 	layers := make([]graph.SliceLayer, len(discovery.Layers))
@@ -265,7 +349,9 @@ func runSlice(args []string) int {
 	if cfg.seedFile != "" {
 		startMode = "seed_file"
 	}
-	result.Slice = &graph.SliceEvidence{StartMode: startMode, SourceURI: sourceURI, DownDepth: cfg.downDepth, UpDepth: cfg.upDepth, StartingNodeIDs: discovery.StartNodeIDs, Layers: layers, FrontierNodeIDs: frontierIDs, OutgoingRelationIDs: outgoingIDs}
+	outgoingTerminalIDs := sliceItemIDs(discovery.OutgoingTerminalItems)
+	upwardStartIDs := sliceItemIDs(discovery.UpwardStartItems)
+	result.Slice = &graph.SliceEvidence{StartMode: startMode, SourceURI: sourceURI, DownDepth: cfg.downDepth, UpDepth: cfg.upDepth, StartingNodeIDs: discovery.StartNodeIDs, Layers: layers, FrontierNodeIDs: frontierIDs, OutgoingTerminalNodeIDs: outgoingTerminalIDs, UpwardStartNodeIDs: upwardStartIDs, OutgoingRelationIDs: outgoingIDs}
 	environment := map[string]string{}
 	for _, declaration := range cfg.env {
 		k, v, _ := strings.Cut(declaration, "=")
@@ -298,10 +384,55 @@ func runSlice(args []string) int {
 	if cfg.fromFile != "" {
 		seedResults = []graph.SeedResult{{Label: sources[0].spec.Label, Requested: primaryTarget, PreparedTargetIDs: discovery.StartNodeIDs}}
 	}
+	for i := range seedResults {
+		seed := &seedResults[i]
+		if seed.Failure != nil {
+			continue
+		}
+		downNodeIDs, downEdges := sliceClosure(seed.PreparedTargetIDs, down.Edges, true, cfg.downDepth)
+		downSet := make(map[string]bool, len(downNodeIDs))
+		for _, id := range downNodeIDs {
+			downSet[id] = true
+		}
+		seedUpwardStarts := []string{}
+		for _, id := range upwardStartIDs {
+			if downSet[id] {
+				seedUpwardStarts = append(seedUpwardStarts, id)
+			}
+		}
+		upNodeIDs, upEdges := sliceClosure(seedUpwardStarts, up.Edges, false, cfg.upDepth)
+		nodeSet := make(map[string]bool, len(downNodeIDs)+len(upNodeIDs))
+		for _, id := range append(downNodeIDs, upNodeIDs...) {
+			nodeSet[id] = true
+		}
+		for id := range nodeSet {
+			seed.ReachedNodeIDs = append(seed.ReachedNodeIDs, id)
+		}
+		relationSet := map[string]graph.Edge{}
+		for _, edge := range append(downEdges, upEdges...) {
+			relationSet[edge.RelationID] = edge
+		}
+		for relationID, edge := range relationSet {
+			seed.ReachedRelationIDs = append(seed.ReachedRelationIDs, relationID)
+			seed.ReachedEdges = append(seed.ReachedEdges, edge)
+		}
+	}
 	result.Seeds = seedResults
 	result.Tool = graph.ToolIdentity{Name: "lsp-trace", Version: graph.Unknown}
 	result.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()
 	result.CapabilityQuality.Advertised = result.Capabilities.CallHierarchyProvider
+	shutdownClient()
+	stopProcess()
+	retainServerStderr := !result.Summary.Complete
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Phase == "slice-outgoing" {
+			retainServerStderr = true
+			break
+		}
+	}
+	if captured := proc.Stderr(); captured != "" && retainServerStderr {
+		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "server-stderr", Message: captured})
+	}
 	result.Canonicalize()
 	data, err := marshalResult(result, cfg.pretty)
 	if err != nil {

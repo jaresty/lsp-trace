@@ -218,14 +218,16 @@ type SliceLayer struct {
 }
 
 type SliceEvidence struct {
-	StartMode           string       `json:"start_mode,omitempty"`
-	SourceURI           string       `json:"source_uri"`
-	DownDepth           int          `json:"down_depth"`
-	UpDepth             int          `json:"up_depth"`
-	StartingNodeIDs     []string     `json:"starting_node_ids"`
-	Layers              []SliceLayer `json:"layers"`
-	FrontierNodeIDs     []string     `json:"frontier_node_ids"`
-	OutgoingRelationIDs []string     `json:"outgoing_relation_ids"`
+	StartMode               string       `json:"start_mode,omitempty"`
+	SourceURI               string       `json:"source_uri"`
+	DownDepth               int          `json:"down_depth"`
+	UpDepth                 int          `json:"up_depth"`
+	StartingNodeIDs         []string     `json:"starting_node_ids"`
+	Layers                  []SliceLayer `json:"layers"`
+	FrontierNodeIDs         []string     `json:"frontier_node_ids"`
+	OutgoingTerminalNodeIDs []string     `json:"outgoing_terminal_node_ids,omitempty"`
+	UpwardStartNodeIDs      []string     `json:"upward_start_node_ids,omitempty"`
+	OutgoingRelationIDs     []string     `json:"outgoing_relation_ids"`
 }
 
 type Result struct {
@@ -603,6 +605,22 @@ func (r *Result) Canonicalize() {
 	})
 	sort.Strings(r.Targets)
 	r.Targets = uniqueStrings(r.Targets)
+	if r.Slice != nil {
+		sort.Strings(r.Slice.StartingNodeIDs)
+		r.Slice.StartingNodeIDs = uniqueStrings(r.Slice.StartingNodeIDs)
+		sort.Strings(r.Slice.FrontierNodeIDs)
+		r.Slice.FrontierNodeIDs = uniqueStrings(r.Slice.FrontierNodeIDs)
+		sort.Strings(r.Slice.OutgoingTerminalNodeIDs)
+		r.Slice.OutgoingTerminalNodeIDs = uniqueStrings(r.Slice.OutgoingTerminalNodeIDs)
+		sort.Strings(r.Slice.UpwardStartNodeIDs)
+		r.Slice.UpwardStartNodeIDs = uniqueStrings(r.Slice.UpwardStartNodeIDs)
+		sort.Strings(r.Slice.OutgoingRelationIDs)
+		r.Slice.OutgoingRelationIDs = uniqueStrings(r.Slice.OutgoingRelationIDs)
+		for i := range r.Slice.Layers {
+			sort.Strings(r.Slice.Layers[i].NodeIDs)
+			r.Slice.Layers[i].NodeIDs = uniqueStrings(r.Slice.Layers[i].NodeIDs)
+		}
+	}
 	sort.Slice(r.SiblingCandidates, func(i, j int) bool { return r.SiblingCandidates[i].RelationID < r.SiblingCandidates[j].RelationID })
 	sort.Slice(r.DispatchRelationships, func(i, j int) bool {
 		return r.DispatchRelationships[i].RelationID < r.DispatchRelationships[j].RelationID

@@ -45,11 +45,48 @@ func TestProducerGeneratedV3PassesLayeredValidation(t *testing.T) {
 	}
 }
 
-func TestProducerGeneratedV3SlicePassesLayeredValidation(t *testing.T) {
+func TestV3SliceValidatesOptionalTerminalAndUpwardStartEvidenceFieldTypes(t *testing.T) {
 	n := graph.NewNode(graph.Item{Name: "start", URI: "file:///w/a.go"})
-	result := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: []graph.Node{n}, Slice: &graph.SliceEvidence{
+	result := graph.Result{SchemaVersion: graph.SchemaVersionV3, Invocation: graph.Invocation{Seeds: []graph.InvocationSeed{{Label: "seed", At: "a.go:1:1"}}}, Nodes: []graph.Node{n}, Seeds: []graph.SeedResult{{Label: "seed", PreparedTargetIDs: []string{n.ID}, ReachedNodeIDs: []string{n.ID}}}, Slice: &graph.SliceEvidence{
+		SourceURI: "file:///w/a.go", DownDepth: 0, UpDepth: 1,
+		StartingNodeIDs: []string{n.ID}, Layers: []graph.SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{n.ID}, UpwardStartNodeIDs: []string{n.ID},
+	}}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"outgoing_terminal_node_ids", "upward_start_node_ids"} {
+		var document map[string]any
+		if err := json.Unmarshal(encoded, &document); err != nil {
+			t.Fatal(err)
+		}
+		document["slice"].(map[string]any)[field] = "not-an-array"
+		mutated, _ := json.Marshal(document)
+		if _, err := Validate(mutated, "v3"); err == nil || !strings.Contains(err.Error(), field) {
+			t.Fatalf("ASSERT_V3_SLICE_FIELD_TYPE_%s: %v", field, err)
+		}
+	}
+	legacyResult := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: []graph.Node{n}, Slice: &graph.SliceEvidence{
 		SourceURI: "file:///w/a.go", DownDepth: 0, UpDepth: 1,
 		StartingNodeIDs: []string{n.ID}, Layers: []graph.SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{n.ID},
+	}}
+	legacyEncoded, err := json.Marshal(legacyResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(legacyEncoded, []byte("outgoing_terminal_node_ids")) || bytes.Contains(legacyEncoded, []byte("upward_start_node_ids")) {
+		t.Fatalf("ASSERT_V3_HISTORICAL_SLICE_OMITS_ADDITIVE_FIELDS: %s", legacyEncoded)
+	}
+	if _, err := Validate(legacyEncoded, "v3"); err != nil {
+		t.Fatalf("ASSERT_V3_HISTORICAL_SLICE_WITHOUT_ADDITIVE_FIELDS: %v", err)
+	}
+}
+
+func TestProducerGeneratedV3SlicePassesLayeredValidation(t *testing.T) {
+	n := graph.NewNode(graph.Item{Name: "start", URI: "file:///w/a.go"})
+	result := graph.Result{SchemaVersion: graph.SchemaVersionV3, Invocation: graph.Invocation{Seeds: []graph.InvocationSeed{{Label: "seed", At: "a.go:1:1"}}}, Nodes: []graph.Node{n}, Seeds: []graph.SeedResult{{Label: "seed", PreparedTargetIDs: []string{n.ID}, ReachedNodeIDs: []string{n.ID}}}, Slice: &graph.SliceEvidence{
+		SourceURI: "file:///w/a.go", DownDepth: 0, UpDepth: 1,
+		StartingNodeIDs: []string{n.ID}, Layers: []graph.SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{n.ID}, UpwardStartNodeIDs: []string{n.ID},
 	}}
 	encoded, err := json.Marshal(result)
 	if err != nil {

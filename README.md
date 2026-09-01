@@ -25,7 +25,7 @@ Line and column values are one-based. Graph JSON is written to stdout (or `--out
 
 ## Bounded call-graph slices
 
-Use `slice` to enumerate document symbols in one starting file, prepare every server-accepted callable, walk outgoing calls to an exact depth, and reuse the incoming traversal from that deduplicated frontier:
+Use `slice` to enumerate document symbols in one starting file, prepare every server-accepted callable, walk outgoing calls to an exact depth, and reuse the incoming traversal from the deterministic union of that frontier plus server-reported outgoing leaves reached before it:
 
 ```sh
 lsp-trace slice \
@@ -38,7 +38,7 @@ lsp-trace slice \
 
 Choose exactly one starting mode: `--from-file FILE` enumerates every server-preparable document symbol in one file; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic `seed-1`, `seed-2`, … labels; `--seed-file FILE` uses the existing labeled seed JSON format. Explicit starts are prepared once, deduplicated by native node identity for traversal, and retain each caller-supplied seed occurrence in `invocation.seeds` and `seeds`.
 
-`--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice.start_mode` plus metadata whose layers, frontier, and outgoing relations reference the native graph's canonical node and relation IDs. A branch that ends before the requested downward depth contributes no exact-depth frontier node. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
+`--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice.start_mode` plus metadata whose layers, frontier, outgoing terminals, upward starts, and outgoing relations reference the native graph's canonical node and relation IDs. `frontier_node_ids` is only the exact-depth layer. `outgoing_terminal_node_ids` contains successful empty `outgoingCalls` responses reached before that layer. `upward_start_node_ids` is their native-ID-sorted union. Null, failed, timed-out, canceled, or node-budget-truncated outgoing expansion is not a server-reported leaf. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
 
 ## Flags
 
@@ -67,7 +67,7 @@ Optional flags:
 - `--schema v1|v2|v3`: select output schema; v3 is the default, while explicit v1/v2 retain their historical projections.
 - `--pretty`: indent JSON output; default is compact JSON.
 
-In v3, every original `invocation.seeds` entry has exactly one `seeds` result with the same label, including failures. Each result's `reached_relation_ids` are direct canonical call-relation IDs for that exact seed occurrence; they are not transitive relations, discovery relations, or relations borrowed from another seed.
+In v3, every original `invocation.seeds` entry has exactly one `seeds` result with the same label, including failures. Each result's `reached_node_ids` and `reached_relation_ids` are the deterministic causal closure for that exact seed occurrence. For slices, that closure follows bounded outgoing paths from the seed and bounded incoming paths only from upward-start nodes reached by those outgoing paths. Shared nodes and relations may belong to multiple seeds; failed seeds have empty membership; the global graph remains deduplicated and equals the union of successful memberships.
 
 Retrieve the committed Draft 2020-12 contracts with `lsp-trace schema get --schema v1|v2|v3`. The command writes the exact schema bytes embedded in the binary. Validate a graph file or stdin with `lsp-trace validate [--schema v1|v2|v3] PATH|-`; the version is auto-detected from `schema_version` unless an explicit matching version is required. Structural schema validation runs first. V3 then runs the existing deeper semantic checks for graph references, digests, receipts, and evidence rules. Validation does not rewrite or canonicalize input.
 

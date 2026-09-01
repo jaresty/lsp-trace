@@ -22,15 +22,17 @@ type Layer struct {
 }
 
 type Discovery struct {
-	SourceURI     string
-	StartNodeIDs  []string
-	Layers        []Layer
-	FrontierItems []lsp.CallHierarchyItem
-	Nodes         []graph.Node
-	Edges         []graph.Edge
-	Diagnostics   []graph.Diagnostic
-	Complete      bool
-	Truncated     bool
+	SourceURI             string
+	StartNodeIDs          []string
+	Layers                []Layer
+	FrontierItems         []lsp.CallHierarchyItem
+	OutgoingTerminalItems []lsp.CallHierarchyItem
+	UpwardStartItems      []lsp.CallHierarchyItem
+	Nodes                 []graph.Node
+	Edges                 []graph.Edge
+	Diagnostics           []graph.Diagnostic
+	Complete              bool
+	Truncated             bool
 }
 
 type Options struct {
@@ -168,6 +170,10 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-outgoing", Method: "callHierarchy/outgoingCalls", NodeID: q.node.ID, Message: message})
 			continue
 		}
+		if len(calls) == 0 {
+			result.OutgoingTerminalItems = append(result.OutgoingTerminalItems, q.item)
+			continue
+		}
 		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
 		for _, call := range calls {
 			callee := node(call.To)
@@ -219,6 +225,21 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 	sort.Strings(result.StartNodeIDs)
 	sort.Slice(result.Nodes, func(i, j int) bool { return result.Nodes[i].ID < result.Nodes[j].ID })
 	sort.Slice(result.FrontierItems, func(i, j int) bool { return node(result.FrontierItems[i]).ID < node(result.FrontierItems[j]).ID })
+	sort.Slice(result.OutgoingTerminalItems, func(i, j int) bool {
+		return node(result.OutgoingTerminalItems[i]).ID < node(result.OutgoingTerminalItems[j]).ID
+	})
+	upwardByID := make(map[string]lsp.CallHierarchyItem, len(result.FrontierItems)+len(result.OutgoingTerminalItems))
+	for _, item := range append(append([]lsp.CallHierarchyItem{}, result.FrontierItems...), result.OutgoingTerminalItems...) {
+		upwardByID[node(item).ID] = item
+	}
+	upwardIDs := make([]string, 0, len(upwardByID))
+	for id := range upwardByID {
+		upwardIDs = append(upwardIDs, id)
+	}
+	sort.Strings(upwardIDs)
+	for _, id := range upwardIDs {
+		result.UpwardStartItems = append(result.UpwardStartItems, upwardByID[id])
+	}
 	sort.Slice(result.Edges, func(i, j int) bool {
 		if result.Edges[i].CallerNodeID != result.Edges[j].CallerNodeID {
 			return result.Edges[i].CallerNodeID < result.Edges[j].CallerNodeID

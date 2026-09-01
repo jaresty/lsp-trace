@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -489,11 +490,72 @@ func TestV3SliceEvidenceRejectsDanglingNativeReferences(t *testing.T) {
 	}
 }
 
+func TestV3SliceEvidenceRejectsIncompleteOrFailedSeedMemberships(t *testing.T) {
+	a := NewNode(Item{Name: "a", URI: "file:///w/a.go"})
+	b := NewNode(Item{Name: "b", URI: "file:///w/b.go"})
+	edge := Edge{CallerNodeID: a.ID, CalleeNodeID: b.ID}
+	relationID := canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", a.ID+"->"+b.ID, "", "", "", a.ID, b.ID)
+	base := Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation:    Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "a.go:1:1"}}},
+		Nodes:         []Node{a, b}, Edges: []Edge{edge},
+		Slice: &SliceEvidence{SourceURI: "file:///w/a.go", DownDepth: 1, StartingNodeIDs: []string{a.ID}, Layers: []SliceLayer{{Depth: 0, NodeIDs: []string{a.ID}}, {Depth: 1, NodeIDs: []string{b.ID}}}, FrontierNodeIDs: []string{b.ID}, OutgoingTerminalNodeIDs: []string{}, UpwardStartNodeIDs: []string{b.ID}, OutgoingRelationIDs: []string{relationID}},
+		Seeds: []SeedResult{{Label: "seed", PreparedTargetIDs: []string{a.ID}, ReachedNodeIDs: []string{a.ID}, ReachedRelationIDs: []string{relationID}, ReachedEdges: []Edge{edge}}},
+	}
+	if _, err := json.Marshal(base); err == nil || !strings.Contains(err.Error(), "slice seed memberships do not cover union nodes") {
+		t.Fatalf("ASSERT_SLICE_SEED_NODE_MEMBERSHIP_UNION_VALIDATED: %v", err)
+	}
+	base.Seeds[0].ReachedNodeIDs = []string{a.ID, b.ID}
+	base.Seeds[0].Failure = &SeedFailure{Phase: "slice-prepare", Message: "failed"}
+	if _, err := json.Marshal(base); err == nil || !strings.Contains(err.Error(), "failed slice seed has non-empty membership") {
+		t.Fatalf("ASSERT_SLICE_FAILED_SEED_MEMBERSHIP_REJECTED: %v", err)
+	}
+}
+
+func TestV3SliceEvidenceRejectsDanglingTerminalAndInvalidUpwardUnion(t *testing.T) {
+	a := NewNode(Item{Name: "a", URI: "file:///w/a.go"})
+	b := NewNode(Item{Name: "b", URI: "file:///w/b.go"})
+	base := SliceEvidence{
+		SourceURI: "file:///w/a.go", DownDepth: 1,
+		StartingNodeIDs: []string{a.ID}, Layers: []SliceLayer{{Depth: 0, NodeIDs: []string{a.ID}}},
+		OutgoingTerminalNodeIDs: []string{a.ID}, UpwardStartNodeIDs: []string{a.ID},
+	}
+
+	r := Result{SchemaVersion: SchemaVersionV3, Invocation: Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "a.go:1:1"}}}, Nodes: []Node{a, b}, Seeds: []SeedResult{{Label: "seed", PreparedTargetIDs: []string{a.ID}, ReachedNodeIDs: []string{a.ID, b.ID}}}, Slice: &base}
+	r.Slice.OutgoingTerminalNodeIDs = []string{"missing"}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "dangling slice outgoing terminal node id") {
+		t.Fatalf("ASSERT_SLICE_OUTGOING_TERMINAL_NATIVE_REFERENCE: %v", err)
+	}
+
+	r.Slice.OutgoingTerminalNodeIDs = []string{a.ID}
+	r.Slice.FrontierNodeIDs = []string{b.ID}
+	r.Slice.Layers = append(r.Slice.Layers, SliceLayer{Depth: 1, NodeIDs: []string{b.ID}})
+	r.Slice.UpwardStartNodeIDs = []string{a.ID}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "slice upward starts do not equal frontier and outgoing-terminal union") {
+		t.Fatalf("ASSERT_SLICE_UPWARD_START_UNION_VALIDATED: %v", err)
+	}
+
+	r.Slice.UpwardStartNodeIDs = []string{b.ID, a.ID}
+	reversed, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("ASSERT_SLICE_UPWARD_START_CANONICAL_BYTES: reversed marshal: %v", err)
+	}
+	r.Slice.UpwardStartNodeIDs = []string{a.ID, b.ID}
+	sorted, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("ASSERT_SLICE_UPWARD_START_CANONICAL_BYTES: sorted marshal: %v", err)
+	}
+	if !bytes.Equal(reversed, sorted) {
+		t.Fatalf("ASSERT_SLICE_UPWARD_START_CANONICAL_BYTES: reversed=%s sorted=%s", reversed, sorted)
+	}
+}
+
 func TestV3SliceAllowsEmptyFrontierWhenGraphEndsBeforeDepth(t *testing.T) {
 	n := NewNode(Item{Name: "start", URI: "file:///w/a.go"})
-	r := Result{SchemaVersion: SchemaVersionV3, Nodes: []Node{n}, Slice: &SliceEvidence{
+	r := Result{SchemaVersion: SchemaVersionV3, Invocation: Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "a.go:1:1"}}}, Nodes: []Node{n}, Seeds: []SeedResult{{Label: "seed", PreparedTargetIDs: []string{n.ID}, ReachedNodeIDs: []string{n.ID}}}, Slice: &SliceEvidence{
 		SourceURI: "file:///w/a.go", DownDepth: 1, StartingNodeIDs: []string{n.ID},
 		Layers: []SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{},
+		OutgoingTerminalNodeIDs: []string{n.ID}, UpwardStartNodeIDs: []string{n.ID},
 	}}
 	if _, err := json.Marshal(r); err != nil {
 		t.Fatalf("ASSERT_SLICE_EMPTY_EXACT_DEPTH_VALID: %v", err)

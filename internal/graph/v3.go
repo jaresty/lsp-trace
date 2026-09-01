@@ -408,6 +408,16 @@ func (r Result) ValidateReferences() error {
 				return err
 			}
 		}
+		for _, id := range r.Slice.OutgoingTerminalNodeIDs {
+			if err := need("slice outgoing terminal", id); err != nil {
+				return err
+			}
+		}
+		for _, id := range r.Slice.UpwardStartNodeIDs {
+			if err := need("slice upward start", id); err != nil {
+				return err
+			}
+		}
 		if r.Slice.DownDepth < 0 {
 			return fmt.Errorf("slice down depth must be non-negative")
 		}
@@ -417,6 +427,62 @@ func (r Result) ValidateReferences() error {
 			}
 		} else if len(r.Slice.FrontierNodeIDs) != 0 {
 			return fmt.Errorf("slice frontier must be empty when down-depth layer was not reached")
+		}
+		if r.Slice.OutgoingTerminalNodeIDs != nil || r.Slice.UpwardStartNodeIDs != nil {
+			upwardDuplicate := false
+			for i := 1; i < len(r.Slice.UpwardStartNodeIDs); i++ {
+				if r.Slice.UpwardStartNodeIDs[i-1] == r.Slice.UpwardStartNodeIDs[i] {
+					upwardDuplicate = true
+					break
+				}
+			}
+			if !sort.StringsAreSorted(r.Slice.UpwardStartNodeIDs) || upwardDuplicate {
+				return fmt.Errorf("slice upward starts must be sorted and unique")
+			}
+			upwardSet := map[string]struct{}{}
+			for _, id := range append(append([]string{}, r.Slice.FrontierNodeIDs...), r.Slice.OutgoingTerminalNodeIDs...) {
+				upwardSet[id] = struct{}{}
+			}
+			expectedUpward := make([]string, 0, len(upwardSet))
+			for id := range upwardSet {
+				expectedUpward = append(expectedUpward, id)
+			}
+			sort.Strings(expectedUpward)
+			if !reflect.DeepEqual(r.Slice.UpwardStartNodeIDs, expectedUpward) {
+				return fmt.Errorf("slice upward starts do not equal frontier and outgoing-terminal union")
+			}
+			membershipNodes := map[string]struct{}{}
+			membershipRelations := map[string]struct{}{}
+			for _, seed := range r.Seeds {
+				if seed.Failure != nil {
+					if len(seed.ReachedNodeIDs) != 0 || len(seed.ReachedRelationIDs) != 0 {
+						return fmt.Errorf("failed slice seed has non-empty membership %q", seed.Label)
+					}
+					continue
+				}
+				for _, id := range seed.ReachedNodeIDs {
+					membershipNodes[id] = struct{}{}
+				}
+				for _, id := range seed.ReachedRelationIDs {
+					membershipRelations[id] = struct{}{}
+				}
+			}
+			if len(membershipNodes) != len(ids) {
+				return fmt.Errorf("slice seed memberships do not cover union nodes")
+			}
+			for id := range ids {
+				if _, ok := membershipNodes[id]; !ok {
+					return fmt.Errorf("slice seed memberships do not cover union nodes")
+				}
+			}
+			if len(membershipRelations) != len(relationIDs) {
+				return fmt.Errorf("slice seed memberships do not cover union relations")
+			}
+			for id := range relationIDs {
+				if _, ok := membershipRelations[id]; !ok {
+					return fmt.Errorf("slice seed memberships do not cover union relations")
+				}
+			}
 		}
 		for _, id := range r.Slice.OutgoingRelationIDs {
 			if _, ok := relationIDs[id]; !ok {
