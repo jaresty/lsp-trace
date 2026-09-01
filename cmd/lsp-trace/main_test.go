@@ -142,8 +142,23 @@ func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 	if code := runSkill([]string{"get"}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != embeddedSkill {
 		t.Fatalf("ASSERT_EMBEDDED_SKILL_GET: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "name: lsp-trace") || !strings.Contains(stdout.String(), "--expand-dispatch-family") || !strings.Contains(stdout.String(), "--expand-topmost-siblings") || !strings.Contains(stdout.String(), "evidence_semantics") || !strings.Contains(stdout.String(), "trace_receipt") || !strings.Contains(stdout.String(), "support_contribution") || !strings.Contains(stdout.String(), "--provenance-source-revision") {
-		t.Fatalf("ASSERT_EMBEDDED_SKILL_CONTENT: %s", stdout.String())
+	requiredContract := []string{
+		"name: lsp-trace",
+		"--expand-dispatch-family",
+		"--expand-topmost-siblings",
+		"evidence_semantics",
+		"trace_receipt",
+		"support_contribution",
+		"--provenance-source-revision",
+		"exactly one `seeds` result",
+		"direct canonical call-relation IDs",
+		"does not resolve cwd symlink aliases",
+		"Field authority",
+	}
+	for _, required := range requiredContract {
+		if !strings.Contains(stdout.String(), required) {
+			t.Fatalf("ASSERT_EMBEDDED_SKILL_DOWNSTREAM_CONTRACT: missing=%q skill=%s", required, stdout.String())
+		}
 	}
 	stdout.Reset()
 	stderr.Reset()

@@ -35,6 +35,7 @@ type Node struct {
 }
 
 type Edge struct {
+	RelationID   string  `json:"relation_id"`
 	CallerNodeID string  `json:"caller_node_id"`
 	CalleeNodeID string  `json:"callee_node_id"`
 	CallSites    []Range `json:"call_sites"`
@@ -101,6 +102,7 @@ func NewNode(item Item) Node {
 }
 
 func MergeEdge(edges []Edge, edge Edge) []Edge {
+	edge.RelationID = canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
 	for i := range edges {
 		if edges[i].CallerNodeID == edge.CallerNodeID && edges[i].CalleeNodeID == edge.CalleeNodeID {
 			edges[i].CallSites = mergeRanges(edges[i].CallSites, edge.CallSites)

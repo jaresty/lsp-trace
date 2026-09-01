@@ -41,6 +41,7 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 			AggregateScope             string                 `json:"aggregate_scope"`
 		} `json:"identity"`
 		ProcessContext graph.ProcessContext `json:"process_context"`
+		Seeds          []graph.SeedResult   `json:"seeds"`
 		Summary        struct {
 			TraversalComplete bool `json:"traversal_complete"`
 		} `json:"summary"`
@@ -57,6 +58,9 @@ func TestV3CapturesCompleteEffectiveInvocationAndAllSeedIdentities(t *testing.T)
 	}
 	if len(inv.Seeds) != 2 || len(bundle.Identity.ResolvedSeeds) != 2 || bundle.Identity.CallerProvenanceClass != "CALLER_ASSERTED" || bundle.Identity.AggregateScope != "RESOLVED_SEED_CONTENTS" || !strings.HasPrefix(bundle.Identity.ResolvedSeedContentsDigest, "sha256:") {
 		t.Fatalf("ASSERT_P3_ALL_SEED_IDENTITIES: invocation_seeds=%#v identity=%#v", inv.Seeds, bundle.Identity)
+	}
+	if len(bundle.Seeds) != 2 || bundle.Seeds[0].Failure == nil || bundle.Seeds[1].Failure == nil || bundle.Seeds[0].Failure.Phase != "spawn" || bundle.Seeds[1].Failure.Phase != "spawn" {
+		t.Fatalf("ASSERT_EXACT_RESULT_PER_INVOCATION_SEED_ON_SPAWN_FAILURE: %#v", bundle.Seeds)
 	}
 	if bundle.Summary.TraversalComplete {
 		t.Fatal("ASSERT_SPAWN_FAILURE_CANONICALLY_INCOMPLETE")
@@ -366,6 +370,36 @@ func TestPublicationPropagatesDirectoryDurabilityFailures(t *testing.T) {
 	}
 }
 
+func TestPublicationDisclosesUnavailableDirectorySyncWithoutTreatingItAsFailure(t *testing.T) {
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalSync, originalDurability := syncPublicationDirectory, publicationDirectoryDurability
+	t.Cleanup(func() {
+		syncPublicationDirectory = originalSync
+		publicationDirectoryDurability = originalDurability
+	})
+	syncPublicationDirectory = func(*os.File) error { return errDirectorySyncUnavailable }
+	publicationDirectoryDurability = directoryDurabilityUnavailable
+	selectorPath := filepath.Join(t.TempDir(), "bundle.json")
+	if err := publishBundle(selectorPath, data); err != nil {
+		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_SYNC_UNAVAILABLE_NOT_PUBLICATION_FAILURE: %v", err)
+	}
+	selector, err := readGenerationSelector(selectorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptData, err := os.ReadFile(filepath.Join(filepath.Dir(selectorPath), selector.Generation, generationReceiptName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt custodyReceipt
+	if err := json.Unmarshal(receiptData, &receipt); err != nil || receipt.DirectoryDurability != directoryDurabilityUnavailable {
+		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_DURABILITY_DISCLOSED: receipt=%s err=%v", receiptData, err)
+	}
+}
+
 func TestPublicationFailureRecordPropagatesDirectorySyncFailure(t *testing.T) {
 	dir := t.TempDir()
 	originalOpen, originalSync := openPublicationDirectory, syncPublicationDirectory
@@ -393,6 +427,9 @@ func TestExactByteCustodyFieldsAndFailureRecordContract(t *testing.T) {
 	if err := json.Unmarshal(receipt, &receiptFields); err != nil || receiptFields["exact_serialized_bytes_digest"] == nil || receiptFields["digest"] != nil {
 		t.Fatalf("ASSERT_DIGEST_ROLE_EXACT_SERIALIZED_BYTES: receipt=%s err=%v", receipt, err)
 	}
+	if receiptFields["directory_durability"] != publicationDirectoryDurability {
+		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_DURABILITY_DISCLOSED: receipt=%s", receipt)
+	}
 	dir := t.TempDir()
 	name, err := retainPublicationFailure(filepath.Join(dir, "missing", "bundle.json"), data, errors.New("publish failed"))
 	if err != nil {
@@ -407,6 +444,9 @@ func TestExactByteCustodyFieldsAndFailureRecordContract(t *testing.T) {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&failureFields); err != nil || failureFields["exact_serialized_bytes_digest"] == nil || failureFields["artifact_digest"] != nil {
 		t.Fatalf("ASSERT_DIGEST_ROLE_EXACT_SERIALIZED_BYTES: failure=%s err=%v", failureData, err)
+	}
+	if failureFields["directory_durability"] != publicationDirectoryDurability {
+		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_DURABILITY_DISCLOSED: failure=%s", failureData)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		t.Fatalf("ASSERT_FAILURE_RECORD_PRIVATE_STRICT_JSON: trailing content err=%v data=%q", err, failureData)

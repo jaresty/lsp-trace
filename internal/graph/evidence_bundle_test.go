@@ -161,7 +161,7 @@ func TestReceiptIssuanceRejectsStructurallyInvalidGraph(t *testing.T) {
 }
 
 func TestValidateSemanticBundleRejectsRehashedIdentityMismatch(t *testing.T) {
-	r := Result{SchemaVersion: SchemaVersionV3, Invocation: Invocation{Seeds: []InvocationSeed{{Label: "a", At: "a.go:1:1", ResolvedURI: "file:///a.go", ContentSHA256: "sha256:abc", LanguageID: "go"}}}}
+	r := Result{SchemaVersion: SchemaVersionV3, Invocation: Invocation{Seeds: []InvocationSeed{{Label: "a", At: "a.go:1:1", ResolvedURI: "file:///a.go", ContentSHA256: "sha256:abc", LanguageID: "go"}}}, Seeds: []SeedResult{{Label: "a"}}}
 	encoded, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -319,6 +319,77 @@ func TestValidateSemanticBundleRejectsRehashedReplayIdentityMismatch(t *testing.
 	}
 }
 
+func TestValidateSemanticBundleRejectsRehashedExactJoinAndMetadataMutations(t *testing.T) {
+	n1 := NewNode(Item{Name: "caller-a", URI: "file:///w/a.go"})
+	n2 := NewNode(Item{Name: "callee-a", URI: "file:///w/a.go"})
+	n3 := NewNode(Item{Name: "caller-b", URI: "file:///w/b.go"})
+	n4 := NewNode(Item{Name: "callee-b", URI: "file:///w/b.go"})
+	r := Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation: Invocation{
+			Server:     ServerInvocation{Environment: map[string]string{"TOKEN": "secret"}},
+			Seeds:      []InvocationSeed{{Label: "a", At: "a.go:1:1"}, {Label: "b", At: "b.go:1:1"}},
+			Provenance: InvocationProvenance{SourceRevision: "rev"},
+		},
+		Nodes: []Node{n1, n2, n3, n4},
+		Edges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}, {CallerNodeID: n3.ID, CalleeNodeID: n4.ID}},
+		Seeds: []SeedResult{
+			{Label: "a", ReachedNodeIDs: []string{n1.ID, n2.ID}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
+			{Label: "b", ReachedNodeIDs: []string{n3.ID, n4.ID}, ReachedEdges: []Edge{{CallerNodeID: n3.ID, CalleeNodeID: n4.ID}}},
+		},
+		Summary: Summary{Complete: true},
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var base bundleV3
+	if err := json.Unmarshal(encoded, &base); err != nil {
+		t.Fatal(err)
+	}
+	rehash := func(bundle *bundleV3) []byte {
+		t.Helper()
+		canonical, err := json.Marshal(bundle.semanticV3)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+		mutated, err := json.Marshal(bundle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return mutated
+	}
+	cases := []struct {
+		name   string
+		want   string
+		mutate func(*bundleV3)
+	}{
+		{"missing result", "invocation/result cardinality", func(b *bundleV3) { b.Seeds = nil; b.SeedMemberships = nil }},
+		{"sensitivity policy", "sensitivity policy mismatch", func(b *bundleV3) { b.SensitivityPolicy.AutomaticRedaction = true }},
+		{"evidence semantics", "evidence semantics mismatch", func(b *bundleV3) { b.EvidenceSemantics.CallEdges.SupportContribution = 99 }},
+		{"duplicate explicit environment name", "duplicate explicit environment name", func(b *bundleV3) {
+			b.ProcessContext.Environment = append(b.ProcessContext.Environment, b.ProcessContext.Environment[0])
+		}},
+		{"cross-seed primary relation", "outside exact seed membership", func(b *bundleV3) {
+			b.Seeds[0].ReachedRelationIDs = append([]string(nil), b.Seeds[1].ReachedRelationIDs...)
+			b.SeedMemberships = projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bundle := base
+			bundle.Seeds = append([]SeedResult(nil), base.Seeds...)
+			bundle.SeedMemberships = append([]SeedMembership(nil), base.SeedMemberships...)
+			bundle.ProcessContext.Environment = append([]EnvironmentIdentity(nil), base.ProcessContext.Environment...)
+			tc.mutate(&bundle)
+			if err := ValidateSemanticBundle(rehash(&bundle)); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("mutation accepted or wrong error: %v", err)
+			}
+		})
+	}
+}
+
 func TestV3CanonicalProjectionRoundTripsAndRejectsDuplicateEdges(t *testing.T) {
 	n1 := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
 	n2 := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})
@@ -336,11 +407,81 @@ func TestV3CanonicalProjectionRoundTripsAndRejectsDuplicateEdges(t *testing.T) {
 	}
 }
 
+func TestPrimaryRelationIDsAreV3Only(t *testing.T) {
+	caller := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
+	callee := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})
+	base := Result{
+		Nodes:                 []Node{caller, callee},
+		Edges:                 MergeEdge(nil, Edge{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}),
+		SiblingCandidates:     []SiblingCandidate{{RelationID: canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", caller.ID, "", "", "", ""), Candidate: caller}},
+		DispatchRelationships: []DispatchRelationship{{RelationID: canonicalRelationID("DISPATCH_ASSOCIATION", "INTERFACE_TO_IMPLEMENTATION", caller.ID+"->"+callee.ID, "", caller.ID, callee.ID, "", ""), Interface: caller, Implementation: callee}},
+		Summary:               Summary{Complete: true},
+	}
+	for _, schema := range []string{SchemaVersionV1, SchemaVersionV2, SchemaVersionV3} {
+		r := base
+		r.SchemaVersion = schema
+		encoded, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document map[string]any
+		if err := json.Unmarshal(encoded, &document); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{"edges", "sibling_candidates", "dispatch_relationships"} {
+			records, _ := document[field].([]any)
+			for _, raw := range records {
+				record, _ := raw.(map[string]any)
+				_, hasID := record["relation_id"]
+				if schema == SchemaVersionV3 && !hasID {
+					t.Fatalf("ASSERT_V3_PRIMARY_RELATION_IDS_PRESENT: field=%s document=%s", field, encoded)
+				}
+				if schema != SchemaVersionV3 && hasID {
+					t.Fatalf("ASSERT_HISTORICAL_PRIMARY_RELATION_IDS_ABSENT_%s: field=%s document=%s", schema, field, encoded)
+				}
+			}
+		}
+	}
+}
+
 func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
-	a := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", "rev-a", "file:///w/a.go", "seed-a", "candidate", "", "", "", "")
-	b := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", "rev-b", "file:///w/a.go", "seed-b", "candidate", "", "", "", "")
-	if a.RelationID != b.RelationID {
-		t.Fatalf("ASSERT_SEMANTIC_RELATION_ID_SEED_INDEPENDENT: %s != %s", a.RelationID, b.RelationID)
+	caller := NewNode(Item{Name: "caller", URI: "file:///w/caller.go"})
+	callee := NewNode(Item{Name: "callee", URI: "file:///w/callee.go"})
+	candidate := NewNode(Item{Name: "candidate", URI: "file:///w/candidate.go"})
+	r := Result{
+		SchemaVersion:         SchemaVersionV3,
+		Invocation:            Invocation{Seeds: []InvocationSeed{{Label: "seed-a", At: "a.go:1:1"}, {Label: "seed-b", At: "b.go:1:1"}}, Provenance: InvocationProvenance{SourceRevision: "rev"}},
+		Nodes:                 []Node{caller, callee},
+		Edges:                 []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}},
+		Seeds:                 []SeedResult{{Label: "seed-a", ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}}, {Label: "seed-b", ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}}},
+		SiblingCandidates:     []SiblingCandidate{{SeedURI: "file:///w/a.go", SeedLabel: "seed-a", Candidate: candidate}, {SeedURI: "file:///w/b.go", SeedLabel: "seed-b", Candidate: candidate}},
+		DispatchRelationships: []DispatchRelationship{{SeedLabel: "seed-a", Interface: caller, Implementation: callee}, {SeedLabel: "seed-b", Interface: caller, Implementation: callee}},
+		Summary:               Summary{Complete: true},
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle bundleV3
+	if err := json.Unmarshal(encoded, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Edges) != 1 || bundle.Edges[0].RelationID == "" || len(bundle.SiblingCandidates) != 1 || bundle.SiblingCandidates[0].RelationID == "" || len(bundle.DispatchRelationships) != 1 || bundle.DispatchRelationships[0].RelationID == "" {
+		t.Fatalf("ASSERT_PRIMARY_CANONICAL_RELATION_IDS: edges=%#v siblings=%#v dispatch=%#v", bundle.Edges, bundle.SiblingCandidates, bundle.DispatchRelationships)
+	}
+	members := map[string]int{}
+	for _, membership := range bundle.SeedMemberships {
+		members[membership.EvidenceKind+":"+membership.EndpointID]++
+	}
+	if members["CALL_RELATION:"+bundle.Edges[0].RelationID] != 2 || members["SIBLING_CANDIDATE:"+bundle.SiblingCandidates[0].RelationID] != 2 || members["DISPATCH_ASSOCIATION:"+bundle.DispatchRelationships[0].RelationID] != 2 {
+		t.Fatalf("ASSERT_MULTI_SEED_CANONICAL_RELATION_MEMBERSHIP: %#v", bundle.SeedMemberships)
+	}
+	bundle.Edges[0].RelationID = "sha256:forged"
+	canonical, _ := json.Marshal(bundle.semanticV3)
+	bundle.TraceReceipt.SemanticCommitmentDigest = domainDigest(SemanticDigestDomain, canonical)
+	mutated, _ := json.Marshal(bundle)
+	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "relation") {
+		t.Fatalf("ASSERT_PRIMARY_RECEIPT_RELATION_CONSISTENCY: %v", err)
 	}
 }
 

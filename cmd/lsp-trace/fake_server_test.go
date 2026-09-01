@@ -162,11 +162,12 @@ func TestSubprocessFailureTraffic(t *testing.T) {
 		reason  graph.Reason
 		phase   string
 	}{
-		{"null", 500 * time.Millisecond, 0, graph.PrepareReturnedNoItem, ""},
-		{"error", 500 * time.Millisecond, 2, graph.ServerError, "traverse"},
+		{"null", 2 * time.Second, 0, graph.PrepareReturnedNoItem, ""},
+		{"error", 2 * time.Second, 2, graph.ServerError, "traverse"},
 		{"delay", 20 * time.Millisecond, 2, graph.RequestTimeout, ""},
-		{"malformed", 500 * time.Millisecond, 1, "", "initialize"},
-		{"exit-early", 500 * time.Millisecond, 1, "", "initialize"},
+		{"delay-initialize", 20 * time.Millisecond, 2, "", "initialize"},
+		{"malformed", 2 * time.Second, 1, "", "initialize"},
+		{"exit-early", 2 * time.Second, 1, "", "initialize"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -209,6 +210,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 		}
 		switch m.Method {
 		case "initialize":
+			if scenario == "delay-initialize" {
+				time.Sleep(80 * time.Millisecond)
+			}
 			if scenario == "exit-early" {
 				return nil
 			}

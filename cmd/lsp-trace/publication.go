@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,13 +13,17 @@ import (
 )
 
 const (
-	generationArtifactName = "artifact.json"
-	generationReceiptName  = "receipt.json"
+	generationArtifactName         = "artifact.json"
+	generationReceiptName          = "receipt.json"
+	directoryDurabilityChecked     = "CHECKED"
+	directoryDurabilityUnavailable = "UNAVAILABLE_ON_PLATFORM"
 )
 
 var (
-	openPublicationDirectory = os.Open
-	syncPublicationDirectory = func(dir *os.File) error { return dir.Sync() }
+	errDirectorySyncUnavailable    = errors.New("directory sync unavailable on platform")
+	openPublicationDirectory       = os.Open
+	syncPublicationDirectory       = platformSyncPublicationDirectory
+	publicationDirectoryDurability = platformDirectoryDurability
 )
 
 func syncPublishedDirectory(path string) error {
@@ -26,7 +31,7 @@ func syncPublishedDirectory(path string) error {
 	if err != nil {
 		return fmt.Errorf("open publication directory %q: %w", path, err)
 	}
-	if err := syncPublicationDirectory(dir); err != nil {
+	if err := syncPublicationDirectory(dir); err != nil && !errors.Is(err, errDirectorySyncUnavailable) {
 		_ = dir.Close()
 		return fmt.Errorf("sync publication directory %q: %w", path, err)
 	}
@@ -65,6 +70,7 @@ type publicationFailureRecord struct {
 	Target                     string `json:"target"`
 	Error                      string `json:"error"`
 	ExactSerializedBytesDigest string `json:"exact_serialized_bytes_digest"`
+	DirectoryDurability        string `json:"directory_durability"`
 }
 
 func retainPublicationFailure(path string, data []byte, publishErr error) (string, error) {
@@ -84,6 +90,7 @@ func retainPublicationFailure(path string, data []byte, publishErr error) (strin
 		Target:                     path,
 		Error:                      publishErr.Error(),
 		ExactSerializedBytesDigest: graph.ExactBytesDigest(data),
+		DirectoryDurability:        publicationDirectoryDurability,
 	})
 	if err != nil {
 		return "", err
@@ -126,6 +133,7 @@ type custodyReceipt struct {
 	DigestScope                string `json:"digest_scope"`
 	IntegrityClaim             string `json:"integrity_claim"`
 	AuthenticityClaim          bool   `json:"authenticity_claim"`
+	DirectoryDurability        string `json:"directory_durability"`
 }
 
 func marshalResult(result graph.Result, pretty bool) ([]byte, error) {
@@ -142,7 +150,11 @@ func marshalResult(result graph.Result, pretty bool) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 func receiptBytes(data []byte) ([]byte, error) {
-	r := custodyReceipt{"lsp-trace.byte-custody-receipt.v1", graph.ExactBytesDigest(data), "SHA-256", graph.ByteDigestScope, "INTEGRITY_AND_CUSTODY_ONLY", false}
+	r := custodyReceipt{
+		ReceiptVersion: "lsp-trace.byte-custody-receipt.v1", ExactSerializedBytesDigest: graph.ExactBytesDigest(data),
+		DigestAlgorithm: "SHA-256", DigestScope: graph.ByteDigestScope, IntegrityClaim: "INTEGRITY_AND_CUSTODY_ONLY",
+		AuthenticityClaim: false, DirectoryDurability: publicationDirectoryDurability,
+	}
 	b, err := json.Marshal(r)
 	if err != nil {
 		return nil, err
@@ -305,7 +317,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "verify receipt: malformed: trailing JSON content")
 		return 1
 	}
-	if receipt.ReceiptVersion != "lsp-trace.byte-custody-receipt.v1" || receipt.DigestScope != graph.ByteDigestScope || receipt.DigestAlgorithm != "SHA-256" || receipt.IntegrityClaim != "INTEGRITY_AND_CUSTODY_ONLY" || receipt.AuthenticityClaim {
+	if receipt.ReceiptVersion != "lsp-trace.byte-custody-receipt.v1" || receipt.DigestScope != graph.ByteDigestScope || receipt.DigestAlgorithm != "SHA-256" || receipt.IntegrityClaim != "INTEGRITY_AND_CUSTODY_ONLY" || receipt.AuthenticityClaim || (receipt.DirectoryDurability != directoryDurabilityChecked && receipt.DirectoryDurability != directoryDurabilityUnavailable) {
 		fmt.Fprintln(stderr, "verify receipt: receipt metadata mismatch")
 		return 1
 	}

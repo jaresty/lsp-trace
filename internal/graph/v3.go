@@ -117,13 +117,21 @@ type bundleV3 struct {
 	TraceReceipt semanticReceiptV3 `json:"trace_receipt"`
 }
 
+func sensitivityPolicy() SensitivityPolicy {
+	return SensitivityPolicy{
+		Covered:                           []string{"invocation_arguments", "explicit_environment_names", "workspace_source_output_paths", "opaque_node_data", "diagnostics", "captured_server_stderr", "trace_transcripts"},
+		AutomaticRedaction:                false,
+		AccessControlResponsibility:       "BUNDLE_CUSTODIAN",
+		AmbientProcessEnvironmentRecorded: false,
+	}
+}
+
 func (r Result) marshalV3() ([]byte, error) {
 	// Producer and verifier must project from the same canonical graph state.
 	r.Canonicalize()
 	for i := range r.Seeds {
 		for _, edge := range r.Seeds[i].ReachedEdges {
-			relation := newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, r.Invocation.Provenance.SourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
-			r.Seeds[i].ReachedRelationIDs = append(r.Seeds[i].ReachedRelationIDs, relation.RelationID)
+			r.Seeds[i].ReachedRelationIDs = append(r.Seeds[i].ReachedRelationIDs, canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, "", "", "", edge.CallerNodeID, edge.CalleeNodeID))
 		}
 		sort.Strings(r.Seeds[i].ReachedRelationIDs)
 		r.Seeds[i].ReachedRelationIDs = uniqueStrings(r.Seeds[i].ReachedRelationIDs)
@@ -160,7 +168,7 @@ func (r Result) marshalV3() ([]byte, error) {
 	inv.Server.Environment = nil
 	sem := semanticV3{
 		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: inv, Identity: identity,
-		SensitivityPolicy: SensitivityPolicy{[]string{"invocation_arguments", "explicit_environment_names", "workspace_source_output_paths", "opaque_node_data", "diagnostics", "captured_server_stderr", "trace_transcripts"}, false, "BUNDLE_CUSTODIAN", false},
+		SensitivityPolicy: sensitivityPolicy(),
 		ProcessContext:    processContext, EvidenceSemantics: evidenceSemantics(), EvidenceReceipt: r.evidenceReceipt(inv.Provenance.SourceRevision),
 		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.Edges, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
 		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges,
@@ -223,7 +231,13 @@ func validateProcessContext(context ProcessContext) error {
 	}
 	last := ""
 	for _, identity := range context.Environment {
-		if identity.Name == "" || identity.Name < last || identity.EnvironmentNameProcessContextDigest != domainDigest("lsp-trace:environment-name:v1", []byte(identity.Name)) || identity.Redaction != (Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}) {
+		if identity.Name == "" || identity.EnvironmentNameProcessContextDigest != domainDigest("lsp-trace:environment-name:v1", []byte(identity.Name)) || identity.Redaction != (Redaction{State: "REDACTED", Reason: "SECRET_SAFE_ENVIRONMENT_IDENTITY"}) {
+			return fmt.Errorf("process context mismatch")
+		}
+		if last != "" && identity.Name <= last {
+			if identity.Name == last {
+				return fmt.Errorf("duplicate explicit environment name %q", identity.Name)
+			}
 			return fmt.Errorf("process context mismatch")
 		}
 		last = identity.Name
@@ -231,7 +245,7 @@ func validateProcessContext(context ProcessContext) error {
 	return nil
 }
 
-func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResult, _ []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship, sourceRevision string) []SeedMembership {
+func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResult, _ []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship, _ string) []SeedMembership {
 	byLabel := make(map[string]InvocationSeed, len(invocationSeeds))
 	for _, seed := range invocationSeeds {
 		byLabel[seed.Label] = seed
@@ -250,12 +264,14 @@ func projectSeedMemberships(invocationSeeds []InvocationSeed, results []SeedResu
 		}
 	}
 	for _, sibling := range siblings {
-		relation := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", sibling.SeedURI, sourceRevision, sibling.SeedURI, sibling.SeedLabel, sibling.Candidate.ID, "", "", "", "")
-		out = append(out, newSeedMembership(byLabel[sibling.SeedLabel], "SIBLING_CANDIDATE", relation.RelationID))
+		for _, label := range sibling.SeedLabels {
+			out = append(out, newSeedMembership(byLabel[label], "SIBLING_CANDIDATE", sibling.RelationID))
+		}
 	}
 	for _, dispatch := range dispatches {
-		relation := newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", dispatch.SeedLabel, sourceRevision, "", dispatch.SeedLabel, "", dispatch.Interface.ID, dispatch.Implementation.ID, "", "")
-		out = append(out, newSeedMembership(byLabel[dispatch.SeedLabel], "DISPATCH_ASSOCIATION", relation.RelationID))
+		for _, label := range dispatch.SeedLabels {
+			out = append(out, newSeedMembership(byLabel[label], "DISPATCH_ASSOCIATION", dispatch.RelationID))
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].MembershipID < out[j].MembershipID })
 	return out
@@ -351,6 +367,9 @@ func (r Result) ValidateReferences() error {
 	}
 	edges := map[string]struct{}{}
 	for _, e := range r.Edges {
+		if e.RelationID != canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", e.CallerNodeID+"->"+e.CalleeNodeID, "", "", "", e.CallerNodeID, e.CalleeNodeID) {
+			return fmt.Errorf("invalid canonical call relation id %q", e.RelationID)
+		}
 		if err := need("edge caller", e.CallerNodeID); err != nil {
 			return err
 		}
@@ -386,11 +405,17 @@ func (r Result) ValidateReferences() error {
 		return nil
 	}
 	for _, c := range r.SiblingCandidates {
+		if c.RelationID != canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", c.Candidate.ID, c.Candidate.ID, "", "", "", "") {
+			return fmt.Errorf("invalid canonical sibling relation id %q", c.RelationID)
+		}
 		if err := checkEmbedded("sibling candidate", c.Candidate); err != nil {
 			return err
 		}
 	}
 	for _, d := range r.DispatchRelationships {
+		if d.RelationID != canonicalRelationID("DISPATCH_ASSOCIATION", "ASSOCIATION", d.Interface.ID+"->"+d.Implementation.ID, "", d.Interface.ID, d.Implementation.ID, "", "") {
+			return fmt.Errorf("invalid canonical dispatch relation id %q", d.RelationID)
+		}
 		if err := checkEmbedded("dispatch interface", d.Interface); err != nil {
 			return err
 		}
@@ -421,6 +446,18 @@ func ValidateSemanticBundle(data []byte) error {
 		Summary:      Summary{Complete: true, Truncated: b.Summary.Truncated},
 		Capabilities: b.Capabilities, CapabilityQuality: b.CapabilityQuality,
 	}
+	for _, membership := range b.SeedMemberships {
+		for i := range verified.SiblingCandidates {
+			if membership.EvidenceKind == "SIBLING_CANDIDATE" && membership.EndpointID == verified.SiblingCandidates[i].RelationID {
+				verified.SiblingCandidates[i].SeedLabels = append(verified.SiblingCandidates[i].SeedLabels, membership.SeedLabel)
+			}
+		}
+		for i := range verified.DispatchRelationships {
+			if membership.EvidenceKind == "DISPATCH_ASSOCIATION" && membership.EndpointID == verified.DispatchRelationships[i].RelationID {
+				verified.DispatchRelationships[i].SeedLabels = append(verified.DispatchRelationships[i].SeedLabels, membership.SeedLabel)
+			}
+		}
+	}
 	if err := verified.ValidateReferences(); err != nil {
 		return err
 	}
@@ -428,11 +465,17 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := validateProcessContext(b.ProcessContext); err != nil {
 		return err
 	}
+	if !reflect.DeepEqual(b.SensitivityPolicy, sensitivityPolicy()) {
+		return fmt.Errorf("sensitivity policy mismatch")
+	}
+	if !reflect.DeepEqual(b.EvidenceSemantics, evidenceSemantics()) {
+		return fmt.Errorf("evidence semantics mismatch")
+	}
 	expectedReceipt := verified.evidenceReceipt(b.Invocation.Provenance.SourceRevision)
-	if err := validateSeedJoins(b.Invocation.Seeds, b.Seeds, b.SiblingCandidates, b.DispatchRelationships, expectedReceipt); err != nil {
+	if err := validateSeedJoins(b.Invocation.Seeds, b.Seeds, verified.SiblingCandidates, verified.DispatchRelationships, expectedReceipt); err != nil {
 		return err
 	}
-	expectedMemberships := projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, b.SiblingCandidates, b.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
+	expectedMemberships := projectSeedMemberships(b.Invocation.Seeds, b.Seeds, b.Edges, verified.SiblingCandidates, verified.DispatchRelationships, b.Invocation.Provenance.SourceRevision)
 	expectedManifest := projectReplayManifest(b.Invocation, b.Diagnostics)
 	expectedLocators := projectPortableLocators(b.Nodes)
 	if !reflect.DeepEqual(b.EvidenceReceipt, expectedReceipt) {
@@ -506,10 +549,10 @@ func validateSeedJoins(invocation []InvocationSeed, results []SeedResult, siblin
 		invocationLabels[seed.Label] = struct{}{}
 	}
 	resultLabels := make(map[string]struct{}, len(results))
-	relationKinds := map[string]string{}
+	relations := map[string]EvidenceRelation{}
 	if receipt != nil {
 		for _, relation := range receipt.Relations {
-			relationKinds[relation.RelationID] = relation.RelationKind
+			relations[relation.RelationID] = relation
 		}
 	}
 	for _, result := range results {
@@ -520,30 +563,40 @@ func validateSeedJoins(invocation []InvocationSeed, results []SeedResult, siblin
 			return fmt.Errorf("seed join mismatch: duplicate result label %q", result.Label)
 		}
 		resultLabels[result.Label] = struct{}{}
+		reachedNodes := make(map[string]struct{}, len(result.ReachedNodeIDs))
+		for _, nodeID := range result.ReachedNodeIDs {
+			reachedNodes[nodeID] = struct{}{}
+		}
 		for _, relationID := range result.ReachedRelationIDs {
-			if relationKinds[relationID] != "CALL_RELATION" {
+			relation, exists := relations[relationID]
+			if !exists || relation.RelationKind != "CALL_RELATION" {
 				return fmt.Errorf("seed join mismatch: unknown call relation %q", relationID)
+			}
+			if _, exact := reachedNodes[relation.CallerNodeID]; !exact {
+				return fmt.Errorf("seed join mismatch: call relation %q outside exact seed membership for %q", relationID, result.Label)
 			}
 		}
 	}
-	if len(results) > 0 {
-		if len(results) != len(invocation) {
-			return fmt.Errorf("seed join mismatch: invocation/result cardinality")
-		}
-		for label := range invocationLabels {
-			if _, exists := resultLabels[label]; !exists {
-				return fmt.Errorf("seed join mismatch: missing result for %q", label)
-			}
+	if len(results) != len(invocation) {
+		return fmt.Errorf("seed join mismatch: invocation/result cardinality")
+	}
+	for label := range invocationLabels {
+		if _, exists := resultLabels[label]; !exists {
+			return fmt.Errorf("seed join mismatch: missing result for %q", label)
 		}
 	}
 	for _, sibling := range siblings {
-		if _, exists := invocationLabels[sibling.SeedLabel]; !exists {
-			return fmt.Errorf("seed join mismatch: sibling label %q", sibling.SeedLabel)
+		for _, label := range sibling.SeedLabels {
+			if _, exists := invocationLabels[label]; !exists {
+				return fmt.Errorf("seed join mismatch: sibling label %q", label)
+			}
 		}
 	}
 	for _, dispatch := range dispatches {
-		if _, exists := invocationLabels[dispatch.SeedLabel]; !exists {
-			return fmt.Errorf("seed join mismatch: dispatch label %q", dispatch.SeedLabel)
+		for _, label := range dispatch.SeedLabels {
+			if _, exists := invocationLabels[label]; !exists {
+				return fmt.Errorf("seed join mismatch: dispatch label %q", label)
+			}
 		}
 	}
 	return nil

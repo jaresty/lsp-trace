@@ -466,6 +466,15 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		result.Tool = base.Tool
 		return result, 2
 	}
+	failResolved := func(phase string, err error) {
+		for _, seed := range resolved {
+			base.Seeds = append(base.Seeds, graph.SeedResult{
+				Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column},
+				Failure: &graph.SeedFailure{Phase: phase, Message: err.Error()},
+			})
+		}
+		base.Summary.Complete = false
+	}
 	var err error
 	var traceFile *os.File
 	var trace jsonrpc.TraceFunc
@@ -473,6 +482,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		traceFile, err = os.OpenFile(c.traceLSP, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
 			base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "trace", Message: err.Error()})
+			failResolved("trace", err)
 			return base, 1
 		}
 		defer traceFile.Close()
@@ -484,6 +494,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	proc, err := server.Start(ctx, c.command, c.args, c.env)
 	if err != nil {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "spawn", Message: err.Error()})
+		failResolved("spawn", err)
 		return base, 1
 	}
 	defer func() {
@@ -510,7 +521,10 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	done()
 	if err != nil {
 		base.Diagnostics = append(base.Diagnostics, graph.Diagnostic{Phase: "initialize", Method: "initialize", Message: err.Error()})
-		base.Summary.Complete = false
+		failResolved("initialize", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return base, 2
+		}
 		return base, 1
 	}
 	base.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()

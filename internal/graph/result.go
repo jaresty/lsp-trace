@@ -156,15 +156,19 @@ type SeedResult struct {
 }
 
 type SiblingCandidate struct {
-	SeedURI   string `json:"seed_uri"`
-	SeedLabel string `json:"seed_label,omitempty"`
-	Candidate Node   `json:"candidate"`
+	RelationID string   `json:"relation_id"`
+	SeedURI    string   `json:"-"`
+	SeedLabel  string   `json:"-"`
+	SeedLabels []string `json:"-"`
+	Candidate  Node     `json:"candidate"`
 }
 
 type DispatchRelationship struct {
-	SeedLabel      string `json:"seed_label"`
-	Interface      Node   `json:"interface"`
-	Implementation Node   `json:"implementation"`
+	RelationID     string   `json:"relation_id"`
+	SeedLabel      string   `json:"-"`
+	SeedLabels     []string `json:"-"`
+	Interface      Node     `json:"interface"`
+	Implementation Node     `json:"implementation"`
 }
 
 type EvidenceRelation struct {
@@ -238,6 +242,48 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		NodeID  string `json:"node_id,omitempty"`
 		Message string `json:"message"`
 	}
+	type legacyEdge struct {
+		CallerNodeID string  `json:"caller_node_id"`
+		CalleeNodeID string  `json:"callee_node_id"`
+		CallSites    []Range `json:"call_sites"`
+	}
+	type legacySiblingCandidate struct {
+		Candidate Node `json:"candidate"`
+	}
+	type legacyDispatchRelationship struct {
+		Interface      Node `json:"interface"`
+		Implementation Node `json:"implementation"`
+	}
+	projectEdges := func(in []Edge) []legacyEdge {
+		if in == nil {
+			return nil
+		}
+		out := make([]legacyEdge, len(in))
+		for i, edge := range in {
+			out[i] = legacyEdge{edge.CallerNodeID, edge.CalleeNodeID, edge.CallSites}
+		}
+		return out
+	}
+	projectSiblings := func(in []SiblingCandidate) []legacySiblingCandidate {
+		if in == nil {
+			return nil
+		}
+		out := make([]legacySiblingCandidate, len(in))
+		for i, sibling := range in {
+			out[i] = legacySiblingCandidate{Candidate: sibling.Candidate}
+		}
+		return out
+	}
+	projectDispatch := func(in []DispatchRelationship) []legacyDispatchRelationship {
+		if in == nil {
+			return nil
+		}
+		out := make([]legacyDispatchRelationship, len(in))
+		for i, relationship := range in {
+			out[i] = legacyDispatchRelationship{Interface: relationship.Interface, Implementation: relationship.Implementation}
+		}
+		return out
+	}
 	if r.SchemaVersion == SchemaVersionV3 {
 		return r.marshalV3()
 	}
@@ -279,7 +325,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			Capabilities Capabilities       `json:"capabilities"`
 			Targets      []string           `json:"targets"`
 			Nodes        []Node             `json:"nodes"`
-			Edges        []Edge             `json:"edges"`
+			Edges        []legacyEdge       `json:"edges"`
 			Terminals    []legacyBoundary   `json:"terminals"`
 			Frontier     []legacyBoundary   `json:"frontier"`
 			Diagnostics  []legacyDiagnostic `json:"diagnostics"`
@@ -289,7 +335,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			Target       Target           `json:"target"`
 			Server       ServerInvocation `json:"server"`
 			Limits       Limits           `json:"limits"`
-		}{legacyInvocation.WorkspaceURI, legacyInvocation.Target, legacyInvocation.Server, legacyInvocation.Limits}, r.Capabilities, r.Targets, r.Nodes, r.Edges, project(r.Terminals), project(r.Frontier), projectDiagnostics(r.Diagnostics), r.Summary})
+		}{legacyInvocation.WorkspaceURI, legacyInvocation.Target, legacyInvocation.Server, legacyInvocation.Limits}, r.Capabilities, r.Targets, r.Nodes, projectEdges(r.Edges), project(r.Terminals), project(r.Frontier), projectDiagnostics(r.Diagnostics), r.Summary})
 	}
 	invocation := normalizedInvocation(r.Invocation)
 	tool := r.Tool
@@ -320,24 +366,24 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Provenance InvocationProvenance `json:"provenance,omitempty"`
 	}
 	type resultV2 struct {
-		SchemaVersion         string                 `json:"schema_version"`
-		Tool                  ToolIdentity           `json:"tool"`
-		Invocation            invocationV2           `json:"invocation"`
-		EvidenceSemantics     EvidenceSemantics      `json:"evidence_semantics"`
-		TraceReceipt          *TraceReceipt          `json:"trace_receipt,omitempty"`
-		Capabilities          Capabilities           `json:"capabilities"`
-		CapabilityQuality     CapabilityQuality      `json:"capability_quality"`
-		Targets               []string               `json:"targets"`
-		Nodes                 []Node                 `json:"nodes"`
-		Edges                 []Edge                 `json:"edges"`
-		Terminals             []Boundary             `json:"terminals"`
-		Frontier              []Boundary             `json:"frontier"`
-		Diagnostics           []Diagnostic           `json:"diagnostics"`
-		SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
-		DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
-		EvidenceReceipt       *EvidenceReceipt       `json:"evidence_receipt,omitempty"`
-		Seeds                 []SeedResult           `json:"seeds,omitempty"`
-		Summary               summaryV2              `json:"summary"`
+		SchemaVersion         string                       `json:"schema_version"`
+		Tool                  ToolIdentity                 `json:"tool"`
+		Invocation            invocationV2                 `json:"invocation"`
+		EvidenceSemantics     EvidenceSemantics            `json:"evidence_semantics"`
+		TraceReceipt          *TraceReceipt                `json:"trace_receipt,omitempty"`
+		Capabilities          Capabilities                 `json:"capabilities"`
+		CapabilityQuality     CapabilityQuality            `json:"capability_quality"`
+		Targets               []string                     `json:"targets"`
+		Nodes                 []Node                       `json:"nodes"`
+		Edges                 []legacyEdge                 `json:"edges"`
+		Terminals             []Boundary                   `json:"terminals"`
+		Frontier              []Boundary                   `json:"frontier"`
+		Diagnostics           []Diagnostic                 `json:"diagnostics"`
+		SiblingCandidates     []legacySiblingCandidate     `json:"sibling_candidates,omitempty"`
+		DispatchRelationships []legacyDispatchRelationship `json:"dispatch_relationships,omitempty"`
+		EvidenceReceipt       *EvidenceReceipt             `json:"evidence_receipt,omitempty"`
+		Seeds                 []SeedResult                 `json:"seeds,omitempty"`
+		Summary               summaryV2                    `json:"summary"`
 	}
 	legacyServer := struct {
 		Command   string   `json:"command"`
@@ -348,9 +394,9 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		SchemaVersion: r.SchemaVersion, Tool: tool, Invocation: legacyInvocation,
 		EvidenceSemantics: evidenceSemantics(),
 		Capabilities:      r.Capabilities, CapabilityQuality: r.CapabilityQuality,
-		Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges, Terminals: r.Terminals,
+		Targets: r.Targets, Nodes: r.Nodes, Edges: projectEdges(r.Edges), Terminals: r.Terminals,
 		Frontier: r.Frontier, Diagnostics: r.Diagnostics,
-		SiblingCandidates: r.SiblingCandidates, DispatchRelationships: r.DispatchRelationships,
+		SiblingCandidates: projectSiblings(r.SiblingCandidates), DispatchRelationships: projectDispatch(r.DispatchRelationships),
 		EvidenceReceipt: r.evidenceReceipt(invocation.Provenance.SourceRevision), Seeds: r.Seeds,
 		Summary: summaryV2{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated},
 	}
@@ -404,13 +450,19 @@ func evidenceSemantics() EvidenceSemantics {
 func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
 	relations := make([]EvidenceRelation, 0, len(r.Edges)+len(r.SiblingCandidates)+len(r.DispatchRelationships))
 	for _, edge := range r.Edges {
-		relations = append(relations, newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, sourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID))
+		relation := newEvidenceRelation("CALL_RELATION", "CALLER_TO_CALLEE", edge.CallerNodeID+"->"+edge.CalleeNodeID, sourceRevision, "", "", "", "", "", edge.CallerNodeID, edge.CalleeNodeID)
+		relation.RelationID = edge.RelationID
+		relations = append(relations, relation)
 	}
 	for _, candidate := range r.SiblingCandidates {
-		relations = append(relations, newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.SeedURI, sourceRevision, candidate.SeedURI, candidate.SeedLabel, candidate.Candidate.ID, "", "", "", ""))
+		relation := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.Candidate.ID, sourceRevision, "", "", candidate.Candidate.ID, "", "", "", "")
+		relation.RelationID = candidate.RelationID
+		relations = append(relations, relation)
 	}
 	for _, relationship := range r.DispatchRelationships {
-		relations = append(relations, newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", relationship.SeedLabel, sourceRevision, "", relationship.SeedLabel, "", relationship.Interface.ID, relationship.Implementation.ID, "", ""))
+		relation := newEvidenceRelation("DISPATCH_ASSOCIATION", "ASSOCIATION", relationship.Interface.ID+"->"+relationship.Implementation.ID, sourceRevision, "", "", "", relationship.Interface.ID, relationship.Implementation.ID, "", "")
+		relation.RelationID = relationship.RelationID
+		relations = append(relations, relation)
 	}
 	if len(relations) == 0 {
 		return nil
@@ -429,7 +481,7 @@ func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
 	return &EvidenceReceipt{SupportTotal: supportTotal, Relations: out}
 }
 
-func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID string) EvidenceRelation {
+func canonicalRelationID(kind, direction, locator, candidateID, interfaceID, implementationID, callerID, calleeID string) string {
 	identityInput := struct {
 		Version          string `json:"version"`
 		EvidenceClass    string `json:"evidence_class"`
@@ -446,8 +498,12 @@ func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seed
 	if err != nil {
 		panic(err)
 	}
+	return domainDigest("lsp-trace:evidence-relation:v2", encoded)
+}
+
+func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID string) EvidenceRelation {
 	return EvidenceRelation{
-		RelationID:   domainDigest("lsp-trace:evidence-relation:v2", encoded),
+		RelationID:   canonicalRelationID(kind, direction, locator, candidateID, interfaceID, implementationID, callerID, calleeID),
 		RelationKind: kind, EvidenceClass: evidenceClassForKind(kind), EvidenceRole: evidenceRoleForKind(kind),
 		Direction: direction, Locator: locator, SourceRevision: sourceRevision, SupportContribution: supportForKind(kind),
 		SeedURI: seedURI, SeedLabel: seedLabel, CandidateNodeID: candidateID, InterfaceNodeID: interfaceID, ImplementationNodeID: implementationID,
@@ -482,7 +538,16 @@ func domainDigest(domain string, payload []byte) string {
 
 func (r *Result) Canonicalize() {
 	for i := range r.Edges {
+		r.Edges[i].RelationID = canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", r.Edges[i].CallerNodeID+"->"+r.Edges[i].CalleeNodeID, "", "", "", r.Edges[i].CallerNodeID, r.Edges[i].CalleeNodeID)
 		r.Edges[i].CallSites = mergeRanges(nil, r.Edges[i].CallSites)
+	}
+	for i := range r.SiblingCandidates {
+		r.SiblingCandidates[i].RelationID = canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", r.SiblingCandidates[i].Candidate.ID, r.SiblingCandidates[i].Candidate.ID, "", "", "", "")
+		r.SiblingCandidates[i].SeedLabels = uniqueStrings(append(r.SiblingCandidates[i].SeedLabels, r.SiblingCandidates[i].SeedLabel))
+	}
+	for i := range r.DispatchRelationships {
+		r.DispatchRelationships[i].RelationID = canonicalRelationID("DISPATCH_ASSOCIATION", "ASSOCIATION", r.DispatchRelationships[i].Interface.ID+"->"+r.DispatchRelationships[i].Implementation.ID, "", r.DispatchRelationships[i].Interface.ID, r.DispatchRelationships[i].Implementation.ID, "", "")
+		r.DispatchRelationships[i].SeedLabels = uniqueStrings(append(r.DispatchRelationships[i].SeedLabels, r.DispatchRelationships[i].SeedLabel))
 	}
 	sort.Slice(r.Nodes, func(i, j int) bool {
 		a, b := r.Nodes[i], r.Nodes[j]
@@ -515,32 +580,18 @@ func (r *Result) Canonicalize() {
 	})
 	sort.Strings(r.Targets)
 	r.Targets = uniqueStrings(r.Targets)
-	sort.Slice(r.SiblingCandidates, func(i, j int) bool {
-		a, b := r.SiblingCandidates[i], r.SiblingCandidates[j]
-		if a.SeedURI != b.SeedURI {
-			return a.SeedURI < b.SeedURI
-		}
-		if a.SeedLabel != b.SeedLabel {
-			return a.SeedLabel < b.SeedLabel
-		}
-		return a.Candidate.ID < b.Candidate.ID
-	})
+	sort.Slice(r.SiblingCandidates, func(i, j int) bool { return r.SiblingCandidates[i].RelationID < r.SiblingCandidates[j].RelationID })
 	sort.Slice(r.DispatchRelationships, func(i, j int) bool {
-		a, b := r.DispatchRelationships[i], r.DispatchRelationships[j]
-		if a.SeedLabel != b.SeedLabel {
-			return a.SeedLabel < b.SeedLabel
-		}
-		if a.Interface.ID != b.Interface.ID {
-			return a.Interface.ID < b.Interface.ID
-		}
-		return a.Implementation.ID < b.Implementation.ID
+		return r.DispatchRelationships[i].RelationID < r.DispatchRelationships[j].RelationID
 	})
 	if len(r.DispatchRelationships) > 0 {
 		out := r.DispatchRelationships[:1]
 		for _, relationship := range r.DispatchRelationships[1:] {
-			last := out[len(out)-1]
-			if relationship.SeedLabel != last.SeedLabel || relationship.Interface.ID != last.Interface.ID || relationship.Implementation.ID != last.Implementation.ID {
+			last := &out[len(out)-1]
+			if relationship.RelationID != last.RelationID {
 				out = append(out, relationship)
+			} else {
+				last.SeedLabels = uniqueStrings(append(last.SeedLabels, relationship.SeedLabels...))
 			}
 		}
 		r.DispatchRelationships = out
@@ -548,9 +599,11 @@ func (r *Result) Canonicalize() {
 	if len(r.SiblingCandidates) > 0 {
 		out := r.SiblingCandidates[:1]
 		for _, candidate := range r.SiblingCandidates[1:] {
-			last := out[len(out)-1]
-			if candidate.SeedURI != last.SeedURI || candidate.SeedLabel != last.SeedLabel || candidate.Candidate.ID != last.Candidate.ID {
+			last := &out[len(out)-1]
+			if candidate.RelationID != last.RelationID {
 				out = append(out, candidate)
+			} else {
+				last.SeedLabels = uniqueStrings(append(last.SeedLabels, candidate.SeedLabels...))
 			}
 		}
 		r.SiblingCandidates = out
