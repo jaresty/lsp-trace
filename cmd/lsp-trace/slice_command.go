@@ -43,7 +43,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.StringVar(&c.seedFile, "seed-file", "", "JSON file containing labeled starting positions")
 	fs.StringVar(&c.languageID, "language-id", "", "document language id")
 	fs.IntVar(&c.downDepth, "down-depth", 2, "outgoing discovery depth")
-	fs.IntVar(&c.upDepth, "up-depth", 100, "incoming traversal depth; 0 unlimited")
+	fs.IntVar(&c.upDepth, "up-depth", 100, "incoming traversal depth; 0 disables")
 	fs.IntVar(&c.maxNodes, "max-nodes", 10000, "maximum graph nodes; 0 unlimited")
 	fs.DurationVar(&c.timeout, "timeout", 5*time.Minute, "global timeout; 0 unlimited")
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")

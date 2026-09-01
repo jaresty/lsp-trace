@@ -620,6 +620,13 @@ func TestCaptureRunDrainsLargeStdout(t *testing.T) {
 	}
 }
 
+func TestSliceHelpSaysZeroUpDepthDisablesTraversal(t *testing.T) {
+	_, stderr, _ := captureRun(t, []string{"slice", "--help"})
+	if !strings.Contains(stderr, "incoming traversal depth; 0 disables") || strings.Contains(stderr, "incoming traversal depth; 0 unlimited") {
+		t.Fatalf("ASSERT_SLICE_UP_DEPTH_ZERO_HELP: stderr=%q", stderr)
+	}
+}
+
 func TestParseSliceUsesSymmetricDepthFlagsAndExclusiveStartModes(t *testing.T) {
 	base := []string{"--workspace", "/w", "--server", "server", "--down-depth", "2", "--up-depth", "7"}
 	t.Run("from file", func(t *testing.T) {
