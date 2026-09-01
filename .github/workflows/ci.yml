@@ -34,6 +34,12 @@ jobs:
         working-directory: elixir-call-hierarchy
     steps:
       - uses: actions/checkout@v4
+      - name: Check out Elixir call hierarchy companion
+        uses: actions/checkout@v4
+        with:
+          repository: jaresty/elixir-call-hierarchy
+          ref: dfd332f51513c79b44c422e1dcb98ddceaaa29a9
+          path: elixir-call-hierarchy
       - uses: erlef/setup-beam@v1
         with:
           otp-version: '25.3.2.7'

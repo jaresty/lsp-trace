@@ -50,8 +50,10 @@ case "$language" in
   elixir|elixir-companion)
     command -v elixir >/dev/null 2>&1 || blocked 'Elixir executable unavailable'
     if [ "$language" = elixir-companion ]; then
-      (cd "$root/elixir-call-hierarchy" && mix escript.build) >"$evidence/setup.txt" 2>&1 || blocked 'companion escript build failed'
-      server="$root/elixir-call-hierarchy/elixir-call-hierarchy"
+      companion_root=${ELIXIR_CALL_HIERARCHY_ROOT:-"$root/../elixir-call-hierarchy"}
+      [ -f "$companion_root/mix.exs" ] || blocked 'Elixir call hierarchy companion checkout unavailable (set ELIXIR_CALL_HIERARCHY_ROOT)'
+      (cd "$companion_root" && mix escript.build) >"$evidence/setup.txt" 2>&1 || blocked 'companion escript build failed'
+      server="$companion_root/elixir-call-hierarchy"
       "$server" 2>"$evidence/server-version.txt" || true
     else
       server=$(find_elixir_ls) || blocked 'ElixirLS executable unavailable (set ELIXIR_LS_COMMAND)'
@@ -74,7 +76,7 @@ set -- "$binary" incoming --workspace "$workspace" --server "$server"
 if [ -n "$server_arg" ]; then
   set -- "$@" --server-arg "$server_arg"
 fi
-set -- "$@" --at "$target" --pretty
+set -- "$@" --at "$target" --schema v2 --pretty
 printf '%s\n' "$*" >"$evidence/command.txt"
 set +e
 "$@" >"$evidence/graph.json" 2>"$evidence/stderr.txt"

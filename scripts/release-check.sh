@@ -52,15 +52,14 @@ assert_contains Q-ELIXIR-ALIAS qualification/elixir/lib/cross_module_callers.ex 
 assert_contains Q-ELIXIR-QUALIFIED qualification/elixir/lib/cross_module_callers.ex 'LspTraceQualification.Calls.leaf'
 assert_contains Q-ELIXIR-BLOCKED scripts/qualify.sh 'missing cross-module caller edge'
 assert_contains Q-ELIXIR-EVIDENCE qualification/README.md 'protocol support, same-module resolution, cross-module resolution, and multi-clause resolution'
-assert_file Q-ELIXIR-COMPANION-MIX elixir-call-hierarchy/mix.exs
-assert_contains Q-ELIXIR-COMPANION-ESCRIPT-IGNORE elixir-call-hierarchy/.gitignore '/elixir-call-hierarchy'
-assert_file Q-ELIXIR-COMPANION-SERVER elixir-call-hierarchy/lib/elixir_call_hierarchy/server.ex
 assert_contains Q-ELIXIR-COMPANION-MODE scripts/qualify.sh 'elixir-companion'
-assert_contains Q-ELIXIR-COMPANION-PROFILE elixir-call-hierarchy/README.md '`--profile`'
-assert_contains Q-ELIXIR-COMPANION-PROFILE-FORMAT elixir-call-hierarchy/README.md 'ECH_PROFILE'
-assert_contains Q-ELIXIR-COMPANION-TRUST elixir-call-hierarchy/README.md 'Compiler and macro expansion—including dependency compilation—are executable code'
-assert_contains Q-ELIXIR-COMPANION-COMPLETE elixir-call-hierarchy/README.md 'Completeness is server-relative'
-assert_contains Q-ELIXIR-COMPANION-COALESCE elixir-call-hierarchy/README.md 'coalesced deterministically by `{module, name, arity}`'
+assert_contains Q-ELIXIR-COMPANION-ROOT scripts/qualify.sh 'ELIXIR_CALL_HIERARCHY_ROOT'
+assert_contains Q-ELIXIR-COMPANION-DEFAULT scripts/qualify.sh '../elixir-call-hierarchy'
+assert_contains Q-ELIXIR-COMPANION-REPOSITORY qualification/README.md 'https://github.com/jaresty/elixir-call-hierarchy'
+assert_contains Q-ELIXIR-COMPANION-EXTERNAL-CONTRACT qualification/README.md "external server's own README defines its profiling, trust, completeness, and clause-coalescing contracts"
+assert_contains Q-ELIXIR-COMPANION-CI-REPOSITORY .github/workflows/ci.yml 'repository: jaresty/elixir-call-hierarchy'
+assert_contains Q-ELIXIR-COMPANION-CI-PIN .github/workflows/ci.yml 'ref: dfd332f51513c79b44c422e1dcb98ddceaaa29a9'
+assert_contains Q-ELIXIR-COMPANION-CI-PATH .github/workflows/ci.yml 'path: elixir-call-hierarchy'
 assert_contains Q-ELIXIR-LS-DISTINCT qualification/README.md 'does not replace or rewrite the retained ElixirLS BLOCKED evidence'
 assert_contains Q-TERMINAL-PROVENANCE docs/SEMANTICS.md 'Terminal provenance'
 assert_contains Q-SOURCE-COMPLETE docs/SEMANTICS.md 'source completeness'
