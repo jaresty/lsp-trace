@@ -60,6 +60,26 @@ func TestSubprocessLifecycleAndHierarchyShapes(t *testing.T) {
 	}
 }
 
+func TestSubprocessSliceComposesOutgoingFrontierWithIncomingTraversal(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--from-file", "main.go", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var got struct {
+		Nodes []graph.Node        `json:"nodes"`
+		Edges []graph.Edge        `json:"edges"`
+		Slice graph.SliceEvidence `json:"slice"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("ASSERT_SLICE_COMMAND_JSON: %v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	if code != 0 || len(got.Nodes) != 3 || len(got.Edges) != 2 || len(got.Slice.Layers) != 2 || len(got.Slice.FrontierNodeIDs) != 1 || len(got.Slice.OutgoingRelationIDs) != 1 {
+		t.Fatalf("ASSERT_SLICE_COMMAND_COMPOSES_DIRECTIONS: code=%d nodes=%d edges=%d slice=%#v stderr=%s", code, len(got.Nodes), len(got.Edges), got.Slice, stderr)
+	}
+}
+
 func TestSubprocessLabeledMultipleSeeds(t *testing.T) {
 	for _, scenario := range []string{"multi-two", "multi-duplicate", "multi-mixed"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -227,8 +247,16 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				_, err = fmt.Fprint(out, "Content-Length: 5\r\n\r\n{")
 				return err
 			}
-			err = writeFake(out, m.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}}, nil)
+			capabilities := map[string]any{"callHierarchyProvider": true}
+			if scenario == "slice" {
+				capabilities["documentSymbolProvider"] = true
+			}
+			err = writeFake(out, m.ID, map[string]any{"capabilities": capabilities}, nil)
 		case "initialized", "textDocument/didOpen":
+		case "textDocument/documentSymbol":
+			if scenario == "slice" {
+				err = writeFake(out, m.ID, []fakeItem{item("start", 0)}, nil)
+			}
 		case "textDocument/prepareCallHierarchy":
 			if scenario == "null" {
 				err = writeFake(out, m.ID, nil, nil)
@@ -244,6 +272,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			line := p.Position.Line
 			name := "leaf"
+			if scenario == "slice" {
+				name = "start"
+			}
 			if scenario == "multi-two" && line > 0 {
 				name = "second"
 			}
@@ -251,6 +282,16 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				line = 0
 			}
 			err = writeFake(out, m.ID, []fakeItem{item(name, line)}, nil)
+		case "callHierarchy/outgoingCalls":
+			var p struct {
+				Item fakeItem `json:"item"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			calls := []map[string]any{}
+			if scenario == "slice" && p.Item.Name == "start" {
+				calls = append(calls, map[string]any{"to": item("leaf", 1), "fromRanges": []fakeRange{{Start: fakePosition{Line: 0, Character: 5}, End: fakePosition{Line: 0, Character: 9}}}})
+			}
+			err = writeFake(out, m.ID, calls, nil)
 		case "callHierarchy/incomingCalls":
 			var p struct {
 				Item fakeItem `json:"item"`
@@ -285,6 +326,10 @@ func incoming(scenario string, it fakeItem) []map[string]any {
 		return map[string]any{"from": from, "fromRanges": []fakeRange{{Start: fakePosition{Line: from.Range.Start.Line, Character: 5}, End: fakePosition{Line: from.Range.Start.Line, Character: 9}}}}
 	}
 	switch scenario {
+	case "slice":
+		if it.Name == "leaf" {
+			return []map[string]any{call(item("root", 2))}
+		}
 	case "linear":
 		if it.Name == "leaf" {
 			return []map[string]any{call(item("root", 1))}

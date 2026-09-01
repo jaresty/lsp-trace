@@ -15,7 +15,8 @@
     "seed_memberships": {"type": ["array", "null"]}, "replay_input_manifest": {"type": "object"}, "portable_locators": {"type": ["array", "null"]},
     "capabilities": {"type": "object"}, "capability_quality": {"type": "object"}, "targets": {"type": ["array", "null"]}, "nodes": {"type": ["array", "null"]}, "edges": {"type": ["array", "null"]},
     "terminals": {"type": ["array", "null"]}, "frontier": {"type": ["array", "null"]}, "diagnostics": {"type": ["array", "null"]}, "sibling_candidates": {"type": ["array", "null"]}, "dispatch_relationships": {"type": ["array", "null"]}, "seeds": {"type": ["array", "null"]},
-    "summary": {"type": "object"}, "trace_receipt": {"type": "object"}
+    "summary": {"type": "object"}, "trace_receipt": {"type": "object"},
+    "slice": {"$ref": "#/$defs/slice"}
   },
   "additionalProperties": false,
   "$defs": {
@@ -34,6 +35,24 @@
       "type": "object",
       "required": ["caller_provenance_class", "resolved_seeds", "aggregate_scope"],
       "properties": {"caller_provenance_class": {"type": "string"}, "resolved_seeds": {"type": ["array", "null"]}, "resolved_seed_contents_digest": {"type": "string"}, "aggregate_scope": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "sliceLayer": {
+      "type": "object",
+      "required": ["depth", "node_ids"],
+      "properties": {"depth": {"type": "integer", "minimum": 0}, "node_ids": {"type": ["array", "null"], "items": {"type": "string"}}},
+      "additionalProperties": false
+    },
+    "slice": {
+      "type": "object",
+      "required": ["source_uri", "down_depth", "up_depth", "starting_node_ids", "layers", "frontier_node_ids", "outgoing_relation_ids"],
+      "properties": {
+        "source_uri": {"type": "string"}, "down_depth": {"type": "integer", "minimum": 0}, "up_depth": {"type": "integer", "minimum": 0},
+        "starting_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "layers": {"type": ["array", "null"], "items": {"$ref": "#/$defs/sliceLayer"}},
+        "frontier_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
+        "outgoing_relation_ids": {"type": ["array", "null"], "items": {"type": "string"}}
+      },
       "additionalProperties": false
     }
   }

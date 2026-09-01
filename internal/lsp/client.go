@@ -110,6 +110,18 @@ func (c *Client) IncomingCalls(ctx context.Context, item CallHierarchyItem) ([]C
 	var calls []CallHierarchyIncomingCall
 	return calls, false, json.Unmarshal(raw, &calls)
 }
+
+func (c *Client) OutgoingCalls(ctx context.Context, item CallHierarchyItem) ([]CallHierarchyOutgoingCall, bool, error) {
+	var raw json.RawMessage
+	if err := c.conn.Call(ctx, "callHierarchy/outgoingCalls", CallHierarchyOutgoingCallsParams{Item: item}, &raw); err != nil {
+		return nil, false, err
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, true, nil
+	}
+	var calls []CallHierarchyOutgoingCall
+	return calls, false, json.Unmarshal(raw, &calls)
+}
 func (c *Client) Shutdown(ctx context.Context) error {
 	if err := c.conn.Call(ctx, "shutdown", nil, nil); err != nil {
 		return err

@@ -94,6 +94,11 @@ for version in v1 v2 v3; do
 done
 assert_contains R-SCHEMA-GET-DOC README.md 'lsp-trace schema get --schema v1|v2|v3'
 assert_contains R-VALIDATE-DOC README.md 'lsp-trace validate [--schema v1|v2|v3] PATH|-'
+assert_contains R-SLICE-DOC README.md 'lsp-trace slice'
+assert_contains R-SLICE-DOWN README.md '`--down-depth` and `--up-depth` count call edges'
+assert_contains R-SLICE-SEMANTICS docs/SEMANTICS.md 'Only nodes at exactly `--down-depth` form the upward frontier'
+assert_contains R-SLICE-POLICY docs/SCHEMA_POLICY.md 'V3 may include an optional `slice` object'
+assert_contains R-SLICE-SCHEMA internal/schema/schemas/lsp-trace.graph.v3.schema.json '"slice": {"$ref": "#/$defs/slice"}'
 assert_contains R-SKILL-VALIDATE-PRESERVES cmd/lsp-trace/SKILL.md 'Validation does not canonicalize or rewrite input.'
 assert_contains R-SKILL-VALIDATION-LAYERS cmd/lsp-trace/SKILL.md 'V1 and v2 validation is structural; v3 runs structural validation before deeper semantic validation.'
 assert_contains R-SKILL-NO-AUTH cmd/lsp-trace/SKILL.md 'Validation and verification do not authenticate producer identity or prove that a declared process executed.'

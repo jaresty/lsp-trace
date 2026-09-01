@@ -212,6 +212,21 @@ type TraceReceipt struct {
 	DigestScope    string `json:"digest_scope"`
 }
 
+type SliceLayer struct {
+	Depth   int      `json:"depth"`
+	NodeIDs []string `json:"node_ids"`
+}
+
+type SliceEvidence struct {
+	SourceURI           string       `json:"source_uri"`
+	DownDepth           int          `json:"down_depth"`
+	UpDepth             int          `json:"up_depth"`
+	StartingNodeIDs     []string     `json:"starting_node_ids"`
+	Layers              []SliceLayer `json:"layers"`
+	FrontierNodeIDs     []string     `json:"frontier_node_ids"`
+	OutgoingRelationIDs []string     `json:"outgoing_relation_ids"`
+}
+
 type Result struct {
 	SchemaVersion         string                 `json:"schema_version"`
 	Invocation            Invocation             `json:"invocation"`
@@ -228,6 +243,7 @@ type Result struct {
 	DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
 	Seeds                 []SeedResult           `json:"-"`
 	Tool                  ToolIdentity           `json:"-"`
+	Slice                 *SliceEvidence         `json:"-"`
 }
 
 func (r Result) MarshalJSON() ([]byte, error) {

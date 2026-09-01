@@ -23,9 +23,11 @@ type fakeClient struct {
 	documentSymbols []lsp.DocumentSymbol
 	symbolSupported bool
 	symbolRequests  int
+	prepareRequests int
 }
 
 func (f *fakeClient) PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	f.prepareRequests++
 	return f.targets, f.prepareErr
 }
 func (f *fakeClient) IncomingCalls(_ context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
@@ -60,6 +62,15 @@ func TestIncomingBranchingDiamondAndOpaqueData(t *testing.T) {
 	}
 	if r.Nodes[0].Name != "root" {
 		t.Fatalf("ASSERT_CANONICAL_NODE_ORDER: first=%s", r.Nodes[0].Name)
+	}
+}
+
+func TestIncomingPreparedReusesIncomingTraversalWithoutPreparing(t *testing.T) {
+	leaf, caller := item("leaf", 8), item("caller", 4)
+	f := &fakeClient{calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {{From: caller}}, "caller": {}}}
+	r := IncomingPrepared(context.Background(), f, []lsp.CallHierarchyItem{leaf}, Options{MaxDepth: 1})
+	if f.prepareRequests != 0 || r.Summary.NodeCount != 2 || r.Summary.EdgeCount != 1 || len(r.Frontier) != 1 || r.Frontier[0].Reason != graph.MaxDepth {
+		t.Fatalf("ASSERT_INCOMING_PREPARED_REUSES_BFS: prepares=%d result=%#v", f.prepareRequests, r)
 	}
 }
 

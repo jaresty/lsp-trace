@@ -114,6 +114,32 @@ func TestClientNullCallHierarchyResponses(t *testing.T) {
 	}
 }
 
+func TestClientOutgoingCallHierarchyResponses(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	client := NewClient(jsonrpc.New(clientConn, clientConn))
+	item := CallHierarchyItem{Name: "caller", URI: "file:///caller", Data: json.RawMessage(`{"opaque":1}`)}
+	go func() {
+		r := bufio.NewReader(serverConn)
+		request := readPeer(t, r)
+		if request.Method != "callHierarchy/outgoingCalls" || !bytes.Contains(request.Params, []byte(`"opaque":1`)) {
+			t.Errorf("ASSERT_OUTGOING_EXACT_ITEM_REQUEST: method=%s params=%s", request.Method, request.Params)
+		}
+		writePeer(t, serverConn, peerMessage{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`[{"to":{"name":"callee","kind":12,"uri":"file:///callee","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"data":{"opaque":2}},"fromRanges":[{"start":{"line":1,"character":2},"end":{"line":1,"character":3}}]}]`)})
+		request = readPeer(t, r)
+		writePeer(t, serverConn, peerMessage{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`null`)})
+	}()
+	calls, wasNull, err := client.OutgoingCalls(context.Background(), item)
+	if err != nil || wasNull || len(calls) != 1 || calls[0].To.Name != "callee" || string(calls[0].To.Data) != `{"opaque":2}` || len(calls[0].FromRanges) != 1 {
+		t.Fatalf("ASSERT_OUTGOING_ARRAY_DECODED: calls=%#v wasNull=%v err=%v", calls, wasNull, err)
+	}
+	calls, wasNull, err = client.OutgoingCalls(context.Background(), item)
+	if err != nil || !wasNull || calls != nil {
+		t.Fatalf("ASSERT_OUTGOING_NULL_DISTINCT: calls=%#v wasNull=%v err=%v", calls, wasNull, err)
+	}
+}
+
 func TestClientLifecycleSequence(t *testing.T) {
 	clientConn, serverConn := net.Pipe()
 	defer clientConn.Close()

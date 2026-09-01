@@ -14,6 +14,12 @@ For v3, the producer and offline verifier derive `traversal_complete` from the s
 
 A terminal records a node that was expanded or intentionally stopped; a frontier records a discovered node that remains unexpanded. Reasons are stable machine-readable values defined by the schema policy. `MAX_DEPTH` and `MAX_NODES` identify user bounds. The global `--timeout` bounds the whole command and produces `GLOBAL_TIMEOUT` when traversal-wide time expires; `--request-timeout` bounds each LSP request and produces `REQUEST_TIMEOUT`. Cancellation surfaces as `CANCELLED`, and an interrupt causes exit status `130` after JSON emission when possible.
 
+## Bounded slice semantics
+
+A v3 slice begins with every recursively enumerated document symbol in `--from-file` that the server accepts through `textDocument/prepareCallHierarchy`. Outgoing breadth-first traversal assigns each node its shortest server-reported distance from that deduplicated starting set. Only nodes at exactly `--down-depth` form the upward frontier; branches ending earlier contribute no frontier node. The existing incoming traversal expands that frontier using `--up-depth` as its maximum caller depth. Both values count call edges, and zero disables traversal in that direction.
+
+The `slice` object records the source URI, ordered shortest-distance layers, exact frontier, and outgoing discovery relations by canonical native node/relation ID. Nodes and edges remain single native graph records. These fields preserve bounded discovery provenance but do not establish feature identity, runtime execution, source completeness, or relationships the server did not report.
+
 ## V3 custody and identity
 
 ### Field authority

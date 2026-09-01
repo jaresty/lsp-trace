@@ -30,6 +30,7 @@ var embeddedSkill string
 
 const usageText = `usage:
   lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
+  lsp-trace slice --workspace PATH --server COMMAND --from-file PATH --down-depth N --up-depth N
   lsp-trace verify PATH
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate [--schema v1|v2|v3] PATH|-
@@ -71,6 +72,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "validate" {
 		return runValidate(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "slice" {
+		return runSlice(args[1:])
 	}
 	if len(args) == 0 || args[0] != "incoming" {
 		fmt.Fprintln(os.Stderr, usageText)
@@ -317,6 +321,12 @@ func (c requestTimeoutClient) IncomingCalls(_ context.Context, item lsp.CallHier
 	ctx, cancel := c.callContext()
 	defer cancel()
 	return c.client.IncomingCalls(ctx, item)
+}
+
+func (c requestTimeoutClient) OutgoingCalls(_ context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyOutgoingCall, bool, error) {
+	ctx, cancel := c.callContext()
+	defer cancel()
+	return c.client.OutgoingCalls(ctx, item)
 }
 
 func (c requestTimeoutClient) SupportsTypeHierarchy() bool {

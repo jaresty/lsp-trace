@@ -45,6 +45,21 @@ func TestProducerGeneratedV3PassesLayeredValidation(t *testing.T) {
 	}
 }
 
+func TestProducerGeneratedV3SlicePassesLayeredValidation(t *testing.T) {
+	n := graph.NewNode(graph.Item{Name: "start", URI: "file:///w/a.go"})
+	result := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: []graph.Node{n}, Slice: &graph.SliceEvidence{
+		SourceURI: "file:///w/a.go", DownDepth: 0, UpDepth: 1,
+		StartingNodeIDs: []string{n.ID}, Layers: []graph.SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{n.ID},
+	}}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Validate(encoded, "v3"); err != nil {
+		t.Fatalf("ASSERT_V3_SLICE_SCHEMA_ACCEPTED: %v", err)
+	}
+}
+
 func TestStructuralValidationPrecedesV3Semantics(t *testing.T) {
 	_, err := Validate([]byte(`{"schema_version":"lsp-trace.graph.v3"}`), "")
 	if err == nil || !strings.Contains(err.Error(), "schema validation") || strings.Contains(err.Error(), "semantic validation") {

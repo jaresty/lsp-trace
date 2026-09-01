@@ -105,6 +105,7 @@ type semanticV3 struct {
 	SiblingCandidates     []SiblingCandidate     `json:"sibling_candidates,omitempty"`
 	DispatchRelationships []DispatchRelationship `json:"dispatch_relationships,omitempty"`
 	Seeds                 []SeedResult           `json:"seeds,omitempty"`
+	Slice                 *SliceEvidence         `json:"slice,omitempty"`
 	Summary               summaryV3              `json:"summary"`
 }
 type semanticReceiptV3 struct {
@@ -173,7 +174,7 @@ func (r Result) marshalV3() ([]byte, error) {
 		SeedMemberships: projectSeedMemberships(inv.Seeds, r.Seeds, r.Edges, r.SiblingCandidates, r.DispatchRelationships, inv.Provenance.SourceRevision), ReplayInputManifest: projectReplayManifest(inv, r.Diagnostics), PortableLocators: projectPortableLocators(r.Nodes),
 		Capabilities: r.Capabilities, CapabilityQuality: r.CapabilityQuality, Targets: r.Targets, Nodes: r.Nodes, Edges: r.Edges,
 		Terminals: r.Terminals, Frontier: r.Frontier, Diagnostics: r.Diagnostics, SiblingCandidates: r.SiblingCandidates,
-		DispatchRelationships: r.DispatchRelationships, Seeds: r.Seeds,
+		DispatchRelationships: r.DispatchRelationships, Seeds: r.Seeds, Slice: r.Slice,
 		Summary: summaryV3{r.Summary.NodeCount, r.Summary.EdgeCount, r.Summary.TerminalCount, r.Summary.CycleCount, r.Summary.Complete, Unknown, CompletenessScope, r.Summary.Truncated},
 	}
 	canonical, err := json.Marshal(sem)
@@ -366,6 +367,7 @@ func (r Result) ValidateReferences() error {
 		}
 	}
 	edges := map[string]struct{}{}
+	relationIDs := map[string]struct{}{}
 	for _, e := range r.Edges {
 		if e.RelationID != canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", e.CallerNodeID+"->"+e.CalleeNodeID, "", "", "", e.CallerNodeID, e.CalleeNodeID) {
 			return fmt.Errorf("invalid canonical call relation id %q", e.RelationID)
@@ -383,6 +385,44 @@ func (r Result) ValidateReferences() error {
 			return fmt.Errorf("duplicate canonical edge %s->%s", e.CallerNodeID, e.CalleeNodeID)
 		}
 		edges[key] = struct{}{}
+		relationIDs[e.RelationID] = struct{}{}
+	}
+	if r.Slice != nil {
+		for _, id := range r.Slice.StartingNodeIDs {
+			if err := need("slice starting", id); err != nil {
+				return err
+			}
+		}
+		for i, layer := range r.Slice.Layers {
+			if layer.Depth != i {
+				return fmt.Errorf("slice layers must be contiguous from depth zero")
+			}
+			for _, id := range layer.NodeIDs {
+				if err := need("slice layer", id); err != nil {
+					return err
+				}
+			}
+		}
+		for _, id := range r.Slice.FrontierNodeIDs {
+			if err := need("slice frontier", id); err != nil {
+				return err
+			}
+		}
+		if r.Slice.DownDepth < 0 {
+			return fmt.Errorf("slice down depth must be non-negative")
+		}
+		if r.Slice.DownDepth < len(r.Slice.Layers) {
+			if !reflect.DeepEqual(r.Slice.FrontierNodeIDs, r.Slice.Layers[r.Slice.DownDepth].NodeIDs) {
+				return fmt.Errorf("slice frontier does not equal down-depth layer")
+			}
+		} else if len(r.Slice.FrontierNodeIDs) != 0 {
+			return fmt.Errorf("slice frontier must be empty when down-depth layer was not reached")
+		}
+		for _, id := range r.Slice.OutgoingRelationIDs {
+			if _, ok := relationIDs[id]; !ok {
+				return fmt.Errorf("dangling slice outgoing relation id %q", id)
+			}
+		}
 	}
 	for _, b := range append(append([]Boundary{}, r.Terminals...), r.Frontier...) {
 		if err := need("boundary", b.NodeID); err != nil {
@@ -442,7 +482,7 @@ func ValidateSemanticBundle(data []byte) error {
 	verified := Result{
 		SchemaVersion: b.SchemaVersion, Targets: b.Targets, Nodes: b.Nodes, Edges: b.Edges,
 		Terminals: b.Terminals, Frontier: b.Frontier, Diagnostics: b.Diagnostics, Seeds: b.Seeds,
-		SiblingCandidates: b.SiblingCandidates, DispatchRelationships: b.DispatchRelationships,
+		SiblingCandidates: b.SiblingCandidates, DispatchRelationships: b.DispatchRelationships, Slice: b.Slice,
 		Summary:      Summary{Complete: true, Truncated: b.Summary.Truncated},
 		Capabilities: b.Capabilities, CapabilityQuality: b.CapabilityQuality,
 	}

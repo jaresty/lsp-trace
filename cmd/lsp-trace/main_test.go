@@ -620,6 +620,16 @@ func TestCaptureRunDrainsLargeStdout(t *testing.T) {
 	}
 }
 
+func TestParseSliceUsesSymmetricDepthFlagsAndRejectsMaxDepth(t *testing.T) {
+	cfg, err := parseSlice([]string{"--workspace", "/w", "--server", "server", "--from-file", "a.go", "--down-depth", "2", "--up-depth", "7"})
+	if err != nil || cfg.downDepth != 2 || cfg.upDepth != 7 || cfg.fromFile != "a.go" {
+		t.Fatalf("ASSERT_SLICE_SYMMETRIC_DEPTH_FLAGS: cfg=%#v err=%v", cfg, err)
+	}
+	if _, err := parseSlice([]string{"--workspace", "/w", "--server", "server", "--from-file", "a.go", "--max-depth", "7"}); err == nil {
+		t.Fatal("ASSERT_SLICE_MAX_DEPTH_NOT_EXPOSED: accepted --max-depth")
+	}
+}
+
 func TestSchemaGetAndValidateCommands(t *testing.T) {
 	for _, version := range []string{"v1", "v2", "v3"} {
 		version := version

@@ -478,6 +478,28 @@ func TestSharedCallerDistinctCalleesPreserveSeedRelationsOrderInvariant(t *testi
 	}
 }
 
+func TestV3SliceEvidenceRejectsDanglingNativeReferences(t *testing.T) {
+	n := NewNode(Item{Name: "start", URI: "file:///w/a.go"})
+	r := Result{SchemaVersion: SchemaVersionV3, Nodes: []Node{n}, Slice: &SliceEvidence{
+		SourceURI: "file:///w/a.go", StartingNodeIDs: []string{"missing"},
+		Layers: []SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{n.ID},
+	}}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "dangling slice starting node id") {
+		t.Fatalf("ASSERT_SLICE_NATIVE_REFERENCES_VALIDATED: %v", err)
+	}
+}
+
+func TestV3SliceAllowsEmptyFrontierWhenGraphEndsBeforeDepth(t *testing.T) {
+	n := NewNode(Item{Name: "start", URI: "file:///w/a.go"})
+	r := Result{SchemaVersion: SchemaVersionV3, Nodes: []Node{n}, Slice: &SliceEvidence{
+		SourceURI: "file:///w/a.go", DownDepth: 1, StartingNodeIDs: []string{n.ID},
+		Layers: []SliceLayer{{Depth: 0, NodeIDs: []string{n.ID}}}, FrontierNodeIDs: []string{},
+	}}
+	if _, err := json.Marshal(r); err != nil {
+		t.Fatalf("ASSERT_SLICE_EMPTY_EXACT_DEPTH_VALID: %v", err)
+	}
+}
+
 func TestV3CanonicalProjectionRoundTripsAndRejectsDuplicateEdges(t *testing.T) {
 	n1 := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
 	n2 := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})

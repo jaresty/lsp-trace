@@ -83,6 +83,21 @@ Validation and verification do not authenticate producer identity or prove that 
 
 Raw environment values, the working-directory path, and server stderr are intentionally not retained.
 
+## Trace a bounded call-graph slice
+
+```bash
+lsp-trace slice \
+  --workspace /path/to/workspace \
+  --server language-server \
+  --from-file path/to/file.ext \
+  --down-depth 2 \
+  --up-depth 8
+```
+
+The command recursively enumerates document symbols in the starting file, asks the server which positions prepare as call-hierarchy items, walks server-reported outgoing calls to the exact `--down-depth` layer, deduplicates that frontier by native node identity, and reuses the existing incoming traversal up to `--up-depth`. Both depths count edges; zero disables traversal in that direction. The v3 `slice` section references native node and relation IDs rather than duplicating graph records. A branch ending before the requested downward depth has no exact-depth frontier node.
+
+Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
+
 ## Interpret results honestly
 
 ### Field authority

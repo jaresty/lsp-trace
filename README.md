@@ -23,6 +23,21 @@ go run ./cmd/lsp-trace incoming \
 
 Line and column values are one-based. Graph JSON is written to stdout (or `--output`), while diagnostics are written to stderr. Exit code `0` means complete traversal, `2` means a structured but incomplete traversal, `1` means invocation or unrecoverable server failure, and `130` means interruption.
 
+## Bounded call-graph slices
+
+Use `slice` to enumerate document symbols in one starting file, prepare every server-accepted callable, walk outgoing calls to an exact depth, and reuse the incoming traversal from that deduplicated frontier:
+
+```sh
+lsp-trace slice \
+  --workspace /path/to/workspace \
+  --server language-server \
+  --from-file src/example.ts \
+  --down-depth 2 \
+  --up-depth 8
+```
+
+`--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice` metadata whose layers, frontier, and outgoing relations reference the native graph's canonical node and relation IDs. A branch that ends before the requested downward depth contributes no exact-depth frontier node. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
+
 ## Flags
 
 Required flags:

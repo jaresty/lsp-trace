@@ -37,6 +37,11 @@ type CallHierarchyIncomingCall struct {
 	FromRanges []Range           `json:"fromRanges"`
 }
 
+type CallHierarchyOutgoingCall struct {
+	To         CallHierarchyItem `json:"to"`
+	FromRanges []Range           `json:"fromRanges"`
+}
+
 type DocumentSymbol struct {
 	Name           string           `json:"name"`
 	Detail         string           `json:"detail,omitempty"`
@@ -69,6 +74,10 @@ type TypeHierarchySubtypesParams struct {
 }
 
 type CallHierarchyIncomingCallsParams struct {
+	Item CallHierarchyItem `json:"item"`
+}
+
+type CallHierarchyOutgoingCallsParams struct {
 	Item CallHierarchyItem `json:"item"`
 }
 

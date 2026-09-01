@@ -29,6 +29,20 @@ type queued struct {
 	depth int
 }
 
+type preparedClient struct {
+	Client
+	items []lsp.CallHierarchyItem
+}
+
+func (c preparedClient) PrepareCallHierarchy(context.Context, lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	return c.items, nil
+}
+
+// IncomingPrepared reuses the incoming traversal with already-prepared items.
+func IncomingPrepared(ctx context.Context, client Client, items []lsp.CallHierarchyItem, opts Options) graph.Result {
+	return Incoming(ctx, preparedClient{Client: client, items: items}, lsp.PrepareCallHierarchyParams{}, opts)
+}
+
 func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarchyParams, opts Options) graph.Result {
 	version := opts.SchemaVersion
 	if version == "" {
