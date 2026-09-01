@@ -236,6 +236,35 @@ func TestSubprocessSlicePopulatesPerSeedCausalMemberships(t *testing.T) {
 	})
 }
 
+func TestWriteSliceSeedFailuresReportsEveryFailureOnly(t *testing.T) {
+	var out strings.Builder
+	writeSliceSeedFailures(&out, []graph.SeedResult{
+		{Label: "ok"},
+		{Label: "first", Failure: &graph.SeedFailure{Phase: "slice-prepare", Message: "no item"}},
+		{Label: "second", Failure: &graph.SeedFailure{Phase: "source", Message: "missing file"}},
+	})
+	const want = "slice seed \"first\" failed during slice-prepare: no item\nslice seed \"second\" failed during source: missing file\n"
+	if out.String() != want {
+		t.Fatalf("ASSERT_SLICE_EVERY_FAILED_SEED_ONLY: want=%q got=%q", want, out.String())
+	}
+}
+
+func TestSubprocessSliceReportsFailedSeedLabelAndCause(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\nfunc second() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-membership-failed", "--at", "main.go:1:1", "--at", "main.go:2:1", "--down-depth", "1", "--up-depth", "1", "--request-timeout", "500ms", "--timeout", "2s"}
+	_, stderr, code := captureRun(t, args)
+	if code != 2 {
+		t.Fatalf("ASSERT_SLICE_FAILED_SEED_REPORT_EXIT: code=%d stderr=%q", code, stderr)
+	}
+	const want = "slice seed \"seed-2\" failed during slice-prepare: json-rpc error -32004: seed-b prepare failed\n"
+	if strings.Count(stderr, want) != 1 {
+		t.Fatalf("ASSERT_SLICE_FAILED_SEED_LABEL_AND_CAUSE: want=%q stderr=%q", want, stderr)
+	}
+}
+
 func TestSubprocessSliceSummarizesNoisyDiagnosticsWithoutDroppingEvidence(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {

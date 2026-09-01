@@ -200,6 +200,14 @@ func sliceClosure(startIDs []string, edges []graph.Edge, outgoing bool, maxDepth
 	return nodeIDs, reachedEdges
 }
 
+func writeSliceSeedFailures(w io.Writer, seeds []graph.SeedResult) {
+	for _, seed := range seeds {
+		if seed.Failure != nil {
+			fmt.Fprintf(w, "slice seed %q failed during %s: %s\n", seed.Label, seed.Failure.Phase, seed.Failure.Message)
+		}
+	}
+}
+
 func writeSliceDiagnostics(w io.Writer, diagnostics []graph.Diagnostic) {
 	nonCallable, outsideCallerRange := 0, 0
 	for _, diagnostic := range diagnostics {
@@ -439,6 +447,7 @@ func runSlice(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	writeSliceSeedFailures(os.Stderr, result.Seeds)
 	writeSliceDiagnostics(os.Stderr, result.Diagnostics)
 	if cfg.output == "" {
 		_, err = os.Stdout.Write(data)

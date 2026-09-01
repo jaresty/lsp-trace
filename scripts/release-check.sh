@@ -122,6 +122,8 @@ assert_contains R-V3-HISTORICAL-ADDITIVE docs/SCHEMA_POLICY.md 'historical v3 do
 assert_contains R-SLICE-RANGE-WARNING-RECOVERABLE docs/SEMANTICS.md '`SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is a recoverable server-quality diagnostic'
 assert_contains R-SLICE-RANGE-WARNING-PUBLISH docs/SEMANTICS.md 'this diagnostic alone does not make the slice incomplete or prevent selector publication'
 assert_contains R-SLICE-INVALID-RELATION-CLOSED docs/SEMANTICS.md 'malformed or unattributable callers, node-identity collisions, and dangling relation references remain fail-closed structural errors'
+assert_contains R-GENERATION-NAME-NOT-IDENTITY README.md 'Generation directory basenames are opaque publication coordinates, not content identities and not part of the determinism contract.'
+assert_contains R-ARTIFACT-BYTE-DETERMINISM docs/SEMANTICS.md 'With identical invocation inputs and server observations, canonical artifact bytes are deterministic; immutable generation directory basenames may differ between publications.'
 assert_contains R-FLAGS README.md '## Flags'
 for flag in workspace server at server-arg server-env language-id max-depth max-nodes timeout request-timeout concurrency log-level trace-lsp output pretty; do
   assert_contains "R-FLAG-$flag" README.md "\`--$flag"
