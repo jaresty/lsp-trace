@@ -44,6 +44,43 @@ type queued struct {
 	depth int
 }
 
+type preparedStartClient struct {
+	Client
+	items map[uint32]lsp.CallHierarchyItem
+}
+
+func (c preparedStartClient) SupportsDocumentSymbols() bool { return true }
+func (c preparedStartClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	lines := make([]int, 0, len(c.items))
+	for line := range c.items {
+		lines = append(lines, int(line))
+	}
+	sort.Ints(lines)
+	out := make([]lsp.DocumentSymbol, 0, len(lines))
+	for _, raw := range lines {
+		line := uint32(raw)
+		position := lsp.Position{Line: line}
+		out = append(out, lsp.DocumentSymbol{Name: c.items[line].Name, Kind: c.items[line].Kind, Range: lsp.Range{Start: position, End: position}, SelectionRange: lsp.Range{Start: position, End: position}})
+	}
+	return out, nil
+}
+func (c preparedStartClient) PrepareCallHierarchy(_ context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	item, ok := c.items[params.Position.Line]
+	if !ok {
+		return nil, nil
+	}
+	return []lsp.CallHierarchyItem{item}, nil
+}
+
+// DiscoverPrepared runs the same outgoing BFS from call-hierarchy items prepared by the caller.
+func DiscoverPrepared(ctx context.Context, client Client, items []lsp.CallHierarchyItem, opts Options) Discovery {
+	byLine := make(map[uint32]lsp.CallHierarchyItem, len(items))
+	for i, item := range items {
+		byLine[uint32(i)] = item
+	}
+	return Discover(ctx, preparedStartClient{Client: client, items: byLine}, "lsp-trace://prepared-starts", opts)
+}
+
 func Discover(ctx context.Context, client Client, sourceURI string, opts Options) Discovery {
 	result := Discovery{SourceURI: sourceURI, Complete: true}
 	if !client.SupportsDocumentSymbols() {

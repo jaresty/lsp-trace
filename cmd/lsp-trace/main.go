@@ -30,7 +30,7 @@ var embeddedSkill string
 
 const usageText = `usage:
   lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
-  lsp-trace slice --workspace PATH --server COMMAND --from-file PATH --down-depth N --up-depth N
+  lsp-trace slice --workspace PATH --server COMMAND (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace verify PATH
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate [--schema v1|v2|v3] PATH|-

@@ -218,6 +218,7 @@ type SliceLayer struct {
 }
 
 type SliceEvidence struct {
+	StartMode           string       `json:"start_mode,omitempty"`
 	SourceURI           string       `json:"source_uri"`
 	DownDepth           int          `json:"down_depth"`
 	UpDepth             int          `json:"up_depth"`

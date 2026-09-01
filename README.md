@@ -36,7 +36,9 @@ lsp-trace slice \
   --up-depth 8
 ```
 
-`--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice` metadata whose layers, frontier, and outgoing relations reference the native graph's canonical node and relation IDs. A branch that ends before the requested downward depth contributes no exact-depth frontier node. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
+Choose exactly one starting mode: `--from-file FILE` enumerates every server-preparable document symbol in one file; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic `seed-1`, `seed-2`, … labels; `--seed-file FILE` uses the existing labeled seed JSON format. Explicit starts are prepared once, deduplicated by native node identity for traversal, and retain each caller-supplied seed occurrence in `invocation.seeds` and `seeds`.
+
+`--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice.start_mode` plus metadata whose layers, frontier, and outgoing relations reference the native graph's canonical node and relation IDs. A branch that ends before the requested downward depth contributes no exact-depth frontier node. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
 
 ## Flags
 

@@ -80,6 +80,47 @@ func TestSubprocessSliceComposesOutgoingFrontierWithIncomingTraversal(t *testing
 	}
 }
 
+func TestSubprocessSliceExplicitStartModesPreserveSeedLabels(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	seedFile := filepath.Join(t.TempDir(), "seeds.json")
+	if err := os.WriteFile(seedFile, []byte(`{"seeds":[{"label":"named-start","at":"main.go:1:1"}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, startMode string
+		mode            []string
+		label           string
+	}{
+		{name: "at", startMode: "at", mode: []string{"--at", "main.go:1:1"}, label: "seed-1"},
+		{name: "seed-file", startMode: "seed_file", mode: []string{"--seed-file", seedFile}, label: "named-start"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s"}
+			args = append(args, tc.mode...)
+			stdout, stderr, code := captureRun(t, args)
+			var got struct {
+				Invocation struct {
+					Seeds []graph.InvocationSeed `json:"seeds"`
+				} `json:"invocation"`
+				Seeds []struct {
+					Label    string   `json:"label"`
+					Prepared []string `json:"prepared_target_ids"`
+				} `json:"seeds"`
+				Slice graph.SliceEvidence `json:"slice"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+				t.Fatalf("ASSERT_SLICE_EXPLICIT_JSON: %v stdout=%q stderr=%q", err, stdout, stderr)
+			}
+			if code != 0 || len(got.Invocation.Seeds) != 1 || got.Invocation.Seeds[0].Label != tc.label || len(got.Seeds) != 1 || got.Seeds[0].Label != tc.label || len(got.Seeds[0].Prepared) != 1 || len(got.Slice.StartingNodeIDs) != 1 || got.Slice.StartMode != tc.startMode {
+				t.Fatalf("ASSERT_SLICE_EXPLICIT_SEED_PROVENANCE: code=%d invocation=%#v seeds=%#v slice=%#v stderr=%s", code, got.Invocation.Seeds, got.Seeds, got.Slice, stderr)
+			}
+		})
+	}
+}
+
 func TestSubprocessLabeledMultipleSeeds(t *testing.T) {
 	for _, scenario := range []string{"multi-two", "multi-duplicate", "multi-mixed"} {
 		t.Run(scenario, func(t *testing.T) {

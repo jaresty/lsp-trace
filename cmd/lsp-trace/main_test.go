@@ -620,14 +620,36 @@ func TestCaptureRunDrainsLargeStdout(t *testing.T) {
 	}
 }
 
-func TestParseSliceUsesSymmetricDepthFlagsAndRejectsMaxDepth(t *testing.T) {
-	cfg, err := parseSlice([]string{"--workspace", "/w", "--server", "server", "--from-file", "a.go", "--down-depth", "2", "--up-depth", "7"})
-	if err != nil || cfg.downDepth != 2 || cfg.upDepth != 7 || cfg.fromFile != "a.go" {
-		t.Fatalf("ASSERT_SLICE_SYMMETRIC_DEPTH_FLAGS: cfg=%#v err=%v", cfg, err)
-	}
-	if _, err := parseSlice([]string{"--workspace", "/w", "--server", "server", "--from-file", "a.go", "--max-depth", "7"}); err == nil {
-		t.Fatal("ASSERT_SLICE_MAX_DEPTH_NOT_EXPOSED: accepted --max-depth")
-	}
+func TestParseSliceUsesSymmetricDepthFlagsAndExclusiveStartModes(t *testing.T) {
+	base := []string{"--workspace", "/w", "--server", "server", "--down-depth", "2", "--up-depth", "7"}
+	t.Run("from file", func(t *testing.T) {
+		cfg, err := parseSlice(append(append([]string{}, base...), "--from-file", "a.go"))
+		if err != nil || cfg.downDepth != 2 || cfg.upDepth != 7 || cfg.fromFile != "a.go" {
+			t.Errorf("ASSERT_SLICE_SYMMETRIC_DEPTH_FLAGS: cfg=%#v err=%v", cfg, err)
+		}
+	})
+	t.Run("repeatable at", func(t *testing.T) {
+		cfg, err := parseSlice(append(append([]string{}, base...), "--at", "a.go:1:1", "--at", "b.go:2:3"))
+		if err != nil || len(cfg.ats) != 2 {
+			t.Errorf("ASSERT_SLICE_REPEATABLE_AT_MODE: cfg=%#v err=%v", cfg, err)
+		}
+	})
+	t.Run("seed file", func(t *testing.T) {
+		cfg, err := parseSlice(append(append([]string{}, base...), "--seed-file", "seeds.json"))
+		if err != nil || cfg.seedFile != "seeds.json" {
+			t.Errorf("ASSERT_SLICE_SEED_FILE_MODE: cfg=%#v err=%v", cfg, err)
+		}
+	})
+	t.Run("exclusive", func(t *testing.T) {
+		if _, err := parseSlice(append(append([]string{}, base...), "--from-file", "a.go", "--at", "a.go:1:1")); err == nil || !strings.Contains(err.Error(), "exactly one") {
+			t.Errorf("ASSERT_SLICE_START_MODES_EXCLUSIVE: %v", err)
+		}
+	})
+	t.Run("no max depth", func(t *testing.T) {
+		if _, err := parseSlice(append(append([]string{}, base...), "--max-depth", "7", "--from-file", "a.go")); err == nil {
+			t.Error("ASSERT_SLICE_MAX_DEPTH_NOT_EXPOSED: accepted --max-depth")
+		}
+	})
 }
 
 func TestSchemaGetAndValidateCommands(t *testing.T) {

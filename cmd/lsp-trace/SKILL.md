@@ -94,7 +94,9 @@ lsp-trace slice \
   --up-depth 8
 ```
 
-The command recursively enumerates document symbols in the starting file, asks the server which positions prepare as call-hierarchy items, walks server-reported outgoing calls to the exact `--down-depth` layer, deduplicates that frontier by native node identity, and reuses the existing incoming traversal up to `--up-depth`. Both depths count edges; zero disables traversal in that direction. The v3 `slice` section references native node and relation IDs rather than duplicating graph records. A branch ending before the requested downward depth has no exact-depth frontier node.
+Choose exactly one starting mode: `--from-file FILE` recursively enumerates document symbols; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic labels; `--seed-file FILE` uses the existing labeled seed format. Explicit seed occurrences retain their labels and requested positions even when prepared nodes deduplicate.
+
+The command asks the server which positions prepare as call-hierarchy items, walks server-reported outgoing calls to the exact `--down-depth` layer, deduplicates that frontier by native node identity, and reuses the existing incoming traversal up to `--up-depth`. Both depths count edges; zero disables traversal in that direction. The v3 `slice` section references native node and relation IDs rather than duplicating graph records. A branch ending before the requested downward depth has no exact-depth frontier node.
 
 Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
 

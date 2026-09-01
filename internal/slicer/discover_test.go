@@ -36,6 +36,15 @@ func symbol(name string, line uint32, children ...lsp.DocumentSymbol) lsp.Docume
 	return lsp.DocumentSymbol{Name: name, Kind: 12, Range: r, SelectionRange: r, Children: children}
 }
 
+func TestDiscoverPreparedUsesSameOutgoingBFS(t *testing.T) {
+	a, c := callItem("a", 1), callItem("c", 3)
+	f := &fakeClient{outgoing: map[string][]lsp.CallHierarchyOutgoingCall{"a": {{To: c}}, "c": {}}}
+	got := DiscoverPrepared(context.Background(), f, []lsp.CallHierarchyItem{a, a}, Options{DownDepth: 1})
+	if len(got.StartNodeIDs) != 1 || len(got.FrontierItems) != 1 || got.FrontierItems[0].Name != "c" || len(got.Edges) != 1 {
+		t.Fatalf("ASSERT_SLICE_PREPARED_STARTS_REUSE_BFS: %#v", got)
+	}
+}
+
 func TestDiscoverExactDepthFrontierIsDeterministicAndDeduplicated(t *testing.T) {
 	a, b, c, d := callItem("a", 1), callItem("b", 2), callItem("c", 3), callItem("d", 4)
 	f := &fakeClient{

@@ -47,6 +47,7 @@
       "type": "object",
       "required": ["source_uri", "down_depth", "up_depth", "starting_node_ids", "layers", "frontier_node_ids", "outgoing_relation_ids"],
       "properties": {
+        "start_mode": {"enum": ["from_file", "at", "seed_file"]},
         "source_uri": {"type": "string"}, "down_depth": {"type": "integer", "minimum": 0}, "up_depth": {"type": "integer", "minimum": 0},
         "starting_node_ids": {"type": ["array", "null"], "items": {"type": "string"}},
         "layers": {"type": ["array", "null"], "items": {"$ref": "#/$defs/sliceLayer"}},
