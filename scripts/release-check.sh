@@ -58,7 +58,7 @@ assert_contains Q-ELIXIR-COMPANION-DEFAULT scripts/qualify.sh '../elixir-call-hi
 assert_contains Q-ELIXIR-COMPANION-REPOSITORY qualification/README.md 'https://github.com/jaresty/elixir-call-hierarchy'
 assert_contains Q-ELIXIR-COMPANION-EXTERNAL-CONTRACT qualification/README.md "external server's own README defines its profiling, trust, completeness, and clause-coalescing contracts"
 assert_contains Q-ELIXIR-COMPANION-CI-REPOSITORY .github/workflows/ci.yml 'repository: jaresty/elixir-call-hierarchy'
-assert_contains Q-ELIXIR-COMPANION-CI-PIN .github/workflows/ci.yml 'ref: dfd332f51513c79b44c422e1dcb98ddceaaa29a9'
+assert_contains Q-ELIXIR-COMPANION-CI-PIN .github/workflows/ci.yml 'ref: aab27746f1ab03a3ce24fa3e636bbc252c0236ff'
 assert_contains Q-ELIXIR-COMPANION-CI-PATH .github/workflows/ci.yml 'path: elixir-call-hierarchy'
 assert_contains Q-ELIXIR-LS-DISTINCT qualification/README.md 'does not replace or rewrite the retained ElixirLS BLOCKED evidence'
 assert_contains Q-TERMINAL-PROVENANCE docs/SEMANTICS.md 'Terminal provenance'

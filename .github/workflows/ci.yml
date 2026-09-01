@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: jaresty/elixir-call-hierarchy
-          ref: dfd332f51513c79b44c422e1dcb98ddceaaa29a9
+          ref: aab27746f1ab03a3ce24fa3e636bbc252c0236ff
           path: elixir-call-hierarchy
       - uses: erlef/setup-beam@v1
         with:
