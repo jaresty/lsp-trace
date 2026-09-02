@@ -19,6 +19,22 @@ import (
 	"lsp-trace/internal/lsp"
 )
 
+func TestTopLevelUsageAdvertisesFilterAndSchemaFamilies(t *testing.T) {
+	stdout, stderr, code := captureRun(t, nil)
+	if code != 1 || stdout != "" {
+		t.Fatalf("ASSERT_TOP_LEVEL_FAMILY_USAGE: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		"lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]",
+		"lsp-trace schema get --family graph|inspect|filter --version VERSION",
+		"lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("ASSERT_TOP_LEVEL_FAMILY_USAGE: missing %q in %q", want, stderr)
+		}
+	}
+}
+
 func validArgs(workspace string) []string {
 	return []string{"--workspace", workspace, "--server", "server", "--at", "main.go:1:1"}
 }

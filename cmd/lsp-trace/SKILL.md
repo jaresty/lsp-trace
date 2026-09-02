@@ -176,6 +176,24 @@ Both modes emit `lsp-trace.inspect.v1` JSON and are read-only. Single-seed outpu
 
 Direct artifacts pass Draft 2020-12 structural and v3 semantic validation but gain no custody claim. Selectors additionally require a complete generation and valid exact-byte custody receipt. Aggregate native records are copied once; per-seed collections reference them. `TOOL_DERIVED_NODE_CORRELATION` identifies reached-node diagnostic correlation only, never exact per-seed custody or causation. Inspection adds no feature or consumer semantics and does not replace graph validation or selector custody verification.
 
+## Compare two retained seed-evidence sets
+
+First retain an aggregate inspection, then compare exactly two distinct stored labels:
+
+```bash
+lsp-trace inspect evidence.selector.json --all-seeds --json > evidence-inspection.json
+lsp-trace filter evidence-inspection.json \
+  --compare-seeds LEFT_LABEL \
+  --compare-seeds RIGHT_LABEL \
+  --json > evidence-comparison.json
+```
+
+`filter` accepts only a path to a valid `lsp-trace.inspect.v1` `ALL_SEEDS` document. It emits a deterministic, read-only `lsp-trace.filter.v1` `SEED_EVIDENCE_COMPARISON`; it starts no server and does not modify or replace the inspection. The result contains typed explicit references partitioned into `shared`, `left_only`, and `right_only`, selected-seed states, global boundaries, and mechanical counts. It contains no copied native records, so resolve references against the admitted inspection document.
+
+Treat reference namespaces independently. Equal raw values in node, call-relation, dispatch, sibling, and diagnostic-correlation namespaces are not equal evidence keys. Do not infer node references from relation endpoints, partition membership records, silently deduplicate malformed input, or reinterpret diagnostic correlation as custody or causation. Failed and successful-empty seeds remain distinct and are valid operands.
+
+Shared references do not establish shared feature or workflow identity. Exclusive or empty references do not establish distinct identity, absence, or a merge/split result. The filter projection has zero support contribution and cannot upgrade native evidence authority, recover selector custody, authenticate source or execution, prove runtime behavior, rank evidence, measure coverage, or determine confidence or acceptance. Use it only as a mechanical pairwise review input; retain semantic and product adjudication outside `lsp-trace`.
+
 ## Interpret results honestly
 
 ### Field authority

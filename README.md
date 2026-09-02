@@ -55,6 +55,18 @@ Selector inspection verifies complete-generation exact-byte custody before struc
 
 Inspection is deterministic and read-only. Global boundaries and diagnostics remain global; reached-node diagnostic indexes are correlations rather than per-seed custody or causation. Record and reference counts do not establish feature coverage, evidence sufficiency, runtime execution, domain meaning, or acceptance. Standalone `verify` remains an explicit selector custody audit.
 
+## Compare retained seed evidence
+
+After producing an `ALL_SEEDS` inspection document, compare exactly two stored seed labels without starting a language server or changing the input:
+
+```sh
+lsp-trace filter evidence-inspection.json --compare-seeds LEFT_LABEL --compare-seeds RIGHT_LABEL --json
+```
+
+The input must be a path to a structurally and semantically valid `lsp-trace.inspect.v1` `ALL_SEEDS` document. Exactly two distinct, known `--compare-seeds` values are required. The output is a `lsp-trace.filter.v1` `SEED_EVIDENCE_COMPARISON` containing typed references partitioned into `shared`, `left_only`, and `right_only`, plus selected-seed state, global completeness boundaries, and mechanical accounting. It does not copy native records; join references back to the admitted inspection input.
+
+Comparison is deterministic, read-only, and limited to explicit per-seed references. Shared references do not prove shared purpose, and exclusive references do not prove distinct purpose. Failed or successful-empty seeds remain valid operands, so an empty partition is not a feature or workflow conclusion. The projection does not recover selector custody, authenticate its producer or source, establish runtime behavior, rank evidence, measure coverage, or decide identity, merge, split, confidence, or acceptance. See [ADR 0002](docs/adr/0002-deterministic-seed-evidence-filtering.md) for the versioned contract and deferred operations.
+
 ## Flags
 
 Required flags:

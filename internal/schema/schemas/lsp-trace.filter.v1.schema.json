@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.filter.v1.schema.json",
+  "title": "lsp-trace pairwise seed-evidence filter v1",
+  "type": "object",
+  "required": ["filter_schema_version", "projection_kind", "authority", "support_contribution", "native_semantics_policy", "input_identity", "operands", "seeds", "partitions", "global_boundary", "accounting", "claim_ceiling"],
+  "properties": {
+    "filter_schema_version": {"const": "lsp-trace.filter.v1"},
+    "projection_kind": {"const": "SEED_EVIDENCE_COMPARISON"},
+    "authority": {"const": "TOOL_DERIVED_SET_PROJECTION"},
+    "support_contribution": {"const": 0},
+    "native_semantics_policy": {"const": "PRESERVE_WITHOUT_AUTHORITY_UPGRADE"},
+    "input_identity": {"$ref": "#/$defs/inputIdentity"},
+    "operands": {"$ref": "#/$defs/operands"},
+    "seeds": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"$ref": "#/$defs/seed"}},
+    "partitions": {"$ref": "#/$defs/partitions"},
+    "global_boundary": {"$ref": "#/$defs/globalBoundary"},
+    "accounting": {"$ref": "#/$defs/accounting"},
+    "claim_ceiling": {"$ref": "#/$defs/claimCeiling"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "inputIdentity": {
+      "type": "object",
+      "required": ["inspection_exact_bytes_digest", "artifact_semantic_commitment_digest", "artifact_exact_serialized_bytes_digest", "execution_bundle_id"],
+      "properties": {
+        "inspection_exact_bytes_digest": {"$ref": "#/$defs/digest"},
+        "artifact_semantic_commitment_digest": {"$ref": "#/$defs/digest"},
+        "artifact_exact_serialized_bytes_digest": {"$ref": "#/$defs/digest"},
+        "execution_bundle_id": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "operands": {
+      "type": "object",
+      "required": ["left_seed_label", "right_seed_label"],
+      "properties": {
+        "left_seed_label": {"type": "string", "minLength": 1},
+        "right_seed_label": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "failure": {
+      "type": "object",
+      "required": ["phase", "message"],
+      "properties": {"phase": {"type": "string"}, "message": {"type": "string"}},
+      "additionalProperties": false
+    },
+    "seed": {
+      "type": "object",
+      "required": ["label", "state", "failure"],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "state": {"enum": ["FAILED", "SUCCESSFUL_EMPTY", "SUCCESSFUL_WITH_EVIDENCE"]},
+        "failure": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]}
+      },
+      "additionalProperties": false
+    },
+    "stringPartition": {
+      "type": "object",
+      "required": ["shared", "left_only", "right_only"],
+      "properties": {
+        "shared": {"type": "array", "items": {"type": "string"}},
+        "left_only": {"type": "array", "items": {"type": "string"}},
+        "right_only": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "indexPartition": {
+      "type": "object",
+      "required": ["shared", "left_only", "right_only"],
+      "properties": {
+        "shared": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "left_only": {"type": "array", "items": {"type": "integer", "minimum": 0}},
+        "right_only": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+      },
+      "additionalProperties": false
+    },
+    "partitions": {
+      "type": "object",
+      "required": ["nodes", "call_relations", "dispatch_relationships", "sibling_candidates", "diagnostic_correlations"],
+      "properties": {
+        "nodes": {"$ref": "#/$defs/stringPartition"},
+        "call_relations": {"$ref": "#/$defs/stringPartition"},
+        "dispatch_relationships": {"$ref": "#/$defs/stringPartition"},
+        "sibling_candidates": {"$ref": "#/$defs/stringPartition"},
+        "diagnostic_correlations": {"$ref": "#/$defs/indexPartition"}
+      },
+      "additionalProperties": false
+    },
+    "globalBoundary": {
+      "type": "object",
+      "required": ["truncated", "traversal_complete", "source_graph_complete"],
+      "properties": {
+        "truncated": {"type": "boolean"},
+        "traversal_complete": {"type": "boolean"},
+        "source_graph_complete": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "namespaceAccounting": {
+      "type": "object",
+      "required": ["left_reference_count", "right_reference_count", "shared_reference_count", "left_only_reference_count", "right_only_reference_count", "pair_universe_count"],
+      "properties": {
+        "left_reference_count": {"type": "integer", "minimum": 0},
+        "right_reference_count": {"type": "integer", "minimum": 0},
+        "shared_reference_count": {"type": "integer", "minimum": 0},
+        "left_only_reference_count": {"type": "integer", "minimum": 0},
+        "right_only_reference_count": {"type": "integer", "minimum": 0},
+        "pair_universe_count": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "accounting": {
+      "type": "object",
+      "required": ["requested_seed_count", "successful_seed_count", "failed_seed_count", "successful_seed_with_membership_count", "successful_seed_without_membership_count", "nodes", "call_relations", "dispatch_relationships", "sibling_candidates", "diagnostic_correlations"],
+      "properties": {
+        "requested_seed_count": {"type": "integer", "minimum": 0},
+        "successful_seed_count": {"type": "integer", "minimum": 0},
+        "failed_seed_count": {"type": "integer", "minimum": 0},
+        "successful_seed_with_membership_count": {"type": "integer", "minimum": 0},
+        "successful_seed_without_membership_count": {"type": "integer", "minimum": 0},
+        "nodes": {"$ref": "#/$defs/namespaceAccounting"},
+        "call_relations": {"$ref": "#/$defs/namespaceAccounting"},
+        "dispatch_relationships": {"$ref": "#/$defs/namespaceAccounting"},
+        "sibling_candidates": {"$ref": "#/$defs/namespaceAccounting"},
+        "diagnostic_correlations": {"$ref": "#/$defs/namespaceAccounting"}
+      },
+      "additionalProperties": false
+    },
+    "claimCeiling": {
+      "type": "object",
+      "required": ["supports", "does_not_support"],
+      "properties": {
+        "supports": {
+          "type": "array",
+          "prefixItems": [{"const": "EXACT_REFERENCE_INTERSECTION"}, {"const": "EXACT_REFERENCE_DIFFERENCE"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "does_not_support": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "SHARED_FEATURE_PURPOSE"}, {"const": "DISTINCT_FEATURE_PURPOSE"}, {"const": "FEATURE_IDENTITY"},
+            {"const": "WORKFLOW_IDENTITY"}, {"const": "MERGE_OR_SPLIT_DISPOSITION"}, {"const": "INDEPENDENT_OBSERVATION"},
+            {"const": "EVIDENTIARY_SUPPORT"}, {"const": "CONFIDENCE"}, {"const": "COVERAGE"}, {"const": "RUNTIME_BEHAVIOR"}, {"const": "ACCEPTANCE"}
+          ],
+          "items": false,
+          "minItems": 11,
+          "maxItems": 11
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

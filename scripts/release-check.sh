@@ -185,6 +185,16 @@ if [ ! -s "$release_tmp/lsp-trace" ]; then
   exit 1
 fi
 printf 'PASS R-DRY-BUILD: hermetic non-publishing release binary\n'
+embedded_skill=$($release_tmp/lsp-trace skill get)
+case "$embedded_skill" in
+  *'## Compare two retained seed-evidence sets'*'Shared references do not establish shared feature or workflow identity'*)
+    printf 'PASS R-EMBEDDED-FILTER-CONTRACT: release binary embeds filter-v1 operational guidance\n'
+    ;;
+  *)
+    printf 'FAIL R-EMBEDDED-FILTER-CONTRACT: release binary skill lacks filter-v1 operational guidance\n'
+    exit 1
+    ;;
+esac
 for version in v1 v2 v3; do
   "$release_tmp/lsp-trace" schema get --schema "$version" > "$release_tmp/$version.schema.json"
   if cmp -s "$release_tmp/$version.schema.json" "$root/internal/schema/schemas/lsp-trace.graph.$version.schema.json"; then

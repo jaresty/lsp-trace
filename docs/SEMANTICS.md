@@ -36,6 +36,20 @@ Single-seed state, reached IDs, same-label `seed_memberships`, and corresponding
 
 Aggregate accounting is recomputed from output arrays before emission. Requested seeds partition into successful and failed seeds; successful seeds partition into with-membership and without-membership seeds; record counters equal copied collection lengths; reference counters equal per-seed occurrence totals and may exceed global counts. These counts do not establish feature coverage, evidence sufficiency, confidence, or acceptance. Inspection is deterministic and read-only, starts no server, changes no input, emits no replacement graph or receipt, and introduces no feature or consumer semantics.
 
+## Pairwise seed-evidence filter operational contract
+
+`filter` accepts exactly one path to a validated `lsp-trace.inspect.v1` `ALL_SEEDS` document and exactly two ordered, distinct, known `--compare-seeds` labels. CLI mode validation precedes input reading. Admission then discriminates the inspection family, applies Draft 2020-12 structural validation, recomputes all-seed semantic, accounting, uniqueness, and reference invariants, derives the pairwise projection, validates its semantics and accounting, validates it against the closed `lsp-trace.filter.v1` schema, and only then emits JSON. Any failure exits without projection JSON.
+
+Set identity is domain-separated: `ReferenceKey = (namespace, value)`. The closed namespaces are `NODE`, `CALL_RELATION`, `DISPATCH_RELATIONSHIP`, `SIBLING_CANDIDATE`, and `DIAGNOSTIC_CORRELATION`. Equal raw values in different namespaces never match. References come only from explicit admitted per-seed fields; endpoint or cross-namespace inference is forbidden. Duplicate seed labels, global identities, or per-seed references, unresolved references, and out-of-range diagnostic indexes fail closed rather than being repaired.
+
+For each namespace and selected seeds `L` and `R`, `shared = Refs(L) ∩ Refs(R)`, `left_only = Refs(L) − Refs(R)`, and `right_only = Refs(R) − Refs(L)`. These partitions are disjoint and exhaust only `Refs(L) ∪ Refs(R)`; globally retained records referenced by neither operand are outside the pairwise universe. Output order follows each reference's admitted global ordinal. Reversing operands swaps seed order and left/right partitions and counts, but leaves shared references, global boundaries, input identity, and common input accounting unchanged.
+
+Failed, successful-empty, and successful-with-evidence states remain distinct. Failed seeds must have no filterable references, but failed and successful-empty seeds are valid operands. Empty or exclusive partitions do not establish semantic difference. `DIAGNOSTIC_CORRELATION` remains correlation only, and membership records are not themselves partitioned because inspection v1 defines no cross-seed canonical membership identity.
+
+The projection has authority `TOOL_DERIVED_SET_PROJECTION`, support contribution `0`, and policy `PRESERVE_WITHOUT_AUTHORITY_UPGRADE`. That authority covers only mechanical partitions, ordering, state classification, and counts. Native evidence retains its original authority and claim ceiling. Shared references establish no shared feature or workflow identity; exclusive references establish no distinct identity. Neither supports runtime behavior, independent observation, confidence, coverage, merge/split disposition, or acceptance. Filtering an inspection document does not recover selector custody or authenticate producer, source, server, execution, environment, or hidden inputs.
+
+Identical inspection bytes and ordered operands produce identical output bytes. The operation is read-only, starts no language server, reads no mutable workspace source, changes no input, and emits no graph, selector, generation, receipt, copied native record, or replacement inspection projection. Broader lookup, threshold, seed-state, generic-expression, text-search, ranking, clustering, and feature-adjudication modes are deferred by ADR 0002.
+
 ## V3 custody and identity
 
 ### Field authority
