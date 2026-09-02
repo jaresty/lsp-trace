@@ -58,7 +58,7 @@ type filterProjection struct {
 		InspectionExactBytesDigest         string `json:"inspection_exact_bytes_digest"`
 		ArtifactSemanticCommitmentDigest   string `json:"artifact_semantic_commitment_digest"`
 		ArtifactExactSerializedBytesDigest string `json:"artifact_exact_serialized_bytes_digest"`
-		ExecutionBundleID                  string `json:"execution_bundle_id"`
+		ExecutionBundleID                  string `json:"execution_bundle_id,omitempty"`
 	} `json:"input_identity"`
 	Operands struct {
 		LeftSeedLabel  string `json:"left_seed_label"`
@@ -220,8 +220,11 @@ func filterSeedSummary(seed inspectAllSeed) filterSeed {
 	state := "SUCCESSFUL_WITH_EVIDENCE"
 	if seed.PreparationStatus == "FAILED" {
 		state = "FAILED"
-	} else if len(seed.NativeNodeIDs)+len(seed.NativeCallRelationIDs)+len(seed.DiscoveryNominationIDs)+len(seed.CorrelatedDiagnosticIndexes) == 0 {
-		state = "SUCCESSFUL_EMPTY"
+	} else {
+		dispatch, sibling := membershipRefs(seed.SeedMemberships)
+		if len(seed.NativeNodeIDs)+len(seed.NativeCallRelationIDs)+len(dispatch)+len(sibling)+len(seed.CorrelatedDiagnosticIndexes) == 0 {
+			state = "SUCCESSFUL_EMPTY"
+		}
 	}
 	return filterSeed{seed.Seed.Label, state, seed.Seed.Failure}
 }

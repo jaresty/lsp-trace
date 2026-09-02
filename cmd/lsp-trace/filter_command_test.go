@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/schema"
 )
 
@@ -34,6 +36,57 @@ func TestFilterHelpAndModeErrors(t *testing.T) {
 	}
 }
 
+func assertFilterFailure(t *testing.T, name string, args []string, want string) {
+	t.Helper()
+	t.Run(name, func(t *testing.T) {
+		stdout, stderr, code := captureRun(t, args)
+		if code != 1 || stdout != "" || !strings.Contains(stderr, want) {
+			t.Fatalf("ASSERT_FILTER_%s: code=%d stdout=%q stderr=%q want=%q", name, code, stdout, stderr, want)
+		}
+	})
+}
+
+func decodeFilter(t *testing.T, stdout string) filterProjection {
+	t.Helper()
+	var got filterProjection
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("decode filter projection: %v", err)
+	}
+	return got
+}
+
+func TestFilterCLIParsingAndValidationBeforeRead(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist.json")
+	assertFilterFailure(t, "CLI_ZERO_OPERANDS_BEFORE_READ", []string{"filter", missing}, "exactly two --compare-seeds")
+	assertFilterFailure(t, "CLI_ONE_OPERAND_BEFORE_READ", []string{"filter", missing, "--compare-seeds", "left"}, "exactly two --compare-seeds")
+	assertFilterFailure(t, "CLI_THREE_OPERANDS_BEFORE_READ", []string{"filter", missing, "--compare-seeds", "left", "--compare-seeds", "right", "--compare-seeds", "third"}, "exactly two --compare-seeds")
+	assertFilterFailure(t, "CLI_EMPTY_OPERAND_BEFORE_READ", []string{"filter", missing, "--compare-seeds", "", "--compare-seeds", "right"}, "must be nonempty")
+	assertFilterFailure(t, "CLI_EQUAL_OPERANDS_BEFORE_READ", []string{"filter", missing, "--compare-seeds", "same", "--compare-seeds", "same"}, "must be distinct")
+	assertFilterFailure(t, "CLI_TRAILING_ARGUMENT_BEFORE_READ", []string{"filter", missing, "--compare-seeds", "left", "--compare-seeds", "right", "extra"}, filterUsage)
+}
+
+func TestFilterRejectsInputFamiliesAndUsesExactSeedLookup(t *testing.T) {
+	path, _ := filterInspectionFixture(t)
+	assertFilterFailure(t, "EXACT_SEED_LOOKUP_CASE_SENSITIVE", []string{"filter", path, "--compare-seeds", "Chosen", "--compare-seeds", "other"}, `seed label "Chosen" not found`)
+
+	for _, tc := range []struct {
+		name, body string
+	}{
+		{"UNKNOWN_JSON", `{}`},
+		{"GRAPH_FAMILY", `{"schema_version":"lsp-trace.graph.v3"}`},
+		{"SINGLE_SEED_INSPECTION", `{"inspection_schema_version":"lsp-trace.inspect.v1","projection_kind":"SEED_INSPECTION","authority":"NON_AUTHORITATIVE_DERIVED_VIEW"}`},
+		{"CONFLICTING_GRAPH_MARKER", `{"inspection_schema_version":"lsp-trace.inspect.v1","projection_kind":"ALL_SEEDS","authority":"NON_AUTHORITATIVE_DERIVED_VIEW","schema_version":"lsp-trace.graph.v3"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := filepath.Join(t.TempDir(), "input.json")
+			if err := os.WriteFile(input, []byte(tc.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			assertFilterFailure(t, tc.name, []string{"filter", input, "--compare-seeds", "left", "--compare-seeds", "right"}, "input must be lsp-trace.inspect.v1 ALL_SEEDS")
+		})
+	}
+}
+
 func runFilterFixture(t *testing.T, assertion string) (string, string, []byte) {
 	t.Helper()
 	path, before := filterInspectionFixture(t)
@@ -42,6 +95,39 @@ func runFilterFixture(t *testing.T, assertion string) (string, string, []byte) {
 		t.Fatalf("%s: filter fixture code=%d stderr=%q", assertion, code, stderr)
 	}
 	return path, stdout, before
+}
+
+func TestFilterPreservesOptionalExecutionBundleCustody(t *testing.T) {
+	path, data := filterInspectionFixture(t)
+	var inspection map[string]any
+	if err := json.Unmarshal(data, &inspection); err != nil {
+		t.Fatal(err)
+	}
+	identity := inspection["artifact_identity"].(map[string]any)
+	delete(identity, "execution_bundle_id")
+	withoutBundle, _ := json.Marshal(inspection)
+	if err := os.WriteFile(path, withoutBundle, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"filter", path, "--compare-seeds", "chosen", "--compare-seeds", "other", "--json"})
+	if code != 0 || stderr != "" {
+		t.Fatalf("ASSERT_FILTER_OPTIONAL_EXECUTION_BUNDLE_ABSENCE: code=%d stderr=%q", code, stderr)
+	}
+	var projection map[string]any
+	_ = json.Unmarshal([]byte(stdout), &projection)
+	if _, present := projection["input_identity"].(map[string]any)["execution_bundle_id"]; present {
+		t.Fatalf("ASSERT_FILTER_OPTIONAL_EXECUTION_BUNDLE_ABSENCE: invented execution bundle")
+	}
+
+	identity["execution_bundle_id"] = "not-a-digest"
+	malformed, _ := json.Marshal(inspection)
+	if err := os.WriteFile(path, malformed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code = captureRun(t, []string{"filter", path, "--compare-seeds", "chosen", "--compare-seeds", "other", "--json"})
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "execution_bundle_id") {
+		t.Fatalf("ASSERT_FILTER_MALFORMED_EXECUTION_BUNDLE_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
 }
 
 func TestFilterTypedPartitionsAndOrder(t *testing.T) {
@@ -89,6 +175,174 @@ func TestFilterRejectsStateReferenceMismatch(t *testing.T) {
 	mutated, _ := json.Marshal(got)
 	if _, err := schema.ValidateFor(mutated, schema.FamilyFilter, "v1"); err == nil || !strings.Contains(err.Error(), "state and reference counts") {
 		t.Fatalf("ASSERT_FILTER_STATE_MATCHES_REFERENCE_COUNTS: mutation accepted: %v", err)
+	}
+}
+
+func TestFilterNamespacePartitionsOrderingEquationsAndReversal(t *testing.T) {
+	globals := []string{"outside-before", "left", "shared", "right", "outside-after"}
+	left, right := []string{"shared", "left"}, []string{"right", "shared"}
+	want := filterStringPartition{Shared: []string{"shared"}, LeftOnly: []string{"left"}, RightOnly: []string{"right"}}
+
+	namespaces := []struct {
+		name string
+		ns   schema.ReferenceNamespace
+	}{
+		{"nodes", schema.ReferenceNode},
+		{"call_relations", schema.ReferenceCallRelation},
+		{"dispatch_relationships", schema.ReferenceDispatchRelationship},
+		{"sibling_candidates", schema.ReferenceSiblingCandidate},
+	}
+	for _, tc := range namespaces {
+		t.Run(tc.name, func(t *testing.T) {
+			got := partitionStringRefs(tc.ns, globals, left, right)
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("ASSERT_FILTER_%s_PARTITION_ORDER_DISJOINT_EXHAUSTIVE_OUTSIDE_OMITTED: got=%#v want=%#v", tc.name, got, want)
+			}
+			account := accountStrings(got, len(left), len(right))
+			if account.SharedReferenceCount+account.LeftOnlyReferenceCount != account.LeftReferenceCount {
+				t.Fatalf("ASSERT_FILTER_%s_LEFT_EQUATION: %#v", tc.name, account)
+			}
+			if account.SharedReferenceCount+account.RightOnlyReferenceCount != account.RightReferenceCount {
+				t.Fatalf("ASSERT_FILTER_%s_RIGHT_EQUATION: %#v", tc.name, account)
+			}
+			if account.SharedReferenceCount+account.LeftOnlyReferenceCount+account.RightOnlyReferenceCount != account.PairUniverseCount {
+				t.Fatalf("ASSERT_FILTER_%s_UNIVERSE_EQUATION: %#v", tc.name, account)
+			}
+			reversed := partitionStringRefs(tc.ns, globals, right, left)
+			if !reflect.DeepEqual(reversed.Shared, got.Shared) || !reflect.DeepEqual(reversed.LeftOnly, got.RightOnly) || !reflect.DeepEqual(reversed.RightOnly, got.LeftOnly) {
+				t.Fatalf("ASSERT_FILTER_%s_OPERAND_REVERSAL: forward=%#v reversed=%#v", tc.name, got, reversed)
+			}
+		})
+	}
+
+	t.Run("diagnostic_correlations", func(t *testing.T) {
+		got := partitionDiagnosticRefs(5, []int{2, 1}, []int{3, 2})
+		want := filterIndexPartition{Shared: []int{2}, LeftOnly: []int{1}, RightOnly: []int{3}}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_PARTITION_ORDER_DISJOINT_EXHAUSTIVE_OUTSIDE_OMITTED: got=%#v want=%#v", got, want)
+		}
+		account := accountIndexes(got, 2, 2)
+		if account.SharedReferenceCount+account.LeftOnlyReferenceCount != account.LeftReferenceCount {
+			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_LEFT_EQUATION: %#v", account)
+		}
+		if account.SharedReferenceCount+account.RightOnlyReferenceCount != account.RightReferenceCount {
+			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_RIGHT_EQUATION: %#v", account)
+		}
+		if account.SharedReferenceCount+account.LeftOnlyReferenceCount+account.RightOnlyReferenceCount != account.PairUniverseCount {
+			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_UNIVERSE_EQUATION: %#v", account)
+		}
+		reversed := partitionDiagnosticRefs(5, []int{3, 2}, []int{2, 1})
+		if !reflect.DeepEqual(reversed.Shared, got.Shared) || !reflect.DeepEqual(reversed.LeftOnly, got.RightOnly) || !reflect.DeepEqual(reversed.RightOnly, got.LeftOnly) {
+			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_OPERAND_REVERSAL: forward=%#v reversed=%#v", got, reversed)
+		}
+	})
+}
+
+func TestFilterEqualRawIDsRemainDomainSeparated(t *testing.T) {
+	const same = "same-raw-id"
+	for _, tc := range []struct {
+		name string
+		ns   schema.ReferenceNamespace
+	}{
+		{"NODE", schema.ReferenceNode}, {"CALL_RELATION", schema.ReferenceCallRelation}, {"DISPATCH_RELATIONSHIP", schema.ReferenceDispatchRelationship}, {"SIBLING_CANDIDATE", schema.ReferenceSiblingCandidate},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := partitionStringRefs(tc.ns, []string{same}, []string{same}, nil)
+			if !reflect.DeepEqual(got.LeftOnly, []string{same}) || len(got.Shared) != 0 {
+				t.Fatalf("ASSERT_FILTER_DOMAIN_SEPARATION_%s: %#v", tc.name, got)
+			}
+		})
+	}
+	gotDiagnostic := partitionDiagnosticRefs(1, []int{0}, nil)
+	if !reflect.DeepEqual(gotDiagnostic.LeftOnly, []int{0}) || len(gotDiagnostic.Shared) != 0 {
+		t.Fatalf("ASSERT_FILTER_DOMAIN_SEPARATION_DIAGNOSTIC_CORRELATION: %#v", gotDiagnostic)
+	}
+}
+
+func TestFilterSeedStateBoundaries(t *testing.T) {
+	failed := inspectAllSeed{PreparationStatus: "FAILED", Seed: graph.SeedResult{Label: "failed", Failure: &graph.SeedFailure{Phase: "prepare", Message: "failed"}}}
+	empty := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "empty"}}
+	withNode := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "node"}, NativeNodeIDs: []string{"n"}}
+	withDispatch := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "dispatch"}, SeedMemberships: []graph.SeedMembership{{EvidenceKind: "DISPATCH_ASSOCIATION", EndpointID: "d"}}}
+	for _, tc := range []struct {
+		name string
+		seed inspectAllSeed
+		want string
+	}{
+		{"FAILED", failed, "FAILED"}, {"SUCCESSFUL_EMPTY", empty, "SUCCESSFUL_EMPTY"}, {"SUCCESSFUL_WITH_NODE", withNode, "SUCCESSFUL_WITH_EVIDENCE"}, {"SUCCESSFUL_WITH_DISPATCH", withDispatch, "SUCCESSFUL_WITH_EVIDENCE"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := filterSeedSummary(tc.seed).State; got != tc.want {
+				t.Fatalf("ASSERT_FILTER_STATE_%s: got=%q want=%q", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFilterSchemaVersionAuthorityPolicyAndClaimCeiling(t *testing.T) {
+	_, stdout, _ := runFilterFixture(t, "ASSERT_FILTER_CONTRACT_CONSTANTS")
+	got := decodeFilter(t, stdout)
+	if got.FilterSchemaVersion != "lsp-trace.filter.v1" {
+		t.Fatalf("ASSERT_FILTER_SCHEMA_VERSION: %q", got.FilterSchemaVersion)
+	}
+	if got.ProjectionKind != "SEED_EVIDENCE_COMPARISON" {
+		t.Fatalf("ASSERT_FILTER_PROJECTION_KIND: %q", got.ProjectionKind)
+	}
+	if got.Authority != "TOOL_DERIVED_SET_PROJECTION" {
+		t.Fatalf("ASSERT_FILTER_AUTHORITY: %q", got.Authority)
+	}
+	if got.SupportContribution != 0 {
+		t.Fatalf("ASSERT_FILTER_SUPPORT_CONTRIBUTION: %d", got.SupportContribution)
+	}
+	if got.NativeSemanticsPolicy != "PRESERVE_WITHOUT_AUTHORITY_UPGRADE" {
+		t.Fatalf("ASSERT_FILTER_NATIVE_SEMANTICS_POLICY: %q", got.NativeSemanticsPolicy)
+	}
+	wantSupports := []string{"EXACT_REFERENCE_INTERSECTION", "EXACT_REFERENCE_DIFFERENCE"}
+	if !reflect.DeepEqual(got.ClaimCeiling.Supports, wantSupports) {
+		t.Fatalf("ASSERT_FILTER_CLAIM_CEILING_SUPPORTS: got=%v want=%v", got.ClaimCeiling.Supports, wantSupports)
+	}
+	wantDoesNotSupport := []string{"SHARED_FEATURE_PURPOSE", "DISTINCT_FEATURE_PURPOSE", "FEATURE_IDENTITY", "WORKFLOW_IDENTITY", "MERGE_OR_SPLIT_DISPOSITION", "INDEPENDENT_OBSERVATION", "EVIDENTIARY_SUPPORT", "CONFIDENCE", "COVERAGE", "RUNTIME_BEHAVIOR", "ACCEPTANCE"}
+	if !reflect.DeepEqual(got.ClaimCeiling.DoesNotSupport, wantDoesNotSupport) {
+		t.Fatalf("ASSERT_FILTER_CLAIM_CEILING_DOES_NOT_SUPPORT: got=%v want=%v", got.ClaimCeiling.DoesNotSupport, wantDoesNotSupport)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+		t.Fatal(err)
+	}
+	mutations := []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"SCHEMA_VERSION", func(v map[string]any) { v["filter_schema_version"] = "lsp-trace.filter.v2" }},
+		{"AUTHORITY", func(v map[string]any) { v["authority"] = "UPGRADED" }},
+		{"SUPPORT", func(v map[string]any) { v["support_contribution"] = float64(1) }},
+		{"NATIVE_POLICY", func(v map[string]any) { v["native_semantics_policy"] = "REPLACE" }},
+		{"CLAIM_SUPPORTS", func(v map[string]any) {
+			v["claim_ceiling"].(map[string]any)["supports"] = []any{"EXACT_REFERENCE_INTERSECTION"}
+		}},
+		{"CLAIM_DOES_NOT_SUPPORT", func(v map[string]any) { v["claim_ceiling"].(map[string]any)["does_not_support"] = []any{"ACCEPTANCE"} }},
+	}
+	for _, tc := range mutations {
+		t.Run("reject_mutated_"+tc.name, func(t *testing.T) {
+			var candidate map[string]any
+			encoded, _ := json.Marshal(raw)
+			_ = json.Unmarshal(encoded, &candidate)
+			tc.mutate(candidate)
+			mutated, _ := json.Marshal(candidate)
+			if _, err := schema.ValidateFor(mutated, schema.FamilyFilter, "v1"); err == nil {
+				t.Fatalf("ASSERT_FILTER_REJECT_MUTATED_%s: accepted", tc.name)
+			}
+		})
+	}
+}
+
+func TestFilterDynamicNoServerBehavior(t *testing.T) {
+	path, _ := filterInspectionFixture(t)
+	t.Setenv("PATH", t.TempDir())
+	stdout, stderr, code := captureRun(t, []string{"filter", path, "--compare-seeds", "chosen", "--compare-seeds", "other", "--json"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"filter_schema_version":"lsp-trace.filter.v1"`) {
+		t.Fatalf("ASSERT_FILTER_DYNAMIC_NO_SERVER: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

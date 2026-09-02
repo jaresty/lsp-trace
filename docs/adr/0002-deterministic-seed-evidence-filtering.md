@@ -368,6 +368,8 @@ The output contains references only. Consumers join them to the admitted inspect
 
 `inspection_exact_bytes_digest` identifies the exact inspected projection bytes. Artifact identities are copied from the admitted inspection projection and retain their existing meanings. Their presence does not assert selector custody or producer authenticity.
 
+`execution_bundle_id` is optional because `lsp-trace.inspect.v1` permits it to be absent. When the admitted inspection contains a valid digest, the filter copies it byte-for-byte; when absent, the filter omits it. The filter never invents, normalizes, or substitutes an execution-bundle identity. A present malformed value fails closed during filter output validation.
+
 `input_identity` has a closed schema. No input-origin or custody-verification boolean is emitted because v1 accepts inspection documents only and cannot reconstruct their prior custody path.
 
 ## Accounting

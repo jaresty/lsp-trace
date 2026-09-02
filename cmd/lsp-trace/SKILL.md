@@ -194,6 +194,20 @@ Treat reference namespaces independently. Equal raw values in node, call-relatio
 
 Shared references do not establish shared feature or workflow identity. Exclusive or empty references do not establish distinct identity, absence, or a merge/split result. The filter projection has zero support contribution and cannot upgrade native evidence authority, recover selector custody, authenticate source or execution, prove runtime behavior, rank evidence, measure coverage, or determine confidence or acceptance. Use it only as a mechanical pairwise review input; retain semantic and product adjudication outside `lsp-trace`.
 
+### Verify filter contract changes
+
+Run the focused matrix whenever changing filter admission, projection, schemas, accounting, or authority boundaries:
+
+```bash
+go test ./cmd/lsp-trace -run '^TestFilter' -count=1
+go test ./internal/schema -count=1
+./scripts/release-check.sh
+```
+
+The matrix covers CLI validation before input reads; inspection-family and seed admission; failed, successful-empty, and evidence-bearing states; all five typed reference namespaces; domain-separated equal raw values; pairwise disjointness and exhaustion; outside-universe omission; canonical ordering and operand reversal; every namespace accounting equation; schema and authority constants; deterministic output; input immutability; and operation without a language-server executable. Mutation subtests deliberately alter each stable filter constant or accounting rule and require validation to fail closed.
+
+Treat the matrix as regression evidence about the implementation contract, not evidence about any traced program. Passing tests do not authenticate an inspection producer, establish selector custody, prove language-server completeness, strengthen native evidence, or justify feature/workflow conclusions. `execution_bundle_id` remains optional: copy a present admitted digest exactly and omit it when absent; never invent a replacement identity.
+
 ## Interpret results honestly
 
 ### Field authority

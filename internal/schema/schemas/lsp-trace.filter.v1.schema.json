@@ -23,7 +23,7 @@
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "inputIdentity": {
       "type": "object",
-      "required": ["inspection_exact_bytes_digest", "artifact_semantic_commitment_digest", "artifact_exact_serialized_bytes_digest", "execution_bundle_id"],
+      "required": ["inspection_exact_bytes_digest", "artifact_semantic_commitment_digest", "artifact_exact_serialized_bytes_digest"],
       "properties": {
         "inspection_exact_bytes_digest": {"$ref": "#/$defs/digest"},
         "artifact_semantic_commitment_digest": {"$ref": "#/$defs/digest"},
