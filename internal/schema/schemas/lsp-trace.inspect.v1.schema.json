@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.inspect.v1.schema.json",
+  "title": "lsp-trace inspection projection v1",
+  "oneOf": [
+    {"$ref": "#/$defs/singleSeed"},
+    {"$ref": "#/$defs/allSeeds"}
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": ["semantic_commitment_digest", "exact_serialized_bytes_digest"],
+      "properties": {
+        "execution_bundle_id": {"type": "string"},
+        "semantic_commitment_digest": {"type": "string"},
+        "exact_serialized_bytes_digest": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "seed": {
+      "type": "object",
+      "required": ["label", "requested_position", "prepared_target_ids", "reached_node_ids"],
+      "properties": {
+        "label": {"type": "string"},
+        "requested_position": {"type": "object"},
+        "prepared_target_ids": {"type": "array", "items": {"type": "string"}},
+        "reached_node_ids": {"type": "array", "items": {"type": "string"}},
+        "reached_relation_ids": {"type": "array", "items": {"type": "string"}},
+        "failure": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "summary": {
+      "type": "object",
+      "required": ["node_count", "edge_count", "terminal_count", "cycle_count", "traversal_complete", "source_graph_complete", "completeness_scope", "truncated"],
+      "properties": {
+        "node_count": {"type": "integer", "minimum": 0},
+        "edge_count": {"type": "integer", "minimum": 0},
+        "terminal_count": {"type": "integer", "minimum": 0},
+        "cycle_count": {"type": "integer", "minimum": 0},
+        "traversal_complete": {"type": "boolean"},
+        "source_graph_complete": {"type": "string"},
+        "completeness_scope": {"type": "string"},
+        "truncated": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "singleSeed": {
+      "type": "object",
+      "required": ["inspection_schema_version", "projection_kind", "authority", "artifact_identity", "preparation_status", "seed", "seed_memberships", "nodes", "relations", "global", "diagnostics_on_reached_nodes"],
+      "properties": {
+        "inspection_schema_version": {"const": "lsp-trace.inspect.v1"},
+        "projection_kind": {"const": "SEED_INSPECTION"},
+        "authority": {"const": "NON_AUTHORITATIVE_DERIVED_VIEW"},
+        "artifact_identity": {"$ref": "#/$defs/identity"},
+        "preparation_status": {"enum": ["SUCCEEDED", "FAILED"]},
+        "seed": {"$ref": "#/$defs/seed"},
+        "seed_memberships": {"type": "array", "items": {"type": "object"}},
+        "nodes": {"type": "array", "items": {"type": "object"}},
+        "relations": {"type": "array", "items": {"type": "object"}},
+        "global": {
+          "type": "object",
+          "required": ["summary", "terminals", "frontier", "diagnostics"],
+          "properties": {
+            "summary": {"$ref": "#/$defs/summary"},
+            "terminals": {"type": "array", "items": {"type": "object"}},
+            "frontier": {"type": "array", "items": {"type": "object"}},
+            "diagnostics": {"type": "array", "items": {"type": "object"}}
+          },
+          "additionalProperties": false
+        },
+        "diagnostics_on_reached_nodes": {
+          "type": "object",
+          "required": ["authority", "diagnostics"],
+          "properties": {
+            "authority": {"const": "TOOL_DERIVED_NODE_CORRELATION"},
+            "diagnostics": {"type": "array", "items": {"type": "object"}}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "allSeeds": {
+      "type": "object",
+      "required": ["inspection_schema_version", "projection_kind", "authority", "artifact_identity", "records", "seeds", "accounting"],
+      "properties": {
+        "inspection_schema_version": {"const": "lsp-trace.inspect.v1"},
+        "projection_kind": {"const": "ALL_SEEDS"},
+        "authority": {"const": "NON_AUTHORITATIVE_DERIVED_VIEW"},
+        "artifact_identity": {"$ref": "#/$defs/identity"},
+        "records": {
+          "type": "object",
+          "required": ["nodes", "call_relations", "dispatch_relationships", "sibling_candidates", "diagnostics", "terminals", "frontier"],
+          "properties": {
+            "nodes": {"type": "array", "items": {"type": "object"}},
+            "call_relations": {"type": "array", "items": {"type": "object"}},
+            "dispatch_relationships": {"type": "array", "items": {"type": "object"}},
+            "sibling_candidates": {"type": "array", "items": {"type": "object"}},
+            "diagnostics": {"type": "array", "items": {"type": "object"}},
+            "terminals": {"type": "array", "items": {"type": "object"}},
+            "frontier": {"type": "array", "items": {"type": "object"}}
+          },
+          "additionalProperties": false
+        },
+        "seeds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["preparation_status", "seed", "seed_memberships", "native_node_ids", "native_call_relation_ids", "discovery_nomination_ids", "correlated_diagnostic_indexes"],
+            "properties": {
+              "preparation_status": {"enum": ["SUCCEEDED", "FAILED"]},
+              "seed": {"$ref": "#/$defs/seed"},
+              "seed_memberships": {"type": "array", "items": {"type": "object"}},
+              "native_node_ids": {"type": "array", "items": {"type": "string"}},
+              "native_call_relation_ids": {"type": "array", "items": {"type": "string"}},
+              "discovery_nomination_ids": {"type": "array", "items": {"type": "string"}},
+              "correlated_diagnostic_indexes": {"type": "array", "items": {"type": "integer", "minimum": 0}}
+            },
+            "additionalProperties": false
+          }
+        },
+        "accounting": {
+          "type": "object",
+          "required": [
+            "requested_seed_count",
+            "successful_seed_count",
+            "failed_seed_count",
+            "successful_seed_with_membership_count",
+            "successful_seed_without_membership_count",
+            "global_node_record_count",
+            "global_call_relation_record_count",
+            "global_dispatch_relationship_record_count",
+            "global_sibling_candidate_record_count",
+            "global_diagnostic_record_count",
+            "global_terminal_record_count",
+            "global_frontier_record_count",
+            "seed_membership_record_count",
+            "seed_node_reference_count",
+            "seed_call_relation_reference_count",
+            "seed_discovery_nomination_reference_count",
+            "seed_correlated_diagnostic_reference_count",
+            "truncated",
+            "traversal_complete",
+            "source_graph_complete"
+          ],
+          "properties": {
+            "requested_seed_count": {"type": "integer", "minimum": 0},
+            "successful_seed_count": {"type": "integer", "minimum": 0},
+            "failed_seed_count": {"type": "integer", "minimum": 0},
+            "successful_seed_with_membership_count": {"type": "integer", "minimum": 0},
+            "successful_seed_without_membership_count": {"type": "integer", "minimum": 0},
+            "global_node_record_count": {"type": "integer", "minimum": 0},
+            "global_call_relation_record_count": {"type": "integer", "minimum": 0},
+            "global_dispatch_relationship_record_count": {"type": "integer", "minimum": 0},
+            "global_sibling_candidate_record_count": {"type": "integer", "minimum": 0},
+            "global_diagnostic_record_count": {"type": "integer", "minimum": 0},
+            "global_terminal_record_count": {"type": "integer", "minimum": 0},
+            "global_frontier_record_count": {"type": "integer", "minimum": 0},
+            "seed_membership_record_count": {"type": "integer", "minimum": 0},
+            "seed_node_reference_count": {"type": "integer", "minimum": 0},
+            "seed_call_relation_reference_count": {"type": "integer", "minimum": 0},
+            "seed_discovery_nomination_reference_count": {"type": "integer", "minimum": 0},
+            "seed_correlated_diagnostic_reference_count": {"type": "integer", "minimum": 0},
+            "truncated": {"type": "boolean"},
+            "traversal_complete": {"type": "boolean"},
+            "source_graph_complete": {"type": "string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

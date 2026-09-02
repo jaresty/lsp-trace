@@ -4,6 +4,10 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 failed=0
 
+cd "$root"
+./scripts/check-docs.sh
+printf 'PASS R-DOCUMENTATION-CONTRACT: operational documentation guard\n'
+
 assert_file() {
   id=$1
   path=$2
@@ -92,13 +96,15 @@ assert_file R-PLATFORM .goreleaser.yaml
 for version in v1 v2 v3; do
   assert_file "R-SCHEMA-$version" "internal/schema/schemas/lsp-trace.graph.$version.schema.json"
 done
+assert_file R-INSPECTION-SCHEMA internal/schema/schemas/lsp-trace.inspect.v1.schema.json
 assert_contains R-SCHEMA-GET-DOC README.md 'lsp-trace schema get --schema v1|v2|v3'
 assert_contains R-VALIDATE-DOC README.md 'lsp-trace validate [--schema v1|v2|v3] PATH|-'
 assert_contains R-INSPECT-DOC README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL'
+assert_contains R-INSPECT-ALL-DOC README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json'
 assert_contains R-INSPECT-AUTHORITY docs/SEMANTICS.md '`NON_AUTHORITATIVE_DERIVED_VIEW`'
 assert_contains R-INSPECT-DIAGNOSTIC-CORRELATION docs/SEMANTICS.md '`TOOL_DERIVED_NODE_CORRELATION`'
-assert_contains R-SKILL-INSPECT cmd/lsp-trace/SKILL.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL'
-assert_contains R-SKILL-INSPECT-MEMBERSHIPS cmd/lsp-trace/SKILL.md 'same-label `seed_memberships`'
+assert_contains R-SKILL-INSPECT cmd/lsp-trace/SKILL.md '## Inspect retained seeds'
+assert_contains R-SKILL-INSPECT-ALL cmd/lsp-trace/SKILL.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json'
 assert_contains R-SLICE-DOC README.md 'lsp-trace slice'
 assert_contains R-SLICE-DOWN README.md '`--down-depth` and `--up-depth` count call edges'
 assert_contains R-SLICE-START-MODES README.md 'Choose exactly one starting mode'
@@ -160,6 +166,14 @@ assert_contains R-GORELEASER .goreleaser.yaml 'version: 2'
 assert_contains R-RETAIN-STATUS scripts/release-check.sh 'Q-RETAINED-$language-STATUS'
 
 if [ "$failed" -ne 0 ]; then
+  exit 1
+fi
+
+if go test ./internal/schema -run Inspection -count=1 &&
+   go test ./cmd/lsp-trace -run 'TestInspect|TestProjectAllSeedInspection|TestValidateAllSeedAccounting' -count=1; then
+  printf 'PASS R-INSPECTION-CONTRACT: schema, modes, custody, accounting, determinism, and equivalence\n'
+else
+  printf 'FAIL R-INSPECTION-CONTRACT: hermetic inspection contract suite failed\n'
   exit 1
 fi
 

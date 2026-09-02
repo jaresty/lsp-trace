@@ -40,17 +40,20 @@ Choose exactly one starting mode: `--from-file FILE` enumerates every server-pre
 
 `--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice.start_mode` plus metadata whose layers, frontier, outgoing terminals, upward starts, and outgoing relations reference the native graph's canonical node and relation IDs. `frontier_node_ids` is only the exact-depth layer. `outgoing_terminal_node_ids` contains successful empty `outgoingCalls` responses reached before that layer. `upward_start_node_ids` is their native-ID-sorted union. Null, failed, timed-out, canceled, or node-budget-truncated outgoing expansion is not a server-reported leaf. The result is a deterministic bounded projection of call-hierarchy information reported by the selected language server; it is not proof of runtime execution, complete feature coverage, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
 
-## Inspect one seed
+## Inspect retained seeds
 
-Use `inspect` to query one existing v3 seed without constructing a replacement graph:
+Inspect an existing v3 `artifact.json` or publication selector without constructing a replacement graph. Choose exactly one mode:
 
 ```sh
 lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL --json
+lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json
 ```
 
-The input may be an `artifact.json` file or a v3 publication selector. Direct artifacts undergo Draft 2020-12 structural and semantic validation. Selectors additionally require a complete generation and valid exact-byte custody receipt before the selected artifact is validated. Unknown labels and invalid inputs fail with no JSON output.
+Single-seed output is a `SEED_INSPECTION`; aggregate output is `ALL_SEEDS`. Both identify `lsp-trace.inspect.v1` and authority `NON_AUTHORITATIVE_DERIVED_VIEW`. The aggregate preserves stored invocation-seed order and failures, copies admitted native records once, and emits normalized per-seed reference collections plus mechanical accounting.
 
-The deterministic JSON result is a `SEED_INSPECTION` with authority `NON_AUTHORITATIVE_DERIVED_VIEW`. It includes the exact stored seed request, preparation/failure state, reached node and relation IDs, same-label `seed_memberships`, corresponding native node and relation records, global summary/boundaries/diagnostics, and available execution-bundle, semantic, and computed exact-byte identities. `diagnostics_on_reached_nodes` is explicitly `TOOL_DERIVED_NODE_CORRELATION`: it filters global diagnostics by reached node ID and does not claim exact per-seed diagnostic custody. Inspection is read-only, introduces no feature or consumer semantics, and does not replace `validate` or selector custody `verify`.
+Selector inspection verifies complete-generation exact-byte custody before structural and semantic artifact validation. Direct artifacts receive structural and semantic validation, but their computed exact-byte digest makes no custody claim. Unknown labels, missing or duplicate same-label aggregate results, and invalid inputs fail without inspection JSON.
+
+Inspection is deterministic and read-only. Global boundaries and diagnostics remain global; reached-node diagnostic indexes are correlations rather than per-seed custody or causation. Record and reference counts do not establish feature coverage, evidence sufficiency, runtime execution, domain meaning, or acceptance. Standalone `verify` remains an explicit selector custody audit.
 
 ## Flags
 

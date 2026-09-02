@@ -58,19 +58,71 @@ lsp-trace incoming \
 
 Seed-file entries and repeated `--at` values may be combined. Repeated `--at` values receive generated labels. In v3 output, match each requested seed to its same-label `seeds` result; failed seeds remain represented rather than disappearing.
 
-### Produce a provisional feature inventory
+## Build technical inputs for a feature inventory
 
-Use the existing trace JSON to create review candidates, not accepted features:
+Use `lsp-trace` to produce bounded technical evidence beneath provisional hypotheses, not to manufacture feature identity.
 
-1. Start with labeled positions that have a stated reason for investigation, such as user-facing handlers, operator entry points, or known workflows.
-2. Match each `invocation.seeds[].label` to the same-label `seeds[]` result. Record the requested position, `failure.phase` and `failure.message` when present, and direct `reached_relation_ids`; for successful results also retain prepared/reached IDs, diagnostics, and completeness boundaries. Do not borrow another seed's relations or treat transitive relations as direct seed support.
-3. Follow `edges` from the seeded callee toward server-reported callers. Record stable node and relation IDs so every candidate remains traceable to the JSON.
-4. Compare seed traces for overlapping callers or subgraphs. Treat overlap as a reason to review a possible shared capability, not as proof that the seeds are one feature.
-5. Keep `dispatch_relationships` and `sibling_candidates` in separate evidence columns. They may nominate related code for investigation but contribute no caller support.
-6. Carry terminals, frontiers, diagnostics, `traversal_complete`, and `source_graph_complete` into the inventory as gaps or boundaries. Never silently interpret omitted or truncated code as absent.
-7. Emit a provisional record with a candidate label, seed labels, supporting call-relation IDs, discovery-only relation IDs, completeness limits, unknowns, and review status.
+Retain one transport-neutral evidence set: asserted repository paths and revisions; included and excluded source scope; workspace and server configuration; seed labels, positions, and investigation reasons; traversal bounds; selector or artifact bytes; stderr; exit status; verification result when run; inspection output; and unresolved authority limits. `--provenance-source-revision` records a caller assertion—it does not pin or authenticate source.
 
-Call edges, graph overlap, module names, dispatch associations, and sibling nominations do not establish feature identity, runtime use, user value, canonical naming, or acceptance. Product or domain review must decide whether a candidate is a user feature, operator feature, platform capability, shared component, infrastructure, multiple features, or not a feature.
+### Choose a traversal
+
+Use `incoming` when the supplied positions are already the callees of interest and only caller expansion is required. Use `slice` when bounded outgoing discovery must first choose the nodes from which incoming traversal begins. `slice --from-file` is a server-reported document-symbol census, not proof that every callable or feature in the file was discovered. Slice requires exactly one start mode; incoming may combine `--seed-file` with repeated `--at` positions.
+
+Set explicit edge-depth, node, request-timeout, and global-timeout bounds. A typical published slice is:
+
+```bash
+lsp-trace slice \
+  --workspace /path/to/workspace \
+  --server language-server \
+  --from-file path/to/file.ext \
+  --down-depth 2 \
+  --up-depth 8 \
+  --max-nodes 10000 \
+  --request-timeout 30s \
+  --timeout 5m \
+  --output evidence.selector.json \
+  2> evidence.stderr
+status=$?
+```
+
+### Handle traversal status
+
+Interpret status in the command-specific traversal contract:
+
+- `0`: traversal completed relative to the configured server and bounds; continue with retained evidence.
+- `2`: structured incomplete evidence may have been emitted or published. Preserve it with stderr, failed seeds, diagnostics, and boundaries. Slice cancellation follows this structured-incomplete path.
+- `1`: invocation, unrecoverable server, inspection/verification, or publication failure. An incoming or slice publication failure after graph marshalling may leave complete graph JSON on stdout; preserve it as failure evidence rather than treating it as a successful packet.
+- `130`: interrupted `incoming`; JSON may still have been emitted or a selector published. Retain it explicitly as interrupted evidence, not completed traversal.
+
+A selector's existence does not override the recorded traversal status.
+
+### Admit and inspect the retained evidence
+
+`inspect` performs its own admission gates. For a selector it verifies generation metadata and exact-byte custody before structural and semantic artifact validation. For a direct artifact it performs structural and semantic validation; its computed exact-byte digest is identity only and makes no custody claim. Standalone `verify` is a selector-only explicit audit/preflight and is not required before selector inspection:
+
+```bash
+lsp-trace verify evidence.selector.json
+lsp-trace inspect evidence.selector.json --all-seeds --json > evidence-inspection.json
+```
+
+A successful projection identifies `inspection_schema_version: "lsp-trace.inspect.v1"`, `projection_kind: "ALL_SEEDS"`, and `authority: "NON_AUTHORITATIVE_DERIVED_VIEW"`.
+
+### Reconcile all stored seeds
+
+The aggregate stores native records copied once from the admitted artifact and uses normalized per-seed ID/index projection collections. Shared records referenced by multiple seeds are not independent observations. Before downstream use, require:
+
+```text
+requested_seed_count = successful_seed_count + failed_seed_count
+successful_seed_count = successful_seed_with_membership_count + successful_seed_without_membership_count
+```
+
+Also require every global record count to equal its corresponding `records` array length and every reference count to equal the sum of corresponding per-seed collection lengths. Reference counts are occurrences and may exceed copied global record counts. Failed seeds remain in the requested denominator with failure details and empty memberships/references. `correlated_diagnostic_indexes` are zero-based references into global `records.diagnostics`; they are tool-derived node correlations, not diagnostic custody or causation.
+
+Use each seed's own stored result, exact `seed_memberships`, reached IDs, and native references for attribution. Never substitute the deduplicated union graph, borrow another seed's closure, treat transitive paths as direct support, or treat discovery nominations as call evidence.
+
+Each reversible technical hypothesis must record a provisional bounded claim, exact supporting record IDs, known missing or failed evidence, competing interpretations, contrary evidence or an observation that would reject it, and the action for withdrawing or splitting it. Shared callers, overlap, labels, and mechanical counts alone do not merge hypotheses.
+
+Stop before proposition admission, merge/split adjudication, canonical feature identity or naming, user purpose, production use, value, priority, lifecycle, coverage, or acceptance. Those remain external even when several technical signals agree.
 
 Important options:
 
@@ -83,7 +135,7 @@ Important options:
 - `--schema v1|v2|v3` selects compatibility; v3 is default and explicit v1/v2 retain historical projections.
 - `lsp-trace schema get --schema v1|v2|v3` prints the exact embedded Draft 2020-12 contract.
 - `lsp-trace validate [--schema v1|v2|v3] PATH|-` validates a file or stdin, auto-detects the version by default, rejects explicit mismatches, and applies deeper semantic validation to v3 after structural validation.
-- `lsp-trace verify PATH` validates the exact-byte sidecar and embedded semantic receipt offline; success prints no graph.
+- `lsp-trace verify SELECTOR` validates the selected generation's exact-byte custody and embedded semantic receipt offline; success prints `verified integrity and custody` rather than graph JSON. Direct artifacts are not custody-verifiable by this command.
 - `--provenance-invocation-id`, `--provenance-caller`, `--provenance-source`, `--provenance-source-revision`, `--provenance-server-version`, `--provenance-timestamp`, and `--provenance-tool-version` add caller-supplied receipt metadata. Omitted values remain `UNKNOWN`; the tool never infers them from Git, the clock, the environment, or the server.
 
 Validation does not canonicalize or rewrite input. V1 and v2 validation is structural; v3 runs structural validation before deeper semantic validation.
@@ -111,17 +163,18 @@ The command asks the server which positions prepare as call-hierarchy items and 
 
 Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
 
-## Inspect one seed
+## Inspect retained seeds
 
-Query one existing seed from either a v3 `artifact.json` or publication selector:
+Choose exactly one mode for an existing v3 `artifact.json` or publication selector:
 
 ```bash
 lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL --json
+lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json
 ```
 
-Direct artifacts must pass Draft 2020-12 structural and v3 semantic validation. Selectors additionally require a complete generation and valid exact-byte custody receipt. Unknown labels and invalid inputs fail without JSON output.
+Both modes emit `lsp-trace.inspect.v1` JSON and are read-only. Single-seed output uses `projection_kind: "SEED_INSPECTION"`; aggregate output uses `projection_kind: "ALL_SEEDS"`. Both use authority `NON_AUTHORITATIVE_DERIVED_VIEW`, not graph or receipt authority. Unknown labels, invalid inputs, and missing or duplicate same-label aggregate results fail without JSON output.
 
-The result is a read-only `SEED_INSPECTION` with authority `NON_AUTHORITATIVE_DERIVED_VIEW`, not a transformed graph or receipt. It contains the stored request, `preparation_status`, failure state, reached IDs, same-label `seed_memberships`, corresponding native nodes and call relations, global summary/boundaries/diagnostics, and available execution-bundle, semantic, and computed exact-byte identities. `diagnostics_on_reached_nodes` is labeled `TOOL_DERIVED_NODE_CORRELATION`: it filters global diagnostics by reached node ID but does not establish exact per-seed diagnostic custody or causation. Inspection adds no feature or consumer semantics and does not replace artifact `validate` or selector `verify`.
+Direct artifacts pass Draft 2020-12 structural and v3 semantic validation but gain no custody claim. Selectors additionally require a complete generation and valid exact-byte custody receipt. Aggregate native records are copied once; per-seed collections reference them. `TOOL_DERIVED_NODE_CORRELATION` identifies reached-node diagnostic correlation only, never exact per-seed custody or causation. Inspection adds no feature or consumer semantics and does not replace graph validation or selector custody verification.
 
 ## Interpret results honestly
 
@@ -150,4 +203,4 @@ For structured incomplete slices, stderr lists each failed seed's label, failure
 - Unresolved evidence marks traversal incomplete; dynamic-call evidence is advisory and never fabricates edges.
 - `UNKNOWN` provenance is an explicit evidence boundary, not permission to substitute the current timestamp, executable version, repository revision, or server version.
 
-Exit code `0` means traversal completed within this server-relative scope. Exit code `2` means structured but incomplete output and may still have published a valid selector or emitted graph JSON; inspect failed-seed stderr and the structured evidence instead of discarding it. Exit code `1` means invocation or unrecoverable server failure, including publication failure whose complete graph may be on stdout. Exit code `130` means interruption.
+Exit code `0` means traversal completed within this server-relative scope. Exit code `2` means structured but incomplete output and may still have published a valid selector or emitted graph JSON; inspect failed-seed stderr and the structured evidence instead of discarding it. Exit code `1` means invocation or unrecoverable server failure, including publication failure whose complete graph may be on stdout. Exit code `130` is specific to interrupted `incoming`; slice cancellation follows the structured-incomplete status `2` path.

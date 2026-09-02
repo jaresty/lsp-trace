@@ -133,7 +133,7 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 }
 
 func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
-	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL") || !strings.Contains(usageText, "lsp-trace skill get") {
+	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds)") || !strings.Contains(usageText, "lsp-trace skill get") {
 		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
 	}
 }
@@ -146,13 +146,17 @@ func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 	requiredContract := []string{
 		"name: lsp-trace",
 		"lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL",
+		"--all-seeds",
+		"lsp-trace.inspect.v1",
 		"NON_AUTHORITATIVE_DERIVED_VIEW",
 		"TOOL_DERIVED_NODE_CORRELATION",
+		"## Build technical inputs for a feature inventory",
+		"### Choose a traversal",
+		"### Handle traversal status",
+		"### Reconcile all stored seeds",
 		"--expand-dispatch-family",
 		"--expand-topmost-siblings",
 		`{"seeds":[`,
-		"Produce a provisional feature inventory",
-		"do not establish feature identity",
 		"evidence_semantics",
 		"trace_receipt",
 		"support_contribution",
