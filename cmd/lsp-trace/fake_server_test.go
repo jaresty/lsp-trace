@@ -524,7 +524,7 @@ func TestSubprocessFailureTraffic(t *testing.T) {
 	}{
 		{"null", 2 * time.Second, 0, graph.PrepareReturnedNoItem, ""},
 		{"error", 2 * time.Second, 2, graph.ServerError, "traverse"},
-		{"delay", 20 * time.Millisecond, 2, graph.RequestTimeout, ""},
+		{"delay", 500 * time.Millisecond, 2, graph.RequestTimeout, ""},
 		{"delay-initialize", 20 * time.Millisecond, 2, "", "initialize"},
 		{"malformed", 2 * time.Second, 1, "", "initialize"},
 		{"exit-early", 2 * time.Second, 1, "", "initialize"},
@@ -671,7 +671,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			_ = json.Unmarshal(m.Params, &p)
 			if scenario == "delay" {
-				time.Sleep(80 * time.Millisecond)
+				time.Sleep(2 * time.Second)
 			}
 			if scenario == "error" {
 				err = writeFake(out, m.ID, nil, map[string]any{"code": -32001, "message": "fake failure"})
