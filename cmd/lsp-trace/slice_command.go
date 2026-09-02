@@ -371,7 +371,27 @@ func runSlice(args []string) int {
 	}
 	outgoingTerminalIDs := sliceItemIDs(discovery.OutgoingTerminalItems)
 	upwardStartIDs := sliceItemIDs(discovery.UpwardStartItems)
-	result.Slice = &graph.SliceEvidence{StartMode: startMode, SourceURI: sourceURI, DownDepth: cfg.downDepth, UpDepth: cfg.upDepth, StartingNodeIDs: discovery.StartNodeIDs, Layers: layers, FrontierNodeIDs: frontierIDs, OutgoingTerminalNodeIDs: outgoingTerminalIDs, UpwardStartNodeIDs: upwardStartIDs, OutgoingRelationIDs: outgoingIDs}
+	result.Slice = &graph.SliceEvidence{StartMode: startMode, SourceURI: sourceURI, DownDepth: cfg.downDepth, UpDepth: cfg.upDepth, StartingNodeIDs: discovery.StartNodeIDs, Layers: layers, FrontierNodeIDs: frontierIDs, OutgoingTerminalNodeIDs: outgoingTerminalIDs, UpwardStartNodeIDs: upwardStartIDs, OutgoingRelationIDs: outgoingIDs, TraversalComplete: discovery.TraversalComplete}
+	if cfg.fromFile != "" {
+		preparation := &graph.SlicePreparationEvidence{
+			Complete: discovery.PreparationCensusComplete,
+			Accounting: graph.SlicePreparationAccounting{
+				DocumentSymbols: discovery.PreparationAccounting.DocumentSymbols,
+				Attempted:       discovery.PreparationAccounting.Attempted,
+				Prepared:        discovery.PreparationAccounting.Prepared,
+				NotPreparable:   discovery.PreparationAccounting.NotPreparable,
+				Failed:          discovery.PreparationAccounting.Failed,
+			},
+		}
+		for _, disposition := range discovery.PreparationDispositions {
+			preparation.Dispositions = append(preparation.Dispositions, graph.SlicePreparationDisposition{
+				Name: disposition.Name, Kind: disposition.Kind,
+				SelectionRange: graph.Range{Start: graph.Position{Line: disposition.SelectionRange.Start.Line, Character: disposition.SelectionRange.Start.Character}, End: graph.Position{Line: disposition.SelectionRange.End.Line, Character: disposition.SelectionRange.End.Character}},
+				Status:         disposition.Status, PreparedItemIDs: append([]string(nil), disposition.PreparedItemIDs...), Message: disposition.Message,
+			})
+		}
+		result.Slice.Preparation = preparation
+	}
 	environment := map[string]string{}
 	for _, declaration := range cfg.env {
 		k, v, _ := strings.Cut(declaration, "=")

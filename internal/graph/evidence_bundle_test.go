@@ -705,6 +705,20 @@ func TestV3SliceAllowsEmptyFrontierWhenGraphEndsBeforeDepth(t *testing.T) {
 	}
 }
 
+func TestV3SliceRejectsPreparationAccountingMismatch(t *testing.T) {
+	r := Result{SchemaVersion: SchemaVersionV3, Slice: &SliceEvidence{
+		SourceURI: "file:///w/a.go", FrontierNodeIDs: []string{}, OutgoingRelationIDs: []string{},
+		Preparation: &SlicePreparationEvidence{
+			Complete:     true,
+			Accounting:   SlicePreparationAccounting{DocumentSymbols: 1, Attempted: 1, Prepared: 1},
+			Dispositions: []SlicePreparationDisposition{{Name: "value", Status: "not_preparable", PreparedItemIDs: []string{}}},
+		},
+	}}
+	if _, err := json.Marshal(r); err == nil || !strings.Contains(err.Error(), "slice preparation accounting does not match dispositions") {
+		t.Fatalf("ASSERT_SLICE_PREPARATION_ACCOUNTING_VALIDATED: %v", err)
+	}
+}
+
 func TestV3CanonicalProjectionRoundTripsAndRejectsDuplicateEdges(t *testing.T) {
 	n1 := NewNode(Item{Name: "caller", URI: "file:///w/a.go"})
 	n2 := NewNode(Item{Name: "callee", URI: "file:///w/b.go"})

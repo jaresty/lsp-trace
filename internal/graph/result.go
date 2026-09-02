@@ -219,17 +219,42 @@ type SliceLayer struct {
 	NodeIDs []string `json:"node_ids"`
 }
 
+type SlicePreparationDisposition struct {
+	Name            string   `json:"name"`
+	Kind            int      `json:"kind"`
+	SelectionRange  Range    `json:"selection_range"`
+	Status          string   `json:"status"`
+	PreparedItemIDs []string `json:"prepared_item_ids"`
+	Message         string   `json:"message,omitempty"`
+}
+
+type SlicePreparationAccounting struct {
+	DocumentSymbols int `json:"document_symbols"`
+	Attempted       int `json:"attempted"`
+	Prepared        int `json:"prepared"`
+	NotPreparable   int `json:"not_preparable"`
+	Failed          int `json:"failed"`
+}
+
+type SlicePreparationEvidence struct {
+	Complete     bool                          `json:"complete"`
+	Accounting   SlicePreparationAccounting    `json:"accounting"`
+	Dispositions []SlicePreparationDisposition `json:"dispositions"`
+}
+
 type SliceEvidence struct {
-	StartMode               string       `json:"start_mode,omitempty"`
-	SourceURI               string       `json:"source_uri"`
-	DownDepth               int          `json:"down_depth"`
-	UpDepth                 int          `json:"up_depth"`
-	StartingNodeIDs         []string     `json:"starting_node_ids"`
-	Layers                  []SliceLayer `json:"layers"`
-	FrontierNodeIDs         []string     `json:"frontier_node_ids"`
-	OutgoingTerminalNodeIDs []string     `json:"outgoing_terminal_node_ids,omitempty"`
-	UpwardStartNodeIDs      []string     `json:"upward_start_node_ids,omitempty"`
-	OutgoingRelationIDs     []string     `json:"outgoing_relation_ids"`
+	StartMode               string                    `json:"start_mode,omitempty"`
+	SourceURI               string                    `json:"source_uri"`
+	DownDepth               int                       `json:"down_depth"`
+	UpDepth                 int                       `json:"up_depth"`
+	StartingNodeIDs         []string                  `json:"starting_node_ids"`
+	Layers                  []SliceLayer              `json:"layers"`
+	FrontierNodeIDs         []string                  `json:"frontier_node_ids"`
+	OutgoingTerminalNodeIDs []string                  `json:"outgoing_terminal_node_ids,omitempty"`
+	UpwardStartNodeIDs      []string                  `json:"upward_start_node_ids,omitempty"`
+	OutgoingRelationIDs     []string                  `json:"outgoing_relation_ids"`
+	TraversalComplete       bool                      `json:"traversal_complete"`
+	Preparation             *SlicePreparationEvidence `json:"preparation,omitempty"`
 }
 
 type Result struct {
@@ -619,6 +644,26 @@ func (r *Result) Canonicalize() {
 		r.Slice.UpwardStartNodeIDs = uniqueStrings(r.Slice.UpwardStartNodeIDs)
 		sort.Strings(r.Slice.OutgoingRelationIDs)
 		r.Slice.OutgoingRelationIDs = uniqueStrings(r.Slice.OutgoingRelationIDs)
+		if r.Slice.Preparation != nil {
+			for i := range r.Slice.Preparation.Dispositions {
+				d := &r.Slice.Preparation.Dispositions[i]
+				sort.Strings(d.PreparedItemIDs)
+				d.PreparedItemIDs = uniqueStrings(d.PreparedItemIDs)
+			}
+			sort.SliceStable(r.Slice.Preparation.Dispositions, func(i, j int) bool {
+				a, b := r.Slice.Preparation.Dispositions[i], r.Slice.Preparation.Dispositions[j]
+				if a.SelectionRange.Start.Line != b.SelectionRange.Start.Line {
+					return a.SelectionRange.Start.Line < b.SelectionRange.Start.Line
+				}
+				if a.SelectionRange.Start.Character != b.SelectionRange.Start.Character {
+					return a.SelectionRange.Start.Character < b.SelectionRange.Start.Character
+				}
+				if a.Kind != b.Kind {
+					return a.Kind < b.Kind
+				}
+				return a.Name < b.Name
+			})
+		}
 		for i := range r.Slice.Layers {
 			sort.Strings(r.Slice.Layers[i].NodeIDs)
 			r.Slice.Layers[i].NodeIDs = uniqueStrings(r.Slice.Layers[i].NodeIDs)

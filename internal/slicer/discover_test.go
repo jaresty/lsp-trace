@@ -3,6 +3,7 @@ package slicer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -10,9 +11,10 @@ import (
 )
 
 type fakeClient struct {
-	symbols  []lsp.DocumentSymbol
-	prepared map[uint32][]lsp.CallHierarchyItem
-	outgoing map[string][]lsp.CallHierarchyOutgoingCall
+	symbols       []lsp.DocumentSymbol
+	prepared      map[uint32][]lsp.CallHierarchyItem
+	prepareErrors map[uint32]error
+	outgoing      map[string][]lsp.CallHierarchyOutgoingCall
 }
 
 func (f *fakeClient) SupportsDocumentSymbols() bool { return true }
@@ -20,6 +22,9 @@ func (f *fakeClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) 
 	return f.symbols, nil
 }
 func (f *fakeClient) PrepareCallHierarchy(_ context.Context, p lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	if err := f.prepareErrors[p.Position.Line]; err != nil {
+		return nil, err
+	}
 	return f.prepared[p.Position.Line], nil
 }
 func (f *fakeClient) OutgoingCalls(_ context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyOutgoingCall, bool, error) {
@@ -42,6 +47,33 @@ func TestDiscoverPreparedUsesSameOutgoingBFS(t *testing.T) {
 	got := DiscoverPrepared(context.Background(), f, []lsp.CallHierarchyItem{a, a}, Options{DownDepth: 1})
 	if len(got.StartNodeIDs) != 1 || len(got.FrontierItems) != 1 || got.FrontierItems[0].Name != "c" || len(got.Edges) != 1 {
 		t.Fatalf("ASSERT_SLICE_PREPARED_STARTS_REUSE_BFS: %#v", got)
+	}
+}
+
+func TestDiscoverAccountsForEveryDocumentSymbolPreparation(t *testing.T) {
+	a := callItem("a", 1)
+	f := &fakeClient{
+		symbols:       []lsp.DocumentSymbol{symbol("container", 20, symbol("a", 1), symbol("value", 2)), symbol("broken", 3)},
+		prepared:      map[uint32][]lsp.CallHierarchyItem{1: {a}},
+		prepareErrors: map[uint32]error{3: errors.New("prepare failed")},
+		outgoing:      map[string][]lsp.CallHierarchyOutgoingCall{"a": {}},
+	}
+
+	got := Discover(context.Background(), f, "file:///w/code.go", Options{DownDepth: 0})
+	if got.PreparationAccounting.DocumentSymbols != 4 || got.PreparationAccounting.Attempted != 4 || got.PreparationAccounting.Prepared != 1 || got.PreparationAccounting.NotPreparable != 2 || got.PreparationAccounting.Failed != 1 {
+		t.Fatalf("ASSERT_SLICE_PREPARATION_COUNTS_EXACT: %#v", got.PreparationAccounting)
+	}
+	if got.PreparationCensusComplete || !got.TraversalComplete {
+		t.Fatalf("ASSERT_SLICE_CENSUS_COMPLETENESS_INDEPENDENT: census=%t traversal=%t", got.PreparationCensusComplete, got.TraversalComplete)
+	}
+	if len(got.PreparationDispositions) != 4 {
+		t.Fatalf("ASSERT_SLICE_EVERY_SYMBOL_HAS_DISPOSITION: %#v", got.PreparationDispositions)
+	}
+	want := []string{"prepared", "not_preparable", "failed", "not_preparable"}
+	for i, disposition := range got.PreparationDispositions {
+		if disposition.Status != want[i] {
+			t.Fatalf("ASSERT_SLICE_PREPARATION_DISPOSITIONS_DETERMINISTIC: index=%d got=%#v", i, got.PreparationDispositions)
+		}
 	}
 }
 

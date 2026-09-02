@@ -21,18 +21,39 @@ type Layer struct {
 	NodeIDs []string `json:"node_ids"`
 }
 
+type PreparationDisposition struct {
+	Name            string
+	Kind            int
+	SelectionRange  lsp.Range
+	Status          string
+	PreparedItemIDs []string
+	Message         string
+}
+
+type PreparationAccounting struct {
+	DocumentSymbols int
+	Attempted       int
+	Prepared        int
+	NotPreparable   int
+	Failed          int
+}
+
 type Discovery struct {
-	SourceURI             string
-	StartNodeIDs          []string
-	Layers                []Layer
-	FrontierItems         []lsp.CallHierarchyItem
-	OutgoingTerminalItems []lsp.CallHierarchyItem
-	UpwardStartItems      []lsp.CallHierarchyItem
-	Nodes                 []graph.Node
-	Edges                 []graph.Edge
-	Diagnostics           []graph.Diagnostic
-	Complete              bool
-	Truncated             bool
+	SourceURI                 string
+	PreparationDispositions   []PreparationDisposition
+	PreparationAccounting     PreparationAccounting
+	PreparationCensusComplete bool
+	TraversalComplete         bool
+	StartNodeIDs              []string
+	Layers                    []Layer
+	FrontierItems             []lsp.CallHierarchyItem
+	OutgoingTerminalItems     []lsp.CallHierarchyItem
+	UpwardStartItems          []lsp.CallHierarchyItem
+	Nodes                     []graph.Node
+	Edges                     []graph.Edge
+	Diagnostics               []graph.Diagnostic
+	Complete                  bool
+	Truncated                 bool
 }
 
 type Options struct {
@@ -84,7 +105,7 @@ func DiscoverPrepared(ctx context.Context, client Client, items []lsp.CallHierar
 }
 
 func Discover(ctx context.Context, client Client, sourceURI string, opts Options) Discovery {
-	result := Discovery{SourceURI: sourceURI, Complete: true}
+	result := Discovery{SourceURI: sourceURI, Complete: true, PreparationCensusComplete: true, TraversalComplete: true}
 	if !client.SupportsDocumentSymbols() {
 		result.Complete = false
 		result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-symbols", Method: "textDocument/documentSymbol", Message: "document symbols unsupported"})
@@ -97,6 +118,7 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 		return result
 	}
 	flat := flatten(symbols)
+	result.PreparationAccounting.DocumentSymbols = len(flat)
 	sort.Slice(flat, func(i, j int) bool {
 		if flat[i].SelectionRange.Start != flat[j].SelectionRange.Start {
 			return lessPosition(flat[i].SelectionRange.Start, flat[j].SelectionRange.Start)
@@ -112,23 +134,41 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 	depthByID := map[string]int{}
 	queue := []queued{}
 	for _, symbol := range flat {
+		disposition := PreparationDisposition{Name: symbol.Name, Kind: symbol.Kind, SelectionRange: symbol.SelectionRange}
+		result.PreparationAccounting.Attempted++
 		items, prepareErr := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: sourceURI}, Position: symbol.SelectionRange.Start})
 		if prepareErr != nil {
+			disposition.Status, disposition.Message = "failed", prepareErr.Error()
+			result.PreparationAccounting.Failed++
+			result.PreparationCensusComplete = false
 			result.Complete = false
 			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-prepare", Method: "textDocument/prepareCallHierarchy", Message: prepareErr.Error()})
+			result.PreparationDispositions = append(result.PreparationDispositions, disposition)
 			continue
 		}
+		if len(items) == 0 {
+			disposition.Status = "not_preparable"
+			result.PreparationAccounting.NotPreparable++
+			result.PreparationDispositions = append(result.PreparationDispositions, disposition)
+			continue
+		}
+		disposition.Status = "prepared"
+		result.PreparationAccounting.Prepared++
 		for _, item := range items {
 			n := node(item)
 			if err := graph.ValidateItem(n.Item); err != nil {
+				disposition.Message = err.Error()
 				result.Complete = false
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-prepare", Method: "textDocument/prepareCallHierarchy", NodeID: n.ID, Message: err.Error()})
 				continue
 			}
 			if existing, ok := nodesByID[n.ID]; ok && !graph.SameNodeIdentity(existing, n) {
+				disposition.Message = "conflicting prepared node identity"
 				result.Complete = false
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-prepare", Method: "textDocument/prepareCallHierarchy", NodeID: n.ID, Message: disposition.Message})
 				continue
 			}
+			disposition.PreparedItemIDs = append(disposition.PreparedItemIDs, n.ID)
 			if _, ok := itemsByID[n.ID]; !ok {
 				if opts.MaxNodes > 0 && len(itemsByID) >= opts.MaxNodes {
 					result.Complete, result.Truncated = false, true
@@ -139,6 +179,14 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 				result.StartNodeIDs = append(result.StartNodeIDs, n.ID)
 			}
 		}
+		if disposition.Message != "" {
+			disposition.Status = "failed"
+			result.PreparationAccounting.Prepared--
+			result.PreparationAccounting.Failed++
+			result.PreparationCensusComplete = false
+		}
+		sort.Strings(disposition.PreparedItemIDs)
+		result.PreparationDispositions = append(result.PreparationDispositions, disposition)
 	}
 
 	expanded := map[string]bool{}
@@ -248,6 +296,16 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 	})
 	if errors.Is(ctx.Err(), context.Canceled) {
 		result.Complete = false
+		result.TraversalComplete = false
+	}
+	if result.Truncated {
+		result.TraversalComplete = false
+	}
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Phase == "slice-outgoing" {
+			result.TraversalComplete = false
+			break
+		}
 	}
 	return result
 }

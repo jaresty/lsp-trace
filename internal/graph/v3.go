@@ -490,6 +490,27 @@ func (r Result) ValidateReferences() error {
 				return err
 			}
 		}
+		if preparation := r.Slice.Preparation; preparation != nil {
+			counts := SlicePreparationAccounting{DocumentSymbols: len(preparation.Dispositions), Attempted: len(preparation.Dispositions)}
+			for _, disposition := range preparation.Dispositions {
+				switch disposition.Status {
+				case "prepared":
+					counts.Prepared++
+				case "not_preparable":
+					counts.NotPreparable++
+				case "failed":
+					counts.Failed++
+				default:
+					return fmt.Errorf("slice preparation disposition has unknown status %q", disposition.Status)
+				}
+			}
+			if !reflect.DeepEqual(preparation.Accounting, counts) {
+				return fmt.Errorf("slice preparation accounting does not match dispositions")
+			}
+			if preparation.Complete != (counts.Failed == 0) {
+				return fmt.Errorf("slice preparation completeness does not match failed count")
+			}
+		}
 		if r.Slice.DownDepth < 0 {
 			return fmt.Errorf("slice down depth must be non-negative")
 		}
