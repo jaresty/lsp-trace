@@ -7,7 +7,7 @@ A release candidate must satisfy:
 3. `go vet ./...`
 4. `go build ./...`
 5. retained PASS evidence for TypeScript, C#, and ElixirLS qualification, including server versions, capability results, exact caller/range assertions, and graph output
-6. review of security, semantic, and schema-policy changes
+6. review of security, semantic, and schema-policy changes, including named-profile precedence and environment-value non-persistence
 7. a clean GoReleaser snapshot and checksums
 
 A BLOCKED or FAIL language qualification—including unavailable ElixirLS or unusable Call Hierarchy—blocks release; it is not a pass and must be attached to the release decision. Support claims require retained PASS evidence; fixture presence is not support evidence.

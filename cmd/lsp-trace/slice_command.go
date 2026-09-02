@@ -32,9 +32,12 @@ type sliceConfig struct {
 
 func parseSlice(args []string) (sliceConfig, error) {
 	var c sliceConfig
+	var profiles profileFlags
 	fs := flag.NewFlagSet("slice", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
+	fs.StringVar(&profiles.ConfigPath, "config", "", "profile config path (replaces default discovery)")
+	fs.StringVar(&profiles.Name, "profile", "", "named server profile")
 	fs.StringVar(&c.command, "server", "", "language server command")
 	fs.Var(&c.args, "server-arg", "repeatable server argument")
 	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
@@ -55,7 +58,16 @@ func parseSlice(args []string) (sliceConfig, error) {
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if c.workspace == "" || c.command == "" {
+	if profiles.ConfigPath != "" && profiles.Name == "" {
+		return c, fmt.Errorf("--config requires --profile")
+	}
+	if c.workspace == "" {
+		return c, fmt.Errorf("--workspace and --server are required")
+	}
+	if err := applySliceProfile(&c, profiles, explicitServerFields(fs)); err != nil {
+		return c, err
+	}
+	if c.command == "" {
 		return c, fmt.Errorf("--workspace and --server are required")
 	}
 	modes := 0
@@ -384,8 +396,8 @@ func runSlice(args []string) int {
 		}
 	}
 	result.Invocation = graph.Invocation{
-		WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: append(os.Environ(), cfg.env...),
-		Target: primaryTarget, Server: graph.ServerInvocation{Command: cfg.command, Arguments: cfg.args, Environment: environment},
+		WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: effectiveEnvironmentNames(os.Environ(), cfg.env),
+		Target: primaryTarget, Server: graph.ServerInvocation{Command: cfg.command, Arguments: cfg.args, Environment: recordedServerEnvironment(environment)},
 		Limits: graph.Limits{MaxDepth: cfg.upDepth, MaxNodes: cfg.maxNodes, TimeoutMS: cfg.timeout.Milliseconds()}, RequestTimeoutMS: cfg.requestTimeout.Milliseconds(), Concurrency: 1,
 		LanguageID: languageID, OutputMode: outputMode, OutputPath: cfg.output, Seeds: invocationSeeds,
 	}

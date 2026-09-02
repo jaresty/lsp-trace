@@ -6,6 +6,14 @@ Completeness is bounded by server capability and responses plus visible depth, n
 
 The qualification fixtures include `StaticButNotExecuted`, whose call is behind a branch normal fixture execution does not take. A server may still report that edge, demonstrating the distinction between static evidence and observed execution.
 
+## Named server profile resolution
+
+Profiles are opt-in: only an explicit `--profile NAME` selects one, for both `incoming` and `slice`. `language_ids`, file extensions, and seed paths never select a profile. With no profile, config discovery is skipped and legacy command flags behave unchanged.
+
+Default resolution reads `$XDG_CONFIG_HOME/lsp-trace/config.toml` (falling back to `~/.config/lsp-trace/config.toml`) before `--workspace/.lsp-trace.toml`. An explicit `--config PATH` replaces both. Every read TOML file is decoded strictly: malformed syntax or any unknown field aborts the invocation. Fields resolve independently with CLI command-related flags over project profile over user profile. Thus `--profile NAME --server COMMAND` is coherent: the explicit server replaces only profile `command`; explicit repeatable argument or environment fields replace those whole fields.
+
+A profile has `command`, `args`, `env`, and `language_ids`. After explicit selection, the first language ID is the default sent for documents, and `--language-id` overrides it. Environment entries are either `VAR` or `KEY=${VAR}`. No plaintext value is valid. Runtime values come only from the invoking process environment and a missing reference fails before process start. Invocation evidence records effective environment names and `${NAME}` references, not environment values; this applies to inherited, CLI, and profile-derived environment data.
+
 ## Completeness and bounds
 
 `summary.complete` is true only when every discovered node was expanded successfully or reached a natural terminal. It is false when capability, cancellation, timeout, server error, invalid response, or a safety bound prevents complete expansion. `summary.truncated` is narrower: it reports depth or node-count truncation, not every cause of incompleteness. Consumers must inspect `terminals`, `frontier`, and `diagnostics` rather than infer a reason from either Boolean alone.

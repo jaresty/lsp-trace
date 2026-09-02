@@ -37,6 +37,10 @@ assert_contains DOC-ALL-INPUT README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT 
 assert_contains DOC-PRECEDENCE docs/SEMANTICS.md 'custody verification precedes structural validation, structural validation precedes semantic validation, and inspection follows successful admission'
 assert_contains DOC-AUTHORITY docs/SEMANTICS.md '`NON_AUTHORITATIVE_DERIVED_VIEW`'
 assert_contains DOC-RELEASE scripts/release-check.sh './scripts/check-docs.sh'
+assert_contains DOC-PROFILE-README README.md '## Named server profiles'
+assert_contains DOC-PROFILE-SEMANTICS docs/SEMANTICS.md '## Named server profile resolution'
+assert_contains DOC-PROFILE-SKILL cmd/lsp-trace/SKILL.md '## Use named server profiles'
+assert_contains DOC-PROFILE-SECRET README.md 'Graph invocation output records environment names/references, never values.'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

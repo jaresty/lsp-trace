@@ -67,6 +67,22 @@ The input must be a path to a structurally and semantically valid `lsp-trace.ins
 
 Comparison is deterministic, read-only, and limited to explicit per-seed references. Shared references do not prove shared purpose, and exclusive references do not prove distinct purpose. Failed or successful-empty seeds remain valid operands, so an empty partition is not a feature or workflow conclusion. The projection does not recover selector custody, authenticate its producer or source, establish runtime behavior, rank evidence, measure coverage, or decide identity, merge, split, confidence, or acceptance. See [ADR 0002](docs/adr/0002-deterministic-seed-evidence-filtering.md) for the versioned contract and deferred operations.
 
+## Named server profiles
+
+Profiles are selected explicitly with `--profile NAME` on both `incoming` and `slice`; `language_ids` never selects a profile automatically. Without `--profile`, configuration files are not read and all legacy flags retain their existing behavior. `--server` may be combined with `--profile` and overrides the profile command.
+
+Default discovery reads the user file at `$XDG_CONFIG_HOME/lsp-trace/config.toml` (or `~/.config/lsp-trace/config.toml`) and then the project file at `--workspace/.lsp-trace.toml`. `--config PATH` replaces both default files and requires `--profile`. Malformed TOML and unknown fields fail closed. Values merge by field: command-related CLI flags override the project profile field, which overrides the user profile field.
+
+```toml
+[profiles.typescript]
+command = "typescript-language-server"
+args = ["--stdio"]
+env = ["NPM_TOKEN", "AUTH_TOKEN=${AUTH_TOKEN}"]
+language_ids = ["typescript", "typescriptreact"]
+```
+
+Profile `env` entries are variable names or `KEY=${VAR}` exact references only. Values are read from the lsp-trace process environment at runtime; missing variables fail before server startup. Plaintext values are rejected. Graph invocation output records environment names/references, never values. For an explicitly selected profile, the first `language_ids` entry is the default document language ID; `--language-id` overrides it.
+
 ## Flags
 
 Required flags:

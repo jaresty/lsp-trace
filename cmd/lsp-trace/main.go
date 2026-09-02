@@ -29,8 +29,8 @@ import (
 var embeddedSkill string
 
 const usageText = `usage:
-  lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
-  lsp-trace slice --workspace PATH --server COMMAND (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
+  lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
+  lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
   lsp-trace verify PATH
@@ -158,9 +158,12 @@ func runSkill(args []string, stdout, stderr io.Writer) int {
 
 func parse(args []string) (config, error) {
 	var c config
+	var profiles profileFlags
 	fs := flag.NewFlagSet("incoming", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
+	fs.StringVar(&profiles.ConfigPath, "config", "", "profile config path (replaces default discovery)")
+	fs.StringVar(&profiles.Name, "profile", "", "named server profile")
 	fs.StringVar(&c.command, "server", "", "language server command")
 	fs.Var(&c.args, "server-arg", "repeatable server argument")
 	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
@@ -192,7 +195,16 @@ func parse(args []string) (config, error) {
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if c.workspace == "" || c.command == "" {
+	if profiles.ConfigPath != "" && profiles.Name == "" {
+		return c, errors.New("--config requires --profile")
+	}
+	if c.workspace == "" {
+		return c, errors.New("--workspace and --server are required")
+	}
+	if err := applyIncomingProfile(&c, profiles, explicitServerFields(fs)); err != nil {
+		return c, err
+	}
+	if c.command == "" {
 		return c, errors.New("--workspace and --server are required")
 	}
 	if err := loadSeeds(&c); err != nil {
@@ -485,9 +497,8 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		effectiveLanguageID = seeds[0].LanguageID
 	}
 	workingDirectory, _ := os.Getwd()
-	effectiveEnvironment := append([]string(nil), os.Environ()...)
-	effectiveEnvironment = append(effectiveEnvironment, c.env...)
-	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: effectiveEnvironment, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args, Environment: env}, Limits: limits, RequestTimeoutMS: c.requestTimeout.Milliseconds(), Concurrency: c.concurrency, LanguageID: effectiveLanguageID, Expansion: graph.ExpansionConfig{TopmostSiblings: c.topmostSiblings, DispatchFamily: c.expandDispatchFamily}, Trace: graph.TraceConfig{Enabled: c.traceLSP != "", Path: c.traceLSP}, OutputMode: outputMode, OutputPath: c.output, Seeds: seeds, Provenance: provenance}
+	effectiveEnvironment := effectiveEnvironmentNames(os.Environ(), c.env)
+	base.Invocation = graph.Invocation{WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: effectiveEnvironment, Server: graph.ServerInvocation{Command: c.command, Arguments: c.args, Environment: recordedServerEnvironment(env)}, Limits: limits, RequestTimeoutMS: c.requestTimeout.Milliseconds(), Concurrency: c.concurrency, LanguageID: effectiveLanguageID, Expansion: graph.ExpansionConfig{TopmostSiblings: c.topmostSiblings, DispatchFamily: c.expandDispatchFamily}, Trace: graph.TraceConfig{Enabled: c.traceLSP != "", Path: c.traceLSP}, OutputMode: outputMode, OutputPath: c.output, Seeds: seeds, Provenance: provenance}
 	if len(resolved) > 0 {
 		first := resolved[0]
 		base.Invocation.WorkspaceURI = workspaceURI

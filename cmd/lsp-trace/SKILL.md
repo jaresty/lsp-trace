@@ -9,6 +9,22 @@ Use `lsp-trace` when you need an evidence-preserving upward caller trace from ex
 
 Use only trusted language-server binaries and workspaces. The selected server runs with your permissions and may execute project build or restore logic, read workspace files, access the network, and emit sensitive data. Sandboxing is the caller's responsibility. `lsp-trace` passes arguments directly without a shell and performs no automatic network access.
 
+## Use named server profiles
+
+Both `incoming` and `slice` accept explicit `--profile NAME`. Profiles are never selected automatically from `language_ids`, paths, or extensions. With no profile, configuration files are ignored and legacy flags behave unchanged. `--server` may accompany a profile and overrides its command.
+
+Default discovery loads `$XDG_CONFIG_HOME/lsp-trace/config.toml` (or `~/.config/lsp-trace/config.toml`) and then `--workspace/.lsp-trace.toml`; `--config PATH` replaces both. CLI command-related fields override project profile fields, which override user profile fields. Malformed TOML, unknown fields, and missing profiles fail closed.
+
+```toml
+[profiles.typescript]
+command = "typescript-language-server"
+args = ["--stdio"]
+env = ["NPM_TOKEN", "AUTH_TOKEN=${AUTH_TOKEN}"]
+language_ids = ["typescript", "typescriptreact"]
+```
+
+Profile environment entries contain only variable names or exact `KEY=${VAR}` references. Values are read from the process environment at runtime; missing variables fail and plaintext values are rejected. Invocation graph output retains names/references, never environment values. The first `language_ids` entry supplies the default only after explicit profile selection; `--language-id` overrides it.
+
 ## Retrieve this skill
 
 ```bash
@@ -194,19 +210,38 @@ Treat reference namespaces independently. Equal raw values in node, call-relatio
 
 Shared references do not establish shared feature or workflow identity. Exclusive or empty references do not establish distinct identity, absence, or a merge/split result. The filter projection has zero support contribution and cannot upgrade native evidence authority, recover selector custody, authenticate source or execution, prove runtime behavior, rank evidence, measure coverage, or determine confidence or acceptance. Use it only as a mechanical pairwise review input; retain semantic and product adjudication outside `lsp-trace`.
 
-### Verify filter contract changes
+### Use a comparison
 
-Run the focused matrix whenever changing filter admission, projection, schemas, accounting, or authority boundaries:
+Validate both files before interpreting the result:
 
 ```bash
-go test ./cmd/lsp-trace -run '^TestFilter' -count=1
-go test ./internal/schema -count=1
-./scripts/release-check.sh
+lsp-trace validate --family inspect --version v1 evidence-inspection.json
+lsp-trace validate --family filter --version v1 evidence-comparison.json
 ```
 
-The matrix covers CLI validation before input reads; inspection-family and seed admission; failed, successful-empty, and evidence-bearing states; all five typed reference namespaces; domain-separated equal raw values; pairwise disjointness and exhaustion; outside-universe omission; canonical ordering and operand reversal; every namespace accounting equation; schema and authority constants; deterministic output; input immutability; and operation without a language-server executable. Mutation subtests deliberately alter each stable filter constant or accounting rule and require validation to fail closed.
+Read the selected seed states and global completeness boundary first:
 
-Treat the matrix as regression evidence about the implementation contract, not evidence about any traced program. Passing tests do not authenticate an inspection producer, establish selector custody, prove language-server completeness, strengthen native evidence, or justify feature/workflow conclusions. `execution_bundle_id` remains optional: copy a present admitted digest exactly and omit it when absent; never invent a replacement identity.
+```bash
+jq '{seeds, global_boundary}' evidence-comparison.json
+```
+
+`FAILED` means preparation failed and all filterable references are empty. `SUCCESSFUL_EMPTY` means preparation succeeded but the admitted inspection attributes no filterable references to that seed. `SUCCESSFUL_WITH_EVIDENCE` means at least one typed reference is present. Before treating an empty or exclusive partition as informative, check both seed states plus `global_boundary.truncated`, `global_boundary.traversal_complete`, and `global_boundary.source_graph_complete`.
+
+Inspect exact overlap and directional differences by namespace:
+
+```bash
+jq '.partitions.nodes' evidence-comparison.json
+jq '.partitions.call_relations' evidence-comparison.json
+jq '.partitions.dispatch_relationships' evidence-comparison.json
+jq '.partitions.sibling_candidates' evidence-comparison.json
+jq '.partitions.diagnostic_correlations' evidence-comparison.json
+```
+
+Each namespace contains `shared`, `left_only`, and `right_only`. These arrays contain references, not copied records. Join node IDs, relation IDs, and diagnostic indexes back to `evidence-inspection.json` when record details are needed. Keep namespaces separate even when raw values match. Diagnostic indexes are zero-based positions in `records.diagnostics` and express correlation only.
+
+Use `.accounting` to reconcile mechanical counts, not to rank evidence. For every namespace, `shared + left_only` equals the left reference count, `shared + right_only` equals the right reference count, and `shared + left_only + right_only` equals the pairwise universe count.
+
+Operand order controls only the directional names. Re-run with the labels reversed when checking a consumer that treats left and right differently: `shared` and the completeness boundary must remain unchanged, while `left_only` and `right_only`, selected-seed order, and their counts swap. `input_identity.inspection_exact_bytes_digest` identifies the exact inspection bytes used; optional `execution_bundle_id` is copied when present and omitted when absent, never invented.
 
 ## Interpret results honestly
 
