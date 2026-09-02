@@ -567,6 +567,7 @@ func (r *Result) Canonicalize() {
 		if r.SiblingCandidates[i].SeedLabel != "" {
 			r.SiblingCandidates[i].SeedLabels = append(r.SiblingCandidates[i].SeedLabels, r.SiblingCandidates[i].SeedLabel)
 		}
+		sort.Strings(r.SiblingCandidates[i].SeedLabels)
 		r.SiblingCandidates[i].SeedLabels = uniqueStrings(r.SiblingCandidates[i].SeedLabels)
 	}
 	for i := range r.DispatchRelationships {

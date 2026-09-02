@@ -174,6 +174,69 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 	}
 }
 
+func TestValidateSemanticBundleAcceptsMergedSiblingSeedMemberships(t *testing.T) {
+	candidate := NewNode(Item{Name: "candidate", URI: "file:///w/candidate.go"})
+	r := Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation: Invocation{Seeds: []InvocationSeed{
+			{Label: "seed-a", At: "a.go:1:1"},
+			{Label: "seed-b", At: "b.go:1:1"},
+		}},
+		Seeds: []SeedResult{{Label: "seed-a"}, {Label: "seed-b"}},
+		SiblingCandidates: []SiblingCandidate{{
+			SeedLabel:  "seed-a",
+			SeedLabels: []string{"seed-a", "seed-b"},
+			Candidate:  candidate,
+		}},
+		Summary: Summary{Complete: true},
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSemanticBundle(encoded); err != nil {
+		t.Fatalf("ASSERT_MERGED_SIBLING_SEED_MEMBERSHIP_REPLAY: %v", err)
+	}
+}
+
+func TestValidateSemanticBundleRejectsAlteredSiblingSeedMembership(t *testing.T) {
+	candidate := NewNode(Item{Name: "candidate", URI: "file:///w/candidate.go"})
+	encoded, err := json.Marshal(Result{
+		SchemaVersion: SchemaVersionV3,
+		Invocation:    Invocation{Seeds: []InvocationSeed{{Label: "seed", At: "a.go:1:1"}}},
+		Seeds:         []SeedResult{{Label: "seed"}},
+		SiblingCandidates: []SiblingCandidate{{
+			SeedLabel: "seed",
+			Candidate: candidate,
+		}},
+		Summary: Summary{Complete: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle bundleV3
+	if err := json.Unmarshal(encoded, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	for i := range bundle.SeedMemberships {
+		if bundle.SeedMemberships[i].EvidenceKind == "SIBLING_CANDIDATE" {
+			bundle.SeedMemberships[i].SeedAt = "altered.go:9:9"
+		}
+	}
+	canonical, err := json.Marshal(bundle.semanticV3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle.TraceReceipt = semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}
+	mutated, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateSemanticBundle(mutated); err == nil || !strings.Contains(err.Error(), "replay identity mismatch: seed memberships") {
+		t.Fatalf("ASSERT_ALTERED_SIBLING_SEED_MEMBERSHIP_REJECTED: %v", err)
+	}
+}
+
 func TestReceiptIssuanceRejectsStructurallyInvalidGraph(t *testing.T) {
 	n := NewNode(Item{Name: "n", URI: "file:///n"})
 	cases := []Result{
@@ -732,6 +795,9 @@ func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
 	}
 	if members["CALL_RELATION:"+bundle.Edges[0].RelationID] != 2 || members["SIBLING_CANDIDATE:"+bundle.SiblingCandidates[0].RelationID] != 2 || members["DISPATCH_ASSOCIATION:"+bundle.DispatchRelationships[0].RelationID] != 2 {
 		t.Fatalf("ASSERT_MULTI_SEED_CANONICAL_RELATION_MEMBERSHIP: %#v", bundle.SeedMemberships)
+	}
+	if err := ValidateSemanticBundle(encoded); err != nil {
+		t.Fatalf("ASSERT_MULTI_SEED_CANONICAL_RELATION_REPLAY: %v", err)
 	}
 	bundle.Edges[0].RelationID = "sha256:forged"
 	canonical, _ := json.Marshal(bundle.semanticV3)

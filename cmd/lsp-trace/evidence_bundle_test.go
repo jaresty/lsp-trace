@@ -78,6 +78,30 @@ func TestVerifyRequiresValidDetachedReceipt(t *testing.T) {
 	}
 }
 
+func TestPublishBundleAcceptsMergedSiblingSeedMemberships(t *testing.T) {
+	candidate := graph.NewNode(graph.Item{Name: "candidate", URI: "file:///w/candidate.go"})
+	data, err := marshalResult(graph.Result{
+		SchemaVersion: graph.SchemaVersionV3,
+		Invocation: graph.Invocation{Seeds: []graph.InvocationSeed{
+			{Label: "seed-a", At: "a.go:1:1"},
+			{Label: "seed-b", At: "b.go:1:1"},
+		}},
+		Seeds: []graph.SeedResult{{Label: "seed-a"}, {Label: "seed-b"}},
+		SiblingCandidates: []graph.SiblingCandidate{{
+			SeedLabel:  "seed-a",
+			SeedLabels: []string{"seed-a", "seed-b"},
+			Candidate:  candidate,
+		}},
+		Summary: graph.Summary{Complete: true},
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publishBundle(filepath.Join(t.TempDir(), "bundle.json"), data); err != nil {
+		t.Fatalf("ASSERT_MERGED_SIBLING_SEED_MEMBERSHIP_PUBLICATION: %v", err)
+	}
+}
+
 func TestPublishAndVerifyRoundTripAndMutation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bundle.json")
