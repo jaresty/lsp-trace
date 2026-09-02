@@ -16,6 +16,41 @@ assert_contains() {
   fi
 }
 
+assert_heading_order() {
+  id=$1
+  path=$2
+  shift 2
+  previous=0
+  for heading in "$@"; do
+    line=$(grep -n -F -x "$heading" "$root/$path" | cut -d: -f1 || true)
+    case "$line" in
+      ''|*[!0-9]*)
+        printf 'FAIL %s: %s must contain exactly one %s heading\n' "$id" "$path" "$heading"
+        failed=1
+        return
+        ;;
+    esac
+    if [ "$line" -le "$previous" ]; then
+      printf 'FAIL %s: %s top-level heading order breaks at %s\n' "$id" "$path" "$heading"
+      failed=1
+      return
+    fi
+    previous=$line
+  done
+  printf 'PASS %s: %s has stable task-first top-level heading order\n' "$id" "$path"
+}
+
+assert_heading_order DOC-SKILL-TASK-FIRST cmd/lsp-trace/SKILL.md \
+  '## Quick start' \
+  '## Choose a command' \
+  '## Operational workflows' \
+  '## Interpretation boundaries' \
+  '## Reference'
+assert_contains DOC-SKILL-ROUTER-INCOMING cmd/lsp-trace/SKILL.md '`incoming`: start from exact callee positions and trace callers upward.'
+assert_contains DOC-SKILL-ROUTER-SLICE cmd/lsp-trace/SKILL.md '`slice`: discover bounded outgoing nodes first, then trace incoming callers from the exact frontier and server-reported leaves.'
+assert_contains DOC-SKILL-ROUTER-INSPECT cmd/lsp-trace/SKILL.md '`inspect`: admit and project one seed or all retained seeds without changing evidence authority.'
+assert_contains DOC-SKILL-ROUTER-FILTER cmd/lsp-trace/SKILL.md '`filter`: mechanically compare exactly two seeds from an admitted all-seeds inspection.'
+
 assert_contains DOC-README README.md '## Inspect retained seeds'
 assert_contains DOC-SEMANTICS docs/SEMANTICS.md '## Seed inspection operational contract'
 assert_contains DOC-SKILL cmd/lsp-trace/SKILL.md '## Build technical inputs for a feature inventory'

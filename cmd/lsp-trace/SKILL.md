@@ -9,7 +9,18 @@ Use `lsp-trace` when you need an evidence-preserving upward caller trace from ex
 
 Use only trusted language-server binaries and workspaces. The selected server runs with your permissions and may execute project build or restore logic, read workspace files, access the network, and emit sensitive data. Sandboxing is the caller's responsibility. `lsp-trace` passes arguments directly without a shell and performs no automatic network access.
 
-## Use named server profiles
+## Quick start
+
+Prefer a named server profile for normal operation:
+
+```bash
+lsp-trace incoming \
+  --workspace /path/to/workspace \
+  --profile typescript \
+  --at path/to/file.ts:LINE:COLUMN
+```
+
+### Use named server profiles
 
 Both `incoming` and `slice` accept explicit `--profile NAME`. Profiles are never selected automatically from `language_ids`, paths, or extensions. With no profile, configuration files are ignored and legacy flags behave unchanged. `--server` may accompany a profile and overrides its command.
 
@@ -25,7 +36,7 @@ language_ids = ["typescript", "typescriptreact"]
 
 Profile environment entries contain only variable names or exact `KEY=${VAR}` references. Values are read from the process environment at runtime; missing variables fail and plaintext values are rejected. Invocation graph output retains names/references, never environment values. The first `language_ids` entry supplies the default only after explicit profile selection; `--language-id` overrides it.
 
-## Retrieve this skill
+### Retrieve this skill
 
 ```bash
 lsp-trace skill get
@@ -33,7 +44,18 @@ lsp-trace skill get
 
 The command prints this complete embedded document to stdout. Static retrieval is built in; dynamic skill discovery, listing, and installation are not currently provided.
 
-## Trace incoming callers
+## Choose a command
+
+- `incoming`: start from exact callee positions and trace callers upward.
+- `slice`: discover bounded outgoing nodes first, then trace incoming callers from the exact frontier and server-reported leaves.
+- `inspect`: admit and project one seed or all retained seeds without changing evidence authority.
+- `filter`: mechanically compare exactly two seeds from an admitted all-seeds inspection.
+- `verify`: audit a publication selector's exact-byte custody and embedded semantic receipt.
+- `validate`: validate graph, inspection, or filter documents against the selected family/version contract.
+
+Use `incoming` when the supplied positions are already the callees of interest and only caller expansion is required. Use `slice` when bounded outgoing discovery must first choose the nodes from which incoming traversal begins. `slice --from-file` is a server-reported document-symbol census, not proof that every callable or feature in the file was discovered. Slice requires exactly one start mode; incoming may combine `--seed-file` with repeated `--at` positions.
+
+A direct server command remains available when a profile is unsuitable:
 
 ```bash
 lsp-trace incoming \
@@ -44,6 +66,10 @@ lsp-trace incoming \
 ```
 
 `language-server` is a placeholder. Select a server that supports LSP Call Hierarchy and pass its required startup arguments with repeatable `--server-arg`; `--stdio` is required by the example server but is not universal. Use repeatable `--server-env KEY=VALUE` for environment overrides and `--language-id` when extension-based inference is unsuitable.
+
+## Operational workflows
+
+### Trace incoming callers
 
 `--at` is repeatable. `--seed-file` accepts labeled seeds. Lines and columns are one-based.
 
@@ -74,7 +100,7 @@ lsp-trace incoming \
 
 Seed-file entries and repeated `--at` values may be combined. Repeated `--at` values receive generated labels. In v3 output, match each requested seed to its same-label `seeds` result; failed seeds remain represented rather than disappearing.
 
-## Build technical inputs for a feature inventory
+### Build technical inputs for a feature inventory
 
 Use `lsp-trace` to produce bounded technical evidence beneath provisional hypotheses, not to manufacture feature identity.
 
@@ -82,24 +108,7 @@ Retain one transport-neutral evidence set: asserted repository paths and revisio
 
 ### Choose a traversal
 
-Use `incoming` when the supplied positions are already the callees of interest and only caller expansion is required. Use `slice` when bounded outgoing discovery must first choose the nodes from which incoming traversal begins. `slice --from-file` is a server-reported document-symbol census, not proof that every callable or feature in the file was discovered. Slice requires exactly one start mode; incoming may combine `--seed-file` with repeated `--at` positions.
-
-Set explicit edge-depth, node, request-timeout, and global-timeout bounds. A typical published slice is:
-
-```bash
-lsp-trace slice \
-  --workspace /path/to/workspace \
-  --server language-server \
-  --from-file path/to/file.ext \
-  --down-depth 2 \
-  --up-depth 8 \
-  --max-nodes 10000 \
-  --request-timeout 30s \
-  --timeout 5m \
-  --output evidence.selector.json \
-  2> evidence.stderr
-status=$?
-```
+The command router above defines when to use each traversal. In either case, set explicit edge-depth, node, request-timeout, and global-timeout bounds. The slice workflow below shows a typical published invocation.
 
 ### Handle traversal status
 
@@ -111,17 +120,6 @@ Interpret status in the command-specific traversal contract:
 - `130`: interrupted `incoming`; JSON may still have been emitted or a selector published. Retain it explicitly as interrupted evidence, not completed traversal.
 
 A selector's existence does not override the recorded traversal status.
-
-### Admit and inspect the retained evidence
-
-`inspect` performs its own admission gates. For a selector it verifies generation metadata and exact-byte custody before structural and semantic artifact validation. For a direct artifact it performs structural and semantic validation; its computed exact-byte digest is identity only and makes no custody claim. Standalone `verify` is a selector-only explicit audit/preflight and is not required before selector inspection:
-
-```bash
-lsp-trace verify evidence.selector.json
-lsp-trace inspect evidence.selector.json --all-seeds --json > evidence-inspection.json
-```
-
-A successful projection identifies `inspection_schema_version: "lsp-trace.inspect.v1"`, `projection_kind: "ALL_SEEDS"`, and `authority: "NON_AUTHORITATIVE_DERIVED_VIEW"`.
 
 ### Reconcile all stored seeds
 
@@ -160,15 +158,21 @@ Validation and verification do not authenticate producer identity or prove that 
 
 Raw environment values and the working-directory path are intentionally not retained. The raw server-stderr stream is not retained as a standalone artifact, but captured stderr text may be retained as a sensitive `server-stderr` diagnostic when traversal is incomplete or fails; early slice lifecycle failures relay captured stderr before the transport error.
 
-## Trace a bounded call-graph slice
+### Trace a bounded call-graph slice
 
 ```bash
 lsp-trace slice \
   --workspace /path/to/workspace \
-  --server language-server \
-  --from-file path/to/file.ext \
+  --profile typescript \
+  --from-file path/to/file.ts \
   --down-depth 2 \
-  --up-depth 8
+  --up-depth 8 \
+  --max-nodes 10000 \
+  --request-timeout 30s \
+  --timeout 5m \
+  --output evidence.selector.json \
+  2> evidence.stderr
+status=$?
 ```
 
 Choose exactly one starting mode: `--from-file FILE` recursively enumerates document symbols; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic labels; `--seed-file FILE` uses the existing labeled seed format. Explicit seed occurrences retain their labels and requested positions even when prepared nodes deduplicate.
@@ -179,7 +183,16 @@ The command asks the server which positions prepare as call-hierarchy items and 
 
 Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
 
-## Inspect retained seeds
+### Inspect retained seeds
+
+`inspect` performs its own admission gates. For a selector it verifies generation metadata and exact-byte custody before structural and semantic artifact validation. For a direct artifact it performs structural and semantic validation; its computed exact-byte digest is identity only and makes no custody claim. Standalone `verify` is a selector-only explicit audit/preflight and is not required before selector inspection:
+
+```bash
+lsp-trace verify evidence.selector.json
+lsp-trace inspect evidence.selector.json --all-seeds --json > evidence-inspection.json
+```
+
+A successful projection identifies `inspection_schema_version: "lsp-trace.inspect.v1"`, `projection_kind: "ALL_SEEDS"`, and `authority: "NON_AUTHORITATIVE_DERIVED_VIEW"`.
 
 Choose exactly one mode for an existing v3 `artifact.json` or publication selector:
 
@@ -192,7 +205,7 @@ Both modes emit `lsp-trace.inspect.v1` JSON and are read-only. Single-seed outpu
 
 Direct artifacts pass Draft 2020-12 structural and v3 semantic validation but gain no custody claim. Selectors additionally require a complete generation and valid exact-byte custody receipt. Aggregate native records are copied once; per-seed collections reference them. `TOOL_DERIVED_NODE_CORRELATION` identifies reached-node diagnostic correlation only, never exact per-seed custody or causation. Inspection adds no feature or consumer semantics and does not replace graph validation or selector custody verification.
 
-## Compare two retained seed-evidence sets
+### Compare two retained seed-evidence sets
 
 First retain an aggregate inspection, then compare exactly two distinct stored labels:
 
@@ -243,7 +256,11 @@ Use `.accounting` to reconcile mechanical counts, not to rank evidence. For ever
 
 Operand order controls only the directional names. Re-run with the labels reversed when checking a consumer that treats left and right differently: `shared` and the completeness boundary must remain unchanged, while `left_only` and `right_only`, selected-seed order, and their counts swap. `input_identity.inspection_exact_bytes_digest` identifies the exact inspection bytes used; optional `execution_bundle_id` is copied when present and omitted when absent, never invented.
 
-## Interpret results honestly
+## Interpretation boundaries
+
+Feature and product adjudication is explicitly external to `lsp-trace`. The tool supplies bounded technical evidence and mechanical projections; external authorities must decide proposition admission, merge/split outcomes, canonical feature identity and naming, user purpose, production use, value, priority, lifecycle, coverage, and acceptance.
+
+### Interpret results honestly
 
 ### Field authority
 
@@ -271,3 +288,7 @@ For structured incomplete slices, stderr lists each failed seed's label, failure
 - `UNKNOWN` provenance is an explicit evidence boundary, not permission to substitute the current timestamp, executable version, repository revision, or server version.
 
 Exit code `0` means traversal completed within this server-relative scope. Exit code `2` means structured but incomplete output and may still have published a valid selector or emitted graph JSON; inspect failed-seed stderr and the structured evidence instead of discarding it. Exit code `1` means invocation or unrecoverable server failure, including publication failure whose complete graph may be on stdout. Exit code `130` is specific to interrupted `incoming`; slice cancellation follows the structured-incomplete status `2` path.
+
+## Reference
+
+Use `lsp-trace skill get` to retrieve this complete embedded operator skill, `lsp-trace schema get --schema v1|v2|v3` for exact embedded graph schemas, and the options and contracts above as the command reference. Static retrieval is built in; dynamic skill discovery, listing, and installation are not currently provided.
