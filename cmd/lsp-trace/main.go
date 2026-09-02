@@ -31,6 +31,7 @@ var embeddedSkill string
 const usageText = `usage:
   lsp-trace incoming --workspace PATH --server COMMAND --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH --server COMMAND (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
+  lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL [--json]
   lsp-trace verify PATH
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate [--schema v1|v2|v3] PATH|-
@@ -63,6 +64,9 @@ func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
 	if len(args) > 0 && args[0] == "skill" {
 		return runSkill(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "inspect" {
+		return runInspect(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "verify" {
 		return runVerify(args[1:], os.Stdout, os.Stderr)

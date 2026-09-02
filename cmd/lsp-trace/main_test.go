@@ -133,7 +133,7 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 }
 
 func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
-	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace skill get") {
+	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL") || !strings.Contains(usageText, "lsp-trace skill get") {
 		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
 	}
 }
@@ -145,6 +145,9 @@ func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 	}
 	requiredContract := []string{
 		"name: lsp-trace",
+		"lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL",
+		"NON_AUTHORITATIVE_DERIVED_VIEW",
+		"TOOL_DERIVED_NODE_CORRELATION",
 		"--expand-dispatch-family",
 		"--expand-topmost-siblings",
 		`{"seeds":[`,

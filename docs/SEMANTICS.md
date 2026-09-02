@@ -26,6 +26,12 @@ Slice captures server stderr through the same process buffer as `incoming`. If i
 
 `SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is a recoverable server-quality diagnostic when the caller, callee, call-site range, and deterministic relation identity remain valid. The relation and server ranges are retained unchanged, traversal continues, and this diagnostic alone does not make the slice incomplete or prevent selector publication. Invalid call-site ranges, malformed or unattributable callers, node-identity collisions, and dangling relation references remain fail-closed structural errors. `source_graph_complete` remains `UNKNOWN`; recoverable containment says nothing about source-wide or runtime completeness.
 
+## Seed inspection
+
+`lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL [--json]` is a read-only query over existing v3 evidence. A direct artifact must pass Draft 2020-12 structural validation followed by v3 semantic validation. A selector must additionally resolve to a complete generation whose exact-byte custody receipt verifies before the selected artifact is validated. Inspection does not weaken or replace `validate` or `verify`.
+
+The output is labeled `SEED_INSPECTION` with authority `NON_AUTHORITATIVE_DERIVED_VIEW`. Stored seed state, reached IDs, same-label `seed_memberships`, and corresponding native nodes and call relations are selected without changing their identities. Global summary, terminals, frontier, and diagnostics remain global evidence. `diagnostics_on_reached_nodes` has authority `TOOL_DERIVED_NODE_CORRELATION`: it includes only global diagnostics whose nonempty `node_id` occurs in that seed's `reached_node_ids`, and it does not establish exact per-seed diagnostic custody or causation. The projection contains no graph schema version, creates no replacement graph or receipt, introduces no feature or consumer semantics, and does not mutate the input. Its exact-byte digest is computed from the inspected artifact bytes; selector input is custody-verified, while a direct artifact digest alone carries no custody claim.
+
 ## V3 custody and identity
 
 ### Field authority

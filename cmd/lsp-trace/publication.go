@@ -284,45 +284,46 @@ func writePrivateSyncedFile(path string, data []byte) error {
 	ok = true
 	return nil
 }
-func runVerify(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace verify PATH")
-		return 1
-	}
-	path := args[0]
+func loadCustodiedGeneration(path string) ([]byte, string, error) {
 	selector, err := readGenerationSelector(path)
 	if err != nil {
-		fmt.Fprintf(stderr, "verify: %v\n", err)
-		return 1
+		return nil, "verify", err
 	}
 	generationDir := filepath.Join(filepath.Dir(path), selector.Generation)
 	data, err := os.ReadFile(filepath.Join(generationDir, generationArtifactName))
 	if err != nil {
-		fmt.Fprintf(stderr, "verify: incomplete selected generation: %v\n", err)
-		return 1
+		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	receiptData, err := os.ReadFile(filepath.Join(generationDir, generationReceiptName))
 	if err != nil {
-		fmt.Fprintf(stderr, "verify receipt: incomplete selected generation: %v\n", err)
-		return 1
+		return nil, "verify receipt", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	var receipt custodyReceipt
 	decoder := json.NewDecoder(bytes.NewReader(receiptData))
 	decoder.DisallowUnknownFields()
 	if err = decoder.Decode(&receipt); err != nil {
-		fmt.Fprintf(stderr, "verify receipt: malformed: %v\n", err)
-		return 1
+		return nil, "verify receipt", fmt.Errorf("malformed: %w", err)
 	}
 	if err = decoder.Decode(&struct{}{}); err != io.EOF {
-		fmt.Fprintln(stderr, "verify receipt: malformed: trailing JSON content")
-		return 1
+		return nil, "verify receipt", fmt.Errorf("malformed: trailing JSON content")
 	}
 	if receipt.ReceiptVersion != "lsp-trace.byte-custody-receipt.v1" || receipt.DigestScope != graph.ByteDigestScope || receipt.DigestAlgorithm != "SHA-256" || receipt.IntegrityClaim != "INTEGRITY_AND_CUSTODY_ONLY" || receipt.AuthenticityClaim || (receipt.DirectoryDurability != directoryDurabilityChecked && receipt.DirectoryDurability != directoryDurabilityUnavailable) {
-		fmt.Fprintln(stderr, "verify receipt: receipt metadata mismatch")
-		return 1
+		return nil, "verify receipt", fmt.Errorf("receipt metadata mismatch")
 	}
 	if receipt.ExactSerializedBytesDigest != graph.ExactBytesDigest(data) {
-		fmt.Fprintln(stderr, "verify receipt: exact-byte integrity mismatch")
+		return nil, "verify receipt", fmt.Errorf("exact-byte integrity mismatch")
+	}
+	return data, "", nil
+}
+
+func runVerify(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, "usage: lsp-trace verify PATH")
+		return 1
+	}
+	data, stage, err := loadCustodiedGeneration(args[0])
+	if err != nil {
+		fmt.Fprintf(stderr, "%s: %v\n", stage, err)
 		return 1
 	}
 	if err = graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {

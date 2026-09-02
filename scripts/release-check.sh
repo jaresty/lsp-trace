@@ -94,6 +94,11 @@ for version in v1 v2 v3; do
 done
 assert_contains R-SCHEMA-GET-DOC README.md 'lsp-trace schema get --schema v1|v2|v3'
 assert_contains R-VALIDATE-DOC README.md 'lsp-trace validate [--schema v1|v2|v3] PATH|-'
+assert_contains R-INSPECT-DOC README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL'
+assert_contains R-INSPECT-AUTHORITY docs/SEMANTICS.md '`NON_AUTHORITATIVE_DERIVED_VIEW`'
+assert_contains R-INSPECT-DIAGNOSTIC-CORRELATION docs/SEMANTICS.md '`TOOL_DERIVED_NODE_CORRELATION`'
+assert_contains R-SKILL-INSPECT cmd/lsp-trace/SKILL.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL'
+assert_contains R-SKILL-INSPECT-MEMBERSHIPS cmd/lsp-trace/SKILL.md 'same-label `seed_memberships`'
 assert_contains R-SLICE-DOC README.md 'lsp-trace slice'
 assert_contains R-SLICE-DOWN README.md '`--down-depth` and `--up-depth` count call edges'
 assert_contains R-SLICE-START-MODES README.md 'Choose exactly one starting mode'

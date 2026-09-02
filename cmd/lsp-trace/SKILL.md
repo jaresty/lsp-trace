@@ -111,6 +111,18 @@ The command asks the server which positions prepare as call-hierarchy items and 
 
 Treat a slice as a deterministic bounded projection of information reported by the selected language server, not as complete feature coverage or runtime execution evidence. Dynamic dispatch, reflection, generated code, configuration, templates, framework routing, and other relationships omitted by the server may be absent.
 
+## Inspect one seed
+
+Query one existing seed from either a v3 `artifact.json` or publication selector:
+
+```bash
+lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL --json
+```
+
+Direct artifacts must pass Draft 2020-12 structural and v3 semantic validation. Selectors additionally require a complete generation and valid exact-byte custody receipt. Unknown labels and invalid inputs fail without JSON output.
+
+The result is a read-only `SEED_INSPECTION` with authority `NON_AUTHORITATIVE_DERIVED_VIEW`, not a transformed graph or receipt. It contains the stored request, `preparation_status`, failure state, reached IDs, same-label `seed_memberships`, corresponding native nodes and call relations, global summary/boundaries/diagnostics, and available execution-bundle, semantic, and computed exact-byte identities. `diagnostics_on_reached_nodes` is labeled `TOOL_DERIVED_NODE_CORRELATION`: it filters global diagnostics by reached node ID but does not establish exact per-seed diagnostic custody or causation. Inspection adds no feature or consumer semantics and does not replace artifact `validate` or selector `verify`.
+
 ## Interpret results honestly
 
 ### Field authority
