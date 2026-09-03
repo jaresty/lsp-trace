@@ -49,7 +49,7 @@ func findTool(manifest *Manifest, name string) *ToolContract {
 
 func TestManifestIsSoleExactAuthority(t *testing.T) {
 	const (
-		coverageAssertion = "manifest contains all twelve recognized canonical tools with six advertised enabled and six unadvertised reserved"
+		coverageAssertion = "manifest contains all twelve recognized canonical tools with seven advertised enabled and five unadvertised reserved"
 		aliasAssertion    = "canonical names and aliases are globally unique"
 		inputAssertion    = "each enabled canonical tool has an exact dedicated closed input schema"
 	)
@@ -92,7 +92,7 @@ func TestManifestIsSoleExactAuthority(t *testing.T) {
 			reserved++
 		}
 	}
-	if enabled != 6 || reserved != 6 {
+	if enabled != 7 || reserved != 5 {
 		t.Errorf("%s: enabled=%d reserved=%d", coverageAssertion, enabled, reserved)
 	}
 }

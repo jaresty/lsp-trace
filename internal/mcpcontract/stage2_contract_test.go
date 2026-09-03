@@ -143,13 +143,13 @@ func TestStage2LifecycleExecutableContract(t *testing.T) {
 		if tool.Advertised {
 			advertised++
 		}
-		if tool.Name == "lsp_trace_v1_incoming" || tool.Name == "lsp_trace_v1_slice" {
+		if tool.Name == "lsp_trace_v1_slice" {
 			if tool.Advertised || tool.Availability != "NOT_IMPLEMENTED" {
 				t.Fatalf("ASSERT_STAGE3_RESERVED: %+v", tool)
 			}
 		}
 	}
-	if advertised != 6 {
-		t.Fatalf("ASSERT_STAGE1_SIX_ADVERTISED: got %d", advertised)
+	if advertised != 7 {
+		t.Fatalf("ASSERT_STAGE1_SEVEN_ADVERTISED: got %d", advertised)
 	}
 }

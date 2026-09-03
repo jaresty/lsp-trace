@@ -82,7 +82,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		switch m.Method {
 		case "initialize":
-			result := json.RawMessage(`{"capabilities":{},"serverInfo":{"name":"fake-lsp-fixture","version":"1"}}`)
+			result := json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","callHierarchyProvider":true},"serverInfo":{"name":"fake-lsp-fixture","version":"1"}}`)
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
@@ -94,6 +94,27 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 		case "exit":
 			return 0
+		case "textDocument/prepareCallHierarchy":
+			result := json.RawMessage(`[{"name":"leaf","kind":12,"uri":"file:///fixture/main.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`)
+			if err := w.Write(response(m.ID, result)); err != nil {
+				fmt.Fprintln(errout, err)
+				return fixtureInputErrorCode
+			}
+		case "callHierarchy/incomingCalls":
+			var p struct {
+				Item struct {
+					Name string `json:"name"`
+				} `json:"item"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			result := json.RawMessage(`[]`)
+			if p.Item.Name == "leaf" {
+				result = json.RawMessage(`[{"from":{"name":"caller","kind":12,"uri":"file:///fixture/main.go","range":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"data":{"fixture":"caller"}},"fromRanges":[{"start":{"line":2,"character":1},"end":{"line":2,"character":2}}]}]`)
+			}
+			if err := w.Write(response(m.ID, result)); err != nil {
+				fmt.Fprintln(errout, err)
+				return fixtureInputErrorCode
+			}
 		case "fixture/reply":
 			var p resultParams
 			if json.Unmarshal(m.Params, &p) != nil {

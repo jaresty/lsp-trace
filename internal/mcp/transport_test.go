@@ -190,8 +190,8 @@ func TestCapabilitiesAndReservedDispatch(t *testing.T) {
 	t.Log("ASSERTION: " + precedenceAssertion)
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_capabilities","arguments":{}}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_incoming","arguments":{}}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":{"unexpected":true}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_slice","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_slice","arguments":{"unexpected":true}}}`,
 	}, "\n") + "\n"
 	got := runMessages(t, input)
 	capCall := got[0]["result"].(map[string]any)
@@ -209,7 +209,7 @@ func TestCapabilitiesAndReservedDispatch(t *testing.T) {
 	}
 	reservedCall := got[1]["result"].(map[string]any)
 	reservedEnvelope := reservedCall["structuredContent"].(map[string]any)
-	if reservedEnvelope["tool"] != "lsp_trace_v1_incoming" || reservedEnvelope["code"] != "TOOL_NOT_IMPLEMENTED" || reservedEnvelope["outcome"] != "DOMAIN_ERROR" || reservedEnvelope["operation_status"] != "FAILED" {
+	if reservedEnvelope["tool"] != "lsp_trace_v1_slice" || reservedEnvelope["code"] != "TOOL_NOT_IMPLEMENTED" || reservedEnvelope["outcome"] != "DOMAIN_ERROR" || reservedEnvelope["operation_status"] != "FAILED" {
 		t.Errorf("%s: %v", precedenceAssertion, reservedEnvelope)
 	}
 	if _, ok := got[2]["error"]; !ok {
@@ -272,7 +272,7 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
-	const listAssertion = "tools/list advertises the ten always-local canonical names"
+	const listAssertion = "tools/list advertises the eleven always-local canonical names"
 	const bindingAssertion = "tools/call binds the canonical operation envelope once in structuredContent with empty content and equal error state"
 	const unknownAssertion = "unknown tool calls use native MCP unknown-tool errors without an operation envelope"
 	for _, a := range []string{transportAssertion, listAssertion, bindingAssertion, unknownAssertion} {
@@ -291,7 +291,7 @@ func TestTransportContract(t *testing.T) {
 	}
 	result, _ := got[1]["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 10 {
+	if len(tools) != 11 {
 		t.Errorf("%s: got %d tools", listAssertion, len(tools))
 	}
 	call, _ := got[2]["result"].(map[string]any)

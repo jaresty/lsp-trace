@@ -243,6 +243,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			code = failure.Code
 			return bindLifecycleEnvelope(base, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 		}
+		if tool.ExecutorFamily == IncomingExecutorFamily {
+			code = failure.Code
+			if code == operation.FailureInvalidInput {
+				code = "INPUT_INVALID"
+			}
+		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
 	if tool.ExecutorFamily == LifecycleExecutorFamily {
@@ -429,8 +435,8 @@ func decodeClosed(raw json.RawMessage, dst any, allowed ...string) error {
 }
 
 func validateArguments(tool Tool, arguments map[string]any) error {
-	if tool.ExecutorFamily == LifecycleExecutorFamily && tool.Availability == Enabled {
-		return nil // lifecycleops.Executor owns closed semantic decoding for the local contract
+	if (tool.ExecutorFamily == LifecycleExecutorFamily || tool.ExecutorFamily == IncomingExecutorFamily) && tool.Availability == Enabled {
+		return nil // family executor owns closed semantic decoding for the local contract
 	}
 	raw, err := json.Marshal(arguments)
 	if err != nil {
@@ -459,6 +465,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Inspect
 	case "lsp_trace_v1_filter":
 		return operation.Filter
+	case "lsp_trace_v1_incoming":
+		return operation.Name("incoming")
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")
 	case "lsp_session_v1_status":

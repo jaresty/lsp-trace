@@ -50,12 +50,18 @@ const (
 	ReadinessFailed  ReadinessState = "FAILED"
 )
 
+type SessionMetadata struct {
+	PositionEncoding     string
+	CallHierarchySupport bool
+}
+
 type ReadinessSnapshot struct {
 	ID         string
 	SessionID  string
 	Generation uint64
 	State      ReadinessState
 	Failure    session.Failure
+	Metadata   SessionMetadata
 }
 
 type readinessOperation struct {
@@ -300,6 +306,7 @@ type runtimeSession struct {
 	cancels        int
 	protocolOwned  bool
 	lifecycleOwned bool
+	metadata       SessionMetadata
 }
 
 type Manager struct {
@@ -447,21 +454,44 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		m.abortReadiness(child, opID, session.InitializationFailure)
 		return
 	}
-	response := make(chan error, 1)
+	type readinessResult struct {
+		metadata SessionMetadata
+		err      error
+	}
+	response := make(chan readinessResult, 1)
 	go func() {
 		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
 		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0) {
 			err = errors.New("sessionruntime: invalid readiness response")
 		}
-		response <- err
+		metadata := SessionMetadata{}
+		if err == nil {
+			var initialized struct {
+				Capabilities struct {
+					PositionEncoding      string          `json:"positionEncoding"`
+					CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider"`
+				} `json:"capabilities"`
+			}
+			if decodeErr := json.Unmarshal(message.Result, &initialized); decodeErr != nil {
+				err = errors.New("sessionruntime: malformed initialize result")
+			} else {
+				metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
+				if metadata.PositionEncoding == "" {
+					metadata.PositionEncoding = "utf-16"
+				}
+				provider := initialized.Capabilities.CallHierarchyProvider
+				metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+			}
+		}
+		response <- readinessResult{metadata: metadata, err: err}
 	}()
 	select {
-	case err := <-response:
-		if err != nil {
+	case observed := <-response:
+		if observed.err != nil {
 			m.abortReadiness(child, opID, session.InitializationFailure)
 			return
 		}
-		m.finishReadiness(opID, ReadinessReady, "")
+		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
 	case <-ctx.Done():
 		failure := session.RequestCancelled
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -474,18 +504,19 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 func (m *Manager) abortReadiness(child Child, id string, failure session.Failure) {
 	_ = child.Teardown(context.Background())
 	_ = child.Close()
-	m.finishReadiness(id, ReadinessFailed, failure)
+	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
 }
 
-func (m *Manager) finishReadiness(id string, state ReadinessState, failure session.Failure) {
+func (m *Manager) finishReadiness(id string, state ReadinessState, failure session.Failure, metadata SessionMetadata) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	op := m.readiness[id]
 	if op == nil || op.snapshot.State != ReadinessPending {
 		return
 	}
-	op.snapshot.State, op.snapshot.Failure = state, failure
+	op.snapshot.State, op.snapshot.Failure, op.snapshot.Metadata = state, failure, metadata
 	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
+		r.metadata = metadata
 		r.protocolOwned = false
 		if state == ReadinessReady {
 			result := m.algebra.ObserveInitialization(op.snapshot.SessionID, op.snapshot.Generation, true)
@@ -890,6 +921,22 @@ func (m *Manager) Census() Census {
 	}
 	return c
 }
+func (m *Manager) Metadata(id string, generation uint64) (SessionMetadata, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return SessionMetadata{}, session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return SessionMetadata{}, session.StaleGeneration
+	}
+	if r.record.State != session.Ready || r.protocolOwned {
+		return SessionMetadata{}, session.LifecycleConflict
+	}
+	return r.metadata, ""
+}
+
 func (m *Manager) Records() []Record {
 	m.mu.Lock()
 	defer m.mu.Unlock()
