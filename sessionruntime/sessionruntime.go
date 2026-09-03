@@ -309,24 +309,54 @@ func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) 
 	}
 	for i := len(m.operationIDs) - 1; i >= 0; i-- {
 		existing := m.operations[m.operationIDs[i]]
-		if existing.SessionID == id && existing.Generation == r.record.Generation && existing.CallerID == caller && existing.Restart == restart {
+		if existing.SessionID != id || existing.Generation != r.record.Generation || existing.Restart != restart {
+			continue
+		}
+		if existing.CallerID == caller {
 			return session.LifecycleResult{State: r.record.State, Generation: existing.Generation, IntentID: existing.ID, Replayed: true}
 		}
+		if existing.State == OperationPending {
+			// Joining an accepted operation consumes no new runtime capacity. Let the
+			// algebra bound and record the distinct caller against that exact intent.
+			return m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
+		}
 	}
+	// Runtime capacity is reserved before the session algebra can install or join
+	// an intent. Holding m.mu makes the cross-layer admission indivisible to other
+	// runtime callers. Non-new algebra results release the provisional worker slot.
+	if m.workers >= m.limits.MaxChildren || !m.canReserveOperation() {
+		return session.LifecycleResult{Failure: session.ResourceExhausted}
+	}
+	m.workers++
 	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
 	if intent.Failure != "" || intent.Noop || intent.Joined || intent.Replayed {
+		m.workers--
 		return intent
 	}
-	if m.workers >= m.limits.MaxChildren || !m.reserveOperation(intent.IntentID) {
+	if !m.reserveOperation(intent.IntentID) {
+		// canReserveOperation and reserveOperation run under the same lock, so this
+		// is defensive only: no concurrent runtime mutation can consume capacity.
+		m.workers--
 		return session.LifecycleResult{Failure: session.ResourceExhausted}
 	}
 	snapshot := OperationSnapshot{ID: intent.IntentID, SessionID: id, CallerID: caller, Generation: r.record.Generation, Restart: restart, State: OperationPending}
 	m.operations[snapshot.ID] = snapshot
 	m.operationIDs = append(m.operationIDs, snapshot.ID)
-	m.workers++
 	m.observe(id, snapshot.Generation, kind, intent.State, "")
 	go m.runLifecycle(snapshot, r.process, r.spec)
 	return intent
+}
+
+func (m *Manager) canReserveOperation() bool {
+	if len(m.operations) < m.limits.MaxOperations {
+		return true
+	}
+	for _, id := range m.operationIDs {
+		if m.operations[id].State != OperationPending {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) reserveOperation(id string) bool {

@@ -187,6 +187,54 @@ func (s *sequenceStarter) Starts() int {
 	return s.starts
 }
 
+func TestLifecycleCapacityRejectionIsAtomicAndRetryable(t *testing.T) {
+	childA := &blockingChild{release: make(chan struct{})}
+	starter := &sequenceStarter{children: []Child{childA, referenceChild{}}}
+	m, err := New(Config{Limits: Limits{MaxSessions: 2, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 16, MaxOperations: 2}, Starter: starter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileA := profile(t)
+	validatedB, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: "/workspace-b", Profile: "go", EnvironmentReference: "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileB := runtimeprofile.Resolve(validatedB)
+	startedA := m.Start(context.Background(), StartRequest{Profile: profileA})
+	startedB := m.Start(context.Background(), StartRequest{Profile: profileB})
+	operationA := m.Stop(context.Background(), startedA.SessionID, "caller-a")
+	if operationA.IntentID == "" {
+		t.Fatal("session A stop omitted operation ID")
+	}
+	for _, caller := range []string{"caller-b-1", "caller-b-2"} {
+		rejected := m.Stop(context.Background(), startedB.SessionID, caller)
+		if rejected.Failure != session.ResourceExhausted || rejected.IntentID != "" {
+			t.Fatalf("capacity rejection mutated arbitration or exposed phantom operation: caller=%s result=%+v", caller, rejected)
+		}
+	}
+	if c := m.Census(); c.Operations != 1 || c.Workers != 1 {
+		t.Fatalf("capacity rejection leaked reservation: %+v", c)
+	}
+	close(childA.release)
+	waitOperation(t, m, operationA.IntentID, OperationComplete)
+	retry := m.Stop(context.Background(), startedB.SessionID, "caller-b-1")
+	if retry.Failure != "" || retry.IntentID == "" {
+		t.Fatalf("capacity rejection was not retryable: %+v", retry)
+	}
+	joined := m.Stop(context.Background(), startedB.SessionID, "caller-b-2")
+	if joined.Failure != "" || joined.IntentID != retry.IntentID {
+		t.Fatalf("different caller did not join accepted operation: retry=%+v joined=%+v", retry, joined)
+	}
+	replayed := m.Stop(context.Background(), startedB.SessionID, "caller-b-1")
+	if replayed.Failure != "" || replayed.IntentID != retry.IntentID {
+		t.Fatalf("same caller replay changed accepted operation: retry=%+v replay=%+v", retry, replayed)
+	}
+	waitOperation(t, m, retry.IntentID, OperationComplete)
+	if c := m.Census(); c.Workers != 0 || c.Operations > 2 {
+		t.Fatalf("terminal operation accounting leaked: %+v", c)
+	}
+}
+
 type failedChild struct{}
 
 func (failedChild) Teardown(context.Context) managedprocess.TeardownObservation {
