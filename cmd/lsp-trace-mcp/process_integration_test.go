@@ -138,7 +138,12 @@ func decodeProcessCall(t *testing.T, response map[string]any) processCall {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
+	tool, _ := env["tool"].(string)
+	if strings.HasPrefix(tool, "lsp_session_v1_") {
+		if env["envelope_version"] != "1" || env["request_id"] == "" || env["outcome"] == "" || env["operation_status"] == "" {
+			t.Fatalf("ASSERT_ALWAYS_LOCAL_LIFECYCLE_ENVELOPE: envelope=%s", raw)
+		}
+	} else if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
 		t.Fatalf("ASSERT_MANIFEST_SELECTED_ENVELOPE: %v envelope=%s", err, raw)
 	}
 	return processCall{result: result, env: env}
@@ -304,8 +309,8 @@ func TestRealProcessDomainErrorsAreManifestConformant(t *testing.T) {
 	}
 }
 
-func TestRealProcessPublicationConfigurationAndLaterStagesReserved(t *testing.T) {
-	const assertion = "selector publication capability is conditional on a configured pinned root while later stages remain NOT_IMPLEMENTED regardless of live flag"
+func TestRealProcessPublicationConfigurationAndAlwaysLocalLifecycle(t *testing.T) {
+	const assertion = "selector publication remains conditional, live traversal remains reserved, and lifecycle list dispatches locally"
 	t.Log("ASSERTION: " + assertion)
 	binary := buildMCPBinary(t)
 	for _, args := range [][]string{nil, {"--enable-live-lsp"}} {
@@ -318,11 +323,13 @@ func TestRealProcessPublicationConfigurationAndLaterStagesReserved(t *testing.T)
 		if capability["selector_publication_supported"] != false {
 			t.Errorf("ASSERT_PUBLICATION_DISABLED_WITHOUT_ROOT: args=%v result=%v", args, capability)
 		}
-		for _, response := range responses[1:] {
-			call := decodeProcessCall(t, response)
-			if call.env["code"] != "TOOL_NOT_IMPLEMENTED" || call.env["operation_status"] != "FAILED" || call.env["outcome"] != "DOMAIN_ERROR" || call.env["isError"] != true {
-				t.Errorf("%s: args=%v envelope=%v", assertion, args, call.env)
-			}
+		incoming := decodeProcessCall(t, responses[1])
+		if incoming.env["code"] != "TOOL_NOT_IMPLEMENTED" || incoming.env["operation_status"] != "FAILED" {
+			t.Errorf("%s: args=%v incoming=%v", assertion, args, incoming.env)
+		}
+		lifecycle := decodeProcessCall(t, responses[2])
+		if lifecycle.env["outcome"] != "COMPLETE" || lifecycle.env["operation_status"] != "SUCCEEDED" || lifecycle.env["isError"] != false {
+			t.Errorf("%s: args=%v lifecycle=%v", assertion, args, lifecycle.env)
 		}
 	}
 }

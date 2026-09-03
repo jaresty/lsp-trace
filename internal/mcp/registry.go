@@ -109,6 +109,13 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	for i := range tools {
 		base := cloneTool(tools[i])
+		// Stage 2 is an always-local development contract. Lifecycle tools are
+		// enabled by default; the two live traversal tools remain reserved.
+		if tools[i].ExecutorFamily == LifecycleExecutorFamily {
+			tools[i].Availability = Enabled
+			tools[i].InputSchema = lifecycleInputSchema(tools[i].Name)
+			tools[i].EnvelopeSchemaIDs = []string{resultEnvelopeSchemaID, domainEnvelopeSchemaID}
+		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)
 		}
@@ -150,6 +157,23 @@ func withoutPublicationEnvelopes(ids []string) []string {
 		}
 	}
 	return out
+}
+
+func lifecycleInputSchema(name string) map[string]any {
+	properties := map[string]any{}
+	required := []any{}
+	if name != "lsp_session_v1_list" {
+		properties = map[string]any{
+			"session_id": map[string]any{"type": "string", "minLength": 1},
+			"generation": map[string]any{"type": "integer", "minimum": 1},
+		}
+		required = []any{"session_id", "generation"}
+		if name != "lsp_session_v1_status" {
+			properties["caller_id"] = map[string]any{"type": "string", "minLength": 1}
+			required = append(required, "caller_id")
+		}
+	}
+	return map[string]any{"type": "object", "additionalProperties": false, "properties": properties, "required": required}
 }
 
 func cloneTool(tool Tool) Tool {

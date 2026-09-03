@@ -80,7 +80,14 @@ assert_contains DOC-MCP-README README.md '## MCP offline evidence server'
 assert_contains DOC-MCP-SKILL cmd/lsp-trace/SKILL.md '### Use the MCP offline evidence server'
 assert_contains DOC-MCP-STDIO README.md 'lsp-trace-mcp --publication-root'
 assert_contains DOC-MCP-CAPABILITIES README.md 'lsp_trace_v1_capabilities'
-assert_contains DOC-MCP-RESERVATIONS cmd/lsp-trace/SKILL.md 'Stage 2 lifecycle and Stage 3 live traversal tools remain reserved `NOT_IMPLEMENTED`.'
+assert_contains DOC-MCP-ALWAYS-LOCAL README.md 'local-development-only'
+assert_contains DOC-MCP-TEN-TOOLS README.md 'ten canonical tools'
+assert_contains DOC-MCP-LIFECYCLE cmd/lsp-trace/SKILL.md 'Stage 2 lifecycle tools are enabled by default'
+assert_contains DOC-MCP-WARNING README.md "developer's permissions"
+assert_contains DOC-MCP-NO-SANDBOX README.md 'not sandboxed'
+assert_contains DOC-MCP-LOCAL-ACCESS README.md 'local files and network'
+assert_contains DOC-MCP-TRUST README.md 'must be trusted'
+assert_contains DOC-MCP-ADR docs/adr/0003-always-local-stage2.md '# ADR 0003: Activate always-local Stage 2 lifecycle tools'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

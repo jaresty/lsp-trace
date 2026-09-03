@@ -272,7 +272,7 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
-	const listAssertion = "tools/list advertises only six enabled canonical names"
+	const listAssertion = "tools/list advertises the ten always-local canonical names"
 	const bindingAssertion = "tools/call binds the canonical operation envelope once in structuredContent with empty content and equal error state"
 	const unknownAssertion = "unknown tool calls use native MCP unknown-tool errors without an operation envelope"
 	for _, a := range []string{transportAssertion, listAssertion, bindingAssertion, unknownAssertion} {
@@ -291,7 +291,7 @@ func TestTransportContract(t *testing.T) {
 	}
 	result, _ := got[1]["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 6 {
+	if len(tools) != 10 {
 		t.Errorf("%s: got %d tools", listAssertion, len(tools))
 	}
 	call, _ := got[2]["result"].(map[string]any)

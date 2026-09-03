@@ -69,7 +69,9 @@ Comparison is deterministic, read-only, and limited to explicit per-seed referen
 
 ## MCP offline evidence server
 
-`lsp-trace-mcp` is a separate stdio MCP server for deterministic offline operations. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. It starts no language server in Stage 1. Launch it without filesystem publication, or pin selector publication beneath one private root:
+`lsp-trace-mcp` is a local-development-only stdio MCP server. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. Its default surface has ten canonical tools: the six deterministic offline evidence tools plus four local session lifecycle tools. Launch it without filesystem publication, or pin selector publication beneath one private root:
+
+> **WARNING:** Local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. Run only developer-configured commands you trust.
 
 ```sh
 lsp-trace-mcp
@@ -91,7 +93,7 @@ Call `lsp_trace_v1_capabilities` with `{}` to discover the process-lifetime tool
 
 Artifact-producing tools return exact bytes inline when they fit the 1,048,576-byte limit. A request whose result may exceed that limit should provide an `output_selector`; selector publication is available only when the process was started with `--publication-root`, and the selector must resolve beneath that pinned root. Publication uses exclusive no-replace owner-only files and returns a path-free receipt. The server never chooses or returns a private path. `list_page_max` is 100.
 
-MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, and filtering do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_*`) and Stage 3 live traversal tools (`lsp_trace_v1_incoming` and `lsp_trace_v1_slice`) are reserved, unadvertised, and `NOT_IMPLEMENTED`; `--enable-live-lsp` does not enable them in the Stage 1 binary. See [ADR 0003](docs/adr/0003-persistent-mcp-language-server-sessions.md) for the normative staged contract.
+MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, and filtering do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) are enabled by default and route to one process-local runtime. Stage 3 live traversal tools (`lsp_trace_v1_incoming` and `lsp_trace_v1_slice`) remain reserved and `NOT_IMPLEMENTED`. Darwin uses local process-group supervision; unsupported platforms retain the ten-tool surface but process-start-dependent behavior fails explicitly without starting a child. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
 
 ## Named server profiles
 

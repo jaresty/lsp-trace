@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"time"
 
+	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/lifecycleops"
+	"lsp-trace/sessionruntime"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
@@ -27,6 +32,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "lsp-trace-mcp accepts no positional arguments")
 		return 2
 	}
+	fmt.Fprintln(stderr, "WARNING: local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted.")
 	var publicationRoot *publication.Root
 	if *publicationRootPath != "" {
 		var err error
@@ -72,8 +78,24 @@ func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, err
 	if err != nil {
 		return nil, err
 	}
+	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
+	if runtime.GOOS == "darwin" {
+		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 64 * 1024, GracePeriod: 250 * time.Millisecond})
+		if err != nil {
+			return nil, err
+		}
+		starter = sessionruntime.ManagedStarter{Manager: supervisor}
+	}
+	manager, err := sessionruntime.New(sessionruntime.Config{
+		Limits:  sessionruntime.Limits{MaxSessions: 8, MaxRequests: 128, MaxChildren: 8, MaxCancels: 128, MaxTombstones: 128, MaxObservations: 1024, MaxOperations: 128},
+		Starter: starter, ReadinessTimeout: 10 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
+		Executors:       map[mcp.ExecutorFamily]mcp.Executor{mcp.LifecycleExecutorFamily: lifecycleops.NewExecutor(lifecycleops.New(manager))},
 		PublicationRoot: publicationRoot, Publisher: publication.NewPublisher(),
 	}, nil
 }

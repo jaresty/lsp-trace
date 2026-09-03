@@ -239,7 +239,17 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	})
 	if failure != nil {
 		code, diagnostics := normalizeDomainFailure(failure)
+		if tool.ExecutorFamily == LifecycleExecutorFamily {
+			code = failure.Code
+			return bindLifecycleEnvelope(base, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+	}
+	if tool.ExecutorFamily == LifecycleExecutorFamily {
+		return bindLifecycleEnvelope(base, envelope{
+			EnvelopeVersion: "1", EnvelopeSchemaID: resultEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Result: opResult.Value,
+		})
 	}
 	if tool.Name == "lsp_trace_v1_capabilities" {
 		env := envelope{
@@ -298,6 +308,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 
 func (s *Server) nextRequestID() string {
 	return fmt.Sprintf("offline-%d", s.requestSequence.Add(1))
+}
+
+func bindLifecycleEnvelope(base response, env envelope) response {
+	base.Result = callResult{Content: []any{}, StructuredContent: env, IsError: env.IsError}
+	return base
 }
 
 func bindEnvelope(base response, tool Tool, env envelope) response {
@@ -414,6 +429,9 @@ func decodeClosed(raw json.RawMessage, dst any, allowed ...string) error {
 }
 
 func validateArguments(tool Tool, arguments map[string]any) error {
+	if tool.ExecutorFamily == LifecycleExecutorFamily && tool.Availability == Enabled {
+		return nil // lifecycleops.Executor owns closed semantic decoding for the local contract
+	}
 	raw, err := json.Marshal(arguments)
 	if err != nil {
 		return err
@@ -441,6 +459,14 @@ func operationName(canonical string) operation.Name {
 		return operation.Inspect
 	case "lsp_trace_v1_filter":
 		return operation.Filter
+	case "lsp_session_v1_list":
+		return operation.Name("session_list")
+	case "lsp_session_v1_status":
+		return operation.Name("session_status")
+	case "lsp_session_v1_stop":
+		return operation.Name("session_stop")
+	case "lsp_session_v1_restart":
+		return operation.Name("session_restart")
 	default:
 		return operation.Capabilities
 	}

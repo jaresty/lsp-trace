@@ -93,21 +93,27 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 	}})
 }
 
-func TestLifecycleExecutorFamilyIsDisabledAndUnadvertised(t *testing.T) {
-	const assertion = "ASSERT_LIFECYCLE_FAMILY_DISABLED_UNADVERTISED_SIX"
+func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
+	const assertion = "ASSERT_ALWAYS_LOCAL_TEN_TOOL_LIFECYCLE_SURFACE"
 	t.Log("ASSERTION: " + assertion)
-	r := NewRegistry(true)
-	if got := len(r.Advertised()); got != 6 {
+	r := NewRegistry(false)
+	if got := len(r.Advertised()); got != 10 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
 		tool, ok := r.Resolve(canonical)
-		if !ok || tool.Availability != NotImplemented || tool.ExecutorFamily != LifecycleExecutorFamily {
+		if !ok || tool.Availability != Enabled || tool.ExecutorFamily != LifecycleExecutorFamily {
 			t.Fatalf("%s[%s]: tool=%+v ok=%v", assertion, canonical, tool, ok)
 		}
 		alias, ok := r.Resolve(tool.Aliases[0])
-		if !ok || alias.Name != canonical || alias.ExecutorFamily != LifecycleExecutorFamily {
+		if !ok || alias.Name != canonical || alias.Availability != Enabled || alias.ExecutorFamily != LifecycleExecutorFamily {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
+		}
+	}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_filter", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
+	for i, tool := range r.Advertised() {
+		if tool.Name != want[i] {
+			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
 		}
 	}
 	t.Log("PASS " + assertion)
@@ -115,7 +121,7 @@ func TestLifecycleExecutorFamilyIsDisabledAndUnadvertised(t *testing.T) {
 
 func TestRegistryContract(t *testing.T) {
 	const (
-		canonicalAssertion = "registry has twelve canonical entries with six enabled offline and six flag-insensitive reserved entries"
+		canonicalAssertion = "registry has twelve canonical entries with ten always-local enabled tools and two reserved live-traversal entries"
 		aliasAssertion     = "each exact alias resolves to its canonical identity and aliases are not advertised"
 		unknownAssertion   = "unknown and unsupported versioned names are not recognized"
 	)
@@ -128,7 +134,7 @@ func TestRegistryContract(t *testing.T) {
 		if got := len(r.Tools()); got != 12 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 6 {
+		if got := len(r.Advertised()); got != 10 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{
