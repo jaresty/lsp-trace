@@ -42,6 +42,27 @@ type OperationSnapshot struct {
 	Failure    session.Failure
 }
 
+type ReadinessState string
+
+const (
+	ReadinessPending ReadinessState = "PENDING"
+	ReadinessReady   ReadinessState = "READY"
+	ReadinessFailed  ReadinessState = "FAILED"
+)
+
+type ReadinessSnapshot struct {
+	ID         string
+	SessionID  string
+	Generation uint64
+	State      ReadinessState
+	Failure    session.Failure
+}
+
+type readinessOperation struct {
+	snapshot ReadinessSnapshot
+	done     chan struct{}
+}
+
 type Child interface {
 	Teardown(context.Context) managedprocess.TeardownObservation
 	Close() managedprocess.ResourceObservation
@@ -69,9 +90,10 @@ func (s ManagedStarter) Start(ctx context.Context, spec managedprocess.Spec) (Ch
 }
 
 type Config struct {
-	Limits  Limits
-	Wire    lspwire.Limits
-	Starter Starter
+	Limits           Limits
+	Wire             lspwire.Limits
+	Starter          Starter
+	ReadinessTimeout time.Duration
 }
 type StartRequest struct {
 	Profile  runtimeprofile.Profile
@@ -115,19 +137,23 @@ type runtimeSession struct {
 }
 
 type Manager struct {
-	mu           sync.Mutex
-	limits       Limits
-	wire         lspwire.Limits
-	starter      Starter
-	algebra      *session.Manager
-	sessions     map[string]*runtimeSession
-	operations   map[string]OperationSnapshot
-	operationIDs []string
-	observations []Observation
-	sequence     uint64
-	workers      int
-	workerDone   chan struct{}
-	closed       bool
+	mu               sync.Mutex
+	limits           Limits
+	wire             lspwire.Limits
+	starter          Starter
+	algebra          *session.Manager
+	sessions         map[string]*runtimeSession
+	operations       map[string]OperationSnapshot
+	operationIDs     []string
+	readiness        map[string]*readinessOperation
+	readinessIDs     map[string]string
+	observations     []Observation
+	sequence         uint64
+	readinessSeq     uint64
+	readinessTimeout time.Duration
+	workers          int
+	workerDone       chan struct{}
+	closed           bool
 }
 
 func New(c Config) (*Manager, error) {
@@ -145,7 +171,11 @@ func New(c Config) (*Manager, error) {
 	if l.MaxOperations <= 0 {
 		l.MaxOperations = l.MaxObservations
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), workerDone: make(chan struct{}, 1)}, nil
+	readinessTimeout := c.ReadinessTimeout
+	if readinessTimeout <= 0 {
+		readinessTimeout = time.Second
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, workerDone: make(chan struct{}, 1)}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
@@ -195,6 +225,143 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
 	m.sessions[id] = &runtimeSession{record: r, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request)}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
+}
+
+func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint64, deadline time.Time) ReadinessSnapshot {
+	m.mu.Lock()
+	r := m.sessions[id]
+	if r == nil {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.SessionNotFound}
+	}
+	if generation != r.record.Generation {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.StaleGeneration}
+	}
+	if existing := m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)]; existing != "" {
+		snapshot := m.readiness[existing].snapshot
+		m.mu.Unlock()
+		return snapshot
+	}
+	protocol, ok := r.process.(wireChild)
+	if !ok {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.InitializationFailure}
+	}
+	m.readinessSeq++
+	opID := "readiness-" + strconv.FormatUint(m.readinessSeq, 10)
+	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, SessionID: id, Generation: generation, State: ReadinessPending}, done: make(chan struct{})}
+	m.readiness[opID] = op
+	m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)] = opID
+	m.workers++
+	m.mu.Unlock()
+	go m.runReadiness(ctx, deadline, protocol, opID, generation)
+	return op.snapshot
+}
+
+func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child wireChild, opID string, generation uint64) {
+	ctx := parent
+	cancel := func() {}
+	if deadline.IsZero() {
+		ctx, cancel = context.WithTimeout(parent, m.readinessTimeout)
+	} else {
+		ctx, cancel = context.WithDeadline(parent, deadline)
+	}
+	defer cancel()
+
+	key := lspwire.NewPending(1).Begin(generation)
+	id := strconv.FormatUint(key.ID, 10)
+	writer := lspwire.NewWriter(child.Stdin(), m.wire)
+	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: json.RawMessage(`{}`)}); err != nil {
+		m.abortReadiness(child, opID, session.InitializationFailure)
+		return
+	}
+	response := make(chan error, 1)
+	go func() {
+		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
+		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0) {
+			err = errors.New("sessionruntime: invalid readiness response")
+		}
+		response <- err
+	}()
+	select {
+	case err := <-response:
+		if err != nil {
+			m.abortReadiness(child, opID, session.InitializationFailure)
+			return
+		}
+		m.finishReadiness(opID, ReadinessReady, "")
+	case <-ctx.Done():
+		failure := session.RequestCancelled
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			failure = session.InitializationTimeout
+		}
+		m.abortReadiness(child, opID, failure)
+	}
+}
+
+func (m *Manager) abortReadiness(child Child, id string, failure session.Failure) {
+	_ = child.Teardown(context.Background())
+	_ = child.Close()
+	m.finishReadiness(id, ReadinessFailed, failure)
+}
+
+func (m *Manager) finishReadiness(id string, state ReadinessState, failure session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op := m.readiness[id]
+	if op == nil || op.snapshot.State != ReadinessPending {
+		return
+	}
+	op.snapshot.State, op.snapshot.Failure = state, failure
+	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
+		if state == ReadinessReady {
+			result := m.algebra.ObserveInitialization(op.snapshot.SessionID, op.snapshot.Generation, true)
+			r.record.State = result.State
+			m.observe(op.snapshot.SessionID, op.snapshot.Generation, "readiness", result.State, result.Failure)
+		} else {
+			result := m.algebra.ObserveInitialization(op.snapshot.SessionID, op.snapshot.Generation, false)
+			r.record.State = result.State
+			m.observe(op.snapshot.SessionID, op.snapshot.Generation, "readiness", result.State, failure)
+		}
+	}
+	close(op.done)
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) Readiness(id string) (ReadinessSnapshot, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op, ok := m.readiness[id]
+	if !ok {
+		return ReadinessSnapshot{}, false
+	}
+	return op.snapshot, true
+}
+
+func (m *Manager) WaitReadiness(ctx context.Context, id string) (ReadinessSnapshot, bool) {
+	m.mu.Lock()
+	op, ok := m.readiness[id]
+	if !ok {
+		m.mu.Unlock()
+		return ReadinessSnapshot{}, false
+	}
+	done := op.done
+	snapshot := op.snapshot
+	m.mu.Unlock()
+	if snapshot.State != ReadinessPending {
+		return snapshot, true
+	}
+	select {
+	case <-done:
+		return m.Readiness(id)
+	case <-ctx.Done():
+		return snapshot, true
+	}
 }
 
 func (m *Manager) ObserveInitialization(id string, generation uint64, complete bool) session.LifecycleResult {
@@ -329,6 +496,11 @@ func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) 
 	}
 	if m.closed {
 		return session.LifecycleResult{Failure: session.LifecycleConflict}
+	}
+	if readinessID := m.readinessIDs[id+":"+strconv.FormatUint(r.record.Generation, 10)]; readinessID != "" {
+		if readiness := m.readiness[readinessID]; readiness != nil && readiness.snapshot.State == ReadinessPending {
+			return session.LifecycleResult{State: r.record.State, Generation: r.record.Generation, Failure: session.LifecycleConflict}
+		}
 	}
 	op := session.LifecycleStop
 	kind := "teardown"

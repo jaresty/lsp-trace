@@ -3,7 +3,9 @@ package sessionruntime
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -22,6 +24,14 @@ func profile(t *testing.T) runtimeprofile.Profile {
 		t.Fatal(err)
 	}
 	return runtimeprofile.Resolve(v)
+}
+
+func TestReadinessOperationSurfaceExists(t *testing.T) {
+	for _, name := range []string{"BeginReadiness", "Readiness", "WaitReadiness"} {
+		if _, ok := reflect.TypeOf((*Manager)(nil)).MethodByName(name); !ok {
+			t.Fatalf("ASSERT_READINESS_OPERATION_SURFACE: missing %s", name)
+		}
+	}
 }
 
 func TestUnavailableHasNoSessionOrProcessSideEffects(t *testing.T) {
@@ -337,6 +347,148 @@ type oneChildStarter struct{ child Child }
 
 func (s oneChildStarter) Start(context.Context, managedprocess.Spec) (Child, managedprocess.StartObservation) {
 	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
+}
+
+type readinessChild struct {
+	input  *io.PipeReader
+	stdin  *io.PipeWriter
+	output *io.PipeWriter
+	stdout *io.PipeReader
+	mode   string
+}
+
+func newReadinessChild(mode string) *readinessChild {
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	c := &readinessChild{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode}
+	go func() {
+		message, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+		if err != nil || message.Method != "initialize" {
+			return
+		}
+		switch mode {
+		case "ready":
+			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: json.RawMessage(`{"capabilities":{}}`)})
+		case "error":
+			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Error: &lspwire.RPCError{Code: -32603, Message: "fixture error"}})
+		case "malformed":
+			_, _ = io.WriteString(output, "Content-Length: nope\r\n\r\n{}")
+		case "death":
+			_ = output.Close()
+		case "hang":
+		}
+	}()
+	return c
+}
+
+func (c *readinessChild) Stdin() io.WriteCloser { return c.stdin }
+func (c *readinessChild) Stdout() io.ReadCloser { return c.stdout }
+func (c *readinessChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	_ = c.stdin.Close()
+	_ = c.input.Close()
+	_ = c.output.Close()
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+}
+func (c *readinessChild) Close() managedprocess.ResourceObservation {
+	_ = c.stdout.Close()
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+func readinessManager(t *testing.T, child Child) (*Manager, StartResult) {
+	t.Helper()
+	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 1, MaxTombstones: 2, MaxObservations: 32, MaxOperations: 2}, Starter: oneChildStarter{child}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return m, m.Start(context.Background(), StartRequest{Profile: profile(t)})
+}
+
+func TestReadinessProtocolOutcomesAreBoundedAndImmutable(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want ReadinessState
+		fail session.Failure
+	}{{"ready", ReadinessReady, ""}, {"error", ReadinessFailed, session.InitializationFailure}, {"malformed", ReadinessFailed, session.InitializationFailure}, {"death", ReadinessFailed, session.InitializationFailure}} {
+		t.Run(tc.mode, func(t *testing.T) {
+			m, started := readinessManager(t, newReadinessChild(tc.mode))
+			pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+			if pending.State != ReadinessPending {
+				t.Fatalf("ASSERT_READINESS_PENDING: snapshot=%+v", pending)
+			}
+			terminal, ok := m.WaitReadiness(context.Background(), pending.ID)
+			if !ok || terminal.State != tc.want || terminal.Failure != tc.fail {
+				t.Fatalf("ASSERT_READINESS_PROTOCOL_TERMINAL_%s: snapshot=%+v found=%v", tc.mode, terminal, ok)
+			}
+			again, _ := m.Readiness(pending.ID)
+			if again != terminal {
+				t.Fatalf("ASSERT_READINESS_IMMUTABLE: first=%+v again=%+v", terminal, again)
+			}
+		})
+	}
+}
+
+func TestReadinessTimeoutAndCancellationAreTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		begin func(*Manager, StartResult) ReadinessSnapshot
+		fail  session.Failure
+	}{
+		{"timeout", func(m *Manager, s StartResult) ReadinessSnapshot {
+			return m.BeginReadiness(context.Background(), s.SessionID, s.Generation, time.Now().Add(10*time.Millisecond))
+		}, session.InitializationTimeout},
+		{"cancel", func(m *Manager, s StartResult) ReadinessSnapshot {
+			ctx, cancel := context.WithCancel(context.Background())
+			pending := m.BeginReadiness(ctx, s.SessionID, s.Generation, time.Now().Add(time.Second))
+			cancel()
+			return pending
+		}, session.RequestCancelled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := newReadinessChild("hang")
+			m, started := readinessManager(t, child)
+			pending := tc.begin(m, started)
+			terminal, _ := m.WaitReadiness(context.Background(), pending.ID)
+			if terminal.State != ReadinessFailed || terminal.Failure != tc.fail || m.Census().Workers != 0 {
+				t.Fatalf("ASSERT_READINESS_BOUNDED_%s: snapshot=%+v census=%+v", tc.name, terminal, m.Census())
+			}
+			_ = child.Teardown(context.Background())
+			_ = child.Close()
+		})
+	}
+}
+
+func TestReadinessPendingComposesWithLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(*Manager, string) session.LifecycleResult
+	}{
+		{"stop", func(m *Manager, id string) session.LifecycleResult { return m.Stop(context.Background(), id, "caller") }},
+		{"restart", func(m *Manager, id string) session.LifecycleResult {
+			return m.Restart(context.Background(), id, "caller")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := newReadinessChild("hang")
+			m, started := readinessManager(t, child)
+			ctx, cancel := context.WithCancel(context.Background())
+			pending := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(time.Second))
+			lifecycle := tc.call(m, started.SessionID)
+			if lifecycle.Failure != session.LifecycleConflict || lifecycle.IntentID != "" {
+				t.Fatalf("ASSERT_READINESS_LIFECYCLE_REJECTS_STREAM_OVERLAP: operation=%+v", lifecycle)
+			}
+			stillPending, _ := m.Readiness(pending.ID)
+			if stillPending.State != ReadinessPending {
+				t.Fatalf("ASSERT_READINESS_LIFECYCLE_NO_STALE_READY: readiness=%+v", stillPending)
+			}
+			cancel()
+			terminal, _ := m.WaitReadiness(context.Background(), pending.ID)
+			if terminal.State != ReadinessFailed || terminal.Failure != session.RequestCancelled || m.Census().Workers != 0 {
+				t.Fatalf("ASSERT_READINESS_LIFECYCLE_LEAK_FREE: readiness=%+v census=%+v", terminal, m.Census())
+			}
+			_ = child.Teardown(context.Background())
+			_ = child.Close()
+		})
+	}
 }
 
 func TestRuntimeCancellationWritesExactlyOnceToActiveChild(t *testing.T) {
