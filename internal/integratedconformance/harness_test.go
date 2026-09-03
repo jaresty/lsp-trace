@@ -619,7 +619,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			owned := path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" ||
 				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" ||
 				path == "cmd/fake-lsp/main.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" ||
-				path == "README.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" ||
+				path == "README.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" ||
 				path == "cmd/lsp-trace/SKILL.md" || path == "cmd/lsp-trace-mcp/main.go" || path == "cmd/lsp-trace-mcp/main_test.go" || path == "cmd/lsp-trace-mcp/process_integration_test.go" ||
 				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" || strings.HasPrefix(path, "internal/integratedconformance/")
 			if !owned {

@@ -88,6 +88,7 @@ assert_contains DOC-MCP-NO-SANDBOX README.md 'not sandboxed'
 assert_contains DOC-MCP-LOCAL-ACCESS README.md 'local files and network'
 assert_contains DOC-MCP-TRUST README.md 'must be trusted'
 assert_contains DOC-MCP-ADR docs/adr/0003-always-local-stage2.md '# ADR 0003: Activate always-local Stage 2 lifecycle tools'
+assert_contains DOC-MCP-HISTORICAL-ADR docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Superseded by [ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

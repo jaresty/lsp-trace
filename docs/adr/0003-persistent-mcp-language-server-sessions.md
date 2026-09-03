@@ -1,7 +1,8 @@
 # ADR 0003: Add an optional MCP server with persistent language-server sessions
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)
 - **Date:** 2026-09-02
+- **Historical scope:** This document preserves the former staged six-tool, containment-gated design as provenance only. It is not current runtime or acceptance authority.
 - **Decision owners:** LSP Trace maintainers
 - **Scope:** Optional MCP transport, offline evidence operations, and reusable live LSP sessions
 - **Related commands:** `incoming`, `slice`, `inspect`, `filter`, `verify`, `schema get`, `validate`

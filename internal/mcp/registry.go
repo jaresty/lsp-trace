@@ -113,6 +113,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		// enabled by default; the two live traversal tools remain reserved.
 		if tools[i].ExecutorFamily == LifecycleExecutorFamily {
 			tools[i].Availability = Enabled
+			tools[i].Description = lifecycleDescription(tools[i].Name)
 			tools[i].InputSchema = lifecycleInputSchema(tools[i].Name)
 			tools[i].EnvelopeSchemaIDs = []string{resultEnvelopeSchemaID, domainEnvelopeSchemaID}
 		}
@@ -157,6 +158,21 @@ func withoutPublicationEnvelopes(ids []string) []string {
 		}
 	}
 	return out
+}
+
+func lifecycleDescription(name string) string {
+	switch name {
+	case "lsp_session_v1_list":
+		return "List local language-server sessions"
+	case "lsp_session_v1_status":
+		return "Get local language-server session status"
+	case "lsp_session_v1_stop":
+		return "Stop a local language-server session generation"
+	case "lsp_session_v1_restart":
+		return "Restart a local language-server session generation"
+	default:
+		return ""
+	}
 }
 
 func lifecycleInputSchema(name string) map[string]any {

@@ -105,6 +105,9 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 		if !ok || tool.Availability != Enabled || tool.ExecutorFamily != LifecycleExecutorFamily {
 			t.Fatalf("%s[%s]: tool=%+v ok=%v", assertion, canonical, tool, ok)
 		}
+		if tool.Description == "" {
+			t.Fatalf("ASSERT_ALWAYS_LOCAL_LIFECYCLE_DESCRIPTION[%s]: empty", canonical)
+		}
 		alias, ok := r.Resolve(tool.Aliases[0])
 		if !ok || alias.Name != canonical || alias.Availability != Enabled || alias.ExecutorFamily != LifecycleExecutorFamily {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
