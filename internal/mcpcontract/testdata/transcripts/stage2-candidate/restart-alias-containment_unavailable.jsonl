@@ -1,0 +1,2 @@
+{"id":2019,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{"selector":{"session_id":"session-1"}},"name":"lsp_session_restart"}}
+{"id":2019,"jsonrpc":"2.0","result":{"content":[],"isError":true,"structuredContent":{"code":"PROCESS_CONTAINMENT_UNAVAILABLE","envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-session-containment-unavailable.v1.schema.json","envelope_version":"1","isError":true,"operation_status":"FAILED","outcome":"DOMAIN_ERROR","request_id":"candidate-2019","tool":"lsp_session_v1_restart"}}}

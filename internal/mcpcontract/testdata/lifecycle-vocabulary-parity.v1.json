@@ -1,0 +1,68 @@
+{
+  "version": "1",
+  "states": [
+    "STARTING",
+    "INITIALIZING",
+    "READY",
+    "DRAINING",
+    "STOPPING",
+    "STOPPED",
+    "CRASHED",
+    "POISONED"
+  ],
+  "events": [
+    "FIRST_START",
+    "RESTART_ACCEPTED",
+    "PIPES_ESTABLISHED",
+    "SPAWN_FAILED",
+    "SETUP_FAILED",
+    "INTENT_ACCEPTED",
+    "INITIALIZED",
+    "INIT_FAILED",
+    "GRACEFUL_INTENT",
+    "WORK_DRAINED",
+    "UNEXPECTED_DEATH",
+    "POISON",
+    "REAPED"
+  ],
+  "guards": [
+    "VERIFIED",
+    "PREDECESSOR_REAPED",
+    "NO_CHILD",
+    "POSSIBLE_CHILD",
+    "HAS_WORK",
+    "NO_WORK",
+    "ANY"
+  ],
+  "availability": [
+    "NOT_IMPLEMENTED",
+    "CONTAINMENT_UNAVAILABLE",
+    "RUNTIME_DISABLED",
+    "ENABLED"
+  ],
+  "failures": [
+    "TOOL_NOT_IMPLEMENTED",
+    "PROCESS_CONTAINMENT_UNAVAILABLE",
+    "LIVE_LSP_DISABLED",
+    "SESSION_NOT_FOUND",
+    "LIST_CURSOR_INVALID",
+    "STALE_GENERATION",
+    "LIFECYCLE_CONFLICT",
+    "SESSION_REAP_INCOMPLETE",
+    "SESSION_STOPPING",
+    "SESSION_POISONED",
+    "RESOURCE_EXHAUSTED",
+    "SPAWN_FAILED",
+    "PIPE_SETUP_FAILED",
+    "INITIALIZATION_FAILED",
+    "INITIALIZATION_TIMEOUT",
+    "SESSION_CRASHED",
+    "REQUEST_CANCELLED",
+    "REQUEST_TIMEOUT"
+  ],
+  "restart": [
+    "STOP",
+    "RESTART",
+    "EVICT"
+  ]
+}

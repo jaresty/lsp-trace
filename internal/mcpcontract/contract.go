@@ -14,7 +14,10 @@ import (
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-//go:embed testdata/stage1-manifest.v1.json testdata/schemas/*.json testdata/transcripts/*.jsonl
+//go:embed testdata/stage1-manifest.v1.json
+//go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
+//go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json
+//go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 
 const manifestPath = "testdata/stage1-manifest.v1.json"
@@ -127,7 +130,7 @@ func ValidateSchemaIdentity(s SchemaRegistration) error {
 		return fmt.Errorf("schema identity must be immutable and versioned: %q", s.ID)
 	}
 	switch s.Layer {
-	case "input", "envelope", "artifact", "capability":
+	case "input", "envelope", "artifact", "capability", "candidate_support":
 	default:
 		return fmt.Errorf("schema %q has invalid layer %q", s.ID, s.Layer)
 	}

@@ -1,0 +1,2 @@
+{"id":9001,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{},"name":"not_a_tool"}}
+{"error":{"code":-32602,"message":"Unknown tool"},"id":9001,"jsonrpc":"2.0"}

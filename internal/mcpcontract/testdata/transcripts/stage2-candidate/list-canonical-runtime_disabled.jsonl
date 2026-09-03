@@ -1,0 +1,2 @@
+{"id":2024,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{},"name":"lsp_session_v1_list"}}
+{"id":2024,"jsonrpc":"2.0","result":{"content":[],"isError":true,"structuredContent":{"code":"LIVE_LSP_DISABLED","envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-session-runtime-disabled.v1.schema.json","envelope_version":"1","isError":true,"operation_status":"FAILED","outcome":"DOMAIN_ERROR","request_id":"candidate-2024","tool":"lsp_session_v1_list"}}}

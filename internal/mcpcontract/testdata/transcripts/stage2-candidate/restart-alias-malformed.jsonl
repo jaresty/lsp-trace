@@ -1,0 +1,2 @@
+{"id":121,"jsonrpc":"2.0","method":"tools/call","params":{"arguments":{"unexpected":true},"name":"lsp_session_restart"}}
+{"error":{"code":-32602,"message":"Input validation error"},"id":121,"jsonrpc":"2.0"}
