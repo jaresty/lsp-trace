@@ -133,6 +133,22 @@ func TestManagerEvictionReevaluatesWaitersByAdmissionSequence(t *testing.T) {
 	}
 }
 
+func TestReleaseStoppedRequiresExactSafeGenerationAndRetainsHistory(t *testing.T) {
+	m, _ := NewManager(ManagerConfig{MaxSessions: 1})
+	if got := m.Admit("a", 0); got.Kind != AdmissionFree {
+		t.Fatal(got)
+	}
+	if page := m.List(ListOptions{SessionID: "a", Limit: 1}); len(page.Records) != 1 || page.Records[0].State != string(Stopped) {
+		t.Fatalf("ASSERT_ALGEBRA_RELEASE_CONFIRMED_STOP: page=%+v", page)
+	}
+	if m.ReleaseStopped("a", 2) || !m.ReleaseStopped("a", 1) || m.LiveCount() != 0 {
+		t.Fatalf("ASSERT_ALGEBRA_RELEASE_EXACT_GENERATION: live=%d", m.LiveCount())
+	}
+	if page := m.List(ListOptions{SessionID: "a", Limit: 1}); len(page.Records) != 1 || page.Records[0].State != string(Stopped) {
+		t.Fatalf("ASSERT_ALGEBRA_RELEASE_RETAINS_HISTORY: page=%+v", page)
+	}
+}
+
 func TestManagerEvictionMultipleReleasedSlotsAndReversedCompletion(t *testing.T) {
 	m, _ := NewManager(ManagerConfig{MaxSessions: 3})
 	for _, id := range []string{"a", "b", "c"} {

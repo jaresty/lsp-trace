@@ -81,6 +81,13 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
 			}
+		case "shutdown":
+			if err := w.Write(response(m.ID, nil)); err != nil {
+				fmt.Fprintln(errout, err)
+				return fixtureInputErrorCode
+			}
+		case "exit":
+			return 0
 		case "fixture/reply":
 			var p resultParams
 			if json.Unmarshal(m.Params, &p) != nil {

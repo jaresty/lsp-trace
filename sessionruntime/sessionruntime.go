@@ -5,7 +5,10 @@ package sessionruntime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,6 +45,12 @@ type OperationSnapshot struct {
 type Child interface {
 	Teardown(context.Context) managedprocess.TeardownObservation
 	Close() managedprocess.ResourceObservation
+}
+
+type wireChild interface {
+	Child
+	Stdin() io.WriteCloser
+	Stdout() io.ReadCloser
 }
 
 type Starter interface {
@@ -224,6 +233,25 @@ func (m *Manager) BeginRequest(id string, generation uint64, deadline time.Time)
 	return key, ""
 }
 
+func (m *Manager) CancelRequest(id string, key lspwire.RequestKey) (lspwire.CancelState, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil || key.Generation != r.record.Generation {
+		return lspwire.CancelNotPending, nil
+	}
+	child, ok := r.process.(wireChild)
+	if !ok {
+		return lspwire.CancelNotPending, errors.New("sessionruntime: active child has no LSP wire")
+	}
+	state, err := r.pending.Cancel(lspwire.NewWriter(child.Stdin(), m.wire), key)
+	if state == lspwire.CancelWritten {
+		r.cancels++
+		m.observe(id, key.Generation, "cancel", r.record.State, session.RequestCancelled)
+	}
+	return state, err
+}
+
 func (m *Manager) CompleteResponse(id string, key lspwire.ResponseKey) lspwire.ResponseDisposition {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -343,7 +371,7 @@ func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) 
 	m.operations[snapshot.ID] = snapshot
 	m.operationIDs = append(m.operationIDs, snapshot.ID)
 	m.observe(id, snapshot.Generation, kind, intent.State, "")
-	go m.runLifecycle(snapshot, r.process, r.spec)
+	go m.runLifecycle(snapshot, r.process, r.pending, r.spec)
 	return intent
 }
 
@@ -380,11 +408,15 @@ func (m *Manager) reserveOperation(id string) bool {
 	return true
 }
 
-func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, spec managedprocess.Spec) {
+func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending *lspwire.Pending, spec managedprocess.Spec) {
+	shutdownComplete := true
+	if protocol, ok := child.(wireChild); ok {
+		shutdownComplete = m.gracefulShutdown(protocol, pending, operation.Generation)
+	}
 	teardown := child.Teardown(context.Background())
 	resources := child.Close()
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
-	observed := session.LifecycleCompletion{ShutdownComplete: true, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
+	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
 
 	m.mu.Lock()
 	completed := m.algebra.CompleteLifecycleObserved(operation.SessionID, operation.ID, observed)
@@ -403,6 +435,15 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, spec ma
 		return
 	}
 	if !operation.Restart {
+		if !m.algebra.ReleaseStopped(operation.SessionID, operation.Generation) {
+			operation.State, operation.Failure = OperationFailed, session.LifecycleConflict
+			if r != nil {
+				r.record.State = session.Poisoned
+			}
+			m.finishOperation(operation)
+			m.mu.Unlock()
+			return
+		}
 		delete(m.sessions, operation.SessionID)
 		operation.State = OperationComplete
 		m.finishOperation(operation)
@@ -429,6 +470,34 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, spec ma
 	m.observe(operation.SessionID, completed.Generation, "initialization", session.Ready, "")
 	operation.State = OperationComplete
 	m.finishOperation(operation)
+}
+
+func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) bool {
+	key := pending.Begin(generation)
+	id := strconv.FormatUint(key.ID, 10)
+	writer := lspwire.NewWriter(child.Stdin(), m.wire)
+	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
+		return false
+	}
+	response := make(chan error, 1)
+	go func() {
+		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
+		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || pending.Accept(key) != lspwire.ResponseAccepted) {
+			err = errors.New("sessionruntime: invalid shutdown response")
+		}
+		response <- err
+	}()
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case err := <-response:
+		if err != nil {
+			return false
+		}
+	case <-timer.C:
+		return false
+	}
+	return writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil
 }
 
 func (m *Manager) finishOperation(operation OperationSnapshot) {

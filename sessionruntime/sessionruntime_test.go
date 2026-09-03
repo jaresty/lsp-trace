@@ -1,12 +1,15 @@
 package sessionruntime
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"sync"
 	"testing"
 	"time"
 
 	"lsp-trace/internal/containment"
+	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
@@ -262,6 +265,153 @@ func TestFailedTerminationRemainsQueryableAndPoisoned(t *testing.T) {
 	}
 	if again, ok := m.Operation(accepted.IntentID); !ok || again != failed {
 		t.Fatalf("failed operation not immutable/queryable: found=%v first=%+v again=%+v", ok, failed, again)
+	}
+}
+
+type recordingWriteCloser struct {
+	io.WriteCloser
+	events chan string
+}
+
+func (w recordingWriteCloser) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte(`"method":"shutdown"`)) {
+		w.events <- "shutdown"
+	}
+	if bytes.Contains(p, []byte(`"method":"exit"`)) {
+		w.events <- "exit"
+	}
+	if bytes.Contains(p, []byte(`"method":"$/cancelRequest"`)) {
+		w.events <- "$/cancelRequest"
+	}
+	return w.WriteCloser.Write(p)
+}
+
+type protocolTestChild struct {
+	input  *io.PipeReader
+	stdin  *io.PipeWriter
+	output *io.PipeWriter
+	stdout *io.PipeReader
+	events chan string
+	fail   bool
+}
+
+func newWireChild(t *testing.T, fail bool) *protocolTestChild {
+	t.Helper()
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	c := &protocolTestChild{input: input, stdin: stdin, output: output, stdout: stdout, events: make(chan string, 8), fail: fail}
+	go func() {
+		r := lspwire.NewReader(input, lspwire.DefaultLimits())
+		w := lspwire.NewWriter(output, lspwire.DefaultLimits())
+		for {
+			msg, err := r.Read()
+			if err != nil {
+				return
+			}
+			if msg.Method == "shutdown" && !fail {
+				_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: []byte("null")})
+			}
+			if msg.Method == "exit" {
+				return
+			}
+		}
+	}()
+	return c
+}
+
+func (c *protocolTestChild) Stdin() io.WriteCloser { return recordingWriteCloser{c.stdin, c.events} }
+func (c *protocolTestChild) Stdout() io.ReadCloser { return c.stdout }
+func (c *protocolTestChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.events <- "forceful"
+	_ = c.stdin.Close()
+	_ = c.input.Close()
+	_ = c.output.Close()
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+}
+func (c *protocolTestChild) Close() managedprocess.ResourceObservation {
+	_ = c.stdout.Close()
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+type oneChildStarter struct{ child Child }
+
+func (s oneChildStarter) Start(context.Context, managedprocess.Spec) (Child, managedprocess.StartObservation) {
+	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
+}
+
+func TestRuntimeCancellationWritesExactlyOnceToActiveChild(t *testing.T) {
+	child := newWireChild(t, false)
+	m, _ := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 2, MaxTombstones: 2, MaxObservations: 16}, Starter: oneChildStarter{child}})
+	started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	key, failure := m.BeginRequest(started.SessionID, started.Generation, time.Time{})
+	if failure != "" {
+		t.Fatal(failure)
+	}
+	api, ok := any(m).(interface {
+		CancelRequest(string, lspwire.RequestKey) (lspwire.CancelState, error)
+	})
+	if !ok {
+		t.Fatal("ASSERT_RUNTIME_CANCEL_ACTIVE_WIRE: manager cancellation seam absent")
+	}
+	first, err := api.CancelRequest(started.SessionID, key)
+	second, secondErr := api.CancelRequest(started.SessionID, key)
+	if err != nil || secondErr != nil || first != lspwire.CancelWritten || second != lspwire.CancelAlreadyWritten {
+		t.Fatalf("ASSERT_RUNTIME_CANCEL_EXACTLY_ONCE: first=%v second=%v err=%v secondErr=%v", first, second, err, secondErr)
+	}
+	if got := <-child.events; got != "$/cancelRequest" {
+		t.Fatalf("ASSERT_RUNTIME_CANCEL_ACTIVE_WIRE: method=%q", got)
+	}
+	select {
+	case got := <-child.events:
+		t.Fatalf("ASSERT_RUNTIME_CANCEL_EXACTLY_ONCE: duplicate=%q", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestGracefulShutdownExitOrderAndHonestFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail bool
+		want OperationState
+	}{{"success", false, OperationComplete}, {"failure", true, OperationFailed}} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := newWireChild(t, tc.fail)
+			m, _ := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 2, MaxObservations: 16}, Starter: oneChildStarter{child}})
+			started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+			accepted := m.Stop(context.Background(), started.SessionID, "caller")
+			terminal := waitOperation(t, m, accepted.IntentID, tc.want)
+			var events []string
+			for len(child.events) > 0 {
+				events = append(events, <-child.events)
+			}
+			joined := bytes.Join(func() [][]byte {
+				out := make([][]byte, len(events))
+				for i, v := range events {
+					out[i] = []byte(v)
+				}
+				return out
+			}(), []byte(","))
+			if tc.fail {
+				if !bytes.Contains(joined, []byte("shutdown,forceful")) || terminal.Failure == "" {
+					t.Fatalf("ASSERT_GRACEFUL_FALLBACK_HONEST: events=%v terminal=%+v", events, terminal)
+				}
+			} else if !bytes.Contains(joined, []byte("shutdown,exit,forceful")) {
+				t.Fatalf("ASSERT_GRACEFUL_SHUTDOWN_EXIT_ORDER: events=%v", events)
+			}
+		})
+	}
+}
+
+func TestConfirmedStopReleasesCapacityForDistinctSession(t *testing.T) {
+	starter := &sequenceStarter{children: []Child{referenceChild{}, referenceChild{}}}
+	m, _ := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 16}, Starter: starter})
+	first := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	stop := m.Stop(context.Background(), first.SessionID, "caller")
+	waitOperation(t, m, stop.IntentID, OperationComplete)
+	validated, _ := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: "/other", Profile: "go", EnvironmentReference: "local"})
+	second := m.Start(context.Background(), StartRequest{Profile: runtimeprofile.Resolve(validated)})
+	if second.Failure != "" {
+		t.Fatalf("ASSERT_POST_STOP_CAPACITY_RETRY: result=%+v", second)
 	}
 }
 

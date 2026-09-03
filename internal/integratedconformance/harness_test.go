@@ -33,9 +33,6 @@ const evidenceCeiling = "DISABLED_HERMETIC_REFERENCE_ONLY"
 var exactGaps = []string{
 	"MCP lifecycle dispatch is not composable: Stage 2 lifecycle tools remain reserved NOT_IMPLEMENTED and have no registered handlers.",
 	"Production-equivalent fake-process startup is not composable: the sealed production containment gate is unavailable and the hermetic starter has no production authority.",
-	"Cancellation cannot cross sessionruntime to the fake LSP: sessionruntime exposes request accounting but no cancellation write adapter.",
-	"Graceful LSP shutdown cannot cross sessionruntime: teardown owns process interruption/close but does not issue shutdown and exit frames.",
-	"Post-stop new-session capacity retry cannot cross sessionruntime: the runtime removes its session while the composed algebra retains capacity, so retry remains RESOURCE_EXHAUSTED.",
 }
 
 type processChild struct {
@@ -115,6 +112,9 @@ func (s *execStarter) Start(ctx context.Context, _ managedprocess.Spec) (session
 	s.mu.Unlock()
 	return child, managedprocess.StartObservation{Kind: managedprocess.StartStarted, Evidence: evidenceCeiling}
 }
+
+func (p *processChild) Stdin() io.WriteCloser { return p.stdin }
+func (p *processChild) Stdout() io.ReadCloser { return p.stdout }
 
 func (p *processChild) Teardown(ctx context.Context) managedprocess.TeardownObservation {
 	phases := []managedprocess.TeardownPhase{managedprocess.PhaseInterrupt}
@@ -287,14 +287,21 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS ASSERT_LIFECYCLE_PENDING_COMPLETE_FAILED")
 	})
 
-	t.Run("ASSERT_CANCEL_LATE_MALFORMED_CRASH_STDERR", func(t *testing.T) {
-		rejectPerturbation(t, "ASSERT_CANCEL_LATE_MALFORMED_CRASH_STDERR")
-		child := startDirect(t, fake, 32)
-		pending := lspwire.NewPending(2)
-		key := pending.Begin(1)
+	t.Run("ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE")
+		starter := &execStarter{path: fake, stderrLimit: 32}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: starter})
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		child := starter.children[0]
+		key, failure := manager.BeginRequest(started.SessionID, started.Generation, time.Time{})
+		if failure != "" {
+			t.Fatal(failure)
+		}
 		writeMessage(t, child.stdin, lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`1`), Method: "fixture/hang", Params: json.RawMessage(`{}`)})
-		if state, err := pending.Cancel(lspwire.NewWriter(child.stdin, lspwire.DefaultLimits()), key); err != nil || state != lspwire.CancelWritten {
-			t.Fatalf("cancel=%v err=%v", state, err)
+		first, err := manager.CancelRequest(started.SessionID, key)
+		second, secondErr := manager.CancelRequest(started.SessionID, key)
+		if err != nil || secondErr != nil || first != lspwire.CancelWritten || second != lspwire.CancelAlreadyWritten {
+			t.Fatalf("ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE: first=%v second=%v err=%v secondErr=%v", first, second, err, secondErr)
 		}
 		observed, err := lspwire.NewReader(child.stdout, lspwire.DefaultLimits()).Read()
 		if err != nil || observed.Method != "fixture/cancelObserved" {
@@ -302,7 +309,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		}
 		writeMessage(t, child.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/lateReply", Params: json.RawMessage(`{"id":1,"result":{"late":true}}`)})
 		late, err := lspwire.NewReader(child.stdout, lspwire.DefaultLimits()).Read()
-		if err != nil || pending.Accept(lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseAccepted || pending.Accept(lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseDuplicate || string(late.ID) != "1" {
+		if err != nil || manager.CompleteResponse(started.SessionID, lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseAccepted || manager.CompleteResponse(started.SessionID, lspwire.ResponseKey{Generation: 1, ID: 1}) != lspwire.ResponseDuplicate || string(late.ID) != "1" {
 			t.Fatalf("late=%+v err=%v", late, err)
 		}
 		child.Teardown(context.Background())
@@ -324,7 +331,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			t.Fatalf("death=%+v", death)
 		}
 		crashed.Close()
-		t.Log("PASS ASSERT_CANCEL_LATE_MALFORMED_CRASH_STDERR")
+		t.Log("PASS ASSERT_RUNTIME_CANCELLATION_CROSSES_SESSION_WIRE")
 	})
 
 	t.Run("ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER", func(t *testing.T) {
@@ -379,12 +386,52 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS ASSERT_RESTART_CAPACITY_SHUTDOWN_ORDER")
 	})
 
+	t.Run("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		accepted := manager.Stop(context.Background(), started.SessionID, "graceful")
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if terminal, ok := manager.Operation(accepted.IntentID); ok && terminal.State != sessionruntime.OperationPending {
+				if terminal.State != sessionruntime.OperationComplete {
+					t.Fatalf("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE: terminal=%+v", terminal)
+				}
+				t.Log("PASS ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE")
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatal("ASSERT_GRACEFUL_SHUTDOWN_EXIT_BEFORE_FORCE: timeout")
+	})
+
+	t.Run("ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY")
+		starter := &execStarter{path: fake, stderrLimit: 64}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: starter})
+		first := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "one"))})
+		accepted := manager.Stop(context.Background(), first.SessionID, "stop")
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			if terminal, ok := manager.Operation(accepted.IntentID); ok && terminal.State != sessionruntime.OperationPending {
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		second := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, filepath.Join(t.TempDir(), "two"))})
+		if second.Failure != "" {
+			t.Fatalf("ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY: result=%+v", second)
+		}
+		t.Log("PASS ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY")
+	})
+
 	t.Run("ASSERT_EXACT_CROSS_SEAM_GAPS", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_EXACT_CROSS_SEAM_GAPS")
-		if len(exactGaps) != 5 {
+		if len(exactGaps) != 2 {
 			t.Fatalf("gaps=%v", exactGaps)
 		}
-		for _, required := range []string{"MCP lifecycle dispatch", "Production-equivalent fake-process startup", "Cancellation cannot cross sessionruntime", "Graceful LSP shutdown", "Post-stop new-session capacity retry"} {
+		for _, required := range []string{"MCP lifecycle dispatch", "Production-equivalent fake-process startup"} {
 			found := false
 			for _, gap := range exactGaps {
 				found = found || strings.Contains(gap, required)
@@ -409,8 +456,11 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			if line == "" {
 				continue
 			}
-			path := strings.TrimSpace(line[3:])
-			if !strings.HasPrefix(path, "internal/integratedconformance/") {
+			path := strings.TrimSpace(line[2:])
+			owned := path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" ||
+				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" ||
+				path == "cmd/fake-lsp/main.go" || strings.HasPrefix(path, "internal/integratedconformance/")
+			if !owned {
 				t.Fatalf("unowned path %q", path)
 			}
 		}

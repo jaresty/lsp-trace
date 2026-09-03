@@ -776,6 +776,23 @@ func (m *Manager) removeWaiter(contender string) {
 		}
 	}
 }
+
+// ReleaseStopped frees admission capacity only for the exact generation whose
+// lifecycle is confirmed stopped and reaped. Lifecycle history remains retained.
+func (m *Manager) ReleaseStopped(sessionID string, generation uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	lifecycle := m.lifecycles[sessionID]
+	if lifecycle == nil || lifecycle.generation != generation || lifecycle.state != Stopped || !lifecycle.reaped || lifecycle.incumbent != nil {
+		return false
+	}
+	if _, ok := m.live[sessionID]; !ok {
+		return false
+	}
+	delete(m.live, sessionID)
+	return true
+}
+
 func (m *Manager) LiveCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
