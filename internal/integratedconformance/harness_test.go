@@ -29,7 +29,11 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const evidenceCeiling = "DISABLED_HERMETIC_REFERENCE_ONLY"
+const (
+	evidenceCeiling       = "DISABLED_HERMETIC_REFERENCE_ONLY"
+	localDarwinEvidence   = "LOCAL_DARWIN_SUPERVISION_ONLY"
+	productionUnavailable = "UNAVAILABLE"
+)
 
 var exactGaps = []string{
 	"Production-equivalent fake-process startup is not composable: the sealed production containment gate is unavailable and the hermetic starter has no production authority.",
@@ -195,6 +199,142 @@ func rejectPerturbation(t *testing.T, assertion string) {
 
 func TestDisabledIntegratedConformance(t *testing.T) {
 	fake := buildFake(t)
+
+	t.Run("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_LOCAL_DARWIN_START_CORRELATED_READY")
+		if runtime.GOOS != "darwin" {
+			t.Skip("LOCAL_DARWIN_SUPERVISION_ONLY")
+		}
+		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
+		if err != nil {
+			t.Fatal(err)
+		}
+		manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: sessionruntime.ManagedStarter{Manager: supervisor}, ReadinessTimeout: 5 * time.Second})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir()), Process: managedprocess.Spec{Path: fake, Dir: repositoryRoot(t)}})
+		if started.Failure != "" || started.State != session.Initializing || started.Generation != 1 || started.Start.Evidence != localDarwinEvidence {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: start=%+v", started)
+		}
+		pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(5*time.Second))
+		if pending.State != sessionruntime.ReadinessPending || pending.SessionID != started.SessionID || pending.Generation != started.Generation {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: pending=%+v start=%+v", pending, started)
+		}
+		waitContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		ready, found := manager.WaitReadiness(waitContext, pending.ID)
+		if !found || ready.ID != pending.ID || ready.SessionID != started.SessionID || ready.Generation != started.Generation || ready.State != sessionruntime.ReadinessReady || ready.Failure != "" {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: found=%v ready=%+v pending=%+v", found, ready, pending)
+		}
+		if census := manager.Census(); census.Workers != 0 {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: census=%+v", census)
+		}
+		accepted := manager.Stop(context.Background(), started.SessionID, "darwin-readiness-cleanup")
+		if accepted.Failure != "" {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: cleanup=%+v", accepted)
+		}
+		shutdownContext, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer shutdownCancel()
+		if err := manager.Shutdown(shutdownContext); err != nil {
+			t.Fatalf("ASSERT_LOCAL_DARWIN_START_CORRELATED_READY: shutdown=%v", err)
+		}
+		t.Log("PASS ASSERT_LOCAL_DARWIN_START_CORRELATED_READY")
+	})
+
+	t.Run("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION")
+		starter := &cleanStarter{}
+		manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 2, 1), Starter: starter})
+		if err != nil {
+			t.Fatal(err)
+		}
+		started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+		if started.Failure != "" {
+			t.Fatal(started.Failure)
+		}
+		manager.ObserveInitialization(started.SessionID, started.Generation, true)
+		executor := lifecycleops.NewExecutor(lifecycleops.New(manager))
+		status := executeLifecycle(t, executor, lifecycleops.OperationStatus, started.SessionID, 1, "")
+		if record, ok := status.Value.(sessionruntime.Record); !ok || record.State != session.Ready || record.Generation != 1 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: status=%+v", status.Value)
+		}
+		restartResult := executeLifecycle(t, executor, lifecycleops.OperationRestart, started.SessionID, 1, "restart")
+		restartAcceptance, ok := restartResult.Value.(lifecycleops.Acceptance)
+		if !ok || !restartAcceptance.Pending {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: restart=%+v", restartResult.Value)
+		}
+		restartTerminal := waitLifecycleTerminal(t, lifecycleops.New(manager), restartAcceptance.OperationID)
+		if restartTerminal.State != lifecycleops.Complete || !restartTerminal.Restart || restartTerminal.Generation != 1 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: restart terminal=%+v", restartTerminal)
+		}
+		current, failure := lifecycleops.New(manager).Status(started.SessionID, 2)
+		if failure != "" || current.Generation != 2 || current.State != session.Ready {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: current=%+v failure=%s", current, failure)
+		}
+		_, staleFailure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationStatus, RequestID: "status-stale", Input: json.RawMessage(`{"session_id":"` + started.SessionID + `","generation":1}`)})
+		if staleFailure == nil || staleFailure.Code != string(lifecycleops.FailureStaleGeneration) {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stale=%+v", staleFailure)
+		}
+		stopResult := executeLifecycle(t, executor, lifecycleops.OperationStop, started.SessionID, 2, "stop")
+		stopAcceptance, ok := stopResult.Value.(lifecycleops.Acceptance)
+		if !ok || !stopAcceptance.Pending {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stop=%+v", stopResult.Value)
+		}
+		stopTerminal := waitLifecycleTerminal(t, lifecycleops.New(manager), stopAcceptance.OperationID)
+		if stopTerminal.State != lifecycleops.Complete || stopTerminal.Restart || stopTerminal.Generation != 2 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: stop terminal=%+v", stopTerminal)
+		}
+		if census := manager.Census(); census.Sessions != 0 || census.Children != 0 || census.Workers != 0 {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: census=%+v", census)
+		}
+		t.Log("PASS ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION")
+	})
+
+	t.Run("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_READINESS_FAULT_TERMINALS_CLEANUP")
+		for _, tc := range []readinessCase{
+			{name: "timeout", mode: "hang", fail: session.InitializationTimeout},
+			{name: "cancellation", mode: "hang", fail: session.RequestCancelled},
+			{name: "EOF", mode: "eof", fail: session.InitializationFailure},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				child := newReadinessFixture(tc.mode)
+				manager, err := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: &fixedStarter{child: child}, ReadinessTimeout: 20 * time.Millisecond})
+				if err != nil {
+					t.Fatal(err)
+				}
+				started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir())})
+				readinessContext := context.Background()
+				deadline := time.Time{}
+				if tc.name == "cancellation" {
+					var cancel context.CancelFunc
+					readinessContext, cancel = context.WithCancel(context.Background())
+					defer cancel()
+					pending := manager.BeginReadiness(readinessContext, started.SessionID, started.Generation, time.Now().Add(time.Second))
+					cancel()
+					terminal, _ := manager.WaitReadiness(context.Background(), pending.ID)
+					assertReadinessFaultCleanup(t, tc, terminal, manager, child)
+					return
+				}
+				if tc.name == "timeout" {
+					deadline = time.Now().Add(20 * time.Millisecond)
+				}
+				pending := manager.BeginReadiness(readinessContext, started.SessionID, started.Generation, deadline)
+				terminal, _ := manager.WaitReadiness(context.Background(), pending.ID)
+				assertReadinessFaultCleanup(t, tc, terminal, manager, child)
+			})
+		}
+
+		crashed := startDirect(t, fake, 32)
+		writeMessage(t, crashed.stdin, lspwire.Message{JSONRPC: lspwire.Version, Method: "fixture/crash", Params: json.RawMessage(`{}`)})
+		death := crashed.wait()
+		resources := crashed.Close()
+		if death.ExitCode != 86 || death.Reap.Kind != managedprocess.ReapComplete || resources.Kind != managedprocess.ResourcesClosed {
+			t.Fatalf("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP: crash death=%+v resources=%+v", death, resources)
+		}
+		t.Log("PASS ASSERT_READINESS_FAULT_TERMINALS_CLEANUP")
+	})
 
 	t.Run("ASSERT_INTEGRATED_FAKE_LSP_FRAMING", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_INTEGRATED_FAKE_LSP_FRAMING")
@@ -489,8 +629,8 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 
 	t.Run("ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY")
-		if evidenceCeiling != "DISABLED_HERMETIC_REFERENCE_ONLY" {
-			t.Fatal(evidenceCeiling)
+		if evidenceCeiling != "DISABLED_HERMETIC_REFERENCE_ONLY" || localDarwinEvidence != "LOCAL_DARWIN_SUPERVISION_ONLY" || productionUnavailable != "UNAVAILABLE" {
+			t.Fatalf("evidence labels: reference=%q darwin=%q production=%q", evidenceCeiling, localDarwinEvidence, productionUnavailable)
 		}
 		if reflect.TypeOf(execStarter{}).AssignableTo(reflect.TypeOf(containment.RuntimeGate{})) {
 			t.Fatal("hermetic starter acquired production authority")
@@ -520,6 +660,116 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		}
 		t.Log("PASS ASSERT_STAGE1_SIX_STAGE2_DISABLED_ZERO_EFFECTS")
 	})
+}
+
+func executeLifecycle(t *testing.T, executor *lifecycleops.Executor, name operation.Name, sessionID string, generation uint64, callerID string) operation.Result {
+	t.Helper()
+	input := map[string]any{"session_id": sessionID, "generation": generation}
+	if callerID != "" {
+		input["caller_id"] = callerID
+	}
+	raw, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, failure := executor.Execute(context.Background(), operation.Request{Name: name, RequestID: string(name), Input: raw})
+	if failure != nil {
+		t.Fatalf("%s direct dispatch: %+v", name, failure)
+	}
+	return result
+}
+
+func waitLifecycleTerminal(t *testing.T, service *lifecycleops.Service, operationID string) lifecycleops.OperationSnapshot {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot, failure := service.OperationStatus(operationID)
+		if failure != "" {
+			t.Fatalf("operation %s: %s", operationID, failure)
+		}
+		if snapshot.State != lifecycleops.Pending {
+			return snapshot
+		}
+		runtime.Gosched()
+	}
+	t.Fatalf("operation %s remained pending", operationID)
+	return lifecycleops.OperationSnapshot{}
+}
+
+type readinessCase struct {
+	name string
+	mode string
+	fail session.Failure
+}
+
+func assertReadinessFaultCleanup(t *testing.T, tc readinessCase, terminal sessionruntime.ReadinessSnapshot, manager *sessionruntime.Manager, child *readinessFixture) {
+	t.Helper()
+	child.mu.Lock()
+	teardowns, closes := child.teardowns, child.closes
+	child.mu.Unlock()
+	if terminal.State != sessionruntime.ReadinessFailed || terminal.Failure != tc.fail || manager.Census().Workers != 0 || teardowns != 1 || closes != 1 {
+		t.Fatalf("ASSERT_READINESS_FAULT_TERMINALS_CLEANUP: case=%s terminal=%+v census=%+v teardown=%d close=%d", tc.name, terminal, manager.Census(), teardowns, closes)
+	}
+}
+
+type readinessFixture struct {
+	input             *io.PipeReader
+	stdin             *io.PipeWriter
+	output            *io.PipeWriter
+	stdout            *io.PipeReader
+	mode              string
+	mu                sync.Mutex
+	teardowns, closes int
+}
+
+func newReadinessFixture(mode string) *readinessFixture {
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	child := &readinessFixture{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode}
+	go func() {
+		message, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+		if err != nil || message.Method != "initialize" {
+			return
+		}
+		if mode == "eof" {
+			_ = output.Close()
+		}
+	}()
+	return child
+}
+
+func (c *readinessFixture) Stdin() io.WriteCloser { return c.stdin }
+func (c *readinessFixture) Stdout() io.ReadCloser { return c.stdout }
+func (c *readinessFixture) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.mu.Lock()
+	c.teardowns++
+	c.mu.Unlock()
+	_ = c.stdin.Close()
+	_ = c.input.Close()
+	_ = c.output.Close()
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete, Evidence: evidenceCeiling}}}
+}
+func (c *readinessFixture) Close() managedprocess.ResourceObservation {
+	c.mu.Lock()
+	c.closes++
+	c.mu.Unlock()
+	_ = c.stdout.Close()
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed, Evidence: evidenceCeiling}
+}
+
+type cleanStarter struct{}
+
+func (*cleanStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	return cleanChild{}, managedprocess.StartObservation{Kind: managedprocess.StartStarted, Evidence: evidenceCeiling}
+}
+
+type cleanChild struct{}
+
+func (cleanChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete, Evidence: evidenceCeiling}}}
+}
+func (cleanChild) Close() managedprocess.ResourceObservation {
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed, Evidence: evidenceCeiling}
 }
 
 type fixedStarter struct{ child sessionruntime.Child }
