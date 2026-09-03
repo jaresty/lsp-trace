@@ -28,6 +28,31 @@ type processCall struct {
 	env    map[string]any
 }
 
+func executableName(name, goos string) string {
+	if goos == "windows" && !strings.HasSuffix(name, ".exe") {
+		return name + ".exe"
+	}
+	return name
+}
+
+func TestExecutableNameMatchesTargetPlatform(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name, goos, want string
+	}{
+		{name: "lsp-trace", goos: "windows", want: "lsp-trace.exe"},
+		{name: "lsp-trace-mcp.exe", goos: "windows", want: "lsp-trace-mcp.exe"},
+		{name: "lsp-trace", goos: "darwin", want: "lsp-trace"},
+		{name: "lsp-trace-mcp", goos: "linux", want: "lsp-trace-mcp"},
+	} {
+		t.Run(tt.name+"/"+tt.goos, func(t *testing.T) {
+			if got := executableName(tt.name, tt.goos); got != tt.want {
+				t.Errorf("ASSERT_PLATFORM_EXECUTABLE_NAME: executableName(%q, %q)=%q want=%q", tt.name, tt.goos, got, tt.want)
+			}
+		})
+	}
+}
+
 func buildBinary(t *testing.T, name, packagePath string) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
@@ -35,7 +60,7 @@ func buildBinary(t *testing.T, name, packagePath string) string {
 		t.Fatal("ASSERT_REAL_PROCESS_BINARY: caller path unavailable")
 	}
 	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	binary := filepath.Join(t.TempDir(), name)
+	binary := filepath.Join(t.TempDir(), executableName(name, runtime.GOOS))
 	cmd := exec.Command("go", "build", "-o", binary, packagePath)
 	cmd.Dir = repo
 	if out, err := cmd.CombinedOutput(); err != nil {

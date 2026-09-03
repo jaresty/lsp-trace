@@ -212,7 +212,7 @@ func safeTarget(root *Root, selector string) (*target, error) {
 			}
 			before, err = current.Lstat(part)
 		}
-		if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.IsDir() || before.Mode().Perm()&0077 != 0 {
+		if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.IsDir() || enforcePOSIXOwnerOnlyMode(runtime.GOOS) && before.Mode().Perm()&0077 != 0 {
 			if owned {
 				current.Close()
 			}
@@ -268,6 +268,10 @@ func canonicalFinalComponent(name string) string {
 		return strings.ToLower(name)
 	}
 	return name
+}
+
+func enforcePOSIXOwnerOnlyMode(goos string) bool {
+	return goos != "windows"
 }
 
 func createTemporarySibling(parent *os.Root) (*os.File, string, error) {

@@ -6,10 +6,23 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 )
+
+func TestOwnerOnlyModeVerificationIsPlatformAppropriate(t *testing.T) {
+	const assertion = "ASSERT_PLATFORM_APPROPRIATE_OWNER_ONLY_MODE_VERIFICATION"
+	for _, tc := range []struct {
+		goos string
+		want bool
+	}{{"linux", true}, {"darwin", true}, {"windows", false}} {
+		if got := enforcePOSIXOwnerOnlyMode(tc.goos); got != tc.want {
+			t.Fatalf("%s: goos=%s got=%t want=%t", assertion, tc.goos, got, tc.want)
+		}
+	}
+}
 
 func TestPublishExactBytesAndReceipt(t *testing.T) {
 	root, err := OpenRoot(t.TempDir())
@@ -38,7 +51,7 @@ func TestPublishExactBytesAndReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if enforcePOSIXOwnerOnlyMode(runtime.GOOS) && info.Mode().Perm() != 0600 {
 		t.Fatalf("published mode = %o", info.Mode().Perm())
 	}
 }
@@ -64,12 +77,19 @@ func TestNestedParentsAreOwnerOnly(t *testing.T) {
 	if result.Failure != nil {
 		t.Fatalf("publish: %#v", result.Failure)
 	}
+	published, err := os.ReadFile(filepath.Join(root.Path(), "nested/deep/out"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(published) != "x" {
+		t.Fatalf("nested published bytes = %q", published)
+	}
 	for _, name := range []string{"nested", "nested/deep"} {
 		info, err := os.Stat(filepath.Join(root.Path(), name))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !info.IsDir() || info.Mode().Perm() != 0700 {
+		if !info.IsDir() || enforcePOSIXOwnerOnlyMode(runtime.GOOS) && info.Mode().Perm() != 0700 {
 			t.Fatalf("%s mode = %v", name, info.Mode())
 		}
 	}
@@ -108,6 +128,9 @@ func TestPinnedRootSubstitutionFailsClosed(t *testing.T) {
 	}
 	defer root.Close()
 	if err := os.Rename(path, path+".old"); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("platform prevents replacing an open pinned root: %v", err)
+		}
 		t.Fatal(err)
 	}
 	if err := os.Mkdir(path, 0700); err != nil {
