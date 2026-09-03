@@ -481,7 +481,8 @@ func TestPublishBundleRejectsSymlinkedParent(t *testing.T) {
 	}
 }
 
-func TestPublicationFailsClosedWhenPlatformGuaranteesUnavailable(t *testing.T) {
+func TestPublicationAllowsUnavailableDirectoryDurabilityWithAtomicNoReplace(t *testing.T) {
+	const assertion = "ASSERT_DIRECTORY_DURABILITY_UNAVAILABLE_DOES_NOT_DISABLE_PUBLICATION"
 	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -494,11 +495,12 @@ func TestPublicationFailsClosedWhenPlatformGuaranteesUnavailable(t *testing.T) {
 	syncPublicationDirectory = func(*os.File) error { return errDirectorySyncUnavailable }
 	publicationDirectoryDurability = directoryDurabilityUnavailable
 	selectorPath := filepath.Join(t.TempDir(), "bundle.json")
-	if err := publishBundle(selectorPath, data); err == nil {
-		t.Fatal("ASSERT_PLATFORM_UNSUPPORTED_FAILS_CLOSED: publication succeeded without required platform guarantees")
+	if err := publishBundle(selectorPath, data); err != nil {
+		t.Fatalf("%s: %v", assertion, err)
 	}
-	if _, err := os.Lstat(selectorPath); !os.IsNotExist(err) {
-		t.Fatalf("ASSERT_PLATFORM_UNSUPPORTED_FAILS_BEFORE_SELECTION: selector err=%v", err)
+	published, stage, err := loadCustodiedGeneration(selectorPath)
+	if err != nil || stage != "" || !bytes.Equal(published, data) {
+		t.Fatalf("%s: stage=%q err=%v bytes_equal=%t", assertion, stage, err, bytes.Equal(published, data))
 	}
 }
 

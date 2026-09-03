@@ -10,6 +10,6 @@ func platformSyncPublicationDirectory(_ *os.File) error {
 	return errDirectorySyncUnavailable
 }
 
-func platformInstallNoReplace(_ *os.Root, _, _ string) error {
-	return errDirectorySyncUnavailable
+func platformInstallNoReplace(root *os.Root, staged, final string) error {
+	return root.Link(staged, final)
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -181,10 +182,10 @@ func safeTarget(root *Root, selector string) (*target, error) {
 	if root == nil || root.file == nil || root.handle == nil || selector == "" || strings.IndexByte(selector, 0) >= 0 || filepath.IsAbs(selector) || !filepath.IsLocal(selector) {
 		return nil, errors.New("unsafe selector")
 	}
-	if filepath.Clean(selector) != selector {
-		return nil, errors.New("selector is not normalized")
+	parts, err := selectorPathParts(runtime.GOOS, selector)
+	if err != nil {
+		return nil, err
 	}
-	parts := strings.Split(selector, string(filepath.Separator))
 	for _, part := range parts {
 		if part == "" || part == "." || part == ".." || strings.ContainsRune(part, filepath.Separator) {
 			return nil, errors.New("unsafe selector component")
@@ -272,6 +273,16 @@ func canonicalFinalComponent(name string) string {
 
 func enforcePOSIXOwnerOnlyMode(goos string) bool {
 	return goos != "windows"
+}
+
+func selectorPathParts(goos, selector string) ([]string, error) {
+	if goos == "windows" && strings.Contains(selector, `\`) {
+		return nil, errors.New("unsafe selector component")
+	}
+	if path.Clean(selector) != selector {
+		return nil, errors.New("selector is not normalized")
+	}
+	return strings.Split(selector, "/"), nil
 }
 
 func createTemporarySibling(parent *os.Root) (*os.File, string, error) {

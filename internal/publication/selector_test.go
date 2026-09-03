@@ -7,10 +7,31 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 )
+
+func TestSelectorPathPartsArePlatformPortable(t *testing.T) {
+	const assertion = "ASSERT_PLATFORM_PORTABLE_SELECTOR_COMPONENTS"
+	for _, tc := range []struct {
+		goos     string
+		selector string
+		want     []string
+		wantErr  bool
+	}{
+		{goos: "linux", selector: "nested/output.json", want: []string{"nested", "output.json"}},
+		{goos: "darwin", selector: "nested/output.json", want: []string{"nested", "output.json"}},
+		{goos: "windows", selector: "nested/output.json", want: []string{"nested", "output.json"}},
+		{goos: "windows", selector: `nested\output.json`, wantErr: true},
+	} {
+		got, err := selectorPathParts(tc.goos, tc.selector)
+		if (err != nil) != tc.wantErr || !tc.wantErr && !slices.Equal(got, tc.want) {
+			t.Fatalf("%s: goos=%s selector=%q parts=%q err=%v want=%q want_err=%t", assertion, tc.goos, tc.selector, got, err, tc.want, tc.wantErr)
+		}
+	}
+}
 
 func TestOwnerOnlyModeVerificationIsPlatformAppropriate(t *testing.T) {
 	const assertion = "ASSERT_PLATFORM_APPROPRIATE_OWNER_ONLY_MODE_VERIFICATION"

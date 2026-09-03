@@ -253,9 +253,6 @@ func syncRoot(root *os.Root) error {
 }
 
 func publishBundle(path string, data []byte) error {
-	if publicationDirectoryDurability != directoryDurabilityChecked {
-		return fmt.Errorf("publication unsupported: required platform guarantees unavailable")
-	}
 	if err := graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {
 		return fmt.Errorf("staged semantic validation: %w", err)
 	}
