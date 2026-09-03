@@ -93,6 +93,26 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 	}})
 }
 
+func TestLifecycleExecutorFamilyIsDisabledAndUnadvertised(t *testing.T) {
+	const assertion = "ASSERT_LIFECYCLE_FAMILY_DISABLED_UNADVERTISED_SIX"
+	t.Log("ASSERTION: " + assertion)
+	r := NewRegistry(true)
+	if got := len(r.Advertised()); got != 6 {
+		t.Fatalf("%s: advertised=%d", assertion, got)
+	}
+	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
+		tool, ok := r.Resolve(canonical)
+		if !ok || tool.Availability != NotImplemented || tool.ExecutorFamily != LifecycleExecutorFamily {
+			t.Fatalf("%s[%s]: tool=%+v ok=%v", assertion, canonical, tool, ok)
+		}
+		alias, ok := r.Resolve(tool.Aliases[0])
+		if !ok || alias.Name != canonical || alias.ExecutorFamily != LifecycleExecutorFamily {
+			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
+		}
+	}
+	t.Log("PASS " + assertion)
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has twelve canonical entries with six enabled offline and six flag-insensitive reserved entries"

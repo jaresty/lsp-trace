@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"lsp-trace/internal/mcpcontract"
 )
@@ -27,7 +28,10 @@ const (
 
 type ExecutorFamily string
 
-const OfflineExecutorFamily ExecutorFamily = "offline"
+const (
+	OfflineExecutorFamily   ExecutorFamily = "offline"
+	LifecycleExecutorFamily ExecutorFamily = "lifecycle"
+)
 
 // SemanticValidator runs after structural schema validation and before dispatch.
 type SemanticValidator func(context.Context, Tool, map[string]any) error
@@ -92,11 +96,15 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		if !publicationSupported {
 			envelopeSchemaIDs = withoutPublicationEnvelopes(envelopeSchemaIDs)
 		}
+		executorFamily := OfflineExecutorFamily
+		if strings.HasPrefix(contract.Name, "lsp_session_v1_") {
+			executorFamily = LifecycleExecutorFamily
+		}
 		tools = append(tools, Tool{
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
 			EnvelopeSchemaIDs: envelopeSchemaIDs, ArtifactSchemaIDs: append([]string{}, contract.ArtifactSchemaIDs...),
 			Availability: Availability(contract.Availability), Description: descriptions[contract.Name], InputSchema: inputSchema,
-			ExecutorFamily: OfflineExecutorFamily,
+			ExecutorFamily: executorFamily,
 		})
 	}
 	for i := range tools {

@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
+	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 	"lsp-trace/lifecycleops"
@@ -31,7 +32,6 @@ import (
 const evidenceCeiling = "DISABLED_HERMETIC_REFERENCE_ONLY"
 
 var exactGaps = []string{
-	"MCP lifecycle dispatch is not composable: Stage 2 lifecycle tools remain reserved NOT_IMPLEMENTED and have no registered handlers.",
 	"Production-equivalent fake-process startup is not composable: the sealed production containment gate is unavailable and the hermetic starter has no production authority.",
 }
 
@@ -426,12 +426,31 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS ASSERT_POST_STOP_NEW_SESSION_CAPACITY_RETRY")
 	})
 
+	t.Run("ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH")
+		for _, gap := range exactGaps {
+			if strings.Contains(gap, "MCP lifecycle dispatch") {
+				t.Fatalf("disabled direct lifecycle dispatch remains recorded as a gap: %s", gap)
+			}
+		}
+		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: &fixedStarter{child: failingChild{}}})
+		executor := lifecycleops.NewExecutor(lifecycleops.New(manager))
+		result, failure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationList, RequestID: "disabled-direct-1", Input: json.RawMessage(`{}`)})
+		if failure != nil {
+			t.Fatalf("direct dispatch failure=%v", failure)
+		}
+		if _, ok := result.Value.(lifecycleops.ListSnapshot); !ok {
+			t.Fatalf("direct dispatch result=%T", result.Value)
+		}
+		t.Log("PASS ASSERT_DISABLED_LIFECYCLE_DIRECT_DISPATCH")
+	})
+
 	t.Run("ASSERT_EXACT_CROSS_SEAM_GAPS", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_EXACT_CROSS_SEAM_GAPS")
-		if len(exactGaps) != 2 {
+		if len(exactGaps) != 1 {
 			t.Fatalf("gaps=%v", exactGaps)
 		}
-		for _, required := range []string{"MCP lifecycle dispatch", "Production-equivalent fake-process startup"} {
+		for _, required := range []string{"Production-equivalent fake-process startup"} {
 			found := false
 			for _, gap := range exactGaps {
 				found = found || strings.Contains(gap, required)
@@ -459,7 +478,8 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			path := strings.TrimSpace(line[2:])
 			owned := path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" ||
 				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" ||
-				path == "cmd/fake-lsp/main.go" || strings.HasPrefix(path, "internal/integratedconformance/")
+				path == "cmd/fake-lsp/main.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" ||
+				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || strings.HasPrefix(path, "internal/integratedconformance/")
 			if !owned {
 				t.Fatalf("unowned path %q", path)
 			}
