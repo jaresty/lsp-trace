@@ -5,6 +5,94 @@ import (
 	"testing"
 )
 
+func TestRegistrySnapshotsAreImmutable(t *testing.T) {
+	const assertion = "registry snapshots cannot mutate canonical aliases schemas or availability"
+	t.Log("ASSERTION: " + assertion)
+
+	r := NewRegistry(false)
+	tools := r.Tools()
+	var snapshot *Tool
+	for i := range tools {
+		if tools[i].Name == "lsp_trace_v1_inspect" {
+			snapshot = &tools[i]
+			break
+		}
+	}
+	if snapshot == nil {
+		t.Fatal("inspect tool missing")
+	}
+	snapshot.Aliases[0] = "mutated_alias"
+	snapshot.EnvelopeSchemaIDs[0] = "mutated-envelope"
+	snapshot.ArtifactSchemaIDs[0] = "mutated-artifact"
+	snapshot.InputSchema["type"] = "array"
+	snapshot.Availability = RuntimeDisabled
+
+	resolved, ok := r.Resolve(snapshot.Name)
+	if !ok {
+		t.Fatalf("%s: canonical tool disappeared", assertion)
+	}
+	if resolved.Aliases[0] == "mutated_alias" || resolved.EnvelopeSchemaIDs[0] == "mutated-envelope" ||
+		resolved.ArtifactSchemaIDs[0] == "mutated-artifact" || resolved.InputSchema["type"] == "array" ||
+		resolved.Availability == RuntimeDisabled {
+		t.Fatalf("%s: mutation escaped snapshot: %#v", assertion, resolved)
+	}
+}
+
+func TestComputedRoutingIsFrozenAndAliasesStayHidden(t *testing.T) {
+	const assertion = "routing metadata is computed once while canonical and alias resolution stays unambiguous and aliases stay hidden"
+	t.Log("ASSERTION: " + assertion)
+
+	enabled := true
+	calls := 0
+	r := NewRegistryWithRouting(false, Routing{
+		Availability: func(tool Tool) Availability {
+			calls++
+			if tool.Name == "lsp_trace_v1_inspect" && !enabled {
+				return RuntimeDisabled
+			}
+			return tool.Availability
+		},
+		Aliases: func(tool Tool) []string {
+			if tool.Name == "lsp_trace_v1_inspect" {
+				return []string{"private_inspect_alias"}
+			}
+			return tool.Aliases
+		},
+	})
+	if calls != len(r.Tools()) {
+		t.Fatalf("%s: availability computed %d times", assertion, calls)
+	}
+	enabled = false
+	resolved, ok := r.Resolve("private_inspect_alias")
+	if !ok || resolved.Name != "lsp_trace_v1_inspect" || resolved.Availability != Enabled {
+		t.Fatalf("%s: resolved=%#v ok=%v", assertion, resolved, ok)
+	}
+	for _, tool := range r.Advertised() {
+		if tool.Name == "private_inspect_alias" {
+			t.Fatalf("%s: alias advertised", assertion)
+		}
+	}
+	if calls != len(r.Tools()) {
+		t.Fatalf("%s: availability callback retained after construction", assertion)
+	}
+}
+
+func TestRegistryRejectsAmbiguousNames(t *testing.T) {
+	const assertion = "canonical and alias collisions are rejected during construction"
+	t.Log("ASSERTION: " + assertion)
+	defer func() {
+		if recover() == nil {
+			t.Fatalf("%s: collision accepted", assertion)
+		}
+	}()
+	NewRegistryWithRouting(false, Routing{Aliases: func(tool Tool) []string {
+		if tool.Name == "lsp_trace_v1_inspect" {
+			return []string{"lsp_trace_v1_filter"}
+		}
+		return tool.Aliases
+	}})
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has twelve canonical entries with six enabled offline and six flag-insensitive reserved entries"

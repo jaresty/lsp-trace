@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
+	"sync/atomic"
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
@@ -30,9 +32,13 @@ type Executor interface {
 type Server struct {
 	Registry        *Registry
 	Executor        Executor
+	Executors       map[ExecutorFamily]Executor
 	PublicationRoot *publication.Root
 	Publisher       *publication.Publisher
-	requestSequence uint64
+	requestSequence atomic.Uint64
+	lifecycleMu     sync.Mutex
+	serveGeneration uint64
+	serveCancel     context.CancelFunc
 }
 
 type request struct {
@@ -85,6 +91,27 @@ type callResult struct {
 }
 
 func (s *Server) Serve(stdin io.Reader, stdout io.Writer) error {
+	return s.ServeContext(context.Background(), stdin, stdout)
+}
+
+func (s *Server) ServeContext(parent context.Context, stdin io.Reader, stdout io.Writer) error {
+	ctx, cancel := context.WithCancel(parent)
+	s.lifecycleMu.Lock()
+	if s.serveCancel != nil {
+		s.serveCancel()
+	}
+	s.serveGeneration++
+	generation := s.serveGeneration
+	s.serveCancel = cancel
+	s.lifecycleMu.Unlock()
+	defer func() {
+		cancel()
+		s.lifecycleMu.Lock()
+		if s.serveGeneration == generation {
+			s.serveCancel = nil
+		}
+		s.lifecycleMu.Unlock()
+	}()
 	if s.Registry == nil {
 		s.Registry = NewRegistryWithPublication(false, s.PublicationRoot != nil)
 	}
@@ -103,7 +130,7 @@ func (s *Server) Serve(stdin io.Reader, stdout io.Writer) error {
 		if req.ID == nil { // MCP notifications have no response.
 			continue
 		}
-		resp := s.handle(req)
+		resp := s.handleContext(ctx, req)
 		if err := encoder.Encode(resp); err != nil {
 			return err
 		}
@@ -111,7 +138,18 @@ func (s *Server) Serve(stdin io.Reader, stdout io.Writer) error {
 	return scanner.Err()
 }
 
-func (s *Server) handle(req request) response {
+// Shutdown cancels the active serving context. Closing or interrupting the
+// transport reader remains the caller's responsibility.
+func (s *Server) Shutdown() {
+	s.lifecycleMu.Lock()
+	cancel := s.serveCancel
+	s.lifecycleMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Server) handleContext(ctx context.Context, req request) response {
 	base := response{JSONRPC: "2.0", ID: req.ID}
 	if req.JSONRPC != "2.0" {
 		base.Error = &rpcError{Code: -32600, Message: "Invalid Request"}
@@ -133,14 +171,14 @@ func (s *Server) handle(req request) response {
 		}
 		base.Result = map[string]any{"tools": tools}
 	case "tools/call":
-		return s.call(base, req.Params)
+		return s.callContext(ctx, base, req.Params)
 	default:
 		base.Error = &rpcError{Code: -32601, Message: "Method not found"}
 	}
 	return base
 }
 
-func (s *Server) call(base response, raw json.RawMessage) response {
+func (s *Server) callContext(ctx context.Context, base response, raw json.RawMessage) response {
 	var params callParams
 	if err := decodeClosed(raw, &params, "name", "arguments"); err != nil || params.Name == "" || params.Arguments == nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
@@ -155,6 +193,12 @@ func (s *Server) call(base response, raw json.RawMessage) response {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
 		return base
 	}
+	if tool.semanticValidator != nil {
+		if err := tool.semanticValidator(ctx, tool, cloneMap(params.Arguments)); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
+			return base
+		}
+	}
 	requestID := s.nextRequestID()
 	if tool.Availability != Enabled {
 		env := envelope{
@@ -168,8 +212,12 @@ func (s *Server) call(base response, raw json.RawMessage) response {
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_SELECTOR_UNSAFE", []string{"selector publication is disabled"})
 		return bindEnvelope(base, tool, env)
 	}
-	if s.Executor == nil {
-		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"offline operation executor unavailable"})
+	executor := s.Executor
+	if routed, ok := s.Executors[tool.ExecutorFamily]; ok {
+		executor = routed
+	}
+	if executor == nil {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"operation executor unavailable for family " + string(tool.ExecutorFamily)})
 		return bindEnvelope(base, tool, env)
 	}
 	operationArguments := params.Arguments
@@ -186,7 +234,7 @@ func (s *Server) call(base response, raw json.RawMessage) response {
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{err.Error()})
 		return bindEnvelope(base, tool, env)
 	}
-	opResult, failure := s.Executor.Execute(context.Background(), operation.Request{
+	opResult, failure := executor.Execute(ctx, operation.Request{
 		Name: operationName(tool.Name), RequestID: requestID, Input: opInput,
 	})
 	if failure != nil {
@@ -249,8 +297,7 @@ func (s *Server) call(base response, raw json.RawMessage) response {
 }
 
 func (s *Server) nextRequestID() string {
-	s.requestSequence++
-	return fmt.Sprintf("offline-%d", s.requestSequence)
+	return fmt.Sprintf("offline-%d", s.requestSequence.Add(1))
 }
 
 func bindEnvelope(base response, tool Tool, env envelope) response {

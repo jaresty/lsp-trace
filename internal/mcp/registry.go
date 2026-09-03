@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"lsp-trace/internal/mcpcontract"
@@ -23,6 +25,22 @@ const (
 	Enabled                Availability = "ENABLED"
 )
 
+type ExecutorFamily string
+
+const OfflineExecutorFamily ExecutorFamily = "offline"
+
+// SemanticValidator runs after structural schema validation and before dispatch.
+type SemanticValidator func(context.Context, Tool, map[string]any) error
+
+// Routing computes immutable process-lifetime metadata while the registry is built.
+// Its callbacks are invoked during construction and are not retained.
+type Routing struct {
+	Availability      func(Tool) Availability
+	Aliases           func(Tool) []string
+	SemanticValidator func(Tool) SemanticValidator
+	ExecutorFamily    func(Tool) ExecutorFamily
+}
+
 type Tool struct {
 	Name              string         `json:"name"`
 	Aliases           []string       `json:"aliases"`
@@ -32,6 +50,8 @@ type Tool struct {
 	Availability      Availability   `json:"availability"`
 	Description       string         `json:"-"`
 	InputSchema       map[string]any `json:"-"`
+	ExecutorFamily    ExecutorFamily `json:"-"`
+	semanticValidator SemanticValidator
 }
 
 type Registry struct {
@@ -45,6 +65,10 @@ func NewRegistry(enableLiveLSP bool) *Registry {
 }
 
 func NewRegistryWithPublication(_ bool, publicationSupported bool) *Registry {
+	return NewRegistryWithRouting(publicationSupported, Routing{})
+}
+
+func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registry {
 	manifest, err := mcpcontract.LoadManifest()
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
@@ -72,13 +96,40 @@ func NewRegistryWithPublication(_ bool, publicationSupported bool) *Registry {
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
 			EnvelopeSchemaIDs: envelopeSchemaIDs, ArtifactSchemaIDs: append([]string{}, contract.ArtifactSchemaIDs...),
 			Availability: Availability(contract.Availability), Description: descriptions[contract.Name], InputSchema: inputSchema,
+			ExecutorFamily: OfflineExecutorFamily,
 		})
+	}
+	for i := range tools {
+		base := cloneTool(tools[i])
+		if routing.Availability != nil {
+			tools[i].Availability = routing.Availability(base)
+		}
+		if routing.Aliases != nil {
+			tools[i].Aliases = append([]string(nil), routing.Aliases(base)...)
+		}
+		if routing.SemanticValidator != nil {
+			tools[i].semanticValidator = routing.SemanticValidator(base)
+		}
+		if routing.ExecutorFamily != nil {
+			tools[i].ExecutorFamily = routing.ExecutorFamily(base)
+			if tools[i].ExecutorFamily == "" {
+				tools[i].ExecutorFamily = OfflineExecutorFamily
+			}
+		}
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	r := &Registry{tools: tools, byName: make(map[string]int, len(tools)*2), publicationSupported: publicationSupported}
 	for i := range tools {
-		r.byName[tools[i].Name] = i
-		r.byName[tools[i].Aliases[0]] = i
+		names := append([]string{tools[i].Name}, tools[i].Aliases...)
+		for _, name := range names {
+			if name == "" {
+				panic("MCP registry contains an empty canonical name or alias")
+			}
+			if prior, exists := r.byName[name]; exists && prior != i {
+				panic(fmt.Sprintf("MCP registry name %q is ambiguous", name))
+			}
+			r.byName[name] = i
+		}
 	}
 	return r
 }
@@ -93,7 +144,47 @@ func withoutPublicationEnvelopes(ids []string) []string {
 	return out
 }
 
-func (r *Registry) Tools() []Tool { return append([]Tool(nil), r.tools...) }
+func cloneTool(tool Tool) Tool {
+	tool.Aliases = append([]string{}, tool.Aliases...)
+	tool.EnvelopeSchemaIDs = append([]string{}, tool.EnvelopeSchemaIDs...)
+	tool.ArtifactSchemaIDs = append([]string{}, tool.ArtifactSchemaIDs...)
+	tool.InputSchema = cloneMap(tool.InputSchema)
+	return tool
+}
+
+func cloneMap(input map[string]any) map[string]any {
+	if input == nil {
+		return nil
+	}
+	output := make(map[string]any, len(input))
+	for key, value := range input {
+		output[key] = cloneValue(value)
+	}
+	return output
+}
+
+func cloneValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		return cloneMap(value)
+	case []any:
+		output := make([]any, len(value))
+		for i := range value {
+			output[i] = cloneValue(value[i])
+		}
+		return output
+	default:
+		return value
+	}
+}
+
+func (r *Registry) Tools() []Tool {
+	tools := make([]Tool, len(r.tools))
+	for i := range r.tools {
+		tools[i] = cloneTool(r.tools[i])
+	}
+	return tools
+}
 
 // Capabilities returns immutable Stage 1 metadata for every canonical enabled
 // or reserved tool. Selector publication reflects process-lifetime root configuration.
@@ -120,5 +211,5 @@ func (r *Registry) Resolve(name string) (Tool, bool) {
 	if !ok {
 		return Tool{}, false
 	}
-	return r.tools[i], true
+	return cloneTool(r.tools[i]), true
 }

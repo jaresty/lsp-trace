@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/operation"
 )
@@ -52,6 +55,132 @@ func runServerMessages(t *testing.T, server *Server, input string) []map[string]
 		responses = append(responses, response)
 	}
 	return responses
+}
+
+type orderedExecutor struct {
+	events *[]string
+}
+
+func (e orderedExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+	*e.events = append(*e.events, "execute")
+	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph.v3"}`)}, nil
+}
+
+func TestStructuralThenSemanticThenExecutorFamily(t *testing.T) {
+	const structuralAssertion = "structural validation rejects malformed input before semantic validation"
+	const routeAssertion = "valid input runs optional semantic validation before the selected executor family"
+	t.Log("ASSERTION: " + structuralAssertion)
+	t.Log("ASSERTION: " + routeAssertion)
+
+	events := []string{}
+	registry := NewRegistryWithRouting(false, Routing{
+		SemanticValidator: func(tool Tool) SemanticValidator {
+			if tool.Name != "lsp_trace_v1_verify" {
+				return nil
+			}
+			return func(_ context.Context, _ Tool, arguments map[string]any) error {
+				events = append(events, "semantic")
+				input, _ := arguments["input"].(map[string]any)
+				if blocked, _ := input["blocked"].(bool); blocked {
+					return errors.New("blocked semantically")
+				}
+				return nil
+			}
+		},
+		ExecutorFamily: func(tool Tool) ExecutorFamily {
+			if tool.Name == "lsp_trace_v1_verify" {
+				return ExecutorFamily("analysis")
+			}
+			return OfflineExecutorFamily
+		},
+	})
+	server := &Server{
+		Registry: registry,
+		Executor: orderedExecutor{events: &[]string{}},
+		Executors: map[ExecutorFamily]Executor{
+			ExecutorFamily("analysis"): orderedExecutor{events: &events},
+		},
+	}
+	responses := runServerMessages(t, server, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"unexpected":true}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"input":{"blocked":true}}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"input":{}}}}`,
+	}, "\n")+"\n")
+	if len(responses) != 3 || responses[0]["error"] == nil {
+		t.Fatalf("%s: responses=%v", structuralAssertion, responses)
+	}
+	if semanticError, _ := responses[1]["error"].(map[string]any); semanticError["message"] != "Invalid tool arguments: blocked semantically" {
+		t.Fatalf("%s: semantic error=%v", routeAssertion, responses[1])
+	}
+	if got := strings.Join(events, ","); got != "semantic,semantic,execute" {
+		t.Fatalf("%s: events=%q", routeAssertion, got)
+	}
+}
+
+type cancellationExecutor struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (e cancellationExecutor) Execute(ctx context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+	close(e.started)
+	select {
+	case <-ctx.Done():
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: ctx.Err()}
+	case <-e.release:
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal}
+	}
+}
+
+func TestRequestContextCancelsInFlightExecutor(t *testing.T) {
+	const assertion = "request cancellation reaches the selected in-flight executor"
+	t.Log("ASSERTION: " + assertion)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server := &Server{Registry: NewRegistry(false), Executor: cancellationExecutor{started: started, release: release}}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan response, 1)
+	go func() {
+		done <- server.handleContext(ctx, request{
+			JSONRPC: "2.0", ID: 1, Method: "tools/call",
+			Params: json.RawMessage(`{"name":"lsp_trace_v1_verify","arguments":{"input":{}}}`),
+		})
+	}()
+	<-started
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		close(release)
+		t.Fatalf("%s: context cancellation did not reach executor", assertion)
+	}
+}
+
+func TestServerShutdownCancelsInFlightExecutor(t *testing.T) {
+	const assertion = "server shutdown coordinates cancellation of the selected in-flight executor"
+	t.Log("ASSERTION: " + assertion)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	server := &Server{Registry: NewRegistry(false), Executor: cancellationExecutor{started: started, release: release}}
+	reader, writer := io.Pipe()
+	var output bytes.Buffer
+	done := make(chan error, 1)
+	go func() { done <- server.ServeContext(context.Background(), reader, &output) }()
+	if _, err := io.WriteString(writer, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"input":{}}}}`+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	server.Shutdown()
+	_ = writer.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("%s: %v", assertion, err)
+		}
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatalf("%s: serve did not stop", assertion)
+	}
 }
 
 func TestCapabilitiesAndReservedDispatch(t *testing.T) {
