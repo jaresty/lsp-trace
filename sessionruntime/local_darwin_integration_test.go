@@ -41,9 +41,23 @@ func TestExplicitLocalDarwinSupervisorRunsFakeLSP(t *testing.T) {
 	if started.Failure != "" || started.Start.Evidence != managedprocess.LocalDarwinSupervisionOnly {
 		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_FAKE_LSP: %+v", started)
 	}
-	// The process is started, but sessionruntime has no public initialization handshake yet.
-	// Bound this fixture-only settle period before exercising graceful shutdown.
-	time.Sleep(100 * time.Millisecond)
+	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	if pending.State != ReadinessPending {
+		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_PENDING: %+v", pending)
+	}
+	readinessContext, cancelReadiness := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancelReadiness()
+	ready, found := manager.WaitReadiness(readinessContext, pending.ID)
+	if !found || ready.State != ReadinessReady || ready.Failure != "" {
+		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_READY: found=%v snapshot=%+v", found, ready)
+	}
+	again, found := manager.Readiness(pending.ID)
+	if !found || again != ready {
+		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_IMMUTABLE: found=%v first=%+v again=%+v", found, ready, again)
+	}
+	if census := manager.Census(); census.Workers != 0 {
+		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_LEAK_FREE: %+v", census)
+	}
 	accepted := manager.Stop(context.Background(), started.SessionID, "local-test")
 	if accepted.Failure != "" {
 		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_STOP_ACCEPTED: %+v", accepted)
