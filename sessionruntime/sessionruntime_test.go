@@ -74,10 +74,14 @@ type referenceStarter struct{ starts int }
 type referenceChild struct{}
 
 type blockingChild struct {
+	entered chan struct{}
 	release chan struct{}
 }
 
 func (c *blockingChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	if c.entered != nil {
+		close(c.entered)
+	}
 	<-c.release
 	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
 }
@@ -202,7 +206,8 @@ func (s *sequenceStarter) Starts() int {
 
 func TestLifecycleCapacityRejectionIsAtomicAndRetryable(t *testing.T) {
 	childA := &blockingChild{release: make(chan struct{})}
-	starter := &sequenceStarter{children: []Child{childA, referenceChild{}}}
+	childB := &blockingChild{entered: make(chan struct{}), release: make(chan struct{})}
+	starter := &sequenceStarter{children: []Child{childA, childB}}
 	m, err := New(Config{Limits: Limits{MaxSessions: 2, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 16, MaxOperations: 2}, Starter: starter})
 	if err != nil {
 		t.Fatal(err)
@@ -232,17 +237,23 @@ func TestLifecycleCapacityRejectionIsAtomicAndRetryable(t *testing.T) {
 	waitOperation(t, m, operationA.IntentID, OperationComplete)
 	retry := m.Stop(context.Background(), startedB.SessionID, "caller-b-1")
 	if retry.Failure != "" || retry.IntentID == "" {
-		t.Fatalf("capacity rejection was not retryable: %+v", retry)
+		t.Fatalf("ASSERT_CAPACITY_REJECTION_ATOMIC_RETRYABLE: %+v", retry)
 	}
+	<-childB.entered
 	joined := m.Stop(context.Background(), startedB.SessionID, "caller-b-2")
 	if joined.Failure != "" || joined.IntentID != retry.IntentID {
-		t.Fatalf("different caller did not join accepted operation: retry=%+v joined=%+v", retry, joined)
+		t.Fatalf("ASSERT_DISTINCT_CALLER_JOINS_ACCEPTED_OPERATION: retry=%+v joined=%+v", retry, joined)
 	}
 	replayed := m.Stop(context.Background(), startedB.SessionID, "caller-b-1")
 	if replayed.Failure != "" || replayed.IntentID != retry.IntentID {
-		t.Fatalf("same caller replay changed accepted operation: retry=%+v replay=%+v", retry, replayed)
+		t.Fatalf("ASSERT_SAME_CALLER_REPLAY_ACCEPTED_IDENTITY: retry=%+v replay=%+v", retry, replayed)
 	}
-	waitOperation(t, m, retry.IntentID, OperationComplete)
+	close(childB.release)
+	terminal := waitOperation(t, m, retry.IntentID, OperationComplete)
+	again, found := m.Operation(retry.IntentID)
+	if !found || terminal.ID != retry.IntentID || terminal.SessionID != startedB.SessionID || terminal.CallerID != "caller-b-1" || terminal.Generation != retry.Generation || terminal.Restart || terminal.State != OperationComplete || again != terminal {
+		t.Fatalf("ASSERT_TERMINAL_OPERATION_SNAPSHOT_IMMUTABLE: found=%v accepted=%+v first=%+v again=%+v", found, retry, terminal, again)
+	}
 	if c := m.Census(); c.Workers != 0 || c.Operations > 2 {
 		t.Fatalf("terminal operation accounting leaked: %+v", c)
 	}
