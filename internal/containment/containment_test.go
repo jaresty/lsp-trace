@@ -162,6 +162,43 @@ func TestLocalAuthorityAndEvidenceCeilingDocumented(t *testing.T) {
 	}
 }
 
+func TestNativeProofScaffoldIsNonAuthorizing(t *testing.T) {
+	const assertionAuthority = "native-proof scaffolding defines no authorization result or conversion path"
+	const assertionSupport = "native-proof scaffolding contains no supported/verified state claim"
+	t.Log("ASSERTION: " + assertionAuthority)
+	t.Log("ASSERTION: " + assertionSupport)
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate package")
+	}
+	path := filepath.Join(filepath.Dir(filename), "native_proof.go")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Errorf("%s: scaffold unavailable: %v", assertionAuthority, err)
+		t.Errorf("%s: scaffold unavailable: %v", assertionSupport, err)
+		return
+	}
+	text := string(body)
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, body, 0)
+	if err != nil {
+		t.Fatalf("%s: parse scaffold: %v", assertionAuthority, err)
+	}
+	forbidden := map[string]bool{"Verified": true, "Supported": true, "Classification": true, "runtimeResult": true, "Snapshot": true, "RuntimeGate": true}
+	ast.Inspect(file, func(node ast.Node) bool {
+		if ident, ok := node.(*ast.Ident); ok && forbidden[ident.Name] {
+			t.Errorf("%s: forbidden authority identifier %q", assertionAuthority, ident.Name)
+		}
+		return true
+	})
+	for _, required := range []string{"type nativeProof interface", "Evidence() nativeEvidence", "type nativeEvidence struct"} {
+		if !strings.Contains(text, required) {
+			t.Errorf("%s: missing %q", assertionSupport, required)
+		}
+	}
+}
+
 func TestProductionAPIHasNoForgeableVerifiedConstructor(t *testing.T) {
 	const assertion = "production containment exports no VERIFIED value, attestation, injectable classifier, or reference conversion"
 	t.Log("ASSERTION: " + assertion)
