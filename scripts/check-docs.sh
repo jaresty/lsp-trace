@@ -76,6 +76,11 @@ assert_contains DOC-PROFILE-README README.md '## Named server profiles'
 assert_contains DOC-PROFILE-SEMANTICS docs/SEMANTICS.md '## Named server profile resolution'
 assert_contains DOC-PROFILE-SKILL cmd/lsp-trace/SKILL.md '## Use named server profiles'
 assert_contains DOC-PROFILE-SECRET README.md 'Graph invocation output records environment names/references, never values.'
+assert_contains DOC-MCP-README README.md '## MCP offline evidence server'
+assert_contains DOC-MCP-SKILL cmd/lsp-trace/SKILL.md '### Use the MCP offline evidence server'
+assert_contains DOC-MCP-STDIO README.md 'lsp-trace-mcp --publication-root'
+assert_contains DOC-MCP-CAPABILITIES README.md 'lsp_trace_v1_capabilities'
+assert_contains DOC-MCP-RESERVATIONS cmd/lsp-trace/SKILL.md 'Stage 2 lifecycle and Stage 3 live traversal tools remain reserved `NOT_IMPLEMENTED`.'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

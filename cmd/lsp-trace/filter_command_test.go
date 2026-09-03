@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"lsp-trace/internal/graph"
+	semanticfilter "lsp-trace/internal/filter"
 	"lsp-trace/internal/schema"
 )
 
@@ -46,9 +46,9 @@ func assertFilterFailure(t *testing.T, name string, args []string, want string) 
 	})
 }
 
-func decodeFilter(t *testing.T, stdout string) filterProjection {
+func decodeFilter(t *testing.T, stdout string) semanticfilter.Projection {
 	t.Helper()
-	var got filterProjection
+	var got semanticfilter.Projection
 	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 		t.Fatalf("decode filter projection: %v", err)
 	}
@@ -175,107 +175,6 @@ func TestFilterRejectsStateReferenceMismatch(t *testing.T) {
 	mutated, _ := json.Marshal(got)
 	if _, err := schema.ValidateFor(mutated, schema.FamilyFilter, "v1"); err == nil || !strings.Contains(err.Error(), "state and reference counts") {
 		t.Fatalf("ASSERT_FILTER_STATE_MATCHES_REFERENCE_COUNTS: mutation accepted: %v", err)
-	}
-}
-
-func TestFilterNamespacePartitionsOrderingEquationsAndReversal(t *testing.T) {
-	globals := []string{"outside-before", "left", "shared", "right", "outside-after"}
-	left, right := []string{"shared", "left"}, []string{"right", "shared"}
-	want := filterStringPartition{Shared: []string{"shared"}, LeftOnly: []string{"left"}, RightOnly: []string{"right"}}
-
-	namespaces := []struct {
-		name string
-		ns   schema.ReferenceNamespace
-	}{
-		{"nodes", schema.ReferenceNode},
-		{"call_relations", schema.ReferenceCallRelation},
-		{"dispatch_relationships", schema.ReferenceDispatchRelationship},
-		{"sibling_candidates", schema.ReferenceSiblingCandidate},
-	}
-	for _, tc := range namespaces {
-		t.Run(tc.name, func(t *testing.T) {
-			got := partitionStringRefs(tc.ns, globals, left, right)
-			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("ASSERT_FILTER_%s_PARTITION_ORDER_DISJOINT_EXHAUSTIVE_OUTSIDE_OMITTED: got=%#v want=%#v", tc.name, got, want)
-			}
-			account := accountStrings(got, len(left), len(right))
-			if account.SharedReferenceCount+account.LeftOnlyReferenceCount != account.LeftReferenceCount {
-				t.Fatalf("ASSERT_FILTER_%s_LEFT_EQUATION: %#v", tc.name, account)
-			}
-			if account.SharedReferenceCount+account.RightOnlyReferenceCount != account.RightReferenceCount {
-				t.Fatalf("ASSERT_FILTER_%s_RIGHT_EQUATION: %#v", tc.name, account)
-			}
-			if account.SharedReferenceCount+account.LeftOnlyReferenceCount+account.RightOnlyReferenceCount != account.PairUniverseCount {
-				t.Fatalf("ASSERT_FILTER_%s_UNIVERSE_EQUATION: %#v", tc.name, account)
-			}
-			reversed := partitionStringRefs(tc.ns, globals, right, left)
-			if !reflect.DeepEqual(reversed.Shared, got.Shared) || !reflect.DeepEqual(reversed.LeftOnly, got.RightOnly) || !reflect.DeepEqual(reversed.RightOnly, got.LeftOnly) {
-				t.Fatalf("ASSERT_FILTER_%s_OPERAND_REVERSAL: forward=%#v reversed=%#v", tc.name, got, reversed)
-			}
-		})
-	}
-
-	t.Run("diagnostic_correlations", func(t *testing.T) {
-		got := partitionDiagnosticRefs(5, []int{2, 1}, []int{3, 2})
-		want := filterIndexPartition{Shared: []int{2}, LeftOnly: []int{1}, RightOnly: []int{3}}
-		if !reflect.DeepEqual(got, want) {
-			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_PARTITION_ORDER_DISJOINT_EXHAUSTIVE_OUTSIDE_OMITTED: got=%#v want=%#v", got, want)
-		}
-		account := accountIndexes(got, 2, 2)
-		if account.SharedReferenceCount+account.LeftOnlyReferenceCount != account.LeftReferenceCount {
-			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_LEFT_EQUATION: %#v", account)
-		}
-		if account.SharedReferenceCount+account.RightOnlyReferenceCount != account.RightReferenceCount {
-			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_RIGHT_EQUATION: %#v", account)
-		}
-		if account.SharedReferenceCount+account.LeftOnlyReferenceCount+account.RightOnlyReferenceCount != account.PairUniverseCount {
-			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_UNIVERSE_EQUATION: %#v", account)
-		}
-		reversed := partitionDiagnosticRefs(5, []int{3, 2}, []int{2, 1})
-		if !reflect.DeepEqual(reversed.Shared, got.Shared) || !reflect.DeepEqual(reversed.LeftOnly, got.RightOnly) || !reflect.DeepEqual(reversed.RightOnly, got.LeftOnly) {
-			t.Fatalf("ASSERT_FILTER_DIAGNOSTIC_OPERAND_REVERSAL: forward=%#v reversed=%#v", got, reversed)
-		}
-	})
-}
-
-func TestFilterEqualRawIDsRemainDomainSeparated(t *testing.T) {
-	const same = "same-raw-id"
-	for _, tc := range []struct {
-		name string
-		ns   schema.ReferenceNamespace
-	}{
-		{"NODE", schema.ReferenceNode}, {"CALL_RELATION", schema.ReferenceCallRelation}, {"DISPATCH_RELATIONSHIP", schema.ReferenceDispatchRelationship}, {"SIBLING_CANDIDATE", schema.ReferenceSiblingCandidate},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			got := partitionStringRefs(tc.ns, []string{same}, []string{same}, nil)
-			if !reflect.DeepEqual(got.LeftOnly, []string{same}) || len(got.Shared) != 0 {
-				t.Fatalf("ASSERT_FILTER_DOMAIN_SEPARATION_%s: %#v", tc.name, got)
-			}
-		})
-	}
-	gotDiagnostic := partitionDiagnosticRefs(1, []int{0}, nil)
-	if !reflect.DeepEqual(gotDiagnostic.LeftOnly, []int{0}) || len(gotDiagnostic.Shared) != 0 {
-		t.Fatalf("ASSERT_FILTER_DOMAIN_SEPARATION_DIAGNOSTIC_CORRELATION: %#v", gotDiagnostic)
-	}
-}
-
-func TestFilterSeedStateBoundaries(t *testing.T) {
-	failed := inspectAllSeed{PreparationStatus: "FAILED", Seed: graph.SeedResult{Label: "failed", Failure: &graph.SeedFailure{Phase: "prepare", Message: "failed"}}}
-	empty := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "empty"}}
-	withNode := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "node"}, NativeNodeIDs: []string{"n"}}
-	withDispatch := inspectAllSeed{PreparationStatus: "SUCCEEDED", Seed: graph.SeedResult{Label: "dispatch"}, SeedMemberships: []graph.SeedMembership{{EvidenceKind: "DISPATCH_ASSOCIATION", EndpointID: "d"}}}
-	for _, tc := range []struct {
-		name string
-		seed inspectAllSeed
-		want string
-	}{
-		{"FAILED", failed, "FAILED"}, {"SUCCESSFUL_EMPTY", empty, "SUCCESSFUL_EMPTY"}, {"SUCCESSFUL_WITH_NODE", withNode, "SUCCESSFUL_WITH_EVIDENCE"}, {"SUCCESSFUL_WITH_DISPATCH", withDispatch, "SUCCESSFUL_WITH_EVIDENCE"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := filterSeedSummary(tc.seed).State; got != tc.want {
-				t.Fatalf("ASSERT_FILTER_STATE_%s: got=%q want=%q", tc.name, got, tc.want)
-			}
-		})
 	}
 }
 

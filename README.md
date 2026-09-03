@@ -67,6 +67,32 @@ The input must be a path to a structurally and semantically valid `lsp-trace.ins
 
 Comparison is deterministic, read-only, and limited to explicit per-seed references. Shared references do not prove shared purpose, and exclusive references do not prove distinct purpose. Failed or successful-empty seeds remain valid operands, so an empty partition is not a feature or workflow conclusion. The projection does not recover selector custody, authenticate its producer or source, establish runtime behavior, rank evidence, measure coverage, or decide identity, merge, split, confidence, or acceptance. See [ADR 0002](docs/adr/0002-deterministic-seed-evidence-filtering.md) for the versioned contract and deferred operations.
 
+## MCP offline evidence server
+
+`lsp-trace-mcp` is a separate stdio MCP server for deterministic offline operations. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. It starts no language server in Stage 1. Launch it without filesystem publication, or pin selector publication beneath one private root:
+
+```sh
+lsp-trace-mcp
+lsp-trace-mcp --publication-root /absolute/private/root
+```
+
+Stage 1 advertises six canonical tools and accepts one unadvertised compatibility alias for each:
+
+| Canonical tool | Alias |
+|---|---|
+| `lsp_trace_v1_capabilities` | `lsp_trace_capabilities` |
+| `lsp_trace_v1_schema_get` | `lsp_trace_schema_get` |
+| `lsp_trace_v1_validate` | `lsp_trace_validate` |
+| `lsp_trace_v1_verify` | `lsp_trace_verify` |
+| `lsp_trace_v1_inspect` | `lsp_trace_inspect` |
+| `lsp_trace_v1_filter` | `lsp_trace_filter` |
+
+Call `lsp_trace_v1_capabilities` with `{}` to discover the process-lifetime tool availability, canonical names and aliases, immutable input/envelope/artifact schema IDs, publication support, and effective limits. The embedded `internal/mcpcontract/testdata/stage1-manifest.v1.json` plus its registered schemas are authoritative for tool/schema compatibility; each operation returns exactly one versioned envelope selected by `envelope_schema_id` in `structuredContent`, with empty non-mirroring MCP `content`.
+
+Artifact-producing tools return exact bytes inline when they fit the 1,048,576-byte limit. A request whose result may exceed that limit should provide an `output_selector`; selector publication is available only when the process was started with `--publication-root`, and the selector must resolve beneath that pinned root. Publication uses exclusive no-replace owner-only files and returns a path-free receipt. The server never chooses or returns a private path. `list_page_max` is 100.
+
+MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, and filtering do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_*`) and Stage 3 live traversal tools (`lsp_trace_v1_incoming` and `lsp_trace_v1_slice`) are reserved, unadvertised, and `NOT_IMPLEMENTED`; `--enable-live-lsp` does not enable them in the Stage 1 binary. See [ADR 0003](docs/adr/0003-persistent-mcp-language-server-sessions.md) for the normative staged contract.
+
 ## Named server profiles
 
 Profiles are selected explicitly with `--profile NAME` on both `incoming` and `slice`; `language_ids` never selects a profile automatically. Without `--profile`, configuration files are not read and all legacy flags retain their existing behavior. `--server` may be combined with `--profile` and overrides the profile command.

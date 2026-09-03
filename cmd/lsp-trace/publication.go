@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,18 +12,21 @@ import (
 	"path/filepath"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/verification"
 )
 
 const (
 	generationArtifactName         = "artifact.json"
 	generationReceiptName          = "receipt.json"
-	directoryDurabilityChecked     = "CHECKED"
-	directoryDurabilityUnavailable = "UNAVAILABLE_ON_PLATFORM"
+	directoryDurabilityChecked     = verification.DirectoryDurabilityChecked
+	directoryDurabilityUnavailable = verification.DirectoryDurabilityUnavailable
 )
 
 var (
 	errDirectorySyncUnavailable    = errors.New("directory sync unavailable on platform")
 	openPublicationDirectory       = os.Open
+	openPublicationRoot            = os.OpenRoot
+	openChildPublicationRoot       = func(root *os.Root, name string) (*os.Root, error) { return root.OpenRoot(name) }
 	syncPublicationDirectory       = platformSyncPublicationDirectory
 	publicationDirectoryDurability = platformDirectoryDurability
 )
@@ -41,28 +46,18 @@ func syncPublishedDirectory(path string) error {
 	return nil
 }
 
-type generationSelector struct {
-	Generation string `json:"generation"`
-}
+type generationSelector = verification.Selector
 
 func readGenerationSelector(path string) (generationSelector, error) {
-	var selector generationSelector
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return selector, err
+		return generationSelector{}, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&selector); err != nil {
-		return selector, fmt.Errorf("malformed generation selector: %w", err)
-	}
-	if selector.Generation == "" || filepath.Base(selector.Generation) != selector.Generation {
-		return selector, fmt.Errorf("malformed generation selector: invalid generation")
-	}
-	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return selector, fmt.Errorf("malformed generation selector: trailing JSON content")
-	}
-	return selector, nil
+	return decodeGenerationSelector(data)
+}
+
+func decodeGenerationSelector(data []byte) (generationSelector, error) {
+	return verification.DecodeSelector(data)
 }
 
 type publicationFailureRecord struct {
@@ -126,16 +121,6 @@ func retainPublicationFailure(path string, data []byte, publishErr error) (strin
 	return name, nil
 }
 
-type custodyReceipt struct {
-	ReceiptVersion             string `json:"receipt_version"`
-	ExactSerializedBytesDigest string `json:"exact_serialized_bytes_digest"`
-	DigestAlgorithm            string `json:"digest_algorithm"`
-	DigestScope                string `json:"digest_scope"`
-	IntegrityClaim             string `json:"integrity_claim"`
-	AuthenticityClaim          bool   `json:"authenticity_claim"`
-	DirectoryDurability        string `json:"directory_durability"`
-}
-
 func marshalResult(result graph.Result, pretty bool) ([]byte, error) {
 	var b []byte
 	var err error
@@ -150,16 +135,7 @@ func marshalResult(result graph.Result, pretty bool) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 func receiptBytes(data []byte) ([]byte, error) {
-	r := custodyReceipt{
-		ReceiptVersion: "lsp-trace.byte-custody-receipt.v1", ExactSerializedBytesDigest: graph.ExactBytesDigest(data),
-		DigestAlgorithm: "SHA-256", DigestScope: graph.ByteDigestScope, IntegrityClaim: "INTEGRITY_AND_CUSTODY_ONLY",
-		AuthenticityClaim: false, DirectoryDurability: publicationDirectoryDurability,
-	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		return nil, err
-	}
-	return append(b, '\n'), nil
+	return verification.ReceiptBytes(data, publicationDirectoryDurability)
 }
 func stage(dir, pattern string, data []byte) (string, error) {
 	f, err := os.CreateTemp(dir, pattern)
@@ -206,7 +182,80 @@ func publishArtifact(path string, data []byte) error {
 	return syncPublishedDirectory(dir)
 }
 
+func randomPublicationName(prefix string) (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return prefix + hex.EncodeToString(raw[:]), nil
+}
+
+func openPinnedPublicationParent(path string) (*os.Root, string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, "", err
+	}
+	parentPath := filepath.Dir(absolute)
+	info, err := os.Lstat(parentPath)
+	if err != nil {
+		return nil, "", err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, "", fmt.Errorf("publication parent is not a no-follow directory")
+	}
+	root, err := openPublicationRoot(parentPath)
+	if err != nil {
+		return nil, "", err
+	}
+	opened, statErr := root.Stat(".")
+	if statErr != nil || !os.SameFile(info, opened) {
+		root.Close()
+		return nil, "", fmt.Errorf("publication parent identity changed")
+	}
+	return root, filepath.Base(absolute), nil
+}
+
+func writeRootFile(root *os.Root, name string, data []byte) error {
+	f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		return err
+	}
+	ok := false
+	defer func() {
+		_ = f.Close()
+		if !ok {
+			_ = root.Remove(name)
+		}
+	}()
+	if _, err := f.Write(data); err != nil {
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	ok = true
+	return nil
+}
+
+func syncRoot(root *os.Root) error {
+	f, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if err := syncPublicationDirectory(f); err != nil && !errors.Is(err, errDirectorySyncUnavailable) {
+		return err
+	}
+	return nil
+}
+
 func publishBundle(path string, data []byte) error {
+	if publicationDirectoryDurability != directoryDurabilityChecked {
+		return fmt.Errorf("publication unsupported: required platform guarantees unavailable")
+	}
 	if err := graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {
 		return fmt.Errorf("staged semantic validation: %w", err)
 	}
@@ -214,50 +263,60 @@ func publishBundle(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(path)
-	generationDir, err := os.MkdirTemp(dir, ".lsp-trace-generation-*")
+	parent, finalName, err := openPinnedPublicationParent(path)
 	if err != nil {
+		return err
+	}
+	defer parent.Close()
+	generationName, err := randomPublicationName(".lsp-trace-generation-")
+	if err != nil {
+		return err
+	}
+	if err := parent.Mkdir(generationName, 0700); err != nil {
 		return err
 	}
 	selected := false
 	defer func() {
 		if !selected {
-			_ = os.RemoveAll(generationDir)
+			_ = parent.RemoveAll(generationName)
 		}
 	}()
-	if err := os.Chmod(generationDir, 0700); err != nil {
+	generation, err := openChildPublicationRoot(parent, generationName)
+	if err != nil {
 		return err
 	}
-	artifactPath := filepath.Join(generationDir, generationArtifactName)
-	receiptPath := filepath.Join(generationDir, generationReceiptName)
-	if err := writePrivateSyncedFile(artifactPath, data); err != nil {
+	defer generation.Close()
+	if err := writeRootFile(generation, generationArtifactName, data); err != nil {
 		return err
 	}
-	if err := writePrivateSyncedFile(receiptPath, receipt); err != nil {
+	if err := writeRootFile(generation, generationReceiptName, receipt); err != nil {
 		return err
 	}
-	staged, err := os.ReadFile(artifactPath)
+	staged, err := generation.ReadFile(generationArtifactName)
 	if err != nil || !bytes.Equal(staged, data) {
 		return fmt.Errorf("staged artifact byte validation failed: %v", err)
 	}
-	if err := syncPublishedDirectory(generationDir); err != nil {
+	if err := syncRoot(generation); err != nil {
 		return err
 	}
-	selectorData, err := json.Marshal(generationSelector{Generation: filepath.Base(generationDir)})
+	selectorData, err := json.Marshal(generationSelector{Generation: generationName})
 	if err != nil {
 		return err
 	}
-	selectorTemp, err := stage(dir, ".lsp-trace-selector-*", append(selectorData, '\n'))
+	selectorTemp, err := randomPublicationName(".lsp-trace-selector-")
 	if err != nil {
 		return err
 	}
-	defer os.Remove(selectorTemp)
-	if err := os.Rename(selectorTemp, path); err != nil {
+	if err := writeRootFile(parent, selectorTemp, append(selectorData, '\n')); err != nil {
+		return err
+	}
+	defer parent.Remove(selectorTemp)
+	if err := platformInstallNoReplace(parent, selectorTemp, finalName); err != nil {
 		return err
 	}
 	selected = true
-	_ = os.Remove(path + ".receipt.json")
-	return syncPublishedDirectory(dir)
+	_ = parent.Remove(finalName + ".receipt.json")
+	return syncRoot(parent)
 }
 
 func writePrivateSyncedFile(path string, data []byte) error {
@@ -284,34 +343,75 @@ func writePrivateSyncedFile(path string, data []byte) error {
 	ok = true
 	return nil
 }
+func readRootRegularNoFollow(root *os.Root, name string) ([]byte, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("no-follow regular file required: %q", name)
+	}
+	f, err := root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(info, opened) {
+		return nil, fmt.Errorf("file identity changed: %q", name)
+	}
+	return io.ReadAll(f)
+}
+
+func openRootDirectoryNoFollow(root *os.Root, name string) (*os.Root, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, fmt.Errorf("no-follow directory required: %q", name)
+	}
+	child, err := openChildPublicationRoot(root, name)
+	if err != nil {
+		return nil, err
+	}
+	opened, err := child.Stat(".")
+	if err != nil || !os.SameFile(info, opened) {
+		child.Close()
+		return nil, fmt.Errorf("directory identity changed: %q", name)
+	}
+	return child, nil
+}
+
 func loadCustodiedGeneration(path string) ([]byte, string, error) {
-	selector, err := readGenerationSelector(path)
+	parent, finalName, err := openPinnedPublicationParent(path)
 	if err != nil {
 		return nil, "verify", err
 	}
-	generationDir := filepath.Join(filepath.Dir(path), selector.Generation)
-	data, err := os.ReadFile(filepath.Join(generationDir, generationArtifactName))
+	defer parent.Close()
+	selectorData, err := readRootRegularNoFollow(parent, finalName)
+	if err != nil {
+		return nil, "verify", err
+	}
+	selector, err := decodeGenerationSelector(selectorData)
+	if err != nil {
+		return nil, "verify", err
+	}
+	generation, err := openRootDirectoryNoFollow(parent, selector.Generation)
 	if err != nil {
 		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
-	receiptData, err := os.ReadFile(filepath.Join(generationDir, generationReceiptName))
+	defer generation.Close()
+	data, err := readRootRegularNoFollow(generation, generationArtifactName)
+	if err != nil {
+		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
+	}
+	receiptData, err := readRootRegularNoFollow(generation, generationReceiptName)
 	if err != nil {
 		return nil, "verify receipt", fmt.Errorf("incomplete selected generation: %w", err)
 	}
-	var receipt custodyReceipt
-	decoder := json.NewDecoder(bytes.NewReader(receiptData))
-	decoder.DisallowUnknownFields()
-	if err = decoder.Decode(&receipt); err != nil {
-		return nil, "verify receipt", fmt.Errorf("malformed: %w", err)
-	}
-	if err = decoder.Decode(&struct{}{}); err != io.EOF {
-		return nil, "verify receipt", fmt.Errorf("malformed: trailing JSON content")
-	}
-	if receipt.ReceiptVersion != "lsp-trace.byte-custody-receipt.v1" || receipt.DigestScope != graph.ByteDigestScope || receipt.DigestAlgorithm != "SHA-256" || receipt.IntegrityClaim != "INTEGRITY_AND_CUSTODY_ONLY" || receipt.AuthenticityClaim || (receipt.DirectoryDurability != directoryDurabilityChecked && receipt.DirectoryDurability != directoryDurabilityUnavailable) {
-		return nil, "verify receipt", fmt.Errorf("receipt metadata mismatch")
-	}
-	if receipt.ExactSerializedBytesDigest != graph.ExactBytesDigest(data) {
-		return nil, "verify receipt", fmt.Errorf("exact-byte integrity mismatch")
+	if err = verification.VerifyReceipt(data, receiptData); err != nil {
+		return nil, "verify receipt", err
 	}
 	return data, "", nil
 }

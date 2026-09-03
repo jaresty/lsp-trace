@@ -1,0 +1,1 @@
+{"id":1,"jsonrpc":"2.0","result":{"content":[],"isError":false,"structuredContent":{"envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-result.v1.schema.json","envelope_version":"1","isError":false,"operation_status":"SUCCEEDED","outcome":"COMPLETE","request_id":"manager-1","result":{"manifest_version":"1"},"tool":"lsp_trace_v1_capabilities"}}}

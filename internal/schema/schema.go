@@ -1,12 +1,9 @@
 package schema
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"strings"
-
-	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 
 	"lsp-trace/internal/graph"
 )
@@ -59,74 +56,16 @@ func BytesFor(family, version string) ([]byte, error) {
 // Bytes preserves the graph-family schema lookup compatibility alias.
 func Bytes(version string) ([]byte, error) { return BytesFor(FamilyGraph, version) }
 
-// ValidateFor runs structural validation for the requested schema family.
+// ValidateFor runs structural validation before family-specific semantics.
 func ValidateFor(data []byte, family, requested string) (string, error) {
-	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
-	if err != nil {
-		return "", fmt.Errorf("invalid JSON: %w", err)
-	}
-	object, ok := doc.(map[string]any)
-	if !ok {
-		return "", fmt.Errorf("schema_version: document must be an object")
-	}
-	field, familyOK := versionFields[family]
-	if !familyOK {
-		return "", fmt.Errorf("unsupported schema family %q", family)
-	}
-	detected, ok := object[field].(string)
-	if !ok || detected == "" {
-		return "", fmt.Errorf("%s: missing or not a string", field)
-	}
-	short, full, err := normalizeFamily(family, detected)
+	structural, err := ValidateStructure(data, family, requested)
 	if err != nil {
 		return "", err
 	}
-	if requested != "" {
-		_, want, err := normalizeFamily(family, requested)
-		if err != nil {
-			return "", err
-		}
-		if want != full {
-			return "", fmt.Errorf("schema version mismatch: document=%s requested=%s", full, want)
-		}
-	}
-	raw, err := BytesFor(family, short)
-	if err != nil {
+	if err := ValidateSemantics(data, structural); err != nil {
 		return "", err
 	}
-	schemaDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-	if err != nil {
-		return "", fmt.Errorf("embedded schema %s: %w", full, err)
-	}
-	compiler := jsonschema.NewCompiler()
-	compiler.DefaultDraft(jsonschema.Draft2020)
-	resource := "https://jaresty.github.io/lsp-trace/schemas/" + full + ".schema.json"
-	if err := compiler.AddResource(resource, schemaDoc); err != nil {
-		return "", fmt.Errorf("embedded schema %s: %w", full, err)
-	}
-	compiled, err := compiler.Compile(resource)
-	if err != nil {
-		return "", fmt.Errorf("embedded schema %s: %w", full, err)
-	}
-	if err := compiled.Validate(doc); err != nil {
-		return "", fmt.Errorf("schema validation %s: %w", full, err)
-	}
-	if family == FamilyGraph && full == graph.SchemaVersionV3 {
-		if err := graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {
-			return "", fmt.Errorf("semantic validation %s: %w", full, err)
-		}
-	}
-	if family == FamilyInspect && object["projection_kind"] == "ALL_SEEDS" {
-		if err := ValidateAllSeedInspection(bytes.TrimSpace(data)); err != nil {
-			return "", fmt.Errorf("semantic validation %s: %w", full, err)
-		}
-	}
-	if family == FamilyFilter {
-		if err := ValidateFilter(bytes.TrimSpace(data)); err != nil {
-			return "", fmt.Errorf("semantic validation %s: %w", full, err)
-		}
-	}
-	return full, nil
+	return structural.Version, nil
 }
 
 // Validate preserves the graph-family validation compatibility alias.

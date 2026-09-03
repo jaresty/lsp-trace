@@ -44,6 +44,16 @@ lsp-trace skill get
 
 The command prints this complete embedded document to stdout. Static retrieval is built in; dynamic skill discovery, listing, and installation are not currently provided.
 
+### Use the MCP offline evidence server
+
+Configure an MCP client to launch `lsp-trace-mcp` directly over stdio. Stage 1 starts no language server. Run `lsp-trace-mcp` for inline-only results, or `lsp-trace-mcp --publication-root /absolute/private/root` to permit caller-supplied relative `output_selector` publication beneath one pinned private root.
+
+The six advertised canonical offline tools are `lsp_trace_v1_capabilities`, `lsp_trace_v1_schema_get`, `lsp_trace_v1_validate`, `lsp_trace_v1_verify`, `lsp_trace_v1_inspect`, and `lsp_trace_v1_filter`. Their accepted unadvertised aliases omit `_v1`: `lsp_trace_capabilities`, `lsp_trace_schema_get`, `lsp_trace_validate`, `lsp_trace_verify`, `lsp_trace_inspect`, and `lsp_trace_filter`. Call capabilities with `{}` before relying on availability, schema identities, publication support, or limits.
+
+The embedded Stage 1 manifest and registered schemas are authoritative. Each completed tool call returns exactly one versioned envelope in MCP `structuredContent`, selected by `envelope_schema_id`; outer MCP `content` is empty and does not mirror the envelope. Artifact output is inline through 1,048,576 bytes. Larger possible output requires `output_selector`; publication is exclusive, owner-only, no-replace, and returns a path-free receipt. The server never chooses or returns a private path. `list_page_max` is 100.
+
+Preserve existing evidence ceilings: MCP transport, envelopes, inline bytes, publication receipts, validation, verification, inspection, and filtering add no authenticity, authority, source truth, execution proof, feature identity, coverage, confidence, or acceptance. Stage 2 lifecycle and Stage 3 live traversal tools remain reserved `NOT_IMPLEMENTED`. The Stage 1 binary ignores `--enable-live-lsp` for those reserved entries.
+
 ## Choose a command
 
 - `incoming`: start from exact callee positions and trace callers upward.

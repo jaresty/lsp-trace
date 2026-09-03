@@ -164,6 +164,15 @@ assert_contains R-DRY-RUN docs/RELEASING.md './scripts/release-check.sh'
 assert_contains R-NO-SERVERS docs/RELEASING.md 'does not start or install external language servers'
 assert_contains R-GORELEASER .goreleaser.yaml 'version: 2'
 assert_contains R-RETAIN-STATUS scripts/release-check.sh 'Q-RETAINED-$language-STATUS'
+assert_file R-MCP-ADR docs/adr/0003-persistent-mcp-language-server-sessions.md
+assert_file R-MCP-SERVER cmd/lsp-trace-mcp/main.go
+assert_file R-MCP-MANIFEST internal/mcpcontract/testdata/stage1-manifest.v1.json
+assert_file R-MCP-ENVELOPE-SCHEMA internal/mcpcontract/testdata/schemas/envelope-result.v1.schema.json
+assert_contains R-MCP-PROTOCOL-PIN internal/mcpcontract/testdata/stage1-manifest.v1.json '"revision":"2025-06-18"'
+assert_contains R-MCP-GORELEASER-MAIN .goreleaser.yaml 'main: ./cmd/lsp-trace-mcp'
+assert_contains R-MCP-GORELEASER-BINARY .goreleaser.yaml 'binary: lsp-trace-mcp'
+assert_contains R-MCP-ADR-ACCEPTED docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Accepted'
+assert_contains R-MCP-RELEASE-DOC docs/RELEASING.md 'lsp-trace-mcp'
 
 if [ "$failed" -ne 0 ]; then
   exit 1
@@ -177,6 +186,13 @@ else
   exit 1
 fi
 
+if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
+  printf 'PASS R-MCP-CONTRACT: MCP Stage 1 contract, transport, registry, and real-process suites\n'
+else
+  printf 'FAIL R-MCP-CONTRACT: MCP Stage 1 contract suite failed\n'
+  exit 1
+fi
+
 release_tmp=$(mktemp -d "${TMPDIR:-/tmp}/lsp-trace-release.XXXXXX")
 trap 'rm -rf "$release_tmp"' EXIT HUP INT TERM
 go build -trimpath -o "$release_tmp/lsp-trace" ./cmd/lsp-trace
@@ -185,6 +201,12 @@ if [ ! -s "$release_tmp/lsp-trace" ]; then
   exit 1
 fi
 printf 'PASS R-DRY-BUILD: hermetic non-publishing release binary\n'
+go build -trimpath -o "$release_tmp/lsp-trace-mcp" ./cmd/lsp-trace-mcp
+if [ ! -s "$release_tmp/lsp-trace-mcp" ]; then
+  printf 'FAIL R-MCP-DRY-BUILD: MCP release binary is missing or empty\n'
+  exit 1
+fi
+printf 'PASS R-MCP-DRY-BUILD: hermetic non-publishing MCP release binary\n'
 embedded_skill=$($release_tmp/lsp-trace skill get)
 case "$embedded_skill" in
   *'## Compare two retained seed-evidence sets'*'Shared references do not establish shared feature or workflow identity'*)

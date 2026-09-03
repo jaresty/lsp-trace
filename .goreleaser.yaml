@@ -1,8 +1,15 @@
 version: 2
 project_name: lsp-trace
 builds:
-  - main: ./cmd/lsp-trace
+  - id: lsp-trace
+    main: ./cmd/lsp-trace
     binary: lsp-trace
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+  - id: lsp-trace-mcp
+    main: ./cmd/lsp-trace-mcp
+    binary: lsp-trace-mcp
     env: [CGO_ENABLED=0]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]

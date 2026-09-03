@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -102,17 +103,29 @@ func TestPublishBundleAcceptsMergedSiblingSeedMemberships(t *testing.T) {
 	}
 }
 
+func TestPublishBundleRefusesExistingFinalSelector(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundle.json")
+	original := []byte("existing selector must survive\n")
+	if err := os.WriteFile(path, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publishBundle(path, data); err == nil {
+		t.Fatal("ASSERT_PUBLICATION_FINAL_COLLISION_NO_REPLACE: publication replaced an existing selector")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, original) {
+		t.Fatalf("ASSERT_PUBLICATION_FINAL_COLLISION_IDENTITY_PRESERVED: got=%q err=%v", got, err)
+	}
+}
+
 func TestPublishAndVerifyRoundTripAndMutation(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bundle.json")
-	for _, existing := range []string{path, path + ".receipt.json"} {
-		if err := os.WriteFile(existing, []byte("permissive old content"), 0644); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.Chmod(existing, 0644); err != nil {
-			t.Fatal(err)
-		}
-	}
 	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -155,6 +168,33 @@ func TestPublishAndVerifyRoundTripAndMutation(t *testing.T) {
 	stdout, stderr, code = captureRun(t, []string{"verify", path})
 	if code == 0 || stdout != "" || !strings.Contains(stderr, "exact-byte integrity mismatch") {
 		t.Fatalf("ASSERT_P6_VERIFY_MUTATION: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+}
+
+func TestVerifyRejectsSymlinkedSelectedGeneration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bundle.json")
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := publishBundle(path, data); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := readGenerationSelector(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generationPath := filepath.Join(filepath.Dir(path), selector.Generation)
+	relocated := generationPath + "-relocated"
+	if err := os.Rename(generationPath, relocated); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(relocated, generationPath); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"verify", path})
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "no-follow") {
+		t.Fatalf("ASSERT_VERIFY_COMPONENT_RELATIVE_NO_FOLLOW: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
@@ -299,6 +339,36 @@ func TestConcurrentPublicationUsesUniquePrivateStaging(t *testing.T) {
 	}
 }
 
+func TestConcurrentPublicationToSameSelectorHasOneWinner(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundle.json")
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			errs <- publishBundle(path, data)
+		}()
+	}
+	close(start)
+	successes := 0
+	for range 2 {
+		if err := <-errs; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("ASSERT_PUBLICATION_ATOMIC_NO_REPLACE_ONE_WINNER: successes=%d", successes)
+	}
+	if _, _, err := loadCustodiedGeneration(path); err != nil {
+		t.Fatalf("ASSERT_PUBLICATION_ATOMIC_NO_REPLACE_WINNER_COMPLETE: %v", err)
+	}
+}
+
 func TestHistoricalSchemaSurvivesSourceFailureEndToEnd(t *testing.T) {
 	workspace := t.TempDir()
 	stdout, stderr, code := captureRun(t, []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--at", "missing.go:1:1", "--schema", "v2"})
@@ -339,49 +409,43 @@ func TestPublicationPropagatesDirectoryDurabilityFailures(t *testing.T) {
 		t.Fatal(err)
 	}
 	tests := []struct {
-		name      string
-		failOpen  func(string) bool
-		failSync  func(string) bool
-		assertion string
+		name         string
+		failParent   bool
+		failChild    bool
+		failSyncCall int
+		assertion    string
 	}{
-		{
-			name:      "generation directory open",
-			failOpen:  func(path string) bool { return strings.Contains(filepath.Base(path), ".lsp-trace-generation-") },
-			assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_OPEN_PROPAGATED",
-		},
-		{
-			name:      "generation directory sync",
-			failSync:  func(path string) bool { return strings.Contains(filepath.Base(path), ".lsp-trace-generation-") },
-			assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_SYNC_PROPAGATED",
-		},
-		{
-			name:      "destination directory open after selector publication",
-			failOpen:  func(path string) bool { return filepath.Base(path) == "destination" },
-			assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_OPEN_PROPAGATED",
-		},
-		{
-			name:      "destination directory sync after selector publication",
-			failSync:  func(path string) bool { return filepath.Base(path) == "destination" },
-			assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_SYNC_PROPAGATED",
-		},
+		{name: "destination directory open", failParent: true, assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_OPEN_PROPAGATED"},
+		{name: "generation directory open", failChild: true, assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_OPEN_PROPAGATED"},
+		{name: "generation directory sync", failSyncCall: 1, assertion: "ASSERT_DURABILITY_GENERATION_DIRECTORY_SYNC_PROPAGATED"},
+		{name: "destination directory sync", failSyncCall: 2, assertion: "ASSERT_DURABILITY_DESTINATION_DIRECTORY_SYNC_PROPAGATED"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			dir := filepath.Join(root, "destination")
+			dir := filepath.Join(t.TempDir(), "destination")
 			if err := os.Mkdir(dir, 0700); err != nil {
 				t.Fatal(err)
 			}
-			originalOpen, originalSync := openPublicationDirectory, syncPublicationDirectory
-			t.Cleanup(func() { openPublicationDirectory, syncPublicationDirectory = originalOpen, originalSync })
-			openPublicationDirectory = func(path string) (*os.File, error) {
-				if tc.failOpen != nil && tc.failOpen(path) {
+			originalRoot, originalChild, originalSync := openPublicationRoot, openChildPublicationRoot, syncPublicationDirectory
+			t.Cleanup(func() {
+				openPublicationRoot, openChildPublicationRoot, syncPublicationDirectory = originalRoot, originalChild, originalSync
+			})
+			openPublicationRoot = func(path string) (*os.Root, error) {
+				if tc.failParent {
 					return nil, errors.New(tc.assertion)
 				}
-				return os.Open(path)
+				return os.OpenRoot(path)
 			}
+			openChildPublicationRoot = func(root *os.Root, name string) (*os.Root, error) {
+				if tc.failChild {
+					return nil, errors.New(tc.assertion)
+				}
+				return root.OpenRoot(name)
+			}
+			syncCalls := 0
 			syncPublicationDirectory = func(opened *os.File) error {
-				if tc.failSync != nil && tc.failSync(opened.Name()) {
+				syncCalls++
+				if syncCalls == tc.failSyncCall {
 					return errors.New(tc.assertion)
 				}
 				return originalSync(opened)
@@ -394,7 +458,30 @@ func TestPublicationPropagatesDirectoryDurabilityFailures(t *testing.T) {
 	}
 }
 
-func TestPublicationDisclosesUnavailableDirectorySyncWithoutTreatingItAsFailure(t *testing.T) {
+func TestPublishBundleRejectsSymlinkedParent(t *testing.T) {
+	root := t.TempDir()
+	realParent := filepath.Join(root, "real")
+	if err := os.Mkdir(realParent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	linkedParent := filepath.Join(root, "linked")
+	if err := os.Symlink(realParent, linkedParent); err != nil {
+		t.Fatal(err)
+	}
+	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(linkedParent, "bundle.json")
+	if err := publishBundle(path, data); err == nil {
+		t.Fatal("ASSERT_PUBLICATION_COMPONENT_RELATIVE_NO_FOLLOW: publication traversed a symlinked parent")
+	}
+	if _, err := os.Lstat(filepath.Join(realParent, "bundle.json")); !os.IsNotExist(err) {
+		t.Fatalf("ASSERT_PUBLICATION_COMPONENT_RELATIVE_NO_FOLLOW: real target changed: %v", err)
+	}
+}
+
+func TestPublicationFailsClosedWhenPlatformGuaranteesUnavailable(t *testing.T) {
 	data, err := marshalResult(graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}, false)
 	if err != nil {
 		t.Fatal(err)
@@ -407,20 +494,11 @@ func TestPublicationDisclosesUnavailableDirectorySyncWithoutTreatingItAsFailure(
 	syncPublicationDirectory = func(*os.File) error { return errDirectorySyncUnavailable }
 	publicationDirectoryDurability = directoryDurabilityUnavailable
 	selectorPath := filepath.Join(t.TempDir(), "bundle.json")
-	if err := publishBundle(selectorPath, data); err != nil {
-		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_SYNC_UNAVAILABLE_NOT_PUBLICATION_FAILURE: %v", err)
+	if err := publishBundle(selectorPath, data); err == nil {
+		t.Fatal("ASSERT_PLATFORM_UNSUPPORTED_FAILS_CLOSED: publication succeeded without required platform guarantees")
 	}
-	selector, err := readGenerationSelector(selectorPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	receiptData, err := os.ReadFile(filepath.Join(filepath.Dir(selectorPath), selector.Generation, generationReceiptName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var receipt custodyReceipt
-	if err := json.Unmarshal(receiptData, &receipt); err != nil || receipt.DirectoryDurability != directoryDurabilityUnavailable {
-		t.Fatalf("ASSERT_PLATFORM_DIRECTORY_DURABILITY_DISCLOSED: receipt=%s err=%v", receiptData, err)
+	if _, err := os.Lstat(selectorPath); !os.IsNotExist(err) {
+		t.Fatalf("ASSERT_PLATFORM_UNSUPPORTED_FAILS_BEFORE_SELECTION: selector err=%v", err)
 	}
 }
 
