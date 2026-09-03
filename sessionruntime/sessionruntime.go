@@ -1,0 +1,354 @@
+// Package sessionruntime provides transport-neutral orchestration over the
+// session algebra, resolved runtime identity, managed processes, and LSP wire.
+// It neither registers nor advertises a command surface.
+package sessionruntime
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"time"
+
+	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/session"
+)
+
+type Limits struct {
+	MaxSessions, MaxRequests, MaxChildren, MaxCancels, MaxTombstones, MaxObservations int
+}
+
+type Child interface {
+	Teardown(context.Context) managedprocess.TeardownObservation
+	Close() managedprocess.ResourceObservation
+}
+
+type Starter interface {
+	Start(context.Context, managedprocess.Spec) (Child, managedprocess.StartObservation)
+}
+
+// ManagedStarter adapts the existing managed-process foundation to the narrow
+// runtime seam. Production callers construct Manager with the sealed gate.
+type ManagedStarter struct{ Manager *managedprocess.Manager }
+
+func (s ManagedStarter) Start(ctx context.Context, spec managedprocess.Spec) (Child, managedprocess.StartObservation) {
+	if s.Manager == nil {
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable, Reason: "containment unavailable"}
+	}
+	return s.Manager.Start(ctx, spec)
+}
+
+type Config struct {
+	Limits  Limits
+	Wire    lspwire.Limits
+	Starter Starter
+}
+type StartRequest struct {
+	Profile  runtimeprofile.Profile
+	Process  managedprocess.Spec
+	Deadline time.Time
+}
+type StartResult struct {
+	SessionID  string
+	Generation uint64
+	State      session.State
+	Failure    session.Failure
+	Start      managedprocess.StartObservation
+}
+type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations int }
+type Observation struct {
+	Sequence, Generation uint64
+	SessionID, Kind      string
+	State                session.State
+	Failure              session.Failure
+}
+type Record struct {
+	SessionID  string
+	Profile    runtimeprofile.Profile
+	Generation uint64
+	State      session.State
+	Started    time.Time
+}
+type Request struct {
+	Key      lspwire.RequestKey
+	Deadline time.Time
+	Terminal session.Failure
+}
+
+type runtimeSession struct {
+	record   Record
+	process  Child
+	spec     managedprocess.Spec
+	pending  *lspwire.Pending
+	requests map[lspwire.RequestKey]*Request
+	cancels  int
+}
+
+type Manager struct {
+	mu           sync.Mutex
+	limits       Limits
+	wire         lspwire.Limits
+	starter      Starter
+	algebra      *session.Manager
+	sessions     map[string]*runtimeSession
+	observations []Observation
+	sequence     uint64
+}
+
+func New(c Config) (*Manager, error) {
+	l := c.Limits
+	if l.MaxSessions <= 0 || l.MaxRequests <= 0 || l.MaxChildren <= 0 || l.MaxCancels <= 0 || l.MaxTombstones <= 0 || l.MaxObservations <= 0 {
+		return nil, errors.New("sessionruntime: all limits must be positive")
+	}
+	if c.Starter == nil {
+		return nil, errors.New("sessionruntime: starter is required")
+	}
+	a, err := session.NewManager(session.ManagerConfig{MaxSessions: l.MaxSessions})
+	if err != nil {
+		return nil, err
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession)}, nil
+}
+
+func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
+	if !req.Deadline.IsZero() && !time.Now().Before(req.Deadline) {
+		return StartResult{Failure: session.RequestTimeout}
+	}
+	if err := ctx.Err(); err != nil {
+		return StartResult{Failure: session.RequestCancelled}
+	}
+	id := req.Profile.SessionKey().String()
+	m.mu.Lock()
+	if current := m.sessions[id]; current != nil {
+		result := StartResult{SessionID: id, Generation: current.record.Generation, State: current.record.State}
+		m.mu.Unlock()
+		return result
+	}
+	if len(m.sessions) >= m.limits.MaxSessions {
+		m.mu.Unlock()
+		return StartResult{SessionID: id, Failure: session.ResourceExhausted}
+	}
+	m.mu.Unlock()
+
+	// Start is deliberately before admission. The production managedprocess gate
+	// returns UNAVAILABLE before command construction, pipes, or process creation.
+	child, observed := m.starter.Start(ctx, req.Process)
+	if observed.Kind == managedprocess.StartUnavailable {
+		return StartResult{SessionID: id, Failure: session.ProcessContainmentUnavailable, Start: observed}
+	}
+	if observed.Kind != managedprocess.StartStarted || child == nil {
+		return StartResult{SessionID: id, Failure: session.SpawnFailure, Start: observed}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sessions[id] != nil || len(m.sessions) >= m.limits.MaxSessions {
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		return StartResult{SessionID: id, Failure: session.LifecycleConflict, Start: observed}
+	}
+	m.algebra.RegisterLifecycle(id, 1, session.Initializing, false)
+	if admission := m.algebra.Admit(id, 0); admission.Kind != session.AdmissionFree {
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
+	}
+	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
+	m.sessions[id] = &runtimeSession{record: r, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request)}
+	m.observe(id, 1, "startup", session.Initializing, "")
+	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
+}
+
+func (m *Manager) ObserveInitialization(id string, generation uint64, complete bool) session.LifecycleResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	result := m.algebra.ObserveInitialization(id, generation, complete)
+	r.record.State = result.State
+	kind := "initialization"
+	if !complete {
+		kind = "poison"
+	}
+	m.observe(id, generation, kind, result.State, result.Failure)
+	return result
+}
+
+func (m *Manager) BeginRequest(id string, generation uint64, deadline time.Time) (lspwire.RequestKey, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return lspwire.RequestKey{}, session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return lspwire.RequestKey{}, session.StaleGeneration
+	}
+	if len(r.requests) >= m.limits.MaxRequests {
+		return lspwire.RequestKey{}, session.ResourceExhausted
+	}
+	key := r.pending.Begin(generation)
+	r.requests[key] = &Request{Key: key, Deadline: deadline}
+	m.observe(id, generation, "request", r.record.State, "")
+	return key, ""
+}
+
+func (m *Manager) CompleteResponse(id string, key lspwire.ResponseKey) lspwire.ResponseDisposition {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return lspwire.ResponseUnknown
+	}
+	d := r.pending.Accept(key)
+	if d == lspwire.ResponseAccepted {
+		delete(r.requests, key)
+		m.observe(id, key.Generation, "response", r.record.State, "")
+	}
+	return d
+}
+
+func (m *Manager) Expire(now time.Time) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for id, r := range m.sessions {
+		for key, request := range r.requests {
+			if request.Terminal == "" && !request.Deadline.IsZero() && !now.Before(request.Deadline) {
+				request.Terminal = session.RequestTimeout
+				delete(r.requests, key)
+				n++
+				m.observe(id, key.Generation, "deadline", r.record.State, session.RequestTimeout)
+			}
+		}
+	}
+	return n
+}
+
+func (m *Manager) ObserveCrash(id string, generation uint64) session.Failure {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return session.StaleGeneration
+	}
+	r.record.State = session.Crashed
+	m.observe(id, generation, "crash", session.Crashed, session.SessionCrashed)
+	return ""
+}
+
+func (m *Manager) Poison(id string, generation uint64) session.LifecycleResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	result := m.algebra.ObservePoison(id, generation)
+	r.record.State = result.State
+	m.observe(id, generation, "poison", result.State, result.Failure)
+	return result
+}
+
+func (m *Manager) Stop(ctx context.Context, id, caller string) session.LifecycleResult {
+	return m.terminate(ctx, id, caller, false)
+}
+
+func (m *Manager) Restart(ctx context.Context, id, caller string) session.LifecycleResult {
+	return m.terminate(ctx, id, caller, true)
+}
+
+func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool) session.LifecycleResult {
+	m.mu.Lock()
+	r := m.sessions[id]
+	if r == nil {
+		m.mu.Unlock()
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	op := session.LifecycleStop
+	kind := "teardown"
+	if restart {
+		op, kind = session.LifecycleRestart, "restart"
+	}
+	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
+	if intent.Failure != "" || intent.Noop || intent.Joined || intent.Replayed {
+		m.mu.Unlock()
+		return intent
+	}
+	child, generation, spec := r.process, r.record.Generation, r.spec
+	m.observe(id, generation, kind, intent.State, "")
+	m.mu.Unlock()
+
+	teardown := child.Teardown(ctx)
+	resources := child.Close()
+	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	observed := session.LifecycleCompletion{ShutdownComplete: true, UnsafeIOAbsent: true, TerminateSucceeded: true, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
+	if resources.Kind != managedprocess.ResourcesClosed {
+		observed.UnsafeIOAbsent = false
+	}
+
+	m.mu.Lock()
+	completed := m.algebra.CompleteLifecycleObserved(id, intent.IntentID, observed)
+	m.observe(id, generation, "teardown", completed.State, completed.Failure)
+	if completed.Failure != "" || !restart {
+		delete(m.sessions, id)
+		m.mu.Unlock()
+		return completed
+	}
+	m.mu.Unlock()
+
+	child, start := m.starter.Start(ctx, spec)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if start.Kind != managedprocess.StartStarted || child == nil {
+		completed.State, completed.Failure = session.Poisoned, session.SpawnFailure
+		m.observe(id, completed.Generation, "poison", session.Poisoned, session.SpawnFailure)
+		delete(m.sessions, id)
+		return completed
+	}
+	r.process, r.record.Generation, r.record.State = child, completed.Generation, session.Ready
+	r.pending, r.requests, r.cancels = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), 0
+	m.observe(id, completed.Generation, "startup", session.Starting, "")
+	m.observe(id, completed.Generation, "initialization", session.Ready, "")
+	return completed
+}
+
+func (m *Manager) Census() Census {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c := Census{Sessions: len(m.sessions), Generations: len(m.sessions), Children: len(m.sessions), Observations: len(m.observations)}
+	for _, r := range m.sessions {
+		c.Requests += len(r.requests)
+		c.Cancels += r.cancels
+		c.Tombstones += r.pending.TombstoneCount()
+	}
+	return c
+}
+func (m *Manager) Records() []Record {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Record, 0, len(m.sessions))
+	for _, r := range m.sessions {
+		out = append(out, r.record)
+	}
+	return out
+}
+func (m *Manager) Observations() []Observation {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Observation(nil), m.observations...)
+}
+func (m *Manager) observe(id string, generation uint64, kind string, state session.State, failure session.Failure) {
+	m.sequence++
+	m.observations = append(m.observations, Observation{Sequence: m.sequence, SessionID: id, Generation: generation, Kind: kind, State: state, Failure: failure})
+	if over := len(m.observations) - m.limits.MaxObservations; over > 0 {
+		copy(m.observations, m.observations[over:])
+		m.observations = m.observations[:m.limits.MaxObservations]
+	}
+}
