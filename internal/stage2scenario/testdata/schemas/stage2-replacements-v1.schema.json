@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"stage2-replacements-v1","type":"object","additionalProperties":false,"required":["version","replacements","rule"],"properties":{"version":{"const":"stage2-replacements-v1"},"replacements":{"type":"array","maxItems":0},"rule":{"const":"undeclared replacement fails; pure reference fixtures require no replacement"}}}

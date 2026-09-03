@@ -1,0 +1,17 @@
+{
+  "version": "stage2-scenario-v1",
+  "steps": [
+    {"op":"startup","outcome":"started"},
+    {"op":"initialize","outcome":"ready"},
+    {"op":"request","request":"r1","generation":1},
+    {"op":"child","request":"r1","child":"r1/0","ordinal":1},
+    {"op":"child","request":"r1","child":"r1/1","ordinal":2},
+    {"op":"respond","child":"r1/0"},
+    {"op":"timeout","request":"r1"},
+    {"op":"late_response","child":"r1/1"},
+    {"op":"request","request":"r2","generation":1},
+    {"op":"cancel","request":"r2"},
+    {"op":"crash","outcome":"crashed"},
+    {"op":"poison","outcome":"poisoned"}
+  ]
+}

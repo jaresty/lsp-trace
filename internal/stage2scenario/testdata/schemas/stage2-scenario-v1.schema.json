@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "stage2-scenario-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "steps"],
+  "properties": {
+    "version": {"const": "stage2-scenario-v1"},
+    "steps": {"type": "array", "items": {"$ref": "#/$defs/step"}}
+  },
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "positive": {"type": "integer", "minimum": 1, "maximum": 18446744073709551615},
+    "expect": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "maxLength": 256},
+        "session_id": {"$ref": "#/$defs/id"},
+        "victim": {"$ref": "#/$defs/id"},
+        "reservation": {"$ref": "#/$defs/id"},
+        "state": {"enum": ["STARTING", "INITIALIZING", "READY", "DRAINING", "STOPPING", "STOPPED", "CRASHED", "POISONED"]},
+        "prior_state": {"enum": ["STARTING", "INITIALIZING", "READY", "DRAINING", "STOPPING", "STOPPED", "CRASHED", "POISONED"]},
+        "generation": {"$ref": "#/$defs/positive"},
+        "intent_id": {"$ref": "#/$defs/id"},
+        "intent_ref": {"$ref": "#/$defs/id"},
+        "intent_kind": {"enum": ["STOP", "RESTART", "EVICT"]},
+        "outcome": {"enum": ["COMPLETE", "DOMAIN_ERROR", "CANCELLED", "TIMED_OUT"]},
+        "operation_status": {"enum": ["SUCCEEDED", "FAILED", "NOOP", "CANCELLED", "TIMED_OUT"]},
+        "failure": {"type": "string", "maxLength": 256},
+        "joined": {"type": "boolean"},
+        "replayed": {"type": "boolean"},
+        "noop": {"type": "boolean"},
+        "detached": {"type": "boolean"}
+      }
+    },
+    "step": {
+      "oneOf": [
+        {"$ref": "#/$defs/startLike"},
+        {"$ref": "#/$defs/request"},
+        {"$ref": "#/$defs/child"},
+        {"$ref": "#/$defs/respondLike"},
+        {"$ref": "#/$defs/cancelWriteFailed"},
+        {"$ref": "#/$defs/terminalLike"},
+        {"$ref": "#/$defs/lifecycleRegister"},
+        {"$ref": "#/$defs/lifecycle"},
+        {"$ref": "#/$defs/lifecycleComplete"},
+        {"$ref": "#/$defs/lifecycleDetach"},
+        {"$ref": "#/$defs/admit"},
+        {"$ref": "#/$defs/evictComplete"}
+      ]
+    },
+    "startLike": {"type":"object","additionalProperties":false,"required":["op","session","generation","outcome"],"properties":{"op":{"enum":["startup","initialize","crash","poison"]},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"outcome":{"type":"string","minLength":1,"maxLength":256}}},
+    "request": {"type":"object","additionalProperties":false,"required":["op","session","generation","request"],"properties":{"op":{"const":"request"},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"request":{"$ref":"#/$defs/id"}}},
+    "child": {"type":"object","additionalProperties":false,"required":["op","session","generation","request","lsp_request","child","ordinal"],"properties":{"op":{"const":"child"},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"request":{"$ref":"#/$defs/id"},"lsp_request":{"$ref":"#/$defs/id"},"child":{"$ref":"#/$defs/id"},"ordinal":{"$ref":"#/$defs/positive"}}},
+    "respondLike": {"type":"object","additionalProperties":false,"required":["op","session","generation","lsp_request","child"],"properties":{"op":{"enum":["respond","late_response"]},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"lsp_request":{"$ref":"#/$defs/id"},"child":{"$ref":"#/$defs/id"}}},
+    "cancelWriteFailed": {"type":"object","additionalProperties":false,"required":["op","session","generation","request","lsp_request","child"],"properties":{"op":{"const":"cancel_write_failed"},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"request":{"$ref":"#/$defs/id"},"lsp_request":{"$ref":"#/$defs/id"},"child":{"$ref":"#/$defs/id"}}},
+    "terminalLike": {"type":"object","additionalProperties":false,"required":["op","session","generation","request"],"properties":{"op":{"enum":["timeout","cancel"]},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"request":{"$ref":"#/$defs/id"}}},
+    "lifecycleRegister": {"type":"object","additionalProperties":false,"required":["op","session","generation","state","expect"],"properties":{"op":{"const":"lifecycle_register"},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"state":{"enum":["STARTING","INITIALIZING","READY","DRAINING","STOPPING","STOPPED","CRASHED","POISONED"]},"reaped":{"type":"boolean"},"expect":{"$ref":"#/$defs/expect"}}},
+    "lifecycle": {"type":"object","additionalProperties":false,"required":["op","session","generation","operation","caller","expect"],"properties":{"op":{"const":"lifecycle"},"session":{"$ref":"#/$defs/id"},"generation":{"$ref":"#/$defs/positive"},"operation":{"enum":["STATUS","STOP","RESTART"]},"caller":{"$ref":"#/$defs/id"},"bind":{"$ref":"#/$defs/id"},"child_risk":{"type":"boolean"},"has_work":{"type":"boolean"},"expect":{"$ref":"#/$defs/expect"}}},
+    "lifecycleComplete": {"type":"object","additionalProperties":false,"required":["op","session","expect"],"properties":{"op":{"const":"lifecycle_complete"},"session":{"$ref":"#/$defs/id"},"intent_id":{"$ref":"#/$defs/id"},"intent_ref":{"$ref":"#/$defs/id"},"death":{"type":"boolean"},"reaped":{"type":"boolean"},"ready":{"type":"boolean"},"expect":{"$ref":"#/$defs/expect"}},"oneOf":[{"required":["intent_id"]},{"required":["intent_ref"]}]},
+    "lifecycleDetach": {"type":"object","additionalProperties":false,"required":["op","session","caller","outcome","expect"],"properties":{"op":{"const":"lifecycle_detach"},"session":{"$ref":"#/$defs/id"},"intent_id":{"$ref":"#/$defs/id"},"intent_ref":{"$ref":"#/$defs/id"},"caller":{"$ref":"#/$defs/id"},"outcome":{"enum":["REQUEST_CANCELLED","REQUEST_TIMEOUT"]},"expect":{"$ref":"#/$defs/expect"}},"oneOf":[{"required":["intent_id"]},{"required":["intent_ref"]}]},
+    "admit": {"type":"object","additionalProperties":false,"required":["op","session","expect"],"properties":{"op":{"const":"admit"},"session":{"$ref":"#/$defs/id"},"expect":{"$ref":"#/$defs/expect"}}},
+    "evictComplete": {"type":"object","additionalProperties":false,"required":["op","success","expect"],"properties":{"op":{"const":"evict_complete"},"intent_id":{"$ref":"#/$defs/id"},"intent_ref":{"$ref":"#/$defs/id"},"success":{"type":"boolean"},"expect":{"$ref":"#/$defs/expect"}},"oneOf":[{"required":["intent_id"]},{"required":["intent_ref"]}]}
+  }
+}
