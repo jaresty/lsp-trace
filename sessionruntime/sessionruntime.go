@@ -17,6 +17,26 @@ import (
 
 type Limits struct {
 	MaxSessions, MaxRequests, MaxChildren, MaxCancels, MaxTombstones, MaxObservations int
+	// MaxOperations bounds retained lifecycle operation records. Zero defaults to MaxObservations.
+	MaxOperations int
+}
+
+type OperationState string
+
+const (
+	OperationPending  OperationState = "PENDING"
+	OperationComplete OperationState = "COMPLETE"
+	OperationFailed   OperationState = "FAILED"
+)
+
+type OperationSnapshot struct {
+	ID         string
+	SessionID  string
+	CallerID   string
+	Generation uint64
+	Restart    bool
+	State      OperationState
+	Failure    session.Failure
 }
 
 type Child interface {
@@ -56,7 +76,7 @@ type StartResult struct {
 	Failure    session.Failure
 	Start      managedprocess.StartObservation
 }
-type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations int }
+type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations, Operations, Workers int }
 type Observation struct {
 	Sequence, Generation uint64
 	SessionID, Kind      string
@@ -92,8 +112,13 @@ type Manager struct {
 	starter      Starter
 	algebra      *session.Manager
 	sessions     map[string]*runtimeSession
+	operations   map[string]OperationSnapshot
+	operationIDs []string
 	observations []Observation
 	sequence     uint64
+	workers      int
+	workerDone   chan struct{}
+	closed       bool
 }
 
 func New(c Config) (*Manager, error) {
@@ -108,7 +133,10 @@ func New(c Config) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession)}, nil
+	if l.MaxOperations <= 0 {
+		l.MaxOperations = l.MaxObservations
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), workerDone: make(chan struct{}, 1)}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
@@ -264,65 +292,151 @@ func (m *Manager) Restart(ctx context.Context, id, caller string) session.Lifecy
 	return m.terminate(ctx, id, caller, true)
 }
 
-func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool) session.LifecycleResult {
+func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) session.LifecycleResult {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	r := m.sessions[id]
 	if r == nil {
-		m.mu.Unlock()
 		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	if m.closed {
+		return session.LifecycleResult{Failure: session.LifecycleConflict}
 	}
 	op := session.LifecycleStop
 	kind := "teardown"
 	if restart {
 		op, kind = session.LifecycleRestart, "restart"
 	}
+	for i := len(m.operationIDs) - 1; i >= 0; i-- {
+		existing := m.operations[m.operationIDs[i]]
+		if existing.SessionID == id && existing.Generation == r.record.Generation && existing.CallerID == caller && existing.Restart == restart {
+			return session.LifecycleResult{State: r.record.State, Generation: existing.Generation, IntentID: existing.ID, Replayed: true}
+		}
+	}
 	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
 	if intent.Failure != "" || intent.Noop || intent.Joined || intent.Replayed {
-		m.mu.Unlock()
 		return intent
 	}
-	child, generation, spec := r.process, r.record.Generation, r.spec
-	m.observe(id, generation, kind, intent.State, "")
-	m.mu.Unlock()
+	if m.workers >= m.limits.MaxChildren || !m.reserveOperation(intent.IntentID) {
+		return session.LifecycleResult{Failure: session.ResourceExhausted}
+	}
+	snapshot := OperationSnapshot{ID: intent.IntentID, SessionID: id, CallerID: caller, Generation: r.record.Generation, Restart: restart, State: OperationPending}
+	m.operations[snapshot.ID] = snapshot
+	m.operationIDs = append(m.operationIDs, snapshot.ID)
+	m.workers++
+	m.observe(id, snapshot.Generation, kind, intent.State, "")
+	go m.runLifecycle(snapshot, r.process, r.spec)
+	return intent
+}
 
-	teardown := child.Teardown(ctx)
+func (m *Manager) reserveOperation(id string) bool {
+	if _, exists := m.operations[id]; exists {
+		return true
+	}
+	for len(m.operations) >= m.limits.MaxOperations {
+		removed := false
+		for i, candidate := range m.operationIDs {
+			if m.operations[candidate].State != OperationPending {
+				delete(m.operations, candidate)
+				m.operationIDs = append(m.operationIDs[:i], m.operationIDs[i+1:]...)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, spec managedprocess.Spec) {
+	teardown := child.Teardown(context.Background())
 	resources := child.Close()
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
-	observed := session.LifecycleCompletion{ShutdownComplete: true, UnsafeIOAbsent: true, TerminateSucceeded: true, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
-	if resources.Kind != managedprocess.ResourcesClosed {
-		observed.UnsafeIOAbsent = false
-	}
+	observed := session.LifecycleCompletion{ShutdownComplete: true, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
 
 	m.mu.Lock()
-	completed := m.algebra.CompleteLifecycleObserved(id, intent.IntentID, observed)
-	m.observe(id, generation, "teardown", completed.State, completed.Failure)
-	if completed.Failure != "" || !restart {
-		delete(m.sessions, id)
+	completed := m.algebra.CompleteLifecycleObserved(operation.SessionID, operation.ID, observed)
+	r := m.sessions[operation.SessionID]
+	m.observe(operation.SessionID, operation.Generation, "teardown", completed.State, completed.Failure)
+	if completed.Failure != "" || !death || resources.Kind != managedprocess.ResourcesClosed {
+		operation.State, operation.Failure = OperationFailed, completed.Failure
+		if operation.Failure == "" {
+			operation.Failure = session.SessionReapIncomplete
+		}
+		if r != nil {
+			r.record.State = session.Poisoned
+		}
+		m.finishOperation(operation)
 		m.mu.Unlock()
-		return completed
+		return
+	}
+	if !operation.Restart {
+		delete(m.sessions, operation.SessionID)
+		operation.State = OperationComplete
+		m.finishOperation(operation)
+		m.mu.Unlock()
+		return
 	}
 	m.mu.Unlock()
 
-	child, start := m.starter.Start(ctx, spec)
+	next, start := m.starter.Start(context.Background(), spec)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if start.Kind != managedprocess.StartStarted || child == nil {
-		completed.State, completed.Failure = session.Poisoned, session.SpawnFailure
-		m.observe(id, completed.Generation, "poison", session.Poisoned, session.SpawnFailure)
-		delete(m.sessions, id)
-		return completed
+	if start.Kind != managedprocess.StartStarted || next == nil || r == nil {
+		operation.State, operation.Failure = OperationFailed, session.SpawnFailure
+		if r != nil {
+			r.record.State = session.Poisoned
+		}
+		m.observe(operation.SessionID, completed.Generation, "poison", session.Poisoned, session.SpawnFailure)
+		m.finishOperation(operation)
+		return
 	}
-	r.process, r.record.Generation, r.record.State = child, completed.Generation, session.Ready
+	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Ready
 	r.pending, r.requests, r.cancels = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), 0
-	m.observe(id, completed.Generation, "startup", session.Starting, "")
-	m.observe(id, completed.Generation, "initialization", session.Ready, "")
-	return completed
+	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
+	m.observe(operation.SessionID, completed.Generation, "initialization", session.Ready, "")
+	operation.State = OperationComplete
+	m.finishOperation(operation)
+}
+
+func (m *Manager) finishOperation(operation OperationSnapshot) {
+	m.operations[operation.ID] = operation
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) Operation(id string) (OperationSnapshot, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	snapshot, ok := m.operations[id]
+	return snapshot, ok
+}
+
+func (m *Manager) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	m.closed = true
+	for m.workers > 0 {
+		m.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.workerDone:
+		}
+		m.mu.Lock()
+	}
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *Manager) Census() Census {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	c := Census{Sessions: len(m.sessions), Generations: len(m.sessions), Children: len(m.sessions), Observations: len(m.observations)}
+	c := Census{Sessions: len(m.sessions), Generations: len(m.sessions), Children: len(m.sessions), Observations: len(m.observations), Operations: len(m.operations), Workers: m.workers}
 	for _, r := range m.sessions {
 		c.Requests += len(r.requests)
 		c.Cancels += r.cancels
