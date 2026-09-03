@@ -194,7 +194,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			}
 			_, known := seen[caller.ID]
 			if !known && opts.MaxNodes > 0 && len(seen) >= opts.MaxNodes {
-				result.Frontier = append(result.Frontier, graph.Boundary{NodeID: caller.ID, Reason: graph.MaxNodes})
+				result.Frontier = append(result.Frontier, graph.Boundary{NodeID: q.node.ID, Reason: graph.MaxNodes, Message: "caller omitted by node bound: " + caller.ID})
 				result.Summary.Complete = false
 				result.Summary.Truncated = true
 				continue

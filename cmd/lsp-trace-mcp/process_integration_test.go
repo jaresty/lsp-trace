@@ -310,13 +310,13 @@ func TestRealProcessDomainErrorsAreManifestConformant(t *testing.T) {
 }
 
 func TestRealProcessPublicationConfigurationAndAlwaysLocalLifecycle(t *testing.T) {
-	const assertion = "selector publication remains conditional, live traversal remains reserved, and lifecycle list dispatches locally"
+	const assertion = "selector publication remains conditional, incoming dispatches locally, and lifecycle list dispatches locally"
 	t.Log("ASSERTION: " + assertion)
 	binary := buildMCPBinary(t)
 	for _, args := range [][]string{nil, {"--enable-live-lsp"}} {
 		responses := runMCPProcess(t, binary, args, []map[string]any{
 			callRequest(1, "lsp_trace_capabilities", map[string]any{}),
-			callRequest(2, "lsp_trace_incoming", map[string]any{}),
+			callRequest(2, "lsp_trace_incoming", map[string]any{"session_id": "missing", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 1, "max_nodes": 1, "timeout_ms": 1000, "request_timeout_ms": 100}),
 			callRequest(3, "lsp_session_v1_list", map[string]any{}),
 		})
 		capability := decodeProcessCall(t, responses[0]).env["result"].(map[string]any)
@@ -324,7 +324,7 @@ func TestRealProcessPublicationConfigurationAndAlwaysLocalLifecycle(t *testing.T
 			t.Errorf("ASSERT_PUBLICATION_DISABLED_WITHOUT_ROOT: args=%v result=%v", args, capability)
 		}
 		incoming := decodeProcessCall(t, responses[1])
-		if incoming.env["code"] != "TOOL_NOT_IMPLEMENTED" || incoming.env["operation_status"] != "FAILED" {
+		if incoming.env["code"] != "SESSION_NOT_FOUND" || incoming.env["operation_status"] != "FAILED" {
 			t.Errorf("%s: args=%v incoming=%v", assertion, args, incoming.env)
 		}
 		lifecycle := decodeProcessCall(t, responses[2])

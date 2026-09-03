@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"time"
 
+	"lsp-trace/incomingops"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
@@ -56,6 +57,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 }
 
 func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, error) {
+	server, _, err := newServerRuntime(enableLiveLSP, roots...)
+	return server, err
+}
+
+func newServerRuntime(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
 	var publicationRoot *publication.Root
 	if len(roots) != 0 {
 		publicationRoot = roots[0]
@@ -63,7 +69,7 @@ func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, err
 	registry := mcp.NewRegistryWithPublication(enableLiveLSP, publicationRoot != nil)
 	validator, err := mcpcontract.NewOperationInputValidator()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	handlers, err := operation.NewRequiredHandlers(map[operation.Name]operation.Handler{
 		operation.Capabilities: func(context.Context, operation.Request) (operation.Result, *operation.Failure) {
@@ -76,13 +82,13 @@ func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, err
 		operation.Filter:    operation.NewFilterHandler(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {
 		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 64 * 1024, GracePeriod: 250 * time.Millisecond})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		starter = sessionruntime.ManagedStarter{Manager: supervisor}
 	}
@@ -91,11 +97,14 @@ func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, err
 		Starter: starter, ReadinessTimeout: 10 * time.Second,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
-		Executors:       map[mcp.ExecutorFamily]mcp.Executor{mcp.LifecycleExecutorFamily: lifecycleops.NewExecutor(lifecycleops.New(manager))},
+		Executors: map[mcp.ExecutorFamily]mcp.Executor{
+			mcp.LifecycleExecutorFamily: lifecycleops.NewExecutor(lifecycleops.New(manager)),
+			mcp.IncomingExecutorFamily:  incomingops.NewExecutor(manager),
+		},
 		PublicationRoot: publicationRoot, Publisher: publication.NewPublisher(),
-	}, nil
+	}, manager, nil
 }

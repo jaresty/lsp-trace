@@ -94,10 +94,10 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 }
 
 func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
-	const assertion = "ASSERT_ALWAYS_LOCAL_TEN_TOOL_LIFECYCLE_SURFACE"
+	const assertion = "ASSERT_ALWAYS_LOCAL_ELEVEN_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 10 {
+	if got := len(r.Advertised()); got != 11 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -113,10 +113,22 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_filter", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
 	for i, tool := range r.Advertised() {
 		if tool.Name != want[i] {
 			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
+		}
+	}
+	if incoming, ok := r.Resolve("lsp_trace_v1_incoming"); !ok || incoming.Availability != Enabled {
+		t.Fatalf("ASSERT_INCOMING_CALLABLE_SLICE_RESERVED: incoming=%+v found=%v", incoming, ok)
+	}
+	if slice, ok := r.Resolve("lsp_trace_v1_slice"); !ok || slice.Availability != NotImplemented {
+		t.Fatalf("ASSERT_INCOMING_CALLABLE_SLICE_RESERVED: slice=%+v found=%v", slice, ok)
+	}
+	advertised := r.Advertised()
+	for i := 1; i < len(advertised); i++ {
+		if advertised[i-1].Name > advertised[i].Name {
+			t.Fatalf("%s: order=%v", assertion, advertised)
 		}
 	}
 	t.Log("PASS " + assertion)
@@ -124,7 +136,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 
 func TestRegistryContract(t *testing.T) {
 	const (
-		canonicalAssertion = "registry has twelve canonical entries with ten always-local enabled tools and two reserved live-traversal entries"
+		canonicalAssertion = "registry has twelve canonical entries with eleven always-local enabled tools and one reserved slice entry"
 		aliasAssertion     = "each exact alias resolves to its canonical identity and aliases are not advertised"
 		unknownAssertion   = "unknown and unsupported versioned names are not recognized"
 	)
@@ -137,7 +149,7 @@ func TestRegistryContract(t *testing.T) {
 		if got := len(r.Tools()); got != 12 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 10 {
+		if got := len(r.Advertised()); got != 11 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{

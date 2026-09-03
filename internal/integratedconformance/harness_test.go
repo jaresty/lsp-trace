@@ -621,7 +621,8 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				path == "cmd/fake-lsp/main.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" ||
 				path == "README.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" ||
 				path == "cmd/lsp-trace/SKILL.md" || path == "cmd/lsp-trace-mcp/main.go" || path == "cmd/lsp-trace-mcp/main_test.go" || path == "cmd/lsp-trace-mcp/process_integration_test.go" ||
-				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" || strings.HasPrefix(path, "internal/integratedconformance/")
+				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" ||
+				strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "internal/traverse/") || strings.HasPrefix(path, "internal/integratedconformance/")
 			if !owned {
 				t.Fatalf("unowned path %q", path)
 			}
@@ -640,10 +641,10 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY")
 	})
 
-	t.Run("ASSERT_ALWAYS_LOCAL_TEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
-		rejectPerturbation(t, "ASSERT_ALWAYS_LOCAL_TEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
+	t.Run("ASSERT_ALWAYS_LOCAL_ELEVEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_ALWAYS_LOCAL_ELEVEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
 		registry := mcp.NewRegistry(true)
-		if got := len(registry.Advertised()); got != 10 {
+		if got := len(registry.Advertised()); got != 11 {
 			t.Fatalf("advertised=%d", got)
 		}
 		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {
@@ -660,7 +661,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		if result.Failure != session.ProcessContainmentUnavailable || before != after || after != (sessionruntime.Census{}) {
 			t.Fatalf("result=%+v before=%+v after=%+v", result, before, after)
 		}
-		t.Log("PASS ASSERT_ALWAYS_LOCAL_TEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
+		t.Log("PASS ASSERT_ALWAYS_LOCAL_ELEVEN_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
 	})
 }
 
