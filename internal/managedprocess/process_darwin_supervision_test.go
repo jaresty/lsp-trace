@@ -10,13 +10,16 @@ import (
 )
 
 func TestLocalDarwinSupervisionUsesGroupAndBoundedEvidence(t *testing.T) {
+	if LocalDarwinSupervisionOnly != "LOCAL_DARWIN_SUPERVISION_ONLY" {
+		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: exported=%q", LocalDarwinSupervisionOnly)
+	}
 	m := newHermeticManager(Options{StderrLimit: 64, GracePeriod: 20 * time.Millisecond})
 	p, started := m.Start(context.Background(), helperSpec("survive"))
 	if p == nil || started.Kind != StartStarted {
 		t.Fatalf("ASSERT_LOCAL_DARWIN_START: process=%v observation=%+v", p, started)
 	}
-	if started.Evidence != LocalDarwinSupervisionOnly {
-		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: evidence=%q", started.Evidence)
+	if started.Evidence != "LOCAL_DARWIN_SUPERVISION_ONLY" {
+		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: start evidence=%q", started.Evidence)
 	}
 	// Allow the helper to install its interrupt handler before exercising escalation.
 	time.Sleep(50 * time.Millisecond)
@@ -27,15 +30,24 @@ func TestLocalDarwinSupervisionUsesGroupAndBoundedEvidence(t *testing.T) {
 	if teardown.Census.ProcessGroupID != p.cmd.Process.Pid {
 		t.Fatalf("ASSERT_LOCAL_DARWIN_NEW_PROCESS_GROUP: census=%+v pid=%d", teardown.Census, p.cmd.Process.Pid)
 	}
-	if teardown.Death.Reap.Kind != ReapComplete || teardown.Death.Evidence != LocalDarwinSupervisionOnly {
+	if teardown.Death.Reap.Kind != ReapComplete {
 		t.Fatalf("ASSERT_LOCAL_DARWIN_BOUNDED_REAP: %+v", teardown.Death)
+	}
+	if teardown.Death.Evidence != "LOCAL_DARWIN_SUPERVISION_ONLY" {
+		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: death evidence=%q", teardown.Death.Evidence)
+	}
+	if teardown.Census.Evidence != "LOCAL_DARWIN_SUPERVISION_ONLY" {
+		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: census evidence=%q", teardown.Census.Evidence)
 	}
 	if !containsPhase(teardown.Phases, PhaseInterrupt) || !containsPhase(teardown.Phases, PhaseKill) || !containsPhase(teardown.Phases, PhaseReap) {
 		t.Fatalf("ASSERT_LOCAL_DARWIN_GROUP_ESCALATION: %+v", teardown)
 	}
 	closed := p.Close()
-	if closed.Kind != ResourcesClosed || closed.Evidence != LocalDarwinSupervisionOnly {
+	if closed.Kind != ResourcesClosed {
 		t.Fatalf("ASSERT_LOCAL_DARWIN_RESOURCE_CLOSURE: %+v", closed)
+	}
+	if closed.Evidence != "LOCAL_DARWIN_SUPERVISION_ONLY" {
+		t.Fatalf("ASSERT_LOCAL_DARWIN_LABEL: close evidence=%q", closed.Evidence)
 	}
 }
 
