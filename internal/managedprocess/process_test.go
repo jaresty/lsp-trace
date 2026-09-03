@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -107,6 +108,7 @@ func TestManagedProcessHelper(t *testing.T) {
 		_, _ = io.WriteString(os.Stderr, "abcdefghij")
 		os.Exit(7)
 	case "survive":
+		signal.Ignore(os.Interrupt)
 		for {
 			time.Sleep(time.Second)
 		}

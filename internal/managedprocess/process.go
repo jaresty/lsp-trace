@@ -15,7 +15,11 @@ import (
 	"lsp-trace/internal/containment"
 )
 
-const localEvidence = "hermetic process-management observation only"
+const (
+	localEvidence              = "hermetic process-management observation only"
+	LocalDarwinSupervisionOnly = "LOCAL_DARWIN_SUPERVISION_ONLY"
+	localDarwinLimitations     = "local Darwin process-group supervision does not prove anti-escape, owner-death cleanup, descendant containment, or VERIFIED"
+)
 
 type Options struct {
 	StderrLimit int
@@ -38,10 +42,11 @@ const (
 )
 
 type StartObservation struct {
-	Kind     StartKind
-	Reason   string
-	Err      error
-	Evidence string
+	Kind        StartKind
+	Reason      string
+	Err         error
+	Evidence    string
+	Limitations string
 }
 
 type DeathKind string
@@ -113,17 +118,29 @@ const (
 	PhaseReap      TeardownPhase = "REAP"
 )
 
+type GroupCensusObservation struct {
+	ProcessGroupID int
+	Members        int
+	Limit          int
+	Bounded        bool
+	Truncated      bool
+	Err            error
+	Evidence       string
+}
+
 type TeardownObservation struct {
 	Phases []TeardownPhase
 	Death  DeathObservation
+	Census GroupCensusObservation
 }
 
 type commandFactory func(context.Context, Spec) (*exec.Cmd, error)
 
 type Manager struct {
-	available bool
-	options   Options
-	factory   commandFactory
+	available   bool
+	localDarwin bool
+	options     Options
+	factory     commandFactory
 }
 
 // New consumes only the sealed production gate. Current containment gates are
@@ -136,10 +153,19 @@ func New(gate containment.RuntimeGate, options Options) *Manager {
 	}
 }
 
+// NewLocalDarwinSupervisor explicitly opts into local process-group supervision.
+// It is not a containment gate and cannot make production startup available.
+func NewLocalDarwinSupervisor(options Options) (*Manager, error) {
+	if !localDarwinSupported() {
+		return nil, errors.New("managedprocess: local Darwin supervision unavailable")
+	}
+	return &Manager{available: true, localDarwin: true, options: normalizedOptions(options), factory: commandFromSpec}, nil
+}
+
 // newHermeticManager exercises process mechanics without representing a
 // production containment authorization path.
 func newHermeticManager(options Options) *Manager {
-	return &Manager{available: true, options: normalizedOptions(options), factory: commandFromSpec}
+	return &Manager{available: true, localDarwin: localDarwinSupported(), options: normalizedOptions(options), factory: commandFromSpec}
 }
 
 func normalizedOptions(options Options) Options {
@@ -169,35 +195,48 @@ func commandFromSpec(ctx context.Context, spec Spec) (*exec.Cmd, error) {
 }
 
 func (m *Manager) Start(ctx context.Context, spec Spec) (*Process, StartObservation) {
+	evidence := localEvidence
+	limitations := ""
+	if m != nil && m.localDarwin {
+		evidence = LocalDarwinSupervisionOnly
+		limitations = localDarwinLimitations
+	}
 	if m == nil || !m.available {
-		return nil, StartObservation{Kind: StartUnavailable, Reason: "containment unavailable", Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartUnavailable, Reason: "containment unavailable", Evidence: evidence, Limitations: limitations}
 	}
 	if m.factory == nil {
-		return nil, StartObservation{Kind: StartFailed, Reason: "command factory unavailable", Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartFailed, Reason: "command factory unavailable", Evidence: evidence, Limitations: limitations}
 	}
 	cmd, err := m.factory(ctx, spec)
 	if err != nil {
-		return nil, StartObservation{Kind: StartFailed, Reason: "command construction failed", Err: err, Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartFailed, Reason: "command construction failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, StartObservation{Kind: StartFailed, Reason: "stdin pipe failed", Err: err, Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartFailed, Reason: "stdin pipe failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		_ = stdin.Close()
-		return nil, StartObservation{Kind: StartFailed, Reason: "stdout pipe failed", Err: err, Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartFailed, Reason: "stdout pipe failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
 	stderr := &boundedBuffer{limit: m.options.StderrLimit}
 	cmd.Stderr = stderr
+	if m.localDarwin {
+		if err := configureLocalDarwin(cmd); err != nil {
+			_ = stdin.Close()
+			_ = stdout.Close()
+			return nil, StartObservation{Kind: StartUnavailable, Reason: "local Darwin supervision unavailable", Err: err, Evidence: LocalDarwinSupervisionOnly, Limitations: localDarwinLimitations}
+		}
+	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		return nil, StartObservation{Kind: StartFailed, Reason: "process start failed", Err: err, Evidence: localEvidence}
+		return nil, StartObservation{Kind: StartFailed, Reason: "process start failed", Err: err, Evidence: evidence, Limitations: limitations}
 	}
-	p := &Process{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, gracePeriod: m.options.GracePeriod, done: make(chan struct{})}
+	p := &Process{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr, gracePeriod: m.options.GracePeriod, done: make(chan struct{}), evidence: evidence, localDarwin: m.localDarwin}
 	go p.reap()
-	return p, StartObservation{Kind: StartStarted, Evidence: localEvidence}
+	return p, StartObservation{Kind: StartStarted, Evidence: evidence, Limitations: limitations}
 }
 
 type Process struct {
@@ -207,6 +246,8 @@ type Process struct {
 	stderr      *boundedBuffer
 	gracePeriod time.Duration
 	done        chan struct{}
+	evidence    string
+	localDarwin bool
 
 	waitOnce  sync.Once
 	death     DeathObservation
@@ -220,6 +261,10 @@ func (p *Process) Stdout() io.ReadCloser { return p.stdout }
 func (p *Process) reap() {
 	err := p.cmd.Wait()
 	p.death = deathFromWait(p.cmd, err, p.stderr.snapshot())
+	if p.localDarwin {
+		p.death.Evidence = p.evidence
+		p.death.Reap.Evidence = p.evidence
+	}
 	close(p.done)
 }
 
@@ -239,13 +284,21 @@ func (p *Process) Observe() SurvivorObservation {
 
 func (p *Process) Teardown(ctx context.Context) TeardownObservation {
 	phases := []TeardownPhase{PhaseInterrupt}
+	census := GroupCensusObservation{}
+	if p.localDarwin {
+		census = censusLocalDarwinGroup(p.cmd.Process.Pid, 64)
+	}
 	select {
 	case <-p.done:
 		phases = append(phases, PhaseReap)
-		return TeardownObservation{Phases: phases, Death: p.death}
+		return TeardownObservation{Phases: phases, Death: p.death, Census: census}
 	default:
 	}
-	_ = p.cmd.Process.Signal(os.Interrupt)
+	if p.localDarwin {
+		_ = signalLocalDarwinGroup(p.cmd.Process.Pid, os.Interrupt)
+	} else {
+		_ = p.cmd.Process.Signal(os.Interrupt)
+	}
 	phases = append(phases, PhaseWait)
 	timer := time.NewTimer(p.gracePeriod)
 	defer timer.Stop()
@@ -253,15 +306,23 @@ func (p *Process) Teardown(ctx context.Context) TeardownObservation {
 	case <-p.done:
 	case <-ctx.Done():
 		phases = append(phases, PhaseKill)
-		_ = p.cmd.Process.Kill()
+		if p.localDarwin {
+			_ = signalLocalDarwinGroup(p.cmd.Process.Pid, os.Kill)
+		} else {
+			_ = p.cmd.Process.Kill()
+		}
 		<-p.done
 	case <-timer.C:
 		phases = append(phases, PhaseKill)
-		_ = p.cmd.Process.Kill()
+		if p.localDarwin {
+			_ = signalLocalDarwinGroup(p.cmd.Process.Pid, os.Kill)
+		} else {
+			_ = p.cmd.Process.Kill()
+		}
 		<-p.done
 	}
 	phases = append(phases, PhaseReap)
-	return TeardownObservation{Phases: phases, Death: p.death}
+	return TeardownObservation{Phases: phases, Death: p.death, Census: census}
 }
 
 func (p *Process) Close() ResourceObservation {
@@ -274,9 +335,9 @@ func (p *Process) Close() ResourceObservation {
 			errs = appendIf(errs, p.stdout.Close())
 		}
 		if err := errors.Join(errs...); err != nil {
-			p.resources = ResourceObservation{Kind: ResourcesCloseFailed, Err: err, Evidence: localEvidence}
+			p.resources = ResourceObservation{Kind: ResourcesCloseFailed, Err: err, Evidence: p.evidence}
 		} else {
-			p.resources = ResourceObservation{Kind: ResourcesClosed, Evidence: localEvidence}
+			p.resources = ResourceObservation{Kind: ResourcesClosed, Evidence: p.evidence}
 		}
 	})
 	return p.resources
