@@ -1,13 +1,26 @@
 {
-  "name": "@lsp-trace/ember-glint-provider",
-  "version": "0.1.0",
-  "description": "External Ember/Glint provider package boundary for lsp-trace",
-  "license": "MIT",
-  "private": false,
-  "files": [
-    "README.md"
-  ],
-  "engines": {
-    "node": ">=20"
+  "name": "@lsp-trace/ember-glint-analyzer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./default-analyzer.mjs",
+    "./analyzer": "./analyzer.mjs",
+    "./template": "./analyzers/template.mjs",
+    "./script": "./analyzers/script.mjs",
+    "./glint": "./analyzers/glint.mjs",
+    "./custody": "./analyzers/custody.cjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@glint/core": "1.5.2",
+    "@glint/environment-ember-loose": "1.5.2",
+    "@glint/environment-ember-template-imports": "1.5.2",
+    "ember-source": "7.2.0",
+    "tree-sitter": "0.21.1",
+    "tree-sitter-typescript": "0.23.2",
+    "typescript": "5.9.2"
   }
 }
