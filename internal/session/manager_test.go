@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+func TestRestartCanCompleteStartupPendingCorrelatedInitialization(t *testing.T) {
+	m, _ := NewManager(ManagerConfig{MaxSessions: 1})
+	m.RegisterLifecycle("s", 4, Ready, false)
+	intent := m.Lifecycle(LifecycleRequest{SessionID: "s", Generation: 4, Operation: LifecycleRestart, CallerID: "caller"})
+	completed := m.CompleteLifecycleObserved("s", intent.IntentID, LifecycleCompletion{ShutdownComplete: true, UnsafeIOAbsent: true, TerminateSucceeded: true, DeathObserved: true, NoContainedSurvivors: true, StderrDrainComplete: true, Reaped: true, InitializationPending: true})
+	if completed.Failure != "" || completed.Generation != 5 || completed.State != Initializing || completed.Outcome != OutcomeComplete || completed.OperationStatus != StatusSucceeded {
+		t.Fatalf("ASSERT_RESTART_PENDING_INITIALIZATION_RESULT: %+v", completed)
+	}
+	if stale := m.ObserveInitialization("s", 4, true); stale.Failure != StaleGeneration || m.lifecycles["s"].state != Initializing {
+		t.Fatalf("ASSERT_RESTART_PENDING_REJECTS_STALE_GENERATION: result=%+v lifecycle=%+v", stale, m.lifecycles["s"])
+	}
+	if ready := m.ObserveInitialization("s", 5, true); ready.Failure != "" || ready.State != Ready || m.lifecycles["s"].state != Ready {
+		t.Fatalf("ASSERT_RESTART_PENDING_EXACT_GENERATION_READY: result=%+v lifecycle=%+v", ready, m.lifecycles["s"])
+	}
+}
+
 func TestManagerCapacityAdmissionAndEviction(t *testing.T) {
 	for _, invalid := range []int{0, -1} {
 		if _, err := NewManager(ManagerConfig{MaxSessions: invalid}); err == nil {

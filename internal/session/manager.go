@@ -152,6 +152,7 @@ type LifecycleCompletion struct {
 	StderrDrainComplete    bool
 	Reaped                 bool
 	InitializationComplete bool
+	InitializationPending  bool
 }
 
 type LifecycleLedgerEntry struct {
@@ -397,6 +398,11 @@ func (m *Manager) CompleteLifecycleObserved(sessionID, intentID string, observed
 		result.Generation = s.generation
 		s.state = Starting
 		m.appendLifecycle(sessionID, s.generation, "allocate", intent.id, "", Starting, intent.kind, "")
+		if observed.InitializationPending {
+			s.state, result.State = Initializing, Initializing
+			m.appendLifecycle(sessionID, s.generation, "initialized", intent.id, "", Initializing, intent.kind, "")
+			return m.terminalizeLifecycle(sessionID, s, intent, classifyLifecycleResult(result))
+		}
 		if !observed.InitializationComplete {
 			m.appendLifecycle(sessionID, s.generation, "poison", intent.id, "", Poisoned, intent.kind, InitializationFailure)
 			result.State, result.Failure = Poisoned, InitializationFailure

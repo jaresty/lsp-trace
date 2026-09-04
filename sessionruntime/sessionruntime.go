@@ -792,7 +792,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	teardown := child.Teardown(context.Background())
 	resources := child.Close()
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
-	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationComplete: true}
+	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationPending: true}
 
 	m.mu.Lock()
 	completed := m.algebra.CompleteLifecycleObserved(operation.SessionID, operation.ID, observed)
@@ -832,7 +832,6 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 
 	next, start := m.starter.Start(context.Background(), spec)
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if start.Kind != managedprocess.StartStarted || next == nil || r == nil {
 		operation.State, operation.Failure = OperationFailed, session.SpawnFailure
 		if r != nil {
@@ -840,14 +839,28 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		}
 		m.observe(operation.SessionID, completed.Generation, "poison", session.Poisoned, session.SpawnFailure)
 		m.finishOperation(operation)
+		m.mu.Unlock()
 		return
 	}
-	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Ready
+	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
 	r.pending, r.requests, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), 0, false, false
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
-	m.observe(operation.SessionID, completed.Generation, "initialization", session.Ready, "")
-	operation.State = OperationComplete
+	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")
+	m.mu.Unlock()
+	if _, ok := next.(wireChild); ok {
+		readiness := m.BeginReadiness(context.Background(), operation.SessionID, completed.Generation, time.Time{})
+		observed, _ := m.WaitReadiness(context.Background(), readiness.ID)
+		if observed.State != ReadinessReady {
+			operation.State, operation.Failure = OperationFailed, observed.Failure
+		} else {
+			operation.State = OperationComplete
+		}
+	} else {
+		operation.State = OperationComplete
+	}
+	m.mu.Lock()
 	m.finishOperation(operation)
+	m.mu.Unlock()
 }
 
 func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) bool {

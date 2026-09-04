@@ -601,6 +601,16 @@ func TestReferenceSeamIdentityNoOverlapAndRestartObservations(t *testing.T) {
 		t.Fatalf("assert restart acceptance: %+v", restart)
 	}
 	waitOperation(t, m, restart.IntentID, OperationComplete)
+	restarted := m.Records()[0]
+	if restarted.Generation != 2 || restarted.State != session.Initializing {
+		t.Fatalf("ASSERT_RESTART_GENERATION_INITIALIZING: status=%+v; generation n+1 must not be READY without correlated initialize metadata", restarted)
+	}
+	if stale := m.ObserveInitialization(first.SessionID, 1, true); stale.Failure != session.StaleGeneration || m.Records()[0].State != session.Initializing {
+		t.Fatalf("ASSERT_RESTART_REJECTS_STALE_INITIALIZATION: result=%+v status=%+v", stale, m.Records()[0])
+	}
+	if initialized := m.ObserveInitialization(first.SessionID, 2, true); initialized.Failure != "" || initialized.State != session.Ready || m.Records()[0].State != session.Ready {
+		t.Fatalf("ASSERT_RESTART_EXACT_GENERATION_READY: result=%+v status=%+v", initialized, m.Records()[0])
+	}
 	if starter.starts != 2 || m.Census().Generations != 1 {
 		t.Fatalf("assert restart no overlap: starts=%d census=%+v", starter.starts, m.Census())
 	}
