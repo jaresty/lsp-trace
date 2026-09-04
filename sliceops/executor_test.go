@@ -3,6 +3,7 @@ package sliceops
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -73,19 +74,51 @@ func TestSliceAppliesConservativeDefaults(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
-func TestSliceSymbolUsesGoplsHierarchySelectionStart(t *testing.T) {
-	const assertion = "ASSERT_SLICE_GOPLS_SYMBOL_SELECTION_START"
+func TestSliceSymbolUsesSharedBoundedPrepareReconciliation(t *testing.T) {
+	const assertion = "ASSERT_SLICE_SYMBOL_PREPARE_POSITION_PARITY"
 	root := item("Target", 7)
-	symbols := `[{"name":"Manager","kind":23,"tags":[],"deprecated":false,"range":{"start":{"line":2,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":2,"character":5},"end":{"line":2,"character":12}},"children":[{"name":"Target","kind":12,"tags":[],"deprecated":false,"range":{"start":{"line":7,"character":1},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}]}]`
+	symbols := `[{"name":"Target","kind":12,"location":{"uri":"file:///w/a.go","range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}}}}]`
 	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
-		"textDocument/documentSymbol:":       {Result: json.RawMessage(symbols)},
-		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
 		"callHierarchy/outgoingCalls:Target": {Result: json.RawMessage(`[]`)},
 		"callHierarchy/incomingCalls:Target": {Result: json.RawMessage(`[]`)},
 	}}
+	f.respond = func(r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+		switch r.Method {
+		case "textDocument/documentSymbol":
+			return sessionruntime.RoundTripResult{Result: json.RawMessage(symbols)}
+		case "textDocument/prepareCallHierarchy":
+			var params struct {
+				Position struct{ Character uint32 } `json:"position"`
+			}
+			_ = json.Unmarshal(r.Params, &params)
+			if params.Position.Character < 5 {
+				return sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "identifier not found"}}
+			}
+			return sessionruntime.RoundTripResult{Result: json.RawMessage(`[` + root + `]`)}
+		default:
+			if result, ok := f.results[r.Method+":Target"]; ok {
+				return result
+			}
+			return sessionruntime.RoundTripResult{Failure: session.RequestTimeout}
+		}
+	}
 	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","symbol":"Target","down_depth":1,"up_depth":1}`)})
-	if failure != nil || len(f.requests) < 2 || !strings.Contains(string(f.requests[1].Params), `"line":7,"character":3`) {
+	if failure != nil {
 		t.Fatalf("%s: failure=%v requests=%v", assertion, failure, f.requests)
+	}
+	var preparePositions []uint32
+	for _, request := range f.requests {
+		if request.Method != "textDocument/prepareCallHierarchy" {
+			continue
+		}
+		var params struct {
+			Position struct{ Character uint32 } `json:"position"`
+		}
+		_ = json.Unmarshal(request.Params, &params)
+		preparePositions = append(preparePositions, params.Position.Character)
+	}
+	if got := fmt.Sprint(preparePositions); got != "[0 1 2 3 4 5 5]" {
+		t.Fatalf("%s: positions=%v requests=%v", assertion, preparePositions, f.requests)
 	}
 }
 

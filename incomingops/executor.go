@@ -21,7 +21,10 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const OperationIncoming operation.Name = "incoming"
+const (
+	OperationIncoming          operation.Name = "incoming"
+	maxSymbolPrepareProbeDelta                = uint32(64)
+)
 
 type Runtime interface {
 	Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure)
@@ -156,7 +159,44 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 	if len(matches) != 1 {
 		return 0, 0, failure("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", symbolName, len(matches)))
 	}
-	return matches[0].SelectionRange.Start.Line, matches[0].SelectionRange.Start.Character, nil
+	symbol := matches[0]
+	if !validRange(symbol.Range) || !validRange(symbol.SelectionRange) || !rangeContains(symbol.Range, symbol.SelectionRange) {
+		return 0, 0, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", fmt.Errorf("document symbol %q has invalid ranges", symbolName))
+	}
+	start := symbol.SelectionRange.Start
+	for delta := uint32(0); delta <= maxSymbolPrepareProbeDelta && delta <= ^uint32(0)-start.Character; delta++ {
+		candidate := lsp.Position{Line: start.Line, Character: start.Character + delta}
+		items, err := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: candidate})
+		if err == nil {
+			if len(items) > 0 {
+				return candidate.Line, candidate.Character, nil
+			}
+			continue
+		}
+		if strings.Contains(err.Error(), "json-rpc error 0: identifier not found") {
+			continue
+		}
+		if errors.Is(err, context.Canceled) {
+			return 0, 0, failure("CANCELLED", err)
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return 0, 0, failure("REQUEST_TIMEOUT", err)
+		}
+		return 0, 0, failure("DOCUMENT_SYMBOL_PREPARE_FAILED", err)
+	}
+	return 0, 0, failure("DOCUMENT_SYMBOL_UNPREPARABLE", fmt.Errorf("document symbol %q was not preparable within %d bounded positions", symbolName, maxSymbolPrepareProbeDelta+1))
+}
+
+func validRange(r lsp.Range) bool {
+	return !positionLess(r.End, r.Start)
+}
+
+func rangeContains(outer, inner lsp.Range) bool {
+	return !positionLess(inner.Start, outer.Start) && !positionLess(outer.End, inner.End)
+}
+
+func positionLess(a, b lsp.Position) bool {
+	return a.Line < b.Line || (a.Line == b.Line && a.Character < b.Character)
 }
 
 func applyDefaults(r *request) {

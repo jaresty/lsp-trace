@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": [
+    {
+      "name": "New",
+      "kind": 12,
+      "location": {
+        "uri": "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-4f55da80-20fc-44a-2332720e/sessionruntime/sessionruntime.go",
+        "range": {
+          "start": {"line": 355, "character": 0},
+          "end": {"line": 379, "character": 1}
+        }
+      }
+    }
+  ]
+}
