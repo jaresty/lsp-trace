@@ -81,7 +81,12 @@ assert_contains DOC-MCP-SKILL cmd/lsp-trace/SKILL.md '### Use the MCP offline ev
 assert_contains DOC-MCP-STDIO README.md 'lsp-trace-mcp --publication-root'
 assert_contains DOC-MCP-CAPABILITIES README.md 'lsp_trace_v1_capabilities'
 assert_contains DOC-MCP-ALWAYS-LOCAL README.md 'local-development-only'
-assert_contains DOC-MCP-TWELVE-TOOLS README.md 'twelve canonical tools'
+assert_contains DOC-MCP-THIRTEEN-TOOLS README.md 'thirteen canonical tools'
+assert_contains DOC-MCP-PROVIDERS README.md 'Host-provisioned relation providers'
+assert_contains DOC-MCP-PROVIDER-CONTRACT docs/PROVIDERS.md 'lsp-trace.provider-collector-request.v1'
+assert_contains DOC-MCP-PROVIDER-DECLARATION-SCHEMA schema/schemas/lsp-trace.bootstrap-provider.v1.schema.json 'lsp-trace.bootstrap-provider.v1'
+assert_contains DOC-MCP-PROVIDER-REQUEST-SCHEMA schema/schemas/lsp-trace.provider-collector-request.v1.schema.json 'lsp-trace.provider-collector-request.v1'
+assert_contains DOC-MCP-PROVIDER-OBSERVATION-SCHEMA schema/schemas/lsp-trace.provider-observations.v1.schema.json 'lsp-trace.provider-observations'
 assert_contains DOC-MCP-INCOMING cmd/lsp-trace/SKILL.md 'bounded incoming traversal are enabled by default'
 assert_contains DOC-MCP-SLICE-ENABLED cmd/lsp-trace/SKILL.md 'Slice traversal is enabled by default'
 assert_contains DOC-MCP-WARNING README.md "developer's permissions"
@@ -93,7 +98,8 @@ assert_contains DOC-MCP-HISTORICAL-ADR docs/adr/0003-persistent-mcp-language-ser
 assert_contains DOC-PI-STANDARD-ADAPTER README.md 'pi install npm:pi-mcp-adapter'
 assert_contains DOC-PI-PROJECT-CONFIG README.md 'Preferred project config: `.mcp.json`'
 assert_contains DOC-PI-DIRECT-TOOLS README.md '"directTools": ['
-assert_contains DOC-PI-EXACT-TWELVE README.md 'The list contains exactly the twelve canonical MCP names'
+assert_contains DOC-PI-EXACT-THIRTEEN README.md 'The list contains exactly the thirteen canonical MCP names'
+assert_contains DOC-PI-EXECUTE README.md '"lsp_trace_v1_execute"'
 assert_contains DOC-PI-SELF-CHECK README.md '/mcp reconnect lsp-trace'
 assert_contains DOC-PI-NO-CUSTOM-EXTENSION README.md 'Do not add a repository-local Pi extension or a second MCP bridge.'
 assert_contains DOC-PI-HOST-AUTHORITY README.md 'Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory.'
@@ -104,7 +110,7 @@ assert_contains DOC-PI-SEARCH-INTENTS README.md '"who calls this callee"'
 assert_contains DOC-MCP-TRAVERSAL-COMPACT README.md '"detail":"compact","output_selector":"traces/callers.json"'
 assert_contains DOC-MCP-LIFECYCLE-SUCCESS README.md 'Successful lifecycle guidance is categorical and comes only from the returned `result`'
 assert_contains DOC-SKILL-TRAVERSAL-COMPACT cmd/lsp-trace/SKILL.md 'For a compact traversal response, set both `detail: "compact"` and a caller-chosen `output_selector`.'
-assert_contains DOC-ADR-TWELVE docs/adr/0003-always-local-stage2.md 'Unsupported platforms keep the same twelve-tool discovery contract.'
+assert_contains DOC-ADR-THIRTEEN docs/adr/0003-always-local-stage2.md 'Unsupported platforms keep the same thirteen-tool discovery contract.'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

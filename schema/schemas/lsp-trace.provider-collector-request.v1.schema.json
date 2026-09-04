@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.provider-collector-request.v1.schema.json",
+  "title": "Host-to-provider collector request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "provider_id", "adapter_id", "session", "seed", "relations", "document_custody", "limits"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.provider-collector-request.v1"},
+    "provider_id": {"type": "string", "minLength": 1},
+    "adapter_id": {"type": "string", "minLength": 1},
+    "session": {
+      "type": "object", "additionalProperties": false, "required": ["session_id", "generation"],
+      "properties": {"session_id": {"type": "string", "minLength": 1}, "generation": {"type": "integer", "minimum": 1}}
+    },
+    "seed": {
+      "type": "object", "additionalProperties": false, "required": ["uri"],
+      "properties": {"uri": {"type": "string", "format": "uri"}, "line": {"type": "integer", "minimum": 0}, "character": {"type": "integer", "minimum": 0}, "symbol": {"type": "string"}, "start_mode": {"type": "string"}}
+    },
+    "relations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+    "document_custody": {
+      "type": "object", "additionalProperties": false, "required": ["original_uri", "fail_on_unknown_revision"],
+      "properties": {"original_uri": {"type": "string", "format": "uri"}, "workspace_revision": {}, "fail_on_unknown_revision": {"type": "boolean"}}
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false, "required": ["max_nodes", "timeout_ms", "request_timeout_ms"],
+      "properties": {"max_depth": {"type": "integer", "minimum": 0}, "down_depth": {"type": "integer", "minimum": 0}, "up_depth": {"type": "integer", "minimum": 0}, "max_nodes": {"type": "integer", "minimum": 1}, "max_messages": {"type": "integer", "minimum": 1}, "max_bytes": {"type": "integer", "minimum": 1}, "timeout_ms": {"type": "integer", "minimum": 1}, "request_timeout_ms": {"type": "integer", "minimum": 1}}
+    }
+  }
+}

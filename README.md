@@ -69,7 +69,7 @@ Comparison is deterministic, read-only, and limited to explicit per-seed referen
 
 ## MCP offline evidence server
 
-`lsp-trace-mcp` is a local-development-only stdio MCP server. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. Its default surface has twelve canonical tools: six deterministic offline evidence tools, four local session lifecycle tools, and two bounded traversal tools. Launch it without filesystem publication, or pin selector publication beneath one private root:
+`lsp-trace-mcp` is a local-development-only stdio MCP server. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. Its default surface has thirteen canonical tools: seven deterministic offline evidence tools, four local session lifecycle tools, and two bounded traversal tools. Launch it without filesystem publication, or pin selector publication beneath one private root:
 
 > **WARNING:** Local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. Run only developer-configured commands you trust.
 
@@ -99,9 +99,9 @@ Traversal requires a READY session. The host—not the MCP caller—provisions t
 }
 ```
 
-After startup, call `lsp_session_v1_list` to discover the exact READY `session_id` and `generation`; pass that selector to `lsp_trace_v1_incoming` or `lsp_trace_v1_slice`. Process configuration never enters MCP input schemas or session identity.
+After startup, call `lsp_session_v1_list` to discover the exact READY `session_id` and `generation`; pass that selector to `lsp_trace_v1_incoming` or `lsp_trace_v1_slice`. Process configuration never enters MCP input schemas or session identity. For explicit provider-backed non-CALLS relations, add host-owned `providers` declarations as documented in [Host-provisioned relation providers](docs/PROVIDERS.md); callers select only registered identities, `auto`, or `none`.
 
-Stage 1 advertises six canonical tools and accepts one unadvertised compatibility alias for each:
+Stage 1 advertises seven canonical tools and accepts one unadvertised compatibility alias for each:
 
 | Canonical tool | Alias |
 |---|---|
@@ -122,7 +122,7 @@ Incoming and slice also accept `detail: "compact"` only with a caller-chosen `ou
 lsp_trace_v1_incoming {"session_id":"SESSION_FROM_LIST","generation":1,"uri":"file:///absolute/workspace/file.go","line":0,"character":0,"detail":"compact","output_selector":"traces/callers.json"}
 ```
 
-The default surface publishes exactly twelve canonical tools. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the twelve-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
+The default surface publishes exactly thirteen canonical tools. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the thirteen-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
 
 ## Pi direct tools with pi-mcp-adapter
 
@@ -150,6 +150,7 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
         "lsp_trace_v1_verify",
         "lsp_trace_v1_inspect",
         "lsp_trace_v1_filter",
+        "lsp_trace_v1_execute",
         "lsp_session_v1_list",
         "lsp_session_v1_restart",
         "lsp_session_v1_status",
@@ -166,6 +167,7 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
         "lsp_trace_v1_slice": ["explore call graph", "outgoing then incoming"],
         "lsp_trace_v1_inspect": ["inspect retained seed evidence"],
         "lsp_trace_v1_filter": ["compare two seeds"],
+        "lsp_trace_v1_execute": ["execute approved custody operation"],
         "lsp_trace_v1_validate": ["validate evidence schema"],
         "lsp_trace_v1_verify": ["verify custody digest"],
         "lsp_trace_v1_schema_get": ["retrieve schema contract"],
@@ -177,7 +179,7 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
 }
 ```
 
-The list contains exactly the twelve canonical MCP names. `toolPrefix: "none"` keeps those names unchanged in Pi. `searchKeywords` is adapter-only routing metadata: it improves proxy search without changing MCP names, descriptions, schemas, direct-tool registration, runtime behavior, or authority. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing twelve tools and cannot override process configuration.
+The list contains exactly the thirteen canonical MCP names. `toolPrefix: "none"` keeps those names unchanged in Pi. `searchKeywords` is adapter-only routing metadata: it improves proxy search without changing MCP names, descriptions, schemas, direct-tool registration, runtime behavior, or authority. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing thirteen tools and cannot override process configuration.
 
 Natural-language routing examples:
 
@@ -198,7 +200,7 @@ From the repository root, reconnect once so the adapter refreshes cached metadat
 /mcp tools
 ```
 
-Confirm that `lsp-trace` is connected and that the twelve names in the configuration appear once each. On the first run the adapter may initially expose only its proxy while metadata is cached; reconnecting refreshes and hot-loads the configured direct tools. A missing or extra name is compatibility drift: stop and run the repository checks before using the integration.
+Confirm that `lsp-trace` is connected and that the thirteen names in the configuration appear once each. On the first run the adapter may initially expose only its proxy while metadata is cached; reconnecting refreshes and hot-loads the configured direct tools. A missing or extra name is compatibility drift: stop and run the repository checks before using the integration.
 
 ```sh
 ./scripts/check-docs.sh
@@ -305,12 +307,13 @@ Dynamic skill discovery, listing, and installation are deferred. The embedded sk
 
 ## Qualification and release
 
-TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract are documented in [qualification/README.md](qualification/README.md). Server support is claimed only from retained PASS evidence containing the server version, capability result, command, graph, stderr, and assertions. A BLOCKED or FAIL external-server run remains a release blocker; fixture presence alone is not interoperability evidence.
+TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract are documented in [qualification/README.md](qualification/README.md). Server support is claimed only from retained PASS evidence containing the server version, capability result, command, graph, stderr, and assertions. A BLOCKED or FAIL external-server run blocks only a release that claims support for that provider; fixture presence alone is not interoperability evidence.
 
 - [Graph semantics](docs/SEMANTICS.md)
 - [Security and trust boundaries](docs/SECURITY.md)
 - [Schema compatibility policy](docs/SCHEMA_POLICY.md)
 - [Release checklist](docs/RELEASING.md)
-- [Pi direct-tool setup](docs/PI.md)
+- [Pi direct-tool setup](#pi-direct-tools-with-pi-mcp-adapter)
+- [Host-provisioned relation providers](docs/PROVIDERS.md)
 
 Run `./scripts/release-check.sh` for hermetic release-asset checks. Retained TypeScript and C# qualification runs pass. The strengthened ElixirLS cross-module qualification is retained as BLOCKED because the required aliased and fully qualified caller edges were not reported. The hermetic real-stdio fake-server suite runs in normal Go tests.

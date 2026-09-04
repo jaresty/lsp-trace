@@ -19,9 +19,9 @@ assert_contains() {
   fi
 }
 
-assert_contains ASSERT_RELEASE_DOC_TWELVE "$skill" 'The default surface advertises twelve canonical tools:'
+assert_contains ASSERT_RELEASE_DOC_THIRTEEN "$skill" 'The default surface advertises thirteen canonical tools:'
 assert_contains ASSERT_RELEASE_BOOTSTRAP_GUARD "$release_check" 'bootstrap_process_test.go'
-assert_contains ASSERT_RELEASE_TWELVE_TOOL_GUARD "$release_check" 'TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault'
+assert_contains ASSERT_RELEASE_THIRTEEN_TOOL_GUARD "$release_check" 'TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault'
 assert_contains ASSERT_RELEASE_STDIO_CHANNEL_GUARD "$release_check" 'TestRunStdioOnly'
 assert_contains ASSERT_RELEASE_GUIDE_BOOTSTRAP "$releasing" 'production bootstrap'
 assert_contains ASSERT_RELEASE_GUIDE_CHANNELS "$releasing" 'trusted-local warning on stderr and protocol-clean MCP stdout'

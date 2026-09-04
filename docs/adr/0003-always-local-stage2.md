@@ -8,17 +8,17 @@ The previous staged contract advertised six offline MCP tools and retained four 
 
 ## Decision
 
-The default stdio MCP surface advertises twelve canonical tools: the existing six offline evidence tools, `lsp_trace_v1_incoming`, `lsp_trace_v1_slice`, and `lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`. Canonical names and their existing unversioned aliases route lifecycle and traversal calls to one process-local session runtime.
+The default stdio MCP surface advertises thirteen canonical tools: the seven offline evidence tools (including `lsp_trace_v1_execute`), `lsp_trace_v1_incoming`, `lsp_trace_v1_slice`, and `lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`. Canonical names and their existing unversioned aliases route lifecycle and traversal calls to one process-local session runtime.
 
 On Darwin, process startup uses the existing local process-group supervisor and readiness/lifecycle APIs. A session becomes lifecycle-visible only according to the runtime readiness state. Stop and restart retain bounded asynchronous operation records, cancellation behavior, teardown/reap requirements, immutable terminal outcomes, and monotonically succeeding restart generations.
 
-Unsupported platforms keep the same twelve-tool discovery contract. Operations that require starting a process fail explicitly without starting a child. Platform support does not hide tools and is not expressed as a production-containment gate.
+Unsupported platforms keep the same thirteen-tool discovery contract. Operations that require starting a process fail explicitly without starting a child. Platform support does not hide tools and is not expressed as a production-containment gate.
 
 ## Trust and safety boundary
 
 **WARNING:** Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. Only configure commands you trust.
 
-The default MCP publication is twelve canonical tools in deterministic canonical-name order. Incoming and slice validate all caller input before runtime effects, require retained initialize evidence for call hierarchy and position encoding, and perform bounded transactions through `sessionruntime.RoundTrip`. Incoming delegates graph traversal to `internal/traverse`; slice composes `internal/slicer` exact-depth outgoing discovery with incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves. Failed or null outgoing responses remain incomplete and never become leaves. Slice `max_messages` and `max_bytes` are per-wire-request limits applied independently to every prepare, outgoing, and incoming RoundTrip, not aggregate traversal budgets; incoming retains its fixed safe per-wire-request defaults.
+The default MCP publication is thirteen canonical tools in deterministic canonical-name order. Incoming and slice validate all caller input before runtime effects, require retained initialize evidence for call hierarchy and position encoding, and perform bounded transactions through `sessionruntime.RoundTrip`. Incoming delegates graph traversal to `internal/traverse`; slice composes `internal/slicer` exact-depth outgoing discovery with incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves. Failed or null outgoing responses remain incomplete and never become leaves. Slice `max_messages` and `max_bytes` are per-wire-request limits applied independently to every prepare, outgoing, and incoming RoundTrip, not aggregate traversal budgets; incoming retains its fixed safe per-wire-request defaults.
 
 This decision does not claim hostile-code safety, native containment, remote execution, or privileged isolation. The server is a local developer tool, not a multi-tenant or production execution service.
 

@@ -199,9 +199,9 @@ else
   exit 1
 fi
 if go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1; then
-  printf 'PASS R-MCP-EXACT-TWELVE-TOOLS: exactly twelve canonical tools\n'
+  printf 'PASS R-MCP-EXACT-THIRTEEN-TOOLS: exactly thirteen canonical tools\n'
 else
-  printf 'FAIL R-MCP-EXACT-TWELVE-TOOLS: canonical tool cardinality contract failed\n'
+  printf 'FAIL R-MCP-EXACT-THIRTEEN-TOOLS: canonical tool cardinality contract failed\n'
   exit 1
 fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then

@@ -94,7 +94,7 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 }
 
 func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
-	const assertion = "ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER"
+	const assertion = "ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
 	if got := len(r.Advertised()); got != 13 {

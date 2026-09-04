@@ -105,11 +105,11 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 		} `json:"result"`
 	}
 	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 13 {
-		t.Fatalf("ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER: response=%s err=%v", lines[0], err)
+		t.Fatalf("ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER: response=%s err=%v", lines[0], err)
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {
 		if listed.Result.Tools[i-1].Name > listed.Result.Tools[i].Name {
-			t.Fatalf("ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER: tools=%v", listed.Result.Tools)
+			t.Fatalf("ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER: tools=%v", listed.Result.Tools)
 		}
 	}
 	for _, line := range lines[1:] {
