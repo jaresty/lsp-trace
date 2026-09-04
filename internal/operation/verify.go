@@ -51,7 +51,15 @@ func NewVerifyHandler(loader CustodyLoader) Handler {
 		if err := graph.ValidateSemanticBundle(bytes.TrimSpace(material.Artifact)); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
 		}
-		return Result{Artifact: material.Artifact}, nil
+		var identity struct {
+			TraceReceipt struct {
+				SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
+			} `json:"trace_receipt"`
+		}
+		if err := json.Unmarshal(material.Artifact, &identity); err != nil {
+			return verifyFailure("VERIFICATION_FAILED", err)
+		}
+		return Result{Artifact: material.Artifact, LogicalDigest: identity.TraceReceipt.SemanticCommitmentDigest}, nil
 	}
 }
 

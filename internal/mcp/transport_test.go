@@ -19,8 +19,9 @@ import (
 )
 
 type fakeExecutor struct {
-	calls    []operation.Name
-	artifact []byte
+	calls         []operation.Name
+	artifact      []byte
+	logicalDigest string
 }
 
 func (f *fakeExecutor) Execute(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
@@ -33,7 +34,7 @@ func (f *fakeExecutor) Execute(_ context.Context, request operation.Request) (op
 		if artifact == nil {
 			artifact = []byte(`{"schema_version":"lsp-trace.graph.v3"}`)
 		}
-		return operation.Result{Artifact: artifact}, nil
+		return operation.Result{Artifact: artifact, LogicalDigest: f.logicalDigest}, nil
 	default:
 		return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput}
 	}
@@ -480,6 +481,36 @@ func TestOversizedArtifactRequiresSelector(t *testing.T) {
 			}
 			if env["outcome"] != "COMPLETE" || env["operation_status"] != "SUCCEEDED" || env["content"] == nil || env["isError"] != false {
 				t.Errorf("ASSERT_INLINE_LIMIT_INCLUSIVE: envelope=%v", env)
+			}
+		})
+	}
+}
+
+func TestCustodyLogicalDigestParityAcrossInlineAndPublication(t *testing.T) {
+	const assertion = "ASSERT_MCP_CUSTODY_LOGICAL_DIGEST_PARITY"
+	const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3"}`)
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		root bool
+	}{{"inline", map[string]any{"input": map[string]any{}}, false}, {"publication", map[string]any{"input": map[string]any{}, "output_selector": "custody.json"}, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := NewRegistryWithPublication(false, tc.root)
+			server := &Server{Registry: registry, Executor: &fakeExecutor{artifact: artifact, logicalDigest: digest}}
+			if tc.root {
+				root, err := publication.OpenRoot(t.TempDir())
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer root.Close()
+				server.PublicationRoot = root
+			}
+			arguments, _ := json.Marshal(tc.args)
+			responses := runServerMessages(t, server, fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":%s}}`, arguments)+"\n")
+			env := responses[0]["result"].(map[string]any)["structuredContent"].(map[string]any)
+			if env["logical_digest"] != digest || env["outcome"] != "COMPLETE" {
+				t.Fatalf("%s: envelope=%v", assertion, env)
 			}
 		})
 	}
