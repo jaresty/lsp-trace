@@ -261,10 +261,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			switch code {
 			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS":
 				code = "INPUT_INVALID"
-			case "DOCUMENT_SYMBOL_UNSUPPORTED":
+			case "DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNPREPARABLE":
 				code = "UNSUPPORTED_CALL_HIERARCHY"
-			case "DOCUMENT_SYMBOL_FAILED":
+			case "DOCUMENT_SYMBOL_FAILED", "DOCUMENT_SYMBOL_MALFORMED_RANGE", "DOCUMENT_SYMBOL_PREPARE_FAILED":
 				code = "OUTPUT_VALIDATION_FAILED"
+			case "CANCELLED":
+				code = "REQUEST_CANCELLED"
 			}
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))

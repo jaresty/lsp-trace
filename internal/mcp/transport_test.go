@@ -85,6 +85,61 @@ func (traversalFailureExecutor) Execute(_ context.Context, _ operation.Request) 
 	return operation.Result{}, &operation.Failure{Code: "DOCUMENT_SYMBOL_ABSENT", Diagnostics: []string{`document symbol "Start" not found`}}
 }
 
+type targetFailureExecutor struct {
+	failure *operation.Failure
+}
+
+func (e targetFailureExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+	return operation.Result{}, e.failure
+}
+
+func TestResolveTargetFailuresNormalizeToExclusivePublicEnvelopes(t *testing.T) {
+	const assertion = "ASSERT_RESOLVE_TARGET_FAILURE_NORMALIZATION"
+	t.Log("ASSERTION: " + assertion)
+	tests := []struct {
+		privateCode string
+		publicCode  string
+	}{
+		{"DOCUMENT_SYMBOL_ABSENT", "INPUT_INVALID"},
+		{"DOCUMENT_SYMBOL_AMBIGUOUS", "INPUT_INVALID"},
+		{"DOCUMENT_SYMBOL_UNSUPPORTED", "UNSUPPORTED_CALL_HIERARCHY"},
+		{"DOCUMENT_SYMBOL_FAILED", "OUTPUT_VALIDATION_FAILED"},
+		{"DOCUMENT_SYMBOL_MALFORMED_RANGE", "OUTPUT_VALIDATION_FAILED"},
+		{"DOCUMENT_SYMBOL_PREPARE_FAILED", "OUTPUT_VALIDATION_FAILED"},
+		{"DOCUMENT_SYMBOL_UNPREPARABLE", "UNSUPPORTED_CALL_HIERARCHY"},
+		{"CANCELLED", "REQUEST_CANCELLED"},
+		{"REQUEST_TIMEOUT", "REQUEST_TIMEOUT"},
+	}
+	const arguments = `{"session_id":"project","uri":"file:///workspace/main.go","symbol":"Start"}`
+	for _, test := range tests {
+		t.Run(test.privateCode, func(t *testing.T) {
+			diagnostics := []string{"resolve target: " + test.privateCode}
+			server := &Server{
+				Registry: NewRegistry(false),
+				Executors: map[ExecutorFamily]Executor{
+					IncomingExecutorFamily: targetFailureExecutor{failure: &operation.Failure{Code: test.privateCode, Diagnostics: diagnostics}},
+				},
+			}
+			response := runServerMessages(t, server, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":`+arguments+`}}`+"\n")[0]
+			envelope := decodeEnvelopeForAssertion(t, assertion+"_"+test.privateCode, response)
+			if envelope["code"] != test.publicCode {
+				t.Fatalf("%s_%s: code=%v want=%s", assertion, test.privateCode, envelope["code"], test.publicCode)
+			}
+			gotDiagnostics, ok := envelope["diagnostics"].([]any)
+			if !ok || len(gotDiagnostics) != 1 || gotDiagnostics[0] != diagnostics[0] {
+				t.Fatalf("%s_%s: diagnostics=%v want=%v", assertion, test.privateCode, envelope["diagnostics"], diagnostics)
+			}
+			raw, err := json.Marshal(envelope)
+			if err != nil {
+				t.Fatalf("%s_%s: marshal: %v", assertion, test.privateCode, err)
+			}
+			if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
+				t.Fatalf("%s_%s: exclusive validation: %v envelope=%s", assertion, test.privateCode, err, raw)
+			}
+		})
+	}
+}
+
 func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T) {
 	const (
 		compat      = "ASSERT_MCP_FULL_BACKWARD_COMPATIBLE"
