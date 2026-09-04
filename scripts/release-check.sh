@@ -171,7 +171,8 @@ assert_file R-MCP-ENVELOPE-SCHEMA internal/mcpcontract/testdata/schemas/envelope
 assert_contains R-MCP-PROTOCOL-PIN internal/mcpcontract/testdata/stage1-manifest.v1.json '"revision":"2025-06-18"'
 assert_contains R-MCP-GORELEASER-MAIN .goreleaser.yaml 'main: ./cmd/lsp-trace-mcp'
 assert_contains R-MCP-GORELEASER-BINARY .goreleaser.yaml 'binary: lsp-trace-mcp'
-assert_contains R-MCP-ADR-ACCEPTED docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Accepted'
+assert_contains R-MCP-ADR-SUPERSEDED docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Superseded by'
+assert_contains R-MCP-ADR-SUCCESSOR docs/adr/0003-persistent-mcp-language-server-sessions.md '[ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)'
 assert_contains R-MCP-RELEASE-DOC docs/RELEASING.md 'lsp-trace-mcp'
 
 if [ "$failed" -ne 0 ]; then
