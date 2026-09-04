@@ -119,6 +119,54 @@ func TestSubprocessSliceComposesOutgoingFrontierWithIncomingTraversal(t *testing
 	}
 }
 
+func TestSubprocessSliceReconcilesIncomingAliasAtDirectCLI(t *testing.T) {
+	const assertion = "ASSERT_DIRECT_SLICE_UNIFIED_SYMBOL_IDENTITY"
+	t.Log("ASSERTION: " + assertion)
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-identity", "--from-file", "main.go", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var got struct {
+		Nodes       []graph.Node       `json:"nodes"`
+		Edges       []graph.Edge       `json:"edges"`
+		Diagnostics []graph.Diagnostic `json:"diagnostics"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("%s: decode: %v stdout=%q stderr=%q", assertion, err, stdout, stderr)
+	}
+	logicalRoots, distinctRoots := 0, 0
+	for _, node := range got.Nodes {
+		if node.Name != "root" {
+			continue
+		}
+		if node.SelectionRange.Start.Line == 0 {
+			logicalRoots++
+		} else {
+			distinctRoots++
+		}
+	}
+	endpointPairs := map[string]bool{}
+	duplicateEndpoints := 0
+	for _, edge := range got.Edges {
+		key := edge.CallerNodeID + "->" + edge.CalleeNodeID
+		if endpointPairs[key] {
+			duplicateEndpoints++
+		}
+		endpointPairs[key] = true
+	}
+	warnings := 0
+	for _, diagnostic := range got.Diagnostics {
+		if diagnostic.Message == "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE" {
+			warnings++
+		}
+	}
+	if code != 0 || logicalRoots != 1 || distinctRoots != 1 || duplicateEndpoints != 0 || len(got.Edges) != 2 || warnings != 2 || !strings.Contains(stderr, "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE (2 occurrences)") {
+		t.Fatalf("%s: code=%d logicalRoots=%d distinctRoots=%d edges=%d duplicateEndpoints=%d warnings=%d stderr=%q artifact=%s", assertion, code, logicalRoots, distinctRoots, len(got.Edges), duplicateEndpoints, warnings, stderr, stdout)
+	}
+}
+
 func TestSubprocessSliceStartsUpwardFromEarlyLeaves(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
@@ -593,6 +641,8 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 		case "textDocument/documentSymbol":
 			if scenario == "slice-noisy" {
 				err = writeFake(out, m.ID, []fakeItem{item("start", 0), item("value-a", 1), item("value-b", 2)}, nil)
+			} else if scenario == "slice-identity" {
+				err = writeFake(out, m.ID, []fakeItem{item("root", 0)}, nil)
 			} else if strings.HasPrefix(scenario, "slice") {
 				err = writeFake(out, m.ID, []fakeItem{item("start", 0)}, nil)
 			}
@@ -621,6 +671,8 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			name := "leaf"
 			if strings.HasPrefix(scenario, "slice-membership") || strings.HasPrefix(scenario, "slice-range-") {
 				name = fmt.Sprintf("seed-%c", 'a'+p.Position.Line)
+			} else if scenario == "slice-identity" {
+				name = "root"
 			} else if strings.HasPrefix(scenario, "slice") {
 				name = "start"
 			}
@@ -643,6 +695,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			calls := []map[string]any{}
 			if (scenario == "slice" || scenario == "slice-noisy") && p.Item.Name == "start" {
+				calls = append(calls, map[string]any{"to": item("leaf", 1), "fromRanges": []fakeRange{{Start: fakePosition{Line: 0, Character: 5}, End: fakePosition{Line: 0, Character: 9}}}})
+			}
+			if scenario == "slice-identity" && p.Item.Name == "root" {
 				calls = append(calls, map[string]any{"to": item("leaf", 1), "fromRanges": []fakeRange{{Start: fakePosition{Line: 0, Character: 5}, End: fakePosition{Line: 0, Character: 9}}}})
 			}
 			if scenario == "slice-membership-disconnected" || scenario == "slice-membership-failed" {
@@ -702,6 +757,14 @@ func incoming(scenario string, it fakeItem) []map[string]any {
 	case "slice":
 		if it.Name == "leaf" {
 			return []map[string]any{call(item("root", 2))}
+		}
+	case "slice-identity":
+		if it.Name == "leaf" {
+			alias := item("root", 0)
+			alias.Range = alias.SelectionRange
+			distinct := item("root", 10)
+			outside := []fakeRange{{Start: fakePosition{Line: 99}, End: fakePosition{Line: 99, Character: 1}}}
+			return []map[string]any{{"from": alias, "fromRanges": outside}, {"from": distinct, "fromRanges": outside}}
 		}
 	case "slice-noisy":
 		if it.Name == "leaf" {
