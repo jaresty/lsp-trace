@@ -52,6 +52,26 @@ func item(name string, line int) string {
 	return `{"name":"` + name + `","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":` + string(rune('0'+line)) + `,"character":0},"end":{"line":` + string(rune('0'+line)) + `,"character":1}},"selectionRange":{"start":{"line":` + string(rune('0'+line)) + `,"character":0},"end":{"line":` + string(rune('0'+line)) + `,"character":1}}}`
 }
 
+func TestSliceAppliesConservativeDefaults(t *testing.T) {
+	const assertion = "ASSERT_SLICE_CONSERVATIVE_DEFAULTS"
+	t.Log("ASSERTION: " + assertion)
+	root := item("root", 0)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:root":   {Result: json.RawMessage(`[]`)},
+	}}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0}`)})
+	if failure != nil {
+		t.Fatalf("%s: %v", assertion, failure)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil || got.Invocation.Limits.MaxNodes <= 0 || got.Invocation.Limits.TimeoutMS <= 0 || got.Invocation.RequestTimeoutMS <= 0 || len(f.requests) == 0 || f.requests[0].MaxMessages <= 0 || f.requests[0].MaxBytes <= 0 {
+		t.Fatalf("%s: limits=%+v request_timeout=%d requests=%+v err=%v", assertion, got.Invocation.Limits, got.Invocation.RequestTimeoutMS, f.requests, err)
+	}
+	t.Log("PASS " + assertion)
+}
+
 func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
 	for _, assertion := range []string{"ASSERT_SLICE_EXACT_DEPTH_FRONTIER", "ASSERT_SLICE_FAILED_NULL_NOT_LEAF", "ASSERT_SLICE_UPWARD_SORTED_DEDUP_UNION", "ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP"} {
 		t.Log("ASSERTION: " + assertion)

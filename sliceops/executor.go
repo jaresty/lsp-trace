@@ -58,6 +58,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err := decodeClosed(op.Input, &in); err != nil {
 		return operation.Result{}, fail(operation.FailureInvalidInput, err)
 	}
+	applyDefaults(&in)
 	if err := validate(in); err != nil {
 		return operation.Result{}, fail(operation.FailureInvalidInput, err)
 	}
@@ -183,6 +184,30 @@ func terminalCode(err error) string {
 	}
 	return ""
 }
+func applyDefaults(r *request) {
+	if r.DownDepth == 0 {
+		r.DownDepth = 2
+	}
+	if r.UpDepth == 0 {
+		r.UpDepth = 2
+	}
+	if r.MaxNodes == 0 {
+		r.MaxNodes = 100
+	}
+	if r.MaxMessages == 0 {
+		r.MaxMessages = 64
+	}
+	if r.MaxBytes == 0 {
+		r.MaxBytes = 4 << 20
+	}
+	if r.TimeoutMS == 0 {
+		r.TimeoutMS = 5000
+	}
+	if r.RequestTimeoutMS == 0 {
+		r.RequestTimeoutMS = 1000
+	}
+}
+
 func validate(r request) error {
 	if r.SessionID == "" || r.Generation == 0 || r.URI == "" || r.StartMode != "at" {
 		return errors.New("session_id, generation, start_mode=at, and uri are required")

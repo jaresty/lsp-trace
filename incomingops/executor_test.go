@@ -44,6 +44,25 @@ func validInput() json.RawMessage {
 	return json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"max_depth":4,"max_nodes":20,"timeout_ms":1000,"request_timeout_ms":100}`)
 }
 
+func TestIncomingAppliesConservativeDefaults(t *testing.T) {
+	const assertion = "ASSERT_INCOMING_CONSERVATIVE_DEFAULTS"
+	t.Log("ASSERTION: " + assertion)
+	item := `{"name":"leaf","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}}`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{
+		"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)},
+		"callHierarchy/incomingCalls":       {json.RawMessage(`[]`)},
+	}}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0}`)})
+	if failure != nil {
+		t.Fatalf("%s: %v", assertion, failure)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil || got.Invocation.Limits.MaxDepth <= 0 || got.Invocation.Limits.MaxNodes <= 0 || got.Invocation.Limits.TimeoutMS <= 0 || got.Invocation.RequestTimeoutMS <= 0 {
+		t.Fatalf("%s: limits=%+v request_timeout=%d err=%v", assertion, got.Invocation.Limits, got.Invocation.RequestTimeoutMS, err)
+	}
+	t.Log("PASS " + assertion)
+}
+
 func TestIncomingUsesRoundTripAndExistingDeterministicTraversal(t *testing.T) {
 	const assertion = "ASSERT_INCOMING_ROUNDTRIP_TRAVERSE_DETERMINISTIC"
 	item := `{"name":"leaf","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"opaque":1}}`

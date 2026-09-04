@@ -51,6 +51,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err := decodeClosed(op.Input, &input); err != nil {
 		return operation.Result{}, failure(operation.FailureInvalidInput, err)
 	}
+	applyDefaults(&input)
 	if err := validate(input); err != nil {
 		return operation.Result{}, failure(operation.FailureInvalidInput, err)
 	}
@@ -79,6 +80,21 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return operation.Result{}, failure(operation.FailureInternal, err)
 	}
 	return operation.Result{Artifact: append(artifact, '\n')}, nil
+}
+
+func applyDefaults(r *request) {
+	if r.MaxDepth == 0 {
+		r.MaxDepth = 4
+	}
+	if r.MaxNodes == 0 {
+		r.MaxNodes = 100
+	}
+	if r.TimeoutMS == 0 {
+		r.TimeoutMS = 5000
+	}
+	if r.RequestTimeoutMS == 0 {
+		r.RequestTimeoutMS = 1000
+	}
 }
 
 func validate(r request) error {

@@ -203,7 +203,7 @@ func incomingInputSchema() map[string]any {
 			"timeout_ms":         map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
 			"request_timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
 		},
-		"required": []any{"session_id", "generation", "uri", "line", "character", "max_depth", "max_nodes", "timeout_ms", "request_timeout_ms"},
+		"required": []any{"session_id", "generation", "uri", "line", "character"},
 	}
 }
 
