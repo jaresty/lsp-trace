@@ -41,6 +41,11 @@ type Runtime interface {
 	Restart(context.Context, string, string) session.LifecycleResult
 }
 
+// SelectorRuntime may resolve host-owned aliases before exact runtime access.
+type SelectorRuntime interface {
+	ResolveSessionSelector(string, uint64) (string, uint64, session.Failure)
+}
+
 type Service struct{ runtime Runtime }
 
 type ListSnapshot struct {
@@ -79,6 +84,13 @@ func (s *Service) List() ListSnapshot {
 }
 
 func (s *Service) Status(id string, generation uint64) (sessionruntime.Record, Failure) {
+	if resolver, ok := s.runtime.(SelectorRuntime); ok {
+		var failure session.Failure
+		id, generation, failure = resolver.ResolveSessionSelector(id, generation)
+		if failure != "" {
+			return sessionruntime.Record{}, mapFailure(failure)
+		}
+	}
 	for _, record := range s.runtime.Records() {
 		if record.SessionID != id {
 			continue
@@ -110,6 +122,7 @@ func (s *Service) accept(ctx context.Context, request LifecycleRequest, restart 
 	if failure != FailureNone {
 		return Acceptance{Failure: failure}
 	}
+	request.SessionID = record.SessionID
 	request.Generation = record.Generation
 	var result session.LifecycleResult
 	if restart {

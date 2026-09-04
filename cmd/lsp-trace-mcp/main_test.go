@@ -10,9 +10,29 @@ import (
 	"time"
 
 	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/sessionruntime"
 )
+
+func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
+	server, manager, err := newServerRuntime(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeLifecycle := server.Executors[mcp.LifecycleExecutorFamily]
+	beforeIncoming := server.Executors[mcp.IncomingExecutorFamily]
+	beforeSlice := server.Executors[mcp.SliceExecutorFamily]
+
+	selected := composeHostSelectorRuntime(server, manager, []bootstrapSession{{Alias: "project", SessionID: "canonical"}})
+	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice {
+		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice)
+	}
+	if got := server.Registry.Tools(); len(got) != 12 {
+		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
+	}
+	t.Log("PASS ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE")
+}
 
 func TestAlwaysLocalLifecycleListDispatch(t *testing.T) {
 	const assertion = "ASSERT_ALWAYS_LOCAL_LIFECYCLE_LIST_DISPATCH"

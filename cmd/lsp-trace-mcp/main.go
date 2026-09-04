@@ -64,9 +64,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
-		selected := newHostSelectorRuntime(manager, bootstrapSessions)
-		server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
-		server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
+		composeHostSelectorRuntime(server, manager, bootstrapSessions)
 	}
 	serveErr := server.Serve(stdin, stdout)
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -96,6 +94,14 @@ func newHostSelectorRuntime(manager *sessionruntime.Manager, sessions []bootstra
 		}
 	}
 	return &hostSelectorRuntime{Manager: manager, aliases: aliases}
+}
+
+func composeHostSelectorRuntime(server *mcp.Server, manager *sessionruntime.Manager, sessions []bootstrapSession) *hostSelectorRuntime {
+	selected := newHostSelectorRuntime(manager, sessions)
+	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.New(selected))
+	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
+	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
+	return selected
 }
 
 func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {

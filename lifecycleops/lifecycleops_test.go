@@ -21,6 +21,8 @@ type fakeRuntime struct {
 	operations   map[string]sessionruntime.OperationSnapshot
 	result       session.LifecycleResult
 	calls        int
+	stopIDs      []string
+	restartIDs   []string
 }
 
 func (f *fakeRuntime) Records() []sessionruntime.Record {
@@ -44,17 +46,50 @@ func (f *fakeRuntime) Operation(id string) (sessionruntime.OperationSnapshot, bo
 	o, ok := f.operations[id]
 	return o, ok
 }
-func (f *fakeRuntime) Stop(context.Context, string, string) session.LifecycleResult {
+func (f *fakeRuntime) Stop(_ context.Context, id string, _ string) session.LifecycleResult {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	f.stopIDs = append(f.stopIDs, id)
 	return f.result
 }
-func (f *fakeRuntime) Restart(context.Context, string, string) session.LifecycleResult {
+func (f *fakeRuntime) Restart(_ context.Context, id string, _ string) session.LifecycleResult {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	f.restartIDs = append(f.restartIDs, id)
 	return f.result
+}
+
+type selectorRuntime struct {
+	*fakeRuntime
+	aliases map[string]string
+}
+
+func (f *selectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
+	if canonical, ok := f.aliases[id]; ok {
+		id = canonical
+	} else if id != "canonical" {
+		return "", 0, session.SessionNotFound
+	}
+	if generation != 0 {
+		return id, generation, ""
+	}
+	var match *sessionruntime.Record
+	for _, candidate := range f.Records() {
+		if candidate.SessionID != id || candidate.State != session.Ready {
+			continue
+		}
+		if match != nil {
+			return "", 0, session.Failure("AMBIGUOUS_SESSION_SELECTOR")
+		}
+		copy := candidate
+		match = &copy
+	}
+	if match == nil {
+		return "", 0, session.Failure("SESSION_NOT_READY")
+	}
+	return match.SessionID, match.Generation, ""
 }
 
 func record(id string, generation uint64) sessionruntime.Record {
@@ -95,6 +130,54 @@ func TestStatusValidatesUnknownAndStaleGeneration(t *testing.T) {
 		t.Fatalf("ASSERT status identity generation: valid=%+v failure=%q", got, failure)
 	}
 	t.Log("PASS ASSERT status identity generation")
+}
+
+func TestLifecycleSelectorStatusAliasSemantics(t *testing.T) {
+	f := &selectorRuntime{
+		fakeRuntime: &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+		aliases:     map[string]string{"project": "canonical"},
+	}
+	s := New(f)
+
+	got, failure := s.Status("project", 0)
+	if failure != FailureNone || got.SessionID != "canonical" || got.Generation != 7 {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_STATUS_ALIAS_OMITTED_UNIQUE_READY: got=%+v failure=%q", got, failure)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_STATUS_ALIAS_OMITTED_UNIQUE_READY")
+	got, failure = s.Status("project", 7)
+	if failure != FailureNone || got.SessionID != "canonical" || got.Generation != 7 {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_STATUS_ALIAS_EXPLICIT_GENERATION_EXACT: got=%+v failure=%q", got, failure)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_STATUS_ALIAS_EXPLICIT_GENERATION_EXACT")
+	if _, failure = s.Status("unknown", 0); failure != FailureSessionNotFound {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_UNKNOWN_ALIAS_HONEST_FAILURE: failure=%q", failure)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_UNKNOWN_ALIAS_HONEST_FAILURE")
+	got, failure = s.Status("canonical", 7)
+	if failure != FailureNone || got.SessionID != "canonical" {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_CANONICAL_SESSION_REACHES_RUNTIME: got=%+v failure=%q", got, failure)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_CANONICAL_SESSION_REACHES_RUNTIME")
+}
+
+func TestLifecycleSelectorStopAndRestartUseCanonicalIdentity(t *testing.T) {
+	f := &selectorRuntime{
+		fakeRuntime: &fakeRuntime{
+			records: []sessionruntime.Record{record("canonical", 7)},
+			result:  session.LifecycleResult{IntentID: "intent", Generation: 7, State: session.Stopping},
+		},
+		aliases: map[string]string{"project": "canonical"},
+	}
+	s := New(f)
+
+	if got := s.Stop(context.Background(), LifecycleRequest{SessionID: "project", CallerID: "caller"}); got.Failure != FailureNone || got.Generation != 7 || !reflect.DeepEqual(f.stopIDs, []string{"canonical"}) {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_STOP_ALIAS_CANONICAL_ID_GENERATION: got=%+v ids=%v", got, f.stopIDs)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_STOP_ALIAS_CANONICAL_ID_GENERATION")
+	if got := s.Restart(context.Background(), LifecycleRequest{SessionID: "project", Generation: 7, CallerID: "caller"}); got.Failure != FailureNone || got.Generation != 7 || !reflect.DeepEqual(f.restartIDs, []string{"canonical"}) {
+		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_RESTART_ALIAS_CANONICAL_ID_GENERATION: got=%+v ids=%v", got, f.restartIDs)
+	}
+	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_RESTART_ALIAS_CANONICAL_ID_GENERATION")
 }
 
 func TestAcceptanceIsBoundedDelegatedAndStable(t *testing.T) {
