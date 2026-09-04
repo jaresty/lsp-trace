@@ -60,6 +60,17 @@ func TestSemanticBindingCustodyConsistent(t *testing.T) {
 	}
 }
 
+func TestSemanticBindingDelegatesObservationAdapter(t *testing.T) {
+	a, request, receipt := semanticFixture(t)
+	var e observationadapter.Envelope
+	_ = json.Unmarshal(receipt.Response, &e)
+	e.Observations[0].Kind = relations.RelationCalls
+	receipt.Response, _ = json.Marshal(e)
+	if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+		t.Fatal("ASSERT_PROVIDER_SEMANTIC_DELEGATES_OBSERVATION_ADAPTER: accepted forbidden CALLS observation")
+	}
+}
+
 func TestSemanticBindingDelegatesAndProjectsExactReceipt(t *testing.T) {
 	a, request, receipt := semanticFixture(t)
 	raw, err := a.Adapt(context.Background(), request, receipt)
