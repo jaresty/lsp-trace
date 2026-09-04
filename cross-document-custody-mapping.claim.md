@@ -76,3 +76,7 @@ Result: 0 passed, 8 failed. The output independently named all eight required as
 - Pre-commit full suite: 3229 passed, 2 failed, 2 skipped; both failures were the same dirty-worktree `ASSERT_PACKAGE_OWNERSHIP_ONLY` check observing the newly owned production module before commit.
 - Claim-first commit: `91d5786`.
 - Assertion-specific red commit: `cf2b6a9`.
+- Implementation commit: `38baba8`.
+- Clean-state focused guard: 8 passed, 0 failed.
+- Clean-state full suite: 3231 passed in 40 packages.
+- Clean-state `git diff --check`: pass; `git status --short`: empty.
