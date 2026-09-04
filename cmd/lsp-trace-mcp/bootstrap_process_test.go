@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,6 +19,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	fakeBinary := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	workspace := t.TempDir()
 	configPath := filepath.Join(t.TempDir(), "bootstrap.json")
+	startedMarker := filepath.Join(t.TempDir(), "fake-lsp-started")
 	config := map[string]any{
 		"version": 1,
 		"processes": []any{map[string]any{
@@ -28,8 +30,9 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 				"environment_reference": "hermetic",
 			},
 			"execution": map[string]any{
-				"path":      fakeBinary,
-				"directory": workspace,
+				"path":        fakeBinary,
+				"directory":   workspace,
+				"environment": []string{"LSP_TRACE_FAKE_LSP_SCHEDULED=" + startedMarker},
 			},
 		}},
 	}
@@ -47,8 +50,25 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	cmd.Stdin = strings.NewReader(request)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
+	err = cmd.Run()
+	if runtime.GOOS != "darwin" {
+		if err == nil || !strings.Contains(stderr.String(), "PROCESS_CONTAINMENT_UNAVAILABLE") {
+			t.Fatalf("%s: unsupported platform did not fail closed: err=%v stderr=%s", assertion, err, stderr.String())
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("%s: unsupported platform emitted successful stdio: %q", assertion, stdout.String())
+		}
+		if _, markerErr := os.Stat(startedMarker); !os.IsNotExist(markerErr) {
+			t.Fatalf("%s: unsupported platform started child: marker error=%v", assertion, markerErr)
+		}
+		t.Log("PASS ASSERT_PRODUCTION_BOOTSTRAP_UNSUPPORTED_PLATFORM_ZERO_EFFECTS")
+		return
+	}
+	if err != nil {
 		t.Fatalf("%s: process failed: %v stderr=%s", assertion, err, stderr.String())
+	}
+	if _, err := os.Stat(startedMarker); err != nil {
+		t.Fatalf("%s: supported platform did not start configured child: %v", assertion, err)
 	}
 	var response struct {
 		Result struct {
