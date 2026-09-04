@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"lsp-trace/internal/graph"
@@ -25,6 +26,12 @@ const OperationIncoming operation.Name = "incoming"
 type Runtime interface {
 	Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure)
 	RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	Records() []sessionruntime.Record
+}
+
+// SelectorRuntime may resolve host-owned aliases before exact runtime access.
+type SelectorRuntime interface {
+	ResolveSessionSelector(string, uint64) (string, uint64, session.Failure)
 }
 
 type Executor struct{ runtime Runtime }
@@ -32,15 +39,16 @@ type Executor struct{ runtime Runtime }
 func NewExecutor(runtime Runtime) *Executor { return &Executor{runtime: runtime} }
 
 type request struct {
-	SessionID        string `json:"session_id"`
-	Generation       uint64 `json:"generation"`
-	URI              string `json:"uri"`
-	Line             uint32 `json:"line"`
-	Character        uint32 `json:"character"`
-	MaxDepth         int    `json:"max_depth"`
-	MaxNodes         int    `json:"max_nodes"`
-	TimeoutMS        int64  `json:"timeout_ms"`
-	RequestTimeoutMS int64  `json:"request_timeout_ms"`
+	SessionID        string  `json:"session_id"`
+	Generation       uint64  `json:"generation"`
+	URI              string  `json:"uri"`
+	Line             *uint32 `json:"line"`
+	Character        *uint32 `json:"character"`
+	Symbol           string  `json:"symbol"`
+	MaxDepth         int     `json:"max_depth"`
+	MaxNodes         int     `json:"max_nodes"`
+	TimeoutMS        int64   `json:"timeout_ms"`
+	RequestTimeoutMS int64   `json:"request_timeout_ms"`
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
@@ -54,6 +62,11 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	applyDefaults(&input)
 	if err := validate(input); err != nil {
 		return operation.Result{}, failure(operation.FailureInvalidInput, err)
+	}
+	resolvedID, resolvedGeneration, runtimeFailure := ResolveSession(e.runtime, input.SessionID, input.Generation)
+	input.SessionID, input.Generation = resolvedID, resolvedGeneration
+	if runtimeFailure != "" {
+		return operation.Result{}, failure(string(runtimeFailure), nil)
 	}
 	metadata, runtimeFailure := e.runtime.Metadata(input.SessionID, input.Generation)
 	if runtimeFailure != "" {
@@ -70,8 +83,12 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	ctx, cancel := context.WithTimeout(parent, time.Duration(input.TimeoutMS)*time.Millisecond)
 	defer cancel()
 	client := NewSessionClient(e.runtime, input.SessionID, input.Generation, time.Duration(input.RequestTimeoutMS)*time.Millisecond)
-	result := traverse.Incoming(ctx, client, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: input.URI}, Position: lsp.Position{Line: input.Line, Character: input.Character}}, traverse.Options{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, SchemaVersion: graph.SchemaVersionV3})
-	result.Invocation.Target = graph.Target{URI: input.URI, Line: int(input.Line), Column: int(input.Character)}
+	line, character, targetFailure := ResolveTarget(ctx, client, input.URI, input.Symbol, input.Line, input.Character)
+	if targetFailure != nil {
+		return operation.Result{}, targetFailure
+	}
+	result := traverse.Incoming(ctx, client, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: input.URI}, Position: lsp.Position{Line: line, Character: character}}, traverse.Options{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, SchemaVersion: graph.SchemaVersionV3})
+	result.Invocation.Target = graph.Target{URI: input.URI, Line: int(line), Column: int(character)}
 	result.Invocation.Limits = graph.Limits{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, TimeoutMS: input.TimeoutMS}
 	result.Invocation.RequestTimeoutMS = input.RequestTimeoutMS
 	result.Capabilities.CallHierarchyProvider = metadata.CallHierarchySupport
@@ -80,6 +97,66 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return operation.Result{}, failure(operation.FailureInternal, err)
 	}
 	return operation.Result{Artifact: append(artifact, '\n')}, nil
+}
+
+// ResolveSession preserves explicit generations and infers only one current READY generation.
+func ResolveSession(runtime Runtime, id string, generation uint64) (string, uint64, session.Failure) {
+	if resolver, ok := runtime.(SelectorRuntime); ok {
+		return resolver.ResolveSessionSelector(id, generation)
+	}
+	if generation != 0 {
+		return id, generation, ""
+	}
+	var match *sessionruntime.Record
+	for _, record := range runtime.Records() {
+		if record.SessionID != id {
+			continue
+		}
+		if match != nil {
+			return "", 0, session.Failure("AMBIGUOUS_SESSION_SELECTOR")
+		}
+		copy := record
+		match = &copy
+	}
+	if match == nil {
+		return "", 0, session.SessionNotFound
+	}
+	if match.State != session.Ready {
+		return "", 0, session.Failure("SESSION_NOT_READY")
+	}
+	return match.SessionID, match.Generation, ""
+}
+
+// ResolveTarget resolves an explicit position or one exact hierarchical document symbol.
+func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName string, line, character *uint32) (uint32, uint32, *operation.Failure) {
+	if symbolName == "" {
+		return *line, *character, nil
+	}
+	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
+	if err != nil {
+		if strings.Contains(err.Error(), "json-rpc error -32601") {
+			return 0, 0, failure("DOCUMENT_SYMBOL_UNSUPPORTED", err)
+		}
+		return 0, 0, failure("DOCUMENT_SYMBOL_FAILED", err)
+	}
+	var matches []lsp.DocumentSymbol
+	var walk func([]lsp.DocumentSymbol)
+	walk = func(items []lsp.DocumentSymbol) {
+		for _, symbol := range items {
+			if symbol.Name == symbolName {
+				matches = append(matches, symbol)
+			}
+			walk(symbol.Children)
+		}
+	}
+	walk(symbols)
+	if len(matches) == 0 {
+		return 0, 0, failure("DOCUMENT_SYMBOL_ABSENT", fmt.Errorf("document symbol %q not found", symbolName))
+	}
+	if len(matches) != 1 {
+		return 0, 0, failure("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", symbolName, len(matches)))
+	}
+	return matches[0].SelectionRange.Start.Line, matches[0].SelectionRange.Start.Character, nil
 }
 
 func applyDefaults(r *request) {
@@ -98,8 +175,13 @@ func applyDefaults(r *request) {
 }
 
 func validate(r request) error {
-	if r.SessionID == "" || r.Generation == 0 || r.URI == "" {
-		return errors.New("session_id, generation, and uri are required")
+	if r.SessionID == "" || r.URI == "" {
+		return errors.New("session_id and uri are required")
+	}
+	position := r.Line != nil && r.Character != nil
+	partialPosition := (r.Line == nil) != (r.Character == nil)
+	if partialPosition || position == (r.Symbol != "") {
+		return errors.New("exactly one complete target selector is required: line+character or symbol")
 	}
 	u, err := url.Parse(r.URI)
 	if err != nil || !u.IsAbs() {
@@ -181,9 +263,17 @@ func (c *SessionClient) OutgoingCalls(ctx context.Context, item lsp.CallHierarch
 	return calls, wasNull, err
 }
 
-func (*SessionClient) SupportsDocumentSymbols() bool { return false }
-func (*SessionClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
-	return nil, errors.New("document symbols unsupported")
+func (*SessionClient) SupportsDocumentSymbols() bool { return true }
+func (c *SessionClient) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	var symbols []lsp.DocumentSymbol
+	wasNull, err := c.call(ctx, "textDocument/documentSymbol", params, &symbols)
+	if err != nil {
+		return nil, err
+	}
+	if wasNull {
+		return nil, nil
+	}
+	return symbols, nil
 }
 
 func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {

@@ -21,6 +21,7 @@ type bootstrapConfig struct {
 }
 
 type bootstrapProcessConfig struct {
+	Alias     string                    `json:"alias,omitempty"`
 	Profile   bootstrapProfileIdentity  `json:"profile"`
 	Execution managedExecutionAuthority `json:"execution"`
 }
@@ -43,6 +44,7 @@ type managedExecutionAuthority struct {
 }
 
 type bootstrapSession struct {
+	Alias      string
 	SessionID  string
 	Generation uint64
 }
@@ -77,6 +79,7 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 }
 
 type preparedBootstrap struct {
+	alias   string
 	profile runtimeprofile.Profile
 	process managedprocess.Spec
 }
@@ -84,6 +87,7 @@ type preparedBootstrap struct {
 func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 	prepared := make([]preparedBootstrap, 0, len(config.Processes))
 	seen := make(map[string]struct{}, len(config.Processes))
+	seenAliases := make(map[string]struct{}, len(config.Processes))
 	for i, process := range config.Processes {
 		validated, err := runtimeprofile.Validate(runtimeprofile.Selector{
 			TrustDomain: process.Profile.TrustDomain, Workspace: process.Profile.Workspace,
@@ -94,15 +98,28 @@ func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 			return nil, fmt.Errorf("bootstrap process %d profile: %w", i, err)
 		}
 		profile := runtimeprofile.Resolve(validated)
+		if process.Alias != "" {
+			if _, duplicate := seenAliases[process.Alias]; duplicate {
+				return nil, fmt.Errorf("bootstrap process %d duplicates alias %q", i, process.Alias)
+			}
+			seenAliases[process.Alias] = struct{}{}
+		}
 		id := profile.SessionKey().String()
 		if _, duplicate := seen[id]; duplicate {
 			return nil, fmt.Errorf("bootstrap process %d duplicates session identity %s", i, id)
 		}
 		seen[id] = struct{}{}
 		prepared = append(prepared, preparedBootstrap{
-			profile: profile,
+			alias: process.Alias, profile: profile,
 			process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)},
 		})
+	}
+	for i, process := range prepared {
+		if process.alias != "" {
+			if _, collision := seen[process.alias]; collision {
+				return nil, fmt.Errorf("bootstrap process %d alias %q collides with a session identity", i, process.alias)
+			}
+		}
 	}
 	return prepared, nil
 }
@@ -127,7 +144,7 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 			rollback()
 			return nil, fmt.Errorf("bootstrap process %d start: %s", i, result.Failure)
 		}
-		session := bootstrapSession{SessionID: result.SessionID, Generation: result.Generation}
+		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation}
 		started = append(started, session)
 		deadline := time.Now().Add(timeout)
 		pending := manager.BeginReadiness(ctx, session.SessionID, session.Generation, deadline)

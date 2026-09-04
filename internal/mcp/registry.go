@@ -193,17 +193,17 @@ func incomingInputSchema() map[string]any {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"type":    "object", "additionalProperties": false,
 		"properties": map[string]any{
-			"session_id":         map[string]any{"type": "string", "minLength": 1},
-			"generation":         map[string]any{"type": "integer", "minimum": 1},
-			"uri":                map[string]any{"type": "string", "minLength": 1, "format": "uri"},
-			"line":               map[string]any{"type": "integer", "minimum": 0},
-			"character":          map[string]any{"type": "integer", "minimum": 0},
-			"max_depth":          map[string]any{"type": "integer", "minimum": 1, "maximum": 64},
-			"max_nodes":          map[string]any{"type": "integer", "minimum": 1, "maximum": 10000},
-			"timeout_ms":         map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
-			"request_timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
+			"session_id": map[string]any{"type": "string", "minLength": 1}, "generation": map[string]any{"type": "integer", "minimum": 1},
+			"uri": map[string]any{"type": "string", "minLength": 1, "format": "uri"}, "line": map[string]any{"type": "integer", "minimum": 0},
+			"character": map[string]any{"type": "integer", "minimum": 0}, "symbol": map[string]any{"type": "string", "minLength": 1},
+			"max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 64}, "max_nodes": map[string]any{"type": "integer", "minimum": 1, "maximum": 10000},
+			"timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
 		},
-		"required": []any{"session_id", "generation", "uri", "line", "character"},
+		"required": []any{"session_id", "uri"},
+		"oneOf": []any{
+			map[string]any{"required": []any{"line", "character"}, "not": map[string]any{"required": []any{"symbol"}}},
+			map[string]any{"required": []any{"symbol"}, "not": map[string]any{"anyOf": []any{map[string]any{"required": []any{"line"}}, map[string]any{"required": []any{"character"}}}}},
+		},
 	}
 }
 

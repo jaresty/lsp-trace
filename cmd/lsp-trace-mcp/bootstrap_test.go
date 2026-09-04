@@ -44,6 +44,28 @@ func TestBootstrapConfigIsStrictAndHostOwned(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
+func TestBootstrapHostOwnedAliases(t *testing.T) {
+	const assertion = "ASSERT_BOOTSTRAP_HOST_ALIAS_STRICT_UNIQUE"
+	workspace := t.TempDir()
+	write := func(body string) string {
+		path := filepath.Join(t.TempDir(), "bootstrap.json")
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	body := `{"version":1,"processes":[{"alias":"primary","profile":{"trust_domain":"test","workspace":"` + workspace + `","profile":"go","environment_reference":"local"},"execution":{"path":"/server","directory":"` + workspace + `"}}]}`
+	config, err := loadBootstrapConfig(write(body))
+	if err != nil || len(config.Processes) != 1 {
+		t.Fatalf("%s: valid alias err=%v config=%+v", assertion, err, config)
+	}
+	config.Processes = append(config.Processes, config.Processes[0])
+	config.Processes[1].Profile.Profile = "other"
+	if _, err := prepareBootstrap(config); err == nil || !strings.Contains(err.Error(), "alias") {
+		t.Fatalf("%s: duplicate alias err=%v", assertion, err)
+	}
+}
+
 func TestPrepareBootstrapRejectsDuplicateSessionIdentity(t *testing.T) {
 	const assertion = "ASSERT_BOOTSTRAP_DUPLICATE_SESSION_IDENTITY_REJECTED"
 	workspace := t.TempDir()

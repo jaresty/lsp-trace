@@ -22,6 +22,7 @@ type fakeRuntime struct {
 	respond  func(sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
 }
 
+func (f *fakeRuntime) Records() []sessionruntime.Record { return nil }
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return f.metadata, f.failure
 }

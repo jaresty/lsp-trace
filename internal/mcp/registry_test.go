@@ -158,6 +158,24 @@ func TestLifecycleSchemasPermitGenerationInference(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
+func TestTraversalSchemaSelectorContracts(t *testing.T) {
+	const assertion = "ASSERT_TRAVERSAL_SCHEMA_OPTIONAL_GENERATION_EXCLUSIVE_SYMBOL_TARGET"
+	tool, ok := NewRegistry(false).Resolve("lsp_trace_v1_incoming")
+	if !ok {
+		t.Fatal(assertion + ": tool missing")
+	}
+	required, _ := tool.InputSchema["required"].([]any)
+	for _, field := range required {
+		if field == "generation" || field == "line" || field == "character" {
+			t.Fatalf("%s: required=%v", assertion, required)
+		}
+	}
+	properties, _ := tool.InputSchema["properties"].(map[string]any)
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 12 {
+		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
+	}
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has twelve canonical entries with eleven always-local enabled tools and one reserved slice entry"

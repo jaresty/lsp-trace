@@ -20,8 +20,12 @@ type fakeRuntime struct {
 	requests []sessionruntime.RoundTripRequest
 	results  map[string][]json.RawMessage
 	observed map[string][]sessionruntime.RoundTripResult
+	records  []sessionruntime.Record
 }
 
+func (f *fakeRuntime) Records() []sessionruntime.Record {
+	return append([]sessionruntime.Record(nil), f.records...)
+}
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return f.metadata, f.failure
 }
@@ -204,6 +208,61 @@ func TestIncomingMalformedAndTimeoutArePartialHonest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIncomingSymbolFailuresAreExplicit(t *testing.T) {
+	const symbol = `{"name":"Target","kind":12,"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":2}},"selectionRange":{"start":{"line":1,"character":0},"end":{"line":1,"character":2}}}`
+	base := func() *fakeRuntime {
+		return &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{}}
+	}
+	cases := []struct {
+		name, assertion, want string
+		configure             func(*fakeRuntime)
+		input                 string
+	}{
+		{"unsupported", "ASSERT_DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNSUPPORTED", func(f *fakeRuntime) {
+			f.observed = map[string][]sessionruntime.RoundTripResult{"textDocument/documentSymbol": {sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32601, Message: "method not found"}}}}
+		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
+		{"absent", "ASSERT_DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_ABSENT", func(f *fakeRuntime) {
+			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`[]`)}
+		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
+		{"ambiguous", "ASSERT_DOCUMENT_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_AMBIGUOUS", func(f *fakeRuntime) {
+			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`[` + symbol + `,` + symbol + `]`)}
+		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
+		{"mixed", "ASSERT_TARGET_MODE_EXCLUSIVE", operation.FailureInvalidInput, func(*fakeRuntime) {}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target","line":1,"character":0}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := base()
+			tc.configure(f)
+			_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(tc.input)})
+			if failure == nil || failure.Code != tc.want {
+				t.Fatalf("%s: failure=%v", tc.assertion, failure)
+			}
+			t.Log("PASS " + tc.assertion)
+		})
+	}
+}
+
+func TestIncomingSelectorContracts(t *testing.T) {
+	documentSymbol := `{"name":"Target","kind":12,"range":{"start":{"line":7,"character":1},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}`
+	item := `{"name":"Target","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":7,"character":1},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}`
+	t.Run("omitted generation", func(t *testing.T) {
+		const assertion = "ASSERT_INCOMING_OMITTED_GENERATION_UNIQUE_READY"
+		f := &fakeRuntime{records: []sessionruntime.Record{{SessionID: "s", Generation: 2, State: session.Ready}}, metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
+		_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","uri":"file:///w/a.go","line":0,"character":0}`)})
+		if failure != nil {
+			t.Fatalf("%s: %v", assertion, failure)
+		}
+	})
+	t.Run("unique symbol", func(t *testing.T) {
+		const assertion = "ASSERT_INCOMING_SYMBOL_UNIQUE_SELECTION_START"
+		f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(`[` + documentSymbol + `]`)}, "textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
+		_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
+		if failure != nil || len(f.requests) < 2 || f.requests[0].Method != "textDocument/documentSymbol" || !strings.Contains(string(f.requests[1].Params), `"line":7,"character":3`) {
+			t.Fatalf("%s: failure=%v requests=%v", assertion, failure, f.requests)
+		}
+	})
 }
 
 var _ = lspwire.RequestKey{}

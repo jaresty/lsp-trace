@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/session"
 	"lsp-trace/lifecycleops"
 	"lsp-trace/sessionruntime"
 	"lsp-trace/sliceops"
@@ -63,6 +64,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
+		selected := newHostSelectorRuntime(manager, bootstrapSessions)
+		server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
+		server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
 	}
 	serveErr := server.Serve(stdin, stdout)
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -77,6 +81,48 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+type hostSelectorRuntime struct {
+	*sessionruntime.Manager
+	aliases map[string]string
+}
+
+func newHostSelectorRuntime(manager *sessionruntime.Manager, sessions []bootstrapSession) *hostSelectorRuntime {
+	aliases := make(map[string]string, len(sessions))
+	for _, started := range sessions {
+		if started.Alias != "" {
+			aliases[started.Alias] = started.SessionID
+		}
+	}
+	return &hostSelectorRuntime{Manager: manager, aliases: aliases}
+}
+
+func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
+	if canonical, ok := r.aliases[id]; ok {
+		id = canonical
+	}
+	if generation != 0 {
+		return id, generation, ""
+	}
+	var match *sessionruntime.Record
+	for _, record := range r.Records() {
+		if record.SessionID != id {
+			continue
+		}
+		if match != nil {
+			return "", 0, session.Failure("AMBIGUOUS_SESSION_SELECTOR")
+		}
+		copy := record
+		match = &copy
+	}
+	if match == nil {
+		return "", 0, session.SessionNotFound
+	}
+	if match.State != session.Ready {
+		return "", 0, session.Failure("SESSION_NOT_READY")
+	}
+	return match.SessionID, match.Generation, ""
 }
 
 func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, error) {
