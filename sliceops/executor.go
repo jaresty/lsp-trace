@@ -35,21 +35,30 @@ type Executor struct{ runtime Runtime }
 
 func NewExecutor(runtime Runtime) *Executor { return &Executor{runtime: runtime} }
 
+type RelationCollector interface {
+	CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error)
+}
+
 type request struct {
-	SessionID        string  `json:"session_id"`
-	Generation       uint64  `json:"generation"`
-	StartMode        string  `json:"start_mode"`
-	URI              string  `json:"uri"`
-	Line             *uint32 `json:"line"`
-	Character        *uint32 `json:"character"`
-	Symbol           string  `json:"symbol"`
-	DownDepth        int     `json:"down_depth"`
-	UpDepth          int     `json:"up_depth"`
-	MaxNodes         int     `json:"max_nodes"`
-	MaxMessages      int     `json:"max_messages"`
-	MaxBytes         int     `json:"max_bytes"`
-	TimeoutMS        int64   `json:"timeout_ms"`
-	RequestTimeoutMS int64   `json:"request_timeout_ms"`
+	SessionID             string          `json:"session_id"`
+	Generation            uint64          `json:"generation"`
+	StartMode             string          `json:"start_mode"`
+	URI                   string          `json:"uri"`
+	Line                  *uint32         `json:"line"`
+	Character             *uint32         `json:"character"`
+	Symbol                string          `json:"symbol"`
+	DownDepth             int             `json:"down_depth"`
+	UpDepth               int             `json:"up_depth"`
+	MaxNodes              int             `json:"max_nodes"`
+	MaxMessages           int             `json:"max_messages"`
+	MaxBytes              int             `json:"max_bytes"`
+	TimeoutMS             int64           `json:"timeout_ms"`
+	RequestTimeoutMS      int64           `json:"request_timeout_ms"`
+	Relations             *[]string       `json:"relations"`
+	Adapters              json.RawMessage `json:"adapters"`
+	Providers             []string        `json:"providers"`
+	WorkspaceRevision     json.RawMessage `json:"workspace_revision"`
+	FailOnUnknownRevision bool            `json:"fail_on_unknown_revision"`
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
@@ -72,6 +81,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	metadata, runtimeFailure := e.runtime.Metadata(in.SessionID, in.Generation)
 	if runtimeFailure != "" {
 		return operation.Result{}, fail(string(runtimeFailure), nil)
+	}
+	if in.Relations != nil {
+		return e.executeComposition(parent, op.Input, in, metadata)
 	}
 	if !metadata.CallHierarchySupport {
 		return operation.Result{}, fail(string(graph.UnsupportedCallHierarchy), nil)
@@ -196,6 +208,134 @@ func terminalCode(err error) string {
 	}
 	return ""
 }
+
+var supportedRelations = map[string]bool{
+	graph.RelationCalls: true, graph.RelationBindsArgument: true, graph.RelationPassesCallback: true,
+	graph.RelationInvokesTask: true, graph.RelationTriggersReload: true, graph.RelationUpdatesState: true,
+	graph.RelationRendersFrom: true,
+}
+
+type compositionArtifact struct {
+	SchemaVersion string            `json:"schema_version"`
+	Complete      bool              `json:"complete"`
+	Calls         json.RawMessage   `json:"calls,omitempty"`
+	Providers     []json.RawMessage `json:"providers,omitempty"`
+	Traversals    []typedTraversal  `json:"traversals"`
+}
+type typedTraversal struct {
+	Kind            string   `json:"kind"`
+	Source          string   `json:"source"`
+	FrontierNodeIDs []string `json:"frontier_node_ids"`
+	RelationIDs     []string `json:"relation_ids"`
+}
+type providerReceipt struct {
+	ProviderID string          `json:"provider_id"`
+	Terminal   string          `json:"terminal"`
+	Complete   bool            `json:"complete"`
+	Truncated  bool            `json:"truncated"`
+	Bounds     json.RawMessage `json:"bounds"`
+	Relations  []struct {
+		RelationID string `json:"relation_id"`
+		Kind       string `json:"kind"`
+	} `json:"relations"`
+}
+
+func (e *Executor) executeComposition(parent context.Context, raw json.RawMessage, in request, metadata sessionruntime.SessionMetadata) (operation.Result, *operation.Failure) {
+	selected := append([]string(nil), (*in.Relations)...)
+	seen := make(map[string]bool, len(selected))
+	external := make([]string, 0, len(selected))
+	wantCalls := false
+	for _, kind := range selected {
+		if !supportedRelations[kind] || seen[kind] {
+			return operation.Result{}, fail(operation.FailureInvalidInput, fmt.Errorf("unknown or duplicate relation %q", kind))
+		}
+		seen[kind] = true
+		if kind == graph.RelationCalls {
+			wantCalls = true
+		} else {
+			external = append(external, kind)
+		}
+	}
+	sort.Strings(external)
+	composed := compositionArtifact{SchemaVersion: "lsp-trace.slice-composition.v1", Complete: true, Traversals: []typedTraversal{}}
+	if wantCalls {
+		if !metadata.CallHierarchySupport {
+			return operation.Result{}, fail(string(graph.UnsupportedCallHierarchy), nil)
+		}
+		legacyInput := in
+		legacyInput.Relations = nil
+		encoded, _ := json.Marshal(legacyInput)
+		legacy, failed := e.Execute(parent, operation.Request{Name: OperationSlice, Input: encoded})
+		if failed != nil {
+			return operation.Result{}, failed
+		}
+		composed.Calls = bytes.TrimSpace(legacy.Artifact)
+		var calls graph.Result
+		if json.Unmarshal(legacy.Artifact, &calls) != nil {
+			return operation.Result{}, fail(operation.FailureInternal, errors.New("invalid legacy slice artifact"))
+		}
+		if !calls.Summary.Complete {
+			composed.Complete = false
+		}
+		frontier := []string{}
+		if calls.Slice != nil {
+			frontier = append(frontier, calls.Slice.FrontierNodeIDs...)
+		}
+		relations := make([]string, len(calls.Edges))
+		for i := range calls.Edges {
+			relations[i] = calls.Edges[i].RelationID
+		}
+		composed.Traversals = append(composed.Traversals, typedTraversal{Kind: graph.RelationCalls, Source: graph.EvidenceServerReported, FrontierNodeIDs: frontier, RelationIDs: relations})
+	}
+	if len(external) > 0 {
+		collector, ok := e.runtime.(RelationCollector)
+		if !ok {
+			return operation.Result{}, fail("ADAPTER_NOT_AVAILABLE", nil)
+		}
+		provider, err := collector.CollectRelations(parent, external, raw)
+		if err != nil {
+			return operation.Result{}, fail("RELATION_PROVIDER_FAILED", err)
+		}
+		var receipt providerReceipt
+		if err := decodeStrict(provider, &receipt); err != nil || receipt.ProviderID == "" || receipt.Terminal == "" || len(receipt.Bounds) == 0 {
+			return operation.Result{}, fail("RELATION_PROVIDER_MALFORMED", err)
+		}
+		byKind := make(map[string][]string)
+		for _, relation := range receipt.Relations {
+			if !seen[relation.Kind] || relation.Kind == graph.RelationCalls {
+				return operation.Result{}, fail("RELATION_PROVIDER_KIND_MISMATCH", fmt.Errorf("provider returned unselected relation %q", relation.Kind))
+			}
+			byKind[relation.Kind] = append(byKind[relation.Kind], relation.RelationID)
+		}
+		composed.Providers = []json.RawMessage{append(json.RawMessage(nil), provider...)}
+		for _, kind := range external {
+			ids := byKind[kind]
+			sort.Strings(ids)
+			composed.Traversals = append(composed.Traversals, typedTraversal{Kind: kind, Source: graph.EvidenceSourceAdapter, FrontierNodeIDs: []string{}, RelationIDs: ids})
+		}
+		if !receipt.Complete || receipt.Truncated || receipt.Terminal != "COMPLETE_WITHIN_BOUNDS" {
+			composed.Complete = false
+		}
+	}
+	encoded, err := json.Marshal(composed)
+	if err != nil {
+		return operation.Result{}, fail(operation.FailureInternal, err)
+	}
+	return operation.Result{Artifact: append(encoded, '\n')}, nil
+}
+
+func decodeStrict(raw []byte, target any) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(target); err != nil {
+		return err
+	}
+	if err := d.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("one JSON value required")
+	}
+	return nil
+}
+
 func applyDefaults(r *request) {
 	if r.DownDepth == 0 {
 		r.DownDepth = 2

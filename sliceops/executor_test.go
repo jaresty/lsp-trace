@@ -4,28 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/provider"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
 type fakeRuntime struct {
-	metadata sessionruntime.SessionMetadata
-	failure  session.Failure
-	calls    []string
-	requests []sessionruntime.RoundTripRequest
-	results  map[string]sessionruntime.RoundTripResult
-	respond  func(sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	metadata         sessionruntime.SessionMetadata
+	failure          session.Failure
+	calls            []string
+	requests         []sessionruntime.RoundTripRequest
+	results          map[string]sessionruntime.RoundTripResult
+	respond          func(sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	relationCalls    [][]string
+	relationArtifact json.RawMessage
+	relationErr      error
 }
 
 func (f *fakeRuntime) Records() []sessionruntime.Record { return nil }
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return f.metadata, f.failure
+}
+func (f *fakeRuntime) CollectRelations(_ context.Context, selected []string, _ json.RawMessage) (json.RawMessage, error) {
+	f.relationCalls = append(f.relationCalls, append([]string(nil), selected...))
+	return append(json.RawMessage(nil), f.relationArtifact...), f.relationErr
 }
 func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	var p struct {
@@ -256,4 +267,58 @@ func TestSliceServerErrorIsPartialNotLeaf(t *testing.T) {
 	if failure != nil || !strings.Contains(string(result.Artifact), "boom") || strings.Contains(string(result.Artifact), `"outgoing_terminal_node_ids":[`) {
 		t.Fatalf("%s: failure=%v artifact=%s", assertion, failure, result.Artifact)
 	}
+}
+
+func TestSliceManagedFakeProviderProcess(t *testing.T) {
+	const assertion = "ASSERT_SLICE_REAL_MANAGED_PROVIDER_PROCESS"
+	response := `{"provider_id":"managed@1","terminal":"COMPLETE_WITHIN_BOUNDS","complete":true,"truncated":false,"bounds":{"max_nodes":20,"max_relations":7,"max_sources":2,"max_operations":3,"timeout_ms":1000,"protocol_messages":1,"cancelled":false},"relations":[{"relation_id":"r-managed","kind":"PASSES_CALLBACK"}]}`
+	script := filepath.Join(t.TempDir(), "provider.sh")
+	body := "#!/bin/sh\nprintf 'Content-Length: " + fmt.Sprint(len(response)) + "\\r\\n\\r\\n%s' '" + response + "'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	registry := provider.NewRegistry()
+	if err := registry.Register(provider.Registration{ID: "managed@1", Path: script}); err != nil {
+		t.Fatal(err)
+	}
+	receipt := provider.NewRuntime(registry).Execute(context.Background(), "managed@1", json.RawMessage(`{"relations":["PASSES_CALLBACK"]}`), provider.Limits{RequestBytes: 4096, ResponseBytes: 4096, ProtocolMessages: 1, StderrBytes: 1024, WallTime: time.Second, TerminationGrace: 100 * time.Millisecond})
+	if receipt.Failure != nil || !receipt.Reaped || !json.Valid(receipt.Response) {
+		t.Fatalf("%s: receipt=%+v", assertion, receipt)
+	}
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16"}, relationArtifact: receipt.Response}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.gjs","line":0,"character":0,"relations":["PASSES_CALLBACK"]}`)})
+	if failure != nil || !strings.Contains(string(result.Artifact), `"relation_id":"r-managed"`) || len(f.calls) != 0 {
+		t.Fatalf("%s: failure=%v calls=%v artifact=%s", assertion, failure, f.calls, result.Artifact)
+	}
+	t.Log("PASS " + assertion)
+}
+
+func TestSliceExplicitRelationComposition(t *testing.T) {
+	const assertionSelection = "ASSERT_SLICE_TYPED_SELECTION_FRONTIER_DETERMINISTIC"
+	const assertionIsolation = "ASSERT_SLICE_PROVIDER_FAILURE_NEVER_CALLS_LEAF"
+	const assertionBounds = "ASSERT_SLICE_INDEPENDENT_PROVIDER_BOUNDS_RECEIPT"
+	root := item("root", 0)
+	provider := json.RawMessage(`{"provider_id":"fake@1","terminal":"PROTOCOL_FAILED","complete":false,"truncated":false,"bounds":{"max_nodes":20,"max_relations":7,"max_sources":2,"max_operations":3,"timeout_ms":50,"protocol_messages":4,"cancelled":false},"relations":[{"relation_id":"r-provider","kind":"PASSES_CALLBACK"}]}`)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, relationArtifact: provider, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:root":   {Result: json.RawMessage(`[]`)},
+	}}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":1,"relations":["CALLS","PASSES_CALLBACK"],"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":1000,"request_timeout_ms":100}`)
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: input})
+	raw := string(result.Artifact)
+	if failure != nil || len(f.relationCalls) != 1 || strings.Join(f.relationCalls[0], ",") != "PASSES_CALLBACK" || !strings.Contains(raw, `"kind":"CALLS"`) || !strings.Contains(raw, `"frontier_node_ids"`) || !strings.Contains(raw, `"kind":"PASSES_CALLBACK"`) {
+		t.Fatalf("%s: failure=%v relation_calls=%v artifact=%s", assertionSelection, failure, f.relationCalls, raw)
+	}
+	t.Log("PASS " + assertionSelection)
+	if strings.Contains(raw, `"outgoing_terminal_node_ids":["PROTOCOL_FAILED"`) || !strings.Contains(raw, `"terminal":"PROTOCOL_FAILED"`) || !strings.Contains(raw, `"calls":`) {
+		t.Fatalf("%s: artifact=%s", assertionIsolation, raw)
+	}
+	t.Log("PASS " + assertionIsolation)
+	for _, field := range []string{`"max_nodes":20`, `"max_relations":7`, `"max_sources":2`, `"max_operations":3`, `"timeout_ms":50`, `"protocol_messages":4`, `"cancelled":false`} {
+		if !strings.Contains(raw, field) {
+			t.Fatalf("%s: missing %s in %s", assertionBounds, field, raw)
+		}
+	}
+	t.Log("PASS " + assertionBounds)
 }
