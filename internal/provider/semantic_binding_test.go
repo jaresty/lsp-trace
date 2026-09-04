@@ -77,14 +77,26 @@ func TestSemanticBindingIdentityConsistent(t *testing.T) {
 }
 
 func TestSemanticBindingCustodyConsistent(t *testing.T) {
-	a, request, receipt := semanticFixture(t)
-	var e observationadapter.Envelope
-	_ = json.Unmarshal(receipt.Response, &e)
-	e.Documents[0].OriginalURI = "file:///workspace/other.gts"
-	receipt.Response, _ = json.Marshal(e)
-	if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
-		t.Fatal("ASSERT_PROVIDER_SEMANTIC_CUSTODY_CONSISTENT: accepted original URI mismatch")
-	}
+	t.Run("original-uri", func(t *testing.T) {
+		a, request, receipt := semanticFixture(t)
+		var e observationadapter.Envelope
+		_ = json.Unmarshal(receipt.Response, &e)
+		e.Documents[0].OriginalURI = "file:///workspace/other.gts"
+		receipt.Response, _ = json.Marshal(e)
+		if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+			t.Fatal("ASSERT_PROVIDER_SEMANTIC_ORIGINAL_DOCUMENT_CUSTODY: accepted original URI mismatch")
+		}
+	})
+	t.Run("workspace-revision", func(t *testing.T) {
+		a, request, receipt := semanticFixture(t)
+		var e observationadapter.Envelope
+		_ = json.Unmarshal(receipt.Response, &e)
+		e.Documents[0].Revision.Value = strings.Repeat("d", 40)
+		receipt.Response, _ = json.Marshal(e)
+		if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+			t.Fatal("ASSERT_PROVIDER_SEMANTIC_REVISION_CONSISTENT: accepted workspace revision mismatch")
+		}
+	})
 }
 
 func TestSemanticBindingDelegatesObservationAdapter(t *testing.T) {
