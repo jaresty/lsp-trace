@@ -505,34 +505,43 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	}
 	response := make(chan readinessResult, 1)
 	go func() {
-		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
-		if err == nil {
+		reader := lspwire.NewReader(child.Stdout(), m.wire)
+		for messages := 0; messages < m.limits.MaxObservations; messages++ {
+			message, err := reader.Read()
+			if err != nil {
+				response <- readinessResult{err: err}
+				return
+			}
 			body, _ := json.Marshal(message)
 			m.recordReadinessResponse(opID, int64(len(body)))
-		}
-		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0) {
-			err = errors.New("sessionruntime: invalid readiness response")
-		}
-		metadata := SessionMetadata{}
-		if err == nil {
+			if message.Kind() == lspwire.KindNotification {
+				continue
+			}
+			if message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0 {
+				response <- readinessResult{err: errors.New("sessionruntime: invalid readiness response")}
+				return
+			}
+			metadata := SessionMetadata{}
 			var initialized struct {
 				Capabilities struct {
 					PositionEncoding      string          `json:"positionEncoding"`
 					CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider"`
 				} `json:"capabilities"`
 			}
-			if decodeErr := json.Unmarshal(message.Result, &initialized); decodeErr != nil {
-				err = errors.New("sessionruntime: malformed initialize result")
-			} else {
-				metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
-				if metadata.PositionEncoding == "" {
-					metadata.PositionEncoding = "utf-16"
-				}
-				provider := initialized.Capabilities.CallHierarchyProvider
-				metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+			if err := json.Unmarshal(message.Result, &initialized); err != nil {
+				response <- readinessResult{err: errors.New("sessionruntime: malformed initialize result")}
+				return
 			}
+			metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
+			if metadata.PositionEncoding == "" {
+				metadata.PositionEncoding = "utf-16"
+			}
+			provider := initialized.Capabilities.CallHierarchyProvider
+			metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+			response <- readinessResult{metadata: metadata}
+			return
 		}
-		response <- readinessResult{metadata: metadata, err: err}
+		response <- readinessResult{err: errors.New("sessionruntime: readiness response limit exceeded")}
 	}()
 	select {
 	case observed := <-response:

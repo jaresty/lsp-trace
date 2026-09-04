@@ -387,10 +387,22 @@ func newReadinessChild(mode string) *readinessChild {
 			if err == nil {
 				c.initialized <- initialized
 			}
+		case "notification-before-ready":
+			writer := lspwire.NewWriter(output, lspwire.DefaultLimits())
+			_ = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "window/logMessage", Params: json.RawMessage(`{"type":3,"message":"indexing"}`)})
+			_ = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: json.RawMessage(`{"capabilities":{}}`)})
+			initialized, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+			if err == nil {
+				c.initialized <- initialized
+			}
 		case "error":
 			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Error: &lspwire.RPCError{Code: -32603, Message: "fixture error"}})
+		case "wrong-id":
+			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`{"capabilities":{}}`)})
 		case "malformed":
 			_, _ = io.WriteString(output, "Content-Length: nope\r\n\r\n{}")
+		case "oversized":
+			_, _ = io.WriteString(output, "Content-Length: 16777217\r\n\r\n")
 		case "death":
 			_ = output.Close()
 		case "hang":
@@ -440,6 +452,20 @@ func TestReadinessInitializeCarriesConfiguredWorkspace(t *testing.T) {
 	}
 }
 
+func TestReadinessAcceptsNotificationBeforeInitializeResponse(t *testing.T) {
+	const assertion = "ASSERT_READINESS_ACCEPTS_NOTIFICATION_BEFORE_INITIALIZE_RESPONSE"
+	child := newReadinessChild("notification-before-ready")
+	m, started := readinessManager(t, child)
+	pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	terminal, found := m.WaitReadiness(context.Background(), pending.ID)
+	if !found || terminal.State != ReadinessReady || terminal.Failure != "" {
+		t.Fatalf("%s: readiness=%+v found=%t", assertion, terminal, found)
+	}
+	if terminal.ResponseMessages != 2 || terminal.ResponseBytes <= 0 {
+		t.Fatalf("%s: response accounting=%+v", assertion, terminal)
+	}
+}
+
 func TestReadinessSendsInitializedNotificationBeforeReady(t *testing.T) {
 	const assertion = "ASSERT_READINESS_INITIALIZED_NOTIFICATION_PRECEDES_READY"
 	child := newReadinessChild("ready")
@@ -464,7 +490,7 @@ func TestReadinessProtocolOutcomesAreBoundedAndImmutable(t *testing.T) {
 		mode string
 		want ReadinessState
 		fail session.Failure
-	}{{"ready", ReadinessReady, ""}, {"error", ReadinessFailed, session.InitializationFailure}, {"malformed", ReadinessFailed, session.InitializationFailure}, {"death", ReadinessFailed, session.InitializationFailure}} {
+	}{{"ready", ReadinessReady, ""}, {"error", ReadinessFailed, session.InitializationFailure}, {"wrong-id", ReadinessFailed, session.InitializationFailure}, {"malformed", ReadinessFailed, session.InitializationFailure}, {"oversized", ReadinessFailed, session.InitializationFailure}, {"death", ReadinessFailed, session.InitializationFailure}} {
 		t.Run(tc.mode, func(t *testing.T) {
 			m, started := readinessManager(t, newReadinessChild(tc.mode))
 			pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
