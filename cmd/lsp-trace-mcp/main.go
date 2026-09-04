@@ -27,6 +27,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
 	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
+	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -45,13 +46,34 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		defer publicationRoot.Close()
 	}
-	server, err := newServer(*enableLiveLSP, publicationRoot)
+	server, manager, err := newServerRuntime(*enableLiveLSP, publicationRoot)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if err := server.Serve(stdin, stdout); err != nil {
-		fmt.Fprintln(stderr, err)
+	var bootstrapSessions []bootstrapSession
+	if *bootstrapConfigPath != "" {
+		config, err := loadBootstrapConfig(*bootstrapConfigPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "bootstrap config:", err)
+			return 1
+		}
+		bootstrapSessions, err = startBootstrap(context.Background(), manager, config, 10*time.Second)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+	}
+	serveErr := server.Serve(stdin, stdout)
+	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	shutdownErr := stopBootstrap(shutdownContext, manager, bootstrapSessions)
+	if serveErr != nil {
+		fmt.Fprintln(stderr, serveErr)
+		return 1
+	}
+	if shutdownErr != nil {
+		fmt.Fprintln(stderr, shutdownErr)
 		return 1
 	}
 	return 0
