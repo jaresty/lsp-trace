@@ -40,6 +40,7 @@ func TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs(t *testing.T
 		{"qualification failure", `"status":"PASS"`, `"status":"FAIL"`, "", "", "schema validation"},
 		{"non-exhaustive universe", `"universe":2`, `"universe":3`, "", "", "universe count"},
 		{"unknown exclusion", `"member_id":"b.go","reason":"POLICY_EXCLUDED"`, `"member_id":"missing.go","reason":"POLICY_EXCLUDED"`, "", "", "exclusion member"},
+		{"invalid exclusion reason", `"reason":"POLICY_EXCLUDED"`, `"reason":"UNREVIEWED"`, "", "", "schema validation"},
 		{"overlap covered and excluded", `"member_id":"a.go","evidence_ids"`, `"member_id":"b.go","evidence_ids"`, "", "", "both covered and excluded"},
 		{"unaccounted member", `"exclusions":[{"member_id":"b.go","reason":"POLICY_EXCLUDED"}]`, `"exclusions":[]`, `"excluded":1`, `"excluded":0`, "members must be exhausted"},
 	}

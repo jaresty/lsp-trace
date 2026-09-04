@@ -57,6 +57,23 @@ func TestNormalizedRelationsSchemaBoundary(t *testing.T) {
 	}
 }
 
+func TestNormalizedRelationsRejectsMissingRequiredProvenanceFields(t *testing.T) {
+	valid := mustJSON(t, NormalizeRelations(normalizedRelationsFixture()))
+	for _, field := range []string{"caller_node_id", "callee_node_id", "call_sites"} {
+		t.Run(field, func(t *testing.T) {
+			var document map[string]any
+			if err := json.Unmarshal(valid, &document); err != nil {
+				t.Fatal(err)
+			}
+			relations := document["relations"].([]any)
+			delete(relations[0].(map[string]any), field)
+			if err := ValidateNormalizedRelationsJSON(mustJSON(t, document)); err == nil {
+				t.Fatalf("ASSERT_NORMALIZED_RELATIONS_REJECTS_MISSING_%s: accepted", field)
+			}
+		})
+	}
+}
+
 func TestNormalizedRelationsDoesNotMutateGraphSerialization(t *testing.T) {
 	for _, version := range []string{SchemaVersionV2, SchemaVersionV3} {
 		result := normalizedRelationsFixture()
