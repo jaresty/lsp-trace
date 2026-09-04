@@ -252,7 +252,12 @@ func TestIncomingSelectorContracts(t *testing.T) {
 		f := &fakeRuntime{records: []sessionruntime.Record{{SessionID: "s", Generation: 2, State: session.Ready}}, metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
 		_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","uri":"file:///w/a.go","line":0,"character":0}`)})
 		if failure != nil {
-			t.Fatalf("%s: %v", assertion, failure)
+			t.Fatalf("%s: READY failure=%v", assertion, failure)
+		}
+		f.records[0].State = session.Stopped
+		_, failure = NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","uri":"file:///w/a.go","line":0,"character":0}`)})
+		if failure == nil || failure.Code != "SESSION_NOT_READY" {
+			t.Fatalf("%s: non-READY failure=%v", assertion, failure)
 		}
 	})
 	t.Run("unique symbol", func(t *testing.T) {
