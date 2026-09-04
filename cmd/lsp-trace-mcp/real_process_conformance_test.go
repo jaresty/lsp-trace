@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
+	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/provider"
 )
 
@@ -36,7 +40,31 @@ func TestRealProviderProcessTransportConformance(t *testing.T) {
 		if a.Failure != nil || b.Failure != nil || !a.Reaped || !b.Reaped || !json.Valid(a.Response) || !bytes.Equal(a.Response, b.Response) {
 			t.Fatalf("ASSERT_REAL_PROVIDER_SUCCESS_SCHEMA_AND_REPLAY: a=%+v b=%+v", a, b)
 		}
+		var envelope observationadapter.Envelope
+		if err := json.Unmarshal(a.Response, &envelope); err != nil {
+			t.Fatalf("ASSERT_REAL_PROVIDER_SUCCESS_SCHEMA_AND_REPLAY: decode strict envelope: %v", err)
+		}
+		adapted, err := observationadapter.Adapt(envelope)
+		if err != nil || len(adapted.Observations) != 1 {
+			t.Fatalf("ASSERT_REAL_PROVIDER_SUCCESS_SCHEMA_AND_REPLAY: adapt=%+v err=%v", adapted, err)
+		}
+		observation := adapted.Observations[0]
+		if observation.OriginalAnchor.DocumentID != "fixture-original" || observation.OriginalAnchor.URI != "file:///fixture/main.go" || observation.OriginalAnchor.Range.Start.Line != 0 || observation.OriginalAnchor.Range.Start.Character != 0 || observation.OriginalAnchor.Range.End.Line != 0 || observation.OriginalAnchor.Range.End.Character != 7 || len(adapted.Custody.Documents) != 1 || adapted.Custody.Documents[0].OriginalURI != observation.OriginalAnchor.URI {
+			t.Fatalf("ASSERT_REAL_PROVIDER_SUCCESS_SCHEMA_AND_REPLAY: original custody or exact anchor changed: observation=%+v custody=%+v", observation, adapted.Custody)
+		}
 		t.Log("PASS ASSERT_REAL_PROVIDER_SUCCESS_SCHEMA_AND_REPLAY")
+	})
+	t.Run("ASSERT_REAL_PROVIDER_NO_ITEM_STRICT_ENVELOPE", func(t *testing.T) {
+		receipt := run(t, "fake@1", "no-item", context.Background(), limits)
+		var envelope observationadapter.Envelope
+		if receipt.Failure != nil || !receipt.Reaped || json.Unmarshal(receipt.Response, &envelope) != nil {
+			t.Fatalf("ASSERT_REAL_PROVIDER_NO_ITEM_STRICT_ENVELOPE: receipt=%+v", receipt)
+		}
+		adapted, err := observationadapter.Adapt(envelope)
+		if err != nil || len(adapted.Observations) != 0 || len(adapted.Custody.Documents) != 1 {
+			t.Fatalf("ASSERT_REAL_PROVIDER_NO_ITEM_STRICT_ENVELOPE: adapted=%+v err=%v", adapted, err)
+		}
+		t.Log("PASS ASSERT_REAL_PROVIDER_NO_ITEM_STRICT_ENVELOPE")
 	})
 	for _, tc := range []struct {
 		name, mode string
@@ -119,21 +147,32 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	}
 	mcpBinary := buildMCPBinary(t)
 	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
+	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
 	workspace := t.TempDir()
-	configPath := filepath.Join(t.TempDir(), "bootstrap.json")
-	config := map[string]any{"version": 1, "processes": []any{map[string]any{"alias": "fixture", "profile": map[string]any{"trust_domain": "real-provider-conformance", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"}, "execution": map[string]any{"path": fakeLSP, "directory": workspace}}}}
-	raw, _ := json.Marshal(config)
-	if err := os.WriteFile(configPath, raw, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	providerStartMarker := filepath.Join(t.TempDir(), "provider-started")
+	baseConfig := map[string]any{"version": 1, "processes": []any{map[string]any{"alias": "fixture", "profile": map[string]any{"trust_domain": "real-provider-conformance", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"}, "execution": map[string]any{"path": fakeLSP, "directory": workspace}}}}
+	config := cloneMap(baseConfig)
+	config["providers"] = []any{map[string]any{
+		"identity": "fake@1", "version": "1.0.0",
+		"protocol":   map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
+		"executable": fakeProvider, "directory": workspace,
+		"environment":  []string{"LSP_TRACE_PROVIDER_MODE=success", "LSP_TRACE_PROVIDER_START_MARKER=" + providerStartMarker},
+		"capabilities": map[string]any{"relations": []string{"PASSES_CALLBACK"}, "languages": []string{"go"}, "frameworks": []string{"fixture"}},
+		"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": 1000, "termination_grace_ms": 50},
+	}}
+	configPath := writeBootstrapJSON(t, config)
+	legacyConfigPath := writeBootstrapJSON(t, baseConfig)
 	base := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500}
 
 	t.Run("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
 		request := cloneMap(base)
 		request["relations"] = []string{"PASSES_CALLBACK"}
 		request["providers"] = []string{"fake@1"}
-		response := runMCPProcess(t, mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(1, "lsp_trace_v1_incoming", request)})[0]
-		call := decodeProcessCall(t, response)
+		responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(1, "lsp_trace_v1_incoming", request)})
+		if err != nil {
+			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
+		}
+		call := decodeProcessCall(t, responses[0])
 		if call.env["operation_status"] != "SUCCEEDED" {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: %s; envelope=%v", productionProviderContractGap, call.env)
 		}
@@ -146,16 +185,79 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 		request["down_depth"] = 2
 		request["relations"] = []string{"PASSES_CALLBACK"}
 		request["providers"] = []string{"fake@1"}
-		response := runMCPProcess(t, mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(2, "lsp_trace_v1_slice", request)})[0]
-		call := decodeProcessCall(t, response)
+		responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(2, "lsp_trace_v1_slice", request)})
+		if err != nil {
+			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
+		}
+		call := decodeProcessCall(t, responses[0])
 		if call.env["operation_status"] != "SUCCEEDED" {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: %s; envelope=%v", productionProviderContractGap, call.env)
 		}
 		t.Log("PASS ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER")
 	})
 	t.Run("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3", func(t *testing.T) {
-		t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: %s; no separately provisioned provider exists to mark non-invocation, so exact omission parity cannot be observed without fabricating authority", productionProviderContractGap)
+		request := cloneMap(base)
+		legacyResponses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", legacyConfigPath}, []map[string]any{callRequest(3, "lsp_trace_v1_incoming", request)})
+		if err != nil {
+			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: historical graph-v3 run failed: %v", err)
+		}
+		providerResponses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(3, "lsp_trace_v1_incoming", request)})
+		if err != nil {
+			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: host provider bootstrap unavailable: %v", err)
+		}
+		if _, err := os.Stat(providerStartMarker); !os.IsNotExist(err) {
+			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: omitted relations started provider: marker_err=%v", err)
+		}
+		legacy := decodeProcessCall(t, legacyResponses[0])
+		withProvider := decodeProcessCall(t, providerResponses[0])
+		legacyBytes, providerBytes := inlineArtifactBytes(t, legacy.env), inlineArtifactBytes(t, withProvider.env)
+		if !bytes.Equal(providerBytes, legacyBytes) {
+			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: graph-v3 bytes changed\nprovider: %q\nhistorical: %q", providerBytes, legacyBytes)
+		}
+		t.Log("PASS ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3")
 	})
+}
+
+func writeBootstrapJSON(t *testing.T, config map[string]any) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "bootstrap.json")
+	raw, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func runMCPProcessForAcceptance(binary string, args []string, requests []map[string]any) ([]map[string]any, error) {
+	var stdin bytes.Buffer
+	encoder := json.NewEncoder(&stdin)
+	encoder.SetEscapeHTML(false)
+	for _, request := range requests {
+		if err := encoder.Encode(request); err != nil {
+			return nil, err
+		}
+	}
+	command := exec.Command(binary, args...)
+	command.Stdin = &stdin
+	var stdout, stderr bytes.Buffer
+	command.Stdout, command.Stderr = &stdout, &stderr
+	if err := command.Run(); err != nil {
+		return nil, fmt.Errorf("run: %w stderr=%s", err, stderr.String())
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != len(requests) {
+		return nil, fmt.Errorf("responses=%d requests=%d stdout=%q", len(lines), len(requests), stdout.String())
+	}
+	responses := make([]map[string]any, len(lines))
+	for i, line := range lines {
+		if err := json.Unmarshal([]byte(line), &responses[i]); err != nil {
+			return nil, fmt.Errorf("response[%d]=%q: %w", i, line, err)
+		}
+	}
+	return responses, nil
 }
 
 func conformanceRepositoryRoot(t *testing.T) string {
