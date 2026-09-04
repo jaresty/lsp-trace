@@ -7,6 +7,8 @@ failed=0
 cd "$root"
 ./scripts/check-docs.sh
 printf 'PASS R-DOCUMENTATION-CONTRACT: operational documentation guard\n'
+./scripts/test-b05-qualification.sh
+printf 'PASS R-B05-QUALIFICATION: nine fixtures, managed acceptance, retained evidence, and non-entailments\n'
 
 assert_file() {
   id=$1

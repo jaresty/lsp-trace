@@ -1,0 +1,81 @@
+{
+  "schema_version": "lsp-trace.b05-qualification.v1",
+  "families": {
+    "plain_js_calls": {
+      "kind": "compatibility",
+      "observations": ["server_reported_call_hierarchy", "graph_v3_bytes_unchanged_when_relations_omitted"],
+      "relations": ["CALLS"],
+      "prohibited": ["source_derived_calls"],
+      "completeness": "COMPLETE_WITHIN_BOUNDS",
+      "revision_policy": "EXACT_OR_CALLER_ASSERTED"
+    },
+    "ember_glimmer_chain": {
+      "kind": "motivating_chain",
+      "observations": ["upload_complete_perform", "data_load_perform", "successful_value_read", "yielded_service", "component_argument_binding", "template_argument_read", "upload_callback_passage"],
+      "relations": ["INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "BINDS_ARGUMENT", "RENDERS_FROM", "PASSES_CALLBACK"],
+      "prohibited": ["runtime_execution", "repaint", "feature_identity", "whole_source_completeness"],
+      "completeness": "PARTIAL",
+      "revision_policy": "PINNED_COMMIT_BLOB_RANGE"
+    },
+    "callback_passage": {
+      "kind": "non_entailment",
+      "observations": ["callable_reference_passed", "no_explicit_invocation_observed"],
+      "relations": ["PASSES_CALLBACK"],
+      "prohibited": ["INVOKES_TASK", "runtime_execution"],
+      "completeness": "PARTIAL",
+      "revision_policy": "EXACT_ANCHOR"
+    },
+    "advertised_no_prepare": {
+      "kind": "provider_gap",
+      "terminal": "PREPARE_RETURNED_NO_ITEM",
+      "observations": ["call_hierarchy_provider_true", "prepare_count_zero", "calls_count_zero"],
+      "relations": [],
+      "prohibited": ["absence_claim", "complete_traversal"],
+      "completeness": "UNKNOWN",
+      "revision_policy": "EXACT_SEED"
+    },
+    "unsupported_template": {
+      "kind": "adapter_gap",
+      "terminal": "ADAPTER_NOT_AVAILABLE",
+      "observations": ["framework_recognized", "qualified_adapter_unavailable"],
+      "relations": [],
+      "prohibited": ["NO_RELATIONS_WITHIN_BOUNDS", "absence_claim"],
+      "completeness": "UNKNOWN",
+      "revision_policy": "EXACT_SOURCE"
+    },
+    "mixed_revision": {
+      "kind": "custody_failure",
+      "terminal": "MIXED_REVISION",
+      "observations": ["conflicting_anchor_revisions_identified"],
+      "relations": [],
+      "prohibited": ["mixed_revision_relation", "revision_guess"],
+      "completeness": "UNKNOWN",
+      "revision_policy": "REJECT"
+    },
+    "bounds": {
+      "kind": "bounded_partial",
+      "terminal": "MAX_RELATIONS",
+      "observations": ["deterministic_frontier", "phase_bound_receipt", "frontier_identity_retained"],
+      "relations": ["CALLS"],
+      "prohibited": ["complete_traversal"],
+      "completeness": "PARTIAL",
+      "revision_policy": "EXACT_SOURCE"
+    },
+    "identity": {
+      "kind": "determinism",
+      "observations": ["repeat_same_ids_and_digest", "reordered_traversal_same_ids_and_digest"],
+      "relations": ["CALLS", "BINDS_ARGUMENT"],
+      "prohibited": ["timestamp_identity", "request_id_identity", "traversal_order_identity"],
+      "completeness": "COMPLETE_WITHIN_BOUNDS",
+      "revision_policy": "EXACT_SOURCE"
+    },
+    "red_validation": {
+      "kind": "rejection",
+      "observations": ["each_prohibited_claim_rejected_with_specific_assertion"],
+      "relations": [],
+      "prohibited": ["mislabeled_calls", "callback_passage_as_invocation", "state_update_as_render", "runtime_claim", "omitted_revision", "false_completeness"],
+      "completeness": "COMPLETE_WITHIN_BOUNDS",
+      "revision_policy": "REQUIRED"
+    }
+  }
+}
