@@ -23,7 +23,7 @@ const (
 )
 
 var familyVersions = map[string]map[string]string{
-	FamilyGraph:                    {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3},
+	FamilyGraph:                    {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3, "v4": "lsp-trace.graph.v4"},
 	FamilyInspect:                  {"v1": "lsp-trace.inspect.v1"},
 	FamilyFilter:                   {"v1": "lsp-trace.filter.v1"},
 	FamilySourceManifest:           {"v1": "lsp-trace.source-manifest.v1"},

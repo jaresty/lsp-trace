@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v4.schema.json",
+  "title": "lsp-trace graph v4 normalized relations",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "nodes", "edges", "relations"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.graph.v4"},
+    "nodes": {"type": ["array", "null"]},
+    "edges": {"type": ["array", "null"], "description": "Compatibility projection containing CALLS relations only."},
+    "relations": {"type": ["array", "null"]}
+  }
+}
