@@ -12,19 +12,21 @@ import (
 var files embed.FS
 
 const (
-	FamilyGraph   = "graph"
-	FamilyInspect = "inspect"
-	FamilyFilter  = "filter"
+	FamilyGraph          = "graph"
+	FamilyInspect        = "inspect"
+	FamilyFilter         = "filter"
+	FamilySourceManifest = "source-manifest"
 )
 
 var familyVersions = map[string]map[string]string{
-	FamilyGraph:   {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3},
-	FamilyInspect: {"v1": "lsp-trace.inspect.v1"},
-	FamilyFilter:  {"v1": "lsp-trace.filter.v1"},
+	FamilyGraph:          {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3},
+	FamilyInspect:        {"v1": "lsp-trace.inspect.v1"},
+	FamilyFilter:         {"v1": "lsp-trace.filter.v1"},
+	FamilySourceManifest: {"v1": "lsp-trace.source-manifest.v1"},
 }
 
 var versionFields = map[string]string{
-	FamilyGraph: "schema_version", FamilyInspect: "inspection_schema_version", FamilyFilter: "filter_schema_version",
+	FamilyGraph: "schema_version", FamilyInspect: "inspection_schema_version", FamilyFilter: "filter_schema_version", FamilySourceManifest: "source_manifest_schema_version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {

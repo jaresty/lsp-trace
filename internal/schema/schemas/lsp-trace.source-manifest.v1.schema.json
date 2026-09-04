@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.source-manifest.v1.schema.json",
+  "title": "lsp-trace contributing-source manifest v1",
+  "type": "object",
+  "required": ["source_manifest_schema_version", "source_snapshot_id", "authentication", "collections", "receipts", "revision_attestations", "exclusions", "failures"],
+  "properties": {
+    "source_manifest_schema_version": {"const": "lsp-trace.source-manifest.v1"},
+    "source_snapshot_id": {"$ref": "#/$defs/digest"},
+    "authentication": {"$ref": "#/$defs/authentication"},
+    "collections": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/collection"}},
+    "receipts": {"type": "array", "items": {"$ref": "#/$defs/receipt"}},
+    "revision_attestations": {"type": "array", "items": {"$ref": "#/$defs/revisionAttestation"}},
+    "exclusions": {"type": "array", "items": {"$ref": "#/$defs/exclusion"}},
+    "failures": {"type": "array", "items": {"$ref": "#/$defs/failure"}}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\].*$",
+      "allOf": [
+        {"not": {"pattern": "^[A-Za-z]:"}},
+        {"not": {"pattern": "(^|/)\\.\\.(/|$)"}}
+      ]
+    },
+    "referenceList": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}, "uniqueItems": true},
+    "authentication": {
+      "type": "object",
+      "required": ["state"],
+      "properties": {
+        "state": {"enum": ["SELF_ASSERTED", "INTEGRITY_VERIFIED", "AUTHENTICATED", "FAILED"]},
+        "trust_policy_id": {"$ref": "#/$defs/nonEmptyString"},
+        "anchor_reference": {"$ref": "#/$defs/nonEmptyString"},
+        "verification_method": {"$ref": "#/$defs/nonEmptyString"},
+        "verification_result": {"$ref": "#/$defs/nonEmptyString"},
+        "provisioning_receipt_id": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "allOf": [{
+        "if": {"properties": {"state": {"const": "AUTHENTICATED"}}, "required": ["state"]},
+        "then": {"required": ["trust_policy_id", "anchor_reference", "verification_method", "verification_result", "provisioning_receipt_id"]}
+      }],
+      "additionalProperties": false
+    },
+    "collection": {
+      "type": "object",
+      "required": ["collection_id", "custody_adapter_kind", "dirty", "untracked"],
+      "properties": {
+        "collection_id": {"$ref": "#/$defs/nonEmptyString"},
+        "custody_adapter_kind": {"enum": ["GIT_WORKTREE", "IMMUTABLE_MANIFEST", "ARCHIVE", "PACKAGE", "OTHER"]},
+        "dirty": {"type": "boolean"},
+        "untracked": {"type": "boolean"},
+        "provider_reference": {"$ref": "#/$defs/nonEmptyString"},
+        "execution_reference": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "revisionAttestation": {
+      "type": "object",
+      "required": ["collection_id", "kind", "claimed_revision", "resolved_revision", "verification_result"],
+      "properties": {
+        "collection_id": {"$ref": "#/$defs/nonEmptyString"},
+        "kind": {"enum": ["GIT_COMMIT", "VCS_REVISION", "ARCHIVE", "PACKAGE", "BUILD_INPUT", "OTHER"]},
+        "claimed_revision": {"$ref": "#/$defs/nonEmptyString"},
+        "resolved_revision": {"$ref": "#/$defs/nonEmptyString"},
+        "verification_result": {"enum": ["MATCH", "MISMATCH", "UNVERIFIED"]}
+      },
+      "additionalProperties": false
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["receipt_id", "collection_id", "path", "content_sha256", "language", "classification", "inclusion_reason", "provider_references", "execution_references"],
+      "properties": {
+        "receipt_id": {"$ref": "#/$defs/digest"},
+        "collection_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "content_sha256": {"$ref": "#/$defs/digest"},
+        "language": {"$ref": "#/$defs/nonEmptyString"},
+        "classification": {"enum": ["SOURCE", "GENERATED_SOURCE", "TEST", "CONFIGURATION", "DOCUMENTATION", "DEPENDENCY", "OTHER"]},
+        "inclusion_reason": {"enum": ["RETAINED_NODE", "ENDPOINT_RANGE", "CALL_SITE", "DISPATCH_RELATIONSHIP", "TYPE_ASSOCIATION", "DOCUMENT_ASSOCIATION", "SOURCE_DIAGNOSTIC", "OTHER"]},
+        "provider_references": {"$ref": "#/$defs/referenceList"},
+        "execution_references": {"$ref": "#/$defs/referenceList"}
+      },
+      "additionalProperties": false
+    },
+    "exclusion": {
+      "type": "object",
+      "required": ["collection_id", "kind", "reason"],
+      "properties": {
+        "collection_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "kind": {"enum": ["IGNORED", "OUTSIDE_SCOPE", "UNSUPPORTED", "POLICY_DENIED", "UNREADABLE", "OTHER"]},
+        "reason": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    },
+    "failure": {
+      "type": "object",
+      "required": ["collection_id", "kind", "message"],
+      "properties": {
+        "collection_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/relativePath"},
+        "kind": {"enum": ["READ", "HASH", "REVISION_MISMATCH", "AUTHENTICATION", "VALIDATION", "OTHER"]},
+        "message": {"$ref": "#/$defs/nonEmptyString"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

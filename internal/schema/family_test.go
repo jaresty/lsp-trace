@@ -7,6 +7,27 @@ import (
 	"testing"
 )
 
+const validSourceManifestV1 = `{
+  "source_manifest_schema_version":"lsp-trace.source-manifest.v1",
+  "source_snapshot_id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "authentication":{"state":"INTEGRITY_VERIFIED"},
+  "collections":[{"collection_id":"workspace","custody_adapter_kind":"GIT_WORKTREE","dirty":true,"untracked":false}],
+  "receipts":[{
+    "receipt_id":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "collection_id":"workspace",
+    "path":"internal/schema/schema.go",
+    "content_sha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "language":"go",
+    "classification":"SOURCE",
+    "inclusion_reason":"RETAINED_NODE",
+    "provider_references":["gopls"],
+    "execution_references":["sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"]
+  }],
+  "revision_attestations":[],
+  "exclusions":[],
+  "failures":[]
+}`
+
 const validFilterV1 = `{
   "filter_schema_version":"lsp-trace.filter.v1",
   "projection_kind":"SEED_EVIDENCE_COMPARISON",
@@ -49,6 +70,7 @@ func TestFamilySchemasMatchCommittedBytesDeterministically(t *testing.T) {
 		{FamilyGraph, "v3", "lsp-trace.graph.v3"},
 		{FamilyInspect, "v1", "lsp-trace.inspect.v1"},
 		{FamilyFilter, "v1", "lsp-trace.filter.v1"},
+		{FamilySourceManifest, "v1", "lsp-trace.source-manifest.v1"},
 	} {
 		first, err := BytesFor(tc.family, tc.version)
 		if err != nil {
@@ -65,6 +87,30 @@ func TestFamilySchemasMatchCommittedBytesDeterministically(t *testing.T) {
 		if !bytes.Equal(first, second) || !bytes.Equal(first, committed) {
 			t.Fatalf("ASSERT_FAMILY_SCHEMA_BYTES: %s bytes differ", tc.full)
 		}
+	}
+}
+
+func TestValidateForSourceManifestFamily(t *testing.T) {
+	detected, err := ValidateFor([]byte(validSourceManifestV1), FamilySourceManifest, "v1")
+	if err != nil || detected != "lsp-trace.source-manifest.v1" {
+		t.Fatalf("ASSERT_SOURCE_MANIFEST_V1_VALID: detected=%q err=%v", detected, err)
+	}
+
+	for _, mutation := range []struct {
+		name string
+		from string
+		to   string
+	}{
+		{name: "missing inclusion reason", from: `    "inclusion_reason":"RETAINED_NODE",` + "\n", to: ""},
+		{name: "absolute path", from: `"path":"internal/schema/schema.go"`, to: `"path":"/internal/schema/schema.go"`},
+		{name: "bad digest", from: `"content_sha256":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"`, to: `"content_sha256":"cccc"`},
+	} {
+		t.Run(mutation.name, func(t *testing.T) {
+			mutated := strings.Replace(validSourceManifestV1, mutation.from, mutation.to, 1)
+			if _, err := ValidateFor([]byte(mutated), FamilySourceManifest, "v1"); err == nil || !strings.Contains(err.Error(), "schema validation") {
+				t.Fatalf("ASSERT_SOURCE_MANIFEST_V1_REJECTS_%s: %v", strings.ToUpper(strings.ReplaceAll(mutation.name, " ", "_")), err)
+			}
+		})
 	}
 }
 
