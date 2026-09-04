@@ -73,6 +73,30 @@ No existing file or symbol is claimed. In particular, bootstrap parsing, MCP com
 - `ASSERT_PROVIDER_SEMANTIC_COMPOSITION_PAYLOAD_EXACT`
 - `ASSERT_PROVIDER_NEUTRAL_NO_EMBER_PARSING`
 
+## Red evidence
+
+The committed compile-valid permissive surfaces were exercised with:
+
+`go test ./internal/provider -run 'Test(Admission|SemanticBinding)' -count=1 -v`
+
+Result: `Go test: 0 passed, 9 failed in 1 packages`. The output independently named all nine behavioral assertion identities; `ASSERT_PROVIDER_NEUTRAL_NO_EMBER_PARSING` is structural and is enforced by owned-source and forbidden-path diff inspection.
+
+## Implementation
+
+- Added an immutable `ProvisionedAdmissionResolver` that canonicalizes copied host declarations, accepts only omitted/`auto`, `none`, or one registered stable identity, rejects caller-shaped authority and unsupported/duplicate relations, requires all requested capabilities, and rejects zero/multiple auto candidates.
+- Added `ObservationSemanticAdapter`, a concrete `provider.SemanticAdapter`, with strict single-value JSON decoding; request, receipt, provider, protocol, adapter, relation, request-ID, and original custody checks; delegation to `internal/observationadapter`; and deterministic incoming/slice provider-receipt projection.
+- The implementation imports no framework parser and contains no Ember/Glimmer vocabulary.
+- Bootstrap parsing, MCP composition, incoming/slice composition, transport, graph semantics, and observation adaptation were not edited.
+
 ## Evidence
 
-Pending assertion-specific red, focused green, full repository, vet, diff hygiene, forbidden-path diff, and commit evidence.
+- Focused green after strengthened distinction coverage: `Go test: 18 passed in 1 packages`.
+- Provider package: `Go test: 36 passed in 1 packages`.
+- Provider race package: `Go test: 36 passed in 1 packages`.
+- `go vet ./...`: pass, no diagnostics.
+- `git diff --check`: pass, no diagnostics.
+- Forbidden-path diff over bootstrap parsing, MCP composition, incoming, and slice: empty.
+- First full pre-commit run: `Go test: 3192 passed, 7 failed, 2 skipped in 40 packages`; four failures are the frame-declared production acceptance reds, two are the dirty-worktree ownership guard, and the isolated slice managed-process test passed on immediate rerun.
+- Clean-state full: `Go test: 3204 passed, 4 failed, 2 skipped in 40 packages`; only `ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER`, `ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER`, `ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3`, and their parent test remain red, as assigned to later frames by `FRAMEWORK.md`.
+- Post-commit focused: `Go test: 18 passed in 1 packages`.
+- Final implementation commit: this commit — `feat: bind provider admission and observations`.

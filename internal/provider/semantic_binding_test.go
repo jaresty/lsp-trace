@@ -33,19 +33,46 @@ func semanticFixture(t *testing.T) (*ObservationSemanticAdapter, StrictCollector
 }
 
 func TestSemanticBindingEnvelopeStrict(t *testing.T) {
-	a, request, receipt := semanticFixture(t)
-	bad := receipt
-	bad.Response = append(append(json.RawMessage(nil), receipt.Response[:len(receipt.Response)-1]...), []byte(`,"unknown":true}`)...)
-	if _, err := a.Adapt(context.Background(), request, bad); err == nil {
-		t.Fatal("ASSERT_PROVIDER_SEMANTIC_ENVELOPE_STRICT: accepted unknown field")
+	for name, mutate := range map[string]func(json.RawMessage) json.RawMessage{
+		"unknown-field": func(raw json.RawMessage) json.RawMessage {
+			return append(append(json.RawMessage(nil), raw[:len(raw)-1]...), []byte(`,"unknown":true}`)...)
+		},
+		"trailing-value": func(raw json.RawMessage) json.RawMessage {
+			return append(append(json.RawMessage(nil), raw...), []byte(` {}`)...)
+		},
+		"malformed": func(raw json.RawMessage) json.RawMessage { return raw[:len(raw)-1] },
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, request, receipt := semanticFixture(t)
+			receipt.Response = mutate(receipt.Response)
+			if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+				t.Fatalf("ASSERT_PROVIDER_SEMANTIC_ENVELOPE_STRICT: accepted %s", name)
+			}
+		})
 	}
 }
 
 func TestSemanticBindingIdentityConsistent(t *testing.T) {
-	a, request, receipt := semanticFixture(t)
-	receipt.ProviderID = "beta@1"
-	if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
-		t.Fatal("ASSERT_PROVIDER_SEMANTIC_IDENTITY_CONSISTENT: accepted receipt provider mismatch")
+	for name, mutate := range map[string]func(*StrictCollectorRequest, *Receipt, *observationadapter.Envelope){
+		"receipt-provider": func(_ *StrictCollectorRequest, r *Receipt, _ *observationadapter.Envelope) { r.ProviderID = "beta@1" },
+		"provider":         func(_ *StrictCollectorRequest, _ *Receipt, e *observationadapter.Envelope) { e.Provider.Version = "2" },
+		"protocol":         func(_ *StrictCollectorRequest, _ *Receipt, e *observationadapter.Envelope) { e.Protocol.Version = "2" },
+		"adapter":          func(_ *StrictCollectorRequest, _ *Receipt, e *observationadapter.Envelope) { e.Adapter.Version = "2" },
+		"request":          func(_ *StrictCollectorRequest, _ *Receipt, e *observationadapter.Envelope) { e.RequestID = "other" },
+		"relation": func(_ *StrictCollectorRequest, _ *Receipt, e *observationadapter.Envelope) {
+			e.Observations[0].Kind = relations.RelationRendersFrom
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			a, request, receipt := semanticFixture(t)
+			var envelope observationadapter.Envelope
+			_ = json.Unmarshal(receipt.Response, &envelope)
+			mutate(&request, &receipt, &envelope)
+			receipt.Response, _ = json.Marshal(envelope)
+			if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+				t.Fatalf("ASSERT_PROVIDER_SEMANTIC_IDENTITY_CONSISTENT: accepted %s mismatch", name)
+			}
+		})
 	}
 }
 
@@ -78,10 +105,15 @@ func TestSemanticBindingDelegatesAndProjectsExactReceipt(t *testing.T) {
 		t.Fatalf("ASSERT_PROVIDER_SEMANTIC_DELEGATES_OBSERVATION_ADAPTER: %v", err)
 	}
 	var got struct {
-		ProviderID, Terminal string
-		Complete, Truncated  bool
-		Bounds               json.RawMessage
-		Relations            []struct{ RelationID, Kind string }
+		ProviderID string          `json:"provider_id"`
+		Terminal   string          `json:"terminal"`
+		Complete   bool            `json:"complete"`
+		Truncated  bool            `json:"truncated"`
+		Bounds     json.RawMessage `json:"bounds"`
+		Relations  []struct {
+			RelationID string `json:"relation_id"`
+			Kind       string `json:"kind"`
+		} `json:"relations"`
 	}
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatal(err)
