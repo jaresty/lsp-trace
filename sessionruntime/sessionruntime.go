@@ -57,16 +57,23 @@ type SessionMetadata struct {
 }
 
 type ReadinessSnapshot struct {
-	ID         string
-	SessionID  string
-	Generation uint64
-	State      ReadinessState
-	Failure    session.Failure
-	Metadata   SessionMetadata
+	ID               string
+	SessionID        string
+	Generation       uint64
+	State            ReadinessState
+	Failure          session.Failure
+	Metadata         SessionMetadata
+	Duration         time.Duration
+	RequestMessages  int
+	RequestBytes     int64
+	ResponseMessages int
+	ResponseBytes    int64
+	ThermalPhase     string
 }
 
 type readinessOperation struct {
 	snapshot ReadinessSnapshot
+	started  time.Time
 	done     chan struct{}
 }
 
@@ -101,6 +108,8 @@ type Config struct {
 	Wire             lspwire.Limits
 	Starter          Starter
 	ReadinessTimeout time.Duration
+	// Now is an optional monotonic clock seam for deterministic runtime observations.
+	Now func() time.Time
 }
 type StartRequest struct {
 	Profile  runtimeprofile.Profile
@@ -148,14 +157,19 @@ type RoundTripRequest struct {
 
 // RoundTripResult is the immutable terminal observation of one transaction.
 type RoundTripResult struct {
-	Key           lspwire.RequestKey
-	Result        json.RawMessage
-	ServerError   *lspwire.RPCError
-	Failure       session.Failure
-	Messages      int
-	Bytes         int64
-	Notifications []lspwire.Message
-	Responses     []lspwire.Message
+	Key             lspwire.RequestKey
+	Result          json.RawMessage
+	ServerError     *lspwire.RPCError
+	Failure         session.Failure
+	Messages        int
+	Bytes           int64
+	RequestMessages int
+	RequestBytes    int64
+	Duration        time.Duration
+	ThermalPhase    string
+	Notifications   []lspwire.Message
+	Responses       []lspwire.Message
+	started         time.Time
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
@@ -192,7 +206,7 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 	m.observe(req.SessionID, req.Generation, "request", r.record.State, "")
 	m.mu.Unlock()
 
-	result := RoundTripResult{Key: key}
+	result := RoundTripResult{Key: key, ThermalPhase: "WARM", started: m.now()}
 	maxMessages := req.MaxMessages
 	if maxMessages <= 0 {
 		maxMessages = 1
@@ -213,7 +227,11 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
-	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: req.Params}); err != nil {
+	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: req.Params}
+	requestBody, _ := json.Marshal(requestMessage)
+	result.RequestMessages = 1
+	result.RequestBytes = int64(len(requestBody))
+	if err := writer.Write(requestMessage); err != nil {
 		return m.finishRoundTrip(req.SessionID, child, result, session.SessionPoisoned, true)
 	}
 
@@ -290,6 +308,10 @@ func (m *Manager) finishRoundTrip(id string, child Child, result RoundTripResult
 		m.observe(id, result.Key.Generation, "response", r.record.State, failure)
 	}
 	result.Failure = failure
+	result.Duration = m.now().Sub(result.started)
+	if result.Duration < 0 {
+		result.Duration = 0
+	}
 	m.workers--
 	select {
 	case m.workerDone <- struct{}{}:
@@ -325,6 +347,7 @@ type Manager struct {
 	sequence         uint64
 	readinessSeq     uint64
 	readinessTimeout time.Duration
+	now              func() time.Time
 	workers          int
 	workerDone       chan struct{}
 	closed           bool
@@ -349,7 +372,11 @@ func New(c Config) (*Manager, error) {
 	if readinessTimeout <= 0 {
 		readinessTimeout = time.Second
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, workerDone: make(chan struct{}, 1)}, nil
+	now := c.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1)}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
@@ -429,7 +456,7 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 	workspace := r.record.Profile.Workspace().String()
 	m.readinessSeq++
 	opID := "readiness-" + strconv.FormatUint(m.readinessSeq, 10)
-	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, SessionID: id, Generation: generation, State: ReadinessPending}, done: make(chan struct{})}
+	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, SessionID: id, Generation: generation, State: ReadinessPending, ThermalPhase: "COLD"}, started: m.now(), done: make(chan struct{})}
 	m.readiness[opID] = op
 	m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)] = opID
 	r.protocolOwned = true
@@ -465,7 +492,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		URI  string `json:"uri"`
 		Name string `json:"name"`
 	}{{URI: workspaceURI, Name: "workspace"}}})
-	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}); err != nil {
+	initializeMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}
+	initializeBody, _ := json.Marshal(initializeMessage)
+	m.recordReadinessRequest(opID, int64(len(initializeBody)))
+	if err := writer.Write(initializeMessage); err != nil {
 		m.abortReadiness(child, opID, session.InitializationFailure)
 		return
 	}
@@ -476,6 +506,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	response := make(chan readinessResult, 1)
 	go func() {
 		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
+		if err == nil {
+			body, _ := json.Marshal(message)
+			m.recordReadinessResponse(opID, int64(len(body)))
+		}
 		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0) {
 			err = errors.New("sessionruntime: invalid readiness response")
 		}
@@ -506,7 +540,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			m.abortReadiness(child, opID, session.InitializationFailure)
 			return
 		}
-		if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "initialized", Params: json.RawMessage(`{}`)}); err != nil {
+		initializedMessage := lspwire.Message{JSONRPC: lspwire.Version, Method: "initialized", Params: json.RawMessage(`{}`)}
+		initializedBody, _ := json.Marshal(initializedMessage)
+		m.recordReadinessRequest(opID, int64(len(initializedBody)))
+		if err := writer.Write(initializedMessage); err != nil {
 			m.abortReadiness(child, opID, session.InitializationFailure)
 			return
 		}
@@ -526,6 +563,24 @@ func (m *Manager) abortReadiness(child Child, id string, failure session.Failure
 	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
 }
 
+func (m *Manager) recordReadinessRequest(id string, bytes int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op := m.readiness[id]; op != nil && op.snapshot.State == ReadinessPending {
+		op.snapshot.RequestMessages++
+		op.snapshot.RequestBytes += bytes
+	}
+}
+
+func (m *Manager) recordReadinessResponse(id string, bytes int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op := m.readiness[id]; op != nil && op.snapshot.State == ReadinessPending {
+		op.snapshot.ResponseMessages++
+		op.snapshot.ResponseBytes += bytes
+	}
+}
+
 func (m *Manager) finishReadiness(id string, state ReadinessState, failure session.Failure, metadata SessionMetadata) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -534,6 +589,10 @@ func (m *Manager) finishReadiness(id string, state ReadinessState, failure sessi
 		return
 	}
 	op.snapshot.State, op.snapshot.Failure, op.snapshot.Metadata = state, failure, metadata
+	op.snapshot.Duration = m.now().Sub(op.started)
+	if op.snapshot.Duration < 0 {
+		op.snapshot.Duration = 0
+	}
 	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
 		r.metadata = metadata
 		r.protocolOwned = false

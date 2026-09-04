@@ -430,6 +430,9 @@ func TestReadinessInitializeCarriesConfiguredWorkspace(t *testing.T) {
 	if !found || terminal.State != ReadinessReady {
 		t.Fatalf("%s: readiness=%+v found=%t", assertion, terminal, found)
 	}
+	if terminal.RequestMessages != 2 || terminal.RequestBytes <= 0 || terminal.ResponseMessages != 1 || terminal.ResponseBytes <= 0 || terminal.Duration < 0 || terminal.ThermalPhase != "COLD" {
+		t.Fatalf("ASSERT_READINESS_ACCOUNTING_COLD: %+v", terminal)
+	}
 	params := <-child.initializeParams
 	workspaceURI := "file:///workspace"
 	if !bytes.Contains(params, []byte(`"rootUri":"`+workspaceURI+`"`)) || !bytes.Contains(params, []byte(`"workspaceFolders":[{"uri":"`+workspaceURI+`"`)) {
