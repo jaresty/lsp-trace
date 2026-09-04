@@ -45,22 +45,31 @@ func (r *ProvisionedAdmissionResolver) Admit(_ context.Context, selection Select
 	if len(selection.Relations) == 0 {
 		return Admission{}, errors.New("provider admission requires relations")
 	}
-	wanted := append([]string(nil), selection.Relations...)
-	sort.Strings(wanted)
-	for i, relation := range wanted {
+	wantedRelations, err := canonicalRequested("relation", selection.Relations)
+	if err != nil {
+		return Admission{}, err
+	}
+	for _, relation := range wantedRelations {
 		if _, ok := supportedRelations[relation]; !ok {
 			return Admission{}, fmt.Errorf("unsupported relation %q", relation)
 		}
-		if i > 0 && relation == wanted[i-1] {
-			return Admission{}, fmt.Errorf("duplicate relation %q", relation)
-		}
+	}
+	wantedLanguages, err := canonicalRequested("language", selection.Languages)
+	if err != nil {
+		return Admission{}, err
+	}
+	wantedFrameworks, err := canonicalRequested("framework", selection.Frameworks)
+	if err != nil {
+		return Admission{}, err
 	}
 	candidates := make([]Declaration, 0, len(r.declarations))
 	for _, declaration := range r.declarations {
 		if selector != "auto" && declaration.Identity != selector {
 			continue
 		}
-		if supportsAll(declaration.Capabilities.Relations, wanted) {
+		if supportsAll(declaration.Capabilities.Relations, wantedRelations) &&
+			supportsAll(declaration.Capabilities.Languages, wantedLanguages) &&
+			supportsAll(declaration.Capabilities.Frameworks, wantedFrameworks) {
 			candidates = append(candidates, declaration)
 		}
 	}
@@ -72,6 +81,20 @@ func (r *ProvisionedAdmissionResolver) Admit(_ context.Context, selection Select
 	}
 	declaration := candidates[0]
 	return Admission{ProviderID: declaration.Identity, AdapterID: r.adapterID, Limits: declaration.Limits}, nil
+}
+
+func canonicalRequested(kind string, values []string) ([]string, error) {
+	canonical := append([]string(nil), values...)
+	sort.Strings(canonical)
+	for i, value := range canonical {
+		if value == "" {
+			return nil, fmt.Errorf("selected %s must not be empty", kind)
+		}
+		if i > 0 && value == canonical[i-1] {
+			return nil, fmt.Errorf("duplicate %s %q", kind, value)
+		}
+	}
+	return canonical, nil
 }
 
 func supportsAll(capabilities, wanted []string) bool {

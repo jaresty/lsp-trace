@@ -50,19 +50,33 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		defer publicationRoot.Close()
 	}
-	server, manager, err := newServerRuntime(*enableLiveLSP, publicationRoot)
+	var config *bootstrapConfig
+	var provisioned provider.Provisioned
+	inventory := provider.NewConfiguredInventory(provisioned)
+	if *bootstrapConfigPath != "" {
+		loaded, err := loadBootstrapConfig(*bootstrapConfigPath)
+		if err != nil {
+			fmt.Fprintln(stderr, "bootstrap config:", err)
+			return 1
+		}
+		config = &loaded
+		if len(loaded.Providers) != 0 {
+			provisioned, err = loaded.provisionProviders()
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			inventory = provider.NewConfiguredInventory(provisioned)
+		}
+	}
+	server, manager, err := newServerRuntimeWithInventory(*enableLiveLSP, inventory, publicationRoot)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 	var bootstrapSessions []bootstrapSession
-	if *bootstrapConfigPath != "" {
-		config, err := loadBootstrapConfig(*bootstrapConfigPath)
-		if err != nil {
-			fmt.Fprintln(stderr, "bootstrap config:", err)
-			return 1
-		}
-		bootstrapSessions, err = startBootstrap(context.Background(), manager, config, 10*time.Second)
+	if config != nil {
+		bootstrapSessions, err = startBootstrap(context.Background(), manager, *config, 10*time.Second)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -71,11 +85,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if len(config.Providers) == 0 {
 			composeHostSelectorExecutors(server, selected)
 		} else {
-			provisioned, err := config.provisionProviders()
-			if err != nil {
-				fmt.Fprintln(stderr, err)
-				return 1
-			}
 			adapterIdentity := observationadapter.Identity{Name: "lsp-trace-observation-adapter", Version: "1"}
 			admitter, err := provider.NewAdmissionResolver(provisioned, adapterIdentity.Name+"@"+adapterIdentity.Version)
 			if err != nil {
@@ -171,11 +180,15 @@ func newServer(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, err
 }
 
 func newServerRuntime(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
+	return newServerRuntimeWithInventory(enableLiveLSP, provider.ConfiguredInventory{}, roots...)
+}
+
+func newServerRuntimeWithInventory(enableLiveLSP bool, inventory provider.ConfiguredInventory, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
 	var publicationRoot *publication.Root
 	if len(roots) != 0 {
 		publicationRoot = roots[0]
 	}
-	registry := mcp.NewRegistryWithPublication(enableLiveLSP, publicationRoot != nil)
+	registry := mcp.NewRegistryWithProviderInventory(enableLiveLSP, publicationRoot != nil, inventory)
 	validator, err := mcpcontract.NewOperationInputValidator()
 	if err != nil {
 		return nil, nil, err

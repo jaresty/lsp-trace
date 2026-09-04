@@ -26,9 +26,11 @@ type Admission struct {
 }
 
 type Selection struct {
-	Relations []string
-	Providers []string
-	Adapters  json.RawMessage
+	Relations  []string
+	Languages  []string
+	Frameworks []string
+	Providers  []string
+	Adapters   json.RawMessage
 }
 
 type AdmissionResolver interface {
@@ -111,6 +113,8 @@ type operationInput struct {
 	TimeoutMS             int64           `json:"timeout_ms"`
 	RequestTimeoutMS      int64           `json:"request_timeout_ms"`
 	Relations             *[]string       `json:"relations"`
+	Languages             []string        `json:"languages"`
+	Frameworks            []string        `json:"frameworks"`
 	Adapters              json.RawMessage `json:"adapters"`
 	Providers             []string        `json:"providers"`
 	WorkspaceRevision     json.RawMessage `json:"workspace_revision"`
@@ -130,7 +134,11 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 	}
 	selected := append([]string(nil), relations...)
 	sort.Strings(selected)
-	admission, err := c.admitter.Admit(ctx, Selection{Relations: append([]string(nil), selected...), Providers: append([]string(nil), in.Providers...), Adapters: append(json.RawMessage(nil), in.Adapters...)})
+	admission, err := c.admitter.Admit(ctx, Selection{
+		Relations: append([]string(nil), selected...), Languages: append([]string(nil), in.Languages...),
+		Frameworks: append([]string(nil), in.Frameworks...), Providers: append([]string(nil), in.Providers...),
+		Adapters: append(json.RawMessage(nil), in.Adapters...),
+	})
 	if err != nil {
 		return nil, err
 	}
