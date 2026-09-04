@@ -118,6 +118,84 @@ Artifact-producing tools return exact bytes inline when they fit the 1,048,576-b
 
 The default surface publishes exactly twelve canonical tools. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the twelve-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
 
+## Pi direct tools with pi-mcp-adapter
+
+Use the standard adapter rather than maintaining a repository-specific tool bridge:
+
+```sh
+pi install npm:pi-mcp-adapter
+```
+
+Restart Pi after installation. Preferred project config: `.mcp.json`. The host writes this file and the referenced bootstrap file; they are trusted configuration, not MCP call arguments.
+
+```json
+{
+  "mcpServers": {
+    "lsp-trace": {
+      "command": "/absolute/path/to/lsp-trace-mcp",
+      "args": [
+        "--bootstrap-config",
+        "/absolute/path/to/bootstrap.json"
+      ],
+      "directTools": [
+        "lsp_trace_v1_capabilities",
+        "lsp_trace_v1_schema_get",
+        "lsp_trace_v1_validate",
+        "lsp_trace_v1_verify",
+        "lsp_trace_v1_inspect",
+        "lsp_trace_v1_filter",
+        "lsp_session_v1_list",
+        "lsp_session_v1_restart",
+        "lsp_session_v1_status",
+        "lsp_session_v1_stop",
+        "lsp_trace_v1_incoming",
+        "lsp_trace_v1_slice"
+      ],
+      "toolPrefix": "none"
+    }
+  }
+}
+```
+
+The list contains exactly the twelve canonical MCP names. `toolPrefix: "none"` keeps those names unchanged in Pi. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing twelve tools and cannot override process configuration.
+
+The warning above still applies: the adapter starts `lsp-trace-mcp`, which starts trusted local language-server children with the developer's permissions. They are not sandboxed and may access local files and network.
+
+### Pi self-check
+
+From the repository root, reconnect once so the adapter refreshes cached metadata, then inspect its direct tool list:
+
+```text
+/mcp reconnect lsp-trace
+/mcp tools
+```
+
+Confirm that `lsp-trace` is connected and that the twelve names in the configuration appear once each. On the first run the adapter may initially expose only its proxy while metadata is cached; reconnecting refreshes and hot-loads the configured direct tools. A missing or extra name is compatibility drift: stop and run the repository checks before using the integration.
+
+```sh
+./scripts/check-docs.sh
+go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1
+```
+
+### Pi lifecycle examples
+
+First discover the host-provisioned selector; do not invent or assume a generation:
+
+```text
+lsp_session_v1_list {}
+lsp_session_v1_status {"session_id":"SESSION_FROM_LIST","generation":1}
+lsp_trace_v1_incoming {"session_id":"SESSION_FROM_LIST","generation":1,"uri":"file:///absolute/workspace/file.go","line":0,"character":0,"max_depth":8,"max_nodes":1000,"request_timeout_ms":30000,"timeout_ms":60000}
+```
+
+Use the exact current generation returned by list/status. A stale-generation diagnostic names the authoritative current generation; query status with that exact selector before retrying. Stop and restart are host-managed lifecycle intents:
+
+```text
+lsp_session_v1_stop {"session_id":"SESSION_FROM_LIST","generation":1,"caller_id":"pi-session"}
+lsp_session_v1_restart {"session_id":"SESSION_FROM_LIST","generation":1,"caller_id":"pi-session"}
+```
+
+Cancellation stops the caller observation; an already accepted lifecycle intent may continue. Query current-generation status before retrying. A reap failure requires host-operator inspection and reaping rather than caller-supplied executable, environment, or directory controls. Partial or truncated traversal results remain honest bounded outcomes. Increase only the documented bounded parameter responsible for a reported frontier; never reinterpret partial evidence as complete.
+
 ## Named server profiles
 
 Profiles are selected explicitly with `--profile NAME` on both `incoming` and `slice`; `language_ids` never selects a profile automatically. Without `--profile`, configuration files are not read and all legacy flags retain their existing behavior. `--server` may be combined with `--profile` and overrides the profile command.

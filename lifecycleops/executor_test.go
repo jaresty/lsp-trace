@@ -18,6 +18,9 @@ const (
 	assertStructuralFirst    = "ASSERT_LIFECYCLE_EXECUTOR_STRUCTURAL_FIRST"
 	assertFaithfulResults    = "ASSERT_LIFECYCLE_EXECUTOR_FAITHFUL_RESULTS_FAILURES"
 	assertContextPropagation = "ASSERT_LIFECYCLE_EXECUTOR_CONTEXT_PROPAGATION"
+	assertStaleGuidance      = "ASSERT_LIFECYCLE_EXECUTOR_STALE_CURRENT_GENERATION_RETRY"
+	assertRecoveryGuidance   = "ASSERT_LIFECYCLE_EXECUTOR_BOUNDED_HOST_RECOVERY"
+	assertCancellationTruth  = "ASSERT_LIFECYCLE_EXECUTOR_CANCELLATION_TRUTH"
 )
 
 func rejectExecutorPerturbation(t *testing.T, assertion string) {
@@ -129,6 +132,65 @@ func TestExecutorInfersOnlyReadyGeneration(t *testing.T) {
 		t.Fatalf("%s: non-READY failure=%v", assertion, failure)
 	}
 	t.Log("PASS " + assertion)
+}
+
+func TestExecutorActionableDiagnostics(t *testing.T) {
+	tests := []struct {
+		assertion string
+		runtime   *fakeRuntime
+		ctx       context.Context
+		name      operation.Name
+		input     string
+		code      string
+		want      []string
+	}{
+		{
+			assertion: assertStaleGuidance,
+			runtime:   &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}},
+			ctx:       context.Background(),
+			name:      OperationStatus,
+			input:     `{"session_id":"known","generation":3}`,
+			code:      string(FailureStaleGeneration),
+			want:      []string{"current generation is 4", "retry lsp_session_v1_status with session_id \"known\" and generation 4"},
+		},
+		{
+			assertion: assertRecoveryGuidance,
+			runtime: &fakeRuntime{
+				records: []sessionruntime.Record{record("known", 4)},
+				result:  session.LifecycleResult{Failure: session.SessionReapIncomplete},
+			},
+			ctx:   context.Background(),
+			name:  OperationStop,
+			input: `{"session_id":"known","generation":4,"caller_id":"caller"}`,
+			code:  string(FailureReapIncomplete),
+			want:  []string{"host operator must inspect and reap the trusted local child before retrying"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.assertion, func(t *testing.T) {
+			t.Log("ASSERTION: " + tc.assertion)
+			rejectExecutorPerturbation(t, tc.assertion)
+			result, failure := NewExecutor(New(tc.runtime)).Execute(tc.ctx, operation.Request{Name: tc.name, RequestID: "request-1", Input: json.RawMessage(tc.input)})
+			if failure == nil || failure.Code != tc.code || result.Value != nil || !reflect.DeepEqual(failure.Diagnostics, tc.want) {
+				t.Fatalf("%s: result=%+v failure=%+v", tc.assertion, result, failure)
+			}
+			t.Log("PASS " + tc.assertion)
+		})
+	}
+
+	t.Run(assertCancellationTruth, func(t *testing.T) {
+		t.Log("ASSERTION: " + assertCancellationTruth)
+		rejectExecutorPerturbation(t, assertCancellationTruth)
+		runtime := &contextRuntime{fakeRuntime: &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}}}
+		ctx, cancel := context.WithCancelCause(context.Background())
+		cancel(errors.New("caller shutdown"))
+		_, failure := NewExecutor(New(runtime)).Execute(ctx, operation.Request{Name: OperationStop, RequestID: "request-1", Input: json.RawMessage(`{"session_id":"known","generation":4,"caller_id":"caller"}`)})
+		want := []string{"caller observation was cancelled; an accepted lifecycle intent may continue", "query lsp_session_v1_status for the current generation before retrying"}
+		if failure == nil || failure.Code != string(FailureCapacityExhausted) || !reflect.DeepEqual(failure.Diagnostics, want) {
+			t.Fatalf("%s: failure=%+v", assertCancellationTruth, failure)
+		}
+		t.Log("PASS " + assertCancellationTruth)
+	})
 }
 
 func TestExecutorPropagatesCallerContext(t *testing.T) {

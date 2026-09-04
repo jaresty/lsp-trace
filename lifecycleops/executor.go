@@ -58,7 +58,7 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 			}
 			record, failure := e.service.Status(input.SessionID, input.Generation)
 			if failure != FailureNone {
-				return operation.Result{}, lifecycleFailure(string(failure), nil)
+				return operation.Result{}, e.actionableFailure(ctx, input, failure)
 			}
 			return operation.Result{Value: record}, nil
 		}
@@ -73,7 +73,7 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 			acceptance = e.service.Restart(ctx, lifecycleRequest)
 		}
 		if acceptance.Failure != FailureNone {
-			return operation.Result{}, lifecycleFailure(string(acceptance.Failure), nil)
+			return operation.Result{}, e.actionableFailure(ctx, input, acceptance.Failure)
 		}
 		return operation.Result{Value: acceptance}, nil
 	default:
@@ -91,6 +91,32 @@ func decodeClosed(raw json.RawMessage, target any) error {
 		return fmt.Errorf("one JSON value required")
 	}
 	return nil
+}
+
+func (e *Executor) actionableFailure(ctx context.Context, input selectorRequest, failure Failure) *operation.Failure {
+	diagnostics := []string(nil)
+	switch failure {
+	case FailureStaleGeneration:
+		for _, record := range e.service.List().Sessions {
+			if record.SessionID == input.SessionID {
+				diagnostics = []string{
+					fmt.Sprintf("current generation is %d", record.Generation),
+					fmt.Sprintf("retry lsp_session_v1_status with session_id %q and generation %d", input.SessionID, record.Generation),
+				}
+				break
+			}
+		}
+	case FailureReapIncomplete:
+		diagnostics = []string{"host operator must inspect and reap the trusted local child before retrying"}
+	case FailureCapacityExhausted:
+		if ctx.Err() != nil {
+			diagnostics = []string{
+				"caller observation was cancelled; an accepted lifecycle intent may continue",
+				"query lsp_session_v1_status for the current generation before retrying",
+			}
+		}
+	}
+	return &operation.Failure{Code: string(failure), Diagnostics: diagnostics}
 }
 
 func lifecycleFailure(code string, err error) *operation.Failure {

@@ -90,6 +90,15 @@ assert_contains DOC-MCP-LOCAL-ACCESS README.md 'local files and network'
 assert_contains DOC-MCP-TRUST README.md 'must be trusted'
 assert_contains DOC-MCP-ADR docs/adr/0003-always-local-stage2.md '# ADR 0003: Activate always-local Stage 2 lifecycle tools'
 assert_contains DOC-MCP-HISTORICAL-ADR docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Superseded by [ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)'
+assert_contains DOC-PI-STANDARD-ADAPTER README.md 'pi install npm:pi-mcp-adapter'
+assert_contains DOC-PI-PROJECT-CONFIG README.md 'Preferred project config: `.mcp.json`'
+assert_contains DOC-PI-DIRECT-TOOLS README.md '"directTools": ['
+assert_contains DOC-PI-EXACT-TWELVE README.md 'The list contains exactly the twelve canonical MCP names'
+assert_contains DOC-PI-SELF-CHECK README.md '/mcp reconnect lsp-trace'
+assert_contains DOC-PI-NO-CUSTOM-EXTENSION README.md 'Do not add a repository-local Pi extension or a second MCP bridge.'
+assert_contains DOC-PI-HOST-AUTHORITY README.md 'Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory.'
+assert_contains DOC-PI-CANCELLATION README.md 'Cancellation stops the caller observation; an already accepted lifecycle intent may continue.'
+assert_contains DOC-PI-BOUNDED README.md 'Partial or truncated traversal results remain honest bounded outcomes.'
 
 if [ "$failed" -ne 0 ]; then
   exit 1
