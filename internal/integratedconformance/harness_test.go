@@ -630,7 +630,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				path == "internal/operation/types.go" || path == "internal/operation/verify.go" || path == "internal/operation/verify_test.go" || path == "mcp-transport.claim.md" ||
 				path == "internal/schema/denominator.go" || path == "internal/schema/denominator_test.go" || path == "internal/schema/family_test.go" || path == "internal/schema/schema.go" || path == "internal/schema/validation_core.go" || path == "internal/schema/schemas/lsp-trace.source-denominator.v1.schema.json" ||
 				path == "internal/graph/relations.go" || path == "internal/graph/relations_test.go" || path == "internal/graph/snapshot_identity.go" || path == "internal/graph/snapshot_identity_test.go" || path == "internal/graph/schemas/normalized-relations.v1.schema.json" ||
-				path == "internal/source/receipt.go" || path == "internal/source/receipt_test.go" ||
+				path == "internal/source/receipt.go" || path == "internal/source/receipt_test.go" || path == "internal/source/discovery_receipt_bridge.go" || path == "internal/source/discovery_receipt_bridge_test.go" ||
 				strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "sliceops/") || strings.HasPrefix(path, "internal/traverse/") || strings.HasPrefix(path, "internal/integratedconformance/")
 			if !owned {
 				t.Fatalf("unowned path %q", path)
