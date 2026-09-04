@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/mcpcontract"
+	"lsp-trace/internal/provider"
 )
 
 const (
@@ -67,6 +68,7 @@ type Registry struct {
 	tools                []Tool
 	byName               map[string]int
 	publicationSupported bool
+	providerInventory    provider.ConfiguredInventory
 }
 
 func NewRegistry(enableLiveLSP bool) *Registry {
@@ -75,6 +77,12 @@ func NewRegistry(enableLiveLSP bool) *Registry {
 
 func NewRegistryWithPublication(_ bool, publicationSupported bool) *Registry {
 	return NewRegistryWithRouting(publicationSupported, Routing{})
+}
+
+func NewRegistryWithProviderInventory(_ bool, publicationSupported bool, inventory provider.ConfiguredInventory) *Registry {
+	registry := NewRegistryWithRouting(publicationSupported, Routing{})
+	registry.providerInventory = inventory
+	return registry
 }
 
 func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registry {
@@ -334,7 +342,8 @@ func (r *Registry) Capabilities() map[string]any {
 	return map[string]any{
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"tools": r.Tools(), "selector_publication_supported": r.publicationSupported,
-		"inline_byte_limit": uint64(inlineByteLimit), "list_page_max": uint32(100),
+		"configured_providers": r.providerInventory.Entries(),
+		"inline_byte_limit":    uint64(inlineByteLimit), "list_page_max": uint32(100),
 		"normalized_relations": map[string]any{
 			"kinds":                []string{"CALLS", "BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"},
 			"default_when_omitted": "CALLS_ONLY", "provider_authority": "HOST_PROVISIONED_ONLY",

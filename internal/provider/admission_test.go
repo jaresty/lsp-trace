@@ -59,3 +59,44 @@ func TestAdmissionDeterministic(t *testing.T) {
 		t.Fatalf("ASSERT_PROVIDER_ADMISSION_DETERMINISTIC: x=%+v/%v y=%+v/%v", x, err, y, err2)
 	}
 }
+
+func TestAdmissionAutoRequiresEveryConstraintAndExactlyOne(t *testing.T) {
+	complete := admissionDeclaration("complete@1", "CALLS", "PASSES_CALLBACK")
+	complete.Capabilities.Languages = []string{"javascript", "typescript"}
+	complete.Capabilities.Frameworks = []string{"framework-a", "framework-b"}
+	partialRelation := admissionDeclaration("partial-relation@1", "CALLS")
+	partialRelation.Capabilities.Languages = append([]string(nil), complete.Capabilities.Languages...)
+	partialRelation.Capabilities.Frameworks = append([]string(nil), complete.Capabilities.Frameworks...)
+	partialLanguage := admissionDeclaration("partial-language@1", "CALLS", "PASSES_CALLBACK")
+	partialLanguage.Capabilities.Languages = []string{"typescript"}
+	partialLanguage.Capabilities.Frameworks = append([]string(nil), complete.Capabilities.Frameworks...)
+	partialFramework := admissionDeclaration("partial-framework@1", "CALLS", "PASSES_CALLBACK")
+	partialFramework.Capabilities.Languages = append([]string(nil), complete.Capabilities.Languages...)
+	partialFramework.Capabilities.Frameworks = []string{"framework-a"}
+
+	selection := Selection{Relations: []string{"CALLS", "PASSES_CALLBACK"}, Languages: []string{"javascript", "typescript"}, Frameworks: []string{"framework-a", "framework-b"}, Providers: []string{"auto"}}
+	r, _ := NewAdmissionResolver(mustProvisionAdmission(t, complete, partialRelation, partialLanguage, partialFramework), "semantic@1")
+	got, err := r.Admit(context.Background(), selection)
+	if err != nil || got.ProviderID != "complete@1" {
+		t.Fatalf("ASSERT_PROVIDER_AUTO_ALL_CONSTRAINTS: got=%+v err=%v", got, err)
+	}
+
+	other := complete
+	other.Identity = "other@1"
+	other.Executable = filepath.Join(string(filepath.Separator), "host", "other@1")
+	r, _ = NewAdmissionResolver(mustProvisionAdmission(t, complete, other), "semantic@1")
+	if _, err := r.Admit(context.Background(), selection); err == nil {
+		t.Fatal("ASSERT_PROVIDER_AUTO_EXACTLY_ONE: accepted two complete matches")
+	}
+	r, _ = NewAdmissionResolver(mustProvisionAdmission(t, partialRelation, partialLanguage, partialFramework), "semantic@1")
+	if _, err := r.Admit(context.Background(), selection); err == nil {
+		t.Fatal("ASSERT_PROVIDER_AUTO_EXACTLY_ONE: accepted zero complete matches")
+	}
+}
+
+func TestAdmissionRequestCannotSupplyExecutionAuthority(t *testing.T) {
+	r, _ := NewAdmissionResolver(mustProvisionAdmission(t, admissionDeclaration("alpha@1", "CALLS")), "semantic@1")
+	if _, err := r.Admit(context.Background(), Selection{Relations: []string{"CALLS"}, Languages: []string{"typescript"}, Frameworks: []string{"opaque"}, Providers: []string{"/tmp/request-provider"}}); err == nil {
+		t.Fatal("ASSERT_PROVIDER_REQUEST_NO_EXECUTION_AUTHORITY: accepted request executable")
+	}
+}

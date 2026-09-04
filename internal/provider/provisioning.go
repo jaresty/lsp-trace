@@ -17,17 +17,26 @@ var supportedRelations = map[string]struct{}{
 	"TRIGGERS_RELOAD": {}, "UPDATES_STATE": {}, "RENDERS_FROM": {},
 }
 
-type ProtocolIdentity struct{ Name, Version string }
-type Capabilities struct{ Relations, Languages, Frameworks []string }
+type ProtocolIdentity struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+type Capabilities struct {
+	Relations  []string `json:"relations"`
+	Languages  []string `json:"languages"`
+	Frameworks []string `json:"frameworks"`
+}
 type Declaration struct {
-	Identity, Version string
-	Protocol          ProtocolIdentity
-	Executable        string
-	Arguments         []string
-	Directory         string
-	Environment       []string
-	Capabilities      Capabilities
-	Limits            Limits
+	Identity, Version   string
+	Protocol            ProtocolIdentity
+	Executable          string
+	Arguments           []string
+	Directory           string
+	Environment         []string
+	ExecutableAvailable bool
+	ConformanceVerified bool
+	Capabilities        Capabilities
+	Limits              Limits
 }
 
 var MaxProviderLimits = Limits{

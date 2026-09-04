@@ -10,13 +10,15 @@ import (
 const bootstrapProviderSchemaVersionV1 = "lsp-trace.bootstrap-provider.v1"
 
 type bootstrapProviderDeclaration struct {
-	SchemaVersion string                     `json:"schema_version"`
-	Identity      string                     `json:"identity"`
-	Version       string                     `json:"version"`
-	Protocol      bootstrapProviderProtocol  `json:"protocol"`
-	Execution     bootstrapProviderExecution `json:"execution"`
-	Capabilities  bootstrapCapabilities      `json:"capabilities"`
-	Limits        bootstrapProviderLimits    `json:"limits"`
+	SchemaVersion       string                     `json:"schema_version"`
+	Identity            string                     `json:"identity"`
+	Version             string                     `json:"version"`
+	Protocol            bootstrapProviderProtocol  `json:"protocol"`
+	Execution           bootstrapProviderExecution `json:"execution"`
+	Capabilities        bootstrapCapabilities      `json:"capabilities"`
+	ExecutableAvailable bool                       `json:"executable_available,omitempty"`
+	ConformanceVerified bool                       `json:"conformance_verified,omitempty"`
+	Limits              bootstrapProviderLimits    `json:"limits"`
 }
 
 type bootstrapProviderProtocol struct {
@@ -53,13 +55,15 @@ func (config bootstrapConfig) providerDeclarations() ([]provider.Declaration, er
 			return nil, fmt.Errorf("bootstrap provider %d schema_version must be %q", i, bootstrapProviderSchemaVersionV1)
 		}
 		declarations[i] = provider.Declaration{
-			Identity:    configured.Identity,
-			Version:     configured.Version,
-			Protocol:    provider.ProtocolIdentity{Name: configured.Protocol.Name, Version: configured.Protocol.Version},
-			Executable:  configured.Execution.Path,
-			Arguments:   append([]string(nil), configured.Execution.Arguments...),
-			Directory:   configured.Execution.Directory,
-			Environment: append([]string(nil), configured.Execution.Environment...),
+			Identity:            configured.Identity,
+			Version:             configured.Version,
+			Protocol:            provider.ProtocolIdentity{Name: configured.Protocol.Name, Version: configured.Protocol.Version},
+			Executable:          configured.Execution.Path,
+			Arguments:           append([]string(nil), configured.Execution.Arguments...),
+			Directory:           configured.Execution.Directory,
+			Environment:         append([]string(nil), configured.Execution.Environment...),
+			ExecutableAvailable: configured.ExecutableAvailable,
+			ConformanceVerified: configured.ConformanceVerified,
 			Capabilities: provider.Capabilities{
 				Relations:  append([]string(nil), configured.Capabilities.Relations...),
 				Languages:  append([]string(nil), configured.Capabilities.Languages...),
