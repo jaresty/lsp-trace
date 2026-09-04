@@ -174,6 +174,7 @@ assert_contains R-MCP-GORELEASER-BINARY .goreleaser.yaml 'binary: lsp-trace-mcp'
 assert_contains R-MCP-ADR-SUPERSEDED docs/adr/0003-persistent-mcp-language-server-sessions.md '**Status:** Superseded by'
 assert_contains R-MCP-ADR-SUCCESSOR docs/adr/0003-persistent-mcp-language-server-sessions.md '[ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)'
 assert_contains R-MCP-RELEASE-DOC docs/RELEASING.md 'lsp-trace-mcp'
+assert_contains R-MCP-PRODUCTION-BOOTSTRAP-TEST cmd/lsp-trace-mcp/main_test.go 'func TestProductionBootstrap'
 
 if [ "$failed" -ne 0 ]; then
   exit 1
@@ -187,6 +188,18 @@ else
   exit 1
 fi
 
+if go test ./cmd/lsp-trace-mcp -run 'TestProductionBootstrap|TestRunStdioOnly' -count=1; then
+  printf 'PASS R-MCP-PRODUCTION-BOOTSTRAP-STDIO: production bootstrap, trusted-local stderr, and clean MCP stdout\n'
+else
+  printf 'FAIL R-MCP-PRODUCTION-BOOTSTRAP-STDIO: production bootstrap or stdio channel contract failed\n'
+  exit 1
+fi
+if go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1; then
+  printf 'PASS R-MCP-EXACT-TWELVE-TOOLS: exactly twelve canonical tools\n'
+else
+  printf 'FAIL R-MCP-EXACT-TWELVE-TOOLS: canonical tool cardinality contract failed\n'
+  exit 1
+fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
   printf 'PASS R-MCP-CONTRACT: MCP Stage 1 contract, transport, registry, and real-process suites\n'
 else
