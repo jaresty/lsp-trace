@@ -1,0 +1,15 @@
+{
+  "name": "@lsp-trace/ember-glint-provider",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ember-glint": "./bin/ember-glint.mjs"
+  },
+  "scripts": {
+    "test": "node --test ./test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
