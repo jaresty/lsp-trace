@@ -27,9 +27,13 @@ assert_contains ASSERT_RELEASE_GUIDE_BOOTSTRAP "$releasing" 'production bootstra
 assert_contains ASSERT_RELEASE_GUIDE_CHANNELS "$releasing" 'trusted-local warning on stderr and protocol-clean MCP stdout'
 assert_contains ASSERT_RELEASE_BOOTSTRAP_USAGE "$readme" 'lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json'
 assert_contains ASSERT_RELEASE_BOOTSTRAP_HOST_AUTHORITY "$readme" 'The host—not the MCP caller—provisions trusted sessions'
-assert_contains ASSERT_RELEASE_B05_PROVIDER_BUILD "$release_check" 'go build -trimpath -o "$release_tmp/lsp-trace-provider-ember-glint" ./cmd/lsp-trace-provider-ember-glint'
-assert_contains ASSERT_RELEASE_B05_PROVIDER_BINARY "$release_check" 'LSP_TRACE_EMBER_PROVIDER_BINARY="$release_tmp/lsp-trace-provider-ember-glint"'
-assert_contains ASSERT_RELEASE_B05_LIFECYCLE_TEST "$release_check" 'TestProductionEmberProviderCompletesManagedB05Lifecycle'
-assert_contains ASSERT_RELEASE_B05_RETAINED_QUALIFICATION "$release_check" 'qualification/retained/ember-glint/b05-production-lifecycle.json'
-assert_contains ASSERT_RELEASE_B05_GORELEASER_MAIN .goreleaser.yaml 'main: ./cmd/lsp-trace-provider-ember-glint'
-assert_contains ASSERT_RELEASE_B05_GORELEASER_BINARY .goreleaser.yaml 'binary: lsp-trace-provider-ember-glint'
+assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_QUALIFIER "$release_check" 'scripts/qualify-external-provider.sh'
+assert_contains ASSERT_RELEASE_RETAINED_EXTERNAL_QUALIFICATION "$release_check" 'qualification/retained/external-provider/ember-glint.json'
+assert_contains ASSERT_RELEASE_REAL_EXTERNAL_PROVIDER_QUALIFICATION "$release_check" 'ASSERT_RELEASE_REAL_EXTERNAL_PROVIDER_QUALIFICATION'
+assert_contains ASSERT_RELEASE_CORE_ARCHIVE_GUARD "$release_check" 'ASSERT_CORE_ARCHIVES_EXCLUDE_PROVIDER_ASSETS'
+assert_contains ASSERT_RELEASE_CORE_ARCHIVE_IDS .goreleaser.yaml 'ids: [lsp-trace, lsp-trace-mcp]'
+if grep -F 'lsp-trace-provider-ember-glint' .goreleaser.yaml >/dev/null; then
+  printf 'FAIL ASSERT_RELEASE_CORE_ARCHIVES_NO_PROVIDER_ASSETS\n'
+  exit 1
+fi
+printf 'PASS ASSERT_RELEASE_CORE_ARCHIVES_NO_PROVIDER_ASSETS\n'

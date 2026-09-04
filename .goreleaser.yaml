@@ -14,7 +14,8 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
 archives:
-  - formats: [tar.gz]
+  - ids: [lsp-trace, lsp-trace-mcp]
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]

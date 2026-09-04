@@ -1,5 +1,13 @@
 # Releasing
 
+## External-provider production qualification
+
+Release admission requires at least one retained real external-provider production qualification. Generate it only by running `./scripts/qualify-external-provider.sh` with `LSP_TRACE_EXTERNAL_PROVIDER_PATH` set to the absolute executable path of an independently installed provider package; fake, testdata, repository-local, and bundled analyzer paths are inadmissible.
+
+The retained witness must cover MCP request → provider subprocess → observations → adapter → graph-v4. It must preserve exact provider, protocol, request, and adapter identities, contributor IDs and original anchors, immutable custody, and deterministic replay bytes. It must also prove graph-v3 omission parity with zero provider starts. Honest unsupported Glint outcomes remain `BLOCKED`; they are never rewritten as empty relations, successful support, or evidence of absence.
+
+The release gate consumes reviewed retained evidence and does not require a bundled analyzer or a live provider during the hermetic release check. Core GoReleaser archives contain only `lsp-trace` and `lsp-trace-mcp`; provider packages publish and version their own assets independently.
+
 A release candidate must satisfy:
 
 1. `./scripts/release-check.sh`
@@ -8,7 +16,7 @@ A release candidate must satisfy:
 4. `go build ./...`
 5. retained PASS evidence for every provider the release claims to support, including server versions, capability results, exact caller/range assertions, and graph output
 6. review of security, semantic, schema-policy, and [provider protocol](PROVIDERS.md) changes, including named-profile precedence and environment-value non-persistence
-7. a clean GoReleaser snapshot that packages both `lsp-trace` and `lsp-trace-mcp`, plus checksums
+7. a clean GoReleaser snapshot that packages only `lsp-trace` and `lsp-trace-mcp`, plus checksums, with no provider assets
 8. `./scripts/test-b05-qualification.sh`, requiring the exact nine-family ledger, real managed incoming/slice acceptance, retained B05 evidence, and documented non-entailments
 
 A BLOCKED or FAIL qualification cannot support a provider claim. It blocks release only when that provider is advertised as supported by the release. Retain the result and state its qualification boundary; fixture presence is not support evidence. The retained ElixirLS result is BLOCKED and is not a release support claim.
@@ -19,4 +27,4 @@ Qualification runs remain separate and opt-in because servers and SDKs may acces
 
 The hermetic B05 gate does not start providers or establish external adapter support. Its PASS covers the committed fixture ledger, managed executor composition, red validation, and evidence/documentation integrity. Any external provider outcome remains PASS, BLOCKED, or FAIL according to its separately retained evidence; BLOCKED and unknown outcomes cannot satisfy a support claim.
 
-Create an annotated `vX.Y.Z` tag only after the checklist passes. The release workflow builds Linux, macOS, and Windows archives containing both `lsp-trace` and `lsp-trace-mcp`, whose normative Stage 1 manifest, schemas, and transcripts are embedded in the MCP binary, then publishes checksums. Do not claim support for a platform without a produced archive and successful smoke test on that platform.
+Create an annotated `vX.Y.Z` tag only after the checklist passes. The release workflow builds Linux, macOS, and Windows core archives containing only `lsp-trace` and `lsp-trace-mcp`, whose normative Stage 1 manifest, schemas, and transcripts are embedded in the MCP binary, then publishes checksums. Do not claim support for a platform without a produced archive and successful smoke test on that platform.
