@@ -111,16 +111,34 @@ func failure(code string, err error) *operation.Failure {
 	return &operation.Failure{Code: code, Err: err}
 }
 
+const (
+	defaultMaxMessages = 64
+	defaultMaxBytes    = 4 << 20
+)
+
+// WireLimits bounds each individual LSP request made by SessionClient.
+type WireLimits struct {
+	MaxMessages int
+	MaxBytes    int64
+}
+
 // SessionClient adapts standard call-hierarchy requests to one retained exact generation.
 type SessionClient struct {
 	runtime        Runtime
 	sessionID      string
 	generation     uint64
 	requestTimeout time.Duration
+	wireLimits     WireLimits
 }
 
+// NewSessionClient preserves the incoming operation's fixed safe per-wire-request limits.
 func NewSessionClient(runtime Runtime, sessionID string, generation uint64, requestTimeout time.Duration) *SessionClient {
-	return &SessionClient{runtime: runtime, sessionID: sessionID, generation: generation, requestTimeout: requestTimeout}
+	return NewSessionClientWithWireLimits(runtime, sessionID, generation, requestTimeout, WireLimits{MaxMessages: defaultMaxMessages, MaxBytes: defaultMaxBytes})
+}
+
+// NewSessionClientWithWireLimits applies explicit limits to every individual LSP request.
+func NewSessionClientWithWireLimits(runtime Runtime, sessionID string, generation uint64, requestTimeout time.Duration, limits WireLimits) *SessionClient {
+	return &SessionClient{runtime: runtime, sessionID: sessionID, generation: generation, requestTimeout: requestTimeout, wireLimits: limits}
 }
 
 func (c *SessionClient) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
@@ -161,7 +179,7 @@ func (c *SessionClient) call(parent context.Context, method string, params, targ
 	if outer, ok := parent.Deadline(); ok && outer.Before(deadline) {
 		deadline = outer
 	}
-	observed := c.runtime.RoundTrip(parent, sessionruntime.RoundTripRequest{SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw, Deadline: deadline, MaxMessages: 64, MaxBytes: 4 << 20})
+	observed := c.runtime.RoundTrip(parent, sessionruntime.RoundTripRequest{SessionID: c.sessionID, Generation: c.generation, Method: method, Params: raw, Deadline: deadline, MaxMessages: c.wireLimits.MaxMessages, MaxBytes: c.wireLimits.MaxBytes})
 	if observed.Failure != "" {
 		switch observed.Failure {
 		case session.RequestCancelled:

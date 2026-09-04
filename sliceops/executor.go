@@ -75,7 +75,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(in.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	client := incomingops.NewSessionClient(e.runtime, in.SessionID, in.Generation, time.Duration(in.RequestTimeoutMS)*time.Millisecond)
+	client := incomingops.NewSessionClientWithWireLimits(e.runtime, in.SessionID, in.Generation, time.Duration(in.RequestTimeoutMS)*time.Millisecond, incomingops.WireLimits{MaxMessages: in.MaxMessages, MaxBytes: int64(in.MaxBytes)})
 	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: in.URI}, Position: lsp.Position{Line: in.Line, Character: in.Character}}
 	prepared, err := client.PrepareCallHierarchy(ctx, params)
 	if err != nil {

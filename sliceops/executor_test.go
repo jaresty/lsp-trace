@@ -17,7 +17,9 @@ type fakeRuntime struct {
 	metadata sessionruntime.SessionMetadata
 	failure  session.Failure
 	calls    []string
+	requests []sessionruntime.RoundTripRequest
 	results  map[string]sessionruntime.RoundTripResult
+	respond  func(sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
 }
 
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
@@ -32,6 +34,10 @@ func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripReq
 	_ = json.Unmarshal(r.Params, &p)
 	key := r.Method + ":" + p.Item.Name
 	f.calls = append(f.calls, key)
+	f.requests = append(f.requests, r)
+	if f.respond != nil {
+		return f.respond(r)
+	}
 	if result, ok := f.results[key]; ok {
 		return result
 	}
@@ -74,6 +80,56 @@ func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(f.calls, ","), "callHierarchy/incomingCalls:deep") || !strings.Contains(strings.Join(f.calls, ","), "callHierarchy/incomingCalls:leaf") {
 		t.Fatalf("ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP: calls=%v", f.calls)
+	}
+}
+
+func TestSliceWireBoundsReachEveryRoundTrip(t *testing.T) {
+	const assertion = "ASSERT_SLICE_PER_WIRE_REQUEST_BOUNDS"
+	t.Log("ASSERTION: " + assertion)
+	root, leaf := item("root", 0), item("leaf", 1)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]}]`)},
+		"callHierarchy/incomingCalls:leaf":   {Result: json.RawMessage(`[]`)},
+	}}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":1,"max_nodes":20,"max_messages":7,"max_bytes":12345,"timeout_ms":1000,"request_timeout_ms":100}`)
+	if _, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: input}); failure != nil {
+		t.Fatalf("%s: %v", assertion, failure)
+	}
+	if len(f.requests) != 3 {
+		t.Fatalf("%s: requests=%+v", assertion, f.requests)
+	}
+	for _, request := range f.requests {
+		if request.MaxMessages != 7 || request.MaxBytes != 12345 {
+			t.Fatalf("%s: method=%s max_messages=%d max_bytes=%d", assertion, request.Method, request.MaxMessages, request.MaxBytes)
+		}
+	}
+}
+
+func TestSliceWireBoundsAffectOutcomes(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		assertion string
+		input     json.RawMessage
+		matches   func(sessionruntime.RoundTripRequest) bool
+	}{
+		{"messages", "ASSERT_SLICE_MAX_MESSAGES_BOUNDED_OUTCOME", json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":1,"max_nodes":20,"max_messages":1,"max_bytes":4194304,"timeout_ms":1000,"request_timeout_ms":100}`), func(r sessionruntime.RoundTripRequest) bool { return r.MaxMessages == 1 }},
+		{"bytes", "ASSERT_SLICE_MAX_BYTES_BOUNDED_OUTCOME", json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":1,"max_nodes":20,"max_messages":64,"max_bytes":1024,"timeout_ms":1000,"request_timeout_ms":100}`), func(r sessionruntime.RoundTripRequest) bool { return r.MaxBytes == 1024 }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Log("ASSERTION: " + tc.assertion)
+			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}}
+			f.respond = func(r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+				if tc.matches(r) {
+					return sessionruntime.RoundTripResult{Failure: session.ResourceExhausted}
+				}
+				return sessionruntime.RoundTripResult{Result: json.RawMessage(`[]`)}
+			}
+			result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: tc.input})
+			if failure != nil || !strings.Contains(string(result.Artifact), string(session.ResourceExhausted)) {
+				t.Fatalf("%s: failure=%v requests=%+v artifact=%s", tc.assertion, failure, f.requests, result.Artifact)
+			}
+		})
 	}
 }
 

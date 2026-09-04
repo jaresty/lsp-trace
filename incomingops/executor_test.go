@@ -17,6 +17,7 @@ type fakeRuntime struct {
 	metadata sessionruntime.SessionMetadata
 	failure  session.Failure
 	calls    []string
+	requests []sessionruntime.RoundTripRequest
 	results  map[string][]json.RawMessage
 	observed map[string][]sessionruntime.RoundTripResult
 }
@@ -26,6 +27,7 @@ func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, 
 }
 func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	f.calls = append(f.calls, r.Method)
+	f.requests = append(f.requests, r)
 	if queue := f.observed[r.Method]; len(queue) > 0 {
 		f.observed[r.Method] = queue[1:]
 		return queue[0]
@@ -60,6 +62,24 @@ func TestIncomingUsesRoundTripAndExistingDeterministicTraversal(t *testing.T) {
 	}
 	if strings.Join(f.calls, ",") != "textDocument/prepareCallHierarchy,callHierarchy/incomingCalls,callHierarchy/incomingCalls" || got.Summary.NodeCount != 2 || got.Summary.EdgeCount != 1 || !strings.Contains(string(result.Artifact), `"traversal_complete":true`) {
 		t.Fatalf("%s: calls=%v summary=%+v artifact=%s", assertion, f.calls, got.Summary, result.Artifact)
+	}
+}
+
+func TestIncomingRetainsFixedPerWireRequestBounds(t *testing.T) {
+	const assertion = "ASSERT_INCOMING_FIXED_PER_WIRE_REQUEST_BOUNDS"
+	t.Log("ASSERTION: " + assertion)
+	item := `{"name":"leaf","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}}`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{
+		"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)},
+		"callHierarchy/incomingCalls":       {json.RawMessage(`[]`)},
+	}}
+	if _, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: validInput()}); failure != nil {
+		t.Fatalf("%s: %v", assertion, failure)
+	}
+	for _, request := range f.requests {
+		if request.MaxMessages != 64 || request.MaxBytes != 4<<20 {
+			t.Fatalf("%s: method=%s max_messages=%d max_bytes=%d", assertion, request.Method, request.MaxMessages, request.MaxBytes)
+		}
 	}
 }
 
