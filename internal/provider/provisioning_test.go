@@ -56,8 +56,8 @@ func TestProviderDeclarationClosedValidation(t *testing.T) {
 func TestProviderRegistryDeterministic(t *testing.T) {
 	a, b := validDeclaration("zeta@1"), validDeclaration("alpha@1")
 	a.Capabilities = Capabilities{
-		Relations: []string{"UPDATES_STATE", "PASSES_CALLBACK"},
-		Languages: []string{"typescript", "javascript"},
+		Relations:  []string{"UPDATES_STATE", "PASSES_CALLBACK"},
+		Languages:  []string{"typescript", "javascript"},
 		Frameworks: []string{"glimmer", "ember"},
 	}
 	first, err := Provision([]Declaration{a, b})
@@ -115,7 +115,7 @@ func TestProviderProvisioningImmutable(t *testing.T) {
 	if !ok {
 		t.Fatal(assertCopies)
 	}
-	if strings.Join(reg.Args, " ") != "--stdio" || strings.Join(reg.Env, " ") != "LANG=C" || p.Declarations[0].Capabilities.Relations[0] != "BINDS_ARGUMENT" {
+	if strings.Join(reg.Args, " ") != "--stdio" || strings.Join(reg.Env, " ") != "LANG=C" || strings.Join(p.Declarations[0].Arguments, " ") != "--stdio" || p.Declarations[0].Capabilities.Relations[0] != "BINDS_ARGUMENT" {
 		t.Fatalf("%s: registration=%+v declaration=%+v", assertCopies, reg, p.Declarations[0])
 	}
 }
