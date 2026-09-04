@@ -273,7 +273,7 @@ func TestSliceManagedFakeProviderProcess(t *testing.T) {
 	const assertion = "ASSERT_SLICE_REAL_MANAGED_PROVIDER_PROCESS"
 	response := `{"provider_id":"managed@1","terminal":"COMPLETE_WITHIN_BOUNDS","complete":true,"truncated":false,"bounds":{"max_nodes":20,"max_relations":7,"max_sources":2,"max_operations":3,"timeout_ms":1000,"protocol_messages":1,"cancelled":false},"relations":[{"relation_id":"r-managed","kind":"PASSES_CALLBACK"}]}`
 	script := filepath.Join(t.TempDir(), "provider.sh")
-	body := "#!/bin/sh\nprintf 'Content-Length: " + fmt.Sprint(len(response)) + "\\r\\n\\r\\n%s' '" + response + "'\n"
+	body := "#!/bin/sh\nIFS= read -r header\nIFS= read -r blank\nlength=$(printf %s \"${header#Content-Length: }\" | tr -d '\\r')\ndd bs=1 count=\"$length\" >/dev/null 2>&1\nprintf 'Content-Length: " + fmt.Sprint(len(response)) + "\\r\\n\\r\\n%s' '" + response + "'\n"
 	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
 		t.Fatal(err)
 	}
