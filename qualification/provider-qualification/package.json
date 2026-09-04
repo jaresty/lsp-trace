@@ -1,0 +1,17 @@
+{
+  "name": "lsp-trace-provider-qualification",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "qualify": "node qualify.mjs",
+    "test": "node --test qualify.test.mjs"
+  },
+  "dependencies": {
+    "@glint/core": "1.5.2",
+    "ember-source": "7.2.0",
+    "tree-sitter": "0.21.1",
+    "tree-sitter-typescript": "0.23.2",
+    "typescript": "5.9.2"
+  }
+}

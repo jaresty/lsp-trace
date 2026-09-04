@@ -1,0 +1,139 @@
+{
+  "schema_version": "lsp-trace.provider-qualification.v1",
+  "candidates": [
+    {
+      "id": "ember-template-compiler",
+      "version": "7.2.0",
+      "outcome": "SCOPED_ROLE",
+      "role": "template-syntax-ast",
+      "operation": "preprocess extracted <template> body",
+      "observation": "parsed 4 PathExpression nodes including callback passage and argument read",
+      "anchors": [
+        {
+          "original": "this.uploadFile",
+          "loc": {
+            "start": {
+              "line": 2,
+              "column": 29
+            },
+            "end": {
+              "line": 2,
+              "column": 44
+            }
+          }
+        },
+        {
+          "original": "@data.length",
+          "loc": {
+            "start": {
+              "line": 3,
+              "column": 9
+            },
+            "end": {
+              "line": 3,
+              "column": 21
+            }
+          }
+        }
+      ],
+      "supported_claims": [
+        "bounded_source_structure",
+        "exact_source_anchor",
+        "typed_static_relation"
+      ],
+      "prohibited_claims": [
+        "callback_invocation_from_passage",
+        "feature_identity",
+        "repaint",
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "id": "glint",
+      "version": "1.5.2",
+      "outcome": "BLOCKED",
+      "role": null,
+      "operation": "loadConfig plus analyzeProject on qualification workspace",
+      "observation": "Unable to find Glint configuration for ${QUALIFICATION}",
+      "anchors": [],
+      "supported_claims": [],
+      "prohibited_claims": [
+        "callback_invocation_from_passage",
+        "feature_identity",
+        "repaint",
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "id": "tree-sitter",
+      "version": "0.21.1",
+      "outcome": "SCOPED_ROLE",
+      "role": "typescript-concrete-syntax",
+      "operation": "parse plain.ts with tree-sitter-typescript grammar",
+      "observation": "parsed call_expression leaf(value)",
+      "anchors": [
+        {
+          "uri": "fixtures/plain.ts",
+          "range": {
+            "start": {
+              "row": 5,
+              "column": 9
+            },
+            "end": {
+              "row": 5,
+              "column": 20
+            }
+          }
+        }
+      ],
+      "supported_claims": [
+        "bounded_source_structure",
+        "exact_source_anchor"
+      ],
+      "prohibited_claims": [
+        "callback_invocation_from_passage",
+        "feature_identity",
+        "repaint",
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "id": "typescript-service",
+      "version": "5.9.2",
+      "outcome": "PASS",
+      "role": "typescript-symbol-definition",
+      "operation": "createLanguageService then getDefinitionAtPosition at leaf call",
+      "observation": "resolved 1 definition(s) for leaf",
+      "anchors": [
+        {
+          "uri": "fixtures/plain.ts",
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 16
+            },
+            "end": {
+              "line": 0,
+              "character": 20
+            }
+          }
+        }
+      ],
+      "supported_claims": [
+        "bounded_source_structure",
+        "exact_source_anchor",
+        "typed_static_relation"
+      ],
+      "prohibited_claims": [
+        "callback_invocation_from_passage",
+        "feature_identity",
+        "repaint",
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    }
+  ]
+}
