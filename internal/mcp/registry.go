@@ -127,8 +127,11 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		if tools[i].ExecutorFamily == IncomingExecutorFamily {
 			tools[i].Availability = Enabled
 			tools[i].InputSchema = incomingInputSchema()
-			tools[i].EnvelopeSchemaIDs = []string{artifactEnvelopeSchemaID, domainEnvelopeSchemaID}
+			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
 			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json"}
+		}
+		if tools[i].ExecutorFamily == SliceExecutorFamily {
+			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
 		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)
@@ -188,6 +191,14 @@ func lifecycleDescription(name string) string {
 	}
 }
 
+func traversalEnvelopeSchemaIDs(publicationSupported bool) []string {
+	ids := []string{artifactEnvelopeSchemaID, publicationEnvelopeSchemaID, compactEnvelopeSchemaID, publicationErrorEnvelopeSchemaID, domainEnvelopeSchemaID}
+	if !publicationSupported {
+		ids = withoutPublicationEnvelopes(ids)
+	}
+	return ids
+}
+
 func incomingInputSchema() map[string]any {
 	return map[string]any{
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -196,6 +207,7 @@ func incomingInputSchema() map[string]any {
 			"session_id": map[string]any{"type": "string", "minLength": 1}, "generation": map[string]any{"type": "integer", "minimum": 1},
 			"uri": map[string]any{"type": "string", "minLength": 1, "format": "uri"}, "line": map[string]any{"type": "integer", "minimum": 0},
 			"character": map[string]any{"type": "integer", "minimum": 0}, "symbol": map[string]any{"type": "string", "minLength": 1},
+			"detail": map[string]any{"type": "string", "enum": []any{"compact", "full"}}, "output_selector": map[string]any{"type": "string", "minLength": 1},
 			"max_depth": map[string]any{"type": "integer", "minimum": 1, "maximum": 64}, "max_nodes": map[string]any{"type": "integer", "minimum": 1, "maximum": 10000},
 			"timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
 		},

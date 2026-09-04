@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -67,6 +69,14 @@ func (e orderedExecutor) Execute(_ context.Context, _ operation.Request) (operat
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph.v3"}`)}, nil
 }
 
+type traversalArtifactExecutor struct {
+	artifact []byte
+}
+
+func (e traversalArtifactExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+	return operation.Result{Artifact: e.artifact}, nil
+}
+
 func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T) {
 	const (
 		compat      = "ASSERT_MCP_FULL_BACKWARD_COMPATIBLE"
@@ -115,6 +125,66 @@ func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T)
 	}
 	if got := len(server.Registry.Advertised()); got != 12 {
 		t.Fatalf("%s: got %d", cardinality, got)
+	}
+}
+
+func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
+	const (
+		compat      = "ASSERT_TRAVERSAL_DEFAULT_FULL_BACKWARD_COMPATIBLE"
+		custody     = "ASSERT_TRAVERSAL_COMPACT_PUBLISHES_EXACT_FULL_BYTES"
+		summary     = "ASSERT_TRAVERSAL_COMPACT_RETURNS_RECEIPT_AND_SUMMARY"
+		cardinality = "ASSERT_TRAVERSAL_COMPACT_PRESERVES_TWELVE_TOOLS"
+	)
+	for _, assertion := range []string{compat, custody, summary, cardinality} {
+		t.Log("ASSERTION: " + assertion)
+	}
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{"traversal_complete":true}}`)
+	for _, tc := range []struct {
+		name      string
+		arguments string
+		family    ExecutorFamily
+	}{
+		{"lsp_trace_v1_incoming", `"session_id":"session","generation":1,"uri":"file:///workspace/main.go","line":0,"character":0`, IncomingExecutorFamily},
+		{"lsp_trace_v1_slice", `"session_id":"session","generation":1,"start_mode":"at","uri":"file:///workspace/main.go","line":0,"character":0`, SliceExecutorFamily},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rootPath := t.TempDir()
+			root, err := publication.OpenRoot(rootPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			server := &Server{
+				Registry:        NewRegistryWithPublication(false, true),
+				Executors:       map[ExecutorFamily]Executor{tc.family: traversalArtifactExecutor{artifact: artifact}},
+				PublicationRoot: root,
+			}
+			responses := runServerMessages(t, server, strings.Join([]string{
+				`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tc.name + `","arguments":{` + tc.arguments + `}}}`,
+				`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"` + tc.name + `","arguments":{` + tc.arguments + `,"detail":"compact","output_selector":"artifact.json"}}}`,
+			}, "\n")+"\n")
+			if responses[0]["error"] != nil {
+				t.Fatalf("%s: %v", compat, responses[0])
+			}
+			full := responses[0]["result"].(map[string]any)["structuredContent"].(map[string]any)
+			if full["envelope_schema_id"] != artifactEnvelopeSchemaID || full["content"] != string(artifact) {
+				t.Fatalf("%s: %v", compat, full)
+			}
+			if responses[1]["error"] != nil {
+				t.Fatalf("%s: %v", custody, responses[1])
+			}
+			compact := responses[1]["result"].(map[string]any)["structuredContent"].(map[string]any)
+			if compact["publication_receipt"] == nil || compact["summary"] == nil || compact["content"] != nil {
+				t.Fatalf("%s: %v", summary, compact)
+			}
+			published, err := os.ReadFile(filepath.Join(rootPath, "artifact.json"))
+			if err != nil || !bytes.Equal(published, artifact) {
+				t.Fatalf("%s: bytes=%q err=%v", custody, published, err)
+			}
+			if got := len(server.Registry.Advertised()); got != 12 {
+				t.Fatalf("%s: got %d", cardinality, got)
+			}
+		})
 	}
 }
 
