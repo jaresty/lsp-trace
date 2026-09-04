@@ -62,6 +62,12 @@ func response(id, result json.RawMessage) lspwire.Message {
 
 func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	errout := &cappedWriter{w: stderr, remaining: maxStderrBytes}
+	if marker := os.Getenv("LSP_TRACE_FAKE_LSP_SCHEDULED"); marker != "" {
+		if err := os.WriteFile(marker, []byte("scheduled\n"), 0o600); err != nil {
+			fmt.Fprintf(errout, "fake-lsp scheduling marker: %v\n", err)
+			return fixtureInputErrorCode
+		}
+	}
 	r := lspwire.NewReader(stdin, fixtureLimits)
 	w := lspwire.NewWriter(stdout, fixtureLimits)
 	hanging := map[string]json.RawMessage{}
