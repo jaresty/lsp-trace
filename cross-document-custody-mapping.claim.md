@@ -49,3 +49,30 @@ No existing file or symbol is claimed. Analyzers, framing commands, release pack
 4. Implement the smallest production JavaScript module satisfying those assertions.
 5. Rerun the identical focused test green, then repository checks.
 6. Record exact evidence and commit a clean worktree.
+
+## Red evidence
+
+The committed present-but-wrong production surface was exercised with:
+
+`node --test provider/cross-document-custody-mapping.test.js`
+
+Result: 0 passed, 8 failed. The output independently named all eight required assertion identities and each assertion reported its own mismatch or missing rejection.
+
+## Implementation
+
+- Canonical original identities normalize absolute URLs and remove fragments under an `original:` kind prefix.
+- Canonical virtual identities are deterministic, generator-qualified SHA-256 identities derived from their original parent, generator, and generated-document name under a disjoint `virtual:` prefix.
+- `DocumentCustody` retains frozen digest/revision records, rejects conflicting custody, requires virtual-parent custody at the same revision, and rejects unknown revisions.
+- `createDocumentMapping` validates authoritative same-revision custody, canonicalizes exact equal-length segments, rejects mixed revisions and overlaps, and translates only fully covered contiguous ranges.
+- Generated coordinates carry only subordinate virtual/original identities, revision, range, and coordinate kind; no semantic relation conclusion is emitted.
+
+## Evidence
+
+- Focused red: 0 passed, 8 failed; every required assertion identity was named.
+- Focused green: 8 passed, 0 failed.
+- Strengthened exact-range green, including interior-hole and unknown-revision rejection: 8 passed, 0 failed.
+- `node --check provider/cross-document-custody-mapping.js`: pass.
+- `git diff --check`: pass.
+- Pre-commit full suite: 3229 passed, 2 failed, 2 skipped; both failures were the same dirty-worktree `ASSERT_PACKAGE_OWNERSHIP_ONLY` check observing the newly owned production module before commit.
+- Claim-first commit: `91d5786`.
+- Assertion-specific red commit: `cf2b6a9`.

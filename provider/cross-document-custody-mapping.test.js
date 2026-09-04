@@ -108,6 +108,19 @@ test('ASSERT_RANGE_TRANSLATION_EXACT', () => {
   const { mapping } = mappingFixture();
   assert.deepEqual(mapping.translateOriginalRange({ start: 11, end: 17 }, '17').range, { start: 101, end: 107 }, 'ASSERT_RANGE_TRANSLATION_EXACT contiguous exact range');
   assert.throws(() => mapping.translateOriginalRange({ start: 9, end: 11 }, '17'), /range is not exactly mapped/, 'ASSERT_RANGE_TRANSLATION_EXACT rejects partial range');
+  assert.throws(() => mapping.translateOriginalRange({ start: 11, end: 12 }, '18'), /unknown document revision/, 'ASSERT_RANGE_TRANSLATION_EXACT rejects unknown revision');
+
+  const state = fixture();
+  const mappingWithHole = createDocumentMapping({
+    custody: state.custody,
+    original: state.original,
+    virtual: state.virtual,
+    segments: [
+      { original: { start: 10, end: 12 }, generated: { start: 100, end: 102 }, revision: '17' },
+      { original: { start: 13, end: 15 }, generated: { start: 103, end: 105 }, revision: '17' },
+    ],
+  });
+  assert.throws(() => mappingWithHole.translateOriginalRange({ start: 11, end: 14 }, '17'), /range is not exactly mapped/, 'ASSERT_RANGE_TRANSLATION_EXACT rejects interior hole');
 });
 
 test('ASSERT_GENERATED_COORDINATE_SUBORDINATE', () => {
