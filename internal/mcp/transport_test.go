@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/publication"
 )
 
 type fakeExecutor struct {
@@ -64,6 +65,57 @@ type orderedExecutor struct {
 func (e orderedExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
 	*e.events = append(*e.events, "execute")
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph.v3"}`)}, nil
+}
+
+func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T) {
+	const (
+		compat      = "ASSERT_MCP_FULL_BACKWARD_COMPATIBLE"
+		custody     = "ASSERT_MCP_COMPACT_IMMUTABLE_FULL_RECEIPT"
+		summary     = "ASSERT_MCP_COMPACT_CONCISE_SUMMARY"
+		accounting  = "ASSERT_MCP_COMPACT_PUBLIC_ACCOUNTING"
+		progress    = "ASSERT_MCP_COMPACT_OBSERVED_PROGRESS"
+		cardinality = "ASSERT_MCP_EXACT_TWELVE_AUTHORITY_UNCHANGED"
+	)
+	for _, assertion := range []string{compat, custody, summary, accounting, progress, cardinality} {
+		t.Log("ASSERTION: " + assertion)
+	}
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{"traversal_complete":true}}`)
+	root, err := publication.OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	server := &Server{Registry: NewRegistryWithPublication(false, true), Executor: &fakeExecutor{artifact: artifact}, PublicationRoot: root}
+	responses := runServerMessages(t, server, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"input":{},"detail":"full"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_verify","arguments":{"input":{},"detail":"compact","output_selector":"full.json"}}}`,
+	}, "\n")+"\n")
+	if responses[0]["error"] != nil {
+		t.Fatalf("%s: %v", compat, responses[0])
+	}
+	full := responses[0]["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if full["envelope_schema_id"] != artifactEnvelopeSchemaID || full["content"] != string(artifact) {
+		t.Fatalf("%s: %v", compat, full)
+	}
+	if responses[1]["error"] != nil {
+		t.Fatalf("%s: %v", custody, responses[1])
+	}
+	compact := responses[1]["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if compact["publication_receipt"] == nil || compact["content"] != nil {
+		t.Fatalf("%s: %v", custody, compact)
+	}
+	if compact["summary"] == nil {
+		t.Fatalf("%s: %v", summary, compact)
+	}
+	if compact["duration_ms"] == nil || compact["request_accounting"] == nil {
+		t.Fatalf("%s: %v", accounting, compact)
+	}
+	if compact["progress"] != "completed" {
+		t.Fatalf("%s: %v", progress, compact)
+	}
+	if got := len(server.Registry.Advertised()); got != 12 {
+		t.Fatalf("%s: got %d", cardinality, got)
+	}
 }
 
 func TestStructuralThenSemanticThenExecutorFamily(t *testing.T) {

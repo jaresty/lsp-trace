@@ -11,6 +11,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
@@ -23,6 +24,7 @@ const (
 	artifactEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-artifact.v1.schema.json"
 	domainEnvelopeSchemaID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json"
 	disabledEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-not-implemented.v1.schema.json"
+	compactEnvelopeSchemaID  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-compact-publication.v1.schema.json"
 )
 
 type Executor interface {
@@ -82,6 +84,10 @@ type envelope struct {
 	ArtifactDigest          string               `json:"artifact_digest,omitempty"`
 	ArtifactByteLength      *uint64              `json:"artifact_byte_length,omitempty"`
 	RetainedFailureMetadata *publication.Failure `json:"retained_failure_metadata,omitempty"`
+	Summary                 any                  `json:"summary,omitempty"`
+	DurationMS              *uint64              `json:"duration_ms,omitempty"`
+	RequestAccounting       any                  `json:"request_accounting,omitempty"`
+	Progress                string               `json:"progress,omitempty"`
 }
 
 type callResult struct {
@@ -208,6 +214,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, env)
 	}
 	selector, publicationRequested := params.Arguments["output_selector"].(string)
+	detail, _ := params.Arguments["detail"].(string)
+	compact := detail == "compact"
+	if compact && !publicationRequested {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{"compact detail requires output_selector so the full artifact remains available"})
+		return bindEnvelope(base, tool, env)
+	}
 	if publicationRequested && s.PublicationRoot == nil {
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_SELECTOR_UNSAFE", []string{"selector publication is disabled"})
 		return bindEnvelope(base, tool, env)
@@ -221,10 +233,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, env)
 	}
 	operationArguments := params.Arguments
-	if publicationRequested {
-		operationArguments = make(map[string]any, len(params.Arguments)-1)
+	if publicationRequested || detail != "" {
+		operationArguments = make(map[string]any, len(params.Arguments))
 		for key, value := range params.Arguments {
-			if key != "output_selector" {
+			if key != "output_selector" && key != "detail" {
 				operationArguments[key] = value
 			}
 		}
@@ -234,6 +246,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{err.Error()})
 		return bindEnvelope(base, tool, env)
 	}
+	started := time.Now()
 	opResult, failure := executor.Execute(ctx, operation.Request{
 		Name: operationName(tool.Name), RequestID: requestID, Input: opInput,
 	})
@@ -281,6 +294,14 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			EnvelopeVersion: "1", EnvelopeSchemaID: publicationEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", ArtifactSchemaID: artifactID,
 		}
+		if compact {
+			duration := uint64(time.Since(started) / time.Millisecond)
+			successEnvelope.EnvelopeSchemaID = compactEnvelopeSchemaID
+			successEnvelope.Summary = compactSummary(opResult.Artifact)
+			successEnvelope.DurationMS = &duration
+			successEnvelope.RequestAccounting = map[string]any{"request_bytes": uint64(len(opInput)), "response_bytes": byteLength}
+			successEnvelope.Progress = "completed"
+		}
 		failureEnvelope := envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: publicationErrorEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "PUBLICATION_ERROR", OperationStatus: "FAILED", IsError: true, Code: publication.CodePublicationFailed,
@@ -310,6 +331,23 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Content: &content, ArtifactSchemaID: artifactID,
 	}
 	return bindEnvelope(base, tool, env)
+}
+
+func compactSummary(artifact []byte) map[string]any {
+	var value map[string]any
+	_ = json.Unmarshal(artifact, &value)
+	out := map[string]any{"artifact_byte_length": uint64(len(artifact))}
+	for _, key := range []string{"schema_version", "inspection_schema_version", "filter_schema_version"} {
+		if v, ok := value[key]; ok {
+			out[key] = v
+		}
+	}
+	for _, key := range []string{"nodes", "edges", "terminals", "frontier", "diagnostics"} {
+		if v, ok := value[key].([]any); ok {
+			out[key+"_count"] = len(v)
+		}
+	}
+	return out
 }
 
 func (s *Server) nextRequestID() string {

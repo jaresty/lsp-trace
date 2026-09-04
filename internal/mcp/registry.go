@@ -166,7 +166,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 func withoutPublicationEnvelopes(ids []string) []string {
 	out := ids[:0]
 	for _, id := range ids {
-		if id != publicationEnvelopeSchemaID && id != publicationErrorEnvelopeSchemaID {
+		if id != publicationEnvelopeSchemaID && id != compactEnvelopeSchemaID && id != publicationErrorEnvelopeSchemaID {
 			out = append(out, id)
 		}
 	}
