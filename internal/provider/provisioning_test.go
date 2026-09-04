@@ -55,6 +55,11 @@ func TestProviderDeclarationClosedValidation(t *testing.T) {
 
 func TestProviderRegistryDeterministic(t *testing.T) {
 	a, b := validDeclaration("zeta@1"), validDeclaration("alpha@1")
+	a.Capabilities = Capabilities{
+		Relations: []string{"UPDATES_STATE", "PASSES_CALLBACK"},
+		Languages: []string{"typescript", "javascript"},
+		Frameworks: []string{"glimmer", "ember"},
+	}
 	first, err := Provision([]Declaration{a, b})
 	if err != nil {
 		t.Fatalf("%s: %v", assertRegistry, err)
@@ -70,6 +75,12 @@ func TestProviderRegistryDeterministic(t *testing.T) {
 		if _, ok := first.Registry.Resolve(id); !ok {
 			t.Fatalf("%s: missing %s", assertRegistry, id)
 		}
+	}
+	got := first.Declarations[1].Capabilities
+	if !reflect.DeepEqual(got.Relations, []string{"PASSES_CALLBACK", "UPDATES_STATE"}) ||
+		!reflect.DeepEqual(got.Languages, []string{"javascript", "typescript"}) ||
+		!reflect.DeepEqual(got.Frameworks, []string{"ember", "glimmer"}) {
+		t.Fatalf("%s: capabilities not canonical: %+v", assertRegistry, got)
 	}
 }
 
