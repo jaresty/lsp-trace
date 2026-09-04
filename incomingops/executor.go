@@ -41,17 +41,25 @@ type Executor struct{ runtime Runtime }
 
 func NewExecutor(runtime Runtime) *Executor { return &Executor{runtime: runtime} }
 
+// RelationCollector is the minimal incoming-owned boundary to host-provisioned
+// external relation providers. The provider artifact remains opaque so this
+// package neither owns nor interprets framework semantics.
+type RelationCollector interface {
+	CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error)
+}
+
 type request struct {
-	SessionID        string  `json:"session_id"`
-	Generation       uint64  `json:"generation"`
-	URI              string  `json:"uri"`
-	Line             *uint32 `json:"line"`
-	Character        *uint32 `json:"character"`
-	Symbol           string  `json:"symbol"`
-	MaxDepth         int     `json:"max_depth"`
-	MaxNodes         int     `json:"max_nodes"`
-	TimeoutMS        int64   `json:"timeout_ms"`
-	RequestTimeoutMS int64   `json:"request_timeout_ms"`
+	SessionID        string    `json:"session_id"`
+	Generation       uint64    `json:"generation"`
+	URI              string    `json:"uri"`
+	Line             *uint32   `json:"line"`
+	Character        *uint32   `json:"character"`
+	Symbol           string    `json:"symbol"`
+	MaxDepth         int       `json:"max_depth"`
+	MaxNodes         int       `json:"max_nodes"`
+	TimeoutMS        int64     `json:"timeout_ms"`
+	RequestTimeoutMS int64     `json:"request_timeout_ms"`
+	Relations        *[]string `json:"relations"`
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
@@ -74,6 +82,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	metadata, runtimeFailure := e.runtime.Metadata(input.SessionID, input.Generation)
 	if runtimeFailure != "" {
 		return operation.Result{}, failure(string(runtimeFailure), nil)
+	}
+	if input.Relations != nil {
+		return e.executeComposition(parent, op.Input, input, metadata)
 	}
 	if !metadata.CallHierarchySupport {
 		return operation.Result{}, failure(string(graph.UnsupportedCallHierarchy), nil)
@@ -185,6 +196,95 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 		return 0, 0, failure("DOCUMENT_SYMBOL_PREPARE_FAILED", err)
 	}
 	return 0, 0, failure("DOCUMENT_SYMBOL_UNPREPARABLE", fmt.Errorf("document symbol %q was not preparable within %d bounded positions", symbolName, maxSymbolPrepareProbeDelta+1))
+}
+
+var supportedRelations = map[string]bool{
+	"CALLS": true, "BINDS_ARGUMENT": true, "PASSES_CALLBACK": true,
+	"INVOKES_TASK": true, "TRIGGERS_RELOAD": true, "UPDATES_STATE": true,
+	"RENDERS_FROM": true,
+}
+
+type compositionArtifact struct {
+	SchemaVersion string            `json:"schema_version"`
+	Complete      bool              `json:"complete"`
+	Calls         json.RawMessage   `json:"calls,omitempty"`
+	Providers     []json.RawMessage `json:"providers,omitempty"`
+}
+
+type providerReceipt struct {
+	ProviderID string          `json:"provider_id"`
+	Terminal   string          `json:"terminal"`
+	Complete   bool            `json:"complete"`
+	Truncated  bool            `json:"truncated"`
+	Bounds     json.RawMessage `json:"bounds"`
+	Relations  []struct {
+		RelationID string `json:"relation_id"`
+		Kind       string `json:"kind"`
+	} `json:"relations"`
+}
+
+func (e *Executor) executeComposition(parent context.Context, raw json.RawMessage, input request, metadata sessionruntime.SessionMetadata) (operation.Result, *operation.Failure) {
+	selected := append([]string(nil), (*input.Relations)...)
+	seen := make(map[string]bool, len(selected))
+	external := make([]string, 0, len(selected))
+	wantCalls := false
+	for _, kind := range selected {
+		if !supportedRelations[kind] || seen[kind] {
+			return operation.Result{}, failure(operation.FailureInvalidInput, fmt.Errorf("unknown or duplicate relation %q", kind))
+		}
+		seen[kind] = true
+		if kind == "CALLS" {
+			wantCalls = true
+		} else {
+			external = append(external, kind)
+		}
+	}
+	artifact := compositionArtifact{SchemaVersion: "lsp-trace.incoming-composition.v1", Complete: true}
+	if wantCalls {
+		if !metadata.CallHierarchySupport {
+			return operation.Result{}, failure(string(graph.UnsupportedCallHierarchy), nil)
+		}
+		legacyInput := input
+		legacyInput.Relations = nil
+		encoded, _ := json.Marshal(legacyInput)
+		legacy, failed := e.Execute(parent, operation.Request{Name: OperationIncoming, Input: encoded})
+		if failed != nil {
+			return operation.Result{}, failed
+		}
+		artifact.Calls = bytes.TrimSpace(legacy.Artifact)
+		var calls graph.Result
+		if json.Unmarshal(legacy.Artifact, &calls) != nil || !calls.Summary.Complete {
+			artifact.Complete = false
+		}
+	}
+	if len(external) > 0 {
+		collector, ok := e.runtime.(RelationCollector)
+		if !ok {
+			return operation.Result{}, failure("ADAPTER_NOT_AVAILABLE", nil)
+		}
+		provider, err := collector.CollectRelations(parent, external, raw)
+		if err != nil {
+			return operation.Result{}, failure("RELATION_PROVIDER_FAILED", err)
+		}
+		var receipt providerReceipt
+		if err := decodeStrict(provider, &receipt); err != nil || receipt.ProviderID == "" || receipt.Terminal == "" || len(receipt.Bounds) == 0 {
+			return operation.Result{}, failure("RELATION_PROVIDER_MALFORMED", err)
+		}
+		for _, relation := range receipt.Relations {
+			if !seen[relation.Kind] || relation.Kind == "CALLS" {
+				return operation.Result{}, failure("RELATION_PROVIDER_KIND_MISMATCH", fmt.Errorf("provider returned unselected relation %q", relation.Kind))
+			}
+		}
+		artifact.Providers = []json.RawMessage{append(json.RawMessage(nil), provider...)}
+		if !receipt.Complete || receipt.Truncated || receipt.Terminal != "COMPLETE_WITHIN_BOUNDS" {
+			artifact.Complete = false
+		}
+	}
+	encoded, err := json.Marshal(artifact)
+	if err != nil {
+		return operation.Result{}, failure(operation.FailureInternal, err)
+	}
+	return operation.Result{Artifact: append(encoded, '\n')}, nil
 }
 
 func validRange(r lsp.Range) bool {

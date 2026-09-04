@@ -15,13 +15,16 @@ import (
 )
 
 type fakeRuntime struct {
-	metadata sessionruntime.SessionMetadata
-	failure  session.Failure
-	calls    []string
-	requests []sessionruntime.RoundTripRequest
-	results  map[string][]json.RawMessage
-	observed map[string][]sessionruntime.RoundTripResult
-	records  []sessionruntime.Record
+	metadata         sessionruntime.SessionMetadata
+	failure          session.Failure
+	calls            []string
+	requests         []sessionruntime.RoundTripRequest
+	results          map[string][]json.RawMessage
+	observed         map[string][]sessionruntime.RoundTripResult
+	records          []sessionruntime.Record
+	relationCalls    [][]string
+	relationArtifact json.RawMessage
+	relationErr      error
 }
 
 func (f *fakeRuntime) Records() []sessionruntime.Record {
@@ -29,6 +32,10 @@ func (f *fakeRuntime) Records() []sessionruntime.Record {
 }
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return f.metadata, f.failure
+}
+func (f *fakeRuntime) CollectRelations(_ context.Context, selected []string, _ json.RawMessage) (json.RawMessage, error) {
+	f.relationCalls = append(f.relationCalls, append([]string(nil), selected...))
+	return append(json.RawMessage(nil), f.relationArtifact...), f.relationErr
 }
 func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	f.calls = append(f.calls, r.Method)
@@ -381,6 +388,29 @@ func TestIncomingSelectorContracts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIncomingExplicitRelationComposition(t *testing.T) {
+	const assertionSelection = "ASSERT_INCOMING_EXPLICIT_SELECTION_EXACT"
+	const assertionKind = "ASSERT_INCOMING_PROVIDER_KIND_PRESERVED"
+	const assertionReceipt = "ASSERT_INCOMING_PROVIDER_RECEIPT_FAILS_CLOSED"
+	provider := json.RawMessage(`{"provider_id":"ember@1","terminal":"UNAVAILABLE","complete":false,"truncated":false,"bounds":{"max_relations":7,"max_source_bytes":99,"max_operations":3,"timeout_ms":50},"relations":[{"relation_id":"r1","kind":"PASSES_CALLBACK"}]}`)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, relationArtifact: provider}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.gjs","line":0,"character":0,"relations":["PASSES_CALLBACK"],"max_depth":4,"max_nodes":20,"timeout_ms":1000,"request_timeout_ms":100}`)
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: input})
+	raw := string(result.Artifact)
+	if failure != nil || len(f.calls) != 0 || len(f.relationCalls) != 1 || strings.Join(f.relationCalls[0], ",") != "PASSES_CALLBACK" {
+		t.Fatalf("%s: failure=%v lsp_calls=%v relation_calls=%v", assertionSelection, failure, f.calls, f.relationCalls)
+	}
+	t.Log("PASS " + assertionSelection)
+	if !strings.Contains(raw, `"kind":"PASSES_CALLBACK"`) || strings.Contains(raw, `"kind":"CALLS"`) {
+		t.Fatalf("%s: artifact=%s", assertionKind, raw)
+	}
+	t.Log("PASS " + assertionKind)
+	if !strings.Contains(raw, `"provider_id":"ember@1"`) || !strings.Contains(raw, `"terminal":"UNAVAILABLE"`) || !strings.Contains(raw, `"complete":false`) || !strings.Contains(raw, `"max_relations":7`) {
+		t.Fatalf("%s: artifact=%s", assertionReceipt, raw)
+	}
+	t.Log("PASS " + assertionReceipt)
 }
 
 var _ = lspwire.RequestKey{}
