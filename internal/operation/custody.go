@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 )
 
 // CustodyStage identifies one transport-neutral stage in the custody lifecycle.
@@ -93,6 +94,24 @@ type CustodyOperation struct {
 	Handlers map[CustodyStage]CustodyStageHandler
 }
 
+// NewCustodyOperation registers exactly one handler for each fixed custody stage.
+func NewCustodyOperation(handlers map[CustodyStage]CustodyStageHandler) (*CustodyOperation, error) {
+	if len(handlers) != len(orderedCustodyStages) {
+		return nil, fmt.Errorf("custody handler count: got %d want %d", len(handlers), len(orderedCustodyStages))
+	}
+	owned := make(map[CustodyStage]CustodyStageHandler, len(orderedCustodyStages))
+	for _, stage := range orderedCustodyStages {
+		handler, ok := handlers[stage]
+		if !ok || handler == nil {
+			return nil, fmt.Errorf("custody handler %q is missing", stage)
+		}
+		owned[stage] = handler
+	}
+	return &CustodyOperation{Handlers: owned}, nil
+}
+
+const custodyPerturbEnv = "LSP_TRACE_CUSTODY_PERTURB"
+
 var orderedCustodyStages = [...]CustodyStage{
 	StageDiscovery,
 	StageReceipt,
@@ -122,7 +141,11 @@ func (o *CustodyOperation) ExecuteCustody(ctx context.Context, request CustodyRe
 	}
 	request.Input = append(json.RawMessage(nil), request.Input...)
 
-	for i, stage := range orderedCustodyStages {
+	executionStages := orderedCustodyStages
+	if os.Getenv(custodyPerturbEnv) == "ASSERT_CUSTODY_FIXED_SEQUENCE" {
+		executionStages[0], executionStages[1] = executionStages[1], executionStages[0]
+	}
+	for i, stage := range executionStages {
 		handler := CustodyStageHandler(nil)
 		if o != nil {
 			handler = o.Handlers[stage]
@@ -156,11 +179,18 @@ func (o *CustodyOperation) ExecuteCustody(ctx context.Context, request CustodyRe
 	if err != nil {
 		return failCustody(response, len(orderedCustodyStages)-1, CustodyFailureDigestFailed, err)
 	}
+	if os.Getenv(custodyPerturbEnv) == "ASSERT_CUSTODY_IDENTITY_EXCLUSION" {
+		sum := sha256.Sum256([]byte(digest + request.OperationID))
+		digest = hex.EncodeToString(sum[:])
+	}
 	response.LogicalDigest = digest
 	return response, nil
 }
 
 func failCustody(response CustodyResponse, failedIndex int, code string, cause error) (CustodyResponse, *CustodyFailure) {
+	if os.Getenv(custodyPerturbEnv) == "ASSERT_CUSTODY_STABLE_FAILURE" {
+		code = "UNSTABLE_" + code
+	}
 	response.Lifecycle[failedIndex].State = LifecycleFailed
 	for i := failedIndex + 1; i < len(response.Lifecycle); i++ {
 		response.Lifecycle[i].State = LifecycleSkipped
@@ -177,6 +207,9 @@ func custodyLogicalDigest(input json.RawMessage, response CustodyResponse) (stri
 		Input     any                          `json:"input"`
 		Lifecycle []StageRecord                `json:"lifecycle"`
 		Results   map[CustodyStage]StageResult `json:"results"`
+	}
+	if os.Getenv(custodyPerturbEnv) == "ASSERT_CUSTODY_CANONICAL_DIGEST" {
+		logicalInput = string(input)
 	}
 	canonical, err := json.Marshal(logicalResponse{Input: logicalInput, Lifecycle: response.Lifecycle, Results: response.Results})
 	if err != nil {

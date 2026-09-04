@@ -11,7 +11,7 @@ import (
 
 var custodyStages = []CustodyStage{StageDiscovery, StageReceipt, StageManifest, StageSnapshot, StageAdmission, StagePublication}
 
-func successfulCustodyOperation(events *[]CustodyStage) *CustodyOperation {
+func custodyHandlers(events *[]CustodyStage) map[CustodyStage]CustodyStageHandler {
 	handlers := make(map[CustodyStage]CustodyStageHandler, len(custodyStages))
 	for _, stage := range custodyStages {
 		stage := stage
@@ -25,7 +25,59 @@ func successfulCustodyOperation(events *[]CustodyStage) *CustodyOperation {
 			return result, nil
 		}
 	}
-	return &CustodyOperation{Handlers: handlers}
+	return handlers
+}
+
+func successfulCustodyOperation(events *[]CustodyStage) *CustodyOperation {
+	operation, err := NewCustodyOperation(custodyHandlers(events))
+	if err != nil {
+		panic(err)
+	}
+	return operation
+}
+
+func TestCustodyOperationCanonicalRegistration(t *testing.T) {
+	const assertion = "P1_CANONICAL_CUSTODY_OPERATION_NAME"
+	if CustodyExecute != Name("custody_execute") {
+		t.Fatalf("%s: got %q", assertion, CustodyExecute)
+	}
+}
+
+func TestCustodyOperationRegistrationIsClosedAndImmutable(t *testing.T) {
+	t.Run("complete", func(t *testing.T) {
+		const assertion = "P2A_COMPLETE_STAGE_REGISTRATION"
+		handlers := custodyHandlers(&[]CustodyStage{})
+		for _, stage := range custodyStages {
+			incomplete := make(map[CustodyStage]CustodyStageHandler, len(handlers)-1)
+			for candidate, handler := range handlers {
+				if candidate != stage {
+					incomplete[candidate] = handler
+				}
+			}
+			if _, err := NewCustodyOperation(incomplete); err == nil {
+				t.Fatalf("%s: accepted missing stage %q", assertion, stage)
+			}
+		}
+		handlers[StageManifest] = nil
+		if _, err := NewCustodyOperation(handlers); err == nil {
+			t.Fatalf("%s: accepted nil stage handler", assertion)
+		}
+	})
+
+	t.Run("immutable", func(t *testing.T) {
+		const assertion = "P2B_CALLER_MUTATION_CANNOT_CHANGE_AVAILABILITY"
+		events := []CustodyStage{}
+		handlers := custodyHandlers(&events)
+		operation, err := NewCustodyOperation(handlers)
+		if err != nil {
+			t.Fatalf("%s: construct: %v", assertion, err)
+		}
+		delete(handlers, StageManifest)
+		response, failure := operation.ExecuteCustody(context.Background(), CustodyRequest{OperationID: "op-1", Input: json.RawMessage(`{}`)})
+		if failure != nil || len(events) != len(custodyStages) {
+			t.Fatalf("%s: events=%v lifecycle=%v failure=%v", assertion, events, response.Lifecycle, failure)
+		}
+	})
 }
 
 func TestCustodyCanonicalModelsAndTransportNeutrality(t *testing.T) {
@@ -48,7 +100,7 @@ func TestCustodyCanonicalModelsAndTransportNeutrality(t *testing.T) {
 }
 
 func TestCustodyExecutesFixedSequenceAndReportsLifecycle(t *testing.T) {
-	const assertion = "P3_EXPLICIT_LIFECYCLE_AND_P5_FIXED_SEQUENCE"
+	const assertion = "P3A_FIXED_STAGE_SEQUENCE"
 	events := []CustodyStage{}
 	response, failure := successfulCustodyOperation(&events).ExecuteCustody(context.Background(), CustodyRequest{OperationID: "op-1", Input: json.RawMessage(`{"source":"x"}`)})
 	if failure != nil {
@@ -67,23 +119,24 @@ func TestCustodyExecutesFixedSequenceAndReportsLifecycle(t *testing.T) {
 	}
 }
 
-func TestCustodyLogicalDigestIsCanonicalAndMutationSensitive(t *testing.T) {
-	const assertion = "P2_DETERMINISTIC_LOGICAL_DIGEST"
-	requestA := CustodyRequest{OperationID: "runtime-a", Input: json.RawMessage(`{"z":3,"a":1}`)}
-	requestB := CustodyRequest{OperationID: "runtime-b", Input: json.RawMessage(`{"a":1,"z":3}`)}
-	eventsA, eventsB := []CustodyStage{}, []CustodyStage{}
-	responseA, failureA := successfulCustodyOperation(&eventsA).ExecuteCustody(context.Background(), requestA)
-	responseB, failureB := successfulCustodyOperation(&eventsB).ExecuteCustody(context.Background(), requestB)
+func TestCustodyLogicalDigestCanonicalizesEquivalentJSON(t *testing.T) {
+	const assertion = "P4A_CANONICAL_LOGICAL_DIGEST"
+	requestA := CustodyRequest{OperationID: "runtime", Input: json.RawMessage(`{"z":3,"a":1}`)}
+	requestB := CustodyRequest{OperationID: "runtime", Input: json.RawMessage(`{"a":1,"z":3}`)}
+	responseA, failureA := successfulCustodyOperation(&[]CustodyStage{}).ExecuteCustody(context.Background(), requestA)
+	responseB, failureB := successfulCustodyOperation(&[]CustodyStage{}).ExecuteCustody(context.Background(), requestB)
 	if failureA != nil || failureB != nil || responseA.LogicalDigest == "" || responseA.LogicalDigest != responseB.LogicalDigest {
 		t.Fatalf("%s: digestA=%q digestB=%q failures=(%v,%v)", assertion, responseA.LogicalDigest, responseB.LogicalDigest, failureA, failureB)
 	}
-	mutated := successfulCustodyOperation(&[]CustodyStage{})
-	mutated.Handlers[StageManifest] = func(context.Context, CustodyRequest, CustodyResponse) (StageResult, error) {
-		return StageResult{Artifact: json.RawMessage(`{"manifest":"changed"}`)}, nil
-	}
-	responseC, failureC := mutated.ExecuteCustody(context.Background(), requestA)
-	if failureC != nil || responseC.LogicalDigest == responseA.LogicalDigest {
-		t.Fatalf("%s: mutation digest=%q original=%q failure=%v", assertion, responseC.LogicalDigest, responseA.LogicalDigest, failureC)
+}
+
+func TestCustodyLogicalDigestExcludesOperationIdentity(t *testing.T) {
+	const assertion = "P4B_LOGICAL_DIGEST_EXCLUDES_OPERATION_IDENTITY"
+	input := json.RawMessage(`{"a":1,"z":3}`)
+	responseA, failureA := successfulCustodyOperation(&[]CustodyStage{}).ExecuteCustody(context.Background(), CustodyRequest{OperationID: "runtime-a", Input: input})
+	responseB, failureB := successfulCustodyOperation(&[]CustodyStage{}).ExecuteCustody(context.Background(), CustodyRequest{OperationID: "runtime-b", Input: input})
+	if failureA != nil || failureB != nil || responseA.LogicalDigest == "" || responseA.LogicalDigest != responseB.LogicalDigest {
+		t.Fatalf("%s: digestA=%q digestB=%q failures=(%v,%v)", assertion, responseA.LogicalDigest, responseB.LogicalDigest, failureA, failureB)
 	}
 }
 
@@ -116,7 +169,7 @@ func TestCustodyTypedFailuresSuppressLaterStages(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assertion := "P4_TYPED_FAILURE_SUPPRESSION_" + strings.ToUpper(tc.name)
+			assertion := "P3B_STABLE_FAILURE_LIFECYCLE_" + strings.ToUpper(tc.name)
 			events := []CustodyStage{}
 			o := successfulCustodyOperation(&events)
 			tc.configure(o)
