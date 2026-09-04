@@ -73,6 +73,22 @@ func TestSliceAppliesConservativeDefaults(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
+func TestSliceSymbolUsesGoplsHierarchySelectionStart(t *testing.T) {
+	const assertion = "ASSERT_SLICE_GOPLS_SYMBOL_SELECTION_START"
+	root := item("Target", 7)
+	symbols := `[{"name":"Manager","kind":23,"tags":[],"deprecated":false,"range":{"start":{"line":2,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":2,"character":5},"end":{"line":2,"character":12}},"children":[{"name":"Target","kind":12,"tags":[],"deprecated":false,"range":{"start":{"line":7,"character":1},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}]}]`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/documentSymbol:":       {Result: json.RawMessage(symbols)},
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:Target": {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:Target": {Result: json.RawMessage(`[]`)},
+	}}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","symbol":"Target","down_depth":1,"up_depth":1}`)})
+	if failure != nil || len(f.requests) < 2 || !strings.Contains(string(f.requests[1].Params), `"line":7,"character":3`) {
+		t.Fatalf("%s: failure=%v requests=%v", assertion, failure, f.requests)
+	}
+}
+
 func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
 	for _, assertion := range []string{"ASSERT_SLICE_EXACT_DEPTH_FRONTIER", "ASSERT_SLICE_FAILED_NULL_NOT_LEAF", "ASSERT_SLICE_UPWARD_SORTED_DEDUP_UNION", "ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP"} {
 		t.Log("ASSERTION: " + assertion)

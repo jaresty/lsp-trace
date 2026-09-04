@@ -263,17 +263,74 @@ func (c *SessionClient) OutgoingCalls(ctx context.Context, item lsp.CallHierarch
 	return calls, wasNull, err
 }
 
+type documentSymbolWire struct {
+	Name           string               `json:"name"`
+	Detail         string               `json:"detail,omitempty"`
+	Kind           int                  `json:"kind"`
+	Tags           []int                `json:"tags,omitempty"`
+	Deprecated     bool                 `json:"deprecated,omitempty"`
+	Range          lsp.Range            `json:"range"`
+	SelectionRange lsp.Range            `json:"selectionRange"`
+	Children       []documentSymbolWire `json:"children,omitempty"`
+}
+
+func (s documentSymbolWire) normalized() lsp.DocumentSymbol {
+	children := make([]lsp.DocumentSymbol, len(s.Children))
+	for i := range s.Children {
+		children[i] = s.Children[i].normalized()
+	}
+	return lsp.DocumentSymbol{Name: s.Name, Detail: s.Detail, Kind: s.Kind, Range: s.Range, SelectionRange: s.SelectionRange, Children: children}
+}
+
 func (*SessionClient) SupportsDocumentSymbols() bool { return true }
 func (c *SessionClient) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
-	var symbols []lsp.DocumentSymbol
-	wasNull, err := c.call(ctx, "textDocument/documentSymbol", params, &symbols)
+	var rawSymbols []json.RawMessage
+	wasNull, err := c.call(ctx, "textDocument/documentSymbol", params, &rawSymbols)
 	if err != nil {
 		return nil, err
 	}
 	if wasNull {
 		return nil, nil
 	}
+	symbols := make([]lsp.DocumentSymbol, 0, len(rawSymbols))
+	for _, raw := range rawSymbols {
+		var discriminator struct {
+			Location json.RawMessage `json:"location"`
+		}
+		if err := json.Unmarshal(raw, &discriminator); err != nil {
+			return nil, fmt.Errorf("malformed textDocument/documentSymbol result: %w", err)
+		}
+		if len(discriminator.Location) == 0 {
+			var symbol documentSymbolWire
+			if err := decodeStrict(raw, &symbol); err != nil {
+				return nil, fmt.Errorf("malformed textDocument/documentSymbol result: %w", err)
+			}
+			symbols = append(symbols, symbol.normalized())
+			continue
+		}
+		var symbol struct {
+			Name       string `json:"name"`
+			Kind       int    `json:"kind"`
+			Tags       []int  `json:"tags,omitempty"`
+			Deprecated bool   `json:"deprecated,omitempty"`
+			Location   struct {
+				URI   string    `json:"uri"`
+				Range lsp.Range `json:"range"`
+			} `json:"location"`
+			ContainerName string `json:"containerName,omitempty"`
+		}
+		if err := decodeStrict(raw, &symbol); err != nil {
+			return nil, fmt.Errorf("malformed textDocument/documentSymbol result: %w", err)
+		}
+		symbols = append(symbols, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range})
+	}
 	return symbols, nil
+}
+
+func decodeStrict(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(target)
 }
 
 func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {

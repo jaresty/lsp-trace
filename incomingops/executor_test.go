@@ -223,11 +223,14 @@ func TestIncomingSymbolFailuresAreExplicit(t *testing.T) {
 		{"unsupported", "ASSERT_DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNSUPPORTED", func(f *fakeRuntime) {
 			f.observed = map[string][]sessionruntime.RoundTripResult{"textDocument/documentSymbol": {sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32601, Message: "method not found"}}}}
 		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
+		{"failed", "ASSERT_DOCUMENT_SYMBOL_FAILED", "DOCUMENT_SYMBOL_FAILED", func(f *fakeRuntime) {
+			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`{"not":"an array"}`)}
+		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
 		{"absent", "ASSERT_DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_ABSENT", func(f *fakeRuntime) {
 			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`[]`)}
 		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
 		{"ambiguous", "ASSERT_DOCUMENT_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_AMBIGUOUS", func(f *fakeRuntime) {
-			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`[` + symbol + `,` + symbol + `]`)}
+			f.results["textDocument/documentSymbol"] = []json.RawMessage{json.RawMessage(`[` + symbol + `,{"name":"Container","kind":5,"range":{"start":{"line":0,"character":0},"end":{"line":2,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":9}},"children":[` + symbol + `]}]`)}
 		}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`},
 		{"mixed", "ASSERT_TARGET_MODE_EXCLUSIVE", operation.FailureInvalidInput, func(*fakeRuntime) {}, `{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target","line":1,"character":0}`},
 	}
@@ -268,6 +271,34 @@ func TestIncomingSelectorContracts(t *testing.T) {
 			t.Fatalf("%s: failure=%v requests=%v", assertion, failure, f.requests)
 		}
 	})
+	for _, tc := range []struct {
+		name, assertion, symbols, wantPosition string
+	}{
+		{
+			name:         "gopls hierarchical document symbols",
+			assertion:    "ASSERT_GOPLS_DOCUMENT_SYMBOL_HIERARCHY_SELECTION_START",
+			symbols:      `[{"name":"Manager","detail":"struct{...}","kind":23,"tags":[],"deprecated":false,"range":{"start":{"line":2,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":2,"character":5},"end":{"line":2,"character":12}},"children":[{"name":"Target","detail":"func()","kind":12,"tags":[],"deprecated":false,"range":{"start":{"line":7,"character":1},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}]}]`,
+			wantPosition: `"line":7,"character":3`,
+		},
+		{
+			name:         "flat symbol information",
+			assertion:    "ASSERT_SYMBOL_INFORMATION_LOCATION_START",
+			symbols:      `[{"name":"Target","kind":12,"tags":[],"deprecated":false,"location":{"uri":"file:///w/a.go","range":{"start":{"line":7,"character":4},"end":{"line":9,"character":1}}},"containerName":"Manager"}]`,
+			wantPosition: `"line":7,"character":4`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var specimen any
+			if err := json.Unmarshal([]byte(tc.symbols), &specimen); err != nil {
+				t.Fatalf("%s_SPECIMEN_VALID: %v", tc.assertion, err)
+			}
+			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(tc.symbols)}, "textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
+			_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
+			if failure != nil || len(f.requests) < 2 || !strings.Contains(string(f.requests[1].Params), tc.wantPosition) {
+				t.Fatalf("%s: failure=%v requests=%v", tc.assertion, failure, f.requests)
+			}
+		})
+	}
 }
 
 var _ = lspwire.RequestKey{}
