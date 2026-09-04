@@ -14,19 +14,20 @@ type OperationInputValidator struct {
 }
 
 // NewOperationInputValidator constructs an immutable manifest-backed validator
-// for the six Stage 1 offline operations and activated incoming traversal.
+// for the Stage 1 offline operations.
 func NewOperationInputValidator() (*OperationInputValidator, error) {
 	manifest, err := LoadManifest()
 	if err != nil {
 		return nil, err
 	}
 	canonical := map[operation.Name]string{
-		operation.Capabilities: "lsp_trace_v1_capabilities",
-		operation.SchemaGet:    "lsp_trace_v1_schema_get",
-		operation.Validate:     "lsp_trace_v1_validate",
-		operation.Verify:       "lsp_trace_v1_verify",
-		operation.Inspect:      "lsp_trace_v1_inspect",
-		operation.Filter:       "lsp_trace_v1_filter",
+		operation.Capabilities:   "lsp_trace_v1_capabilities",
+		operation.SchemaGet:      "lsp_trace_v1_schema_get",
+		operation.Validate:       "lsp_trace_v1_validate",
+		operation.Verify:         "lsp_trace_v1_verify",
+		operation.Inspect:        "lsp_trace_v1_inspect",
+		operation.Filter:         "lsp_trace_v1_filter",
+		operation.CustodyExecute: "lsp_trace_v1_execute",
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {

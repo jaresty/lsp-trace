@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lsp-trace/incomingops"
+	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
@@ -159,6 +160,7 @@ func newServerRuntime(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Serv
 	if err != nil {
 		return nil, nil, err
 	}
+	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutor().Execute
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {
 		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 64 * 1024, GracePeriod: 250 * time.Millisecond})

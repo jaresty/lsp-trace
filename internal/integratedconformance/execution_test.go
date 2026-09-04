@@ -13,9 +13,8 @@ import (
 	"reflect"
 	"testing"
 
+	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/operation"
-	"lsp-trace/internal/publication"
-	"lsp-trace/internal/source"
 	"lsp-trace/internal/verification"
 )
 
@@ -230,78 +229,20 @@ func runExecutionPath(t *testing.T, mode string, input executionInput) execution
 }
 
 func executeHermetic(ctx context.Context, input executionInput) executionOutput {
-	logicalInput, _ := json.Marshal(struct {
-		Source string `json:"source"`
-	}{input.Source})
-	var artifact, receipt []byte
-	root, err := publication.OpenRoot(input.Root)
-	if err != nil {
-		return executionOutput{Failure: &executionFailure{Code: publication.CodePublicationFailed, Stage: operation.StagePublication}}
-	}
-	defer root.Close()
-	fail := operation.CustodyStage(input.FailAt)
-	handlers := make(map[operation.CustodyStage]operation.CustodyStageHandler)
-	for _, stage := range []operation.CustodyStage{operation.StageDiscovery, operation.StageReceipt, operation.StageManifest, operation.StageSnapshot, operation.StageAdmission, operation.StagePublication} {
-		stage := stage
-		handlers[stage] = func(_ context.Context, _ operation.CustodyRequest, response operation.CustodyResponse) (operation.StageResult, error) {
-			if fail == stage {
-				return operation.StageResult{}, fmt.Errorf("injected %s failure", stage)
-			}
-			switch stage {
-			case operation.StageDiscovery:
-				return jsonStage(map[string]any{"locator": "hermetic/input.go", "source_digest": sourceDigest(input.Source)})
-			case operation.StageReceipt:
-				_, _, encoded, err := source.CanonicalizeReceipt(source.DiscoveredItem{ID: "source-1", Locator: "hermetic/input.go"}, source.Acquisition{Status: source.Readable, Provenance: source.Provenance{Mechanism: "hermetic", Locator: "hermetic/input.go"}}, []byte(input.Source))
-				if err != nil {
-					return operation.StageResult{}, err
-				}
-				return operation.StageResult{Artifact: encoded}, nil
-			case operation.StageManifest:
-				digest := sourceDigest(input.Source)
-				encoded, err := source.AssembleManifest([]source.ManifestReceipt{{ID: "source-1", Path: "input.go", Digest: digest}}, []source.ManifestDecision{{ReceiptID: "source-1", State: source.ManifestInclude}})
-				if err != nil {
-					return operation.StageResult{}, err
-				}
-				artifact = encoded
-				return operation.StageResult{Artifact: encoded}, nil
-			case operation.StageSnapshot:
-				return jsonStage(map[string]any{"snapshot_identity": sourceDigest(string(artifact))})
-			case operation.StageAdmission:
-				admitted := true
-				result, err := jsonStage(map[string]any{"status": "MISSING_TRUST"})
-				result.Admitted = &admitted
-				return result, err
-			case operation.StagePublication:
-				receipt, err = verification.ReceiptBytes(artifact, verification.DirectoryDurabilityChecked)
-				if err != nil {
-					return operation.StageResult{}, err
-				}
-				pub := publication.NewPublisher()
-				if result := pub.Publish(publication.Request{Root: root, Selector: "artifact.json", Bytes: artifact, ArtifactSchemaID: "lsp-trace.source-custody-manifest.v1"}); result.Err() != nil {
-					return operation.StageResult{}, result.Err()
-				}
-				if result := pub.Publish(publication.Request{Root: root, Selector: "receipt.json", Bytes: receipt, ArtifactSchemaID: "lsp-trace.publication-receipt.v1"}); result.Err() != nil {
-					return operation.StageResult{}, result.Err()
-				}
-				return jsonStage(map[string]any{"artifact": "artifact.json", "receipt": "receipt.json", "digest": sourceDigest(string(artifact)), "byte_length": len(artifact)})
-			}
-			return operation.StageResult{}, fmt.Errorf("unknown stage")
-		}
-	}
-	response, failure := (&operation.CustodyOperation{Handlers: handlers}).ExecuteCustody(ctx, operation.CustodyRequest{OperationID: "hermetic-custody", Input: logicalInput})
-	out := executionOutput{Response: response}
+	raw, _ := json.Marshal(input)
+	result, failure := executionruntime.NewProductionExecutor().Execute(ctx, operation.Request{Name: operation.CustodyExecute, RequestID: "hermetic-custody", Input: raw})
 	if failure != nil {
-		out.Failure = &executionFailure{Code: failure.Code, Stage: failure.Stage}
-		return out
+		stage := operation.StageDiscovery
+		if len(failure.Diagnostics) != 0 {
+			stage = operation.CustodyStage(failure.Diagnostics[0])
+		}
+		return executionOutput{Failure: &executionFailure{Code: failure.Code, Stage: stage}}
 	}
-	out.Artifact = filepath.Join(input.Root, "artifact.json")
-	out.Receipt = filepath.Join(input.Root, "receipt.json")
-	return out
-}
-
-func jsonStage(value any) (operation.StageResult, error) {
-	encoded, err := json.Marshal(value)
-	return operation.StageResult{Artifact: encoded}, err
+	artifact, ok := result.Value.(executionruntime.ProductionArtifact)
+	if !ok {
+		return executionOutput{Failure: &executionFailure{Code: operation.FailureInternal, Stage: operation.StageDiscovery}}
+	}
+	return executionOutput{Response: artifact.Response, Artifact: artifact.Artifact, Receipt: artifact.Receipt}
 }
 
 func normalizeExecution(t *testing.T, out executionOutput) normalizedExecution {

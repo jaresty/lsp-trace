@@ -550,7 +550,7 @@ func operationName(canonical string) operation.Name {
 	case "lsp_trace_v1_slice":
 		return operation.Name("slice")
 	case "lsp_trace_v1_execute":
-		return operation.Name("execute")
+		return operation.CustodyExecute
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")
 	case "lsp_session_v1_status":

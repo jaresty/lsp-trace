@@ -12,12 +12,13 @@ import (
 	"os/signal"
 	"syscall"
 
+	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/operation"
 )
 
 const (
 	executionSchemaVersion = "lsp-trace.execution.v1"
-	executionOperation     = operation.Name("execute")
+	executionOperation     = operation.CustodyExecute
 
 	executionExitSuccess          = 0
 	executionExitInvalidInput     = 1
@@ -50,10 +51,9 @@ func (unavailableExecutionExecutor) Execute(context.Context, operation.Request) 
 	return operation.Result{}, &operation.Failure{Code: operation.FailureNotImplemented, Err: operation.ErrNotImplemented}
 }
 
-// registeredExecutionExecutor is replaced by the concrete-operation
-// registration seam. Keeping the fallback transport-shaped avoids assigning
-// any execution semantics to the CLI.
-var registeredExecutionExecutor operation.Executor = unavailableExecutionExecutor{}
+// registeredExecutionExecutor is replaceable by focused transport tests; the
+// production default is the same concrete custody executor used by MCP.
+var registeredExecutionExecutor operation.Executor = executionruntime.NewProductionExecutor()
 
 func runExecution(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, cancel := signalContext()

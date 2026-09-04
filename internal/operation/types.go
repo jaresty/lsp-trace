@@ -19,7 +19,7 @@ const (
 	Verify         Name = "verify"
 	Inspect        Name = "inspect"
 	Filter         Name = "filter"
-	CustodyExecute Name = "custody_execute"
+	CustodyExecute Name = "execute"
 )
 
 var ErrNotImplemented = errors.New("operation not implemented")

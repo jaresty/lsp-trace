@@ -38,7 +38,7 @@ func successfulCustodyOperation(events *[]CustodyStage) *CustodyOperation {
 
 func TestCustodyOperationCanonicalRegistration(t *testing.T) {
 	const assertion = "P1_CANONICAL_CUSTODY_OPERATION_NAME"
-	if CustodyExecute != Name("custody_execute") {
+	if CustodyExecute != Name("execute") {
 		t.Fatalf("%s: got %q", assertion, CustodyExecute)
 	}
 }
