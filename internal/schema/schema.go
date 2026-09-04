@@ -17,6 +17,9 @@ const (
 	FamilyFilter                   = "filter"
 	FamilySourceManifest           = "source-manifest"
 	FamilyTrustProvisioningReceipt = "trust-provisioning-receipt"
+	FamilySourceDenominator        = "source-denominator"
+
+	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
 
 var familyVersions = map[string]map[string]string{
@@ -25,6 +28,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyFilter:                   {"v1": "lsp-trace.filter.v1"},
 	FamilySourceManifest:           {"v1": "lsp-trace.source-manifest.v1"},
 	FamilyTrustProvisioningReceipt: {"v1": "lsp-trace.trust-provisioning-receipt.v1"},
+	FamilySourceDenominator:        {"v1": SourceDenominatorVersionV1},
 }
 
 var versionFields = map[string]string{
@@ -33,6 +37,7 @@ var versionFields = map[string]string{
 	FamilyFilter:                   "filter_schema_version",
 	FamilySourceManifest:           "source_manifest_schema_version",
 	FamilyTrustProvisioningReceipt: "trust_provisioning_receipt_schema_version",
+	FamilySourceDenominator:        "denominator_schema_version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {
