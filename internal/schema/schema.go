@@ -12,21 +12,27 @@ import (
 var files embed.FS
 
 const (
-	FamilyGraph          = "graph"
-	FamilyInspect        = "inspect"
-	FamilyFilter         = "filter"
-	FamilySourceManifest = "source-manifest"
+	FamilyGraph                    = "graph"
+	FamilyInspect                  = "inspect"
+	FamilyFilter                   = "filter"
+	FamilySourceManifest           = "source-manifest"
+	FamilyTrustProvisioningReceipt = "trust-provisioning-receipt"
 )
 
 var familyVersions = map[string]map[string]string{
-	FamilyGraph:          {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3},
-	FamilyInspect:        {"v1": "lsp-trace.inspect.v1"},
-	FamilyFilter:         {"v1": "lsp-trace.filter.v1"},
-	FamilySourceManifest: {"v1": "lsp-trace.source-manifest.v1"},
+	FamilyGraph:                    {"v1": graph.SchemaVersionV1, "v2": graph.SchemaVersionV2, "v3": graph.SchemaVersionV3},
+	FamilyInspect:                  {"v1": "lsp-trace.inspect.v1"},
+	FamilyFilter:                   {"v1": "lsp-trace.filter.v1"},
+	FamilySourceManifest:           {"v1": "lsp-trace.source-manifest.v1"},
+	FamilyTrustProvisioningReceipt: {"v1": "lsp-trace.trust-provisioning-receipt.v1"},
 }
 
 var versionFields = map[string]string{
-	FamilyGraph: "schema_version", FamilyInspect: "inspection_schema_version", FamilyFilter: "filter_schema_version", FamilySourceManifest: "source_manifest_schema_version",
+	FamilyGraph:                    "schema_version",
+	FamilyInspect:                  "inspection_schema_version",
+	FamilyFilter:                   "filter_schema_version",
+	FamilySourceManifest:           "source_manifest_schema_version",
+	FamilyTrustProvisioningReceipt: "trust_provisioning_receipt_schema_version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {
