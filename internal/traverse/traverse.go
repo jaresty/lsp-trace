@@ -87,6 +87,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	}
 	seen := map[string]graph.Node{}
 	expanded := map[string]bool{}
+	edgeIndex := map[[2]string]int{}
 	queue := make([]queued, 0, len(items))
 	for _, item := range items {
 		n := node(item, newNode)
@@ -207,10 +208,15 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			for i, r := range call.FromRanges {
 				ranges[i] = rng(r)
 			}
-			before := len(result.Edges)
-			result.Edges = graph.MergeEdge(result.Edges, graph.Edge{CallerNodeID: caller.ID, CalleeNodeID: q.node.ID, CallSites: ranges})
-			if len(result.Edges) > before && caller.URI != q.node.URI {
-				result.CapabilityQuality.CrossFileEdges++
+			key := [2]string{caller.ID, q.node.ID}
+			if index, ok := edgeIndex[key]; ok {
+				result.Edges[index].CallSites = append(result.Edges[index].CallSites, ranges...)
+			} else {
+				edgeIndex[key] = len(result.Edges)
+				result.Edges = append(result.Edges, graph.Edge{CallerNodeID: caller.ID, CalleeNodeID: q.node.ID, CallSites: ranges})
+				if caller.URI != q.node.URI {
+					result.CapabilityQuality.CrossFileEdges++
+				}
 			}
 		}
 	}

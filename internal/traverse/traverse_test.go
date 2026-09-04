@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -148,6 +149,66 @@ func TestIncomingShuffledResponsesProduceIdenticalCanonicalJSON(t *testing.T) {
 	reverse := run([]lsp.CallHierarchyIncomingCall{{From: b}, {From: a}})
 	if !bytes.Equal(forward, reverse) {
 		t.Fatalf("ASSERT_SHUFFLED_RESPONSES_STABLE: %s != %s", forward, reverse)
+	}
+}
+
+func TestIncomingExactGraphParityAndDeterminism(t *testing.T) {
+	t.Log("GUARD_PROCEDURE: TestIncomingExactGraphParityAndDeterminism")
+	t.Log("ASSERT_EXACT_GRAPH_ORDERING_PARITY")
+	t.Log("ASSERT_EXACT_GRAPH_ACCOUNTING_PARITY")
+	t.Log("ASSERT_EXACT_TERMINAL_PARITY")
+	t.Log("ASSERT_EXACT_CALLSITE_PARITY")
+	leaf, a, b, root := item("leaf", 8), item("a", 5), item("b", 6), item("root", 1)
+	callSiteA := lsp.Range{Start: lsp.Position{Line: 5, Character: 1}, End: lsp.Position{Line: 5, Character: 3}}
+	callSiteB := lsp.Range{Start: lsp.Position{Line: 6, Character: 1}, End: lsp.Position{Line: 6, Character: 3}}
+
+	run := func(reverse bool) graph.Result {
+		incoming := []lsp.CallHierarchyIncomingCall{{From: b, FromRanges: []lsp.Range{callSiteB}}, {From: a, FromRanges: []lsp.Range{callSiteA}}}
+		if reverse {
+			incoming[0], incoming[1] = incoming[1], incoming[0]
+		}
+		f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+			"leaf": incoming,
+			"a":    {{From: root, FromRanges: []lsp.Range{root.Range}}},
+			"b":    {{From: root, FromRanges: []lsp.Range{root.Range}}},
+			"root": {},
+		}}
+		return Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	}
+
+	forward, reverse := run(false), run(true)
+	forwardJSON, err := json.Marshal(forward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reverseJSON, err := json.Marshal(reverse)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(forwardJSON, reverseJSON) {
+		t.Fatalf("ASSERT_EXACT_GRAPH_ORDERING_PARITY: %s != %s", forwardJSON, reverseJSON)
+	}
+	if got := []int{len(forward.Nodes), len(forward.Edges), len(forward.Frontier), len(forward.Terminals)}; !reflect.DeepEqual(got, []int{4, 4, 0, 1}) {
+		t.Fatalf("ASSERT_EXACT_GRAPH_ACCOUNTING_PARITY: nodes/edges/frontier/terminals=%v", got)
+	}
+	if forward.Terminals[0].NodeID != graph.NewNode(graph.Item{Name: root.Name, Kind: root.Kind, URI: root.URI, Range: rng(root.Range), SelectionRange: rng(root.SelectionRange)}).ID || forward.Terminals[0].Reason != graph.ServerReportedNoIncoming {
+		t.Fatalf("ASSERT_EXACT_TERMINAL_PARITY: %#v", forward.Terminals)
+	}
+	wantSites := map[string][]graph.Range{
+		"a":    {rng(callSiteA)},
+		"b":    {rng(callSiteB)},
+		"root": {rng(root.Range), rng(root.Range)},
+	}
+	gotSites := map[string][]graph.Range{}
+	for _, edge := range forward.Edges {
+		for _, caller := range []lsp.CallHierarchyItem{a, b, root} {
+			if edge.CallerNodeID == node(caller, graph.NewNode).ID {
+				gotSites[caller.Name] = append(gotSites[caller.Name], edge.CallSites...)
+			}
+		}
+	}
+	if !reflect.DeepEqual(gotSites, wantSites) {
+		t.Fatalf("ASSERT_EXACT_CALLSITE_PARITY: got=%#v want=%#v", gotSites, wantSites)
 	}
 }
 
