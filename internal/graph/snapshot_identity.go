@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 )
 
-const snapshotIdentityDomain = "lsp-trace:source-snapshot:v1"
+const (
+	snapshotIdentityDomain        = "lsp-trace:source-snapshot:v1"
+	snapshotBindingIdentityDomain = "lsp-trace:source-snapshot-binding:v1"
+)
 
 // SnapshotIdentity returns the domain-separated identity of a canonical source
 // manifest and its canonical admitted artifact receipts. Length framing makes
@@ -18,6 +21,19 @@ func SnapshotIdentity(canonicalManifest, canonicalArtifactReceipts []byte) strin
 	_, _ = h.Write([]byte{0})
 	writeSnapshotIdentityComponent(h, canonicalManifest)
 	writeSnapshotIdentityComponent(h, canonicalArtifactReceipts)
+	return "sha256:" + hex.EncodeToString(h.Sum(nil))
+}
+
+// SnapshotBindingIdentity binds an existing snapshot identity to its validated
+// canonical source manifest and canonical member commitments. All inputs must
+// be finalized before this nonrecursive identity is computed.
+func SnapshotBindingIdentity(snapshotIdentity string, canonicalManifest, canonicalMemberCommitments []byte) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte(snapshotBindingIdentityDomain))
+	_, _ = h.Write([]byte{0})
+	writeSnapshotIdentityComponent(h, []byte(snapshotIdentity))
+	writeSnapshotIdentityComponent(h, canonicalManifest)
+	writeSnapshotIdentityComponent(h, canonicalMemberCommitments)
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
 
