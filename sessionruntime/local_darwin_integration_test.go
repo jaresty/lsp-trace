@@ -12,14 +12,24 @@ import (
 	"lsp-trace/internal/managedprocess"
 )
 
+const localDarwinReadinessBudget = 5 * time.Second
+
+func TestLocalDarwinReadinessBudget(t *testing.T) {
+	const want = 5 * time.Second
+	if localDarwinReadinessBudget != want {
+		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_BUDGET: got=%s want=%s", localDarwinReadinessBudget, want)
+	}
+}
+
 func TestExplicitLocalDarwinSupervisorRunsFakeLSP(t *testing.T) {
 	supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
 	}
 	manager, err := New(Config{
-		Limits:  Limits{MaxSessions: 1, MaxRequests: 2, MaxChildren: 1, MaxCancels: 2, MaxTombstones: 2, MaxObservations: 16},
-		Starter: ManagedStarter{Manager: supervisor},
+		Limits:           Limits{MaxSessions: 1, MaxRequests: 2, MaxChildren: 1, MaxCancels: 2, MaxTombstones: 2, MaxObservations: 16},
+		Starter:          ManagedStarter{Manager: supervisor},
+		ReadinessTimeout: localDarwinReadinessBudget,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -41,7 +51,7 @@ func TestExplicitLocalDarwinSupervisorRunsFakeLSP(t *testing.T) {
 	if started.Failure != "" || started.Start.Evidence != managedprocess.LocalDarwinSupervisionOnly {
 		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_FAKE_LSP: %+v", started)
 	}
-	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Time{})
 	if pending.State != ReadinessPending {
 		t.Fatalf("ASSERT_SESSIONRUNTIME_LOCAL_DARWIN_READINESS_PENDING: %+v", pending)
 	}

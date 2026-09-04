@@ -616,7 +616,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				continue
 			}
 			path := strings.TrimSpace(line[2:])
-			owned := path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/roundtrip_test.go" ||
+			owned := path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
 				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" ||
 				path == "cmd/fake-lsp/main.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" ||
 				path == "README.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" ||
