@@ -16,8 +16,9 @@ import (
 )
 
 type bootstrapConfig struct {
-	Version   int                      `json:"version"`
-	Processes []bootstrapProcessConfig `json:"processes"`
+	Version   int                            `json:"version"`
+	Processes []bootstrapProcessConfig       `json:"processes,omitempty"`
+	Providers []bootstrapProviderDeclaration `json:"providers,omitempty"`
 }
 
 type bootstrapProcessConfig struct {
@@ -67,13 +68,16 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config must contain one JSON value")
 	}
-	if config.Version != 1 || len(config.Processes) == 0 {
-		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process")
+	if config.Version != 1 || len(config.Processes)+len(config.Providers) == 0 {
+		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process or provider")
 	}
 	for i, process := range config.Processes {
 		if !filepath.IsAbs(process.Execution.Path) || !filepath.IsAbs(process.Execution.Directory) {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d execution path and directory must be absolute", i)
 		}
+	}
+	if err := validateBootstrapProviders(config); err != nil {
+		return bootstrapConfig{}, err
 	}
 	return config, nil
 }
