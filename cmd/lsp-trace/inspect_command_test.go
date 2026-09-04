@@ -318,7 +318,9 @@ func TestInspectRejectsUnknownSeedAndTamperedSelector(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(selected, append(data, ' '), 0600); err != nil {
+	tampered := append([]byte(nil), data...)
+	tampered[0] ^= 1
+	if err := os.WriteFile(selected, tampered, 0600); err != nil {
 		t.Fatal(err)
 	}
 	stdout, stderr, code = captureRun(t, []string{"inspect", selector, "--seed", "chosen"})

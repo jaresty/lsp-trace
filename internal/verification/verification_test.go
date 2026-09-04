@@ -37,6 +37,7 @@ func TestSelectorReceiptAndVerificationSemantics(t *testing.T) {
 		for _, field := range []string{
 			`"receipt_version":"lsp-trace.byte-custody-receipt.v1"`,
 			`"digest_algorithm":"SHA-256"`,
+			`"artifact_byte_length":21`,
 			`"digest_scope":"EXACT_SERIALIZED_OUTPUT_BYTES"`,
 			`"integrity_claim":"INTEGRITY_AND_CUSTODY_ONLY"`,
 			`"authenticity_claim":false`,
@@ -66,13 +67,15 @@ func TestVerifyReceiptRejectsMalformedMetadataAndDigest(t *testing.T) {
 		{"trailing JSON", append(append([]byte(nil), receipt...), []byte(`{"second":true}`)...), "malformed: trailing JSON content"},
 		{"unknown field", []byte(`{"receipt_version":"lsp-trace.byte-custody-receipt.v1","exact_serialized_bytes_digest":"sha256:00","digest_algorithm":"SHA-256","digest_scope":"EXACT_SERIALIZED_OUTPUT_BYTES","integrity_claim":"INTEGRITY_AND_CUSTODY_ONLY","authenticity_claim":false,"directory_durability":"CHECKED","extra":true}`), "malformed:"},
 		{"metadata authority", []byte(strings.Replace(string(receipt), "INTEGRITY_AND_CUSTODY_ONLY", "AUTHENTIC", 1)), "receipt metadata mismatch"},
+		{"byte length", []byte(strings.Replace(string(receipt), `"artifact_byte_length":21`, `"artifact_byte_length":20`, 1)), "exact-byte length mismatch"},
 		{"exact bytes", receipt, "exact-byte integrity mismatch"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			inputArtifact := artifact
 			if tc.name == "exact bytes" {
-				inputArtifact = []byte("tampered\n")
+				inputArtifact = append([]byte(nil), artifact...)
+				inputArtifact[0] ^= 1
 			}
 			err := VerifyReceipt(inputArtifact, tc.data)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {

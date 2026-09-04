@@ -77,7 +77,8 @@ func TestVerifyHandlerPreservesLoaderAndCoreFailures(t *testing.T) {
 	}
 
 	material := validCustodyMaterial(t)
-	material.Artifact = append(append([]byte(nil), material.Artifact...), ' ')
+	material.Artifact = append([]byte(nil), material.Artifact...)
+	material.Artifact[0] ^= 1
 	_, failure = NewVerifyHandler(custodyLoaderFunc(func(context.Context, json.RawMessage) (CustodyMaterial, *Failure) {
 		return material, nil
 	}))(context.Background(), verifyRequest(`"selector.json"`))

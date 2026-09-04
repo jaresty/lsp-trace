@@ -1,11 +1,13 @@
 package publication
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -285,6 +287,36 @@ func selectorPathParts(goos, selector string) ([]string, error) {
 	return strings.Split(selector, "/"), nil
 }
 
+func writeAll(w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if err != nil {
+			return err
+		}
+		if n <= 0 || n > len(data) {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
+	return nil
+}
+
+func readPublished(parent *os.Root, name string) ([]byte, error) {
+	file, err := parent.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("published target is not a regular file")
+	}
+	return io.ReadAll(file)
+}
+
 func createTemporarySibling(parent *os.Root) (*os.File, string, error) {
 	for attempt := 0; attempt < 32; attempt++ {
 		var random [16]byte
@@ -328,7 +360,7 @@ func (p *Publisher) Publish(req Request) Result {
 	}
 	cleanup := false
 	defer func() { _ = target.parent.Remove(tmpName) }()
-	if _, err = tmp.Write(req.Bytes); err == nil {
+	if err = writeAll(tmp, req.Bytes); err == nil {
 		err = tmp.Sync()
 	}
 	closeErr := tmp.Close()
@@ -352,9 +384,16 @@ func (p *Publisher) Publish(req Request) Result {
 	}
 	cleanup = target.parent.Remove(tmpName) == nil
 	_ = cleanup // post-install cleanup cannot change the committed outcome
-	sum := sha256.Sum256(req.Bytes)
+	persisted, err := readPublished(target.parent, target.name)
+	if err != nil {
+		return failure("reread", CodePublicationFailed, cleanup, true, err)
+	}
+	if !bytes.Equal(persisted, req.Bytes) {
+		return failure("reread", CodePublicationFailed, cleanup, true, errors.New("published exact bytes mismatch"))
+	}
+	sum := sha256.Sum256(persisted)
 	return Result{Receipt: &Receipt{
-		Digest: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(req.Bytes)),
+		Digest: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(persisted)),
 		ArtifactSchemaID: req.ArtifactSchemaID, PublicationMechanism: PublicationMechanism,
 	}}
 }
