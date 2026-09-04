@@ -1,0 +1,13 @@
+{
+  "name": "@lsp-trace/ember-glint-provider",
+  "version": "0.1.0",
+  "description": "External Ember/Glint provider package boundary for lsp-trace",
+  "license": "MIT",
+  "private": false,
+  "files": [
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

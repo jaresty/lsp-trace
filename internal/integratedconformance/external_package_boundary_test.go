@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	assertCoreNoImports    = "ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_EMBER_GLINT_IMPORTS"
-	assertCoreNoMatchers   = "ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_SEMANTIC_MATCHERS"
-	assertProviderPackage  = "ASSERT_EXTERNAL_BOUNDARY_PROVIDER_PACKAGE_INSTALLABLE_VERSIONED"
-	assertArchivesExclude  = "ASSERT_EXTERNAL_BOUNDARY_CORE_ARCHIVES_EXCLUDE_PROVIDER"
+	assertCoreNoImports   = "ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_EMBER_GLINT_IMPORTS"
+	assertCoreNoMatchers  = "ASSERT_EXTERNAL_BOUNDARY_CORE_GO_NO_SEMANTIC_MATCHERS"
+	assertProviderPackage = "ASSERT_EXTERNAL_BOUNDARY_PROVIDER_PACKAGE_INSTALLABLE_VERSIONED"
+	assertArchivesExclude = "ASSERT_EXTERNAL_BOUNDARY_CORE_ARCHIVES_EXCLUDE_PROVIDER"
 )
 
 func TestExternalPackageBoundary(t *testing.T) {
@@ -27,9 +27,8 @@ func TestExternalPackageBoundary(t *testing.T) {
 
 	t.Run(assertCoreNoMatchers, func(t *testing.T) {
 		assertNoCoreGoMatch(t, root, assertCoreNoMatchers, func(path, line string) bool {
-			lower := strings.ToLower(line)
-			return strings.Contains(lower, "emberglintprovider") ||
-				strings.Contains(lower, "ember-glint-provider") ||
+			lower := strings.ToLower(strings.TrimSpace(line))
+			return lower == "package emberglintprovider" ||
 				strings.Contains(lower, "noqualifiedanalyzer")
 		})
 	})

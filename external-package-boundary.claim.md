@@ -45,3 +45,27 @@ This frame does not implement an analyzer, protocol command, generic provider co
 4. Establish the minimal external package metadata/documentation boundary and preserve only non-overlapping reusable prototype source.
 5. Run the identical guards green, focused/full tests, release configuration checks, and diff hygiene.
 6. Record evidence, commit all changes, and leave the worktree clean.
+
+## Red evidence
+
+`go test ./internal/integratedconformance -run TestExternalPackageBoundary -count=1 -v` reported `Go test: 0 passed, 5 failed in 1 packages`. The output independently named all four required assertion identities; the parent test supplied the fifth failure. The baseline contained a core import of `lsp-trace/internal/emberglintprovider`, framework implementation identities, no external package metadata, and an Ember/Glint GoReleaser target.
+
+A minimization perturbation temporarily removed the provider README. The package-boundary assertion failed and the README was restored, proving the metadata-only package cannot be reduced below its documented boundary while satisfying the guard.
+
+## Implementation
+
+- Removed the core Go command at `cmd/ember-glint-provider/` and implementation package at `internal/emberglintprovider/`.
+- Removed the Ember/Glint provider build from `.goreleaser.yaml`; only the two core binaries remain.
+- Removed `internal/b05lifecycle/`, whose Go tests and fixtures required and qualified the framework-specific production provider from core ownership.
+- Added independently versioned npm metadata and installation documentation under `providers/ember-glint/`.
+- Left sibling-owned analyzer, template, custody, protocol, and qualification prototypes in their existing ownership locations rather than duplicating them.
+- Added structural guards for core import absence, core implementation matcher absence, package metadata, and core archive exclusion.
+- Added no analyzer, protocol command, generic conformance, inventory, readiness, or production qualification implementation.
+
+## Verification evidence
+
+- Boundary plus ownership focus: `go test ./internal/integratedconformance -run 'TestExternalPackageBoundary|TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY' -count=1 -v` — `Go test: 7 passed in 1 packages`.
+- Full repository after one isolated transient managed-process retry: `go test ./... -count=1` — `Go test: 3236 passed in 40 packages`.
+- External package payload: `npm pack --dry-run` — `@lsp-trace/ember-glint-provider@0.1.0`, two files (`README.md`, `package.json`), no implementation or provider assets.
+- `git diff --check` — pass.
+- `goreleaser check` was unavailable because the executable is not installed; the committed structural archive guard validates the relevant configuration boundary.
