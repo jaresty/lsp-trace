@@ -14,7 +14,7 @@ type OperationInputValidator struct {
 }
 
 // NewOperationInputValidator constructs an immutable manifest-backed validator
-// for the six Stage 1 offline operations and activated incoming traversal.
+// for exactly the six Stage 1 offline operations.
 func NewOperationInputValidator() (*OperationInputValidator, error) {
 	manifest, err := LoadManifest()
 	if err != nil {

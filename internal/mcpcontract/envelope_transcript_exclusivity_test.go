@@ -130,14 +130,14 @@ func TestEnvelopeTranscriptExclusivityConformance(t *testing.T) {
 		if tool.Advertised {
 			advertised++
 		}
-		if tool.Name == "lsp_trace_v1_slice" {
+		if tool.Name == "lsp_trace_v1_incoming" || tool.Name == "lsp_trace_v1_slice" {
 			if tool.Advertised || tool.Availability != "NOT_IMPLEMENTED" {
 				t.Fatalf("%s: Stage 3 tool changed: %+v", assertStageBoundaries, tool)
 			}
 		}
 	}
-	if advertised != 7 {
-		t.Fatalf("%s: Stage 1 advertised=%d want 7", assertStageBoundaries, advertised)
+	if advertised != 6 {
+		t.Fatalf("%s: Stage 1 advertised=%d want 6", assertStageBoundaries, advertised)
 	}
 }
 

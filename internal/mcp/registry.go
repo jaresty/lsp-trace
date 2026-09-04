@@ -31,7 +31,6 @@ type ExecutorFamily string
 const (
 	OfflineExecutorFamily   ExecutorFamily = "offline"
 	LifecycleExecutorFamily ExecutorFamily = "lifecycle"
-	IncomingExecutorFamily  ExecutorFamily = "incoming"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -82,7 +81,6 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_inspect": "Inspect retained evidence", "lsp_trace_v1_filter": "Filter retained evidence",
 		"lsp_trace_v1_validate": "Validate retained evidence", "lsp_trace_v1_verify": "Verify retained evidence",
 		"lsp_trace_v1_schema_get": "Retrieve an evidence schema", "lsp_trace_v1_capabilities": "Discover LSP Trace MCP capabilities",
-		"lsp_trace_v1_incoming": "Trace bounded incoming calls through a managed local language-server session",
 	}
 	tools := make([]Tool, 0, len(manifest.Tools))
 	for _, contract := range manifest.Tools {
@@ -101,8 +99,6 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		executorFamily := OfflineExecutorFamily
 		if strings.HasPrefix(contract.Name, "lsp_session_v1_") {
 			executorFamily = LifecycleExecutorFamily
-		} else if contract.Name == "lsp_trace_v1_incoming" {
-			executorFamily = IncomingExecutorFamily
 		}
 		tools = append(tools, Tool{
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
@@ -113,19 +109,13 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	for i := range tools {
 		base := cloneTool(tools[i])
-		// Always-local lifecycle and incoming traversal are enabled by default.
-		// Slice remains reserved and unadvertised.
+		// Stage 2 is an always-local development contract. Lifecycle tools are
+		// enabled by default; the two live traversal tools remain reserved.
 		if tools[i].ExecutorFamily == LifecycleExecutorFamily {
 			tools[i].Availability = Enabled
 			tools[i].Description = lifecycleDescription(tools[i].Name)
 			tools[i].InputSchema = lifecycleInputSchema(tools[i].Name)
 			tools[i].EnvelopeSchemaIDs = []string{resultEnvelopeSchemaID, domainEnvelopeSchemaID}
-		}
-		if tools[i].ExecutorFamily == IncomingExecutorFamily {
-			tools[i].Availability = Enabled
-			tools[i].InputSchema = incomingInputSchema()
-			tools[i].EnvelopeSchemaIDs = []string{artifactEnvelopeSchemaID, domainEnvelopeSchemaID}
-			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json"}
 		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)
@@ -182,25 +172,6 @@ func lifecycleDescription(name string) string {
 		return "Restart a local language-server session generation"
 	default:
 		return ""
-	}
-}
-
-func incomingInputSchema() map[string]any {
-	return map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"type":    "object", "additionalProperties": false,
-		"properties": map[string]any{
-			"session_id":         map[string]any{"type": "string", "minLength": 1},
-			"generation":         map[string]any{"type": "integer", "minimum": 1},
-			"uri":                map[string]any{"type": "string", "minLength": 1, "format": "uri"},
-			"line":               map[string]any{"type": "integer", "minimum": 0},
-			"character":          map[string]any{"type": "integer", "minimum": 0},
-			"max_depth":          map[string]any{"type": "integer", "minimum": 1, "maximum": 64},
-			"max_nodes":          map[string]any{"type": "integer", "minimum": 1, "maximum": 10000},
-			"timeout_ms":         map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
-			"request_timeout_ms": map[string]any{"type": "integer", "minimum": 1, "maximum": 60000},
-		},
-		"required": []any{"session_id", "generation", "uri", "line", "character", "max_depth", "max_nodes", "timeout_ms", "request_timeout_ms"},
 	}
 }
 
