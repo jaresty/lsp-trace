@@ -15,6 +15,8 @@ const (
 	publicationErrorEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-publication-error.v1.schema.json"
 	inlineByteLimit                  = 1048576
 	graphV4ArtifactSchemaID          = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v4.schema.json"
+	incomingCompositionSchemaID      = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.incoming-composition.v1.schema.json"
+	sliceCompositionSchemaID         = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.slice-composition.v1.schema.json"
 )
 
 // Availability is the immutable process-lifetime availability of a tool.
@@ -133,11 +135,12 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			tools[i].Availability = Enabled
 			tools[i].InputSchema = incomingInputSchema()
 			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
-			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json", graphV4ArtifactSchemaID}
+			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json", graphV4ArtifactSchemaID, incomingCompositionSchemaID}
 		}
 		if tools[i].ExecutorFamily == SliceExecutorFamily {
 			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, sliceCompositionSchemaID)
 		}
 		if tools[i].ExecutorFamily == IncomingExecutorFamily || tools[i].ExecutorFamily == SliceExecutorFamily {
 			addNormalizedProviderInputProperties(tools[i].InputSchema)

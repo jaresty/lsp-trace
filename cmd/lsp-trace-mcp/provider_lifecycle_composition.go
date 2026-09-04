@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"lsp-trace/internal/provider"
-	"lsp-trace/sessionruntime"
 )
 
 type providerLifecycleFactory interface {
@@ -23,27 +22,26 @@ func (productionProviderLifecycleFactory) NewCollector(runtime provider.Executor
 }
 
 func composeMCPProviderLifecycle(
-	manager *sessionruntime.Manager,
+	selected *hostSelectorRuntime,
 	registry *provider.Registry,
 	admitter provider.AdmissionResolver,
 	adapter provider.SemanticAdapter,
 	composeExecutors func(*hostSelectorRuntime),
 ) (*hostSelectorRuntime, error) {
-	return composeMCPProviderLifecycleWith(manager, registry, admitter, adapter, productionProviderLifecycleFactory{}, composeExecutors)
+	return composeMCPProviderLifecycleWith(selected, registry, admitter, adapter, productionProviderLifecycleFactory{}, composeExecutors)
 }
 
 func composeMCPProviderLifecycleWith(
-	manager *sessionruntime.Manager,
+	selected *hostSelectorRuntime,
 	registry *provider.Registry,
 	admitter provider.AdmissionResolver,
 	adapter provider.SemanticAdapter,
 	factory providerLifecycleFactory,
 	composeExecutors func(*hostSelectorRuntime),
 ) (*hostSelectorRuntime, error) {
-	if registry == nil || admitter == nil || adapter == nil || factory == nil || composeExecutors == nil {
-		return nil, errors.New("provider lifecycle composition requires registry, admission resolver, semantic adapter, factory, and executor composer")
+	if selected == nil || registry == nil || admitter == nil || adapter == nil || factory == nil || composeExecutors == nil {
+		return nil, errors.New("provider lifecycle composition requires host selector runtime, registry, admission resolver, semantic adapter, factory, and executor composer")
 	}
-	selected := newHostSelectorRuntime(manager, nil)
 	providerRuntime := factory.NewRuntime(registry)
 	collector, err := factory.NewCollector(providerRuntime, admitter, adapter)
 	if err != nil {

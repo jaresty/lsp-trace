@@ -59,7 +59,7 @@ func composeLifecycleFixture(t *testing.T) (*hostSelectorRuntime, *compositionFa
 	factory := &compositionFactory{collector: collector}
 	attachedBeforeExecutors := false
 	selected, err := composeMCPProviderLifecycleWith(
-		nil,
+		newHostSelectorRuntime(nil, nil),
 		provider.NewRegistry(),
 		compositionAdmitter{},
 		compositionAdapter{},
@@ -75,7 +75,7 @@ func composeLifecycleFixture(t *testing.T) (*hostSelectorRuntime, *compositionFa
 func TestMCPProviderLifecycleComposition(t *testing.T) {
 	t.Run("production wrapper", func(t *testing.T) {
 		attachedBeforeExecutors := false
-		selected, err := composeMCPProviderLifecycle(nil, provider.NewRegistry(), compositionAdmitter{}, compositionAdapter{}, func(runtime *hostSelectorRuntime) {
+		selected, err := composeMCPProviderLifecycle(newHostSelectorRuntime(nil, nil), provider.NewRegistry(), compositionAdmitter{}, compositionAdapter{}, func(runtime *hostSelectorRuntime) {
 			attachedBeforeExecutors = runtime.relationCollector != nil
 		})
 		if err != nil || selected == nil || selected.relationCollector == nil || !attachedBeforeExecutors {

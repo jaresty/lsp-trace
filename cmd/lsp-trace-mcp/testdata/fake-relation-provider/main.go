@@ -36,13 +36,13 @@ func main() {
 	case "oversized":
 		_, _ = io.WriteString(os.Stdout, "Content-Length: 1048576\r\n\r\n{}")
 	case "no-item":
-		writeObservationEnvelope(nil, "UNKNOWN")
+		writeObservationEnvelope(body, nil, "UNKNOWN")
 	default:
-		var request any
+		var request map[string]any
 		if json.Unmarshal(body, &request) != nil {
 			os.Exit(2)
 		}
-		writeObservationEnvelope([]map[string]any{{
+		writeObservationEnvelope(body, []map[string]any{{
 			"kind": "PASSES_CALLBACK",
 			"from": map[string]any{"node_id": "fixture:caller", "role": "CALLABLE_REFERENCE"},
 			"to":   map[string]any{"node_id": "fixture:callback", "role": "CALLBACK_PARAMETER"},
@@ -75,23 +75,58 @@ func readFrame(r io.Reader) ([]byte, error) {
 	return body, err
 }
 
-func writeObservationEnvelope(observations []map[string]any, coverageStatus string) {
+func writeObservationEnvelope(requestBody []byte, observations []map[string]any, coverageStatus string) {
 	if observations == nil {
 		observations = []map[string]any{}
 	}
+	providerName, providerVersion := "fake-relation-provider", "1.0.0"
+	adapterName, adapterVersion := "fake-relation-observations", "1.0.0"
+	requestID, originalURI := "", "file:///fixture/main.go"
+	revision := map[string]any{"kind": "git", "value": strings.Repeat("b", 40), "blob": strings.Repeat("c", 40), "custody": "PROVIDER_PROVED"}
+	var request struct {
+		ProviderID string `json:"provider_id"`
+		AdapterID  string `json:"adapter_id"`
+		Session    struct {
+			SessionID  string `json:"session_id"`
+			Generation uint64 `json:"generation"`
+		} `json:"session"`
+		Seed struct {
+			URI string `json:"uri"`
+		} `json:"seed"`
+		Documents struct {
+			OriginalURI       string         `json:"original_uri"`
+			WorkspaceRevision map[string]any `json:"workspace_revision"`
+		} `json:"document_custody"`
+	}
+	if json.Unmarshal(requestBody, &request) == nil && request.ProviderID != "" {
+		providerName, providerVersion = splitIdentity(request.ProviderID)
+		adapterName, adapterVersion = splitIdentity(request.AdapterID)
+		originalURI = request.Documents.OriginalURI
+		requestID = fmt.Sprintf("%s:%d:%s", request.Session.SessionID, request.Session.Generation, request.Seed.URI)
+		if len(request.Documents.WorkspaceRevision) != 0 {
+			revision = request.Documents.WorkspaceRevision
+			if _, ok := revision["blob"]; !ok {
+				revision["blob"] = strings.Repeat("c", 40)
+			}
+			if _, ok := revision["custody"]; !ok {
+				revision["custody"] = "PROVIDER_PROVED"
+			}
+		}
+	}
 	envelope := map[string]any{
-		"provider":  map[string]string{"name": "fake-relation-provider", "version": "1.0.0"},
-		"protocol":  map[string]string{"name": "lsp-trace.provider-observations", "version": "1"},
-		"adapter":   map[string]string{"name": "fake-relation-observations", "version": "1.0.0"},
-		"authority": "PROVIDER_REPORTED",
+		"provider":   map[string]string{"name": providerName, "version": providerVersion},
+		"protocol":   map[string]string{"name": "lsp-trace.provider-observations", "version": "1"},
+		"adapter":    map[string]string{"name": adapterName, "version": adapterVersion},
+		"request_id": requestID,
+		"authority":  "PROVIDER_REPORTED",
 		"coverage": map[string]any{
 			"Status": coverageStatus, "Denominator": []string{"fixture-original"},
 			"Covered": []string{"fixture-original"}, "CoveredCount": 1,
 		},
 		"documents": []map[string]any{{
-			"document_id": "fixture-original", "original_uri": "file:///fixture/main.go",
+			"document_id": "fixture-original", "original_uri": originalURI,
 			"content_sha256": strings.Repeat("a", 64),
-			"revision":       map[string]any{"kind": "git", "value": strings.Repeat("b", 40), "blob": strings.Repeat("c", 40), "custody": "PROVIDER_PROVED"},
+			"revision":       revision,
 			"coordinates":    "ORIGINAL",
 		}},
 		"observations": observations,
@@ -101,6 +136,14 @@ func writeObservationEnvelope(observations []map[string]any, coverageStatus stri
 		os.Exit(2)
 	}
 	writeFrame(body)
+}
+
+func splitIdentity(identity string) (string, string) {
+	name, version, ok := strings.Cut(identity, "@")
+	if !ok {
+		return identity, ""
+	}
+	return name, version
 }
 
 func writeFrame(body []byte) {

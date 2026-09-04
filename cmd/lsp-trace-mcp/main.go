@@ -14,7 +14,9 @@ import (
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
+	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/provider"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/session"
 	"lsp-trace/lifecycleops"
@@ -65,7 +67,33 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, err)
 			return 1
 		}
-		composeHostSelectorRuntime(server, manager, bootstrapSessions)
+		selected := newHostSelectorRuntime(manager, bootstrapSessions)
+		if len(config.Providers) == 0 {
+			composeHostSelectorExecutors(server, selected)
+		} else {
+			provisioned, err := config.provisionProviders()
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			adapterIdentity := observationadapter.Identity{Name: "lsp-trace-observation-adapter", Version: "1"}
+			admitter, err := provider.NewAdmissionResolver(provisioned, adapterIdentity.Name+"@"+adapterIdentity.Version)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			adapter, err := provider.NewObservationSemanticAdapter(provisioned, adapterIdentity)
+			if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+			if _, err := composeMCPProviderLifecycle(selected, provisioned.Registry, admitter, adapter, func(runtime *hostSelectorRuntime) {
+				composeHostSelectorExecutors(server, runtime)
+			}); err != nil {
+				fmt.Fprintln(stderr, err)
+				return 1
+			}
+		}
 	}
 	serveErr := server.Serve(stdin, stdout)
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -100,10 +128,14 @@ func newHostSelectorRuntime(manager *sessionruntime.Manager, sessions []bootstra
 
 func composeHostSelectorRuntime(server *mcp.Server, manager *sessionruntime.Manager, sessions []bootstrapSession) *hostSelectorRuntime {
 	selected := newHostSelectorRuntime(manager, sessions)
+	composeHostSelectorExecutors(server, selected)
+	return selected
+}
+
+func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRuntime) {
 	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.New(selected))
 	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
 	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
-	return selected
 }
 
 func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {

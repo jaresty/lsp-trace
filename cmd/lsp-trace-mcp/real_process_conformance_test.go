@@ -153,10 +153,11 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	baseConfig := map[string]any{"version": 1, "processes": []any{map[string]any{"alias": "fixture", "profile": map[string]any{"trust_domain": "real-provider-conformance", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"}, "execution": map[string]any{"path": fakeLSP, "directory": workspace}}}}
 	config := cloneMap(baseConfig)
 	config["providers"] = []any{map[string]any{
-		"identity": "fake@1", "version": "1.0.0",
-		"protocol":   map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
-		"executable": fakeProvider, "directory": workspace,
-		"environment":  []string{"LSP_TRACE_PROVIDER_MODE=success", "LSP_TRACE_PROVIDER_START_MARKER=" + providerStartMarker},
+		"schema_version": "lsp-trace.bootstrap-provider.v1",
+		"identity":       "fake@1.0.0", "version": "1.0.0",
+		"protocol": map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
+		"execution": map[string]any{"path": fakeProvider, "directory": workspace,
+			"environment": []string{"LSP_TRACE_PROVIDER_MODE=success", "LSP_TRACE_PROVIDER_START_MARKER=" + providerStartMarker}},
 		"capabilities": map[string]any{"relations": []string{"PASSES_CALLBACK"}, "languages": []string{"go"}, "frameworks": []string{"fixture"}},
 		"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": 1000, "termination_grace_ms": 50},
 	}}
@@ -167,7 +168,7 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	t.Run("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
 		request := cloneMap(base)
 		request["relations"] = []string{"PASSES_CALLBACK"}
-		request["providers"] = []string{"fake@1"}
+		request["providers"] = []string{"fake@1.0.0"}
 		responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(1, "lsp_trace_v1_incoming", request)})
 		if err != nil {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
@@ -180,11 +181,12 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	})
 	t.Run("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
 		request := cloneMap(base)
+		delete(request, "max_depth")
 		request["start_mode"] = "at"
 		request["up_depth"] = 2
 		request["down_depth"] = 2
 		request["relations"] = []string{"PASSES_CALLBACK"}
-		request["providers"] = []string{"fake@1"}
+		request["providers"] = []string{"fake@1.0.0"}
 		responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(2, "lsp_trace_v1_slice", request)})
 		if err != nil {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
@@ -196,6 +198,9 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 		t.Log("PASS ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER")
 	})
 	t.Run("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3", func(t *testing.T) {
+		if err := os.Remove(providerStartMarker); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
 		request := cloneMap(base)
 		legacyResponses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", legacyConfigPath}, []map[string]any{callRequest(3, "lsp_trace_v1_incoming", request)})
 		if err != nil {
