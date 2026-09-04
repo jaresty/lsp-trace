@@ -39,7 +39,7 @@ func TestAlwaysLocalLifecycleListDispatch(t *testing.T) {
 	}
 }
 
-func TestAlwaysLocalIncomingManagedFakeLSPEndToEnd(t *testing.T) {
+func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("LOCAL_DARWIN_SUPERVISION_ONLY")
 	}
@@ -59,13 +59,15 @@ func TestAlwaysLocalIncomingManagedFakeLSPEndToEnd(t *testing.T) {
 		t.Fatalf("ASSERT_INCOMING_RETAINED_INITIALIZE_EVIDENCE: start=%+v ready=%+v", started, ready)
 	}
 	var stdout bytes.Buffer
+	sliceArgs := `{"session_id":"` + started.SessionID + `","generation":1,"start_mode":"at","uri":"file:///fixture/main.go","line":0,"character":0,"down_depth":1,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":5000,"request_timeout_ms":1000}`
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":{"session_id":"` + started.SessionID + `","generation":1,"uri":"file:///fixture/main.go","line":0,"character":0,"max_depth":4,"max_nodes":20,"timeout_ms":5000,"request_timeout_ms":1000}}}` + "\n"
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_slice","arguments":` + sliceArgs + `}}` + "\n" +
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_slice","arguments":` + sliceArgs + `}}` + "\n"
 	if err := server.Serve(strings.NewReader(input), &stdout); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	if len(lines) != 2 {
+	if len(lines) != 3 {
 		t.Fatalf("ASSERT_INCOMING_MCP_STDIO_CALLABLE: %q", stdout.String())
 	}
 	var listed struct {
@@ -75,16 +77,18 @@ func TestAlwaysLocalIncomingManagedFakeLSPEndToEnd(t *testing.T) {
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 11 {
-		t.Fatalf("ASSERT_ALWAYS_LOCAL_ELEVEN_TOOL_ORDER: response=%s err=%v", lines[0], err)
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 12 {
+		t.Fatalf("ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER: response=%s err=%v", lines[0], err)
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {
 		if listed.Result.Tools[i-1].Name > listed.Result.Tools[i].Name {
-			t.Fatalf("ASSERT_ALWAYS_LOCAL_ELEVEN_TOOL_ORDER: tools=%v", listed.Result.Tools)
+			t.Fatalf("ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER: tools=%v", listed.Result.Tools)
 		}
 	}
-	if !strings.Contains(lines[1], `"tool":"lsp_trace_v1_incoming"`) || !strings.Contains(lines[1], `\"traversal_complete\":true`) || !strings.Contains(lines[1], `\"edge_count\":1`) {
-		t.Fatalf("ASSERT_INCOMING_MCP_STDIO_CALLABLE: %s", lines[1])
+	for _, line := range lines[1:] {
+		if !strings.Contains(line, `"tool":"lsp_trace_v1_slice"`) || !strings.Contains(line, `\"upward_start_node_ids\"`) || !strings.Contains(line, `\"traversal_complete\":true`) {
+			t.Fatalf("ASSERT_SLICE_MCP_STDIO_CANONICAL_ALIAS_CALLABLE: %s", line)
+		}
 	}
 }
 

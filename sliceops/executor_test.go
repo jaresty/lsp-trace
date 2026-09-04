@@ -1,0 +1,102 @@
+package sliceops
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/session"
+	"lsp-trace/sessionruntime"
+)
+
+type fakeRuntime struct {
+	metadata sessionruntime.SessionMetadata
+	failure  session.Failure
+	calls    []string
+	results  map[string]sessionruntime.RoundTripResult
+}
+
+func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
+	return f.metadata, f.failure
+}
+func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	var p struct {
+		Item struct {
+			Name string `json:"name"`
+		} `json:"item"`
+	}
+	_ = json.Unmarshal(r.Params, &p)
+	key := r.Method + ":" + p.Item.Name
+	f.calls = append(f.calls, key)
+	if result, ok := f.results[key]; ok {
+		return result
+	}
+	return sessionruntime.RoundTripResult{Failure: session.RequestTimeout}
+}
+
+func validInput() json.RawMessage {
+	return json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":2,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":1000,"request_timeout_ms":100}`)
+}
+
+func item(name string, line int) string {
+	return `{"name":"` + name + `","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":` + string(rune('0'+line)) + `,"character":0},"end":{"line":` + string(rune('0'+line)) + `,"character":1}},"selectionRange":{"start":{"line":` + string(rune('0'+line)) + `,"character":0},"end":{"line":` + string(rune('0'+line)) + `,"character":1}}}`
+}
+
+func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
+	for _, assertion := range []string{"ASSERT_SLICE_EXACT_DEPTH_FRONTIER", "ASSERT_SLICE_FAILED_NULL_NOT_LEAF", "ASSERT_SLICE_UPWARD_SORTED_DEDUP_UNION", "ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP"} {
+		t.Log("ASSERTION: " + assertion)
+	}
+	root, mid, leaf, deep := item("root", 0), item("mid", 1), item("leaf", 2), item("deep", 3)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]},{"to":` + mid + `,"fromRanges":[]}]`)},
+		"callHierarchy/outgoingCalls:leaf":   {Result: json.RawMessage(`[]`)},
+		"callHierarchy/outgoingCalls:mid":    {Result: json.RawMessage(`[{"to":` + deep + `,"fromRanges":[]}]`)},
+		"callHierarchy/incomingCalls:deep":   {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:leaf":   {Result: json.RawMessage(`[]`)},
+	}}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if failure != nil {
+		t.Fatalf("ASSERT_SLICE_EXACT_DEPTH_FRONTIER: %v", failure)
+	}
+	var got struct {
+		Slice *graph.SliceEvidence `json:"slice"`
+	}
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Slice == nil || len(got.Slice.FrontierNodeIDs) != 1 || len(got.Slice.OutgoingTerminalNodeIDs) != 1 || len(got.Slice.UpwardStartNodeIDs) != 2 {
+		t.Fatalf("ASSERT_SLICE_UPWARD_SORTED_DEDUP_UNION: slice=%+v", got.Slice)
+	}
+	if !strings.Contains(strings.Join(f.calls, ","), "callHierarchy/incomingCalls:deep") || !strings.Contains(strings.Join(f.calls, ","), "callHierarchy/incomingCalls:leaf") {
+		t.Fatalf("ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP: calls=%v", f.calls)
+	}
+}
+
+func TestSliceRejectsBeforeEffects(t *testing.T) {
+	const assertion = "ASSERT_SLICE_VALIDATE_BEFORE_EFFECTS"
+	t.Log("ASSERTION: " + assertion)
+	f := &fakeRuntime{}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: json.RawMessage(`{"session_id":"","generation":0}`)})
+	if failure == nil || failure.Code != operation.FailureInvalidInput || len(f.calls) != 0 {
+		t.Fatalf("%s: failure=%v calls=%v", assertion, failure, f.calls)
+	}
+}
+
+func TestSliceServerErrorIsPartialNotLeaf(t *testing.T) {
+	const assertion = "ASSERT_SLICE_FAILED_NULL_NOT_LEAF"
+	t.Log("ASSERTION: " + assertion)
+	root := item("root", 0)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-8", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {ServerError: &lspwire.RPCError{Code: -32603, Message: "boom"}},
+	}}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if failure != nil || !strings.Contains(string(result.Artifact), "boom") || strings.Contains(string(result.Artifact), `"outgoing_terminal_node_ids":[`) {
+		t.Fatalf("%s: failure=%v artifact=%s", assertion, failure, result.Artifact)
+	}
+}

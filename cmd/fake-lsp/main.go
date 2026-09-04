@@ -100,6 +100,11 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
 			}
+		case "callHierarchy/outgoingCalls":
+			if err := w.Write(response(m.ID, json.RawMessage(`[]`))); err != nil {
+				fmt.Fprintln(errout, err)
+				return fixtureInputErrorCode
+			}
 		case "callHierarchy/incomingCalls":
 			var p struct {
 				Item struct {

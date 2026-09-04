@@ -15,7 +15,7 @@ import (
 )
 
 //go:embed testdata/stage1-manifest.v1.json
-//go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-incoming.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
+//go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-incoming.v1.schema.json testdata/schemas/input-slice.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
 //go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS

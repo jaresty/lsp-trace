@@ -17,6 +17,7 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/lifecycleops"
 	"lsp-trace/sessionruntime"
+	"lsp-trace/sliceops"
 )
 
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
@@ -104,6 +105,7 @@ func newServerRuntime(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Serv
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
 			mcp.LifecycleExecutorFamily: lifecycleops.NewExecutor(lifecycleops.New(manager)),
 			mcp.IncomingExecutorFamily:  incomingops.NewExecutor(manager),
+			mcp.SliceExecutorFamily:     sliceops.NewExecutor(manager),
 		},
 		PublicationRoot: publicationRoot, Publisher: publication.NewPublisher(),
 	}, manager, nil

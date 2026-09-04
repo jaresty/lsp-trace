@@ -32,6 +32,7 @@ const (
 	OfflineExecutorFamily   ExecutorFamily = "offline"
 	LifecycleExecutorFamily ExecutorFamily = "lifecycle"
 	IncomingExecutorFamily  ExecutorFamily = "incoming"
+	SliceExecutorFamily     ExecutorFamily = "slice"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -83,6 +84,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_validate": "Validate retained evidence", "lsp_trace_v1_verify": "Verify retained evidence",
 		"lsp_trace_v1_schema_get": "Retrieve an evidence schema", "lsp_trace_v1_capabilities": "Discover LSP Trace MCP capabilities",
 		"lsp_trace_v1_incoming": "Trace bounded incoming calls through a managed local language-server session",
+		"lsp_trace_v1_slice":    "Trace a bounded outgoing-then-incoming slice through a managed local language-server session",
 	}
 	tools := make([]Tool, 0, len(manifest.Tools))
 	for _, contract := range manifest.Tools {
@@ -103,6 +105,8 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			executorFamily = LifecycleExecutorFamily
 		} else if contract.Name == "lsp_trace_v1_incoming" {
 			executorFamily = IncomingExecutorFamily
+		} else if contract.Name == "lsp_trace_v1_slice" {
+			executorFamily = SliceExecutorFamily
 		}
 		tools = append(tools, Tool{
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
@@ -113,8 +117,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	for i := range tools {
 		base := cloneTool(tools[i])
-		// Always-local lifecycle and incoming traversal are enabled by default.
-		// Slice remains reserved and unadvertised.
+		// Always-local lifecycle and traversal operations are enabled by default.
 		if tools[i].ExecutorFamily == LifecycleExecutorFamily {
 			tools[i].Availability = Enabled
 			tools[i].Description = lifecycleDescription(tools[i].Name)

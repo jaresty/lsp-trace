@@ -94,10 +94,10 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 }
 
 func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
-	const assertion = "ASSERT_ALWAYS_LOCAL_ELEVEN_TOOL_ORDER"
+	const assertion = "ASSERT_ALWAYS_LOCAL_TWELVE_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 11 {
+	if got := len(r.Advertised()); got != 12 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -113,7 +113,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
 	for i, tool := range r.Advertised() {
 		if tool.Name != want[i] {
 			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
@@ -122,8 +122,10 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	if incoming, ok := r.Resolve("lsp_trace_v1_incoming"); !ok || incoming.Availability != Enabled {
 		t.Fatalf("ASSERT_INCOMING_CALLABLE_SLICE_RESERVED: incoming=%+v found=%v", incoming, ok)
 	}
-	if slice, ok := r.Resolve("lsp_trace_v1_slice"); !ok || slice.Availability != NotImplemented {
-		t.Fatalf("ASSERT_INCOMING_CALLABLE_SLICE_RESERVED: slice=%+v found=%v", slice, ok)
+	if slice, ok := r.Resolve("lsp_trace_v1_slice"); !ok || slice.Availability != Enabled || slice.ExecutorFamily != ExecutorFamily("slice") {
+		t.Fatalf("ASSERT_SLICE_CALLABLE_CANONICAL_ALIAS: slice=%+v found=%v", slice, ok)
+	} else if alias, aliasOK := r.Resolve("lsp_trace_slice"); !aliasOK || alias.Name != slice.Name || alias.Availability != Enabled || alias.ExecutorFamily != ExecutorFamily("slice") {
+		t.Fatalf("ASSERT_SLICE_CALLABLE_CANONICAL_ALIAS: alias=%+v found=%v", alias, aliasOK)
 	}
 	advertised := r.Advertised()
 	for i := 1; i < len(advertised); i++ {
@@ -149,7 +151,7 @@ func TestRegistryContract(t *testing.T) {
 		if got := len(r.Tools()); got != 12 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 11 {
+		if got := len(r.Advertised()); got != 12 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{

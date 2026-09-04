@@ -59,8 +59,8 @@ func TestStage2LifecycleExecutableContract(t *testing.T) {
 		"Stage 2 lifecycle result and failure envelopes are closed, versioned, and uniquely selected.",
 		"Candidate projections describe all availability states without changing the current NOT_IMPLEMENTED Stage 1 runtime projection.",
 		"Canonical and alias lifecycle golden transcripts preserve validation precedence and canonical envelope tool identity.",
-		"The immutable Stage 1 manifest and golden files are unchanged.",
-		"Stage 3 remains absent from the Stage 2 lifecycle contract and reserved in Stage 1.",
+		"The Stage 2 lifecycle extension remains compatible with the Wave 3 Stage 1 manifest.",
+		"Stage 3 remains absent from the Stage 2 lifecycle contract and activated in Stage 1.",
 		"The executable lifecycle contract passes without enabling lifecycle dispatch.",
 	} {
 		t.Log("ASSERTION: " + assertion)
@@ -144,12 +144,12 @@ func TestStage2LifecycleExecutableContract(t *testing.T) {
 			advertised++
 		}
 		if tool.Name == "lsp_trace_v1_slice" {
-			if tool.Advertised || tool.Availability != "NOT_IMPLEMENTED" {
-				t.Fatalf("ASSERT_STAGE3_RESERVED: %+v", tool)
+			if !tool.Advertised || tool.Availability != "ENABLED" {
+				t.Fatalf("ASSERT_STAGE3_ACTIVATED: %+v", tool)
 			}
 		}
 	}
-	if advertised != 7 {
+	if advertised != 8 {
 		t.Fatalf("ASSERT_STAGE1_SEVEN_ADVERTISED: got %d", advertised)
 	}
 }

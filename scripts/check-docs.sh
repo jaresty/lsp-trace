@@ -81,9 +81,9 @@ assert_contains DOC-MCP-SKILL cmd/lsp-trace/SKILL.md '### Use the MCP offline ev
 assert_contains DOC-MCP-STDIO README.md 'lsp-trace-mcp --publication-root'
 assert_contains DOC-MCP-CAPABILITIES README.md 'lsp_trace_v1_capabilities'
 assert_contains DOC-MCP-ALWAYS-LOCAL README.md 'local-development-only'
-assert_contains DOC-MCP-ELEVEN-TOOLS README.md 'eleven canonical tools'
+assert_contains DOC-MCP-TWELVE-TOOLS README.md 'twelve canonical tools'
 assert_contains DOC-MCP-INCOMING cmd/lsp-trace/SKILL.md 'bounded incoming traversal are enabled by default'
-assert_contains DOC-MCP-SLICE-RESERVED cmd/lsp-trace/SKILL.md 'Slice remains reserved, unadvertised, and `NOT_IMPLEMENTED`'
+assert_contains DOC-MCP-SLICE-ENABLED cmd/lsp-trace/SKILL.md 'Slice traversal is enabled by default'
 assert_contains DOC-MCP-WARNING README.md "developer's permissions"
 assert_contains DOC-MCP-NO-SANDBOX README.md 'not sandboxed'
 assert_contains DOC-MCP-LOCAL-ACCESS README.md 'local files and network'

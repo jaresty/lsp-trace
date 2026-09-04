@@ -7,7 +7,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 
 	"lsp-trace/internal/session"
@@ -361,13 +360,13 @@ func assertReservationParity(t *testing.T, contract stage2LifecycleContract) {
 		if tool.Advertised {
 			advertised++
 		}
-		if strings.HasPrefix(tool.Name, "lsp_trace_v1_slice") {
-			if tool.Advertised || tool.Availability != "NOT_IMPLEMENTED" {
-				t.Fatalf("ASSERT_SESSION_KEY_PARITY_STAGES_RESERVED: %+v", tool)
+		if tool.Name == "lsp_trace_v1_slice" {
+			if !tool.Advertised || tool.Availability != "ENABLED" {
+				t.Fatalf("ASSERT_SESSION_KEY_PARITY_SLICE_ACTIVATED: %+v", tool)
 			}
 		}
 	}
-	if advertised != 7 {
+	if advertised != 8 {
 		t.Fatalf("ASSERT_SESSION_KEY_PARITY_BASELINE_PRESERVED: advertised=%d", advertised)
 	}
 }

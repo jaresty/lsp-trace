@@ -68,7 +68,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(input.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	client := &client{runtime: e.runtime, sessionID: input.SessionID, generation: input.Generation, requestTimeout: time.Duration(input.RequestTimeoutMS) * time.Millisecond}
+	client := NewSessionClient(e.runtime, input.SessionID, input.Generation, time.Duration(input.RequestTimeoutMS)*time.Millisecond)
 	result := traverse.Incoming(ctx, client, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: input.URI}, Position: lsp.Position{Line: input.Line, Character: input.Character}}, traverse.Options{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, SchemaVersion: graph.SchemaVersionV3})
 	result.Invocation.Target = graph.Target{URI: input.URI, Line: int(input.Line), Column: int(input.Character)}
 	result.Invocation.Limits = graph.Limits{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, TimeoutMS: input.TimeoutMS}
@@ -111,14 +111,19 @@ func failure(code string, err error) *operation.Failure {
 	return &operation.Failure{Code: code, Err: err}
 }
 
-type client struct {
+// SessionClient adapts standard call-hierarchy requests to one retained exact generation.
+type SessionClient struct {
 	runtime        Runtime
 	sessionID      string
 	generation     uint64
 	requestTimeout time.Duration
 }
 
-func (c *client) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+func NewSessionClient(runtime Runtime, sessionID string, generation uint64, requestTimeout time.Duration) *SessionClient {
+	return &SessionClient{runtime: runtime, sessionID: sessionID, generation: generation, requestTimeout: requestTimeout}
+}
+
+func (c *SessionClient) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	var items []lsp.CallHierarchyItem
 	wasNull, err := c.call(ctx, "textDocument/prepareCallHierarchy", params, &items)
 	if err != nil {
@@ -130,18 +135,24 @@ func (c *client) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCal
 	return items, nil
 }
 
-func (c *client) IncomingCalls(ctx context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
+func (c *SessionClient) IncomingCalls(ctx context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
 	var calls []lsp.CallHierarchyIncomingCall
 	wasNull, err := c.call(ctx, "callHierarchy/incomingCalls", lsp.CallHierarchyIncomingCallsParams{Item: item}, &calls)
 	return calls, wasNull, err
 }
 
-func (*client) SupportsDocumentSymbols() bool { return false }
-func (*client) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+func (c *SessionClient) OutgoingCalls(ctx context.Context, item lsp.CallHierarchyItem) ([]lsp.CallHierarchyOutgoingCall, bool, error) {
+	var calls []lsp.CallHierarchyOutgoingCall
+	wasNull, err := c.call(ctx, "callHierarchy/outgoingCalls", lsp.CallHierarchyOutgoingCallsParams{Item: item}, &calls)
+	return calls, wasNull, err
+}
+
+func (*SessionClient) SupportsDocumentSymbols() bool { return false }
+func (*SessionClient) DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
 	return nil, errors.New("document symbols unsupported")
 }
 
-func (c *client) call(parent context.Context, method string, params, target any) (bool, error) {
+func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {
 	raw, err := json.Marshal(params)
 	if err != nil {
 		return false, err

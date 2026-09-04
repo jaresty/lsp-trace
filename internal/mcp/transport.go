@@ -435,7 +435,7 @@ func decodeClosed(raw json.RawMessage, dst any, allowed ...string) error {
 }
 
 func validateArguments(tool Tool, arguments map[string]any) error {
-	if (tool.ExecutorFamily == LifecycleExecutorFamily || tool.ExecutorFamily == IncomingExecutorFamily) && tool.Availability == Enabled {
+	if (tool.ExecutorFamily == LifecycleExecutorFamily || tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily) && tool.Availability == Enabled {
 		return nil // family executor owns closed semantic decoding for the local contract
 	}
 	raw, err := json.Marshal(arguments)
@@ -467,6 +467,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Filter
 	case "lsp_trace_v1_incoming":
 		return operation.Name("incoming")
+	case "lsp_trace_v1_slice":
+		return operation.Name("slice")
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")
 	case "lsp_session_v1_status":
