@@ -90,6 +90,67 @@ func TestTrustAuthenticationRequiresIndependentProvisioning(t *testing.T) {
 	}
 }
 
+func TestTrustAdmissionAssignsTypedStatusAfterExactValidation(t *testing.T) {
+	const assertionMissing = "ASSERT_TRUST_ADMISSION_MISSING_EXPLICIT: absent optional trust material returns MISSING_TRUST without error"
+	const assertionIndependent = "ASSERT_TRUST_ADMISSION_INDEPENDENT: claimant-controlled or presented anchors never authenticate"
+	const assertionSnapshot = "ASSERT_TRUST_ADMISSION_EXACT_SNAPSHOT: receipt, claim, and verifier source snapshot identities must match"
+	const assertionIdentities = "ASSERT_TRUST_ADMISSION_IDENTITIES: receipt, policy, anchor, and verification identities match before AUTHENTICATED"
+	const assertionGit = "ASSERT_TRUST_ADMISSION_GIT_OPTIONAL_TYPED: Git attestation is optional typed snapshot-bound evidence and never trust authority"
+	for _, assertion := range []string{assertionMissing, assertionIndependent, assertionSnapshot, assertionIdentities, assertionGit} {
+		t.Log("ASSERTION: " + assertion)
+	}
+
+	context := validTrustAuthenticationContext()
+	context.SourceSnapshotIdentity = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	receipt := strings.Replace(validTrustProvisioningReceiptV1, "\n}", ",\n  \"source_snapshot_identity\":\"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\"\n}", 1)
+
+	missing, err := AdmitTrust(TrustAdmissionRequest{Context: context, ClaimedSourceSnapshotIdentity: context.SourceSnapshotIdentity})
+	if err != nil || missing.Status != AuthenticationMissingTrust {
+		t.Fatalf("%s: status=%q err=%v", assertionMissing, missing.Status, err)
+	}
+
+	valid := TrustAdmissionRequest{Receipt: []byte(receipt), Context: context, ClaimedSourceSnapshotIdentity: context.SourceSnapshotIdentity}
+	admitted, err := AdmitTrust(valid)
+	if err != nil || admitted.Status != AuthenticationAuthenticated {
+		t.Fatalf("%s: status=%q err=%v", assertionIdentities, admitted.Status, err)
+	}
+
+	claimantReceipt := strings.Replace(receipt, "security-operations", "claimant-service", 1)
+	claimant, err := AdmitTrust(TrustAdmissionRequest{Receipt: []byte(claimantReceipt), Context: context, ClaimedSourceSnapshotIdentity: context.SourceSnapshotIdentity})
+	if err == nil || claimant.Status != AuthenticationRejected {
+		t.Fatalf("%s: claimant status=%q err=%v", assertionIndependent, claimant.Status, err)
+	}
+	bundleReceipt := strings.Replace(receipt, "VERIFIER_TRUST_STORE", "PRESENTED_BUNDLE", 1)
+	bundle, err := AdmitTrust(TrustAdmissionRequest{Receipt: []byte(bundleReceipt), Context: context, ClaimedSourceSnapshotIdentity: context.SourceSnapshotIdentity})
+	if err == nil || bundle.Status != AuthenticationRejected {
+		t.Fatalf("%s: bundle status=%q err=%v", assertionIndependent, bundle.Status, err)
+	}
+
+	wrongClaim := valid
+	wrongClaim.ClaimedSourceSnapshotIdentity = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	mismatch, err := AdmitTrust(wrongClaim)
+	if err == nil || mismatch.Status != AuthenticationRejected {
+		t.Fatalf("%s: status=%q err=%v", assertionSnapshot, mismatch.Status, err)
+	}
+
+	withGit := valid
+	withGit.GitAttestation = &GitAttestationEvidence{
+		EvidenceType:           GitCommitAttestation,
+		SourceSnapshotIdentity: context.SourceSnapshotIdentity,
+		CommitIdentity:         "99d246473fb4a3ea77983275c75fc8db6491343d",
+	}
+	gitAdmitted, err := AdmitTrust(withGit)
+	if err != nil || gitAdmitted.Status != AuthenticationAuthenticated || gitAdmitted.GitAttestation == nil {
+		t.Fatalf("%s: valid typed evidence status=%q evidence=%v err=%v", assertionGit, gitAdmitted.Status, gitAdmitted.GitAttestation, err)
+	}
+	wrongGit := withGit
+	wrongGit.GitAttestation = &GitAttestationEvidence{EvidenceType: GitCommitAttestation, SourceSnapshotIdentity: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", CommitIdentity: "99d2464"}
+	gitRejected, err := AdmitTrust(wrongGit)
+	if err == nil || gitRejected.Status != AuthenticationRejected {
+		t.Fatalf("%s: wrong-snapshot evidence status=%q err=%v", assertionGit, gitRejected.Status, err)
+	}
+}
+
 func TestTrustReceiptAdditionPreservesCommittedGraphSchemaBytes(t *testing.T) {
 	const assertion = "ASSERT_TRUST_RECEIPT_GRAPH_COMPATIBILITY: committed V2 and V3 canonical schema bytes remain unchanged"
 	t.Log("ASSERTION: " + assertion)

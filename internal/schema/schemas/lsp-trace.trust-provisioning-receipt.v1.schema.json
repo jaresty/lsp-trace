@@ -25,6 +25,7 @@
     "trust_policy_id": {"type": "string", "minLength": 1},
     "anchor_type": {"type": "string", "minLength": 1},
     "anchor_identity": {"type": "string", "minLength": 1},
+    "source_snapshot_identity": {"type": "string", "minLength": 1},
     "provisioning_authority": {"type": "string", "minLength": 1},
     "provisioning_channel": {
       "type": "string",
