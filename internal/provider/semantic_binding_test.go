@@ -32,24 +32,30 @@ func semanticFixture(t *testing.T) (*ObservationSemanticAdapter, StrictCollector
 	return a, request, Receipt{ProviderID: "alpha@1", Response: raw, Messages: 1, Reaped: true}
 }
 
-func TestSemanticBindingStrictAndConsistent(t *testing.T) {
+func TestSemanticBindingEnvelopeStrict(t *testing.T) {
 	a, request, receipt := semanticFixture(t)
 	bad := receipt
 	bad.Response = append(append(json.RawMessage(nil), receipt.Response[:len(receipt.Response)-1]...), []byte(`,"unknown":true}`)...)
 	if _, err := a.Adapt(context.Background(), request, bad); err == nil {
 		t.Fatal("ASSERT_PROVIDER_SEMANTIC_ENVELOPE_STRICT: accepted unknown field")
 	}
-	bad = receipt
-	bad.ProviderID = "beta@1"
-	if _, err := a.Adapt(context.Background(), request, bad); err == nil {
+}
+
+func TestSemanticBindingIdentityConsistent(t *testing.T) {
+	a, request, receipt := semanticFixture(t)
+	receipt.ProviderID = "beta@1"
+	if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
 		t.Fatal("ASSERT_PROVIDER_SEMANTIC_IDENTITY_CONSISTENT: accepted receipt provider mismatch")
 	}
-	bad = receipt
+}
+
+func TestSemanticBindingCustodyConsistent(t *testing.T) {
+	a, request, receipt := semanticFixture(t)
 	var e observationadapter.Envelope
 	_ = json.Unmarshal(receipt.Response, &e)
 	e.Documents[0].OriginalURI = "file:///workspace/other.gts"
-	bad.Response, _ = json.Marshal(e)
-	if _, err := a.Adapt(context.Background(), request, bad); err == nil {
+	receipt.Response, _ = json.Marshal(e)
+	if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
 		t.Fatal("ASSERT_PROVIDER_SEMANTIC_CUSTODY_CONSISTENT: accepted original URI mismatch")
 	}
 }

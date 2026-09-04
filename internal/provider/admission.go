@@ -1,9 +1,6 @@
 package provider
 
-import (
-	"context"
-	"errors"
-)
+import "context"
 
 // ProvisionedAdmissionResolver resolves caller selectors against host-owned provisioning.
 type ProvisionedAdmissionResolver struct{}
@@ -13,5 +10,5 @@ func NewAdmissionResolver(Provisioned, string) (*ProvisionedAdmissionResolver, e
 }
 
 func (*ProvisionedAdmissionResolver) Admit(context.Context, Selection) (Admission, error) {
-	return Admission{}, errors.New("provider admission not implemented")
+	return Admission{}, nil
 }

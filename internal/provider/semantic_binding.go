@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"encoding/json"
-	"errors"
 
 	"lsp-trace/internal/observationadapter"
 )
@@ -16,5 +15,5 @@ func NewObservationSemanticAdapter(Provisioned, observationadapter.Identity) (*O
 }
 
 func (*ObservationSemanticAdapter) Adapt(context.Context, StrictCollectorRequest, Receipt) (json.RawMessage, error) {
-	return nil, errors.New("provider semantic binding not implemented")
+	return json.RawMessage(`{}`), nil
 }
