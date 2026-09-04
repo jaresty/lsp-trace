@@ -80,7 +80,7 @@ Yes. The current architecture constrains this assignment to registry-derived MCP
 
 ### Commit
 
-_To be filled with the final commit hash after commit creation._
+Implementation commit: `e897912` (`feat: expose custody logical digest through MCP`).
 
 ### Residual risks
 
