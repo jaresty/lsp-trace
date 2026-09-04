@@ -13,6 +13,12 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
+  - id: lsp-trace-provider-ember-glint
+    main: ./cmd/lsp-trace-provider-ember-glint
+    binary: lsp-trace-provider-ember-glint
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
 archives:
   - formats: [tar.gz]
     format_overrides:

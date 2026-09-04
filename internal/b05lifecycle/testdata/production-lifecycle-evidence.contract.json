@@ -1,0 +1,33 @@
+{
+  "schema_version": "lsp-trace.b05-production-lifecycle-contract.v1",
+  "provider_identity": "ember-glint@1",
+  "protocol_identity": "lsp-trace.provider-observations@1",
+  "request_identity": "b05-production-lifecycle-1",
+  "bootstrap_example": "internal/b05lifecycle/testdata/bootstrap.production.example.json",
+  "production_binary": "lsp-trace-provider-ember-glint",
+  "retained_evidence": "qualification/retained/ember-glint/b05-production-lifecycle.json",
+  "expected_observation_kinds": [
+    "BINDS_ARGUMENT",
+    "PASSES_CALLBACK",
+    "INVOKES_TASK",
+    "TRIGGERS_RELOAD",
+    "UPDATES_STATE",
+    "RENDERS_FROM"
+  ],
+  "prohibited_claims": [
+    "callback_invocation_from_passage",
+    "feature_identity",
+    "repaint",
+    "runtime_execution",
+    "whole_source_completeness"
+  ],
+  "requirements": [
+    "bootstrap_validation",
+    "deterministic_replay",
+    "exact_provider_protocol_request_identity",
+    "immutable_original_virtual_custody",
+    "explicit_coverage",
+    "all_contributor_ids",
+    "graph_v3_omission_byte_parity"
+  ]
+}

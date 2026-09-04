@@ -179,6 +179,12 @@ assert_contains R-MCP-RELEASE-DOC docs/RELEASING.md 'lsp-trace-mcp'
 assert_contains R-MCP-BOOTSTRAP-DOC README.md 'lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json'
 assert_contains R-MCP-BOOTSTRAP-HOST-AUTHORITY README.md 'The host—not the MCP caller—provisions trusted sessions'
 assert_contains R-MCP-PRODUCTION-BOOTSTRAP-TEST cmd/lsp-trace-mcp/bootstrap_process_test.go 'func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady'
+assert_file R-B05-PRODUCTION-LIFECYCLE-TEST internal/b05lifecycle/lifecycle_test.go
+assert_file R-B05-PRODUCTION-BOOTSTRAP-EXAMPLE internal/b05lifecycle/testdata/bootstrap.production.example.json
+assert_file R-B05-PRODUCTION-EVIDENCE-CONTRACT internal/b05lifecycle/testdata/production-lifecycle-evidence.contract.json
+assert_file R-B05-PRODUCTION-QUALIFICATION qualification/retained/ember-glint/b05-production-lifecycle.json
+assert_contains R-B05-GORELEASER-PROVIDER-MAIN .goreleaser.yaml 'main: ./cmd/lsp-trace-provider-ember-glint'
+assert_contains R-B05-GORELEASER-PROVIDER-BINARY .goreleaser.yaml 'binary: lsp-trace-provider-ember-glint'
 
 if [ "$failed" -ne 0 ]; then
   exit 1
@@ -225,6 +231,18 @@ if [ ! -s "$release_tmp/lsp-trace-mcp" ]; then
   exit 1
 fi
 printf 'PASS R-MCP-DRY-BUILD: hermetic non-publishing MCP release binary\n'
+go build -trimpath -o "$release_tmp/lsp-trace-provider-ember-glint" ./cmd/lsp-trace-provider-ember-glint
+if [ ! -s "$release_tmp/lsp-trace-provider-ember-glint" ]; then
+  printf 'FAIL R-B05-PROVIDER-DRY-BUILD: production Ember provider release binary is missing or empty\n'
+  exit 1
+fi
+printf 'PASS R-B05-PROVIDER-DRY-BUILD: hermetic production Ember provider release binary\n'
+if LSP_TRACE_EMBER_PROVIDER_BINARY="$release_tmp/lsp-trace-provider-ember-glint" go test ./internal/b05lifecycle -run TestProductionEmberProviderCompletesManagedB05Lifecycle -count=1; then
+  printf 'PASS R-B05-PRODUCTION-LIFECYCLE: production binary and retained qualification completed managed B05 lifecycle\n'
+else
+  printf 'FAIL R-B05-PRODUCTION-LIFECYCLE: production binary or retained lifecycle qualification is absent or invalid\n'
+  exit 1
+fi
 embedded_skill=$($release_tmp/lsp-trace skill get)
 case "$embedded_skill" in
   *'## Compare two retained seed-evidence sets'*'Shared references do not establish shared feature or workflow identity'*)
