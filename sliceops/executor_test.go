@@ -83,6 +83,37 @@ func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
 	}
 }
 
+func TestSliceReconcilesIncomingAliasToOutgoingPresentation(t *testing.T) {
+	const assertion = "ASSERT_MANAGED_SLICE_UNIFIED_SYMBOL_IDENTITY"
+	t.Log("ASSERTION: " + assertion)
+	outgoingRoot := `{"name":"root","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":2,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"surface":"outgoing"}}`
+	incomingRoot := `{"name":"root","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"surface":"incoming"}}`
+	leaf := item("leaf", 1)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + outgoingRoot + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]}]`)},
+		"callHierarchy/outgoingCalls:leaf":   {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:leaf":   {Result: json.RawMessage(`[{"from":` + incomingRoot + `,"fromRanges":[]}]`)},
+		"callHierarchy/incomingCalls:root":   {Result: json.RawMessage(`[]`)},
+	}}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if failure != nil {
+		t.Fatalf("%s: %v", assertion, failure)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Nodes) != 2 || len(got.Edges) != 1 {
+		t.Fatalf("%s: nodes=%d edges=%d artifact=%s", assertion, len(got.Nodes), len(got.Edges), result.Artifact)
+	}
+	for _, n := range got.Nodes {
+		if n.Name == "root" && (n.Range.End.Line != 2 || !strings.Contains(string(n.Data), "outgoing")) {
+			t.Fatalf("%s: root=%+v", assertion, n)
+		}
+	}
+}
+
 func TestSliceWireBoundsReachEveryRoundTrip(t *testing.T) {
 	const assertion = "ASSERT_SLICE_PER_WIRE_REQUEST_BOUNDS"
 	t.Log("ASSERTION: " + assertion)

@@ -98,6 +98,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		}
 		up = traverse.IncomingPrepared(ctx, client, discovery.UpwardStartItems, traverse.Options{MaxDepth: in.UpDepth, MaxNodes: len(discovery.UpwardStartItems) + remaining, SchemaVersion: graph.SchemaVersionV3})
 	}
+	graph.ReconcileIncomingAliases(down, &up)
 	result := graph.MergeResults(down, up)
 	decorate(&result, in, metadata, prepared, discovery)
 	return artifact(result)

@@ -349,6 +349,7 @@ func runSlice(args []string) int {
 		}
 		up = traverse.IncomingPrepared(ctx, timed, discovery.UpwardStartItems, traverse.Options{MaxDepth: cfg.upDepth, MaxNodes: upMaxNodes, SchemaVersion: graph.SchemaVersionV3})
 	}
+	graph.ReconcileIncomingAliases(down, &up)
 	result := graph.MergeResults(down, up)
 	layers := make([]graph.SliceLayer, len(discovery.Layers))
 	for i, layer := range discovery.Layers {
