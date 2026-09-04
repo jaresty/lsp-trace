@@ -69,8 +69,12 @@ func TestSemanticBindingIdentityConsistent(t *testing.T) {
 			_ = json.Unmarshal(receipt.Response, &envelope)
 			mutate(&request, &receipt, &envelope)
 			receipt.Response, _ = json.Marshal(envelope)
-			if _, err := a.Adapt(context.Background(), request, receipt); err == nil {
+			_, err := a.Adapt(context.Background(), request, receipt)
+			if err == nil {
 				t.Fatalf("ASSERT_PROVIDER_SEMANTIC_IDENTITY_CONSISTENT: accepted %s mismatch", name)
+			}
+			if name == "protocol" && err.Error() != "observation protocol identity/version mismatch" {
+				t.Fatalf("ASSERT_PROVIDER_SEMANTIC_IDENTITY_CONSISTENT: protocol mismatch escaped provider boundary: %v", err)
 			}
 		})
 	}
