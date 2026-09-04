@@ -14,6 +14,7 @@ const (
 	publicationEnvelopeSchemaID      = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-publication.v1.schema.json"
 	publicationErrorEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-publication-error.v1.schema.json"
 	inlineByteLimit                  = 1048576
+	graphV4ArtifactSchemaID          = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v4.schema.json"
 )
 
 // Availability is the immutable process-lifetime availability of a tool.
@@ -132,10 +133,17 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			tools[i].Availability = Enabled
 			tools[i].InputSchema = incomingInputSchema()
 			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
-			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json"}
+			tools[i].ArtifactSchemaIDs = []string{"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v3.schema.json", graphV4ArtifactSchemaID}
 		}
 		if tools[i].ExecutorFamily == SliceExecutorFamily {
 			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
+		}
+		if tools[i].ExecutorFamily == IncomingExecutorFamily || tools[i].ExecutorFamily == SliceExecutorFamily {
+			addNormalizedProviderInputProperties(tools[i].InputSchema)
+		}
+		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
 		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)
@@ -168,6 +176,15 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		}
 	}
 	return r
+}
+
+func appendUnique(ids []string, id string) []string {
+	for _, candidate := range ids {
+		if candidate == id {
+			return ids
+		}
+	}
+	return append(ids, id)
 }
 
 func withoutPublicationEnvelopes(ids []string) []string {
@@ -221,6 +238,32 @@ func incomingInputSchema() map[string]any {
 			map[string]any{"required": []any{"symbol"}, "not": map[string]any{"anyOf": []any{map[string]any{"required": []any{"line"}}, map[string]any{"required": []any{"character"}}}}},
 		},
 	}
+}
+
+func addNormalizedProviderInputProperties(input map[string]any) {
+	properties, ok := input["properties"].(map[string]any)
+	if !ok {
+		panic("MCP traversal input schema has no properties object")
+	}
+	properties["relations"] = map[string]any{
+		"type": "array", "uniqueItems": true, "minItems": 1,
+		"items": map[string]any{"type": "string", "enum": []any{"CALLS", "BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"}},
+	}
+	properties["adapters"] = map[string]any{"oneOf": []any{
+		map[string]any{"const": "auto"},
+		map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}},
+	}}
+	properties["providers"] = map[string]any{"type": "array", "uniqueItems": true, "items": map[string]any{"type": "string", "minLength": 1}}
+	properties["workspace_revision"] = map[string]any{
+		"type": "object", "additionalProperties": false,
+		"properties": map[string]any{
+			"kind":    map[string]any{"type": "string", "minLength": 1},
+			"commit":  map[string]any{"type": "string", "minLength": 1},
+			"custody": map[string]any{"type": "string", "enum": []any{"CALLER_ASSERTED", "PROVIDER_VERIFIED", "UNKNOWN"}},
+		},
+		"required": []any{"kind", "commit", "custody"},
+	}
+	properties["fail_on_unknown_revision"] = map[string]any{"type": "boolean"}
 }
 
 func lifecycleInputSchema(name string) map[string]any {
@@ -289,6 +332,10 @@ func (r *Registry) Capabilities() map[string]any {
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"tools": r.Tools(), "selector_publication_supported": r.publicationSupported,
 		"inline_byte_limit": uint64(inlineByteLimit), "list_page_max": uint32(100),
+		"normalized_relations": map[string]any{
+			"kinds":                []string{"CALLS", "BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"},
+			"default_when_omitted": "CALLS_ONLY", "provider_authority": "HOST_PROVISIONED_ONLY",
+		},
 	}
 }
 
