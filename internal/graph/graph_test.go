@@ -72,6 +72,60 @@ func TestCanonicalizeSortsAllCollectionsAndCountsCycles(t *testing.T) {
 	}
 }
 
+func TestCanonicalizePreservesMixedRepeatedURIClasses(t *testing.T) {
+	const repeatedValid = "FILE://EXAMPLE.COM/a.go#fragment"
+	const repeatedMalformed = "%"
+	node := func(name, uri string) Node { return NewNode(Item{Name: name, URI: uri}) }
+	empty, emptyRepeat := node("empty", ""), node("empty-repeat", "")
+	malformed, malformedRepeat := node("malformed", repeatedMalformed), node("malformed-repeat", repeatedMalformed)
+	malformedUnique := node("malformed-unique", "%x")
+	valid, validRepeat := node("valid", repeatedValid), node("valid-repeat", repeatedValid)
+	unique := node("unique", "file:///b.go")
+	external := node("external", "https://EXAMPLE.COM/pkg#fragment")
+	r := Result{
+		SchemaVersion: SchemaVersion,
+		Nodes:         []Node{validRepeat, emptyRepeat, malformedUnique, external, unique, malformedRepeat, empty, valid, malformed},
+		Edges: []Edge{
+			{CallerNodeID: valid.ID, CalleeNodeID: validRepeat.ID},
+			{CallerNodeID: malformed.ID, CalleeNodeID: malformedRepeat.ID},
+			{CallerNodeID: empty.ID, CalleeNodeID: emptyRepeat.ID},
+			{CallerNodeID: valid.ID, CalleeNodeID: unique.ID},
+			{CallerNodeID: malformed.ID, CalleeNodeID: malformedUnique.ID},
+			{CallerNodeID: external.ID, CalleeNodeID: valid.ID},
+			{CallerNodeID: empty.ID, CalleeNodeID: valid.ID},
+		},
+		Diagnostics: []Diagnostic{
+			{Phase: "traverse", Method: "z", NodeID: validRepeat.ID, Message: "second"},
+			{Phase: "prepare", Method: "a", NodeID: empty.ID, Message: "first"},
+		},
+	}
+	want := make(map[string]string, len(r.Nodes))
+	for _, n := range r.Nodes {
+		want[n.ID] = n.URI
+	}
+
+	r.Canonicalize()
+
+	if r.CapabilityQuality.CrossFileEdges != 4 {
+		t.Fatalf("ASSERT_MIXED_REPEATED_URI_CANONICAL_EQUIVALENCE: cross_file_edges=%d, want 4", r.CapabilityQuality.CrossFileEdges)
+	}
+	for i, n := range r.Nodes {
+		if want[n.ID] != n.URI {
+			t.Fatalf("ASSERT_MIXED_REPEATED_URI_ID_RAW_PARITY: node=%#v want_uri=%q", n, want[n.ID])
+		}
+		if i > 0 && r.Nodes[i-1].URI > n.URI {
+			t.Fatalf("ASSERT_MIXED_REPEATED_URI_ORDER_PARITY: nodes=%#v", r.Nodes)
+		}
+	}
+	if r.Diagnostics[0].Phase != "prepare" || r.Diagnostics[1].Phase != "traverse" {
+		t.Fatalf("ASSERT_MIXED_REPEATED_DIAGNOSTIC_ORDER_PARITY: diagnostics=%#v", r.Diagnostics)
+	}
+	encoded, err := json.Marshal(r)
+	if err != nil || !bytes.Contains(encoded, []byte(`"cross_file_edges":4`)) {
+		t.Fatalf("ASSERT_MIXED_REPEATED_CANONICAL_JSON_PARITY: encoded=%s err=%v", encoded, err)
+	}
+}
+
 func TestValidateItemRejectsMissingFieldsAndInvalidRanges(t *testing.T) {
 	valid := testItem()
 	for _, tc := range []struct {

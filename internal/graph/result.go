@@ -745,8 +745,14 @@ func (r *Result) Canonicalize() {
 		r.CapabilityQuality.IncomingEdges = len(r.Edges)
 		r.CapabilityQuality.CrossFileEdges = 0
 		nodeURIs := make(map[string]string, len(r.Nodes))
+		canonicalURIs := make(map[string]string, len(r.Nodes))
 		for _, node := range r.Nodes {
-			nodeURIs[node.ID] = canonicalURI(node.URI)
+			uri, ok := canonicalURIs[node.URI]
+			if !ok {
+				uri = canonicalURI(node.URI)
+				canonicalURIs[node.URI] = uri
+			}
+			nodeURIs[node.ID] = uri
 		}
 		for _, edge := range r.Edges {
 			if callerURI, callerOK := nodeURIs[edge.CallerNodeID]; callerOK {
