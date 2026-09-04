@@ -626,9 +626,9 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				path == "README.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" ||
 				path == "cmd/lsp-trace/main.go" || path == "cmd/lsp-trace/render_command.go" || path == "cmd/lsp-trace/render_command_test.go" || path == "cmd/lsp-trace/custody_command.go" || path == "cmd/lsp-trace/custody_command_test.go" || strings.HasPrefix(path, "internal/presentation/") ||
 				path == "cmd/lsp-trace/SKILL.md" || path == "cmd/lsp-trace-mcp/main.go" || path == "cmd/lsp-trace-mcp/main_test.go" || path == "cmd/lsp-trace-mcp/process_integration_test.go" || path == "cmd/lsp-trace-mcp/bootstrap.go" || path == "cmd/lsp-trace-mcp/bootstrap_test.go" || path == "cmd/lsp-trace-mcp/bootstrap_process_test.go" ||
-				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" ||
+				path == "internal/mcp/registry.go" || path == "internal/mcp/registry_test.go" || path == "internal/mcp/transport.go" || path == "internal/mcp/transport_test.go" || path == "internal/mcp/execution_transport_test.go" ||
 				path == "internal/operation/types.go" || path == "internal/operation/verify.go" || path == "internal/operation/verify_test.go" || path == "mcp-transport.claim.md" ||
-				path == "internal/schema/denominator.go" || path == "internal/schema/denominator_test.go" || path == "internal/schema/family_test.go" || path == "internal/schema/schema.go" || path == "internal/schema/validation_core.go" || path == "internal/schema/schemas/lsp-trace.source-denominator.v1.schema.json" ||
+				path == "internal/schema/denominator.go" || path == "internal/schema/denominator_test.go" || path == "internal/schema/family_test.go" || path == "internal/schema/schema.go" || path == "internal/schema/validation_core.go" || path == "internal/schema/schemas/lsp-trace.source-denominator.v1.schema.json" || path == "schema/schemas/lsp-trace.execution.v1.schema.json" ||
 				path == "internal/graph/relations.go" || path == "internal/graph/relations_test.go" || path == "internal/graph/snapshot_identity.go" || path == "internal/graph/snapshot_identity_test.go" || path == "internal/graph/schemas/normalized-relations.v1.schema.json" ||
 				path == "internal/source/receipt.go" || path == "internal/source/receipt_test.go" ||
 				strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "sliceops/") || strings.HasPrefix(path, "internal/traverse/") || strings.HasPrefix(path, "internal/integratedconformance/")
@@ -653,7 +653,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 	t.Run("ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
 		registry := mcp.NewRegistry(true)
-		if got := len(registry.Advertised()); got != 12 {
+		if got := len(registry.Advertised()); got != 13 {
 			t.Fatalf("advertised=%d", got)
 		}
 		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {

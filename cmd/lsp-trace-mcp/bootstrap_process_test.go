@@ -11,7 +11,7 @@ import (
 )
 
 func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *testing.T) {
-	const assertion = "ASSERT_PRODUCTION_BOOTSTRAP_HOST_AUTHORITY_CORRELATED_READY_TWELVE_TOOLS"
+	const assertion = "ASSERT_PRODUCTION_BOOTSTRAP_HOST_AUTHORITY_CORRELATED_READY_THIRTEEN_TOOLS"
 	t.Log("ASSERTION: " + assertion)
 
 	mcpBinary := buildMCPBinary(t)
@@ -64,7 +64,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	if err := json.Unmarshal(lines[0], &response); err != nil {
 		t.Fatalf("%s: invalid tools response: %v stdout=%q", assertion, err, stdout.String())
 	}
-	if len(response.Result.Tools) != 12 {
+	if len(response.Result.Tools) != 13 {
 		t.Fatalf("%s: advertised=%d", assertion, len(response.Result.Tools))
 	}
 	if !bytes.Contains(lines[1], []byte(`"State":"READY"`)) || !bytes.Contains(lines[1], []byte(`"Generation":1`)) {

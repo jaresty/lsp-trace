@@ -19,12 +19,16 @@ import (
 )
 
 const (
-	protocolVersion          = "2025-06-18"
-	resultEnvelopeSchemaID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-result.v1.schema.json"
-	artifactEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-artifact.v1.schema.json"
-	domainEnvelopeSchemaID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json"
-	disabledEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-not-implemented.v1.schema.json"
-	compactEnvelopeSchemaID  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-compact-publication.v1.schema.json"
+	protocolVersion                           = "2025-06-18"
+	resultEnvelopeSchemaID                    = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-result.v1.schema.json"
+	artifactEnvelopeSchemaID                  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-artifact.v1.schema.json"
+	domainEnvelopeSchemaID                    = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json"
+	disabledEnvelopeSchemaID                  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-not-implemented.v1.schema.json"
+	compactEnvelopeSchemaID                   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-compact-publication.v1.schema.json"
+	executionArtifactEnvelopeSchemaID         = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-execute-artifact.v1.schema.json"
+	executionPublicationEnvelopeSchemaID      = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-execute-publication.v1.schema.json"
+	executionPublicationErrorEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-execute-publication-error.v1.schema.json"
+	executionDomainErrorEnvelopeSchemaID      = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-execute-domain-error.v1.schema.json"
 )
 
 type Executor interface {
@@ -299,7 +303,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		digest := "sha256:" + hex.EncodeToString(sum[:])
 		byteLength := uint64(len(opResult.Artifact))
 		successEnvelope := envelope{
-			EnvelopeVersion: "1", EnvelopeSchemaID: publicationEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+			EnvelopeVersion: "1", EnvelopeSchemaID: publicationSuccessSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", ArtifactSchemaID: artifactID,
 			LogicalDigest: opResult.LogicalDigest,
 		}
@@ -312,7 +316,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			successEnvelope.Progress = "completed"
 		}
 		failureEnvelope := envelope{
-			EnvelopeVersion: "1", EnvelopeSchemaID: publicationErrorEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+			EnvelopeVersion: "1", EnvelopeSchemaID: publicationFailureSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
 			Outcome: "PUBLICATION_ERROR", OperationStatus: "FAILED", IsError: true, Code: publication.CodePublicationFailed,
 			ArtifactSchemaID: artifactID, ArtifactDigest: digest, ArtifactByteLength: &byteLength,
 		}
@@ -336,7 +340,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	content := string(opResult.Artifact)
 	env := envelope{
-		EnvelopeVersion: "1", EnvelopeSchemaID: artifactEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+		EnvelopeVersion: "1", EnvelopeSchemaID: artifactSuccessSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
 		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Content: &content, ArtifactSchemaID: artifactID,
 		LogicalDigest: opResult.LogicalDigest,
 	}
@@ -414,10 +418,38 @@ func containsSchemaID(ids []string, wanted string) bool {
 
 func domainErrorEnvelope(tool, requestID, code string, diagnostics []string) envelope {
 	return envelope{
-		EnvelopeVersion: "1", EnvelopeSchemaID: domainEnvelopeSchemaID, Tool: tool, RequestID: requestID,
+		EnvelopeVersion: "1", EnvelopeSchemaID: domainFailureSchemaID(tool), Tool: tool, RequestID: requestID,
 		Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Code: code,
 		Diagnostics: diagnostics,
 	}
+}
+
+func artifactSuccessSchemaID(tool string) string {
+	if tool == "lsp_trace_v1_execute" {
+		return executionArtifactEnvelopeSchemaID
+	}
+	return artifactEnvelopeSchemaID
+}
+
+func publicationSuccessSchemaID(tool string) string {
+	if tool == "lsp_trace_v1_execute" {
+		return executionPublicationEnvelopeSchemaID
+	}
+	return publicationEnvelopeSchemaID
+}
+
+func publicationFailureSchemaID(tool string) string {
+	if tool == "lsp_trace_v1_execute" {
+		return executionPublicationErrorEnvelopeSchemaID
+	}
+	return publicationErrorEnvelopeSchemaID
+}
+
+func domainFailureSchemaID(tool string) string {
+	if tool == "lsp_trace_v1_execute" {
+		return executionDomainErrorEnvelopeSchemaID
+	}
+	return domainEnvelopeSchemaID
 }
 
 func normalizeDomainFailure(failure *operation.Failure) (string, []string) {
@@ -517,6 +549,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":
 		return operation.Name("slice")
+	case "lsp_trace_v1_execute":
+		return operation.Name("execute")
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")
 	case "lsp_session_v1_status":

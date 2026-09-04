@@ -149,7 +149,7 @@ func TestStage2LifecycleExecutableContract(t *testing.T) {
 			}
 		}
 	}
-	if advertised != 8 {
-		t.Fatalf("ASSERT_STAGE1_SEVEN_ADVERTISED: got %d", advertised)
+	if advertised != 9 {
+		t.Fatalf("ASSERT_STAGE1_NINE_ADVERTISED: got %d", advertised)
 	}
 }
