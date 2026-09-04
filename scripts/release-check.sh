@@ -175,7 +175,7 @@ assert_contains R-MCP-ADR-SUPERSEDED docs/adr/0003-persistent-mcp-language-serve
 assert_contains R-MCP-ADR-SUCCESSOR docs/adr/0003-persistent-mcp-language-server-sessions.md '[ADR 0003: Activate always-local Stage 2 lifecycle tools](0003-always-local-stage2.md)'
 assert_contains R-MCP-RELEASE-DOC docs/RELEASING.md 'lsp-trace-mcp'
 assert_contains R-MCP-BOOTSTRAP-DOC README.md 'lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json'
-assert_contains R-MCP-BOOTSTRAP-HOST-AUTHORITY README.md 'the host—not the MCP caller—provisions trusted sessions'
+assert_contains R-MCP-BOOTSTRAP-HOST-AUTHORITY README.md 'The host—not the MCP caller—provisions trusted sessions'
 assert_contains R-MCP-PRODUCTION-BOOTSTRAP-TEST cmd/lsp-trace-mcp/bootstrap_process_test.go 'func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady'
 
 if [ "$failed" -ne 0 ]; then

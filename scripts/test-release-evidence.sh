@@ -26,4 +26,4 @@ assert_contains ASSERT_RELEASE_STDIO_CHANNEL_GUARD "$release_check" 'TestRunStdi
 assert_contains ASSERT_RELEASE_GUIDE_BOOTSTRAP "$releasing" 'production bootstrap'
 assert_contains ASSERT_RELEASE_GUIDE_CHANNELS "$releasing" 'trusted-local warning on stderr and protocol-clean MCP stdout'
 assert_contains ASSERT_RELEASE_BOOTSTRAP_USAGE "$readme" 'lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json'
-assert_contains ASSERT_RELEASE_BOOTSTRAP_HOST_AUTHORITY "$readme" 'the host—not the MCP caller—provisions trusted sessions'
+assert_contains ASSERT_RELEASE_BOOTSTRAP_HOST_AUTHORITY "$readme" 'The host—not the MCP caller—provisions trusted sessions'
