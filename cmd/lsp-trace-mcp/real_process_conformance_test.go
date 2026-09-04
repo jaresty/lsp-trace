@@ -13,11 +13,30 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/provider"
 )
 
 const productionProviderContractGap = "production MCP bootstrap has no host-provisioned relation-provider registry/collector boundary; composeHostSelectorRuntime injects only the LSP session runtime"
+
+type realProviderComposition struct {
+	Complete  bool              `json:"complete"`
+	Calls     json.RawMessage   `json:"calls"`
+	Providers []json.RawMessage `json:"providers"`
+}
+
+func requireRealProviderComposition(t *testing.T, assertion string, call processCall) realProviderComposition {
+	t.Helper()
+	if call.env["operation_status"] != "SUCCEEDED" {
+		t.Fatalf("%s: %s; envelope=%v", assertion, productionProviderContractGap, call.env)
+	}
+	var composition realProviderComposition
+	if err := json.Unmarshal(inlineArtifactBytes(t, call.env), &composition); err != nil || len(composition.Providers) != 1 || !bytes.Contains(composition.Providers[0], []byte(`"provider_id":"fake@1.0.0"`)) || !bytes.Contains(composition.Providers[0], []byte(`"kind":"PASSES_CALLBACK"`)) {
+		t.Fatalf("%s: provider evidence absent or malformed: composition=%+v err=%v", assertion, composition, err)
+	}
+	return composition
+}
 
 func TestRealProviderProcessTransportConformance(t *testing.T) {
 	binary := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
@@ -174,9 +193,7 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
 		}
 		call := decodeProcessCall(t, responses[0])
-		if call.env["operation_status"] != "SUCCEEDED" {
-			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: %s; envelope=%v", productionProviderContractGap, call.env)
-		}
+		requireRealProviderComposition(t, "ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", call)
 		t.Log("PASS ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER")
 	})
 	t.Run("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
@@ -192,11 +209,36 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
 		}
 		call := decodeProcessCall(t, responses[0])
-		if call.env["operation_status"] != "SUCCEEDED" {
-			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: %s; envelope=%v", productionProviderContractGap, call.env)
-		}
+		requireRealProviderComposition(t, "ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", call)
 		t.Log("PASS ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER")
 	})
+	for _, operation := range []string{"incoming", "slice"} {
+		t.Run("ASSERT_PRODUCTION_PROVIDER_SUCCESS_NEVER_MASKS_"+strings.ToUpper(operation)+"_CALLS_GAP", func(t *testing.T) {
+			request := cloneMap(base)
+			request["max_nodes"] = 1
+			request["relations"] = []string{"CALLS", "PASSES_CALLBACK"}
+			request["providers"] = []string{"fake@1.0.0"}
+			tool := "lsp_trace_v1_incoming"
+			if operation == "slice" {
+				tool = "lsp_trace_v1_slice"
+				delete(request, "max_depth")
+				request["start_mode"] = "at"
+				request["up_depth"] = 2
+				request["down_depth"] = 2
+			}
+			assertion := "ASSERT_PRODUCTION_PROVIDER_SUCCESS_NEVER_MASKS_" + strings.ToUpper(operation) + "_CALLS_GAP"
+			responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(4, tool, request)})
+			if err != nil {
+				t.Fatalf("%s: process=%v", assertion, err)
+			}
+			composition := requireRealProviderComposition(t, assertion, decodeProcessCall(t, responses[0]))
+			var calls graph.Result
+			if len(composition.Calls) == 0 || json.Unmarshal(composition.Calls, &calls) != nil || calls.Summary.Complete || composition.Complete {
+				t.Fatalf("%s: provider success masked CALLS gap: composition_complete=%v calls=%+v", assertion, composition.Complete, calls.Summary)
+			}
+			t.Log("PASS " + assertion)
+		})
+	}
 	t.Run("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3", func(t *testing.T) {
 		if err := os.Remove(providerStartMarker); err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
@@ -216,8 +258,9 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 		legacy := decodeProcessCall(t, legacyResponses[0])
 		withProvider := decodeProcessCall(t, providerResponses[0])
 		legacyBytes, providerBytes := inlineArtifactBytes(t, legacy.env), inlineArtifactBytes(t, withProvider.env)
-		if !bytes.Equal(providerBytes, legacyBytes) {
-			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: graph-v3 bytes changed\nprovider: %q\nhistorical: %q", providerBytes, legacyBytes)
+		var providerGraph graph.Result
+		if !bytes.Equal(providerBytes, legacyBytes) || json.Unmarshal(providerBytes, &providerGraph) != nil || providerGraph.SchemaVersion != graph.SchemaVersionV3 {
+			t.Fatalf("ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3: graph-v3 bytes changed or schema drifted: schema=%q\nprovider: %q\nhistorical: %q", providerGraph.SchemaVersion, providerBytes, legacyBytes)
 		}
 		t.Log("PASS ASSERT_PRODUCTION_OMISSION_ZERO_PROVIDER_START_EXACT_GRAPH_V3")
 	})

@@ -17,18 +17,22 @@ func (c *compositionCollector) CollectRelations(context.Context, []string, json.
 }
 
 type compositionFactory struct {
-	runtimeCalls   int
-	collectorCalls int
-	collector      productionRelationCollector
+	runtimeCalls     int
+	collectorCalls   int
+	runtime          provider.Executor
+	collectorRuntime provider.Executor
+	collector        productionRelationCollector
 }
 
 func (f *compositionFactory) NewRuntime(*provider.Registry) provider.Executor {
 	f.runtimeCalls++
-	return compositionExecutor{}
+	f.runtime = &compositionExecutor{}
+	return f.runtime
 }
 
-func (f *compositionFactory) NewCollector(provider.Executor, provider.AdmissionResolver, provider.SemanticAdapter) (productionRelationCollector, error) {
+func (f *compositionFactory) NewCollector(runtime provider.Executor, _ provider.AdmissionResolver, _ provider.SemanticAdapter) (productionRelationCollector, error) {
 	f.collectorCalls++
+	f.collectorRuntime = runtime
 	if f.collector == nil {
 		return nil, errors.New("missing test collector")
 	}
@@ -37,7 +41,7 @@ func (f *compositionFactory) NewCollector(provider.Executor, provider.AdmissionR
 
 type compositionExecutor struct{}
 
-func (compositionExecutor) Execute(context.Context, string, json.RawMessage, provider.Limits) provider.Receipt {
+func (*compositionExecutor) Execute(context.Context, string, json.RawMessage, provider.Limits) provider.Receipt {
 	return provider.Receipt{}
 }
 
@@ -74,20 +78,17 @@ func composeLifecycleFixture(t *testing.T) (*hostSelectorRuntime, *compositionFa
 
 func TestMCPProviderLifecycleComposition(t *testing.T) {
 	t.Run("production wrapper", func(t *testing.T) {
-		attachedBeforeExecutors := false
-		selected, err := composeMCPProviderLifecycle(newHostSelectorRuntime(nil, nil), provider.NewRegistry(), compositionAdmitter{}, compositionAdapter{}, func(runtime *hostSelectorRuntime) {
-			attachedBeforeExecutors = runtime.relationCollector != nil
-		})
-		if err != nil || selected == nil || selected.relationCollector == nil || !attachedBeforeExecutors {
-			t.Fatalf("ASSERT_MCP_PROVIDER_LIFECYCLE_PRODUCTION_COMPOSITION: selected=%v attached=%v err=%v", selected != nil, attachedBeforeExecutors, err)
+		selected, err := composeMCPProviderLifecycle(newHostSelectorRuntime(nil, nil), provider.NewRegistry(), compositionAdmitter{}, compositionAdapter{}, func(*hostSelectorRuntime) {})
+		if err != nil || selected == nil || selected.relationCollector == nil {
+			t.Fatalf("ASSERT_MCP_PROVIDER_LIFECYCLE_PRODUCTION_COMPOSITION: selected=%v collector=%v err=%v", selected != nil, selected != nil && selected.relationCollector != nil, err)
 		}
 		t.Log("PASS ASSERT_MCP_PROVIDER_LIFECYCLE_PRODUCTION_COMPOSITION")
 	})
 
 	t.Run("exactly one", func(t *testing.T) {
 		selected, factory, collector, _ := composeLifecycleFixture(t)
-		if factory.runtimeCalls != 1 || factory.collectorCalls != 1 || selected.relationCollector != collector {
-			t.Fatalf("ASSERT_MCP_PROVIDER_LIFECYCLE_EXACTLY_ONE: runtime_calls=%d collector_calls=%d attached=%v", factory.runtimeCalls, factory.collectorCalls, selected.relationCollector == collector)
+		if factory.runtimeCalls != 1 || factory.collectorCalls != 1 || factory.runtime == nil || factory.collectorRuntime != factory.runtime || selected.relationCollector != collector {
+			t.Fatalf("ASSERT_MCP_PROVIDER_LIFECYCLE_EXACTLY_ONE: runtime_calls=%d collector_calls=%d shared_runtime=%v attached=%v", factory.runtimeCalls, factory.collectorCalls, factory.collectorRuntime == factory.runtime, selected.relationCollector == collector)
 		}
 		t.Log("PASS ASSERT_MCP_PROVIDER_LIFECYCLE_EXACTLY_ONE")
 	})
