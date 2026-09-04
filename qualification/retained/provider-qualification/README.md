@@ -1,6 +1,6 @@
 # External provider qualification
 
-Baseline: `158e85f17d969cee94037bf0555b6504420f385d`
+Baseline: `0702d12`
 
 Run from `qualification/provider-qualification`:
 
@@ -10,11 +10,17 @@ npm run qualify
 npm test
 ```
 
-The deterministic `report.json` records one executed outcome per candidate:
+The workspace pins `@glint/core`, `@glint/environment-ember-loose`, and `@glint/environment-ember-template-imports` at `1.5.2`, Ember at `7.2.0`, and TypeScript at `5.9.2`. `tsconfig.json` uses the supported `ember-template-imports` environment over one bounded `.gts` Glimmer component fixture.
 
-- Ember Template Compiler 7.2.0: **SCOPED_ROLE** `template-syntax-ast`. Its internal `_preprocess` entrypoint parsed the extracted bounded `<template>` body and returned exact locations for callback passage and argument reads. This is not a stable public API claim.
-- Glint 1.5.2: **BLOCKED**. `loadConfig` could not find a Glint configuration for the isolated qualification workspace, so no Glint semantic claim is inferred.
-- Tree-sitter 0.21.1 with `tree-sitter-typescript` 0.23.2: **SCOPED_ROLE** `typescript-concrete-syntax`. It parsed one exact `call_expression`; syntax alone does not establish symbol identity or framework semantics.
-- TypeScript service 5.9.2: **PASS** for `typescript-symbol-definition`. `createLanguageService` resolved the exact `leaf` call to its definition in the bounded fixture.
+The deterministic `lsp-trace.provider-qualification.v2` report records one independently classified Glint operation:
 
-Every result is static source evidence only. It prohibits claims of runtime execution, callback invocation from passage, repaint, feature identity, and whole-source completeness. A scoped role is not general provider qualification, and BLOCKED is never promoted from package presence or another provider's evidence.
+- **PASS** `workspace`: public `loadConfig` plus root-exported `analyzeProject` loaded the pinned environment and returned zero Glint diagnostics.
+- **SCOPED_ROLE** `typed-template-resolution`: `analyzeProject(...).languageServer.getDefinition` resolved template `this.itemCount` to its exact typed getter definition. `analyzeProject` is explicitly documented in the package declaration as unstable, so this is not stable provider API qualification.
+- **SCOPED_ROLE** `original-source-ranges`: the returned transform manager mapped the virtual token span to the exact original `.gts` token and range. The manager is obtained through the unstable analysis API.
+- **SCOPED_ROLE** `virtual-document-mappings`: `getTransformedRange`, `getOriginalRange`, and `getTransformedContents` produced a deterministic subordinate virtual `.ts` document and exact bidirectional round trip. Original coordinates remain authoritative.
+- **PASS** `immutable-pinned-files`: SHA-256 values for the fixture, `tsconfig.json`, and lockfile were identical before and after analysis.
+- **BLOCKED** `partial-failure-reporting`: the `@glint/core` 1.5.2 public root contract exposes diagnostics, arrays, optional values, and thrown errors, but no structured status vocabulary distinguishing unsupported, unavailable, partial, bounded, empty, and transport-failed outcomes. Package presence and internal files do not upgrade this result.
+
+Two consecutive qualification runs produced byte-identical console output and retained report SHA-256 `0b384f1e74a52a3505426ccf4ff5140945c2f04e06dea86b44e90bb55f1004fe`. `npm test` reported 2 passing tests.
+
+The prior Ember Template Compiler, Tree-sitter, and plain TypeScript roles retain their original narrow ceilings. Every result is static source evidence only. Nothing here supports runtime execution, callback invocation from passage, repaint, feature identity, whole-source completeness, relation absence from unknown evidence, production-provider readiness, or release packaging.

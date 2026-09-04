@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "qualify": "node qualify.mjs",
-    "test": "node --test qualify.test.mjs"
+    "test": "node --test qualify.test.mjs frozen-glint.test.mjs"
   },
   "dependencies": {
     "@glint/core": "1.5.2",
+    "@glint/environment-ember-loose": "1.5.2",
+    "@glint/environment-ember-template-imports": "1.5.2",
     "ember-source": "7.2.0",
     "tree-sitter": "0.21.1",
     "tree-sitter-typescript": "0.23.2",

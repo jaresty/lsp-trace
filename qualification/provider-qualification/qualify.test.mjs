@@ -12,7 +12,7 @@ export const prohibited = [
 ];
 
 export function validate(report) {
-  assert.equal(report.schema_version, 'lsp-trace.provider-qualification.v1', 'P3 deterministic schema');
+  assert.equal(report.schema_version, 'lsp-trace.provider-qualification.v2', 'P3 deterministic schema');
   assert.deepEqual(report.candidates.map((entry) => entry.id), candidates, 'P1 exact candidate set');
   for (const entry of report.candidates) {
     assert.ok(['PASS', 'BLOCKED', 'SCOPED_ROLE'].includes(entry.outcome), `P1 ${entry.id} closed outcome`);
@@ -26,7 +26,7 @@ export function validate(report) {
 }
 
 const valid = {
-  schema_version: 'lsp-trace.provider-qualification.v1',
+  schema_version: 'lsp-trace.provider-qualification.v2',
   candidates: candidates.map((id) => ({
     id,
     outcome: 'SCOPED_ROLE',

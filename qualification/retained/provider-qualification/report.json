@@ -1,41 +1,33 @@
 {
-  "schema_version": "lsp-trace.provider-qualification.v1",
+  "schema_version": "lsp-trace.provider-qualification.v2",
   "candidates": [
     {
       "id": "ember-template-compiler",
       "version": "7.2.0",
       "outcome": "SCOPED_ROLE",
       "role": "template-syntax-ast",
-      "operation": "preprocess extracted <template> body",
-      "observation": "parsed 4 PathExpression nodes including callback passage and argument read",
-      "anchors": [
-        {
-          "original": "this.uploadFile",
-          "loc": {
-            "start": {
-              "line": 2,
-              "column": 29
-            },
-            "end": {
-              "line": 2,
-              "column": 44
-            }
-          }
-        },
-        {
-          "original": "@data.length",
-          "loc": {
-            "start": {
-              "line": 3,
-              "column": 9
-            },
-            "end": {
-              "line": 3,
-              "column": 21
-            }
-          }
-        }
+      "operation": "covered by prior retained qualification; not upgraded by Glint evidence",
+      "observation": "Ember compiler remains syntax-only",
+      "anchors": [],
+      "supported_claims": [
+        "bounded_source_structure"
       ],
+      "prohibited_claims": [
+        "callback_invocation_from_passage",
+        "feature_identity",
+        "repaint",
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "id": "glint",
+      "version": "1.5.2",
+      "outcome": "SCOPED_ROLE",
+      "role": "typed-template-project-analysis",
+      "operation": "operation-level root API qualification",
+      "observation": "see glint_operations for independent outcomes and evidence",
+      "anchors": [],
       "supported_claims": [
         "bounded_source_structure",
         "exact_source_anchor",
@@ -50,44 +42,13 @@
       ]
     },
     {
-      "id": "glint",
-      "version": "1.5.2",
-      "outcome": "BLOCKED",
-      "role": null,
-      "operation": "loadConfig plus analyzeProject on qualification workspace",
-      "observation": "Unable to find Glint configuration for ${QUALIFICATION}",
-      "anchors": [],
-      "supported_claims": [],
-      "prohibited_claims": [
-        "callback_invocation_from_passage",
-        "feature_identity",
-        "repaint",
-        "runtime_execution",
-        "whole_source_completeness"
-      ]
-    },
-    {
       "id": "tree-sitter",
       "version": "0.21.1",
       "outcome": "SCOPED_ROLE",
       "role": "typescript-concrete-syntax",
-      "operation": "parse plain.ts with tree-sitter-typescript grammar",
-      "observation": "parsed call_expression leaf(value)",
-      "anchors": [
-        {
-          "uri": "fixtures/plain.ts",
-          "range": {
-            "start": {
-              "row": 5,
-              "column": 9
-            },
-            "end": {
-              "row": 5,
-              "column": 20
-            }
-          }
-        }
-      ],
+      "operation": "covered by prior retained qualification; not upgraded by Glint evidence",
+      "observation": "Tree-sitter remains concrete-syntax-only",
+      "anchors": [],
       "supported_claims": [
         "bounded_source_structure",
         "exact_source_anchor"
@@ -105,23 +66,9 @@
       "version": "5.9.2",
       "outcome": "PASS",
       "role": "typescript-symbol-definition",
-      "operation": "createLanguageService then getDefinitionAtPosition at leaf call",
-      "observation": "resolved 1 definition(s) for leaf",
-      "anchors": [
-        {
-          "uri": "fixtures/plain.ts",
-          "range": {
-            "start": {
-              "line": 0,
-              "character": 16
-            },
-            "end": {
-              "line": 0,
-              "character": 20
-            }
-          }
-        }
-      ],
+      "operation": "covered by prior retained qualification",
+      "observation": "TypeScript service support remains bounded to plain TypeScript fixture",
+      "anchors": [],
       "supported_claims": [
         "bounded_source_structure",
         "exact_source_anchor",
@@ -134,6 +81,164 @@
         "runtime_execution",
         "whole_source_completeness"
       ]
+    }
+  ],
+  "glint_operations": [
+    {
+      "id": "workspace",
+      "assertion": "ASSERT_GLINT_VALID_FROZEN_WORKSPACE",
+      "outcome": "PASS",
+      "api": "loadConfig(projectDirectory)",
+      "observation": "loaded supported ember-template-imports configuration with zero diagnostics",
+      "evidence": {
+        "environment": [
+          "ember-template-imports"
+        ],
+        "diagnostics": [],
+        "versions": {
+          "@glint/core": "1.5.2",
+          "@glint/environment-ember-loose": "1.5.2",
+          "@glint/environment-ember-template-imports": "1.5.2",
+          "ember-source": "7.2.0",
+          "typescript": "5.9.2"
+        }
+      }
+    },
+    {
+      "id": "typed-template-resolution",
+      "assertion": "ASSERT_GLINT_TYPED_TEMPLATE_RESOLUTION",
+      "outcome": "SCOPED_ROLE",
+      "api": "analyzeProject(projectDirectory).languageServer.getDefinition(uri, position)",
+      "observation": "resolved template this.itemCount to one typed getter definition",
+      "evidence": {
+        "query": {
+          "uri": "fixtures/component.gts",
+          "range": {
+            "start": {
+              "line": 14,
+              "character": 9
+            },
+            "end": {
+              "line": 14,
+              "character": 23
+            }
+          }
+        },
+        "definitions": [
+          {
+            "uri": "fixtures/component.gts",
+            "range": {
+              "start": {
+                "line": 9,
+                "character": 6
+              },
+              "end": {
+                "line": 9,
+                "character": 15
+              }
+            }
+          }
+        ],
+        "api_stability": "unstable per @glint/core 1.5.2 root declaration"
+      },
+      "role": "typed-template-definition"
+    },
+    {
+      "id": "original-source-ranges",
+      "assertion": "ASSERT_GLINT_EXACT_ORIGINAL_SOURCE_RANGES",
+      "outcome": "SCOPED_ROLE",
+      "api": "analyzeProject(projectDirectory).transformManager.getOriginalRange(...)",
+      "observation": "mapped the virtual span back to the exact original template token range",
+      "evidence": {
+        "original": {
+          "uri": "fixtures/component.gts",
+          "offsets": {
+            "start": 280,
+            "end": 294
+          },
+          "range": {
+            "start": {
+              "line": 14,
+              "character": 9
+            },
+            "end": {
+              "line": 14,
+              "character": 23
+            }
+          },
+          "text": "this.itemCount"
+        },
+        "api_stability": "transform manager obtained through unstable analyzeProject API"
+      },
+      "role": "exact-original-source-range"
+    },
+    {
+      "id": "virtual-document-mappings",
+      "assertion": "ASSERT_GLINT_VIRTUAL_DOCUMENT_MAPPINGS",
+      "outcome": "SCOPED_ROLE",
+      "api": "transformManager.getTransformedRange(...) plus getOriginalRange(...) and languageServer.getTransformedContents(uri)",
+      "observation": "observed deterministic original-to-virtual and virtual-to-original mapping round trip",
+      "evidence": {
+        "original_uri": "fixtures/component.gts",
+        "virtual_uri": "fixtures/component.ts",
+        "original_offsets": {
+          "start": 280,
+          "end": 294
+        },
+        "virtual_offsets": {
+          "start": 553,
+          "end": 570
+        },
+        "round_trip_original_offsets": {
+          "start": 280,
+          "end": 294
+        },
+        "virtual_sha256": "4ff22b91f4f38e1e8dffcdadcab08f5366292727ae9975c29982ec02ed9a697a",
+        "api_stability": "transform manager obtained through unstable analyzeProject API"
+      },
+      "role": "bidirectional-virtual-document-mapping"
+    },
+    {
+      "id": "immutable-pinned-files",
+      "assertion": "ASSERT_GLINT_IMMUTABLE_PINNED_FILES",
+      "outcome": "PASS",
+      "api": "SHA-256 before and after read-only Glint analysis",
+      "observation": "all pinned fixture, configuration, and lockfile bytes remained unchanged",
+      "evidence": {
+        "before": {
+          "fixtures/component.gts": "eb1357e731e87197853570d72cce1496dd886dba9475e4eeb58b5c7216a358cf",
+          "tsconfig.json": "9d3d8c49ef615b946a3656d255691a88d5839a8b446d0d4f3ec2a8ac3d5f4079",
+          "package-lock.json": "efbe4e09ff09c42c325386ad5f0b23f7426173bb494f53f1ef6da1c1b7a5430f"
+        },
+        "after": {
+          "fixtures/component.gts": "eb1357e731e87197853570d72cce1496dd886dba9475e4eeb58b5c7216a358cf",
+          "tsconfig.json": "9d3d8c49ef615b946a3656d255691a88d5839a8b446d0d4f3ec2a8ac3d5f4079",
+          "package-lock.json": "efbe4e09ff09c42c325386ad5f0b23f7426173bb494f53f1ef6da1c1b7a5430f"
+        }
+      }
+    },
+    {
+      "id": "partial-failure-reporting",
+      "assertion": "ASSERT_GLINT_EXPLICIT_PARTIAL_FAILURE",
+      "outcome": "BLOCKED",
+      "api": "@glint/core 1.5.2 root exports and ProjectAnalysis API",
+      "observation": "no documented root API returns a structured partial/failure outcome vocabulary; diagnostics, arrays, undefined values, and thrown errors cannot distinguish unsupported, unavailable, partial, bounded, empty, or transport-failed outcomes",
+      "evidence": {
+        "root_exports": [
+          "analyzeProject",
+          "loadConfig",
+          "pathUtils"
+        ],
+        "required_distinctions": [
+          "unsupported",
+          "unavailable",
+          "partial",
+          "bounded",
+          "empty",
+          "transport-failed"
+        ],
+        "support_basis": "package export map and root declarations; package presence is not support"
+      }
     }
   ]
 }
