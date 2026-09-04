@@ -85,7 +85,8 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_validate":     "Validate retained evidence against its schema contract",
 		"lsp_trace_v1_verify":       "Verify immutable publication custody, byte length, and digest",
 		"lsp_trace_v1_schema_get":   "Retrieve the exact schema contract for an evidence family and version",
-		"lsp_trace_v1_capabilities": "Discover the twelve canonical LSP Trace tools, schemas, publication support, and limits",
+		"lsp_trace_v1_capabilities": "Discover the thirteen canonical LSP Trace tools, schemas, publication support, and limits",
+		"lsp_trace_v1_execute":      "Execute one canonical request through the shared transport-neutral operation",
 		"lsp_trace_v1_incoming":     "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
 		"lsp_trace_v1_slice":        "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
 	}

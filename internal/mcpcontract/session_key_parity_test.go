@@ -366,7 +366,7 @@ func assertReservationParity(t *testing.T, contract stage2LifecycleContract) {
 			}
 		}
 	}
-	if advertised != 8 {
+	if advertised != 9 {
 		t.Fatalf("ASSERT_SESSION_KEY_PARITY_BASELINE_PRESERVED: advertised=%d", advertised)
 	}
 }

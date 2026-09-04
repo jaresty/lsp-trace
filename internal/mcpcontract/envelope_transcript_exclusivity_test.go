@@ -136,8 +136,8 @@ func TestEnvelopeTranscriptExclusivityConformance(t *testing.T) {
 			}
 		}
 	}
-	if advertised != 8 {
-		t.Fatalf("%s: Stage 1 advertised=%d want 7", assertStageBoundaries, advertised)
+	if advertised != 9 {
+		t.Fatalf("%s: Stage 1 advertised=%d want 9", assertStageBoundaries, advertised)
 	}
 }
 
