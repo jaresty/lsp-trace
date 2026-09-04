@@ -99,6 +99,12 @@ assert_contains DOC-PI-NO-CUSTOM-EXTENSION README.md 'Do not add a repository-lo
 assert_contains DOC-PI-HOST-AUTHORITY README.md 'Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory.'
 assert_contains DOC-PI-CANCELLATION README.md 'Cancellation stops the caller observation; an already accepted lifecycle intent may continue.'
 assert_contains DOC-PI-BOUNDED README.md 'Partial or truncated traversal results remain honest bounded outcomes.'
+assert_contains DOC-PI-SEARCH-KEYWORDS README.md '"searchKeywords": {'
+assert_contains DOC-PI-SEARCH-INTENTS README.md '"who calls this callee"'
+assert_contains DOC-MCP-TRAVERSAL-COMPACT README.md '"detail":"compact","output_selector":"traces/callers.json"'
+assert_contains DOC-MCP-LIFECYCLE-SUCCESS README.md 'Successful lifecycle guidance is categorical and comes only from the returned `result`'
+assert_contains DOC-SKILL-TRAVERSAL-COMPACT cmd/lsp-trace/SKILL.md 'For a compact traversal response, set both `detail: "compact"` and a caller-chosen `output_selector`.'
+assert_contains DOC-ADR-TWELVE docs/adr/0003-always-local-stage2.md 'Unsupported platforms keep the same twelve-tool discovery contract.'
 
 if [ "$failed" -ne 0 ]; then
   exit 1

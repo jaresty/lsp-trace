@@ -116,6 +116,12 @@ Call `lsp_trace_v1_capabilities` with `{}` to discover the process-lifetime tool
 
 Artifact-producing tools return exact bytes inline when they fit the 1,048,576-byte limit. A request whose result may exceed that limit should provide an `output_selector`; selector publication is available only when the process was started with `--publication-root`, and the selector must resolve beneath that pinned root. Publication uses exclusive no-replace owner-only files and returns a path-free receipt. The server never chooses or returns a private path. `list_page_max` is 100.
 
+Incoming and slice also accept `detail: "compact"` only with a caller-chosen `output_selector`. The selected file receives the complete immutable graph bytes; the response contains a path-free publication receipt and bounded summary instead of inline graph content. Omitting `detail`, or setting `detail: "full"`, preserves the legacy inline/default or full publication behavior. For example:
+
+```text
+lsp_trace_v1_incoming {"session_id":"SESSION_FROM_LIST","generation":1,"uri":"file:///absolute/workspace/file.go","line":0,"character":0,"detail":"compact","output_selector":"traces/callers.json"}
+```
+
 The default surface publishes exactly twelve canonical tools. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the twelve-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
 
 ## Pi direct tools with pi-mcp-adapter
@@ -151,13 +157,35 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
         "lsp_trace_v1_incoming",
         "lsp_trace_v1_slice"
       ],
+      "searchKeywords": {
+        "lsp_session_v1_list": ["discover sessions", "available language servers"],
+        "lsp_session_v1_status": ["current session state", "is the server ready"],
+        "lsp_session_v1_stop": ["stop language server"],
+        "lsp_session_v1_restart": ["restart language server"],
+        "lsp_trace_v1_incoming": ["who calls this callee", "find callers", "incoming calls"],
+        "lsp_trace_v1_slice": ["explore call graph", "outgoing then incoming"],
+        "lsp_trace_v1_inspect": ["inspect retained seed evidence"],
+        "lsp_trace_v1_filter": ["compare two seeds"],
+        "lsp_trace_v1_validate": ["validate evidence schema"],
+        "lsp_trace_v1_verify": ["verify custody digest"],
+        "lsp_trace_v1_schema_get": ["retrieve schema contract"],
+        "lsp_trace_v1_capabilities": ["discover tools and limits"]
+      },
       "toolPrefix": "none"
     }
   }
 }
 ```
 
-The list contains exactly the twelve canonical MCP names. `toolPrefix: "none"` keeps those names unchanged in Pi. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing twelve tools and cannot override process configuration.
+The list contains exactly the twelve canonical MCP names. `toolPrefix: "none"` keeps those names unchanged in Pi. `searchKeywords` is adapter-only routing metadata: it improves proxy search without changing MCP names, descriptions, schemas, direct-tool registration, runtime behavior, or authority. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing twelve tools and cannot override process configuration.
+
+Natural-language routing examples:
+
+- “who calls this callee” or “find callers of this exact position” routes to `lsp_trace_v1_incoming`.
+- “explore outward, then find callers from the boundary” routes to `lsp_trace_v1_slice`.
+- “what sessions did the host provision?” routes to `lsp_session_v1_list`; “is this exact generation ready?” routes to `lsp_session_v1_status`.
+- “compare these two retained seeds” routes to `lsp_trace_v1_filter`, after `lsp_trace_v1_inspect` produces an all-seeds inspection.
+- Do not route source-edit requests, arbitrary shell execution, server-command selection, environment changes, or working-directory changes to these tools. Those intents are outside the MCP surface and remain host-controlled.
 
 The warning above still applies: the adapter starts `lsp-trace-mcp`, which starts trusted local language-server children with the developer's permissions. They are not sandboxed and may access local files and network.
 
@@ -187,7 +215,7 @@ lsp_session_v1_status {"session_id":"SESSION_FROM_LIST","generation":1}
 lsp_trace_v1_incoming {"session_id":"SESSION_FROM_LIST","generation":1,"uri":"file:///absolute/workspace/file.go","line":0,"character":0,"max_depth":8,"max_nodes":1000,"request_timeout_ms":30000,"timeout_ms":60000}
 ```
 
-Use the exact current generation returned by list/status. A stale-generation diagnostic names the authoritative current generation; query status with that exact selector before retrying. Stop and restart are host-managed lifecycle intents:
+Use the exact current generation returned by list/status. A stale-generation diagnostic names the authoritative current generation; query status with that exact selector before retrying. Successful lifecycle guidance is categorical and comes only from the returned `result`: report the observed state and terminal facts present there, never invented phases, percentages, elapsed estimates, or inferred completion. Stop and restart are host-managed lifecycle intents:
 
 ```text
 lsp_session_v1_stop {"session_id":"SESSION_FROM_LIST","generation":1,"caller_id":"pi-session"}

@@ -80,11 +80,14 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
 	descriptions := map[string]string{
-		"lsp_trace_v1_inspect": "Inspect retained evidence", "lsp_trace_v1_filter": "Filter retained evidence",
-		"lsp_trace_v1_validate": "Validate retained evidence", "lsp_trace_v1_verify": "Verify retained evidence",
-		"lsp_trace_v1_schema_get": "Retrieve an evidence schema", "lsp_trace_v1_capabilities": "Discover LSP Trace MCP capabilities",
-		"lsp_trace_v1_incoming": "Trace bounded incoming calls through a managed local language-server session",
-		"lsp_trace_v1_slice":    "Trace a bounded outgoing-then-incoming slice through a managed local language-server session",
+		"lsp_trace_v1_inspect":      "Inspect retained evidence for one seed or all retained seeds without changing authority",
+		"lsp_trace_v1_filter":       "Compare exactly two retained seed evidence sets with a mechanical filter",
+		"lsp_trace_v1_validate":     "Validate retained evidence against its schema contract",
+		"lsp_trace_v1_verify":       "Verify immutable publication custody, byte length, and digest",
+		"lsp_trace_v1_schema_get":   "Retrieve the exact schema contract for an evidence family and version",
+		"lsp_trace_v1_capabilities": "Discover the twelve canonical LSP Trace tools, schemas, publication support, and limits",
+		"lsp_trace_v1_incoming":     "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
+		"lsp_trace_v1_slice":        "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
 	}
 	tools := make([]Tool, 0, len(manifest.Tools))
 	for _, contract := range manifest.Tools {
@@ -179,13 +182,13 @@ func withoutPublicationEnvelopes(ids []string) []string {
 func lifecycleDescription(name string) string {
 	switch name {
 	case "lsp_session_v1_list":
-		return "List local language-server sessions"
+		return "Discover host-provisioned local language-server sessions and exact generations"
 	case "lsp_session_v1_status":
-		return "Get local language-server session status"
+		return "Read the current observed state of one local language-server session generation"
 	case "lsp_session_v1_stop":
-		return "Stop a local language-server session generation"
+		return "Request the host runtime to stop one exact local language-server session generation"
 	case "lsp_session_v1_restart":
-		return "Restart a local language-server session generation"
+		return "Request the host runtime to restart one exact local language-server session generation"
 	default:
 		return ""
 	}

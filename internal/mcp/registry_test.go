@@ -176,6 +176,38 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 	}
 }
 
+func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
+	const assertion = "ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS"
+	t.Log("ASSERTION: " + assertion)
+	want := map[string][]string{
+		"lsp_session_v1_list":       {"discover", "session"},
+		"lsp_session_v1_status":     {"current", "state"},
+		"lsp_session_v1_stop":       {"stop", "generation"},
+		"lsp_session_v1_restart":    {"restart", "generation"},
+		"lsp_trace_v1_incoming":     {"who calls", "callee"},
+		"lsp_trace_v1_slice":        {"outgoing", "incoming"},
+		"lsp_trace_v1_inspect":      {"seed", "retained"},
+		"lsp_trace_v1_filter":       {"compare", "two"},
+		"lsp_trace_v1_validate":     {"schema", "validate"},
+		"lsp_trace_v1_verify":       {"custody", "digest"},
+		"lsp_trace_v1_schema_get":   {"schema", "contract"},
+		"lsp_trace_v1_capabilities": {"twelve", "limits"},
+	}
+	registry := NewRegistry(false)
+	for name, terms := range want {
+		tool, ok := registry.Resolve(name)
+		if !ok {
+			t.Fatalf("%s: missing %s", assertion, name)
+		}
+		description := strings.ToLower(tool.Description)
+		for _, term := range terms {
+			if !strings.Contains(description, term) {
+				t.Errorf("%s: %s description %q lacks %q", assertion, name, tool.Description, term)
+			}
+		}
+	}
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has twelve canonical entries with eleven always-local enabled tools and one reserved slice entry"

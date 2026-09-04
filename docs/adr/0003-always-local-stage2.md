@@ -12,7 +12,7 @@ The default stdio MCP surface advertises twelve canonical tools: the existing si
 
 On Darwin, process startup uses the existing local process-group supervisor and readiness/lifecycle APIs. A session becomes lifecycle-visible only according to the runtime readiness state. Stop and restart retain bounded asynchronous operation records, cancellation behavior, teardown/reap requirements, immutable terminal outcomes, and monotonically succeeding restart generations.
 
-Unsupported platforms keep the same ten-tool discovery contract. Operations that require starting a process fail explicitly without starting a child. Platform support does not hide tools and is not expressed as a production-containment gate.
+Unsupported platforms keep the same twelve-tool discovery contract. Operations that require starting a process fail explicitly without starting a child. Platform support does not hide tools and is not expressed as a production-containment gate.
 
 ## Trust and safety boundary
 
