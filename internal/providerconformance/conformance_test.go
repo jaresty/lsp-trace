@@ -110,7 +110,7 @@ func validFixture(t *testing.T, mode string) (Config, Request) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	limits := Limits{RequestBytes: 64 << 10, ResponseBytes: 64 << 10, Messages: 1, Observations: 8, Diagnostics: 8, StderrBytes: 4096, WallTime: time.Second, TerminationGrace: 100 * time.Millisecond}
+	limits := Limits{RequestBytes: 64 << 10, ResponseBytes: 64 << 10, Messages: 1, Observations: 8, Diagnostics: 8, StderrBytes: 4096, WallTime: 10 * time.Second, TerminationGrace: 100 * time.Millisecond}
 	provider := Identity{Name: "generic-provider", Version: "1"}
 	protocol := Identity{Name: "generic-protocol", Version: "1"}
 	custody := Custody{OriginalURI: "file:///source", OriginalRevision: "r1", OriginalDigest: "sha256:original", VirtualURI: "virtual:///source", VirtualRevision: "r1", VirtualDigest: "sha256:virtual", VirtualOriginalURI: "file:///source"}

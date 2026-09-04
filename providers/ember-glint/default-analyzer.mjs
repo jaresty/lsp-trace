@@ -19,9 +19,34 @@ const versions = Object.freeze({
 });
 
 export function createDefaultAnalyzer() {
-  return createAnalyzer({
+  const analyzer = createAnalyzer({
     templateExtractor: createTemplateObservationExtractor({ compiler, compilerVersion: require('ember-source/package.json').version }),
     scriptExtractor: createScriptSymbolExtractor({ ts, Parser, TypeScriptLanguages, versions }),
     glintAnalyzer: createGlintAnalyzer({ loadConfig, analyzeProject }),
+  });
+  return Object.freeze({
+    id: 'ember-glint-default@1',
+    relationKinds: ['BINDS_ARGUMENT'],
+    languages: ['glimmer-js'],
+    frameworks: ['ember'],
+    supportedRelations: analyzer.supportedRelations,
+    analyze(request, options) {
+      if (request?.schema === 'lsp-trace.provider-request.v1') {
+        const input = request.documents?.[0];
+        const document = input && {
+          document_id: 'original',
+          uri: input.uri,
+          revision: input.revision,
+          blob: input.digest.replace(/^sha256:/, ''),
+        };
+        const result = analyzer.analyze({ kind: 'template', source: input?.source ?? '', document, relationKinds: request.relation_kinds });
+        return {
+          outcome: result.observations.length === 0 ? 'EMPTY' : 'COMPLETE',
+          observations: result.observations,
+          coverage: { status: 'BOUNDED', denominator: [document?.uri].filter(Boolean), covered: [document?.uri].filter(Boolean) },
+        };
+      }
+      return analyzer.analyze(request, options);
+    },
   });
 }

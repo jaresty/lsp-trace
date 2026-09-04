@@ -25,4 +25,5 @@ esac
 printf 'PASS ASSERT_EXTERNAL_PROVIDER_ABSOLUTE_PATH: %s\n' "$canonical"
 printf 'PASS ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH: independently installed executable\n'
 LSP_TRACE_EXTERNAL_PROVIDER_PATH="$canonical" \
-  go test ./internal/b05lifecycle -run TestProductionExternalProviderCompletesManagedLifecycle -count=1 -v
+LSP_TRACE_RETAIN_EXTERNAL_QUALIFICATION=1 \
+  go test ./internal/provider -run TestProductionExternalProviderCompletesManagedLifecycle -count=1 -v

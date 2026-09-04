@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 export const PROVIDER_IDENTITY = 'ember-glint@1';
 export const REQUEST_SCHEMA = 'lsp-trace.provider-request.v1';
@@ -132,6 +134,52 @@ function freezeMetadata(records) {
   });
 }
 
+async function strictCollectorResponse(request, records) {
+  const allowed = new Set(['schema_version', 'provider_id', 'adapter_id', 'session', 'seed', 'relations', 'document_custody', 'limits']);
+  if (!plainObject(request) || request.schema_version !== 'lsp-trace.provider-collector-request.v1' || Object.keys(request).some((key) => !allowed.has(key))) {
+    throw new TypeError('unsupported strict collector request');
+  }
+  const uri = request.seed?.uri;
+  const relations = strings(request.relations, 'relations', { allowEmpty: false });
+  if (request.provider_id !== PROVIDER_IDENTITY || typeof request.adapter_id !== 'string' || !uri?.startsWith('file://')) {
+    throw new TypeError('strict collector identity and file seed are required');
+  }
+  const source = await readFile(fileURLToPath(uri), 'utf8');
+  const digest = createHash('sha256').update(source).digest('hex');
+  const revision = plainObject(request.document_custody?.workspace_revision) ? request.document_custody.workspace_revision : {};
+  const revisionValue = revision.value || digest;
+  const document = { document_id: 'original', uri, revision: revisionValue, blob: digest };
+  const eligible = records.filter((record) => relations.every((kind) => record.relationKinds.includes(kind)) && record.languages.includes('glimmer-js'));
+  let observations = [];
+  let failure;
+  let coverage = { status: 'UNKNOWN', denominator: [uri], covered: [], CoveredCount: 0 };
+  if (eligible.length === 1) {
+    const result = await eligible[0].analyzer.analyze({ schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
+    observations = result.observations.map((observation) => ({
+      ...observation,
+      supports: ['source_dependency_relation'],
+      does_not_support: ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'],
+    }));
+    if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
+    else if (result.outcome === 'BOUNDED' || result.outcome === 'PARTIAL') coverage = { status: 'PARTIAL', denominator: [uri], covered: [], CoveredCount: 0 };
+    else failure = result.outcome === 'UNAVAILABLE' ? 'ADAPTER_NOT_AVAILABLE' : 'TRANSPORT_FAILED';
+  } else {
+    failure = 'RELATION_NOT_SUPPORTED';
+  }
+  const [adapterName, adapterVersion] = request.adapter_id.split('@');
+  return {
+    provider: { name: 'ember-glint', version: '1' },
+    protocol: { name: 'lsp-trace.provider-observations', version: '1' },
+    adapter: { name: adapterName, version: adapterVersion },
+    authority: 'PROVIDER_REPORTED',
+    coverage,
+    ...(failure ? { failure } : {}),
+    documents: [{ document_id: 'original', original_uri: uri, content_sha256: digest, revision: { kind: revision.kind || 'content', value: revisionValue, blob: digest, custody: 'PROVIDER_PROVED' }, coordinates: 'ORIGINAL' }],
+    observations,
+    request_id: `${request.session.session_id}:${request.session.generation}:${uri}`,
+  };
+}
+
 function responseFor(request, metadata, outcome, observations, coverage, analyzer) {
   const logical = {
     schema: OBSERVATION_SCHEMA,
@@ -152,6 +200,7 @@ export function createProvider({ analyzers = [] } = {}) {
   return Object.freeze({
     metadata,
     async handle(input) {
+      if (input?.schema_version === 'lsp-trace.provider-collector-request.v1') return strictCollectorResponse(input, records);
       const request = validateRequest(input);
       const eligible = records.filter((record) => (
         request.relation_kinds.every((kind) => record.relationKinds.includes(kind)) &&

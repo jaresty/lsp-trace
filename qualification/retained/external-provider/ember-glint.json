@@ -1,0 +1,104 @@
+{
+  "schema_version": "lsp-trace.external-provider-production-qualification.v1",
+  "outcome": "PASS",
+  "installation_kind": "independent-external-package",
+  "provider_path_kind": "absolute-external",
+  "lifecycle": "request→external subprocess→provider observations→generic adapter→graph-v4",
+  "provider_identity": "ember-glint@1",
+  "protocol_identity": "lsp-trace.provider-observations@1",
+  "adapter_identity": "ember-template@1",
+  "response_sha256": "694059af8c3c6ecb7807db6b88481c3563aa5d1a83e91622b21295cd7c174037",
+  "deterministic_replay": true,
+  "reviewed": true,
+  "unsupported_honest": true,
+  "graph_v3_omission_parity": true,
+  "graph_v4": {
+    "schema_version": "lsp-trace.graph.v4",
+    "artifact_kind": "NORMALIZED_RELATIONS",
+    "relations": [
+      {
+        "relation_id": "sha256:a7cc208319b43c5d427849254d230d83946b86b89436c0b24d987e71f831f998",
+        "kind": "BINDS_ARGUMENT",
+        "from": "path:this.itemCount",
+        "to": "argument:Widget:@value",
+        "evidence_class": "SOURCE_DERIVED_ADAPTER",
+        "adapter": {
+          "name": "ember-template",
+          "version": "1"
+        },
+        "anchors": [
+          {
+            "uri": "file:///var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/lsp-trace-external-provider-qualification/component.gts",
+            "revision": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 8
+              },
+              "end": {
+                "line": 0,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "confidence": "EXACT",
+        "supports": [
+          "source_dependency_relation"
+        ],
+        "does_not_support": [
+          "callback_invocation",
+          "feature_identity",
+          "repaint",
+          "runtime_execution",
+          "whole_source_completeness"
+        ],
+        "contributing_observation_ids": [
+          "sha256:5d943585a1c32ceca55242ce961ce3918a81aa59746aa78fd7679ff24566a616"
+        ]
+      }
+    ]
+  },
+  "observations": [
+    {
+      "observation_id": "sha256:5d943585a1c32ceca55242ce961ce3918a81aa59746aa78fd7679ff24566a616",
+      "authority": "PROVIDER_REPORTED",
+      "kind": "BINDS_ARGUMENT",
+      "from": {
+        "node_id": "path:this.itemCount",
+        "role": "SOURCE_EXPRESSION"
+      },
+      "to": {
+        "node_id": "argument:Widget:@value",
+        "role": "BOUND_ARGUMENT"
+      },
+      "original_anchor": {
+        "document_id": "original",
+        "uri": "file:///var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/lsp-trace-external-provider-qualification/component.gts",
+        "revision": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+        "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 8
+          },
+          "end": {
+            "line": 0,
+            "character": 33
+          }
+        }
+      },
+      "supports": [
+        "source_dependency_relation"
+      ],
+      "does_not_support": [
+        "runtime_execution",
+        "callback_invocation",
+        "repaint",
+        "feature_identity",
+        "whole_source_completeness"
+      ]
+    }
+  ]
+}

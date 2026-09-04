@@ -102,7 +102,15 @@ named('ASSERT_INSTALL_ENTRY_POINT_OFFLINE', async () => {
   const { fileURLToPath } = await import('node:url');
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(pkg.bin['ember-glint'], './bin/ember-glint.mjs');
-  assert.equal(pkg.dependencies, undefined);
+  assert.deepEqual(pkg.dependencies, {
+    '@glint/core': '1.5.2',
+    '@glint/environment-ember-loose': '1.5.2',
+    '@glint/environment-ember-template-imports': '1.5.2',
+    'ember-source': '7.2.0',
+    'tree-sitter': '0.21.1',
+    'tree-sitter-typescript': '0.23.2',
+    typescript: '5.9.2',
+  });
 
   const child = spawn(process.execPath, [fileURLToPath(new URL('../bin/ember-glint.mjs', import.meta.url))], { stdio: ['pipe', 'pipe', 'pipe'] });
   const output = [];
@@ -112,5 +120,7 @@ named('ASSERT_INSTALL_ENTRY_POINT_OFFLINE', async () => {
   assert.equal(code, 0);
   const response = decodeFrame(Buffer.concat(output));
   assert.equal(response.provider.identity, 'ember-glint@1');
-  assert.equal(response.outcome, 'UNAVAILABLE');
+  assert.equal(response.outcome, 'COMPLETE');
+  assert.deepEqual(response.provider.capabilities.relation_kinds, ['BINDS_ARGUMENT']);
+  assert.deepEqual(response.observations.map(({ kind }) => kind), ['BINDS_ARGUMENT']);
 });
