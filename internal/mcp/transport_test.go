@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
 )
@@ -75,6 +77,12 @@ type traversalArtifactExecutor struct {
 
 func (e traversalArtifactExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
 	return operation.Result{Artifact: e.artifact}, nil
+}
+
+type traversalFailureExecutor struct{}
+
+func (traversalFailureExecutor) Execute(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+	return operation.Result{}, &operation.Failure{Code: "DOCUMENT_SYMBOL_ABSENT", Diagnostics: []string{`document symbol "Start" not found`}}
 }
 
 func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T) {
@@ -186,6 +194,72 @@ func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *testing.T) {
+	const (
+		fullAssertion        = "ASSERT_REAL_TRAVERSAL_FULL_ENVELOPE_EXCLUSIVE"
+		failureAssertion     = "ASSERT_REAL_TRAVERSAL_FAILURE_DIAGNOSTIC_ENVELOPE_EXCLUSIVE"
+		compactAssertion     = "ASSERT_REAL_TRAVERSAL_COMPACT_IMMUTABLE_PUBLICATION"
+		cardinalityAssertion = "ASSERT_REAL_TRAVERSAL_PRESERVES_EXACTLY_TWELVE_TOOLS"
+	)
+	for _, assertion := range []string{fullAssertion, failureAssertion, compactAssertion, cardinalityAssertion} {
+		t.Log("ASSERTION: " + assertion)
+	}
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","invocation":{"target":{"uri":"file:///workspace/main.go","line":7,"column":3},"limits":{"max_depth":4,"max_nodes":100,"timeout_ms":5000},"request_timeout_ms":1000},"capabilities":{"call_hierarchy_provider":true},"nodes":[{"id":"node-1","name":"Start","kind":12,"uri":"file:///workspace/main.go","range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}},"selection_range":{"start":{"line":7,"character":3},"end":{"line":7,"character":8}}}],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{"traversal_complete":true,"node_count":1,"edge_count":0}}` + "\n")
+	rootPath := t.TempDir()
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	registry := NewRegistryWithPublication(false, true)
+	arguments := `{"session_id":"project","uri":"file:///workspace/main.go","symbol":"Start"}`
+	success := &Server{Registry: registry, Executors: map[ExecutorFamily]Executor{IncomingExecutorFamily: traversalArtifactExecutor{artifact: artifact}}, PublicationRoot: root}
+	responses := runServerMessages(t, success, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":` + arguments + `}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":{"session_id":"project","uri":"file:///workspace/main.go","symbol":"Start","detail":"compact","output_selector":"incoming.json"}}}`,
+	}, "\n")+"\n")
+	for i, assertion := range []string{fullAssertion, compactAssertion} {
+		call := decodeEnvelopeForAssertion(t, assertion, responses[i])
+		raw, _ := json.Marshal(call)
+		if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
+			t.Fatalf("%s: %v envelope=%s", assertion, err, raw)
+		}
+	}
+	published, err := os.ReadFile(filepath.Join(rootPath, "incoming.json"))
+	if err != nil || !bytes.Equal(published, artifact) {
+		t.Fatalf("%s: bytes=%q err=%v", compactAssertion, published, err)
+	}
+	failure := &Server{Registry: registry, Executors: map[ExecutorFamily]Executor{IncomingExecutorFamily: traversalFailureExecutor{}}, PublicationRoot: root}
+	failureResponse := runServerMessages(t, failure, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_incoming","arguments":`+arguments+`}}`+"\n")[0]
+	failureEnvelope := decodeEnvelopeForAssertion(t, failureAssertion, failureResponse)
+	if failureEnvelope["code"] != "INPUT_INVALID" || !strings.Contains(fmt.Sprint(failureEnvelope["diagnostics"]), "Start") {
+		t.Fatalf("%s: envelope=%v", failureAssertion, failureEnvelope)
+	}
+	raw, _ := json.Marshal(failureEnvelope)
+	if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
+		t.Fatalf("%s: %v envelope=%s", failureAssertion, err, raw)
+	}
+	if got := len(registry.Advertised()); got != 12 {
+		t.Fatalf("%s: got %d", cardinalityAssertion, got)
+	}
+}
+
+func decodeEnvelopeForAssertion(t *testing.T, assertion string, response map[string]any) map[string]any {
+	t.Helper()
+	if response["error"] != nil {
+		t.Fatalf("%s: response=%v", assertion, response)
+	}
+	result, ok := response["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: result=%v", assertion, response)
+	}
+	env, ok := result["structuredContent"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: envelope=%v", assertion, result)
+	}
+	return env
 }
 
 func TestStructuralThenSemanticThenExecutorFamily(t *testing.T) {

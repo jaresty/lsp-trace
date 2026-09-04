@@ -258,8 +258,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		if tool.ExecutorFamily == IncomingExecutorFamily {
 			code = failure.Code
-			if code == operation.FailureInvalidInput {
+			switch code {
+			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS":
 				code = "INPUT_INVALID"
+			case "DOCUMENT_SYMBOL_UNSUPPORTED":
+				code = "UNSUPPORTED_CALL_HIERARCHY"
+			case "DOCUMENT_SYMBOL_FAILED":
+				code = "OUTPUT_VALIDATION_FAILED"
 			}
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
