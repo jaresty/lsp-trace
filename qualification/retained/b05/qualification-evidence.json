@@ -1,0 +1,29 @@
+{
+  "schema_version": "lsp-trace.b05-evidence.v1",
+  "baseline": "158e85f17d969cee94037bf0555b6504420f385d",
+  "outcome": "PASS",
+  "procedure": "go test ./internal/b05qualification -count=1",
+  "fixture_ledger": "internal/b05qualification/testdata/fixture-ledger.json",
+  "assertions": [
+    "ASSERT_B05_EXACT_NINE_FAMILIES",
+    "ASSERT_B05_CALLBACK_NOT_INVOCATION",
+    "ASSERT_B05_NO_PREPARE_UNKNOWN_ZERO_CALLS",
+    "ASSERT_B05_UNSUPPORTED_NOT_EMPTY",
+    "ASSERT_B05_MIXED_REVISION_FAIL_CLOSED",
+    "ASSERT_B05_IDENTITY_REORDER_STABLE",
+    "ASSERT_B05_MANAGED_INCOMING",
+    "ASSERT_B05_MANAGED_SLICE",
+    "ASSERT_B05_CALLS_ONLY_COMPATIBILITY"
+  ],
+  "observed_result": "Go test: 6 passed in 1 packages",
+  "scope": "hermetic qualification of the committed ledger and real managed executor composition",
+  "does_not_support": [
+    "runtime_execution",
+    "callback_invocation_from_passage",
+    "repaint",
+    "feature_identity",
+    "whole_source_completeness",
+    "external_adapter_availability"
+  ],
+  "external_provider_status": "BLOCKED unless separately retained provider evidence is PASS"
+}
