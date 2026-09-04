@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"lsp-trace/internal/managedprocess"
@@ -45,6 +48,9 @@ type bootstrapSession struct {
 }
 
 func loadBootstrapConfig(path string) (bootstrapConfig, error) {
+	if !filepath.IsAbs(path) {
+		return bootstrapConfig{}, fmt.Errorf("bootstrap config path must be absolute")
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		return bootstrapConfig{}, err
@@ -56,20 +62,28 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if err := decoder.Decode(&config); err != nil {
 		return bootstrapConfig{}, err
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return bootstrapConfig{}, fmt.Errorf("bootstrap config must contain one JSON value")
+	}
 	if config.Version != 1 || len(config.Processes) == 0 {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process")
 	}
 	for i, process := range config.Processes {
-		if process.Execution.Path == "" || process.Execution.Directory == "" {
-			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d execution path and directory are required", i)
+		if !filepath.IsAbs(process.Execution.Path) || !filepath.IsAbs(process.Execution.Directory) {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d execution path and directory must be absolute", i)
 		}
 	}
 	return config, nil
 }
 
-func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config bootstrapConfig, timeout time.Duration) ([]bootstrapSession, error) {
-	started := make([]bootstrapSession, 0, len(config.Processes))
-	rollback := func() { _ = stopBootstrap(context.Background(), manager, started) }
+type preparedBootstrap struct {
+	profile runtimeprofile.Profile
+	process managedprocess.Spec
+}
+
+func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
+	prepared := make([]preparedBootstrap, 0, len(config.Processes))
+	seen := make(map[string]struct{}, len(config.Processes))
 	for i, process := range config.Processes {
 		validated, err := runtimeprofile.Validate(runtimeprofile.Selector{
 			TrustDomain: process.Profile.TrustDomain, Workspace: process.Profile.Workspace,
@@ -77,12 +91,37 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 			Options: process.Profile.Options,
 		})
 		if err != nil {
-			rollback()
 			return nil, fmt.Errorf("bootstrap process %d profile: %w", i, err)
 		}
+		profile := runtimeprofile.Resolve(validated)
+		id := profile.SessionKey().String()
+		if _, duplicate := seen[id]; duplicate {
+			return nil, fmt.Errorf("bootstrap process %d duplicates session identity %s", i, id)
+		}
+		seen[id] = struct{}{}
+		prepared = append(prepared, preparedBootstrap{
+			profile: profile,
+			process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)},
+		})
+	}
+	return prepared, nil
+}
+
+func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config bootstrapConfig, timeout time.Duration) ([]bootstrapSession, error) {
+	prepared, err := prepareBootstrap(config)
+	if err != nil {
+		return nil, err
+	}
+	started := make([]bootstrapSession, 0, len(prepared))
+	rollback := func() {
+		rollbackContext, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		_ = stopBootstrap(rollbackContext, manager, started)
+	}
+	for i, process := range prepared {
 		result := manager.Start(ctx, sessionruntime.StartRequest{
-			Profile: runtimeprofile.Resolve(validated),
-			Process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)},
+			Profile: process.profile,
+			Process: process.process,
 		})
 		if result.Failure != "" {
 			rollback()
@@ -102,11 +141,15 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 }
 
 func stopBootstrap(ctx context.Context, manager *sessionruntime.Manager, sessions []bootstrapSession) error {
+	var failures []error
 	for i := len(sessions) - 1; i >= 0; i-- {
 		result := manager.Stop(ctx, sessions[i].SessionID, "production-bootstrap")
 		if result.Failure != "" {
-			return fmt.Errorf("stop bootstrap session %s: %s", sessions[i].SessionID, result.Failure)
+			failures = append(failures, fmt.Errorf("stop bootstrap session %s: %s", sessions[i].SessionID, result.Failure))
 		}
 	}
-	return manager.Shutdown(ctx)
+	if err := manager.Shutdown(ctx); err != nil {
+		failures = append(failures, err)
+	}
+	return errors.Join(failures...)
 }

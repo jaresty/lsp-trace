@@ -46,7 +46,7 @@ The command prints this complete embedded document to stdout. Static retrieval i
 
 ### Use the MCP offline evidence server
 
-Configure an MCP client to launch `lsp-trace-mcp` directly over stdio for local development. Run `lsp-trace-mcp` for inline-only results, or `lsp-trace-mcp --publication-root /absolute/private/root` to permit caller-supplied relative `output_selector` publication beneath one pinned private root.
+Configure an MCP client to launch `lsp-trace-mcp` directly over stdio for local development. Run `lsp-trace-mcp` for inline-only results, or `lsp-trace-mcp --publication-root /absolute/private/root` to permit caller-supplied relative `output_selector` publication beneath one pinned private root. To make traversal callable, the host—not the MCP caller—provisions trusted sessions with `lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json`; stdio serving begins only after every configured session reaches correlated READY. Use `lsp_session_v1_list` to obtain its exact session ID and generation.
 
 The default surface advertises twelve canonical tools: the six offline tools `lsp_trace_v1_capabilities`, `lsp_trace_v1_schema_get`, `lsp_trace_v1_validate`, `lsp_trace_v1_verify`, `lsp_trace_v1_inspect`, and `lsp_trace_v1_filter`; `lsp_trace_v1_incoming`; `lsp_trace_v1_slice`; and `lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`. Their unversioned aliases remain callable but unadvertised. Call capabilities with `{}` before relying on schema identities, publication support, or limits.
 

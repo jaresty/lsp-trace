@@ -269,8 +269,12 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: restart terminal=%+v", restartTerminal)
 		}
 		current, failure := lifecycleops.New(manager).Status(started.SessionID, 2)
-		if failure != "" || current.Generation != 2 || current.State != session.Ready {
-			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: current=%+v failure=%s", current, failure)
+		if failure != "" || current.Generation != 2 || current.State != session.Initializing {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: pending current=%+v failure=%s", current, failure)
+		}
+		initialized := manager.ObserveInitialization(started.SessionID, 2, true)
+		if initialized.Failure != "" || initialized.Generation != 2 || initialized.State != session.Ready {
+			t.Fatalf("ASSERT_DISABLED_DISPATCH_LIFECYCLE_TERMINAL_GENERATION: initialized=%+v", initialized)
 		}
 		_, staleFailure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationStatus, RequestID: "status-stale", Input: json.RawMessage(`{"session_id":"` + started.SessionID + `","generation":1}`)})
 		if staleFailure == nil || staleFailure.Code != string(lifecycleops.FailureStaleGeneration) {

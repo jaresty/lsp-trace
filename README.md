@@ -69,14 +69,37 @@ Comparison is deterministic, read-only, and limited to explicit per-seed referen
 
 ## MCP offline evidence server
 
-`lsp-trace-mcp` is a local-development-only stdio MCP server. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. Its default surface has ten canonical tools: the six deterministic offline evidence tools plus four local session lifecycle tools. Launch it without filesystem publication, or pin selector publication beneath one private root:
+`lsp-trace-mcp` is a local-development-only stdio MCP server. Configure an MCP client to start the executable directly; it accepts MCP JSON-RPC on stdin and writes MCP JSON-RPC to stdout. Its default surface has twelve canonical tools: six deterministic offline evidence tools, four local session lifecycle tools, and two bounded traversal tools. Launch it without filesystem publication, or pin selector publication beneath one private root:
 
 > **WARNING:** Local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. Run only developer-configured commands you trust.
 
 ```sh
 lsp-trace-mcp
 lsp-trace-mcp --publication-root /absolute/private/root
+lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json
 ```
+
+Traversal requires a READY session. Because MCP callers cannot select executable commands, the host may provision trusted sessions before stdio serving with a strict bootstrap file. The config path, executable path, workspace, and execution directory are absolute. Unknown fields, trailing JSON values, duplicate session identities, spawn failures, and readiness failures fail closed before MCP stdio is served; partial startup is rolled back within bounded shutdown.
+
+```json
+{
+  "version": 1,
+  "processes": [{
+    "profile": {
+      "trust_domain": "local-development",
+      "workspace": "/absolute/path/to/workspace",
+      "profile": "gopls",
+      "environment_reference": "developer"
+    },
+    "execution": {
+      "path": "/absolute/path/to/gopls",
+      "directory": "/absolute/path/to/workspace"
+    }
+  }]
+}
+```
+
+After startup, call `lsp_session_v1_list` to discover the exact READY `session_id` and `generation`; pass that selector to `lsp_trace_v1_incoming` or `lsp_trace_v1_slice`. Process configuration never enters MCP input schemas or session identity.
 
 Stage 1 advertises six canonical tools and accepts one unadvertised compatibility alias for each:
 

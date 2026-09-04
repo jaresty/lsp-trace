@@ -41,7 +41,8 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 		t.Fatal(err)
 	}
 
-	request := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n"
+	request := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_session_v1_list","arguments":{}}}` + "\n"
 	cmd := exec.Command(mcpBinary, "--bootstrap-config", configPath)
 	cmd.Stdin = strings.NewReader(request)
 	var stdout, stderr bytes.Buffer
@@ -56,11 +57,18 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &response); err != nil {
-		t.Fatalf("%s: invalid response: %v stdout=%q", assertion, err, stdout.String())
+	lines := bytes.Split(bytes.TrimSpace(stdout.Bytes()), []byte("\n"))
+	if len(lines) != 2 {
+		t.Fatalf("%s: responses=%d stdout=%q", assertion, len(lines), stdout.String())
+	}
+	if err := json.Unmarshal(lines[0], &response); err != nil {
+		t.Fatalf("%s: invalid tools response: %v stdout=%q", assertion, err, stdout.String())
 	}
 	if len(response.Result.Tools) != 12 {
 		t.Fatalf("%s: advertised=%d", assertion, len(response.Result.Tools))
+	}
+	if !bytes.Contains(lines[1], []byte(`"State":"READY"`)) || !bytes.Contains(lines[1], []byte(`"Generation":1`)) {
+		t.Fatalf("%s: bootstrap session not discoverably READY: %s", assertion, lines[1])
 	}
 	t.Log("PASS " + assertion)
 }

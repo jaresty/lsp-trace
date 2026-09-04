@@ -15,15 +15,46 @@ import (
 func TestBootstrapConfigIsStrictAndHostOwned(t *testing.T) {
 	const assertion = "ASSERT_BOOTSTRAP_CONFIG_REJECTS_UNDECLARED_AUTHORITY"
 	t.Log("ASSERTION: " + assertion)
-	path := filepath.Join(t.TempDir(), "bootstrap.json")
-	body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"server","directory":"/workspace"},"mcp_selected_command":"forbidden"}]}`
-	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
-		t.Fatal(err)
+	write := func(t *testing.T, body string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "bootstrap.json")
+		if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		return path
 	}
-	if _, err := loadBootstrapConfig(path); err == nil || !strings.Contains(err.Error(), "unknown field") {
+	t.Run("unknown field", func(t *testing.T) {
+		body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"/server","directory":"/workspace"},"mcp_selected_command":"forbidden"}]}`
+		if _, err := loadBootstrapConfig(write(t, body)); err == nil || !strings.Contains(err.Error(), "unknown field") {
+			t.Fatalf("%s: err=%v", assertion, err)
+		}
+	})
+	t.Run("trailing value", func(t *testing.T) {
+		body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"/server","directory":"/workspace"}}]} {}`
+		if _, err := loadBootstrapConfig(write(t, body)); err == nil || !strings.Contains(err.Error(), "one JSON value") {
+			t.Fatalf("%s: err=%v", assertion, err)
+		}
+	})
+	t.Run("relative execution", func(t *testing.T) {
+		body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"server","directory":"/workspace"}}]}`
+		if _, err := loadBootstrapConfig(write(t, body)); err == nil || !strings.Contains(err.Error(), "must be absolute") {
+			t.Fatalf("%s: err=%v", assertion, err)
+		}
+	})
+	t.Log("PASS " + assertion)
+}
+
+func TestPrepareBootstrapRejectsDuplicateSessionIdentity(t *testing.T) {
+	const assertion = "ASSERT_BOOTSTRAP_DUPLICATE_SESSION_IDENTITY_REJECTED"
+	workspace := t.TempDir()
+	process := bootstrapProcessConfig{
+		Profile:   bootstrapProfileIdentity{TrustDomain: "bootstrap", Workspace: workspace, Profile: "fake", EnvironmentReference: "hermetic"},
+		Execution: managedExecutionAuthority{Path: "/fake-lsp", Directory: workspace},
+	}
+	_, err := prepareBootstrap(bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{process, process}})
+	if err == nil || !strings.Contains(err.Error(), "duplicates session identity") {
 		t.Fatalf("%s: err=%v", assertion, err)
 	}
-	t.Log("PASS " + assertion)
 }
 
 func TestBootstrapRollbackAndShutdownOwnEveryStartedSession(t *testing.T) {
@@ -45,7 +76,8 @@ func TestBootstrapRollbackAndShutdownOwnEveryStartedSession(t *testing.T) {
 			t.Fatal(err)
 		}
 		invalid := valid
-		invalid.Profile.TrustDomain = ""
+		invalid.Profile.Profile = "missing"
+		invalid.Execution.Path = filepath.Join(workspace, "missing-lsp")
 		if _, err := startBootstrap(context.Background(), manager, bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{valid, invalid}}, 5*time.Second); err == nil {
 			t.Fatalf("%s: startup unexpectedly succeeded", assertion)
 		}
