@@ -632,7 +632,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				path == "internal/graph/relations.go" || path == "internal/graph/relations_test.go" || path == "internal/graph/snapshot_identity.go" || path == "internal/graph/snapshot_identity_test.go" || path == "internal/graph/schemas/normalized-relations.v1.schema.json" ||
 				path == "internal/source/receipt.go" || path == "internal/source/receipt_test.go" || path == "internal/source/discovery_receipt_bridge.go" || path == "internal/source/discovery_receipt_bridge_test.go" || path == "internal/source/snapshot_trust_bridge.go" || path == "internal/source/snapshot_trust_bridge_test.go" ||
 				path == "internal/execution/manifest_decision_bridge.go" || path == "internal/execution/manifest_decision_bridge_test.go" || path == "internal/publication/completion.go" || path == "internal/publication/completion_test.go" ||
-				strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "sliceops/") || strings.HasPrefix(path, "internal/traverse/") || strings.HasPrefix(path, "internal/execution/") || strings.HasPrefix(path, "internal/integratedconformance/")
+				strings.HasPrefix(path, "internal/mcpcontract/") || strings.HasPrefix(path, "incomingops/") || strings.HasPrefix(path, "sliceops/") || strings.HasPrefix(path, "internal/traverse/") || strings.HasPrefix(path, "internal/execution/") || strings.HasPrefix(path, "internal/observationadapter/") || path == "observation-adaptation.claim.md" || strings.HasPrefix(path, "internal/integratedconformance/")
 			if !owned {
 				t.Fatalf("unowned path %q", path)
 			}
