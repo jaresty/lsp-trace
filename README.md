@@ -79,7 +79,7 @@ lsp-trace-mcp --publication-root /absolute/private/root
 lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json
 ```
 
-Traversal requires a READY session. Because MCP callers cannot select executable commands, the host may provision trusted sessions before stdio serving with a strict bootstrap file. The config path, executable path, workspace, and execution directory are absolute. Unknown fields, trailing JSON values, duplicate session identities, spawn failures, and readiness failures fail closed before MCP stdio is served; partial startup is rolled back within bounded shutdown.
+Traversal requires a READY session. The host—not the MCP caller—provisions trusted sessions before stdio serving with a strict bootstrap file; MCP callers cannot select executable commands. The config path, executable path, workspace, and execution directory are absolute. Unknown fields, trailing JSON values, duplicate session identities, spawn failures, and readiness failures fail closed before MCP stdio is served; partial startup is rolled back within bounded shutdown.
 
 ```json
 {
