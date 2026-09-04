@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -425,6 +426,7 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 		m.mu.Unlock()
 		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.InitializationFailure}
 	}
+	workspace := r.record.Profile.Workspace().String()
 	m.readinessSeq++
 	opID := "readiness-" + strconv.FormatUint(m.readinessSeq, 10)
 	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, SessionID: id, Generation: generation, State: ReadinessPending}, done: make(chan struct{})}
@@ -433,11 +435,11 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 	r.protocolOwned = true
 	m.workers++
 	m.mu.Unlock()
-	go m.runReadiness(ctx, deadline, protocol, opID, generation)
+	go m.runReadiness(ctx, deadline, protocol, opID, generation, workspace)
 	return op.snapshot
 }
 
-func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child wireChild, opID string, generation uint64) {
+func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child wireChild, opID string, generation uint64, workspace string) {
 	ctx := parent
 	cancel := func() {}
 	if deadline.IsZero() {
@@ -450,7 +452,20 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	key := lspwire.NewPending(1).Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
-	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: json.RawMessage(`{}`)}); err != nil {
+	workspaceURI := (&url.URL{Scheme: "file", Path: workspace}).String()
+	params, _ := json.Marshal(struct {
+		ProcessID        any    `json:"processId"`
+		RootURI          string `json:"rootUri"`
+		WorkspaceFolders []struct {
+			URI  string `json:"uri"`
+			Name string `json:"name"`
+		} `json:"workspaceFolders"`
+		Capabilities struct{} `json:"capabilities"`
+	}{ProcessID: nil, RootURI: workspaceURI, WorkspaceFolders: []struct {
+		URI  string `json:"uri"`
+		Name string `json:"name"`
+	}{{URI: workspaceURI, Name: "workspace"}}})
+	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}); err != nil {
 		m.abortReadiness(child, opID, session.InitializationFailure)
 		return
 	}
@@ -488,6 +503,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	select {
 	case observed := <-response:
 		if observed.err != nil {
+			m.abortReadiness(child, opID, session.InitializationFailure)
+			return
+		}
+		if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "initialized", Params: json.RawMessage(`{}`)}); err != nil {
 			m.abortReadiness(child, opID, session.InitializationFailure)
 			return
 		}

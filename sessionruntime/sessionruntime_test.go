@@ -361,25 +361,32 @@ func (s oneChildStarter) Start(context.Context, managedprocess.Spec) (Child, man
 }
 
 type readinessChild struct {
-	input  *io.PipeReader
-	stdin  *io.PipeWriter
-	output *io.PipeWriter
-	stdout *io.PipeReader
-	mode   string
+	input            *io.PipeReader
+	stdin            *io.PipeWriter
+	output           *io.PipeWriter
+	stdout           *io.PipeReader
+	mode             string
+	initializeParams chan json.RawMessage
+	initialized      chan lspwire.Message
 }
 
 func newReadinessChild(mode string) *readinessChild {
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
-	c := &readinessChild{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode}
+	c := &readinessChild{input: input, stdin: stdin, output: output, stdout: stdout, mode: mode, initializeParams: make(chan json.RawMessage, 1), initialized: make(chan lspwire.Message, 1)}
 	go func() {
 		message, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
 		if err != nil || message.Method != "initialize" {
 			return
 		}
+		c.initializeParams <- append(json.RawMessage(nil), message.Params...)
 		switch mode {
 		case "ready":
 			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: json.RawMessage(`{"capabilities":{}}`)})
+			initialized, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+			if err == nil {
+				c.initialized <- initialized
+			}
 		case "error":
 			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Error: &lspwire.RPCError{Code: -32603, Message: "fixture error"}})
 		case "malformed":
@@ -412,6 +419,41 @@ func readinessManager(t *testing.T, child Child) (*Manager, StartResult) {
 		t.Fatal(err)
 	}
 	return m, m.Start(context.Background(), StartRequest{Profile: profile(t)})
+}
+
+func TestReadinessInitializeCarriesConfiguredWorkspace(t *testing.T) {
+	const assertion = "ASSERT_READINESS_INITIALIZE_CORRELATES_CONFIGURED_WORKSPACE"
+	child := newReadinessChild("ready")
+	m, started := readinessManager(t, child)
+	pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	terminal, found := m.WaitReadiness(context.Background(), pending.ID)
+	if !found || terminal.State != ReadinessReady {
+		t.Fatalf("%s: readiness=%+v found=%t", assertion, terminal, found)
+	}
+	params := <-child.initializeParams
+	workspaceURI := "file:///workspace"
+	if !bytes.Contains(params, []byte(`"rootUri":"`+workspaceURI+`"`)) || !bytes.Contains(params, []byte(`"workspaceFolders":[{"uri":"`+workspaceURI+`"`)) {
+		t.Fatalf("%s: params=%s", assertion, params)
+	}
+}
+
+func TestReadinessSendsInitializedNotificationBeforeReady(t *testing.T) {
+	const assertion = "ASSERT_READINESS_INITIALIZED_NOTIFICATION_PRECEDES_READY"
+	child := newReadinessChild("ready")
+	m, started := readinessManager(t, child)
+	pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	terminal, found := m.WaitReadiness(context.Background(), pending.ID)
+	if !found || terminal.State != ReadinessReady {
+		t.Fatalf("%s: readiness=%+v found=%t", assertion, terminal, found)
+	}
+	select {
+	case message := <-child.initialized:
+		if message.Method != "initialized" || message.ID != nil || string(message.Params) != "{}" {
+			t.Fatalf("%s: message=%+v", assertion, message)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("%s: initialized notification absent", assertion)
+	}
 }
 
 func TestReadinessProtocolOutcomesAreBoundedAndImmutable(t *testing.T) {
