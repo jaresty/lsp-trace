@@ -82,6 +82,7 @@ type envelope struct {
 	PublicationReceipt      *publication.Receipt `json:"publication_receipt,omitempty"`
 	ArtifactSchemaID        string               `json:"artifact_schema_id,omitempty"`
 	ArtifactDigest          string               `json:"artifact_digest,omitempty"`
+	LogicalDigest           string               `json:"logical_digest,omitempty"`
 	ArtifactByteLength      *uint64              `json:"artifact_byte_length,omitempty"`
 	RetainedFailureMetadata *publication.Failure `json:"retained_failure_metadata,omitempty"`
 	Summary                 any                  `json:"summary,omitempty"`
@@ -300,6 +301,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		successEnvelope := envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: publicationEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", ArtifactSchemaID: artifactID,
+			LogicalDigest: opResult.LogicalDigest,
 		}
 		if compact {
 			duration := uint64(time.Since(started) / time.Millisecond)
@@ -336,6 +338,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	env := envelope{
 		EnvelopeVersion: "1", EnvelopeSchemaID: artifactEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Content: &content, ArtifactSchemaID: artifactID,
+		LogicalDigest: opResult.LogicalDigest,
 	}
 	return bindEnvelope(base, tool, env)
 }

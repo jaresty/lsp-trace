@@ -64,6 +64,17 @@ func TestVerifyHandlerUsesInjectedCustodyAndPreservesExactBytes(t *testing.T) {
 	if !bytes.Equal(result.Artifact, material.Artifact) {
 		t.Fatalf("%s: artifact changed\ngot:  %q\nwant: %q", assertVerifyBytes, result.Artifact, material.Artifact)
 	}
+	var artifact struct {
+		TraceReceipt struct {
+			SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
+		} `json:"trace_receipt"`
+	}
+	if err := json.Unmarshal(material.Artifact, &artifact); err != nil {
+		t.Fatal(err)
+	}
+	if result.LogicalDigest != artifact.TraceReceipt.SemanticCommitmentDigest {
+		t.Fatalf("ASSERT_VERIFY_LOGICAL_DIGEST_PARITY: got=%q want=%q", result.LogicalDigest, artifact.TraceReceipt.SemanticCommitmentDigest)
+	}
 }
 
 func TestVerifyHandlerPreservesLoaderAndCoreFailures(t *testing.T) {

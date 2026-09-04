@@ -267,6 +267,19 @@ func TestRealProcessSixOfflineCanonicalAndAliasConformance(t *testing.T) {
 		if !equalJSON(canonicalComparable, aliasComparable) {
 			t.Errorf("ASSERT_CANONICAL_ALIAS_EQUIVALENCE: %s canonical=%v alias=%v", tc.canonical, canonical.env, alias.env)
 		}
+		if tc.canonical == "lsp_trace_v1_verify" {
+			var graphIdentity struct {
+				TraceReceipt struct {
+					SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
+				} `json:"trace_receipt"`
+			}
+			if err := json.Unmarshal(graphBytes, &graphIdentity); err != nil {
+				t.Fatal(err)
+			}
+			if canonical.env["logical_digest"] != graphIdentity.TraceReceipt.SemanticCommitmentDigest || alias.env["logical_digest"] != graphIdentity.TraceReceipt.SemanticCommitmentDigest {
+				t.Errorf("ASSERT_REAL_PROCESS_CUSTODY_LOGICAL_DIGEST_PARITY: canonical=%v alias=%v want=%s", canonical.env["logical_digest"], alias.env["logical_digest"], graphIdentity.TraceReceipt.SemanticCommitmentDigest)
+			}
+		}
 		if tc.wantArtifact != nil {
 			got := inlineArtifactBytes(t, canonical.env)
 			if !bytes.Equal(got, tc.wantArtifact) {
