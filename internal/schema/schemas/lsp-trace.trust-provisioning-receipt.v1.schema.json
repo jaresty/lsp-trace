@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.trust-provisioning-receipt.v1.schema.json",
+  "title": "lsp-trace trust provisioning receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "trust_provisioning_receipt_schema_version",
+    "receipt_id",
+    "trust_policy_id",
+    "anchor_type",
+    "anchor_identity",
+    "provisioning_authority",
+    "provisioning_channel",
+    "verification_method",
+    "verification_result"
+  ],
+  "anyOf": [
+    {"required": ["provisioning_event"]},
+    {"required": ["trust_store_version"]}
+  ],
+  "properties": {
+    "trust_provisioning_receipt_schema_version": {"const": "lsp-trace.trust-provisioning-receipt.v1"},
+    "receipt_id": {"type": "string", "minLength": 1},
+    "trust_policy_id": {"type": "string", "minLength": 1},
+    "anchor_type": {"type": "string", "minLength": 1},
+    "anchor_identity": {"type": "string", "minLength": 1},
+    "provisioning_authority": {"type": "string", "minLength": 1},
+    "provisioning_channel": {
+      "type": "string",
+      "enum": ["VERIFIER_TRUST_STORE", "INDEPENDENT_TRUST_POLICY"]
+    },
+    "provisioning_event": {"type": "string", "minLength": 1},
+    "trust_store_version": {"type": "string", "minLength": 1},
+    "verification_method": {"type": "string", "minLength": 1},
+    "verification_result": {"type": "string", "enum": ["VERIFIED", "FAILED"]}
+  }
+}
