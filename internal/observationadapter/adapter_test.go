@@ -70,7 +70,8 @@ func TestProviderReportedAuthorityAndDeterministicObservationID(t *testing.T) {
 }
 
 func TestDocumentCustodyRetainsOriginalAndVirtualAnchors(t *testing.T) {
-	r, err := Adapt(validEnvelope())
+	e := validEnvelope()
+	r, err := Adapt(e)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,21 @@ func TestDocumentCustodyRetainsOriginalAndVirtualAnchors(t *testing.T) {
 	if o.OriginalAnchor.URI != "file:///workspace/component.gts" || o.VirtualAnchor == nil || o.VirtualAnchor.URI != "file:///virtual/component.ts" || o.VirtualAnchor.MappingID != "map-1" {
 		t.Fatalf("ASSERT_ORIGINAL_VIRTUAL_ANCHOR_CUSTODY: %#v", o)
 	}
-	e := validEnvelope()
+	expectedAnchors := map[string]Anchor{
+		e.Observations[0].OriginalAnchor.URI: e.Observations[0].OriginalAnchor,
+		e.Observations[0].VirtualAnchor.URI:  *e.Observations[0].VirtualAnchor,
+	}
+	gotAnchors := r.GraphV4.Relations[0].Anchors
+	if len(gotAnchors) != len(expectedAnchors) {
+		t.Fatalf("ASSERT_GRAPH_V4_EXACT_ANCHOR_REVISION_CUSTODY: got %v", gotAnchors)
+	}
+	for _, got := range gotAnchors {
+		want, ok := expectedAnchors[got.URI]
+		if !ok || got.Revision != want.Revision || got.Blob != want.Blob || got.Range != want.Range {
+			t.Fatalf("ASSERT_GRAPH_V4_EXACT_ANCHOR_REVISION_CUSTODY: got %#v want %#v", got, want)
+		}
+	}
+	e = validEnvelope()
 	e.Observations[0].VirtualAnchor.MappingID = ""
 	if _, err := Adapt(e); err == nil {
 		t.Fatal("ASSERT_SYNTHETIC_VIRTUAL_PROVENANCE_REJECTED: accepted missing mapping")
@@ -120,9 +135,16 @@ func TestManyObservationGraphV4DeterminismAndProvenance(t *testing.T) {
 	if !reflect.DeepEqual(r1.GraphV4, r2.GraphV4) {
 		t.Fatalf("ASSERT_GRAPH_V4_ORDER_INDEPENDENT: %#v != %#v", r1.GraphV4, r2.GraphV4)
 	}
+	if !reflect.DeepEqual(r1.Observations, r2.Observations) {
+		t.Fatalf("ASSERT_OBSERVATION_ORDER_INDEPENDENT: %#v != %#v", r1.Observations, r2.Observations)
+	}
 	rel := r1.GraphV4.Relations[0]
 	if len(rel.ContributingObservationIDs) != 2 {
 		t.Fatalf("ASSERT_GRAPH_V4_ALL_CONTRIBUTORS: got %v", rel.ContributingObservationIDs)
+	}
+	wantContributorIDs := []string{r1.Observations[0].ObservationID, r1.Observations[1].ObservationID}
+	if !reflect.DeepEqual(rel.ContributingObservationIDs, wantContributorIDs) {
+		t.Fatalf("ASSERT_GRAPH_V4_EXACT_CONTRIBUTORS: got %v want %v", rel.ContributingObservationIDs, wantContributorIDs)
 	}
 	if rel.Adapter == nil || rel.Adapter.Name != e.Adapter.Name || rel.Adapter.Version != e.Adapter.Version {
 		t.Fatalf("ASSERT_GRAPH_V4_ADAPTER_IDENTITY: %#v", rel.Adapter)
