@@ -52,7 +52,41 @@ type retainedLifecycleEvidence struct {
 	GraphV3OmissionGot  json.RawMessage `json:"graph_v3_omission_observed"`
 }
 
+func TestProductionExternalProviderCompletesManagedLifecycle(t *testing.T) {
+	binary := os.Getenv("LSP_TRACE_EXTERNAL_PROVIDER_PATH")
+	if binary == "" {
+		t.Fatal("ASSERT_EXTERNAL_PROVIDER_ABSOLUTE_PATH: LSP_TRACE_EXTERNAL_PROVIDER_PATH is required")
+	}
+	root := repositoryRoot(t)
+	absolute, err := filepath.Abs(binary)
+	if err != nil || absolute != binary {
+		t.Fatalf("ASSERT_EXTERNAL_PROVIDER_ABSOLUTE_PATH: path must already be absolute: %q (%v)", binary, err)
+	}
+	relative, relErr := filepath.Rel(root, absolute)
+	if relErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		t.Fatalf("ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH: provider is inside core repository: %s", absolute)
+	}
+	clean := filepath.ToSlash(filepath.Clean(absolute))
+	if strings.Contains(clean, "/testdata/") || strings.Contains(strings.ToLower(filepath.Base(clean)), "fake") {
+		t.Fatalf("ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH: fake/testdata provider is inadmissible: %s", clean)
+	}
+	testProductionProviderLifecycle(t, absolute)
+}
+
 func TestProductionEmberProviderCompletesManagedB05Lifecycle(t *testing.T) {
+	binary := os.Getenv("LSP_TRACE_EMBER_PROVIDER_BINARY")
+	if binary == "" {
+		t.Fatal("ASSERT_B05_PRODUCTION_PROVIDER_BINARY: LSP_TRACE_EMBER_PROVIDER_BINARY is required")
+	}
+	absolute, err := filepath.Abs(binary)
+	if err != nil {
+		t.Fatalf("ASSERT_B05_PRODUCTION_PROVIDER_BINARY: %v", err)
+	}
+	testProductionProviderLifecycle(t, absolute)
+}
+
+func testProductionProviderLifecycle(t *testing.T, absolute string) {
+	t.Helper()
 	for _, assertion := range []string{
 		"ASSERT_B05_PRODUCTION_PROVIDER_BINARY",
 		"ASSERT_B05_BOOTSTRAP_VALIDATION_EXAMPLE",
@@ -74,14 +108,6 @@ func TestProductionEmberProviderCompletesManagedB05Lifecycle(t *testing.T) {
 	contract := loadContract(t, root)
 	validateBootstrapExample(t, root, contract)
 
-	binary := os.Getenv("LSP_TRACE_EMBER_PROVIDER_BINARY")
-	if binary == "" {
-		t.Fatal("ASSERT_B05_PRODUCTION_PROVIDER_BINARY: LSP_TRACE_EMBER_PROVIDER_BINARY is required")
-	}
-	absolute, err := filepath.Abs(binary)
-	if err != nil {
-		t.Fatalf("ASSERT_B05_PRODUCTION_PROVIDER_BINARY: %v", err)
-	}
 	if info, err := os.Stat(absolute); err != nil || info.Size() == 0 || info.Mode()&0111 == 0 {
 		t.Fatalf("ASSERT_B05_PRODUCTION_PROVIDER_BINARY: production executable unavailable: %v", err)
 	}

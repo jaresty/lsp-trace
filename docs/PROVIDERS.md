@@ -10,6 +10,21 @@ The host owns every executable path, argument, working directory, environment en
 
 This protocol is v1. Unknown configuration fields, trailing JSON, unsupported relation kinds, ambiguous `auto` selection, malformed frames, malformed envelopes, identity mismatches, invalid custody, and exceeded limits fail closed.
 
+## Independent installation and registration
+
+Production providers are independently installable packages with their own version and release boundary. Install a provider outside the lsp-trace source tree and core release archive, using that provider package's documented installation command. lsp-trace never downloads or implicitly discovers a provider executable.
+
+The host registers the installed provider by supplying its absolute executable path in bootstrap configuration. Relative paths, PATH lookup, package-name lookup, repository `testdata`, and fake executables are not production authority. For example, after installing an Ember/Glint provider package to `/opt/lsp-trace-providers/ember-glint/bin/ember-glint-provider`, put that exact absolute executable path in `providers[].execution.path`; do not copy the analyzer into an lsp-trace release archive.
+
+Run the generic production lifecycle qualification against the independently installed path before retaining evidence:
+
+```sh
+LSP_TRACE_EXTERNAL_PROVIDER_PATH=/opt/lsp-trace-providers/ember-glint/bin/ember-glint-provider \
+  ./scripts/qualify-external-provider.sh
+```
+
+The qualifier rejects repository-local, fake, and testdata paths. The provider project owns creation of reviewed retained evidence; core release validation consumes that evidence but does not install or bundle the provider.
+
 ## Bootstrap configuration
 
 The host supplies an absolute JSON bootstrap file to `lsp-trace-mcp --bootstrap-config`. The provider declaration is structurally defined by [`lsp-trace.bootstrap-provider.v1`](../schema/schemas/lsp-trace.bootstrap-provider.v1.schema.json). Existing configurations containing only `processes` remain valid. Add a top-level `providers` array to make relation collection available:
