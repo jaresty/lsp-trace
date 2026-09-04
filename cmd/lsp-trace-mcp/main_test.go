@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/incomingops"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/sessionruntime"
+	"lsp-trace/sliceops"
 )
 
 func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
@@ -30,6 +32,11 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	}
 	if got := server.Registry.Tools(); len(got) != 13 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
+	}
+	_, incomingCollector := any(selected).(incomingops.RelationCollector)
+	_, sliceCollector := any(selected).(sliceops.RelationCollector)
+	if !incomingCollector || !sliceCollector {
+		t.Fatalf("ASSERT_PRODUCTION_INCOMING_RELATION_COLLECTOR=%v ASSERT_PRODUCTION_SLICE_RELATION_COLLECTOR=%v", incomingCollector, sliceCollector)
 	}
 	t.Log("PASS ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE")
 }

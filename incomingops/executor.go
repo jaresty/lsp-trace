@@ -49,17 +49,21 @@ type RelationCollector interface {
 }
 
 type request struct {
-	SessionID        string    `json:"session_id"`
-	Generation       uint64    `json:"generation"`
-	URI              string    `json:"uri"`
-	Line             *uint32   `json:"line"`
-	Character        *uint32   `json:"character"`
-	Symbol           string    `json:"symbol"`
-	MaxDepth         int       `json:"max_depth"`
-	MaxNodes         int       `json:"max_nodes"`
-	TimeoutMS        int64     `json:"timeout_ms"`
-	RequestTimeoutMS int64     `json:"request_timeout_ms"`
-	Relations        *[]string `json:"relations"`
+	SessionID             string          `json:"session_id"`
+	Generation            uint64          `json:"generation"`
+	URI                   string          `json:"uri"`
+	Line                  *uint32         `json:"line"`
+	Character             *uint32         `json:"character"`
+	Symbol                string          `json:"symbol"`
+	MaxDepth              int             `json:"max_depth"`
+	MaxNodes              int             `json:"max_nodes"`
+	TimeoutMS             int64           `json:"timeout_ms"`
+	RequestTimeoutMS      int64           `json:"request_timeout_ms"`
+	Relations             *[]string       `json:"relations"`
+	Adapters              json.RawMessage `json:"adapters"`
+	Providers             []string        `json:"providers"`
+	WorkspaceRevision     json.RawMessage `json:"workspace_revision"`
+	FailOnUnknownRevision bool            `json:"fail_on_unknown_revision"`
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
