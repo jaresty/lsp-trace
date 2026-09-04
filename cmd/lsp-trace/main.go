@@ -36,6 +36,7 @@ const usageText = `usage:
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
+  lsp-trace execute --request-id ID --input PATH|-
   lsp-trace schema get --family graph|inspect|filter --version VERSION
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-
@@ -81,6 +82,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "custody" {
 		return runCustody(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "execute" {
+		return runExecution(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "filter" {
 		return runFilter(args[1:], os.Stdout, os.Stderr)
