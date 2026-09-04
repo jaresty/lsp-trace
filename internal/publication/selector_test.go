@@ -1,9 +1,11 @@
 package publication
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +44,52 @@ func TestOwnerOnlyModeVerificationIsPlatformAppropriate(t *testing.T) {
 		if got := enforcePOSIXOwnerOnlyMode(tc.goos); got != tc.want {
 			t.Fatalf("%s: goos=%s got=%t want=%t", assertion, tc.goos, got, tc.want)
 		}
+	}
+}
+
+type chunkWriter struct {
+	bytes.Buffer
+	limit int
+}
+
+func (w *chunkWriter) Write(data []byte) (int, error) {
+	if len(data) > w.limit {
+		data = data[:w.limit]
+	}
+	return w.Buffer.Write(data)
+}
+
+type zeroWriter struct{}
+
+func (zeroWriter) Write([]byte) (int, error) { return 0, nil }
+
+func TestWriteAllRejectsNoProgressAndCompletesShortWrites(t *testing.T) {
+	const assertion = "ASSERT_PUBLICATION_NO_SILENT_TRUNCATION"
+	writer := &chunkWriter{limit: 2}
+	data := []byte("complete canonical bytes")
+	if err := writeAll(writer, data); err != nil || !bytes.Equal(writer.Bytes(), data) {
+		t.Fatalf("%s: bytes=%q err=%v", assertion, writer.Bytes(), err)
+	}
+	if err := writeAll(zeroWriter{}, data); !errors.Is(err, io.ErrShortWrite) {
+		t.Fatalf("%s: zero-progress err=%v", assertion, err)
+	}
+}
+
+func TestPublishRejectsCollisionWithoutChangingBytes(t *testing.T) {
+	const assertion = "ASSERT_PUBLICATION_COLLISION_PRESERVES_IMMUTABLE_BYTES"
+	root, err := OpenRoot(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	publisher := NewPublisher()
+	if result := publisher.Publish(Request{Root: root, Selector: "immutable", Bytes: []byte("first")}); result.Failure != nil {
+		t.Fatalf("%s: first=%#v", assertion, result)
+	}
+	result := publisher.Publish(Request{Root: root, Selector: "immutable", Bytes: []byte("second")})
+	got, err := os.ReadFile(filepath.Join(root.Path(), "immutable"))
+	if result.Failure == nil || result.Failure.Code != CodeTargetExists || err != nil || string(got) != "first" {
+		t.Fatalf("%s: result=%#v bytes=%q err=%v", assertion, result, got, err)
 	}
 }
 

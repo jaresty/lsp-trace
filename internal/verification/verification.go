@@ -28,6 +28,7 @@ type Selector struct {
 type receipt struct {
 	ReceiptVersion             string `json:"receipt_version"`
 	ExactSerializedBytesDigest string `json:"exact_serialized_bytes_digest"`
+	ArtifactByteLength         uint64 `json:"artifact_byte_length"`
 	DigestAlgorithm            string `json:"digest_algorithm"`
 	DigestScope                string `json:"digest_scope"`
 	IntegrityClaim             string `json:"integrity_claim"`
@@ -55,6 +56,7 @@ func ReceiptBytes(data []byte, directoryDurability string) ([]byte, error) {
 	r := receipt{
 		ReceiptVersion:             receiptVersion,
 		ExactSerializedBytesDigest: graph.ExactBytesDigest(data),
+		ArtifactByteLength:         uint64(len(data)),
 		DigestAlgorithm:            digestAlgorithm,
 		DigestScope:                graph.ByteDigestScope,
 		IntegrityClaim:             integrityClaim,
@@ -80,6 +82,9 @@ func VerifyReceipt(artifact, receiptData []byte) error {
 	}
 	if r.ReceiptVersion != receiptVersion || r.DigestScope != graph.ByteDigestScope || r.DigestAlgorithm != digestAlgorithm || r.IntegrityClaim != integrityClaim || r.AuthenticityClaim || (r.DirectoryDurability != DirectoryDurabilityChecked && r.DirectoryDurability != DirectoryDurabilityUnavailable) {
 		return fmt.Errorf("receipt metadata mismatch")
+	}
+	if r.ArtifactByteLength != uint64(len(artifact)) {
+		return fmt.Errorf("exact-byte length mismatch")
 	}
 	if r.ExactSerializedBytesDigest != graph.ExactBytesDigest(artifact) {
 		return fmt.Errorf("exact-byte integrity mismatch")

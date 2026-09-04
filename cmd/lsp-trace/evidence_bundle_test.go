@@ -162,7 +162,9 @@ func TestPublishAndVerifyRoundTripAndMutation(t *testing.T) {
 	if code != 0 || stdout != "verified integrity and custody\n" || stderr != "" {
 		t.Fatalf("ASSERT_P6_VERIFY_SUCCESS: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	if err := os.WriteFile(filepath.Join(generationDir, generationArtifactName), append(data, ' '), 0600); err != nil {
+	tampered := append([]byte(nil), data...)
+	tampered[0] ^= 1
+	if err := os.WriteFile(filepath.Join(generationDir, generationArtifactName), tampered, 0600); err != nil {
 		t.Fatal(err)
 	}
 	stdout, stderr, code = captureRun(t, []string{"verify", path})
