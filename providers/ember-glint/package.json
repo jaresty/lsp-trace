@@ -1,18 +1,26 @@
 {
-  "name": "@lsp-trace/ember-glint-analyzer",
+  "name": "@lsp-trace/ember-glint-provider",
   "version": "1.0.0",
-  "private": true,
+  "private": false,
   "type": "module",
+  "bin": {
+    "ember-glint": "./bin/ember-glint.mjs"
+  },
   "exports": {
     ".": "./default-analyzer.mjs",
     "./analyzer": "./analyzer.mjs",
+    "./protocol": "./src/protocol.mjs",
     "./template": "./analyzers/template.mjs",
     "./script": "./analyzers/script.mjs",
     "./glint": "./analyzers/glint.mjs",
     "./custody": "./analyzers/custody.cjs"
   },
+  "files": ["bin", "src", "analyzers", "analyzer.mjs", "default-analyzer.mjs", "README.md"],
   "scripts": {
     "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "@glint/core": "1.5.2",

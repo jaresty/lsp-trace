@@ -1,25 +1,28 @@
 # @lsp-trace/ember-glint-provider
 
-This directory is the independently installable and versioned package boundary for Ember/Glint provider work.
+This is an independently installable and versioned external provider package. Core `lsp-trace` does not import it and core release archives do not bundle it. Hosts install it separately and register its absolute executable path.
 
-It is intentionally separate from the core Go module: core `lsp-trace` must not import this package, and core release archives must not bundle it. Provider executables are installed independently and supplied to hosts by absolute path.
-
-## Current scope
-
-This boundary currently contains package metadata only. Analyzer implementation, protocol command/framing, generic conformance, provider inventory, readiness, and production qualification belong to other frames and are not implemented here.
-
-Existing reusable prototypes remain in their sibling-owned locations until their owning analyzer or protocol frames move them. This package does not duplicate those sources or claim their behavior.
-
-## Installation
+## Install
 
 From this repository checkout:
 
 ```sh
 npm install ./providers/ember-glint
+npm link --prefix ./providers/ember-glint
 ```
 
-Published versions can be installed by package name once released independently:
+The executable is `ember-glint`, with stable provider identity `ember-glint@1`. It performs no downloads or executable discovery.
 
-```sh
-npm install @lsp-trace/ember-glint-provider
-```
+## Analyzer boundary
+
+Framework semantics remain inside this package. The pinned analyzer stack uses Ember Template Compiler, Glint, TypeScript, and Tree-sitter only within retained qualification ceilings. Missing Glint configuration is `BLOCKED`/unavailable, never an empty relation result.
+
+`createProvider({ analyzers })` consumes narrow qualified adapters. The protocol layer validates custody-bearing requests, selects one unambiguous compatible analyzer, bounds and deterministically orders observations, and emits the generic observation envelope. Unsupported relation, language, or framework selections fail explicitly.
+
+## Wire contract
+
+Input is exactly one `Content-Length: N\r\n\r\n` frame containing the generic collector request. Output is exactly one deterministic framed `lsp-trace.provider-observations.v1` envelope. `logical_digest` is SHA-256 over canonical logical response bytes before transport framing and before adding the digest field.
+
+## Registration
+
+Register the installed absolute executable path in the host-owned `providers` section of the `lsp-trace-mcp` bootstrap. The core never downloads, discovers, or selects this package implicitly.
