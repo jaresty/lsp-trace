@@ -162,6 +162,7 @@ Important options:
 - `lsp-trace schema get --schema v1|v2|v3` prints the exact embedded Draft 2020-12 contract.
 - `lsp-trace validate [--schema v1|v2|v3] PATH|-` validates a file or stdin, auto-detects the version by default, rejects explicit mismatches, and applies deeper semantic validation to v3 after structural validation.
 - `lsp-trace verify SELECTOR` validates the selected generation's exact-byte custody and embedded semantic receipt offline; success prints `verified integrity and custody` rather than graph JSON. Direct artifacts are not custody-verifiable by this command.
+- `lsp-trace render SELECTOR_OR_ARTIFACT --format summary|tree|mermaid --detail compact|full` emits a deterministic, non-authoritative read-only view of V3 evidence. It reuses selector custody admission, never rewrites evidence, displays only safely in-workspace file URIs relatively, and reports retained truncation causes with corresponding caller-controlled limit guidance.
 - `--provenance-invocation-id`, `--provenance-caller`, `--provenance-source`, `--provenance-source-revision`, `--provenance-server-version`, `--provenance-timestamp`, and `--provenance-tool-version` add caller-supplied receipt metadata. Omitted values remain `UNKNOWN`; the tool never infers them from Git, the clock, the environment, or the server.
 
 Validation does not canonicalize or rewrite input. V1 and v2 validation is structural; v3 runs structural validation before deeper semantic validation.

@@ -32,6 +32,7 @@ const usageText = `usage:
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
+  lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
   lsp-trace verify PATH
   lsp-trace schema get --family graph|inspect|filter --version VERSION
@@ -70,6 +71,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "inspect" {
 		return runInspect(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "render" {
+		return runRender(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "verify" {
 		return runVerify(args[1:], os.Stdout, os.Stderr)

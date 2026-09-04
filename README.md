@@ -175,6 +175,18 @@ Field authority is bounded: provenance and requested invocation fields are calle
 
 The current implementation includes deterministic graph normalization, bounded slice composition, read-only seed inspection, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI.
 
+## Read-only presentation
+
+Render a direct V3 artifact or an existing immutable-generation selector without changing the retained evidence or selector custody:
+
+```bash
+lsp-trace render evidence.selector.json --format summary --detail compact
+lsp-trace render graph.v3.json --format tree --detail full
+lsp-trace render graph.v3.json --format mermaid
+```
+
+Formats are `summary`, `tree`, and `mermaid`; detail is `compact` or `full`. Output is a deterministic, non-authoritative presentation view. File URIs beneath the recorded workspace are displayed relatively; external and non-file URIs remain unchanged. Retained terminal/frontier causes are shown, with limit guidance only when the cause maps to a caller-controlled option.
+
 ## Embedded skill
 
 Retrieve the binary's static agent skill without network access or installation:
@@ -193,5 +205,6 @@ TypeScript, C#, and Elixir fixtures and the PASS/BLOCKED/FAIL evidence contract 
 - [Security and trust boundaries](docs/SECURITY.md)
 - [Schema compatibility policy](docs/SCHEMA_POLICY.md)
 - [Release checklist](docs/RELEASING.md)
+- [Pi direct-tool setup](docs/PI.md)
 
 Run `./scripts/release-check.sh` for hermetic release-asset checks. Retained TypeScript and C# qualification runs pass. The strengthened ElixirLS cross-module qualification is retained as BLOCKED because the required aliased and fully qualified caller edges were not reported. The hermetic real-stdio fake-server suite runs in normal Go tests.
