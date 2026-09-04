@@ -37,6 +37,7 @@ const usageText = `usage:
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-
+  lsp-trace provider conformance --executable ABSOLUTE_PATH --input PATH|- [--arg VALUE...]
   lsp-trace schema get --family graph|inspect|filter --version VERSION
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-
@@ -85,6 +86,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "execute" {
 		return runExecution(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) > 1 && args[0] == "provider" && args[1] == "conformance" {
+		return runProviderConformance(args[2:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "filter" {
 		return runFilter(args[1:], os.Stdout, os.Stderr)

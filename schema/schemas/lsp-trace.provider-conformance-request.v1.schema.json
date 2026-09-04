@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.provider-conformance-request.v1.schema.json",
+  "title": "Generic provider conformance request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "provider", "protocol", "capabilities", "limits", "custody", "payload"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.provider-conformance-request.v1"},
+    "request_id": {"type": "string", "minLength": 1},
+    "provider": {"$ref": "#/$defs/identity"},
+    "protocol": {"$ref": "#/$defs/identity"},
+    "capabilities": {"type": "object", "additionalProperties": false, "required": ["operations"], "properties": {"operations": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}}},
+    "limits": {"type": "object", "additionalProperties": false, "required": ["request_bytes", "response_bytes", "messages", "observations", "diagnostics", "stderr_bytes"], "properties": {"request_bytes": {"type": "integer", "minimum": 1}, "response_bytes": {"type": "integer", "minimum": 1}, "messages": {"const": 1}, "observations": {"type": "integer", "minimum": 1}, "diagnostics": {"type": "integer", "minimum": 1}, "stderr_bytes": {"type": "integer", "minimum": 0}}},
+    "custody": {"$ref": "#/$defs/custody"},
+    "payload": {}
+  },
+  "$defs": {
+    "identity": {"type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": {"name": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}}},
+    "custody": {"type": "object", "additionalProperties": false, "required": ["original_uri", "original_revision", "original_digest"], "properties": {"original_uri": {"type": "string", "format": "uri"}, "original_revision": {"type": "string", "minLength": 1}, "original_digest": {"type": "string", "minLength": 1}, "virtual_uri": {"type": "string", "format": "uri"}, "virtual_revision": {"type": "string", "minLength": 1}, "virtual_digest": {"type": "string", "minLength": 1}, "virtual_original_uri": {"type": "string", "format": "uri"}}}
+  }
+}
