@@ -413,4 +413,23 @@ func TestIncomingExplicitRelationComposition(t *testing.T) {
 	t.Log("PASS " + assertionReceipt)
 }
 
+func TestIncomingProviderSuccessPreservesCallsGap(t *testing.T) {
+	const assertion = "ASSERT_PROVIDER_SUCCESS_NEVER_OVERWRITES_CALLS_GAP"
+	item := json.RawMessage(`[{"name":"root","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}]`)
+	provider := json.RawMessage(`{"provider_id":"source@1","terminal":"COMPLETE_WITHIN_BOUNDS","complete":true,"truncated":false,"bounds":{"max_relations":7},"relations":[{"relation_id":"r1","kind":"PASSES_CALLBACK"}]}`)
+	f := &fakeRuntime{
+		metadata:         sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true},
+		relationArtifact: provider,
+		results:          map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {item}},
+		observed:         map[string][]sessionruntime.RoundTripResult{"callHierarchy/incomingCalls": {{ServerError: &lspwire.RPCError{Code: -32603, Message: "calls gap"}}}},
+	}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"relations":["CALLS","PASSES_CALLBACK"],"max_depth":4,"max_nodes":20,"timeout_ms":1000,"request_timeout_ms":100}`)
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: input})
+	raw := string(result.Artifact)
+	if failure != nil || !strings.Contains(raw, `"calls":`) || !strings.Contains(raw, "calls gap") || !strings.Contains(raw, `"provider_id":"source@1"`) || !strings.Contains(raw, `"complete":false`) {
+		t.Fatalf("%s: failure=%v artifact=%s", assertion, failure, raw)
+	}
+	t.Log("PASS " + assertion)
+}
+
 var _ = lspwire.RequestKey{}

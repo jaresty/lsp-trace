@@ -84,7 +84,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 type hostSelectorRuntime struct {
 	*sessionruntime.Manager
-	aliases map[string]string
+	aliases           map[string]string
+	relationCollector productionRelationCollector
 }
 
 func newHostSelectorRuntime(manager *sessionruntime.Manager, sessions []bootstrapSession) *hostSelectorRuntime {
