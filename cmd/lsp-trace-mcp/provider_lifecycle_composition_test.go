@@ -73,6 +73,17 @@ func composeLifecycleFixture(t *testing.T) (*hostSelectorRuntime, *compositionFa
 }
 
 func TestMCPProviderLifecycleComposition(t *testing.T) {
+	t.Run("production wrapper", func(t *testing.T) {
+		attachedBeforeExecutors := false
+		selected, err := composeMCPProviderLifecycle(nil, provider.NewRegistry(), compositionAdmitter{}, compositionAdapter{}, func(runtime *hostSelectorRuntime) {
+			attachedBeforeExecutors = runtime.relationCollector != nil
+		})
+		if err != nil || selected == nil || selected.relationCollector == nil || !attachedBeforeExecutors {
+			t.Fatalf("ASSERT_MCP_PROVIDER_LIFECYCLE_PRODUCTION_COMPOSITION: selected=%v attached=%v err=%v", selected != nil, attachedBeforeExecutors, err)
+		}
+		t.Log("PASS ASSERT_MCP_PROVIDER_LIFECYCLE_PRODUCTION_COMPOSITION")
+	})
+
 	t.Run("exactly one", func(t *testing.T) {
 		selected, factory, collector, _ := composeLifecycleFixture(t)
 		if factory.runtimeCalls != 1 || factory.collectorCalls != 1 || selected.relationCollector != collector {
