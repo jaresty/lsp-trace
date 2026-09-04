@@ -49,6 +49,7 @@ func TestFamilySchemasMatchCommittedBytesDeterministically(t *testing.T) {
 		{FamilyGraph, "v3", "lsp-trace.graph.v3"},
 		{FamilyInspect, "v1", "lsp-trace.inspect.v1"},
 		{FamilyFilter, "v1", "lsp-trace.filter.v1"},
+		{FamilySourceDenominator, "v1", SourceDenominatorVersionV1},
 	} {
 		first, err := BytesFor(tc.family, tc.version)
 		if err != nil {

@@ -90,6 +90,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 		err = ValidateAllSeedInspection(trimmed)
 	case structural.Family == FamilyFilter && structural.Version == "lsp-trace.filter.v1":
 		err = ValidateFilter(trimmed)
+	case structural.Family == FamilySourceDenominator && structural.Version == SourceDenominatorVersionV1:
+		err = ValidateSourceDenominator(trimmed)
 	}
 	if err != nil {
 		return fmt.Errorf("semantic validation %s: %w", structural.Version, err)
