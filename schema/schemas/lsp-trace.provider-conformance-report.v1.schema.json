@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.provider-conformance-report.v1.schema.json",
+  "title": "Generic provider conformance report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "outcome", "request_id", "provider", "protocol", "checks", "terminated", "reaped"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.provider-conformance-report.v1"},
+    "outcome": {"enum": ["passed", "unsupported", "unavailable", "partial", "empty", "failed"]},
+    "request_id": {"type": "string"},
+    "provider": {"$ref": "#/$defs/identity"},
+    "protocol": {"$ref": "#/$defs/identity"},
+    "checks": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "passed"], "properties": {"name": {"type": "string", "minLength": 1}, "passed": {"type": "boolean"}, "detail": {"type": "string"}}}},
+    "response_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "terminated": {"type": "boolean"},
+    "reaped": {"type": "boolean"}
+  },
+  "$defs": {"identity": {"type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": {"name": {"type": "string", "minLength": 1}, "version": {"type": "string", "minLength": 1}}}}
+}
