@@ -76,7 +76,7 @@ func TestExecutorExactFourContracts(t *testing.T) {
 			{operation.Name("session_list"), `{"unknown":true}`},
 			{operation.Name("session_status"), `{"session_id":"known","generation":4,"caller_id":"surplus"}`},
 			{operation.Name("session_stop"), `{"session_id":"known","generation":4}`},
-			{operation.Name("session_restart"), `{"session_id":"known","generation":0,"caller_id":"caller"}`},
+			{operation.Name("session_restart"), `{"session_id":"","caller_id":"caller"}`},
 		} {
 			if _, failure := executeLifecycle(t, executor, tc.name, tc.input); failure == nil || failure.Code != operation.FailureInvalidInput {
 				t.Fatalf("%s[%s]: %v", assertStructuralFirst, tc.name, failure)
@@ -111,6 +111,24 @@ type contextRuntime struct {
 func (r *contextRuntime) Stop(ctx context.Context, _, _ string) session.LifecycleResult {
 	r.observed = context.Cause(ctx)
 	return session.LifecycleResult{Failure: session.ResourceExhausted}
+}
+
+func TestExecutorInfersOnlyReadyGeneration(t *testing.T) {
+	const assertion = "ASSERT_OMITTED_GENERATION_REQUIRES_ONE_READY"
+	t.Log("ASSERTION: " + assertion)
+	ready := &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}}
+	result, failure := executeLifecycle(t, NewExecutor(New(ready)), OperationStatus, `{"session_id":"known"}`)
+	gotRecord, ok := result.Value.(sessionruntime.Record)
+	if failure != nil || !ok || gotRecord.Generation != 4 {
+		t.Fatalf("%s: READY omitted generation result=%+v failure=%v", assertion, result, failure)
+	}
+	notReady := record("known", 4)
+	notReady.State = session.Stopped
+	_, failure = executeLifecycle(t, NewExecutor(New(&fakeRuntime{records: []sessionruntime.Record{notReady}})), OperationStatus, `{"session_id":"known"}`)
+	if failure == nil || failure.Code != "SESSION_NOT_READY" {
+		t.Fatalf("%s: non-READY failure=%v", assertion, failure)
+	}
+	t.Log("PASS " + assertion)
 }
 
 func TestExecutorPropagatesCallerContext(t *testing.T) {

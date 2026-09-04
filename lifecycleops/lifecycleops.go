@@ -14,6 +14,7 @@ type Failure string
 const (
 	FailureNone                   Failure = ""
 	FailureSessionNotFound        Failure = "SESSION_NOT_FOUND"
+	FailureSessionNotReady        Failure = "SESSION_NOT_READY"
 	FailureStaleGeneration        Failure = "STALE_GENERATION"
 	FailureOperationNotFound      Failure = "OPERATION_NOT_FOUND"
 	FailureCapacityExhausted      Failure = "CAPACITY_EXHAUSTED"
@@ -82,6 +83,12 @@ func (s *Service) Status(id string, generation uint64) (sessionruntime.Record, F
 		if record.SessionID != id {
 			continue
 		}
+		if generation == 0 {
+			if record.State != session.Ready {
+				return sessionruntime.Record{}, FailureSessionNotReady
+			}
+			return record, FailureNone
+		}
 		if record.Generation != generation {
 			return sessionruntime.Record{}, FailureStaleGeneration
 		}
@@ -99,9 +106,11 @@ func (s *Service) Restart(ctx context.Context, request LifecycleRequest) Accepta
 }
 
 func (s *Service) accept(ctx context.Context, request LifecycleRequest, restart bool) Acceptance {
-	if _, failure := s.Status(request.SessionID, request.Generation); failure != FailureNone {
+	record, failure := s.Status(request.SessionID, request.Generation)
+	if failure != FailureNone {
 		return Acceptance{Failure: failure}
 	}
+	request.Generation = record.Generation
 	var result session.LifecycleResult
 	if restart {
 		result = s.runtime.Restart(ctx, request.SessionID, request.CallerID)

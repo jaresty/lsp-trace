@@ -136,6 +136,28 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
+func TestLifecycleSchemasPermitGenerationInference(t *testing.T) {
+	const assertion = "ASSERT_LIFECYCLE_SCHEMA_GENERATION_OPTIONAL_SESSION_REQUIRED"
+	t.Log("ASSERTION: " + assertion)
+	r := NewRegistry(false)
+	for _, name := range []string{"lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
+		tool, ok := r.Resolve(name)
+		if !ok {
+			t.Fatalf("%s: missing %s", assertion, name)
+		}
+		required, _ := tool.InputSchema["required"].([]any)
+		hasSession, hasGeneration := false, false
+		for _, field := range required {
+			hasSession = hasSession || field == "session_id"
+			hasGeneration = hasGeneration || field == "generation"
+		}
+		if !hasSession || hasGeneration {
+			t.Fatalf("%s: %s required=%v", assertion, name, required)
+		}
+	}
+	t.Log("PASS " + assertion)
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has twelve canonical entries with eleven always-local enabled tools and one reserved slice entry"

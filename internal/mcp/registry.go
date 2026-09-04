@@ -215,7 +215,7 @@ func lifecycleInputSchema(name string) map[string]any {
 			"session_id": map[string]any{"type": "string", "minLength": 1},
 			"generation": map[string]any{"type": "integer", "minimum": 1},
 		}
-		required = []any{"session_id", "generation"}
+		required = []any{"session_id"}
 		if name != "lsp_session_v1_status" {
 			properties["caller_id"] = map[string]any{"type": "string", "minLength": 1}
 			required = append(required, "caller_id")

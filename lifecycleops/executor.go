@@ -49,8 +49,8 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 		if err := decodeClosed(request.Input, &input); err != nil {
 			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, err)
 		}
-		if input.SessionID == "" || input.Generation == 0 {
-			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, fmt.Errorf("session_id and generation are required"))
+		if input.SessionID == "" {
+			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, fmt.Errorf("session_id is required"))
 		}
 		if request.Name == OperationStatus {
 			if input.CallerID != "" {
