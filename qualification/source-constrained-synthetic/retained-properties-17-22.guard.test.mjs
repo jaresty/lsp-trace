@@ -6,6 +6,7 @@ import { analyze, IDENTITY, VERSION } from '../../providers/source-constrained-s
 
 const root = new URL('./', import.meta.url);
 const fixture = JSON.parse(readFileSync(new URL('./target-b05-seeds.v1.json', root), 'utf8'));
+const evidence = JSON.parse(readFileSync(new URL('../retained/target-b05-synthetic/qualification-evidence.v1.json', root), 'utf8'));
 const commit = '326718ae733cb26097bd30246276cecd371a4e79';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const requestFor = seed => ({ schema_version: 'lsp-trace.provider-collector-request.v1', provider_id: `${IDENTITY}@${VERSION}`, adapter_id: 'lsp-trace-observation-adapter@1', session: { session_id: 'target-b05-stage-a', generation: 1 }, seed: { uri: new URL(seed.path, root).href }, relations: [seed.relation], languages: ['typescript'], frameworks: ['source-constrained-synthetic'], document_custody: { workspace_revision: { kind: 'git', commit } }, limits: { max_nodes: 100, request_timeout_ms: 30000 } });
@@ -43,6 +44,9 @@ guard('P 19', 'ASSERT_PINNED_KEEPLATESTTASK_SOURCE_AND_IN_PROCESS_INVOCATION', '
   assert.deepEqual(observation.original_anchor.range, seed.generated_call_range);
   assert.match(observation.from.node_id, /receiver=TaskForAsyncTaskFunction/);
   assert.match(observation.to.node_id, /symbol=AbstractTask\.perform/);
+  const attempts = evidence.attempts.filter(item => item.seed === seed.id);
+  assert.equal(attempts.length, 4);
+  assert.equal(attempts.every(item => item.status === 'PASS' && item.validation.relation_kind === seed.relation && item.validation.exact_anchor && item.validation.exact_endpoints && item.validation.checker_provenance), true);
 });
 
 guard('P 20', 'ASSERT_EXACT_RELOAD_PROVENANCE_AND_IN_PROCESS_RELATION', 'reload seed maps the exact source call and is directly analyzed in-process with UserImportModel collection and Model.reload provenance', async () => {
@@ -55,18 +59,26 @@ guard('P 20', 'ASSERT_EXACT_RELOAD_PROVENANCE_AND_IN_PROCESS_RELATION', 'reload 
   assert.match(observation.from.node_id, /receiver=UserImportModel/);
   assert.match(observation.from.node_id, /collection=uploads:UserImportModel\[\]/);
   assert.match(observation.to.node_id, /symbol=Model\.reload/);
+  const attempts = evidence.attempts.filter(item => item.seed === seed.id);
+  assert.equal(attempts.length, 4);
+  assert.equal(attempts.every(item => item.status === 'PASS' && item.validation.relation_kind === seed.relation && item.validation.exact_anchor && item.validation.exact_endpoints && item.validation.checker_provenance), true);
 });
 
-guard('P 21', 'ASSERT_STAGE_A_HAS_NO_EXECUTION_PLACEHOLDERS', 'Stage A contains no qualifier observations, provider replay placeholders, operation counts, or execution claims', () => {
-  assert.equal(fixture.stage_a.provider_analysis, 'direct-in-process-both-seeds');
-  assert.deepEqual(fixture.stage_a.execution_claims, []);
-  assert.equal('operations' in fixture, false);
-  assert.equal('qualifier' in fixture, false);
-  assert.equal(JSON.stringify(fixture).includes('provider_replays'), false);
+guard('P 21', 'ASSERT_REAL_MCP_QUALIFIER_STRICT_CUSTODY_DIGESTS_REPLAY', 'committed executable qualifier records eight actual stdio calls with strict public commit custody, equivalent content, all digest classes, and deterministic replay', () => {
+  assert.equal(evidence.qualifier.executable, 'qualification/source-constrained-synthetic/qualify-target-b05.mjs');
+  assert.equal(evidence.qualifier.transport, 'actual-built-lsp-trace-mcp-stdio');
+  assert.equal(evidence.qualifier.operation_count, 8);
+  assert.equal(evidence.qualifier.workspace_clean, true);
+  assert.match(evidence.qualifier.workspace_commit, /^[0-9a-f]{40}$/);
+  assert.equal(evidence.qualifier.deterministic_replay, true);
+  assert.deepEqual(Object.keys(evidence.digests).sort(), ['mcp_executable', 'provider_executable', 'provider_package']);
+  assert.equal(evidence.attempts.every(item => item.custody.requested.commit === evidence.qualifier.workspace_commit && item.custody.requested.custody === 'CALLER_ASSERTED' && item.custody.observed_document_revision.kind === 'git' && item.custody.observed_document_revision.value === evidence.qualifier.workspace_commit && item.custody.observed_document_revision.custody === 'PROVIDER_PROVED' && item.validation.strict_public_commit_custody && item.validation.graph_v4 && item.validation.content_structured_equivalent && Object.keys(item.digests).sort().join(',') === 'logical,request,response,transcript'), true);
+  for (const seed of fixture.seeds) for (const operation of ['incoming', 'slice']) { const pair = evidence.attempts.filter(item => item.seed === seed.id && item.operation === operation); assert.equal(pair.length, 2); assert.equal(pair[0].digests.response, pair[1].digests.response); assert.equal(pair[0].digests.logical, pair[1].digests.logical); }
 });
 
-guard('P 22', 'ASSERT_STAGE_A_DOES_NOT_ADMIT_TARGET_OR_PROGRAM', 'Stage A keeps provisional target B05 and PROGRAM_B admission false and direct JavaScript rejected', () => {
-  assert.equal(fixture.stage_a.provisional_target_b05_admitted, false);
-  assert.equal(fixture.stage_a.PROGRAM_B_ADMITTED, false);
-  assert.ok(fixture.premise_ledger.rejected.includes('direct JavaScript analysis'));
+guard('P 22', 'ASSERT_ONLY_TARGET_B05_PROVISIONAL_ADMITTED_FROM_OBSERVATIONS', 'direct JavaScript is UNSUPPORTED, target B05 alone is provisionally admitted from observed responses, PROGRAM_B remains false, and retained history is additive', () => {
+  assert.deepEqual(evidence.admission, { direct_javascript: 'UNSUPPORTED', provisional_target_B05_admitted: true, PROGRAM_B_ADMITTED: false });
+  assert.deepEqual(evidence.history, { additive: true, b05_v2_rewritten: false, generic_matrix_rewritten: false });
+  assert.equal(evidence.attempts.length, 8);
+  assert.equal(evidence.attempts.every(item => item.response && item.request && item.transcript && item.status === 'PASS'), true);
 });
