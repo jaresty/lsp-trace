@@ -1,0 +1,124 @@
+{
+  "schema_version": "lsp-trace.external-provider-mcp-qualification.v1",
+  "outcome": "PASS",
+  "transport": "real-lsp-trace-mcp-stdio",
+  "provider_path_kind": "absolute-external",
+  "provider_identity": "ember-glint@1",
+  "requested_relation": "BINDS_ARGUMENT",
+  "managed_session_substrate": "managed-fake-lsp",
+  "text_envelope_equals_structured_content": true,
+  "inline_graph_v4_schema_valid": true,
+  "deterministic_replay": true,
+  "graph_v4": {
+    "schema_version": "lsp-trace.graph.v4",
+    "artifact_kind": "NORMALIZED_RELATIONS",
+    "relations": [
+      {
+        "relation_id": "sha256:13c974b9ed19330132a1ae1e5c1659a062780c8e4de9b6f4af834d5da9510565",
+        "kind": "BINDS_ARGUMENT",
+        "from": "path:this.itemCount",
+        "to": "argument:Widget:@value",
+        "evidence_class": "SOURCE_DERIVED_ADAPTER",
+        "adapter": {
+          "name": "lsp-trace-observation-adapter",
+          "version": "1"
+        },
+        "anchors": [
+          {
+            "uri": "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts",
+            "revision": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "range": {
+              "start": {
+                "line": 0,
+                "character": 8
+              },
+              "end": {
+                "line": 0,
+                "character": 33
+              }
+            }
+          }
+        ],
+        "confidence": "EXACT",
+        "supports": [
+          "source_dependency_relation"
+        ],
+        "does_not_support": [
+          "callback_invocation",
+          "feature_identity",
+          "repaint",
+          "runtime_execution",
+          "whole_source_completeness"
+        ],
+        "contributing_observation_ids": [
+          "sha256:26f170a8c34bf617d3a6d3f6c517b76acf722c95f5960ead0000d1a50fb8f389"
+        ]
+      }
+    ],
+    "provenance": {
+      "provider_id": "ember-glint@1",
+      "provider": {
+        "name": "ember-glint",
+        "version": "1"
+      },
+      "protocol": {
+        "name": "lsp-trace.provider-observations",
+        "version": "1"
+      },
+      "adapter": {
+        "name": "lsp-trace-observation-adapter",
+        "version": "1"
+      },
+      "coverage": {
+        "Status": "COMPLETE_WITHIN_BOUNDS",
+        "Denominator": [
+          "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts"
+        ],
+        "Covered": [
+          "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts"
+        ],
+        "CoveredCount": 1
+      },
+      "bounds": {
+        "max_depth": 2,
+        "max_nodes": 100,
+        "timeout_ms": 30000,
+        "request_timeout_ms": 30000
+      },
+      "custody": {
+        "workspace_revision": {
+          "custody": ""
+        },
+        "documents": [
+          {
+            "document_id": "original",
+            "original_uri": "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts",
+            "content_sha256": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "revision": {
+              "kind": "content",
+              "value": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+              "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+              "custody": "PROVIDER_PROVED"
+            },
+            "coordinates": "ORIGINAL"
+          }
+        ],
+        "conflicts": [],
+        "logical_digest": "sha256:96f6c0fa72d0f9b508563d8c9df947162d574995f02edc6cc1fffe04a5630a62"
+      },
+      "observation_ids": [
+        "sha256:26f170a8c34bf617d3a6d3f6c517b76acf722c95f5960ead0000d1a50fb8f389"
+      ],
+      "logical_digest": "sha256:53c1ace1061c2abeebc98349b8cbb486fcc082b2841ea5b3ff38ad47b6782ab8",
+      "receipt": {
+        "messages": 1,
+        "stderr_bytes": 0,
+        "stderr_truncated": false,
+        "exit_code": 0,
+        "terminated": false,
+        "reaped": true
+      }
+    }
+  }
+}

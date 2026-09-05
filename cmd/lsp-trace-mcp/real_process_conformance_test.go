@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -352,6 +353,132 @@ func TestManagedNonCallsNeverReturnsEmptyToolResult(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
+	const assertion = "ASSERT_PRODUCTION_MCP_EXTERNAL_EMBER_GLINT_GRAPH_V4"
+	providerPath := os.Getenv("LSP_TRACE_EXTERNAL_PROVIDER_PATH")
+	if providerPath == "" {
+		t.Skip("LSP_TRACE_EXTERNAL_PROVIDER_PATH is required")
+	}
+	if runtime.GOOS != "darwin" {
+		t.Fatalf("%s: skip-free production process conformance requires supported LocalDarwinSupervisor", assertion)
+	}
+	if !filepath.IsAbs(providerPath) {
+		t.Fatalf("%s: external provider path must be absolute: %q", assertion, providerPath)
+	}
+	providerPath, err := filepath.EvalSymlinks(providerPath)
+	if err != nil {
+		t.Fatalf("%s: resolve external provider: %v", assertion, err)
+	}
+	root := conformanceRepositoryRoot(t)
+	if rel, err := filepath.Rel(root, providerPath); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("%s: provider must be independently installed outside repository: %s", assertion, providerPath)
+	}
+	info, err := os.Stat(providerPath)
+	if err != nil || info.IsDir() || info.Mode()&0o111 == 0 {
+		t.Fatalf("%s: external provider must be executable: path=%s err=%v", assertion, providerPath, err)
+	}
+
+	fixture := filepath.Join(root, "qualification", "external-provider", "component.gts")
+	fixtureURI := "file://" + fixture
+	mcpBinary := buildMCPBinary(t)
+	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
+	config := map[string]any{
+		"version": 1,
+		"processes": []any{map[string]any{
+			"alias": "external-ember-glint", "profile": map[string]any{"trust_domain": "external-ember-glint-qualification", "workspace": filepath.Dir(fixture), "profile": "fake-lsp", "environment_reference": "qualification"},
+			"execution": map[string]any{"path": fakeLSP, "directory": filepath.Dir(fixture)},
+		}},
+		"providers": []any{map[string]any{
+			"schema_version": "lsp-trace.bootstrap-provider.v1", "identity": "ember-glint@1", "version": "1",
+			"protocol":             map[string]any{"name": observationadapter.ProtocolName, "version": observationadapter.ProtocolVersion},
+			"execution":            map[string]any{"path": providerPath, "directory": filepath.Dir(providerPath)},
+			"executable_available": true, "conformance_verified": true,
+			"capabilities": map[string]any{"relations": []string{"BINDS_ARGUMENT"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}},
+			"limits":       map[string]any{"request_bytes": 1048576, "response_bytes": 1048576, "protocol_messages": 1, "stderr_bytes": 4096, "wall_time_ms": 30000, "termination_grace_ms": 1000},
+		}},
+	}
+	request := map[string]any{
+		"session_id": "external-ember-glint", "generation": 1, "uri": fixtureURI, "line": 0, "character": 8,
+		"max_depth": 2, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000,
+		"relations": []string{"BINDS_ARGUMENT"}, "providers": []string{"ember-glint@1"},
+	}
+	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
+		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(2, "lsp_trace_v1_incoming", request),
+		callRequest(3, "lsp_trace_v1_incoming", request),
+	})
+	if err != nil {
+		t.Fatalf("%s: real MCP process: %v", assertion, err)
+	}
+	ready, _ := json.Marshal(responses[0])
+	if !bytes.Contains(ready, []byte(`"State":"READY"`)) || !bytes.Contains(ready, []byte(`"Generation":1`)) {
+		t.Fatalf("%s: managed fake LSP session not ready: %s", assertion, ready)
+	}
+	first := decodeProcessCall(t, responses[1])
+	second := decodeProcessCall(t, responses[2])
+	firstArtifact := inlineArtifactBytes(t, first.env)
+	secondArtifact := inlineArtifactBytes(t, second.env)
+	if len(firstArtifact) == 0 || !bytes.Equal(firstArtifact, secondArtifact) {
+		t.Fatalf("%s: graph-v4 replay differs: first=%q second=%q", assertion, firstArtifact, secondArtifact)
+	}
+	if err := graph.ValidateNormalizedRelationsJSON(firstArtifact); err != nil {
+		t.Fatalf("%s: inline graph-v4 schema/semantics: %v artifact=%s", assertion, err, firstArtifact)
+	}
+	var result graph.NormalizedRelations
+	if err := json.Unmarshal(firstArtifact, &result); err != nil {
+		t.Fatalf("%s: decode graph-v4: %v", assertion, err)
+	}
+	if result.SchemaVersion != graph.NormalizedRelationsSchemaVersion || result.ArtifactKind != graph.NormalizedRelationsArtifactKind || len(result.Relations) != 1 || result.Provenance == nil {
+		t.Fatalf("%s: exact graph-v4 shape: %+v", assertion, result)
+	}
+	relation := result.Relations[0]
+	if relation.Kind != graph.RelationBindsArgument || relation.From != "path:this.itemCount" || relation.To != "argument:Widget:@value" || relation.EvidenceClass != graph.EvidenceSourceAdapter || relation.Adapter == nil || relation.Adapter.Name != "lsp-trace-observation-adapter" || relation.Adapter.Version != "1" || len(relation.Anchors) != 1 || relation.Anchors[0].URI != fixtureURI || relation.Anchors[0].Range.Start.Line != 0 || relation.Anchors[0].Range.Start.Character != 8 || relation.Anchors[0].Range.End.Line != 0 || relation.Anchors[0].Range.End.Character != 33 || relation.Anchors[0].Revision == "" || relation.Anchors[0].Revision != relation.Anchors[0].Blob || len(relation.ContributingObservationIDs) != 1 {
+		t.Fatalf("%s: exact relation/adapter/anchor/contributor provenance: %+v", assertion, relation)
+	}
+	var providerIdentity, adapterIdentity struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	var custody struct {
+		Documents []struct {
+			OriginalURI string `json:"original_uri"`
+			Revision    struct {
+				Custody string `json:"custody"`
+				Value   string `json:"value"`
+				Blob    string `json:"blob"`
+			} `json:"revision"`
+		} `json:"documents"`
+	}
+	if json.Unmarshal(result.Provenance.Provider, &providerIdentity) != nil || providerIdentity.Name != "ember-glint" || providerIdentity.Version != "1" || json.Unmarshal(result.Provenance.Adapter, &adapterIdentity) != nil || adapterIdentity.Name != "lsp-trace-observation-adapter" || adapterIdentity.Version != "1" || json.Unmarshal(result.Provenance.Custody, &custody) != nil || len(custody.Documents) != 1 || custody.Documents[0].OriginalURI != fixtureURI || custody.Documents[0].Revision.Custody != "PROVIDER_PROVED" || custody.Documents[0].Revision.Value != relation.Anchors[0].Revision || custody.Documents[0].Revision.Blob != relation.Anchors[0].Blob || result.Provenance.ProviderID != "ember-glint@1" || !reflect.DeepEqual(result.Provenance.ObservationIDs, relation.ContributingObservationIDs) {
+		t.Fatalf("%s: exact provider/adapter/custody/contributing-observation provenance: %+v provider=%+v adapter=%+v custody=%+v", assertion, result.Provenance, providerIdentity, adapterIdentity, custody)
+	}
+	if os.Getenv("LSP_TRACE_RETAIN_EXTERNAL_QUALIFICATION") == "1" {
+		evidence := struct {
+			SchemaVersion                       string                    `json:"schema_version"`
+			Outcome                             string                    `json:"outcome"`
+			Transport                           string                    `json:"transport"`
+			ProviderPathKind                    string                    `json:"provider_path_kind"`
+			ProviderIdentity                    string                    `json:"provider_identity"`
+			RequestedRelation                   string                    `json:"requested_relation"`
+			ManagedSessionSubstrate             string                    `json:"managed_session_substrate"`
+			TextEnvelopeEqualsStructuredContent bool                      `json:"text_envelope_equals_structured_content"`
+			InlineGraphV4SchemaValid            bool                      `json:"inline_graph_v4_schema_valid"`
+			DeterministicReplay                 bool                      `json:"deterministic_replay"`
+			GraphV4                             graph.NormalizedRelations `json:"graph_v4"`
+		}{"lsp-trace.external-provider-mcp-qualification.v1", "PASS", "real-lsp-trace-mcp-stdio", "absolute-external", "ember-glint@1", "BINDS_ARGUMENT", "managed-fake-lsp", true, true, true, result}
+		raw, err := json.MarshalIndent(evidence, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw = append(raw, '\n')
+		path := filepath.Join(root, "qualification", "retained", "external-provider", "ember-glint-mcp.json")
+		if err := os.WriteFile(path, raw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Log("PASS " + assertion)
 }
 
 func TestProductionMCPRealProviderConformance(t *testing.T) {

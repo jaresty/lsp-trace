@@ -185,6 +185,11 @@ assert_contains ASSERT_RELEASE_REAL_EXTERNAL_PROVIDER_QUALIFICATION qualificatio
 assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_REAL_PATH qualification/retained/external-provider/ember-glint.json '"provider_path_kind": "absolute-external"'
 assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_GRAPH_V4 qualification/retained/external-provider/ember-glint.json '"schema_version": "lsp-trace.external-provider-production-qualification.v1"'
 assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_PASS qualification/retained/external-provider/ember-glint.json '"outcome": "PASS"'
+assert_file ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_MCP_QUALIFICATION qualification/retained/external-provider/ember-glint-mcp.json
+assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_TRANSPORT qualification/retained/external-provider/ember-glint-mcp.json '"transport": "real-lsp-trace-mcp-stdio"'
+assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_GRAPH_V4 qualification/retained/external-provider/ember-glint-mcp.json '"schema_version": "lsp-trace.graph.v4"'
+assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_BINDS_ARGUMENT qualification/retained/external-provider/ember-glint-mcp.json '"kind": "BINDS_ARGUMENT"'
+assert_contains ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_REPLAY qualification/retained/external-provider/ember-glint-mcp.json '"deterministic_replay": true'
 assert_contains ASSERT_RELEASE_CORE_ARCHIVE_IDS .goreleaser.yaml 'ids: [lsp-trace, lsp-trace-mcp]'
 
 if [ "$failed" -ne 0 ]; then

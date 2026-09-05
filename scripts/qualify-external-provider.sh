@@ -27,3 +27,6 @@ printf 'PASS ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH: independently installed
 LSP_TRACE_EXTERNAL_PROVIDER_PATH="$canonical" \
 LSP_TRACE_RETAIN_EXTERNAL_QUALIFICATION=1 \
   go test ./internal/provider -run TestProductionExternalProviderCompletesManagedLifecycle -count=1 -v
+LSP_TRACE_EXTERNAL_PROVIDER_PATH="$canonical" \
+LSP_TRACE_RETAIN_EXTERNAL_QUALIFICATION=1 \
+  go test ./cmd/lsp-trace-mcp -run TestProductionMCPExternalEmberGlintProvider -count=1 -v

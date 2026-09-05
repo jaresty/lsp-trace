@@ -29,6 +29,29 @@ func TestExternalProviderQualifierRejectsRepositorySymlink(t *testing.T) {
 	}
 }
 
+func TestRetainedExternalProviderMCPGraphV4(t *testing.T) {
+	const assertion = "ASSERT_RELEASE_RETAINED_EXTERNAL_PROVIDER_MCP_GRAPH_V4"
+	raw, err := os.ReadFile(filepath.Join("..", "..", "qualification", "retained", "external-provider", "ember-glint-mcp.json"))
+	if err != nil {
+		t.Fatalf("%s: %v", assertion, err)
+	}
+	var evidence struct {
+		Outcome                             string          `json:"outcome"`
+		Transport                           string          `json:"transport"`
+		ProviderPathKind                    string          `json:"provider_path_kind"`
+		ProviderIdentity                    string          `json:"provider_identity"`
+		RequestedRelation                   string          `json:"requested_relation"`
+		ManagedSessionSubstrate             string          `json:"managed_session_substrate"`
+		TextEnvelopeEqualsStructuredContent bool            `json:"text_envelope_equals_structured_content"`
+		InlineGraphV4SchemaValid            bool            `json:"inline_graph_v4_schema_valid"`
+		DeterministicReplay                 bool            `json:"deterministic_replay"`
+		GraphV4                             json.RawMessage `json:"graph_v4"`
+	}
+	if err := json.Unmarshal(raw, &evidence); err != nil || evidence.Outcome != "PASS" || evidence.Transport != "real-lsp-trace-mcp-stdio" || evidence.ProviderPathKind != "absolute-external" || evidence.ProviderIdentity != "ember-glint@1" || evidence.RequestedRelation != "BINDS_ARGUMENT" || evidence.ManagedSessionSubstrate != "managed-fake-lsp" || !evidence.TextEnvelopeEqualsStructuredContent || !evidence.InlineGraphV4SchemaValid || !evidence.DeterministicReplay || !strings.Contains(string(evidence.GraphV4), `"schema_version": "lsp-trace.graph.v4"`) || !strings.Contains(string(evidence.GraphV4), `"kind": "BINDS_ARGUMENT"`) {
+		t.Fatalf("%s: exact MCP transport graph-v4 evidence required: evidence=%+v err=%v", assertion, evidence, err)
+	}
+}
+
 func TestRetainedExternalProviderResponseDigest(t *testing.T) {
 	const assertion = "ASSERT_RELEASE_RETAINED_PROVIDER_RESPONSE_DIGEST"
 	raw, err := os.ReadFile(filepath.Join("..", "..", "qualification", "retained", "external-provider", "ember-glint.json"))
@@ -80,10 +103,14 @@ func TestProductionQualificationAndReleasePolicy(t *testing.T) {
 	contains("ASSERT_GENERIC_EXTERNAL_PROVIDER_QUALIFIER_ACCEPTS_PATH", qualifier, "LSP_TRACE_EXTERNAL_PROVIDER_PATH")
 	contains("ASSERT_GENERIC_EXTERNAL_PROVIDER_REJECTS_FAKE_TESTDATA", qualifier, "ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH")
 	contains("ASSERT_GENERIC_EXTERNAL_PROVIDER_LIFECYCLE", qualifier, "TestProductionExternalProviderCompletesManagedLifecycle")
+	contains("ASSERT_GENERIC_EXTERNAL_PROVIDER_MCP_TRANSPORT", qualifier, "TestProductionMCPExternalEmberGlintProvider")
 
 	release := read("ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_QUALIFICATION", "scripts/release-check.sh")
 	contains("ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_QUALIFICATION", release, "qualification/retained/external-provider/ember-glint.json")
 	contains("ASSERT_RELEASE_QUALIFICATION_IS_REAL_EXTERNAL_PATH", release, "ASSERT_RELEASE_REAL_EXTERNAL_PROVIDER_QUALIFICATION")
+	contains("ASSERT_RELEASE_REQUIRES_RETAINED_EXTERNAL_MCP_QUALIFICATION", release, "qualification/retained/external-provider/ember-glint-mcp.json")
+	contains("ASSERT_RELEASE_ATTESTS_REAL_MCP_TRANSPORT", release, "ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_TRANSPORT")
+	contains("ASSERT_RELEASE_ATTESTS_EXACT_MCP_GRAPH_V4", release, "ASSERT_RELEASE_EXTERNAL_PROVIDER_MCP_GRAPH_V4")
 	notContains("ASSERT_RELEASE_DOES_NOT_BUILD_BUNDLED_PROVIDER", release, "go build -trimpath -o \"$release_tmp/lsp-trace-provider-ember-glint\"")
 
 	goreleaser := read("ASSERT_CORE_ARCHIVES_EXCLUDE_PROVIDER_ASSETS", ".goreleaser.yaml")
