@@ -1,0 +1,67 @@
+{
+  "schema_version": "lsp-trace.b05-invokes-task-qualification.v1",
+  "baseline": "1825a56070d7b76174ebb086d7c464731ce12bb0",
+  "relation": "INVOKES_TASK",
+  "stage": "S1_ANALYZER_OBSERVATION",
+  "disposition": "BLOCKED",
+  "reason": "QUALIFIED_EMBER_CONCURRENCY_TASK_RECEIVER_IDENTITY_UNAVAILABLE",
+  "missing_prerequisite": "A pinned Ember Concurrency package and type surface that independently identifies the call receiver as an Ember Concurrency Task",
+  "tool_observations": [
+    {
+      "source": "providers/ember-glint/package.json",
+      "typescript": "5.9.2",
+      "glint_core": "1.5.2",
+      "ember_source": "7.2.0",
+      "ember_concurrency": "ABSENT"
+    },
+    {
+      "procedure": "npm ls ember-concurrency --json",
+      "exit_code": 1,
+      "observed_package_tree": {
+        "version": "1.0.0",
+        "name": "@lsp-trace/ember-glint-provider"
+      }
+    },
+    {
+      "source": "providers/ember-glint/analyzers/script.mjs",
+      "available_operation": "typescript.getDefinitionAtPosition",
+      "qualification_limit": "Definitions outside supplied source documents are omitted; no independently pinned Ember Concurrency Task receiver identity is available"
+    }
+  ],
+  "frozen_seeds": {
+    "positive": {
+      "path": "providers/ember-glint/fixtures/invokes-task-positive.gts",
+      "sha256": "a4ebe09bfe65f98f9979bb0c526c082e27a820fd567610756146671c89c76004",
+      "candidate": "this.upload.perform()",
+      "required_receiver_identity": "ember-concurrency:Task",
+      "outcome": "BLOCKED_UNRESOLVED_RECEIVER_IDENTITY"
+    },
+    "confusable_negative": {
+      "path": "providers/ember-glint/fixtures/invokes-task-negative.gts",
+      "sha256": "bec9246b1929343e088c6aef543b266c0c0d7956ab33f6456b03d90212e192f5",
+      "candidate": "this.runner.perform()",
+      "receiver_identity": "source-local:ReportRunner",
+      "outcome": "NO_RELATION"
+    }
+  },
+  "negative_guard": {
+    "path": "providers/ember-glint/test/invokes-task.test.mjs",
+    "procedure": "node --test providers/ember-glint/test/invokes-task.test.mjs",
+    "assertion": "ASSERT_INVOKES_TASK_NO_METHOD_NAME_INFERENCE",
+    "counterfactual_procedure": "LSP_TRACE_TEST_NAME_ONLY=1 node --test providers/ember-glint/test/invokes-task.test.mjs",
+    "counterfactual_observation": "ASSERT_INVOKES_TASK_NO_METHOD_NAME_INFERENCE fails with true !== false"
+  },
+  "advancement": {
+    "analyzer_implemented": false,
+    "analyzer_exported": false,
+    "relation_advertised": false,
+    "analyzer_wired": false,
+    "later_stages_entered": false
+  },
+  "does_not_support": [
+    "task_runtime_invocation",
+    "task_feature_identity",
+    "method_name_inference",
+    "INVOKES_TASK_relation_availability"
+  ]
+}
