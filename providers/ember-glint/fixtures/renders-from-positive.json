@@ -1,0 +1,137 @@
+{
+  "schema": "lsp-trace.ember-glint.renders-from-seed.v1",
+  "case": "positive-direct-typed-getter",
+  "request": {
+    "projectDirectory": "/workspace",
+    "template": {
+      "uri": "file:///workspace/app/components/panel.gts",
+      "source": "<p>{{this.itemCount}}</p>",
+      "expression": {
+        "start": 5,
+        "end": 19
+      }
+    },
+    "mapping": {
+      "uri": "file:///workspace/.glint/panel.ts",
+      "original": {
+        "start": 5,
+        "end": 19
+      },
+      "virtual": {
+        "start": 500,
+        "end": 514
+      }
+    },
+    "definitions": [
+      {
+        "uri": "file:///workspace/app/components/panel.ts",
+        "source": "import Component from '@glimmer/component';\nexport default class Panel extends Component<{ Args: { data: string[] } }> {\n  get itemCount(): number {\n    return this.args.data.length;\n  }\n}",
+        "start": 127,
+        "end": 136,
+        "generated": false
+      }
+    ]
+  },
+  "expected": {
+    "status": "SCOPED_ROLE",
+    "observations": [
+      {
+        "kind": "RENDERS_FROM",
+        "from": {
+          "node_id": "file:///workspace/app/components/panel.ts#property:itemCount",
+          "role": "SOURCE_PROPERTY"
+        },
+        "to": {
+          "node_id": "file:///workspace/app/components/panel.gts#expression:5:19",
+          "role": "RENDER_EXPRESSION"
+        },
+        "original_anchor": {
+          "uri": "file:///workspace/app/components/panel.gts",
+          "bytes": {
+            "start": 5,
+            "end": 19
+          },
+          "range": {
+            "start": {
+              "line": 0,
+              "character": 5
+            },
+            "end": {
+              "line": 0,
+              "character": 19
+            }
+          },
+          "text": "this.itemCount"
+        },
+        "definition_anchor": {
+          "uri": "file:///workspace/app/components/panel.ts",
+          "bytes": {
+            "start": 127,
+            "end": 136
+          },
+          "range": {
+            "start": {
+              "line": 2,
+              "character": 6
+            },
+            "end": {
+              "line": 2,
+              "character": 15
+            }
+          },
+          "text": "itemCount"
+        },
+        "source_read_anchor": {
+          "uri": "file:///workspace/app/components/panel.ts",
+          "bytes": {
+            "start": 160,
+            "end": 174
+          },
+          "range": {
+            "start": {
+              "line": 3,
+              "character": 11
+            },
+            "end": {
+              "line": 3,
+              "character": 25
+            }
+          },
+          "text": "this.args.data"
+        },
+        "virtual_mapping": {
+          "uri": "file:///workspace/.glint/panel.ts",
+          "original": {
+            "start": 5,
+            "end": 19
+          },
+          "virtual": {
+            "start": 500,
+            "end": 514
+          }
+        },
+        "support": {
+          "outcome": "SCOPED_ROLE",
+          "operation": "glint.definition+typescript.direct-qualified-read"
+        },
+        "supports": [
+          "bounded_source_structure",
+          "exact_source_anchor",
+          "typed_static_relation"
+        ],
+        "does_not_support": [
+          "repaint",
+          "render_occurrence",
+          "runtime_execution",
+          "callback_execution",
+          "feature_identity",
+          "source_completeness"
+        ]
+      }
+    ],
+    "coverage": {
+      "status": "BOUNDED",
+      "boundary": "one exact Glint template expression mapped to one source-declared typed getter/property with one direct this.args source read"
+    }
+  }
+}
