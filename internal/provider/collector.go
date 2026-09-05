@@ -74,6 +74,36 @@ type DocumentCustody struct {
 	FailOnUnknown     bool            `json:"fail_on_unknown_revision"`
 }
 
+type publicWorkspaceRevision struct {
+	Kind    string `json:"kind"`
+	Commit  string `json:"commit"`
+	Custody string `json:"custody"`
+}
+
+type providerWorkspaceRevision struct {
+	Kind    string `json:"kind"`
+	Value   string `json:"value"`
+	Custody string `json:"custody"`
+}
+
+func normalizeWorkspaceRevision(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var public publicWorkspaceRevision
+	if err := decodeCollectorInput(raw, &public); err != nil {
+		return nil, fmt.Errorf("public workspace revision: %w", err)
+	}
+	if public.Kind == "" || public.Commit == "" || public.Custody == "" {
+		return nil, errors.New("public workspace revision requires kind, commit, and custody")
+	}
+	normalized, err := json.Marshal(providerWorkspaceRevision{Kind: public.Kind, Value: public.Commit, Custody: public.Custody})
+	if err != nil {
+		return nil, fmt.Errorf("normalize workspace revision: %w", err)
+	}
+	return normalized, nil
+}
+
 type CollectorLimits struct {
 	MaxDepth         int   `json:"max_depth,omitempty"`
 	DownDepth        int   `json:"down_depth,omitempty"`
@@ -147,6 +177,10 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 	if admission.ProviderID == "" || admission.AdapterID == "" {
 		return Result{}, errors.New("provider admission omitted identity")
 	}
+	workspaceRevision, err := normalizeWorkspaceRevision(in.WorkspaceRevision)
+	if err != nil {
+		return Result{}, err
+	}
 	request := StrictCollectorRequest{
 		SchemaVersion: CollectorRequestSchema,
 		ProviderID:    admission.ProviderID,
@@ -156,7 +190,7 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 		Relations:     selected,
 		Languages:     append([]string(nil), in.Languages...),
 		Frameworks:    append([]string(nil), in.Frameworks...),
-		Documents:     DocumentCustody{OriginalURI: in.URI, WorkspaceRevision: append(json.RawMessage(nil), in.WorkspaceRevision...), FailOnUnknown: in.FailOnUnknownRevision},
+		Documents:     DocumentCustody{OriginalURI: in.URI, WorkspaceRevision: workspaceRevision, FailOnUnknown: in.FailOnUnknownRevision},
 		Limits:        CollectorLimits{MaxDepth: in.MaxDepth, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS},
 	}
 	encoded, err := json.Marshal(request)

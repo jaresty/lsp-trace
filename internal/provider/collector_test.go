@@ -66,6 +66,26 @@ func TestCollectorOmittedRelationsDoNotAdmitOrResolve(t *testing.T) {
 	t.Log("PASS " + assertion)
 }
 
+func TestNormalizePublicWorkspaceRevision(t *testing.T) {
+	valid, err := normalizeWorkspaceRevision(json.RawMessage(`{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED"}`))
+	if err != nil || string(valid) != `{"kind":"git","value":"abc","custody":"CALLER_ASSERTED"}` {
+		t.Fatalf("ASSERT_PUBLIC_COMMIT_NORMALIZED_ONCE: normalized=%s err=%v", valid, err)
+	}
+	for name, raw := range map[string]string{
+		"missing commit": `{"kind":"git","custody":"CALLER_ASSERTED"}`,
+		"empty commit": `{"kind":"git","commit":"","custody":"CALLER_ASSERTED"}`,
+		"private value": `{"kind":"git","value":"abc","custody":"CALLER_ASSERTED"}`,
+		"conflicting aliases": `{"kind":"git","commit":"abc","value":"def","custody":"CALLER_ASSERTED"}`,
+		"unknown field": `{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED","extra":true}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if normalized, err := normalizeWorkspaceRevision(json.RawMessage(raw)); err == nil {
+				t.Fatalf("ASSERT_PUBLIC_REVISION_FAILS_CLOSED: accepted %s as %s", raw, normalized)
+			}
+		})
+	}
+}
+
 func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T) {
 	const assertionRequest = "ASSERT_STRICT_PROVIDER_REQUEST_FROM_MANAGED_CUSTODY_AND_LIMITS"
 	const assertionAdapter = "ASSERT_SEMANTIC_ADAPTATION_NARROW_INJECTABLE_INTERFACE"
@@ -90,7 +110,7 @@ func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T)
 	if err := json.Unmarshal(e.request, &wireFields); err != nil {
 		t.Fatal(err)
 	}
-	if e.calls != 1 || e.id != "host-provider@1" || !reflect.DeepEqual(e.limits, limits) || wire.SchemaVersion != CollectorRequestSchema || wire.Session.SessionID != "managed-session" || wire.Session.Generation != 7 || wire.Seed.URI != "file:///workspace/component.gts" || wire.Seed.Line == nil || *wire.Seed.Line != 3 || wire.Documents.OriginalURI != wire.Seed.URI || !wire.Documents.FailOnUnknown || !strings.Contains(string(wire.Documents.WorkspaceRevision), `"commit":"abc"`) || wire.Limits.MaxNodes != 20 || wire.Limits.MaxMessages != 8 || wire.Limits.MaxBytes != 2048 || string(wireFields["languages"]) != `["glimmer-js"]` || string(wireFields["frameworks"]) != `["ember"]` {
+	if e.calls != 1 || e.id != "host-provider@1" || !reflect.DeepEqual(e.limits, limits) || wire.SchemaVersion != CollectorRequestSchema || wire.Session.SessionID != "managed-session" || wire.Session.Generation != 7 || wire.Seed.URI != "file:///workspace/component.gts" || wire.Seed.Line == nil || *wire.Seed.Line != 3 || wire.Documents.OriginalURI != wire.Seed.URI || !wire.Documents.FailOnUnknown || !strings.Contains(string(wire.Documents.WorkspaceRevision), `"value":"abc"`) || strings.Contains(string(wire.Documents.WorkspaceRevision), `"commit"`) || wire.Limits.MaxNodes != 20 || wire.Limits.MaxMessages != 8 || wire.Limits.MaxBytes != 2048 || string(wireFields["languages"]) != `["glimmer-js"]` || string(wireFields["frameworks"]) != `["ember"]` {
 		t.Fatalf("%s: calls=%d id=%q limits=%+v wire=%+v wire_fields=%s", assertionRequest, e.calls, e.id, e.limits, wire, e.request)
 	}
 	t.Log("PASS " + assertionRequest)

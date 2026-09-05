@@ -339,7 +339,7 @@ func TestManagedNonCallsNeverReturnsEmptyToolResult(t *testing.T) {
 					"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": wallTimeMS, "termination_grace_ms": 20},
 				}},
 			}
-			request := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500, "relations": []string{"PASSES_CALLBACK"}, "providers": []string{"fake@1.0.0"}, "workspace_revision": map[string]any{"kind": "git", "value": strings.Repeat("b", 40), "custody": "CALLER_ASSERTED"}}
+			request := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500, "relations": []string{"PASSES_CALLBACK"}, "providers": []string{"fake@1.0.0"}, "workspace_revision": map[string]any{"kind": "git", "commit": strings.Repeat("b", 40), "custody": "CALLER_ASSERTED"}}
 			responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{callRequest(1, "lsp_trace_v1_incoming", request)})
 			if err != nil {
 				t.Fatalf("ASSERT_MANAGED_NONCALLS_NEVER_RETURNS_EMPTY_TOOL_RESULT_%s: process=%v", tc.mode, err)
@@ -441,7 +441,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		"max_depth": 2, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000,
 		"relations": []string{"BINDS_ARGUMENT"}, "providers": []string{"ember-glint@1"},
 		"languages": []string{"glimmer-js"}, "frameworks": []string{"ember"},
-		"workspace_revision": map[string]any{"kind": "git", "value": commit, "custody": "CALLER_ASSERTED"},
+		"workspace_revision": map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"},
 		"fail_on_unknown_revision": true,
 	}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
