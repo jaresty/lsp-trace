@@ -1,7 +1,7 @@
 {
   "provider": {
     "identity": "source-constrained-synthetic-provider",
-    "version": "1.0.0-provisional",
+    "version": "1.0.0",
     "selectable": true,
     "evidence_class": "SOURCE_CONSTRAINED_SYNTHETIC",
     "discovery_status": "PROVISIONAL_DISCOVERY"
@@ -9,18 +9,23 @@
   "observations": {
     "INVOKES_TASK": {
       "chain": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
-      "anchors": ["app/services/uploads.js#uploadComplete.perform"],
-      "dependency": "ember-concurrency@5.2.0",
-      "declaration_provenance": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
-      "negative_boundaries": ["unrelated.perform", "contradictory.perform"]
+      "anchor": "exact TypeScript call expression",
+      "receiver": "TaskForAsyncTaskFunction",
+      "member_declaration": "ember-concurrency@5.2.0:vendor/ember-concurrency/index.d.ts#AbstractTask.perform",
+      "declaration_sha256": "1ca4672f7e39b0e3c16f099b501d3b8000ece297764398634770a56c15ce115a",
+      "evidence_basis": "typescript-checker",
+      "authority_ceiling": "non-authoritative",
+      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unresolved declaration"]
     },
     "TRIGGERS_RELOAD": {
-      "chain": ["UserImportModel", "@warp-drive/legacy Model.reload"],
-      "collection_provenance": "upload collection element",
-      "model_provenance": "market-view-ui:app/models/user-import.js",
-      "anchors": ["app/models/user-import.js#upload.reload"],
-      "dependencies": ["@warp-drive/legacy@5.8.1"],
-      "negative_boundaries": ["unrelated.reload", "contradictory.reload", "unsupported_collection_element.reload"]
+      "receiver": "UserImportModel",
+      "member_declaration": "@warp-drive/legacy@5.8.1:vendor/warp-drive/private-model.d.ts#Model.reload",
+      "declaration_sha256": "2f02d0909d25249d0b404015762c6c593e51dfa3ff7993d0f0a6f07be15dd37b",
+      "collection_provenance": "source-declared uploads:UserImportModel[] element",
+      "anchor": "exact TypeScript call expression",
+      "evidence_basis": "typescript-checker",
+      "authority_ceiling": "non-authoritative",
+      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unsupported collection element", "unresolved declaration"]
     }
   },
   "selection": {
@@ -33,9 +38,11 @@
     "seed_count": 10,
     "attempt_count": 20,
     "operations": ["incoming", "slice"],
+    "language": "typescript",
     "provider_installation": "independent",
     "deterministic": true,
     "schema_valid": true,
+    "semantic_provenance_inspected": true,
     "provisionally_satisfied_relations": ["PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"]
   },
   "admission": {
@@ -44,8 +51,9 @@
     "b05_v2_blob": "0bd7501a1fa9307002fd09c10e4bb3843141df0e"
   },
   "analyzer_scope": {
-    "languages": ["Go"],
-    "framework_matchers": []
+    "languages": ["TypeScript"],
+    "framework_matchers": [],
+    "core_go_framework_parsing": false
   },
   "omitted_relations": {
     "graph_v3_bytes": "baseline-graph-v3",

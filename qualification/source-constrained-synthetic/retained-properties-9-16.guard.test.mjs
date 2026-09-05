@@ -40,7 +40,7 @@ function guard(property, id, statement, observe) {
 guard('P 9', 'ASSERT_SYNTHETIC_PROVIDER_DISTINCT_EXPLICIT_PROVISIONAL_IDENTITY', 'a distinct explicitly selectable synthetic provider identity and version declare SOURCE_CONSTRAINED_SYNTHETIC and PROVISIONAL_DISCOVERY', () => {
   assert.deepEqual(fixture.provider, {
     identity: 'source-constrained-synthetic-provider',
-    version: '1.0.0-provisional',
+    version: '1.0.0',
     selectable: true,
     evidence_class: 'SOURCE_CONSTRAINED_SYNTHETIC',
     discovery_status: 'PROVISIONAL_DISCOVERY',
@@ -50,21 +50,26 @@ guard('P 9', 'ASSERT_SYNTHETIC_PROVIDER_DISTINCT_EXPLICIT_PROVISIONAL_IDENTITY',
 guard('P 10', 'ASSERT_SYNTHETIC_INVOKES_TASK_EXACT_QUALIFIED_CHAIN', 'INVOKES_TASK is observed only for the qualified synthetic Task chain with original anchors, dependency, declaration provenance, and negative boundaries', () => {
   assert.deepEqual(fixture.observations.INVOKES_TASK, {
     chain: ['TaskForAsyncTaskFunction', 'Task', 'AbstractTask.perform'],
-    anchors: ['app/services/uploads.js#uploadComplete.perform'],
-    dependency: 'ember-concurrency@5.2.0',
-    declaration_provenance: ['TaskForAsyncTaskFunction', 'Task', 'AbstractTask.perform'],
-    negative_boundaries: ['unrelated.perform', 'contradictory.perform'],
+    anchor: 'exact TypeScript call expression',
+    receiver: 'TaskForAsyncTaskFunction',
+    member_declaration: 'ember-concurrency@5.2.0:vendor/ember-concurrency/index.d.ts#AbstractTask.perform',
+    declaration_sha256: '1ca4672f7e39b0e3c16f099b501d3b8000ece297764398634770a56c15ce115a',
+    evidence_basis: 'typescript-checker',
+    authority_ceiling: 'non-authoritative',
+    negative_boundaries: ['marker-only', 'same-spelling unrelated method', 'any receiver', 'unknown receiver', 'contradictory receiver', 'unresolved declaration'],
   });
 });
 
 guard('P 11', 'ASSERT_SYNTHETIC_TRIGGERS_RELOAD_EXACT_QUALIFIED_CHAIN', 'TRIGGERS_RELOAD is observed only for the qualified synthetic Warp Drive chain with collection and model provenance, anchors, dependencies, and negative boundaries', () => {
   assert.deepEqual(fixture.observations.TRIGGERS_RELOAD, {
-    chain: ['UserImportModel', '@warp-drive/legacy Model.reload'],
-    collection_provenance: 'upload collection element',
-    model_provenance: 'market-view-ui:app/models/user-import.js',
-    anchors: ['app/models/user-import.js#upload.reload'],
-    dependencies: ['@warp-drive/legacy@5.8.1'],
-    negative_boundaries: ['unrelated.reload', 'contradictory.reload', 'unsupported_collection_element.reload'],
+    receiver: 'UserImportModel',
+    member_declaration: '@warp-drive/legacy@5.8.1:vendor/warp-drive/private-model.d.ts#Model.reload',
+    declaration_sha256: '2f02d0909d25249d0b404015762c6c593e51dfa3ff7993d0f0a6f07be15dd37b',
+    collection_provenance: 'source-declared uploads:UserImportModel[] element',
+    anchor: 'exact TypeScript call expression',
+    evidence_basis: 'typescript-checker',
+    authority_ceiling: 'non-authoritative',
+    negative_boundaries: ['marker-only', 'same-spelling unrelated method', 'any receiver', 'unknown receiver', 'contradictory receiver', 'unsupported collection element', 'unresolved declaration'],
   });
 });
 
@@ -97,7 +102,7 @@ guard('P 13', 'ASSERT_SYNTHETIC_REAL_MCP_TEN_SEED_TWENTY_ATTEMPT_MATRIX', 'an im
     assert.equal(matrix.invocation.identity, 'production-lsp-trace-mcp');
     assert.ok(isAbsolute(matrix.invocation.executable));
     assert.match(matrix.invocation.executable_digest, /^sha256:[0-9a-f]{64}$/);
-    assert.equal(matrix.provider.identity, 'source-constrained-synthetic-provider@1.0.0-provisional');
+    assert.equal(matrix.provider.identity, 'source-constrained-synthetic-provider@1.0.0');
     assert.equal(matrix.provider.path_kind, 'absolute-external-npm-install');
     assert.ok(isAbsolute(matrix.provider.executable));
     assert.ok(!matrix.provider.executable.startsWith(matrix.repository_root + '/'));
@@ -132,6 +137,29 @@ guard('P 13', 'ASSERT_SYNTHETIC_REAL_MCP_TEN_SEED_TWENTY_ATTEMPT_MATRIX', 'an im
     assert.equal(attempt.replay_digest, attempt.response_digest, key);
     assert.equal(attempt.replay_response_digest, attempt.response_digest, key);
     assert.equal(attempt.observed_relation, attempt.polarity === 'positive', key);
+    assert.equal(attempt.semantic_provenance_valid, true, key);
+    assert.deepEqual(attempt.request.params.arguments.languages, ['typescript'], key);
+    assert.deepEqual(attempt.request.params.arguments.providers, [matrix.provider.identity], key);
+    if (attempt.polarity === 'positive' && ['INVOKES_TASK', 'TRIGGERS_RELOAD'].includes(attempt.relation)) {
+      const artifact = JSON.parse(attempt.response.result.structuredContent.content);
+      const relation = artifact.relations.find(item => item.kind === attempt.relation);
+      assert.equal(relation.anchors.length, 1, key);
+      assert.equal(relation.anchors[0].uri, attempt.request.params.arguments.uri, key);
+      assert.match(relation.from, /evidence=typescript-checker|receiver=/, key);
+      assert.match(relation.to, /evidence=typescript-checker/, key);
+      assert.match(relation.to, /authority=non-authoritative/, key);
+      assert.match(relation.to, /sha256=[0-9a-f]{64}/, key);
+      if (attempt.relation === 'INVOKES_TASK') {
+        assert.match(relation.from, /receiver=TaskForAsyncTaskFunction/, key);
+        assert.match(relation.to, /package=ember-concurrency@5\.2\.0/, key);
+        assert.match(relation.to, /symbol=AbstractTask\.perform/, key);
+      } else {
+        assert.match(relation.from, /receiver=UserImportModel/, key);
+        assert.match(relation.from, /collection=uploads:UserImportModel\[\]/, key);
+        assert.match(relation.to, /package=@warp-drive\/legacy@5\.8\.1/, key);
+        assert.match(relation.to, /symbol=Model\.reload/, key);
+      }
+    }
   }
   assert.equal(expected.size, 0, `missing attempts: ${[...expected].join(',')}`);
   assert.deepEqual(matrix.relation_stages, Object.fromEntries(relations.map(relation => [relation, { positive: 2, negative: 2, status: 'PASS' }])));
@@ -146,10 +174,11 @@ guard('P 14', 'ASSERT_PROGRAM_B_PROVISIONAL_ONLY_B05_V2_UNCHANGED', 'PROGRAM_B_P
   });
 });
 
-guard('P 15', 'ASSERT_SYNTHETIC_ANALYZER_GENERIC_GO_NO_FRAMEWORK_MATCHER', 'synthetic analysis is generic Go only and has no framework matcher', () => {
+guard('P 15', 'ASSERT_SYNTHETIC_ANALYZER_TYPESCRIPT_CHECKER_CORE_GO_GENERIC', 'synthetic analysis uses the TypeScript checker while core Go has no framework parser', () => {
   assert.deepEqual(fixture.analyzer_scope, {
-    languages: ['Go'],
+    languages: ['TypeScript'],
     framework_matchers: [],
+    core_go_framework_parsing: false,
   });
 });
 

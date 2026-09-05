@@ -1,11 +1,36 @@
 {
-  "schema": "lsp-trace.source-constrained-synthetic-provider.provenance.v1",
-  "source": {"repository":"market-view-ui.git-object","commit":"326718ae733cb26097bd30246276cecd371a4e79"},
-  "relations": {
-    "INVOKES_TASK": {"anchor":{"path":"app/services/uploads.js","blob":"8714414be3d70935e55e0fd6dccf1cd867363547","sha256":"82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205","symbol":"uploadComplete.perform"},"chain":["TaskForAsyncTaskFunction","Task","AbstractTask.perform"],"dependency":"ember-concurrency@5.2.0","negative_boundaries":["unrelated.perform","contradictory.perform"]},
-    "TRIGGERS_RELOAD": {"anchor":{"path":"app/models/user-import.js","blob":"eae121fffc6a82d1111466f71a68fe5f5b8cc400","sha256":"37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9","symbol":"upload.reload"},"chain":["UserImportModel","@warp-drive/legacy Model.reload"],"collection_provenance":"upload collection element","model_provenance":"market-view-ui:app/models/user-import.js","dependencies":["@warp-drive/legacy@5.8.1"],"negative_boundaries":["unrelated.reload","contradictory.reload","unsupported_collection_element.reload"]}
+  "schema": "lsp-trace.source-constrained-synthetic-provider.provenance.v2",
+  "compiler": { "name": "typescript", "version": "5.9.3" },
+  "config": { "path": "tsconfig.json", "sha256": "fbbe636ff59ded53e4ed0fdb18ad57ffceb628b8b45f310c44c451eeb6004b3c" },
+  "packages": {
+    "ember-concurrency": {
+      "version": "5.2.0",
+      "integrity": "sha512-NUptPzaxaF2XWqn3VQ5KqiLSRqPFIZhWXH3UkOMhiedmiolxGYjUV96maoHWdd5msxNgQBC0UkZ28m7pV7A0sQ==",
+      "declarations": [{ "path": "vendor/ember-concurrency/index.d.ts", "sha256": "1ca4672f7e39b0e3c16f099b501d3b8000ece297764398634770a56c15ce115a" }]
+    },
+    "@warp-drive/legacy": {
+      "version": "5.8.1",
+      "integrity": "sha512-i2+LhOQ+RO4AKeI4mSMWGNsiIY/sVB9CoslPDqCVc9BofcQE7uvAZinIjjPgPU5bbzqEThqdlHiEeoOdd19Tfw==",
+      "declarations": [
+        { "path": "vendor/warp-drive/model.d.ts", "sha256": "9313eeaa1e41483d1a4baa276f932eea64363314fa418062193beed358f1e72e" },
+        { "path": "vendor/warp-drive/private-model.d.ts", "sha256": "2f02d0909d25249d0b404015762c6c593e51dfa3ff7993d0f0a6f07be15dd37b" }
+      ]
+    }
   },
-  "coverage_boundary":["uploadComplete.perform","upload.reload"],
-  "failure_boundary":["unrelated.perform","contradictory.perform","unrelated.reload","contradictory.reload","unsupported_collection_element.reload"],
-  "core_go_framework_parsing":false
+  "relations": {
+    "INVOKES_TASK": {
+      "receiver": "TaskForAsyncTaskFunction",
+      "chain": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
+      "member_declaration": "ember-concurrency@5.2.0:AbstractTask.perform",
+      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unresolved declaration"]
+    },
+    "TRIGGERS_RELOAD": {
+      "receiver": "UserImportModel",
+      "member_declaration": "@warp-drive/legacy@5.8.1:Model.reload",
+      "collection_provenance": "source-declared UserImportModel[] element",
+      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unsupported collection element", "unresolved declaration"]
+    }
+  },
+  "evidence_basis": "TypeScript 5.9.3 checker-resolved source call, receiver type, member declaration, and packaged declaration anchors",
+  "authority_ceiling": "SOURCE_CONSTRAINED_SYNTHETIC; PROVIDER_REPORTED; non-authoritative; no runtime execution or production completeness claim"
 }
