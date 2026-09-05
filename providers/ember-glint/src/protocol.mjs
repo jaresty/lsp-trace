@@ -207,7 +207,9 @@ export function createProvider({ analyzers = [] } = {}) {
         request.documents.every((document) => record.languages.includes(document.language))
       ));
       if (eligible.length === 0) {
-        return responseFor(request, metadata, 'UNAVAILABLE', [], Object.freeze({ status: 'UNKNOWN', reason: 'NO_QUALIFIED_ANALYZER' }), null);
+        const unsupportedRelation = request.relation_kinds.some((kind) => !metadata.capabilities.relation_kinds.includes(kind));
+        const reason = unsupportedRelation ? 'RELATION_NOT_SUPPORTED' : 'NO_QUALIFIED_ANALYZER';
+        return responseFor(request, metadata, 'UNAVAILABLE', [], Object.freeze({ status: 'UNKNOWN', reason }), null);
       }
       if (eligible.length > 1) {
         return responseFor(request, metadata, 'BLOCKED', [], Object.freeze({ status: 'UNKNOWN', reason: 'AMBIGUOUS_QUALIFIED_ANALYZER' }), null);

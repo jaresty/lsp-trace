@@ -88,6 +88,14 @@ named('ASSERT_DETERMINISTIC_CANONICAL_BYTES_LOGICAL_DIGEST', () => {
   assert.ok(!logicalDigest(left).includes('Content-Length'));
 });
 
+named('ASSERT_UNSUPPORTED_RELATION_EXPLICIT_NOT_EMPTY_SUCCESS', async () => {
+  const unsupported = await createProvider({ analyzers: [] }).handle({ ...request, relation_kinds: ['UNSUPPORTED_RUNTIME_CALL'] });
+  assert.equal(unsupported.outcome, 'UNAVAILABLE');
+  assert.equal(unsupported.coverage.status, 'UNKNOWN');
+  assert.equal(unsupported.coverage.reason, 'RELATION_NOT_SUPPORTED');
+  assert.deepEqual(unsupported.observations, []);
+});
+
 named('ASSERT_HONEST_CAPABILITY_METADATA', () => {
   const none = createProvider({ analyzers: [] }).metadata;
   assert.deepEqual(none.capabilities, { relation_kinds: [], languages: [], frameworks: [] });
