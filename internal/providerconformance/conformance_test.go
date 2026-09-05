@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,8 +77,14 @@ func runProviderConformanceHelper() {
 	if mode == "wrong-custody" {
 		response["custody"] = Custody{OriginalURI: "file:///other", OriginalRevision: "r1", OriginalDigest: "sha256:other"}
 	}
+	if mode == "unknown-field" {
+		response["unexpected"] = true
+	}
 	if mode == "too-many" {
 		response["observations"] = make([]json.RawMessage, 9)
+	}
+	if mode == "nondeterministic" {
+		response["diagnostics"] = []string{strconv.Itoa(os.Getpid())}
 	}
 	encoded, _ := json.Marshal(response)
 	fmt.Printf("Content-Length: %d\r\n\r\n%s", len(encoded), encoded)
@@ -136,7 +143,7 @@ func TestGenericProviderConformance(t *testing.T) {
 		if got := Run(context.Background(), cfg, req); got.Outcome != OutcomeFailed || checkPassed(got, "identity") {
 			t.Fatalf("%s: mismatch not rejected: %#v", assertWire, got)
 		}
-		for _, mode := range []string{"wrong-custody", "two-frames"} {
+		for _, mode := range []string{"wrong-custody", "two-frames", "unknown-field"} {
 			cfg, req = validFixture(t, mode)
 			if got := Run(context.Background(), cfg, req); got.Outcome != OutcomeFailed {
 				t.Fatalf("%s: mode=%s accepted: %#v", assertWire, mode, got)
@@ -158,8 +165,8 @@ func TestGenericProviderConformance(t *testing.T) {
 		}
 		cfg, req = validFixture(t, "hang")
 		cancelCtx, cancel := context.WithCancel(context.Background())
-		cancel()
-		if got = Run(cancelCtx, cfg, req); got.Outcome != OutcomeUnavailable {
+		time.AfterFunc(20*time.Millisecond, cancel)
+		if got = Run(cancelCtx, cfg, req); got.Outcome != OutcomeUnavailable || !got.Terminated || !got.Reaped {
 			t.Fatalf("%s: cancellation=%#v", assertLifecycle, got)
 		}
 		cfg, req = validFixture(t, "too-many")
@@ -168,7 +175,11 @@ func TestGenericProviderConformance(t *testing.T) {
 		}
 	})
 	t.Run(assertReplay, func(t *testing.T) {
-		cfg, req := validFixture(t, "passed")
+		cfg, req := validFixture(t, "nondeterministic")
+		if got := Run(context.Background(), cfg, req); got.Outcome != OutcomeFailed || checkPassed(got, "replay") {
+			t.Fatalf("%s: nondeterministic response accepted: %#v", assertReplay, got)
+		}
+		cfg, req = validFixture(t, "passed")
 		got := Run(context.Background(), cfg, req)
 		if got.Outcome != OutcomePassed || !checkPassed(got, "replay") || got.ResponseDigest == "" {
 			t.Fatalf("%s: %#v", assertReplay, got)
