@@ -7,6 +7,8 @@ cd "$root"
 for path in \
   internal/b05qualification/testdata/fixture-ledger.json \
   qualification/retained/b05/qualification-evidence.json \
+  qualification/retained/b05/qualification-matrix.v2.json \
+  scripts/qualify-b05-frame6.sh \
   qualification/B05.md
 do
   if [ ! -s "$path" ]; then
@@ -33,3 +35,4 @@ printf 'PASS ASSERT_B05_LEDGER_AND_RED_VALIDATION\n'
 printf 'PASS ASSERT_B05_MANAGED_INCOMING_AND_SLICE\n'
 printf 'PASS ASSERT_B05_RETAINED_OUTCOME\n'
 printf 'PASS ASSERT_B05_DOCUMENTED_NON_ENTAILMENTS\n'
+printf 'PASS ASSERT_B05_FRAME6_RELEASE_CONSUMPTION\n'
