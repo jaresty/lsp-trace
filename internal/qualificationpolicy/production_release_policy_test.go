@@ -1,11 +1,52 @@
 package qualificationpolicy
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestExternalProviderQualifierRejectsRepositorySymlink(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(root, "providers", "ember-glint", "bin", "ember-glint.mjs")
+	link := filepath.Join(t.TempDir(), "external-provider")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(filepath.Join(root, "scripts", "qualify-external-provider.sh"), link)
+	cmd.Dir = root
+	output, err := cmd.CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "FAIL ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH") {
+		t.Fatalf("ASSERT_EXTERNAL_PROVIDER_REAL_TARGET_PATH: err=%v output=%s", err, output)
+	}
+}
+
+func TestRetainedExternalProviderResponseDigest(t *testing.T) {
+	const assertion = "ASSERT_RELEASE_RETAINED_PROVIDER_RESPONSE_DIGEST"
+	raw, err := os.ReadFile(filepath.Join("..", "..", "qualification", "retained", "external-provider", "ember-glint.json"))
+	if err != nil {
+		t.Fatalf("%s: %v", assertion, err)
+	}
+	var evidence struct {
+		Response       []byte `json:"response"`
+		ResponseSHA256 string `json:"response_sha256"`
+	}
+	if err := json.Unmarshal(raw, &evidence); err != nil || len(evidence.Response) == 0 {
+		t.Fatalf("%s: retained exact provider response is required: %v", assertion, err)
+	}
+	digest := sha256.Sum256(evidence.Response)
+	if got := hex.EncodeToString(digest[:]); got != evidence.ResponseSHA256 {
+		t.Fatalf("%s: got=%s want=%s", assertion, got, evidence.ResponseSHA256)
+	}
+}
 
 func TestProductionQualificationAndReleasePolicy(t *testing.T) {
 	root := filepath.Join("..", "..")

@@ -191,6 +191,13 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
+if go test ./internal/qualificationpolicy -count=1; then
+  printf 'PASS R-EXTERNAL-PROVIDER-QUALIFICATION-AUTHENTICITY: retained response digest and real-path policy\n'
+else
+  printf 'FAIL R-EXTERNAL-PROVIDER-QUALIFICATION-AUTHENTICITY: retained response or real-path policy failed\n'
+  exit 1
+fi
+
 if go test ./internal/schema -run Inspection -count=1 &&
    go test ./cmd/lsp-trace -run 'TestInspect|TestProjectAllSeedInspection|TestValidateAllSeedAccounting' -count=1; then
   printf 'PASS R-INSPECTION-CONTRACT: schema, modes, custody, accounting, determinism, and equivalence\n'
