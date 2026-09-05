@@ -1,0 +1,55 @@
+{
+  "schema_version": "lsp-trace.ember-glint.passes-callback-evidence.v1",
+  "baseline": "1825a56070d7b76174ebb086d7c464731ce12bb0",
+  "outcome": "BLOCKED",
+  "blocker": {
+    "stage": "provider-package-tests",
+    "assertion": "ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS",
+    "reason": "shared exact-runtime-content allowlist does not yet admit analyzers/passes-callback.mjs"
+  },
+  "scope": "Frame 1 source-derived PASSES_CALLBACK analyzer over the frozen positive and noncallable-negative Ember .gts fixtures",
+  "procedure": "node --test providers/ember-glint/test/passes-callback.test.mjs",
+  "assertions": [
+    "ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER",
+    "ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR",
+    "ASSERT_PASSES_CALLBACK_EXACT_GLINT_MAPPING_REQUIRED",
+    "ASSERT_PASSES_CALLBACK_DETERMINISTIC",
+    "ASSERT_PASSES_CALLBACK_REJECTS_NONCALLABLE",
+    "ASSERT_PASSES_CALLBACK_SEMANTIC_CEILING",
+    "ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST"
+  ],
+  "red": {
+    "artifact": "committed assertion guard applied to a present-but-wrong volatile unqualified observation shell",
+    "observed_result": "Node test: pass 0, fail 6",
+    "failed_assertions": [
+      "ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER",
+      "ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR",
+      "ASSERT_PASSES_CALLBACK_EXACT_GLINT_MAPPING_REQUIRED",
+      "ASSERT_PASSES_CALLBACK_DETERMINISTIC",
+      "ASSERT_PASSES_CALLBACK_REJECTS_NONCALLABLE",
+      "ASSERT_PASSES_CALLBACK_SEMANTIC_CEILING"
+    ]
+  },
+  "green": {
+    "artifact": "qualified Tree-sitter syntax, TypeScript definition/signature/type compatibility, and exact Glint round-trip mapping analyzer",
+    "observed_result": "Node test: pass 6, fail 0"
+  },
+  "qualified_evidence": [
+    "tree-sitter-typescript@0.23.2 call_expression and argument structure",
+    "typescript@5.9.2 getDefinitionAtPosition, getResolvedSignature, getTypeAtLocation, getCallSignatures, and isTypeAssignableTo",
+    "exact generated-to-original Glint range mapping with round-trip equality"
+  ],
+  "supports": [
+    "source_dependency_relation",
+    "typed_callable_reference_passage_to_callable_parameter",
+    "exact_original_source_anchors",
+    "deterministic_bounded_observations"
+  ],
+  "does_not_support": [
+    "callback_invocation",
+    "runtime_execution",
+    "repaint",
+    "feature_identity",
+    "whole_source_completeness"
+  ]
+}
