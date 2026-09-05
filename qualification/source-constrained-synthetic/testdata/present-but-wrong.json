@@ -1,0 +1,60 @@
+{
+  "fixture_kind": "synthetic-unlabeled",
+  "source": {
+    "repository": "working-tree-copy",
+    "commit": "HEAD",
+    "paths": [
+      {
+        "path": "app/services/uploads.js",
+        "blob": "wrong",
+        "sha256": "wrong"
+      },
+      {
+        "path": "app/models/user-import.js",
+        "blob": "wrong",
+        "sha256": "wrong"
+      }
+    ],
+    "nais_mutated": true
+  },
+  "toolchain": {
+    "ember-concurrency": "5.1.0",
+    "@warp-drive/legacy": "5.8.0",
+    "compiler": "unknown",
+    "glint": "unknown"
+  },
+  "introduced_declarations": [
+    {
+      "identity": "Task.perform",
+      "target_source": "guessed"
+    }
+  ],
+  "resolutions": {
+    "uploadComplete.perform": ["Task", "perform"],
+    "unrelated.perform": ["Task", "perform"],
+    "contradictory.perform": ["Task", "perform"],
+    "upload.reload": ["Model", "reload"],
+    "unrelated.reload": ["Model", "reload"],
+    "contradictory.reload": ["Model", "reload"],
+    "unsupported_collection_element.reload": ["Model", "reload"]
+  },
+  "evidence": {
+    "status": "maybe-pass",
+    "canonical": false,
+    "stable_order": false,
+    "generated_at": "now"
+  },
+  "policy": {
+    "scope": "authoritative",
+    "advertised_relations": ["INVOKES_TASK", "TRIGGERS_RELOAD"],
+    "qualification": "PRODUCTION_RESOLVED",
+    "b05_v2_blob": "changed",
+    "PROGRAM_B_ADMITTED": true
+  },
+  "execution": {
+    "procedure": "uncommitted-local-command",
+    "reproducible": false,
+    "committed": false,
+    "nais_mutated": true
+  }
+}
