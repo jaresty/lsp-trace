@@ -518,6 +518,76 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	legacyConfigPath := writeBootstrapJSON(t, baseConfig)
 	base := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500}
 
+	for _, operation := range []string{"incoming", "slice"} {
+		t.Run("ASSERT_PRODUCTION_MCP_"+strings.ToUpper(operation)+"_SELECTOR_CONTRACT", func(t *testing.T) {
+			tool := "lsp_trace_v1_" + operation
+			requestFor := func() map[string]any {
+				request := cloneMap(base)
+				request["relations"] = []string{"PASSES_CALLBACK"}
+				if operation == "slice" {
+					delete(request, "max_depth")
+					request["start_mode"] = "at"
+					request["up_depth"] = 2
+					request["down_depth"] = 2
+				}
+				return request
+			}
+			run := func(t *testing.T, request map[string]any) processCall {
+				t.Helper()
+				responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", configPath}, []map[string]any{callRequest(20, tool, request)})
+				if err != nil {
+					t.Fatalf("process: %v", err)
+				}
+				return decodeProcessCall(t, responses[0])
+			}
+
+			omitted := requestFor()
+			omitted["providers"] = []string{"fake@1.0.0"}
+			baselineCall := run(t, omitted)
+			baseline := requireRealProviderGraphV4(t, "ASSERT_PRODUCTION_MCP_"+strings.ToUpper(operation)+"_SELECTORS_OMITTED", baselineCall)
+			for _, mode := range []string{"exact", "auto"} {
+				t.Run("accepts arrays and preserves "+mode+" semantics", func(t *testing.T) {
+					matching := requestFor()
+					matching["languages"] = []string{"go"}
+					matching["frameworks"] = []string{"fixture"}
+					if mode == "exact" {
+						matching["providers"] = []string{"fake@1.0.0"}
+					}
+					call := run(t, matching)
+					got := requireRealProviderGraphV4(t, "ASSERT_PRODUCTION_MCP_"+strings.ToUpper(operation)+"_SELECTORS_ACCEPTED_"+strings.ToUpper(mode), call)
+					if !reflect.DeepEqual(got.Relations, baseline.Relations) || call.env["logical_digest"] != baselineCall.env["logical_digest"] {
+						t.Fatalf("ASSERT_PRODUCTION_MCP_%s_SELECTOR_GRAPH_V4_EQUIVALENCE_%s: omitted_relations=%+v matching_relations=%+v omitted_digest=%v matching_digest=%v", strings.ToUpper(operation), strings.ToUpper(mode), baseline.Relations, got.Relations, baselineCall.env["logical_digest"], call.env["logical_digest"])
+					}
+				})
+			}
+
+			for _, tc := range []struct {
+				name  string
+				field string
+				value []string
+				want  string
+			}{
+				{"duplicate languages", "languages", []string{"go", "go"}, "duplicate language"},
+				{"empty language", "languages", []string{""}, "selected language must not be empty"},
+				{"unsupported language", "languages", []string{"rust"}, "does not support selected"},
+				{"duplicate frameworks", "frameworks", []string{"fixture", "fixture"}, "duplicate framework"},
+				{"empty framework", "frameworks", []string{""}, "selected framework must not be empty"},
+				{"unsupported framework", "frameworks", []string{"other"}, "does not support selected"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					request := requestFor()
+					request["providers"] = []string{"fake@1.0.0"}
+					request[tc.field] = tc.value
+					call := run(t, request)
+					raw, _ := json.Marshal(call.env)
+					if call.env["operation_status"] == "SUCCEEDED" || !strings.Contains(string(raw), tc.want) {
+						t.Fatalf("ASSERT_PRODUCTION_MCP_%s_%s_EXPLICIT_REJECTION: want=%q envelope=%s", strings.ToUpper(operation), strings.ToUpper(strings.ReplaceAll(tc.name, " ", "_")), tc.want, raw)
+					}
+				})
+			}
+		})
+	}
+
 	t.Run("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
 		request := cloneMap(base)
 		request["relations"] = []string{"PASSES_CALLBACK"}

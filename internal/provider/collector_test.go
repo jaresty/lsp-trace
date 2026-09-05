@@ -77,7 +77,7 @@ func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T)
 	result, _ := json.Marshal(Result{ProviderID: "host-provider@1", Terminal: "COMPLETE_WITHIN_BOUNDS", Complete: true, Bounds: CollectorLimits{MaxNodes: 20}, Observations: []observationadapter.Observation{{ObservationID: "o1"}}, GraphV4: graph.NormalizedRelations{SchemaVersion: graph.NormalizedRelationsSchemaVersion, ArtifactKind: graph.NormalizedRelationsArtifactKind, Relations: []graph.Relation{{RelationID: "r1", Kind: "PASSES_CALLBACK"}}}, LogicalDigest: "sha256:test"})
 	s := &collectorAdapter{result: result}
 	c, _ := NewCollector(e, a, s)
-	raw := json.RawMessage(`{"session_id":"managed-session","generation":7,"start_mode":"at","uri":"file:///workspace/component.gts","line":3,"character":4,"relations":["PASSES_CALLBACK"],"adapters":"auto","providers":["host-provider@1"],"workspace_revision":{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED"},"fail_on_unknown_revision":true,"down_depth":2,"up_depth":3,"max_nodes":20,"max_messages":8,"max_bytes":2048,"timeout_ms":500,"request_timeout_ms":100}`)
+	raw := json.RawMessage(`{"session_id":"managed-session","generation":7,"start_mode":"at","uri":"file:///workspace/component.gts","line":3,"character":4,"relations":["PASSES_CALLBACK"],"languages":["glimmer-js"],"frameworks":["ember"],"adapters":"auto","providers":["host-provider@1"],"workspace_revision":{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED"},"fail_on_unknown_revision":true,"down_depth":2,"up_depth":3,"max_nodes":20,"max_messages":8,"max_bytes":2048,"timeout_ms":500,"request_timeout_ms":100}`)
 	got, err := c.CollectRelations(context.Background(), []string{"PASSES_CALLBACK"}, raw)
 	if err != nil {
 		t.Fatalf("%s: %v", assertionRequest, err)
@@ -86,12 +86,16 @@ func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T)
 	if err := json.Unmarshal(e.request, &wire); err != nil {
 		t.Fatal(err)
 	}
-	if e.calls != 1 || e.id != "host-provider@1" || !reflect.DeepEqual(e.limits, limits) || wire.SchemaVersion != CollectorRequestSchema || wire.Session.SessionID != "managed-session" || wire.Session.Generation != 7 || wire.Seed.URI != "file:///workspace/component.gts" || wire.Seed.Line == nil || *wire.Seed.Line != 3 || wire.Documents.OriginalURI != wire.Seed.URI || !wire.Documents.FailOnUnknown || !strings.Contains(string(wire.Documents.WorkspaceRevision), `"commit":"abc"`) || wire.Limits.MaxNodes != 20 || wire.Limits.MaxMessages != 8 || wire.Limits.MaxBytes != 2048 {
-		t.Fatalf("%s: calls=%d id=%q limits=%+v wire=%+v", assertionRequest, e.calls, e.id, e.limits, wire)
+	var wireFields map[string]json.RawMessage
+	if err := json.Unmarshal(e.request, &wireFields); err != nil {
+		t.Fatal(err)
+	}
+	if e.calls != 1 || e.id != "host-provider@1" || !reflect.DeepEqual(e.limits, limits) || wire.SchemaVersion != CollectorRequestSchema || wire.Session.SessionID != "managed-session" || wire.Session.Generation != 7 || wire.Seed.URI != "file:///workspace/component.gts" || wire.Seed.Line == nil || *wire.Seed.Line != 3 || wire.Documents.OriginalURI != wire.Seed.URI || !wire.Documents.FailOnUnknown || !strings.Contains(string(wire.Documents.WorkspaceRevision), `"commit":"abc"`) || wire.Limits.MaxNodes != 20 || wire.Limits.MaxMessages != 8 || wire.Limits.MaxBytes != 2048 || string(wireFields["languages"]) != `["glimmer-js"]` || string(wireFields["frameworks"]) != `["ember"]` {
+		t.Fatalf("%s: calls=%d id=%q limits=%+v wire=%+v wire_fields=%s", assertionRequest, e.calls, e.id, e.limits, wire, e.request)
 	}
 	t.Log("PASS " + assertionRequest)
-	if a.calls != 1 || s.calls != 1 || s.request.ProviderID != "host-provider@1" || s.request.AdapterID != "source-adapter@1" {
-		t.Fatalf("%s: admission=%d adapter=%d request=%+v", assertionAdapter, a.calls, s.calls, s.request)
+	if a.calls != 1 || !reflect.DeepEqual(a.selection.Languages, []string{"glimmer-js"}) || !reflect.DeepEqual(a.selection.Frameworks, []string{"ember"}) || s.calls != 1 || s.request.ProviderID != "host-provider@1" || s.request.AdapterID != "source-adapter@1" {
+		t.Fatalf("%s: admission=%d selection=%+v adapter=%d request=%+v", assertionAdapter, a.calls, a.selection, s.calls, s.request)
 	}
 	t.Log("PASS " + assertionAdapter)
 	e.receipt.Response[0] = 'X'
