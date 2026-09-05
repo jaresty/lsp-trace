@@ -112,13 +112,14 @@ func TestProductionExternalProviderCompletesManagedLifecycle(t *testing.T) {
 		ProtocolIdentity      string `json:"protocol_identity"`
 		AdapterIdentity       string `json:"adapter_identity"`
 		ResponseSHA256        string `json:"response_sha256"`
+		Response              []byte `json:"response"`
 		DeterministicReplay   bool   `json:"deterministic_replay"`
 		Reviewed              bool   `json:"reviewed"`
 		UnsupportedHonest     bool   `json:"unsupported_honest"`
 		GraphV3OmissionParity bool   `json:"graph_v3_omission_parity"`
 		GraphV4               any    `json:"graph_v4"`
 		Observations          any    `json:"observations"`
-	}{"lsp-trace.external-provider-production-qualification.v1", "PASS", "independent-external-package", "absolute-external", "request→external subprocess→provider observations→generic adapter→graph-v4", declaration.Identity, observationadapter.ProtocolName + "@" + observationadapter.ProtocolVersion, "ember-template@1", hex.EncodeToString(responseDigest[:]), true, true, true, true, adapted.GraphV4, adapted.Observations}
+	}{"lsp-trace.external-provider-production-qualification.v1", "PASS", "independent-external-package", "absolute-external", "request→external subprocess→provider observations→generic adapter→graph-v4", declaration.Identity, observationadapter.ProtocolName + "@" + observationadapter.ProtocolVersion, "ember-template@1", hex.EncodeToString(responseDigest[:]), first.Response, true, true, true, true, adapted.GraphV4, adapted.Observations}
 	encoded, _ := json.MarshalIndent(evidence, "", "  ")
 	encoded = append(encoded, '\n')
 	if os.Getenv("LSP_TRACE_RETAIN_EXTERNAL_QUALIFICATION") == "1" {

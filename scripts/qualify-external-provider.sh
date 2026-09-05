@@ -16,7 +16,7 @@ case "$provider" in
 esac
 [ -f "$provider" ] && [ -x "$provider" ] || fail ASSERT_EXTERNAL_PROVIDER_EXECUTABLE "not an executable file: $provider"
 
-canonical=$(CDPATH= cd -- "$(dirname -- "$provider")" && pwd)/$(basename -- "$provider")
+canonical=$(realpath "$provider") || fail ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH "cannot resolve provider target: $provider"
 case "$canonical" in
   *'/testdata/'*|*'/fake-'*|*'/fake_'*) fail ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH "fake/testdata providers cannot qualify production: $canonical" ;;
   "$root"/*) fail ASSERT_EXTERNAL_PROVIDER_REAL_PACKAGE_PATH "provider must be independently installed outside the core repository: $canonical" ;;
