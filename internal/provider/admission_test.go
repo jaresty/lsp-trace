@@ -94,6 +94,24 @@ func TestAdmissionAutoRequiresEveryConstraintAndExactlyOne(t *testing.T) {
 	}
 }
 
+func TestAdmissionExactRequiresEveryConstraint(t *testing.T) {
+	declaration := admissionDeclaration("alpha@1", "CALLS")
+	r, _ := NewAdmissionResolver(mustProvisionAdmission(t, declaration), "semantic@1")
+	for name, selection := range map[string]Selection{
+		"language":  {Relations: []string{"CALLS"}, Languages: []string{"javascript"}, Frameworks: []string{"opaque"}, Providers: []string{"alpha@1"}},
+		"framework": {Relations: []string{"CALLS"}, Languages: []string{"typescript"}, Frameworks: []string{"framework-a"}, Providers: []string{"alpha@1"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := r.Admit(context.Background(), selection); err == nil {
+				t.Fatalf("ASSERT_PROVIDER_EXACT_ALL_CONSTRAINTS: accepted incompatible %s", name)
+			}
+		})
+	}
+	if got, err := r.Admit(context.Background(), Selection{Relations: []string{"CALLS"}, Languages: []string{"typescript"}, Frameworks: []string{"opaque"}, Providers: []string{"alpha@1"}}); err != nil || got.ProviderID != "alpha@1" {
+		t.Fatalf("ASSERT_PROVIDER_EXACT_ALL_CONSTRAINTS: compatible exact selection got=%+v err=%v", got, err)
+	}
+}
+
 func TestAdmissionRequestCannotSupplyExecutionAuthority(t *testing.T) {
 	r, _ := NewAdmissionResolver(mustProvisionAdmission(t, admissionDeclaration("alpha@1", "CALLS")), "semantic@1")
 	if _, err := r.Admit(context.Background(), Selection{Relations: []string{"CALLS"}, Languages: []string{"typescript"}, Frameworks: []string{"opaque"}, Providers: []string{"/tmp/request-provider"}}); err == nil {

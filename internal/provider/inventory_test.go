@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -55,10 +56,19 @@ func TestConfiguredProviderInventoryReadinessStates(t *testing.T) {
 }
 
 func TestConfiguredProviderInventoryDoesNotLaunch(t *testing.T) {
+	directory := t.TempDir()
+	marker := filepath.Join(directory, "started")
+	executable := filepath.Join(directory, "must-not-be-launched")
+	if err := os.WriteFile(executable, []byte("#!/bin/sh\ntouch \""+marker+"\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	declaration := admissionDeclaration("missing@1", "CALLS")
-	declaration.Executable = filepath.Join(t.TempDir(), "must-not-be-launched")
+	declaration.Executable = executable
 	inventory := NewConfiguredInventory(mustProvisionAdmission(t, declaration))
 	if got := inventory.Entries(); len(got) != 1 || got[0].ExecutableAvailable {
 		t.Fatalf("ASSERT_CONFIGURED_PROVIDER_INVENTORY_NO_LAUNCH: entries=%+v", got)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("ASSERT_CONFIGURED_PROVIDER_INVENTORY_NO_LAUNCH: provider process side effect observed: %v", err)
 	}
 }
