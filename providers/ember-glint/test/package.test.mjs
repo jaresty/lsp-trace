@@ -9,8 +9,9 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const allowed = [
   'README.md', 'analyzer.mjs', 'analyzers/custody.cjs', 'analyzers/glint.mjs',
-  'analyzers/script.mjs', 'analyzers/template.mjs', 'bin/ember-glint.mjs',
-  'default-analyzer.mjs', 'package.json', 'src/protocol.mjs',
+  'analyzers/passes-callback.mjs', 'analyzers/script.mjs', 'analyzers/template.mjs',
+  'bin/ember-glint.mjs', 'default-analyzer.mjs', 'package.json',
+  'renders-from-analyzer.mjs', 'src/protocol.mjs',
 ];
 
 function runtimeFiles(directory, prefix = '') {

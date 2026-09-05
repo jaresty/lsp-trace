@@ -112,11 +112,11 @@ test('ASSERT_PASSES_CALLBACK_SEMANTIC_CEILING', async () => {
 test('ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST', async () => {
   const evidence = JSON.parse(await readFile(retainedPath, 'utf8'));
   assert.equal(evidence.schema_version, 'lsp-trace.ember-glint.passes-callback-evidence.v1', 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
-  assert.equal(evidence.outcome, 'BLOCKED', 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
-  assert.deepEqual(evidence.blocker, {
+  assert.equal(evidence.outcome, 'PASS', 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
+  assert.deepEqual(evidence.admission, {
     stage: 'provider-package-tests',
     assertion: 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS',
-    reason: 'shared exact-runtime-content allowlist does not yet admit analyzers/passes-callback.mjs',
+    result: 'PASS',
   }, 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
   assert.equal(evidence.baseline, '1825a56070d7b76174ebb086d7c464731ce12bb0', 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
   assert.deepEqual(evidence.assertions, [
@@ -136,5 +136,5 @@ test('ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST', async () => {
     'whole_source_completeness',
   ], 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
   assert.match(evidence.red.observed_result, /fail 6/, 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
-  assert.match(evidence.green.observed_result, /pass 6[\s\S]*fail 0/, 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
+  assert.match(evidence.green.observed_result, /pass 7[\s\S]*fail 0/, 'ASSERT_PASSES_CALLBACK_RETAINED_EVIDENCE_HONEST');
 });

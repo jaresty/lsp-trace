@@ -1,11 +1,11 @@
 {
   "schema_version": "lsp-trace.ember-glint.passes-callback-evidence.v1",
   "baseline": "1825a56070d7b76174ebb086d7c464731ce12bb0",
-  "outcome": "BLOCKED",
-  "blocker": {
+  "outcome": "PASS",
+  "admission": {
     "stage": "provider-package-tests",
     "assertion": "ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS",
-    "reason": "shared exact-runtime-content allowlist does not yet admit analyzers/passes-callback.mjs"
+    "result": "PASS"
   },
   "scope": "Frame 1 source-derived PASSES_CALLBACK analyzer over the frozen positive and noncallable-negative Ember .gts fixtures",
   "procedure": "node --test providers/ember-glint/test/passes-callback.test.mjs",
@@ -32,7 +32,7 @@
   },
   "green": {
     "artifact": "qualified Tree-sitter syntax, TypeScript definition/signature/type compatibility, and exact Glint round-trip mapping analyzer",
-    "observed_result": "Node test: pass 6, fail 0"
+    "observed_result": "Node test: pass 7, fail 0"
   },
   "qualified_evidence": [
     "tree-sitter-typescript@0.23.2 call_expression and argument structure",

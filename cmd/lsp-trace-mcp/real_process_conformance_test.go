@@ -432,7 +432,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 			"protocol":             map[string]any{"name": observationadapter.ProtocolName, "version": observationadapter.ProtocolVersion},
 			"execution":            map[string]any{"path": providerPath, "directory": filepath.Dir(providerPath)},
 			"executable_available": true, "conformance_verified": true,
-			"capabilities": map[string]any{"relations": []string{"BINDS_ARGUMENT"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}},
+			"capabilities": map[string]any{"relations": []string{"BINDS_ARGUMENT", "PASSES_CALLBACK", "UPDATES_STATE", "RENDERS_FROM"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}},
 			"limits":       map[string]any{"request_bytes": 1048576, "response_bytes": 1048576, "protocol_messages": 1, "stderr_bytes": 4096, "wall_time_ms": 30000, "termination_grace_ms": 1000},
 		}},
 	}

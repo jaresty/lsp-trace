@@ -129,6 +129,6 @@ named('ASSERT_INSTALL_ENTRY_POINT_OFFLINE', async () => {
   const response = decodeFrame(Buffer.concat(output));
   assert.equal(response.provider.identity, 'ember-glint@1');
   assert.equal(response.outcome, 'COMPLETE');
-  assert.deepEqual(response.provider.capabilities.relation_kinds, ['BINDS_ARGUMENT']);
+  assert.deepEqual(response.provider.capabilities.relation_kinds, ['BINDS_ARGUMENT', 'PASSES_CALLBACK', 'RENDERS_FROM', 'UPDATES_STATE']);
   assert.deepEqual(response.observations.map(({ kind }) => kind), ['BINDS_ARGUMENT']);
 });
