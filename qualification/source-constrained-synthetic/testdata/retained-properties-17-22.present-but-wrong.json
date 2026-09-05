@@ -1,0 +1,51 @@
+{
+  "seeds": {
+    "source": { "commit": "326718ae733cb26097bd30246276cecd371a4e79" },
+    "items": [
+      {
+        "language": "javascript",
+        "javascript": { "path": "app/controllers/import.js", "blob": "not-a-blob", "sha256": "missing" },
+        "original_call_ranges": [],
+        "generated_call_ranges": [],
+        "mappings": [],
+        "generation": { "deterministic": false }
+      }
+    ]
+  },
+  "declarations": {
+    "kinds": ["import", "receiver", "collection", "model"],
+    "entries": [
+      { "kind": "import", "provenance": "assumed", "source": "", "declaration": "", "sha256": "missing" }
+    ],
+    "unsupported_premises": { "disposition": "accepted", "accepted": ["receiver-name-only"] }
+  },
+  "task_seed": {
+    "evidence": { "initializer": "task(...)" },
+    "provider_replays": [
+      { "logical_evidence": { "relation": "INVOKES_TASK", "range": 1 } },
+      { "logical_evidence": { "relation": "INVOKES_TASK", "range": 2 } }
+    ]
+  },
+  "reload_seed": {
+    "uploads_collection_writes": ["push"],
+    "expected_uploads_collection_writes": ["push", "replace"],
+    "model_provenance": { "model": "Unknown", "provenance": "assumed" },
+    "call": "upload.refresh()",
+    "provider_replays": [
+      { "logical_evidence": { "relation": "TRIGGERS_RELOAD", "range": 1 } },
+      { "logical_evidence": { "relation": "TRIGGERS_RELOAD", "range": 2 } }
+    ]
+  },
+  "qualifier": {
+    "committed": false,
+    "workspace": "repository",
+    "provider": "source-tree",
+    "transport": "in-process",
+    "seed_custody": ["none"]
+  },
+  "admission": {
+    "direct_javascript": "SUPPORTED",
+    "provisional_targets_true": ["B05", "PROGRAM_B"],
+    "PROGRAM_B_ADMITTED": true
+  }
+}
