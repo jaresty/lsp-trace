@@ -1,0 +1,59 @@
+{
+  "provider": {
+    "identity": "source-constrained-synthetic-provider",
+    "version": "1.0.0-provisional",
+    "selectable": true,
+    "evidence_class": "SOURCE_CONSTRAINED_SYNTHETIC",
+    "discovery_status": "HIDDEN"
+  },
+  "observations": {
+    "INVOKES_TASK": {
+      "chain": ["TaskForAsyncTaskFunction", "AbstractTask.perform"],
+      "anchors": ["app/services/uploads.js#uploadComplete.perform"],
+      "dependency": "ember-concurrency@5.2.0",
+      "declaration_provenance": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
+      "negative_boundaries": ["unrelated.perform", "contradictory.perform"]
+    },
+    "TRIGGERS_RELOAD": {
+      "chain": ["UserImportModel", "reload"],
+      "collection_provenance": "upload collection element",
+      "model_provenance": "market-view-ui:app/models/user-import.js",
+      "anchors": ["app/models/user-import.js#upload.reload"],
+      "dependencies": ["@warp-drive/legacy@5.8.1"],
+      "negative_boundaries": ["unrelated.reload", "contradictory.reload", "unsupported_collection_element.reload"]
+    }
+  },
+  "selection": {
+    "requires_explicit_provisional": false,
+    "production_consumes_synthetic": false,
+    "auto_advertises_synthetic": false
+  },
+  "matrix": {
+    "immutable": true,
+    "seed_count": 9,
+    "attempt_count": 20,
+    "operations": ["incoming", "slice"],
+    "provider_installation": "independent",
+    "deterministic": true,
+    "schema_valid": true,
+    "provisionally_satisfied_relations": ["PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"]
+  },
+  "admission": {
+    "PROGRAM_B_PROVISIONAL_DISCOVERY_ADMITTED": false,
+    "PROGRAM_B_ADMITTED": false,
+    "b05_v2_blob": "0bd7501a1fa9307002fd09c10e4bb3843141df0e"
+  },
+  "analyzer_scope": {
+    "languages": ["Go"],
+    "framework_matchers": ["ember"]
+  },
+  "omitted_relations": {
+    "graph_v3_bytes": "baseline-graph-v3",
+    "baseline_graph_v3_bytes": "baseline-graph-v3",
+    "provider_startups": 1,
+    "production_capabilities": "baseline-capabilities",
+    "baseline_production_capabilities": "baseline-capabilities",
+    "production_evidence": "baseline-evidence",
+    "baseline_production_evidence": "baseline-evidence"
+  }
+}

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "verify": "node verify.mjs",
-    "guard": "node --test source-constrained-synthetic.guard.test.mjs",
+    "guard": "node --test *.guard.test.mjs",
     "test": "npm run verify && npm run guard",
     "perturb": "node perturbations.mjs"
   },
