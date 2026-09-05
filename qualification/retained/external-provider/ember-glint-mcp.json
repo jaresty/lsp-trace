@@ -14,7 +14,7 @@
     "artifact_kind": "NORMALIZED_RELATIONS",
     "relations": [
       {
-        "relation_id": "sha256:0ae74632f326f8b4d191e6b027c2a1f1779307b5787b1dbd604288ea7fab7bee",
+        "relation_id": "sha256:04fd05d8faf85cc19a0303f59b30b854d5c3daaa3b345b508a505e19f0fe278c",
         "kind": "BINDS_ARGUMENT",
         "from": "path:this.itemCount",
         "to": "argument:Widget:@value",
@@ -25,8 +25,8 @@
         },
         "anchors": [
           {
-            "uri": "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
-            "revision": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+            "uri": "file:///private/tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
+            "revision": "811c270a17da417a78d2c8abc82a2afe05860034",
             "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
             "range": {
               "start": {
@@ -52,7 +52,7 @@
           "whole_source_completeness"
         ],
         "contributing_observation_ids": [
-          "sha256:836c65c3e0c18fc3c0c0f843387c504c650edc47c3f0b9fc9f7b1940913ebbe1"
+          "sha256:942b4c153d857b19540113e137d9a5e2a59389d82b79eb06f8d9623996f10920"
         ]
       }
     ],
@@ -73,10 +73,10 @@
       "coverage": {
         "Status": "COMPLETE_WITHIN_BOUNDS",
         "Denominator": [
-          "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
+          "file:///private/tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
         ],
         "Covered": [
-          "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
+          "file:///private/tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
         ],
         "CoveredCount": 1
       },
@@ -93,11 +93,11 @@
         "documents": [
           {
             "document_id": "original",
-            "original_uri": "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
+            "original_uri": "file:///private/tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
             "content_sha256": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
             "revision": {
-              "kind": "content",
-              "value": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+              "kind": "git",
+              "value": "811c270a17da417a78d2c8abc82a2afe05860034",
               "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
               "custody": "PROVIDER_PROVED"
             },
@@ -105,12 +105,12 @@
           }
         ],
         "conflicts": [],
-        "logical_digest": "sha256:93c1a730fec50e632b4dbf335392deeeefd3feac656c35625ecd6ade1b6de4f2"
+        "logical_digest": "sha256:bc40800f0be7cebfd66165efae3b514287642591abbb9303bf2f84c01fab20a8"
       },
       "observation_ids": [
-        "sha256:836c65c3e0c18fc3c0c0f843387c504c650edc47c3f0b9fc9f7b1940913ebbe1"
+        "sha256:942b4c153d857b19540113e137d9a5e2a59389d82b79eb06f8d9623996f10920"
       ],
-      "logical_digest": "sha256:0297bca7613606d1920d2ebdbeca6ddb417b90bf81c65e497978f2ce65b3d62c",
+      "logical_digest": "sha256:e37b0a22c910df54fcc3d13e23a82cf026dfaebd954887dc03545521fbe55d95",
       "receipt": {
         "messages": 1,
         "stderr_bytes": 0,

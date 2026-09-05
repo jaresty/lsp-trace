@@ -387,12 +387,36 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 	}
 	// Retained evidence must not depend on the checkout or agent-worktree path.
 	// Stage the immutable fixture at one stable qualification coordinate.
-	fixture := "/tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
-	if err := os.MkdirAll(filepath.Dir(fixture), 0o755); err != nil {
+	fixtureRoot := "/tmp/lsp-trace-external-provider-mcp-qualification"
+	fixture := filepath.Join(fixtureRoot, "component.gts")
+	if err := os.RemoveAll(fixtureRoot); err != nil {
+		t.Fatalf("%s: reset stable fixture repository: %v", assertion, err)
+	}
+	if err := os.MkdirAll(fixtureRoot, 0o755); err != nil {
 		t.Fatalf("%s: create stable fixture directory: %v", assertion, err)
 	}
 	if err := os.WriteFile(fixture, fixtureBytes, 0o644); err != nil {
 		t.Fatalf("%s: stage pinned fixture: %v", assertion, err)
+	}
+	git := func(args ...string) string {
+		command := exec.Command("git", args...)
+		command.Dir = fixtureRoot
+		command.Env = append(os.Environ(), "GIT_AUTHOR_DATE=2000-01-01T00:00:00Z", "GIT_COMMITTER_DATE=2000-01-01T00:00:00Z")
+		output, err := command.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s: git %v: %v: %s", assertion, args, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
+	git("init", "-q")
+	git("config", "user.name", "lsp-trace qualification")
+	git("config", "user.email", "qualification@example.invalid")
+	git("add", "component.gts")
+	git("commit", "-qm", "pinned qualification source")
+	commit := git("rev-parse", "HEAD")
+	fixture, err = filepath.EvalSymlinks(fixture)
+	if err != nil {
+		t.Fatalf("%s: canonicalize pinned fixture: %v", assertion, err)
 	}
 	fixtureURI := "file://" + fixture
 	mcpBinary := buildMCPBinary(t)
@@ -416,6 +440,9 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		"session_id": "external-ember-glint", "generation": 1, "uri": fixtureURI, "line": 0, "character": 8,
 		"max_depth": 2, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000,
 		"relations": []string{"BINDS_ARGUMENT"}, "providers": []string{"ember-glint@1"},
+		"languages": []string{"glimmer-js"}, "frameworks": []string{"ember"},
+		"workspace_revision": map[string]any{"kind": "git", "value": commit, "custody": "CALLER_ASSERTED"},
+		"fail_on_unknown_revision": true,
 	}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
 		callRequest(1, "lsp_session_v1_list", map[string]any{}),
@@ -447,7 +474,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		t.Fatalf("%s: exact graph-v4 shape: %+v", assertion, result)
 	}
 	relation := result.Relations[0]
-	if relation.Kind != graph.RelationBindsArgument || relation.From != "path:this.itemCount" || relation.To != "argument:Widget:@value" || relation.EvidenceClass != graph.EvidenceSourceAdapter || relation.Adapter == nil || relation.Adapter.Name != "lsp-trace-observation-adapter" || relation.Adapter.Version != "1" || len(relation.Anchors) != 1 || relation.Anchors[0].URI != fixtureURI || relation.Anchors[0].Range.Start.Line != 0 || relation.Anchors[0].Range.Start.Character != 8 || relation.Anchors[0].Range.End.Line != 0 || relation.Anchors[0].Range.End.Character != 33 || relation.Anchors[0].Revision == "" || relation.Anchors[0].Revision != relation.Anchors[0].Blob || len(relation.ContributingObservationIDs) != 1 {
+	if relation.Kind != graph.RelationBindsArgument || relation.From != "path:this.itemCount" || relation.To != "argument:Widget:@value" || relation.EvidenceClass != graph.EvidenceSourceAdapter || relation.Adapter == nil || relation.Adapter.Name != "lsp-trace-observation-adapter" || relation.Adapter.Version != "1" || len(relation.Anchors) != 1 || relation.Anchors[0].URI != fixtureURI || relation.Anchors[0].Range.Start.Line != 0 || relation.Anchors[0].Range.Start.Character != 8 || relation.Anchors[0].Range.End.Line != 0 || relation.Anchors[0].Range.End.Character != 33 || relation.Anchors[0].Revision != commit || relation.Anchors[0].Blob == "" || relation.Anchors[0].Revision == relation.Anchors[0].Blob || len(relation.ContributingObservationIDs) != 1 {
 		t.Fatalf("%s: exact relation/adapter/anchor/contributor provenance: %+v", assertion, relation)
 	}
 	var providerIdentity, adapterIdentity struct {

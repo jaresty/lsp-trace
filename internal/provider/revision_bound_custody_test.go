@@ -61,7 +61,7 @@ func newManagedGitSessionFixture(t *testing.T) managedGitSessionFixture {
 		OriginalPath:   path,
 		OriginalURI:    (&url.URL{Scheme: "file", Path: path}).String(),
 		ContentSHA256:  hex.EncodeToString(sum[:]),
-		Blob:           gitOutput(t, root, "rev-parse", "HEAD:component.gts"),
+		Blob:           hex.EncodeToString(sum[:]),
 	}
 }
 

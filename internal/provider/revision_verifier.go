@@ -121,12 +121,8 @@ func (v *GitRevisionVerifier) VerifyRevision(ctx context.Context, request Strict
 	if document.ContentSHA256 != digest {
 		return custodyError("provider content SHA-256 does not match pinned Git object")
 	}
-	if document.Revision.Blob != "" {
-		blobCmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", metadata.Commit+":"+gitPath)
-		blob, err := blobCmd.Output()
-		if err != nil || strings.TrimSpace(string(blob)) != document.Revision.Blob {
-			return custodyError("provider blob identity does not match pinned Git object")
-		}
+	if document.Revision.Blob != digest {
+		return custodyError("provider blob content digest does not match pinned Git object bytes")
 	}
 	return nil
 }
