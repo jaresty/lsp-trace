@@ -160,6 +160,76 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 	t.Log("PASS ASSERT_GLINT_REMAINS_BLOCKED")
 }
 
+func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed fake LSP requires LocalDarwinSupervisor")
+	}
+	mcpBinary := buildMCPBinary(t)
+	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
+	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
+	workspace := t.TempDir()
+	config := map[string]any{
+		"version": 1,
+		"processes": []any{map[string]any{
+			"alias":     "fixture",
+			"profile":   map[string]any{"trust_domain": "managed-graph-v4-red", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"},
+			"execution": map[string]any{"path": fakeLSP, "directory": workspace},
+		}},
+		"providers": []any{map[string]any{
+			"schema_version": "lsp-trace.bootstrap-provider.v1",
+			"identity":       "fake@1.0.0", "version": "1.0.0",
+			"protocol":     map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
+			"execution":    map[string]any{"path": fakeProvider, "directory": workspace, "environment": []string{"LSP_TRACE_PROVIDER_MODE=success"}},
+			"capabilities": map[string]any{"relations": []string{"PASSES_CALLBACK"}, "languages": []string{"go"}, "frameworks": []string{"fixture"}},
+			"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": 1000, "termination_grace_ms": 50},
+		}},
+	}
+	base := map[string]any{
+		"session_id": "fixture", "generation": 1, "start_mode": "at", "uri": "file:///fixture/main.go", "line": 0, "character": 0,
+		"up_depth": 2, "down_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500,
+	}
+	nonCalls := cloneMap(base)
+	nonCalls["relations"] = []string{"PASSES_CALLBACK"}
+	nonCalls["providers"] = []string{"fake@1.0.0"}
+	omitted := cloneMap(base)
+	calls := cloneMap(base)
+	calls["relations"] = []string{"CALLS"}
+	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
+		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(2, "lsp_trace_v1_slice", omitted),
+		callRequest(3, "lsp_trace_v1_slice", calls),
+		callRequest(4, "lsp_trace_v1_slice", nonCalls),
+	})
+	if err != nil {
+		t.Fatalf("setup: production MCP process failed: %v", err)
+	}
+	readyRaw, _ := json.Marshal(responses[0])
+	if !bytes.Contains(readyRaw, []byte(`"State":"READY"`)) || !bytes.Contains(readyRaw, []byte(`"Generation":1`)) {
+		t.Fatalf("setup: managed session did not reach READY: response=%s", readyRaw)
+	}
+	omittedCall := decodeProcessCall(t, responses[1])
+	var omittedGraph graph.Result
+	omittedArtifact := inlineArtifactBytes(t, omittedCall.env)
+	if omittedCall.env["operation_status"] != "SUCCEEDED" || json.Unmarshal(omittedArtifact, &omittedGraph) != nil || omittedGraph.SchemaVersion != graph.SchemaVersionV3 {
+		t.Fatalf("omitted control: envelope=%v artifact=%q", omittedCall.env, omittedArtifact)
+	}
+	callsCall := decodeProcessCall(t, responses[2])
+	callsArtifact := inlineArtifactBytes(t, callsCall.env)
+	if callsCall.env["operation_status"] != "SUCCEEDED" || len(callsArtifact) == 0 || !bytes.Contains(callsArtifact, []byte(`"schema_version":"lsp-trace.slice-composition.v1"`)) || !bytes.Contains(callsArtifact, []byte(`"calls":`)) {
+		t.Fatalf("CALLS control: envelope=%v artifact=%q", callsCall.env, callsArtifact)
+	}
+	nonCallsCall := decodeProcessCall(t, responses[3])
+	nonCallsArtifact := inlineArtifactBytes(t, nonCallsCall.env)
+	var identity struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	decodeErr := json.Unmarshal(nonCallsArtifact, &identity)
+	if nonCallsCall.env["operation_status"] != "SUCCEEDED" || decodeErr != nil || identity.SchemaVersion != "lsp-trace.graph.v4" {
+		rawResponse, _ := json.Marshal(responses[3])
+		t.Fatalf("ASSERT_MANAGED_SLICE_RETURNS_GRAPH_V4_FOR_READY_EXTERNAL_PROVIDER: internal_artifact=%q internal_decode_error=%v internal_schema_version=%q mcp_response=%s", nonCallsArtifact, decodeErr, identity.SchemaVersion, rawResponse)
+	}
+}
+
 func TestProductionMCPRealProviderConformance(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Fatalf("ASSERT_PRODUCTION_PROVIDER_PLATFORM: skip-free production process conformance requires supported LocalDarwinSupervisor")
