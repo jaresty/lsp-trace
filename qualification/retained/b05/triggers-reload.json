@@ -1,0 +1,94 @@
+{
+  "schema_version": "lsp-trace.b05-relation-qualification.v1",
+  "relation": "TRIGGERS_RELOAD",
+  "baseline": "1825a56070d7b76174ebb086d7c464731ce12bb0",
+  "stage": "S1",
+  "outcome": "BLOCKED",
+  "reason": "QUALIFIED_EMBER_DATA_TARGET_IDENTITY_UNAVAILABLE",
+  "prerequisite": {
+    "required": "A pinned Ember Data declaration package and analyzer evidence resolving the call receiver and reload declaration/signature to that package.",
+    "missing": [
+      "pinned @ember-data/model, @ember-data/store, or ember-data API declarations",
+      "TypeScript Program/TypeChecker receiver type evidence",
+      "resolved reload declaration/signature package identity"
+    ]
+  },
+  "tool_observations": {
+    "package_manifest": {
+      "path": "providers/ember-glint/package.json",
+      "pinned": {
+        "@glint/core": "1.5.2",
+        "ember-source": "7.2.0",
+        "typescript": "5.9.2",
+        "tree-sitter": "0.21.1",
+        "tree-sitter-typescript": "0.23.2"
+      },
+      "ember_data_api_dependency": null
+    },
+    "package_lock": {
+      "path": "providers/ember-glint/package-lock.json",
+      "root_dependency_ember_data_api": null,
+      "only_ember_data_named_transitive_entry": "@ember-data/rfc395-data@0.0.4",
+      "entry_role": "babel-plugin package mapping data; not Ember Data runtime/type declarations"
+    },
+    "script_analyzer": {
+      "path": "providers/ember-glint/analyzers/script.mjs",
+      "typescript_operation": "getDefinitionAtPosition",
+      "program_or_type_checker_access": false,
+      "receiver_type_resolution": false,
+      "resolved_signature_resolution": false,
+      "declaration_package_identity": false
+    },
+    "module_resolution_probe": {
+      "command": "node --input-type=module -e <createRequire resolution probe>",
+      "results": {
+        "@ember-data/store": "UNRESOLVED: MODULE_NOT_FOUND",
+        "@ember-data/model": "UNRESOLVED: MODULE_NOT_FOUND",
+        "ember-data": "UNRESOLVED: MODULE_NOT_FOUND"
+      },
+      "qualification_note": "The worktree had no installed provider dependencies; these results corroborate but do not replace the lockfile observation."
+    }
+  },
+  "frozen_seeds": {
+    "positive": {
+      "path": "providers/ember-glint/fixtures/triggers-reload-positive.ts",
+      "sha256": "bed00acd526407feb18876bd26a49eec88bcafb2d27e37c69dc9bbd9e992ed11",
+      "intent": "Ember Data Model receiver calling reload; remains unqualified because its pinned declaration package is absent."
+    },
+    "confusable_negative": {
+      "path": "providers/ember-glint/fixtures/triggers-reload-negative.ts",
+      "sha256": "52638cdf6ef57afb2844576a54e5b9081a4f4ed56689327c312f4742aa1f31d1",
+      "intent": "Unrelated LocalCache receiver calling the same reload spelling."
+    }
+  },
+  "negative_guard": {
+    "path": "providers/ember-glint/test/triggers-reload.test.mjs",
+    "sha256": "1e011dcc55891a4f339f58381f00499837876c6bbe33d96f78cab7035d3896c1",
+    "procedure": "node --test providers/ember-glint/test/triggers-reload.test.mjs",
+    "passing_observation": "3 passed, 0 failed",
+    "red_probes": [
+      {
+        "perturbation": "TRIGGERS_RELOAD_PERTURB=name-only",
+        "observation": "ASSERT_TRIGGERS_RELOAD_REQUIRES_QUALIFIED_EMBER_DATA_TARGET failed while the other two assertions passed"
+      },
+      {
+        "perturbation": "TRIGGERS_RELOAD_PERTURB=seed-confusion",
+        "observation": "ASSERT_TRIGGERS_RELOAD_SEEDS_SHARE_SPELLING_BUT_NOT_TARGET failed while the other two assertions passed"
+      },
+      {
+        "perturbation": "TRIGGERS_RELOAD_PERTURB=advertise",
+        "observation": "ASSERT_TRIGGERS_RELOAD_BLOCKED_IS_NOT_ADVERTISED_OR_WIRED failed while the other two assertions passed"
+      }
+    ]
+  },
+  "advertised": false,
+  "wired": false,
+  "analyzer_implemented": false,
+  "does_not_support": [
+    "method-name-only reload inference",
+    "runtime reload occurrence",
+    "Ember Data feature identity",
+    "whole-source completeness",
+    "advancement beyond S1"
+  ]
+}
