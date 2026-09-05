@@ -1,0 +1,27 @@
+{
+  "schema": "source-constrained-synthetic.provenance/v1",
+  "source": {
+    "repository": "market-view-ui.git-object",
+    "commit": "326718ae733cb26097bd30246276cecd371a4e79",
+    "paths": [
+      { "path": "app/services/uploads.js", "blob": "8714414be3d70935e55e0fd6dccf1cd867363547", "sha256": "82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205" },
+      { "path": "app/models/user-import.js", "blob": "eae121fffc6a82d1111466f71a68fe5f5b8cc400", "sha256": "37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9" }
+    ],
+    "nais_mutated": false
+  },
+  "packages": {
+    "ember-concurrency": { "version": "5.2.0", "integrity": "sha512-NUptPzaxaF2XWqn3VQ5KqiLSRqPFIZhWXH3UkOMhiedmiolxGYjUV96maoHWdd5msxNgQBC0UkZ28m7pV7A0sQ==", "declaration": "vendor/packages/ember-concurrency/index.d.ts", "sha256": "1ca4672f7e39b0e3c16f099b501d3b8000ece297764398634770a56c15ce115a" },
+    "@warp-drive/legacy": { "version": "5.8.1", "integrity": "sha512-i2+LhOQ+RO4AKeI4mSMWGNsiIY/sVB9CoslPDqCVc9BofcQE7uvAZinIjjPgPU5bbzqEThqdlHiEeoOdd19Tfw==", "declarations": [
+      { "path": "vendor/packages/warp-drive/model.d.ts", "sha256": "9313eeaa1e41483d1a4baa276f932eea64363314fa418062193beed358f1e72e" },
+      { "path": "vendor/packages/warp-drive/private-model.d.ts", "sha256": "2f02d0909d25249d0b404015762c6c593e51dfa3ff7993d0f0a6f07be15dd37b" }
+    ] }
+  },
+  "analyzer": { "identity": "source-constrained-synthetic-analyzer/v1", "typescript": "5.9.3", "glint": "@glint/template@1.7.4", "core_go_framework_parsing": false },
+  "introduced_declarations": [
+    { "identity": "TaskForAsyncTaskFunction", "target_source": "ember-concurrency@5.2.0", "source_path": "vendor/packages/ember-concurrency/index.d.ts", "annotations": [] },
+    { "identity": "Task", "target_source": "ember-concurrency@5.2.0", "source_path": "vendor/packages/ember-concurrency/index.d.ts", "annotations": [] },
+    { "identity": "AbstractTask.perform", "target_source": "ember-concurrency@5.2.0", "source_path": "vendor/packages/ember-concurrency/index.d.ts", "annotations": [] },
+    { "identity": "UserImportModel", "target_source": "market-view-ui:app/models/user-import.js@326718ae733cb26097bd30246276cecd371a4e79", "source_path": "vendor/market-view-ui/app/models/user-import.js", "annotations": [] },
+    { "identity": "Model.reload", "target_source": "@warp-drive/legacy@5.8.1", "source_path": "vendor/packages/warp-drive/private-model.d.ts", "annotations": [] }
+  ]
+}

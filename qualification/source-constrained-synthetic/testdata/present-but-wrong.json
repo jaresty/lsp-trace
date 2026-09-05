@@ -1,60 +1,88 @@
 {
-  "fixture_kind": "synthetic-unlabeled",
+  "fixture_kind": "source-constrained-synthetic",
   "source": {
-    "repository": "working-tree-copy",
-    "commit": "HEAD",
+    "repository": "market-view-ui.git-object",
+    "commit": "326718ae733cb26097bd30246276cecd371a4e79",
     "paths": [
       {
         "path": "app/services/uploads.js",
-        "blob": "wrong",
-        "sha256": "wrong"
+        "blob": "8714414be3d70935e55e0fd6dccf1cd867363547",
+        "sha256": "82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205"
       },
       {
         "path": "app/models/user-import.js",
-        "blob": "wrong",
-        "sha256": "wrong"
+        "blob": "eae121fffc6a82d1111466f71a68fe5f5b8cc400",
+        "sha256": "37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9"
       }
     ],
-    "nais_mutated": true
+    "nais_mutated": false
   },
   "toolchain": {
-    "ember-concurrency": "5.1.0",
-    "@warp-drive/legacy": "5.8.0",
-    "compiler": "unknown",
-    "glint": "unknown"
+    "ember-concurrency": "5.2.0",
+    "@warp-drive/legacy": "5.8.1",
+    "compiler": "ember-source@6.11.0",
+    "glint": "@glint/template@1.7.4"
   },
   "introduced_declarations": [
     {
-      "identity": "Task.perform",
-      "target_source": "guessed"
+      "identity": "TaskForAsyncTaskFunction",
+      "target_source": "ember-concurrency@5.2.0",
+      "annotations": []
+    },
+    {
+      "identity": "Task",
+      "target_source": "ember-concurrency@5.2.0",
+      "annotations": []
+    },
+    {
+      "identity": "AbstractTask.perform",
+      "target_source": "ember-concurrency@5.2.0",
+      "annotations": []
+    },
+    {
+      "identity": "UserImportModel",
+      "target_source": "market-view-ui:app/models/user-import.js@326718ae733cb26097bd30246276cecd371a4e79",
+      "annotations": []
+    },
+    {
+      "identity": "Model.reload",
+      "target_source": "@warp-drive/legacy@5.8.1",
+      "annotations": []
     }
   ],
   "resolutions": {
-    "uploadComplete.perform": ["Task", "perform"],
-    "unrelated.perform": ["Task", "perform"],
-    "contradictory.perform": ["Task", "perform"],
-    "upload.reload": ["Model", "reload"],
-    "unrelated.reload": ["Model", "reload"],
-    "contradictory.reload": ["Model", "reload"],
-    "unsupported_collection_element.reload": ["Model", "reload"]
+    "uploadComplete.perform": [
+      "TaskForAsyncTaskFunction",
+      "Task",
+      "AbstractTask.perform"
+    ],
+    "unrelated.perform": [],
+    "contradictory.perform": [],
+    "upload.reload": [
+      "UserImportModel",
+      "@warp-drive/legacy Model.reload"
+    ],
+    "unrelated.reload": [],
+    "contradictory.reload": [],
+    "unsupported_collection_element.reload": []
   },
   "evidence": {
-    "status": "maybe-pass",
-    "canonical": false,
-    "stable_order": false,
-    "generated_at": "now"
+    "status": "PROVISIONAL",
+    "canonical": true,
+    "stable_order": true,
+    "generated_at": null
   },
   "policy": {
-    "scope": "authoritative",
-    "advertised_relations": ["INVOKES_TASK", "TRIGGERS_RELOAD"],
-    "qualification": "PRODUCTION_RESOLVED",
-    "b05_v2_blob": "changed",
-    "PROGRAM_B_ADMITTED": true
+    "scope": "provisional-only",
+    "advertised_relations": [],
+    "qualification": "PROVISIONAL",
+    "b05_v2_blob": "0bd7501a1fa9307002fd09c10e4bb3843141df0e",
+    "PROGRAM_B_ADMITTED": false
   },
   "execution": {
-    "procedure": "uncommitted-local-command",
-    "reproducible": false,
-    "committed": false,
-    "nais_mutated": true
+    "procedure": "node --test qualification/source-constrained-synthetic/source-constrained-synthetic.guard.test.mjs",
+    "reproducible": true,
+    "committed": true,
+    "nais_mutated": false
   }
 }

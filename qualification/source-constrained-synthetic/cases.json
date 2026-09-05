@@ -1,0 +1,9 @@
+{
+  "uploadComplete.perform": { "member": "perform", "receiver": "TaskForAsyncTaskFunction", "bases": ["Task", "AbstractTask"], "supported": true },
+  "unrelated.perform": { "member": "perform", "receiver": "UnrelatedReceiver", "bases": [], "supported": true },
+  "contradictory.perform": { "member": "perform", "receiver": "TaskForAsyncTaskFunction", "bases": ["NotTask"], "supported": true },
+  "upload.reload": { "member": "reload", "receiver": "UserImportModel", "bases": ["Model"], "supported": true },
+  "unrelated.reload": { "member": "reload", "receiver": "UnrelatedReceiver", "bases": [], "supported": true },
+  "contradictory.reload": { "member": "reload", "receiver": "UserImportModel", "bases": ["NotModel"], "supported": true },
+  "unsupported_collection_element.reload": { "member": "reload", "receiver": "UnsupportedCollectionElement", "bases": ["Model"], "supported": false }
+}

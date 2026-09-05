@@ -1,0 +1,6 @@
+{
+  "environment": ["ember-template-imports"],
+  "template": "@glint/template@1.7.4",
+  "typescript": "typescript@5.9.3",
+  "checkStandaloneTemplates": false
+}

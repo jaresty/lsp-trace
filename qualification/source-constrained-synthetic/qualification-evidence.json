@@ -1,0 +1,80 @@
+{
+  "schema": "source-constrained-synthetic.evidence/v1",
+  "status": "RESOLVED_SYNTHETIC",
+  "analyzer": {
+    "identity": "source-constrained-synthetic-analyzer/v1",
+    "typescript": "5.9.3",
+    "glint": "@glint/template@1.7.4",
+    "core_go_framework_parsing": false
+  },
+  "packages": {
+    "ember-concurrency": {
+      "version": "5.2.0",
+      "integrity": "sha512-NUptPzaxaF2XWqn3VQ5KqiLSRqPFIZhWXH3UkOMhiedmiolxGYjUV96maoHWdd5msxNgQBC0UkZ28m7pV7A0sQ=="
+    },
+    "@warp-drive/legacy": {
+      "version": "5.8.1",
+      "integrity": "sha512-i2+LhOQ+RO4AKeI4mSMWGNsiIY/sVB9CoslPDqCVc9BofcQE7uvAZinIjjPgPU5bbzqEThqdlHiEeoOdd19Tfw=="
+    }
+  },
+  "source": {
+    "repository": "market-view-ui.git-object",
+    "commit": "326718ae733cb26097bd30246276cecd371a4e79",
+    "paths": [
+      {
+        "path": "app/services/uploads.js",
+        "blob": "8714414be3d70935e55e0fd6dccf1cd867363547",
+        "sha256": "82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205"
+      },
+      {
+        "path": "app/models/user-import.js",
+        "blob": "eae121fffc6a82d1111466f71a68fe5f5b8cc400",
+        "sha256": "37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9"
+      }
+    ],
+    "nais_mutated": false
+  },
+  "target_status": {
+    "before": {
+      "uploadComplete.perform": "UNRESOLVED",
+      "upload.reload": "UNRESOLVED"
+    },
+    "after": {
+      "uploadComplete.perform": "RESOLVED_SYNTHETIC",
+      "upload.reload": "RESOLVED_SYNTHETIC"
+    }
+  },
+  "resolutions": {
+    "uploadComplete.perform": [
+      "TaskForAsyncTaskFunction",
+      "Task",
+      "AbstractTask.perform"
+    ],
+    "unrelated.perform": [],
+    "contradictory.perform": [],
+    "upload.reload": [
+      "UserImportModel",
+      "@warp-drive/legacy Model.reload"
+    ],
+    "unrelated.reload": [],
+    "contradictory.reload": [],
+    "unsupported_collection_element.reload": []
+  },
+  "coverage_boundary": [
+    "uploadComplete.perform",
+    "upload.reload"
+  ],
+  "failure_boundary": [
+    "unrelated.perform",
+    "contradictory.perform",
+    "unrelated.reload",
+    "contradictory.reload",
+    "unsupported_collection_element.reload"
+  ],
+  "authority": {
+    "advertised_relations": [],
+    "production_resolved": false,
+    "PROGRAM_B_ADMITTED": false
+  },
+  "generated_at": null
+}

@@ -1,0 +1,20 @@
+{
+  "name": "source-constrained-synthetic-qualification",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node verify.mjs",
+    "guard": "node --test source-constrained-synthetic.guard.test.mjs",
+    "test": "npm run verify && npm run guard",
+    "perturb": "node perturbations.mjs"
+  },
+  "dependencies": {
+    "@warp-drive/legacy": "5.8.1",
+    "ember-concurrency": "5.2.0"
+  },
+  "devDependencies": {
+    "@glint/template": "1.7.4",
+    "typescript": "5.9.3"
+  }
+}
