@@ -4,6 +4,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { createDefaultAnalyzer } from '../default-analyzer.mjs';
+import { createGlintAnalyzer } from '../analyzers/glint.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const analyzer = createDefaultAnalyzer();
@@ -33,6 +34,17 @@ test('ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING', () => {
   assert.equal(observation.original_anchor.text, 'this.itemCount', 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
   assert.deepEqual(observation.virtual_mapping.original, observation.original_anchor.bytes, 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
   assert.equal(observation.support.outcome, 'SCOPED_ROLE', 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
+});
+
+test('ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED', () => {
+  const invalid = createGlintAnalyzer({
+    loadConfig() { throw new Error('invalid Glint config'); },
+    analyzeProject() { throw new Error('must not analyze invalid config'); },
+  }).analyze({ projectDirectory: root });
+  assert.equal(invalid.status, 'BLOCKED', 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
+  assert.equal(invalid.reason, 'GLINT_ANALYSIS_UNAVAILABLE', 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
+  assert.deepEqual(invalid.observations, [], 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
+  assert.equal(invalid.coverage.status, 'UNKNOWN', 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
 });
 
 test('ASSERT_PACKAGE_MISSING_GLINT_CONFIG_EXPLICIT_BLOCKED', () => {
