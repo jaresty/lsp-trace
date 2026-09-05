@@ -37,24 +37,34 @@ func main() {
 		_, _ = io.WriteString(os.Stdout, "Content-Length: 1048576\r\n\r\n{}")
 	case "no-item":
 		writeObservationEnvelope(body, nil, "UNKNOWN")
+	case "adapter-mismatch", "revision-mismatch", "kind-mismatch", "invalid-coverage":
+		writeObservationEnvelope(body, fixtureObservations(mode), map[string]string{"invalid-coverage": "INVALID"}[mode])
 	default:
 		var request map[string]any
 		if json.Unmarshal(body, &request) != nil {
 			os.Exit(2)
 		}
-		writeObservationEnvelope(body, []map[string]any{{
-			"kind": "PASSES_CALLBACK",
-			"from": map[string]any{"node_id": "fixture:caller", "role": "CALLABLE_REFERENCE"},
-			"to":   map[string]any{"node_id": "fixture:callback", "role": "CALLBACK_PARAMETER"},
-			"original_anchor": map[string]any{
-				"document_id": "fixture-original", "uri": "file:///fixture/main.go",
-				"revision": strings.Repeat("b", 40), "blob": strings.Repeat("c", 40),
-				"range": map[string]any{"start": map[string]any{"line": 0, "character": 0}, "end": map[string]any{"line": 0, "character": 7}},
-			},
-			"supports":         []string{"source_dependency_relation"},
-			"does_not_support": []string{"runtime_execution", "callback_invocation", "repaint", "feature_identity", "whole_source_completeness"},
-		}}, "COMPLETE_WITHIN_BOUNDS")
+		writeObservationEnvelope(body, fixtureObservations("success"), "COMPLETE_WITHIN_BOUNDS")
 	}
+}
+
+func fixtureObservations(mode string) []map[string]any {
+	kind := "PASSES_CALLBACK"
+	if mode == "kind-mismatch" {
+		kind = "RENDERS_FROM"
+	}
+	revision := strings.Repeat("b", 40)
+	if mode == "revision-mismatch" {
+		revision = strings.Repeat("d", 40)
+	}
+	return []map[string]any{{
+		"kind":             kind,
+		"from":             map[string]any{"node_id": "fixture:caller", "role": "CALLABLE_REFERENCE"},
+		"to":               map[string]any{"node_id": "fixture:callback", "role": "CALLBACK_PARAMETER"},
+		"original_anchor":  map[string]any{"document_id": "fixture-original", "uri": "file:///fixture/main.go", "revision": revision, "blob": strings.Repeat("c", 40), "range": map[string]any{"start": map[string]any{"line": 0, "character": 0}, "end": map[string]any{"line": 0, "character": 7}}},
+		"supports":         []string{"source_dependency_relation"},
+		"does_not_support": []string{"runtime_execution", "callback_invocation", "repaint", "feature_identity", "whole_source_completeness"},
+	}}
 }
 
 func readFrame(r io.Reader) ([]byte, error) {
@@ -112,6 +122,15 @@ func writeObservationEnvelope(requestBody []byte, observations []map[string]any,
 				revision["custody"] = "PROVIDER_PROVED"
 			}
 		}
+	}
+	if coverageStatus == "" {
+		coverageStatus = "COMPLETE_WITHIN_BOUNDS"
+	}
+	if os.Getenv("LSP_TRACE_PROVIDER_MODE") == "revision-mismatch" {
+		revision["value"] = strings.Repeat("d", 40)
+	}
+	if mode := os.Getenv("LSP_TRACE_PROVIDER_MODE"); mode == "adapter-mismatch" {
+		adapterVersion = "mismatch"
 	}
 	envelope := map[string]any{
 		"provider":   map[string]string{"name": providerName, "version": providerVersion},

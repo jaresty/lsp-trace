@@ -95,7 +95,9 @@ The response is one [`lsp-trace.provider-observations.v1`](../schema/schemas/lsp
 
 Every original anchor must match a declared immutable document record. A virtual anchor is valid only with that document's deterministic mapping and never replaces the original anchor. The adapter rejects mismatched provider/protocol/adapter/request identity, document revision, URI, mapping, or selected relation.
 
-Incoming and slice compose provider evidence into a graph-v4 response while retaining separate CALLS outcomes and receipts. A provider result can be complete, empty, partial, bounded, unavailable, unsupported, transport-failed, or malformed; absence of a relation is never evidence of absence outside its explicit coverage boundary.
+For both incoming and slice, an explicit external-only relation selection returns `lsp-trace.graph.v4` directly. Its optional `provenance` object is required in accepted provider output and retains provider/protocol/adapter identities, validated original custody, coverage and bounds, contributing observation IDs, the logical digest, and bounded execution-receipt metadata. Explicit `CALLS` retains composition-v1, mixed `CALLS` plus external relations retains composition-v1 with the complete typed provider record, and omitted `relations` retains the exact historical graph-v3 path without resolving or starting a provider.
+
+Provider unavailable, unsupported, failed, malformed, mismatched, timed-out, cancelled, and no-observation outcomes fail through the closed public MCP domain-error vocabulary; they never produce an empty accepted operation result. Successful and domain-failure `tools/call` responses contain exactly one MCP text item whose text is canonical JSON for the same logical envelope exposed in `structuredContent`. A provider result can be complete, partial, or bounded; absence of a relation is never evidence of absence outside its explicit coverage boundary.
 
 ## Security and upgrades
 

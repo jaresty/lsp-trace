@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/observationadapter"
 )
 
 type collectorAdmitter struct {
@@ -71,7 +74,7 @@ func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T)
 	a := &collectorAdmitter{admission: Admission{ProviderID: "host-provider@1", AdapterID: "source-adapter@1", Limits: limits}}
 	response := json.RawMessage(`{"provider":"raw"}`)
 	e := &collectorExecutor{receipt: Receipt{ProviderID: "host-provider@1", Response: response, Messages: 1, Stderr: StderrReceipt{Bytes: []byte("bounded")}, Reaped: true}}
-	result := json.RawMessage(`{"provider_id":"host-provider@1","terminal":"COMPLETE_WITHIN_BOUNDS","complete":true,"truncated":false,"bounds":{"max_nodes":20},"relations":[{"relation_id":"r1","kind":"PASSES_CALLBACK"}]}`)
+	result, _ := json.Marshal(Result{ProviderID: "host-provider@1", Terminal: "COMPLETE_WITHIN_BOUNDS", Complete: true, Bounds: CollectorLimits{MaxNodes: 20}, Observations: []observationadapter.Observation{{ObservationID: "o1"}}, GraphV4: graph.NormalizedRelations{SchemaVersion: graph.NormalizedRelationsSchemaVersion, ArtifactKind: graph.NormalizedRelationsArtifactKind, Relations: []graph.Relation{{RelationID: "r1", Kind: "PASSES_CALLBACK"}}}, LogicalDigest: "sha256:test"})
 	s := &collectorAdapter{result: result}
 	c, _ := NewCollector(e, a, s)
 	raw := json.RawMessage(`{"session_id":"managed-session","generation":7,"start_mode":"at","uri":"file:///workspace/component.gts","line":3,"character":4,"relations":["PASSES_CALLBACK"],"adapters":"auto","providers":["host-provider@1"],"workspace_revision":{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED"},"fail_on_unknown_revision":true,"down_depth":2,"up_depth":3,"max_nodes":20,"max_messages":8,"max_bytes":2048,"timeout_ms":500,"request_timeout_ms":100}`)
@@ -94,8 +97,8 @@ func TestCollectorBuildsStrictAdmittedRequestAndIndependentReceipt(t *testing.T)
 	e.receipt.Response[0] = 'X'
 	e.receipt.Stderr.Bytes[0] = 'X'
 	result[0] = 'X'
-	if !json.Valid(got) || !json.Valid(s.receipt.Response) || string(s.receipt.Stderr.Bytes) != "bounded" {
-		t.Fatalf("%s: got=%q adapted_receipt=%q stderr=%q", assertionReceipt, got, s.receipt.Response, s.receipt.Stderr.Bytes)
+	if got.ProviderID != "host-provider@1" || got.GraphV4.SchemaVersion != graph.NormalizedRelationsSchemaVersion || !json.Valid(s.receipt.Response) || string(s.receipt.Stderr.Bytes) != "bounded" {
+		t.Fatalf("%s: got=%+v adapted_receipt=%q stderr=%q", assertionReceipt, got, s.receipt.Response, s.receipt.Stderr.Bytes)
 	}
 	t.Log("PASS " + assertionReceipt)
 }

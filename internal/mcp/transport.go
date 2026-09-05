@@ -259,25 +259,31 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		code, diagnostics := normalizeDomainFailure(failure)
 		if tool.ExecutorFamily == LifecycleExecutorFamily {
 			code = failure.Code
-			return bindLifecycleEnvelope(base, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+			return bindLifecycleEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 		}
-		if tool.ExecutorFamily == IncomingExecutorFamily {
+		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily {
 			code = failure.Code
 			switch code {
 			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS":
 				code = "INPUT_INVALID"
 			case "DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNPREPARABLE":
 				code = "UNSUPPORTED_CALL_HIERARCHY"
-			case "DOCUMENT_SYMBOL_FAILED", "DOCUMENT_SYMBOL_MALFORMED_RANGE", "DOCUMENT_SYMBOL_PREPARE_FAILED":
+			case "DOCUMENT_SYMBOL_FAILED", "DOCUMENT_SYMBOL_MALFORMED_RANGE", "DOCUMENT_SYMBOL_PREPARE_FAILED", "RELATION_PROVIDER_MALFORMED", "RELATION_PROVIDER_KIND_MISMATCH":
 				code = "OUTPUT_VALIDATION_FAILED"
+			case "ADAPTER_NOT_AVAILABLE", "RELATION_PROVIDER_FAILED":
+				code = "RESOURCE_EXHAUSTED"
 			case "CANCELLED":
 				code = "REQUEST_CANCELLED"
+			case "REQUEST_TIMEOUT", "SESSION_NOT_FOUND", "STALE_GENERATION", "LIFECYCLE_CONFLICT", "SESSION_POISONED", "RESOURCE_EXHAUSTED", "SESSION_CRASHED", "REQUEST_CANCELLED", "UNSUPPORTED_CALL_HIERARCHY", "UNSUPPORTED_POSITION_ENCODING", "INPUT_FAMILY_MISMATCH":
+				// Already in the closed public vocabulary.
+			default:
+				code = "OUTPUT_VALIDATION_FAILED"
 			}
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
 	if tool.ExecutorFamily == LifecycleExecutorFamily {
-		return bindLifecycleEnvelope(base, envelope{
+		return bindLifecycleEnvelope(base, tool, envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: resultEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Result: opResult.Value,
 		})
@@ -368,8 +374,13 @@ func (s *Server) nextRequestID() string {
 	return fmt.Sprintf("offline-%d", s.requestSequence.Add(1))
 }
 
-func bindLifecycleEnvelope(base response, env envelope) response {
-	base.Result = callResult{Content: []any{}, StructuredContent: env, IsError: env.IsError}
+func bindLifecycleEnvelope(base response, _ Tool, env envelope) response {
+	raw, err := json.Marshal(env)
+	if err != nil {
+		base.Error = &rpcError{Code: -32603, Message: "Internal error: invalid operation envelope"}
+		return base
+	}
+	base.Result = callResult{Content: []any{map[string]any{"type": "text", "text": string(raw)}}, StructuredContent: env, IsError: env.IsError}
 	return base
 }
 
@@ -382,7 +393,7 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 		base.Error = &rpcError{Code: -32603, Message: "Internal error: invalid operation envelope"}
 		return base
 	}
-	base.Result = callResult{Content: []any{}, StructuredContent: env, IsError: env.IsError}
+	base.Result = callResult{Content: []any{map[string]any{"type": "text", "text": string(raw)}}, StructuredContent: env, IsError: env.IsError}
 	return base
 }
 

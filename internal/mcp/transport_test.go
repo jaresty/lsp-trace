@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -541,7 +542,7 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
 	const listAssertion = "tools/list advertises the thirteen canonical names"
-	const bindingAssertion = "tools/call binds the canonical operation envelope once in structuredContent with empty content and equal error state"
+	const bindingAssertion = "tools/call binds one canonical operation envelope in structuredContent and one equal text content item"
 	const unknownAssertion = "unknown tool calls use native MCP unknown-tool errors without an operation envelope"
 	for _, a := range []string{transportAssertion, listAssertion, bindingAssertion, unknownAssertion} {
 		t.Log("ASSERTION: " + a)
@@ -564,10 +565,13 @@ func TestTransportContract(t *testing.T) {
 	}
 	call, _ := got[2]["result"].(map[string]any)
 	content, _ := call["content"].([]any)
-	if content == nil || len(content) != 0 {
-		t.Errorf("%s: outer content is not empty", bindingAssertion)
-	}
 	envelope, _ := call["structuredContent"].(map[string]any)
+	var textEnvelope map[string]any
+	if len(content) != 1 {
+		t.Errorf("%s: content=%v", bindingAssertion, content)
+	} else if item, ok := content[0].(map[string]any); !ok || item["type"] != "text" || json.Unmarshal([]byte(item["text"].(string)), &textEnvelope) != nil || !reflect.DeepEqual(textEnvelope, envelope) {
+		t.Errorf("%s: content=%v envelope=%v", bindingAssertion, content, envelope)
+	}
 	if envelope["tool"] != "lsp_trace_v1_verify" || call["isError"] != envelope["isError"] {
 		t.Errorf("%s: call=%v envelope=%v", bindingAssertion, call, envelope)
 	}

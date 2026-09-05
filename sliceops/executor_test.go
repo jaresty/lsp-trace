@@ -34,9 +34,23 @@ func (f *fakeRuntime) Records() []sessionruntime.Record { return nil }
 func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return f.metadata, f.failure
 }
-func (f *fakeRuntime) CollectRelations(_ context.Context, selected []string, _ json.RawMessage) (json.RawMessage, error) {
+func (f *fakeRuntime) CollectRelations(_ context.Context, selected []string, _ json.RawMessage) (provider.Result, error) {
 	f.relationCalls = append(f.relationCalls, append([]string(nil), selected...))
-	return append(json.RawMessage(nil), f.relationArtifact...), f.relationErr
+	if f.relationErr != nil {
+		return provider.Result{}, f.relationErr
+	}
+	var legacy struct {
+		ProviderID string           `json:"provider_id"`
+		Terminal   string           `json:"terminal"`
+		Complete   bool             `json:"complete"`
+		Truncated  bool             `json:"truncated"`
+		Bounds     json.RawMessage  `json:"bounds"`
+		Relations  []graph.Relation `json:"relations"`
+	}
+	if err := json.Unmarshal(f.relationArtifact, &legacy); err != nil {
+		return provider.Result{}, err
+	}
+	return provider.Result{ProviderID: legacy.ProviderID, Terminal: legacy.Terminal, Complete: legacy.Complete, Truncated: legacy.Truncated, GraphV4: graph.NormalizedRelations{SchemaVersion: graph.NormalizedRelationsSchemaVersion, ArtifactKind: graph.NormalizedRelationsArtifactKind, Relations: legacy.Relations, Provenance: &graph.NormalizedRelationsProvenance{ProviderID: legacy.ProviderID, Bounds: legacy.Bounds}}}, nil
 }
 func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	var p struct {

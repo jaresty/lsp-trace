@@ -121,16 +121,16 @@ type operationInput struct {
 	FailOnUnknownRevision bool            `json:"fail_on_unknown_revision"`
 }
 
-func (c *Collector) CollectRelations(ctx context.Context, relations []string, raw json.RawMessage) (json.RawMessage, error) {
+func (c *Collector) CollectRelations(ctx context.Context, relations []string, raw json.RawMessage) (Result, error) {
 	if c == nil || c.runtime == nil || c.admitter == nil || c.adapter == nil {
-		return nil, errors.New("relation collector unavailable")
+		return Result{}, errors.New("relation collector unavailable")
 	}
 	if len(relations) == 0 {
-		return nil, errors.New("relation collector requires admitted relations")
+		return Result{}, errors.New("relation collector requires admitted relations")
 	}
 	var in operationInput
 	if err := decodeCollectorInput(raw, &in); err != nil {
-		return nil, fmt.Errorf("strict collector input: %w", err)
+		return Result{}, fmt.Errorf("strict collector input: %w", err)
 	}
 	selected := append([]string(nil), relations...)
 	sort.Strings(selected)
@@ -140,10 +140,10 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 		Adapters: append(json.RawMessage(nil), in.Adapters...),
 	})
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 	if admission.ProviderID == "" || admission.AdapterID == "" {
-		return nil, errors.New("provider admission omitted identity")
+		return Result{}, errors.New("provider admission omitted identity")
 	}
 	request := StrictCollectorRequest{
 		SchemaVersion: CollectorRequestSchema,
@@ -157,14 +157,24 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 	}
 	encoded, err := json.Marshal(request)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 	receipt := c.runtime.Execute(ctx, admission.ProviderID, encoded, admission.Limits)
 	adapted, err := c.adapter.Adapt(ctx, request, cloneReceipt(receipt))
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
-	return append(json.RawMessage(nil), adapted...), nil
+	var result Result
+	if err := decodeCollectorInput(adapted, &result); err != nil {
+		return Result{}, fmt.Errorf("typed provider result: %w", err)
+	}
+	if result.ProviderID == "" || result.GraphV4.SchemaVersion == "" || result.LogicalDigest == "" {
+		return Result{}, errors.New("typed provider result omitted required identity, graph, or digest")
+	}
+	if len(result.Observations) == 0 || len(result.GraphV4.Relations) == 0 {
+		return Result{}, errors.New("typed provider result contains no accepted observations")
+	}
+	return result, nil
 }
 
 func decodeCollectorInput(raw []byte, target any) error {

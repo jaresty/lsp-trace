@@ -6,22 +6,23 @@ import (
 	"errors"
 
 	"lsp-trace/incomingops"
+	"lsp-trace/internal/provider"
 	"lsp-trace/sliceops"
 )
 
 type productionRelationCollector interface {
-	CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error)
+	CollectRelations(context.Context, []string, json.RawMessage) (provider.Result, error)
 }
 
 var _ incomingops.RelationCollector = (*hostSelectorRuntime)(nil)
 var _ sliceops.RelationCollector = (*hostSelectorRuntime)(nil)
 
-func (r *hostSelectorRuntime) CollectRelations(ctx context.Context, relations []string, raw json.RawMessage) (json.RawMessage, error) {
+func (r *hostSelectorRuntime) CollectRelations(ctx context.Context, relations []string, raw json.RawMessage) (provider.Result, error) {
 	if len(relations) == 0 {
-		return nil, nil
+		return provider.Result{}, errors.New("production relation collector requires non-empty relations")
 	}
 	if r == nil || r.relationCollector == nil {
-		return nil, errors.New("production relation collector is not provisioned")
+		return provider.Result{}, errors.New("production relation collector is not provisioned")
 	}
 	return r.relationCollector.CollectRelations(ctx, append([]string(nil), relations...), append(json.RawMessage(nil), raw...))
 }

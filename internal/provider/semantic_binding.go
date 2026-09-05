@@ -3,18 +3,48 @@ package provider
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"sort"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/observationadapter"
+	"lsp-trace/internal/relations"
 )
 
+// Result is the lossless provider-neutral result accepted by managed operations.
+type Result struct {
+	ProviderID    string                           `json:"provider_id"`
+	Provider      observationadapter.Identity      `json:"provider"`
+	Protocol      observationadapter.Identity      `json:"protocol"`
+	Adapter       observationadapter.Identity      `json:"adapter"`
+	Terminal      string                           `json:"terminal"`
+	Complete      bool                             `json:"complete"`
+	Truncated     bool                             `json:"truncated"`
+	Bounds        CollectorLimits                  `json:"bounds"`
+	Coverage      relations.Coverage               `json:"coverage"`
+	Custody       graph.DocumentCustodyReceipt     `json:"custody"`
+	Observations  []observationadapter.Observation `json:"observations"`
+	GraphV4       graph.NormalizedRelations        `json:"graph_v4"`
+	LogicalDigest string                           `json:"logical_digest"`
+	Receipt       ExecutionReceipt                 `json:"receipt"`
+}
+
+type ExecutionReceipt struct {
+	Messages        int    `json:"messages"`
+	Stderr          string `json:"stderr,omitempty"`
+	StderrBytes     int64  `json:"stderr_bytes"`
+	StderrTruncated bool   `json:"stderr_truncated"`
+	ExitCode        int    `json:"exit_code"`
+	Terminated      bool   `json:"terminated"`
+	Reaped          bool   `json:"reaped"`
+}
+
 // ObservationSemanticAdapter binds strict transport receipts to the provider-neutral
-// observation adapter and projects its result into the incoming/slice receipt contract.
+// observation adapter without interpreting framework semantics.
 type ObservationSemanticAdapter struct {
 	declarations map[string]Declaration
 	adapter      observationadapter.Identity
@@ -81,29 +111,30 @@ func (a *ObservationSemanticAdapter) Adapt(_ context.Context, request StrictColl
 	if err != nil {
 		return nil, err
 	}
-	type relation struct {
-		RelationID string `json:"relation_id"`
-		Kind       string `json:"kind"`
-	}
-	relations := make([]relation, len(adapted.GraphV4.Relations))
-	for i, item := range adapted.GraphV4.Relations {
-		relations[i] = relation{RelationID: item.RelationID, Kind: item.Kind}
-	}
-	sort.Slice(relations, func(i, j int) bool { return relations[i].RelationID < relations[j].RelationID })
-	bounds, err := json.Marshal(request.Limits)
+	canonical, err := json.Marshal(adapted.GraphV4)
 	if err != nil {
 		return nil, err
 	}
+	sum := sha256.Sum256(canonical)
+	logicalDigest := "sha256:" + hex.EncodeToString(sum[:])
+	executionReceipt := ExecutionReceipt{Messages: receipt.Messages, Stderr: string(receipt.Stderr.Bytes), StderrBytes: receipt.Stderr.TotalBytes, StderrTruncated: receipt.Stderr.Truncated, ExitCode: receipt.ExitCode, Terminated: receipt.Terminated, Reaped: receipt.Reaped}
+	observationIDs := make([]string, len(adapted.Observations))
+	for i := range adapted.Observations {
+		observationIDs[i] = adapted.Observations[i].ObservationID
+	}
+	marshal := func(value any) json.RawMessage { raw, _ := json.Marshal(value); return raw }
+	adapted.GraphV4.Provenance = &graph.NormalizedRelationsProvenance{
+		ProviderID: request.ProviderID, Provider: marshal(envelope.Provider), Protocol: marshal(envelope.Protocol), Adapter: marshal(envelope.Adapter),
+		Coverage: marshal(adapted.Coverage), Bounds: marshal(request.Limits), Custody: marshal(adapted.Custody), ObservationIDs: observationIDs,
+		LogicalDigest: logicalDigest, Receipt: marshal(executionReceipt),
+	}
 	complete := string(adapted.Coverage.Status) == "COMPLETE_WITHIN_BOUNDS" && adapted.Failure == ""
-	payload := struct {
-		ProviderID string          `json:"provider_id"`
-		Terminal   string          `json:"terminal"`
-		Complete   bool            `json:"complete"`
-		Truncated  bool            `json:"truncated"`
-		Bounds     json.RawMessage `json:"bounds"`
-		Relations  []relation      `json:"relations"`
-	}{request.ProviderID, string(adapted.Coverage.Status), complete, string(adapted.Failure) == "BOUNDED_TRUNCATION", bounds, relations}
-	return json.Marshal(payload)
+	return json.Marshal(Result{
+		ProviderID: request.ProviderID, Provider: envelope.Provider, Protocol: envelope.Protocol, Adapter: envelope.Adapter,
+		Terminal: string(adapted.Coverage.Status), Complete: complete, Truncated: string(adapted.Failure) == "BOUNDED_TRUNCATION",
+		Bounds: request.Limits, Coverage: adapted.Coverage, Custody: adapted.Custody,
+		Observations: adapted.Observations, GraphV4: adapted.GraphV4, LogicalDigest: logicalDigest, Receipt: executionReceipt,
+	})
 }
 
 func decodeObservationEnvelope(raw []byte, target *observationadapter.Envelope) error {

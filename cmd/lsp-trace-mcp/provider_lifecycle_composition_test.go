@@ -11,9 +11,9 @@ import (
 
 type compositionCollector struct{ calls int }
 
-func (c *compositionCollector) CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error) {
+func (c *compositionCollector) CollectRelations(context.Context, []string, json.RawMessage) (provider.Result, error) {
 	c.calls++
-	return json.RawMessage(`{"provider":"ok"}`), nil
+	return provider.Result{ProviderID: "ok"}, nil
 }
 
 type compositionFactory struct {
@@ -104,8 +104,8 @@ func TestMCPProviderLifecycleComposition(t *testing.T) {
 	t.Run("omitted relations", func(t *testing.T) {
 		selected, _, collector, _ := composeLifecycleFixture(t)
 		artifact, err := selected.CollectRelations(context.Background(), nil, json.RawMessage(`{}`))
-		if err != nil || artifact != nil || collector.calls != 0 {
-			t.Fatalf("ASSERT_MCP_OMITTED_RELATIONS_BYPASS_COLLECTOR: calls=%d artifact=%s err=%v", collector.calls, artifact, err)
+		if err == nil || artifact.ProviderID != "" || collector.calls != 0 {
+			t.Fatalf("ASSERT_MCP_OMITTED_RELATIONS_BYPASS_COLLECTOR: calls=%d artifact=%+v err=%v", collector.calls, artifact, err)
 		}
 		t.Log("PASS ASSERT_MCP_OMITTED_RELATIONS_BYPASS_COLLECTOR")
 	})

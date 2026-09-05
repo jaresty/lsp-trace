@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/provider"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/traverse"
 	"lsp-trace/sessionruntime"
@@ -45,7 +46,7 @@ func NewExecutor(runtime Runtime) *Executor { return &Executor{runtime: runtime}
 // external relation providers. The provider artifact remains opaque so this
 // package neither owns nor interprets framework semantics.
 type RelationCollector interface {
-	CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error)
+	CollectRelations(context.Context, []string, json.RawMessage) (provider.Result, error)
 }
 
 type request struct {
@@ -212,19 +213,7 @@ type compositionArtifact struct {
 	SchemaVersion string            `json:"schema_version"`
 	Complete      bool              `json:"complete"`
 	Calls         json.RawMessage   `json:"calls,omitempty"`
-	Providers     []json.RawMessage `json:"providers,omitempty"`
-}
-
-type providerReceipt struct {
-	ProviderID string          `json:"provider_id"`
-	Terminal   string          `json:"terminal"`
-	Complete   bool            `json:"complete"`
-	Truncated  bool            `json:"truncated"`
-	Bounds     json.RawMessage `json:"bounds"`
-	Relations  []struct {
-		RelationID string `json:"relation_id"`
-		Kind       string `json:"kind"`
-	} `json:"relations"`
+	Providers     []provider.Result `json:"providers,omitempty"`
 }
 
 func (e *Executor) executeComposition(parent context.Context, raw json.RawMessage, input request, metadata sessionruntime.SessionMetadata) (operation.Result, *operation.Failure) {
@@ -266,21 +255,27 @@ func (e *Executor) executeComposition(parent context.Context, raw json.RawMessag
 		if !ok {
 			return operation.Result{}, failure("ADAPTER_NOT_AVAILABLE", nil)
 		}
-		provider, err := collector.CollectRelations(parent, external, raw)
+		providerResult, err := collector.CollectRelations(parent, external, raw)
 		if err != nil {
 			return operation.Result{}, failure("RELATION_PROVIDER_FAILED", err)
 		}
-		var receipt providerReceipt
-		if err := decodeStrict(provider, &receipt); err != nil || receipt.ProviderID == "" || receipt.Terminal == "" || len(receipt.Bounds) == 0 {
-			return operation.Result{}, failure("RELATION_PROVIDER_MALFORMED", err)
+		if providerResult.ProviderID == "" || providerResult.Terminal == "" || providerResult.GraphV4.SchemaVersion != graph.NormalizedRelationsSchemaVersion {
+			return operation.Result{}, failure("RELATION_PROVIDER_MALFORMED", errors.New("provider result omitted required identity, terminal, or graph-v4"))
 		}
-		for _, relation := range receipt.Relations {
-			if !seen[relation.Kind] || relation.Kind == "CALLS" {
+		for _, relation := range providerResult.GraphV4.Relations {
+			if !seen[relation.Kind] || relation.Kind == graph.RelationCalls {
 				return operation.Result{}, failure("RELATION_PROVIDER_KIND_MISMATCH", fmt.Errorf("provider returned unselected relation %q", relation.Kind))
 			}
 		}
-		artifact.Providers = []json.RawMessage{append(json.RawMessage(nil), provider...)}
-		if !receipt.Complete || receipt.Truncated || receipt.Terminal != "COMPLETE_WITHIN_BOUNDS" {
+		if !wantCalls {
+			encoded, err := json.Marshal(providerResult.GraphV4)
+			if err != nil || len(encoded) == 0 {
+				return operation.Result{}, failure("RELATION_PROVIDER_MALFORMED", err)
+			}
+			return operation.Result{Artifact: append(encoded, '\n'), LogicalDigest: providerResult.LogicalDigest}, nil
+		}
+		artifact.Providers = []provider.Result{providerResult}
+		if !providerResult.Complete || providerResult.Truncated || providerResult.Terminal != "COMPLETE_WITHIN_BOUNDS" {
 			artifact.Complete = false
 		}
 	}

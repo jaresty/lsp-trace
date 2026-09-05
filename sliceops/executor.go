@@ -17,6 +17,7 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/provider"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/slicer"
 	"lsp-trace/internal/traverse"
@@ -36,7 +37,7 @@ type Executor struct{ runtime Runtime }
 func NewExecutor(runtime Runtime) *Executor { return &Executor{runtime: runtime} }
 
 type RelationCollector interface {
-	CollectRelations(context.Context, []string, json.RawMessage) (json.RawMessage, error)
+	CollectRelations(context.Context, []string, json.RawMessage) (provider.Result, error)
 }
 
 type request struct {
@@ -219,7 +220,7 @@ type compositionArtifact struct {
 	SchemaVersion string            `json:"schema_version"`
 	Complete      bool              `json:"complete"`
 	Calls         json.RawMessage   `json:"calls,omitempty"`
-	Providers     []json.RawMessage `json:"providers,omitempty"`
+	Providers     []provider.Result `json:"providers,omitempty"`
 	Traversals    []typedTraversal  `json:"traversals"`
 }
 type typedTraversal struct {
@@ -227,17 +228,6 @@ type typedTraversal struct {
 	Source          string   `json:"source"`
 	FrontierNodeIDs []string `json:"frontier_node_ids"`
 	RelationIDs     []string `json:"relation_ids"`
-}
-type providerReceipt struct {
-	ProviderID string          `json:"provider_id"`
-	Terminal   string          `json:"terminal"`
-	Complete   bool            `json:"complete"`
-	Truncated  bool            `json:"truncated"`
-	Bounds     json.RawMessage `json:"bounds"`
-	Relations  []struct {
-		RelationID string `json:"relation_id"`
-		Kind       string `json:"kind"`
-	} `json:"relations"`
 }
 
 func (e *Executor) executeComposition(parent context.Context, raw json.RawMessage, in request, metadata sessionruntime.SessionMetadata) (operation.Result, *operation.Failure) {
@@ -292,28 +282,34 @@ func (e *Executor) executeComposition(parent context.Context, raw json.RawMessag
 		if !ok {
 			return operation.Result{}, fail("ADAPTER_NOT_AVAILABLE", nil)
 		}
-		provider, err := collector.CollectRelations(parent, external, raw)
+		providerResult, err := collector.CollectRelations(parent, external, raw)
 		if err != nil {
 			return operation.Result{}, fail("RELATION_PROVIDER_FAILED", err)
 		}
-		var receipt providerReceipt
-		if err := decodeStrict(provider, &receipt); err != nil || receipt.ProviderID == "" || receipt.Terminal == "" || len(receipt.Bounds) == 0 {
-			return operation.Result{}, fail("RELATION_PROVIDER_MALFORMED", err)
+		if providerResult.ProviderID == "" || providerResult.Terminal == "" || providerResult.GraphV4.SchemaVersion != graph.NormalizedRelationsSchemaVersion {
+			return operation.Result{}, fail("RELATION_PROVIDER_MALFORMED", errors.New("provider result omitted required identity, terminal, or graph-v4"))
 		}
 		byKind := make(map[string][]string)
-		for _, relation := range receipt.Relations {
+		for _, relation := range providerResult.GraphV4.Relations {
 			if !seen[relation.Kind] || relation.Kind == graph.RelationCalls {
 				return operation.Result{}, fail("RELATION_PROVIDER_KIND_MISMATCH", fmt.Errorf("provider returned unselected relation %q", relation.Kind))
 			}
 			byKind[relation.Kind] = append(byKind[relation.Kind], relation.RelationID)
 		}
-		composed.Providers = []json.RawMessage{append(json.RawMessage(nil), provider...)}
+		if !wantCalls {
+			encoded, err := json.Marshal(providerResult.GraphV4)
+			if err != nil || len(encoded) == 0 {
+				return operation.Result{}, fail("RELATION_PROVIDER_MALFORMED", err)
+			}
+			return operation.Result{Artifact: append(encoded, '\n'), LogicalDigest: providerResult.LogicalDigest}, nil
+		}
+		composed.Providers = []provider.Result{providerResult}
 		for _, kind := range external {
 			ids := byKind[kind]
 			sort.Strings(ids)
 			composed.Traversals = append(composed.Traversals, typedTraversal{Kind: kind, Source: graph.EvidenceSourceAdapter, FrontierNodeIDs: []string{}, RelationIDs: ids})
 		}
-		if !receipt.Complete || receipt.Truncated || receipt.Terminal != "COMPLETE_WITHIN_BOUNDS" {
+		if !providerResult.Complete || providerResult.Truncated || providerResult.Terminal != "COMPLETE_WITHIN_BOUNDS" {
 			composed.Complete = false
 		}
 	}

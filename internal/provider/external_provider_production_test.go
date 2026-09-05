@@ -79,8 +79,8 @@ func TestProductionExternalProviderCompletesManagedLifecycle(t *testing.T) {
 	}
 	operationInput := json.RawMessage(`{"session_id":"production-qualification","generation":1,"uri":"` + fixtureURI + `","start_mode":"at","relations":["BINDS_ARGUMENT"],"languages":["glimmer-js"],"frameworks":["ember"],"providers":["ember-glint@1"],"max_nodes":100,"max_messages":1,"max_bytes":1048576,"timeout_ms":30000,"request_timeout_ms":30000}`)
 	collectorProjection, err := collector.CollectRelations(context.Background(), []string{"BINDS_ARGUMENT"}, operationInput)
-	if err != nil || !bytes.Contains(collectorProjection, []byte(`"kind":"BINDS_ARGUMENT"`)) {
-		t.Fatalf("%s: generic collector projection: %v %s", assertion, err, collectorProjection)
+	if err != nil || len(collectorProjection.GraphV4.Relations) == 0 || collectorProjection.GraphV4.Relations[0].Kind != "BINDS_ARGUMENT" {
+		t.Fatalf("%s: generic collector projection: %v %+v", assertion, err, collectorProjection)
 	}
 	var envelope observationadapter.Envelope
 	if err := json.Unmarshal(first.Response, &envelope); err != nil {

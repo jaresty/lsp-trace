@@ -68,9 +68,26 @@ type Relation struct {
 
 // NormalizedRelations is a detached graph-v4 projection. Legacy Result bytes are unaffected.
 type NormalizedRelations struct {
-	SchemaVersion string     `json:"schema_version"`
-	ArtifactKind  string     `json:"artifact_kind"`
-	Relations     []Relation `json:"relations"`
+	SchemaVersion string                         `json:"schema_version"`
+	ArtifactKind  string                         `json:"artifact_kind"`
+	Relations     []Relation                     `json:"relations"`
+	Provenance    *NormalizedRelationsProvenance `json:"provenance,omitempty"`
+}
+
+// NormalizedRelationsProvenance retains provider-neutral acceptance evidence.
+// Raw fields preserve their owning typed contracts without importing provider or
+// framework semantics into the graph package.
+type NormalizedRelationsProvenance struct {
+	ProviderID     string          `json:"provider_id"`
+	Provider       json.RawMessage `json:"provider"`
+	Protocol       json.RawMessage `json:"protocol"`
+	Adapter        json.RawMessage `json:"adapter"`
+	Coverage       json.RawMessage `json:"coverage"`
+	Bounds         json.RawMessage `json:"bounds"`
+	Custody        json.RawMessage `json:"custody"`
+	ObservationIDs []string        `json:"observation_ids"`
+	LogicalDigest  string          `json:"logical_digest"`
+	Receipt        json.RawMessage `json:"receipt"`
 }
 
 // NewRelation canonicalizes identity-bearing collections and assigns the relation identity.

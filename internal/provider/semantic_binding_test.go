@@ -120,21 +120,11 @@ func TestSemanticBindingDelegatesAndProjectsExactReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ASSERT_PROVIDER_SEMANTIC_DELEGATES_OBSERVATION_ADAPTER: %v", err)
 	}
-	var got struct {
-		ProviderID string          `json:"provider_id"`
-		Terminal   string          `json:"terminal"`
-		Complete   bool            `json:"complete"`
-		Truncated  bool            `json:"truncated"`
-		Bounds     json.RawMessage `json:"bounds"`
-		Relations  []struct {
-			RelationID string `json:"relation_id"`
-			Kind       string `json:"kind"`
-		} `json:"relations"`
-	}
+	var got Result
 	if err := json.Unmarshal(raw, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ProviderID != "alpha@1" || got.Terminal != "PARTIAL" || got.Complete || got.Truncated || len(got.Bounds) == 0 || len(got.Relations) != 1 || got.Relations[0].Kind != "PASSES_CALLBACK" || got.Relations[0].RelationID == "" {
+	if got.ProviderID != "alpha@1" || got.Terminal != "PARTIAL" || got.Complete || got.Truncated || got.Bounds.MaxNodes == 0 || len(got.Observations) != 1 || len(got.GraphV4.Relations) != 1 || got.GraphV4.Relations[0].Kind != "PASSES_CALLBACK" || got.GraphV4.Relations[0].RelationID == "" || got.LogicalDigest == "" {
 		t.Fatalf("ASSERT_PROVIDER_SEMANTIC_COMPOSITION_PAYLOAD_EXACT: raw=%s decoded=%+v", raw, got)
 	}
 	if strings.Contains(string(raw), "ember") || strings.Contains(string(raw), "glimmer") {

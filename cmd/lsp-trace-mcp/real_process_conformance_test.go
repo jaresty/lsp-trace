@@ -26,6 +26,18 @@ type realProviderComposition struct {
 	Providers []json.RawMessage `json:"providers"`
 }
 
+func requireRealProviderGraphV4(t *testing.T, assertion string, call processCall) graph.NormalizedRelations {
+	t.Helper()
+	if call.env["operation_status"] != "SUCCEEDED" {
+		t.Fatalf("%s: provider operation failed: envelope=%v", assertion, call.env)
+	}
+	var result graph.NormalizedRelations
+	if err := json.Unmarshal(inlineArtifactBytes(t, call.env), &result); err != nil || result.SchemaVersion != graph.NormalizedRelationsSchemaVersion || len(result.Relations) != 1 || result.Relations[0].Kind != graph.RelationPassesCallback {
+		t.Fatalf("%s: graph-v4 evidence absent or malformed: result=%+v err=%v", assertion, result, err)
+	}
+	return result
+}
+
 func requireRealProviderComposition(t *testing.T, assertion string, call processCall) realProviderComposition {
 	t.Helper()
 	if call.env["operation_status"] != "SUCCEEDED" {
@@ -230,6 +242,118 @@ func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 	}
 }
 
+func TestManagedIncomingReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed fake LSP requires LocalDarwinSupervisor")
+	}
+	mcpBinary := buildMCPBinary(t)
+	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
+	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
+	workspace := t.TempDir()
+	config := map[string]any{
+		"version": 1,
+		"processes": []any{map[string]any{
+			"alias": "fixture", "profile": map[string]any{"trust_domain": "managed-incoming-graph-v4", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"},
+			"execution": map[string]any{"path": fakeLSP, "directory": workspace},
+		}},
+		"providers": []any{map[string]any{
+			"schema_version": "lsp-trace.bootstrap-provider.v1", "identity": "fake@1.0.0", "version": "1.0.0",
+			"protocol":     map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
+			"execution":    map[string]any{"path": fakeProvider, "directory": workspace, "environment": []string{"LSP_TRACE_PROVIDER_MODE=success"}},
+			"capabilities": map[string]any{"relations": []string{"PASSES_CALLBACK"}, "languages": []string{"go"}, "frameworks": []string{"fixture"}},
+			"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": 1000, "termination_grace_ms": 50},
+		}},
+	}
+	request := map[string]any{
+		"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0,
+		"max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500,
+		"relations": []string{"PASSES_CALLBACK"}, "providers": []string{"fake@1.0.0"},
+	}
+	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
+		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(2, "lsp_trace_v1_incoming", request),
+	})
+	if err != nil {
+		t.Fatalf("setup: production MCP process failed: %v", err)
+	}
+	readyRaw, _ := json.Marshal(responses[0])
+	if !bytes.Contains(readyRaw, []byte(`"State":"READY"`)) {
+		t.Fatalf("setup: managed session did not reach READY: response=%s", readyRaw)
+	}
+	call := decodeProcessCall(t, responses[1])
+	artifact := inlineArtifactBytes(t, call.env)
+	var identity struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	decodeErr := json.Unmarshal(artifact, &identity)
+	if call.env["operation_status"] != "SUCCEEDED" || decodeErr != nil || identity.SchemaVersion != "lsp-trace.graph.v4" {
+		rawResponse, _ := json.Marshal(responses[1])
+		t.Fatalf("ASSERT_MANAGED_INCOMING_RETURNS_GRAPH_V4_FOR_READY_EXTERNAL_PROVIDER: internal_artifact=%q internal_decode_error=%v internal_schema_version=%q mcp_response=%s", artifact, decodeErr, identity.SchemaVersion, rawResponse)
+	}
+}
+
+func TestManagedNonCallsNeverReturnsEmptyToolResult(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed fake LSP requires LocalDarwinSupervisor")
+	}
+	mcpBinary := buildMCPBinary(t)
+	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
+	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
+	for _, tc := range []struct {
+		mode        string
+		wantStatus  string
+		wantCode    string
+		unavailable bool
+	}{
+		{"success", "SUCCEEDED", "", false},
+		{"provider-unavailable", "FAILED", "RESOURCE_EXHAUSTED", true},
+		{"malformed-frame", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"malformed-payload", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"oversized", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"hang", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"no-item", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"adapter-mismatch", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"revision-mismatch", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"kind-mismatch", "FAILED", "RESOURCE_EXHAUSTED", false},
+		{"invalid-coverage", "FAILED", "RESOURCE_EXHAUSTED", false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			workspace := t.TempDir()
+			wallTimeMS := 1000
+			if tc.mode == "hang" {
+				wallTimeMS = 100
+			}
+			providerPath := fakeProvider
+			if tc.unavailable {
+				providerPath = filepath.Join(t.TempDir(), "missing-provider")
+			}
+			config := map[string]any{
+				"version":   1,
+				"processes": []any{map[string]any{"alias": "fixture", "profile": map[string]any{"trust_domain": "noncalls-failure-" + tc.mode, "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"}, "execution": map[string]any{"path": fakeLSP, "directory": workspace}}},
+				"providers": []any{map[string]any{
+					"schema_version": "lsp-trace.bootstrap-provider.v1", "identity": "fake@1.0.0", "version": "1.0.0",
+					"protocol":     map[string]any{"name": "lsp-trace.provider-observations", "version": "1"},
+					"execution":    map[string]any{"path": providerPath, "directory": workspace, "environment": []string{"LSP_TRACE_PROVIDER_MODE=" + tc.mode}},
+					"capabilities": map[string]any{"relations": []string{"PASSES_CALLBACK"}, "languages": []string{"go"}, "frameworks": []string{"fixture"}},
+					"limits":       map[string]any{"request_bytes": 4096, "response_bytes": 4096, "protocol_messages": 1, "stderr_bytes": 128, "wall_time_ms": wallTimeMS, "termination_grace_ms": 20},
+				}},
+			}
+			request := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500, "relations": []string{"PASSES_CALLBACK"}, "providers": []string{"fake@1.0.0"}, "workspace_revision": map[string]any{"kind": "git", "value": strings.Repeat("b", 40), "custody": "CALLER_ASSERTED"}}
+			responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{callRequest(1, "lsp_trace_v1_incoming", request)})
+			if err != nil {
+				t.Fatalf("ASSERT_MANAGED_NONCALLS_NEVER_RETURNS_EMPTY_TOOL_RESULT_%s: process=%v", tc.mode, err)
+			}
+			call := decodeProcessCall(t, responses[0])
+			if call.env["operation_status"] != tc.wantStatus || (tc.wantCode != "" && call.env["code"] != tc.wantCode) {
+				t.Fatalf("ASSERT_MANAGED_NONCALLS_NEVER_RETURNS_EMPTY_TOOL_RESULT_%s: envelope=%v", tc.mode, call.env)
+			}
+			if tc.wantStatus == "SUCCEEDED" && len(inlineArtifactBytes(t, call.env)) == 0 {
+				t.Fatalf("ASSERT_MANAGED_NONCALLS_NEVER_RETURNS_EMPTY_TOOL_RESULT_%s: empty artifact", tc.mode)
+			}
+		})
+	}
+}
+
 func TestProductionMCPRealProviderConformance(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Fatalf("ASSERT_PRODUCTION_PROVIDER_PLATFORM: skip-free production process conformance requires supported LocalDarwinSupervisor")
@@ -263,7 +387,7 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
 		}
 		call := decodeProcessCall(t, responses[0])
-		requireRealProviderComposition(t, "ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", call)
+		requireRealProviderGraphV4(t, "ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER", call)
 		t.Log("PASS ASSERT_PRODUCTION_MCP_INCOMING_NONCALLS_REAL_PROVIDER")
 	})
 	t.Run("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", func(t *testing.T) {
@@ -279,7 +403,7 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 			t.Fatalf("ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER: host provider bootstrap unavailable: %v", err)
 		}
 		call := decodeProcessCall(t, responses[0])
-		requireRealProviderComposition(t, "ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", call)
+		requireRealProviderGraphV4(t, "ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER", call)
 		t.Log("PASS ASSERT_PRODUCTION_MCP_SLICE_NONCALLS_REAL_PROVIDER")
 	})
 	for _, operation := range []string{"incoming", "slice"} {

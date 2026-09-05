@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -128,8 +129,15 @@ func decodeProcessCall(t *testing.T, response map[string]any) processCall {
 	if !ok {
 		t.Fatalf("ASSERT_REAL_PROCESS_CALL_RESULT: result=%v", result)
 	}
-	if content, ok := result["content"].([]any); !ok || len(content) != 0 {
-		t.Fatalf("ASSERT_EMPTY_OUTER_CONTENT: result=%v", result)
+	content, ok := result["content"].([]any)
+	if !ok || len(content) != 1 {
+		t.Fatalf("ASSERT_ONE_CANONICAL_TEXT_CONTENT: result=%v", result)
+	}
+	item, ok := content[0].(map[string]any)
+	text, textOK := item["text"].(string)
+	var textEnvelope map[string]any
+	if !ok || item["type"] != "text" || !textOK || json.Unmarshal([]byte(text), &textEnvelope) != nil || !reflect.DeepEqual(textEnvelope, env) {
+		t.Fatalf("ASSERT_TEXT_CONTENT_EQUALS_STRUCTURED_ENVELOPE: content=%v envelope=%v", content, env)
 	}
 	if result["isError"] != env["isError"] {
 		t.Fatalf("ASSERT_EQUAL_ERROR_STATE: outer=%v envelope=%v", result["isError"], env["isError"])
