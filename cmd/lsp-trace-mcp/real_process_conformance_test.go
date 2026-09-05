@@ -380,7 +380,20 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		t.Fatalf("%s: external provider must be executable: path=%s err=%v", assertion, providerPath, err)
 	}
 
-	fixture := filepath.Join(root, "qualification", "external-provider", "component.gts")
+	sourceFixture := filepath.Join(root, "qualification", "external-provider", "component.gts")
+	fixtureBytes, err := os.ReadFile(sourceFixture)
+	if err != nil {
+		t.Fatalf("%s: read pinned fixture: %v", assertion, err)
+	}
+	// Retained evidence must not depend on the checkout or agent-worktree path.
+	// Stage the immutable fixture at one stable qualification coordinate.
+	fixture := "/tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
+	if err := os.MkdirAll(filepath.Dir(fixture), 0o755); err != nil {
+		t.Fatalf("%s: create stable fixture directory: %v", assertion, err)
+	}
+	if err := os.WriteFile(fixture, fixtureBytes, 0o644); err != nil {
+		t.Fatalf("%s: stage pinned fixture: %v", assertion, err)
+	}
 	fixtureURI := "file://" + fixture
 	mcpBinary := buildMCPBinary(t)
 	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")

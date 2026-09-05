@@ -14,7 +14,7 @@
     "artifact_kind": "NORMALIZED_RELATIONS",
     "relations": [
       {
-        "relation_id": "sha256:13c974b9ed19330132a1ae1e5c1659a062780c8e4de9b6f4af834d5da9510565",
+        "relation_id": "sha256:0ae74632f326f8b4d191e6b027c2a1f1779307b5787b1dbd604288ea7fab7bee",
         "kind": "BINDS_ARGUMENT",
         "from": "path:this.itemCount",
         "to": "argument:Widget:@value",
@@ -25,7 +25,7 @@
         },
         "anchors": [
           {
-            "uri": "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts",
+            "uri": "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
             "revision": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
             "blob": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
             "range": {
@@ -52,7 +52,7 @@
           "whole_source_completeness"
         ],
         "contributing_observation_ids": [
-          "sha256:26f170a8c34bf617d3a6d3f6c517b76acf722c95f5960ead0000d1a50fb8f389"
+          "sha256:836c65c3e0c18fc3c0c0f843387c504c650edc47c3f0b9fc9f7b1940913ebbe1"
         ]
       }
     ],
@@ -73,10 +73,10 @@
       "coverage": {
         "Status": "COMPLETE_WITHIN_BOUNDS",
         "Denominator": [
-          "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts"
+          "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
         ],
         "Covered": [
-          "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts"
+          "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts"
         ],
         "CoveredCount": 1
       },
@@ -93,7 +93,7 @@
         "documents": [
           {
             "document_id": "original",
-            "original_uri": "file:///private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-8ddc3e49-f421-42c-61fc267f/qualification/external-provider/component.gts",
+            "original_uri": "file:///tmp/lsp-trace-external-provider-mcp-qualification/component.gts",
             "content_sha256": "ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
             "revision": {
               "kind": "content",
@@ -105,12 +105,12 @@
           }
         ],
         "conflicts": [],
-        "logical_digest": "sha256:96f6c0fa72d0f9b508563d8c9df947162d574995f02edc6cc1fffe04a5630a62"
+        "logical_digest": "sha256:93c1a730fec50e632b4dbf335392deeeefd3feac656c35625ecd6ade1b6de4f2"
       },
       "observation_ids": [
-        "sha256:26f170a8c34bf617d3a6d3f6c517b76acf722c95f5960ead0000d1a50fb8f389"
+        "sha256:836c65c3e0c18fc3c0c0f843387c504c650edc47c3f0b9fc9f7b1940913ebbe1"
       ],
-      "logical_digest": "sha256:53c1ace1061c2abeebc98349b8cbb486fcc082b2841ea5b3ff38ad47b6782ab8",
+      "logical_digest": "sha256:0297bca7613606d1920d2ebdbeca6ddb417b90bf81c65e497978f2ce65b3d62c",
       "receipt": {
         "messages": 1,
         "stderr_bytes": 0,
