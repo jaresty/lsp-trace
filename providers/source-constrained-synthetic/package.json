@@ -1,0 +1,11 @@
+{
+  "name": "@lsp-trace/source-constrained-synthetic-provider",
+  "version": "1.0.0-provisional",
+  "private": false,
+  "type": "module",
+  "bin": { "source-constrained-synthetic-provider": "./bin/provider.mjs" },
+  "exports": { ".": "./src/provider.mjs" },
+  "files": ["bin", "src", "provenance.json", "README.md"],
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=20" }
+}

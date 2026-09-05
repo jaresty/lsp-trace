@@ -6,6 +6,7 @@
   "allowed_evidence_statuses": ["RESOLVED_RECONSTRUCTED", "RESOLVED_SYNTHETIC"],
   "forbidden_statuses": ["PRODUCTION_RESOLVED"],
   "b05_v2_blob": "0bd7501a1fa9307002fd09c10e4bb3843141df0e",
+  "PROGRAM_B_PROVISIONAL_DISCOVERY_ADMITTED": true,
   "PROGRAM_B_ADMITTED": false,
   "authority": "No synthetic or reconstructed relation is authoritative production evidence."
 }

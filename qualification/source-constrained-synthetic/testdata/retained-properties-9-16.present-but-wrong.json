@@ -4,18 +4,18 @@
     "version": "1.0.0-provisional",
     "selectable": true,
     "evidence_class": "SOURCE_CONSTRAINED_SYNTHETIC",
-    "discovery_status": "HIDDEN"
+    "discovery_status": "PROVISIONAL_DISCOVERY"
   },
   "observations": {
     "INVOKES_TASK": {
-      "chain": ["TaskForAsyncTaskFunction", "AbstractTask.perform"],
+      "chain": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
       "anchors": ["app/services/uploads.js#uploadComplete.perform"],
       "dependency": "ember-concurrency@5.2.0",
       "declaration_provenance": ["TaskForAsyncTaskFunction", "Task", "AbstractTask.perform"],
       "negative_boundaries": ["unrelated.perform", "contradictory.perform"]
     },
     "TRIGGERS_RELOAD": {
-      "chain": ["UserImportModel", "reload"],
+      "chain": ["UserImportModel", "@warp-drive/legacy Model.reload"],
       "collection_provenance": "upload collection element",
       "model_provenance": "market-view-ui:app/models/user-import.js",
       "anchors": ["app/models/user-import.js#upload.reload"],
@@ -24,13 +24,13 @@
     }
   },
   "selection": {
-    "requires_explicit_provisional": false,
+    "requires_explicit_provisional": true,
     "production_consumes_synthetic": false,
     "auto_advertises_synthetic": false
   },
   "matrix": {
     "immutable": true,
-    "seed_count": 9,
+    "seed_count": 10,
     "attempt_count": 20,
     "operations": ["incoming", "slice"],
     "provider_installation": "independent",
@@ -39,18 +39,18 @@
     "provisionally_satisfied_relations": ["PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"]
   },
   "admission": {
-    "PROGRAM_B_PROVISIONAL_DISCOVERY_ADMITTED": false,
+    "PROGRAM_B_PROVISIONAL_DISCOVERY_ADMITTED": true,
     "PROGRAM_B_ADMITTED": false,
     "b05_v2_blob": "0bd7501a1fa9307002fd09c10e4bb3843141df0e"
   },
   "analyzer_scope": {
     "languages": ["Go"],
-    "framework_matchers": ["ember"]
+    "framework_matchers": []
   },
   "omitted_relations": {
     "graph_v3_bytes": "baseline-graph-v3",
     "baseline_graph_v3_bytes": "baseline-graph-v3",
-    "provider_startups": 1,
+    "provider_startups": 0,
     "production_capabilities": "baseline-capabilities",
     "baseline_production_capabilities": "baseline-capabilities",
     "production_evidence": "baseline-evidence",

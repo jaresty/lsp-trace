@@ -7,7 +7,8 @@
     "verify": "node verify.mjs",
     "guard": "node --test *.guard.test.mjs",
     "test": "npm run verify && npm run guard",
-    "perturb": "node perturbations.mjs"
+    "perturb": "node perturbations.mjs && node retained-properties-9-16.perturbations.mjs",
+    "matrix": "node build-provisional-matrix.mjs"
   },
   "dependencies": {
     "@warp-drive/legacy": "5.8.1",

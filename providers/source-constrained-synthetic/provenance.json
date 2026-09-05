@@ -1,0 +1,11 @@
+{
+  "schema": "lsp-trace.source-constrained-synthetic-provider.provenance.v1",
+  "source": {"repository":"market-view-ui.git-object","commit":"326718ae733cb26097bd30246276cecd371a4e79"},
+  "relations": {
+    "INVOKES_TASK": {"anchor":{"path":"app/services/uploads.js","blob":"8714414be3d70935e55e0fd6dccf1cd867363547","sha256":"82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205","symbol":"uploadComplete.perform"},"chain":["TaskForAsyncTaskFunction","Task","AbstractTask.perform"],"dependency":"ember-concurrency@5.2.0","negative_boundaries":["unrelated.perform","contradictory.perform"]},
+    "TRIGGERS_RELOAD": {"anchor":{"path":"app/models/user-import.js","blob":"eae121fffc6a82d1111466f71a68fe5f5b8cc400","sha256":"37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9","symbol":"upload.reload"},"chain":["UserImportModel","@warp-drive/legacy Model.reload"],"collection_provenance":"upload collection element","model_provenance":"market-view-ui:app/models/user-import.js","dependencies":["@warp-drive/legacy@5.8.1"],"negative_boundaries":["unrelated.reload","contradictory.reload","unsupported_collection_element.reload"]}
+  },
+  "coverage_boundary":["uploadComplete.perform","upload.reload"],
+  "failure_boundary":["unrelated.perform","contradictory.perform","unrelated.reload","contradictory.reload","unsupported_collection_element.reload"],
+  "core_go_framework_parsing":false
+}
