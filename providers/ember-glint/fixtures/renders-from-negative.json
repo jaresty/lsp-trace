@@ -1,0 +1,44 @@
+{
+  "schema": "lsp-trace.ember-glint.renders-from-seed.v1",
+  "case": "negative-indirect-dataflow",
+  "request": {
+    "projectDirectory": "/workspace",
+    "template": {
+      "uri": "file:///workspace/app/components/panel.gts",
+      "source": "<p>{{this.itemCount}}</p>",
+      "expression": {
+        "start": 5,
+        "end": 19
+      }
+    },
+    "mapping": {
+      "uri": "file:///workspace/.glint/panel.ts",
+      "original": {
+        "start": 5,
+        "end": 19
+      },
+      "virtual": {
+        "start": 500,
+        "end": 514
+      }
+    },
+    "definitions": [
+      {
+        "uri": "file:///workspace/app/components/panel.ts",
+        "source": "import Component from '@glimmer/component';\nexport default class Panel extends Component<{ Args: { data: string[] } }> {\n  get itemCount(): number {\n    const value = this.args.data;\n    return value.length;\n  }\n}",
+        "start": 127,
+        "end": 136,
+        "generated": false
+      }
+    ]
+  },
+  "expected": {
+    "status": "BLOCKED",
+    "reason": "DIRECT_QUALIFIED_SOURCE_READ_UNAVAILABLE",
+    "observations": [],
+    "coverage": {
+      "status": "UNKNOWN",
+      "reason": "ANALYSIS_UNAVAILABLE"
+    }
+  }
+}
