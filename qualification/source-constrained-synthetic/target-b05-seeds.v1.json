@@ -1,0 +1,53 @@
+{
+  "schema": "lsp-trace.target-b05-seeds.v1",
+  "source": {
+    "repository": "market-view-ui.git-object",
+    "commit": "326718ae733cb26097bd30246276cecd371a4e79",
+    "immutable_git_objects": true,
+    "nais_mutated": false,
+    "files": [
+      { "path": "app/services/uploads.js", "blob": "8714414be3d70935e55e0fd6dccf1cd867363547", "sha256": "82f1e0fbd92dda79801b4d521cdb3edc976ae13ab20cb018879a6390fc308205", "ranges": ["1:1-8:28", "28:3-28:15", "31:5-31:50", "78:7-78:52", "89:9-93:43", "115:7-115:52", "150:3-152:6", "158:7-158:54"] },
+      { "path": "app/services/data.js", "blob": "6e0307436c12fb55c71a1789b609348ee228c35a", "sha256": "a2559e68e11906fbcde8c238db3e85f64933c6207c1467164bee1dccd701faf8", "ranges": ["15:3-15:20", "19:3-43:6"] },
+      { "path": "app/models/user-import.js", "blob": "eae121fffc6a82d1111466f71a68fe5f5b8cc400", "sha256": "37ea85621d5a84356417ee3128df63a0e90a35e8856e46cfc8fc602c5aed7fd9", "ranges": ["2:1-2:65", "20:1-101:2"] },
+      { "path": "app/models/admissions-list.js", "blob": "f4d4c0bd59076121a035f778fd1c9d4a7a383eae", "sha256": "df07de938588bca9a90de6bc9ace33ca78f709c2da0f0f2d3b81869a03e5a1eb", "ranges": ["2:1-2:65", "16:3-17:15", "42:3-46:4"] },
+      { "path": "app/models/dataset.js", "blob": "0c5c01a27eb5f68d97c5027fc41fdef6834ae85c", "sha256": "5b8826e0f6b06c3bbf82d61264ccf9b2d4ee3f382e4cd3cf78c5902ca8502967", "ranges": ["1:1-1:78", "25:3-26:14", "36:3-38:4"] }
+    ]
+  },
+  "seeds": [
+    {
+      "id": "upload-complete-task",
+      "language": "typescript",
+      "path": "seeds/upload-complete-task.ts",
+      "relation": "INVOKES_TASK",
+      "original_call_range": { "start": { "line": 92, "character": 12 }, "end": { "line": 92, "character": 42 } },
+      "generated_call_range": { "start": { "line": 8, "character": 4 }, "end": { "line": 8, "character": 33 } },
+      "mapping": { "original": "app/services/uploads.js:93:13-43", "synthetic": "seeds/upload-complete-task.ts:9:5-34", "text": "this.uploadComplete.perform()" },
+      "source_evidence": { "import": "import { keepLatestTask } from 'ember-concurrency';", "initializer": "uploadComplete = keepLatestTask(async () => { ... })", "call": "this.uploadComplete.perform()" }
+    },
+    {
+      "id": "upload-reload-provenance",
+      "language": "typescript",
+      "path": "seeds/upload-reload-provenance.ts",
+      "relation": "TRIGGERS_RELOAD",
+      "original_call_range": { "start": { "line": 89, "character": 10 }, "end": { "line": 89, "character": 31 } },
+      "generated_call_range": { "start": { "line": 9, "character": 12 }, "end": { "line": 9, "character": 27 } },
+      "mapping": { "original": "app/services/uploads.js:90:11-32", "synthetic": "seeds/upload-reload-provenance.ts:10:13-28", "text": "upload.reload()" }
+    }
+  ],
+  "premise_ledger": {
+    "accepted": [
+      { "premise": "keepLatestTask import and initializer", "basis": "exact-target-source", "source": "app/services/uploads.js:3-8,150-152" },
+      { "premise": "TaskForAsyncTaskFunction→Task→AbstractTask.perform", "basis": "lock-matched-declaration", "source": "ember-concurrency@5.2.0" },
+      { "premise": "uploads contains UserImportModel values", "basis": "exact-five-file-source-chain", "source": "all five pinned source files" },
+      { "premise": "UserImportModel extends Model and Model.reload", "basis": "target-source-plus-lock-matched-declaration", "source": "app/models/user-import.js;@warp-drive/legacy@5.8.1" }
+    ],
+    "rejected": ["receiver-name-only", "any", "unknown", "non-UserImport collection element", "NotTask.perform", "NotModel.reload", "marker-only relation", "direct JavaScript analysis"],
+    "disposition": "unsupported-premises-rejected"
+  },
+  "stage_a": {
+    "provider_analysis": "direct-in-process-both-seeds",
+    "provisional_target_b05_admitted": false,
+    "PROGRAM_B_ADMITTED": false,
+    "execution_claims": []
+  }
+}
