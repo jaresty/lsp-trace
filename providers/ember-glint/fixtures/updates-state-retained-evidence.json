@@ -1,0 +1,97 @@
+{
+  "schema_version": "lsp-trace.ember-glint.updates-state-evidence.v1",
+  "baseline": "1825a56070d7b76174ebb086d7c464731ce12bb0",
+  "analyzer_stage": "S1",
+  "qualification": {
+    "provider": "typescript@5.9.2",
+    "operation": "getSymbolAtLocation",
+    "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS",
+    "claim": "static_source_dependency_only",
+    "does_not_support": [
+      "runtime_execution",
+      "runtime_mutation",
+      "whole_source_completeness"
+    ]
+  },
+  "seeds": {
+    "positive": {
+      "path": "fixtures/updates-state-positive.ts",
+      "sha256": "aa6fa3f496e51b54c8a8df5ae7406c58f419736900a396dc182a4d7c3825e086"
+    },
+    "negative": {
+      "path": "fixtures/updates-state-negative.ts",
+      "sha256": "fb28629d3871fb7a668d7b78978bba9f9a7f3eb1505a4c5b150e2a185368ffc4"
+    }
+  },
+  "red": {
+    "command": "node --test --test-name-pattern=<ASSERTION> test/updates-state.test.mjs",
+    "assertions": [
+      { "id": "ASSERT_UPDATES_STATE_REQUIRES_TYPESCRIPT_OWNED_CURRENT_CLASS_FIELD", "result": "0 !== 2" },
+      { "id": "ASSERT_UPDATES_STATE_EXACT_STATE_PRODUCER_AND_STATE_VALUE_ENDPOINTS", "result": "actual: []" },
+      { "id": "ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR", "result": "actual: []" },
+      { "id": "ASSERT_UPDATES_STATE_DETERMINISTIC", "result": "0 !== 2" },
+      { "id": "ASSERT_UPDATES_STATE_REJECTS_LOCAL_AND_UNRESOLVED_THIS_TARGETS", "result": "0 !== 2" },
+      { "id": "ASSERT_UPDATES_STATE_STATIC_NON_ENTAILMENTS", "result": "0 !== 2" }
+    ]
+  },
+  "green": {
+    "command": "npm test",
+    "tests": 24,
+    "pass": 24,
+    "fail": 0
+  },
+  "observations": [
+    {
+      "kind": "UPDATES_STATE",
+      "from": {
+        "role": "STATE_PRODUCER",
+        "symbol": "CounterPanel",
+        "declaration": { "start": 6, "end": 18, "text": "CounterPanel" }
+      },
+      "to": {
+        "role": "STATE_VALUE",
+        "symbol": "count",
+        "declaration": { "start": 23, "end": 28, "text": "count" }
+      },
+      "original_anchor": {
+        "uri": "file:///workspace/updates-state-positive.ts",
+        "bytes": { "start": 101, "end": 113 },
+        "range": { "start": { "row": 6, "column": 4 }, "end": { "row": 6, "column": 16 } },
+        "text": "this.count++"
+      },
+      "resolution": {
+        "provider": "typescript@5.9.2",
+        "operation": "getSymbolAtLocation",
+        "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS"
+      },
+      "supports": ["source_dependency_relation"],
+      "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]
+    },
+    {
+      "kind": "UPDATES_STATE",
+      "from": {
+        "role": "STATE_PRODUCER",
+        "symbol": "CounterPanel",
+        "declaration": { "start": 6, "end": 18, "text": "CounterPanel" }
+      },
+      "to": {
+        "role": "STATE_VALUE",
+        "symbol": "enabled",
+        "declaration": { "start": 36, "end": 43, "text": "enabled" }
+      },
+      "original_anchor": {
+        "uri": "file:///workspace/updates-state-positive.ts",
+        "bytes": { "start": 76, "end": 95 },
+        "range": { "start": { "row": 5, "column": 4 }, "end": { "row": 5, "column": 23 } },
+        "text": "this.enabled = true"
+      },
+      "resolution": {
+        "provider": "typescript@5.9.2",
+        "operation": "getSymbolAtLocation",
+        "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS"
+      },
+      "supports": ["source_dependency_relation"],
+      "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]
+    }
+  ]
+}
