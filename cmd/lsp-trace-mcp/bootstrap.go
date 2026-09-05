@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"lsp-trace/internal/managedprocess"
@@ -45,9 +47,11 @@ type managedExecutionAuthority struct {
 }
 
 type bootstrapSession struct {
-	Alias      string
-	SessionID  string
-	Generation uint64
+	Alias          string
+	SessionID      string
+	Generation     uint64
+	RepositoryRoot string
+	GitCommit      string
 }
 
 func loadBootstrapConfig(path string) (bootstrapConfig, error) {
@@ -148,7 +152,8 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 			rollback()
 			return nil, fmt.Errorf("bootstrap process %d start: %s", i, result.Failure)
 		}
-		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation}
+		repositoryRoot, gitCommit := pinnedGitMetadata(process.process.Dir)
+		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit}
 		started = append(started, session)
 		deadline := time.Now().Add(timeout)
 		pending := manager.BeginReadiness(ctx, session.SessionID, session.Generation, deadline)
@@ -159,6 +164,24 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 		}
 	}
 	return started, nil
+}
+
+func pinnedGitMetadata(directory string) (string, string) {
+	rootCommand := exec.Command("git", "-C", directory, "rev-parse", "--show-toplevel")
+	rootBytes, err := rootCommand.Output()
+	if err != nil {
+		return "", ""
+	}
+	root := strings.TrimSpace(string(rootBytes))
+	if root == "" || !filepath.IsAbs(root) {
+		return "", ""
+	}
+	commitCommand := exec.Command("git", "-C", root, "rev-parse", "--verify", "HEAD^{commit}")
+	commitBytes, err := commitCommand.Output()
+	if err != nil {
+		return "", ""
+	}
+	return filepath.Clean(root), strings.TrimSpace(string(commitBytes))
 }
 
 func stopBootstrap(ctx context.Context, manager *sessionruntime.Manager, sessions []bootstrapSession) error {

@@ -135,7 +135,7 @@ function freezeMetadata(records) {
 }
 
 async function strictCollectorResponse(request, records) {
-  const allowed = new Set(['schema_version', 'provider_id', 'adapter_id', 'session', 'seed', 'relations', 'document_custody', 'limits']);
+  const allowed = new Set(['schema_version', 'provider_id', 'adapter_id', 'session', 'seed', 'relations', 'languages', 'frameworks', 'document_custody', 'limits']);
   if (!plainObject(request) || request.schema_version !== 'lsp-trace.provider-collector-request.v1' || Object.keys(request).some((key) => !allowed.has(key))) {
     throw new TypeError('unsupported strict collector request');
   }

@@ -92,6 +92,8 @@ type StrictCollectorRequest struct {
 	Session       ManagedSessionCustody `json:"session"`
 	Seed          SeedCustody           `json:"seed"`
 	Relations     []string              `json:"relations"`
+	Languages     []string              `json:"languages,omitempty"`
+	Frameworks    []string              `json:"frameworks,omitempty"`
 	Documents     DocumentCustody       `json:"document_custody"`
 	Limits        CollectorLimits       `json:"limits"`
 }
@@ -152,6 +154,8 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 		Session:       ManagedSessionCustody{SessionID: in.SessionID, Generation: in.Generation},
 		Seed:          SeedCustody{URI: in.URI, Line: in.Line, Character: in.Character, Symbol: in.Symbol, StartMode: in.StartMode},
 		Relations:     selected,
+		Languages:     append([]string(nil), in.Languages...),
+		Frameworks:    append([]string(nil), in.Frameworks...),
 		Documents:     DocumentCustody{OriginalURI: in.URI, WorkspaceRevision: append(json.RawMessage(nil), in.WorkspaceRevision...), FailOnUnknown: in.FailOnUnknownRevision},
 		Limits:        CollectorLimits{MaxDepth: in.MaxDepth, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS},
 	}

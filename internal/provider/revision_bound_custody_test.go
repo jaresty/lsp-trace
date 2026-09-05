@@ -93,7 +93,8 @@ func revisionBoundSemanticCase(t *testing.T, session managedGitSessionFixture) (
 	declaration := admissionDeclaration("ember-glint@1", "BINDS_ARGUMENT")
 	provisioned := mustProvisionAdmission(t, declaration)
 	adapterIdentity := observationadapter.Identity{Name: "ember-template", Version: "1"}
-	adapter, err := NewObservationSemanticAdapter(provisioned, adapterIdentity)
+	verifier := NewGitRevisionVerifier([]ManagedGitRevision{{SessionID: "managed-git-session", Generation: session.Generation, RepositoryRoot: session.RepositoryRoot, Commit: session.Commit}})
+	adapter, err := NewObservationSemanticAdapter(provisioned, adapterIdentity, verifier)
 	if err != nil {
 		t.Fatal(err)
 	}

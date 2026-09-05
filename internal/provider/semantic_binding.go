@@ -49,9 +49,10 @@ type ObservationSemanticAdapter struct {
 	declarations map[string]Declaration
 	adapter      observationadapter.Identity
 	adapterID    string
+	verifier     RevisionVerifier
 }
 
-func NewObservationSemanticAdapter(provisioned Provisioned, adapter observationadapter.Identity) (*ObservationSemanticAdapter, error) {
+func NewObservationSemanticAdapter(provisioned Provisioned, adapter observationadapter.Identity, verifiers ...RevisionVerifier) (*ObservationSemanticAdapter, error) {
 	if provisioned.Registry == nil || adapter.Name == "" || adapter.Version == "" {
 		return nil, errors.New("provider semantic adapter requires provisioning and adapter identity")
 	}
@@ -59,10 +60,17 @@ func NewObservationSemanticAdapter(provisioned Provisioned, adapter observationa
 	for _, declaration := range provisioned.Declarations {
 		declarations[declaration.Identity] = cloneDeclaration(declaration)
 	}
-	return &ObservationSemanticAdapter{declarations: declarations, adapter: adapter, adapterID: adapter.Name + "@" + adapter.Version}, nil
+	var verifier RevisionVerifier
+	if len(verifiers) > 1 {
+		return nil, errors.New("provider semantic adapter accepts at most one revision verifier")
+	}
+	if len(verifiers) == 1 {
+		verifier = verifiers[0]
+	}
+	return &ObservationSemanticAdapter{declarations: declarations, adapter: adapter, adapterID: adapter.Name + "@" + adapter.Version, verifier: verifier}, nil
 }
 
-func (a *ObservationSemanticAdapter) Adapt(_ context.Context, request StrictCollectorRequest, receipt Receipt) (json.RawMessage, error) {
+func (a *ObservationSemanticAdapter) Adapt(ctx context.Context, request StrictCollectorRequest, receipt Receipt) (json.RawMessage, error) {
 	if a == nil || request.SchemaVersion != CollectorRequestSchema {
 		return nil, errors.New("provider semantic adapter unavailable or request schema mismatch")
 	}
@@ -95,7 +103,7 @@ func (a *ObservationSemanticAdapter) Adapt(_ context.Context, request StrictColl
 	if envelope.RequestID != semanticRequestID(request) {
 		return nil, errors.New("observation request identity mismatch")
 	}
-	if err := validateSemanticCustody(request, envelope); err != nil {
+	if err := validateSemanticCustody(ctx, a.verifier, request, envelope); err != nil {
 		return nil, err
 	}
 	selected := make(map[string]struct{}, len(request.Relations))
@@ -153,7 +161,7 @@ func semanticRequestID(request StrictCollectorRequest) string {
 	return fmt.Sprintf("%s:%d:%s", request.Session.SessionID, request.Session.Generation, request.Seed.URI)
 }
 
-func validateSemanticCustody(request StrictCollectorRequest, envelope observationadapter.Envelope) error {
+func validateSemanticCustody(ctx context.Context, verifier RevisionVerifier, request StrictCollectorRequest, envelope observationadapter.Envelope) error {
 	if len(envelope.Documents) == 0 {
 		return errors.New("observation envelope omitted document custody")
 	}
@@ -171,6 +179,17 @@ func validateSemanticCustody(request StrictCollectorRequest, envelope observatio
 		matched = true
 		if workspace.Kind != "" && (document.Revision.Kind != workspace.Kind || document.Revision.Value != workspace.Value) {
 			return errors.New("observation document revision does not match request custody")
+		}
+		if workspace.Kind == "git" && request.Documents.FailOnUnknown {
+			if verifier == nil {
+				return custodyError("host revision verifier is unavailable")
+			}
+			if err := verifier.VerifyRevision(ctx, request, document); err != nil {
+				if IsRevisionCustodyError(err) {
+					return err
+				}
+				return &RevisionCustodyError{Err: err}
+			}
 		}
 	}
 	if !matched {

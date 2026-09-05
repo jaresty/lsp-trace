@@ -111,6 +111,7 @@ func TestResolveTargetFailuresNormalizeToExclusivePublicEnvelopes(t *testing.T) 
 		{"DOCUMENT_SYMBOL_UNPREPARABLE", "UNSUPPORTED_CALL_HIERARCHY"},
 		{"CANCELLED", "REQUEST_CANCELLED"},
 		{"REQUEST_TIMEOUT", "REQUEST_TIMEOUT"},
+		{"RELATION_CUSTODY_FAILED", "RELATION_CUSTODY_FAILED"},
 	}
 	const arguments = `{"session_id":"project","uri":"file:///workspace/main.go","symbol":"Start"}`
 	for _, test := range tests {

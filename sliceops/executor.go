@@ -56,6 +56,8 @@ type request struct {
 	TimeoutMS             int64           `json:"timeout_ms"`
 	RequestTimeoutMS      int64           `json:"request_timeout_ms"`
 	Relations             *[]string       `json:"relations"`
+	Languages             []string        `json:"languages"`
+	Frameworks            []string        `json:"frameworks"`
 	Adapters              json.RawMessage `json:"adapters"`
 	Providers             []string        `json:"providers"`
 	WorkspaceRevision     json.RawMessage `json:"workspace_revision"`
@@ -284,6 +286,9 @@ func (e *Executor) executeComposition(parent context.Context, raw json.RawMessag
 		}
 		providerResult, err := collector.CollectRelations(parent, external, raw)
 		if err != nil {
+			if provider.IsRevisionCustodyError(err) {
+				return operation.Result{}, fail("RELATION_CUSTODY_FAILED", err)
+			}
 			return operation.Result{}, fail("RELATION_PROVIDER_FAILED", err)
 		}
 		if providerResult.ProviderID == "" || providerResult.Terminal == "" || providerResult.GraphV4.SchemaVersion != graph.NormalizedRelationsSchemaVersion {

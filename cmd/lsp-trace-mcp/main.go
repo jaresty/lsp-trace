@@ -91,7 +91,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 				fmt.Fprintln(stderr, err)
 				return 1
 			}
-			adapter, err := provider.NewObservationSemanticAdapter(provisioned, adapterIdentity)
+			gitRevisions := make([]provider.ManagedGitRevision, 0, len(bootstrapSessions))
+			for _, session := range bootstrapSessions {
+				if session.RepositoryRoot != "" && session.GitCommit != "" {
+					gitRevisions = append(gitRevisions, provider.ManagedGitRevision{SessionID: session.SessionID, Generation: session.Generation, RepositoryRoot: session.RepositoryRoot, Commit: session.GitCommit})
+				}
+			}
+			adapter, err := provider.NewObservationSemanticAdapter(provisioned, adapterIdentity, provider.NewGitRevisionVerifier(gitRevisions))
 			if err != nil {
 				fmt.Fprintln(stderr, err)
 				return 1

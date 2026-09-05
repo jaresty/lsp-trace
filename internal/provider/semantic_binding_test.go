@@ -15,7 +15,7 @@ func semanticFixture(t *testing.T) (*ObservationSemanticAdapter, StrictCollector
 	t.Helper()
 	p := mustProvisionAdmission(t, admissionDeclaration("alpha@1", "PASSES_CALLBACK"))
 	identity := observationadapter.Identity{Name: "semantic", Version: "1"}
-	a, err := NewObservationSemanticAdapter(p, identity)
+	a, err := NewObservationSemanticAdapter(p, identity, RevisionVerifierFunc(func(context.Context, StrictCollectorRequest, graph.SourceDocumentRecord) error { return nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
