@@ -12,6 +12,7 @@ const stable = '/tmp/lsp-trace-target-b05-synthetic-qualification';
 const workspace = join(stable, 'workspace'), install = join(stable, 'provider-install'), dist = join(stable, 'dist');
 const mcp = join(stable, 'lsp-trace-mcp'), fakeLSP = join(stable, 'fake-lsp');
 const output = resolve(root, 'qualification/retained/target-b05-synthetic/qualification-evidence.v1.json');
+const retain = process.argv.includes('--retain');
 const sha = value => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 const canonical = value => Array.isArray(value) ? `[${value.map(canonical).join(',')}]` : value && typeof value === 'object' ? `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}` : JSON.stringify(value);
 const normalize = response => { const copy = structuredClone(response); copy.id = 0; const normalizeBody = body => { if (body?.request_id) body.request_id = 'replay-normalized'; return body; }; if (copy.result?.structuredContent) normalizeBody(copy.result.structuredContent); if (copy.result?.content?.[0]?.text) copy.result.content[0].text = JSON.stringify(normalizeBody(JSON.parse(copy.result.content[0].text))); return copy; };
@@ -65,6 +66,8 @@ for (const seed of specification.seeds) for (const operation of ['incoming', 'sl
 for (const seed of specification.seeds) for (const operation of ['incoming', 'slice']) { const pair = attempts.filter(item => item.seed === seed.id && item.operation === operation); if (pair.length !== 2 || pair[0].digests.response !== pair[1].digests.response || pair[0].digests.logical !== pair[1].digests.logical) throw new Error(`deterministic replay failed: ${seed.id}/${operation}`); }
 if (attempts.length !== 8 || attempts.some(item => item.status !== 'PASS')) throw new Error(`target B05 qualification failed: ${attempts.filter(item => item.status !== 'PASS').map(item => item.id).join(',')}`);
 const evidence = { schema: 'lsp-trace.target-b05-synthetic.evidence.v1', immutable: true, evidence_class: 'SOURCE_CONSTRAINED_SYNTHETIC', target: 'B05', source_commit: specification.source.commit, qualifier: { executable: 'qualification/source-constrained-synthetic/qualify-target-b05.mjs', transport: 'actual-built-lsp-trace-mcp-stdio', fake_lsp: true, explicit_provider: providerID, isolated_workspace: true, workspace_commit: commit, workspace_clean: clean, provider_install: 'outside-repository-from-npm-pack', operation_count: attempts.length, deterministic_replay: true }, digests: { mcp_executable: sha(readFileSync(mcp)), provider_package: sha(readFileSync(tarball)), provider_executable: sha(readFileSync(provider)) }, attempts, admission: { direct_javascript: 'UNSUPPORTED', provisional_target_B05_admitted: true, PROGRAM_B_ADMITTED: false }, history: { additive: true, b05_v2_rewritten: false, generic_matrix_rewritten: false } };
-mkdirSync(dirname(output), { recursive: true });
-writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`);
-console.log(`TARGET_B05_QUALIFIED evidence=${output} observed_calls=8 replay=deterministic provisional_B05=true program_b=false`);
+if (retain) {
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, `${JSON.stringify(evidence, null, 2)}\n`);
+}
+console.log(`TARGET_B05_QUALIFIED evidence=${retain ? output : 'fresh-observation-not-retained'} observed_calls=8 replay=deterministic provisional_B05=true program_b=false retained=${retain}`);

@@ -66,6 +66,9 @@ guard('P 20', 'ASSERT_EXACT_RELOAD_PROVENANCE_AND_IN_PROCESS_RELATION', 'reload 
 
 guard('P 21', 'ASSERT_REAL_MCP_QUALIFIER_STRICT_CUSTODY_DIGESTS_REPLAY', 'committed executable qualifier records eight actual stdio calls with strict public commit custody, equivalent content, all digest classes, and deterministic replay', () => {
   assert.equal(evidence.qualifier.executable, 'qualification/source-constrained-synthetic/qualify-target-b05.mjs');
+  const qualifierSource = readFileSync(new URL('./qualify-target-b05.mjs', root), 'utf8');
+  assert.match(qualifierSource, /const retain = process\.argv\.includes\('--retain'\)/);
+  assert.match(qualifierSource, /if \(retain\) \{[\s\S]*writeFileSync\(output/);
   assert.equal(evidence.qualifier.transport, 'actual-built-lsp-trace-mcp-stdio');
   assert.equal(evidence.qualifier.operation_count, 8);
   assert.equal(evidence.qualifier.workspace_clean, true);
