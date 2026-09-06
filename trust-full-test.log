@@ -1,0 +1,46 @@
+ok  	lsp-trace/cmd/fake-lsp	0.218s
+ok  	lsp-trace/cmd/lsp-trace	6.342s
+ok  	lsp-trace/cmd/lsp-trace-mcp	16.355s
+ok  	lsp-trace/incomingops	1.196s
+ok  	lsp-trace/internal/b05qualification	0.823s
+ok  	lsp-trace/internal/containment	0.998s
+?   	lsp-trace/internal/containment/reference	[no test files]
+ok  	lsp-trace/internal/dispatch	3.075s
+ok  	lsp-trace/internal/execution	2.901s
+ok  	lsp-trace/internal/filter	1.945s
+ok  	lsp-trace/internal/graph	0.638s
+ok  	lsp-trace/internal/inspection	2.498s
+--- FAIL: TestDisabledIntegratedConformance (0.77s)
+    --- FAIL: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.01s)
+        harness_test.go:640: unowned path "internal/schema/host_trust.go"
+FAIL
+FAIL	lsp-trace/internal/integratedconformance	10.823s
+ok  	lsp-trace/internal/jsonrpc	2.314s
+ok  	lsp-trace/internal/lsp	1.758s
+ok  	lsp-trace/internal/lspwire	2.120s
+ok  	lsp-trace/internal/managedprocess	3.363s
+ok  	lsp-trace/internal/mcp	1.701s
+ok  	lsp-trace/internal/mcpcontract	2.720s
+ok  	lsp-trace/internal/observationadapter	3.441s
+ok  	lsp-trace/internal/operation	3.042s
+ok  	lsp-trace/internal/presentation	3.228s
+ok  	lsp-trace/internal/provider	4.296s
+ok  	lsp-trace/internal/providerconformance	3.368s
+ok  	lsp-trace/internal/publication	3.002s
+ok  	lsp-trace/internal/qualificationmatrix	3.048s
+ok  	lsp-trace/internal/qualificationpolicy	6.711s
+ok  	lsp-trace/internal/relations	3.252s
+ok  	lsp-trace/internal/runtimeprofile	3.248s
+ok  	lsp-trace/internal/schema	3.241s
+ok  	lsp-trace/internal/server	3.167s
+ok  	lsp-trace/internal/session	3.178s
+ok  	lsp-trace/internal/sessionkey	3.155s
+ok  	lsp-trace/internal/slicer	3.062s
+ok  	lsp-trace/internal/source	3.167s
+ok  	lsp-trace/internal/stage2scenario	3.155s
+ok  	lsp-trace/internal/traverse	3.140s
+ok  	lsp-trace/internal/verification	2.820s
+ok  	lsp-trace/lifecycleops	2.867s
+ok  	lsp-trace/sessionruntime	4.665s
+ok  	lsp-trace/sliceops	3.497s
+FAIL

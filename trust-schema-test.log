@@ -1,0 +1,174 @@
+=== RUN   TestSourceDenominatorV1AcceptsCompleteSnapshotScope
+--- PASS: TestSourceDenominatorV1AcceptsCompleteSnapshotScope (0.00s)
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unbounded_scope
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/provider-derived_universe
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/scope_policy_mismatch
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/qualification_failure
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/non-exhaustive_universe
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unknown_exclusion
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/invalid_exclusion_reason
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/overlap_covered_and_excluded
+=== RUN   TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unaccounted_member
+--- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs (0.01s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unbounded_scope (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/provider-derived_universe (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/scope_policy_mismatch (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/qualification_failure (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/non-exhaustive_universe (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unknown_exclusion (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/invalid_exclusion_reason (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/overlap_covered_and_excluded (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsInvalidScopeAndDenominatorProofs/unaccounted_member (0.00s)
+=== RUN   TestSourceDenominatorV1AcceptsVerifiedMembershipCommitment
+--- PASS: TestSourceDenominatorV1AcceptsVerifiedMembershipCommitment (0.00s)
+=== RUN   TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts
+=== RUN   TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts/duplicate_member
+=== RUN   TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts/members_count
+--- PASS: TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts/duplicate_member (0.00s)
+    --- PASS: TestSourceDenominatorV1RejectsDuplicateIdentitiesAndBadCounts/members_count (0.00s)
+=== RUN   TestFamilySchemasMatchCommittedBytesDeterministically
+--- PASS: TestFamilySchemasMatchCommittedBytesDeterministically (0.00s)
+=== RUN   TestValidateForSourceManifestFamily
+=== RUN   TestValidateForSourceManifestFamily/missing_inclusion_reason
+=== RUN   TestValidateForSourceManifestFamily/absolute_path
+=== RUN   TestValidateForSourceManifestFamily/bad_digest
+--- PASS: TestValidateForSourceManifestFamily (0.00s)
+    --- PASS: TestValidateForSourceManifestFamily/missing_inclusion_reason (0.00s)
+    --- PASS: TestValidateForSourceManifestFamily/absolute_path (0.00s)
+    --- PASS: TestValidateForSourceManifestFamily/bad_digest (0.00s)
+=== RUN   TestValidateForInspectRunsAllSeedSemanticsAfterStructure
+--- PASS: TestValidateForInspectRunsAllSeedSemanticsAfterStructure (0.00s)
+=== RUN   TestValidateForFilterFamilyAndRejectCrossFamily
+--- PASS: TestValidateForFilterFamilyAndRejectCrossFamily (0.00s)
+=== RUN   TestHostTrustPositive
+--- PASS: TestHostTrustPositive (0.00s)
+=== RUN   TestHostTrustMissing
+--- PASS: TestHostTrustMissing (0.00s)
+=== RUN   TestHostTrustRequestSubstitution
+=== RUN   TestHostTrustRequestSubstitution/unapproved-authority
+=== RUN   TestHostTrustRequestSubstitution/claimant-service
+=== RUN   TestHostTrustRequestSubstitution/artifact-producer
+=== RUN   TestHostTrustRequestSubstitution/trust-policy:old
+=== RUN   TestHostTrustRequestSubstitution/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+=== RUN   TestHostTrustRequestSubstitution/trust-store:v3
+=== RUN   TestHostTrustRequestSubstitution/OTHER_METHOD
+=== RUN   TestHostTrustRequestSubstitution/snapshot
+=== RUN   TestHostTrustRequestSubstitution/unprovisioned
+--- PASS: TestHostTrustRequestSubstitution (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/unapproved-authority (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/claimant-service (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/artifact-producer (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/trust-policy:old (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/trust-store:v3 (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/OTHER_METHOD (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/snapshot (0.00s)
+    --- PASS: TestHostTrustRequestSubstitution/unprovisioned (0.00s)
+=== RUN   TestHostTrustProvisioningRejects
+=== RUN   TestHostTrustProvisioningRejects/claimant-service
+=== RUN   TestHostTrustProvisioningRejects/artifact-producer
+=== RUN   TestHostTrustProvisioningRejects/unknown_identities
+--- PASS: TestHostTrustProvisioningRejects (0.00s)
+    --- PASS: TestHostTrustProvisioningRejects/claimant-service (0.00s)
+    --- PASS: TestHostTrustProvisioningRejects/artifact-producer (0.00s)
+    --- PASS: TestHostTrustProvisioningRejects/unknown_identities (0.00s)
+=== RUN   TestHostTrustFrozenEvidence
+--- PASS: TestHostTrustFrozenEvidence (0.00s)
+=== RUN   TestInspectionSchemaBytesMatchCommittedAsset
+--- PASS: TestInspectionSchemaBytesMatchCommittedAsset (0.00s)
+=== RUN   TestValidateInspectionAcceptsValidProjection
+--- PASS: TestValidateInspectionAcceptsValidProjection (0.00s)
+=== RUN   TestValidateAllSeedInspectionAcceptsSemanticallyValidDocument
+--- PASS: TestValidateAllSeedInspectionAcceptsSemanticallyValidDocument (0.00s)
+=== RUN   TestValidateAllSeedInspectionKeepsReferenceNamespacesDistinct
+--- PASS: TestValidateAllSeedInspectionKeepsReferenceNamespacesDistinct (0.00s)
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_label
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/failed_seed_references
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_global_identity
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/unresolved_reference
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_reference
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_dispatch_reference
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/diagnostic_out_of_range
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/membership_label_mismatch
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/nomination_mismatch
+=== RUN   TestValidateAllSeedInspectionRejectsControlledPerturbations/accounting_mismatch
+--- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations (0.01s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_label (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/failed_seed_references (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_global_identity (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/unresolved_reference (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_reference (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/duplicate_dispatch_reference (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/diagnostic_out_of_range (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/membership_label_mismatch (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/nomination_mismatch (0.00s)
+    --- PASS: TestValidateAllSeedInspectionRejectsControlledPerturbations/accounting_mismatch (0.00s)
+=== RUN   TestValidateAllSeedInspectionRejectsOtherInspectionFamily
+--- PASS: TestValidateAllSeedInspectionRejectsOtherInspectionFamily (0.00s)
+=== RUN   TestValidateInspectionRejectsMissingAllSeedAccountingField
+--- PASS: TestValidateInspectionRejectsMissingAllSeedAccountingField (0.00s)
+=== RUN   TestValidateInspectionRejectsMissingAuthority
+--- PASS: TestValidateInspectionRejectsMissingAuthority (0.00s)
+=== RUN   TestValidateInspectionRejectsGraphVersionInPlaceOfInspectionVersion
+--- PASS: TestValidateInspectionRejectsGraphVersionInPlaceOfInspectionVersion (0.00s)
+=== RUN   TestPartitionTypedReferences
+--- PASS: TestPartitionTypedReferences (0.00s)
+=== RUN   TestPartitionTypedReferencesOperandReversal
+--- PASS: TestPartitionTypedReferencesOperandReversal (0.00s)
+=== RUN   TestEmbeddedSchemasMatchCommittedBytes
+--- PASS: TestEmbeddedSchemasMatchCommittedBytes (0.00s)
+=== RUN   TestProducerGeneratedV3PassesLayeredValidation
+--- PASS: TestProducerGeneratedV3PassesLayeredValidation (0.00s)
+=== RUN   TestV3SliceValidatesOptionalTerminalAndUpwardStartEvidenceFieldTypes
+--- PASS: TestV3SliceValidatesOptionalTerminalAndUpwardStartEvidenceFieldTypes (0.00s)
+=== RUN   TestV3SchemaStructurallyAcceptsHistoricalMissingAdditiveProvenance
+--- PASS: TestV3SchemaStructurallyAcceptsHistoricalMissingAdditiveProvenance (0.00s)
+=== RUN   TestProducerGeneratedV3SlicePassesLayeredValidation
+--- PASS: TestProducerGeneratedV3SlicePassesLayeredValidation (0.00s)
+=== RUN   TestStructuralValidationPrecedesV3Semantics
+--- PASS: TestStructuralValidationPrecedesV3Semantics (0.00s)
+=== RUN   TestTrustProvisioningReceiptV1Contract
+    trust_provisioning_receipt_test.go:37: ASSERTION: ASSERT_TRUST_RECEIPT_V1_CONTRACT: V1 accepts exactly the required typed provisioning fields
+--- PASS: TestTrustProvisioningReceiptV1Contract (0.00s)
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning
+    trust_provisioning_receipt_test.go:63: ASSERTION: ASSERT_TRUST_AUTH_INDEPENDENT_PROVISIONING: AUTHENTICATED requires a matching verified receipt provisioned independently of claimant, producer, and bundle
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/unprovisioned_receipt
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/failed_verification
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/policy_mismatch
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/anchor_mismatch
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/claimant_authority
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/producer_authority
+=== RUN   TestTrustAuthenticationRequiresIndependentProvisioning/presented_bundle_channel
+--- PASS: TestTrustAuthenticationRequiresIndependentProvisioning (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/unprovisioned_receipt (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/failed_verification (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/policy_mismatch (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/anchor_mismatch (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/claimant_authority (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/producer_authority (0.00s)
+    --- PASS: TestTrustAuthenticationRequiresIndependentProvisioning/presented_bundle_channel (0.00s)
+=== RUN   TestTrustAdmissionAssignsTypedStatusAfterExactValidation
+    trust_provisioning_receipt_test.go:100: ASSERTION: ASSERT_TRUST_ADMISSION_MISSING_EXPLICIT: absent optional trust material returns MISSING_TRUST without error
+    trust_provisioning_receipt_test.go:100: ASSERTION: ASSERT_TRUST_ADMISSION_INDEPENDENT: claimant-controlled or presented anchors never authenticate
+    trust_provisioning_receipt_test.go:100: ASSERTION: ASSERT_TRUST_ADMISSION_EXACT_SNAPSHOT: receipt, claim, and verifier source snapshot identities must match
+    trust_provisioning_receipt_test.go:100: ASSERTION: ASSERT_TRUST_ADMISSION_IDENTITIES: receipt, policy, anchor, and verification identities match before AUTHENTICATED
+    trust_provisioning_receipt_test.go:100: ASSERTION: ASSERT_TRUST_ADMISSION_GIT_OPTIONAL_TYPED: Git attestation is optional typed snapshot-bound evidence and never trust authority
+--- PASS: TestTrustAdmissionAssignsTypedStatusAfterExactValidation (0.00s)
+=== RUN   TestTrustReceiptAdditionPreservesCommittedGraphSchemaBytes
+    trust_provisioning_receipt_test.go:156: ASSERTION: ASSERT_TRUST_RECEIPT_GRAPH_COMPATIBILITY: committed V2 and V3 canonical schema bytes remain unchanged
+--- PASS: TestTrustReceiptAdditionPreservesCommittedGraphSchemaBytes (0.00s)
+=== RUN   TestValidationCoreRetrievalReturnsIndependentExactBytes
+--- PASS: TestValidationCoreRetrievalReturnsIndependentExactBytes (0.00s)
+=== RUN   TestValidationCoreSeparatesStructureFromFamilySemantics
+--- PASS: TestValidationCoreSeparatesStructureFromFamilySemantics (0.00s)
+=== RUN   TestValidationCoreRejectsForgedStructuralResult
+--- PASS: TestValidationCoreRejectsForgedStructuralResult (0.00s)
+=== RUN   TestValidationCoreHistoricalGraphSemanticsRemainNoOp
+--- PASS: TestValidationCoreHistoricalGraphSemanticsRemainNoOp (0.00s)
+=== RUN   TestValidationCoreConcurrentDeterministicDiagnostics
+--- PASS: TestValidationCoreConcurrentDeterministicDiagnostics (0.01s)
+PASS
+ok  	lsp-trace/internal/schema	0.226s
