@@ -27,10 +27,11 @@
     "command": "node --test --test-name-pattern=<ASSERTION> test/updates-state.test.mjs",
     "assertions": [
       { "id": "ASSERT_UPDATES_STATE_REQUIRES_TYPESCRIPT_OWNED_CURRENT_CLASS_FIELD", "result": "0 !== 2" },
-      { "id": "ASSERT_UPDATES_STATE_EXACT_STATE_PRODUCER_AND_STATE_VALUE_ENDPOINTS", "result": "actual: []" },
-      { "id": "ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR", "result": "actual: []" },
+      { "id": "ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY", "result": "unsupported endpoint properties: symbol, declaration" },
+      { "id": "ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY", "result": "unsupported anchor properties: bytes, text" },
       { "id": "ASSERT_UPDATES_STATE_DETERMINISTIC", "result": "0 !== 2" },
-      { "id": "ASSERT_UPDATES_STATE_REJECTS_LOCAL_AND_UNRESOLVED_THIS_TARGETS", "result": "0 !== 2" },
+      { "id": "ASSERT_UPDATES_STATE_REJECTS_LOCAL_UNRESOLVED_ANY_UNKNOWN_AND_NAME_ONLY_TARGETS", "result": "0 !== 2" },
+      { "id": "ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY", "result": "endpoint node_id absent" },
       { "id": "ASSERT_UPDATES_STATE_STATIC_NON_ENTAILMENTS", "result": "0 !== 2" }
     ]
   },
@@ -44,25 +45,19 @@
     {
       "kind": "UPDATES_STATE",
       "from": {
-        "role": "STATE_PRODUCER",
-        "symbol": "CounterPanel",
-        "declaration": { "start": 6, "end": 18, "text": "CounterPanel" }
+        "node_id": "UPDATES_STATE:state-producer:uri=file:///workspace/updates-state-positive.ts;bytes=6-18",
+        "role": "STATE_PRODUCER"
       },
       "to": {
-        "role": "STATE_VALUE",
-        "symbol": "count",
-        "declaration": { "start": 23, "end": 28, "text": "count" }
+        "node_id": "UPDATES_STATE:state-value:uri=file:///workspace/updates-state-positive.ts;bytes=23-28",
+        "role": "STATE_VALUE"
       },
       "original_anchor": {
+        "document_id": "original",
         "uri": "file:///workspace/updates-state-positive.ts",
-        "bytes": { "start": 101, "end": 113 },
-        "range": { "start": { "row": 6, "column": 4 }, "end": { "row": 6, "column": 16 } },
-        "text": "this.count++"
-      },
-      "resolution": {
-        "provider": "typescript@5.9.2",
-        "operation": "getSymbolAtLocation",
-        "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS"
+        "revision": "3338e63278689bc368055bb450357be0cbb3906e",
+        "blob": "aa6fa3f496e51b54c8a8df5ae7406c58f419736900a396dc182a4d7c3825e086",
+        "range": { "start": { "line": 6, "character": 4 }, "end": { "line": 6, "character": 16 } }
       },
       "supports": ["source_dependency_relation"],
       "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]
@@ -70,25 +65,19 @@
     {
       "kind": "UPDATES_STATE",
       "from": {
-        "role": "STATE_PRODUCER",
-        "symbol": "CounterPanel",
-        "declaration": { "start": 6, "end": 18, "text": "CounterPanel" }
+        "node_id": "UPDATES_STATE:state-producer:uri=file:///workspace/updates-state-positive.ts;bytes=6-18",
+        "role": "STATE_PRODUCER"
       },
       "to": {
-        "role": "STATE_VALUE",
-        "symbol": "enabled",
-        "declaration": { "start": 36, "end": 43, "text": "enabled" }
+        "node_id": "UPDATES_STATE:state-value:uri=file:///workspace/updates-state-positive.ts;bytes=36-43",
+        "role": "STATE_VALUE"
       },
       "original_anchor": {
+        "document_id": "original",
         "uri": "file:///workspace/updates-state-positive.ts",
-        "bytes": { "start": 76, "end": 95 },
-        "range": { "start": { "row": 5, "column": 4 }, "end": { "row": 5, "column": 23 } },
-        "text": "this.enabled = true"
-      },
-      "resolution": {
-        "provider": "typescript@5.9.2",
-        "operation": "getSymbolAtLocation",
-        "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS"
+        "revision": "3338e63278689bc368055bb450357be0cbb3906e",
+        "blob": "aa6fa3f496e51b54c8a8df5ae7406c58f419736900a396dc182a4d7c3825e086",
+        "range": { "start": { "line": 5, "character": 4 }, "end": { "line": 5, "character": 23 } }
       },
       "supports": ["source_dependency_relation"],
       "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]

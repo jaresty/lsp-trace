@@ -22,18 +22,23 @@ const versions = Object.freeze({
 });
 const extractor = createScriptSymbolExtractor({ ts, Parser, TypeScriptLanguages, versions });
 
+function document(name, source) {
+  return {
+    document_id: 'original',
+    uri: `file:///workspace/${name}`,
+    language: 'typescript',
+    revision: '3338e63278689bc368055bb450357be0cbb3906e',
+    blob: createHash('sha256').update(source).digest('hex'),
+    source,
+  };
+}
+
 function fixture(name) {
-  const source = readFileSync(path.join(root, 'fixtures', name), 'utf8');
-  return { uri: `file:///workspace/${name}`, language: 'typescript', source };
+  return document(name, readFileSync(path.join(root, 'fixtures', name), 'utf8'));
 }
 
 function updates(document) {
   return extractor.extract({ documents: [document] }).observations.filter(({ kind }) => kind === 'UPDATES_STATE');
-}
-
-function anchor(source, text) {
-  const start = Buffer.byteLength(source.slice(0, source.indexOf(text)), 'utf8');
-  return { start, end: start + Buffer.byteLength(text, 'utf8'), text };
 }
 
 const positive = fixture('updates-state-positive.ts');
@@ -43,28 +48,36 @@ test('ASSERT_UPDATES_STATE_REQUIRES_TYPESCRIPT_OWNED_CURRENT_CLASS_FIELD', () =>
   assert.equal(updates(positive).length, 2, 'ASSERT_UPDATES_STATE_REQUIRES_TYPESCRIPT_OWNED_CURRENT_CLASS_FIELD');
 });
 
-test('ASSERT_UPDATES_STATE_EXACT_STATE_PRODUCER_AND_STATE_VALUE_ENDPOINTS', () => {
+test('ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY', () => {
   const observations = updates(positive);
-  assert.deepEqual(observations.map(({ from, to }) => ({ from, to })), [
-    {
-      from: { role: 'STATE_PRODUCER', symbol: 'CounterPanel', declaration: anchor(positive.source, 'CounterPanel') },
-      to: { role: 'STATE_VALUE', symbol: 'count', declaration: anchor(positive.source, 'count') },
-    },
-    {
-      from: { role: 'STATE_PRODUCER', symbol: 'CounterPanel', declaration: anchor(positive.source, 'CounterPanel') },
-      to: { role: 'STATE_VALUE', symbol: 'enabled', declaration: anchor(positive.source, 'enabled') },
-    },
-  ], 'ASSERT_UPDATES_STATE_EXACT_STATE_PRODUCER_AND_STATE_VALUE_ENDPOINTS');
+  for (const observation of observations) {
+    assert.deepEqual(Object.keys(observation).sort(), ['does_not_support', 'from', 'kind', 'original_anchor', 'supports', 'to'], 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+    assert.deepEqual(Object.keys(observation.from).sort(), ['node_id', 'role'], 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+    assert.deepEqual(Object.keys(observation.to).sort(), ['node_id', 'role'], 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+    assert.equal(observation.from.role, 'STATE_PRODUCER', 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+    assert.equal(observation.to.role, 'STATE_VALUE', 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+    assert.match(observation.from.node_id, /^UPDATES_STATE:state-producer:uri=file:\/\/\/workspace\/updates-state-positive\.ts;bytes=6-18$/, 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+  }
+  assert.match(observations[0].to.node_id, /:state-value:.*;bytes=23-28$/, 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
+  assert.match(observations[1].to.node_id, /:state-value:.*;bytes=36-43$/, 'ASSERT_UPDATES_STATE_STRICT_ENDPOINTS_PRESERVE_ROLES_AND_DECLARATION_IDENTITY');
 });
 
-test('ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR', () => {
-  assert.deepEqual(updates(positive).map(({ original_anchor }) => ({
-    bytes: original_anchor.bytes,
-    text: original_anchor.text,
-  })), [
-    { bytes: { start: anchor(positive.source, 'this.count++').start, end: anchor(positive.source, 'this.count++').end }, text: 'this.count++' },
-    { bytes: { start: anchor(positive.source, 'this.enabled = true').start, end: anchor(positive.source, 'this.enabled = true').end }, text: 'this.enabled = true' },
-  ], 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR');
+test('ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY', () => {
+  const anchors = updates(positive).map(({ original_anchor }) => original_anchor);
+  assert.deepEqual(anchors.map((value) => Object.keys(value).sort()), [
+    ['blob', 'document_id', 'range', 'revision', 'uri'],
+    ['blob', 'document_id', 'range', 'revision', 'uri'],
+  ], 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+  assert.deepEqual(anchors.map(({ range }) => range), [
+    { start: { line: 6, character: 4 }, end: { line: 6, character: 16 } },
+    { start: { line: 5, character: 4 }, end: { line: 5, character: 23 } },
+  ], 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+  for (const value of anchors) {
+    assert.equal(value.document_id, positive.document_id, 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+    assert.equal(value.uri, positive.uri, 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+    assert.equal(value.revision, positive.revision, 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+    assert.equal(value.blob, positive.blob, 'ASSERT_UPDATES_STATE_EXACT_WRITE_ANCHOR_AND_CUSTODY');
+  }
 });
 
 test('ASSERT_UPDATES_STATE_DETERMINISTIC', () => {
@@ -74,9 +87,23 @@ test('ASSERT_UPDATES_STATE_DETERMINISTIC', () => {
   assert.deepEqual(first, second, 'ASSERT_UPDATES_STATE_DETERMINISTIC');
 });
 
-test('ASSERT_UPDATES_STATE_REJECTS_LOCAL_AND_UNRESOLVED_THIS_TARGETS', () => {
-  assert.equal(updates(positive).length, 2, 'ASSERT_UPDATES_STATE_REJECTS_LOCAL_AND_UNRESOLVED_THIS_TARGETS');
-  assert.deepEqual(updates(negative), [], 'ASSERT_UPDATES_STATE_REJECTS_LOCAL_AND_UNRESOLVED_THIS_TARGETS');
+test('ASSERT_UPDATES_STATE_REJECTS_LOCAL_UNRESOLVED_ANY_UNKNOWN_AND_NAME_ONLY_TARGETS', () => {
+  assert.equal(updates(positive).length, 2, 'ASSERT_UPDATES_STATE_REJECTS_LOCAL_UNRESOLVED_ANY_UNKNOWN_AND_NAME_ONLY_TARGETS');
+  assert.deepEqual(updates(negative), [], 'ASSERT_UPDATES_STATE_REJECTS_LOCAL_UNRESOLVED_ANY_UNKNOWN_AND_NAME_ONLY_TARGETS');
+  const unsafe = document('unsafe.ts', `class State { count = 0; }\nclass Panel { count = 0; apply(anyValue: any, unknownValue: unknown, other: State) { let count = 0; count++; anyValue.count++; (unknownValue as any).count++; other.count++; this.missing++; } }\n`);
+  assert.deepEqual(updates(unsafe), [], 'ASSERT_UPDATES_STATE_REJECTS_LOCAL_UNRESOLVED_ANY_UNKNOWN_AND_NAME_ONLY_TARGETS');
+});
+
+test('ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY', () => {
+  const renamed = document('updates-state-positive.ts', positive.source.replace('CounterPanel', 'RenamedCounterPanel').replace('count = 0', 'total = 0').replace('this.count++', 'this.total++'));
+  const baseline = updates(positive);
+  const changed = updates(renamed);
+  assert.equal(changed.length, 2, 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
+  assert.notEqual(changed[0].from.node_id, baseline[0].from.node_id, 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
+  assert.notEqual(changed[0].to.node_id, baseline[0].to.node_id, 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
+  assert.equal(changed[0].original_anchor.document_id, 'original', 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
+  assert.equal(changed[0].original_anchor.revision, renamed.revision, 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
+  assert.equal(changed[0].original_anchor.blob, renamed.blob, 'ASSERT_UPDATES_STATE_DECLARATION_PERTURBATION_CHANGES_NODE_IDS_NOT_ANCHOR_CUSTODY');
 });
 
 test('ASSERT_UPDATES_STATE_STATIC_NON_ENTAILMENTS', () => {

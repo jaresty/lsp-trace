@@ -62,7 +62,10 @@ function anchorForSpan(document, sourceFile, span) {
 }
 
 function stableObservationKey(observation) {
-  if (['UPDATES_STATE', 'INVOKES_TASK', 'TRIGGERS_RELOAD'].includes(observation.kind)) {
+  if (observation.kind === 'UPDATES_STATE') {
+    return [observation.kind, observation.from.node_id, observation.to.node_id, JSON.stringify(observation.original_anchor.range)].join('\u0000');
+  }
+  if (['INVOKES_TASK', 'TRIGGERS_RELOAD'].includes(observation.kind)) {
     const write = observation.original_anchor;
     return [write.uri, write.bytes.start, write.bytes.end, observation.kind, observation.from.symbol, observation.to.symbol].join('\u0000');
   }
@@ -91,6 +94,26 @@ function sourceAnchor(document, sourceFile, node) {
     },
     text: document.source.slice(start, end),
   };
+}
+
+function providerAnchor(document, sourceFile, node) {
+  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
+  return {
+    document_id: document.document_id,
+    uri: document.uri,
+    revision: document.revision,
+    blob: document.blob,
+    range: {
+      start: { line: start.line, character: start.character },
+      end: { line: end.line, character: end.character },
+    },
+  };
+}
+
+function declarationNodeID(role, document, sourceFile, declaration) {
+  const span = declarationSpan(sourceFile, declaration);
+  return `UPDATES_STATE:${role}:uri=${document.uri};bytes=${span.start}-${span.end}`;
 }
 
 function enclosingClass(ts, node) {
@@ -221,24 +244,20 @@ export function createScriptSymbolExtractor(dependencies) {
                 const symbol = checker.getSymbolAtLocation(target.name);
                 const fieldDeclaration = symbol?.declarations?.find((declaration) => ts.isPropertyDeclaration(declaration));
                 if (fieldDeclaration?.parent === currentClass && byFileName.has(fieldDeclaration.getSourceFile().fileName)) {
+                  const classDeclaration = currentClass.name;
+                  const fieldNameDeclaration = fieldDeclaration.name;
+                  const fieldSourceFile = fieldDeclaration.getSourceFile();
                   const observation = {
                     kind: 'UPDATES_STATE',
                     from: {
+                      node_id: declarationNodeID('state-producer', record.document, sourceFile, classDeclaration),
                       role: 'STATE_PRODUCER',
-                      symbol: currentClass.name.text,
-                      declaration: declarationSpan(sourceFile, currentClass.name),
                     },
                     to: {
+                      node_id: declarationNodeID('state-value', record.document, fieldSourceFile, fieldNameDeclaration),
                       role: 'STATE_VALUE',
-                      symbol: target.name.text,
-                      declaration: declarationSpan(fieldDeclaration.getSourceFile(), fieldDeclaration.name),
                     },
-                    original_anchor: sourceAnchor(record.document, sourceFile, node),
-                    resolution: {
-                      provider: `typescript@${PINNED_ANALYZERS.typescript}`,
-                      operation: 'getSymbolAtLocation',
-                      ownership: 'DECLARATION_PARENT_IS_CURRENT_CLASS',
-                    },
+                    original_anchor: providerAnchor(record.document, sourceFile, node),
                     supports: ['source_dependency_relation'],
                     does_not_support: ['runtime_execution', 'runtime_mutation', 'whole_source_completeness'],
                   };

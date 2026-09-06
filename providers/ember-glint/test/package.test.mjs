@@ -102,6 +102,34 @@ test('ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS', () => {
       assert.equal(reloadResponse.observations.length, expectedCount, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
       if (expectedCount) assert.match(reloadResponse.observations[0].to.node_id, /path=vendor\/warp-drive\/private-model\.d\.ts;symbol=Model\.reload;/, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD');
     }
+
+    for (const [fixture, expectedCount] of [['updates-state-positive.ts', 2], ['updates-state-negative.ts', 0]]) {
+      const stateSeed = path.join(workspace, fixture);
+      writeFileSync(stateSeed, readFileSync(path.join(root, 'fixtures', fixture)));
+      const stateRequest = { ...request, seed: { uri: pathToFileURL(stateSeed).href }, relations: ['UPDATES_STATE'] };
+      const stateBody = Buffer.from(JSON.stringify(stateRequest));
+      const stateRun = spawnSync(path.join(temporary, 'node_modules', '.bin', 'ember-glint'), [], {
+        cwd: workspace,
+        input: Buffer.concat([Buffer.from(`Content-Length: ${stateBody.length}\r\n\r\n`, 'ascii'), stateBody]),
+      });
+      assert.equal(stateRun.status, 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}: stderr=${stateRun.stderr}`);
+      assert.equal(stateRun.stderr.length, 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      const stateSeparator = stateRun.stdout.indexOf('\r\n\r\n');
+      assert.ok(stateSeparator > 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      const stateHeader = stateRun.stdout.subarray(0, stateSeparator).toString('ascii');
+      const stateResponseBody = stateRun.stdout.subarray(stateSeparator + 4);
+      assert.equal(stateResponseBody.length, Number(stateHeader.slice('Content-Length: '.length)), `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      const stateResponse = JSON.parse(stateResponseBody);
+      assert.equal(stateResponse.coverage.status, 'COMPLETE_WITHIN_BOUNDS', `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      assert.equal(stateResponse.failure, undefined, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      assert.equal(stateResponse.observations.length, expectedCount, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE: ${fixture}`);
+      for (const observation of stateResponse.observations) {
+        assert.deepEqual(Object.keys(observation).sort(), ['does_not_support', 'from', 'kind', 'original_anchor', 'supports', 'to'], 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE');
+        assert.deepEqual(Object.keys(observation.from).sort(), ['node_id', 'role'], 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE');
+        assert.deepEqual(Object.keys(observation.to).sort(), ['node_id', 'role'], 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE');
+        assert.equal(observation.original_anchor.revision, request.document_custody.workspace_revision.value, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_UPDATES_STATE');
+      }
+    }
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
