@@ -1,9 +1,18 @@
 # PRD: Revision-Bound Structural Graph Evidence and Analysis
 
-**Status:** Revised proposal  
+**Status:** Revised proposed target contract; not an implementation-completion or qualification declaration
+
 **Product:** `lsp-trace`  
 **Audience:** Maintainers and downstream structural-graph consumers  
-**Supersedes:** The initial revision-bound structural graph proposal  
+**Supersedes:** The initial revision-bound structural graph proposal (proposal lineage only)
+
+**Inventory baseline:** `217fbb8` (2026-09-06)
+
+**Revision basis:** Original PRD blob `2645f5685b5fa5b1495188b18c9ba23371671a01` at `81b70e3`, unchanged at the inventory baseline.
+
+Approval of documentation revisions does not adopt the target contract, amend accepted ADRs, authorize the proposed next implementation milestone, or accept a delivery program. Adoption, normative amendment, and acceptance each require an explicit maintainer decision bound to the exact document/code revision, policy versions, evidence, and scope. Until then, requirement language below describes the proposed target, not delivered capability.
+
+[ADR 0001](adr/0001-technical-evidence-packet-projections.md) and [ADR 0002](adr/0002-deterministic-seed-evidence-filtering.md) retain their accepted claim ceilings: inspection and set projection do not authenticate source or execution, increase native evidence authority, establish independent support, or adjudicate feature identity. New custody and analytical contracts must be independently versioned and explicitly adopted; this PRD does not reinterpret historical graph, inspection, filter, validation, or verification semantics.
 
 ## 1. Summary
 
@@ -18,9 +27,9 @@ Infomap, Leiden, and community-boundary reporting remain a later program gated b
 
 `lsp-trace` will continue to describe attributable structural evidence. It will not infer product features, business entities, runtime execution, or whole-source completeness from language-server output.
 
-## 2. Current foundation
+## 2. Foundation inventory — 2026-09-06, baseline `217fbb8`
 
-The current repository already provides:
+This inventory describes the pinned repository, not any currently installed binary, provider, or live host configuration. The baseline provides these bounded foundations:
 
 - deterministic bounded incoming traversal and outgoing-then-incoming slices;
 - canonical caller-to-callee edge orientation;
@@ -33,22 +42,28 @@ The current repository already provides:
 - retained TypeScript and C# qualification evidence;
 - explicit blocked ElixirLS qualification evidence.
 
-The current repository does not yet provide:
+Additional implemented precursors at this baseline include:
 
-- authenticated repository revision claims;
-- custody for every source file contributing retained graph evidence;
-- portable or revision-scoped semantic symbol identity;
-- a single normalized lossless relation export;
-- a first-class graph projection contract;
-- general graph analytics beyond bounded traversal and cycle counting;
-- distinct retained JavaScript qualification;
-- V3 qualification covering the proposed source and analysis artifacts.
+- `lsp-trace.graph.v4` and normalized provider relations (`internal/schema/schemas/lsp-trace.graph.v4.schema.json`, `internal/graph/relations.go`), retaining original evidence anchors rather than replacing their authority;
+- host-provisioned provider collection and admission (`internal/provider/`, `docs/PROVIDERS.md`), with blocked diagnostics and partial relation coverage preserved by `217fbb8`;
+- generic shared-operation and CLI/MCP parity infrastructure (`internal/operation/`, `internal/mcpcontract/`), not qualification of the proposed analytics;
+- trust-provisioning, source-denominator, qualification-policy, support, and matrix validation primitives (`internal/schema/trust_provisioning_receipt.go`, `internal/schema/denominator.go`, `internal/qualificationpolicy/`, `internal/relations/support.go`, `internal/qualificationmatrix/`). Their presence is not independent operational proof or proof of complete production integration.
+
+The baseline does **not establish completion** of:
+
+- independently authenticated revision claims or custody for every contributing input;
+- portable or revision-scoped semantic identity and acquisition/logical identity separation under FR5–FR6;
+- FR6 lossless heterogeneous occurrence reconstruction, FR7 validated support dependence, or FR8 digest-bound analytical projection policy; graph.v4 normalized relations are a bounded precursor, not equivalence to `lsp-trace.relations.v1`;
+- the proposed offline analytical artifact families or their qualified CLI/MCP operations;
+- exact language/provider/version/native-input acceptance, including distinct JavaScript obligations, or integrated qualification of the proposed source and analysis artifacts.
+
+Existing SCC-based cycle accounting is not publication of weak/strong components or a condensation DAG. Program admission must be established by the normative matrix, not inferred from package names, tests, schemas, or successful artifact delivery.
 
 ## 3. Problem
 
-Current `lsp-trace` artifacts preserve deterministic language-server evidence, but downstream consumers must reconstruct source identity, relation normalization, projection choices, and analytical provenance themselves.
+The original proposal identified the gaps below in the earlier call-hierarchy foundation. They remain the problem statement, not a claim that every precursor is absent at `217fbb8`: §2 records subsequent bounded implementation. Downstream consumers still need a qualified public contract for source identity, lossless normalization, projection choices, and analytical provenance.
 
-Specific limitations are:
+Original limitations motivating the target contract are:
 
 - source identity is limited to successfully resolved seed URI/content-digest pairs;
 - `source_revision` and related provenance are caller-asserted;
@@ -129,7 +144,7 @@ The product must distinguish:
 7. **Producer authentication:** optional signature or external custody proving who published an artifact.
 8. **Provider evidence:** what a named language server reported during a named execution.
 
-A digest alone proves integrity relative to itself; it does not authenticate the truth, origin, revision, or producer of the bytes.
+A digest alone proves integrity relative to itself; it does not authenticate the truth, origin, revision, or producer of the bytes. Copying a caller revision into a provider request, response, or graph retains caller authority; it is not provider verification. A separately attributable provider assertion must remain distinct from independent authentication. Hashing materialized bytes alone does not prove membership in the claimed revision: that requires evidence binding those bytes to the independently verified revision/tree or equivalent attestation. Package name, version, path, and hash identify and bind materialized inputs, not authenticated package origin.
 
 Authentication states are closed and machine-validated:
 
@@ -204,7 +219,8 @@ Publish `lsp-trace.source-manifest.v1` with:
 - source classification;
 - inclusion reason;
 - provider and execution references;
-- typed exclusions and failures.
+- typed exclusions and failures;
+- effective compiler configuration, inherited options and their configuration inputs, project references, declaration inputs, and analyzer overrides, with source receipts or immutable references sufficient to reconstruct the effective analysis environment.
 
 Hash every file contributing a retained node, endpoint range, call-site occurrence, dispatch/type/document association, or source-attributable diagnostic.
 
@@ -250,7 +266,9 @@ UNSUPPORTED
 NOT_REQUESTED
 ```
 
-Include provider response or error evidence and request accounting.
+Include provider response or error evidence and request accounting. Retain the effective compiler configuration, inherited options, project references, declaration inputs, analyzer overrides, and their provenance for each execution; distinguish requested configuration from the configuration actually used. Copied caller revision metadata remains `CALLER_ASSERTED`, provider assertions remain attributable provider evidence, and independent authentication requires the §6 chain. A package name/version/path/hash binding alone is not authenticated origin.
+
+Analysis-only defaults are not categorically prohibited. Their policy and version, effective values, changes from native configuration, and evidence scope must be explicit and evaluated under the qualification policy. Modified source, substituted declarations, or modeled configuration must not be accepted as an unmodified-native run.
 
 #### Retained qualification status
 
@@ -285,14 +303,14 @@ No aggregate `complete=true` may obscure an incomplete, unsupported, failed, par
 
 Define and test these layers:
 
-1. **Node occurrence ID:** exact repository, revision context, source receipt, path, range, and provider-reported symbol occurrence.
+1. **Node occurrence ID:** exact source collection and snapshot context, source receipt, path, range, and provider-reported symbol occurrence; revision context is optional typed attestation, not a Git prerequisite.
 2. **Portable locator:** language-aware locator used only for best-effort matching; includes normalization method and version.
-3. **Revision-scoped semantic ID:** identity within one authenticated revision under a named derivation policy.
+3. **Revision-scoped semantic ID:** identity within one authenticated snapshot under a named derivation policy, with an explicit revision-attestation policy when a VCS revision is claimed.
 4. **Cross-revision correspondence:** explicit evidence-bearing relation with `MATCHED`, `AMBIGUOUS`, `REJECTED`, or `UNRESOLVED` status.
-5. **Relation occurrence ID:** exact acquisition/evidence occurrence, including execution, revision context, acquisition method, and call-site occurrence where applicable.
-6. **Logical relation ID:** optional deduplicated semantic endpoints, relation kind, direction, and explicit revision policy.
+5. **Relation occurrence ID:** exact acquisition/evidence occurrence, including execution, snapshot context, optional revision attestation, acquisition method, and call-site occurrence where applicable.
+6. **Logical relation ID:** deduplicated semantic endpoints, relation kind, direction, and explicit snapshot/revision policy; optional during evidence collection, but mandatory for every record explicitly published as a logical relation under FR6 and for its linked occurrences.
 
-Absolute filesystem URI must not be the only repository identity input.
+Collection may retain unresolved or ungrouped occurrences without asserting logical identity; such records must remain explicitly typed and must not masquerade as published logical relations. Git is an optional custody adapter, not an identity requirement. Absolute filesystem URI must not be the only source-collection identity input.
 
 Existing node and relation IDs remain historical V2/V3 identities. Correct the documentation/code inconsistency by documenting existing IDs exactly and introducing new IDs at a new schema boundary.
 
@@ -609,6 +627,8 @@ Qualify, where supported:
 
 A fixture does not establish PASS. A companion provider must not replace, rewrite, or upgrade blocked native-provider evidence.
 
+Report these separately: artifact delivery (a result was retained), graph coverage (under its declared denominator and bounds), deployment integrity (the executed binary/provider/configuration matches the deployment claim), synthetic or modeled qualification (predicates passed in that declared environment), and native acceptance (the exact native-input/provider/operation policy is satisfied). None substitutes for another. Native acceptance requires retained effective compiler configuration, inherited options, project references, declaration inputs, and analyzer overrides, including their origins and changes. Modified or modeled inputs are not unmodified-native acceptance; analysis-only defaults are admissible only within an explicit policy and evidence scope, not by retroactively treating every default as forbidden or silently native.
+
 ### FR19. Cross-family domain neutrality
 
 Domain neutrality is a semantic invariant over every public schema, field, enum, diagnostic, relation, projection, path, component, metric, ranking result, community result, boundary report, CLI rendering, MCP envelope, error, and generated documentation artifact. Public output must not assert product-feature, service, business-entity, ownership, or business-boundary identity from structural evidence. Opaque caller-supplied annotations may contain domain terms only when provenance marks them `CALLER_ASSERTED` and `NON_AUTHORITATIVE`.
@@ -755,6 +775,10 @@ Publish `lsp-trace.qualification-matrix-profile.v1`, an independently governed n
 The gate defines a versioned set of non-waivable foundational cells, including independently anchored custody, source-receipt foreign keys, identity compatibility, occurrence-provenance reconstruction, denominator validation with exact-match `PASS` extractor qualification, minimum support-dependence grouping, operation-registry parity, and neutrality validation for every artifact family and transport published by the Program-B admission milestone. Deferred families are outside this cell until publication; each deferred family has an equivalent non-waivable neutrality gate before its schema, CLI, MCP, or generated documentation becomes public. Other cells may carry an `APPROVED_WAIVER` only when the waiver names its exact generated tuples, rationale, an approving principal authorized by an independently authenticated verifier-side waiver policy, distinct from the artifact producer and evidence producer, with a foreign-keyed policy provisioning receipt, a bounded expiry or objectively testable revalidation condition, and specific blocked claims and operations. A waiver cannot claim `PASS`, cannot hide `BLOCKED`, and is invalid after expiry. Validators and command admission must enforce the blocked claims and operations. Companion-provider evidence cannot replace a native-provider cell.
 
 `PROGRAM_B_ADMITTED` is the single gate predicate used by both Program-B entry and first-milestone completion. It is true only when every non-waivable cell is `PASS`, every other required cell is `PASS` or has a currently valid `APPROVED_WAIVER`, all required real-server evidence is retained, and no requested Program-B operation depends on a claim or operation blocked by a waiver. Program B remains disabled otherwise.
+
+B05 provider admission's `all_requested_relations_supported` flag is not `PROGRAM_B_ADMITTED`. No equivalence may be claimed without a checked mapping from the exact B05 evidence and policy versions to the normative profile's generated tuples and pass predicates. Provider support is not substrate acceptance.
+
+Generic graph algorithms have no blanket Ember prerequisite. The independently governed profile must retain every non-waivable foundational cell and specify operation-specific qualified dependencies; native-provider requirements cannot be removed by an implementation or replaced by companion evidence. A generic operation may proceed only after `PROGRAM_B_ADMITTED` validates for its declared scope and no dependency is blocked. This clarification is not an alternative admission route or a waiver of AC12.
 
 ### Program B: Deterministic structural analysis
 
@@ -975,3 +999,24 @@ The first milestone is complete exactly when `PROGRAM_B_ADMITTED` is true. The v
 11. registry-defined CLI/MCP parity and cross-family domain neutrality.
 
 No PageRank, PPR, Infomap, or Leiden implementation is required for this milestone. Its purpose is to make every later analytical result trustworthy and unambiguous.
+
+Neither artifact delivery nor B05 `all_requested_relations_supported` establishes completion of this milestone. Acceptance requires a revision-bound decision supported by the checked normative matrix mapping in A4; this document records no such acceptance.
+
+## 21. Remaining work and proposed next milestone
+
+### Remaining-work inventory
+
+- Close contributing-input custody and effective-configuration provenance gaps, with independent authentication and operational integration evidence.
+- Complete FR5–FR7 identity separation, heterogeneous occurrence reconstruction, canonical upstream provenance, and support-dependence validation rather than treating normalized provider records as the finished substrate.
+- Adopt and qualify the versioned projection, operation-registry, denominator, trust, and matrix policies; retain exact native and modeled evidence separately and prove CLI/MCP/offline enforcement.
+- Deliver and qualify the FR9–FR11 analytical artifacts, replay/resource contracts, and transport parity. Shortest paths, capped enumeration and explicit path diversity, structural metrics, PageRank, and PPR remain required for Program B completion. Program C remains deferred.
+
+### PROPOSED: Versioned analytical projection and first topology operations
+
+This is a sequencing proposal for maintainer approval, **not approved implementation work or a declaration of Program A/B qualification**. Preserve §20 as the substrate-admission milestone; do not replace it with a smaller algorithm demonstration.
+
+After its prerequisites and `PROGRAM_B_ADMITTED` are satisfied, the proposed next increment would publish an explicit versioned analytical projection contract under FR8, then deterministic incoming/outgoing reachability, bounded neighborhoods, weak and strong components, and condensation. Projection policy and output must bind the exact admitted graph digest, direction, multiedges, weights, self-loops, unresolved endpoints, exclusions, and frontier handling. Component membership and condensation edges require canonical ordering and attributable relation witnesses; existing SCC cycle accounting does not satisfy this publication contract.
+
+Require offline CLI/MCP execution over the same shared operations, schemas, semantic validators, canonical results, and digests; include inline/immutable publication parity, corruption and policy-mismatch rejection, empty/disconnected/self-loop/multiedge fixtures, deterministic replay, and typed resource-limit outcomes. Inputs must satisfy custody, occurrence reconstruction, support accounting, denominator-claim, compatibility, and neutrality obligations. Qualification must cover the exact operations, projection classes, and native/provider dependencies selected by the independently governed matrix, without a blanket Ember dependency or any admission bypass.
+
+Before authorizing this increment, maintainers must record the exact projection/operation versions, normative matrix mapping and dependency scope, qualification policy and evidence scope for analysis-only defaults, and revision-bound acceptance authority. This proposal neither drops the remaining FR9 paths/path-diversity requirements nor FR10 metrics or FR11 PageRank/PPR, and it does not accelerate deferred communities.
