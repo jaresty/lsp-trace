@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -43,13 +44,23 @@ test('ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS', () => {
 
   const temporary = mkdtempSync(path.join(tmpdir(), 'ember-glint-install-'));
   try {
-    const [{ filename }] = JSON.parse(execFileSync('npm', ['pack', '--json', '--pack-destination', temporary], { cwd: root, encoding: 'utf8' }));
-    execFileSync('npm', ['install', '--ignore-scripts', '--offline', path.join(temporary, filename)], { cwd: temporary, stdio: 'pipe' });
+    const [packed] = JSON.parse(execFileSync('npm', ['pack', '--json', '--pack-destination', temporary], { cwd: root, encoding: 'utf8' }));
+    const tarball = path.join(temporary, packed.filename);
+    const sha256 = (value) => createHash('sha256').update(value).digest('hex');
+    assert.equal(sha256(readFileSync(tarball)).length, 64, 'ASSERT_PACK_INSTALL_CUSTODY_TARBALL_DIGEST');
+    assert.match(packed.integrity, /^sha512-/, 'ASSERT_PACK_INSTALL_CUSTODY_NPM_INTEGRITY');
+    assert.match(packed.shasum, /^[0-9a-f]{40}$/, 'ASSERT_PACK_INSTALL_CUSTODY_NPM_SHASUM');
+    execFileSync('npm', ['install', '--ignore-scripts', '--offline', tarball], { cwd: temporary, stdio: 'pipe' });
     const installed = path.join(temporary, 'node_modules', '@lsp-trace', 'ember-glint-provider');
     assert.deepEqual(runtimeFiles(installed).filter((name) => name !== 'package.json').sort(), allowed.filter((name) => name !== 'package.json'), 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     const manifest = JSON.parse(readFileSync(path.join(installed, 'package.json'), 'utf8'));
+    assert.equal(manifest.version, '1.0.1', 'ASSERT_PACK_INSTALL_CUSTODY_VERSION');
     assert.equal(manifest.bin['ember-glint'], './bin/ember-glint.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     assert.equal(manifest.exports['.'], './default-analyzer.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
+    const installedAnalyzer = path.join(installed, 'analyzers', 'source-constrained-typescript.mjs');
+    assert.equal(realpathSync(installedAnalyzer), realpathSync(path.dirname(installedAnalyzer)) + path.sep + path.basename(installedAnalyzer), 'ASSERT_PACK_INSTALL_CUSTODY_ANALYZER_REALPATH');
+    assert.equal(sha256(readFileSync(installedAnalyzer)), sha256(readFileSync(path.join(root, 'analyzers', 'source-constrained-typescript.mjs'))), 'ASSERT_PACK_INSTALL_CUSTODY_ANALYZER_DIGEST');
+    assert.equal(sha256(readFileSync(path.join(installed, 'bin', 'ember-glint.mjs'))), sha256(readFileSync(path.join(root, 'bin', 'ember-glint.mjs'))), 'ASSERT_PACK_INSTALL_CUSTODY_EXECUTABLE_DIGEST');
 
     const workspace = path.join(temporary, 'workspace');
     mkdirSync(workspace);

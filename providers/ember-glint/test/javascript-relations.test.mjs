@@ -35,6 +35,17 @@ for (const [fixture, relation] of [
   });
 }
 
+test('ASSERT_GJS_SOURCE_CONSTRAINED_RELATIONS_FAIL_CLOSED', async () => {
+  const result = await analyzeSourceConstrainedTypeScript({
+    documents: [{ uri: pathToFileURL(join(root, 'unsupported.gjs')).href, revision: commit }],
+    relation_kinds: ['INVOKES_TASK', 'TRIGGERS_RELOAD'],
+  });
+  assert.equal(result.outcome, 'UNAVAILABLE');
+  assert.equal(result.coverage.status, 'UNKNOWN');
+  assert.equal(result.coverage.reason, 'SOURCE_CONSTRAINED_INPUT_NOT_SUPPORTED');
+  assert.deepEqual(result.observations, []);
+});
+
 for (const [fixture, relation, blocker] of [
   ['invokes-task-any.js', 'INVOKES_TASK', /unsafe compiler identity:/],
   ['invokes-task-unresolved.js', 'INVOKES_TASK', /bounded checker failure: TS2307/],

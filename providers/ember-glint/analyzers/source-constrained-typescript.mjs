@@ -275,7 +275,13 @@ function analyzeOther(kind, node, checker, sourceFile, uri) {
 export async function analyzeSourceConstrainedTypeScript(request) {
   const input = request.documents?.[0];
   const uri = input?.uri;
-  if (!uri?.startsWith('file://') || !/\.(?:js|ts|gts)$/.test(uri)) throw new Error('source-constrained JavaScript or TypeScript file seed required');
+  if (!uri?.startsWith('file://') || !/\.(?:js|ts|gts)$/.test(uri)) {
+    return {
+      outcome: 'UNAVAILABLE',
+      observations: [],
+      coverage: { status: 'UNKNOWN', reason: 'SOURCE_CONSTRAINED_INPUT_NOT_SUPPORTED' },
+    };
+  }
   const requested = new Set(request.relation_kinds || []);
   if (![...requested].some(kind => ['INVOKES_TASK', 'TRIGGERS_RELOAD', 'PASSES_CALLBACK', 'UPDATES_STATE', 'RENDERS_FROM'].includes(kind))) {
     return { outcome: 'EMPTY', observations: [], coverage: { status: 'BOUNDED', denominator: [uri], covered: [uri] } };

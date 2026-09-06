@@ -142,6 +142,27 @@ named('ASSERT_STRICT_COLLECTOR_PRESERVES_RELATION_NON_ENTAILMENTS', async () => 
   }
 });
 
+named('ASSERT_STRICT_ANALYZER_THROW_IS_ONE_STRUCTURED_FAILURE', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ember-glint-throw-'));
+  const path = join(directory, 'app.js');
+  await writeFile(path, 'export {};', 'utf8');
+  try {
+    const analyzer = Object.freeze({
+      id: 'throwing@1', languages: ['glimmer-js'], frameworks: ['ember'], relationKinds: ['INVOKES_TASK'],
+      async analyze() { throw new Error('diagnostic witness'); },
+    });
+    const response = await createProvider({ analyzers: [analyzer] }).handle({
+      schema_version: 'lsp-trace.provider-collector-request.v1', provider_id: PROVIDER_IDENTITY,
+      adapter_id: 'lsp-trace-observation-adapter@1', session: { session_id: 'throw', generation: 1 },
+      seed: { uri: pathToFileURL(path).href }, relations: ['INVOKES_TASK'], languages: ['glimmer-js'], frameworks: ['ember'],
+      document_custody: { workspace_revision: { kind: 'content', value: 'r1' } }, limits: { max_nodes: 10, request_timeout_ms: 1000 },
+    });
+    assert.equal(response.failure, 'TRANSPORT_FAILED');
+    assert.equal(response.coverage.status, 'UNKNOWN');
+    assert.deepEqual(response.observations, []);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 named('ASSERT_UNSUPPORTED_RELATION_EXPLICIT_NOT_EMPTY_SUCCESS', async () => {
   const unsupported = await createProvider({ analyzers: [] }).handle({ ...request, relation_kinds: ['UNSUPPORTED_RUNTIME_CALL'] });
   assert.equal(unsupported.outcome, 'UNAVAILABLE');

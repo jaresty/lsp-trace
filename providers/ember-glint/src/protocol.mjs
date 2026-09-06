@@ -134,6 +134,14 @@ function freezeMetadata(records) {
   });
 }
 
+async function settleAnalyzer(analyzer, request, options) {
+  try {
+    return { value: await analyzer.analyze(request, options) };
+  } catch (error) {
+    return { error };
+  }
+}
+
 async function strictCollectorResponse(request, records) {
   const allowed = new Set(['schema_version', 'provider_id', 'adapter_id', 'session', 'seed', 'relations', 'languages', 'frameworks', 'document_custody', 'limits']);
   if (!plainObject(request) || request.schema_version !== 'lsp-trace.provider-collector-request.v1' || Object.keys(request).some((key) => !allowed.has(key))) {
@@ -154,16 +162,21 @@ async function strictCollectorResponse(request, records) {
   let failure;
   let coverage = { status: 'UNKNOWN', denominator: [uri], covered: [], CoveredCount: 0 };
   if (eligible.length === 1) {
-    const result = await eligible[0].analyzer.analyze({ schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source, position: Number.isInteger(request.seed.line) && Number.isInteger(request.seed.character) ? { line: request.seed.line, character: request.seed.character } : undefined }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
-    const genericNonEntailments = ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'];
-    observations = result.observations.map((observation) => ({
-      ...observation,
-      supports: strings([...strings(observation.supports ?? [], 'observation.supports'), 'source_dependency_relation'], 'observation.supports'),
-      does_not_support: strings([...strings(observation.does_not_support ?? [], 'observation.does_not_support'), ...genericNonEntailments], 'observation.does_not_support'),
-    }));
-    if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
-    else if (result.outcome === 'BOUNDED' || result.outcome === 'PARTIAL') coverage = { status: 'PARTIAL', denominator: [uri], covered: [], CoveredCount: 0 };
-    else failure = result.outcome === 'UNAVAILABLE' ? 'ADAPTER_NOT_AVAILABLE' : 'TRANSPORT_FAILED';
+    const settled = await settleAnalyzer(eligible[0].analyzer, { schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source, position: Number.isInteger(request.seed.line) && Number.isInteger(request.seed.character) ? { line: request.seed.line, character: request.seed.character } : undefined }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
+    if (settled.error) {
+      failure = 'TRANSPORT_FAILED';
+    } else {
+      const result = settled.value;
+      const genericNonEntailments = ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'];
+      observations = result.observations.map((observation) => ({
+        ...observation,
+        supports: strings([...strings(observation.supports ?? [], 'observation.supports'), 'source_dependency_relation'], 'observation.supports'),
+        does_not_support: strings([...strings(observation.does_not_support ?? [], 'observation.does_not_support'), ...genericNonEntailments], 'observation.does_not_support'),
+      }));
+      if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
+      else if (result.outcome === 'BOUNDED' || result.outcome === 'PARTIAL') coverage = { status: 'PARTIAL', denominator: [uri], covered: [], CoveredCount: 0 };
+      else failure = result.outcome === 'UNAVAILABLE' ? 'ADAPTER_NOT_AVAILABLE' : 'TRANSPORT_FAILED';
+    }
   } else {
     failure = 'RELATION_NOT_SUPPORTED';
   }
@@ -225,9 +238,7 @@ export function createProvider({ analyzers = [] } = {}) {
       const selected = eligible[0];
       const controller = new AbortController();
       let timer;
-      const analysis = Promise.resolve()
-        .then(() => selected.analyzer.analyze(request, Object.freeze({ signal: controller.signal })))
-        .then((value) => ({ value }), (error) => ({ error }));
+      const analysis = settleAnalyzer(selected.analyzer, request, Object.freeze({ signal: controller.signal }));
       const timeout = new Promise((resolve) => {
         timer = setTimeout(() => {
           controller.abort();
