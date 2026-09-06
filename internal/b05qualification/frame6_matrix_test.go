@@ -50,8 +50,8 @@ func TestFrame6ExactQualificationMatrix(t *testing.T) {
 	if m.SchemaVersion != "lsp-trace.b05-qualification-matrix.v2" {
 		t.Fatal("ASSERT_B05_FRAME6_MATRIX_SCHEMA")
 	}
-	if len(m.Seeds) != 10 {
-		t.Fatalf("ASSERT_B05_FRAME6_EXACT_TEN_SEEDS: %d", len(m.Seeds))
+	if len(m.Seeds) != 12 {
+		t.Fatalf("ASSERT_B05_FRAME6_EXACT_TWELVE_SEEDS: %d", len(m.Seeds))
 	}
 	pairs := map[string]map[string]bool{}
 	for _, s := range m.Seeds {
@@ -71,13 +71,13 @@ func TestFrame6ExactQualificationMatrix(t *testing.T) {
 		}
 		pairs[s.Relation][s.Polarity] = true
 	}
-	for _, r := range []string{"PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"} {
+	for _, r := range []string{"BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"} {
 		if !pairs[r]["positive"] || !pairs[r]["confusable_negative"] || len(pairs[r]) != 2 {
 			t.Fatalf("ASSERT_B05_FRAME6_RELATION_POLARITY_PAIR: %s", r)
 		}
 	}
-	if len(m.Attempts) != 20 {
-		t.Fatalf("ASSERT_B05_FRAME6_EXACT_TWENTY_ATTEMPTS: %d", len(m.Attempts))
+	if len(m.Attempts) != 24 {
+		t.Fatalf("ASSERT_B05_FRAME6_EXACT_TWENTY_FOUR_ATTEMPTS: %d", len(m.Attempts))
 	}
 	seen := map[string]bool{}
 	for _, a := range m.Attempts {
@@ -105,7 +105,7 @@ func TestFrame6ExactQualificationMatrix(t *testing.T) {
 			t.Fatalf("ASSERT_B05_FRAME6_EXPECTED_OUTCOME: %s", a.ID)
 		}
 	}
-	if len(m.Stages) != 20 {
+	if len(m.Stages) != 24 {
 		t.Fatalf("ASSERT_B05_FRAME6_FOUR_STAGES_PER_RELATION: %d", len(m.Stages))
 	}
 	if m.ProviderPackageSHA256 == "" || m.ProviderExecutableSHA256 == "" {

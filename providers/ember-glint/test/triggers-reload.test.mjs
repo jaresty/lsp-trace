@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const root = new URL('../', import.meta.url);
@@ -13,7 +13,7 @@ const perturb = process.env.TRIGGERS_RELOAD_PERTURB;
 const assertions = Object.freeze({
   seedPair: 'ASSERT_TRIGGERS_RELOAD_SEEDS_SHARE_SPELLING_BUT_NOT_TARGET',
   qualifiedIdentity: 'ASSERT_TRIGGERS_RELOAD_REQUIRES_QUALIFIED_EMBER_DATA_TARGET',
-  blockedAdvertisement: 'ASSERT_TRIGGERS_RELOAD_BLOCKED_IS_NOT_ADVERTISED_OR_WIRED',
+  productionAdvertisement: 'ASSERT_TRIGGERS_RELOAD_QUALIFIED_RELATION_IS_ADVERTISED_AND_WIRED',
 });
 
 function report(assertion, result) {
@@ -53,10 +53,13 @@ test(assertions.qualifiedIdentity, () => {
   report(assertions.qualifiedIdentity, 'PASS');
 });
 
-test(assertions.blockedAdvertisement, () => {
-  const observedAnalyzer = perturb === 'advertise' ? `${analyzer}\n'TRIGGERS_RELOAD'` : analyzer;
-  assert.doesNotMatch(observedAnalyzer, /['"]TRIGGERS_RELOAD['"]/);
-  assert.doesNotMatch(defaultAnalyzer, /['"]TRIGGERS_RELOAD['"]/);
-  assert.equal(existsSync(new URL('analyzers/triggers-reload.mjs', root)), false);
-  report(assertions.blockedAdvertisement, 'PASS');
+test(assertions.productionAdvertisement, () => {
+  const observedAnalyzer = perturb === 'omit-production-wiring'
+    ? defaultAnalyzer.replaceAll("'TRIGGERS_RELOAD'", "'OMITTED_RELOAD'")
+    : defaultAnalyzer;
+  assert.match(observedAnalyzer, /['"]TRIGGERS_RELOAD['"]/);
+  assert.equal(existsSync(new URL('analyzers/source-constrained-typescript.mjs', root)), true);
+  assert.match(defaultAnalyzer, /analyzeSourceConstrainedTypeScript/);
+  assert.match(analyzer, /createAnalyzer/);
+  report(assertions.productionAdvertisement, 'PASS');
 });

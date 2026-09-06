@@ -15,9 +15,10 @@
     "./glint": "./analyzers/glint.mjs",
     "./passes-callback": "./analyzers/passes-callback.mjs",
     "./renders-from": "./renders-from-analyzer.mjs",
+    "./source-constrained-typescript": "./analyzers/source-constrained-typescript.mjs",
     "./custody": "./analyzers/custody.cjs"
   },
-  "files": ["bin", "src", "analyzers", "analyzer.mjs", "default-analyzer.mjs", "renders-from-analyzer.mjs", "README.md"],
+  "files": ["bin", "src", "analyzers", "fixtures/source-constrained-synthetic", "analyzer.mjs", "default-analyzer.mjs", "renders-from-analyzer.mjs", "README.md"],
   "scripts": {
     "test": "node --test test/*.test.mjs"
   },

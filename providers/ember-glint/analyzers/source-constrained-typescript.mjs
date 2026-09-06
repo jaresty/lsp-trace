@@ -4,25 +4,23 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
-export const IDENTITY = 'source-constrained-synthetic-provider';
-export const VERSION = '1.0.0';
-export const EVIDENCE_CLASS = 'SOURCE_CONSTRAINED_SYNTHETIC';
-export const DISCOVERY_STATUS = 'PROVISIONAL_DISCOVERY';
+export const IDENTITY = 'ember-glint';
+export const VERSION = '1';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const fixtureRoot = join(packageRoot, 'fixtures/source-constrained-synthetic');
 const sha256 = value => createHash('sha256').update(value).digest('hex');
-const relations = ['PASSES_CALLBACK', 'INVOKES_TASK', 'TRIGGERS_RELOAD', 'UPDATES_STATE', 'RENDERS_FROM'];
-const roles = { PASSES_CALLBACK: ['CALLABLE_REFERENCE', 'CALLBACK_PARAMETER'], INVOKES_TASK: ['TASK_INVOCATION', 'TASK'], TRIGGERS_RELOAD: ['RELOAD_REQUEST', 'RELOAD_TARGET'], UPDATES_STATE: ['STATE_PRODUCER', 'STATE_VALUE'], RENDERS_FROM: ['RENDER_EXPRESSION', 'READ_VALUE'] };
-export const metadata = Object.freeze({ identity: IDENTITY, version: VERSION, selectable: true, selection: 'EXPLICIT_ONLY', evidence_class: EVIDENCE_CLASS, discovery_status: DISCOVERY_STATUS, capabilities: { relations, languages: ['typescript'], frameworks: ['source-constrained-synthetic'] } });
+const relations = ['INVOKES_TASK', 'TRIGGERS_RELOAD'];
+const roles = { INVOKES_TASK: ['TASK_INVOCATION', 'TASK'], TRIGGERS_RELOAD: ['RELOAD_REQUEST', 'RELOAD_TARGET'] };
 
 let verified;
 async function verifyPackage() {
   if (verified) return verified;
-  const provenanceBytes = await readFile(join(packageRoot, 'provenance.json'));
+  const provenanceBytes = await readFile(join(fixtureRoot, 'provenance.json'));
   const provenance = JSON.parse(provenanceBytes);
   if (provenance.compiler?.version !== ts.version) throw new Error(`compiler provenance mismatch: expected ${provenance.compiler?.version}, got ${ts.version}`);
   const inputs = [provenance.config, ...Object.values(provenance.packages).flatMap(pkg => pkg.declarations)];
   for (const input of inputs) {
-    const bytes = await readFile(join(packageRoot, input.path));
+    const bytes = await readFile(join(fixtureRoot, input.path));
     if (sha256(bytes) !== input.sha256) throw new Error(`packaged input digest mismatch: ${input.path}`);
   }
   verified = { provenance };
@@ -52,13 +50,13 @@ function hasBaseNamed(type, checker, target, seen = new Set()) {
 function ancestor(node, predicate) { for (let current = node.parent; current; current = current.parent) if (predicate(current)) return current; return null; }
 
 function makeProgram(seedPath) {
-  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, baseUrl: packageRoot, paths: { 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
+  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, baseUrl: fixtureRoot, paths: { 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
   const host = ts.createCompilerHost(options);
   host.resolveModuleNames = (names, containingFile) => names.map(name => {
-    if (name === './model/-private/model.js' && containingFile.endsWith('/vendor/warp-drive/model.d.ts')) return { resolvedFileName: join(packageRoot, 'vendor/warp-drive/private-model.d.ts'), extension: ts.Extension.Dts, isExternalLibraryImport: true };
+    if (name === './model/-private/model.js' && containingFile.endsWith('/vendor/warp-drive/model.d.ts')) return { resolvedFileName: join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts'), extension: ts.Extension.Dts, isExternalLibraryImport: true };
     return ts.resolveModuleName(name, containingFile, options, host).resolvedModule;
   });
-  return ts.createProgram([seedPath, join(packageRoot, 'vendor/ember-concurrency/index.d.ts'), join(packageRoot, 'vendor/warp-drive/model.d.ts'), join(packageRoot, 'vendor/warp-drive/private-model.d.ts')], options, host);
+  return ts.createProgram([seedPath, join(fixtureRoot, 'vendor/ember-concurrency/index.d.ts'), join(fixtureRoot, 'vendor/warp-drive/model.d.ts'), join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts')], options, host);
 }
 function declaredTypeAliasName(expression, checker) {
   const symbol = checker.getSymbolAtLocation(expression);
@@ -79,7 +77,7 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance) {
   const symbol = checker.getSymbolAtLocation(access.name);
   const declaration = declarationIdentity(symbol, checker);
   if (!declaration) return null;
-  const declarationPath = relative(packageRoot, declaration.sourceFile.fileName).replaceAll('\\', '/');
+  const declarationPath = relative(fixtureRoot, declaration.sourceFile.fileName).replaceAll('\\', '/');
   const source = exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: checker.typeToString(receiverType) });
   if (kind === 'INVOKES_TASK') {
     const expected = provenance.relations.INVOKES_TASK;
@@ -108,13 +106,13 @@ function analyzeOther(kind, node, checker, sourceFile, uri) {
   return null;
 }
 
-export async function analyze(request) {
-  if (request.provider_id !== `${IDENTITY}@${VERSION}`) throw new Error('explicit provider identity required');
-  const uri = request.seed?.uri;
-  if (!uri?.startsWith('file://') || !uri.endsWith('.ts')) throw new Error('source-constrained TypeScript file seed required');
+export async function analyzeSourceConstrainedTypeScript(request) {
+  const input = request.documents?.[0];
+  const uri = input?.uri;
+  if (!uri?.startsWith('file://') || !/\.(?:ts|gts)$/.test(uri)) throw new Error('source-constrained TypeScript file seed required');
   const seedPath = fileURLToPath(uri);
   const sourceBytes = await readFile(seedPath);
-  const commit = request.document_custody?.workspace_revision?.commit || request.document_custody?.workspace_revision?.value;
+  const commit = input.revision;
   if (!/^[0-9a-f]{40}$/.test(commit || '')) throw new Error('strict git commit required');
   const { provenance } = await verifyPackage();
   const program = makeProgram(seedPath);
@@ -125,7 +123,7 @@ export async function analyze(request) {
   const checker = program.getTypeChecker();
   const documentID = 'qualification-seed';
   const observations = [];
-  const requested = new Set(request.relations || []);
+  const requested = new Set(request.relation_kinds || []);
   function visit(node) {
     for (const kind of requested) {
       let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, sourceFile, uri, provenance) : analyzeOther(kind, node, checker, sourceFile, uri);
@@ -136,8 +134,5 @@ export async function analyze(request) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  return { provider: { name: IDENTITY, version: VERSION }, protocol: { name: 'lsp-trace.provider-observations', version: '1' }, adapter: { name: 'lsp-trace-observation-adapter', version: '1' }, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, authority: 'PROVIDER_REPORTED', coverage: { Status: 'COMPLETE_WITHIN_BOUNDS', Denominator: [documentID], Covered: [documentID], CoveredCount: 1 }, documents: [{ document_id: documentID, original_uri: uri, content_sha256: sha256(sourceBytes), revision: { kind: 'git', value: commit, blob: sha256(sourceBytes), custody: 'PROVIDER_PROVED' }, coordinates: 'ORIGINAL' }], observations };
+  return { outcome: observations.length === 0 ? 'EMPTY' : 'COMPLETE', observations, coverage: { status: 'BOUNDED', denominator: [uri], covered: [uri] } };
 }
-
-export function decodeFrame(buffer) { const i = buffer.indexOf('\r\n\r\n'); if (i < 0) throw new Error('framing'); const h = buffer.subarray(0, i).toString(); if (!/^Content-Length: (0|[1-9]\d*)$/.test(h)) throw new Error('framing'); const body = buffer.subarray(i + 4); if (body.length !== Number(h.slice(16))) throw new Error('length'); return JSON.parse(body); }
-export function encodeFrame(value) { const body = Buffer.from(JSON.stringify(value)); return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body]); }

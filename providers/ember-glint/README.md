@@ -13,6 +13,12 @@ npm link --prefix ./providers/ember-glint
 
 The executable is `ember-glint`, with stable provider identity `ember-glint@1`. It performs no downloads or executable discovery.
 
+## Qualified relation inventory
+
+The executable is the single current provider authority for `BINDS_ARGUMENT`, `INVOKES_TASK`, `PASSES_CALLBACK`, `RENDERS_FROM`, `TRIGGERS_RELOAD`, and `UPDATES_STATE`. Its metadata is derived from the same composed analyzer used for requests, so automatic and explicit selection observe the same complete set.
+
+The source-constrained TypeScript projects and pinned declaration inputs now live under `fixtures/source-constrained-synthetic/`. They are packaged inputs to qualification, not a separately selectable provider. Historical qualification records that name `source-constrained-synthetic-provider@1.0.0` remain immutable records of their original execution.
+
 ## Analyzer boundary
 
 Framework semantics remain inside this package. The pinned analyzer stack uses Ember Template Compiler, Glint, TypeScript, and Tree-sitter only within retained qualification ceilings. Missing Glint configuration is `BLOCKED`/unavailable, never an empty relation result.

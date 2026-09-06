@@ -16,7 +16,7 @@ package_digest=$(shasum -a 256 "$package" | cut -d' ' -f1)
 provider_target=$(realpath "$provider")
 provider_digest=$(shasum -a 256 "$provider_target" | cut -d' ' -f1)
 cd "$root"
-LSP_TRACE_EXTERNAL_PROVIDER_PATH="$provider" B05_FRAME6_COMMIT_FILE="$tmp/workspace-commit" go test ./cmd/lsp-trace-mcp -run TestProductionMCPB05TwentyAttemptQualification -count=1 -v
+LSP_TRACE_EXTERNAL_PROVIDER_PATH="$provider" B05_FRAME6_COMMIT_FILE="$tmp/workspace-commit" go test ./cmd/lsp-trace-mcp -run TestProductionMCPB05TwentyFourAttemptQualification -count=1 -v
 commit=$(tr -d '\n' < "$tmp/workspace-commit")
 B05_WORKSPACE_COMMIT="$commit" B05_PROVIDER_PACKAGE_SHA256="sha256:$package_digest" B05_PROVIDER_EXECUTABLE_SHA256="sha256:$provider_digest" ./scripts/build-b05-frame6-matrix.py
 go test ./internal/b05qualification -run TestFrame6ExactQualificationMatrix -count=1 -v

@@ -9,9 +9,15 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const allowed = [
   'README.md', 'analyzer.mjs', 'analyzers/custody.cjs', 'analyzers/glint.mjs',
-  'analyzers/passes-callback.mjs', 'analyzers/script.mjs', 'analyzers/template.mjs',
-  'bin/ember-glint.mjs', 'default-analyzer.mjs', 'package.json',
-  'renders-from-analyzer.mjs', 'src/protocol.mjs',
+  'analyzers/passes-callback.mjs', 'analyzers/script.mjs',
+  'analyzers/source-constrained-typescript.mjs', 'analyzers/template-relations.mjs', 'analyzers/template.mjs',
+  'bin/ember-glint.mjs', 'default-analyzer.mjs',
+  'fixtures/source-constrained-synthetic/provenance.json',
+  'fixtures/source-constrained-synthetic/tsconfig.json',
+  'fixtures/source-constrained-synthetic/vendor/ember-concurrency/index.d.ts',
+  'fixtures/source-constrained-synthetic/vendor/warp-drive/model.d.ts',
+  'fixtures/source-constrained-synthetic/vendor/warp-drive/private-model.d.ts',
+  'package.json', 'renders-from-analyzer.mjs', 'src/protocol.mjs',
 ];
 
 function runtimeFiles(directory, prefix = '') {

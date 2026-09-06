@@ -25,8 +25,13 @@ test('ASSERT_PACKAGE_PINNED_TEMPLATE_AND_SCRIPT_ANALYZERS', () => {
 });
 
 test('ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING', () => {
-  const first = analyzer.analyze({ kind: 'glint', glintConfigAvailable: true, projectDirectory: root });
-  const second = analyzer.analyze({ kind: 'glint', glintConfigAvailable: true, projectDirectory: root });
+  const request = {
+    kind: 'glint', glintConfigAvailable: true, projectDirectory: root, file: 'fixtures/component.gts',
+    position: { line: 14, character: 14 },
+    range: { start: { line: 14, character: 9 }, end: { line: 14, character: 23 } },
+  };
+  const first = analyzer.analyze(request);
+  const second = analyzer.analyze(request);
   assert.deepEqual(first, second, 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
   assert.equal(first.status, 'SCOPED_ROLE', 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
   assert.deepEqual(first.observations.map(({ kind }) => kind), ['TYPED_TEMPLATE_DEFINITION'], 'ASSERT_PACKAGE_FROZEN_GLINT_SCOPED_RELATION_EXACT_MAPPING');
@@ -40,7 +45,11 @@ test('ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED', () => {
   const invalid = createGlintAnalyzer({
     loadConfig() { throw new Error('invalid Glint config'); },
     analyzeProject() { throw new Error('must not analyze invalid config'); },
-  }).analyze({ projectDirectory: root });
+  }).analyze({
+    projectDirectory: root, file: 'fixtures/component.gts',
+    position: { line: 14, character: 14 },
+    range: { start: { line: 14, character: 9 }, end: { line: 14, character: 23 } },
+  });
   assert.equal(invalid.status, 'BLOCKED', 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
   assert.equal(invalid.reason, 'GLINT_ANALYSIS_UNAVAILABLE', 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
   assert.deepEqual(invalid.observations, [], 'ASSERT_PACKAGE_INVALID_GLINT_CONFIG_EXPLICIT_BLOCKED');
