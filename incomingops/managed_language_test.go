@@ -71,6 +71,20 @@ func (s managedLanguageStarter) Start(context.Context, managedprocess.Spec) (ses
 	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
 
+type managedLanguageSequenceStarter struct {
+	children []*managedLanguageChild
+	next     int
+}
+
+func (s *managedLanguageSequenceStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	if s.next >= len(s.children) {
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartFailed}
+	}
+	child := s.children[s.next]
+	s.next++
+	return child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
+}
+
 func managedLanguageProfile(t *testing.T, workspace string) runtimeprofile.Profile {
 	t.Helper()
 	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: workspace, Profile: "typescript", EnvironmentReference: "local"})
@@ -118,6 +132,66 @@ func TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation(t *te
 	frame := <-child.frames
 	if frame.Method != "textDocument/didOpen" || !json.Valid(frame.Params) || !containsJSON(frame.Params, `"uri":"`+uri+`"`, `"languageId":"javascript"`) {
 		t.Fatalf("%s: first_document_frame=%s params=%s", assertion, frame.Method, frame.Params)
+	}
+}
+
+func TestManagedRestartOpensFreshDocumentWithGenerationLanguage(t *testing.T) {
+	const assertion = "ASSERT_FR11_RESTART_FRESH_DIDOPEN_EFFECTIVE_LANGUAGE"
+	workspace := t.TempDir()
+	path := filepath.Join(workspace, "calls.js")
+	if err := os.WriteFile(path, []byte("function calls() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uri, err := source.FileURI(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := newManagedLanguageChild(), newManagedLanguageChild()
+	starter := &managedLanguageSequenceStarter{children: []*managedLanguageChild{first, second}}
+	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 1, MaxTombstones: 2, MaxObservations: 32, MaxOperations: 2}, Starter: starter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: managedLanguageProfile(t, workspace)})
+	ready := manager.BeginReadiness(context.Background(), started.SessionID, 1, time.Now().Add(time.Second))
+	if terminal, ok := manager.WaitReadiness(context.Background(), ready.ID); !ok || terminal.Failure != "" {
+		t.Fatalf("%s: first readiness=%+v found=%t", assertion, terminal, ok)
+	}
+	<-first.frames
+	<-first.frames
+	opened := manager.PrepareDocument(context.Background(), sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: 1, URI: uri, LanguageID: "typescript"})
+	if opened.Failure != "" {
+		t.Fatalf("%s: first open=%+v", assertion, opened)
+	}
+	<-first.frames
+
+	restart := manager.Restart(context.Background(), started.SessionID, "restart-language-test")
+	if restart.Failure != "" {
+		t.Fatalf("%s: restart=%+v", assertion, restart)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		operation, ok := manager.Operation(restart.IntentID)
+		if ok && operation.State != sessionruntime.OperationPending {
+			if operation.State != sessionruntime.OperationComplete {
+				t.Fatalf("%s: restart operation=%+v", assertion, operation)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s: restart did not complete", assertion)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	<-second.frames
+	<-second.frames
+	fresh := manager.PrepareDocument(context.Background(), sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: 2, URI: uri})
+	if fresh.Failure != "" || fresh.LanguageID != "javascript" || fresh.Version != 1 {
+		t.Fatalf("%s: generation_two_prepare=%+v", assertion, fresh)
+	}
+	frame := <-second.frames
+	if frame.Method != "textDocument/didOpen" || !containsJSON(frame.Params, `"languageId":"javascript"`, `"version":1`) {
+		t.Fatalf("%s: generation_two_frame=%s params=%s", assertion, frame.Method, frame.Params)
 	}
 }
 

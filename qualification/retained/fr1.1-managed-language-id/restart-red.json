@@ -1,0 +1,9 @@
+{"Time":"2026-09-06T11:33:23.094631-07:00","Action":"start","Package":"lsp-trace/incomingops"}
+{"Time":"2026-09-06T11:33:23.43767-07:00","Action":"run","Package":"lsp-trace/incomingops","Test":"TestManagedRestartOpensFreshDocumentWithGenerationLanguage"}
+{"Time":"2026-09-06T11:33:23.43771-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedRestartOpensFreshDocumentWithGenerationLanguage","Output":"=== RUN   TestManagedRestartOpensFreshDocumentWithGenerationLanguage\n"}
+{"Time":"2026-09-06T11:33:23.439513-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedRestartOpensFreshDocumentWithGenerationLanguage","Output":"    managed_language_test.go:190: ASSERT_FR11_RESTART_FRESH_DIDOPEN_EFFECTIVE_LANGUAGE: generation_two_prepare={URI: LanguageID: Version:0 Failure:LIFECYCLE_CONFLICT}\n"}
+{"Time":"2026-09-06T11:33:23.439736-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedRestartOpensFreshDocumentWithGenerationLanguage","Output":"--- FAIL: TestManagedRestartOpensFreshDocumentWithGenerationLanguage (0.00s)\n"}
+{"Time":"2026-09-06T11:33:23.439743-07:00","Action":"fail","Package":"lsp-trace/incomingops","Test":"TestManagedRestartOpensFreshDocumentWithGenerationLanguage","Elapsed":0}
+{"Time":"2026-09-06T11:33:23.439754-07:00","Action":"output","Package":"lsp-trace/incomingops","Output":"FAIL\n"}
+{"Time":"2026-09-06T11:33:23.44012-07:00","Action":"output","Package":"lsp-trace/incomingops","Output":"FAIL\tlsp-trace/incomingops\t0.345s\n"}
+{"Time":"2026-09-06T11:33:23.440134-07:00","Action":"fail","Package":"lsp-trace/incomingops","Elapsed":0.346}

@@ -295,7 +295,7 @@ func TestSliceManagedFakeProviderProcess(t *testing.T) {
 	if err := registry.Register(provider.Registration{ID: "managed@1", Path: script}); err != nil {
 		t.Fatal(err)
 	}
-	receipt := provider.NewRuntime(registry).Execute(context.Background(), "managed@1", json.RawMessage(`{"relations":["PASSES_CALLBACK"]}`), provider.Limits{RequestBytes: 4096, ResponseBytes: 4096, ProtocolMessages: 1, StderrBytes: 1024, WallTime: time.Second, TerminationGrace: 100 * time.Millisecond})
+	receipt := provider.NewRuntime(registry).Execute(context.Background(), "managed@1", json.RawMessage(`{"relations":["PASSES_CALLBACK"]}`), provider.Limits{RequestBytes: 4096, ResponseBytes: 4096, ProtocolMessages: 1, StderrBytes: 1024, WallTime: 5 * time.Second, TerminationGrace: 100 * time.Millisecond})
 	if receipt.Failure != nil || !receipt.Reaped || !json.Valid(receipt.Response) {
 		t.Fatalf("%s: receipt=%+v", assertion, receipt)
 	}

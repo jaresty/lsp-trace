@@ -289,6 +289,27 @@ func TestFailedTerminationRemainsQueryableAndPoisoned(t *testing.T) {
 	}
 }
 
+func TestFailedRestartRetainsCurrentGenerationDocumentState(t *testing.T) {
+	starter := &sequenceStarter{children: []Child{referenceChild{}}}
+	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 8, MaxOperations: 1}, Starter: starter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	want := openDocument{languageID: "javascript", version: 3, digest: [32]byte{1, 2, 3}}
+	m.sessions[started.SessionID].documents["file:///workspace/calls.js"] = want
+
+	accepted := m.Restart(context.Background(), started.SessionID, "failed-restart-document-state")
+	failed := waitOperation(t, m, accepted.IntentID, OperationFailed)
+	r := m.sessions[started.SessionID]
+	if failed.Failure != session.SpawnFailure || r.record.Generation != 1 || r.record.State != session.Poisoned {
+		t.Fatalf("ASSERT_FR11_FAILED_RESTART_RETAINS_GENERATION: operation=%+v record=%+v", failed, r.record)
+	}
+	if got := r.documents["file:///workspace/calls.js"]; got != want {
+		t.Fatalf("ASSERT_FR11_FAILED_RESTART_RETAINS_DOCUMENT_STATE: got=%+v want=%+v", got, want)
+	}
+}
+
 type recordingWriteCloser struct {
 	io.WriteCloser
 	events chan string

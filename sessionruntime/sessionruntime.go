@@ -1040,7 +1040,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		return
 	}
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
-	r.pending, r.requests, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), 0, false, false
+	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
 	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")
 	m.mu.Unlock()
