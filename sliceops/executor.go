@@ -156,7 +156,7 @@ func decorate(result *graph.Result, in request, metadata sessionruntime.SessionM
 		outgoingRelations[i] = e.RelationID
 	}
 	result.Slice = &graph.SliceEvidence{StartMode: in.StartMode, SourceURI: in.URI, DownDepth: in.DownDepth, UpDepth: in.UpDepth, StartingNodeIDs: append([]string(nil), d.StartNodeIDs...), Layers: layers, FrontierNodeIDs: frontier, OutgoingTerminalNodeIDs: itemIDs(d.OutgoingTerminalItems), UpwardStartNodeIDs: itemIDs(d.UpwardStartItems), OutgoingRelationIDs: outgoingRelations, TraversalComplete: d.TraversalComplete}
-	preparedIDs := itemIDs(prepared)
+	preparedIDs := append([]string(nil), d.StartNodeIDs...)
 	reachedNodes := make([]string, len(result.Nodes))
 	for i, n := range result.Nodes {
 		reachedNodes[i] = n.ID

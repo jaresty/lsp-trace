@@ -112,6 +112,17 @@ func TestDiscoverCanonicalizesAliasesAcrossOutgoingResponses(t *testing.T) {
 	}
 }
 
+func TestDiscoverRejectsMalformedOutgoingNodeWithoutPublishingEvidence(t *testing.T) {
+	root := callItem("surveyControl", 1)
+	malformed := callItem("", 2)
+	got := DiscoverPrepared(context.Background(), &fakeClient{outgoing: map[string][]lsp.CallHierarchyOutgoingCall{
+		"surveyControl": {{To: malformed}},
+	}}, []lsp.CallHierarchyItem{root}, Options{DownDepth: 1})
+	if got.Complete || len(got.Nodes) != 1 || len(got.Edges) != 0 || len(got.Diagnostics) != 1 || got.Diagnostics[0].Phase != "slice-outgoing" || got.Diagnostics[0].NodeID != got.Nodes[0].ID {
+		t.Fatalf("ASSERT_SLICE_MALFORMED_OUTGOING_NODE_REJECTED_WITHOUT_EVIDENCE: %#v", got)
+	}
+}
+
 func TestDiscoverDoesNotCollapseConfusableOrAmbiguousSymbols(t *testing.T) {
 	base := callItem("shared", 3)
 	differentURI := base

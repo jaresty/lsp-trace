@@ -209,6 +209,55 @@ func TestSliceReconcilesIncomingAliasToOutgoingPresentation(t *testing.T) {
 	}
 }
 
+func TestSliceRejectedPreparedSeedDoesNotPublishDanglingMembership(t *testing.T) {
+	const assertion = "ASSERT_SLICE_REJECTED_PREPARED_SEED_MEMBERSHIP_REFERENCES_PUBLISHED_NODE"
+	root := `{"name":"surveyControl","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":0,"character":0},"end":{"line":4,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":13}},"data":{"surface":"prepare"}}`
+	malformedPrepared := `{"name":"","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":5,"character":0},"end":{"line":7,"character":1}},"selectionRange":{"start":{"line":5,"character":0},"end":{"line":5,"character":1}},"data":{"surface":"prepare-rejected"}}`
+	leaf := `{"name":"loadQuestions","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":8,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":8,"character":0},"end":{"line":8,"character":13}},"data":{"surface":"outgoing"}}`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:":        {Result: json.RawMessage(`[` + root + `,` + malformedPrepared + `]`)},
+		"callHierarchy/outgoingCalls:surveyControl": {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]}]`)},
+		"callHierarchy/outgoingCalls:loadQuestions": {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:loadQuestions": {Result: json.RawMessage(`[]`)},
+	}}
+
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if failure != nil {
+		t.Fatalf("%s: failure=%v calls=%v", assertion, failure, f.calls)
+	}
+	var got struct {
+		Nodes           []graph.Node           `json:"nodes"`
+		SeedMemberships []graph.SeedMembership `json:"seed_memberships"`
+		Diagnostics     []graph.Diagnostic     `json:"diagnostics"`
+	}
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatalf("%s: unmarshal=%v artifact=%s", assertion, err, result.Artifact)
+	}
+	published := map[string]bool{}
+	for _, node := range got.Nodes {
+		published[node.ID] = true
+	}
+	for _, membership := range got.SeedMemberships {
+		if (membership.EvidenceKind == "PREPARED_TARGET" || membership.EvidenceKind == "REACHED_NODE") && !published[membership.EndpointID] {
+			t.Fatalf("%s: dangling=%q nodes=%#v memberships=%#v", assertion, membership.EndpointID, got.Nodes, got.SeedMemberships)
+		}
+	}
+	if calls := strings.Join(f.calls, ","); !strings.Contains(calls, "callHierarchy/outgoingCalls:surveyControl") || !strings.Contains(calls, "callHierarchy/outgoingCalls:loadQuestions") || !strings.Contains(calls, "callHierarchy/incomingCalls:loadQuestions") {
+		t.Fatalf("%s: raw traversal calls=%v", assertion, f.calls)
+	}
+	foundRejectedPrepare := false
+	for _, diagnostic := range got.Diagnostics {
+		foundRejectedPrepare = foundRejectedPrepare || (diagnostic.Phase == "slice-prepare" && strings.Contains(diagnostic.Message, "missing item name"))
+	}
+	if !foundRejectedPrepare {
+		t.Fatalf("%s: rejected prepare diagnostic missing: %#v", assertion, got.Diagnostics)
+	}
+	second, secondFailure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if secondFailure != nil || string(second.Artifact) != string(result.Artifact) {
+		t.Fatalf("ASSERT_SLICE_REJECTED_PREPARED_DETERMINISTIC_REPLAY: failure=%v first=%s second=%s", secondFailure, result.Artifact, second.Artifact)
+	}
+}
+
 func TestSliceMalformedIncomingCallerPublishesReferenceClosedResult(t *testing.T) {
 	const assertion = "ASSERT_SLICE_MALFORMED_INCOMING_BOUNDARY_REFERENCES_PUBLISHED_NODE"
 	root := `{"name":"surveyControl","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":0,"character":0},"end":{"line":4,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":13}},"data":{"surface":"prepare"}}`
