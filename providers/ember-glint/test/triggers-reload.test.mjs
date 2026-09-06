@@ -1,65 +1,77 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { pathToFileURL } from 'node:url';
 
-const root = new URL('../', import.meta.url);
-const positive = readFileSync(new URL('fixtures/triggers-reload-positive.ts', root), 'utf8');
-const negative = readFileSync(new URL('fixtures/triggers-reload-negative.ts', root), 'utf8');
-const packageLock = JSON.parse(readFileSync(new URL('package-lock.json', root), 'utf8'));
-const analyzer = readFileSync(new URL('analyzer.mjs', root), 'utf8');
-const defaultAnalyzer = readFileSync(new URL('default-analyzer.mjs', root), 'utf8');
-const perturb = process.env.TRIGGERS_RELOAD_PERTURB;
+import { analyzeSourceConstrainedTypeScript } from '../analyzers/source-constrained-typescript.mjs';
 
-const assertions = Object.freeze({
-  seedPair: 'ASSERT_TRIGGERS_RELOAD_SEEDS_SHARE_SPELLING_BUT_NOT_TARGET',
-  qualifiedIdentity: 'ASSERT_TRIGGERS_RELOAD_REQUIRES_QUALIFIED_EMBER_DATA_TARGET',
-  productionAdvertisement: 'ASSERT_TRIGGERS_RELOAD_QUALIFIED_RELATION_IS_ADVERTISED_AND_WIRED',
-});
+const commit = '5567ec8e28dcea18067e23b32e4ff238fdffd218';
 
-function report(assertion, result) {
-  console.log(JSON.stringify({ guard: 'providers/ember-glint/test/triggers-reload.test.mjs', assertion, result }));
+function requestFor(path) {
+  return { documents: [{ uri: pathToFileURL(path).href, revision: commit }], relation_kinds: ['TRIGGERS_RELOAD'] };
 }
 
-function qualifiesReload({ method, receiverPackage, declarationPackage }) {
-  if (perturb === 'name-only') return method === 'reload';
-  return method === 'reload'
-    && receiverPackage === '@ember-data/model'
-    && declarationPackage === '@ember-data/model';
+async function analyze(source) {
+  const directory = await mkdtemp(join(tmpdir(), 'triggers-reload-'));
+  const path = join(directory, 'seed.ts');
+  await writeFile(path, source);
+  try {
+    return await analyzeSourceConstrainedTypeScript(requestFor(path));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
-test(assertions.seedPair, () => {
-  const observedNegative = perturb === 'seed-confusion'
-    ? negative.replace('class LocalCache', "import Model from '@ember-data/model';\nclass LocalCache extends Model")
-    : negative;
-  assert.match(positive, /from '@ember-data\/model'/);
-  assert.match(positive, /\.reload\(\)/);
-  assert.match(observedNegative, /class LocalCache/);
-  assert.doesNotMatch(observedNegative, /from '@ember-data\/model'/);
-  assert.match(observedNegative, /\.reload\(\)/);
-  report(assertions.seedPair, 'PASS');
+const directPersonReload = `
+import Model from '@ember-data/model';
+class Person extends Model {}
+export function refresh(person: Person) { return person.reload(); }
+`;
+
+const compilerBackedNegatives = {
+  'local same-spelling': `class LocalCache { reload() { return this; } }\nnew LocalCache().reload();`,
+  'name-only': `const reload = () => undefined; reload();`,
+  any: `declare const value: any; value.reload();`,
+  'wrong declaration parent': `class WrongParent { reload() { return this; } }\ndeclare const value: WrongParent; value.reload();`,
+  'wrong declaration path': `class Model { reload() { return this; } }\ndeclare const value: Model; value.reload();`,
+};
+
+test('ASSERT_TRIGGERS_RELOAD_COMPILER_ACCEPTS_EXACT_PINNED_MODEL_RELOAD', async () => {
+  const result = await analyze(directPersonReload);
+  assert.equal(result.outcome, 'COMPLETE');
+  assert.equal(result.observations.length, 1);
+  const observation = result.observations[0];
+  assert.equal(observation.kind, 'TRIGGERS_RELOAD');
+  assert.match(observation.to.node_id, /path=vendor\/warp-drive\/private-model\.d\.ts;symbol=Model\.reload;sha256=2f02d0909d25249d0b404015762c6c593e51dfa3ff7993d0f0a6f07be15dd37b;/);
+  assert.equal(observation.original_anchor.document_id, 'original');
+  assert.equal(observation.original_anchor.uri.startsWith('file:'), true);
+  assert.equal(observation.original_anchor.revision, commit);
 });
 
-test(assertions.qualifiedIdentity, () => {
-  const nameOnly = { method: 'reload' };
-  const emberData = {
-    method: 'reload',
-    receiverPackage: '@ember-data/model',
-    declarationPackage: '@ember-data/model',
-  };
-  assert.equal(qualifiesReload(nameOnly), false, 'method spelling alone must not qualify');
-  assert.equal(qualifiesReload(emberData), true, 'both receiver and declaration package identity are required');
-  const rootDependencies = packageLock.packages?.['']?.dependencies ?? {};
-  assert.equal(rootDependencies['@ember-data/model'], undefined, 'pinned tooling does not provide qualified Ember Data model declarations');
-  report(assertions.qualifiedIdentity, 'PASS');
+test('ASSERT_TRIGGERS_RELOAD_COMPILER_REJECTS_NON_IDENTITIES', async () => {
+  for (const [name, source] of Object.entries(compilerBackedNegatives)) {
+    const result = await analyze(source);
+    assert.equal(result.outcome, 'EMPTY', name);
+    assert.deepEqual(result.observations, [], name);
+  }
 });
 
-test(assertions.productionAdvertisement, () => {
-  const observedAnalyzer = perturb === 'omit-production-wiring'
-    ? defaultAnalyzer.replaceAll("'TRIGGERS_RELOAD'", "'OMITTED_RELOAD'")
-    : defaultAnalyzer;
-  assert.match(observedAnalyzer, /['"]TRIGGERS_RELOAD['"]/);
-  assert.equal(existsSync(new URL('analyzers/source-constrained-typescript.mjs', root)), true);
-  assert.match(defaultAnalyzer, /analyzeSourceConstrainedTypeScript/);
-  assert.match(analyzer, /createAnalyzer/);
-  report(assertions.productionAdvertisement, 'PASS');
+test('ASSERT_TRIGGERS_RELOAD_REJECTS_UNKNOWN_AND_UNRESOLVED_CHECKER_INPUT', async () => {
+  await assert.rejects(() => analyze(`declare const value: unknown; value.reload();`), /bounded checker failure/);
+  await assert.rejects(() => analyze(`missing.reload();`), /bounded checker failure/);
+});
+
+test('ASSERT_TRIGGERS_RELOAD_IDS_ANCHORS_AND_FRAMING_ARE_DETERMINISTIC', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'triggers-reload-deterministic-'));
+  const path = join(directory, 'seed.ts');
+  await writeFile(path, directPersonReload);
+  try {
+    const first = await analyzeSourceConstrainedTypeScript(requestFor(path));
+    const second = await analyzeSourceConstrainedTypeScript(requestFor(path));
+    assert.deepEqual(first, second);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

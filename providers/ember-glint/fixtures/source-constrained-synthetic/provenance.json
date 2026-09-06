@@ -31,10 +31,8 @@
       "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unresolved declaration"]
     },
     "TRIGGERS_RELOAD": {
-      "receiver": "UserImportModel",
       "member_declaration": "@warp-drive/legacy@5.8.1:Model.reload",
-      "collection_provenance": "source-declared UserImportModel[] element",
-      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unsupported collection element", "unresolved declaration"]
+      "negative_boundaries": ["marker-only", "same-spelling unrelated method", "name-only", "any receiver", "unknown receiver", "wrong declaration parent", "wrong declaration path", "wrong declaration digest", "unresolved declaration"]
     }
   },
   "evidence_basis": "TypeScript 5.9.2 checker-resolved source call, receiver type, member declaration, and packaged declaration anchors",

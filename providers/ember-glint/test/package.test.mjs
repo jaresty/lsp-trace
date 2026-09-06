@@ -79,6 +79,29 @@ test('ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS', () => {
     assert.equal(response.observations.length, 1, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
     assert.equal(response.observations[0].kind, 'INVOKES_TASK', 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
     assert.match(response.observations[0].to.node_id, /package=ember-concurrency@5\.2\.0;path=vendor\/ember-concurrency\/index\.d\.ts;symbol=AbstractTask\.perform;/, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+
+    for (const [fixture, expectedCount] of [['triggers-reload-positive.ts', 1], ['triggers-reload-negative.ts', 0]]) {
+      const reloadSeed = path.join(workspace, fixture);
+      writeFileSync(reloadSeed, readFileSync(path.join(root, 'fixtures', fixture)));
+      const reloadRequest = { ...request, seed: { uri: pathToFileURL(reloadSeed).href }, relations: ['TRIGGERS_RELOAD'] };
+      const reloadBody = Buffer.from(JSON.stringify(reloadRequest));
+      const reloadRun = spawnSync(path.join(temporary, 'node_modules', '.bin', 'ember-glint'), [], {
+        cwd: workspace,
+        input: Buffer.concat([Buffer.from(`Content-Length: ${reloadBody.length}\r\n\r\n`, 'ascii'), reloadBody]),
+      });
+      assert.equal(reloadRun.status, 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}: stderr=${reloadRun.stderr}`);
+      assert.equal(reloadRun.stderr.length, 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      const reloadSeparator = reloadRun.stdout.indexOf('\r\n\r\n');
+      assert.ok(reloadSeparator > 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      const reloadHeader = reloadRun.stdout.subarray(0, reloadSeparator).toString('ascii');
+      assert.match(reloadHeader, /^Content-Length: [0-9]+$/, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      const reloadResponseBody = reloadRun.stdout.subarray(reloadSeparator + 4);
+      assert.equal(reloadResponseBody.length, Number(reloadHeader.slice('Content-Length: '.length)), `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      const reloadResponse = JSON.parse(reloadResponseBody);
+      assert.equal(reloadResponse.coverage.status, 'COMPLETE_WITHIN_BOUNDS', `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      assert.equal(reloadResponse.observations.length, expectedCount, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD: ${fixture}`);
+      if (expectedCount) assert.match(reloadResponse.observations[0].to.node_id, /path=vendor\/warp-drive\/private-model\.d\.ts;symbol=Model\.reload;/, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_TRIGGERS_RELOAD');
+    }
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

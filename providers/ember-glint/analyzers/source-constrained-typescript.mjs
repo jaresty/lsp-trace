@@ -47,7 +47,6 @@ function hasBaseNamed(type, checker, target, seen = new Set()) {
   if (names.includes(target) || checker.typeToString(type).startsWith(`${target}<`)) return true;
   return (type.getBaseTypes?.() ?? []).some(base => hasBaseNamed(base, checker, target, seen));
 }
-function ancestor(node, predicate) { for (let current = node.parent; current; current = current.parent) if (predicate(current)) return current; return null; }
 
 function makeProgram(seedPath) {
   const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, baseUrl: fixtureRoot, paths: { '@glimmer/component': ['vendor/glimmer-component/index.d.ts'], 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@ember-data/model': ['vendor/warp-drive/model.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
@@ -87,14 +86,9 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance) {
     return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName }), to: exactEndpoint(kind, 'declaration', { package: 'ember-concurrency@5.2.0', path: 'vendor/ember-concurrency/index.d.ts', symbol: 'AbstractTask.perform', sha256: provenance.packages['ember-concurrency'].declarations[0].sha256, chain: expected.chain.join('→'), evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   if (kind === 'TRIGGERS_RELOAD') {
-    const receiverName = typeSymbolName(receiverType);
-    const loop = ancestor(access, ts.isForOfStatement);
-    if (!loop) return null;
-    const collectionType = checker.getTypeAtLocation(loop.expression);
-    const elementType = checker.getIndexTypeOfType(collectionType, ts.IndexKind.Number);
-    const collectionOK = elementType && !isUnsafe(elementType) && typeSymbolName(elementType) === 'UserImportModel';
-    if (member !== 'reload' || receiverName !== 'UserImportModel' || !collectionOK || declaration.parent !== 'Model' || declarationPath !== 'vendor/warp-drive/private-model.d.ts') return null;
-    return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName, collection: `${checker.symbolToString(checker.getSymbolAtLocation(loop.expression) ?? { getName: () => 'collection' })}:UserImportModel[]` }), to: exactEndpoint(kind, 'declaration', { package: '@warp-drive/legacy@5.8.1', path: declarationPath, symbol: 'Model.reload', sha256: provenance.packages['@warp-drive/legacy'].declarations[1].sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
+    const expectedDeclaration = provenance.packages['@warp-drive/legacy'].declarations.find(({ path }) => path === 'vendor/warp-drive/private-model.d.ts');
+    if (member !== 'reload' || declaration.symbol !== 'reload' || declaration.parent !== 'Model' || declarationPath !== expectedDeclaration?.path) return null;
+    return { from: source, to: exactEndpoint(kind, 'declaration', { package: '@warp-drive/legacy@5.8.1', path: declarationPath, symbol: 'Model.reload', sha256: expectedDeclaration.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   return null;
 }
