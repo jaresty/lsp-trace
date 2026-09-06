@@ -72,11 +72,11 @@ func TestNormalizePublicWorkspaceRevision(t *testing.T) {
 		t.Fatalf("ASSERT_PUBLIC_COMMIT_NORMALIZED_ONCE: normalized=%s err=%v", valid, err)
 	}
 	for name, raw := range map[string]string{
-		"missing commit": `{"kind":"git","custody":"CALLER_ASSERTED"}`,
-		"empty commit": `{"kind":"git","commit":"","custody":"CALLER_ASSERTED"}`,
-		"private value": `{"kind":"git","value":"abc","custody":"CALLER_ASSERTED"}`,
+		"missing commit":      `{"kind":"git","custody":"CALLER_ASSERTED"}`,
+		"empty commit":        `{"kind":"git","commit":"","custody":"CALLER_ASSERTED"}`,
+		"private value":       `{"kind":"git","value":"abc","custody":"CALLER_ASSERTED"}`,
 		"conflicting aliases": `{"kind":"git","commit":"abc","value":"def","custody":"CALLER_ASSERTED"}`,
-		"unknown field": `{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED","extra":true}`,
+		"unknown field":       `{"kind":"git","commit":"abc","custody":"CALLER_ASSERTED","extra":true}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if normalized, err := normalizeWorkspaceRevision(json.RawMessage(raw)); err == nil {

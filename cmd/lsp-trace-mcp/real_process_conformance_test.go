@@ -441,7 +441,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		"max_depth": 2, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000,
 		"relations": []string{"BINDS_ARGUMENT"}, "providers": []string{"ember-glint@1"},
 		"languages": []string{"glimmer-js"}, "frameworks": []string{"ember"},
-		"workspace_revision": map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"},
+		"workspace_revision":       map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"},
 		"fail_on_unknown_revision": true,
 	}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
