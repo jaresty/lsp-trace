@@ -3,8 +3,6 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeProject, loadConfig } from '@glint/core';
-import Parser from 'tree-sitter';
-import TypeScriptLanguages from 'tree-sitter-typescript';
 import * as tsModule from 'typescript';
 
 import { createAnalyzer } from './analyzer.mjs';
@@ -21,8 +19,6 @@ const compiler = require('ember-source/ember-template-compiler/index.js');
 const ts = tsModule['module.exports'] ?? tsModule.default ?? tsModule;
 const versions = Object.freeze({
   typescript: require('typescript/package.json').version,
-  treeSitter: require('tree-sitter/package.json').version,
-  treeSitterTypeScript: require('tree-sitter-typescript/package.json').version,
 });
 
 function findProjectDirectory(filename) {
@@ -62,7 +58,7 @@ export function createDefaultAnalyzer() {
     scriptExtractor,
     glintAnalyzer: createGlintAnalyzer({ loadConfig, analyzeProject }),
   });
-  const callbackAnalyzer = createPassesCallbackAnalyzer({ ts, Parser, TypeScriptLanguages, versions });
+  const callbackAnalyzer = createPassesCallbackAnalyzer({ ts, versions });
   const rendersFromAnalyzer = createRendersFromAnalyzer({ ts });
   const templateRelationAdapter = createTemplateRelationAdapter();
   const admitted = Object.freeze(['BINDS_ARGUMENT', 'INVOKES_TASK', 'PASSES_CALLBACK', 'RENDERS_FROM', 'TRIGGERS_RELOAD', 'UPDATES_STATE']);

@@ -1,6 +1,6 @@
 {
   "schema": "lsp-trace.source-constrained-synthetic-provider.provenance.v2",
-  "compiler": { "name": "typescript", "version": "5.9.3" },
+  "compiler": { "name": "typescript", "version": "5.9.2" },
   "config": { "path": "tsconfig.json", "sha256": "fbbe636ff59ded53e4ed0fdb18ad57ffceb628b8b45f310c44c451eeb6004b3c" },
   "packages": {
     "ember-concurrency": {
@@ -31,6 +31,6 @@
       "negative_boundaries": ["marker-only", "same-spelling unrelated method", "any receiver", "unknown receiver", "contradictory receiver", "unsupported collection element", "unresolved declaration"]
     }
   },
-  "evidence_basis": "TypeScript 5.9.3 checker-resolved source call, receiver type, member declaration, and packaged declaration anchors",
+  "evidence_basis": "TypeScript 5.9.2 checker-resolved source call, receiver type, member declaration, and packaged declaration anchors",
   "authority_ceiling": "SOURCE_CONSTRAINED_SYNTHETIC; PROVIDER_REPORTED; non-authoritative; no runtime execution or production completeness claim"
 }

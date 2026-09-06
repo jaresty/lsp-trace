@@ -1,16 +1,8 @@
-const PINNED = Object.freeze({
-  typescript: '5.9.2',
-  treeSitter: '0.21.1',
-  treeSitterTypeScript: '0.23.2',
-});
+const PINNED_TYPESCRIPT = '5.9.2';
 
-function validateDependencies({ ts, Parser, TypeScriptLanguages, versions }) {
+function validateDependencies({ ts, versions }) {
   if (
-    versions?.typescript !== PINNED.typescript ||
-    versions?.treeSitter !== PINNED.treeSitter ||
-    versions?.treeSitterTypeScript !== PINNED.treeSitterTypeScript ||
-    typeof Parser !== 'function' ||
-    !TypeScriptLanguages?.typescript ||
+    versions?.typescript !== PINNED_TYPESCRIPT ||
     typeof ts?.createLanguageService !== 'function'
   ) throw new Error('ASSERT_PASSES_CALLBACK_PINNED_QUALIFIED_ANALYZERS');
 }
@@ -22,15 +14,11 @@ function point(source, offset) {
 
 function anchor(document, mapped) {
   return {
+    document_id: document.document_id,
     uri: mapped.uri,
     revision: document.revision,
     blob: document.blob,
-    bytes: {
-      start: Buffer.byteLength(document.source.slice(0, mapped.start)),
-      end: Buffer.byteLength(document.source.slice(0, mapped.end)),
-    },
     range: { start: point(document.source, mapped.start), end: point(document.source, mapped.end) },
-    text: document.source.slice(mapped.start, mapped.end),
   };
 }
 
@@ -45,15 +33,16 @@ function exactMap(document, start, end) {
   return mapped;
 }
 
+function nodeID(role, value, mapped) {
+  return `PASSES_CALLBACK:${role}:uri=${value.uri};bytes=${Buffer.byteLength(value.source.slice(0, mapped.start))}-${Buffer.byteLength(value.source.slice(0, mapped.end))}`;
+}
+
 function stableKey(observation) {
-  return [
-    observation.from.anchor.uri,
-    observation.from.anchor.bytes.start,
-    observation.from.anchor.bytes.end,
-    observation.to.anchor.uri,
-    observation.to.anchor.bytes.start,
-    observation.to.anchor.bytes.end,
-  ].join('\u0000');
+  return `${observation.from.node_id}\u0000${observation.to.node_id}`;
+}
+
+function isUnsafeType(ts, type) {
+  return (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0;
 }
 
 function sourceFileHost(ts, fileName, source) {
@@ -87,7 +76,7 @@ function collectCalls(ts, node, calls = []) {
 
 export function createPassesCallbackAnalyzer(dependencies) {
   validateDependencies(dependencies);
-  const { ts, Parser, TypeScriptLanguages } = dependencies;
+  const { ts } = dependencies;
 
   return Object.freeze({
     extract({ documents = [] } = {}) {
@@ -97,13 +86,6 @@ export function createPassesCallbackAnalyzer(dependencies) {
           return { status: 'BLOCKED', reason: 'GLINT_EXACT_MAPPING_UNAVAILABLE', observations: [], coverage: { status: 'UNKNOWN', reason: 'analysis_unavailable' } };
         }
 
-        const parser = new Parser();
-        parser.setLanguage(TypeScriptLanguages.typescript);
-        const tree = parser.parse(document.generated.source);
-        if (tree.rootNode.hasError) {
-          return { status: 'FAILED', reason: 'syntax_parse_failure', observations: [], coverage: { status: 'UNKNOWN', reason: 'analysis_unavailable' } };
-        }
-        const syntaxCalls = tree.rootNode.descendantsOfType('call_expression');
         const service = ts.createLanguageService(sourceFileHost(ts, document.generated.fileName, document.generated.source));
         try {
           const program = service.getProgram();
@@ -112,8 +94,6 @@ export function createPassesCallbackAnalyzer(dependencies) {
           const checker = program.getTypeChecker();
 
           for (const call of collectCalls(ts, sourceFile)) {
-            const syntaxCall = syntaxCalls.find((candidate) => candidate.startIndex === call.getStart(sourceFile) && candidate.endIndex === call.end);
-            if (!syntaxCall) continue;
             const signature = checker.getResolvedSignature(call);
             if (!signature) continue;
             const parameters = signature.getParameters();
@@ -121,9 +101,11 @@ export function createPassesCallbackAnalyzer(dependencies) {
             for (let index = 0; index < call.arguments.length; index++) {
               const argument = call.arguments[index];
               if (!ts.isIdentifier(argument)) continue;
-              const syntaxReference = syntaxCall.descendantsOfType('identifier').find((candidate) => candidate.startIndex === argument.getStart(sourceFile) && candidate.endIndex === argument.end);
-              if (!syntaxReference) continue;
-              const parameter = parameters[Math.min(index, parameters.length - 1)];
+              const lastParameter = parameters.at(-1);
+              const lastDeclaration = lastParameter?.valueDeclaration ?? lastParameter?.declarations?.[0];
+              const parameter = index < parameters.length
+                ? parameters[index]
+                : lastDeclaration?.dotDotDotToken ? lastParameter : undefined;
               const parameterDeclaration = parameter?.valueDeclaration ?? parameter?.declarations?.[0];
               if (!parameter || !parameterDeclaration || !ts.isParameter(parameterDeclaration) || !ts.isIdentifier(parameterDeclaration.name)) continue;
 
@@ -132,6 +114,7 @@ export function createPassesCallbackAnalyzer(dependencies) {
               if (!localDefinition) continue;
               const argumentType = checker.getTypeAtLocation(argument);
               const parameterType = checker.getTypeOfSymbolAtLocation(parameter, parameterDeclaration);
+              if (isUnsafeType(ts, argumentType) || isUnsafeType(ts, parameterType)) continue;
               if (checker.getSignaturesOfType(argumentType, ts.SignatureKind.Call).length === 0) continue;
               if (checker.getSignaturesOfType(parameterType, ts.SignatureKind.Call).length === 0) continue;
               if (!checker.isTypeAssignableTo(argumentType, parameterType)) continue;
@@ -142,23 +125,14 @@ export function createPassesCallbackAnalyzer(dependencies) {
                 return { status: 'BLOCKED', reason: 'GLINT_EXACT_MAPPING_UNAVAILABLE', observations: [], coverage: { status: 'UNKNOWN', reason: 'analysis_unavailable' } };
               }
               const fromAnchor = anchor(document, fromMapped);
+              const toAnchor = anchor(document, toMapped);
               observations.push({
                 kind: 'PASSES_CALLBACK',
-                from: { role: 'CALLABLE_REFERENCE', anchor: fromAnchor },
-                to: { role: 'CALLABLE_PARAMETER', anchor: anchor(document, toMapped) },
-                passage: { role: 'ARGUMENT_PASSAGE', anchor: fromAnchor },
-                evidence_class: 'SOURCE_DERIVED_ADAPTER',
-                confidence: 'EXACT',
+                from: { node_id: nodeID('callable-reference', document, fromMapped), role: 'CALLABLE_REFERENCE' },
+                to: { node_id: nodeID('callable-parameter', document, toMapped), role: 'CALLBACK_PARAMETER' },
+                original_anchor: fromAnchor,
                 supports: ['source_dependency_relation'],
                 does_not_support: ['callback_invocation', 'runtime_execution', 'repaint', 'feature_identity', 'whole_source_completeness'],
-                support: {
-                  operations: [
-                    'tree-sitter-typescript:call_expression/arguments',
-                    'typescript:getResolvedSignature/getTypeAtLocation/getCallSignatures/isTypeAssignableTo',
-                    'glint:getOriginalRange-round-trip',
-                  ],
-                  definition: { file_name: localDefinition.fileName, start: localDefinition.textSpan.start, length: localDefinition.textSpan.length },
-                },
               });
             }
           }

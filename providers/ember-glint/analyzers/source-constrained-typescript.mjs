@@ -50,21 +50,21 @@ function hasBaseNamed(type, checker, target, seen = new Set()) {
 function ancestor(node, predicate) { for (let current = node.parent; current; current = current.parent) if (predicate(current)) return current; return null; }
 
 function makeProgram(seedPath) {
-  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, baseUrl: fixtureRoot, paths: { 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
+  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, baseUrl: fixtureRoot, paths: { 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
   const host = ts.createCompilerHost(options);
+  const getSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+    if (fileName === seedPath) {
+      const source = ts.sys.readFile(fileName);
+      return source === undefined ? undefined : ts.createSourceFile(fileName, source, languageVersion, true, ts.ScriptKind.TS);
+    }
+    return getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+  };
   host.resolveModuleNames = (names, containingFile) => names.map(name => {
     if (name === './model/-private/model.js' && containingFile.endsWith('/vendor/warp-drive/model.d.ts')) return { resolvedFileName: join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts'), extension: ts.Extension.Dts, isExternalLibraryImport: true };
     return ts.resolveModuleName(name, containingFile, options, host).resolvedModule;
   });
   return ts.createProgram([seedPath, join(fixtureRoot, 'vendor/ember-concurrency/index.d.ts'), join(fixtureRoot, 'vendor/warp-drive/model.d.ts'), join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts')], options, host);
-}
-function declaredTypeAliasName(expression, checker) {
-  const symbol = checker.getSymbolAtLocation(expression);
-  const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
-  const typeNode = declaration?.type;
-  if (!typeNode || !ts.isTypeReferenceNode(typeNode)) return '';
-  const alias = checker.getSymbolAtLocation(typeNode.typeName);
-  return alias?.getName() ?? '';
 }
 function exactEndpoint(kind, side, fields) { return `${kind}:${side}:${Object.entries(fields).map(([key, value]) => `${key}=${value}`).join(';')}`; }
 
@@ -81,7 +81,7 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance) {
   const source = exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: checker.typeToString(receiverType) });
   if (kind === 'INVOKES_TASK') {
     const expected = provenance.relations.INVOKES_TASK;
-    const receiverName = declaredTypeAliasName(access.expression, checker);
+    const receiverName = typeSymbolName(receiverType);
     const validReceiver = receiverName === expected.receiver;
     if (member !== 'perform' || !validReceiver || !hasBaseNamed(receiverType, checker, 'Task') || declaration.parent !== 'AbstractTask' || !declaration.sourceFile.fileName.replaceAll('\\', '/').endsWith('/vendor/ember-concurrency/index.d.ts')) return null;
     return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName }), to: exactEndpoint(kind, 'declaration', { package: 'ember-concurrency@5.2.0', path: 'vendor/ember-concurrency/index.d.ts', symbol: 'AbstractTask.perform', sha256: provenance.packages['ember-concurrency'].declarations[0].sha256, chain: expected.chain.join('→'), evidence: 'typescript-checker', authority: 'non-authoritative' }) };

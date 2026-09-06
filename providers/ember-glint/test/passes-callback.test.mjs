@@ -5,8 +5,6 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import Parser from 'tree-sitter';
-import TypeScriptLanguages from 'tree-sitter-typescript';
 import * as tsModule from 'typescript';
 
 import { createPassesCallbackAnalyzer } from '../analyzers/passes-callback.mjs';
@@ -15,20 +13,19 @@ const require = createRequire(import.meta.url);
 const ts = tsModule['module.exports'] ?? tsModule.default ?? tsModule;
 const versions = Object.freeze({
   typescript: require('typescript/package.json').version,
-  treeSitter: require('tree-sitter/package.json').version,
-  treeSitterTypeScript: require('tree-sitter-typescript/package.json').version,
 });
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const positivePath = path.join(repository, 'qualification/external-provider/passes-callback-positive.gts');
 const negativePath = path.join(repository, 'qualification/external-provider/passes-callback-negative.gts');
 const retainedPath = path.join(repository, 'qualification/retained/b05/passes-callback.json');
 
-async function analyzeFixture(file, { map = true } = {}) {
-  const source = await readFile(file, 'utf8');
+async function analyzeFixture(file, { map = true, transform = (source) => source } = {}) {
+  const source = transform(await readFile(file, 'utf8'));
   const uri = pathToFileURL(file).href;
-  const analyzer = createPassesCallbackAnalyzer({ ts, Parser, TypeScriptLanguages, versions });
+  const analyzer = createPassesCallbackAnalyzer({ ts, versions });
   return analyzer.extract({
     documents: [{
+      document_id: 'original',
       uri,
       revision: '1825a56070d7b76174ebb086d7c464731ce12bb0',
       blob: 'sha256:fixture',
@@ -53,26 +50,23 @@ test('ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER', async () =>
   const result = await positive();
   assert.equal(result.status, 'SUPPORTED', 'ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER');
   assert.equal(result.observations[0].kind, 'PASSES_CALLBACK', 'ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER');
-  assert.deepEqual(result.observations[0].support.operations, [
-    'tree-sitter-typescript:call_expression/arguments',
-    'typescript:getResolvedSignature/getTypeAtLocation/getCallSignatures/isTypeAssignableTo',
-    'glint:getOriginalRange-round-trip',
-  ], 'ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER');
+  assert.deepEqual(result.observations[0].from, {
+    node_id: result.observations[0].from.node_id,
+    role: 'CALLABLE_REFERENCE',
+  }, 'ASSERT_PASSES_CALLBACK_TYPED_REFERENCE_TO_CALLABLE_PARAMETER');
 });
 
 test('ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR', async () => {
   const { observations: [observation] } = await positive();
-  assert.deepEqual({
-    from: { role: observation.from.role, text: observation.from.anchor.text },
-    to: { role: observation.to.role, text: observation.to.anchor.text },
-    passage: { role: observation.passage.role, text: observation.passage.anchor.text },
-  }, {
-    from: { role: 'CALLABLE_REFERENCE', text: 'format' },
-    to: { role: 'CALLABLE_PARAMETER', text: 'callback' },
-    passage: { role: 'ARGUMENT_PASSAGE', text: 'format' },
+  assert.equal(observation.from.role, 'CALLABLE_REFERENCE', 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.equal(observation.to.role, 'CALLBACK_PARAMETER', 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.equal(observation.original_anchor.uri, pathToFileURL(positivePath).href, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.equal(observation.original_anchor.document_id, 'original', 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.deepEqual(observation.original_anchor.range, {
+    start: { line: 10, character: 8 }, end: { line: 10, character: 14 },
   }, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
-  assert.equal(observation.from.anchor.uri, pathToFileURL(positivePath).href, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
-  assert.equal(observation.to.anchor.uri, pathToFileURL(positivePath).href, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.match(observation.from.node_id, /^PASSES_CALLBACK:callable-reference:/, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
+  assert.match(observation.to.node_id, /^PASSES_CALLBACK:callable-parameter:/, 'ASSERT_PASSES_CALLBACK_EXACT_ENDPOINTS_ROLES_AND_ANCHOR');
 });
 
 test('ASSERT_PASSES_CALLBACK_EXACT_GLINT_MAPPING_REQUIRED', async () => {
@@ -86,6 +80,32 @@ test('ASSERT_PASSES_CALLBACK_DETERMINISTIC', async () => {
   const first = await analyzeFixture(positivePath);
   const second = await analyzeFixture(positivePath);
   assert.deepEqual(first, second, 'ASSERT_PASSES_CALLBACK_DETERMINISTIC');
+});
+
+test('ASSERT_PASSES_CALLBACK_STRICT_OBSERVATION_ENVELOPE', async () => {
+  const { observations: [observation] } = await positive();
+  assert.deepEqual(Object.keys(observation).sort(), [
+    'does_not_support', 'from', 'kind', 'original_anchor', 'supports', 'to',
+  ], 'ASSERT_PASSES_CALLBACK_STRICT_OBSERVATION_ENVELOPE');
+  assert.deepEqual(Object.keys(observation.from).sort(), ['node_id', 'role'], 'ASSERT_PASSES_CALLBACK_STRICT_OBSERVATION_ENVELOPE');
+  assert.deepEqual(Object.keys(observation.to).sort(), ['node_id', 'role'], 'ASSERT_PASSES_CALLBACK_STRICT_OBSERVATION_ENVELOPE');
+  assert.deepEqual(Object.keys(observation.original_anchor).sort(), [
+    'blob', 'document_id', 'range', 'revision', 'uri',
+  ], 'ASSERT_PASSES_CALLBACK_STRICT_OBSERVATION_ENVELOPE');
+});
+
+test('ASSERT_PASSES_CALLBACK_SEMANTIC_PERTURBABILITY', async () => {
+  const nonCallableArgument = await analyzeFixture(positivePath, {
+    transform: (source) => source.replace('function format(value: string): void {', 'const format: string = "same spelling";\nfunction unused(value: string): void {'),
+  });
+  assert.deepEqual(nonCallableArgument.observations, [], 'ASSERT_PASSES_CALLBACK_SEMANTIC_PERTURBABILITY');
+
+  for (const parameterType of ['any', 'unknown', 'string']) {
+    const result = await analyzeFixture(positivePath, {
+      transform: (source) => source.replace('callback: Callback', `callback: ${parameterType}`),
+    });
+    assert.deepEqual(result.observations, [], `ASSERT_PASSES_CALLBACK_SEMANTIC_PERTURBABILITY_${parameterType}`);
+  }
 });
 
 test('ASSERT_PASSES_CALLBACK_REJECTS_NONCALLABLE', async () => {
