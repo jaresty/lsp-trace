@@ -32,13 +32,16 @@ func TestProductionMCPB05TwentyFourAttemptQualification(t *testing.T) {
 	if rel, e := filepath.Rel(root, provider); e == nil && !strings.HasPrefix(rel, "..") {
 		t.Fatalf("%s: repository-local provider", assertion)
 	}
-	seeds := []struct{ id, relation, path string }{
-		{"binds-argument-positive", "BINDS_ARGUMENT", "qualification/external-provider/component.gts"}, {"binds-argument-negative", "BINDS_ARGUMENT", "qualification/external-provider/binds-argument-negative.gts"},
-		{"passes-callback-positive", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-positive.gts"}, {"passes-callback-negative", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-negative.gts"},
-		{"invokes-task-positive", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-positive.gts"}, {"invokes-task-negative", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-negative.gts"},
-		{"triggers-reload-positive", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-positive.ts"}, {"triggers-reload-negative", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-negative.ts"},
-		{"updates-state-positive", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-positive.ts"}, {"updates-state-negative", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-negative.ts"},
-		{"renders-from-positive", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-positive.json"}, {"renders-from-negative", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-negative.json"},
+	seeds := []struct {
+		id, relation, path string
+		want               int
+	}{
+		{"binds-argument-positive", "BINDS_ARGUMENT", "qualification/external-provider/component.gts", 1}, {"binds-argument-negative", "BINDS_ARGUMENT", "qualification/external-provider/binds-argument-negative.gts", 0},
+		{"passes-callback-positive", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-positive.gts", 1}, {"passes-callback-negative", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-negative.gts", 0},
+		{"invokes-task-positive", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-positive.gts", 1}, {"invokes-task-negative", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-negative.gts", 0},
+		{"triggers-reload-positive", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-positive.ts", 1}, {"triggers-reload-negative", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-negative.ts", 0},
+		{"updates-state-positive", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-positive.ts", 2}, {"updates-state-negative", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-negative.ts", 0},
+		{"renders-from-positive", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-positive.json", 1}, {"renders-from-negative", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-negative.json", 0},
 	}
 	workspace := t.TempDir()
 	workspace, err := filepath.EvalSymlinks(workspace)
@@ -119,14 +122,15 @@ func TestProductionMCPB05TwentyFourAttemptQualification(t *testing.T) {
 			if err := json.Unmarshal(a, &result); err != nil {
 				t.Fatalf("ASSERT_B05_FRAME6_GRAPH_V4_DECODE_%s: %v", seed.id, err)
 			}
-			want := 0
-			if strings.HasSuffix(seed.id, "-positive") {
-				want = 1
+			if err := validateB05Frame6Relations(result.Relations, seed.relation, seed.want); err != nil {
+				t.Fatalf("ASSERT_B05_FRAME6_EXACT_RELATION_%s: %v; got=%+v", seed.id, err, result.Relations)
 			}
-			if len(result.Relations) != want || (want == 1 && string(result.Relations[0].Kind) != seed.relation) {
-				t.Fatalf("ASSERT_B05_FRAME6_EXACT_RELATION_%s: want=%s/%d got=%+v", seed.id, seed.relation, want, result.Relations)
+			if seed.id == "updates-state-positive" {
+				if err := validateB05Frame6UpdatesState(result.Relations); err != nil {
+					t.Fatalf("ASSERT_B05_FRAME6_UPDATES_STATE_DECLARATION_SEMANTICS: %v; got=%+v", err, result.Relations)
+				}
 			}
-			if seed.id == "binds-argument-positive" && want == 1 {
+			if seed.id == "binds-argument-positive" {
 				from := strings.TrimPrefix(result.Relations[0].From, "path:")
 				source, err := os.ReadFile(filepath.Join(workspace, seed.id+filepath.Ext(seed.path)))
 				if err != nil || from == result.Relations[0].From || !bytes.Contains(source, []byte(from)) {
@@ -151,4 +155,62 @@ func TestProductionMCPB05TwentyFourAttemptQualification(t *testing.T) {
 		t.Fatalf("%s: got %d", assertion, n)
 	}
 	fmt.Fprintf(os.Stderr, "PASS %s commit=%s attempts=%d\n", assertion, commit, n)
+}
+
+func validateB05Frame6Relations(relations []graph.Relation, kind string, want int) error {
+	if len(relations) != want {
+		return fmt.Errorf("want=%s/%d got count=%d", kind, want, len(relations))
+	}
+	for i, relation := range relations {
+		if relation.Kind != kind {
+			return fmt.Errorf("relation[%d] want kind=%s got=%s", i, kind, relation.Kind)
+		}
+	}
+	return nil
+}
+
+func validateB05Frame6UpdatesState(relations []graph.Relation) error {
+	if err := validateB05Frame6Relations(relations, graph.RelationUpdatesState, 2); err != nil {
+		return err
+	}
+	producer := relations[0].From
+	if !strings.HasPrefix(producer, "UPDATES_STATE:state-producer:") {
+		return fmt.Errorf("producer is not declaration-derived: %s", producer)
+	}
+	targets := map[string]struct{}{}
+	anchors := map[graph.Range]struct{}{}
+	for i, relation := range relations {
+		if relation.From != producer {
+			return fmt.Errorf("relation[%d] producer=%s differs from %s", i, relation.From, producer)
+		}
+		if !strings.HasPrefix(relation.To, "UPDATES_STATE:state-value:") {
+			return fmt.Errorf("relation[%d] target is not declaration-derived STATE_VALUE: %s", i, relation.To)
+		}
+		if len(relation.Anchors) != 1 {
+			return fmt.Errorf("relation[%d] want one write anchor got=%d", i, len(relation.Anchors))
+		}
+		targets[relation.To] = struct{}{}
+		anchors[relation.Anchors[0].Range] = struct{}{}
+	}
+	if len(targets) != 2 {
+		return fmt.Errorf("want two distinct STATE_VALUE targets got=%d", len(targets))
+	}
+	if len(anchors) != 2 {
+		return fmt.Errorf("want two distinct write anchors got=%d", len(anchors))
+	}
+	return nil
+}
+
+func TestB05Frame6ExactMultiplicityGuard(t *testing.T) {
+	relation := graph.Relation{Kind: graph.RelationUpdatesState}
+	for name, relations := range map[string][]graph.Relation{
+		"missing second": {relation},
+		"spurious third": {relation, relation, relation},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := validateB05Frame6Relations(relations, graph.RelationUpdatesState, 2); err == nil {
+				t.Fatal("ASSERT_B05_FRAME6_EXACT_MULTIPLICITY_GUARD: malformed multiplicity accepted")
+			}
+		})
+	}
 }
