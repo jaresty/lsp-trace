@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const allowed = [
@@ -15,6 +15,7 @@ const allowed = [
   'fixtures/source-constrained-synthetic/provenance.json',
   'fixtures/source-constrained-synthetic/tsconfig.json',
   'fixtures/source-constrained-synthetic/vendor/ember-concurrency/index.d.ts',
+  'fixtures/source-constrained-synthetic/vendor/glimmer-component/index.d.ts',
   'fixtures/source-constrained-synthetic/vendor/warp-drive/model.d.ts',
   'fixtures/source-constrained-synthetic/vendor/warp-drive/private-model.d.ts',
   'package.json', 'renders-from-analyzer.mjs', 'src/protocol.mjs',
@@ -41,6 +42,43 @@ test('ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS', () => {
     const manifest = JSON.parse(readFileSync(path.join(installed, 'package.json'), 'utf8'));
     assert.equal(manifest.bin['ember-glint'], './bin/ember-glint.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     assert.equal(manifest.exports['.'], './default-analyzer.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
+
+    const workspace = path.join(temporary, 'workspace');
+    mkdirSync(workspace);
+    const seed = path.join(workspace, 'invokes-task-positive.gts');
+    writeFileSync(seed, readFileSync(path.join(root, 'fixtures/invokes-task-positive.gts')));
+    const request = {
+      schema_version: 'lsp-trace.provider-collector-request.v1',
+      provider_id: 'ember-glint@1',
+      adapter_id: 'lsp-trace-observation-adapter@1',
+      session: { session_id: 'packed-invokes-task', generation: 1 },
+      seed: { uri: pathToFileURL(seed).href },
+      relations: ['INVOKES_TASK'],
+      languages: ['typescript'],
+      frameworks: ['source-constrained-synthetic'],
+      document_custody: { workspace_revision: { kind: 'git', value: '25319f86536014f5afb01a7de0e404cf8b492e51' } },
+      limits: { max_nodes: 10, request_timeout_ms: 1000 },
+    };
+    const body = Buffer.from(JSON.stringify(request));
+    const run = spawnSync(path.join(temporary, 'node_modules', '.bin', 'ember-glint'), [], {
+      cwd: workspace,
+      input: Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'ascii'), body]),
+    });
+    assert.equal(run.status, 0, `ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK: stderr=${run.stderr}`);
+    assert.equal(run.stderr.length, 0, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    const separator = run.stdout.indexOf('\r\n\r\n');
+    assert.ok(separator > 0, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    const header = run.stdout.subarray(0, separator).toString('ascii');
+    assert.match(header, /^Content-Length: [0-9]+$/, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    const length = Number(header.slice('Content-Length: '.length));
+    const responseBody = run.stdout.subarray(separator + 4);
+    assert.equal(responseBody.length, length, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    const response = JSON.parse(responseBody);
+    assert.equal(response.coverage.status, 'COMPLETE_WITHIN_BOUNDS', 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    assert.equal(response.failure, undefined, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    assert.equal(response.observations.length, 1, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    assert.equal(response.observations[0].kind, 'INVOKES_TASK', 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
+    assert.match(response.observations[0].to.node_id, /package=ember-concurrency@5\.2\.0;path=vendor\/ember-concurrency\/index\.d\.ts;symbol=AbstractTask\.perform;/, 'ASSERT_PACKED_OFFLINE_STRICT_COLLECTOR_INVOKES_TASK');
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }

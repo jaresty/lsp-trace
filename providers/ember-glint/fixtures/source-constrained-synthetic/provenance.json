@@ -3,6 +3,12 @@
   "compiler": { "name": "typescript", "version": "5.9.2" },
   "config": { "path": "tsconfig.json", "sha256": "fbbe636ff59ded53e4ed0fdb18ad57ffceb628b8b45f310c44c451eeb6004b3c" },
   "packages": {
+    "@glimmer/component": {
+      "version": "2.1.1",
+      "integrity": "sha512-zFZFaMbWy+9WOcDg/kCgrkGgqkLT39EE4FgyFD0MIkQO5coQsrRZyLsiBu1tbchyM+8hT8jAv+EQVUd8u+MdSQ==",
+      "declarations": [{ "path": "vendor/glimmer-component/index.d.ts", "sha256": "fed50b485ed068473889cb722e6263c6d7b4fd44da257d1aa4668dd765a5eff7" }],
+      "scope": "fixture compilation superclass only; no task or reload semantics"
+    },
     "ember-concurrency": {
       "version": "5.2.0",
       "integrity": "sha512-NUptPzaxaF2XWqn3VQ5KqiLSRqPFIZhWXH3UkOMhiedmiolxGYjUV96maoHWdd5msxNgQBC0UkZ28m7pV7A0sQ==",

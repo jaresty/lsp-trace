@@ -52,6 +52,7 @@ test(assertions.fixtures, () => {
   for (const path of [
     'fixtures/source-constrained-synthetic/provenance.json',
     'fixtures/source-constrained-synthetic/tsconfig.json',
+    'fixtures/source-constrained-synthetic/vendor/glimmer-component/index.d.ts',
     'fixtures/source-constrained-synthetic/vendor/ember-concurrency/index.d.ts',
     'fixtures/source-constrained-synthetic/vendor/warp-drive/model.d.ts',
     'fixtures/source-constrained-synthetic/vendor/warp-drive/private-model.d.ts',

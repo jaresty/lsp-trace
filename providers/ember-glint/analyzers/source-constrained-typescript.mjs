@@ -50,7 +50,7 @@ function hasBaseNamed(type, checker, target, seen = new Set()) {
 function ancestor(node, predicate) { for (let current = node.parent; current; current = current.parent) if (predicate(current)) return current; return null; }
 
 function makeProgram(seedPath) {
-  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, baseUrl: fixtureRoot, paths: { 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
+  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, baseUrl: fixtureRoot, paths: { '@glimmer/component': ['vendor/glimmer-component/index.d.ts'], 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@ember-data/model': ['vendor/warp-drive/model.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
@@ -64,7 +64,7 @@ function makeProgram(seedPath) {
     if (name === './model/-private/model.js' && containingFile.endsWith('/vendor/warp-drive/model.d.ts')) return { resolvedFileName: join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts'), extension: ts.Extension.Dts, isExternalLibraryImport: true };
     return ts.resolveModuleName(name, containingFile, options, host).resolvedModule;
   });
-  return ts.createProgram([seedPath, join(fixtureRoot, 'vendor/ember-concurrency/index.d.ts'), join(fixtureRoot, 'vendor/warp-drive/model.d.ts'), join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts')], options, host);
+  return ts.createProgram([seedPath, join(fixtureRoot, 'vendor/glimmer-component/index.d.ts'), join(fixtureRoot, 'vendor/ember-concurrency/index.d.ts'), join(fixtureRoot, 'vendor/warp-drive/model.d.ts'), join(fixtureRoot, 'vendor/warp-drive/private-model.d.ts')], options, host);
 }
 function exactEndpoint(kind, side, fields) { return `${kind}:${side}:${Object.entries(fields).map(([key, value]) => `${key}=${value}`).join(';')}`; }
 
@@ -121,7 +121,7 @@ export async function analyzeSourceConstrainedTypeScript(request) {
   const diagnostics = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === seedPath);
   if (diagnostics.length) throw new Error(`bounded checker failure: ${diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ')}`);
   const checker = program.getTypeChecker();
-  const documentID = 'qualification-seed';
+  const documentID = 'original';
   const observations = [];
   const requested = new Set(request.relation_kinds || []);
   function visit(node) {

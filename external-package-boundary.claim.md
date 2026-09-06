@@ -69,3 +69,30 @@ A minimization perturbation temporarily removed the provider README. The package
 - External package payload: `npm pack --dry-run` — `@lsp-trace/ember-glint-provider@0.1.0`, two files (`README.md`, `package.json`), no implementation or provider assets.
 - `git diff --check` — pass.
 - `goreleaser check` was unavailable because the executable is not installed; the committed structural archive guard validates the relevant configuration boundary.
+
+## Remediation evidence at HEAD `25319f8`
+
+### RED
+
+Packed qualification attempt 09 exited `1` before emitting a response frame because `invokes-task-positive.gts` imports `@glimmer/component` while the isolated TypeScript program mapped only Ember Concurrency and Warp Drive declarations; the resulting TS2307 diagnostic escaped the process. After adding the missing declaration, attempt 09 reached admission and exposed an exact document-custody mismatch: the strict collector declared document ID `original` while the analyzer emitted `qualification-seed`.
+
+### GREEN
+
+The provider package tests pass 71/71. A fresh packed/offline install now executes the exact strict `INVOKES_TASK` collector request with exit 0, empty stderr, exactly one valid `Content-Length` frame, `COMPLETE_WITHIN_BOUNDS` coverage, and one `AbstractTask.perform` declaration-qualified observation. The existing same-spelling, unresolved, `any`, and `unknown` negative guards remain green. Canonical B05 qualification passes attempts 01–12; attempt 13 stops on an independently exposed TRIGGERS_RELOAD contract conflict and is not hidden or inferred around.
+
+## Derivation
+
+1. Pin a fixture-compilation-only `@glimmer/component@2.1.1` declaration using the lockfile integrity and exact declaration SHA-256; the empty superclass declares no task or reload behavior.
+2. Include that declaration in package verification, exact packed-content assertions, and TypeScript `paths`/program roots so isolated compilation has no ambient dependency.
+3. Preserve declaration-qualified `INVOKES_TASK` inference exclusively through the pinned Ember Concurrency declaration and existing negative boundaries.
+4. Align the source-constrained analyzer's original document ID with the strict collector's immutable `original` document record; do not weaken custody validation.
+5. Add the already pinned `@ember-data/model` compatibility path to the Warp Drive declaration after attempt 13 showed TS2307, then stop when the next result exposed conflicting TRIGGERS_RELOAD semantics (`Person.reload()` versus the analyzer/provenance `UserImportModel[]` loop contract). No diagnostics were suppressed, exceptions hidden, lifecycle handling weakened, or fallback inference added.
+
+### Verification
+
+- Provider package: `npm test` — 71 passed.
+- Canonical `./scripts/qualify-b05-frame6.sh` — attempts 01–12 passed; attempt 13 stopped with `typed provider result contains no accepted observations` due to the documented TRIGGERS_RELOAD contract conflict.
+- Documentation: `./scripts/check-docs.sh` — pass.
+- Go: `go test ./...` and `go test -race ./...` — 3314 passed in 41 packages for each; `go vet ./...` — pass.
+- Release: `./scripts/release-check.sh` — `RELEASE CHECK PASS`.
+- GoReleaser: `goreleaser release --snapshot --clean` — six platform archives built successfully.
