@@ -18,6 +18,7 @@ A release candidate must satisfy:
 6. review of security, semantic, schema-policy, and [provider protocol](PROVIDERS.md) changes, including named-profile precedence and environment-value non-persistence
 7. a clean GoReleaser snapshot that packages only `lsp-trace` and `lsp-trace-mcp`, plus checksums, with no provider assets
 8. `./scripts/test-b05-qualification.sh`, requiring the exact nine-family ledger, real managed incoming/slice acceptance, retained B05 evidence, and documented non-entailments
+9. `./scripts/test-caller-project-javascript-qualification.sh`, requiring the retained real-stdio caller-project JavaScript family with exact outcomes, replay, schema, identity, parity, and custody guards
 
 A BLOCKED or FAIL qualification cannot support a provider claim. It blocks release only when that provider is advertised as supported by the release. Retain the result and state its qualification boundary; fixture presence is not support evidence. The retained ElixirLS result is BLOCKED and is not a release support claim.
 

@@ -1,0 +1,21 @@
+{
+  "schema_version": "lsp-trace.caller-project-javascript.cases.v1",
+  "provider": "ember-glint@1",
+  "language": "glimmer-js",
+  "framework": "ember",
+  "operations": ["incoming", "slice"],
+  "cases": [
+    {"id":"invokes-task-positive","relation":"INVOKES_TASK","variant":"valid","source":"import { task } from 'ember-concurrency';\nconst value = task(async () => 1);\nvalue.perform();\n","expect":"GRAPH","count":1},
+    {"id":"triggers-reload-positive","relation":"TRIGGERS_RELOAD","variant":"valid","source":"import Model from '@warp-drive/legacy';\nconst value = new Model();\nvalue.reload();\n","expect":"GRAPH","count":1},
+    {"id":"invokes-task-same-spelling","relation":"INVOKES_TASK","variant":"valid","source":"const value = { perform() {} };\nvalue.perform();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"triggers-reload-same-spelling","relation":"TRIGGERS_RELOAD","variant":"valid","source":"const value = { reload() {} };\nvalue.reload();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"invokes-task-any","relation":"INVOKES_TASK","variant":"valid","source":"/** @type {any} */ const value = {};\nvalue.perform();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"triggers-reload-unknown","relation":"TRIGGERS_RELOAD","variant":"valid","source":"/** @type {unknown} */ const value = {};\nvalue.reload();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"missing-config","relation":"INVOKES_TASK","variant":"missing-config","source":"import { task } from 'ember-concurrency';\nconst value = task(async () => 1); value.perform();\n","expect":"DOMAIN_ERROR"},
+    {"id":"malformed-config","relation":"INVOKES_TASK","variant":"malformed-config","source":"import { task } from 'ember-concurrency';\nconst value = task(async () => 1); value.perform();\n","expect":"DOMAIN_ERROR"},
+    {"id":"missing-task-declaration","relation":"INVOKES_TASK","variant":"missing-task-declaration","source":"import { task } from 'ember-concurrency';\nconst value = task(async () => 1); value.perform();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"wrong-task-declaration","relation":"INVOKES_TASK","variant":"wrong-task-declaration","source":"import { task } from 'ember-concurrency';\nconst value = task(async () => 1); value.perform();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"missing-reload-declaration","relation":"TRIGGERS_RELOAD","variant":"missing-reload-declaration","source":"import Model from '@warp-drive/legacy';\nconst value = new Model(); value.reload();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"},
+    {"id":"wrong-reload-declaration","relation":"TRIGGERS_RELOAD","variant":"wrong-reload-declaration","source":"import Model from '@warp-drive/legacy';\nconst value = new Model(); value.reload();\n","expect":"DOMAIN_ERROR","code":"RESOURCE_EXHAUSTED"}
+  ]
+}

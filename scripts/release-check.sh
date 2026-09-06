@@ -9,6 +9,8 @@ cd "$root"
 printf 'PASS R-DOCUMENTATION-CONTRACT: operational documentation guard\n'
 ./scripts/test-b05-qualification.sh
 printf 'PASS R-B05-QUALIFICATION: ten immutable seeds, twenty production MCP attempts, four-stage matrix, retained evidence, and non-entailments\n'
+./scripts/test-caller-project-javascript-qualification.sh
+printf 'PASS R-CALLER-PROJECT-JAVASCRIPT-QUALIFICATION: retained caller-project JavaScript MCP evidence\n'
 
 assert_file() {
   id=$1

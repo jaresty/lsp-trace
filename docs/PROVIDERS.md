@@ -18,6 +18,8 @@ The host registers the installed provider by supplying its absolute executable p
 
 Run the generic production lifecycle qualification against the independently installed path before retaining evidence:
 
+Caller-project JavaScript support has a separate tracked qualification family at `qualification/caller-project-javascript/`. `./scripts/qualify-caller-project-javascript.sh` is read-only by default; pass `--retain` explicitly to replace its timestamped, digest-bearing evidence after reviewing a complete PASS. It independently packs and offline-installs `ember-glint@1`, then drives real `lsp-trace-mcp` stdio `incoming` and `slice` calls over positive and fail-closed project variants.
+
 ```sh
 LSP_TRACE_EXTERNAL_PROVIDER_PATH=/opt/lsp-trace-providers/ember-glint/bin/ember-glint-provider \
   ./scripts/qualify-external-provider.sh
