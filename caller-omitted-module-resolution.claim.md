@@ -35,6 +35,36 @@ executed the caller-owned synthetic project and failed `ASSERT_CALLER_OMITTED_MO
 - Release check: pass, including parity, omission compatibility, dry builds, and archive exclusion.
 - GoReleaser v2 check: one configuration validated.
 
+## Reproducibility repair at merged HEAD `0b4f5fb`
+
+### RED
+
+A clean checkout contained only the omitted-resolution `jsconfig.json` and three `src` files. Its required `node_modules/ember-concurrency/index.d.ts` was ignored and absent, so the provider suite failed exactly two assertions with TS2307: the positive omitted-resolution assertion and the omission-only policy matrix.
+
+### GREEN
+
+The omitted-resolution tests now construct a fresh caller project per test under the system temporary directory, including `jsconfig.json`, all three JavaScript sources, and a normal `node_modules/ember-concurrency` package manifest plus declaration. The existing qualification assertion includes a persistent exact-input guard that reads every constructed file and separately requires the `AbstractTask.perform` declaration; deleting or omitting that declaration fails before semantic analysis. The obsolete incomplete tracked fixture was removed.
+
+Verification at the repair commit:
+
+- Focused omitted-resolution assertions: 2/2.
+- Provider package: 89/89.
+- Caller MCP retained ledger: 48/48; guard and release admission pass.
+- B05 historical immutable blob and current lineage/admission/release selection: pass.
+- Full Go: 3321/3321.
+- Race Go: 3321/3321.
+- CI contract: format, test, vet, build, Python, shell, release, clean-tree, and release dry-run pass.
+- Release check: pass.
+- GoReleaser v2: one configuration validated.
+
+## Derivation
+
+1. A fixture dependency ignored by the repository is not a reproducible test input, even when it exists in an agent-local working tree.
+2. Constructing the caller project at runtime makes the test self-contained without force-tracking `node_modules` or changing production/package contents.
+3. The temporary package uses an ordinary `package.json` `types` entry and declaration under `node_modules`; no `paths` alias or analyzer fallback bypasses TypeScript Node10 package resolution.
+4. Canonicalizing the temporary root with `realpath` keeps declaration custody relative to the caller root on macOS, where TypeScript canonicalizes `/var` through `/private/var`.
+5. Per-test projects prevent the module-policy matrix from mutating shared fixture state and preserve the original explicit Classic/NodeNext/Bundler assertions.
+
 ## Pinned Market View replay
 
 Requested immutable UI commit: `326718ae733cb26097bd30246276cecd371a4e79`.

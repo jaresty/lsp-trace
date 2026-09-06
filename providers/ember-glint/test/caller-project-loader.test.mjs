@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile, rename, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,8 +13,30 @@ const projectRoot = join(providerRoot, 'test-projects/caller-js');
 const seedPath = join(projectRoot, 'src/seed.js');
 const uncheckedProjectRoot = join(providerRoot, 'test-projects/caller-js-unchecked');
 const uncheckedSeedPath = join(uncheckedProjectRoot, 'src/seed.js');
-const omittedResolutionRoot = join(providerRoot, 'test-projects/caller-js-omitted-resolution');
 const commit = '04b683e784ba4ed62b182fe7c797bfff5f49d66d';
+const omittedResolutionFixture = {
+  'jsconfig.json': `${JSON.stringify({ compilerOptions: { target: 'ES2022', experimentalDecorators: true, checkJs: true, allowJs: true, noEmit: true }, include: ['src/**/*.js'] }, null, 2)}\n`,
+  'src/positive.js': "import { task } from 'ember-concurrency';\n\nconst callerOwnedTask = task(async () => 'caller-owned');\ncallerOwnedTask.perform();\n",
+  'src/same-spelling.js': 'export {};\nconst callerOwnedTask = { perform() {} };\ncallerOwnedTask.perform();\n',
+  'src/unsafe.js': 'export {};\n/** @type {any} */\nconst callerOwnedTask = {};\ncallerOwnedTask.perform();\n',
+  'node_modules/ember-concurrency/package.json': '{"name":"ember-concurrency","version":"99.0.0-caller","type":"module","types":"index.d.ts"}\n',
+  'node_modules/ember-concurrency/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\ninterface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport interface Task<T, Args extends unknown[]> extends AbstractTask<Args, TaskInstance<T>> {\n  readonly callerProjectBrand: unique symbol;\n}\nexport declare function task<T>(callback: () => Promise<T>): Task<T, []>;\n',
+};
+
+async function withOmittedResolutionProject(observe) {
+  const temporary = await mkdtemp(join(tmpdir(), 'lsp-trace-caller-omitted-resolution-'));
+  const root = await realpath(temporary);
+  try {
+    for (const [relative, content] of Object.entries(omittedResolutionFixture)) {
+      const path = join(root, relative);
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, content);
+    }
+    await observe(root);
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+}
 
 async function request() {
   const source = await readFile(seedPath);
@@ -55,40 +78,54 @@ test('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT', async () => {
 });
 
 test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', async () => {
-  async function analyze(name) {
-    const path = join(omittedResolutionRoot, `src/${name}.js`);
-    const source = await readFile(path);
-    return analyzeSourceConstrainedTypeScript({
-      documents: [{ uri: pathToFileURL(path).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
-      relation_kinds: ['INVOKES_TASK'],
-    });
-  }
+  assert.deepEqual(Object.keys(omittedResolutionFixture).sort(), [
+    'jsconfig.json',
+    'node_modules/ember-concurrency/index.d.ts',
+    'node_modules/ember-concurrency/package.json',
+    'src/positive.js',
+    'src/same-spelling.js',
+    'src/unsafe.js',
+  ], 'ASSERT_CALLER_OMITTED_RESOLUTION_CLEAN_CHECKOUT_INPUTS_ARE_CONSTRUCTED');
+  await withOmittedResolutionProject(async (omittedResolutionRoot) => {
+    for (const [relative, expected] of Object.entries(omittedResolutionFixture)) {
+      assert.equal((await readFile(join(omittedResolutionRoot, relative), 'utf8')), expected, `required constructed fixture input absent or changed: ${relative}`);
+    }
+    assert.match(await readFile(join(omittedResolutionRoot, 'node_modules/ember-concurrency/index.d.ts'), 'utf8'), /interface AbstractTask<[\s\S]*perform\(\.\.\.args: Args\): T;/, 'required Node10-resolved declaration must be present');
 
-  const positive = await analyze('positive');
-  assert.equal(positive.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY ${positive.blocker ?? ''}`);
-  assert.equal(positive.observations.length, 1, 'typed installed declaration must qualify');
-  assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@99\.0\.0-caller;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/);
+    async function analyze(name) {
+      const path = join(omittedResolutionRoot, `src/${name}.js`);
+      const source = await readFile(path);
+      return analyzeSourceConstrainedTypeScript({
+        documents: [{ uri: pathToFileURL(path).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
+        relation_kinds: ['INVOKES_TASK'],
+      });
+    }
 
-  const sameSpelling = await analyze('same-spelling');
-  assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
-  assert.deepEqual(sameSpelling.observations, []);
+    const positive = await analyze('positive');
+    assert.equal(positive.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY ${positive.blocker ?? ''}`);
+    assert.equal(positive.observations.length, 1, 'typed installed declaration must qualify');
+    assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@99\.0\.0-caller;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/);
 
-  const unsafe = await analyze('unsafe');
-  assert.equal(unsafe.outcome, 'BLOCKED', 'unsafe receiver must remain explicit BLOCKED');
-  assert.match(unsafe.blocker, /unsafe compiler identity:/);
+    const sameSpelling = await analyze('same-spelling');
+    assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
+    assert.deepEqual(sameSpelling.observations, []);
+
+    const unsafe = await analyze('unsafe');
+    assert.equal(unsafe.outcome, 'BLOCKED', 'unsafe receiver must remain explicit BLOCKED');
+    assert.match(unsafe.blocker, /unsafe compiler identity:/);
+  });
 });
 
 test('ASSERT_CALLER_MODULE_RESOLUTION_OMISSION_ONLY_POLICY_MATRIX', async () => {
-  const configPath = join(omittedResolutionRoot, 'jsconfig.json');
-  const original = await readFile(configPath);
-  const positivePath = join(omittedResolutionRoot, 'src/positive.js');
-  const source = await readFile(positivePath);
-  const analyze = () => analyzeSourceConstrainedTypeScript({
-    documents: [{ uri: pathToFileURL(positivePath).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
-    relation_kinds: ['INVOKES_TASK'],
-  });
-  const config = compilerOptions => JSON.stringify({ compilerOptions: { target: 'ES2022', experimentalDecorators: true, checkJs: true, allowJs: true, noEmit: true, ...compilerOptions }, include: ['src/**/*.js'] });
-  try {
+  await withOmittedResolutionProject(async (omittedResolutionRoot) => {
+    const configPath = join(omittedResolutionRoot, 'jsconfig.json');
+    const positivePath = join(omittedResolutionRoot, 'src/positive.js');
+    const source = await readFile(positivePath);
+    const analyze = () => analyzeSourceConstrainedTypeScript({
+      documents: [{ uri: pathToFileURL(positivePath).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
+      relation_kinds: ['INVOKES_TASK'],
+    });
+    const config = compilerOptions => JSON.stringify({ compilerOptions: { target: 'ES2022', experimentalDecorators: true, checkJs: true, allowJs: true, noEmit: true, ...compilerOptions }, include: ['src/**/*.js'] });
     for (const [name, options, expected, blocker] of [
       ['omitted-default-module', {}, 'COMPLETE'],
       ['omitted-nodenext-module', { module: 'NodeNext' }, 'COMPLETE'],
@@ -101,9 +138,7 @@ test('ASSERT_CALLER_MODULE_RESOLUTION_OMISSION_ONLY_POLICY_MATRIX', async () => 
       assert.equal(result.outcome, expected, `ASSERT_CALLER_MODULE_RESOLUTION_OMISSION_ONLY_POLICY_MATRIX ${name}: ${result.blocker ?? ''}`);
       if (blocker) assert.match(result.blocker, blocker, name);
     }
-  } finally {
-    await writeFile(configPath, original);
-  }
+  });
 });
 
 test('ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE', async () => {
