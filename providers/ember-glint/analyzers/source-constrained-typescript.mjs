@@ -135,14 +135,115 @@ function declarationCustody(kind, declarationFile, context, provenance) {
     return { path: relative(context.root, declarationFile).replaceAll('\\', '/'), sha256: sha256(readFileSync(declarationFile)), package: `${packageJSON.name}@${packageJSON.version}` };
   } catch { return null; }
 }
-function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) {
+function sameSymbol(checker, left, right) {
+  if (!left || !right) return false;
+  const resolve = symbol => (symbol.flags & ts.SymbolFlags.Alias) ? checker.getAliasedSymbol(symbol) : symbol;
+  return resolve(left) === resolve(right);
+}
+function walkProgram(program, visit) {
+  for (const file of program.getSourceFiles()) {
+    if (file.isDeclarationFile) continue;
+    const walk = node => { visit(node); ts.forEachChild(node, walk); };
+    walk(file);
+  }
+}
+function compilerValueOrigins(expression, checker, program, seen = new Set(), collection = false) {
+  while (ts.isParenthesizedExpression(expression)) expression = expression.expression;
+  if (ts.isAsExpression(expression) || ts.isTypeAssertionExpression(expression)) {
+    if (isUnsafe(checker.getTypeAtLocation(expression))) return [null];
+    expression = expression.expression;
+  }
+  const key = `${expression.getSourceFile().fileName}:${expression.pos}:${expression.end}:${collection}`;
+  if (seen.has(key)) return [];
+  seen.add(key);
+  if (collection && ts.isArrayLiteralExpression(expression)) {
+    return expression.elements.flatMap(element => ts.isSpreadElement(element)
+      ? compilerValueOrigins(element.expression, checker, program, new Set(seen), true)
+      : compilerValueOrigins(element, checker, program, new Set(seen), false));
+  }
+  if (collection && ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+    if (expression.expression.name.text === 'filter') return compilerValueOrigins(expression.expression.expression, checker, program, new Set(seen), true);
+    if (expression.expression.name.text === 'map') {
+      const callback = expression.arguments[0];
+      if (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback)) {
+        const returns = [];
+        if (ts.isBlock(callback.body)) {
+          const walk = node => { if (ts.isReturnStatement(node) && node.expression) returns.push(node.expression); ts.forEachChild(node, walk); };
+          walk(callback.body);
+        } else returns.push(callback.body);
+        return returns.flatMap(value => compilerValueOrigins(value, checker, program, new Set(seen), true));
+      }
+    }
+  }
+  if (ts.isElementAccessExpression(expression)) return compilerValueOrigins(expression.expression, checker, program, new Set(seen), true);
+  if (ts.isIdentifier(expression)) {
+    const symbol = checker.getSymbolAtLocation(expression);
+    const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    if (declaration && ts.isVariableDeclaration(declaration)) {
+      if (ts.isForOfStatement(declaration.parent?.parent)) return compilerValueOrigins(declaration.parent.parent.expression, checker, program, new Set(seen), true);
+      if (isUnsafe(checker.getTypeAtLocation(declaration.name))) return [];
+      if (declaration.initializer) {
+        let reassigned = false;
+        walkProgram(program, node => {
+          if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isIdentifier(node.left) && sameSymbol(checker, checker.getSymbolAtLocation(node.left), symbol)) reassigned = true;
+        });
+        if (!reassigned) return compilerValueOrigins(declaration.initializer, checker, program, new Set(seen), collection);
+      }
+    }
+    if (declaration && ts.isParameter(declaration)) {
+      const signatureOwner = declaration.parent;
+      if ((ts.isArrowFunction(signatureOwner) || ts.isFunctionExpression(signatureOwner)) && ts.isCallExpression(signatureOwner.parent) && ts.isPropertyAccessExpression(signatureOwner.parent.expression)) {
+        return compilerValueOrigins(signatureOwner.parent.expression.expression, checker, program, new Set(seen), true);
+      }
+      const index = signatureOwner.parameters.indexOf(declaration);
+      const origins = [];
+      let calls = 0;
+      walkProgram(program, node => {
+        if (!ts.isCallExpression(node)) return;
+        const signature = checker.getResolvedSignature(node);
+        if (signature?.declaration !== signatureOwner || !node.arguments[index]) return;
+        calls++;
+        origins.push(...compilerValueOrigins(node.arguments[index], checker, program, new Set(seen), collection));
+      });
+      return calls > 0 ? origins : [];
+    }
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    const symbol = checker.getSymbolAtLocation(expression.name);
+    if (symbol) {
+      const origins = [];
+      walkProgram(program, node => {
+        if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken || !ts.isPropertyAccessExpression(node.left)) return;
+        if (sameSymbol(checker, checker.getSymbolAtLocation(node.left.name), symbol)) origins.push(...compilerValueOrigins(node.right, checker, program, new Set(seen), collection));
+      });
+      const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0];
+      if (declaration?.initializer) origins.push(...compilerValueOrigins(declaration.initializer, checker, program, new Set(seen), collection));
+      if (origins.length) return origins;
+    }
+  }
+  if (!collection) {
+    const type = checker.getTypeAtLocation(expression);
+    return isUnsafe(type) ? [null] : [type];
+  }
+  return [];
+}
+function reloadOriginDeclaration(receiver, checker, program) {
+  const origins = compilerValueOrigins(receiver, checker, program);
+  if (origins.length === 0) return null;
+  const declarations = origins.map(type => type && declarationIdentity(checker.getPropertyOfType(type, 'reload'), checker));
+  if (declarations.some(value => !value)) return null;
+  const first = declarations[0];
+  return declarations.every(value => value.symbol === first.symbol && value.parent === first.parent && value.sourceFile.fileName === first.sourceFile.fileName) ? first : null;
+}
+function analyzeCall(kind, call, checker, program, sourceFile, uri, provenance, context) {
   if (!ts.isPropertyAccessExpression(call.expression)) return null;
   const access = call.expression;
   const member = access.name.text;
   const receiverType = checker.getTypeAtLocation(access.expression);
-  if (isUnsafe(receiverType)) return null;
+  const originDeclaration = kind === 'TRIGGERS_RELOAD' && isUnsafe(receiverType) ? reloadOriginDeclaration(access.expression, checker, program) : null;
+  if (isUnsafe(receiverType) && !originDeclaration) return null;
   const symbol = checker.getSymbolAtLocation(access.name);
-  const declaration = declarationIdentity(symbol, checker);
+  const declaration = originDeclaration ?? declarationIdentity(symbol, checker);
   if (!declaration) return null;
   const declarationPath = relative(fixtureRoot, declaration.sourceFile.fileName).replaceAll('\\', '/');
   const source = exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: checker.typeToString(receiverType) });
@@ -158,7 +259,8 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) 
     const custody = declarationCustody(kind, declaration.sourceFile.fileName, context, provenance);
     const validDeclaration = context.kind === 'provider-fixture' ? declarationPath === expectedDeclaration?.path : Boolean(custody);
     if (member !== 'reload' || declaration.symbol !== 'reload' || declaration.parent !== 'Model' || !validDeclaration || !custody) return null;
-    return { from: source, to: exactEndpoint(kind, 'declaration', { package: custody.package, path: custody.path, symbol: 'Model.reload', sha256: custody.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
+    const from = originDeclaration ? exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: checker.typeToString(receiverType), origin: 'compiler-value-flow' }) : source;
+    return { from, to: exactEndpoint(kind, 'declaration', { package: custody.package, path: custody.path, symbol: 'Model.reload', sha256: custody.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   return null;
 }
@@ -209,7 +311,7 @@ export async function analyzeSourceConstrainedTypeScript(request) {
       if (requestedUnsafeCandidate && isUnsafe(receiverType)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
     }
     for (const kind of requested) {
-      let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, sourceFile, uri, provenance, context) : analyzeOther(kind, node, checker, sourceFile, uri);
+      let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, program, sourceFile, uri, provenance, context) : analyzeOther(kind, node, checker, sourceFile, uri);
       if (!resolved) continue;
       const anchorNode = resolved.node ?? node;
       observations.push({ kind, from: { node_id: resolved.from, role: roles[kind][0] }, to: { node_id: resolved.to, role: roles[kind][1] }, original_anchor: { document_id: documentID, uri, revision: commit, blob: sha256(sourceBytes), range: sourceRange(sourceFile, anchorNode) }, supports: ['source_dependency_relation'], does_not_support: ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'] });

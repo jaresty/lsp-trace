@@ -155,3 +155,25 @@ All six observations resolve to `package=ember-concurrency@5.2.0`, physical path
 - B05 historical/current: `./scripts/test-b05-qualification.sh` — immutable historical blob and current 24-attempt release selection pass.
 - Go: `go test ./... -count=1` — 3321/3321; `go test -race ./...` rerun after disposable replay cleanup.
 - CI/release: `./scripts/check-ci.sh` and `./scripts/release-check.sh` — pass, including parity, omission, archive, GoReleaser configuration, and release builds.
+
+## Compiler-owned reload value origins at HEAD `930ba0d`
+
+### RED
+
+`ASSERT_TRIGGERS_RELOAD_FOR_OF_PROPERTY_PARAMETER_ALIAS_ORIGIN` executed after a frozen offline provider install against a constructed caller project matching the native class-property → method-parameter → sole-call array spread → local alias → `for...of` binding shape. The current analyzer reached its own assertion and returned exact `BLOCKED` with `receiver type any`; earlier missing-dependency and fixture-order setup failures were discarded.
+
+### Result
+
+The analyzer now admits an unsafe direct reload receiver only when bounded TypeScript-checker symbols, declarations, resolved signatures, and AST value origins converge on one homogeneous value declaration whose member resolves to authenticated `@warp-drive/legacy@5.8.1` `Model.reload`. Supported bounded links are `for...of` bindings, immutable local aliases, array elements and spreads, property declarations and assignments, exact resolved call arguments for parameters, indexed elements, callback parameters, and identity-preserving `filter`; cycles, empty initial arrays, and self-spreads add no evidence. Any/unknown branches, missing call origins, reassignment, heterogeneous or mixed declarations, and multiple incompatible origins do not qualify. Existing exact package-root realpath containment, package name/version, declaration parent/member, declaration digest, original anchor, and deterministic endpoint requirements remain mandatory.
+
+A disposable shared clone of read-only Market View was detached at `326718ae733cb26097bd30246276cecd371a4e79`; `corepack pnpm@10.32.1 install --frozen-lockfile --offline --ignore-scripts` reused all 1,798 packages and downloaded none. With only the prior analysis overlay `types: ["ember-source/types"]` in the disposable clone, two byte-identical combined analyzer replays of `app/services/uploads.js` preserved exactly six `INVOKES_TASK` observations and no `TRIGGERS_RELOAD`. Two reload-only replays returned exact `BLOCKED`/`UNAVAILABLE`, zero observations, and `unsafe compiler identity: .../app/services/uploads.js:90:17 receiver type any`; integrations returned the same terminal status for lines 81:15 and 97:17. Compiler-owned traversal could not close every collection origin through the caller's mapped/flattened Ember Data values to `UserImportModel`; the string literal `'user-import'` was not used as evidence. Native reload therefore remains `BLOCKED`, not `EMPTY`, and `PROGRAM_B` remains false.
+
+Isolated GREEN perturbations reject heterogeneous same-spelling reload values, an unsafe `any` collection element, multiple incompatible origins, the pre-existing explicit-any local initialized with `new Model`, an explicit `as any[]` assertion, wrong package/version/path, and symlink escape. Provider tests pass 89/89; the freshly packed/offline-installed real MCP caller qualifier passes 12 cases, 24 operations, and 48/48 attempts after its constructed positive manifests were aligned to authenticated `ember-concurrency@5.2.0` and `@warp-drive/legacy@5.8.1` (wrong-name controls retain the pinned versions); retained caller guards pass; B05 historical/current lineage and 24-stage admission pass.
+
+## Derivation
+
+1. An `any` receiver is uncertainty at the call site, not evidence of absence and not authority to use member spelling.
+2. A bounded binding can recover identity only from checker-owned symbols, declarations, resolved signatures, and collection element/value origins; every non-empty origin branch must converge on the exact same declaration.
+3. Declaration identity is insufficient without physical package custody: realpath containment, nearest package manifest, exact `@warp-drive/legacy@5.8.1`, `Model.reload`, and declaration digest remain conjunctive.
+4. The native Market View collection admits values through flows whose Ember Data roots remain unsafe to this checker configuration, so the compiler cannot prove homogeneous `UserImportModel` provenance without a textual or identifier-based leap.
+5. Consequently the implementation safely expands synthetic compiler-proven flows while preserving the native reload blocker, six previously authenticated task relations, immutable retained evidence, and the Program-B admission ceiling.

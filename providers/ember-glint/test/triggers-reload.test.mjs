@@ -61,6 +61,9 @@ test('ASSERT_TRIGGERS_RELOAD_REJECTS_ANY_UNKNOWN_AND_UNRESOLVED_CHECKER_INPUT', 
   const anyResult = await analyze(`declare const value: any; value.reload();`);
   assert.equal(anyResult.outcome, 'BLOCKED');
   assert.match(anyResult.blocker, /unsafe compiler identity:/);
+  const assertedAny = await analyze(`import Model from '@ember-data/model';\ndeclare const models: Model[];\n(models as any[])[0].reload();`);
+  assert.equal(assertedAny.outcome, 'BLOCKED', 'ASSERT_TRIGGERS_RELOAD_UNSAFE_ASSERTION_CANNOT_BYPASS_ORIGIN_GUARD');
+  assert.match(assertedAny.blocker, /unsafe compiler identity:/);
   for (const [source, diagnostic] of [[`declare const value: unknown; value.reload();`, 'TS18046'], [`missing.reload();`, 'TS2304']]) {
     const result = await analyze(source);
     assert.equal(result.outcome, 'BLOCKED');

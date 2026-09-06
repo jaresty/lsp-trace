@@ -23,6 +23,7 @@ const omittedResolutionFixture = {
   'src/unresolved.js': "import { missingTask } from 'missing-concurrency';\nmissingTask().perform();\n",
   'src/unsafe.js': "import Model from '@warp-drive/legacy/model';\n/** @type {any} */ const firstTask = {};\n/** @type {any} */ const secondTask = {};\n/** @type {any} */ const reloadTarget = new Model();\nfirstTask.perform();\nsecondTask.perform();\nreloadTarget.reload();\n",
   'src/reload.js': "import Model from '@warp-drive/legacy/model';\nconst model = new Model();\nmodel.reload();\n",
+  'src/reload-origin.js': "import Model from '@warp-drive/legacy/model';\nclass Uploads {\n  uploads = [];\n  add(values) { this.uploads = [...this.uploads, ...values]; }\n  poll() { for (const upload of this.uploads) upload.reload(); }\n}\nconst uploads = new Uploads();\nconst model = new Model();\nconst alias = model;\nuploads.add([alias]);\n",
   'node_modules/ember-concurrency/package.json': `${JSON.stringify({ name: 'ember-concurrency', version: '5.2.0', type: 'module', types: './declarations/index.d.ts', exports: { '.': { types: './declarations/index.d.ts', default: './dist/index.js' } } })}\n`,
   'node_modules/ember-concurrency/declarations/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\nexport interface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport type TaskForAsyncTaskFunction<Fn extends (...args: any[]) => Promise<any>> = AbstractTask<Parameters<Fn>, TaskInstance<Awaited<ReturnType<Fn>>>> & { readonly callerProjectBrand: unique symbol };\ninterface WrongParent { perform(): void; }\nexport declare function task<Fn extends (...args: any[]) => Promise<any>>(callback: Fn): TaskForAsyncTaskFunction<Fn>;\nexport declare function confusableTask(): WrongParent;\n',
   'node_modules/@warp-drive/legacy/package.json': `${JSON.stringify({ name: '@warp-drive/legacy', version: '5.8.1', type: 'module', exports: { './model': { types: './declarations/model.d.ts', default: './dist/model.js' } } })}\n`,
@@ -91,6 +92,7 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
     'node_modules/ember-concurrency/declarations/index.d.ts',
     'node_modules/ember-concurrency/package.json',
     'src/positive.js',
+    'src/reload-origin.js',
     'src/reload.js',
     'src/same-spelling.js',
     'src/unknown.js',
@@ -127,6 +129,25 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
     assert.equal(reload.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_EXPORTS_SUBPATH ${reload.blocker ?? ''}`);
     assert.equal(reload.observations.length, 1, 'exported model declaration must qualify');
     assert.match(reload.observations[0].to.node_id, /package=@warp-drive\/legacy@5\.8\.1;path=node_modules\/@warp-drive\/legacy\/declarations\/model\.d\.ts;symbol=Model\.reload;/);
+
+    const reloadOrigin = await analyze('reload-origin', ['TRIGGERS_RELOAD']);
+    assert.equal(reloadOrigin.outcome, 'COMPLETE', `ASSERT_TRIGGERS_RELOAD_FOR_OF_PROPERTY_PARAMETER_ALIAS_ORIGIN ${reloadOrigin.blocker ?? ''}`);
+    assert.equal(reloadOrigin.observations.length, 1, 'ASSERT_TRIGGERS_RELOAD_FOR_OF_PROPERTY_PARAMETER_ALIAS_ORIGIN');
+    assert.match(reloadOrigin.observations[0].from.node_id, /receiver=any;origin=compiler-value-flow/);
+    assert.match(reloadOrigin.observations[0].to.node_id, /package=@warp-drive\/legacy@5\.8\.1;path=node_modules\/@warp-drive\/legacy\/declarations\/model\.d\.ts;symbol=Model\.reload;/);
+
+    for (const [name, tail] of [
+      ['heterogeneous', "uploads.add([model, { reload() {} }]);"],
+      ['unknown-origin', "/** @type {any} */ const unknown = {}; uploads.add([model, unknown]);"],
+      ['multiple-origins', "class Other { reload() {} } uploads.add([model]); uploads.add([new Other()]);"],
+    ]) {
+      const path = join(omittedResolutionRoot, `src/reload-origin-${name}.js`);
+      await writeFile(path, `import Model from '@warp-drive/legacy/model';\nclass Uploads { uploads = []; add(values) { this.uploads = [...this.uploads, ...values]; } poll() { for (const upload of this.uploads) upload.reload(); } }\nconst uploads = new Uploads(); const model = new Model(); ${tail}\n`);
+      const negative = await analyze(`reload-origin-${name}`, ['TRIGGERS_RELOAD']);
+      assert.equal(negative.outcome, 'BLOCKED', `ASSERT_TRIGGERS_RELOAD_ORIGIN_REJECTS_${name.toUpperCase()}`);
+      assert.equal(negative.coverage.status, 'UNAVAILABLE');
+      assert.deepEqual(negative.observations, []);
+    }
 
     const sameSpelling = await analyze('same-spelling');
     assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
