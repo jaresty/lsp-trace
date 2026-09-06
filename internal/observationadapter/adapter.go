@@ -44,6 +44,7 @@ type ReportedObservation struct {
 }
 
 type Envelope struct {
+	Diagnostics  []graph.Diagnostic           `json:"diagnostics,omitempty"`
 	Provider     Identity                     `json:"provider"`
 	Protocol     Identity                     `json:"protocol"`
 	Adapter      Identity                     `json:"adapter"`

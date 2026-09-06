@@ -160,11 +160,13 @@ async function strictCollectorResponse(request, records) {
   const eligible = records.filter((record) => relations.every((kind) => record.relationKinds.includes(kind)) && record.languages.includes('glimmer-js'));
   let observations = [];
   let failure;
+  const diagnostics = [];
   let coverage = { status: 'UNKNOWN', denominator: [uri], covered: [], CoveredCount: 0 };
   if (eligible.length === 1) {
     const settled = await settleAnalyzer(eligible[0].analyzer, { schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source, position: Number.isInteger(request.seed.line) && Number.isInteger(request.seed.character) ? { line: request.seed.line, character: request.seed.character } : undefined }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
     if (settled.error) {
       failure = 'TRANSPORT_FAILED';
+      diagnostics.push({ phase: 'provider', message: `FAILED: ${settled.error instanceof Error ? settled.error.message : String(settled.error)}` });
     } else {
       const result = settled.value;
       const genericNonEntailments = ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'];
@@ -175,7 +177,11 @@ async function strictCollectorResponse(request, records) {
       }));
       if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
       else if (result.outcome === 'BOUNDED' || result.outcome === 'PARTIAL') coverage = { status: 'PARTIAL', denominator: [uri], covered: [], CoveredCount: 0 };
-      else failure = result.outcome === 'UNAVAILABLE' ? 'ADAPTER_NOT_AVAILABLE' : 'TRANSPORT_FAILED';
+      else failure = ['UNAVAILABLE', 'BLOCKED'].includes(result.outcome) ? 'ADAPTER_NOT_AVAILABLE' : 'TRANSPORT_FAILED';
+      if (!['COMPLETE', 'EMPTY'].includes(result.outcome)) {
+        const unresolved = result.coverage?.relations?.filter(item => !['COMPLETE', 'EMPTY'].includes(item.outcome)) ?? [{ outcome: result.outcome, coverage: result.coverage, reason: result.blocker ?? result.reason ?? result.coverage?.reason }];
+        for (const item of unresolved) diagnostics.push({ phase: 'provider', ...(item.relation ? { method: item.relation } : {}), message: JSON.stringify(item) });
+      }
     }
   } else {
     failure = 'RELATION_NOT_SUPPORTED';
@@ -195,6 +201,7 @@ async function strictCollectorResponse(request, records) {
     authority: 'PROVIDER_REPORTED',
     coverage,
     ...(failure ? { failure } : {}),
+    ...(diagnostics.length ? { diagnostics } : {}),
     documents: [documentRecord],
     observations,
     request_id: `${request.session.session_id}:${request.session.generation}:${uri}`,

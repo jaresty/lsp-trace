@@ -314,7 +314,7 @@ export async function analyzeSourceConstrainedTypeScript(request) {
       const member = node.expression.name.text;
       const requestedUnsafeCandidate = (member === 'perform' && requested.has('INVOKES_TASK')) || (member === 'reload' && requested.has('TRIGGERS_RELOAD'));
       const receiverType = checker.getTypeAtLocation(node.expression.expression);
-      if (requestedUnsafeCandidate && isUnsafe(receiverType)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
+      if (requestedUnsafeCandidate && isUnsafe(receiverType) && !analyzeCall(member === 'perform' ? 'INVOKES_TASK' : 'TRIGGERS_RELOAD', node, checker, program, sourceFile, uri, provenance, context)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
     }
     for (const kind of requested) {
       let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, program, sourceFile, uri, provenance, context) : analyzeOther(kind, node, checker, sourceFile, uri);
@@ -325,6 +325,6 @@ export async function analyzeSourceConstrainedTypeScript(request) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  if (unsafeCalls.length && observations.length === 0) return { outcome: 'BLOCKED', observations: [], coverage: { status: 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker: `unsafe compiler identity: ${unsafeCalls.join('; ')}` };
+  if (unsafeCalls.length) return { outcome: observations.length ? 'PARTIAL' : 'BLOCKED', observations, coverage: { status: observations.length ? 'PARTIAL' : 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker: `unsafe compiler identity: ${unsafeCalls.join('; ')}` };
   return { outcome: observations.length === 0 ? 'EMPTY' : 'COMPLETE', observations, coverage: { status: 'BOUNDED', denominator: [uri], covered: [uri] } };
 }

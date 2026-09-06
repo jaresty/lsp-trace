@@ -54,7 +54,7 @@ test('ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS', () => {
     const installed = path.join(temporary, 'node_modules', '@lsp-trace', 'ember-glint-provider');
     assert.deepEqual(runtimeFiles(installed).filter((name) => name !== 'package.json').sort(), allowed.filter((name) => name !== 'package.json'), 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     const manifest = JSON.parse(readFileSync(path.join(installed, 'package.json'), 'utf8'));
-    assert.equal(manifest.version, '1.0.1', 'ASSERT_PACK_INSTALL_CUSTODY_VERSION');
+    assert.equal(manifest.version, '1.0.2', 'ASSERT_PACK_INSTALL_CUSTODY_VERSION');
     assert.equal(manifest.bin['ember-glint'], './bin/ember-glint.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     assert.equal(manifest.exports['.'], './default-analyzer.mjs', 'ASSERT_NPM_PACK_AND_OFFLINE_INSTALL_EXACT_RUNTIME_CONTENTS');
     const installedAnalyzer = path.join(installed, 'analyzers', 'source-constrained-typescript.mjs');

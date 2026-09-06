@@ -210,6 +210,10 @@ func (c *Collector) CollectRelations(ctx context.Context, relations []string, ra
 		return Result{}, errors.New("typed provider result omitted required identity, graph, or digest")
 	}
 	if len(result.Observations) == 0 || len(result.GraphV4.Relations) == 0 {
+		if len(result.Diagnostics) > 0 {
+			diagnostics, _ := json.Marshal(result.Diagnostics)
+			return Result{}, fmt.Errorf("typed provider result contains no accepted observations: %s", diagnostics)
+		}
 		return Result{}, errors.New("typed provider result contains no accepted observations")
 	}
 	return result, nil

@@ -24,7 +24,8 @@
         "custody": {"type": "object"},
         "observation_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "logical_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-        "receipt": {"type": "object"}
+        "receipt": {"type": "object"},
+        "diagnostics": {"type": "array", "items": {"type": "object", "required": ["phase", "message"], "additionalProperties": false, "properties": {"phase": {"type": "string"}, "message": {"type": "string"}, "method": {"type": "string"}, "node_id": {"type": "string"}, "category": {"enum": ["UNRESOLVED_CALL", "DYNAMIC_CALL"]}}}}
       }
     }
   }

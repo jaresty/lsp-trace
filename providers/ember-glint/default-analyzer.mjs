@@ -81,35 +81,55 @@ export function createDefaultAnalyzer() {
       blob: input.digest.replace(/^sha256:/, ''), source: input.source,
     };
     const observations = [];
-    let blocked;
-    let resultCoverage;
+    const results = [];
     for (const relation of request.relation_kinds) {
       let result;
-      if (relation === 'BINDS_ARGUMENT' || relation === 'RENDERS_FROM') {
-        result = analyzer.analyze(classification.kind === 'glint'
-          ? { ...classification, document: { ...document, source: input.source }, relationKinds: [relation] }
-          : { kind: 'template', source: input.source, document, relationKinds: [relation] });
-      } else if (relation === 'PASSES_CALLBACK') {
-        const source = input?.source ?? '';
-        result = callbackAnalyzer.extract({ documents: [{ ...document, generated: {
-          source, fileName: '/__lsp_trace__/seed.ts',
-          mapToOriginal: ({ start, end }) => ({ uri: input.uri, start, end, roundTrip: { start, end } }),
-        } }] });
-      } else if (relation === 'INVOKES_TASK' || relation === 'TRIGGERS_RELOAD') {
-        result = await analyzeSourceConstrainedTypeScript({ ...request, relation_kinds: [relation] });
-      } else if (relation === 'UPDATES_STATE') {
-        result = scriptExtractor.extract({ documents: [{ ...document, language: 'typescript' }] });
+      try {
+        if (relation === 'BINDS_ARGUMENT' || relation === 'RENDERS_FROM') {
+          result = analyzer.analyze(classification.kind === 'glint'
+            ? { ...classification, document: { ...document, source: input.source }, relationKinds: [relation] }
+            : { kind: 'template', source: input.source, document, relationKinds: [relation] });
+        } else if (relation === 'PASSES_CALLBACK') {
+          const source = input?.source ?? '';
+          result = callbackAnalyzer.extract({ documents: [{ ...document, generated: {
+            source, fileName: '/__lsp_trace__/seed.ts',
+            mapToOriginal: ({ start, end }) => ({ uri: input.uri, start, end, roundTrip: { start, end } }),
+          } }] });
+        } else if (relation === 'INVOKES_TASK' || relation === 'TRIGGERS_RELOAD') {
+          result = await analyzeSourceConstrainedTypeScript({ ...request, relation_kinds: [relation] });
+        } else if (relation === 'UPDATES_STATE') {
+          result = scriptExtractor.extract({ documents: [{ ...document, language: 'typescript' }] });
+        }
+      } catch (error) {
+        result = { outcome: 'FAILED', observations: [], coverage: { status: 'UNAVAILABLE' }, blocker: error instanceof Error ? error.message : String(error) };
       }
-      if (!result || ['BLOCKED', 'FAILED', 'UNSUPPORTED'].includes(result.status)) blocked = result?.reason ?? 'RELATION_NOT_SUPPORTED';
-      resultCoverage = result?.coverage;
+      // The compiler analyzer uses outcome/blocker; extractors use status/reason.
+      const status = result?.outcome ?? result?.status ?? (result?.coverage?.status === 'BOUNDED'
+        ? result.observations?.length ? 'COMPLETE' : 'EMPTY'
+        : result?.coverage?.status) ?? 'UNSUPPORTED';
+      const outcome = status === 'UNSUPPORTED' || (!result?.outcome && status === 'BLOCKED') ? 'UNAVAILABLE' : status;
+      const reason = result?.blocker ?? result?.reason ?? result?.coverage?.reason;
+      results.push({ relation, outcome, coverage: result?.coverage ?? { status: 'UNKNOWN' }, ...(reason ? { reason } : {}) });
       observations.push(...(result?.observations ?? []).filter(({ kind }) => kind === relation));
     }
+    results.sort((a, b) => a.relation.localeCompare(b.relation));
+    const unresolved = results.filter(({ outcome, coverage }) =>
+      ['BLOCKED', 'UNAVAILABLE', 'FAILED', 'PARTIAL', 'BOUNDED'].includes(outcome) || ['UNKNOWN', 'UNAVAILABLE', 'PARTIAL'].includes(coverage.status));
+    const outcome = unresolved.length
+      ? observations.length ? 'PARTIAL' : ['FAILED', 'BLOCKED', 'UNAVAILABLE', 'PARTIAL', 'BOUNDED'].find(status => unresolved.some(result => result.outcome === status)) ?? 'UNAVAILABLE'
+      : observations.length ? 'COMPLETE' : 'EMPTY';
     return {
-      outcome: blocked ? 'UNAVAILABLE' : observations.length === 0 ? 'EMPTY' : 'COMPLETE',
-      observations,
-      coverage: blocked
-        ? { status: 'UNKNOWN', reason: blocked }
-        : { ...resultCoverage, status: 'BOUNDED', denominator: [document.uri], covered: [document.uri] },
+      outcome, observations,
+      coverage: unresolved.length
+        ? {
+          status: observations.length ? 'PARTIAL' : unresolved[0].coverage.status,
+          denominator: [document.uri], covered: [],
+          reason: unresolved.length === 1
+            ? unresolved[0].reason ?? unresolved[0].outcome
+            : unresolved.map(result => `${result.relation}: ${result.reason ?? result.outcome}`).join('; '),
+          relations: results,
+        }
+        : { ...results.at(-1)?.coverage, status: 'BOUNDED', denominator: [document.uri], covered: [document.uri] },
     };
   }
 

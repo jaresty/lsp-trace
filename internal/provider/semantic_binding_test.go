@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -10,6 +11,49 @@ import (
 	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/relations"
 )
+
+func TestProviderDiagnosticsPreservePartialEvidenceAndIdentity(t *testing.T) {
+	adapter, request, receipt := semanticFixture(t)
+	before, err := adapter.Adapt(context.Background(), request, receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var baseline Result
+	if err := json.Unmarshal(before, &baseline); err != nil {
+		t.Fatal(err)
+	}
+	var envelope observationadapter.Envelope
+	if err := json.Unmarshal(receipt.Response, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	envelope.Coverage = relations.Coverage{Status: relations.CoveragePartial, Denominator: envelope.Coverage.Denominator, Covered: []string{}}
+	envelope.Diagnostics = []graph.Diagnostic{{Phase: "provider", Method: "PASSES_CALLBACK", Message: "BLOCKED: unresolved compiler identity; coverage UNAVAILABLE"}}
+	receipt.Response, _ = json.Marshal(envelope)
+	raw, err := adapter.Adapt(context.Background(), request, receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result Result
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatal(err)
+	}
+	graphBytes, err := json.Marshal(result.GraphV4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := graph.ValidateNormalizedRelationsJSON(graphBytes); err != nil {
+		t.Fatalf("diagnostic graph schema: %v", err)
+	}
+	if result.Complete || result.Coverage.Status != relations.CoveragePartial || len(result.Coverage.Covered) != 0 {
+		t.Fatalf("uncertainty promoted: %+v", result)
+	}
+	if !reflect.DeepEqual(result.Diagnostics, envelope.Diagnostics) || !reflect.DeepEqual(result.GraphV4.Provenance.Diagnostics, envelope.Diagnostics) {
+		t.Fatalf("diagnostics dropped: %s", raw)
+	}
+	if !reflect.DeepEqual(result.Observations, baseline.Observations) || !reflect.DeepEqual(result.GraphV4.Relations, baseline.GraphV4.Relations) || result.LogicalDigest != baseline.LogicalDigest {
+		t.Fatal("diagnostic changed endpoint/anchor/observation identity")
+	}
+}
 
 func semanticFixture(t *testing.T) (*ObservationSemanticAdapter, StrictCollectorRequest, Receipt) {
 	t.Helper()

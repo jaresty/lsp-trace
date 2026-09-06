@@ -17,6 +17,7 @@ import (
 
 // Result is the lossless provider-neutral result accepted by managed operations.
 type Result struct {
+	Diagnostics   []graph.Diagnostic               `json:"diagnostics,omitempty"`
 	ProviderID    string                           `json:"provider_id"`
 	Provider      observationadapter.Identity      `json:"provider"`
 	Protocol      observationadapter.Identity      `json:"protocol"`
@@ -134,13 +135,13 @@ func (a *ObservationSemanticAdapter) Adapt(ctx context.Context, request StrictCo
 	adapted.GraphV4.Provenance = &graph.NormalizedRelationsProvenance{
 		ProviderID: request.ProviderID, Provider: marshal(envelope.Provider), Protocol: marshal(envelope.Protocol), Adapter: marshal(envelope.Adapter),
 		Coverage: marshal(adapted.Coverage), Bounds: marshal(request.Limits), Custody: marshal(adapted.Custody), ObservationIDs: observationIDs,
-		LogicalDigest: logicalDigest, Receipt: marshal(executionReceipt),
+		LogicalDigest: logicalDigest, Receipt: marshal(executionReceipt), Diagnostics: envelope.Diagnostics,
 	}
 	complete := string(adapted.Coverage.Status) == "COMPLETE_WITHIN_BOUNDS" && adapted.Failure == ""
 	return json.Marshal(Result{
 		ProviderID: request.ProviderID, Provider: envelope.Provider, Protocol: envelope.Protocol, Adapter: envelope.Adapter,
 		Terminal: string(adapted.Coverage.Status), Complete: complete, Truncated: string(adapted.Failure) == "BOUNDED_TRUNCATION",
-		Bounds: request.Limits, Coverage: adapted.Coverage, Custody: adapted.Custody,
+		Bounds: request.Limits, Coverage: adapted.Coverage, Custody: adapted.Custody, Diagnostics: envelope.Diagnostics,
 		Observations: adapted.Observations, GraphV4: adapted.GraphV4, LogicalDigest: logicalDigest, Receipt: executionReceipt,
 	})
 }

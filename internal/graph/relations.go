@@ -78,6 +78,7 @@ type NormalizedRelations struct {
 // Raw fields preserve their owning typed contracts without importing provider or
 // framework semantics into the graph package.
 type NormalizedRelationsProvenance struct {
+	Diagnostics    []Diagnostic    `json:"diagnostics,omitempty"`
 	ProviderID     string          `json:"provider_id"`
 	Provider       json.RawMessage `json:"provider"`
 	Protocol       json.RawMessage `json:"protocol"`
