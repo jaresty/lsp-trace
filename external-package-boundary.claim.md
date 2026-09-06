@@ -96,3 +96,27 @@ The provider package tests pass 71/71. A fresh packed/offline install now execut
 - Go: `go test ./...` and `go test -race ./...` — 3314 passed in 41 packages for each; `go vet ./...` — pass.
 - Release: `./scripts/release-check.sh` — `RELEASE CHECK PASS`.
 - GoReleaser: `goreleaser release --snapshot --clean` — six platform archives built successfully.
+
+## Generic caller-project JavaScript boundary at HEAD `40d98be`
+
+### RED
+
+`ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE` executed against a caller-owned `checkJs:false` fixture and reached its own identity assertion: the loader returned only the two compiler-owned `INVOKES_TASK` identities and omitted the compiler-owned `TRIGGERS_RELOAD` identity. The initial missing-`typescript` setup error was explicitly discarded and is not the witness.
+
+### GREEN
+
+Caller-project JavaScript analysis now overlays `allowJs:true`, `checkJs:true`, and `noEmit:true` in memory while preserving the parsed caller project options and leaving project files unchanged. Compiler diagnostics return `BLOCKED` with `UNAVAILABLE` coverage and exact TS code/path/line/column/message text. Any/unknown receiver uncertainty returns explicit `BLOCKED`; bounded checked same-spelling controls remain `EMPTY`; admitted relations still require compiler-owned declaration identity and caller-local package custody. No spelling, regex, marker, or target-name fallback was added.
+
+The focused assertion and provider package pass 87/87. Canonical B05 passes all 24/24 packed real-MCP attempts plus exact matrix and physical-provider checks. `./scripts/check-ci.sh` passes format, full test, vet, build, Python, shell, release, clean-tree policy, and GoReleaser dry-run gates. The older `qualification/source-constrained-synthetic` verifier remains blocked before its guard matrix by its pre-existing protected-baseline mismatch `B05 v2 bytes changed`; no baseline was rewritten and no pass is claimed.
+
+### Native Market View replay
+
+A disposable detached clone of read-only `/Users/schwa/dev/nais/03_repos/market-view-ui` at pinned commit `326718ae733cb26097bd30246276cecd371a4e79` returned `BLOCKED`/`UNAVAILABLE` for both `app/services/uploads.js` and `app/models/user-import.js`. No declaration identities resolved. Exact TS2792 diagnostics named unresolved caller dependencies: `@ember/service`, `@glimmer/tracking`, and `ember-concurrency` for uploads; `@ember/string`, `@warp-drive/legacy/model`, and `moment` for user-import. The replay therefore no longer collapses semantic uncertainty to bounded `EMPTY`.
+
+## Derivation
+
+1. A containing config with `checkJs:false` is not evidence that JavaScript relation absence has been semantically checked; overlay checking for the analyzed root without mutating caller files.
+2. Preserve caller module resolution, `baseUrl`, `paths`, and `types` by spreading parsed options before the three analysis-only overrides.
+3. Admit INVOKES_TASK and TRIGGERS_RELOAD only through TypeScript symbol/declaration identity plus package custody; apply the same caller-local custody policy to both relation families.
+4. Project compiler diagnostics and unsafe any/unknown receiver identity as explicit `BLOCKED`/`UNAVAILABLE`, retaining exact diagnostic provenance instead of throwing or returning absence.
+5. Preserve `EMPTY` only for successfully checked bounded sources whose known compiler identities establish that no requested relation exists.

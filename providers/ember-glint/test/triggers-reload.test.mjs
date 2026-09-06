@@ -33,7 +33,6 @@ export function refresh(person: Person) { return person.reload(); }
 const compilerBackedNegatives = {
   'local same-spelling': `class LocalCache { reload() { return this; } }\nnew LocalCache().reload();`,
   'name-only': `const reload = () => undefined; reload();`,
-  any: `declare const value: any; value.reload();`,
   'wrong declaration parent': `class WrongParent { reload() { return this; } }\ndeclare const value: WrongParent; value.reload();`,
   'wrong declaration path': `class Model { reload() { return this; } }\ndeclare const value: Model; value.reload();`,
 };
@@ -58,9 +57,16 @@ test('ASSERT_TRIGGERS_RELOAD_COMPILER_REJECTS_NON_IDENTITIES', async () => {
   }
 });
 
-test('ASSERT_TRIGGERS_RELOAD_REJECTS_UNKNOWN_AND_UNRESOLVED_CHECKER_INPUT', async () => {
-  await assert.rejects(() => analyze(`declare const value: unknown; value.reload();`), /bounded checker failure/);
-  await assert.rejects(() => analyze(`missing.reload();`), /bounded checker failure/);
+test('ASSERT_TRIGGERS_RELOAD_REJECTS_ANY_UNKNOWN_AND_UNRESOLVED_CHECKER_INPUT', async () => {
+  const anyResult = await analyze(`declare const value: any; value.reload();`);
+  assert.equal(anyResult.outcome, 'BLOCKED');
+  assert.match(anyResult.blocker, /unsafe compiler identity:/);
+  for (const [source, diagnostic] of [[`declare const value: unknown; value.reload();`, 'TS18046'], [`missing.reload();`, 'TS2304']]) {
+    const result = await analyze(source);
+    assert.equal(result.outcome, 'BLOCKED');
+    assert.equal(result.coverage.status, 'UNAVAILABLE');
+    assert.match(result.blocker, new RegExp(`bounded checker failure: ${diagnostic}`));
+  }
 });
 
 test('ASSERT_TRIGGERS_RELOAD_IDS_ANCHORS_AND_FRAMING_ARE_DETERMINISTIC', async () => {

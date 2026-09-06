@@ -26,7 +26,6 @@ for (const [fixture, relation] of [
 
 for (const [fixture, relation] of [
   ['invokes-task-negative.js', 'INVOKES_TASK'],
-  ['invokes-task-any.js', 'INVOKES_TASK'],
   ['triggers-reload-negative.js', 'TRIGGERS_RELOAD'],
 ]) {
   test(`ASSERT_JAVASCRIPT_CONFUSABLE_OR_UNSAFE_EMPTY_${fixture}`, async () => {
@@ -36,12 +35,16 @@ for (const [fixture, relation] of [
   });
 }
 
-for (const [fixture, relation] of [
-  ['invokes-task-unresolved.js', 'INVOKES_TASK'],
-  ['triggers-reload-unknown.js', 'TRIGGERS_RELOAD'],
-  ['triggers-reload-unresolved.js', 'TRIGGERS_RELOAD'],
+for (const [fixture, relation, blocker] of [
+  ['invokes-task-any.js', 'INVOKES_TASK', /unsafe compiler identity:/],
+  ['invokes-task-unresolved.js', 'INVOKES_TASK', /bounded checker failure: TS2307/],
+  ['triggers-reload-unknown.js', 'TRIGGERS_RELOAD', /bounded checker failure: TS18046/],
+  ['triggers-reload-unresolved.js', 'TRIGGERS_RELOAD', /bounded checker failure: TS2307/],
 ]) {
   test(`ASSERT_JAVASCRIPT_UNSAFE_OR_UNRESOLVED_FAILS_CLOSED_${fixture}`, async () => {
-    await assert.rejects(analyzeSourceConstrainedTypeScript(request(fixture, relation)), /bounded checker failure:/);
+    const result = await analyzeSourceConstrainedTypeScript(request(fixture, relation));
+    assert.equal(result.outcome, 'BLOCKED');
+    assert.equal(result.coverage.status, 'UNAVAILABLE');
+    assert.match(result.blocker, blocker);
   });
 }

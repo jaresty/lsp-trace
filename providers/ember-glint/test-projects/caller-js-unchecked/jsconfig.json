@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "checkJs": false,
+    "allowJs": true,
+    "baseUrl": ".",
+    "paths": {
+      "caller-tasks": ["node_modules/ember-concurrency/index.d.ts"],
+      "caller-model": ["node_modules/@warp-drive/legacy/index.d.ts"]
+    },
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["src/**/*.js"]
+}

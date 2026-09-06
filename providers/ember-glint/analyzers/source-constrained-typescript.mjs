@@ -80,7 +80,7 @@ function makeProgram(seedPath) {
   const project = fixtureOwned ? null : projectConfiguration(seedPath);
   if (javascript && !fixtureOwned && !project) return { blocked: 'JavaScript seed has no containing jsconfig/tsconfig' };
   if (project) {
-    const options = { ...project.options, noEmit: true };
+    const options = { ...project.options, noEmit: true, ...(javascript ? { allowJs: true, checkJs: true } : {}) };
     const host = ts.createCompilerHost(options);
     const files = project.files.includes(seedPath) ? project.files : [...project.files, seedPath];
     return { program: ts.createProgram(files, options, host), context: { kind: 'caller-project', root: project.root } };
@@ -131,8 +131,10 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) 
   }
   if (kind === 'TRIGGERS_RELOAD') {
     const expectedDeclaration = provenance.packages['@warp-drive/legacy'].declarations.find(({ path }) => path === 'vendor/warp-drive/private-model.d.ts');
-    if (member !== 'reload' || declaration.symbol !== 'reload' || declaration.parent !== 'Model' || declarationPath !== expectedDeclaration?.path) return null;
-    return { from: source, to: exactEndpoint(kind, 'declaration', { package: '@warp-drive/legacy@5.8.1', path: declarationPath, symbol: 'Model.reload', sha256: expectedDeclaration.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
+    const custody = declarationCustody(kind, declaration.sourceFile.fileName, context, provenance);
+    const validDeclaration = context.kind === 'provider-fixture' ? declarationPath === expectedDeclaration?.path : Boolean(custody);
+    if (member !== 'reload' || declaration.symbol !== 'reload' || declaration.parent !== 'Model' || !validDeclaration || !custody) return null;
+    return { from: source, to: exactEndpoint(kind, 'declaration', { package: custody.package ?? '@warp-drive/legacy@5.8.1', path: custody.path, symbol: 'Model.reload', sha256: custody.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   return null;
 }
@@ -163,11 +165,23 @@ export async function analyzeSourceConstrainedTypeScript(request) {
   const sourceFile = program.getSourceFile(seedPath);
   if (!sourceFile) throw new Error('checker did not load seed');
   const diagnostics = ts.getPreEmitDiagnostics(program).filter(d => d.file?.fileName === seedPath);
-  if (diagnostics.length) throw new Error(`bounded checker failure: ${diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, ' ')).join('; ')}`);
+  if (diagnostics.length) {
+    const blocker = `bounded checker failure: ${diagnostics.map(d => {
+      const position = d.file && d.start !== undefined ? d.file.getLineAndCharacterOfPosition(d.start) : null;
+      const location = position ? `${d.file.fileName}:${position.line + 1}:${position.character + 1}` : d.file?.fileName ?? seedPath;
+      return `TS${d.code} ${location} ${ts.flattenDiagnosticMessageText(d.messageText, ' ')}`;
+    }).join('; ')}`;
+    return { outcome: 'BLOCKED', observations: [], coverage: { status: 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker };
+  }
   const checker = program.getTypeChecker();
   const documentID = 'original';
   const observations = [];
+  const unsafeCalls = [];
   function visit(node) {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const receiverType = checker.getTypeAtLocation(node.expression.expression);
+      if (isUnsafe(receiverType)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
+    }
     for (const kind of requested) {
       let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, sourceFile, uri, provenance, context) : analyzeOther(kind, node, checker, sourceFile, uri);
       if (!resolved) continue;
@@ -177,5 +191,6 @@ export async function analyzeSourceConstrainedTypeScript(request) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
+  if (unsafeCalls.length) return { outcome: 'BLOCKED', observations: [], coverage: { status: 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker: `unsafe compiler identity: ${unsafeCalls.join('; ')}` };
   return { outcome: observations.length === 0 ? 'EMPTY' : 'COMPLETE', observations, coverage: { status: 'BOUNDED', denominator: [uri], covered: [uri] } };
 }

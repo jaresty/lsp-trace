@@ -10,6 +10,8 @@ import { analyzeSourceConstrainedTypeScript } from '../analyzers/source-constrai
 const providerRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const projectRoot = join(providerRoot, 'test-projects/caller-js');
 const seedPath = join(projectRoot, 'src/seed.js');
+const uncheckedProjectRoot = join(providerRoot, 'test-projects/caller-js-unchecked');
+const uncheckedSeedPath = join(uncheckedProjectRoot, 'src/seed.js');
 const commit = '04b683e784ba4ed62b182fe7c797bfff5f49d66d';
 
 async function request() {
@@ -51,6 +53,16 @@ test('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT', async () => {
   await assertCallerQualified('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT');
 });
 
+test('ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE', async () => {
+  const source = await readFile(uncheckedSeedPath);
+  const result = await analyzeSourceConstrainedTypeScript({
+    documents: [{ uri: pathToFileURL(uncheckedSeedPath).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
+    relation_kinds: ['INVOKES_TASK', 'TRIGGERS_RELOAD'],
+  });
+  assert.equal(result.outcome, 'COMPLETE', 'ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE outcome');
+  assert.deepEqual(result.observations.map(({ kind }) => kind), ['INVOKES_TASK', 'INVOKES_TASK', 'TRIGGERS_RELOAD'], 'ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE compiler-owned identities only');
+});
+
 test('ASSERT_P1A_IGNORED_CONFIG_BLOCKS_CALLER_PROJECT', async () => {
   const config = join(projectRoot, 'jsconfig.json');
   await hideFile(config, async () => {
@@ -70,7 +82,10 @@ test('ASSERT_P1A_MALFORMED_CONFIG_FAILS_EXPLICITLY', async () => {
 test('ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY', async () => {
   const declaration = join(projectRoot, 'node_modules/ember-concurrency/index.d.ts');
   await hideFile(declaration, async () => {
-    await assert.rejects(analyzeSourceConstrainedTypeScript(await request()), /bounded checker failure:/, 'ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY A-fail');
+    const result = await analyzeSourceConstrainedTypeScript(await request());
+    assert.equal(result.outcome, 'BLOCKED', 'ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY A-fail');
+    assert.equal(result.coverage.status, 'UNAVAILABLE', 'ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY A-fail');
+    assert.match(result.blocker, /bounded checker failure: TS2307 .* Cannot find module 'ember-concurrency'/, 'ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY A-fail');
   });
   await assertCallerQualified('ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY A-pass');
 });
