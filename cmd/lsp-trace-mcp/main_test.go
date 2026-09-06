@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -75,18 +77,23 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	fake := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
-	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "incoming-e2e", Workspace: t.TempDir(), Profile: "fake-lsp", EnvironmentReference: "hermetic"})
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uri := "file://" + filepath.ToSlash(filepath.Join(workspace, "main.go"))
+	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "incoming-e2e", Workspace: workspace, Profile: "fake-lsp", EnvironmentReference: "hermetic"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated), Process: managedprocess.Spec{Path: fake, Dir: t.TempDir()}})
+	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated), Process: managedprocess.Spec{Path: fake, Dir: workspace}})
 	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(5*time.Second))
 	ready, found := manager.WaitReadiness(context.Background(), pending.ID)
 	if !found || ready.State != sessionruntime.ReadinessReady || !ready.Metadata.CallHierarchySupport || ready.Metadata.PositionEncoding != "utf-16" {
 		t.Fatalf("ASSERT_INCOMING_RETAINED_INITIALIZE_EVIDENCE: start=%+v ready=%+v", started, ready)
 	}
 	var stdout bytes.Buffer
-	sliceArgs := `{"session_id":"` + started.SessionID + `","generation":1,"start_mode":"at","uri":"file:///fixture/main.go","line":0,"character":0,"down_depth":1,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":5000,"request_timeout_ms":1000}`
+	sliceArgs := `{"session_id":"` + started.SessionID + `","generation":1,"start_mode":"at","uri":"` + uri + `","line":0,"character":0,"down_depth":1,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":5000,"request_timeout_ms":1000}`
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_slice","arguments":` + sliceArgs + `}}` + "\n" +
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_slice","arguments":` + sliceArgs + `}}` + "\n"

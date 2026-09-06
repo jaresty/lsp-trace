@@ -1,0 +1,2 @@
+HEAD=1eb09048df850f59a50cd389a91edfb67e45e5b7
+COMMAND=go test -json ./incomingops -run TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation -count=1

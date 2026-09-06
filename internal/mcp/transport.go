@@ -264,7 +264,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily {
 			code = failure.Code
 			switch code {
-			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS":
+			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS", "LANGUAGE_ID_UNAVAILABLE":
 				code = "INPUT_INVALID"
 			case "DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNPREPARABLE":
 				code = "UNSUPPORTED_CALL_HIERARCHY"

@@ -33,6 +33,10 @@ type Runtime interface {
 	Records() []sessionruntime.Record
 }
 
+type documentRuntime interface {
+	PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
+}
+
 // SelectorRuntime may resolve host-owned aliases before exact runtime access.
 type SelectorRuntime interface {
 	ResolveSessionSelector(string, uint64) (string, uint64, session.Failure)
@@ -53,6 +57,7 @@ type request struct {
 	SessionID             string          `json:"session_id"`
 	Generation            uint64          `json:"generation"`
 	URI                   string          `json:"uri"`
+	LanguageID            string          `json:"language_id,omitempty"`
 	Line                  *uint32         `json:"line"`
 	Character             *uint32         `json:"character"`
 	Symbol                string          `json:"symbol"`
@@ -103,6 +108,13 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(input.TimeoutMS)*time.Millisecond)
 	defer cancel()
+	if runtime, ok := e.runtime.(documentRuntime); ok {
+		document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: input.SessionID, Generation: input.Generation, URI: input.URI, LanguageID: input.LanguageID})
+		if document.Failure != "" {
+			return operation.Result{}, failure(string(document.Failure), nil)
+		}
+		input.LanguageID = document.LanguageID
+	}
 	client := NewSessionClient(e.runtime, input.SessionID, input.Generation, time.Duration(input.RequestTimeoutMS)*time.Millisecond)
 	line, character, targetFailure := ResolveTarget(ctx, client, input.URI, input.Symbol, input.Line, input.Character)
 	if targetFailure != nil {
@@ -112,6 +124,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	result.Invocation.Target = graph.Target{URI: input.URI, Line: int(line), Column: int(character)}
 	result.Invocation.Limits = graph.Limits{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, TimeoutMS: input.TimeoutMS}
 	result.Invocation.RequestTimeoutMS = input.RequestTimeoutMS
+	result.Invocation.LanguageID = input.LanguageID
 	result.Capabilities.CallHierarchyProvider = metadata.CallHierarchySupport
 	artifact, err := json.Marshal(result)
 	if err != nil {

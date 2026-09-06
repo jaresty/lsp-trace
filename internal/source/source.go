@@ -85,6 +85,6 @@ func LanguageID(path string) string {
 	case ".rs":
 		return "rust"
 	default:
-		return "plaintext"
+		return ""
 	}
 }

@@ -1,0 +1,9 @@
+{"Time":"2026-09-06T11:14:59.698322-07:00","Action":"start","Package":"lsp-trace/incomingops"}
+{"Time":"2026-09-06T11:14:59.879015-07:00","Action":"run","Package":"lsp-trace/incomingops","Test":"TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation"}
+{"Time":"2026-09-06T11:14:59.87909-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation","Output":"=== RUN   TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation\n"}
+{"Time":"2026-09-06T11:14:59.879917-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation","Output":"    managed_language_test.go:100: ASSERT_FR11_MANAGED_JS_EFFECTIVE_LANGUAGE_DIDOPEN: first_document_frame=textDocument/prepareCallHierarchy params={\"textDocument\":{\"uri\":\"file:///workspace/calls.js\"},\"position\":{\"line\":0,\"character\":0}}\n"}
+{"Time":"2026-09-06T11:14:59.879943-07:00","Action":"output","Package":"lsp-trace/incomingops","Test":"TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation","Output":"--- FAIL: TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation (0.00s)\n"}
+{"Time":"2026-09-06T11:14:59.879951-07:00","Action":"fail","Package":"lsp-trace/incomingops","Test":"TestManagedPlainJavaScriptOpensWithEffectiveLanguageBeforePreparation","Elapsed":0}
+{"Time":"2026-09-06T11:14:59.879964-07:00","Action":"output","Package":"lsp-trace/incomingops","Output":"FAIL\n"}
+{"Time":"2026-09-06T11:14:59.880473-07:00","Action":"output","Package":"lsp-trace/incomingops","Output":"FAIL\tlsp-trace/incomingops\t0.182s\n"}
+{"Time":"2026-09-06T11:14:59.880491-07:00","Action":"fail","Package":"lsp-trace/incomingops","Elapsed":0.182}

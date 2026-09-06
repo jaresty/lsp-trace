@@ -24,9 +24,10 @@ type bootstrapConfig struct {
 }
 
 type bootstrapProcessConfig struct {
-	Alias     string                    `json:"alias,omitempty"`
-	Profile   bootstrapProfileIdentity  `json:"profile"`
-	Execution managedExecutionAuthority `json:"execution"`
+	Alias      string                    `json:"alias,omitempty"`
+	LanguageID string                    `json:"language_id,omitempty"`
+	Profile    bootstrapProfileIdentity  `json:"profile"`
+	Execution  managedExecutionAuthority `json:"execution"`
 }
 
 type bootstrapProfileIdentity struct {
@@ -79,6 +80,9 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 		if !filepath.IsAbs(process.Execution.Path) || !filepath.IsAbs(process.Execution.Directory) {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d execution path and directory must be absolute", i)
 		}
+		if strings.TrimSpace(process.LanguageID) != process.LanguageID {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d language_id is not canonical", i)
+		}
 	}
 	if err := validateBootstrapProviders(config); err != nil {
 		return bootstrapConfig{}, err
@@ -87,9 +91,10 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 }
 
 type preparedBootstrap struct {
-	alias   string
-	profile runtimeprofile.Profile
-	process managedprocess.Spec
+	alias      string
+	languageID string
+	profile    runtimeprofile.Profile
+	process    managedprocess.Spec
 }
 
 func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
@@ -118,7 +123,7 @@ func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 		}
 		seen[id] = struct{}{}
 		prepared = append(prepared, preparedBootstrap{
-			alias: process.Alias, profile: profile,
+			alias: process.Alias, languageID: process.LanguageID, profile: profile,
 			process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)},
 		})
 	}
@@ -145,8 +150,9 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 	}
 	for i, process := range prepared {
 		result := manager.Start(ctx, sessionruntime.StartRequest{
-			Profile: process.profile,
-			Process: process.process,
+			Profile:    process.profile,
+			Process:    process.process,
+			LanguageID: process.languageID,
 		})
 		if result.Failure != "" {
 			rollback()

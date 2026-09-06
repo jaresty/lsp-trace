@@ -123,6 +123,11 @@ func writeObservationEnvelope(requestBody []byte, observations []map[string]any,
 			}
 		}
 	}
+	for _, observation := range observations {
+		if anchor, ok := observation["original_anchor"].(map[string]any); ok {
+			anchor["uri"] = originalURI
+		}
+	}
 	if coverageStatus == "" {
 		coverageStatus = "COMPLETE_WITHIN_BOUNDS"
 	}

@@ -5,10 +5,13 @@ package sessionruntime
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -17,6 +20,7 @@ import (
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
+	"lsp-trace/internal/source"
 )
 
 type Limits struct {
@@ -112,9 +116,10 @@ type Config struct {
 	Now func() time.Time
 }
 type StartRequest struct {
-	Profile  runtimeprofile.Profile
-	Process  managedprocess.Spec
-	Deadline time.Time
+	Profile    runtimeprofile.Profile
+	Process    managedprocess.Spec
+	LanguageID string
+	Deadline   time.Time
 }
 type StartResult struct {
 	SessionID  string
@@ -156,6 +161,103 @@ type RoundTripRequest struct {
 }
 
 // RoundTripResult is the immutable terminal observation of one transaction.
+type DocumentRequest struct {
+	SessionID, URI, LanguageID string
+	Generation                 uint64
+}
+
+type DocumentResult struct {
+	URI, LanguageID string
+	Version         int
+	Failure         session.Failure
+}
+
+type openDocument struct {
+	languageID string
+	version    int
+	digest     [32]byte
+}
+
+const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
+
+// PrepareDocument resolves one effective language identity, synchronizes the
+// workspace file, and retains the exact value used by the document generation.
+func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) DocumentResult {
+	u, err := url.Parse(req.URI)
+	if err != nil || u.Scheme != "file" || u.Host != "" || u.Path == "" {
+		return DocumentResult{Failure: LanguageIDUnavailable}
+	}
+	path := filepath.Clean(filepath.FromSlash(u.Path))
+	m.mu.Lock()
+	r := m.sessions[req.SessionID]
+	if r == nil {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.SessionNotFound}
+	}
+	if req.Generation != r.record.Generation {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.StaleGeneration}
+	}
+	workspace := filepath.Clean(r.record.Profile.Workspace().String())
+	configured := r.languageID
+	m.mu.Unlock()
+	rel, err := filepath.Rel(workspace, path)
+	if err != nil || rel == ".." || filepath.IsAbs(rel) || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
+		return DocumentResult{Failure: LanguageIDUnavailable}
+	}
+	languageID := req.LanguageID
+	if languageID == "" {
+		languageID = configured
+	}
+	if languageID == "" {
+		languageID = source.LanguageID(path)
+	}
+	if languageID == "" {
+		return DocumentResult{Failure: LanguageIDUnavailable}
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return DocumentResult{Failure: LanguageIDUnavailable}
+	}
+	digest := sha256.Sum256(text)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r = m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		return DocumentResult{Failure: session.StaleGeneration}
+	}
+	if r.record.State != session.Ready || r.protocolOwned {
+		return DocumentResult{Failure: session.LifecycleConflict}
+	}
+	child, ok := r.process.(wireChild)
+	if !ok {
+		return DocumentResult{Failure: session.SessionPoisoned}
+	}
+	previous, opened := r.documents[req.URI]
+	if opened && previous.languageID != languageID {
+		return DocumentResult{Failure: session.LifecycleConflict}
+	}
+	if opened && previous.digest == digest {
+		return DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
+	}
+	version := 1
+	method := "textDocument/didOpen"
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "languageId": languageID, "version": version, "text": string(text)}})
+	if opened {
+		version = previous.version + 1
+		method = "textDocument/didChange"
+		params, _ = json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "version": version}, "contentChanges": []map[string]string{{"text": string(text)}}})
+	}
+	if err := lspwire.NewWriter(child.Stdin(), m.wire).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: method, Params: params}); err != nil {
+		r.record.State = session.Poisoned
+		return DocumentResult{Failure: session.SessionPoisoned}
+	}
+	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
+	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
+	return DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
+}
+
 type RoundTripResult struct {
 	Key             lspwire.RequestKey
 	Result          json.RawMessage
@@ -330,6 +432,8 @@ type runtimeSession struct {
 	protocolOwned  bool
 	lifecycleOwned bool
 	metadata       SessionMetadata
+	languageID     string
+	documents      map[string]openDocument
 }
 
 type Manager struct {
@@ -423,7 +527,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
 	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
-	m.sessions[id] = &runtimeSession{record: r, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request)}
+	m.sessions[id] = &runtimeSession{record: r, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument)}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }

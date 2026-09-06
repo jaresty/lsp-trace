@@ -45,6 +45,7 @@ type request struct {
 	Generation            uint64          `json:"generation"`
 	StartMode             string          `json:"start_mode"`
 	URI                   string          `json:"uri"`
+	LanguageID            string          `json:"language_id,omitempty"`
 	Line                  *uint32         `json:"line"`
 	Character             *uint32         `json:"character"`
 	Symbol                string          `json:"symbol"`
@@ -98,6 +99,15 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(in.TimeoutMS)*time.Millisecond)
 	defer cancel()
+	if runtime, ok := e.runtime.(interface {
+		PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
+	}); ok {
+		document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: in.SessionID, Generation: in.Generation, URI: in.URI, LanguageID: in.LanguageID})
+		if document.Failure != "" {
+			return operation.Result{}, fail(string(document.Failure), nil)
+		}
+		in.LanguageID = document.LanguageID
+	}
 	client := incomingops.NewSessionClientWithWireLimits(e.runtime, in.SessionID, in.Generation, time.Duration(in.RequestTimeoutMS)*time.Millisecond, incomingops.WireLimits{MaxMessages: in.MaxMessages, MaxBytes: int64(in.MaxBytes)})
 	line, character, targetFailure := incomingops.ResolveTarget(ctx, client, in.URI, in.Symbol, in.Line, in.Character)
 	if targetFailure != nil {
@@ -161,6 +171,7 @@ func decorate(result *graph.Result, in request, metadata sessionruntime.SessionM
 	result.Invocation.Limits = graph.Limits{MaxDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS}
 	result.Invocation.RequestTimeoutMS = in.RequestTimeoutMS
 	result.Invocation.Concurrency = 1
+	result.Invocation.LanguageID = in.LanguageID
 	result.Capabilities.CallHierarchyProvider = metadata.CallHierarchySupport
 	result.CapabilityQuality.Advertised = metadata.CallHierarchySupport
 	result.Tool = graph.ToolIdentity{Name: "lsp-trace", Version: graph.Unknown}

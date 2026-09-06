@@ -71,6 +71,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	r := lspwire.NewReader(stdin, fixtureLimits)
 	w := lspwire.NewWriter(stdout, fixtureLimits)
 	hanging := map[string]json.RawMessage{}
+	documentURI := "file:///fixture/main.go"
 	for {
 		m, err := r.Read()
 		if errors.Is(err, io.EOF) {
@@ -94,8 +95,18 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 		case "exit":
 			return 0
+		case "textDocument/didOpen":
+			var p struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
+			}
+			if json.Unmarshal(m.Params, &p) == nil && p.TextDocument.URI != "" {
+				documentURI = p.TextDocument.URI
+			}
 		case "textDocument/prepareCallHierarchy":
-			result := json.RawMessage(`[{"name":"leaf","kind":12,"uri":"file:///fixture/main.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`)
+			uri, _ := json.Marshal(documentURI)
+			result := json.RawMessage(fmt.Sprintf(`[{"name":"leaf","kind":12,"uri":%s,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`, uri))
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
@@ -114,7 +125,8 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			_ = json.Unmarshal(m.Params, &p)
 			result := json.RawMessage(`[]`)
 			if p.Item.Name == "leaf" {
-				result = json.RawMessage(`[{"from":{"name":"caller","kind":12,"uri":"file:///fixture/main.go","range":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"data":{"fixture":"caller"}},"fromRanges":[{"start":{"line":2,"character":1},"end":{"line":2,"character":2}}]}]`)
+				uri, _ := json.Marshal(documentURI)
+				result = json.RawMessage(fmt.Sprintf(`[{"from":{"name":"caller","kind":12,"uri":%s,"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":6}},"data":{"fixture":"caller"}},"fromRanges":[{"start":{"line":2,"character":1},"end":{"line":2,"character":2}}]}]`, uri))
 			}
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)

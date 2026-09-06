@@ -181,6 +181,10 @@ func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
 	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uri := "file://" + filepath.ToSlash(filepath.Join(workspace, "main.go"))
 	config := map[string]any{
 		"version": 1,
 		"processes": []any{map[string]any{
@@ -198,7 +202,7 @@ func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 		}},
 	}
 	base := map[string]any{
-		"session_id": "fixture", "generation": 1, "start_mode": "at", "uri": "file:///fixture/main.go", "line": 0, "character": 0,
+		"session_id": "fixture", "generation": 1, "start_mode": "at", "uri": uri, "line": 0, "character": 0,
 		"up_depth": 2, "down_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500,
 	}
 	nonCalls := cloneMap(base)
@@ -529,6 +533,10 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	fakeProvider := buildBinary(t, "fake-relation-provider", "./cmd/lsp-trace-mcp/testdata/fake-relation-provider")
 	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uri := "file://" + filepath.ToSlash(filepath.Join(workspace, "main.go"))
 	providerStartMarker := filepath.Join(t.TempDir(), "provider-started")
 	baseConfig := map[string]any{"version": 1, "processes": []any{map[string]any{"alias": "fixture", "profile": map[string]any{"trust_domain": "real-provider-conformance", "workspace": workspace, "profile": "fake-lsp", "environment_reference": "hermetic"}, "execution": map[string]any{"path": fakeLSP, "directory": workspace}}}}
 	config := cloneMap(baseConfig)
@@ -543,7 +551,7 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 	}}
 	configPath := writeBootstrapJSON(t, config)
 	legacyConfigPath := writeBootstrapJSON(t, baseConfig)
-	base := map[string]any{"session_id": "fixture", "generation": 1, "uri": "file:///fixture/main.go", "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500}
+	base := map[string]any{"session_id": "fixture", "generation": 1, "uri": uri, "line": 0, "character": 0, "max_depth": 2, "max_nodes": 20, "timeout_ms": 1000, "request_timeout_ms": 500}
 
 	for _, operation := range []string{"incoming", "slice"} {
 		t.Run("ASSERT_PRODUCTION_MCP_"+strings.ToUpper(operation)+"_SELECTOR_CONTRACT", func(t *testing.T) {
