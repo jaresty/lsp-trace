@@ -190,7 +190,8 @@ async function strictCollectorResponse(request, records) {
   const virtualAnchor = observations.find(({ virtual_anchor: anchor }) => anchor)?.virtual_anchor;
   const documentRecord = {
     document_id: 'original', original_uri: uri, content_sha256: digest,
-    revision: { kind: revision.kind || 'content', value: revisionValue, blob: digest, custody: 'PROVIDER_PROVED' },
+    // Reading bytes proves their digest, not their relationship to a supplied revision.
+    revision: { kind: revision.kind || 'content', value: revisionValue, blob: digest, custody: revision.value && revision.custody === 'CALLER_ASSERTED' ? 'CALLER_ASSERTED' : 'UNKNOWN' },
     coordinates: 'ORIGINAL',
     ...(virtualAnchor ? { virtual_uri: virtualAnchor.uri, mapping: { mapping_id: virtualAnchor.mapping_id, original_document_id: 'original' } } : {}),
   };

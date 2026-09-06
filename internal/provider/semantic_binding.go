@@ -162,6 +162,9 @@ func semanticRequestID(request StrictCollectorRequest) string {
 	return fmt.Sprintf("%s:%d:%s", request.Session.SessionID, request.Session.Generation, request.Seed.URI)
 }
 
+// validateSemanticCustody binds revision authority at the host boundary. A
+// provider's self-description is not proof; only a successful host verifier can
+// upgrade the matching document. Source identities and anchors are untouched.
 func validateSemanticCustody(ctx context.Context, verifier RevisionVerifier, request StrictCollectorRequest, envelope observationadapter.Envelope) error {
 	if len(envelope.Documents) == 0 {
 		return errors.New("observation envelope omitted document custody")
@@ -173,8 +176,16 @@ func validateSemanticCustody(ctx context.Context, verifier RevisionVerifier, req
 		}
 	}
 	matched := false
-	for _, document := range envelope.Documents {
+	for i := range envelope.Documents {
+		document := &envelope.Documents[i]
+		switch document.Revision.Custody {
+		case graph.CustodyCallerAsserted, graph.CustodyProviderProved, graph.CustodyUnknown:
+		default:
+			return errors.New("ASSERT_CUSTODY_CLOSED_AUTHORITY_VOCABULARY: invalid provider revision custody")
+		}
 		if document.OriginalURI != request.Documents.OriginalURI {
+			// No request-bound verification is available for additional documents.
+			document.Revision.Custody = graph.CustodyUnknown
 			continue
 		}
 		matched = true
@@ -185,12 +196,17 @@ func validateSemanticCustody(ctx context.Context, verifier RevisionVerifier, req
 			if verifier == nil {
 				return custodyError("host revision verifier is unavailable")
 			}
-			if err := verifier.VerifyRevision(ctx, request, document); err != nil {
+			if err := verifier.VerifyRevision(ctx, request, *document); err != nil {
 				if IsRevisionCustodyError(err) {
 					return err
 				}
 				return &RevisionCustodyError{Err: err}
 			}
+			document.Revision.Custody = graph.CustodyProviderProved
+		} else if workspace.Custody == graph.CustodyCallerAsserted && workspace.Kind != "" && workspace.Value != "" {
+			document.Revision.Custody = graph.CustodyCallerAsserted
+		} else {
+			document.Revision.Custody = graph.CustodyUnknown
 		}
 	}
 	if !matched {

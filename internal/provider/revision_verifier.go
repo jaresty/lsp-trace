@@ -88,8 +88,10 @@ func (v *GitRevisionVerifier) VerifyRevision(ctx context.Context, request Strict
 	if workspace.Value != metadata.Commit || document.Revision.Kind != "git" || document.Revision.Value != metadata.Commit {
 		return custodyError("Git commit does not match authenticated managed-session revision")
 	}
-	if document.Revision.Custody != graph.CustodyProviderProved {
-		return custodyError("provider document did not assert proved content")
+	// The provider may honestly carry the caller's assertion; proof is established
+	// here from managed-session metadata and Git bytes, never from that label.
+	if document.Revision.Custody != graph.CustodyCallerAsserted && document.Revision.Custody != graph.CustodyProviderProved {
+		return custodyError("provider document omitted revision assertion")
 	}
 	parsed, err := url.Parse(document.OriginalURI)
 	if err != nil || parsed.Scheme != "file" || parsed.Host != "" {

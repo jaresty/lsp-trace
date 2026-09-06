@@ -129,7 +129,94 @@ func revisionBoundSemanticCase(t *testing.T, session managedGitSessionFixture) (
 	return adapter, request, Receipt{ProviderID: declaration.Identity, Response: response, Messages: 1, Reaped: true}, envelope
 }
 
+func TestRevisionCustodyAuthorityLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		workspace graph.RevisionIdentity
+		strict    bool
+		want      graph.RevisionCustody
+	}{
+		{"caller assertion", graph.RevisionIdentity{Kind: "git", Custody: graph.CustodyCallerAsserted}, false, graph.CustodyCallerAsserted},
+		{"verified Git", graph.RevisionIdentity{Kind: "git", Custody: graph.CustodyCallerAsserted}, true, graph.CustodyProviderProved},
+		{"unknown", graph.RevisionIdentity{Kind: "git", Custody: graph.CustodyUnknown}, false, graph.CustodyUnknown},
+		{"mock self asserted proof", graph.RevisionIdentity{Kind: "git", Custody: graph.CustodyProviderProved}, false, graph.CustodyUnknown},
+		{"no revision", graph.RevisionIdentity{}, false, graph.CustodyUnknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := newManagedGitSessionFixture(t)
+			adapter, request, receipt, envelope := revisionBoundSemanticCase(t, session)
+			request.Documents.FailOnUnknown = tc.strict
+			if tc.workspace.Kind != "" {
+				tc.workspace.Value = session.Commit
+			}
+			request.Documents.WorkspaceRevision, _ = json.Marshal(tc.workspace)
+			// A legacy/mocked provider's self-asserted proof cannot bypass the host boundary.
+			if tc.strict {
+				envelope.Documents[0].Revision.Custody = graph.CustodyCallerAsserted
+			}
+			receipt.Response, _ = json.Marshal(envelope)
+			raw, err := adapter.Adapt(context.Background(), request, receipt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var result Result
+			if err := json.Unmarshal(raw, &result); err != nil {
+				t.Fatal(err)
+			}
+			if got := result.Custody.Documents[0].Revision.Custody; got != tc.want {
+				t.Fatalf("ASSERT_REVISION_CUSTODY_HOST_AUTHORITY: got %s want %s", got, tc.want)
+			}
+			var published graph.DocumentCustodyReceipt
+			if err := json.Unmarshal(result.GraphV4.Provenance.Custody, &published); err != nil {
+				t.Fatal(err)
+			}
+			if published.Documents[0].Revision.Custody != tc.want {
+				t.Fatal("published custody differs")
+			}
+			if result.Observations[0].OriginalAnchor != envelope.Observations[0].OriginalAnchor {
+				t.Fatal("source anchor changed")
+			}
+			if result.Observations[0].From.NodeID != envelope.Observations[0].From.NodeID || result.Observations[0].To.NodeID != envelope.Observations[0].To.NodeID {
+				t.Fatal("endpoint identity changed")
+			}
+		})
+	}
+}
+
 func TestRevisionBoundCustodyComposition(t *testing.T) {
+	t.Run("unknown provider assertion rejected by strict verifier", func(t *testing.T) {
+		session := newManagedGitSessionFixture(t)
+		adapter, request, receipt, envelope := revisionBoundSemanticCase(t, session)
+		envelope.Documents[0].Revision.Custody = graph.CustodyUnknown
+		receipt.Response, _ = json.Marshal(envelope)
+		if _, err := adapter.Adapt(context.Background(), request, receipt); err == nil {
+			t.Fatal("unknown provider assertion passed strict verifier")
+		}
+	})
+	t.Run("invalid provider authority rejected before normalization", func(t *testing.T) {
+		session := newManagedGitSessionFixture(t)
+		adapter, request, receipt, envelope := revisionBoundSemanticCase(t, session)
+		request.Documents.FailOnUnknown = false
+		envelope.Documents[0].Revision.Custody = "FORGED"
+		receipt.Response, _ = json.Marshal(envelope)
+		if _, err := adapter.Adapt(context.Background(), request, receipt); err == nil {
+			t.Fatal("invalid authority normalized into legal custody")
+		}
+	})
+	t.Run("additional document has no host proof", func(t *testing.T) {
+		session := newManagedGitSessionFixture(t)
+		adapter, request, _, envelope := revisionBoundSemanticCase(t, session)
+		extra := envelope.Documents[0]
+		extra.DocumentID = "extra"
+		extra.OriginalURI += ".extra"
+		envelope.Documents = append(envelope.Documents, extra)
+		if err := validateSemanticCustody(context.Background(), adapter.verifier, request, envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Documents[0].Revision.Custody != graph.CustodyProviderProved || envelope.Documents[1].Revision.Custody != graph.CustodyUnknown {
+			t.Fatal("proof escaped matching document")
+		}
+	})
 	t.Run("matching committed blob", func(t *testing.T) {
 		const assertion = "ASSERT_REVISION_CUSTODY_MATCHING_COMMITTED_BLOB_BINDS"
 		session := newManagedGitSessionFixture(t)
