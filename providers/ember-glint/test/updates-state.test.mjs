@@ -112,6 +112,7 @@ test('ASSERT_UPDATES_STATE_STATIC_NON_ENTAILMENTS', () => {
   for (const observation of observations) {
     assert.deepEqual(observation.supports, ['source_dependency_relation'], 'ASSERT_UPDATES_STATE_STATIC_NON_ENTAILMENTS');
     assert.deepEqual(observation.does_not_support, [
+      'render_occurrence',
       'runtime_execution',
       'runtime_mutation',
       'whole_source_completeness',

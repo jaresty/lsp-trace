@@ -8,6 +8,7 @@
     "ownership": "DECLARATION_PARENT_IS_CURRENT_CLASS",
     "claim": "static_source_dependency_only",
     "does_not_support": [
+      "render_occurrence",
       "runtime_execution",
       "runtime_mutation",
       "whole_source_completeness"
@@ -60,7 +61,7 @@
         "range": { "start": { "line": 6, "character": 4 }, "end": { "line": 6, "character": 16 } }
       },
       "supports": ["source_dependency_relation"],
-      "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]
+      "does_not_support": ["render_occurrence", "runtime_execution", "runtime_mutation", "whole_source_completeness"]
     },
     {
       "kind": "UPDATES_STATE",
@@ -80,7 +81,7 @@
         "range": { "start": { "line": 5, "character": 4 }, "end": { "line": 5, "character": 23 } }
       },
       "supports": ["source_dependency_relation"],
-      "does_not_support": ["runtime_execution", "runtime_mutation", "whole_source_completeness"]
+      "does_not_support": ["render_occurrence", "runtime_execution", "runtime_mutation", "whole_source_completeness"]
     }
   ]
 }

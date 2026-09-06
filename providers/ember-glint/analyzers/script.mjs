@@ -259,7 +259,7 @@ export function createScriptSymbolExtractor(dependencies) {
                     },
                     original_anchor: providerAnchor(record.document, sourceFile, node),
                     supports: ['source_dependency_relation'],
-                    does_not_support: ['runtime_execution', 'runtime_mutation', 'whole_source_completeness'],
+                    does_not_support: ['render_occurrence', 'runtime_execution', 'runtime_mutation', 'whole_source_completeness'],
                   };
                   const key = stableObservationKey(observation);
                   if (!seen.has(key)) {
