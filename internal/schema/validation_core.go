@@ -84,6 +84,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 	trimmed := bytes.TrimSpace(data)
 	var err error
 	switch {
+	case structural.Family == FamilyOperationalCustody:
+		return fmt.Errorf("operational custody requires composed custodyevidence.ValidateFor semantic validation")
 	case structural.Family == FamilyGraph && structural.Version == graph.SchemaVersionV3:
 		err = graph.ValidateSemanticBundle(trimmed)
 	case structural.Family == FamilyInspect && structural.Version == InspectionVersionV1 && structural.document["projection_kind"] == "ALL_SEEDS":

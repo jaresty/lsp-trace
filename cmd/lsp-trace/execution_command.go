@@ -58,7 +58,16 @@ var registeredExecutionExecutor operation.Executor = executionruntime.NewProduct
 func runExecution(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	ctx, cancel := signalContext()
 	defer cancel()
-	return runExecutionWithExecutor(ctx, args, stdin, stdout, stderr, registeredExecutionExecutor)
+	executor := registeredExecutionExecutor
+	requestID, _, hostPath, parseErr := parseExecutionArgsWithTrust(args)
+	if parseErr == nil && hostPath != "" {
+		trust, err := executionruntime.LoadHostTrustStore(hostPath)
+		if err != nil {
+			return writeExecutionJSON(stdout, stderr, executionError{SchemaVersion: executionSchemaVersion, State: "error", Operation: executionOperation, RequestID: requestID, Code: operation.FailureInvalidInput, Diagnostics: []string{err.Error()}}, executionExitInvalidInput)
+		}
+		executor = executionruntime.NewProductionExecutorWithTrust(trust)
+	}
+	return runExecutionWithExecutor(ctx, args, stdin, stdout, stderr, executor)
 }
 
 var signalContext = func() (context.Context, context.CancelFunc) {
@@ -123,23 +132,29 @@ func runExecutionWithExecutor(ctx context.Context, args []string, stdin io.Reade
 }
 
 func parseExecutionArgs(args []string) (requestID, inputPath string, err error) {
+	requestID, inputPath, _, err = parseExecutionArgsWithTrust(args)
+	return
+}
+
+func parseExecutionArgsWithTrust(args []string) (requestID, inputPath, hostPath string, err error) {
 	fs := flag.NewFlagSet("execute", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&requestID, "request-id", "", "canonical request identity")
 	fs.StringVar(&inputPath, "input", "", "request JSON path or - for stdin")
+	fs.StringVar(&hostPath, "custody-trust-config", "", "trusted startup-only policy-pinned custody grants")
 	if parseErr := fs.Parse(args); parseErr != nil {
-		return requestID, inputPath, fmt.Errorf("invalid execution arguments: %w", parseErr)
+		return requestID, inputPath, hostPath, fmt.Errorf("invalid execution arguments: %w", parseErr)
 	}
 	if fs.NArg() != 0 {
-		return requestID, inputPath, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
+		return requestID, inputPath, hostPath, fmt.Errorf("unexpected positional arguments: %v", fs.Args())
 	}
 	if requestID == "" {
-		return requestID, inputPath, errors.New("--request-id is required")
+		return requestID, inputPath, hostPath, errors.New("--request-id is required")
 	}
 	if inputPath == "" {
-		return requestID, inputPath, errors.New("--input is required")
+		return requestID, inputPath, hostPath, errors.New("--input is required")
 	}
-	return requestID, inputPath, nil
+	return requestID, inputPath, hostPath, nil
 }
 
 func readExecutionInput(path string, stdin io.Reader) (json.RawMessage, error) {

@@ -1,0 +1,384 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json",
+  "title": "Bounded operational byte-bundle custody (validation is not host reauthentication)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "lsp-trace.operational-custody.v1"
+    },
+    "input_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "lsp-trace.contributing-input-evidence.v1"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "class": {
+                "enum": [
+                  "SOURCE",
+                  "CONFIGURATION",
+                  "DECLARATION",
+                  "GENERATED_MAPPING"
+                ]
+              },
+              "receipt": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "receipt_version": {
+                    "const": "lsp-trace.source-receipt.v1"
+                  },
+                  "item": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "locator": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "locator"
+                    ]
+                  },
+                  "acquisition_status": {
+                    "enum": [
+                      "READABLE",
+                      "UNREADABLE"
+                    ]
+                  },
+                  "provenance": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "mechanism": {
+                        "type": "string"
+                      },
+                      "locator": {
+                        "type": "string"
+                      },
+                      "revision": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "mechanism",
+                      "locator"
+                    ]
+                  },
+                  "content_identity": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "algorithm": {
+                        "const": "sha256"
+                      },
+                      "digest": {
+                        "type": "string",
+                        "pattern": "^sha256:[0-9a-f]{64}$"
+                      },
+                      "scope": {
+                        "const": "ACQUIRED_BYTES"
+                      }
+                    },
+                    "required": [
+                      "algorithm",
+                      "digest",
+                      "scope"
+                    ]
+                  },
+                  "failure": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "reason": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
+                  }
+                },
+                "required": [
+                  "receipt_version",
+                  "item",
+                  "acquisition_status",
+                  "provenance"
+                ]
+              },
+              "content": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "contentEncoding": "base64"
+              },
+              "canonical_receipt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "contentEncoding": "base64"
+              }
+            },
+            "required": [
+              "id",
+              "class",
+              "receipt",
+              "content",
+              "canonical_receipt"
+            ]
+          }
+        },
+        "contributions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "receipt_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              }
+            },
+            "required": [
+              "id",
+              "receipt_ids"
+            ]
+          }
+        },
+        "incomplete_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "schema_version",
+        "inputs",
+        "contributions",
+        "incomplete_reasons"
+      ]
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "READABLE",
+              "UNREADABLE"
+            ]
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "contentEncoding": "base64"
+          }
+        },
+        "required": [
+          "id",
+          "path",
+          "status",
+          "content"
+        ]
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "Policy": {
+          "const": "lsp-trace.observed-input-identity.v1"
+        },
+        "SourceID": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "SnapshotID": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "CollectionID": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "Manifest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "contentEncoding": "base64"
+        },
+        "Acquisition": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "adapter": {
+              "const": "operational-byte-bundle"
+            },
+            "workspace_uri": {
+              "type": "string"
+            },
+            "invocation_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "adapter",
+            "workspace_uri",
+            "invocation_id"
+          ]
+        },
+        "Revision": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "system": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "system",
+                "revision"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "Policy",
+        "SourceID",
+        "SnapshotID",
+        "CollectionID",
+        "Manifest",
+        "Acquisition",
+        "Revision"
+      ]
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "const": "lsp-trace.observed-input-identity.v1"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "status": {
+          "enum": [
+            "MISSING_TRUST",
+            "REJECTED",
+            "AUTHENTICATED"
+          ]
+        },
+        "receipt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "contentEncoding": "base64"
+        },
+        "git_attestation": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "EvidenceType": {
+                  "type": "string"
+                },
+                "SourceSnapshotIdentity": {
+                  "type": "string"
+                },
+                "CommitIdentity": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "EvidenceType",
+                "SourceSnapshotIdentity",
+                "CommitIdentity"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "policy",
+        "snapshot_id",
+        "status",
+        "receipt",
+        "git_attestation"
+      ]
+    },
+    "acquisition_status": {
+      "enum": [
+        "READABLE",
+        "PARTIAL"
+      ]
+    },
+    "require_authenticated": {
+      "type": "boolean"
+    },
+    "publication_permitted": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "input_evidence",
+    "outputs",
+    "identity",
+    "admission",
+    "acquisition_status",
+    "require_authenticated",
+    "publication_permitted"
+  ]
+}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"lsp-trace/internal/custodyevidence"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/source"
@@ -18,9 +19,10 @@ import (
 const ExecutionSchemaVersion = "lsp-trace.execution.v1"
 
 type ProductionInput struct {
-	Root   string `json:"root"`
-	Source string `json:"source"`
-	FailAt string `json:"fail_at,omitempty"`
+	Root        string            `json:"root"`
+	Source      string            `json:"source,omitempty"`
+	FailAt      string            `json:"fail_at,omitempty"`
+	Operational *OperationalInput `json:"operational,omitempty"`
 }
 
 type ProductionArtifact struct {
@@ -29,13 +31,16 @@ type ProductionArtifact struct {
 	Response      operation.CustodyResponse `json:"response"`
 	Artifact      string                    `json:"artifact,omitempty"`
 	Receipt       string                    `json:"receipt,omitempty"`
+	Operational   *custodyevidence.Evidence `json:"operational,omitempty"`
 }
 
-type ProductionExecutor struct{}
+type ProductionExecutor struct {
+	trust *custodyevidence.HostTrustStore
+}
 
 func NewProductionExecutor() operation.Executor { return ProductionExecutor{} }
 
-func (ProductionExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+func (executor ProductionExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
 	if request.Name != operation.CustodyExecute {
 		return operation.Result{}, &operation.Failure{Code: operation.FailureNotImplemented, Err: operation.ErrNotImplemented}
 	}
@@ -50,6 +55,11 @@ func (ProductionExecutor) Execute(ctx context.Context, request operation.Request
 	defer root.Close()
 
 	handlers := productionHandlers(input, root)
+	var evidence *custodyevidence.Evidence
+	if input.Operational != nil {
+		evidence = &custodyevidence.Evidence{}
+		handlers = operationalHandlers(input, root, executor.trust, evidence)
+	}
 	custody, err := operation.NewCustodyOperation(handlers)
 	if err != nil {
 		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: err}
@@ -57,10 +67,21 @@ func (ProductionExecutor) Execute(ctx context.Context, request operation.Request
 	logical, _ := json.Marshal(struct {
 		Source string `json:"source"`
 	}{input.Source})
+	if input.Operational != nil {
+		logical, _ = json.Marshal(input.Operational)
+	}
 	response, custodyFailure := custody.ExecuteCustody(ctx, operation.CustodyRequest{OperationID: request.RequestID, Input: logical})
-	artifact := ProductionArtifact{SchemaVersion: ExecutionSchemaVersion, Operation: operation.CustodyExecute, Response: response}
+	artifact := ProductionArtifact{SchemaVersion: ExecutionSchemaVersion, Operation: operation.CustodyExecute, Response: response, Operational: evidence}
 	if custodyFailure != nil {
-		return operation.Result{}, &operation.Failure{Code: custodyFailure.Code, Diagnostics: []string{string(custodyFailure.Stage)}, Err: custodyFailure}
+		diagnostics := []string{string(custodyFailure.Stage)}
+		// Error transports historically retain diagnostics, not Result.Value.
+		// Preserve the operational artifact there without publishing a rejected
+		// authenticated-required operation. Early failures may be pre-identity.
+		if evidence != nil {
+			retained, _ := json.Marshal(artifact)
+			diagnostics = append(diagnostics, "operational_failure_evidence:"+string(retained))
+		}
+		return operation.Result{}, &operation.Failure{Code: custodyFailure.Code, Diagnostics: diagnostics, Err: custodyFailure}
 	}
 	artifact.Artifact = input.Root + "/artifact.json"
 	artifact.Receipt = input.Root + "/receipt.json"
@@ -81,13 +102,28 @@ func decodeProductionInput(raw []byte, out *ProductionInput) error {
 			return errors.New("invalid production execution request wrapper")
 		}
 		raw = wrapped
+		if err := json.Unmarshal(raw, &members); err != nil {
+			return err
+		}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(out); err != nil {
 		return fmt.Errorf("invalid production execution request: %w", err)
 	}
-	if out.Root == "" || out.Source == "" {
+	if out.Root == "" {
+		if out.Operational == nil {
+			return errors.New("root and source are required")
+		}
+		return errors.New("root is required")
+	}
+	if out.Operational != nil {
+		if _, present := members["source"]; present {
+			return errors.New("operational and supplied source are mutually exclusive")
+		}
+		return validateOperationalInput(out.Operational)
+	}
+	if out.Source == "" {
 		return errors.New("root and source are required")
 	}
 	return nil

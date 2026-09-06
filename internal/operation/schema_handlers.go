@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"lsp-trace/internal/custodyevidence"
 	"lsp-trace/internal/schema"
 )
 
@@ -51,7 +52,15 @@ func ValidateHandler(_ context.Context, request Request) (Result, *Failure) {
 	if input.Schema != nil {
 		family, version = input.Schema.Family, input.Schema.Version
 	}
-	detected, err := schema.ValidateFor(input.Input, family, version)
+	// New-family inline text preserves exact artifact bytes through transports
+	// which historically decode object arguments into maps. It is never a path.
+	if family == schema.FamilyOperationalCustody {
+		var text string
+		if json.Unmarshal(input.Input, &text) == nil {
+			input.Input = []byte(text)
+		}
+	}
+	detected, err := custodyevidence.ValidateFor(input.Input, family, version)
 	if err != nil {
 		code := "INPUT_INVALID"
 		if strings.HasPrefix(err.Error(), "unsupported schema family ") || strings.HasPrefix(err.Error(), "unsupported schema version ") || strings.HasPrefix(err.Error(), "schema version mismatch:") {

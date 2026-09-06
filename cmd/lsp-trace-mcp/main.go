@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lsp-trace/incomingops"
+	"lsp-trace/internal/custodyevidence"
 	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
@@ -32,6 +33,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
 	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
+	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -69,7 +71,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			inventory = provider.NewConfiguredInventory(provisioned)
 		}
 	}
-	server, manager, err := newServerRuntimeWithInventory(*enableLiveLSP, inventory, publicationRoot)
+	custodyTrust, err := executionruntime.LoadHostTrustStore(*custodyTrustPath)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	server, manager, err := newServerRuntimeWithCustodyTrust(*enableLiveLSP, inventory, custodyTrust, publicationRoot)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -195,6 +202,10 @@ func newServerRuntime(enableLiveLSP bool, roots ...*publication.Root) (*mcp.Serv
 }
 
 func newServerRuntimeWithInventory(enableLiveLSP bool, inventory provider.ConfiguredInventory, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
+	return newServerRuntimeWithCustodyTrust(enableLiveLSP, inventory, nil, roots...)
+}
+
+func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
 	var publicationRoot *publication.Root
 	if len(roots) != 0 {
 		publicationRoot = roots[0]
@@ -217,7 +228,7 @@ func newServerRuntimeWithInventory(enableLiveLSP bool, inventory provider.Config
 	if err != nil {
 		return nil, nil, err
 	}
-	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutor().Execute
+	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutorWithTrust(trust).Execute
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {
 		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 64 * 1024, GracePeriod: 250 * time.Millisecond})

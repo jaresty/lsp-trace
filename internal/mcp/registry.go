@@ -155,6 +155,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
 		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)
