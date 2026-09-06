@@ -1,0 +1,100 @@
+[
+  {
+    "perturbation": "unknown-dependencies",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderAccounting$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_ACCOUNTING",
+    "satisfying": "PASS TestInputRecorderAccounting",
+    "violating": "=== RUN   TestInputRecorderAccounting\n    contributing_inputs_test.go:42: ASSERT_INPUT_ACCOUNTING: missing explicit omitted contribution or unknown dependencies\n--- FAIL: TestInputRecorderAccounting (0.00s)"
+  },
+  {
+    "perturbation": "omitted-contribution",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderAccounting$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_ACCOUNTING",
+    "satisfying": "PASS TestInputRecorderAccounting",
+    "violating": "=== RUN   TestInputRecorderAccounting\n    contributing_inputs_test.go:42: ASSERT_INPUT_ACCOUNTING: missing explicit omitted contribution or unknown dependencies\n--- FAIL: TestInputRecorderAccounting (0.00s)"
+  },
+  {
+    "perturbation": "classification-binding",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderClassifiedBytes$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_CLASS_BYTES",
+    "satisfying": "PASS TestInputRecorderClassifiedBytes",
+    "violating": "=== RUN   TestInputRecorderClassifiedBytes\n    contributing_inputs_test.go:54: ASSERT_INPUT_CLASS_BYTES: classification must bind actual bytes\n--- FAIL: TestInputRecorderClassifiedBytes (0.00s)"
+  },
+  {
+    "perturbation": "changed-bytes",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderClassifiedBytes$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_CHANGED_BYTES",
+    "satisfying": "PASS TestInputRecorderClassifiedBytes",
+    "violating": "=== RUN   TestInputRecorderClassifiedBytes\n    contributing_inputs_test.go:66: ASSERT_INPUT_CHANGED_BYTES: changed bytes reused receipt\n--- FAIL: TestInputRecorderClassifiedBytes (0.00s)"
+  },
+  {
+    "perturbation": "lexical-scope",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderScope$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_SCOPE",
+    "satisfying": "PASS TestInputRecorderScope",
+    "violating": "=== RUN   TestInputRecorderScope\n    contributing_inputs_test.go:89: ASSERT_INPUT_SCOPE: accepted \"a/../input\"\n--- FAIL: TestInputRecorderScope (0.00s)"
+  },
+  {
+    "perturbation": "unknown-class",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderScope$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_CLASS",
+    "satisfying": "PASS TestInputRecorderScope",
+    "violating": "=== RUN   TestInputRecorderScope\n    contributing_inputs_test.go:93: ASSERT_INPUT_CLASS: unknown classification accepted\n--- FAIL: TestInputRecorderScope (0.00s)"
+  },
+  {
+    "perturbation": "symlink-scope",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderSymlink$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_SYMLINK",
+    "satisfying": "PASS TestInputRecorderSymlink",
+    "violating": "=== RUN   TestInputRecorderSymlink\n    contributing_inputs_test.go:107: ASSERT_INPUT_SYMLINK: escape must retain failure without bytes\n--- FAIL: TestInputRecorderSymlink (0.00s)"
+  },
+  {
+    "perturbation": "read-failure",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderFailure$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_FAILURE",
+    "satisfying": "PASS TestInputRecorderFailure",
+    "violating": "=== RUN   TestInputRecorderFailure\n    contributing_inputs_test.go:131: ASSERT_INPUT_FAILURE: failure incorrectly complete\n--- FAIL: TestInputRecorderFailure (0.00s)"
+  },
+  {
+    "perturbation": "immutable-evidence",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderImmutable$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_IMMUTABLE",
+    "satisfying": "PASS TestInputRecorderImmutable",
+    "violating": "=== RUN   TestInputRecorderImmutable\n    contributing_inputs_test.go:162: ASSERT_INPUT_IMMUTABLE: caller mutated retained evidence\n--- FAIL: TestInputRecorderImmutable (0.00s)"
+  },
+  {
+    "perturbation": "unknown-reference",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderDuplicates$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_BINDING",
+    "satisfying": "PASS TestInputRecorderDuplicates",
+    "violating": "=== RUN   TestInputRecorderDuplicates\n    contributing_inputs_test.go:176: ASSERT_INPUT_BINDING: accepted \"unknown\"\n--- FAIL: TestInputRecorderDuplicates (0.00s)"
+  },
+  {
+    "perturbation": "duplicate-reference",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderDuplicates$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_BINDING",
+    "satisfying": "PASS TestInputRecorderDuplicates",
+    "violating": "=== RUN   TestInputRecorderDuplicates\n    contributing_inputs_test.go:176: ASSERT_INPUT_BINDING: accepted \"duplicate\"\n--- FAIL: TestInputRecorderDuplicates (0.00s)"
+  },
+  {
+    "perturbation": "duplicate-contribution",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderDuplicates$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_DUPLICATE",
+    "satisfying": "PASS TestInputRecorderDuplicates",
+    "violating": "=== RUN   TestInputRecorderDuplicates\n    contributing_inputs_test.go:183: ASSERT_INPUT_DUPLICATE: contribution overwritten\n--- FAIL: TestInputRecorderDuplicates (0.00s)"
+  },
+  {
+    "perturbation": "duplicate-expected",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderDuplicates$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_DUPLICATE",
+    "satisfying": "PASS TestInputRecorderDuplicates",
+    "violating": "=== RUN   TestInputRecorderDuplicates\n    contributing_inputs_test.go:186: ASSERT_INPUT_DUPLICATE: duplicate expected contribution accepted\n--- FAIL: TestInputRecorderDuplicates (0.00s)"
+  },
+  {
+    "perturbation": "canonical-order",
+    "procedure": "go test ./internal/source -run ^TestInputRecorderOrder$ -count=1 -json",
+    "assertion": "ASSERT_INPUT_ORDER",
+    "satisfying": "PASS TestInputRecorderOrder",
+    "violating": "=== RUN   TestInputRecorderOrder\n    contributing_inputs_test.go:221: ASSERT_INPUT_ORDER: equivalent acquisition order changed evidence\n--- FAIL: TestInputRecorderOrder (0.00s)"
+  }
+]
