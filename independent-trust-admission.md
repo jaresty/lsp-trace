@@ -1,0 +1,29 @@
+# Independent trust admission
+
+Baseline: 4969599. Own `internal/schema/host_trust.go`, `internal/schema/host_trust_test.go`, this claim and `trust-*-test.log` evidence. No sibling source, legacy identity, schema, receipt, or acceptance flag modified.
+
+## Consumer interface
+
+Trusted host startup calls `schema.NewHostTrustStore(grants []schema.HostTrustGrant) (*schema.HostTrustStore,error)` exactly once with independently approved host configuration. Grant fields: `Receipt []byte`, `Context schema.TrustAuthenticationContext`, `GitAttestation *schema.GitAttestationEvidence` (optional). The host must independently verify the grant before provisioning it. Constructor validates existing admission semantics and requires known claimant and producer identities. It pins exact receipt bytes and copies optional evidence; subsequent caller mutation cannot change the approved binding.
+
+Request execution calls `(*schema.HostTrustStore).Admit(schema.HostTrustRequest) (schema.TrustAdmissionResult,error)`. Request fields: Receipt, ClaimedSourceSnapshotIdentity, GitAttestation. There is deliberately NO request Context. Nil/empty stores cannot authenticate presented receipts. Absent receipts return MISSING_TRUST without error. Presented unprovisioned, changed-byte, wrong-snapshot, or mismatched-evidence requests return REJECTED plus error. Exact provisioned receipt and evidence yield AUTHENTICATED. Optional evidence presence is itself pinned; omission or injection rejects.
+
+Production composition prerequisites: configure store outside request/provider/producer parsing; retain it in trusted execution dependencies; pass the actual acquired snapshot identity, not an unchecked requester label; enforce authenticated mode by requiring authenticated result; preserve weaker nonauthoritative execution when that mode is not requested. Do not call the constructor from request-provided grants. Do not pass a caller-created TrustAuthenticationContext to legacy AdmitTrust and call that independent provisioning. Parent owns snapshot bridge/wrapper wiring and joined execution tests.
+
+## Authority and qualification limits
+
+This is generic immutable host-side allowlisting of independently approved receipt bytes. Exact-byte pinning binds receipt ID, policy, anchor, source snapshot, provisioning authority/channel/event, and verification fields. It is NOT cryptographic verification of the ED25519_SIGNATURE label: the host's independent vetting is a precondition, not a property inferred from strings or an opaque context. Code with trusted host-construction privileges can provision grants and is outside the untrusted request threat model. No protection from compromised host configuration is claimed. Replays against another snapshot/policy/event reject; identical replay within an intentionally still-provisioned grant is allowed, not a single-use nonce mechanism. Revocation requires replacing the store with a newly provisioned instance.
+
+Legacy AdmitTrust and ValidateTrustAuthentication are unchanged compatibility primitives. Structural validity is neither independent provisioning nor operational admission. No deployment, live secrets/config changes, program acceptance, crypto implementation, provider semantics, or end-to-end authenticated execution is claimed.
+
+## Evidence
+
+Existing schema Trust/Authentication suite exercised live before changes: PASS (initial namespace trust-baseline.log; parent can retain it). New present rejecting stub produced assertion-specific failures in TestHostTrustPositive, TestHostTrustMissing, TestHostTrustProvisioningRejects and TestHostTrustFrozenEvidence, followed by GREEN after implementation. Initial namespace trust-red.log/trust-green.log are already produced artifacts, not rewritten after isolation correction.
+
+Isolated reduction removing snapshot comparison failed only TestHostTrustRequestSubstitution/snapshot with `snapshot replay must reject: {AUTHENTICATED <nil>} <nil>`. Restored it. Removing only evidence-value comparison failed only TestHostTrustFrozenEvidence with `unapproved evidence must reject`. Restored it. Logs: initial namespace trust-perturb-snapshot.log and trust-perturb-evidence.log. These observations reject both simpler artifacts. Not every negative subcase received its own isolated mutation, so exhaustive assertion-level falsification coverage is not claimed.
+
+Local committed `trust-schema-test.log`: full schema suite PASS; `trust-race-test.log`: schema race suite PASS. `trust-full-test.log`: all Go packages passed except integratedconformance's dirty-tree ownership assertion for this new uncommitted path. Clean commit ad46090 full-suite rerun returned `Go test: 3370 passed in 41 packages`; git status was clean. Parent should rerun again after composition. No ownership guard weakened.
+
+## Derivation
+
+Goal: distinguish host-authenticated operational admission from structural validity and missing trust without breaking weak historical execution. Dimensions: immutable independent host provisioning, exact receipt/snapshot/policy/anchor/evidence bindings, controlled or substituted request rejection, explicit missing trust, legacy compatibility. Enforcement: privileged constructor validates semantic binding and freezes approved bytes; request API admits only exact host-provisioned bindings and returns typed failure states. Evidence: live baseline, rejecting-stub RED, focused GREEN, two isolated reduction failures, schema/race suites, and full suite passing on clean commit ad46090 (3370 tests in 41 packages), after diagnosing the initial dirty-tree-only blocker. Limitations: no cryptographic proof, no hostile host protection, no one-time nonce replay semantics, no wrapper integration or program acceptance; parent must independently provision the store and join actual snapshot identity at execution.
