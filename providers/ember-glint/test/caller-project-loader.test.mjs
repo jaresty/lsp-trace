@@ -16,12 +16,15 @@ const uncheckedSeedPath = join(uncheckedProjectRoot, 'src/seed.js');
 const commit = '04b683e784ba4ed62b182fe7c797bfff5f49d66d';
 const omittedResolutionFixture = {
   'jsconfig.json': `${JSON.stringify({ compilerOptions: { target: 'ES2022', experimentalDecorators: true, checkJs: true, allowJs: true, noEmit: true }, include: ['src/**/*.js'] }, null, 2)}\n`,
-  'src/positive.js': "import { task } from 'ember-concurrency';\n\nconst callerOwnedTask = task(async () => 'caller-owned');\ncallerOwnedTask.perform();\n",
+  'src/positive.js': "import { task } from 'ember-concurrency';\n\nconst one = task(async () => 'one');\nconst two = task(async () => 'two');\nconst three = task(async () => 'three');\nconst four = task(async () => 'four');\nconst five = task(async () => 'five');\nconst six = task(async () => 'six');\none.perform();\ntwo.perform();\nthree.perform();\nfour.perform();\nfive.perform();\nsix.perform();\n",
   'src/same-spelling.js': 'export {};\nconst callerOwnedTask = { perform() {} };\ncallerOwnedTask.perform();\n',
-  'src/unsafe.js': 'export {};\n/** @type {any} */\nconst callerOwnedTask = {};\ncallerOwnedTask.perform();\n',
+  'src/wrong-parent.js': "import { confusableTask } from 'ember-concurrency';\nconfusableTask().perform();\n",
+  'src/unknown.js': 'export {};\n/** @type {unknown} */\nconst receiver = {};\nreceiver.perform();\n',
+  'src/unresolved.js': "import { missingTask } from 'missing-concurrency';\nmissingTask().perform();\n",
+  'src/unsafe.js': "import Model from '@warp-drive/legacy/model';\n/** @type {any} */ const firstTask = {};\n/** @type {any} */ const secondTask = {};\n/** @type {any} */ const reloadTarget = new Model();\nfirstTask.perform();\nsecondTask.perform();\nreloadTarget.reload();\n",
   'src/reload.js': "import Model from '@warp-drive/legacy/model';\nconst model = new Model();\nmodel.reload();\n",
   'node_modules/ember-concurrency/package.json': `${JSON.stringify({ name: 'ember-concurrency', version: '5.2.0', type: 'module', types: './declarations/index.d.ts', exports: { '.': { types: './declarations/index.d.ts', default: './dist/index.js' } } })}\n`,
-  'node_modules/ember-concurrency/declarations/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\ninterface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport interface Task<T, Args extends unknown[]> extends AbstractTask<Args, TaskInstance<T>> {\n  readonly callerProjectBrand: unique symbol;\n}\nexport declare function task<T>(callback: () => Promise<T>): Task<T, []>;\n',
+  'node_modules/ember-concurrency/declarations/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\nexport interface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport type TaskForAsyncTaskFunction<Fn extends (...args: any[]) => Promise<any>> = AbstractTask<Parameters<Fn>, TaskInstance<Awaited<ReturnType<Fn>>>> & { readonly callerProjectBrand: unique symbol };\ninterface WrongParent { perform(): void; }\nexport declare function task<Fn extends (...args: any[]) => Promise<any>>(callback: Fn): TaskForAsyncTaskFunction<Fn>;\nexport declare function confusableTask(): WrongParent;\n',
   'node_modules/@warp-drive/legacy/package.json': `${JSON.stringify({ name: '@warp-drive/legacy', version: '5.8.1', type: 'module', exports: { './model': { types: './declarations/model.d.ts', default: './dist/model.js' } } })}\n`,
   'node_modules/@warp-drive/legacy/declarations/model.d.ts': 'export default class Model { reload(): Promise<this>; }\n',
 };
@@ -90,13 +93,18 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
     'src/positive.js',
     'src/reload.js',
     'src/same-spelling.js',
+    'src/unknown.js',
+    'src/unresolved.js',
     'src/unsafe.js',
+    'src/wrong-parent.js',
   ], 'ASSERT_CALLER_OMITTED_RESOLUTION_CLEAN_CHECKOUT_INPUTS_ARE_CONSTRUCTED');
   await withOmittedResolutionProject(async (omittedResolutionRoot) => {
     for (const [relative, expected] of Object.entries(omittedResolutionFixture)) {
       assert.equal((await readFile(join(omittedResolutionRoot, relative), 'utf8')), expected, `required constructed fixture input absent or changed: ${relative}`);
     }
-    assert.match(await readFile(join(omittedResolutionRoot, 'node_modules/ember-concurrency/declarations/index.d.ts'), 'utf8'), /interface AbstractTask<[\s\S]*perform\(\.\.\.args: Args\): T;/, 'required checker-resolved declaration must be present');
+    const taskDeclaration = await readFile(join(omittedResolutionRoot, 'node_modules/ember-concurrency/declarations/index.d.ts'), 'utf8');
+    assert.match(taskDeclaration, /type TaskForAsyncTaskFunction<[\s\S]*AbstractTask<Parameters<Fn>/, 'ASSERT_GENERIC_TASK_FIXTURE_MODELS_MODERN_PUBLIC_ALIAS');
+    assert.match(taskDeclaration, /interface AbstractTask<[\s\S]*perform\(\.\.\.args: Args\): T;/, 'required checker-resolved declaration must be present');
 
     async function analyze(name, relationKinds = ['INVOKES_TASK']) {
       const path = join(omittedResolutionRoot, `src/${name}.js`);
@@ -109,8 +117,11 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
 
     const positive = await analyze('positive');
     assert.equal(positive.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY ${positive.blocker ?? ''}`);
-    assert.equal(positive.observations.length, 1, 'typed installed declaration must qualify');
-    assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@5\.2\.0;path=node_modules\/ember-concurrency\/declarations\/index\.d\.ts;symbol=AbstractTask\.perform;/, 'checker must resolve the exact AbstractTask.perform declaration identity in the installed layout');
+    assert.equal(positive.observations.length, 6, 'ASSERT_GENERIC_TASK_SIX_DECLARATION_BACKED_RECEIVERS_QUALIFY');
+    for (const observation of positive.observations) {
+      assert.match(observation.from.node_id, /receiver=TaskForAsyncTaskFunction/, 'ASSERT_GENERIC_TASK_PUBLIC_ALIAS_RECEIVER_MUST_QUALIFY');
+      assert.match(observation.to.node_id, /package=ember-concurrency@5\.2\.0;path=node_modules\/ember-concurrency\/declarations\/index\.d\.ts;symbol=AbstractTask\.perform;/, 'checker must resolve the exact AbstractTask.perform declaration identity in the installed layout');
+    }
 
     const reload = await analyze('reload', ['TRIGGERS_RELOAD']);
     assert.equal(reload.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_EXPORTS_SUBPATH ${reload.blocker ?? ''}`);
@@ -121,9 +132,29 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
     assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
     assert.deepEqual(sameSpelling.observations, []);
 
-    const unsafe = await analyze('unsafe');
-    assert.equal(unsafe.outcome, 'BLOCKED', 'unsafe receiver must remain explicit BLOCKED');
+    const wrongParent = await analyze('wrong-parent');
+    assert.equal(wrongParent.outcome, 'EMPTY', 'wrong declaration parent must not qualify');
+    assert.deepEqual(wrongParent.observations, []);
+
+    const unknown = await analyze('unknown');
+    assert.equal(unknown.outcome, 'BLOCKED', 'unknown receiver must remain explicit BLOCKED');
+    assert.match(unknown.blocker, /bounded checker failure: TS2339 .* Property 'perform' does not exist on type 'unknown'/);
+
+    const unresolved = await analyze('unresolved');
+    assert.equal(unresolved.outcome, 'BLOCKED', 'unresolved receiver must fail closed');
+    assert.match(unresolved.blocker, /bounded checker failure: TS2307/);
+
+    const unsafe = await analyze('unsafe', ['INVOKES_TASK', 'TRIGGERS_RELOAD']);
+    assert.equal(unsafe.outcome, 'BLOCKED', 'two any task calls and any reload must remain explicit BLOCKED');
     assert.match(unsafe.blocker, /unsafe compiler identity:/);
+    assert.equal((unsafe.blocker.match(/receiver type any/g) ?? []).length, 3, 'ASSERT_TWO_ANY_TASKS_AND_ANY_RELOAD_FAIL_CLOSED');
+
+    const manifestPath = join(omittedResolutionRoot, 'node_modules/ember-concurrency/package.json');
+    await mutateFile(manifestPath, omittedResolutionFixture['node_modules/ember-concurrency/package.json'].replace('5.2.0', '5.2.1'), async () => {
+      const wrongVersion = await analyze('positive');
+      assert.equal(wrongVersion.outcome, 'EMPTY', 'wrong package version must not qualify');
+      assert.deepEqual(wrongVersion.observations, []);
+    });
   });
 });
 

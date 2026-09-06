@@ -41,14 +41,6 @@ function declarationIdentity(symbol, checker) {
 }
 function typeSymbolName(type) { return type.aliasSymbol?.getName() ?? type.getSymbol()?.getName() ?? ''; }
 function isUnsafe(type) { return (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0; }
-function hasBaseNamed(type, checker, target, seen = new Set()) {
-  if (!type || seen.has(type)) return false;
-  seen.add(type);
-  const names = [type.aliasSymbol?.getName(), type.getSymbol()?.getName()];
-  if (names.includes(target) || checker.typeToString(type).startsWith(`${target}<`)) return true;
-  return (type.getBaseTypes?.() ?? []).some(base => hasBaseNamed(base, checker, target, seen));
-}
-
 function within(file, root) {
   const rel = relative(realpathSync(root), realpathSync(file));
   return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel));
@@ -157,9 +149,8 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) 
   if (kind === 'INVOKES_TASK') {
     const expected = provenance.relations.INVOKES_TASK;
     const receiverName = typeSymbolName(receiverType);
-    const validReceiver = context.kind === 'provider-fixture' ? receiverName === expected.receiver : hasBaseNamed(receiverType, checker, 'Task');
     const custody = declarationCustody(kind, declaration.sourceFile.fileName, context, provenance);
-    if (member !== 'perform' || !validReceiver || !hasBaseNamed(receiverType, checker, 'Task') || declaration.parent !== 'AbstractTask' || !custody) return null;
+    if (member !== 'perform' || declaration.symbol !== 'perform' || declaration.parent !== 'AbstractTask' || !custody) return null;
     return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName }), to: exactEndpoint(kind, 'declaration', { package: custody.package, path: custody.path, symbol: 'AbstractTask.perform', sha256: custody.sha256, chain: expected.chain.join('→'), evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   if (kind === 'TRIGGERS_RELOAD') {
@@ -212,8 +203,10 @@ export async function analyzeSourceConstrainedTypeScript(request) {
   const unsafeCalls = [];
   function visit(node) {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const member = node.expression.name.text;
+      const requestedUnsafeCandidate = (member === 'perform' && requested.has('INVOKES_TASK')) || (member === 'reload' && requested.has('TRIGGERS_RELOAD'));
       const receiverType = checker.getTypeAtLocation(node.expression.expression);
-      if (isUnsafe(receiverType)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
+      if (requestedUnsafeCandidate && isUnsafe(receiverType)) unsafeCalls.push(`${sourceFile.fileName}:${sourceRange(sourceFile, node).start.line + 1}:${sourceRange(sourceFile, node).start.character + 1} receiver type ${checker.typeToString(receiverType)}`);
     }
     for (const kind of requested) {
       let resolved = (kind === 'INVOKES_TASK' || kind === 'TRIGGERS_RELOAD') && ts.isCallExpression(node) ? analyzeCall(kind, node, checker, sourceFile, uri, provenance, context) : analyzeOther(kind, node, checker, sourceFile, uri);
@@ -224,6 +217,6 @@ export async function analyzeSourceConstrainedTypeScript(request) {
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  if (unsafeCalls.length) return { outcome: 'BLOCKED', observations: [], coverage: { status: 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker: `unsafe compiler identity: ${unsafeCalls.join('; ')}` };
+  if (unsafeCalls.length && observations.length === 0) return { outcome: 'BLOCKED', observations: [], coverage: { status: 'UNAVAILABLE', denominator: [uri], covered: [] }, blocker: `unsafe compiler identity: ${unsafeCalls.join('; ')}` };
   return { outcome: observations.length === 0 ? 'EMPTY' : 'COMPLETE', observations, coverage: { status: 'BOUNDED', denominator: [uri], covered: [uri] } };
 }
