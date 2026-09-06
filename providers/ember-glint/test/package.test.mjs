@@ -26,7 +26,7 @@ const allowed = [
   'fixtures/source-constrained-synthetic/vendor/glimmer-component/index.d.ts',
   'fixtures/source-constrained-synthetic/vendor/warp-drive/model.d.ts',
   'fixtures/source-constrained-synthetic/vendor/warp-drive/private-model.d.ts',
-  'package.json', 'src/protocol.mjs',
+  'package.json', 'qualification/observe.mjs', 'qualification/type-overlay.mjs', 'src/protocol.mjs',
 ];
 
 function runtimeFiles(directory, prefix = '') {

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.analysis-only-type-overlay-qualification.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "authority", "purpose", "automatic_continuation", "admission_mutated", "inventory_mutated", "pinned_source", "stages", "comparisons"],
+  "properties": {
+    "schema_version": { "const": "lsp-trace.analysis-only-type-overlay-qualification.v1" },
+    "authority": { "const": "SOURCE_CONSTRAINED_ANALYSIS_INTERVENTION" },
+    "purpose": { "const": "QUALIFICATION_ONLY" },
+    "automatic_continuation": { "const": false },
+    "admission_mutated": { "const": false },
+    "inventory_mutated": { "const": false },
+    "pinned_source": {
+      "type": "object", "additionalProperties": false, "required": ["commit", "immutable"],
+      "properties": { "commit": { "pattern": "^[0-9a-f]{40}$" }, "immutable": { "const": true } }
+    },
+    "stages": {
+      "type": "array", "minItems": 1, "maxItems": 3,
+      "prefixItems": [{ "allOf": [{ "$ref": "#/$defs/stage" }, { "properties": { "name": { "const": "BASELINE" } } }] }],
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "comparisons": { "type": "array", "items": { "$ref": "#/$defs/comparison" } }
+  },
+  "$defs": {
+    "stage": {
+      "type": "object", "required": ["name"],
+      "properties": {
+        "name": { "enum": ["BASELINE", "ENVIRONMENT_ONLY", "TYPE_OVERLAY"] },
+        "predecessor": { "pattern": "^[0-9a-f]{40}$" }, "commit": { "pattern": "^[0-9a-f]{40}$" },
+        "status": { "enum": ["CONFIRMED", "BLOCKED"] }, "blocker": { "type": ["object", "string"] },
+        "diagnostics": { "type": "array", "items": { "type": "object" } }, "observation": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "multiset": {
+      "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["identity", "multiplicity"], "properties": { "identity": { "type": "string" }, "multiplicity": { "type": "integer", "minimum": 1 } } }
+    },
+    "comparison": {
+      "type": "object", "additionalProperties": false, "required": ["from", "to", "relations"],
+      "properties": {
+        "from": { "enum": ["BASELINE", "ENVIRONMENT_ONLY"] }, "to": { "enum": ["ENVIRONMENT_ONLY", "TYPE_OVERLAY"] },
+        "relations": { "type": "object", "additionalProperties": false, "required": ["equal", "before", "after"], "properties": { "equal": { "type": "boolean" }, "before": { "$ref": "#/$defs/multiset" }, "after": { "$ref": "#/$defs/multiset" } } }
+      }
+    }
+  }
+}
