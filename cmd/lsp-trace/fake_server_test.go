@@ -404,7 +404,7 @@ func TestSubprocessSlicePublishesAttributableOutsideCallerRanges(t *testing.T) {
 	}
 }
 
-func TestSubprocessSliceRejectsUnattributableIncomingRelation(t *testing.T) {
+func TestSubprocessSlicePublishesReferenceClosedUnattributableIncomingRelation(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -412,11 +412,28 @@ func TestSubprocessSliceRejectsUnattributableIncomingRelation(t *testing.T) {
 	selector := filepath.Join(t.TempDir(), "selector.json")
 	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-range-unattributable", "--at", "main.go:1:1", "--down-depth", "1", "--up-depth", "2", "--request-timeout", "500ms", "--timeout", "2s", "--output", selector}
 	stdout, stderr, code := captureRun(t, args)
-	if code != 1 || stdout != "" || !strings.Contains(stderr, "dangling boundary node id") {
-		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_RELATION_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "missing item name") {
+		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_RELATION_STRUCTURED_INCOMPLETE: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
-	if _, err := os.Stat(selector); !os.IsNotExist(err) {
-		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_SELECTOR_ABSENT: err=%v", err)
+	artifact, err := readSelectedArtifact(selector)
+	if err != nil {
+		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_SELECTOR_PUBLISHED: %v", err)
+	}
+	if _, err := schema.Validate(artifact, "v3"); err != nil {
+		t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_SCHEMA_VALID: %v", err)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(artifact, &got); err != nil {
+		t.Fatal(err)
+	}
+	published := map[string]bool{}
+	for _, node := range got.Nodes {
+		published[node.ID] = true
+	}
+	for _, boundary := range append(append([]graph.Boundary{}, got.Terminals...), got.Frontier...) {
+		if boundary.NodeID != "" && !published[boundary.NodeID] {
+			t.Fatalf("ASSERT_SLICE_UNATTRIBUTABLE_BOUNDARY_REFERENCES_PUBLISHED_NODE: boundary=%#v nodes=%#v", boundary, got.Nodes)
+		}
 	}
 }
 

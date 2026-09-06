@@ -209,6 +209,37 @@ func TestSliceReconcilesIncomingAliasToOutgoingPresentation(t *testing.T) {
 	}
 }
 
+func TestSliceMalformedIncomingCallerPublishesReferenceClosedResult(t *testing.T) {
+	const assertion = "ASSERT_SLICE_MALFORMED_INCOMING_BOUNDARY_REFERENCES_PUBLISHED_NODE"
+	root := `{"name":"surveyControl","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":0,"character":0},"end":{"line":4,"character":1}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":13}},"data":{"surface":"prepare"}}`
+	leaf := `{"name":"loadQuestions","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":8,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":8,"character":0},"end":{"line":8,"character":13}},"data":{"surface":"outgoing"}}`
+	malformedCaller := `{"name":"","kind":12,"uri":"file:///w/survey-control.ts","range":{"start":{"line":20,"character":0},"end":{"line":22,"character":1}},"selectionRange":{"start":{"line":20,"character":0},"end":{"line":20,"character":1}},"data":{"surface":"incoming"}}`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:":        {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:surveyControl": {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]}]`)},
+		"callHierarchy/outgoingCalls:loadQuestions": {Result: json.RawMessage(`[]`)},
+		"callHierarchy/incomingCalls:loadQuestions": {Result: json.RawMessage(`[{"from":` + malformedCaller + `,"fromRanges":[]}]`)},
+	}}
+
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: validInput()})
+	if failure != nil {
+		t.Fatalf("%s: failure=%v calls=%v", assertion, failure, f.calls)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatalf("%s: unmarshal=%v artifact=%s", assertion, err, result.Artifact)
+	}
+	published := map[string]bool{}
+	for _, node := range got.Nodes {
+		published[node.ID] = true
+	}
+	for _, boundary := range append(append([]graph.Boundary{}, got.Terminals...), got.Frontier...) {
+		if boundary.NodeID != "" && !published[boundary.NodeID] {
+			t.Fatalf("%s: dangling=%q nodes=%#v terminals=%#v frontier=%#v", assertion, boundary.NodeID, got.Nodes, got.Terminals, got.Frontier)
+		}
+	}
+}
+
 func TestSliceWireBoundsReachEveryRoundTrip(t *testing.T) {
 	const assertion = "ASSERT_SLICE_PER_WIRE_REQUEST_BOUNDS"
 	t.Log("ASSERTION: " + assertion)

@@ -92,7 +92,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	for _, item := range items {
 		n := node(item, newNode)
 		if err := graph.ValidateItem(n.Item); err != nil {
-			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: n.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
+			result.Terminals = append(result.Terminals, graph.Boundary{Reason: graph.InvalidServerResponse, Message: err.Error()})
 			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "prepare", Method: "textDocument/prepareCallHierarchy", NodeID: n.ID, Message: err.Error()})
 			result.Summary.Complete = false
 			continue
@@ -162,7 +162,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 		for _, call := range calls {
 			caller := node(call.From, newNode)
 			if err := graph.ValidateItem(caller.Item); err != nil {
-				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.InvalidServerResponse, Message: err.Error()})
+				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.InvalidServerResponse, Message: "rejected incoming caller " + caller.ID + ": " + err.Error()})
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: err.Error()})
 				result.Summary.Complete = false
 				continue
@@ -180,7 +180,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				}
 			}
 			if invalidRange != nil {
-				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: caller.ID, Reason: graph.InvalidServerResponse, Message: invalidRange.Error()})
+				result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.InvalidServerResponse, Message: "rejected incoming caller " + caller.ID + ": " + invalidRange.Error()})
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: q.node.ID, Message: invalidRange.Error()})
 				result.Summary.Complete = false
 				continue
