@@ -1,6 +1,8 @@
 package qualificationpolicy
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -68,6 +70,49 @@ func TestRetainedExternalProviderResponseDigest(t *testing.T) {
 	digest := sha256.Sum256(evidence.Response)
 	if got := hex.EncodeToString(digest[:]); got != evidence.ResponseSHA256 {
 		t.Fatalf("%s: got=%s want=%s", assertion, got, evidence.ResponseSHA256)
+	}
+}
+
+func writeCoreArchive(t *testing.T, names ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "lsp-trace.tar.gz")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gz)
+	for _, name := range names {
+		if err := tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: 0}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestCoreArchiveBoundaryRejectsProviderAsset(t *testing.T) {
+	const assertion = "ASSERT_CORE_ARCHIVES_EXCLUDE_PROVIDER_ASSETS"
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := filepath.Join(root, "scripts", "assert-core-archive-boundary.sh")
+	clean := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "lsp-trace-mcp"))
+	if output, err := clean.CombinedOutput(); err != nil || !strings.Contains(string(output), "PASS "+assertion) {
+		t.Fatalf("%s A-pass: err=%v output=%s", assertion, err, output)
+	}
+	injected := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "providers/ember-glint/bin/ember-glint.mjs"))
+	if output, err := injected.CombinedOutput(); err == nil || !strings.Contains(string(output), "FAIL "+assertion) {
+		t.Fatalf("%s A-fail: err=%v output=%s", assertion, err, output)
 	}
 }
 
