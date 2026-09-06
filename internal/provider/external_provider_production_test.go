@@ -43,7 +43,7 @@ func TestProductionExternalProviderCompletesManagedLifecycle(t *testing.T) {
 	}
 	fixtureURI := "file://" + fixture
 	limits := Limits{RequestBytes: 1 << 20, ResponseBytes: 1 << 20, ProtocolMessages: 1, StderrBytes: 4096, WallTime: 30 * time.Second, TerminationGrace: time.Second}
-	declaration := Declaration{Identity: "ember-glint@1", Version: "1", Protocol: ProtocolIdentity{Name: observationadapter.ProtocolName, Version: observationadapter.ProtocolVersion}, Executable: executable, ExecutableAvailable: true, ConformanceVerified: true, Capabilities: Capabilities{Relations: []string{"BINDS_ARGUMENT", "PASSES_CALLBACK", "UPDATES_STATE", "RENDERS_FROM"}, Languages: []string{"glimmer-js"}, Frameworks: []string{"ember"}}, Limits: limits}
+	declaration := Declaration{Identity: "ember-glint@1", Version: "1", Protocol: ProtocolIdentity{Name: observationadapter.ProtocolName, Version: observationadapter.ProtocolVersion}, Executable: executable, ExecutableAvailable: true, ConformanceVerified: true, Capabilities: Capabilities{Relations: []string{"BINDS_ARGUMENT", "INVOKES_TASK", "PASSES_CALLBACK", "RENDERS_FROM", "TRIGGERS_RELOAD", "UPDATES_STATE"}, Languages: []string{"glimmer-js"}, Frameworks: []string{"ember"}}, Limits: limits}
 	provisioned, err := Provision([]Declaration{declaration})
 	if err != nil {
 		t.Fatalf("%s: provision: %v", assertion, err)
@@ -94,7 +94,7 @@ func TestProductionExternalProviderCompletesManagedLifecycle(t *testing.T) {
 		t.Fatalf("%s: missing exact observations/contributors: %#v", assertion, adapted)
 	}
 	unsupported := request
-	unsupported.Relations = []string{"INVOKES_TASK"}
+	unsupported.Relations = []string{"CALLS"}
 	unsupportedRaw, _ := json.Marshal(unsupported)
 	unsupportedReceipt := runtime.Execute(context.Background(), declaration.Identity, unsupportedRaw, limits)
 	var unsupportedEnvelope observationadapter.Envelope
