@@ -65,10 +65,12 @@ function nearestConfig(seedPath) {
     directory = parent;
   }
 }
-function omittedModuleResolution(moduleKind) {
-  if (moduleKind === ts.ModuleKind.NodeNext) return ts.ModuleResolutionKind.NodeNext;
-  if (moduleKind === ts.ModuleKind.Node16) return ts.ModuleResolutionKind.Node16;
-  return ts.ModuleResolutionKind.Node10;
+function omittedResolutionOptions(options) {
+  if (options.module === ts.ModuleKind.NodeNext) return { ...options, moduleResolution: ts.ModuleResolutionKind.NodeNext };
+  if (options.module === ts.ModuleKind.Node16) return { ...options, moduleResolution: ts.ModuleResolutionKind.Node16 };
+  if (options.module === undefined) return { ...options, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler };
+  const bundlerCompatible = options.module === ts.ModuleKind.Preserve || options.module >= ts.ModuleKind.ES2015;
+  return { ...options, moduleResolution: bundlerCompatible ? ts.ModuleResolutionKind.Bundler : ts.ModuleResolutionKind.Node10 };
 }
 function projectConfiguration(seedPath) {
   const configPath = nearestConfig(seedPath);
@@ -80,7 +82,7 @@ function projectConfiguration(seedPath) {
   const compilerOptions = loaded.config?.compilerOptions;
   const options = compilerOptions && Object.hasOwn(compilerOptions, 'moduleResolution')
     ? parsed.options
-    : { ...parsed.options, moduleResolution: omittedModuleResolution(parsed.options.module) };
+    : omittedResolutionOptions(parsed.options);
   return { configPath, root: dirname(configPath), options, files: parsed.fileNames };
 }
 function makeProgram(seedPath) {
@@ -105,19 +107,41 @@ function makeProgram(seedPath) {
 }
 function exactEndpoint(kind, side, fields) { return `${kind}:${side}:${Object.entries(fields).map(([key, value]) => `${key}=${value}`).join(';')}`; }
 
+function expectedPackageIdentity(kind, provenance) {
+  const identity = provenance.relations[kind]?.member_declaration?.split(':', 1)[0];
+  const separator = identity?.lastIndexOf('@') ?? -1;
+  if (separator <= 0) return null;
+  return { name: identity.slice(0, separator), version: identity.slice(separator + 1) };
+}
+function owningPackageRoot(declarationFile, projectRoot) {
+  const modulesRoot = join(projectRoot, 'node_modules');
+  let directory = dirname(realpathSync(declarationFile));
+  const boundary = realpathSync(modulesRoot);
+  for (;;) {
+    if (!within(directory, boundary)) return null;
+    if (existsSync(join(directory, 'package.json'))) return directory;
+    if (directory === boundary) return null;
+    directory = dirname(directory);
+  }
+}
 function declarationCustody(kind, declarationFile, context, provenance) {
-  const normalized = declarationFile.replaceAll('\\', '/');
+  const expected = expectedPackageIdentity(kind, provenance);
+  if (!expected) return null;
   if (context.kind === 'provider-fixture') {
     const path = relative(fixtureRoot, declarationFile).replaceAll('\\', '/');
-    const record = Object.values(provenance.packages).flatMap(pkg => pkg.declarations).find(item => item.path === path);
-    return record ? { path, sha256: record.sha256 } : null;
+    const entry = Object.entries(provenance.packages).find(([, pkg]) => pkg.declarations.some(item => item.path === path));
+    const record = entry?.[1].declarations.find(item => item.path === path);
+    return record && entry[0] === expected.name && entry[1].version === expected.version
+      ? { path, sha256: record.sha256, package: `${entry[0]}@${entry[1].version}` }
+      : null;
   }
-  const dependencyRoot = join(context.root, 'node_modules', kind === 'INVOKES_TASK' ? 'ember-concurrency' : '@warp-drive/legacy');
-  try { if (!within(declarationFile, dependencyRoot)) return null; } catch { return null; }
-  const packageJSON = JSON.parse(readFileSync(join(dependencyRoot, 'package.json'), 'utf8'));
-  const expectedName = kind === 'INVOKES_TASK' ? 'ember-concurrency' : '@warp-drive/legacy';
-  if (packageJSON.name !== expectedName) return null;
-  return { path: relative(context.root, declarationFile).replaceAll('\\', '/'), sha256: sha256(readFileSync(declarationFile)), package: `${packageJSON.name}@${packageJSON.version}`, normalized };
+  try {
+    const dependencyRoot = owningPackageRoot(declarationFile, context.root);
+    if (!dependencyRoot || !within(declarationFile, dependencyRoot)) return null;
+    const packageJSON = JSON.parse(readFileSync(join(dependencyRoot, 'package.json'), 'utf8'));
+    if (packageJSON.name !== expected.name || packageJSON.version !== expected.version) return null;
+    return { path: relative(context.root, declarationFile).replaceAll('\\', '/'), sha256: sha256(readFileSync(declarationFile)), package: `${packageJSON.name}@${packageJSON.version}` };
+  } catch { return null; }
 }
 function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) {
   if (!ts.isPropertyAccessExpression(call.expression)) return null;
@@ -136,14 +160,14 @@ function analyzeCall(kind, call, checker, sourceFile, uri, provenance, context) 
     const validReceiver = context.kind === 'provider-fixture' ? receiverName === expected.receiver : hasBaseNamed(receiverType, checker, 'Task');
     const custody = declarationCustody(kind, declaration.sourceFile.fileName, context, provenance);
     if (member !== 'perform' || !validReceiver || !hasBaseNamed(receiverType, checker, 'Task') || declaration.parent !== 'AbstractTask' || !custody) return null;
-    return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName }), to: exactEndpoint(kind, 'declaration', { package: custody.package ?? 'ember-concurrency@5.2.0', path: custody.path, symbol: 'AbstractTask.perform', sha256: custody.sha256, chain: expected.chain.join('→'), evidence: 'typescript-checker', authority: 'non-authoritative' }) };
+    return { from: exactEndpoint(kind, 'call', { uri, range: JSON.stringify(sourceRange(sourceFile, call)), receiver: receiverName }), to: exactEndpoint(kind, 'declaration', { package: custody.package, path: custody.path, symbol: 'AbstractTask.perform', sha256: custody.sha256, chain: expected.chain.join('→'), evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   if (kind === 'TRIGGERS_RELOAD') {
     const expectedDeclaration = provenance.packages['@warp-drive/legacy'].declarations.find(({ path }) => path === 'vendor/warp-drive/private-model.d.ts');
     const custody = declarationCustody(kind, declaration.sourceFile.fileName, context, provenance);
     const validDeclaration = context.kind === 'provider-fixture' ? declarationPath === expectedDeclaration?.path : Boolean(custody);
     if (member !== 'reload' || declaration.symbol !== 'reload' || declaration.parent !== 'Model' || !validDeclaration || !custody) return null;
-    return { from: source, to: exactEndpoint(kind, 'declaration', { package: custody.package ?? '@warp-drive/legacy@5.8.1', path: custody.path, symbol: 'Model.reload', sha256: custody.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
+    return { from: source, to: exactEndpoint(kind, 'declaration', { package: custody.package, path: custody.path, symbol: 'Model.reload', sha256: custody.sha256, evidence: 'typescript-checker', authority: 'non-authoritative' }) };
   }
   return null;
 }

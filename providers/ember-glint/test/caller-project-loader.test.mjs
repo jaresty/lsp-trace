@@ -19,8 +19,11 @@ const omittedResolutionFixture = {
   'src/positive.js': "import { task } from 'ember-concurrency';\n\nconst callerOwnedTask = task(async () => 'caller-owned');\ncallerOwnedTask.perform();\n",
   'src/same-spelling.js': 'export {};\nconst callerOwnedTask = { perform() {} };\ncallerOwnedTask.perform();\n',
   'src/unsafe.js': 'export {};\n/** @type {any} */\nconst callerOwnedTask = {};\ncallerOwnedTask.perform();\n',
-  'node_modules/ember-concurrency/package.json': '{"name":"ember-concurrency","version":"99.0.0-caller","type":"module","types":"index.d.ts"}\n',
-  'node_modules/ember-concurrency/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\ninterface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport interface Task<T, Args extends unknown[]> extends AbstractTask<Args, TaskInstance<T>> {\n  readonly callerProjectBrand: unique symbol;\n}\nexport declare function task<T>(callback: () => Promise<T>): Task<T, []>;\n',
+  'src/reload.js': "import Model from '@warp-drive/legacy/model';\nconst model = new Model();\nmodel.reload();\n",
+  'node_modules/ember-concurrency/package.json': `${JSON.stringify({ name: 'ember-concurrency', version: '5.2.0', type: 'module', types: './declarations/index.d.ts', exports: { '.': { types: './declarations/index.d.ts', default: './dist/index.js' } } })}\n`,
+  'node_modules/ember-concurrency/declarations/index.d.ts': 'export interface TaskInstance<T> extends Promise<T> {}\ninterface AbstractTask<Args extends unknown[], T> {\n  perform(...args: Args): T;\n}\nexport interface Task<T, Args extends unknown[]> extends AbstractTask<Args, TaskInstance<T>> {\n  readonly callerProjectBrand: unique symbol;\n}\nexport declare function task<T>(callback: () => Promise<T>): Task<T, []>;\n',
+  'node_modules/@warp-drive/legacy/package.json': `${JSON.stringify({ name: '@warp-drive/legacy', version: '5.8.1', type: 'module', exports: { './model': { types: './declarations/model.d.ts', default: './dist/model.js' } } })}\n`,
+  'node_modules/@warp-drive/legacy/declarations/model.d.ts': 'export default class Model { reload(): Promise<this>; }\n',
 };
 
 async function withOmittedResolutionProject(observe) {
@@ -50,7 +53,7 @@ async function assertCallerQualified(assertion) {
   const result = await analyzeSourceConstrainedTypeScript(await request());
   assert.equal(result.outcome, 'COMPLETE', `${assertion} precondition: analysis must execute`);
   assert.equal(result.observations.length, 1, `${assertion} precondition: relation must be admitted`);
-  assert.match(result.observations[0].to.node_id, /package=ember-concurrency@99\.0\.0-caller;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/, `${assertion} expected caller-local declaration and package custody`);
+  assert.match(result.observations[0].to.node_id, /package=ember-concurrency@5\.2\.0;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/, `${assertion} expected caller-local declaration and package custody`);
 }
 
 async function mutateFile(path, replacement, observe) {
@@ -80,9 +83,12 @@ test('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT', async () => {
 test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', async () => {
   assert.deepEqual(Object.keys(omittedResolutionFixture).sort(), [
     'jsconfig.json',
-    'node_modules/ember-concurrency/index.d.ts',
+    'node_modules/@warp-drive/legacy/declarations/model.d.ts',
+    'node_modules/@warp-drive/legacy/package.json',
+    'node_modules/ember-concurrency/declarations/index.d.ts',
     'node_modules/ember-concurrency/package.json',
     'src/positive.js',
+    'src/reload.js',
     'src/same-spelling.js',
     'src/unsafe.js',
   ], 'ASSERT_CALLER_OMITTED_RESOLUTION_CLEAN_CHECKOUT_INPUTS_ARE_CONSTRUCTED');
@@ -90,21 +96,26 @@ test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', asyn
     for (const [relative, expected] of Object.entries(omittedResolutionFixture)) {
       assert.equal((await readFile(join(omittedResolutionRoot, relative), 'utf8')), expected, `required constructed fixture input absent or changed: ${relative}`);
     }
-    assert.match(await readFile(join(omittedResolutionRoot, 'node_modules/ember-concurrency/index.d.ts'), 'utf8'), /interface AbstractTask<[\s\S]*perform\(\.\.\.args: Args\): T;/, 'required Node10-resolved declaration must be present');
+    assert.match(await readFile(join(omittedResolutionRoot, 'node_modules/ember-concurrency/declarations/index.d.ts'), 'utf8'), /interface AbstractTask<[\s\S]*perform\(\.\.\.args: Args\): T;/, 'required checker-resolved declaration must be present');
 
-    async function analyze(name) {
+    async function analyze(name, relationKinds = ['INVOKES_TASK']) {
       const path = join(omittedResolutionRoot, `src/${name}.js`);
       const source = await readFile(path);
       return analyzeSourceConstrainedTypeScript({
         documents: [{ uri: pathToFileURL(path).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
-        relation_kinds: ['INVOKES_TASK'],
+        relation_kinds: relationKinds,
       });
     }
 
     const positive = await analyze('positive');
     assert.equal(positive.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY ${positive.blocker ?? ''}`);
     assert.equal(positive.observations.length, 1, 'typed installed declaration must qualify');
-    assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@99\.0\.0-caller;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/);
+    assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@5\.2\.0;path=node_modules\/ember-concurrency\/declarations\/index\.d\.ts;symbol=AbstractTask\.perform;/, 'checker must resolve the exact AbstractTask.perform declaration identity in the installed layout');
+
+    const reload = await analyze('reload', ['TRIGGERS_RELOAD']);
+    assert.equal(reload.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_EXPORTS_SUBPATH ${reload.blocker ?? ''}`);
+    assert.equal(reload.observations.length, 1, 'exported model declaration must qualify');
+    assert.match(reload.observations[0].to.node_id, /package=@warp-drive\/legacy@5\.8\.1;path=node_modules\/@warp-drive\/legacy\/declarations\/model\.d\.ts;symbol=Model\.reload;/);
 
     const sameSpelling = await analyze('same-spelling');
     assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
@@ -180,7 +191,7 @@ test('ASSERT_P1B_REMOVED_CALLER_DECLARATION_DOES_NOT_QUALIFY', async () => {
 
 test('ASSERT_P2A_WRONG_PACKAGE_CUSTODY_DOES_NOT_QUALIFY', async () => {
   const manifest = join(projectRoot, 'node_modules/ember-concurrency/package.json');
-  await mutateFile(manifest, '{"name":"confusable-concurrency","version":"99.0.0-caller","type":"module","types":"index.d.ts"}\n', async () => {
+  await mutateFile(manifest, '{"name":"confusable-concurrency","version":"5.2.0","type":"module","types":"index.d.ts"}\n', async () => {
     const result = await analyzeSourceConstrainedTypeScript(await request());
     assert.equal(result.outcome, 'EMPTY', 'ASSERT_P2A_WRONG_PACKAGE_CUSTODY_DOES_NOT_QUALIFY A-fail');
     assert.deepEqual(result.observations, [], 'ASSERT_P2A_WRONG_PACKAGE_CUSTODY_DOES_NOT_QUALIFY A-fail');
