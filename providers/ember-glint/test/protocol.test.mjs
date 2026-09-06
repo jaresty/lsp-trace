@@ -127,7 +127,7 @@ named('ASSERT_STRICT_COLLECTOR_PRESERVES_RELATION_NON_ENTAILMENTS', async () => 
       limits: { max_nodes: 10, request_timeout_ms: 1000 },
     };
     const response = await createProvider({ analyzers: [analyzer] }).handle(strictRequest);
-    assert.deepEqual(response.observations[0].supports, ['source_dependency_relation']);
+    assert.deepEqual(response.observations[0].supports, ['source_dependency_relation', 'typed_static_relation']);
     assert.deepEqual(response.observations[0].does_not_support, [
       'callback_invocation',
       'feature_identity',
@@ -136,7 +136,7 @@ named('ASSERT_STRICT_COLLECTOR_PRESERVES_RELATION_NON_ENTAILMENTS', async () => 
       'runtime_execution',
       'whole_source_completeness',
     ]);
-    assert.equal(logicalDigest(response.observations), 'sha256:51b7f58834712b03daf7348ad598fd70565490cae2940229385bd82e803bcca4');
+    assert.equal(logicalDigest(response.observations), 'sha256:c99fc1259ded217bdc15b9076077b2283222a0ea77e729912de79dd76d5bd711');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

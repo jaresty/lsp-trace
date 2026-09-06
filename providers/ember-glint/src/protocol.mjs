@@ -154,11 +154,11 @@ async function strictCollectorResponse(request, records) {
   let failure;
   let coverage = { status: 'UNKNOWN', denominator: [uri], covered: [], CoveredCount: 0 };
   if (eligible.length === 1) {
-    const result = await eligible[0].analyzer.analyze({ schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
+    const result = await eligible[0].analyzer.analyze({ schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source, position: Number.isInteger(request.seed.line) && Number.isInteger(request.seed.character) ? { line: request.seed.line, character: request.seed.character } : undefined }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
     const genericNonEntailments = ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'];
     observations = result.observations.map((observation) => ({
       ...observation,
-      supports: ['source_dependency_relation'],
+      supports: strings([...strings(observation.supports ?? [], 'observation.supports'), 'source_dependency_relation'], 'observation.supports'),
       does_not_support: strings([...strings(observation.does_not_support ?? [], 'observation.does_not_support'), ...genericNonEntailments], 'observation.does_not_support'),
     }));
     if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
@@ -168,6 +168,13 @@ async function strictCollectorResponse(request, records) {
     failure = 'RELATION_NOT_SUPPORTED';
   }
   const [adapterName, adapterVersion] = request.adapter_id.split('@');
+  const virtualAnchor = observations.find(({ virtual_anchor: anchor }) => anchor)?.virtual_anchor;
+  const documentRecord = {
+    document_id: 'original', original_uri: uri, content_sha256: digest,
+    revision: { kind: revision.kind || 'content', value: revisionValue, blob: digest, custody: 'PROVIDER_PROVED' },
+    coordinates: 'ORIGINAL',
+    ...(virtualAnchor ? { virtual_uri: virtualAnchor.uri, mapping: { mapping_id: virtualAnchor.mapping_id, original_document_id: 'original' } } : {}),
+  };
   return {
     provider: { name: 'ember-glint', version: '1' },
     protocol: { name: 'lsp-trace.provider-observations', version: '1' },
@@ -175,7 +182,7 @@ async function strictCollectorResponse(request, records) {
     authority: 'PROVIDER_REPORTED',
     coverage,
     ...(failure ? { failure } : {}),
-    documents: [{ document_id: 'original', original_uri: uri, content_sha256: digest, revision: { kind: revision.kind || 'content', value: revisionValue, blob: digest, custody: 'PROVIDER_PROVED' }, coordinates: 'ORIGINAL' }],
+    documents: [documentRecord],
     observations,
     request_id: `${request.session.session_id}:${request.session.generation}:${uri}`,
   };

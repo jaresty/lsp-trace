@@ -12,7 +12,6 @@ import { createScriptSymbolExtractor } from './analyzers/script.mjs';
 import { createTemplateObservationExtractor } from './analyzers/template.mjs';
 import { analyzeSourceConstrainedTypeScript } from './analyzers/source-constrained-typescript.mjs';
 import { createTemplateRelationAdapter } from './analyzers/template-relations.mjs';
-import { createRendersFromAnalyzer } from './renders-from-analyzer.mjs';
 
 const require = createRequire(import.meta.url);
 const compiler = require('ember-source/ember-template-compiler/index.js');
@@ -59,7 +58,6 @@ export function createDefaultAnalyzer() {
     glintAnalyzer: createGlintAnalyzer({ loadConfig, analyzeProject }),
   });
   const callbackAnalyzer = createPassesCallbackAnalyzer({ ts, versions });
-  const rendersFromAnalyzer = createRendersFromAnalyzer({ ts });
   const templateRelationAdapter = createTemplateRelationAdapter();
   const admitted = Object.freeze(['BINDS_ARGUMENT', 'INVOKES_TASK', 'PASSES_CALLBACK', 'RENDERS_FROM', 'TRIGGERS_RELOAD', 'UPDATES_STATE']);
 
@@ -87,9 +85,9 @@ export function createDefaultAnalyzer() {
     let resultCoverage;
     for (const relation of request.relation_kinds) {
       let result;
-      if (relation === 'BINDS_ARGUMENT') {
+      if (relation === 'BINDS_ARGUMENT' || relation === 'RENDERS_FROM') {
         result = analyzer.analyze(classification.kind === 'glint'
-          ? { ...classification, relationKinds: [relation] }
+          ? { ...classification, document: { ...document, source: input.source }, relationKinds: [relation] }
           : { kind: 'template', source: input.source, document, relationKinds: [relation] });
       } else if (relation === 'PASSES_CALLBACK') {
         const source = input?.source ?? '';
@@ -101,9 +99,6 @@ export function createDefaultAnalyzer() {
         result = await analyzeSourceConstrainedTypeScript({ ...request, relation_kinds: [relation] });
       } else if (relation === 'UPDATES_STATE') {
         result = scriptExtractor.extract({ documents: [{ ...document, language: 'typescript' }] });
-      } else if (relation === 'RENDERS_FROM') {
-        try { result = rendersFromAnalyzer.analyze(JSON.parse(input?.source ?? '')); }
-        catch { result = { status: 'BLOCKED', reason: 'QUALIFIED_RENDERS_FROM_INPUT_REQUIRED', observations: [], coverage: { status: 'UNKNOWN', reason: 'ANALYSIS_UNAVAILABLE' } }; }
       }
       if (!result || ['BLOCKED', 'FAILED', 'UNSUPPORTED'].includes(result.status)) blocked = result?.reason ?? 'RELATION_NOT_SUPPORTED';
       resultCoverage = result?.coverage;
@@ -126,7 +121,6 @@ export function createDefaultAnalyzer() {
     supportedRelations: admitted,
     analyze(request, options) {
       if (request?.schema === 'lsp-trace.provider-request.v1') return analyzeProviderRequest(request);
-      if (request?.kind === 'renders-from') return rendersFromAnalyzer.analyze(request);
       return analyzer.analyze(request, options);
     },
   });

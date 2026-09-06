@@ -21,7 +21,7 @@ The source-constrained TypeScript projects and pinned declaration inputs now liv
 
 ## Analyzer boundary
 
-Framework semantics remain inside this package. The pinned analyzer stack uses Ember Template Compiler, Glint, TypeScript, and Tree-sitter only within retained qualification ceilings. Missing Glint configuration is `BLOCKED`/unavailable, never an empty relation result.
+Framework semantics remain inside this package. The pinned analyzer stack uses Ember Template Compiler, Glint, TypeScript, and Tree-sitter only within retained qualification ceilings. Production `RENDERS_FROM` is routed through the generalized Glint project analysis and TypeScript Program/TypeChecker; it requires exact original/generated round-trip mapping, one Glint definition, typed declaration identity, and one direct `this.args` member read, and never uses Tree-sitter or JSON semantic input. Missing or ambiguous configuration, mapping, definition, generated source, declaration identity, or safe type is `BLOCKED`/unavailable, never an empty relation result.
 
 `createProvider({ analyzers })` consumes narrow qualified adapters. The protocol layer validates custody-bearing requests, selects one unambiguous compatible analyzer, bounds and deterministically orders observations, and emits the generic observation envelope. Unsupported relation, language, or framework selections fail explicitly.
 

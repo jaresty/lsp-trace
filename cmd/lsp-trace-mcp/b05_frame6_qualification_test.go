@@ -33,29 +33,51 @@ func TestProductionMCPB05TwentyFourAttemptQualification(t *testing.T) {
 		t.Fatalf("%s: repository-local provider", assertion)
 	}
 	seeds := []struct {
-		id, relation, path string
-		want               int
+		id, relation, path    string
+		want, line, character int
 	}{
-		{"binds-argument-positive", "BINDS_ARGUMENT", "qualification/external-provider/component.gts", 1}, {"binds-argument-negative", "BINDS_ARGUMENT", "qualification/external-provider/binds-argument-negative.gts", 0},
-		{"passes-callback-positive", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-positive.gts", 1}, {"passes-callback-negative", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-negative.gts", 0},
-		{"invokes-task-positive", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-positive.gts", 1}, {"invokes-task-negative", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-negative.gts", 0},
-		{"triggers-reload-positive", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-positive.ts", 1}, {"triggers-reload-negative", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-negative.ts", 0},
-		{"updates-state-positive", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-positive.ts", 2}, {"updates-state-negative", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-negative.ts", 0},
-		{"renders-from-positive", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-positive.json", 1}, {"renders-from-negative", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-negative.json", 0},
+		{"binds-argument-positive", "BINDS_ARGUMENT", "qualification/external-provider/component.gts", 1, 0, 0}, {"binds-argument-negative", "BINDS_ARGUMENT", "qualification/external-provider/binds-argument-negative.gts", 0, 0, 0},
+		{"passes-callback-positive", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-positive.gts", 1, 0, 0}, {"passes-callback-negative", "PASSES_CALLBACK", "qualification/external-provider/passes-callback-negative.gts", 0, 0, 0},
+		{"invokes-task-positive", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-positive.gts", 1, 0, 0}, {"invokes-task-negative", "INVOKES_TASK", "providers/ember-glint/fixtures/invokes-task-negative.gts", 0, 0, 0},
+		{"triggers-reload-positive", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-positive.ts", 1, 0, 0}, {"triggers-reload-negative", "TRIGGERS_RELOAD", "providers/ember-glint/fixtures/triggers-reload-negative.ts", 0, 0, 0},
+		{"updates-state-positive", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-positive.ts", 2, 0, 0}, {"updates-state-negative", "UPDATES_STATE", "providers/ember-glint/fixtures/updates-state-negative.ts", 0, 0, 0},
+		{"renders-from-positive", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-positive.gts", 1, 14, 14}, {"renders-from-negative", "RENDERS_FROM", "providers/ember-glint/fixtures/renders-from-negative.gts", 0, 12, 14},
 	}
 	workspace := t.TempDir()
 	workspace, err := filepath.EvalSymlinks(workspace)
 	if err != nil {
 		t.Fatalf("%s: canonicalize workspace: %v", assertion, err)
 	}
+	rendersProject := filepath.Join(workspace, "renders-project")
+	if err = os.Mkdir(rendersProject, 0755); err != nil {
+		t.Fatal(err)
+	}
 	for _, s := range seeds {
 		raw, e := os.ReadFile(filepath.Join(root, s.path))
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e = os.WriteFile(filepath.Join(workspace, s.id+filepath.Ext(s.path)), raw, 0644); e != nil {
+		directory := workspace
+		if s.relation == "RENDERS_FROM" {
+			directory = rendersProject
+		}
+		if e = os.WriteFile(filepath.Join(directory, s.id+filepath.Ext(s.path)), raw, 0644); e != nil {
 			t.Fatal(e)
 		}
+	}
+	configSource, err := os.ReadFile(filepath.Join(root, "providers/ember-glint/fixtures/renders-from-project-tsconfig.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(rendersProject, "tsconfig.json"), configSource, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(workspace, ".gitignore"), []byte("renders-project/node_modules\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dependencyRoot := filepath.Clean(filepath.Join(filepath.Dir(provider), "..", "..", ".."))
+	if err = os.Symlink(dependencyRoot, filepath.Join(rendersProject, "node_modules")); err != nil {
+		t.Fatalf("%s: expose independently installed project dependencies: %v", assertion, err)
 	}
 	git := func(args ...string) string {
 		c := exec.Command("git", args...)
@@ -85,8 +107,12 @@ func TestProductionMCPB05TwentyFourAttemptQualification(t *testing.T) {
 	id := 2
 	for _, s := range seeds {
 		for _, op := range []string{"incoming", "slice"} {
-			uri := "file://" + filepath.Join(workspace, s.id+filepath.Ext(s.path))
-			q := map[string]any{"session_id": "b05-frame6", "generation": 1, "uri": uri, "line": 0, "character": 0, "relations": []string{s.relation}, "providers": []string{"ember-glint@1"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}, "workspace_revision": map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"}, "fail_on_unknown_revision": true, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000}
+			directory := workspace
+			if s.relation == "RENDERS_FROM" {
+				directory = rendersProject
+			}
+			uri := "file://" + filepath.Join(directory, s.id+filepath.Ext(s.path))
+			q := map[string]any{"session_id": "b05-frame6", "generation": 1, "uri": uri, "line": s.line, "character": s.character, "relations": []string{s.relation}, "providers": []string{"ember-glint@1"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}, "workspace_revision": map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"}, "fail_on_unknown_revision": true, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000}
 			if op == "slice" {
 				q["start_mode"] = "at"
 				q["up_depth"] = 1
