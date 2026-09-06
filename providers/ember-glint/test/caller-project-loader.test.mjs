@@ -12,6 +12,7 @@ const projectRoot = join(providerRoot, 'test-projects/caller-js');
 const seedPath = join(projectRoot, 'src/seed.js');
 const uncheckedProjectRoot = join(providerRoot, 'test-projects/caller-js-unchecked');
 const uncheckedSeedPath = join(uncheckedProjectRoot, 'src/seed.js');
+const omittedResolutionRoot = join(providerRoot, 'test-projects/caller-js-omitted-resolution');
 const commit = '04b683e784ba4ed62b182fe7c797bfff5f49d66d';
 
 async function request() {
@@ -51,6 +52,58 @@ async function hideFile(path, observe) {
 
 test('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT', async () => {
   await assertCallerQualified('ASSERT_P1B_CALLER_PROJECT_DEPENDENCY_ROOT');
+});
+
+test('ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY', async () => {
+  async function analyze(name) {
+    const path = join(omittedResolutionRoot, `src/${name}.js`);
+    const source = await readFile(path);
+    return analyzeSourceConstrainedTypeScript({
+      documents: [{ uri: pathToFileURL(path).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
+      relation_kinds: ['INVOKES_TASK'],
+    });
+  }
+
+  const positive = await analyze('positive');
+  assert.equal(positive.outcome, 'COMPLETE', `ASSERT_CALLER_OMITTED_MODULE_RESOLUTION_USES_NODE_COMPATIBLE_POLICY ${positive.blocker ?? ''}`);
+  assert.equal(positive.observations.length, 1, 'typed installed declaration must qualify');
+  assert.match(positive.observations[0].to.node_id, /package=ember-concurrency@99\.0\.0-caller;path=node_modules\/ember-concurrency\/index\.d\.ts(?:;|$)/);
+
+  const sameSpelling = await analyze('same-spelling');
+  assert.equal(sameSpelling.outcome, 'EMPTY', 'same-spelling method must not qualify');
+  assert.deepEqual(sameSpelling.observations, []);
+
+  const unsafe = await analyze('unsafe');
+  assert.equal(unsafe.outcome, 'BLOCKED', 'unsafe receiver must remain explicit BLOCKED');
+  assert.match(unsafe.blocker, /unsafe compiler identity:/);
+});
+
+test('ASSERT_CALLER_MODULE_RESOLUTION_OMISSION_ONLY_POLICY_MATRIX', async () => {
+  const configPath = join(omittedResolutionRoot, 'jsconfig.json');
+  const original = await readFile(configPath);
+  const positivePath = join(omittedResolutionRoot, 'src/positive.js');
+  const source = await readFile(positivePath);
+  const analyze = () => analyzeSourceConstrainedTypeScript({
+    documents: [{ uri: pathToFileURL(positivePath).href, revision: commit, digest: `sha256:${createHash('sha256').update(source).digest('hex')}`, source: source.toString() }],
+    relation_kinds: ['INVOKES_TASK'],
+  });
+  const config = compilerOptions => JSON.stringify({ compilerOptions: { target: 'ES2022', experimentalDecorators: true, checkJs: true, allowJs: true, noEmit: true, ...compilerOptions }, include: ['src/**/*.js'] });
+  try {
+    for (const [name, options, expected, blocker] of [
+      ['omitted-default-module', {}, 'COMPLETE'],
+      ['omitted-nodenext-module', { module: 'NodeNext' }, 'COMPLETE'],
+      ['explicit-classic', { module: 'ESNext', moduleResolution: 'Classic' }, 'BLOCKED', /TS2792/],
+      ['explicit-nodenext', { module: 'NodeNext', moduleResolution: 'NodeNext' }, 'COMPLETE'],
+      ['explicit-bundler', { module: 'ESNext', moduleResolution: 'Bundler' }, 'COMPLETE'],
+    ]) {
+      await writeFile(configPath, config(options));
+      const result = await analyze();
+      assert.equal(result.outcome, expected, `ASSERT_CALLER_MODULE_RESOLUTION_OMISSION_ONLY_POLICY_MATRIX ${name}: ${result.blocker ?? ''}`);
+      if (blocker) assert.match(result.blocker, blocker, name);
+    }
+  } finally {
+    await writeFile(configPath, original);
+  }
 });
 
 test('ASSERT_P2B_P3A_UNCHECKED_JS_SEMANTIC_UNCERTAINTY_NEVER_BECOMES_ABSENCE', async () => {

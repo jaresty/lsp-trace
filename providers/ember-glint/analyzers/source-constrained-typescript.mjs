@@ -65,6 +65,11 @@ function nearestConfig(seedPath) {
     directory = parent;
   }
 }
+function omittedModuleResolution(moduleKind) {
+  if (moduleKind === ts.ModuleKind.NodeNext) return ts.ModuleResolutionKind.NodeNext;
+  if (moduleKind === ts.ModuleKind.Node16) return ts.ModuleResolutionKind.Node16;
+  return ts.ModuleResolutionKind.Node10;
+}
 function projectConfiguration(seedPath) {
   const configPath = nearestConfig(seedPath);
   if (!configPath) return null;
@@ -72,7 +77,11 @@ function projectConfiguration(seedPath) {
   if (loaded.error) throw new Error(`project config failure: ${ts.flattenDiagnosticMessageText(loaded.error.messageText, ' ')}`);
   const parsed = ts.parseJsonConfigFileContent(loaded.config, ts.sys, dirname(configPath), { noEmit: true }, configPath);
   if (parsed.errors.length) throw new Error(`project config failure: ${parsed.errors.map(error => ts.flattenDiagnosticMessageText(error.messageText, ' ')).join('; ')}`);
-  return { configPath, root: dirname(configPath), options: parsed.options, files: parsed.fileNames };
+  const compilerOptions = loaded.config?.compilerOptions;
+  const options = compilerOptions && Object.hasOwn(compilerOptions, 'moduleResolution')
+    ? parsed.options
+    : { ...parsed.options, moduleResolution: omittedModuleResolution(parsed.options.module) };
+  return { configPath, root: dirname(configPath), options, files: parsed.fileNames };
 }
 function makeProgram(seedPath) {
   const javascript = seedPath.endsWith('.js');
