@@ -49,13 +49,14 @@ function hasBaseNamed(type, checker, target, seen = new Set()) {
 }
 
 function makeProgram(seedPath) {
-  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, baseUrl: fixtureRoot, paths: { '@glimmer/component': ['vendor/glimmer-component/index.d.ts'], 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@ember-data/model': ['vendor/warp-drive/model.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
+  const javascript = seedPath.endsWith('.js');
+  const options = { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext, strict: true, noEmit: true, skipLibCheck: true, allowNonTsExtensions: true, allowJs: javascript, checkJs: javascript, baseUrl: fixtureRoot, paths: { '@glimmer/component': ['vendor/glimmer-component/index.d.ts'], 'ember-concurrency': ['vendor/ember-concurrency/index.d.ts'], '@ember-data/model': ['vendor/warp-drive/model.d.ts'], '@warp-drive/legacy/model': ['vendor/warp-drive/model.d.ts'] } };
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile.bind(host);
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
     if (fileName === seedPath) {
       const source = ts.sys.readFile(fileName);
-      return source === undefined ? undefined : ts.createSourceFile(fileName, source, languageVersion, true, ts.ScriptKind.TS);
+      return source === undefined ? undefined : ts.createSourceFile(fileName, source, languageVersion, true, javascript ? ts.ScriptKind.JS : ts.ScriptKind.TS);
     }
     return getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
   };
@@ -103,7 +104,7 @@ function analyzeOther(kind, node, checker, sourceFile, uri) {
 export async function analyzeSourceConstrainedTypeScript(request) {
   const input = request.documents?.[0];
   const uri = input?.uri;
-  if (!uri?.startsWith('file://') || !/\.(?:ts|gts)$/.test(uri)) throw new Error('source-constrained TypeScript file seed required');
+  if (!uri?.startsWith('file://') || !/\.(?:js|ts|gts)$/.test(uri)) throw new Error('source-constrained JavaScript or TypeScript file seed required');
   const seedPath = fileURLToPath(uri);
   const sourceBytes = await readFile(seedPath);
   const commit = input.revision;
