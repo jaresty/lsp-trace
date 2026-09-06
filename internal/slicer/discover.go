@@ -225,6 +225,15 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
 		for _, call := range calls {
 			callee := node(call.To)
+			var semanticMatches []graph.Node
+			for _, existing := range nodesByID {
+				if graph.SameSemanticLocation(existing, callee) {
+					semanticMatches = append(semanticMatches, existing)
+				}
+			}
+			if len(semanticMatches) == 1 {
+				callee = semanticMatches[0]
+			}
 			if err := graph.ValidateItem(callee.Item); err != nil {
 				result.Complete = false
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-outgoing", Method: "callHierarchy/outgoingCalls", NodeID: q.node.ID, Message: err.Error()})

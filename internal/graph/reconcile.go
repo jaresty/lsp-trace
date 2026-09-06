@@ -12,6 +12,13 @@ type semanticLocation struct {
 	SelectionRange Range
 }
 
+// SameSemanticLocation reports whether server presentations identify the same
+// symbol location while allowing response-specific detail, range, and data.
+func SameSemanticLocation(a, b Node) bool {
+	return semanticLocation{a.Name, a.Kind, a.URI, a.SelectionRange} ==
+		semanticLocation{b.Name, b.Kind, b.URI, b.SelectionRange}
+}
+
 // ReconcileIncomingAliases canonicalizes unambiguous incoming call-hierarchy
 // aliases to the outgoing presentation before independently composed results
 // are merged. Native graph identity remains unchanged everywhere else.

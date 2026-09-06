@@ -77,6 +77,67 @@ func TestDiscoverAccountsForEveryDocumentSymbolPreparation(t *testing.T) {
 	}
 }
 
+func TestDiscoverCanonicalizesAliasesAcrossOutgoingResponses(t *testing.T) {
+	const assertion = "ASSERT_SLICE_CROSS_RESPONSE_ALIAS_SINGLE_NODE"
+	left, right := callItem("left", 1), callItem("right", 2)
+	sharedFirst := callItem("shared", 3)
+	sharedFirst.Detail = "declaration"
+	sharedFirst.Range.End.Line = 8
+	sharedSecond := sharedFirst
+	sharedSecond.Detail = "definition"
+	sharedSecond.Range.End.Line = 5
+	sharedSecond.Data = json.RawMessage(`{"surface":"second-response"}`)
+
+	discover := func(starts []lsp.CallHierarchyItem) Discovery {
+		return DiscoverPrepared(context.Background(), &fakeClient{outgoing: map[string][]lsp.CallHierarchyOutgoingCall{
+			"left":  {{To: sharedFirst}},
+			"right": {{To: sharedSecond}},
+		}}, starts, Options{DownDepth: 1})
+	}
+	got := discover([]lsp.CallHierarchyItem{left, right})
+
+	if len(got.Nodes) != 3 || len(got.Edges) != 2 || len(got.FrontierItems) != 1 || got.Edges[0].CalleeNodeID != got.Edges[1].CalleeNodeID {
+		t.Fatalf("%s: nodes=%#v edges=%#v frontier=%#v", assertion, got.Nodes, got.Edges, got.FrontierItems)
+	}
+	first, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := json.Marshal(discover([]lsp.CallHierarchyItem{left, right}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != string(second) {
+		t.Fatalf("ASSERT_SLICE_CROSS_RESPONSE_ALIAS_DETERMINISTIC_REPLAY: first=%s second=%s", first, second)
+	}
+}
+
+func TestDiscoverDoesNotCollapseConfusableOrAmbiguousSymbols(t *testing.T) {
+	base := callItem("shared", 3)
+	differentURI := base
+	differentURI.URI = "file:///w/other.go"
+	differentRange := callItem("shared", 4)
+	ambiguous := base
+	ambiguous.Detail = "second declaration"
+	ambiguous.Range.End.Line = 9
+
+	for _, tc := range []struct {
+		name   string
+		starts []lsp.CallHierarchyItem
+	}{
+		{name: "same-name-different-uri", starts: []lsp.CallHierarchyItem{base, differentURI}},
+		{name: "same-name-different-selection-range", starts: []lsp.CallHierarchyItem{base, differentRange}},
+		{name: "ambiguous-prepared-presentations", starts: []lsp.CallHierarchyItem{base, ambiguous}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := DiscoverPrepared(context.Background(), &fakeClient{outgoing: map[string][]lsp.CallHierarchyOutgoingCall{"shared": {}}}, tc.starts, Options{DownDepth: 1})
+			if len(got.Nodes) != 2 || len(got.StartNodeIDs) != 2 {
+				t.Fatalf("ASSERT_SLICE_CONFUSABLE_SYMBOLS_REMAIN_DISTINCT: nodes=%#v starts=%#v", got.Nodes, got.StartNodeIDs)
+			}
+		})
+	}
+}
+
 func TestDiscoverExactDepthFrontierIsDeterministicAndDeduplicated(t *testing.T) {
 	a, b, c, d := callItem("a", 1), callItem("b", 2), callItem("c", 3), callItem("d", 4)
 	f := &fakeClient{
