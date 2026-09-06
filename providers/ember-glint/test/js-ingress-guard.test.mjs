@@ -18,8 +18,10 @@ test('ASSERT_PRESENT_JAVASCRIPT_SEED_REACHES_QUALIFIED_ANALYZER', async () => {
       documents: [{ uri: pathToFileURL(seed).href, revision: commit }],
       relation_kinds: ['INVOKES_TASK'],
     });
-    assert.equal(result.outcome, 'EMPTY', 'ASSERT_PRESENT_JAVASCRIPT_SEED_REACHES_QUALIFIED_ANALYZER');
-    assert.deepEqual(result.observations, [], 'ASSERT_PRESENT_JAVASCRIPT_SEED_REACHES_QUALIFIED_ANALYZER');
+    assert.equal(result.outcome, 'BLOCKED', 'ASSERT_P2B_UNCONFIGURED_EXTERNAL_JS_BLOCKED');
+    assert.equal(result.coverage.status, 'UNAVAILABLE', 'ASSERT_P2B_UNCONFIGURED_EXTERNAL_JS_UNAVAILABLE');
+    assert.match(result.blocker, /no containing jsconfig\/tsconfig/, 'ASSERT_P2B_NO_PACKAGED_FALLBACK');
+    assert.deepEqual(result.observations, [], 'ASSERT_P2B_UNCONFIGURED_EXTERNAL_JS_HAS_NO_OBSERVATIONS');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
