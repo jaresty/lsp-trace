@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import {
   PROVIDER_IDENTITY,
@@ -86,6 +90,56 @@ named('ASSERT_DETERMINISTIC_CANONICAL_BYTES_LOGICAL_DIGEST', () => {
   assert.equal(logicalDigest(left), logicalDigest(right));
   assert.match(logicalDigest(left), /^sha256:[0-9a-f]{64}$/);
   assert.ok(!logicalDigest(left).includes('Content-Length'));
+});
+
+named('ASSERT_STRICT_COLLECTOR_PRESERVES_RELATION_NON_ENTAILMENTS', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'ember-glint-protocol-'));
+  const path = join(directory, 'app.gjs');
+  await writeFile(path, '<template>Hello</template>', 'utf8');
+  try {
+    const analyzer = Object.freeze({
+      id: 'strict-double@1',
+      languages: ['glimmer-js'],
+      frameworks: ['ember'],
+      relationKinds: ['RENDERS_FROM'],
+      async analyze() {
+        return {
+          outcome: 'COMPLETE',
+          observations: [{
+            kind: 'RENDERS_FROM',
+            supports: ['typed_static_relation'],
+            does_not_support: ['render_occurrence', 'runtime_execution', 'render_occurrence'],
+          }],
+          coverage: { status: 'BOUNDED' },
+        };
+      },
+    });
+    const strictRequest = {
+      schema_version: 'lsp-trace.provider-collector-request.v1',
+      provider_id: PROVIDER_IDENTITY,
+      adapter_id: 'lsp-trace-observation-adapter@1',
+      session: { session_id: 'strict-normalization', generation: 1 },
+      seed: { uri: pathToFileURL(path).href },
+      relations: ['RENDERS_FROM'],
+      languages: ['glimmer-js'],
+      frameworks: ['ember'],
+      document_custody: { workspace_revision: { kind: 'content', value: 'r1' } },
+      limits: { max_nodes: 10, request_timeout_ms: 1000 },
+    };
+    const response = await createProvider({ analyzers: [analyzer] }).handle(strictRequest);
+    assert.deepEqual(response.observations[0].supports, ['source_dependency_relation']);
+    assert.deepEqual(response.observations[0].does_not_support, [
+      'callback_invocation',
+      'feature_identity',
+      'render_occurrence',
+      'repaint',
+      'runtime_execution',
+      'whole_source_completeness',
+    ]);
+    assert.equal(logicalDigest(response.observations), 'sha256:51b7f58834712b03daf7348ad598fd70565490cae2940229385bd82e803bcca4');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 named('ASSERT_UNSUPPORTED_RELATION_EXPLICIT_NOT_EMPTY_SUCCESS', async () => {

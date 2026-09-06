@@ -155,10 +155,11 @@ async function strictCollectorResponse(request, records) {
   let coverage = { status: 'UNKNOWN', denominator: [uri], covered: [], CoveredCount: 0 };
   if (eligible.length === 1) {
     const result = await eligible[0].analyzer.analyze({ schema: REQUEST_SCHEMA, request_id: `${request.session.session_id}:${request.session.generation}:${uri}`, operation: 'analyze', relation_kinds: relations, documents: [{ uri, language: 'glimmer-js', revision: revisionValue, digest: `sha256:${digest}`, source }], limits: { max_observations: request.limits.max_nodes || LIMITS.max_observations, timeout_ms: request.limits.request_timeout_ms || request.limits.timeout_ms || LIMITS.max_timeout_ms } });
+    const genericNonEntailments = ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'];
     observations = result.observations.map((observation) => ({
       ...observation,
       supports: ['source_dependency_relation'],
-      does_not_support: ['runtime_execution', 'callback_invocation', 'repaint', 'feature_identity', 'whole_source_completeness'],
+      does_not_support: strings([...strings(observation.does_not_support ?? [], 'observation.does_not_support'), ...genericNonEntailments], 'observation.does_not_support'),
     }));
     if (result.outcome === 'COMPLETE' || result.outcome === 'EMPTY') coverage = { status: 'COMPLETE_WITHIN_BOUNDS', denominator: [uri], covered: [uri], CoveredCount: 1 };
     else if (result.outcome === 'BOUNDED' || result.outcome === 'PARTIAL') coverage = { status: 'PARTIAL', denominator: [uri], covered: [], CoveredCount: 0 };
