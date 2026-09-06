@@ -1,11 +1,5 @@
 # Language-server qualification
 
-## Analysis-only type-overlay campaigns
-
-`qualification/type-overlay/run.mjs` runs the fixed `BASELINE → ENVIRONMENT_ONLY → TYPE_OVERLAY` campaign in a disposable Git descendant outside both repositories. It requires explicit `--source` and caller-selected `--output` paths, validates the candidate, and atomically publishes it. It never mutates provider admission or inventory.
-
-The generic runner contains no framework semantics. The first narrow semantic adapter lives at `providers/ember-glint/qualification/type-overlay.mjs`. `scripts/qualify-b05-type-overlay.sh` binds that adapter to `qualification/type-overlay/b05.manifest.json`; the manifest pins the source revision and expected result but does not make execution claims. Do not run it without authorized access to the separately supplied pinned source repository.
-
 These TypeScript, C#, and Elixir fixtures qualify the public `lsp-trace incoming` command without adding language-specific behavior to the Go binary. Each run has exactly one state: **PASS, BLOCKED, or FAIL**.
 
 - **PASS**: the server ran and the expected caller graph and call-site ranges matched.

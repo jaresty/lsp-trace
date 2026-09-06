@@ -18,10 +18,8 @@ const (
 	FamilySourceManifest           = "source-manifest"
 	FamilyTrustProvisioningReceipt = "trust-provisioning-receipt"
 	FamilySourceDenominator        = "source-denominator"
-	FamilyTypeOverlayQualification = "analysis-only-type-overlay-qualification"
 
-	SourceDenominatorVersionV1        = "lsp-trace.source-denominator.v1"
-	TypeOverlayQualificationVersionV1 = "lsp-trace.analysis-only-type-overlay-qualification.v1"
+	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
 
 var familyVersions = map[string]map[string]string{
@@ -31,7 +29,6 @@ var familyVersions = map[string]map[string]string{
 	FamilySourceManifest:           {"v1": "lsp-trace.source-manifest.v1"},
 	FamilyTrustProvisioningReceipt: {"v1": "lsp-trace.trust-provisioning-receipt.v1"},
 	FamilySourceDenominator:        {"v1": SourceDenominatorVersionV1},
-	FamilyTypeOverlayQualification: {"v1": TypeOverlayQualificationVersionV1},
 }
 
 var versionFields = map[string]string{
@@ -41,7 +38,6 @@ var versionFields = map[string]string{
 	FamilySourceManifest:           "source_manifest_schema_version",
 	FamilyTrustProvisioningReceipt: "trust_provisioning_receipt_schema_version",
 	FamilySourceDenominator:        "denominator_schema_version",
-	FamilyTypeOverlayQualification: "schema_version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {
