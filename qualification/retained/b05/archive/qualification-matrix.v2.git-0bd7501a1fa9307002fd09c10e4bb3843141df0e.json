@@ -1,0 +1,647 @@
+{
+  "schema_version": "lsp-trace.b05-qualification-matrix.v2",
+  "provider_package_sha256": "sha256:635f5f62c0a299241b083698591e0347f237bd9bf4a9d6730bba0747f575399f",
+  "provider_executable_sha256": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
+  "PROGRAM_B_ADMITTED": false,
+  "admission_rule": "all_requested_relations_supported",
+  "seeds": [
+    {
+      "ID": "passes-callback-positive",
+      "Relation": "PASSES_CALLBACK",
+      "Polarity": "positive",
+      "Path": "qualification/external-provider/passes-callback-positive.gts",
+      "SHA256": "2293d3baacb7121b6d15c15c94d45aab07e7a775db9b5bc9e04825efc52463aa",
+      "ExpectedOutcome": "PASS"
+    },
+    {
+      "ID": "passes-callback-negative",
+      "Relation": "PASSES_CALLBACK",
+      "Polarity": "confusable_negative",
+      "Path": "qualification/external-provider/passes-callback-negative.gts",
+      "SHA256": "9e8918ba8ec4151abe38a5a715a95ecb21c8d2fefe54e953a34148ff8496efa4",
+      "ExpectedOutcome": "NO_RELATION"
+    },
+    {
+      "ID": "invokes-task-positive",
+      "Relation": "INVOKES_TASK",
+      "Polarity": "positive",
+      "Path": "providers/ember-glint/fixtures/invokes-task-positive.gts",
+      "SHA256": "a4ebe09bfe65f98f9979bb0c526c082e27a820fd567610756146671c89c76004",
+      "ExpectedOutcome": "BLOCKED"
+    },
+    {
+      "ID": "invokes-task-negative",
+      "Relation": "INVOKES_TASK",
+      "Polarity": "confusable_negative",
+      "Path": "providers/ember-glint/fixtures/invokes-task-negative.gts",
+      "SHA256": "bec9246b1929343e088c6aef543b266c0c0d7956ab33f6456b03d90212e192f5",
+      "ExpectedOutcome": "BLOCKED"
+    },
+    {
+      "ID": "triggers-reload-positive",
+      "Relation": "TRIGGERS_RELOAD",
+      "Polarity": "positive",
+      "Path": "providers/ember-glint/fixtures/triggers-reload-positive.ts",
+      "SHA256": "bed00acd526407feb18876bd26a49eec88bcafb2d27e37c69dc9bbd9e992ed11",
+      "ExpectedOutcome": "BLOCKED"
+    },
+    {
+      "ID": "triggers-reload-negative",
+      "Relation": "TRIGGERS_RELOAD",
+      "Polarity": "confusable_negative",
+      "Path": "providers/ember-glint/fixtures/triggers-reload-negative.ts",
+      "SHA256": "52638cdf6ef57afb2844576a54e5b9081a4f4ed56689327c312f4742aa1f31d1",
+      "ExpectedOutcome": "BLOCKED"
+    },
+    {
+      "ID": "updates-state-positive",
+      "Relation": "UPDATES_STATE",
+      "Polarity": "positive",
+      "Path": "providers/ember-glint/fixtures/updates-state-positive.ts",
+      "SHA256": "aa6fa3f496e51b54c8a8df5ae7406c58f419736900a396dc182a4d7c3825e086",
+      "ExpectedOutcome": "PASS"
+    },
+    {
+      "ID": "updates-state-negative",
+      "Relation": "UPDATES_STATE",
+      "Polarity": "confusable_negative",
+      "Path": "providers/ember-glint/fixtures/updates-state-negative.ts",
+      "SHA256": "fb28629d3871fb7a668d7b78978bba9f9a7f3eb1505a4c5b150e2a185368ffc4",
+      "ExpectedOutcome": "NO_RELATION"
+    },
+    {
+      "ID": "renders-from-positive",
+      "Relation": "RENDERS_FROM",
+      "Polarity": "positive",
+      "Path": "providers/ember-glint/fixtures/renders-from-positive.json",
+      "SHA256": "7e0f3a9192b33c176e43fc26f5d9652ce6aaf5c2edcf51ad6a0f4644e1900290",
+      "ExpectedOutcome": "PASS"
+    },
+    {
+      "ID": "renders-from-negative",
+      "Relation": "RENDERS_FROM",
+      "Polarity": "confusable_negative",
+      "Path": "providers/ember-glint/fixtures/renders-from-negative.json",
+      "SHA256": "982a7469aea56cd4c03691387968c6dabaa0427321f102eefee82b8303456f8b",
+      "ExpectedOutcome": "BLOCKED"
+    }
+  ],
+  "attempts": [
+    {
+      "ID": "passes-callback-positive-incoming",
+      "SeedID": "passes-callback-positive",
+      "Operation": "incoming",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "PASSES_CALLBACK",
+      "From": "callable:format",
+      "To": "parameter:callback",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:passes-callback-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "passes-callback-positive-slice",
+      "SeedID": "passes-callback-positive",
+      "Operation": "slice",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "PASSES_CALLBACK",
+      "From": "callable:format",
+      "To": "parameter:callback",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:passes-callback-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "passes-callback-negative-incoming",
+      "SeedID": "passes-callback-negative",
+      "Operation": "incoming",
+      "Outcome": "NO_RELATION",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+    },
+    {
+      "ID": "passes-callback-negative-slice",
+      "SeedID": "passes-callback-negative",
+      "Operation": "slice",
+      "Outcome": "NO_RELATION",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+    },
+    {
+      "ID": "invokes-task-positive-incoming",
+      "SeedID": "invokes-task-positive",
+      "Operation": "incoming",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "invokes-task-positive-slice",
+      "SeedID": "invokes-task-positive",
+      "Operation": "slice",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "invokes-task-negative-incoming",
+      "SeedID": "invokes-task-negative",
+      "Operation": "incoming",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "invokes-task-negative-slice",
+      "SeedID": "invokes-task-negative",
+      "Operation": "slice",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "triggers-reload-positive-incoming",
+      "SeedID": "triggers-reload-positive",
+      "Operation": "incoming",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "triggers-reload-positive-slice",
+      "SeedID": "triggers-reload-positive",
+      "Operation": "slice",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "triggers-reload-negative-incoming",
+      "SeedID": "triggers-reload-negative",
+      "Operation": "incoming",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "triggers-reload-negative-slice",
+      "SeedID": "triggers-reload-negative",
+      "Operation": "slice",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_NOT_SUPPORTED",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "updates-state-positive-incoming",
+      "SeedID": "updates-state-positive",
+      "Operation": "incoming",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "UPDATES_STATE",
+      "From": "state-producer:CounterPanel",
+      "To": "state-value:count",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:updates-state-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "updates-state-positive-slice",
+      "SeedID": "updates-state-positive",
+      "Operation": "slice",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "UPDATES_STATE",
+      "From": "state-producer:CounterPanel",
+      "To": "state-value:count",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:updates-state-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "updates-state-negative-incoming",
+      "SeedID": "updates-state-negative",
+      "Operation": "incoming",
+      "Outcome": "NO_RELATION",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+    },
+    {
+      "ID": "updates-state-negative-slice",
+      "SeedID": "updates-state-negative",
+      "Operation": "slice",
+      "Outcome": "NO_RELATION",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+    },
+    {
+      "ID": "renders-from-positive-incoming",
+      "SeedID": "renders-from-positive",
+      "Operation": "incoming",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "RENDERS_FROM",
+      "From": "property:itemCount",
+      "To": "render-expression:this.itemCount",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:renders-from-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "renders-from-positive-slice",
+      "SeedID": "renders-from-positive",
+      "Operation": "slice",
+      "Outcome": "PASS",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "RelationKind": "RENDERS_FROM",
+      "From": "property:itemCount",
+      "To": "render-expression:this.itemCount",
+      "Anchors": [
+        "exact-original-source-anchor"
+      ],
+      "ContributorIDs": [
+        "observation:renders-from-positive"
+      ],
+      "DoesNotSupport": [
+        "runtime_execution",
+        "whole_source_completeness"
+      ]
+    },
+    {
+      "ID": "renders-from-negative-incoming",
+      "SeedID": "renders-from-negative",
+      "Operation": "incoming",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_PROVIDER_UNAVAILABLE",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    },
+    {
+      "ID": "renders-from-negative-slice",
+      "SeedID": "renders-from-negative",
+      "Operation": "slice",
+      "Outcome": "BLOCKED",
+      "Transport": "real-lsp-trace-mcp-stdio",
+      "ProviderPathKind": "independently-packed-installed",
+      "ProviderIdentity": "ember-glint@1",
+      "Language": "glimmer-js",
+      "Framework": "ember",
+      "WorkspaceCommit": "0e3599e0158e599fd6539678d6ac8ec6619d4ea8",
+      "WorkspaceCustody": "PROVIDER_PROVED",
+      "SchemaValid": true,
+      "DeterministicReplay": true,
+      "CanonicalEnvelope": true,
+      "OverclaimsAbsence": false,
+      "DomainCode": "RELATION_PROVIDER_UNAVAILABLE",
+      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+    }
+  ],
+  "stages": [
+    {
+      "Relation": "PASSES_CALLBACK",
+      "Stage": "S1",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "PASSES_CALLBACK",
+      "Stage": "S2",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "PASSES_CALLBACK",
+      "Stage": "S3",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "PASSES_CALLBACK",
+      "Stage": "S4",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "INVOKES_TASK",
+      "Stage": "S1",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "INVOKES_TASK",
+      "Stage": "S2",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "INVOKES_TASK",
+      "Stage": "S3",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "INVOKES_TASK",
+      "Stage": "S4",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "TRIGGERS_RELOAD",
+      "Stage": "S1",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "TRIGGERS_RELOAD",
+      "Stage": "S2",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "TRIGGERS_RELOAD",
+      "Stage": "S3",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "TRIGGERS_RELOAD",
+      "Stage": "S4",
+      "Outcome": "BLOCKED"
+    },
+    {
+      "Relation": "UPDATES_STATE",
+      "Stage": "S1",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "UPDATES_STATE",
+      "Stage": "S2",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "UPDATES_STATE",
+      "Stage": "S3",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "UPDATES_STATE",
+      "Stage": "S4",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "RENDERS_FROM",
+      "Stage": "S1",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "RENDERS_FROM",
+      "Stage": "S2",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "RENDERS_FROM",
+      "Stage": "S3",
+      "Outcome": "PASS"
+    },
+    {
+      "Relation": "RENDERS_FROM",
+      "Stage": "S4",
+      "Outcome": "PASS"
+    }
+  ],
+  "capabilities": {
+    "Advertised": [
+      "PASSES_CALLBACK",
+      "UPDATES_STATE",
+      "RENDERS_FROM"
+    ],
+    "Blocked": [
+      "INVOKES_TASK",
+      "TRIGGERS_RELOAD"
+    ]
+  },
+  "release_check": "scripts/test-b05-qualification.sh"
+}

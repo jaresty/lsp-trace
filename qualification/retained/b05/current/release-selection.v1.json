@@ -1,0 +1,6 @@
+{
+  "schema_version": "lsp-trace.b05-release-selection.v1",
+  "selected_evidence": "qualification/retained/b05/current/qualification-evidence.v3.json",
+  "selected_evidence_id": "sha256:13f4110c7d715794eac7176e80e1b2bc5898852add8b91b44dd3820f385c0f62",
+  "admission_ceiling": "PROGRAM_B_NOT_ADMITTED"
+}

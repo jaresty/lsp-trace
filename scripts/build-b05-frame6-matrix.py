@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-import hashlib,json,os,sys
+import argparse,hashlib,json,os,sys
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-out=root/'qualification/retained/b05/qualification-matrix.v2.json'
+parser=argparse.ArgumentParser()
+parser.add_argument('--output', type=Path)
+args=parser.parse_args()
+out=args.output or root/'qualification/retained/b05/qualification-matrix.v2.json'
 relations={
 'BINDS_ARGUMENT':[('qualification/external-provider/component.gts','positive','PASS'),('qualification/external-provider/binds-argument-negative.gts','confusable_negative','NO_RELATION')],
 'PASSES_CALLBACK':[('qualification/external-provider/passes-callback-positive.gts','positive','PASS'),('qualification/external-provider/passes-callback-negative.gts','confusable_negative','NO_RELATION')],
@@ -29,5 +32,6 @@ for r in relations:
  blocked=r in ('INVOKES_TASK','TRIGGERS_RELOAD')
  for n in range(1,5): stages.append({'Relation':r,'Stage':f'S{n}','Outcome':'BLOCKED' if blocked else 'PASS'})
 m={'schema_version':'lsp-trace.b05-qualification-matrix.v2','provider_package_sha256':os.environ.get('B05_PROVIDER_PACKAGE_SHA256','sha256:'+'0'*64),'provider_executable_sha256':os.environ.get('B05_PROVIDER_EXECUTABLE_SHA256','sha256:'+'0'*64),'PROGRAM_B_ADMITTED':False,'admission_rule':'all_requested_relations_supported','seeds':seeds,'attempts':attempts,'stages':stages,'capabilities':{'Advertised':['BINDS_ARGUMENT','PASSES_CALLBACK','UPDATES_STATE','RENDERS_FROM'],'Blocked':['INVOKES_TASK','TRIGGERS_RELOAD']},'release_check':'scripts/test-b05-qualification.sh'}
+out.parent.mkdir(parents=True,exist_ok=True)
 out.write_text(json.dumps(m,indent=2)+'\n')
 print(f'PASS ASSERT_B05_FRAME6_MATRIX_BUILT: seeds={len(seeds)} attempts={len(attempts)} stages={len(stages)}')

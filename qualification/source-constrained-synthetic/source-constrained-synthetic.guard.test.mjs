@@ -109,8 +109,14 @@ guard('P 7.1', 'provisional policy advertises no authoritative synthetic relatio
   assert.equal(fixture.policy.qualification, 'PROVISIONAL');
 });
 
-guard('P 7.2', 'existing B05 v2 semantics remain byte-identical and PROGRAM_B_ADMITTED remains false', () => {
-  assert.equal(fixture.policy.b05_v2_blob, '0bd7501a1fa9307002fd09c10e4bb3843141df0e');
+guard('P 7.2', 'the archived B05 historical artifact retains exact Git-blob identity and PROGRAM_B remains false', () => {
+  assert.deepEqual(fixture.policy.protected_b05_history, {
+    path: 'qualification/retained/b05/archive/qualification-matrix.v2.git-0bd7501a1fa9307002fd09c10e4bb3843141df0e.json',
+    git_blob: '0bd7501a1fa9307002fd09c10e4bb3843141df0e',
+    bytes: 21472,
+    observed_at_commit: '4d4ac21af24fc8efd77f0071c1e76f2b27e83464',
+    admission_ceiling: 'HISTORICAL_EVIDENCE_ONLY',
+  });
   assert.equal(fixture.policy.PROGRAM_B_ADMITTED, false);
 });
 

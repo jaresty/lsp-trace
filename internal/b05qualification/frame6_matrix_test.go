@@ -21,21 +21,48 @@ type frame6Attempt struct {
 }
 type frame6Stage struct{ Relation, Stage, Outcome string }
 type frame6Matrix struct {
-	SchemaVersion            string                                 `json:"schema_version"`
-	ProviderPackageSHA256    string                                 `json:"provider_package_sha256"`
-	ProviderExecutableSHA256 string                                 `json:"provider_executable_sha256"`
-	ProgramBAdmitted         bool                                   `json:"PROGRAM_B_ADMITTED"`
-	AdmissionRule            string                                 `json:"admission_rule"`
-	Seeds                    []frame6Seed                           `json:"seeds"`
-	Attempts                 []frame6Attempt                        `json:"attempts"`
-	Stages                   []frame6Stage                          `json:"stages"`
-	Capabilities             struct{ Advertised, Blocked []string } `json:"capabilities"`
-	ReleaseCheck             string                                 `json:"release_check"`
+	SchemaVersion      string                                    `json:"schema_version"`
+	EvidenceID         string                                    `json:"evidence_id"`
+	Family             string                                    `json:"family"`
+	Generation         int                                       `json:"generation"`
+	Supersedes         *string                                   `json:"supersedes"`
+	DerivedFrom        []struct{ Identity, Relationship string } `json:"derived_from"`
+	ProductionBoundary struct {
+		Transport                string `json:"transport"`
+		ProviderIdentity         string `json:"provider_identity"`
+		ProviderPathKind         string `json:"provider_path_kind"`
+		WorkspaceCustody         string `json:"workspace_custody"`
+		ProviderPackageSHA256    string `json:"provider_package_sha256"`
+		ProviderExecutableSHA256 string `json:"provider_executable_sha256"`
+		EvidenceKind             string `json:"evidence_kind"`
+	} `json:"production_boundary"`
+	Admission struct {
+		Rule, Ceiling    string
+		ProgramBAdmitted bool     `json:"PROGRAM_B_ADMITTED"`
+		BlockedRelations []string `json:"blocked_relations"`
+	} `json:"admission"`
+	Seeds        []frame6Seed                           `json:"seeds"`
+	Attempts     []frame6Attempt                        `json:"attempts"`
+	Stages       []frame6Stage                          `json:"stages"`
+	Capabilities struct{ Advertised, Blocked []string } `json:"capabilities"`
+	ReleaseCheck string                                 `json:"release_check"`
 }
 
 func loadFrame6(t *testing.T) frame6Matrix {
 	t.Helper()
-	raw, err := os.ReadFile("../../qualification/retained/b05/qualification-matrix.v2.json")
+	selectionRaw, err := os.ReadFile("../../qualification/retained/b05/current/release-selection.v1.json")
+	if err != nil {
+		t.Fatalf("ASSERT_B05_RELEASE_SELECTION_PRESENT: %v", err)
+	}
+	var selection struct {
+		SelectedEvidence   string `json:"selected_evidence"`
+		SelectedEvidenceID string `json:"selected_evidence_id"`
+		AdmissionCeiling   string `json:"admission_ceiling"`
+	}
+	if err := json.Unmarshal(selectionRaw, &selection); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile("../../" + selection.SelectedEvidence)
 	if err != nil {
 		t.Fatalf("ASSERT_B05_FRAME6_MATRIX_PRESENT: %v", err)
 	}
@@ -47,7 +74,7 @@ func loadFrame6(t *testing.T) frame6Matrix {
 }
 func TestFrame6ExactQualificationMatrix(t *testing.T) {
 	m := loadFrame6(t)
-	if m.SchemaVersion != "lsp-trace.b05-qualification-matrix.v2" {
+	if m.SchemaVersion != "lsp-trace.b05-qualification-evidence.v3" || m.Family != "b05-production-provider-qualification" || m.Generation != 1 || m.Supersedes != nil {
 		t.Fatal("ASSERT_B05_FRAME6_MATRIX_SCHEMA")
 	}
 	if len(m.Seeds) != 12 {
@@ -108,10 +135,10 @@ func TestFrame6ExactQualificationMatrix(t *testing.T) {
 	if len(m.Stages) != 24 {
 		t.Fatalf("ASSERT_B05_FRAME6_FOUR_STAGES_PER_RELATION: %d", len(m.Stages))
 	}
-	if m.ProviderPackageSHA256 == "" || m.ProviderExecutableSHA256 == "" {
+	if m.ProductionBoundary.ProviderPackageSHA256 == "" || m.ProductionBoundary.ProviderExecutableSHA256 == "" || m.ProductionBoundary.EvidenceKind != "NATIVE_PROVIDER" {
 		t.Fatal("ASSERT_B05_FRAME6_PROVIDER_PACKAGE_DIGESTS")
 	}
-	if m.ProgramBAdmitted || m.AdmissionRule != "all_requested_relations_supported" {
+	if m.Admission.ProgramBAdmitted || m.Admission.Rule != "all_requested_relations_supported" || m.Admission.Ceiling != "PROGRAM_B_NOT_ADMITTED" {
 		t.Fatal("ASSERT_B05_FRAME6_PROGRAM_B_NOT_ADMITTED")
 	}
 	for _, r := range []string{"INVOKES_TASK", "TRIGGERS_RELOAD"} {

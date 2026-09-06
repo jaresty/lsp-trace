@@ -26,7 +26,7 @@ node --test qualification/source-constrained-synthetic/source-constrained-synthe
 node qualification/source-constrained-synthetic/perturbations.mjs
 ```
 
-The analyzer checks exact vendored digests and source shapes, package-lock integrity, declaration provenance, the protected B05 v2 Git blob, relation-specific positive and negative cases, and policy boundaries. It deterministically emits `qualification-evidence.json` with `RESOLVED_SYNTHETIC`, explicit before/after target status, analyzer/package identities, `coverage_boundary`, and `failure_boundary`.
+The analyzer checks exact vendored digests and source shapes, package-lock integrity, declaration provenance, the archived B05 historical artifact by immutable Git-blob identity, relation-specific positive and negative cases, and policy boundaries. It deterministically emits `qualification-evidence.json` with `RESOLVED_SYNTHETIC`, explicit before/after target status, analyzer/package identities, `coverage_boundary`, and `failure_boundary`.
 
 The executable cases distinguish:
 
@@ -35,4 +35,4 @@ The executable cases distinguish:
 - unrelated and contradictory receivers: unresolved;
 - unsupported collection elements: unresolved.
 
-These are synthetic qualification results only. `provisional-policy.json` advertises no authoritative relations, forbids `PRODUCTION_RESOLVED`, preserves the B05 v2 blob, and keeps `PROGRAM_B_ADMITTED` false.
+These are synthetic qualification results only. `provisional-policy.json` advertises no authoritative relations, forbids `PRODUCTION_RESOLVED`, protects the archived historical bytes without constraining the separate current production lineage, and keeps `PROGRAM_B_ADMITTED` false.

@@ -62,9 +62,13 @@ for (const [id, candidate] of Object.entries(cases)) {
 }
 
 if (policy.advertised_relations.length || policy.qualification !== 'PROVISIONAL' || policy.scope !== 'provisional-only' || policy.PROGRAM_B_ADMITTED !== false) throw new Error('authority boundary violated');
-const b05Path = join(repo, 'qualification/retained/b05/qualification-matrix.v2.json');
-const b05Blob = execFileSync('git', ['hash-object', b05Path], { cwd: repo }).toString().trim();
-if (b05Blob !== policy.b05_v2_blob) throw new Error('B05 v2 bytes changed');
+const history = policy.protected_b05_history;
+const b05Path = join(repo, history.path);
+const b05Bytes = readFileSync(b05Path);
+const b05Blob = execFileSync('git', ['hash-object', '--no-filters', b05Path], { cwd: repo }).toString().trim();
+if (b05Blob !== history.git_blob || b05Bytes.length !== history.bytes) throw new Error('archived B05 historical bytes changed');
+const gitBytes = execFileSync('git', ['cat-file', 'blob', history.git_blob], { cwd: repo });
+if (!b05Bytes.equals(gitBytes)) throw new Error('archived B05 historical custody mismatch');
 
 const introduced = provenance.introduced_declarations.map(({ identity, target_source, annotations }) => ({ identity, target_source, annotations }));
 const fixture = {
@@ -74,7 +78,7 @@ const fixture = {
   introduced_declarations: introduced,
   resolutions,
   evidence: { status: 'PROVISIONAL', canonical: true, stable_order: true, generated_at: null },
-  policy: { scope: policy.scope, advertised_relations: policy.advertised_relations, qualification: policy.qualification, b05_v2_blob: policy.b05_v2_blob, PROGRAM_B_ADMITTED: policy.PROGRAM_B_ADMITTED },
+  policy: { scope: policy.scope, advertised_relations: policy.advertised_relations, qualification: policy.qualification, protected_b05_history: policy.protected_b05_history, PROGRAM_B_ADMITTED: policy.PROGRAM_B_ADMITTED },
   execution: { procedure: 'node --test qualification/source-constrained-synthetic/source-constrained-synthetic.guard.test.mjs', reproducible: true, committed: true, nais_mutated: false },
 };
 const evidence = {

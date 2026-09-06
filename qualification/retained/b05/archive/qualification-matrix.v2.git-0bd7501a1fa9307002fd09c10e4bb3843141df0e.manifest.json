@@ -1,0 +1,18 @@
+{
+  "schema_version": "lsp-trace.immutable-evidence-manifest.v1",
+  "artifact_family": "lsp-trace.b05-qualification-matrix",
+  "artifact_schema_version": "v2",
+  "identity": {
+    "kind": "git-blob",
+    "value": "0bd7501a1fa9307002fd09c10e4bb3843141df0e"
+  },
+  "bytes": 21472,
+  "path": "qualification/retained/b05/archive/qualification-matrix.v2.git-0bd7501a1fa9307002fd09c10e4bb3843141df0e.json",
+  "observed_at_commit": "4d4ac21af24fc8efd77f0071c1e76f2b27e83464",
+  "role": "HISTORICAL_BASELINE",
+  "immutable": true,
+  "admission": {
+    "PROGRAM_B_ADMITTED": false,
+    "ceiling": "HISTORICAL_EVIDENCE_ONLY"
+  }
+}

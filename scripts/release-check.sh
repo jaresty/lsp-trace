@@ -8,7 +8,7 @@ cd "$root"
 ./scripts/check-docs.sh
 printf 'PASS R-DOCUMENTATION-CONTRACT: operational documentation guard\n'
 ./scripts/test-b05-qualification.sh
-printf 'PASS R-B05-QUALIFICATION: ten immutable seeds, twenty production MCP attempts, four-stage matrix, retained evidence, and non-entailments\n'
+printf 'PASS R-B05-QUALIFICATION: archived 10-seed historical baseline; release-selected 12-seed/24-attempt current native production evidence; explicit false admission ceiling\n'
 ./scripts/test-caller-project-javascript-qualification.sh
 printf 'PASS R-CALLER-PROJECT-JAVASCRIPT-QUALIFICATION: retained caller-project JavaScript MCP evidence\n'
 
