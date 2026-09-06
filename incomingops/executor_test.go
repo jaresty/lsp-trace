@@ -71,6 +71,15 @@ func validInput() json.RawMessage {
 	return json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"max_depth":4,"max_nodes":20,"timeout_ms":1000,"request_timeout_ms":100}`)
 }
 
+func TestIncomingUnsupportedCallHierarchySendsNoHierarchyRequests(t *testing.T) {
+	const assertion = "ASSERT_UNSUPPORTED_CALL_HIERARCHY_SENDS_NO_HIERARCHY_REQUESTS"
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: false}}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: validInput()})
+	if failure == nil || failure.Code != string(graph.UnsupportedCallHierarchy) || len(f.calls) != 0 {
+		t.Fatalf("%s: failure=%+v calls=%v", assertion, failure, f.calls)
+	}
+}
+
 func TestIncomingAppliesConservativeDefaults(t *testing.T) {
 	const assertion = "ASSERT_INCOMING_CONSERVATIVE_DEFAULTS"
 	t.Log("ASSERTION: " + assertion)

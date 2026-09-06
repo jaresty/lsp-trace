@@ -381,11 +381,19 @@ func newReadinessChild(mode string) *readinessChild {
 		}
 		c.initializeParams <- append(json.RawMessage(nil), message.Params...)
 		switch mode {
-		case "ready":
-			_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: json.RawMessage(`{"capabilities":{}}`)})
+		case "ready", "static-call-hierarchy", "dynamic-call-hierarchy":
+			capabilities := `{"capabilities":{}}`
+			if mode == "static-call-hierarchy" {
+				capabilities = `{"capabilities":{"callHierarchyProvider":true}}`
+			}
+			writer := lspwire.NewWriter(output, lspwire.DefaultLimits())
+			_ = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: json.RawMessage(capabilities)})
 			initialized, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
 			if err == nil {
 				c.initialized <- initialized
+			}
+			if mode == "dynamic-call-hierarchy" {
+				_ = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`77`), Method: "client/registerCapability", Params: json.RawMessage(`{"registrations":[{"id":"calls","method":"textDocument/prepareCallHierarchy","registerOptions":{}}]}`)})
 			}
 		case "notification-before-ready":
 			writer := lspwire.NewWriter(output, lspwire.DefaultLimits())
@@ -449,6 +457,37 @@ func TestReadinessInitializeCarriesConfiguredWorkspace(t *testing.T) {
 	workspaceURI := "file:///workspace"
 	if !bytes.Contains(params, []byte(`"rootUri":"`+workspaceURI+`"`)) || !bytes.Contains(params, []byte(`"workspaceFolders":[{"uri":"`+workspaceURI+`"`)) {
 		t.Fatalf("%s: params=%s", assertion, params)
+	}
+}
+
+func TestReadinessCallHierarchyCapabilityModes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want bool
+	}{
+		{"static", true},
+		{"dynamic-registration", false},
+		{"unsupported", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mode := "ready"
+			if tc.name == "static" {
+				mode = "static-call-hierarchy"
+			} else if tc.name == "dynamic-registration" {
+				mode = "dynamic-call-hierarchy"
+			}
+			child := newReadinessChild(mode)
+			m, started := readinessManager(t, child)
+			pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+			terminal, found := m.WaitReadiness(context.Background(), pending.ID)
+			if !found || terminal.State != ReadinessReady || terminal.Metadata.CallHierarchySupport != tc.want {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_%s_MODE: readiness=%+v found=%t", tc.name, terminal, found)
+			}
+			params := <-child.initializeParams
+			if !bytes.Contains(params, []byte(`"callHierarchy":{"dynamicRegistration":false}`)) {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_%s_CLIENT_CAPABILITY: params=%s", tc.name, params)
+			}
+		})
 	}
 }
 

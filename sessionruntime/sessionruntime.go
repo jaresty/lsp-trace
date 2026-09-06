@@ -487,7 +487,13 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			URI  string `json:"uri"`
 			Name string `json:"name"`
 		} `json:"workspaceFolders"`
-		Capabilities struct{} `json:"capabilities"`
+		Capabilities struct {
+			TextDocument struct {
+				CallHierarchy struct {
+					DynamicRegistration bool `json:"dynamicRegistration"`
+				} `json:"callHierarchy"`
+			} `json:"textDocument"`
+		} `json:"capabilities"`
 	}{ProcessID: nil, RootURI: workspaceURI, WorkspaceFolders: []struct {
 		URI  string `json:"uri"`
 		Name string `json:"name"`

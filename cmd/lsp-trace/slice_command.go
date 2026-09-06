@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -23,11 +24,11 @@ import (
 )
 
 type sliceConfig struct {
-	workspace, command, fromFile, seedFile, languageID, output string
-	args, env, ats                                             stringsFlag
-	downDepth, upDepth, maxNodes                               int
-	timeout, requestTimeout                                    time.Duration
-	pretty                                                     bool
+	workspace, command, fromFile, seedFile, languageID, output, traceLSP string
+	args, env, ats                                                       stringsFlag
+	downDepth, upDepth, maxNodes                                         int
+	timeout, requestTimeout                                              time.Duration
+	pretty                                                               bool
 }
 
 func parseSlice(args []string) (sliceConfig, error) {
@@ -51,6 +52,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.DurationVar(&c.timeout, "timeout", 5*time.Minute, "global timeout; 0 unlimited")
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")
 	fs.StringVar(&c.output, "output", "", "output file")
+	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
 	if err := fs.Parse(args); err != nil {
 		return c, err
@@ -257,6 +259,18 @@ func runSlice(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	var traceFile *os.File
+	var trace jsonrpc.TraceFunc
+	if cfg.traceLSP != "" {
+		traceFile, err = os.OpenFile(cfg.traceLSP, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer traceFile.Close()
+		encoder := json.NewEncoder(traceFile)
+		trace = func(event jsonrpc.TraceEvent) { _ = encoder.Encode(event) }
+	}
 	proc, err := server.Start(ctx, cfg.command, cfg.args, cfg.env)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -281,7 +295,7 @@ func runSlice(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	client := lsp.NewClient(jsonrpc.New(proc.Stdout, proc.Stdin))
+	client := lsp.NewClient(jsonrpc.NewWithTrace(proc.Stdout, proc.Stdin, trace))
 	rctx, done := context.WithTimeout(ctx, cfg.requestTimeout)
 	err = client.Initialize(rctx, workspaceURI)
 	done()
@@ -420,7 +434,7 @@ func runSlice(args []string) int {
 		WorkspaceURI: workspaceURI, WorkingDirectory: workingDirectory, EffectiveEnvironment: effectiveEnvironmentNames(os.Environ(), cfg.env),
 		Target: primaryTarget, Server: graph.ServerInvocation{Command: cfg.command, Arguments: cfg.args, Environment: recordedServerEnvironment(environment)},
 		Limits: graph.Limits{MaxDepth: cfg.upDepth, MaxNodes: cfg.maxNodes, TimeoutMS: cfg.timeout.Milliseconds()}, RequestTimeoutMS: cfg.requestTimeout.Milliseconds(), Concurrency: 1,
-		LanguageID: languageID, OutputMode: outputMode, OutputPath: cfg.output, Seeds: invocationSeeds,
+		LanguageID: languageID, Trace: graph.TraceConfig{Enabled: cfg.traceLSP != "", Path: cfg.traceLSP}, OutputMode: outputMode, OutputPath: cfg.output, Seeds: invocationSeeds,
 	}
 	if cfg.fromFile != "" {
 		seedResults = []graph.SeedResult{{Label: sources[0].spec.Label, Requested: primaryTarget, PreparedTargetIDs: discovery.StartNodeIDs}}
@@ -464,6 +478,13 @@ func runSlice(args []string) int {
 	result.CapabilityQuality.Advertised = result.Capabilities.CallHierarchyProvider
 	shutdownClient()
 	stopProcess()
+	if traceFile != nil {
+		_ = traceFile.Sync()
+		if transcript, readErr := os.ReadFile(cfg.traceLSP); readErr == nil {
+			sum := sha256.Sum256(transcript)
+			result.Invocation.Trace.ContentSHA256 = fmt.Sprintf("sha256:%x", sum[:])
+		}
+	}
 	retainServerStderr := !result.Summary.Complete
 	for _, diagnostic := range result.Diagnostics {
 		if diagnostic.Phase == "slice-outgoing" {
