@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
@@ -164,12 +165,39 @@ type RoundTripRequest struct {
 type DocumentRequest struct {
 	SessionID, URI, LanguageID string
 	Generation                 uint64
+	// CaptureSupply returns an owned observation of this call's successful
+	// notification write. Omitted mode retains its historical behavior.
+	CaptureSupply bool `json:",omitempty"`
+}
+
+// MaxDocumentSupplyBytes bounds opt-in notification evidence. It does not bound
+// legacy document synchronization, which preserves its existing behavior.
+const MaxDocumentSupplyBytes = 1 << 20
+
+const DocumentSupplyUnavailable session.Failure = "DOCUMENT_SUPPLY_UNAVAILABLE"
+
+// DocumentSupply is historical supply evidence, not proof of server consumption,
+// analyzed-source identity, or a currently active generation. Public values can
+// be fabricated; offline consistency checks cannot authenticate their origin.
+// The caller owns Content and Params. Manager retains neither buffer.
+type DocumentSupply struct {
+	Classification  string
+	SessionID       string
+	Generation      uint64
+	URI             string
+	DocumentVersion int
+	Method          string
+	Content         []byte
+	Params          json.RawMessage
 }
 
 type DocumentResult struct {
 	URI, LanguageID string
 	Version         int
 	Failure         session.Failure
+	// Supply is nil for omitted capture, unchanged/cached documents, and errors.
+	// A cached digest is never promoted to evidence of a new notification.
+	Supply *DocumentSupply `json:",omitempty"`
 }
 
 type openDocument struct {
@@ -215,9 +243,27 @@ func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) Docume
 	if languageID == "" {
 		return DocumentResult{Failure: LanguageIDUnavailable}
 	}
-	text, err := os.ReadFile(path)
-	if err != nil {
-		return DocumentResult{Failure: LanguageIDUnavailable}
+	var text []byte
+	if req.CaptureSupply {
+		// Bind scope to the host-owned workspace, not an arbitrary URI path.
+		// Exact canonical file URI spelling rejects query/fragment/alias forms.
+		if req.URI != (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		root, openErr := os.OpenRoot(workspace)
+		if openErr != nil {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		text, err = source.ReadRegularInputBounded(root, filepath.ToSlash(rel), MaxDocumentSupplyBytes)
+		closeErr := root.Close()
+		if err != nil || closeErr != nil || !utf8.Valid(text) {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+	} else {
+		text, err = os.ReadFile(path)
+		if err != nil {
+			return DocumentResult{Failure: LanguageIDUnavailable}
+		}
 	}
 	digest := sha256.Sum256(text)
 
@@ -255,7 +301,16 @@ func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) Docume
 	}
 	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
 	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
-	return DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
+	result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
+	if req.CaptureSupply {
+		result.Supply = &DocumentSupply{
+			Classification: "LSP_SUPPLIED", SessionID: req.SessionID,
+			Generation: req.Generation, URI: req.URI, DocumentVersion: version,
+			Method: method, Content: append([]byte(nil), text...),
+			Params: append(json.RawMessage(nil), params...),
+		}
+	}
+	return result
 }
 
 type RoundTripResult struct {
