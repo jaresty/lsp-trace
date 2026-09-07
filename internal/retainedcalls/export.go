@@ -168,7 +168,7 @@ func extractTables(e graphprovenance.Evidence) (Tables, error) {
 	for _, k := range []string{"nodes", "edges", "evidence_receipt", "seed_memberships"} {
 		delete(bundle, k)
 	}
-	t := Tables{Contexts: []Context{{contextID, e.GraphDigest, canonical(envelope), canonical(bundle)}}, Endpoints: n.Nodes, Groups: []Group{}, Occurrences: []Occurrence{}, NodeMemberships: []graph.SeedMembership{}, Bindings: e.Bindings, Supply: e.Supply, Captures: e.Captures}
+	t := Tables{Contexts: []Context{{contextID, e.GraphDigest, canonical(envelope), canonical(bundle)}}, Endpoints: append([]graph.Node{}, n.Nodes...), Groups: []Group{}, Occurrences: []Occurrence{}, NodeMemberships: []graph.SeedMembership{}, Bindings: e.Bindings, Supply: e.Supply, Captures: e.Captures}
 	receipts := map[string]graph.EvidenceRelation{}
 	if n.Receipt != nil {
 		t.SupportTotal = n.Receipt.SupportTotal
@@ -404,6 +404,11 @@ func ValidateFor(raw []byte, family, version string) (string, error) {
 	var n native
 	if err = json.Unmarshal(input.GraphBytes, &n); err != nil {
 		return "", err
+	}
+	// Historical empty graphs may encode nodes as null. The export contract
+	// requires an array; normalize only the reconstructed projection, not input.
+	if n.Nodes == nil {
+		n.Nodes = []graph.Node{}
 	}
 	if n.Edges == nil {
 		n.Edges = []graph.Edge{}
