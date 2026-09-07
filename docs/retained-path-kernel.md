@@ -17,7 +17,9 @@ err = retainedpath.Prove(edges, startID, endID, result.Status, result.Path)
 
 - `Edge` carries caller/callee IDs, group ID and ordered opaque witness strings
   in `OccurrenceIDs`, plus uninterpreted historical provenance fields.
-  `boundedanalysis.Edge` and `boundedanalysis.Path` remain available as aliases.
+  `boundedanalysis.Edge` and `boundedanalysis.Path` remain local defined types
+  with the same underlying fields/tags, converted explicitly at the boundary.
+  This preserves existing unkeyed literals without external-type vet warnings.
 - Callers admit node/edge consistency and resource ceilings. Missing search
   endpoints are errors, including equal-but-missing endpoints; they consume no
   work. IDs must be exact, not names or inferred identities.

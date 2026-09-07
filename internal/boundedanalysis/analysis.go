@@ -35,8 +35,11 @@ type Parameters struct {
 	Mode      string `json:"mode"`
 	MaxWork   int    `json:"max_work"`
 }
-type Edge = retainedpath.Edge
-type Path = retainedpath.Path
+
+// Local defined types preserve the historical API, including unkeyed literals
+// used by existing callers, without exposing an external alias to go vet.
+type Edge retainedpath.Edge
+type Path retainedpath.Path
 type Component struct {
 	ID      string   `json:"id"`
 	Members []string `json:"members"`
@@ -214,8 +217,16 @@ func (b *budget) tick() bool {
 
 type adjacency = retainedpath.Adjacency
 
+func pathEdges(edges []Edge) []retainedpath.Edge {
+	out := make([]retainedpath.Edge, len(edges))
+	for i, edge := range edges {
+		out[i] = retainedpath.Edge(edge)
+	}
+	return out
+}
+
 func indexes(e Evidence) (adjacency, adjacency) {
-	return retainedpath.Indexes(e.Edges)
+	return retainedpath.Indexes(pathEdges(e.Edges))
 }
 func components(e *Evidence, out, in adjacency, b *budget) {
 	order := append([]string{}, e.Nodes...)
@@ -305,11 +316,11 @@ func run(ctx context.Context, e *Evidence) error {
 		work := &retainedpath.Budget{Context: ctx, Left: e.Parameters.MaxWork}
 		// project has already admitted these exact endpoints. No new admission
 		// policy or artifact identity participates in the neutral kernel.
-		result, err := retainedpath.Search(e.Nodes, e.Edges, e.Parameters.Start, e.Parameters.End, work)
+		result, err := retainedpath.Search(e.Nodes, pathEdges(e.Edges), e.Parameters.Start, e.Parameters.End, work)
 		if err != nil {
 			return err
 		}
-		e.Status, e.Reason, e.Path = result.Status, result.Reason, result.Path
+		e.Status, e.Reason, e.Path = result.Status, result.Reason, Path(result.Path)
 		return nil
 	}
 	b := &budget{ctx: ctx, left: e.Parameters.MaxWork}
@@ -431,7 +442,7 @@ func prove(e Evidence) error {
 		return nil
 	}
 	if e.Parameters.Operation == "PATH" {
-		return retainedpath.Prove(e.Edges, e.Parameters.Start, e.Parameters.End, e.Status, e.Path)
+		return retainedpath.Prove(pathEdges(e.Edges), e.Parameters.Start, e.Parameters.End, e.Status, retainedpath.Path(e.Path))
 	}
 	out, in := indexes(e)
 	membership := map[string]int{}
