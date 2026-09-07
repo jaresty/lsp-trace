@@ -44,8 +44,10 @@ func runBoundedAnalysis(args []string, stdin io.Reader, stdout, stderr io.Writer
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if len(raw) > boundedanalysis.MaxInputBytes {
-		fmt.Fprintln(stderr, "bounded retained input byte LIMIT")
+	// Reject invalid UTF-8 and duplicate members before json.Marshal can repair
+	// a string carrier; the analytical basis must retain the exact file bytes.
+	if err = boundedanalysis.Preflight(raw, boundedanalysis.MaxInputBytes); err != nil {
+		fmt.Fprintln(stderr, err)
 		return 1
 	}
 	value := map[string]any{"input": string(raw), "operation": *op, "max_work": *work}
