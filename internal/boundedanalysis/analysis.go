@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"lsp-trace/internal/retainedcalls"
+	"lsp-trace/internal/retainedpath"
 	"lsp-trace/internal/schema"
 	"lsp-trace/internal/strictjson"
 )
@@ -34,21 +35,8 @@ type Parameters struct {
 	Mode      string `json:"mode"`
 	MaxWork   int    `json:"max_work"`
 }
-type Edge struct {
-	GroupID           string   `json:"group_id"`
-	ContextID         string   `json:"context_id"`
-	ExecutionBundleID string   `json:"execution_bundle_id"`
-	Caller            string   `json:"caller"`
-	Callee            string   `json:"callee"`
-	Weight            int      `json:"weight"`
-	CallsiteState     string   `json:"callsite_state"`
-	OccurrenceIDs     []string `json:"occurrence_ids"`
-}
-type Path struct {
-	Nodes         []string   `json:"nodes"`
-	GroupIDs      []string   `json:"group_ids"`
-	OccurrenceIDs [][]string `json:"occurrence_ids"`
-}
+type Edge = retainedpath.Edge
+type Path = retainedpath.Path
 type Component struct {
 	ID      string   `json:"id"`
 	Members []string `json:"members"`
@@ -224,78 +212,10 @@ func (b *budget) tick() bool {
 	return true
 }
 
-type adjacency map[string][]Edge
+type adjacency = retainedpath.Adjacency
 
 func indexes(e Evidence) (adjacency, adjacency) {
-	out, in := adjacency{}, adjacency{}
-	for _, edge := range e.Edges {
-		out[edge.Caller] = append(out[edge.Caller], edge)
-		in[edge.Callee] = append(in[edge.Callee], edge)
-	}
-	for _, es := range out {
-		sort.Slice(es, func(i, j int) bool {
-			if es[i].Callee != es[j].Callee {
-				return es[i].Callee < es[j].Callee
-			}
-			return es[i].GroupID < es[j].GroupID
-		})
-	}
-	for _, es := range in {
-		sort.Slice(es, func(i, j int) bool {
-			if es[i].Caller != es[j].Caller {
-				return es[i].Caller < es[j].Caller
-			}
-			return es[i].GroupID < es[j].GroupID
-		})
-	}
-	return out, in
-}
-func shortest(e *Evidence, out adjacency, b *budget) {
-	p := e.Parameters
-	queue := []string{p.Start}
-	seen := map[string]bool{p.Start: true}
-	prev := map[string]Edge{}
-	found := false
-	for head := 0; head < len(queue); head++ {
-		if !b.tick() {
-			return
-		}
-		v := queue[head]
-		if v == p.End {
-			found = true
-			break
-		}
-		for _, edge := range out[v] {
-			if !b.tick() {
-				return
-			}
-			if !seen[edge.Callee] {
-				seen[edge.Callee] = true
-				prev[edge.Callee] = edge
-				queue = append(queue, edge.Callee)
-			}
-		}
-	}
-	if !found {
-		e.Status = "NOT_FOUND_IN_RETAINED_GRAPH"
-		return
-	}
-	e.Status = "FOUND"
-	nodes := []string{p.End}
-	edges := []Edge{}
-	for v := p.End; v != p.Start; {
-		edge := prev[v]
-		edges = append(edges, edge)
-		v = edge.Caller
-		nodes = append(nodes, v)
-	}
-	for i := len(nodes) - 1; i >= 0; i-- {
-		e.Path.Nodes = append(e.Path.Nodes, nodes[i])
-	}
-	for i := len(edges) - 1; i >= 0; i-- {
-		e.Path.GroupIDs = append(e.Path.GroupIDs, edges[i].GroupID)
-		e.Path.OccurrenceIDs = append(e.Path.OccurrenceIDs, edges[i].OccurrenceIDs)
-	}
+	return retainedpath.Indexes(e.Edges)
 }
 func components(e *Evidence, out, in adjacency, b *budget) {
 	order := append([]string{}, e.Nodes...)
@@ -380,13 +300,24 @@ func components(e *Evidence, out, in adjacency, b *budget) {
 	}
 	sort.Slice(e.Components, func(i, j int) bool { return e.Components[i].Members[0] < e.Components[j].Members[0] })
 }
-func run(ctx context.Context, e *Evidence) {
+func run(ctx context.Context, e *Evidence) error {
+	if e.Parameters.Operation == "PATH" {
+		work := &retainedpath.Budget{Context: ctx, Left: e.Parameters.MaxWork}
+		// project has already admitted these exact endpoints. No new admission
+		// policy or artifact identity participates in the neutral kernel.
+		result, err := retainedpath.Search(e.Nodes, e.Edges, e.Parameters.Start, e.Parameters.End, work)
+		if err != nil {
+			return err
+		}
+		e.Status, e.Reason, e.Path = result.Status, result.Reason, result.Path
+		return nil
+	}
 	b := &budget{ctx: ctx, left: e.Parameters.MaxWork}
 	out, in := indexes(*e)
 	if ctx.Err() != nil {
 		e.Status = "INCOMPLETE"
 		e.Reason = "CANCELLED"
-		return
+		return nil
 	}
 	switch e.Parameters.Operation {
 	case "PROJECT":
@@ -405,8 +336,6 @@ func run(ctx context.Context, e *Evidence) {
 		if ctx.Err() != nil {
 			b.reason = "CANCELLED"
 		}
-	case "PATH":
-		shortest(e, out, b)
 	case "COMPONENTS":
 		components(e, out, in, b)
 	}
@@ -416,6 +345,7 @@ func run(ctx context.Context, e *Evidence) {
 		e.Path = Path{[]string{}, []string{}, [][]string{}}
 		e.Components = []Component{}
 	}
+	return nil
 }
 func Analyze(ctx context.Context, raw []byte, p Parameters) ([]byte, error) {
 	p, err := normalize(p)
@@ -426,7 +356,9 @@ func Analyze(ctx context.Context, raw []byte, p Parameters) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	run(ctx, &e)
+	if err := run(ctx, &e); err != nil {
+		return nil, err
+	}
 	e.Digest = seal(e)
 	encoded, err := json.Marshal(e)
 	if err != nil {
@@ -481,7 +413,9 @@ func ValidateFor(raw []byte, family, version string) (string, error) {
 		expected.Status = "INCOMPLETE"
 		expected.Reason = "CANCELLED"
 	} else {
-		run(context.Background(), &expected)
+		if err := run(context.Background(), &expected); err != nil {
+			return "", err
+		}
 	}
 	expected.Digest = seal(expected)
 	if !bytes.Equal(canonical(e), canonical(expected)) {
@@ -493,56 +427,13 @@ func ValidateFor(raw []byte, family, version string) (string, error) {
 // prove checks shortestness via reverse distances (not producer predecessor BFS),
 // and partitions via per-block connectivity plus quotient acyclicity (not SCC).
 func prove(e Evidence) error {
-	out, in := indexes(e)
 	if e.Parameters.Operation == "PROJECT" {
 		return nil
 	}
 	if e.Parameters.Operation == "PATH" {
-		dist := map[string]int{e.Parameters.End: 0}
-		q := []string{e.Parameters.End}
-		for h := 0; h < len(q); h++ {
-			for _, edge := range in[q[h]] {
-				if _, ok := dist[edge.Caller]; !ok {
-					dist[edge.Caller] = dist[q[h]] + 1
-					q = append(q, edge.Caller)
-				}
-			}
-		}
-		n, ok := dist[e.Parameters.Start]
-		if !ok {
-			if e.Status != "NOT_FOUND_IN_RETAINED_GRAPH" {
-				return errors.New("false path reachability")
-			}
-			return nil
-		}
-		if e.Status != "FOUND" || len(e.Path.Nodes) != n+1 || len(e.Path.GroupIDs) != n || len(e.Path.OccurrenceIDs) != n {
-			return errors.New("path not shortest")
-		}
-		v := e.Parameters.Start
-		for i := 0; i < n; i++ {
-			if e.Path.Nodes[i] != v {
-				return errors.New("path endpoint mismatch")
-			}
-			matched := false
-			for _, edge := range out[v] {
-				if d, ok := dist[edge.Callee]; ok && d == n-i-1 {
-					if e.Path.GroupIDs[i] != edge.GroupID || !bytes.Equal(canonical(e.Path.OccurrenceIDs[i]), canonical(edge.OccurrenceIDs)) {
-						return errors.New("path lexical tie/witness mismatch")
-					}
-					v = edge.Callee
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				return errors.New("path continuity mismatch")
-			}
-		}
-		if e.Path.Nodes[n] != e.Parameters.End || v != e.Parameters.End {
-			return errors.New("path end mismatch")
-		}
-		return nil
+		return retainedpath.Prove(e.Edges, e.Parameters.Start, e.Parameters.End, e.Status, e.Path)
 	}
+	out, in := indexes(e)
 	membership := map[string]int{}
 	for i, c := range e.Components {
 		if len(c.Members) == 0 {
