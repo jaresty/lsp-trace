@@ -10,6 +10,11 @@ and explicit weak/strong components. The separate versioned contract preserves
 unverified, incomplete historical scope; it does not admit normative Program B.
 See [syntax, authority, bounds and validation](docs/bounded-retained-analysis.md).
 
+Use `lsp-trace bounded-retained-metrics retained.json` for group degrees,
+neighbor cardinalities, degree histograms and exact directed density. This is a
+separate historical, incomplete-scope family, not source completeness or ranking.
+See [metrics formulas, CLI/MCP routes and validation](docs/bounded-retained-metrics.md).
+
 ## Build and test
 
 ```sh

@@ -24,7 +24,7 @@ func preflightBoundedWire(raw []byte) error {
 		return nil
 	}
 	name := header.Params.Name
-	if name == "lsp_trace_v1_bounded_retained_analysis" || name == "lsp_trace_bounded_retained_analysis" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == boundedanalysis.Family) {
+	if name == "lsp_trace_v1_bounded_retained_analysis" || name == "lsp_trace_bounded_retained_analysis" || name == "lsp_trace_v1_bounded_retained_metrics" || name == "lsp_trace_bounded_retained_metrics" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && (header.Params.Arguments.Schema.Family == boundedanalysis.Family || header.Params.Arguments.Schema.Family == "bounded-retained-metrics")) {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
 	return nil
@@ -41,7 +41,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return false, nil
 	}
-	selected := header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis"
+	selected := header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
 	if header.Name == "lsp_trace_v1_validate" || header.Name == "lsp_trace_validate" {
 		var h struct {
 			Schema struct {
@@ -49,7 +49,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 			} `json:"schema"`
 		}
 		_ = json.Unmarshal(header.Arguments, &h)
-		selected = h.Schema.Family == boundedanalysis.Family
+		selected = h.Schema.Family == boundedanalysis.Family || h.Schema.Family == "bounded-retained-metrics"
 	}
 	if !selected {
 		return false, nil

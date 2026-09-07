@@ -153,21 +153,36 @@ func normalize(p Parameters) (Parameters, error) {
 	}
 	return p, nil
 }
-func project(raw []byte, p Parameters) (Evidence, error) {
+
+// AdmitRetained shares only historical input admission, never analytical policy.
+// Known encoded carriers are preflighted before recursive historical validation.
+func AdmitRetained(raw []byte) (retainedcalls.Evidence, error) {
 	if err := preflightAdmission(raw, false); err != nil {
-		return Evidence{}, err
+		return retainedcalls.Evidence{}, err
 	}
 	if _, err := retainedcalls.ValidateFor(raw, retainedcalls.Family, "v1"); err != nil {
-		return Evidence{}, err
+		return retainedcalls.Evidence{}, err
 	}
 	var input retainedcalls.Evidence
 	if err := json.Unmarshal(raw, &input); err != nil {
-		return Evidence{}, err
+		return input, err
 	}
 	if len(input.Tables.Endpoints) > MaxNodes || len(input.Tables.Groups) > MaxEdges {
-		return Evidence{}, errors.New("bounded analysis node/group LIMIT")
+		return input, errors.New("bounded analysis node/group LIMIT")
 	}
 	if _, err := retainedcalls.Reconstruct(input.Tables); err != nil {
+		return input, err
+	}
+	return input, nil
+}
+
+// PreflightArtifact bounds an analytical artifact and its known encoded chain.
+// Source content and opaque receipts are not recursively interpreted as JSON.
+func PreflightArtifact(raw []byte) error { return preflightAdmission(raw, true) }
+
+func project(raw []byte, p Parameters) (Evidence, error) {
+	input, err := AdmitRetained(raw)
+	if err != nil {
 		return Evidence{}, err
 	}
 	e := Evidence{SchemaVersion: Version, Policy: Policy, Scope: Scope, InputBytes: append([]byte{}, raw...), BasisDigest: basis(raw, p), Parameters: p, Nodes: []string{}, Edges: []Edge{}, Status: "COMPLETE", Path: Path{[]string{}, []string{}, [][]string{}}, Components: []Component{}}

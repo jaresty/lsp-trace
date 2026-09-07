@@ -220,9 +220,9 @@ else
   exit 1
 fi
 if go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1; then
-  printf 'PASS R-MCP-EXACT-FOURTEEN-TOOLS: historical thirteen tools plus retained CALLS export\n'
+  printf 'PASS R-MCP-EXACT-SIXTEEN-TOOLS: historical thirteen tools plus retained CALLS export, bounded analysis and structural metrics\n'
 else
-  printf 'FAIL R-MCP-EXACT-FOURTEEN-TOOLS: canonical tool cardinality contract failed\n'
+  printf 'FAIL R-MCP-EXACT-SIXTEEN-TOOLS: canonical tool cardinality contract failed\n'
   exit 1
 fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
@@ -303,4 +303,9 @@ printf 'PASS R-BOUNDED-RETAINED-ANALYSIS: independent topology proofs, public CL
 "$release_tmp/lsp-trace" schema get --family bounded-retained-analysis --version v1 > "$release_tmp/bounded-retained-analysis.schema.json"
 cmp "$release_tmp/bounded-retained-analysis.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-analysis.v1.schema.json"
 printf 'PASS R-BOUNDED-ANALYSIS-SCHEMA: exact committed additive schema\n'
+go test ./internal/boundedmetrics ./internal/mcpcontract ./cmd/lsp-trace-mcp -run TestMetrics -count=1
+printf 'PASS R-BOUNDED-RETAINED-METRICS: independent table/matrix/Python proofs, exact density, public CLI/MCP and immutable publication\n'
+"$release_tmp/lsp-trace" schema get --family bounded-retained-metrics --version v1 > "$release_tmp/bounded-retained-metrics.schema.json"
+cmp "$release_tmp/bounded-retained-metrics.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-metrics.v1.schema.json"
+printf 'PASS R-BOUNDED-METRICS-SCHEMA: exact committed additive schema\n'
 printf 'RELEASE CHECK PASS\n'

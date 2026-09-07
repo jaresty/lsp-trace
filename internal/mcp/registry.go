@@ -92,6 +92,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	manifest = mcpcontract.WithRetainedCalls(manifest)
 	descriptions := map[string]string{
+		"lsp_trace_v1_bounded_retained_metrics":  "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
 		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
 		"lsp_trace_v1_export_retained_calls":     "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
 		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",
@@ -160,6 +161,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedMetricsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
@@ -209,6 +211,9 @@ func appendUnique(ids []string, id string) []string {
 func withoutPublicationEnvelopes(ids []string) []string {
 	out := ids[:0]
 	for _, id := range ids {
+		if id == mcpcontract.BoundedMetricsEnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.BoundedMetricsEnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.BoundedMetricsEnvelopeID(publicationErrorEnvelopeSchemaID) {
+			continue
+		}
 		if id == mcpcontract.BoundedAnalysisEnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(publicationErrorEnvelopeSchemaID) {
 			continue
 		}

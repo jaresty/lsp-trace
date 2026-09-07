@@ -19,6 +19,7 @@ import (
 //go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-compact-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json testdata/schemas/envelope-execute-artifact.v1.schema.json testdata/schemas/envelope-execute-publication.v1.schema.json testdata/schemas/envelope-execute-publication-error.v1.schema.json testdata/schemas/envelope-execute-domain-error.v1.schema.json
 //go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
+//go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 

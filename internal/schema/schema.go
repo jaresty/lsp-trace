@@ -22,6 +22,7 @@ const (
 	FamilyGraphProvenance          = "graph-provenance"
 	FamilyRetainedCalls            = "retained-calls"
 	FamilyBoundedAnalysis          = "bounded-retained-analysis"
+	FamilyBoundedMetrics           = "bounded-retained-metrics"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -37,6 +38,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyGraphProvenance:          {"v1": "lsp-trace.graph-provenance.v1"},
 	FamilyRetainedCalls:            {"v1": "lsp-trace.retained-calls.v1"},
 	FamilyBoundedAnalysis:          {"v1": "lsp-trace.bounded-retained-analysis.v1"},
+	FamilyBoundedMetrics:           {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 }
 
 var versionFields = map[string]string{
@@ -50,6 +52,7 @@ var versionFields = map[string]string{
 	FamilyGraphProvenance:          "schema_version",
 	FamilyRetainedCalls:            "schema_version",
 	FamilyBoundedAnalysis:          "schema_version",
+	FamilyBoundedMetrics:           "schema_version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {

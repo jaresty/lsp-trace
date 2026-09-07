@@ -657,7 +657,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 	t.Run("ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
 		rejectPerturbation(t, "ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
 		registry := mcp.NewRegistry(true)
-		if got := len(registry.Advertised()); got != 15 {
+		if got := len(registry.Advertised()); got != 16 {
 			t.Fatalf("advertised=%d", got)
 		}
 		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {

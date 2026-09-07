@@ -35,6 +35,7 @@ const usageText = `usage:
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
   lsp-trace export-retained-calls [--output SELECTOR] PATH|-
+  lsp-trace bounded-retained-metrics [--output SELECTOR] PATH|-
   lsp-trace bounded-retained-analysis --operation PROJECT|PATH|COMPONENTS [--start ID --end ID | --mode WEAK|STRONG] [--max-work N] [--output SELECTOR] PATH|-
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
@@ -71,6 +72,9 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "bounded-retained-metrics" {
+		return runBoundedMetrics(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "bounded-retained-analysis" {
 		return runBoundedAnalysis(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}

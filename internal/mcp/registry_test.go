@@ -97,7 +97,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	const assertion = "ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 15 {
+	if got := len(r.Advertised()); got != 16 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -113,7 +113,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
 	for i, tool := range r.Advertised() {
 		if tool.Name != want[i] {
 			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
@@ -171,7 +171,7 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 		}
 	}
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 15 {
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 16 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
 	}
 }
@@ -222,10 +222,10 @@ func TestRegistryContract(t *testing.T) {
 
 	for _, enabledFlag := range []bool{false, true} {
 		r := NewRegistry(enabledFlag)
-		if got := len(r.Tools()); got != 15 {
+		if got := len(r.Tools()); got != 16 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 15 {
+		if got := len(r.Advertised()); got != 16 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{

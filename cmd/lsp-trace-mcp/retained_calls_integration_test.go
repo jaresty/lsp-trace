@@ -88,6 +88,7 @@ func testRetainedCallsRealOffline(t *testing.T, cli, mcp string, input []byte) {
 		t.Fatalf("ASSERT_REAL_TABLES_ONLY: %v", err)
 	}
 	testBoundedRealOffline(t, cli, mcp, raw)
+	testMetricsRealOffline(t, cli, mcp, raw)
 	exportedPath := filepath.Join(dir, "exported.json")
 	if err := os.WriteFile(exportedPath, raw, 0600); err != nil {
 		t.Fatal(err)

@@ -469,12 +469,14 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		admit = admitRetainedCalls
 	case *family == "bounded-retained-analysis" && *version == "v1":
 		admit = admitBoundedAnalysis
+	case *family == "bounded-retained-metrics" && *version == "v1":
+		admit = admitBoundedMetrics
 	default:
 		fmt.Fprintln(stderr, "unsupported verification family/version")
 		return 1
 	}
 	var byteLimit int64
-	if *family == "bounded-retained-analysis" {
+	if *family == "bounded-retained-analysis" || *family == "bounded-retained-metrics" {
 		byteLimit = boundedAnalysisVerificationLimit
 	}
 	data, stage, err := loadCustodiedGenerationLimit(flags.Arg(0), byteLimit)
