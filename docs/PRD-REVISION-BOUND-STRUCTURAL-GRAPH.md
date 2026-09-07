@@ -439,6 +439,8 @@ Every path must preserve stored edge orientation and exact relation-occurrence w
 
 Path enumeration must report configured caps, returned count, truncation status, and deterministic selection order.
 
+Required-symbol acquisition under FR20 must reuse these shared directed path operations over its retained graph, not introduce a separate connection algorithm or infer missing edges. Path analysis remains offline; the acquisition coordinator owns any additional provider requests.
+
 ### FR10. Structural metrics
 
 Provide:
@@ -551,6 +553,8 @@ lsp-trace analyze boundaries <relations> --communities <artifact>
 
 All commands must support canonical JSON. Human-readable output must derive from the same result model.
 
+The existing `slice` and `incoming` acquisition commands must expose FR20 required-symbol selectors, shared acquisition limits, and per-target coverage and connection results. Their adapters must use the same acquisition coordination and FR9 path semantics as the corresponding MCP operations; exact flag spelling belongs to the versioned parameter contract.
+
 Before the command family grows materially, publish `lsp-trace.operation-registry.v1` and derive dispatch, help, capability reporting, and parity tests from it. Every operation entry contains a stable operation ID, lifecycle state, qualification state, required surfaces, parity applicability, input and result schema versions, parameter contract, resource contract, and publication modes. Lifecycle state is closed: `EXPERIMENTAL`, `SUPPORTED`, `DEPRECATED`, or `DISABLED`. `SUPPORTED` and `DEPRECATED` are parity-applicable and require implemented CLI and MCP surfaces over the same shared operation; `EXPERIMENTAL` is not a production-support claim; `DISABLED` is not exposed for execution. Every non-deferred operation required by FR9–FR11 must reach `SUPPORTED` before its delivery program is complete and cannot evade parity through lifecycle labeling. Runtime availability is a separate per-surface state: `ENABLED`, `RUNTIME_DISABLED`, `CONTAINMENT_UNAVAILABLE`, or `NOT_IMPLEMENTED`. `SUPPORTED` requires both required surfaces to be implemented, so `NOT_IMPLEMENTED` is invalid for either; environmental `RUNTIME_DISABLED` or `CONTAINMENT_UNAVAILABLE` may coexist with `SUPPORTED` only when the implementation is present, the disabling condition is reported, and capability metadata does not claim current executability. Registry validation rejects every other lifecycle, parity, required-surface, qualification, and runtime-state combination. Analysis logic must live in importable packages rather than CLI handlers.
 
 ### FR16. MCP analysis tools
@@ -590,6 +594,8 @@ lsp_trace_analyze_boundaries
 ```
 
 Exact public names may follow the repository's established MCP naming convention, but CLI and MCP operation semantics must remain equivalent.
+
+The MCP `slice` and `incoming` acquisition operations must also expose FR20 required-symbol selection, limits, partial-result policy, and per-target resolution, expansion, and connection accounting. Capability discovery and input/result schemas must describe this support separately from offline path execution. CLI/MCP parity includes the combined acquisition result and replay of its path witnesses, not merely successful tool registration.
 
 ### FR17. Offline operation
 
@@ -634,6 +640,19 @@ Report these separately: artifact delivery (a result was retained), graph covera
 Domain neutrality is a semantic invariant over every public schema, field, enum, diagnostic, relation, projection, path, component, metric, ranking result, community result, boundary report, CLI rendering, MCP envelope, error, and generated documentation artifact. Public output must not assert product-feature, service, business-entity, ownership, or business-boundary identity from structural evidence. Opaque caller-supplied annotations may contain domain terms only when provenance marks them `CALLER_ASSERTED` and `NON_AUTHORITATIVE`.
 
 Every public artifact family and transport requires positive and negative neutrality fixtures enforced by semantic validators and acceptance tests.
+
+### FR20. Required-symbol acquisition and connection accounting
+
+`slice` and `incoming` must accept caller-selected required symbol locators alongside a primary root. The operation must attempt resolution and bounded expansion of those targets, retain the resulting evidence, and reuse the shared FR9 directed path operation to report witnessed connections within the acquired graph. Required means **attempted and accounted for**, not guaranteed resolution, expansion, or connectivity. Presence in one graph does not establish a path.
+
+1. **Exact selection:** accept source-qualified symbol-name or positional locators with explicit coordinate conventions and mutually exclusive selector forms. Retain requested locators and validated resolved node identities. Report missing, ambiguous, unsupported, failed, and not-attempted targets without selecting an arbitrary namesake or treating spelling as identity. Multiple distinct prepared identities require explicit disambiguation. Duplicate locators or aliases may share work under a declared policy, but every requested target retains an accounting record.
+2. **Separate outcomes:** independently report each target's resolution, expansion by requested direction, and connection disposition. Expansion must distinguish successful-empty, successful-nonempty, partial, frontier/not-expanded, failed, unsupported, and budget-blocked outcomes as applicable, with attributable request evidence and limits. Discovery alone is not successful expansion; a failed request is not successful-empty. An unresolved or ambiguous endpoint makes its path query not evaluable, rather than disconnected.
+3. **Shared path semantics:** compute a deterministic directed shortest-path witness for each evaluable root/target pair using FR9 over the combined retained graph. Retain the connecting intermediate nodes, relation occurrences, and provenance references in the returned evidence or resolvable immutable artifacts. Do not synthesize edges from co-membership, names, callback expectations, or requested inclusion. Alternative paths, when requested, use FR9's existing capped enumeration and selection policy rather than a new method.
+4. **Explicit direction:** for `slice`, the default connection query is primary root → required symbol; for `incoming`, it is required symbol → primary root. Record the effective path direction and projection. Stored CALLS edges remain caller → callee regardless of acquisition direction. Slice membership through outgoing-then-incoming traversal is not itself a directed connection witness. A target resolving to the root may have a zero-hop witness without implying expansion succeeded.
+5. **One bounded acquisition:** coordinate targets within one declared acquisition context, retaining exact provider execution/session-generation references where applicable. Root and required targets share declared global node, request, time, and evidence limits; per-target or per-direction limits and deterministic allocation rules must also be explicit. Adding targets must not silently multiply global budgets. Unattempted or unserved targets remain visible with reasons. A shared acquisition context does not imply frozen source bytes, compiler consumption, or authenticated analyzed-source identity.
+6. **Scoped negative results:** report a witnessed path when found. Only an exhausted path search over the admitted retained graph may report not-found-in-retained-graph; path-search resource exhaustion yields incomplete, not not-found. Independently preserve acquisition partiality and provider omissions even when the offline graph search is exhaustive. Neither outcome establishes source-level or runtime unreachability. No aggregate success or completeness flag may hide these separate dispositions.
+7. **Preservation and replay:** preserve coverage, graph records, source/evidence receipt references, and path witnesses through publication and the supported normalized-export/analysis pipeline. Derive mandatory coverage from the retained requested-target set, not only successful resolutions; semantic validation must reject missing target records and inconsistent identities, statuses, or path foreign keys. Introduce an explicit additive or versioned boundary where existing single-root contracts cannot represent the acquisition; do not silently relax historical admission or require consumers to discard coverage to analyze the graph. Published evidence must support offline path replay without reacquisition. Consistency verification does not independently authenticate provider or acquisition claims.
+8. **Surface parity and authority:** CLI and MCP expose equivalent selectors, bounds, outcomes, and path semantics, including inline and immutable publication. Capability/schema discovery reports actual supported operation versions. Existing custody, qualification, neutrality, compatibility, and program-admission obligations continue to apply; this requirement does not itself authorize deployment, upgrade weaker provenance, or waive analytical admission gates.
 
 ## 8. Schemas
 
@@ -760,6 +779,7 @@ Partial output may be retained only with typed status, denominator accounting, l
 - Separate advertisement, observed request outcome, and retained qualification.
 - Publish multidimensional completeness.
 - Preserve `source_graph_complete: UNKNOWN` unless proven by a qualified denominator.
+- Add FR20 required-symbol selection and per-target resolution/expansion accounting under shared acquisition limits.
 
 #### A3. Normalized relations and projections
 
@@ -767,6 +787,7 @@ Partial output may be retained only with typed status, denominator accounting, l
 - Define support accounting and type acquisition semantics.
 - Publish projection artifacts and digests.
 - Add export reconstruction and semantic-validation tests.
+- Preserve FR20 requested-target coverage, graph/source joins, and connection witnesses through versioned export and offline replay.
 
 #### A4. Substrate qualification matrix gate
 
@@ -787,7 +808,7 @@ Generic graph algorithms have no blanket Ember prerequisite. The independently g
 - degree metrics;
 - weak and strong components;
 - condensation DAG;
-- directed BFS, reachability, and shortest paths;
+- directed BFS, reachability, and shortest paths, reused for FR20 required-symbol connection witnesses;
 - capped path enumeration;
 - bridges and articulation points under explicit undirected projections.
 
@@ -801,7 +822,7 @@ Generic graph algorithms have no blanket Ember prerequisite. The independently g
 
 #### B3. CLI and MCP adapters
 
-Expose each qualified analysis operation through thin CLI and MCP adapters over the same shared packages. Retain parity fixtures proving equivalent canonical result models and logical digests. Exercise inline and immutable-published MCP result paths.
+Expose each qualified analysis operation through thin CLI and MCP adapters over the same shared packages. Retain parity fixtures proving equivalent canonical result models and logical digests. Exercise inline and immutable-published MCP result paths. Include FR20 acquisition-to-path composition and its separately reported coverage outcomes; do not implement a second path algorithm in either adapter.
 
 #### B4. Cross-language qualification
 
@@ -873,6 +894,16 @@ Existing V2/V3 artifacts remain readable and preserve their original IDs and sem
 
 For identical admitted input, projection, parameters, and implementation version, CLI and MCP execution produce the same canonical result model and logical digest. Registry validation rejects a `SUPPORTED` operation with a missing required implementation; environmental runtime disablement remains distinct from implementation support and must not claim current executability. An oversized MCP result is returned through immutable publication with verified byte length and digest, never silent truncation.
 
+### AC16. Required symbols and witnessed connections
+
+For both `slice` and `incoming`, caller-selected required symbols are attempted under shared acquisition limits and every request retains independent resolution, expansion, and connection accounting:
+
+- **Connected:** the root and required implementation resolve, and provider-reported edges establish a directed chain. The result includes its intermediate nodes and exact retained relation-occurrence witnesses, matching the shared FR9 path result on the same admitted graph and parameters.
+- **Unresolved callback connection:** `StartImport` and a caller-selected concrete `ImportSurveyFromWorkbook` implementation both resolve and expand, but no connecting callback edge is reported. Both targets remain represented; no edge is invented. An exhaustive offline search reports no connection in the retained graph, with acquisition incompleteness preserved separately. Caller-provided names do not establish business identity or callback semantics.
+- **Direction and identity:** reverse-only connectivity does not satisfy the requested direction. Ambiguous namesakes are not arbitrarily selected, aliases preserve every request's accounting, and a resolved root-equal target may have a zero-hop witness without an expansion-success claim.
+- **Partial acquisition and bounded search:** missing, unsupported, failed, frontier-bound, and budget-blocked targets remain explicit; adding targets never silently multiplies the global budget. Acquisition success, expansion success, graph-search exhaustion, and path existence remain distinct. A path-search limit yields incomplete, never not-found.
+- **Compatibility and replay:** equivalent admitted evidence and parameters yield matching CLI/MCP coverage models and path witnesses. Omitted required-symbol options preserve historical behavior and identities. Published coverage survives supported export and validates/replays offline without the source checkout or server. Missing target records, substituted endpoints, lost intermediate witnesses, reversed paths, and inconsistent statuses fail semantic validation.
+
 ## 15. Required tests
 
 - unit tests for identity, canonicalization, and source receipt rules;
@@ -885,6 +916,7 @@ For identical admitted input, projection, parameters, and implementation version
 - capability/completeness red fixtures, including scope-escalation, opaque, stale, self-narrowed, unqualified-extractor, non-exhaustive-commitment, and wrong-scope denominator-proof rejection;
 - relation reconstruction, occurrence-provenance, upstream-observation identity/canonical-order/foreign-key/cycle/parent-closure fixtures, unavailable-upstream-provenance rejection, support-group independence, cross-CLI/MCP/offline minimum-dependence recomputation, illegal class-splitting, and multiedge/call-site tests;
 - direction and projection-preservation tests;
+- FR20 required-symbol resolution/expansion/connection separation, ambiguous and aliased selectors, connected and disconnected implementations, reverse-only and zero-hop paths, shared-budget exhaustion, missing-accounting rejection, source/version uncertainty, versioned export preservation, omitted-option compatibility, and CLI/MCP acquisition-to-offline-path replay tests;
 - weak/strong component and condensation fixtures;
 - bridge, articulation, disconnected, and singleton fixtures;
 - PageRank convergence and dangling-node tests;
