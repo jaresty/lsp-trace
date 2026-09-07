@@ -12,6 +12,8 @@ import (
 	"os"
 )
 
+const boundedAnalysisVerificationLimit = boundedanalysis.MaxBytes
+
 func admitBoundedAnalysis(raw []byte) error {
 	_, err := boundedanalysis.ValidateFor(raw, boundedanalysis.Family, "v1")
 	return err

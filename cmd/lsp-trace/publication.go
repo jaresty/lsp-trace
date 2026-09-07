@@ -358,6 +358,10 @@ func writePrivateSyncedFile(path string, data []byte) error {
 	return nil
 }
 func readRootRegularNoFollow(root *os.Root, name string) ([]byte, error) {
+	return readRootRegularNoFollowLimit(root, name, 0)
+}
+
+func readRootRegularNoFollowLimit(root *os.Root, name string, limit int64) ([]byte, error) {
 	info, err := root.Lstat(name)
 	if err != nil {
 		return nil, err
@@ -373,6 +377,19 @@ func readRootRegularNoFollow(root *os.Root, name string) ([]byte, error) {
 	opened, err := f.Stat()
 	if err != nil || !os.SameFile(info, opened) {
 		return nil, fmt.Errorf("file identity changed: %q", name)
+	}
+	if limit > 0 {
+		if opened.Size() > limit {
+			return nil, fmt.Errorf("bounded publication byte LIMIT: %q", name)
+		}
+		raw, err := io.ReadAll(io.LimitReader(f, limit+1))
+		if err != nil {
+			return nil, err
+		}
+		if int64(len(raw)) > limit {
+			return nil, fmt.Errorf("bounded publication byte LIMIT: %q", name)
+		}
+		return raw, nil
 	}
 	return io.ReadAll(f)
 }
@@ -398,12 +415,16 @@ func openRootDirectoryNoFollow(root *os.Root, name string) (*os.Root, error) {
 }
 
 func loadCustodiedGeneration(path string) ([]byte, string, error) {
+	return loadCustodiedGenerationLimit(path, 0)
+}
+
+func loadCustodiedGenerationLimit(path string, limit int64) ([]byte, string, error) {
 	parent, finalName, err := openPinnedPublicationParent(path)
 	if err != nil {
 		return nil, "verify", err
 	}
 	defer parent.Close()
-	selectorData, err := readRootRegularNoFollow(parent, finalName)
+	selectorData, err := readRootRegularNoFollowLimit(parent, finalName, limit)
 	if err != nil {
 		return nil, "verify", err
 	}
@@ -416,11 +437,11 @@ func loadCustodiedGeneration(path string) ([]byte, string, error) {
 		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	defer generation.Close()
-	data, err := readRootRegularNoFollow(generation, generationArtifactName)
+	data, err := readRootRegularNoFollowLimit(generation, generationArtifactName, limit)
 	if err != nil {
 		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
-	receiptData, err := readRootRegularNoFollow(generation, generationReceiptName)
+	receiptData, err := readRootRegularNoFollowLimit(generation, generationReceiptName, limit)
 	if err != nil {
 		return nil, "verify receipt", fmt.Errorf("incomplete selected generation: %w", err)
 	}
@@ -452,7 +473,11 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "unsupported verification family/version")
 		return 1
 	}
-	data, stage, err := loadCustodiedGeneration(flags.Arg(0))
+	var byteLimit int64
+	if *family == "bounded-retained-analysis" {
+		byteLimit = boundedAnalysisVerificationLimit
+	}
+	data, stage, err := loadCustodiedGenerationLimit(flags.Arg(0), byteLimit)
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", stage, err)
 		return 1
