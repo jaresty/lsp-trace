@@ -32,7 +32,7 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice)
 	}
-	if got := server.Registry.Tools(); len(got) != 16 {
+	if got := server.Registry.Tools(); len(got) != 17 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
 	}
 	_, incomingCollector := any(selected).(incomingops.RelationCollector)
@@ -111,7 +111,7 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 16 {
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 17 {
 		t.Fatalf("ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER: response=%s err=%v", lines[0], err)
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {

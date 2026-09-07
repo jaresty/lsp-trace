@@ -20,6 +20,7 @@ import (
 //go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
+//go:embed testdata/schemas/input-bounded-retained-ranking.v1.schema.json testdata/schemas/envelope-bounded-ranking-*.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 
@@ -195,16 +196,25 @@ func ValidateEnvelopeExclusive(data []byte) error {
 	}
 	named, _ := value["envelope_schema_id"].(string)
 	manifest = WithRetainedCalls(manifest)
+	// Load the immutable resource set once, not once per envelope. Every
+	// envelope is still compiled and checked for exhaustive exclusivity.
+	compiler, _, err := registeredCompiler(manifest)
+	if err != nil {
+		return err
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
 	matches := []string{}
 	for _, registration := range manifest.Schemas {
 		if registration.Layer != "envelope" {
 			continue
 		}
-		compiled, err := compileSchema(manifest, registration.ID)
+		compiled, err := compiler.Compile(registration.ID)
 		if err != nil {
 			return err
 		}
-		doc, _ := jsonschema.UnmarshalJSON(bytes.NewReader(data))
 		if compiled.Validate(doc) == nil {
 			matches = append(matches, registration.ID)
 		}
@@ -252,9 +262,19 @@ func ValidateTranscript(raw []byte, preEnvelope bool) error {
 }
 
 func compileSchema(manifest *Manifest, id string) (*jsonschema.Schema, error) {
+	compiler, ids, err := registeredCompiler(manifest)
+	if err != nil {
+		return nil, err
+	}
+	if !ids[id] {
+		return nil, fmt.Errorf("unknown or external schema %q", id)
+	}
+	return compiler.Compile(id)
+}
+func registeredCompiler(manifest *Manifest) (*jsonschema.Compiler, map[string]bool, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	found := false
+	ids := map[string]bool{}
 	registrations := append([]SchemaRegistration(nil), manifest.Schemas...)
 	sort.Slice(registrations, func(i, j int) bool { return registrations[i].ID < registrations[j].ID })
 	for _, registration := range registrations {
@@ -263,21 +283,16 @@ func compileSchema(manifest *Manifest, id string) (*jsonschema.Schema, error) {
 		}
 		raw, err := contractFiles.ReadFile(path.Join("testdata", registration.Path))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if err := compiler.AddResource(registration.ID, doc); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if registration.ID == id {
-			found = true
-		}
+		ids[registration.ID] = true
 	}
-	if !found {
-		return nil, fmt.Errorf("unknown or external schema %q", id)
-	}
-	return compiler.Compile(id)
+	return compiler, ids, nil
 }

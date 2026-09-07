@@ -84,6 +84,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 	trimmed := bytes.TrimSpace(data)
 	var err error
 	switch {
+	case structural.Family == FamilyBoundedRanking:
+		return fmt.Errorf("bounded ranking requires composed boundedranking.ValidateFor semantic validation")
 	case structural.Family == FamilyBoundedMetrics:
 		return fmt.Errorf("bounded metrics requires composed boundedmetrics.ValidateFor semantic validation")
 	case structural.Family == FamilyBoundedAnalysis:

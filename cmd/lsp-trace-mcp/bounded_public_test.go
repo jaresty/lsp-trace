@@ -16,6 +16,7 @@ import (
 // five-group ten-occurrence specimen, only after source deletion.
 func testBoundedRealOffline(t *testing.T, cli, mcp string, raw []byte) {
 	t.Helper()
+	testRankingRealOffline(t, cli, mcp, raw)
 	var retained retainedcalls.Evidence
 	if err := json.Unmarshal(raw, &retained); err != nil {
 		t.Fatal(err)

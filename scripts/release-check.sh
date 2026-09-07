@@ -220,9 +220,9 @@ else
   exit 1
 fi
 if go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1; then
-  printf 'PASS R-MCP-EXACT-SIXTEEN-TOOLS: historical thirteen tools plus retained CALLS export, bounded analysis and structural metrics\n'
+  printf 'PASS R-MCP-EXACT-SEVENTEEN-TOOLS: historical thirteen tools plus retained CALLS export, bounded analysis, structural metrics and ranking\n'
 else
-  printf 'FAIL R-MCP-EXACT-SIXTEEN-TOOLS: canonical tool cardinality contract failed\n'
+  printf 'FAIL R-MCP-EXACT-SEVENTEEN-TOOLS: canonical tool cardinality contract failed\n'
   exit 1
 fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
@@ -308,4 +308,9 @@ printf 'PASS R-BOUNDED-RETAINED-METRICS: independent table/matrix/Python proofs,
 "$release_tmp/lsp-trace" schema get --family bounded-retained-metrics --version v1 > "$release_tmp/bounded-retained-metrics.schema.json"
 cmp "$release_tmp/bounded-retained-metrics.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-metrics.v1.schema.json"
 printf 'PASS R-BOUNDED-METRICS-SCHEMA: exact committed additive schema\n'
+go test ./internal/boundedranking ./cmd/lsp-trace-mcp -run TestRanking -count=1
+printf 'PASS R-BOUNDED-RANKING: independent rational oracle, stationary proof/replay and shared public CLI/MCP\n'
+"$release_tmp/lsp-trace" schema get --family bounded-retained-ranking --version v1 > "$release_tmp/bounded-retained-ranking.schema.json"
+cmp "$release_tmp/bounded-retained-ranking.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-ranking.v1.schema.json"
+printf 'PASS R-BOUNDED-RANKING-SCHEMA: exact committed additive schema\n'
 printf 'RELEASE CHECK PASS\n'

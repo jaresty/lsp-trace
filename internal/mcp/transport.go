@@ -378,6 +378,11 @@ func compactSummary(artifact []byte) map[string]any {
 	var value map[string]any
 	_ = json.Unmarshal(artifact, &value)
 	out := map[string]any{"artifact_byte_length": uint64(len(artifact))}
+	if value["schema_version"] == "lsp-trace.bounded-retained-ranking.v1" {
+		for _, key := range []string{"status", "reason", "iterations", "work", "residual", "score_mass", "residual_iteration", "group_count"} {
+			out[key] = value[key]
+		}
+	}
 	for _, key := range []string{"schema_version", "inspection_schema_version", "filter_schema_version"} {
 		if v, ok := value[key]; ok {
 			out[key] = v
@@ -414,6 +419,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	}
 	if tool.Name == "lsp_trace_v1_bounded_retained_metrics" {
 		env.EnvelopeSchemaID = mcpcontract.BoundedMetricsEnvelopeID(env.EnvelopeSchemaID)
+	}
+	if tool.Name == "lsp_trace_v1_bounded_retained_ranking" {
+		env.EnvelopeSchemaID = mcpcontract.BoundedRankingEnvelopeID(env.EnvelopeSchemaID)
 	}
 	raw, err := json.Marshal(env)
 	if err == nil {
@@ -592,6 +600,8 @@ func operationName(canonical string) operation.Name {
 		return operation.BoundedRetainedAnalysis
 	case "lsp_trace_v1_bounded_retained_metrics":
 		return operation.BoundedRetainedMetrics
+	case "lsp_trace_v1_bounded_retained_ranking":
+		return operation.BoundedRetainedRanking
 	case "lsp_trace_v1_incoming":
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":

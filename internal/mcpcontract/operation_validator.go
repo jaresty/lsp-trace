@@ -32,6 +32,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.ExportRetainedCalls:     "lsp_trace_v1_export_retained_calls",
 		operation.BoundedRetainedAnalysis: "lsp_trace_v1_bounded_retained_analysis",
 		operation.BoundedRetainedMetrics:  "lsp_trace_v1_bounded_retained_metrics",
+		operation.BoundedRetainedRanking:  "lsp_trace_v1_bounded_retained_ranking",
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
@@ -54,14 +55,14 @@ func (v *OperationInputValidator) ValidateOperationInput(name operation.Name, in
 	if v == nil {
 		return fmt.Errorf("operation input validator is nil")
 	}
-	bounded := name == operation.BoundedRetainedAnalysis || name == operation.BoundedRetainedMetrics
+	bounded := name == operation.BoundedRetainedAnalysis || name == operation.BoundedRetainedMetrics || name == operation.BoundedRetainedRanking
 	if name == operation.Validate {
 		var h struct {
 			Schema struct {
 				Family string `json:"family"`
 			} `json:"schema"`
 		}
-		if json.Unmarshal(input, &h) == nil && h.Schema.Family == "bounded-retained-metrics" {
+		if json.Unmarshal(input, &h) == nil && (h.Schema.Family == "bounded-retained-metrics" || h.Schema.Family == "bounded-retained-ranking") {
 			bounded = true
 		}
 	}

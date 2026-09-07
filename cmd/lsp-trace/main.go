@@ -72,6 +72,9 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "bounded-retained-ranking" {
+		return runBoundedRanking(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "bounded-retained-metrics" {
 		return runBoundedMetrics(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}

@@ -8,6 +8,7 @@ import (
 
 	"lsp-trace/internal/boundedanalysis"
 	"lsp-trace/internal/boundedmetrics"
+	"lsp-trace/internal/boundedranking"
 	traceschema "lsp-trace/internal/schema"
 )
 
@@ -68,7 +69,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	var data []byte
 	var err error
-	if *family == boundedanalysis.Family || *family == boundedmetrics.Family {
+	if *family == boundedanalysis.Family || *family == boundedmetrics.Family || *family == boundedranking.Family {
 		reader := stdin
 		if fs.Arg(0) != "-" {
 			var f *os.File
@@ -97,7 +98,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if *family == "" {
 		detected, err = traceschema.Validate(data, *alias)
 	} else {
-		detected, err = boundedmetrics.ValidateFor(data, *family, *version)
+		detected, err = boundedranking.ValidateFor(data, *family, *version)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)

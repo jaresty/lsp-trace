@@ -118,7 +118,9 @@ Default verify/validate behavior remains graph-only; family selection is explici
 MCP adds `lsp_trace_v1_bounded_retained_metrics`, alias
 `lsp_trace_bounded_retained_metrics`. The shared offline handler serves CLI and
 MCP. Historical thirteen-tool manifest and existing fifteen tool contracts are
-preserved; runtime discovery now has sixteen tools. Metrics input and all five
+preserved; runtime discovery had sixteen tools at metrics introduction. The additive
+[ranking family](bounded-retained-ranking.md) brings the current total to seventeen.
+Metrics input and all five
 envelope variants have distinct additive schemas.
 
 ```json
