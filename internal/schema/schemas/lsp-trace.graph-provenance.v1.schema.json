@@ -1,0 +1,38 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json",
+ "title":"Bounded graph provenance; offline consistency, not source authentication",
+ "type":"object","additionalProperties":false,
+ "required":["schema_version","graph_bytes","graph_digest","workspace_uri","seed_uri","session_id","generation","analyzed_version","dependency_completeness","supply_status","captures","bindings"],
+ "properties":{
+  "schema_version":{"const":"lsp-trace.graph-provenance.v1"},
+  "graph_bytes":{"type":"string","contentEncoding":"base64","description":"Exact unchanged legacy graph bytes; limited to 8 MiB decoded."},
+  "graph_digest":{"$ref":"#/$defs/digest"},
+  "workspace_uri":{"type":"string","minLength":1},
+  "seed_uri":{"type":"string","minLength":1},
+  "session_id":{"type":"string","minLength":1},
+  "generation":{"type":"integer","minimum":1},
+  "analyzed_version":{"const":"ANALYZED_VERSION_UNVERIFIED"},
+  "dependency_completeness":{"const":"UNKNOWN_INCOMPLETE"},
+  "supply_status":{"enum":["OBSERVED_NOTIFICATION","NO_NOTIFICATION_OBSERVATION"]},
+  "supply":{"$ref":"#/$defs/receipt"},
+  "captures":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/receipt"}},
+  "bindings":{"type":"array","maxItems":200000,"items":{"type":"object","additionalProperties":false,"required":["pointer","uri","attribution","receipt_ids"],"properties":{
+   "pointer":{"type":"string","pattern":"^/"},"uri":{"type":"string"},"attribution":{"enum":["SOURCE","NON_SOURCE"]},"receipt_ids":{"type":"array","maxItems":2,"uniqueItems":true,"items":{"$ref":"#/$defs/digest"}}
+  }}}
+ },
+ "$defs":{
+  "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+  "receipt":{"type":"object","additionalProperties":false,"required":["id","uri","path","classification","analyzed_version","status","content","canonical_receipt"],"properties":{
+   "id":{"$ref":"#/$defs/digest"},"uri":{"type":"string","minLength":1},"path":{"type":"string"},
+   "classification":{"enum":["LSP_SUPPLIED","POST_TRAVERSAL_CAPTURE"]},
+   "analyzed_version":{"const":"ANALYZED_VERSION_UNVERIFIED"},
+   "status":{"enum":["READABLE","UNREADABLE","BYTE_LIMIT_EXCEEDED","BUDGET_EXCEEDED","CANCELLED","OUTSIDE_SCOPE","INVALID_URI","VIRTUAL_URI"]},
+   "content":{"type":["string","null"],"contentEncoding":"base64","description":"At most 1 MiB decoded per file; 4 MiB total post-capture, 64 attempted reads."},
+   "canonical_receipt":{"type":"string","contentEncoding":"base64","minLength":1},
+   "supply":{"type":"object","additionalProperties":false,"required":["session_id","generation","document_version","method","params"],"properties":{
+    "session_id":{"type":"string","minLength":1},"generation":{"type":"integer","minimum":1},"document_version":{"type":"integer","minimum":1},"method":{"enum":["textDocument/didOpen","textDocument/didChange"]},"params":{"type":"object"}
+   }}
+  }}
+ }
+}

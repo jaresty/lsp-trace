@@ -276,4 +276,17 @@ else
   printf 'FAIL R-VALIDATE-V2: retained qualification graph failed release validator\n'
   exit 1
 fi
+if go test ./internal/graphprovenance ./sliceops -run 'TestGraph|TestManagedGraphProvenanceConsumer' -count=1; then
+  printf 'PASS R-GRAPH-PROVENANCE: graph-derived census, wire supply, mutation, scope, budgets and offline consistency\n'
+else
+  printf 'FAIL R-GRAPH-PROVENANCE: bounded provenance contract failed\n'
+  exit 1
+fi
+"$release_tmp/lsp-trace" schema get --family graph-provenance --version v1 > "$release_tmp/graph-provenance.schema.json"
+if cmp -s "$release_tmp/graph-provenance.schema.json" "$root/internal/schema/schemas/lsp-trace.graph-provenance.v1.schema.json"; then
+  printf 'PASS R-GRAPH-PROVENANCE-SCHEMA: exact committed envelope schema\n'
+else
+  printf 'FAIL R-GRAPH-PROVENANCE-SCHEMA: schema bytes differ\n'
+  exit 1
+fi
 printf 'RELEASE CHECK PASS\n'

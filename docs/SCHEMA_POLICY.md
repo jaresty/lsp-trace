@@ -4,6 +4,19 @@ Canonical output defaults to `schema_version: lsp-trace.graph.v3`. Explicit `--s
 
 New enum values are additive but consumers must treat unknown values as forward-compatible rather than silently mapping them to an existing reason. Canonical ordering and the exclusion of wall-clock metadata remain compatibility obligations. Release review must identify schema-affecting changes and update golden tests, documentation, and the major version together when required.
 
+## Graph provenance sidecar v1
+
+The opt-in `graph-provenance` family (`lsp-trace.graph-provenance.v1`) is an
+independently versioned envelope containing exact legacy graph-v3 bytes, not a
+change to graph IDs, embedded schema or omitted-mode projections. It binds a
+graph-derived source census to separate `LSP_SUPPLIED` and
+`POST_TRAVERSAL_CAPTURE` receipts; both retain `ANALYZED_VERSION_UNVERIFIED`.
+Dependency completeness remains `UNKNOWN_INCOMPLETE`. Composed offline validation
+checks consistency, not independent reauthentication or compiler consumption.
+See [bounded graph provenance](lsp-supplied-observations.md) for the API, acquisition
+bounds, publication layouts and qualification. This does not adopt the PRD source
+snapshot policy or complete AC1.
+
 ## Schema v3
 
 `lsp-trace.graph.v3` is the unconditional evidence-bundle contract. It records effective limits, global and request timeouts, concurrency, language ID, expansion and trace configuration, server command/arguments, explicit server-environment names with values omitted, output mode, and every original labeled seed. The sensitivity policy declares `automatic_redaction: false`: omission of environment values and the cwd path is a specific projection rule, not a general redaction guarantee. `process_context` uses role-specific `effective_environment_process_context_digest`, `working_directory_process_context_digest`, and per-name `environment_name_process_context_digest` fields without embedding their hidden inputs; offline verification checks structure and semantic commitment but cannot independently reconstruct or authenticate those inputs. The working-directory digest uses a cleaned absolute process path without symlink resolution, so cwd symlink aliases are not canonicalized. Resolved seeds additionally carry URI and SHA-256 content digest; their aggregate uses `resolved_seed_contents_digest` scoped only to `RESOLVED_SEED_CONTENTS`. Caller provenance is classified `CALLER_ASSERTED`. Every original `invocation.seeds` entry has exactly one same-label `seeds` result, including a failure result; failed seeds remain failures and are excluded from resolved-source identity. No Git, clock, tool-version, server-version, or whole-workspace verification is claimed.

@@ -29,6 +29,7 @@ type sliceConfig struct {
 	downDepth, upDepth, maxNodes                                         int
 	timeout, requestTimeout                                              time.Duration
 	pretty                                                               bool
+	graphProvenance                                                      bool
 }
 
 func parseSlice(args []string) (sliceConfig, error) {
@@ -54,8 +55,31 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.StringVar(&c.output, "output", "", "output file")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
+	fs.BoolVar(&c.graphProvenance, "graph-provenance", false, "bounded supplied/post-traversal evidence via managed single-at slice; no analyzed-source authentication")
 	if err := fs.Parse(args); err != nil {
 		return c, err
+	}
+	if c.graphProvenance {
+		explicit := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+		if !explicit["up-depth"] {
+			c.upDepth = 2
+		}
+		if !explicit["max-nodes"] {
+			c.maxNodes = 100
+		}
+		if !explicit["timeout"] {
+			c.timeout = 5 * time.Second
+		}
+		if !explicit["request-timeout"] {
+			c.requestTimeout = time.Second
+		}
+		if len(c.ats) != 1 || c.fromFile != "" || c.seedFile != "" || c.traceLSP != "" {
+			return c, fmt.Errorf("--graph-provenance requires exactly one --at and no --from-file, --seed-file or --trace-lsp")
+		}
+		if c.downDepth < 1 || c.downDepth > 64 || c.upDepth < 1 || c.upDepth > 64 || c.maxNodes < 1 || c.maxNodes > 10000 || c.timeout < time.Millisecond || c.timeout > 60*time.Second || c.requestTimeout < time.Millisecond || c.requestTimeout > 60*time.Second {
+			return c, fmt.Errorf("--graph-provenance uses managed bounds: depth 1..64, nodes 1..10000, timeouts 1ms..60s")
+		}
 	}
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
@@ -253,6 +277,9 @@ func runSlice(args []string) int {
 	if cfg.timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, cfg.timeout)
 		defer cancel()
+	}
+	if cfg.graphProvenance {
+		return runGraphProvenanceSlice(ctx, cfg, os.Stdout, os.Stderr)
 	}
 	workspaceURI, sourceURI, sources, err := resolveSliceSources(cfg)
 	if err != nil {

@@ -149,6 +149,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			tools[i].EnvelopeSchemaIDs = traversalEnvelopeSchemaIDs(publicationSupported)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, sliceCompositionSchemaID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
 		}
 		if tools[i].ExecutorFamily == IncomingExecutorFamily || tools[i].ExecutorFamily == SliceExecutorFamily {
 			addNormalizedProviderInputProperties(tools[i].InputSchema)
@@ -156,6 +157,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
 		}
 		if routing.Availability != nil {
 			tools[i].Availability = routing.Availability(base)

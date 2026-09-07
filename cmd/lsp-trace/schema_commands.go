@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"lsp-trace/internal/custodyevidence"
+	"lsp-trace/internal/graphprovenance"
 	traceschema "lsp-trace/internal/schema"
 )
 
@@ -80,7 +80,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if *family == "" {
 		detected, err = traceschema.Validate(data, *alias)
 	} else {
-		detected, err = custodyevidence.ValidateFor(data, *family, *version)
+		detected, err = graphprovenance.ValidateFor(data, *family, *version)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)

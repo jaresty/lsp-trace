@@ -15,6 +15,7 @@ import (
 
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/provider"
@@ -41,6 +42,7 @@ type RelationCollector interface {
 }
 
 type request struct {
+	GraphProvenance       bool            `json:"graph_provenance,omitempty"`
 	SessionID             string          `json:"session_id"`
 	Generation            uint64          `json:"generation"`
 	StartMode             string          `json:"start_mode"`
@@ -70,6 +72,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return operation.Result{}, fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var in request
+	if err := provenanceInput(op.Input); err != nil {
+		return operation.Result{}, fail(operation.FailureInvalidInput, err)
+	}
 	if err := decodeClosed(op.Input, &in); err != nil {
 		return operation.Result{}, fail(operation.FailureInvalidInput, err)
 	}
@@ -86,6 +91,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if runtimeFailure != "" {
 		return operation.Result{}, fail(string(runtimeFailure), nil)
 	}
+	if in.GraphProvenance && (in.Relations != nil || len(in.Adapters) > 0 || len(in.Providers) > 0 || len(in.Languages) > 0 || len(in.Frameworks) > 0 || len(in.WorkspaceRevision) > 0 || in.FailOnUnknownRevision) {
+		return operation.Result{}, fail("GRAPH_PROVENANCE_UNSUPPORTED_COMBINATION", nil)
+	}
 	if in.Relations != nil {
 		return e.executeComposition(parent, op.Input, in, metadata)
 	}
@@ -99,14 +107,42 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(in.TimeoutMS)*time.Millisecond)
 	defer cancel()
+	var supply *sessionruntime.DocumentSupply
+	workspace := ""
+	if in.GraphProvenance {
+		for _, record := range e.runtime.Records() {
+			if record.SessionID == in.SessionID && record.Generation == in.Generation {
+				workspace = record.Profile.Workspace().String()
+				break
+			}
+		}
+		if workspace == "" {
+			return operation.Result{}, fail("GRAPH_PROVENANCE_SCOPE_UNAVAILABLE", nil)
+		}
+	}
+	finish := func(g graph.Result) (operation.Result, *operation.Failure) {
+		result, failed := artifact(g)
+		if failed != nil || !in.GraphProvenance {
+			return result, failed
+		}
+		raw, err := graphprovenance.Capture(ctx, result.Artifact, workspace, in.URI, in.SessionID, in.Generation, supply)
+		if err != nil {
+			return operation.Result{}, fail("GRAPH_PROVENANCE_FAILED", err)
+		}
+		result.Artifact = raw
+		return result, nil
+	}
 	if runtime, ok := e.runtime.(interface {
 		PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
 	}); ok {
-		document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: in.SessionID, Generation: in.Generation, URI: in.URI, LanguageID: in.LanguageID})
+		document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: in.SessionID, Generation: in.Generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: in.GraphProvenance})
 		if document.Failure != "" {
 			return operation.Result{}, fail(string(document.Failure), nil)
 		}
 		in.LanguageID = document.LanguageID
+		supply = document.Supply
+	} else if in.GraphProvenance {
+		return operation.Result{}, fail("GRAPH_PROVENANCE_SUPPLY_UNAVAILABLE", nil)
 	}
 	client := incomingops.NewSessionClientWithWireLimits(e.runtime, in.SessionID, in.Generation, time.Duration(in.RequestTimeoutMS)*time.Millisecond, incomingops.WireLimits{MaxMessages: in.MaxMessages, MaxBytes: int64(in.MaxBytes)})
 	line, character, targetFailure := incomingops.ResolveTarget(ctx, client, in.URI, in.Symbol, in.Line, in.Character)
@@ -120,10 +156,10 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		if code := terminalCode(err); code != "" {
 			return operation.Result{}, fail(code, err)
 		}
-		return artifact(partialPrepare(in, metadata, err))
+		return finish(partialPrepare(in, metadata, err))
 	}
 	if len(prepared) == 0 {
-		return artifact(emptyResult(in, metadata))
+		return finish(emptyResult(in, metadata))
 	}
 	discovery := slicer.DiscoverPrepared(ctx, client, prepared, slicer.Options{DownDepth: in.DownDepth, MaxNodes: in.MaxNodes})
 	down := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: discovery.Nodes, Edges: discovery.Edges, Diagnostics: discovery.Diagnostics, Summary: graph.Summary{Complete: discovery.Complete, Truncated: discovery.Truncated}}
@@ -139,7 +175,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	graph.ReconcileIncomingAliases(down, &up)
 	result := graph.MergeResults(down, up)
 	decorate(&result, in, metadata, prepared, discovery)
-	return artifact(result)
+	return finish(result)
 }
 
 func decorate(result *graph.Result, in request, metadata sessionruntime.SessionMetadata, prepared []lsp.CallHierarchyItem, d slicer.Discovery) {
