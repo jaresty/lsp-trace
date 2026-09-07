@@ -102,7 +102,16 @@ nonblocking Unix regular-file opener. Lexical/symlink escapes, virtual URIs,
 noncanonical URIs, missing/nonregular files, byte limits, cancellation and budget
 exhaustion remain explicit outcomes without fabricated content or silent omission.
 Regular-file I/O may still be slow or uncancellable. Root replacement and files
-changing during a read do not become source-snapshot guarantees.
+changing during a read do not become source-snapshot guarantees. Runtime
+PrepareDocument now honors context cancellation at the owned framed transport
+boundary: interrupted/short writes retire that exact generation and return no
+successful version/supply; notification I/O is joined before ownership release.
+Cancellation is checked before and after source reads, but cannot interrupt an
+arbitrary regular-file syscall. Accordingly, the preparatory acquisition
+coordinator's durations are not unconditional elapsed-time bounds for automatic
+file-backed supply. Its explicit admission/disable policy and cleanup limits are
+specified in `acquisition-coordinator.md`; no filesystem cancellation capability
+or stronger source-freeze/authentication claim is introduced.
 
 Fixed acquisition bounds: 8 MiB embedded graph; at most 50,000 binding rows and
 8 MiB of charged census metadata (pointer and URI lengths plus 128 bytes per row).

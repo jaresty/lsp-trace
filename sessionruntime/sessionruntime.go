@@ -87,6 +87,8 @@ type Child interface {
 	Close() managedprocess.ResourceObservation
 }
 
+// wireChild resources must be interruptible by Close/Teardown, without acquiring
+// Manager.mu. Starter implementations own that primitive contract.
 type wireChild interface {
 	Child
 	Stdin() io.WriteCloser
@@ -210,7 +212,15 @@ const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
 
 // PrepareDocument resolves one effective language identity, synchronizes the
 // workspace file, and retains the exact value used by the document generation.
-func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) DocumentResult {
+// Context cancellation interrupts owned notification I/O and retires that exact
+// generation before returning. Source filesystem operations remain synchronous:
+// context is checked before and after reads, not enforced inside kernel reads.
+// Supply and version are returned only after a confirmed complete write (or the
+// historical unchanged-document cache hit, which returns no new Supply).
+func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
+	if failure := contextFailure(ctx); failure != "" {
+		return DocumentResult{Failure: failure}
+	}
 	u, err := url.Parse(req.URI)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.Path == "" {
 		return DocumentResult{Failure: LanguageIDUnavailable}
@@ -265,28 +275,42 @@ func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) Docume
 			return DocumentResult{Failure: LanguageIDUnavailable}
 		}
 	}
+	if failure := contextFailure(ctx); failure != "" {
+		return DocumentResult{Failure: failure}
+	}
 	digest := sha256.Sum256(text)
 
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	r = m.sessions[req.SessionID]
 	if r == nil || r.record.Generation != req.Generation {
+		m.mu.Unlock()
 		return DocumentResult{Failure: session.StaleGeneration}
 	}
-	if r.record.State != session.Ready || r.protocolOwned {
+	if m.closed || r.record.State != session.Ready || r.protocolOwned {
+		m.mu.Unlock()
 		return DocumentResult{Failure: session.LifecycleConflict}
 	}
 	child, ok := r.process.(wireChild)
 	if !ok {
+		m.mu.Unlock()
 		return DocumentResult{Failure: session.SessionPoisoned}
 	}
 	previous, opened := r.documents[req.URI]
 	if opened && previous.languageID != languageID {
+		m.mu.Unlock()
 		return DocumentResult{Failure: session.LifecycleConflict}
 	}
 	if opened && previous.digest == digest {
+		m.mu.Unlock()
 		return DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
 	}
+	if m.workers >= m.limits.MaxChildren {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.ResourceExhausted}
+	}
+	r.protocolOwned = true
+	m.workers++
+	m.mu.Unlock()
 	version := 1
 	method := "textDocument/didOpen"
 	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "languageId": languageID, "version": version, "text": string(text)}})
@@ -295,9 +319,36 @@ func (m *Manager) PrepareDocument(_ context.Context, req DocumentRequest) Docume
 		method = "textDocument/didChange"
 		params, _ = json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "version": version}, "contentChanges": []map[string]string{{"text": string(text)}}})
 	}
-	if err := lspwire.NewWriter(child.Stdin(), m.wire).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: method, Params: params}); err != nil {
+	owner := &ownedTransport{child: child}
+	writeErr := owner.run(ctx, func() error {
+		return lspwire.NewWriter(checkedWriter{child.Stdin()}, m.wire).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: method, Params: params})
+	})
+	failure := contextFailure(ctx)
+	if writeErr != nil || failure != "" {
+		owner.retire()
+		if failure == "" {
+			failure = session.SessionPoisoned
+		}
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+	// The lease excludes lifecycle replacement; keep the exact-generation guard
+	// here as well so no late completion can mutate a replacement record.
+	r = m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		return DocumentResult{Failure: session.StaleGeneration}
+	}
+	r.protocolOwned = false
+	if failure != "" {
 		r.record.State = session.Poisoned
-		return DocumentResult{Failure: session.SessionPoisoned}
+		r.retired = owner
+		m.observe(req.SessionID, req.Generation, "document-failed", r.record.State, failure)
+		return DocumentResult{Failure: failure}
 	}
 	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
 	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
@@ -333,6 +384,9 @@ type RoundTripResult struct {
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	if failure := contextFailure(parent); failure != "" {
+		return RoundTripResult{Failure: failure}
+	}
 	m.mu.Lock()
 	r := m.sessions[req.SessionID]
 	if r == nil {
@@ -382,14 +436,19 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 	}
 	defer cancel()
 
-	writer := lspwire.NewWriter(child.Stdin(), m.wire)
+	writer := lspwire.NewWriter(checkedWriter{child.Stdin()}, m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
 	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: req.Params}
 	requestBody, _ := json.Marshal(requestMessage)
 	result.RequestMessages = 1
 	result.RequestBytes = int64(len(requestBody))
-	if err := writer.Write(requestMessage); err != nil {
-		return m.finishRoundTrip(req.SessionID, child, result, session.SessionPoisoned, true)
+	owner := &ownedTransport{child: child}
+	if err := owner.run(ctx, func() error { return writer.Write(requestMessage) }); err != nil {
+		failure := contextFailure(ctx)
+		if failure == "" {
+			failure = session.SessionPoisoned
+		}
+		return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 	}
 
 	type readResult struct {
@@ -402,7 +461,18 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 		go func() { msg, err := reader.Read(); reads <- readResult{msg, err} }()
 		select {
 		case <-ctx.Done():
-			state, _ := r.pending.Cancel(writer, key)
+			// Preserve cooperative $/cancelRequest behavior, but never let that
+			// notification become a second unbounded write after cancellation.
+			cancelCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+			var state lspwire.CancelState
+			_ = owner.run(cancelCtx, func() error {
+				var err error
+				state, err = r.pending.Cancel(writer, key)
+				return err
+			})
+			stopCancel()
+			owner.retire()
+			<-reads // Close/teardown interrupted the outstanding read; join it.
 			if state == lspwire.CancelWritten {
 				m.mu.Lock()
 				r.cancels++
@@ -413,20 +483,20 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				failure = session.RequestTimeout
 			}
-			return m.finishRoundTrip(req.SessionID, child, result, failure, true)
+			return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 		case read := <-reads:
 			if read.err != nil {
 				failure := session.SessionPoisoned
 				if errors.Is(read.err, io.EOF) {
 					failure = session.SessionCrashed
 				}
-				return m.finishRoundTrip(req.SessionID, child, result, failure, true)
+				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 			}
 			body, _ := json.Marshal(read.message)
 			result.Messages++
 			result.Bytes += int64(len(body))
 			if result.Bytes > maxBytes {
-				return m.finishRoundTrip(req.SessionID, child, result, session.ResourceExhausted, true)
+				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
 			if read.message.Kind() == lspwire.KindNotification || read.message.Kind() == lspwire.KindRequest {
 				result.Notifications = append(result.Notifications, read.message)
@@ -443,16 +513,15 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 				continue
 			}
 			result.Result, result.ServerError = append(json.RawMessage(nil), read.message.Result...), read.message.Error
-			return m.finishRoundTrip(req.SessionID, child, result, "", false)
+			return m.finishRoundTrip(req.SessionID, owner, result, "", false)
 		}
 	}
-	return m.finishRoundTrip(req.SessionID, child, result, session.ResourceExhausted, true)
+	return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 }
 
-func (m *Manager) finishRoundTrip(id string, child Child, result RoundTripResult, failure session.Failure, poison bool) RoundTripResult {
+func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result RoundTripResult, failure session.Failure, poison bool) RoundTripResult {
 	if poison {
-		_ = child.Teardown(context.Background())
-		_ = child.Close()
+		owner.retire()
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -461,6 +530,7 @@ func (m *Manager) finishRoundTrip(id string, child Child, result RoundTripResult
 		r.protocolOwned = false
 		if poison {
 			r.record.State = session.Poisoned
+			r.retired = owner
 		}
 		m.observe(id, result.Key.Generation, "response", r.record.State, failure)
 	}
@@ -480,6 +550,7 @@ func (m *Manager) finishRoundTrip(id string, child Child, result RoundTripResult
 type runtimeSession struct {
 	record         Record
 	process        Child
+	retired        *ownedTransport // joined exact-child retirement, never a replacement lookup
 	spec           managedprocess.Spec
 	pending        *lspwire.Pending
 	requests       map[lspwire.RequestKey]*Request
@@ -862,6 +933,9 @@ func (m *Manager) CancelRequest(id string, key lspwire.RequestKey) (lspwire.Canc
 	if r == nil || key.Generation != r.record.Generation {
 		return lspwire.CancelNotPending, nil
 	}
+	if r.protocolOwned {
+		return lspwire.CancelNotPending, errors.New("sessionruntime: protocol stream exclusively owned; cancel the operation context")
+	}
 	child, ok := r.process.(wireChild)
 	if !ok {
 		return lspwire.CancelNotPending, errors.New("sessionruntime: active child has no LSP wire")
@@ -999,7 +1073,7 @@ func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) 
 	m.operationIDs = append(m.operationIDs, snapshot.ID)
 	r.protocolOwned, r.lifecycleOwned = true, true
 	m.observe(id, snapshot.Generation, kind, intent.State, "")
-	go m.runLifecycle(snapshot, r.process, r.pending, r.spec)
+	go m.runLifecycle(snapshot, r.process, r.pending, r.spec, r.retired)
 	return intent
 }
 
@@ -1036,13 +1110,21 @@ func (m *Manager) reserveOperation(id string) bool {
 	return true
 }
 
-func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending *lspwire.Pending, spec managedprocess.Spec) {
+func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending *lspwire.Pending, spec managedprocess.Spec, retired *ownedTransport) {
 	shutdownComplete := true
-	if protocol, ok := child.(wireChild); ok {
-		shutdownComplete = m.gracefulShutdown(protocol, pending, operation.Generation)
+	var teardown managedprocess.TeardownObservation
+	var resources managedprocess.ResourceObservation
+	if retired != nil {
+		// There is no live protocol stream left to shut down. Reuse confirmed
+		// forced-retirement observations; this is not a shutdown acknowledgment.
+		teardown, resources = retired.teardown, retired.resources
+	} else {
+		if protocol, ok := child.(wireChild); ok {
+			shutdownComplete = m.gracefulShutdown(protocol, pending, operation.Generation)
+		}
+		teardown = child.Teardown(context.Background())
+		resources = child.Close()
 	}
-	teardown := child.Teardown(context.Background())
-	resources := child.Close()
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
 	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationPending: true}
 
@@ -1095,6 +1177,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		return
 	}
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
+	r.retired = nil
 	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
 	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")

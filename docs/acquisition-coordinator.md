@@ -103,9 +103,49 @@ Counts may be zero to intentionally block a resource. Hard configuration ceiling
 are 10,000 nodes, 100,000 attempted operations, 64 MiB captured evidence,
 100,000,000 path-work ticks, 16 MiB per response and 4,096 wire messages. Durations
 must be positive; no defaults are silently applied. Context cancellation and
-per-request deadlines are forwarded to the synchronous client, which must honor
-them. The coordinator does not start background goroutines to conceal an
-uncooperative client.
+per-request deadlines are forwarded to the synchronous client. The managed
+runtime enforces them for admitted notification/request pipe writes and response
+reads, including stalled didOpen/didChange. Cancellation retires the exact owned
+transport, joins I/O before returning, and returns REQUEST_CANCELLED or
+REQUEST_TIMEOUT with no successful document version or supply. A failed/short
+write likewise retires the stream and returns SESSION_POISONED. Successful
+unchanged documents still return their version with no new supply observation.
+The coordinator retains earlier evidence and records the failed supply attempt;
+it does not start background goroutines to conceal an uncooperative client.
+
+**Deadline scope and source-I/O policy:** these durations are cancellation
+budgets, not an unconditional elapsed-time bound on file-backed Acquire. Optional
+managed supply synchronously opens/reads a canonical workspace regular file, at
+most 1 MiB, using the existing nonblocking Unix regular-file opener. Unsupported,
+nonregular, out-of-scope, invalid UTF-8, and oversized inputs fail closed with
+DOCUMENT_SUPPLY_UNAVAILABLE. Context is checked before source access and after
+it returns; an expired read cannot proceed to supply. However os.OpenRoot,
+metadata operations and regular-file reads may stall in the filesystem/kernel;
+O_NONBLOCK and byte caps do not make regular-file I/O cancellable. This is the
+same explicit limitation as `lsp-supplied-observations.md`, not a hard coordinator
+filesystem guarantee. Do not admit automatic file-backed supply where a hard
+end-to-end deadline is required: pass a RoundTrip-only runtime facade to
+`sessionclient.New` (its method set must omit PrepareDocument), or a client with
+already-available input and a genuinely cancellable supply primitive. The
+RoundTrip-only policy produces no new supply observation; callers that require
+one must reject that mode rather than fabricate it. Interruptible filesystem
+isolation/preloading is separate work, not provided by this repair.
+
+The runtime admits one protocol owner per exact generation. Concurrent
+PrepareDocument, RoundTrip, Stop and Restart return LIFECYCLE_CONFLICT rather than
+wait behind blocked notification I/O. Cancellation releases the owner only after
+pipe interruption and worker join. Subsequent use of the retired generation
+fails; a later explicit stop/restart reuses its retained close/reap observations
+without attempting a frame on the retired stream. Restart clears document state;
+old generation calls fail STALE_GENERATION after replacement. Retirement captures
+the child object at admission and never closes a replacement looked up by ID.
+A cooperative request cancellation notification is best-effort, bounded to 5 ms
+of cleanup, followed by retirement and read join. OS scheduling, pipe close and
+process reap add cleanup latency: there is no real-time scheduling guarantee.
+Custom Starter wire children must provide close/teardown-interruptible I/O and
+honor the existing teardown context; arbitrary uninterruptible Reader/Writer
+implementations are not supported. Process/group supervision authority is
+unchanged; this repair makes no stronger containment or source-identity claim.
 
 - Every attempted document-symbol request, preparation probe, neighbor query and
   optional source-supply operation costs one global request. Cache reuse costs
