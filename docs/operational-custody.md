@@ -14,6 +14,16 @@ actual reads, including symlink escape attempts (retained as unreadable outcomes
 Native drive-qualified roots are supported; UNC roots are not. Cross-build checks
 do not constitute Windows runtime qualification.
 
+The byte bundle accepts only opened regular files. On Unix, the scoped open uses
+`O_NONBLOCK` before handle-based type checking, so even a concurrent replacement
+with a FIFO cannot block the open. Directories and FIFOs retain unreadable failure
+receipts; contained relative symlinks to regular files still work, and escaping
+symlinks still fail. Windows uses `os.Root`'s reserved-device/namespace restrictions
+and checks the opened type (no filesystem FIFO nodes). Other unsupported runtime
+platforms fail closed for acquisition. This does not promise cancellation of slow
+regular-file I/O, remote mounts, or regular-looking pseudo-files; no abandoned
+read goroutines are introduced. Already observed failure evidence remains retained.
+
 ```json
 {
   "root": "/absolute/output-directory",
@@ -42,7 +52,12 @@ Optional operational fields:
 - `revision`: optional `{system,revision}` annotation, not authority.
 
 Unknown fields reject, including grants, context, policy overrides and trust config
-paths. `operational` is exclusive with `source`, even an explicitly empty source.
+paths. In operational requests, member names are exact and case-sensitive,
+including nested input fields; legacy-only supplied-source case decoding remains
+unchanged.
+Recursive duplicate JSON members reject before direct/CLI decoding and before
+MCP converts raw wire arguments to maps; escaped duplicate names also reject.
+`operational` is exclusive with `source`, even an explicitly empty source.
 An empty operational input list rejects; all listed reads are required when
 `require_authenticated` is true. All four classes are recorded roles in the byte
 bundle; their content is not parsed or executed.
@@ -169,6 +184,17 @@ including completed stage results and available original read evidence. A
 cancellation after a read retains already acquired receipts even before identity
 construction. Such early failure diagnostics are explicitly pre-identity, not a
 claim that a full operational evidence schema has passed.
+
+Both operational and active legacy execution now sync the pinned output directory
+after installing the artifact, before issuing a `CHECKED` exact-byte receipt, and
+again after installing the receipt. File sync alone never supplies that claim.
+Supported-platform directory-sync errors fail execution; Windows uses the existing
+`UNAVAILABLE_ON_PLATFORM` policy. The receipt records completed artifact-parent
+sync, not a guarantee against every power-loss scenario. No schema or enum meaning
+changes: this repairs the producer to meet the existing v1 durability contract.
+Historical immutable receipts are neither rewritten nor reauthenticated; legacy
+artifact/identity bytes remain unchanged. Supported-platform successful receipt
+bytes remain unchanged; Windows now truthfully reports unavailable durability.
 
 Publication is two existing immutable writes, not a new atomic pair transaction.
 If the artifact write succeeds but the receipt write fails, execution fails and

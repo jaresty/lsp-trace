@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -80,7 +81,7 @@ func (r *InputRecorder) ReadInput(name string, class InputClass) ([]byte, string
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	content, readErr := r.root.ReadFile(name)
+	content, readErr := readRegularInput(r.root, name)
 	acquisition := Acquisition{Status: Readable, Provenance: Provenance{Mechanism: "bounded-input/" + string(class), Locator: name}}
 	if readErr != nil {
 		content = nil
@@ -100,6 +101,26 @@ func (r *InputRecorder) ReadInput(name string, class InputClass) ([]byte, string
 	id := fmt.Sprintf("sha256:%x", sha256.Sum256(canonical))
 	r.inputs[id] = InputReceipt{ID: id, Class: class, Receipt: receipt, Content: canonicalContent, CanonicalReceipt: canonical}
 	return content, id, readErr
+}
+
+// readRegularInput checks the handle, not a pre-open path observation. On Unix
+// openInput is nonblocking even if a regular path is raced into a FIFO. Symlink
+// containment remains os.Root-owned. This is not cancellation of slow regular
+// filesystem IO (including remote or pseudo filesystems).
+func readRegularInput(root *os.Root, name string) ([]byte, error) {
+	file, err := openInput(root, name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("input must be a regular file")
+	}
+	return io.ReadAll(file)
 }
 
 // BindContribution records actual use by a retained contribution. Callers must

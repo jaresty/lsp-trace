@@ -15,7 +15,6 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/schema"
 	"lsp-trace/internal/source"
-	"lsp-trace/internal/verification"
 )
 
 type OperationalFile struct {
@@ -69,7 +68,7 @@ func NewProductionExecutorWithTrust(trust *custodyevidence.HostTrustStore) opera
 	return ProductionExecutor{trust: trust}
 }
 
-func operationalHandlers(input ProductionInput, root *publication.Root, trust *custodyevidence.HostTrustStore, e *custodyevidence.Evidence) map[operation.CustodyStage]operation.CustodyStageHandler {
+func operationalHandlers(input ProductionInput, root *publication.Root, trust *custodyevidence.HostTrustStore, e *custodyevidence.Evidence, syncDirectory func() (bool, error)) map[operation.CustodyStage]operation.CustodyStageHandler {
 	h := map[operation.CustodyStage]operation.CustodyStageHandler{}
 	op := input.Operational
 	for _, stage := range []operation.CustodyStage{operation.StageDiscovery, operation.StageReceipt, operation.StageManifest, operation.StageSnapshot, operation.StageAdmission, operation.StagePublication} {
@@ -170,12 +169,15 @@ func operationalHandlers(input ProductionInput, root *publication.Root, trust *c
 				if completion.Err() != nil {
 					return operation.StageResult{}, completion.Err()
 				}
-				receipt, err := verification.ReceiptBytes(encoded, verification.DirectoryDurabilityChecked)
+				receipt, err := receiptForPublishedArtifact(encoded, syncDirectory)
 				if err != nil {
 					return operation.StageResult{}, err
 				}
 				if result := publication.NewPublisher().Publish(publication.Request{Root: root, Selector: "receipt.json", Bytes: receipt, ArtifactSchemaID: "lsp-trace.publication-receipt.v1"}); result.Err() != nil {
 					return operation.StageResult{}, result.Err()
+				}
+				if _, err := syncDirectory(); err != nil {
+					return operation.StageResult{}, err
 				}
 				return stageJSON(completion.Completion)
 			}

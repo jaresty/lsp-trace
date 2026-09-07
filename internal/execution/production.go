@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"lsp-trace/internal/custodyevidence"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/source"
-	"lsp-trace/internal/verification"
+	"lsp-trace/internal/strictjson"
 )
 
 const ExecutionSchemaVersion = "lsp-trace.execution.v1"
@@ -54,11 +56,11 @@ func (executor ProductionExecutor) Execute(ctx context.Context, request operatio
 	}
 	defer root.Close()
 
-	handlers := productionHandlers(input, root)
+	handlers := productionHandlers(input, root, root.SyncDirectory)
 	var evidence *custodyevidence.Evidence
 	if input.Operational != nil {
 		evidence = &custodyevidence.Evidence{}
-		handlers = operationalHandlers(input, root, executor.trust, evidence)
+		handlers = operationalHandlers(input, root, executor.trust, evidence, root.SyncDirectory)
 	}
 	custody, err := operation.NewCustodyOperation(handlers)
 	if err != nil {
@@ -93,6 +95,9 @@ func (executor ProductionExecutor) Execute(ctx context.Context, request operatio
 }
 
 func decodeProductionInput(raw []byte, out *ProductionInput) error {
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		return fmt.Errorf("invalid production execution request: %w", err)
+	}
 	var members map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &members); err != nil {
 		return fmt.Errorf("invalid production execution request: %w", err)
@@ -102,8 +107,19 @@ func decodeProductionInput(raw []byte, out *ProductionInput) error {
 			return errors.New("invalid production execution request wrapper")
 		}
 		raw = wrapped
+		members = nil
 		if err := json.Unmarshal(raw, &members); err != nil {
 			return err
+		}
+	}
+	// Keep legacy supplied-source decoding unchanged; any spelling of the
+	// operational selector enters the exact-name contract before struct decode.
+	for name := range members {
+		if strings.EqualFold(name, "operational") {
+			if err := checkInputMembers(raw, reflect.TypeOf(ProductionInput{})); err != nil {
+				return fmt.Errorf("invalid production execution request: %w", err)
+			}
+			break
 		}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -129,7 +145,7 @@ func decodeProductionInput(raw []byte, out *ProductionInput) error {
 	return nil
 }
 
-func productionHandlers(input ProductionInput, root *publication.Root) map[operation.CustodyStage]operation.CustodyStageHandler {
+func productionHandlers(input ProductionInput, root *publication.Root, syncDirectory func() (bool, error)) map[operation.CustodyStage]operation.CustodyStageHandler {
 	var manifest, receipt []byte
 	fail := operation.CustodyStage(input.FailAt)
 	h := make(map[operation.CustodyStage]operation.CustodyStageHandler, 6)
@@ -166,12 +182,15 @@ func productionHandlers(input ProductionInput, root *publication.Root) map[opera
 					return operation.StageResult{}, completion.Err()
 				}
 				var err error
-				receipt, err = verification.ReceiptBytes(manifest, verification.DirectoryDurabilityChecked)
+				receipt, err = receiptForPublishedArtifact(manifest, syncDirectory)
 				if err != nil {
 					return operation.StageResult{}, err
 				}
 				if published := publication.NewPublisher().Publish(publication.Request{Root: root, Selector: "receipt.json", Bytes: receipt, ArtifactSchemaID: "lsp-trace.publication-receipt.v1"}); published.Err() != nil {
 					return operation.StageResult{}, published.Err()
+				}
+				if _, err := syncDirectory(); err != nil {
+					return operation.StageResult{}, err
 				}
 				return stageJSON(completion.Completion)
 			}

@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/strictjson"
 )
 
 const (
@@ -132,6 +133,13 @@ func (s *Server) ServeContext(parent context.Context, stdin io.Reader, stdout io
 	encoder.SetEscapeHTML(false)
 	for scanner.Scan() {
 		var req request
+		// Check the original wire value before ID or arguments become maps.
+		if err := strictjson.RejectDuplicates(scanner.Bytes()); err != nil {
+			if err := encoder.Encode(response{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "Parse error: " + err.Error()}}); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
 			if err := encoder.Encode(response{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "Parse error"}}); err != nil {
 				return err
@@ -190,6 +198,11 @@ func (s *Server) handleContext(ctx context.Context, req request) response {
 }
 
 func (s *Server) callContext(ctx context.Context, base response, raw json.RawMessage) response {
+	// Also cover internal callers entering with raw params rather than Serve.
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid params: " + err.Error()}
+		return base
+	}
 	var params callParams
 	if err := decodeClosed(raw, &params, "name", "arguments"); err != nil || params.Name == "" || params.Arguments == nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
