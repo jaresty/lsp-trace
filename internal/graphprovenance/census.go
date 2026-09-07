@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -42,9 +43,25 @@ func Census(raw []byte) ([]Binding, error) {
 		return nil, errors.New("provenance requires managed at slice")
 	}
 	var nodes struct {
-		Nodes []graph.Node `json:"nodes"`
+		Nodes      []graph.Node         `json:"nodes"`
+		Invocation graph.Invocation     `json:"invocation"`
+		Seeds      []graph.SeedResult   `json:"seeds"`
+		Slice      *graph.SliceEvidence `json:"slice"`
 	}
-	_ = json.Unmarshal(raw, &nodes)
+	if err := json.Unmarshal(raw, &nodes); err != nil {
+		return nil, err
+	}
+	if len(nodes.Invocation.Seeds) != 1 || len(nodes.Seeds) != 1 {
+		return nil, errors.New("provenance requires exactly one invocation seed and result")
+	}
+	seed, result := nodes.Invocation.Seeds[0], nodes.Seeds[0]
+	target := nodes.Invocation.Target
+	if seed.Label == "" || seed.Label != result.Label || result.Requested != target || seed.ResolvedURI != target.URI || nodes.Slice.SourceURI != target.URI || seed.At != fmt.Sprintf("%s:%d:%d", target.URI, target.Line, target.Column) || nodes.Invocation.Expansion.TopmostSiblings || nodes.Invocation.Expansion.DispatchFamily {
+		return nil, errors.New("provenance single-at target/source join mismatch")
+	}
+	if !slices.Equal(result.PreparedTargetIDs, nodes.Slice.StartingNodeIDs) || (len(nodes.Slice.Layers) > 0 && !slices.Equal(nodes.Slice.Layers[0].NodeIDs, nodes.Slice.StartingNodeIDs)) || (len(nodes.Slice.StartingNodeIDs) > 0 && len(nodes.Slice.Layers) == 0) {
+		return nil, errors.New("provenance single-at prepared/layer target join mismatch")
+	}
 	nodeURI := map[string]string{}
 	for _, n := range nodes.Nodes {
 		nodeURI[n.ID] = n.URI
@@ -79,6 +96,36 @@ func Census(raw []byte) ([]Binding, error) {
 				id, _ := v["node_id"].(string)
 				add(pointer, nodeURI[id])
 			}
+			// Native graph-v3 forms audited against InvocationSeed, Target,
+			// SeedMembership, ReplayArtifact, PortableLocator and LocatorSource.
+			// Relation membership endpoint IDs are not node references.
+			if pointer == "/invocation/target" || strings.HasSuffix(pointer, "/requested_position") {
+				uri, _ := v["uri"].(string)
+				add(pointer, uri)
+			}
+			if at, ok := v["at"].(string); ok && at != "" {
+				uri, _ := v["resolved_uri"].(string)
+				add(pointer+"/at", uri)
+			}
+			if _, ok := v["seed_at"]; ok {
+				add(pointer+"/seed_at", target.URI)
+			}
+			if kind, _ := v["evidence_kind"].(string); kind == "PREPARED_TARGET" || kind == "REACHED_NODE" {
+				id, _ := v["endpoint_id"].(string)
+				add(pointer+"/endpoint_id", nodeURI[id])
+			}
+			if _, ok := v["locator"]; ok {
+				if id, ok := v["node_id"].(string); ok {
+					add(pointer+"/locator", nodeURI[id])
+				} else if v["kind"] == "SOURCE_ARTIFACT" {
+					add(pointer+"/locator", seed.ResolvedURI)
+				}
+			}
+			if _, ok := v["selection_range"]; ok && v["uri"] == nil {
+				if id, ok := v["node_id"].(string); ok {
+					add(pointer+"/selection_range", nodeURI[id])
+				}
+			}
 			keys := make([]string, 0, len(v))
 			for k := range v {
 				keys = append(keys, k)
@@ -100,7 +147,7 @@ func Census(raw []byte) ([]Binding, error) {
 						add(p, nodeURI[text])
 					}
 				}
-				if ids, ok := v[k].([]any); ok && (strings.HasSuffix(k, "_node_ids") || k == "prepared_target_ids" || k == "targets") {
+				if ids, ok := v[k].([]any); ok && (k == "node_ids" || strings.HasSuffix(k, "_node_ids") || k == "prepared_target_ids" || k == "targets") {
 					for i, id := range ids {
 						text, _ := id.(string)
 						add(fmt.Sprintf("%s/%d", p, i), nodeURI[text])

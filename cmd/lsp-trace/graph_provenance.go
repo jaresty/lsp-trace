@@ -93,7 +93,7 @@ func runGraphProvenanceSlice(ctx context.Context, c sliceConfig, stdout, stderr 
 		data = pretty.Bytes()
 	}
 	if c.output != "" {
-		err = publishBundle(c.output, data)
+		err = publishGraphProvenance(c.output, data)
 	} else {
 		_, err = stdout.Write(data)
 	}

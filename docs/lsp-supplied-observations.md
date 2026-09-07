@@ -72,7 +72,15 @@ node-reference arrays, slice records and redundant native node locators. Opaque
 LSP `data` is not interpreted as source references. Diagnostics without a known
 node attribution are explicitly `NON_SOURCE` with no receipt keys; message text
 is never parsed for paths. This version accepts managed single-at CALLS slices,
-not sibling/dispatch discovery or relation compositions.
+not sibling/dispatch discovery or relation compositions. Exactly one invocation
+seed and matching result are required: label, requested target, resolved URI,
+zero-based `at`, slice source, prepared targets and depth-zero layer must join.
+The census explicitly includes literal layer `node_ids`, node-valued membership
+endpoints, seed positions, source replay locators and portable locator ranges;
+relation-valued membership endpoints are not mistaken for node references.
+Previously emitted incomplete v1 binding lists fail corrected admission; regenerate
+the envelope rather than weakening the census. Embedded legacy graph-v3 bytes and
+omitted-mode admission are unchanged.
 
 `LSP_SUPPLIED` means the actual successful didOpen/full-text didChange **write**
 supplied the retained text. Runtime `DocumentRequest.CaptureSupply` returns owned
@@ -126,6 +134,21 @@ bytes. Object input also validates, but historical MCP map transport can reencod
 field order. Use `output_selector` under the existing host `--publication-root`
 for immutable MCP publication. CLI `--output` uses its existing generation
 selector publication; these publication layouts are intentionally distinct.
+
+For a CLI selector, use explicit family admission:
+
+```sh
+lsp-trace verify --family graph-provenance --version v1 selected.json
+```
+
+Historical `verify PATH` remains graph-v3-only. No family is inferred from JSON.
+The provenance publisher performs `graphprovenance.ValidateFor` admission before
+creating a generation, then uses the unchanged exact-byte receipt and immutable
+no-replace selector installation. Wrong-family, unsupported-version and malformed
+inputs reject; an existing selector is never overwritten. Verification first
+checks selected-generation custody and its exact-byte receipt, then admits the
+explicit family. Neither step authenticates analyzed source. This is an additive
+command admission route, not a revision of historical graph-v3 verifier semantics.
 
 `graphprovenance.ValidateFor` performs schema validation, legacy graph-v3 semantic
 validation, a graph-derived census, exact graph digest and receipt hash/content

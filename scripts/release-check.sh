@@ -276,7 +276,7 @@ else
   printf 'FAIL R-VALIDATE-V2: retained qualification graph failed release validator\n'
   exit 1
 fi
-if go test ./internal/graphprovenance ./sliceops -run 'TestGraph|TestManagedGraphProvenanceConsumer' -count=1; then
+if go test ./internal/graphprovenance ./sliceops ./cmd/lsp-trace -run 'TestGraph|TestManagedGraphProvenanceConsumer|TestIndependent|TestCensusExactNativePointers|TestSingleAtShapeCaptureAndOffline' -count=1; then
   printf 'PASS R-GRAPH-PROVENANCE: graph-derived census, wire supply, mutation, scope, budgets and offline consistency\n'
 else
   printf 'FAIL R-GRAPH-PROVENANCE: bounded provenance contract failed\n'

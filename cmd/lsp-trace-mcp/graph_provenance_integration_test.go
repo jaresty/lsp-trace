@@ -14,6 +14,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/verification"
 )
 
 // Explicit installed-server qualification, separate from hermetic fake-wire tests.
@@ -60,7 +61,50 @@ func TestGraphProvenanceRealGoplsCLIAndMCP(t *testing.T) {
 		t.Fatalf("fixture build: %v %s", err, output)
 	}
 	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(root, "f0.go"))}).String()
-	cliRaw := runCLIProcess(t, cli, "slice", "--workspace", root, "--server", server, "--at", "f0.go:2:6", "--graph-provenance", "--down-depth", "5", "--up-depth", "1", "--max-nodes", "100", "--timeout", "60s", "--request-timeout", "10s", "--language-id", "go")
+	sliceArgs := []string{"slice", "--workspace", root, "--server", server, "--at", "f0.go:2:6", "--graph-provenance", "--down-depth", "5", "--up-depth", "1", "--max-nodes", "100", "--timeout", "60s", "--request-timeout", "10s", "--language-id", "go"}
+	cliRaw := runCLIProcess(t, cli, sliceArgs...)
+	selectedPath := filepath.Join(t.TempDir(), "selected.json")
+	outputArgs := append(append([]string{}, sliceArgs...), "--output", selectedPath)
+	if output := runCLIProcess(t, cli, outputArgs...); len(output) != 0 {
+		t.Fatal("output mode wrote stdout artifact")
+	}
+	selectorRaw, err := os.ReadFile(selectedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selector, err := verification.DecodeSelector(selectorRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	generationPath := filepath.Join(filepath.Dir(selectedPath), selector.Generation)
+	selectedRaw, err := os.ReadFile(filepath.Join(generationPath, "artifact.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	selectedReceipt, err := os.ReadFile(filepath.Join(generationPath, "receipt.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := verification.VerifyReceipt(selectedRaw, selectedReceipt); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(selectedRaw, cliRaw) {
+		t.Fatal("ASSERT_OUTPUT_EXACT_BYTES")
+	}
+	if _, err := graphprovenance.ValidateFor(selectedRaw, graphprovenance.Family, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	if output, err := exec.Command(cli, outputArgs...).CombinedOutput(); err == nil {
+		t.Fatalf("ASSERT_OUTPUT_NO_REPLACE: %s", output)
+	}
+	afterSelector, err := os.ReadFile(selectedPath)
+	if err != nil || !bytes.Equal(afterSelector, selectorRaw) {
+		t.Fatal("ASSERT_OUTPUT_SELECTOR_UNCHANGED")
+	}
+	entries, err := os.ReadDir(filepath.Dir(selectedPath))
+	if err != nil || len(entries) != 2 {
+		t.Fatal("ASSERT_FAILED_OUTPUT_CLEANUP")
+	}
 	var cliEvidence graphprovenance.Evidence
 	if err := json.Unmarshal(cliRaw, &cliEvidence); err != nil {
 		t.Fatal(err)
@@ -110,9 +154,26 @@ func TestGraphProvenanceRealGoplsCLIAndMCP(t *testing.T) {
 	if !bytes.Equal(e.GraphBytes, legacy) || !bytes.Equal(cached.GraphBytes, legacy) {
 		t.Fatal("ASSERT_MANAGED_OMITTED_EXACT_BYTES")
 	}
+	// Independent fixed six-layer oracle: not derived from the census predicate.
+	bindings := map[string]bool{}
+	for _, b := range e.Bindings {
+		bindings[b.Pointer] = true
+	}
+	for i := 0; i < 6; i++ {
+		pointer := fmt.Sprintf("/slice/layers/%d/node_ids/0", i)
+		if !bindings[pointer] {
+			t.Fatalf("ASSERT_REAL_LAYER_POINTER: %s", pointer)
+		}
+	}
 	// Remove the entire source fixture before independent CLI and MCP validation.
 	if err := os.RemoveAll(root); err != nil {
 		t.Fatal(err)
+	}
+	if output := runCLIProcess(t, cli, "verify", "--family", "graph-provenance", "--version", "v1", selectedPath); !strings.Contains(string(output), "verified integrity and custody") {
+		t.Fatal("ASSERT_OFFLINE_SELECTED_VERIFY")
+	}
+	if _, err := exec.Command(cli, "verify", selectedPath).CombinedOutput(); err == nil {
+		t.Fatal("ASSERT_HISTORICAL_VERIFY_REMAINS_GRAPH_ONLY")
 	}
 	retained := filepath.Join(t.TempDir(), "evidence.json")
 	if err := os.WriteFile(retained, mcpRaw, 0600); err != nil {
@@ -151,7 +212,10 @@ func TestGraphProvenanceRealGoplsCLIAndMCP(t *testing.T) {
 		if err := os.MkdirAll(retain, 0700); err != nil {
 			t.Fatal(err)
 		}
-		for name, data := range map[string][]byte{"cli.json": cliRaw, "mcp.json": mcpRaw, "legacy-graph.json": legacy, "schema.json": schemaRaw, "gopls-version.txt": version} {
+		if err := os.MkdirAll(filepath.Join(retain, selector.Generation), 0700); err != nil {
+			t.Fatal(err)
+		}
+		for name, data := range map[string][]byte{"selected.json": selectorRaw, filepath.Join(selector.Generation, "artifact.json"): selectedRaw, filepath.Join(selector.Generation, "receipt.json"): selectedReceipt, "cli.json": cliRaw, "mcp.json": mcpRaw, "legacy-graph.json": legacy, "schema.json": schemaRaw, "gopls-version.txt": version} {
 			if err := os.WriteFile(filepath.Join(retain, name), data, 0600); err != nil {
 				t.Fatal(err)
 			}

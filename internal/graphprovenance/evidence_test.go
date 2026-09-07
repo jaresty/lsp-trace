@@ -52,7 +52,7 @@ func fixture(t *testing.T, extra ...string) (string, []byte, string) {
 	}
 	r.Invocation.Target = graph.Target{URI: uris[0]}
 	r.Invocation.Seeds = []graph.InvocationSeed{{Label: "start", At: uris[0] + ":0:0", ResolvedURI: uris[0]}}
-	r.Seeds = []graph.SeedResult{{Label: "start", Requested: r.Invocation.Target, PreparedTargetIDs: []string{ids[0]}, ReachedNodeIDs: ids, ReachedEdges: r.Edges}}
+	r.Seeds = []graph.SeedResult{{Label: "start", Requested: r.Invocation.Target, PreparedTargetIDs: []string{ids[0]}, ReachedNodeIDs: append([]string(nil), ids...), ReachedEdges: r.Edges}}
 	relations := []string{}
 	for _, e := range r.Edges {
 		relations = append(relations, e.RelationID)

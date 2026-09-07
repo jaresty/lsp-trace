@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/verification"
 )
 
@@ -253,7 +255,22 @@ func syncRoot(root *os.Root) error {
 }
 
 func publishBundle(path string, data []byte) error {
-	if err := graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {
+	return publishValidatedBundle(path, data, graph.ValidateSemanticBundle)
+}
+
+func admitGraphProvenance(data []byte) error {
+	_, err := graphprovenance.ValidateFor(data, graphprovenance.Family, "v1")
+	return err
+}
+
+func publishGraphProvenance(path string, data []byte) error {
+	return publishValidatedBundle(path, data, admitGraphProvenance)
+}
+
+// Admission is selected by the explicit route, never guessed from submitted JSON.
+// The immutable generation and exact-byte receipt format remains unchanged.
+func publishValidatedBundle(path string, data []byte, admit func([]byte) error) error {
+	if err := admit(bytes.TrimSpace(data)); err != nil {
 		return fmt.Errorf("staged semantic validation: %w", err)
 	}
 	receipt, err := receiptBytes(data)
@@ -414,16 +431,29 @@ func loadCustodiedGeneration(path string) ([]byte, string, error) {
 }
 
 func runVerify(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace verify PATH")
+	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	family := flags.String("family", "graph", "explicit evidence family")
+	version := flags.String("version", "", "evidence version")
+	if flags.Parse(args) != nil || flags.NArg() != 1 {
+		fmt.Fprintln(stderr, "usage: lsp-trace verify [--family graph-provenance --version v1] PATH")
 		return 1
 	}
-	data, stage, err := loadCustodiedGeneration(args[0])
+	admit := graph.ValidateSemanticBundle
+	switch {
+	case *family == "graph" && (*version == "" || *version == "v3"):
+	case *family == graphprovenance.Family && *version == "v1":
+		admit = admitGraphProvenance
+	default:
+		fmt.Fprintln(stderr, "unsupported verification family/version")
+		return 1
+	}
+	data, stage, err := loadCustodiedGeneration(flags.Arg(0))
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", stage, err)
 		return 1
 	}
-	if err = graph.ValidateSemanticBundle(bytes.TrimSpace(data)); err != nil {
+	if err = admit(bytes.TrimSpace(data)); err != nil {
 		fmt.Fprintf(stderr, "verify semantic receipt: %v\n", err)
 		return 1
 	}
