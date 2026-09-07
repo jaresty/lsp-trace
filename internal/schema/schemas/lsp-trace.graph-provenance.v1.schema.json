@@ -17,7 +17,7 @@
   "supply_status":{"enum":["OBSERVED_NOTIFICATION","NO_NOTIFICATION_OBSERVATION"]},
   "supply":{"$ref":"#/$defs/receipt"},
   "captures":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/receipt"}},
-  "bindings":{"type":"array","maxItems":200000,"items":{"type":"object","additionalProperties":false,"required":["pointer","uri","attribution","receipt_ids"],"properties":{
+  "bindings":{"type":"array","maxItems":50000,"items":{"type":"object","additionalProperties":false,"required":["pointer","uri","attribution","receipt_ids"],"properties":{
    "pointer":{"type":"string","pattern":"^/"},"uri":{"type":"string"},"attribution":{"enum":["SOURCE","NON_SOURCE"]},"receipt_ids":{"type":"array","maxItems":2,"uniqueItems":true,"items":{"$ref":"#/$defs/digest"}}
   }}}
  },

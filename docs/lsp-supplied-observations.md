@@ -96,7 +96,10 @@ exhaustion remain explicit outcomes without fabricated content or silent omissio
 Regular-file I/O may still be slow or uncancellable. Root replacement and files
 changing during a read do not become source-snapshot guarantees.
 
-Fixed acquisition bounds: 8 MiB embedded graph; 1 MiB per source read, 4 MiB total
+Fixed acquisition bounds: 8 MiB embedded graph; at most 50,000 binding rows and
+8 MiB of charged census metadata (pointer and URI lengths plus 128 bytes per row).
+Census exhaustion rejects the operation before source captures, never publishing
+an incomplete binding list. Source acquisition permits 1 MiB per read, 4 MiB total
 post-traversal bytes/read budget, and 64 attempted source reads. Successful reads
 charge actual bytes; failed reads conservatively charge the attempted bound.
 Remaining graph references retain budget-failure receipts. There is no claim to

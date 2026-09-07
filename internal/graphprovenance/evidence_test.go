@@ -190,6 +190,21 @@ func TestGraphProvenanceAdversarialOfflineConsistency(t *testing.T) {
 		}
 	}
 }
+func TestGraphCensusRejectsURIAmplificationWithoutOmission(t *testing.T) {
+	extra := []string{}
+	for i := 0; i < 100; i++ {
+		extra = append(extra, "file:///outside/"+strings.Repeat("x", 16000)+fmt.Sprintf("/%d.go", i))
+	}
+	root, raw, seed := fixture(t, extra...)
+	if len(raw) > MaxGraphBytes {
+		t.Fatal("fixture exceeds graph budget instead of census budget")
+	}
+	out, err := Capture(context.Background(), raw, root, seed, "s", 1, nil)
+	if err == nil || !strings.Contains(err.Error(), "census budget") || out != nil {
+		t.Fatalf("ASSERT_CENSUS_AMPLIFICATION_REJECTED: %v", err)
+	}
+}
+
 func TestGraphCaptureFileBudgetIsExplicit(t *testing.T) {
 	extra := []string{}
 	for i := 0; i < 64; i++ {

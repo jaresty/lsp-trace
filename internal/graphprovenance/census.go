@@ -12,6 +12,9 @@ import (
 	"lsp-trace/internal/strictjson"
 )
 
+const MaxCensusBytes = 8 << 20
+const MaxBindings = 50000
+
 // Census derives every binding pointer from the validated graph, never from an
 // envelope's submitted IDs. Pointers address the decoded exact graph bytes.
 // Node references in redundant native seed/locator structures are also covered.
@@ -47,7 +50,17 @@ func Census(raw []byte) ([]Binding, error) {
 		nodeURI[n.ID] = n.URI
 	}
 	out := []Binding{}
+	var censusErr error
+	censusBytes := 0
 	add := func(pointer, uri string) {
+		if censusErr != nil {
+			return
+		}
+		censusBytes += len(pointer) + len(uri) + 128
+		if len(out) >= MaxBindings || censusBytes > MaxCensusBytes {
+			censusErr = errors.New("graph source census budget exceeded")
+			return
+		}
 		attribution := "SOURCE"
 		if uri == "" {
 			attribution = "NON_SOURCE"
@@ -57,6 +70,9 @@ func Census(raw []byte) ([]Binding, error) {
 	escape := func(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1") }
 	var walk func(any, string)
 	walk = func(value any, pointer string) {
+		if censusErr != nil {
+			return
+		}
 		switch v := value.(type) {
 		case map[string]any:
 			if strings.HasPrefix(pointer, "/diagnostics/") && strings.Count(pointer, "/") == 2 {
@@ -109,6 +125,9 @@ func Census(raw []byte) ([]Binding, error) {
 		}
 	}
 	walk(doc, "")
+	if censusErr != nil {
+		return nil, censusErr
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Pointer < out[j].Pointer })
 	for i := 1; i < len(out); i++ {
 		if out[i].Pointer == out[i-1].Pointer {
