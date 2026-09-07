@@ -1,0 +1,200 @@
+# Preparatory multi-target acquisition coordinator
+
+`internal/acquisition` is the next bounded FR20/AC16 preparatory slice after
+`internal/retainedpath`. **It is not full FR20, public v2 support, qualification,
+Program B admission, or deployment approval.** Legacy incoming/slice wrappers,
+registrations, schemas, IDs and output are unchanged. Public CLI/MCP integration,
+graph-provenance v2, publication/export preservation and end-to-end qualification
+belong to the subsequent work, not this commit.
+
+## API and ownership
+
+```go
+client := sessionclient.New(runtime) // internal/acquisition/sessionclient
+result, err := acquisition.Acquire(ctx, client, acquisition.Request{
+    Mode: acquisition.Slice, // or acquisition.Incoming
+    Context: acquisition.AcquisitionContext{
+        ID: contextID, SessionID: sessionID, Generation: generation,
+        PositionEncoding: "utf-16",
+    },
+    Root: root, // ID must be "root"
+    RequiredTargets: required, // ordered; unique IDs; at most 63
+    Limits: limits,
+})
+```
+
+Both upcoming managed surfaces must call this coordinator, not multiply legacy
+`DiscoverPrepared`/`IncomingPrepared` traversals. The core depends on native
+`graph`, LSP types and `retainedpath`, not either operation wrapper.
+`sessionclient` depends on the core and `sessionruntime`, never incomingops or
+sliceops. An external-package compilation assertion checks that the existing
+`incomingops.SessionClient` also satisfies the typed interface.
+
+The client contract has DocumentSymbols, PrepareCallHierarchy, IncomingCalls and
+OutgoingCalls. `NewWireClient` accepts a neutral RoundTrip callback; each
+`WireRequest` includes the declared context and effective wire byte/message
+limits. It validates bounded JSON shape (including coordinate presence), rejects
+flat SymbolInformation rather than erasing its URI/pretending it supplies a
+selection range, and accepts successful protocol null as empty. Direct typed
+clients must enforce their own transport limits and structural decoding.
+`WithDocumentSupply` optionally adds a source-supply function. The managed adapter
+forwards exact generation, deadline and wire limits and retains runtime errors;
+it does not resolve session aliases or authenticate the declared context.
+
+`Request` is an internal Go contract, not a registered public JSON schema.
+Positions are zero-based in the declared session encoding. Symbol and complete
+line/character selectors are exclusive. URIs must be canonical absolute,
+nonopaque, query/fragment-free URIs (clean absolute path, lowercase scheme/host,
+canonical escaping). IDs are caller labels, not symbol identity. Root ID `root`
+is reserved. All targets have independent down/up depth in [0,64]. In INCOMING,
+only up depth governs acquisition. Zero depth yields an explicit frontier.
+
+## Deterministic phases and identity
+
+The retained policy is
+`ROOTS_FIRST_ORDERED_RESOLUTION_SORTED_ADMISSION_ROUND_ROBIN_BFS_V1`:
+
+1. Resolve root, then required locators in caller order, before any expansion.
+   Exact locator aliases (including language) reuse resolution and its request
+   references while retaining every requested row. Different locators may supply
+   the same URI at different versions; their observations are not URI-coalesced.
+2. Symbol resolution iteratively scans the returned hierarchical forest. Zero
+   matches is MISSING; multiple names are AMBIGUOUS. Validate range and selection
+   containment. Probe from selection start, on that line, within the symbol's
+   half-open range (a zero-width range admits its one point), at most 65 positions.
+   **All preparations, including positional requests, share 65 global attempts.**
+   If candidate positions remain at that ceiling, resolution is BUDGET_BLOCKED,
+   not MISSING.
+   The known identifier-not-found error may advance a symbol probe, but remains a
+   charged failed request. Other errors remain failed/unsupported/blocked.
+3. Prepared items must have canonical matching source URI, valid ranges/kind and
+   contain the candidate position. A named item must also match the returned
+   symbol's name, kind and selection, with its range enclosed by the symbol.
+   There is no spelling heuristic or reprepare. Multiple distinct valid prepared
+   identities are AMBIGUOUS even if the node budget could admit only one. Exact
+   duplicate identities are deduplicated. Namesakes in different URIs stay
+   distinct. Native graph identity fields and prepared opaque data are retained.
+4. Admit the resolved root first; admit remaining resolved identities in lexical
+   native-ID order (stable ties). Admission is distinct from successful
+   resolution. All admitted seeds take precedence over neighbors and consume one
+   **global unique-node** budget, not one budget per target.
+5. Rotate target queues, serving one BFS node per target per round, ordering each
+   queue by depth then native ID. Sort neighbor admission by native ID. Cache
+   each identity+direction query, including failures. Replay creates target-local
+   depth/membership attribution, not another request, observation or support.
+6. SLICE completes the outgoing phase for all targets, then starts each target's
+   incoming BFS at its actual down-depth frontier and successfully empty
+   outgoing leaves. Failed, malformed-only, budget-blocked, and cyclic nonempty
+   nodes are not fabricated leaves. INCOMING starts only at each admitted target.
+   Depth and visited sets are target-local; a frontier for one target can expand
+   for another. No traversal stops early merely because a connection was found.
+7. Admit both endpoints before retaining an edge. Preserve caller→callee
+   orientation and native group IDs; invalid neighbor/item/site data is partial
+   response evidence, not an edge. Duplicate response rows union native sites.
+
+Determinism means identical ordered targets, limits, client outcomes and context
+observations yield identical allocation and results. Reordering caller targets
+may legitimately change request-budget allocation. There is no timing-independent
+claim about live providers.
+
+## Resource and evidence contract
+
+Counts may be zero to intentionally block a resource. Hard configuration ceilings
+are 10,000 nodes, 100,000 attempted operations, 64 MiB captured evidence,
+100,000,000 path-work ticks, 16 MiB per response and 4,096 wire messages. Durations
+must be positive; no defaults are silently applied. Context cancellation and
+per-request deadlines are forwarded to the synchronous client, which must honor
+them. The coordinator does not start background goroutines to conceal an
+uncooperative client.
+
+- Every attempted document-symbol request, preparation probe, neighbor query and
+  optional source-supply operation costs one global request. Cache reuse costs
+  none. A blocked record is explicitly `attempted:false`, not a wire request.
+- Evidence bytes count bounded JSON encodings of request parameters and normalized
+  response/error values, including each encoder newline. This is **not** raw
+  JSON-RPC transport bytes or the size of the whole final artifact. The wire
+  adapter separately bounds transport responses/messages; effective response
+  limits are reduced to the remaining capture budget. Metadata and bounded
+  graph/accounting projections are not charged again as new provider evidence.
+- Capture overflow retains no misleading truncated JSON payload: it reports
+  CAPTURE_INCOMPLETE, records consumed bytes and blocks use of that response.
+  Resource-blocked resolutions/expansions remain explicit on every affected row.
+  Malformed normalized JSON evidence is CAPTURE_FAILED rather than falsely
+  attributed to a byte limit.
+- Each request record carries exact method, owner target, optional queried node,
+  declared context, budget-before snapshot, attempted/outcome status, captured
+  params/response and byte consumption. Alias resolution request IDs and cached
+  expansion references preserve attributions without fabricating attempts.
+- `EdgeObservations` joins actual successful neighbor responses to native group
+  IDs and exact sites. Validation recomputes these joins from captured responses,
+  requires support for every retained edge, and rejects duplicate observation
+  joins. These are not independent-support claims.
+- Supply observations are optional historical facts of supply, **not** frozen
+  bytes, analyzed-source identity, compiler consumption or authenticated receipts.
+  A nil runtime supply remains absent; repeated same-URI versions remain separate.
+
+## Result and native graph boundary
+
+`Result` carries the request/policies, graph, every target row, directional
+expansion/layer/frontier sets, request records, supply observations, edge
+observations and shared usage. It keeps resolution, admission, expansion and
+connection distinct. Successful-null is SUCCESS_EMPTY, never FAILED. Directional
+records distinguish SUCCESS_NONEMPTY, PARTIAL, FRONTIER, FAILED, UNSUPPORTED,
+BUDGET_BLOCKED and NOT_APPLICABLE. Root failure does not suppress required rows.
+`AcquisitionComplete` is only this bounded coordinator's accounting; path-search
+completion is independent, and neither establishes source completeness.
+
+The native graph uses unchanged v3 nodes, groups, call sites, seeds and receipts.
+All requested labels have matching invocation/seed records, including failures.
+Native memberships are reconstructed from each target's actual/replayed
+expansions. `Graph.Slice` is nil: no false historical single-at summary is made.
+The historical canonicalizer recomputes incoming counters from graph edges; those
+legacy counters are **not** the coordinator's actual directional request counts.
+A partial-acquisition diagnostic prevents the legacy canonicalizer from promoting
+partial acquisition to complete. `ValidateReferences`, v3 semantic validation,
+and coordinator joins run before return; tests additionally use the unchanged
+native structural schema validator.
+
+Native semantic/execution receipts retain their historical scope. The central
+result is not wrapped in a fake graph-provenance v1 envelope. Future v2 must bind
+this accounting and carry source/evidence joins and offline replay authority.
+Consistency validation does not authenticate client claims.
+
+## Connections and handoff
+
+After acquisition finishes, `PathInput` projects the final canonical graph to
+`retainedpath.Edge`: native relation ID is GroupID; occurrences are ordered
+`/edges/<index>/call_sites/<index>` pointers into this result's native graph.
+Zero-site groups retain an empty witness list. No new artifact digest enters the
+preimage, avoiding a graph/result digest cycle. Upcoming export must map these
+pointers to its occurrence IDs, not drop them.
+
+Each required target uses the **same** `retainedpath.Search` and independent
+`retainedpath.Prove` kernel as existing bounded analysis, with one sequentially
+shared path-work budget. The declared projection is
+`NATIVE_CALLS_CALLER_TO_CALLEE_UNIT_GROUP_HOPS_V1`. SLICE asks root→required;
+INCOMING asks required→root. Resolved/admitted equal endpoints can yield zero-hop
+FOUND regardless of expansion failure. Unknown/unadmitted endpoints are
+NOT_EVALUABLE. Only exhausted retained-graph search can return
+NOT_FOUND_IN_RETAINED_GRAPH; pathwork/time exhaustion is INCOMPLETE with no partial
+witness. Intermediate nodes, groups and all group callsite pointers remain in the
+result. Negative retained-graph answers never claim source/runtime unreachability.
+
+The root row itself has no root/required connection query and remains
+NOT_EVALUABLE; each required row records effective endpoints, direction, status,
+reason, witness and consumed pathwork. Alternative-path enumeration is not an
+option of this bounded API.
+
+## Regression scope
+
+The persisted pure-Go guards cover connected/disconnected chains, both modes,
+root ambiguity/missing, source-qualified namesakes, positional ambiguity,
+duplicate locator/identity aliases, range/probe limits, null/errors/malformed
+wire ranges, exact opaque data, cache replay and ancestor depth, root-first node
+admission, round-robin request fairness, all resource bounds, cancellation and
+managed restart failures, source-supply versions, no dangling edges/support
+inflation, native schema/receipt joins and shared-kernel witness/work parity.
+Compiling empty-coordinator RED preceded production; controlled smaller cache and
+validator reductions are separately rejected. See the session claim for exact
+commands and retained RED/GREEN logs. These fake fixtures do not qualify a native
+provider or the still-unimplemented public FR20 path.

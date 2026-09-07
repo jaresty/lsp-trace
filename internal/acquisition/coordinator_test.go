@@ -1,0 +1,230 @@
+package acquisition
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/lsp"
+	"reflect"
+	"testing"
+	"time"
+)
+
+type fakeClient struct {
+	items    map[string][]lsp.CallHierarchyItem
+	symbols  map[string][]lsp.DocumentSymbol
+	outgoing map[string][]lsp.CallHierarchyOutgoingCall
+	incoming map[string][]lsp.CallHierarchyIncomingCall
+	errors   map[string]error
+	calls    []string
+	hook     func(context.Context, string) error
+}
+
+func fixture() *fakeClient {
+	return &fakeClient{items: map[string][]lsp.CallHierarchyItem{}, symbols: map[string][]lsp.DocumentSymbol{}, outgoing: map[string][]lsp.CallHierarchyOutgoingCall{}, incoming: map[string][]lsp.CallHierarchyIncomingCall{}, errors: map[string]error{}}
+}
+func (f *fakeClient) called(ctx context.Context, key string) error {
+	f.calls = append(f.calls, key)
+	if f.hook != nil {
+		if e := f.hook(ctx, key); e != nil {
+			return e
+		}
+	}
+	return f.errors[key]
+}
+func (f *fakeClient) DocumentSymbols(ctx context.Context, p lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	key := "symbols:" + p.TextDocument.URI
+	return f.symbols[p.TextDocument.URI], f.called(ctx, key)
+}
+func (f *fakeClient) PrepareCallHierarchy(ctx context.Context, p lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
+	key := prepareKey(p)
+	return f.items[key], f.called(ctx, key)
+}
+func (f *fakeClient) IncomingCalls(ctx context.Context, i lsp.CallHierarchyItem) ([]lsp.CallHierarchyIncomingCall, bool, error) {
+	key := "in:" + i.Name
+	return f.incoming[i.Name], f.incoming[i.Name] == nil, f.called(ctx, key)
+}
+func (f *fakeClient) OutgoingCalls(ctx context.Context, i lsp.CallHierarchyItem) ([]lsp.CallHierarchyOutgoingCall, bool, error) {
+	key := "out:" + i.Name
+	return f.outgoing[i.Name], f.outgoing[i.Name] == nil, f.called(ctx, key)
+}
+func prepareKey(p lsp.PrepareCallHierarchyParams) string { b, _ := json.Marshal(p); return string(b) }
+func item(name string, line uint32) lsp.CallHierarchyItem {
+	return lsp.CallHierarchyItem{Name: name, Kind: 12, URI: "file:///a.go", Range: lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 20}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: line, Character: 2}, End: lsp.Position{Line: line, Character: 6}}, Data: json.RawMessage(`{"opaque":"` + name + `"}`)}
+}
+func target(id string, i lsp.CallHierarchyItem) Target {
+	l, c := i.SelectionRange.Start.Line, i.SelectionRange.Start.Character
+	return Target{ID: id, Locator: Locator{URI: i.URI, Line: &l, Character: &c}, DownDepth: 3, UpDepth: 3}
+}
+func (f *fakeClient) add(i lsp.CallHierarchyItem) {
+	p := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: i.URI}, Position: i.SelectionRange.Start}
+	f.items[prepareKey(p)] = []lsp.CallHierarchyItem{i}
+	f.symbols[i.URI] = append(f.symbols[i.URI], lsp.DocumentSymbol{Name: i.Name, Kind: i.Kind, Range: i.Range, SelectionRange: i.SelectionRange})
+}
+func (f *fakeClient) edge(a, b lsp.CallHierarchyItem) {
+	sites := []lsp.Range{{Start: a.SelectionRange.Start, End: a.SelectionRange.End}}
+	f.outgoing[a.Name] = append(f.outgoing[a.Name], lsp.CallHierarchyOutgoingCall{To: b, FromRanges: sites})
+	f.incoming[b.Name] = append(f.incoming[b.Name], lsp.CallHierarchyIncomingCall{From: a, FromRanges: sites})
+}
+func request(a lsp.CallHierarchyItem, rest ...lsp.CallHierarchyItem) Request {
+	r := Request{Mode: Slice, Context: AcquisitionContext{ID: "test", SessionID: "fake", Generation: 1, PositionEncoding: "utf-16"}, Root: target("root", a), Limits: Limits{MaxNodes: 100, MaxRequests: 100, MaxEvidenceBytes: 1 << 20, MaxPathWork: 1000, Timeout: time.Second, RequestTimeout: time.Second, MaxResponseBytes: 1 << 20, MaxMessages: 64}}
+	for _, i := range rest {
+		r.RequiredTargets = append(r.RequiredTargets, target(i.Name, i))
+	}
+	return r
+}
+func run(t *testing.T, f *fakeClient, r Request) Result {
+	t.Helper()
+	got, err := Acquire(context.Background(), f, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+func TestCoordinatorConnectedChain(t *testing.T) {
+	f := fixture()
+	a, b, c := item("a", 0), item("b", 1), item("c", 2)
+	for _, i := range []lsp.CallHierarchyItem{a, b, c} {
+		f.add(i)
+	}
+	f.edge(a, b)
+	f.edge(b, c)
+	got := run(t, f, request(a, c))
+	if len(got.Targets) != 2 {
+		t.Fatalf("every requested target retains accounting: got %d", len(got.Targets))
+	}
+	if got.Targets[1].Connection.Status != "FOUND" || len(got.Targets[1].Connection.Path.Nodes) != 3 {
+		t.Fatalf("connected chain retains intermediate witness: %+v", got.Targets[1].Connection)
+	}
+	if len(got.Graph.Edges) != 2 {
+		t.Fatalf("only native edges retained: %d", len(got.Graph.Edges))
+	}
+	if err := got.Graph.ValidateReferences(); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(got.Graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = graph.ValidateSemanticBundle(raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, rec := range got.Requests {
+		if rec.Attempted && !rec.CaptureComplete {
+			t.Fatalf("complete fixture captures every request: %+v", rec)
+		}
+	}
+}
+func TestCoordinatorDisconnectedIsNotInvented(t *testing.T) {
+	f := fixture()
+	a, c := item("StartImport", 0), item("ImportSurveyFromWorkbook", 1)
+	f.add(a)
+	f.add(c)
+	got := run(t, f, request(a, c))
+	if len(got.Targets) != 2 {
+		t.Fatal("all targets accounted")
+	}
+	if got.Targets[1].Connection.Status != "NOT_FOUND_IN_RETAINED_GRAPH" || len(got.Graph.Edges) != 0 {
+		t.Fatal("endpoint presence must not fabricate connectivity")
+	}
+	if got.Targets[0].Outgoing.Status != SuccessEmpty {
+		t.Fatal("successful null is empty expansion")
+	}
+}
+func TestCoordinatorAliasSharedBudget(t *testing.T) {
+	f := fixture()
+	a := item("a", 0)
+	f.add(a)
+	r := request(a, a)
+	got := run(t, f, r)
+	if len(got.Targets) != 2 {
+		t.Fatal("aliases retain requested rows")
+	}
+	if len(f.calls) != 3 {
+		t.Fatalf("aliases share preparation and both direction queries: %v", f.calls)
+	}
+	if got.Targets[1].Connection.Status != "FOUND" || len(got.Targets[1].Connection.Path.Nodes) != 1 {
+		t.Fatal("zero hop witness")
+	}
+	if got.Usage.Requests != 3 || got.Usage.Nodes != 1 {
+		t.Fatal("shared work not multiplied")
+	}
+}
+func TestCoordinatorRootFailureDoesNotStopRequired(t *testing.T) {
+	f := fixture()
+	a, c := item("a", 0), item("c", 1)
+	f.add(c)
+	got := run(t, f, request(a, c))
+	if len(got.Targets) != 2 {
+		t.Fatal("missing root accounted")
+	}
+	if got.Targets[0].Resolution.Status != Missing || got.Targets[1].Resolution.Status != Resolved {
+		t.Fatal("required acquisition survives missing root")
+	}
+	if got.Targets[1].Connection.Status != "NOT_EVALUABLE" {
+		t.Fatal("unresolved endpoint is not disconnected")
+	}
+}
+func TestCoordinatorNodeCapNoDangling(t *testing.T) {
+	f := fixture()
+	a, b, c := item("a", 0), item("b", 1), item("c", 2)
+	f.add(a)
+	f.add(c)
+	f.edge(a, b)
+	r := request(a, c)
+	r.Limits.MaxNodes = 2
+	got := run(t, f, r)
+	if len(got.Targets) != 2 {
+		t.Fatal("cap retains accounting")
+	}
+	if len(got.Graph.Nodes) != 2 || len(got.Graph.Edges) != 0 {
+		t.Fatal("all roots admitted before neighbors; no dangling edge at cap")
+	}
+	if got.Targets[0].Outgoing.Status != Partial {
+		t.Fatal("node cap expansion is partial")
+	}
+}
+func TestCoordinatorCancellationAndErrors(t *testing.T) {
+	f := fixture()
+	a := item("a", 0)
+	f.add(a)
+	f.errors["out:a"] = errors.New("SESSION_GENERATION_MISMATCH")
+	got := run(t, f, request(a))
+	if len(got.Targets) != 1 {
+		t.Fatal("failure accounted")
+	}
+	if got.Targets[0].Outgoing.Status != Failed {
+		t.Fatal("restart failure is not empty")
+	}
+	found := false
+	for _, rec := range got.Requests {
+		if rec.Reason == "SESSION_GENERATION_MISMATCH" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("exact client failure retained")
+	}
+}
+func TestCoordinatorDeterminism(t *testing.T) {
+	a, b, c := item("a", 0), item("b", 1), item("c", 2)
+	makeF := func() *fakeClient {
+		f := fixture()
+		for _, i := range []lsp.CallHierarchyItem{a, b, c} {
+			f.add(i)
+		}
+		f.edge(a, b)
+		f.edge(b, c)
+		return f
+	}
+	r := request(a, c, b)
+	r.Limits.MaxRequests = 6
+	one, two := run(t, makeF(), r), run(t, makeF(), r)
+	if !reflect.DeepEqual(one, two) {
+		t.Fatal("identical inputs retain deterministic allocation and records")
+	}
+	if len(one.Targets) != 3 {
+		t.Fatal("all target rows survive resource exhaustion")
+	}
+}
