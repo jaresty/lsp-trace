@@ -37,6 +37,12 @@ limits. It validates bounded JSON shape (including coordinate presence), rejects
 flat SymbolInformation rather than erasing its URI/pretending it supplies a
 selection range, and accepts successful protocol null as empty. Direct typed
 clients must enforce their own transport limits and structural decoding.
+Every wire call row requires a non-null `fromRanges` JSON array: missing, null,
+scalar or object values fail the entire wire response, yielding FAILED with no
+edges from that response. `fromRanges:[]` is valid zero-site support; top-level
+protocol null remains successful-empty. A direct typed client must supply a
+nonnil `FromRanges` slice for each valid row; a nil slice is malformed and produces
+PARTIAL accounting without admitting that row's edge.
 `WithDocumentSupply` optionally adds a source-supply function. The managed adapter
 forwards exact generation, deadline and wire limits and retains runtime errors;
 it does not resolve session aliases or authenticate the declared context.
@@ -167,8 +173,11 @@ unchanged; this repair makes no stronger containment or source-identity claim.
   expansion references preserve attributions without fabricating attempts.
 - `EdgeObservations` joins actual successful neighbor responses to native group
   IDs and exact sites. Validation recomputes these joins from captured responses,
-  requires support for every retained edge, and rejects duplicate observation
-  joins. These are not independent-support claims.
+  requires each retained edge's canonical site set to equal the union of its
+  supported observations, and rejects duplicate observation joins. Missing and
+  invented sites fail even if graph receipts and path pointers are coherently
+  resealed. Repeated response rows and repeated actual observations still union
+  sites without increasing support. These are not independent-support claims.
 - Supply observations are optional historical facts of supply, **not** frozen
   bytes, analyzed-source identity, compiler consumption or authenticated receipts.
   A nil runtime supply remains absent; repeated same-URI versions remain separate.
@@ -200,6 +209,33 @@ result is not wrapped in a fake graph-provenance v1 envelope. Future v2 must bin
 this accounting and carry source/evidence joins and offline replay authority.
 Consistency validation does not authenticate client claims.
 
+`ValidateResult` additionally replays the deterministic acquisition scheduler
+against the retained operation records. It does not call `Acquire`, clients,
+supply primitives, or public operations. Each scheduled operation must consume
+exactly its next record with matching target owner, locator/query parameters,
+node, declared context (including generation), and full pre-usage snapshot.
+Normalized successful and failed captures must re-encode exactly with their
+recorded byte consumption. Resolution status, selected prepared payload (including
+opaque data), ordered request references, root-first admission, cache attribution,
+target-local depths/layers/starts/frontiers, memberships, supplies and graph must
+match replay. Exact locator aliases may reference an earlier owner's matching
+resolution; cache hits require an earlier exact identity-and-direction query.
+They do not invent additional requests or observations.
+
+Supplies are compared in operation order to complete returned Supply payloads,
+including opaque observations/versions, and joined to the request's canonical URI,
+locator and declared context/generation. The validator does not interpret opaque
+observation fields as authenticated runtime identity. Missing/incomplete captures
+cannot reveal their discarded payload: validation checks their disposition and
+bounded declared consumption and does not fabricate response evidence for replay.
+
+Acquisition-wide cancellation is a declared sticky boundary in unattempted
+request records or cache-cancellation expansion records. A request-local timeout
+alone does not assert global cancellation. These boundary claims are checked for
+consistent scheduling and subsequent results, not authenticated offline events.
+The shared scheduler is guarded separately by the persisted independent
+three-node all-pairs oracle; sharing code is not independent proof of scheduling.
+
 ## Connections and handoff
 
 After acquisition finishes, `PathInput` projects the final canonical graph to
@@ -225,6 +261,16 @@ NOT_EVALUABLE; each required row records effective endpoints, direction, status,
 reason, witness and consumed pathwork. Alternative-path enumeration is not an
 option of this bounded API.
 
+Validation repeats `retainedpath.Search` in original required-target order using
+one shared declared work budget and compares status, reason, witness and work;
+`Prove` remains a separate topology check, not resource proof. Zero-hop FOUND
+costs one work tick. A CANCELLED report must have an empty witness and describe
+an unfinished search prefix at its reported work count; cancellation is then
+sticky for later targets. A previously declared global acquisition cancellation
+permits no subsequent completed path. This is cancellation-report consistency,
+not proof of the time or origin of a cancellation event. A full internally
+consistent replacement history is not detected as forgery by these checks.
+
 ## Regression scope
 
 The persisted pure-Go guards cover connected/disconnected chains, both modes,
@@ -238,3 +284,11 @@ Compiling empty-coordinator RED preceded production; controlled smaller cache an
 validator reductions are separately rejected. See the session claim for exact
 commands and retained RED/GREEN logs. These fake fixtures do not qualify a native
 provider or the still-unimplemented public FR20 path.
+
+The validator-repair regression suite reverses the independent review's eight
+false-acceptance probes into persistent rejection assertions, adds malformed
+array/typed-nil and cancellation-prefix distinctions, and preserves the independent
+4,096-case three-node oracle plus 252 request/node/evidence boundary combinations.
+The repair does not change the preceding runtime cancellation API or its explicit
+regular-filesystem I/O caveat. It remains preparatory work pending independent
+review, not a claim of full FR20 readiness.

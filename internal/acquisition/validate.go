@@ -283,7 +283,13 @@ func ValidateResult(r Result) error {
 	if err := validateObservedJoins(r, records); err != nil {
 		return err
 	}
-	return validateTargetJoins(r, records)
+	if err := validateTargetJoins(r, records); err != nil {
+		return err
+	}
+	if err := validateRecordReplay(r); err != nil {
+		return err
+	}
+	return validatePathAccounting(r)
 }
 func has(xs []string, s string) bool {
 	for _, x := range xs {

@@ -80,8 +80,8 @@ func TestDiamondTieAndResponseOrder(t *testing.T) {
 func TestZeroDepthAndZeroSiteGroups(t *testing.T) {
 	a, b := item("a", 0), item("b", 1)
 	f := fixtureForEdge(a, b)
-	f.outgoing[a.Name][0].FromRanges = nil
-	f.incoming[b.Name][0].FromRanges = nil
+	f.outgoing[a.Name][0].FromRanges = []lsp.Range{}
+	f.incoming[b.Name][0].FromRanges = []lsp.Range{}
 	got := run(t, f, request(a, b))
 	if len(got.Targets[1].Connection.Path.OccurrenceIDs) != 1 || len(got.Targets[1].Connection.Path.OccurrenceIDs[0]) != 0 {
 		t.Fatal("zero-site group remains witnessed with an empty occurrence list")

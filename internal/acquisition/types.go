@@ -98,6 +98,10 @@ type Request struct {
 
 // Client must be bound to Request.Context, enforce wire byte/message limits and
 // honor context cancellation. A provider null response is successful-empty.
+// Each call row requires nonnil FromRanges: [] is valid zero-site evidence,
+// nil is malformed (a direct typed client's row is retained only as partial
+// response accounting, never as a supported edge). Wire clients must distinguish
+// missing/null/scalar/object fields before decoding into Go slices.
 // NewWireClient supplies the neutral bounded adapter; an existing SessionClient
 // also implements this interface when constructed with the declared wire limits.
 type Client interface {

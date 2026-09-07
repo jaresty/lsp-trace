@@ -89,6 +89,7 @@ type runner struct {
 	queries     map[string]queryResult
 	members     []map[string]bool
 	relations   []map[string]bool
+	replay      *recordReplay // offline validation only; never invokes a client
 }
 type neighbor struct {
 	item lsp.CallHierarchyItem
@@ -114,6 +115,23 @@ func Acquire(parent context.Context, client Client, request Request) (Result, er
 	ctx, cancel := context.WithTimeout(parent, request.Limits.Timeout)
 	defer cancel()
 	c := &runner{ctx: ctx, client: client, result: Result{Request: request, Policy: Policy, PathProjection: "NATIVE_CALLS_CALLER_TO_CALLEE_UNIT_GROUP_HOPS_V1", AcquisitionComplete: true}, items: map[string]lsp.CallHierarchyItem{}, nodes: map[string]graph.Node{}, resolutions: map[string]Resolution{}, queries: map[string]queryResult{}}
+	if err := c.acquireEvidence(); err != nil {
+		return Result{}, err
+	}
+	if err := c.connect(); err != nil {
+		return Result{}, err
+	}
+	if err := ValidateResult(c.result); err != nil {
+		return Result{}, fmt.Errorf("coordinator invariant: %w", err)
+	}
+	return c.result, nil
+}
+
+// Shared event interpreter: live acquisition invokes a client; validation
+// consumes retained normalized request records at the same operation boundary.
+// Neither this method nor the record interpreter calls Acquire/ValidateResult.
+func (c *runner) acquireEvidence() error {
+	request := c.result.Request
 	targets := append([]Target{request.Root}, request.RequiredTargets...)
 	for _, t := range targets {
 		c.result.Targets = append(c.result.Targets, TargetResult{Requested: t, Admission: NotApplicable, Outgoing: DirectionResult{Status: ExpansionNotApplicable}, Incoming: DirectionResult{Status: ExpansionNotApplicable}, Connection: Connection{Status: "NOT_EVALUABLE", Direction: "CALLER_TO_CALLEE", Reason: "endpoint unresolved or not admitted", Path: emptyPath()}})
@@ -154,16 +172,7 @@ func Acquire(parent context.Context, client Client, request Request) (Result, er
 		c.traverse(Outgoing)
 	}
 	c.traverse(IncomingDirection)
-	if err := c.finishGraph(); err != nil {
-		return Result{}, err
-	}
-	if err := c.connect(); err != nil {
-		return Result{}, err
-	}
-	if err := ValidateResult(c.result); err != nil {
-		return Result{}, fmt.Errorf("coordinator invariant: %w", err)
-	}
-	return c.result, nil
+	return c.finishGraph()
 }
 func resolutionID(r Resolution) string {
 	if r.Identity == nil {
@@ -234,6 +243,9 @@ func boundedJSON(v any, limit int) (json.RawMessage, int, error) {
 	return append(json.RawMessage(nil), bytes.TrimSuffix(w.Bytes(), []byte("\n"))...), w.Len(), nil
 }
 func (c *runner) invoke(target, method, id string, params any, call func(context.Context) (any, error)) (any, *RequestRecord) {
+	if c.replay != nil {
+		return c.replay.invoke(c, target, method, id, params)
+	}
 	rec := RequestRecord{ID: fmt.Sprintf("request-%06d", len(c.result.Requests)+1), TargetID: target, Method: method, NodeID: id, Context: c.result.Request.Context, Before: c.result.Usage, Outcome: "BUDGET_BLOCKED"}
 	l := c.result.Request.Limits
 	blocked := ""
@@ -461,6 +473,9 @@ func (c *runner) resolve(t Target) Resolution {
 }
 
 func (c *runner) query(target, id string, d Direction) (queryResult, bool) {
+	if c.replay != nil {
+		c.replay.beforeQuery(c, target, id, d)
+	}
 	key := string(d) + ":" + id
 	if q, ok := c.queries[key]; ok {
 		if err := c.ctx.Err(); err != nil {
@@ -516,7 +531,7 @@ func (c *runner) query(target, id string, d Direction) (queryResult, bool) {
 		}
 		sort.SliceStable(candidates, func(i, j int) bool { return node(candidates[i].item).ID < node(candidates[j].item).ID })
 		for _, n := range candidates {
-			bad := graph.ValidateItem(node(n.item).Item) != nil || !canonicalURI(n.item.URI) || n.item.Kind < 1 || n.item.Kind > 26
+			bad := n.edge.CallSites == nil || graph.ValidateItem(node(n.item).Item) != nil || !canonicalURI(n.item.URI) || n.item.Kind < 1 || n.item.Kind > 26
 			for _, r := range n.edge.CallSites {
 				if graph.ValidateRange(r) != nil {
 					bad = true
@@ -544,6 +559,9 @@ func (c *runner) query(target, id string, d Direction) (queryResult, bool) {
 	return q, false
 }
 func ranges(rs []lsp.Range) []graph.Range {
+	if rs == nil {
+		return nil
+	}
 	out := make([]graph.Range, len(rs))
 	for i, r := range rs {
 		out[i] = toRange(r)

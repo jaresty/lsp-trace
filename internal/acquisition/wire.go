@@ -166,6 +166,8 @@ func validateWireShape(method string, raw []byte) error {
 			var ranges []json.RawMessage
 			if v, ok := row["fromRanges"]; !ok {
 				return errors.New("missing fromRanges")
+			} else if trimmed := bytes.TrimSpace(v); len(trimmed) == 0 || trimmed[0] != '[' {
+				return errors.New("fromRanges must be a non-null array")
 			} else if e := json.Unmarshal(v, &ranges); e != nil {
 				return e
 			}

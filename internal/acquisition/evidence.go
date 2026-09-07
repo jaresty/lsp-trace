@@ -76,7 +76,7 @@ func observedEdges(rec RequestRecord) ([]graph.Edge, error) {
 	return out, nil
 }
 func validateObservedJoins(r Result, records map[string]RequestRecord) error {
-	supported := map[string]bool{}
+	supported := map[string]graph.Edge{}
 	seen := map[string]bool{}
 	for _, o := range r.EdgeObservations {
 		key := o.RequestID + "/" + o.RelationID
@@ -101,11 +101,21 @@ func validateObservedJoins(r Result, records map[string]RequestRecord) error {
 		if !matched {
 			return errors.New("observation not supported by exact response")
 		}
-		supported[o.RelationID] = true
+		edge := graph.Edge{RelationID: o.RelationID, CallSites: o.CallSites}
+		for _, candidate := range edges {
+			if candidate.RelationID == o.RelationID {
+				edge = candidate
+				break
+			}
+		}
+		if prior, ok := supported[o.RelationID]; ok {
+			edge = graph.MergeEdge([]graph.Edge{prior}, edge)[0]
+		}
+		supported[o.RelationID] = edge
 	}
 	for _, edge := range r.Graph.Edges {
-		if !supported[edge.RelationID] {
-			return errors.New("retained edge lacks acquisition support")
+		if union, ok := supported[edge.RelationID]; !ok || !reflect.DeepEqual(union.CallSites, edge.CallSites) {
+			return errors.New("retained callsites differ from supported canonical union")
 		}
 	}
 	return nil
