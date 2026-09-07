@@ -21,12 +21,17 @@ import (
 // disconnected E->F, and isolate G. All sites are unreported except A->B.
 func boundedFixture(t *testing.T) ([]byte, []string) {
 	t.Helper()
+	return boundedFixtureContent(t, []byte("package p\n"))
+}
+
+func boundedFixtureContent(t *testing.T, content []byte) ([]byte, []string) {
+	t.Helper()
 	root := t.TempDir()
 	r := graph.Result{SchemaVersion: graph.SchemaVersionV3, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
 	ids := []string{}
 	for i := 0; i < 7; i++ {
 		file := filepath.Join(root, fmt.Sprintf("%d.go", i))
-		if err := os.WriteFile(file, []byte("package p\n"), 0600); err != nil {
+		if err := os.WriteFile(file, content, 0600); err != nil {
 			t.Fatal(err)
 		}
 		uri := (&url.URL{Scheme: "file", Path: file}).String()

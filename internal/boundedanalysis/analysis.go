@@ -154,7 +154,7 @@ func normalize(p Parameters) (Parameters, error) {
 	return p, nil
 }
 func project(raw []byte, p Parameters) (Evidence, error) {
-	if err := Preflight(raw, MaxInputBytes); err != nil {
+	if err := preflightAdmission(raw, false); err != nil {
 		return Evidence{}, err
 	}
 	if _, err := retainedcalls.ValidateFor(raw, retainedcalls.Family, "v1"); err != nil {
@@ -427,7 +427,7 @@ func ValidateFor(raw []byte, family, version string) (string, error) {
 	if family != Family {
 		return retainedcalls.ValidateFor(raw, family, version)
 	}
-	if err := Preflight(raw, MaxBytes); err != nil {
+	if err := preflightAdmission(raw, true); err != nil {
 		return "", err
 	}
 	if _, err := schema.ValidateStructure(raw, family, version); err != nil {
