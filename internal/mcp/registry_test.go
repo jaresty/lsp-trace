@@ -97,7 +97,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	const assertion = "ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 13 {
+	if got := len(r.Advertised()); got != 14 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -113,7 +113,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify"}
 	for i, tool := range r.Advertised() {
 		if tool.Name != want[i] {
 			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
@@ -171,7 +171,7 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 		}
 	}
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 13 {
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 14 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
 	}
 }
@@ -180,19 +180,20 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 	const assertion = "ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS"
 	t.Log("ASSERTION: " + assertion)
 	want := map[string][]string{
-		"lsp_session_v1_list":       {"discover", "session"},
-		"lsp_session_v1_status":     {"current", "state"},
-		"lsp_session_v1_stop":       {"stop", "generation"},
-		"lsp_session_v1_restart":    {"restart", "generation"},
-		"lsp_trace_v1_incoming":     {"who calls", "callee"},
-		"lsp_trace_v1_slice":        {"outgoing", "incoming"},
-		"lsp_trace_v1_inspect":      {"seed", "retained"},
-		"lsp_trace_v1_filter":       {"compare", "two"},
-		"lsp_trace_v1_validate":     {"schema", "validate"},
-		"lsp_trace_v1_verify":       {"custody", "digest"},
-		"lsp_trace_v1_schema_get":   {"schema", "contract"},
-		"lsp_trace_v1_capabilities": {"thirteen", "limits"},
-		"lsp_trace_v1_execute":      {"execute", "request"},
+		"lsp_session_v1_list":                {"discover", "session"},
+		"lsp_session_v1_status":              {"current", "state"},
+		"lsp_session_v1_stop":                {"stop", "generation"},
+		"lsp_session_v1_restart":             {"restart", "generation"},
+		"lsp_trace_v1_incoming":              {"who calls", "callee"},
+		"lsp_trace_v1_slice":                 {"outgoing", "incoming"},
+		"lsp_trace_v1_inspect":               {"seed", "retained"},
+		"lsp_trace_v1_filter":                {"compare", "two"},
+		"lsp_trace_v1_validate":              {"schema", "validate"},
+		"lsp_trace_v1_verify":                {"custody", "digest"},
+		"lsp_trace_v1_schema_get":            {"schema", "contract"},
+		"lsp_trace_v1_capabilities":          {"canonical", "limits"},
+		"lsp_trace_v1_export_retained_calls": {"retained", "offline"},
+		"lsp_trace_v1_execute":               {"execute", "request"},
 	}
 	registry := NewRegistry(false)
 	for name, terms := range want {
@@ -211,7 +212,7 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 
 func TestRegistryContract(t *testing.T) {
 	const (
-		canonicalAssertion = "registry has thirteen canonical entries including the execution transport"
+		canonicalAssertion = "registry has fourteen canonical entries including the additive retained CALLS export"
 		aliasAssertion     = "each exact alias resolves to its canonical identity and aliases are not advertised"
 		unknownAssertion   = "unknown and unsupported versioned names are not recognized"
 	)
@@ -221,10 +222,10 @@ func TestRegistryContract(t *testing.T) {
 
 	for _, enabledFlag := range []bool{false, true} {
 		r := NewRegistry(enabledFlag)
-		if got := len(r.Tools()); got != 13 {
+		if got := len(r.Tools()); got != 14 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 13 {
+		if got := len(r.Advertised()); got != 14 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{
@@ -234,7 +235,8 @@ func TestRegistryContract(t *testing.T) {
 			"lsp_session_v1_list": "lsp_session_list", "lsp_session_v1_status": "lsp_session_status",
 			"lsp_session_v1_restart": "lsp_session_restart", "lsp_session_v1_stop": "lsp_session_stop",
 			"lsp_trace_v1_incoming": "lsp_trace_incoming", "lsp_trace_v1_slice": "lsp_trace_slice",
-			"lsp_trace_v1_execute": "lsp_trace_execute",
+			"lsp_trace_v1_execute":               "lsp_trace_execute",
+			"lsp_trace_v1_export_retained_calls": "lsp_trace_export_retained_calls",
 		}
 		for canonical, alias := range expected {
 			for _, name := range []string{canonical, alias} {

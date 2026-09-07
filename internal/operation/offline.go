@@ -36,6 +36,9 @@ func (o *Offline) ExecuteVerify(ctx context.Context, request Request) (Result, *
 func (o *Offline) ExecuteInspect(ctx context.Context, request Request) (Result, *Failure) {
 	return o.executeAs(ctx, Inspect, request)
 }
+func (o *Offline) ExecuteExportRetainedCalls(ctx context.Context, request Request) (Result, *Failure) {
+	return o.executeAs(ctx, ExportRetainedCalls, request)
+}
 func (o *Offline) ExecuteFilter(ctx context.Context, request Request) (Result, *Failure) {
 	return o.executeAs(ctx, Filter, request)
 }

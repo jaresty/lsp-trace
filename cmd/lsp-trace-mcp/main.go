@@ -228,6 +228,7 @@ func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.Con
 	if err != nil {
 		return nil, nil, err
 	}
+	handlers[operation.ExportRetainedCalls] = operation.ExportRetainedCallsHandler
 	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutorWithTrust(trust).Execute
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {

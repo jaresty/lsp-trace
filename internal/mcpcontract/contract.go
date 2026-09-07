@@ -17,6 +17,7 @@ import (
 //go:embed testdata/stage1-manifest.v1.json
 //go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-incoming.v1.schema.json testdata/schemas/input-slice.v1.schema.json testdata/schemas/input-execute.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
 //go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-compact-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json testdata/schemas/envelope-execute-artifact.v1.schema.json testdata/schemas/envelope-execute-publication.v1.schema.json testdata/schemas/envelope-execute-publication-error.v1.schema.json testdata/schemas/envelope-execute-domain-error.v1.schema.json
+//go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 
@@ -146,7 +147,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range manifest.Schemas {
+	for _, registration := range WithRetainedCalls(manifest).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -167,7 +168,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(manifest, schemaID)
+	compiled, err := compileSchema(WithRetainedCalls(manifest), schemaID)
 	if err != nil {
 		return err
 	}
@@ -191,6 +192,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
+	manifest = WithRetainedCalls(manifest)
 	matches := []string{}
 	for _, registration := range manifest.Schemas {
 		if registration.Layer != "envelope" {

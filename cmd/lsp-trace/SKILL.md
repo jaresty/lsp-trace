@@ -48,7 +48,7 @@ The command prints this complete embedded document to stdout. Static retrieval i
 
 Configure an MCP client to launch `lsp-trace-mcp` directly over stdio for local development. Run `lsp-trace-mcp` for inline-only results, or `lsp-trace-mcp --publication-root /absolute/private/root` to permit caller-supplied relative `output_selector` publication beneath one pinned private root. To make traversal callable, the host—not the MCP caller—provisions trusted sessions with `lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json`; stdio serving begins only after every configured session reaches correlated READY. Use `lsp_session_v1_list` to obtain its exact session ID and generation.
 
-The default surface advertises thirteen canonical tools: the seven offline tools `lsp_trace_v1_capabilities`, `lsp_trace_v1_schema_get`, `lsp_trace_v1_validate`, `lsp_trace_v1_verify`, `lsp_trace_v1_inspect`, `lsp_trace_v1_filter`, and `lsp_trace_v1_execute`; `lsp_trace_v1_incoming`; `lsp_trace_v1_slice`; and `lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`. Their unversioned aliases remain callable but unadvertised. Call capabilities with `{}` before relying on schema identities, publication support, or limits.
+The default surface advertises fourteen canonical tools: the additive offline `lsp_trace_v1_export_retained_calls` plus the seven historical offline tools `lsp_trace_v1_capabilities`, `lsp_trace_v1_schema_get`, `lsp_trace_v1_validate`, `lsp_trace_v1_verify`, `lsp_trace_v1_inspect`, `lsp_trace_v1_filter`, and `lsp_trace_v1_execute`; `lsp_trace_v1_incoming`; `lsp_trace_v1_slice`; and `lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`. Their unversioned aliases remain callable but unadvertised. Call capabilities with `{}` before relying on schema identities, publication support, or limits.
 
 The embedded Stage 1 manifest and registered schemas are authoritative. Each completed tool call returns exactly one versioned envelope in MCP `structuredContent`, selected by `envelope_schema_id`; outer MCP `content` is empty and does not mirror the envelope. Artifact output is inline through 1,048,576 bytes. Larger possible output requires `output_selector`; publication is exclusive, owner-only, no-replace, and returns a path-free receipt. The server never chooses or returns a private path. `list_page_max` is 100.
 
@@ -57,6 +57,27 @@ For a compact traversal response, set both `detail: "compact"` and a caller-chos
 Preserve existing evidence ceilings: MCP transport, envelopes, inline bytes, publication receipts, validation, verification, inspection, filtering, and traversal add no authenticity, authority, source truth, execution proof, feature identity, coverage, confidence, or acceptance. Lifecycle tools and bounded incoming traversal are enabled by default and route to the process-local runtime. Slice traversal is enabled by default and routes to that same runtime. Both traversal modes require an exact READY generation and retained initialize evidence for call hierarchy and position encoding. Slice discovers exact-depth outgoing frontier nodes and genuine successful empty outgoing leaves, then traces incoming callers from their sorted deduplicated union; failed or null outgoing responses make traversal incomplete and are never leaves. Slice `max_messages` and `max_bytes` apply independently to each prepare, outgoing, and incoming LSP wire request rather than to the aggregate slice; incoming keeps fixed safe per-wire-request defaults.
 
 **WARNING:** Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This local-development-only tool does not provide hostile-code safety, native containment, remote execution, or privileged isolation.
+
+## Export retained CALLS offline
+
+`lsp-trace export-retained-calls [--output SELECTOR] PATH|-` accepts only an
+admitted graph-provenance/v1 envelope and emits retained-calls/v1. MCP uses
+`lsp_trace_v1_export_retained_calls` with `input` containing the original JSON
+text, and optional immutable `output_selector`. Both share one offline operation.
+No source checkout or running server is required. Use `schema get` and `validate`
+with `--family retained-calls --version v1`; selected CLI verification requires
+that explicit family. Historical graph-only verification and inspect semantics
+are unchanged. `--output` never replaces an existing selector.
+
+Each distinct retained range gets one occurrence; no-range edges stay UNREPORTED
+groups. Support remains once per historical relation group, never once per
+callsite. Exact input bytes, source bindings/receipts, group receipts/memberships,
+and bundle-scoped context are retained. Tables-only reconstruction is compared
+with an independently extracted admitted-input projection during validation.
+Per-callsite acquisition methods/request IDs, repeated-report counts, independent
+support and analyzed-source authentication remain unavailable. Document supply
+is didOpen/change, not call acquisition. Coherent public forgery remains possible.
+This is bounded A3, not normative relations.v1/full FR6 or acceptance.
 
 ## Choose a command
 

@@ -220,9 +220,9 @@ else
   exit 1
 fi
 if go test ./internal/mcp -run TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault -count=1; then
-  printf 'PASS R-MCP-EXACT-THIRTEEN-TOOLS: exactly thirteen canonical tools\n'
+  printf 'PASS R-MCP-EXACT-FOURTEEN-TOOLS: historical thirteen tools plus retained CALLS export\n'
 else
-  printf 'FAIL R-MCP-EXACT-THIRTEEN-TOOLS: canonical tool cardinality contract failed\n'
+  printf 'FAIL R-MCP-EXACT-FOURTEEN-TOOLS: canonical tool cardinality contract failed\n'
   exit 1
 fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
@@ -289,4 +289,13 @@ else
   printf 'FAIL R-GRAPH-PROVENANCE-SCHEMA: schema bytes differ\n'
   exit 1
 fi
+if go test ./internal/retainedcalls ./sliceops ./internal/mcp -run 'TestRetainedCalls|TestDistinctCallsites|TestUnreported|TestContextIdentity|TestCoherentResealing|TestStrictInput|TestIdentityFixedVectors' -count=1; then
+  printf 'PASS R-RETAINED-CALLS: tables-only replay, scoped support, strict admission and fake-wire ceilings\n'
+else
+  printf 'FAIL R-RETAINED-CALLS: bounded export contract failed\n'
+  exit 1
+fi
+"$release_tmp/lsp-trace" schema get --family retained-calls --version v1 > "$release_tmp/retained-calls.schema.json"
+cmp "$release_tmp/retained-calls.schema.json" "$root/internal/schema/schemas/lsp-trace.retained-calls.v1.schema.json"
+printf 'PASS R-RETAINED-CALLS-SCHEMA: exact committed schema\n'
 printf 'RELEASE CHECK PASS\n'

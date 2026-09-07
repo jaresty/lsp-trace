@@ -34,6 +34,7 @@ const usageText = `usage:
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
+  lsp-trace export-retained-calls [--output SELECTOR] PATH|-
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-
@@ -69,6 +70,9 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "export-retained-calls" {
+		return runRetainedCalls(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "skill" {
 		return runSkill(args[1:], os.Stdout, os.Stderr)
 	}

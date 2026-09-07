@@ -436,7 +436,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	family := flags.String("family", "graph", "explicit evidence family")
 	version := flags.String("version", "", "evidence version")
 	if flags.Parse(args) != nil || flags.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace verify [--family graph-provenance --version v1] PATH")
+		fmt.Fprintln(stderr, "usage: lsp-trace verify [--family graph-provenance|retained-calls --version v1] PATH")
 		return 1
 	}
 	admit := graph.ValidateSemanticBundle
@@ -444,6 +444,8 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	case *family == "graph" && (*version == "" || *version == "v3"):
 	case *family == graphprovenance.Family && *version == "v1":
 		admit = admitGraphProvenance
+	case *family == "retained-calls" && *version == "v1":
+		admit = admitRetainedCalls
 	default:
 		fmt.Fprintln(stderr, "unsupported verification family/version")
 		return 1

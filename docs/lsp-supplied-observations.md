@@ -121,6 +121,13 @@ content identity. The record ID is SHA-256 over domain
 empty `id`. Supply and post-capture records do not share an observed-identity
 snapshot, so conflicting same-path versions are never collapsed.
 
+## Retained CALLS export
+
+Use the separate [bounded retained CALLS export](retained-calls.md) to split
+retained distinct callsite ranges while preserving historical relation groups,
+source bindings and group-scoped support. It is an offline CLI/MCP operation,
+not a new traversal or reconstruction of lost acquisition history.
+
 ## Offline validation and publication
 
 ```sh

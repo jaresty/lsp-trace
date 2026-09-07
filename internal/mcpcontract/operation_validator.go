@@ -21,17 +21,18 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		return nil, err
 	}
 	canonical := map[operation.Name]string{
-		operation.Capabilities:   "lsp_trace_v1_capabilities",
-		operation.SchemaGet:      "lsp_trace_v1_schema_get",
-		operation.Validate:       "lsp_trace_v1_validate",
-		operation.Verify:         "lsp_trace_v1_verify",
-		operation.Inspect:        "lsp_trace_v1_inspect",
-		operation.Filter:         "lsp_trace_v1_filter",
-		operation.CustodyExecute: "lsp_trace_v1_execute",
+		operation.Capabilities:        "lsp_trace_v1_capabilities",
+		operation.SchemaGet:           "lsp_trace_v1_schema_get",
+		operation.Validate:            "lsp_trace_v1_validate",
+		operation.Verify:              "lsp_trace_v1_verify",
+		operation.Inspect:             "lsp_trace_v1_inspect",
+		operation.Filter:              "lsp_trace_v1_filter",
+		operation.CustodyExecute:      "lsp_trace_v1_execute",
+		operation.ExportRetainedCalls: "lsp_trace_v1_export_retained_calls",
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range manifest.Tools {
+		for _, tool := range WithRetainedCalls(manifest).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break

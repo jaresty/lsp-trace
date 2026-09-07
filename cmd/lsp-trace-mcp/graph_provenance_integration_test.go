@@ -51,7 +51,7 @@ func TestGraphProvenanceRealGoplsCLIAndMCP(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		body := ""
 		if i < 5 {
-			body = fmt.Sprintf("F%d()", i+1)
+			body = fmt.Sprintf("F%d(); F%d()", i+1, i+1)
 		}
 		write(fmt.Sprintf("f%d.go", i), fmt.Sprintf("package fixture\nfunc F%d() { %s }\n", i, body))
 	}
@@ -169,6 +169,7 @@ func TestGraphProvenanceRealGoplsCLIAndMCP(t *testing.T) {
 	if err := os.RemoveAll(root); err != nil {
 		t.Fatal(err)
 	}
+	testRetainedCallsRealOffline(t, cli, mcp, mcpRaw)
 	if output := runCLIProcess(t, cli, "verify", "--family", "graph-provenance", "--version", "v1", selectedPath); !strings.Contains(string(output), "verified integrity and custody") {
 		t.Fatal("ASSERT_OFFLINE_SELECTED_VERIFY")
 	}

@@ -12,29 +12,35 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/retainedcalls"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
 type provenanceWire struct {
-	in     *io.PipeReader
-	stdin  *io.PipeWriter
-	out    *io.PipeWriter
-	stdout *io.PipeReader
-	uri    string
-	mu     sync.Mutex
-	texts  []string
+	in        *io.PipeReader
+	stdin     *io.PipeWriter
+	out       *io.PipeWriter
+	stdout    *io.PipeReader
+	uri       string
+	mu        sync.Mutex
+	texts     []string
+	callsMode string
 }
 
-func newProvenanceWire(uri string) *provenanceWire {
+func newProvenanceWire(uri string, mode ...string) *provenanceWire {
 	in, stdin := io.Pipe()
 	stdout, out := io.Pipe()
 	w := &provenanceWire{in: in, stdin: stdin, out: out, stdout: stdout, uri: uri}
+	if len(mode) > 0 {
+		w.callsMode = mode[0]
+	}
 	go w.serve()
 	return w
 }
@@ -72,6 +78,16 @@ func (w *provenanceWire) serve() {
 			continue
 		case "textDocument/prepareCallHierarchy":
 			result, _ = json.Marshal([]any{map[string]any{"name": "F", "kind": 12, "uri": w.uri, "range": map[string]any{"start": map[string]int{"line": 1, "character": 0}, "end": map[string]int{"line": 1, "character": 11}}, "selectionRange": map[string]any{"start": map[string]int{"line": 1, "character": 5}, "end": map[string]int{"line": 1, "character": 6}}}})
+		case "callHierarchy/outgoingCalls":
+			if w.callsMode != "" {
+				item := map[string]any{"name": "F", "kind": 12, "uri": w.uri, "range": map[string]any{"start": map[string]int{"line": 1, "character": 0}, "end": map[string]int{"line": 1, "character": 11}}, "selectionRange": map[string]any{"start": map[string]int{"line": 1, "character": 5}, "end": map[string]int{"line": 1, "character": 6}}}
+				sites := []graph.Range{}
+				if w.callsMode == "repeated" {
+					sites = []graph.Range{{Start: graph.Position{Line: 1, Character: 7}, End: graph.Position{Line: 1, Character: 8}}, {Start: graph.Position{Line: 1, Character: 9}, End: graph.Position{Line: 1, Character: 10}}}
+				}
+				call := map[string]any{"to": item, "fromRanges": sites}
+				result, _ = json.Marshal([]any{call, call, call})
+			}
 		case "shutdown":
 			result = json.RawMessage(`null`)
 		case "exit":
@@ -98,13 +114,14 @@ func (w *provenanceWire) Close() managedprocess.ResourceObservation {
 }
 
 type provenanceStarter struct {
-	uri      string
-	mu       sync.Mutex
-	children []*provenanceWire
+	uri       string
+	mu        sync.Mutex
+	children  []*provenanceWire
+	callsMode string
 }
 
 func (s *provenanceStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
-	w := newProvenanceWire(s.uri)
+	w := newProvenanceWire(s.uri, s.callsMode)
 	s.mu.Lock()
 	s.children = append(s.children, w)
 	s.mu.Unlock()
@@ -177,6 +194,13 @@ func TestGraphProvenanceActualWireMutationAndRestart(t *testing.T) {
 			t.Fatal(err)
 		}
 		if _, err := graphprovenance.ValidateFor(result.Artifact, graphprovenance.Family, "v1"); err != nil {
+			t.Fatal(err)
+		}
+		exported, err := retainedcalls.Export(result.Artifact)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = retainedcalls.ValidateFor(exported, retainedcalls.Family, "v1"); err != nil {
 			t.Fatal(err)
 		}
 		return e
