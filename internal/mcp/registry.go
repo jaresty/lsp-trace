@@ -92,16 +92,17 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	manifest = mcpcontract.WithRetainedCalls(manifest)
 	descriptions := map[string]string{
-		"lsp_trace_v1_export_retained_calls": "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
-		"lsp_trace_v1_inspect":               "Inspect retained evidence for one seed or all retained seeds without changing authority",
-		"lsp_trace_v1_filter":                "Compare exactly two retained seed evidence sets with a mechanical filter",
-		"lsp_trace_v1_validate":              "Validate retained evidence against its schema contract",
-		"lsp_trace_v1_verify":                "Verify immutable publication custody, byte length, and digest",
-		"lsp_trace_v1_schema_get":            "Retrieve the exact schema contract for an evidence family and version",
-		"lsp_trace_v1_capabilities":          "Discover canonical LSP Trace tools, schemas, publication support, and limits",
-		"lsp_trace_v1_execute":               "Execute one canonical request through the shared transport-neutral operation",
-		"lsp_trace_v1_incoming":              "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
-		"lsp_trace_v1_slice":                 "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
+		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
+		"lsp_trace_v1_export_retained_calls":     "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
+		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",
+		"lsp_trace_v1_filter":                    "Compare exactly two retained seed evidence sets with a mechanical filter",
+		"lsp_trace_v1_validate":                  "Validate retained evidence against its schema contract",
+		"lsp_trace_v1_verify":                    "Verify immutable publication custody, byte length, and digest",
+		"lsp_trace_v1_schema_get":                "Retrieve the exact schema contract for an evidence family and version",
+		"lsp_trace_v1_capabilities":              "Discover canonical LSP Trace tools, schemas, publication support, and limits",
+		"lsp_trace_v1_execute":                   "Execute one canonical request through the shared transport-neutral operation",
+		"lsp_trace_v1_incoming":                  "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
+		"lsp_trace_v1_slice":                     "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
 	}
 	tools := make([]Tool, 0, len(manifest.Tools))
 	for _, contract := range manifest.Tools {
@@ -158,6 +159,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
@@ -207,6 +209,9 @@ func appendUnique(ids []string, id string) []string {
 func withoutPublicationEnvelopes(ids []string) []string {
 	out := ids[:0]
 	for _, id := range ids {
+		if id == mcpcontract.BoundedAnalysisEnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(publicationErrorEnvelopeSchemaID) {
+			continue
+		}
 		if id != publicationEnvelopeSchemaID && id != compactEnvelopeSchemaID && id != publicationErrorEnvelopeSchemaID && id != mcpcontract.RetainedCallsEnvelopeID(publicationEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(compactEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(publicationErrorEnvelopeSchemaID) {
 			out = append(out, id)
 		}

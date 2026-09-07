@@ -298,4 +298,9 @@ fi
 "$release_tmp/lsp-trace" schema get --family retained-calls --version v1 > "$release_tmp/retained-calls.schema.json"
 cmp "$release_tmp/retained-calls.schema.json" "$root/internal/schema/schemas/lsp-trace.retained-calls.v1.schema.json"
 printf 'PASS R-RETAINED-CALLS-SCHEMA: exact committed schema\n'
+go test ./internal/boundedanalysis ./internal/mcpcontract ./cmd/lsp-trace-mcp -run 'TestBounded|TestAllThreeNode|TestParallelGroups|TestEmptyLimits|TestCoherentlyResealed|TestStrictInputIdentity|TestFixedIndependentBasis|TestContextMutationRemains' -count=1
+printf 'PASS R-BOUNDED-RETAINED-ANALYSIS: independent topology proofs, public CLI/MCP, strict input, immutable publication; no normative admission\n'
+"$release_tmp/lsp-trace" schema get --family bounded-retained-analysis --version v1 > "$release_tmp/bounded-retained-analysis.schema.json"
+cmp "$release_tmp/bounded-retained-analysis.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-analysis.v1.schema.json"
+printf 'PASS R-BOUNDED-ANALYSIS-SCHEMA: exact committed additive schema\n'
 printf 'RELEASE CHECK PASS\n'

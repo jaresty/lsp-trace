@@ -84,7 +84,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	if err := json.Unmarshal(lines[0], &response); err != nil {
 		t.Fatalf("%s: invalid tools response: %v stdout=%q", assertion, err, stdout.String())
 	}
-	if len(response.Result.Tools) != 14 {
+	if len(response.Result.Tools) != 15 {
 		t.Fatalf("%s: advertised=%d", assertion, len(response.Result.Tools))
 	}
 	if !bytes.Contains(lines[1], []byte(`"State":"READY"`)) || !bytes.Contains(lines[1], []byte(`"Generation":1`)) {

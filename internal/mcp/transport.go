@@ -134,7 +134,11 @@ func (s *Server) ServeContext(parent context.Context, stdin io.Reader, stdout io
 	for scanner.Scan() {
 		var req request
 		// Check the original wire value before ID or arguments become maps.
-		if err := strictjson.RejectDuplicates(scanner.Bytes()); err != nil {
+		wireErr := preflightBoundedWire(scanner.Bytes())
+		if wireErr == nil {
+			wireErr = strictjson.RejectDuplicates(scanner.Bytes())
+		}
+		if err := wireErr; err != nil {
 			if err := encoder.Encode(response{JSONRPC: "2.0", Error: &rpcError{Code: -32700, Message: "Parse error: " + err.Error()}}); err != nil {
 				return err
 			}
@@ -199,12 +203,16 @@ func (s *Server) handleContext(ctx context.Context, req request) response {
 
 func (s *Server) callContext(ctx context.Context, base response, raw json.RawMessage) response {
 	// Also cover internal callers entering with raw params rather than Serve.
-	if err := strictjson.RejectDuplicates(raw); err != nil {
-		base.Error = &rpcError{Code: -32602, Message: "Invalid params: " + err.Error()}
-		return base
-	}
 	var params callParams
-	if err := decodeClosed(raw, &params, "name", "arguments"); err != nil || params.Name == "" || params.Arguments == nil {
+	selected, decodeErr := decodeBoundedParams(raw, &params)
+	if !selected {
+		if err := strictjson.RejectDuplicates(raw); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params: " + err.Error()}
+			return base
+		}
+		decodeErr = decodeClosed(raw, &params, "name", "arguments")
+	}
+	if decodeErr != nil || params.Name == "" || params.Arguments == nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
 		return base
 	}
@@ -401,6 +409,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.Name == "lsp_trace_v1_export_retained_calls" {
 		env.EnvelopeSchemaID = mcpcontract.RetainedCallsEnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == "lsp_trace_v1_bounded_retained_analysis" {
+		env.EnvelopeSchemaID = mcpcontract.BoundedAnalysisEnvelopeID(env.EnvelopeSchemaID)
+	}
 	raw, err := json.Marshal(env)
 	if err == nil {
 		err = validateEmittedEnvelope(tool, env, raw)
@@ -574,6 +585,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Filter
 	case "lsp_trace_v1_export_retained_calls":
 		return operation.ExportRetainedCalls
+	case "lsp_trace_v1_bounded_retained_analysis":
+		return operation.BoundedRetainedAnalysis
 	case "lsp_trace_v1_incoming":
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":

@@ -87,7 +87,8 @@ func testRetainedCallsRealOffline(t *testing.T, cli, mcp string, input []byte) {
 	if p, err := retainedcalls.Reconstruct(e.Tables); err != nil || len(p.Edges) != 5 || p.Receipt.SupportTotal != 5 {
 		t.Fatalf("ASSERT_REAL_TABLES_ONLY: %v", err)
 	}
-	exportedPath := filepath.Join(dir, "exported.json")
+	testBoundedRealOffline(t, cli, mcp, raw)
+ exportedPath := filepath.Join(dir, "exported.json")
 	if err := os.WriteFile(exportedPath, raw, 0600); err != nil {
 		t.Fatal(err)
 	}

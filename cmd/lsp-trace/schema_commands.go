@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	"lsp-trace/internal/retainedcalls"
+	"lsp-trace/internal/boundedanalysis"
 	traceschema "lsp-trace/internal/schema"
 )
 
@@ -67,7 +67,23 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	var data []byte
 	var err error
-	if fs.Arg(0) == "-" {
+	if *family == boundedanalysis.Family {
+		reader := stdin
+		if fs.Arg(0) != "-" {
+			var f *os.File
+			f, err = os.Open(fs.Arg(0))
+			if err == nil {
+				defer f.Close()
+				reader = f
+			}
+		}
+		if err == nil {
+			data, err = io.ReadAll(io.LimitReader(reader, boundedanalysis.MaxBytes+1))
+		}
+		if err == nil && len(data) > boundedanalysis.MaxBytes {
+			err = fmt.Errorf("bounded analysis byte LIMIT")
+		}
+	} else if fs.Arg(0) == "-" {
 		data, err = io.ReadAll(stdin)
 	} else {
 		data, err = os.ReadFile(fs.Arg(0))
@@ -80,7 +96,7 @@ func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if *family == "" {
 		detected, err = traceschema.Validate(data, *alias)
 	} else {
-		detected, err = retainedcalls.ValidateFor(data, *family, *version)
+		detected, err = boundedanalysis.ValidateFor(data, *family, *version)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)

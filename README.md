@@ -2,6 +2,14 @@
 
 A language-neutral CLI for recursively tracing incoming LSP Call Hierarchy relations.
 
+## Offline bounded retained analysis
+
+Use `lsp-trace bounded-retained-analysis --operation PROJECT|PATH|COMPONENTS` on
+validated retained CALLS exports for directed unit-group projection, shortest paths,
+and explicit weak/strong components. The separate versioned contract preserves
+unverified, incomplete historical scope; it does not admit normative Program B.
+See [syntax, authority, bounds and validation](docs/bounded-retained-analysis.md).
+
 ## Build and test
 
 ```sh

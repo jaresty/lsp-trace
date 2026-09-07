@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"lsp-trace/internal/boundedanalysis"
 	"lsp-trace/internal/operation"
 )
 
@@ -21,14 +22,15 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		return nil, err
 	}
 	canonical := map[operation.Name]string{
-		operation.Capabilities:        "lsp_trace_v1_capabilities",
-		operation.SchemaGet:           "lsp_trace_v1_schema_get",
-		operation.Validate:            "lsp_trace_v1_validate",
-		operation.Verify:              "lsp_trace_v1_verify",
-		operation.Inspect:             "lsp_trace_v1_inspect",
-		operation.Filter:              "lsp_trace_v1_filter",
-		operation.CustodyExecute:      "lsp_trace_v1_execute",
-		operation.ExportRetainedCalls: "lsp_trace_v1_export_retained_calls",
+		operation.Capabilities:            "lsp_trace_v1_capabilities",
+		operation.SchemaGet:               "lsp_trace_v1_schema_get",
+		operation.Validate:                "lsp_trace_v1_validate",
+		operation.Verify:                  "lsp_trace_v1_verify",
+		operation.Inspect:                 "lsp_trace_v1_inspect",
+		operation.Filter:                  "lsp_trace_v1_filter",
+		operation.CustodyExecute:          "lsp_trace_v1_execute",
+		operation.ExportRetainedCalls:     "lsp_trace_v1_export_retained_calls",
+		operation.BoundedRetainedAnalysis: "lsp_trace_v1_bounded_retained_analysis",
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
@@ -50,6 +52,11 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 func (v *OperationInputValidator) ValidateOperationInput(name operation.Name, input json.RawMessage) error {
 	if v == nil {
 		return fmt.Errorf("operation input validator is nil")
+	}
+	if name == operation.BoundedRetainedAnalysis {
+		if err := boundedanalysis.Preflight(input, boundedanalysis.MaxBytes); err != nil {
+			return err
+		}
 	}
 	schemaID := v.schemaIDs[name]
 	if schemaID == "" {

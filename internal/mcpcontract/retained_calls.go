@@ -27,5 +27,5 @@ func WithRetainedCalls(manifest *Manifest) *Manifest {
 			copy.Tools = append(copy.Tools, ToolContract{Name: "lsp_trace_v1_export_retained_calls", Aliases: []string{"lsp_trace_export_retained_calls"}, InputSchemaID: RetainedCallsInputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{RetainedCallsArtifactID}, Advertised: true, Availability: "ENABLED"})
 		}
 	}
-	return &copy
+	return WithBoundedAnalysis(&copy)
 }

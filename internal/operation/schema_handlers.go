@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"lsp-trace/internal/retainedcalls"
+	"lsp-trace/internal/boundedanalysis"
 	"lsp-trace/internal/schema"
 )
 
@@ -54,13 +54,13 @@ func ValidateHandler(_ context.Context, request Request) (Result, *Failure) {
 	}
 	// New-family inline text preserves exact artifact bytes through transports
 	// which historically decode object arguments into maps. It is never a path.
-	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls {
+	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls || family == boundedanalysis.Family {
 		var text string
 		if json.Unmarshal(input.Input, &text) == nil {
 			input.Input = []byte(text)
 		}
 	}
-	detected, err := retainedcalls.ValidateFor(input.Input, family, version)
+	detected, err := boundedanalysis.ValidateFor(input.Input, family, version)
 	if err != nil {
 		code := "INPUT_INVALID"
 		if strings.HasPrefix(err.Error(), "unsupported schema family ") || strings.HasPrefix(err.Error(), "unsupported schema version ") || strings.HasPrefix(err.Error(), "schema version mismatch:") {

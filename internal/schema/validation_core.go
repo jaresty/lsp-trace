@@ -84,6 +84,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 	trimmed := bytes.TrimSpace(data)
 	var err error
 	switch {
+	case structural.Family == FamilyBoundedAnalysis:
+		return fmt.Errorf("bounded analysis requires composed boundedanalysis.ValidateFor semantic validation")
 	case structural.Family == FamilyRetainedCalls:
 		return fmt.Errorf("retained calls requires composed retainedcalls.ValidateFor semantic validation")
 	case structural.Family == FamilyGraphProvenance:

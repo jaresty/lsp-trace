@@ -446,6 +446,8 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		admit = admitGraphProvenance
 	case *family == "retained-calls" && *version == "v1":
 		admit = admitRetainedCalls
+	case *family == "bounded-retained-analysis" && *version == "v1":
+		admit = admitBoundedAnalysis
 	default:
 		fmt.Fprintln(stderr, "unsupported verification family/version")
 		return 1
