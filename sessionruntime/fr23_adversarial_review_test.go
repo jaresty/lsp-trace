@@ -2,12 +2,34 @@ package sessionruntime
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"lsp-trace/internal/manageddiagnostic"
 )
+
+func TestReviewAttemptIDDoesNotLeakInjectedPreimage(t *testing.T) {
+	const secret = "/caller/private/path/SECRET_NONCE"
+	cfg := attemptConfig(failingStarter{reason: "process start failed"}, manageddiagnostic.StartupAttemptID(secret))
+	m, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := string(m.Start(context.Background(), StartRequest{Profile: profile(t)}).AttemptID)
+	if strings.Contains(id, secret) || strings.Contains(id, "SECRET_NONCE") {
+		t.Fatalf("ASSERT_FR23_ATTEMPT_ID_PREIMAGE_WITHHELD: %q", id)
+	}
+	if len(id) != 64 {
+		t.Fatalf("ASSERT_FR23_ATTEMPT_ID_FIXED_FORMAT: len=%d id=%q", len(id), id)
+	}
+	for _, c := range id {
+		if !strings.ContainsRune("0123456789abcdef", c) {
+			t.Fatalf("ASSERT_FR23_ATTEMPT_ID_PATH_SAFE: %q", id)
+		}
+	}
+}
 
 func TestReviewDuplicateInjectedAttemptIDDoesNotAlias(t *testing.T) {
 	cfg := attemptConfig(failingStarter{reason: "process start failed"}, "duplicate", "duplicate")
