@@ -498,7 +498,12 @@ func ReconstructV2(t TablesV2) (ProjectionV2, error) {
 	return ProjectionV2{r, t.Bindings, t.Supplies, t.Captures, t.Context.WorkspaceURI, t.Context.CaptureBudget}, nil
 }
 func validateForV2(raw []byte) (string, error) {
-	if err := preflightExportV2(raw, MaxBytesV2); err != nil {
+	return validateForV2Observed(raw, nil)
+}
+
+func validateForV2Observed(raw []byte, observe func()) (string, error) {
+	admission := envelopeAdmissionV2{observe: observe}
+	if err := scanExportV2(raw, MaxBytesV2, true, &admission); err != nil {
 		return "", err
 	}
 	var e EvidenceV2
@@ -510,7 +515,7 @@ func validateForV2(raw []byte) (string, error) {
 	if e.SchemaVersion != VersionV2 || e.Policy != PolicyV2 || e.InputDigest != digest(VersionV2+":input", e.InputBytes) || e.Tables.Context.InputDigest != e.InputDigest {
 		return "", errors.New("V2 export identity/policy mismatch")
 	}
-	if _, err := graphprovenance.ValidateFor(e.InputBytes, graphprovenance.Family, "v2"); err != nil {
+	if err := admission.admit(e.InputBytes); err != nil {
 		return "", err
 	}
 	if _, err := schema.ValidateStructure(raw, Family, "v2"); err != nil {

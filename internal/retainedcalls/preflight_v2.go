@@ -16,9 +16,9 @@ import (
 // Scan known carriers iteratively before any recursive schema/semantic decoding.
 // Only the named byte carriers are decoded. Content and opaque data stay opaque.
 func preflightExportV2(raw []byte, max int) error {
-	return scanExportV2(raw, max, true)
+	return scanExportV2(raw, max, true, &envelopeAdmissionV2{})
 }
-func scanExportV2(raw []byte, max int, carriers bool) error {
+func scanExportV2(raw []byte, max int, carriers bool, admission *envelopeAdmissionV2) error {
 	if len(raw) > max {
 		return &LimitErrorV2{"carrier bytes", max}
 	}
@@ -97,7 +97,7 @@ func scanExportV2(raw []byte, max int, carriers bool) error {
 						// The finite input->graph/canonical receipt carrier grammar cannot recurse
 						// arbitrarily: nested input_bytes are not admitted by any typed contract.
 						if key == "input_bytes" {
-							if err = preflightEnvelopeV2(decoded); err != nil {
+							if err = admission.admit(decoded); err != nil {
 								return err
 							}
 						} else if err = scanLeafV2(decoded, limit); err != nil {
@@ -133,11 +133,31 @@ func scanExportV2(raw []byte, max int, carriers bool) error {
 // encoded JSON carriers. Their typed validators reject unknown members; string
 // values are never interpreted as member names or recursively decoded.
 func scanLeafV2(raw []byte, max int) error {
-	return scanExportV2(raw, max, false)
+	return scanExportV2(raw, max, false, nil)
 }
-func preflightEnvelopeV2(raw []byte) error {
+
+// envelopeAdmissionV2 belongs to one validation invocation. input is an owned,
+// immutable copy of the most recently admitted bytes, never a digest, borrowed
+// slice, or mutable typed graph. Empty input cannot be admitted. Keeping one
+// value bounds retention even for invalid exports with extra named carriers.
+// The observer is a private test seam, not admission authority.
+type envelopeAdmissionV2 struct {
+	input   string
+	observe func()
+}
+
+func (a *envelopeAdmissionV2) admit(raw []byte) error {
+	if a.input != "" && a.input == string(raw) {
+		return nil
+	}
+	if a.observe != nil {
+		a.observe()
+	}
 	// Graph-provenance owns the envelope's complete preflight (including its
 	// graph_bytes) and exact admission. No recursive export validator is invoked.
-	_, err := graphprovenance.ValidateFor(raw, graphprovenance.Family, "v2")
-	return err
+	if _, err := graphprovenance.ValidateFor(raw, graphprovenance.Family, "v2"); err != nil {
+		return err
+	}
+	a.input = string(raw)
+	return nil
 }
