@@ -373,7 +373,6 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		}
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.workers--
 	select {
 	case m.workerDone <- struct{}{}:
@@ -383,6 +382,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 	// here as well so no late completion can mutate a replacement record.
 	r = m.sessions[req.SessionID]
 	if r == nil || r.record.Generation != req.Generation {
+		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
 	}
 	r.protocolOwned = false
@@ -396,6 +396,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 			diagnostic.Write = manageddiagnostic.IOFacts{State: manageddiagnostic.IOFailed, Messages: 1}
 			m.diagnostics.Record(diagnostic)
 		}
+		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: failure}, diagnosticEventTerminalFailure)
 	}
 	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
@@ -414,6 +415,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 			Params: append(json.RawMessage(nil), params...),
 		}
 	}
+	m.mu.Unlock()
 	return finishDocument(result, diagnosticEventTerminalResponse)
 }
 

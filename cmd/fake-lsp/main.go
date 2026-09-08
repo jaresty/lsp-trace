@@ -136,6 +136,10 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				return fixtureInputErrorCode
 			}
 		case "textDocument/prepareCallHierarchy":
+			if os.Getenv("LSP_TRACE_FAKE_LSP_HANG_PREPARE") == "1" {
+				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
+				continue
+			}
 			uri, _ := json.Marshal(documentURI)
 			result := json.RawMessage(fmt.Sprintf(`[{"name":"leaf","kind":12,"uri":%s,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`, uri))
 			if err := w.Write(response(m.ID, result)); err != nil {

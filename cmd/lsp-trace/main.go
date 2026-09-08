@@ -46,6 +46,7 @@ const usageText = `usage:
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-
   lsp-trace validate [--schema v1|v2|v3] PATH|-
+  lsp-trace validate-private-request-diagnostics PATH
   lsp-trace skill get`
 
 type stringsFlag []string
@@ -127,6 +128,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "validate" {
 		return runValidate(args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "validate-private-request-diagnostics" {
+		return runPrivateRequestDiagnosticValidation(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "slice" {
 		return runSlice(args[1:])

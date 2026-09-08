@@ -1,6 +1,14 @@
 # Internal managed diagnostics
 
-FR23's first checkpoint is internal only. `internal/manageddiagnostic` owns safe diagnostic records and semantic validation; `sessionruntime.Manager` optionally retains them by exact opaque session ID and generation. The retained stores remain internal and are not a public schema family, registry entry, graph-provenance field, or MCP tool. FR23 now provides one explicit CLI-only private startup sink; it performs no default write and makes no public-release or MCP-availability claim.
+FR23's internal diagnostics remain outside public schema families, registries, graph provenance, and MCP tools. The existing CLI-only startup sink remains opt-in and unchanged; no private sink writes by default.
+
+## Private V3 CLI request-failure artifact
+
+V3 CLI acquisition may opt in only with the pair `--private-request-diagnostic-root ABSOLUTE_ROOT --private-request-diagnostic-selector SAFE_RELATIVE_SELECTOR`. Omission creates no private artifact. Publication reuses the startup sink's selector safety and pinned-root, create-only mode 0600 primitives, synchronizes the file and root, and never replaces an existing name. `validate-private-request-diagnostics PATH` performs bounded, duplicate-key-rejecting, unknown-field-rejecting semantic validation.
+
+The private projection carries only allowlisted lifecycle and integrity facts. It excludes raw stderr, error text, RPC IDs, messages, params, results, source, URI, path, cwd, environment values, command, and arguments. Public V3 capture intentionally retains its historical composition while the private observer collects records, preserving public V1/V2/V3 bytes and MCP behavior.
+
+Private finalization occurs synchronously only after successful public output. It is secondary and non-overriding: projection or publication failure prints only `private request diagnostics unavailable` and does not change already-produced public bytes or status.
 
 ## Current capture
 

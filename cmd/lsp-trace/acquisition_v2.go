@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -83,6 +85,47 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 	return runAcquisitionVersion(mode, "v2", args, stdout, stderr)
 }
 
+// privateAcquisitionRuntime intentionally exposes only the historical public
+// executor contract. Its manager may retain private diagnostics, but those
+// records cannot enter or alter the frozen public V3 composition.
+type privateAcquisitionRuntime struct {
+	manager  *sessionruntime.Manager
+	mu       sync.Mutex
+	requests []manageddiagnostic.Record
+}
+
+func (r *privateAcquisitionRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
+	return r.manager.Metadata(id, generation)
+}
+func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	prior := request.DiagnosticObserver
+	request.DiagnosticObserver = func(record manageddiagnostic.Record) {
+		if prior != nil {
+			prior(record)
+		}
+		r.mu.Lock()
+		r.requests = append(r.requests, record.Clone())
+		r.mu.Unlock()
+	}
+	return r.manager.RoundTrip(ctx, request)
+}
+func (r *privateAcquisitionRuntime) privateQuery() manageddiagnostic.QueryResult {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]manageddiagnostic.Record, len(r.requests))
+	for i := range r.requests {
+		out[i] = r.requests[i].Clone()
+	}
+	if len(out) == 0 {
+		return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
+	}
+	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryAvailable, Records: out}
+}
+func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
+	return r.manager.PrepareDocument(ctx, request)
+}
+func (r *privateAcquisitionRuntime) Records() []sessionruntime.Record { return r.manager.Records() }
+
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
 	fs := flag.NewFlagSet(mode+" v2", flag.ContinueOnError)
@@ -92,6 +135,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var manifestPath string
 	var diagnosticRoot, diagnosticSelector string
 	var bindingRoot, bindingSelector string
+	var requestDiagnosticRoot, requestDiagnosticSelector string
 	fs.StringVar(&c.workspace, "workspace", "", "host workspace path")
 	fs.StringVar(&c.command, "server", "", "trusted language server executable")
 	fs.StringVar(&profile.Name, "profile", "", "named server profile")
@@ -105,12 +149,18 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
 	fs.StringVar(&bindingRoot, "private-seed-binding-root", "", "caller-approved seed-binding root (v3 only)")
 	fs.StringVar(&bindingSelector, "private-seed-binding-selector", "", "safe relative seed-binding selector (v3 only)")
+	fs.StringVar(&requestDiagnosticRoot, "private-request-diagnostic-root", "", "caller-approved private request diagnostic root (v3 only)")
+	fs.StringVar(&requestDiagnosticSelector, "private-request-diagnostic-selector", "", "safe relative private request diagnostic selector (v3 only)")
 	fs.BoolVar(&c.pretty, "pretty", false, "indent outer JSON without changing embedded graph bytes")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
 	if fs.NArg() != 0 || c.workspace == "" || manifestPath == "" {
 		return fail(fmt.Errorf("v2 requires --workspace and --seed-manifest with no positional arguments"))
+	}
+	requestDiagnosticsRequested := requestDiagnosticRoot != "" || requestDiagnosticSelector != ""
+	if requestDiagnosticsRequested && (version != "v3" || requestDiagnosticRoot == "" || requestDiagnosticSelector == "") {
+		return fail(fmt.Errorf("private request diagnostics require v3 and one rooted selector pair"))
 	}
 	if profile.ConfigPath != "" && profile.Name == "" {
 		return fail(fmt.Errorf("--config requires --profile"))
@@ -187,8 +237,10 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if err != nil {
 		return fail(err)
 	}
+	const privateMaxRecords = 64
+	const privateMaxBytes = 64 << 10
 	var diagnosticStore *manageddiagnostic.Store
-	if diagnosticRoot != "" {
+	if diagnosticRoot != "" || requestDiagnosticsRequested {
 		diagnosticStore = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: manageddiagnostic.StartupDiagnosticsMaxRecords, MaxBytes: manageddiagnostic.StartupDiagnosticsMaxBytes})
 	}
 	var binding *seedbinding.Manifest
@@ -242,7 +294,8 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
 	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest})
-	result, failed := acquisitionops.NewExecutor(manager).Execute(ctx, operation.Request{Name: op, Input: input})
+	privateRuntime := &privateAcquisitionRuntime{manager: manager}
+	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
 	if failed != nil {
 		return fail(failed)
 	}
@@ -265,6 +318,18 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	if err != nil {
 		return fail(err)
+	}
+	// Private finalization is synchronous but secondary and non-overriding: the
+	// already-emitted public V3 bytes and their status remain authoritative.
+	if requestDiagnosticsRequested {
+		query := privateRuntime.privateQuery()
+		privateRaw, privateErr := projectPrivateRequestDiagnostic(string(started.AttemptID), started.SessionID, started.Generation, query, data, privateMaxRecords, privateMaxBytes)
+		if privateErr == nil {
+			privateErr = publishPrivateRequestDiagnostic(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw)
+		}
+		if privateErr != nil {
+			fmt.Fprintln(stderr, "private request diagnostics unavailable")
+		}
 	}
 	return 0 // Every structurally valid acquisition retains partial outcomes.
 }
