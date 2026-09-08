@@ -246,3 +246,102 @@ bounded integration proof, not public hydration. Public schema/operation
 registration, CLI/MCP selectors, body opt-in, publication and capability discovery
 remain deferred. Public parity, publication custody, real-provider boundary
 support and deployed availability are **not qualified by this proof**.
+
+## Internal focused-selection checkpoint
+
+This additive Go API implements the selection boundary of FR21 points 10/11,
+not their public CLI/MCP surfaces or full AC17 qualification:
+
+```go
+focus := hydratedevidence.DefaultFocusRequest()
+focus.NodeIDs = []string{/* exact native graph node IDs */}
+focus.RelationIDs = []string{/* exact native graph edge relation IDs */}
+focus.SidecarRecordIDs = []string{/* exact admitted sidecar catalog record IDs */}
+// All three default false; each is an independent explicit choice.
+focus.IncludeBodies = true
+focus.WholeFile = false
+focus.EndpointContext = false
+result, err := hydratedevidence.HydrateFocused(input, focus)
+err = hydratedevidence.ValidateFocused(input, focus, result)
+// Existing core interfaces remain directly usable, without a new paging algorithm.
+err = hydratedevidence.Validate(input, result.Request, result.Bundle)
+text, err := hydratedevidence.Text(input, result.Request, result.Bundle)
+```
+
+`FocusRequest.CorePolicy` supplies mandatory bounded core limits; use
+`DefaultFocusRequest` rather than an all-zero policy. Focus `IncludeBodies`
+overrides the core policy's body bit, so the latter cannot bypass the focus
+opt-in. Optional `PositionEncoding` supplies an explicit conversion encoding
+(e.g. for V1); conflicting V2 encoding receives the core's invalid-coordinate
+outcome. It does not convert caller `SPAN` coordinates into native coordinates.
+No boundary inference or new provider adapter is added.
+
+Selection policy is deliberately narrow and recorded in the manifest:
+
+- `RETAINED_NODE_RANGE`: exact typed native `nodes[i].id` selects the binding at
+  `nodes[i]/range`, not all string/pointer-prefix matches or an inferred complete
+  function. V2 pointers retain `/graph`. Identifier-only ranges stay identifier-only.
+- A native `edges[i].relation_id` selects **every** `edges[i]/call_sites[j]` with
+  the exact caller node's URI and retained range. Endpoint declaration ranges
+  are added only with `EndpointContext`. No acquisition bookkeeping is mined.
+- `ALL_EXACT_BOUND_RECEIPTS`: all receipt IDs bound to each selected carrier are
+  included in sorted source-ID order, including distinct supply and post-capture
+  receipts at the same URI. This is not a latest/analyzed-version decision.
+- `PRESERVE_OCCURRENCES`: input order is node IDs, relation IDs, then sidecar IDs;
+  order and duplicate occurrences within each list are preserved. Generated core
+  origin IDs distinguish each occurrence/site/receipt. Empty IDs remain unknown.
+- Only actual records in an admitted `hydrated-sidecar.v1` envelope are accepted
+  by the sidecar selector; receipt handles/native pointers are not sidecar records.
+  Sidecar kinds and relationship references remain opaque asserted claims.
+
+Every requested occurrence remains in `Manifest.Origins`. `MAPPED` means an
+identity join, **not** successful body delivery or complete context. Each site's
+`OriginIDs` indexes `Bundle.Origins` for the exact privacy, availability,
+coordinate, and budget disposition. Unknown/ambiguous IDs, unsupported record
+selectors, no-call-site groups, absent bindings/sources/ranges and invalid
+retained anchors have explicit manifest dispositions. A zero-site edge retains
+its requested relation and endpoints with `NO_CALL_SITES`, even when endpoint
+context is requested; it never claims call-site context from endpoints alone.
+
+All `NON_SOURCE` catalog records are counted as excluded bookkeeping, not
+selected with empty source IDs and not reported as missing-source warnings.
+The **full** catalog remains available through `Inspect`, and the **full source
+catalog remains in the core bundle** because core semantic validation requires
+it. It is a validation dependency, not an instruction to capture/render every
+source. The manifest determines focused selection; a future public renderer can
+project it without trimming the validated bundle. Existing core `Text` still
+prints the complete source catalog and only the selected origins/spans.
+
+The manifest digest binds exact input digests, exact focus-request/policy digest,
+declared policies, ordered requested occurrences and all site/origin mappings.
+Validation re-admits separately supplied original bytes and focus parameters,
+reconstructs the expected plan, separately audits native array-based coverage
+and receipt/origin foreign keys, then calls existing core `Validate` (never
+`Hydrate`). The native admission and typed projection are shared, not a second
+native parser or independent custody attestation. Rehashing an omitted requested
+ID, omitted call-site, changed authority or substituted policy cannot repair it.
+
+The core origin cap also bounds requested focus occurrences, expanded sites and
+expanded receipt selections, including sites with no receipts. Focus input is
+bounded to 4 MiB and 1024 bytes per requested ID; combined result JSON is bounded
+by `MaxOutputBytes`. There is no wall-clock/RSS promise, new paging/publication
+format, shared-registry schema, public wiring, or automatic source acquisition.
+
+### Original FR20 fixture and measurement convention
+
+`testdata/focused-fr20.v2.json` is an unchanged copy of the original public FR20
+fake-wire artifact retained by the earlier integration run, SHA-256
+`8913b3d062312be15531728f801e2f677f4a65852fd5fbeaf4ef1007ae1f83cf`.
+The source checkout was deleted by that original run. The test reads artifact
+bytes only, selects its actual two native edge IDs, and reuses core hydration,
+validation and Text; it neither rebuilds a graph nor runs a provider.
+
+`TestFocusedActualFR20Measurement` reports UTF-8 bytes of core Text for the two
+selected relationships versus a baseline selecting every catalog record/receipt
+pair (including an empty source ID for source-less records), both in retained-range
+mode with body inclusion. It separately reports focused JSON bytes, distinct
+selected span-content bytes and distinct full retained source-content bytes
+(SHA-256 deduplication for measurement only, not receipt identity merging).
+These are this pinned fixture's measurements, not the unprovided D01 trial, not
+public renderer measurements, and not a universal reduction ratio. D01 replay,
+CLI/MCP parity, deployment and full FR21 acceptance remain deferred.

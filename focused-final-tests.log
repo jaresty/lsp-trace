@@ -1,0 +1,139 @@
+=== RUN   TestSidecarStructureBeforeSemantics
+--- PASS: TestSidecarStructureBeforeSemantics (0.01s)
+=== RUN   TestCoordinateAuthoritySeparateFromRecord
+--- PASS: TestCoordinateAuthoritySeparateFromRecord (0.01s)
+=== RUN   TestSidecarRecordPointer
+--- PASS: TestSidecarRecordPointer (0.01s)
+=== RUN   TestAdmissionAndSelectionAdversaries
+=== RUN   TestAdmissionAndSelectionAdversaries/digest
+=== RUN   TestAdmissionAndSelectionAdversaries/authority
+=== RUN   TestAdmissionAndSelectionAdversaries/qualification
+=== RUN   TestAdmissionAndSelectionAdversaries/source-join
+=== RUN   TestAdmissionAndSelectionAdversaries/unknown-family
+--- PASS: TestAdmissionAndSelectionAdversaries (0.03s)
+    --- PASS: TestAdmissionAndSelectionAdversaries/digest (0.00s)
+    --- PASS: TestAdmissionAndSelectionAdversaries/authority (0.00s)
+    --- PASS: TestAdmissionAndSelectionAdversaries/qualification (0.00s)
+    --- PASS: TestAdmissionAndSelectionAdversaries/source-join (0.00s)
+    --- PASS: TestAdmissionAndSelectionAdversaries/unknown-family (0.00s)
+=== RUN   TestDistinctAssertedReceiptsDoNotMerge
+--- PASS: TestDistinctAssertedReceiptsDoNotMerge (0.01s)
+=== RUN   TestCoordinateOracle
+=== RUN   TestCoordinateOracle/utf8
+=== RUN   TestCoordinateOracle/utf16
+=== RUN   TestCoordinateOracle/utf32
+=== RUN   TestCoordinateOracle/bom-crlf
+=== RUN   TestCoordinateOracle/last-line
+=== RUN   TestCoordinateOracle/endpoint
+=== RUN   TestCoordinateOracle/surrogate
+=== RUN   TestCoordinateOracle/split-utf8
+=== RUN   TestCoordinateOracle/line-break-interior
+=== RUN   TestCoordinateOracle/unknown-encoding
+=== RUN   TestCoordinateOracle/unsupported-source-encoding
+=== RUN   TestCoordinateOracle/negative
+=== RUN   TestCoordinateOracle/reversed
+=== RUN   TestCoordinateOracle/beyond-end
+--- PASS: TestCoordinateOracle (0.00s)
+    --- PASS: TestCoordinateOracle/utf8 (0.00s)
+    --- PASS: TestCoordinateOracle/utf16 (0.00s)
+    --- PASS: TestCoordinateOracle/utf32 (0.00s)
+    --- PASS: TestCoordinateOracle/bom-crlf (0.00s)
+    --- PASS: TestCoordinateOracle/last-line (0.00s)
+    --- PASS: TestCoordinateOracle/endpoint (0.00s)
+    --- PASS: TestCoordinateOracle/surrogate (0.00s)
+    --- PASS: TestCoordinateOracle/split-utf8 (0.00s)
+    --- PASS: TestCoordinateOracle/line-break-interior (0.00s)
+    --- PASS: TestCoordinateOracle/unknown-encoding (0.00s)
+    --- PASS: TestCoordinateOracle/unsupported-source-encoding (0.00s)
+    --- PASS: TestCoordinateOracle/negative (0.00s)
+    --- PASS: TestCoordinateOracle/reversed (0.00s)
+    --- PASS: TestCoordinateOracle/beyond-end (0.00s)
+=== RUN   TestMixedOfflineUnion
+--- PASS: TestMixedOfflineUnion (0.01s)
+=== RUN   TestPrivacyAndDispositions
+--- PASS: TestPrivacyAndDispositions (0.01s)
+=== RUN   TestSourceVersionAndWholeFile
+--- PASS: TestSourceVersionAndWholeFile (0.01s)
+=== RUN   TestSidecarStatesAndUnsupported
+--- PASS: TestSidecarStatesAndUnsupported (0.01s)
+=== RUN   TestGlobalBudgets
+--- PASS: TestGlobalBudgets (0.01s)
+=== RUN   TestValidatorRejectsTamperWithoutProducer
+=== RUN   TestValidatorRejectsTamperWithoutProducer/hash
+=== RUN   TestValidatorRejectsTamperWithoutProducer/authority
+=== RUN   TestValidatorRejectsTamperWithoutProducer/span
+=== RUN   TestValidatorRejectsTamperWithoutProducer/origin
+--- PASS: TestValidatorRejectsTamperWithoutProducer (0.02s)
+    --- PASS: TestValidatorRejectsTamperWithoutProducer/hash (0.00s)
+    --- PASS: TestValidatorRejectsTamperWithoutProducer/authority (0.00s)
+    --- PASS: TestValidatorRejectsTamperWithoutProducer/span (0.00s)
+    --- PASS: TestValidatorRejectsTamperWithoutProducer/origin (0.00s)
+=== RUN   TestFocusedV1ZeroSitesAndMissing
+=== RUN   TestFocusedV1ZeroSitesAndMissing/readable
+=== RUN   TestFocusedV1ZeroSitesAndMissing/missing
+--- PASS: TestFocusedV1ZeroSitesAndMissing (0.06s)
+    --- PASS: TestFocusedV1ZeroSitesAndMissing/readable (0.03s)
+    --- PASS: TestFocusedV1ZeroSitesAndMissing/missing (0.03s)
+=== RUN   TestFocusedV1DirectSitesInvalidAndSPAN
+--- PASS: TestFocusedV1DirectSitesInvalidAndSPAN (0.02s)
+=== RUN   TestFocusedIndependentCoverage
+--- PASS: TestFocusedIndependentCoverage (0.14s)
+=== RUN   TestFocusedLimitsAndPolicyBinding
+--- PASS: TestFocusedLimitsAndPolicyBinding (0.21s)
+=== RUN   TestFocusedTypedJoin
+--- PASS: TestFocusedTypedJoin (0.07s)
+=== RUN   TestFocusedUnknownDuplicate
+--- PASS: TestFocusedUnknownDuplicate (0.07s)
+=== RUN   TestFocusedCatalogNonSource
+--- PASS: TestFocusedCatalogNonSource (0.15s)
+=== RUN   TestFocusedPrivacyRangesVersions
+--- PASS: TestFocusedPrivacyRangesVersions (0.34s)
+=== RUN   TestFocusedEndpointPolicy
+--- PASS: TestFocusedEndpointPolicy (0.07s)
+=== RUN   TestFocusedTampering
+=== RUN   TestFocusedTampering/drop-requested
+=== RUN   TestFocusedTampering/drop-callsite
+=== RUN   TestFocusedTampering/authority
+=== RUN   TestFocusedTampering/resolved-unknown
+=== RUN   TestFocusedTampering/input
+=== RUN   TestFocusedTampering/policy
+--- PASS: TestFocusedTampering (0.76s)
+    --- PASS: TestFocusedTampering/drop-requested (0.11s)
+    --- PASS: TestFocusedTampering/drop-callsite (0.11s)
+    --- PASS: TestFocusedTampering/authority (0.20s)
+    --- PASS: TestFocusedTampering/resolved-unknown (0.11s)
+    --- PASS: TestFocusedTampering/input (0.11s)
+    --- PASS: TestFocusedTampering/policy (0.11s)
+=== RUN   TestFocusedSidecarStates
+--- PASS: TestFocusedSidecarStates (0.19s)
+=== RUN   TestFocusedUnsupported
+--- PASS: TestFocusedUnsupported (0.00s)
+=== RUN   TestFocusedActualFR20Measurement
+    focused_test.go:304: MEASURE actual-fr20 sha256=8913b3d062312be15531728f801e2f677f4a65852fd5fbeaf4ef1007ae1f83cf selected_core_text_utf8_bytes=6032 all_catalog_core_text_utf8_bytes=249648 focused_json_bytes=13582 unique_selected_content_bytes=1 unique_retained_source_bytes=9 catalog_sources=5 catalog_records=272 selected_origins=3
+--- PASS: TestFocusedActualFR20Measurement (0.38s)
+=== RUN   TestInvalidNativeAnchorNeverUpgraded
+--- PASS: TestInvalidNativeAnchorNeverUpgraded (0.00s)
+=== RUN   TestIndependentIntervalOracle
+--- PASS: TestIndependentIntervalOracle (0.00s)
+=== RUN   TestV2NativeAdmission
+--- PASS: TestV2NativeAdmission (0.06s)
+=== RUN   TestCallerBoundaryAuthority
+--- PASS: TestCallerBoundaryAuthority (0.01s)
+=== RUN   TestImmutablePaging
+--- PASS: TestImmutablePaging (0.02s)
+=== RUN   TestOverPageWholeSpan
+--- PASS: TestOverPageWholeSpan (0.01s)
+=== RUN   TestResourceEdges
+--- PASS: TestResourceEdges (0.02s)
+=== RUN   TestOpaqueSourceContentAndEmptyUnion
+--- PASS: TestOpaqueSourceContentAndEmptyUnion (0.01s)
+=== RUN   TestOfflineProductionSurface
+--- PASS: TestOfflineProductionSurface (0.00s)
+=== RUN   TestTextRetainsNativeRecordIdentity
+--- PASS: TestTextRetainsNativeRecordIdentity (0.01s)
+=== RUN   TestWireAndText
+--- PASS: TestWireAndText (0.02s)
+=== RUN   TestOwnedSchema
+--- PASS: TestOwnedSchema (0.01s)
+PASS
+ok  	lsp-trace/internal/hydratedevidence	3.021s

@@ -1,0 +1,7 @@
+PROCEDURE: go test -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-027e3804-8501-4a4-db49fcb0/.focused-overlay.json ./internal/hydratedevidence -run ^TestFocusedIndependentCoverage$ -count=1 -v
+=== RUN   TestFocusedIndependentCoverage
+    focused_native_test.go:124: ASSERT_INDEPENDENT_COVERAGE: coherently omitted native callsite accepted
+--- FAIL: TestFocusedIndependentCoverage (0.09s)
+FAIL
+FAIL	lsp-trace/internal/hydratedevidence	0.353s
+FAIL
