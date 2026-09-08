@@ -157,7 +157,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 		if strings.HasPrefix(registration.Path, "../") {
 			return nil, fmt.Errorf("external schema %q has no embedded contract document", schemaID)
 		}
-		raw, err := contractFiles.ReadFile(path.Join("testdata", registration.Path))
+		raw, err := readContractSchema(path.Join("testdata", registration.Path))
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +281,7 @@ func registeredCompiler(manifest *Manifest) (*jsonschema.Compiler, map[string]bo
 		if registration.Path[:min(len(registration.Path), 3)] == "../" {
 			continue
 		}
-		raw, err := contractFiles.ReadFile(path.Join("testdata", registration.Path))
+		raw, err := readContractSchema(path.Join("testdata", registration.Path))
 		if err != nil {
 			return nil, nil, err
 		}

@@ -1,0 +1,42 @@
+package mcp
+
+import (
+	"encoding/json"
+	"lsp-trace/internal/mcpcontract"
+	"testing"
+)
+
+func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
+	registry := NewRegistry(false)
+	for _, name := range []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming", "lsp_trace_v2_verify"} {
+		tool, ok := registry.Resolve(name)
+		if !ok || tool.Description == "" || len(tool.Aliases) != 0 || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.GraphProvenanceV2ArtifactID {
+			t.Fatalf("ASSERT_V2_EXPLICIT_REGISTRATION: %s %+v", name, tool)
+		}
+	}
+	matrix, ok := registry.Capabilities()["acquisition_v2"].(map[string]any)
+	if !ok || matrix["deployed_availability"] != "UNKNOWN" || matrix["default_acquisition_version"] != "v1" || matrix["public_analysis"] != "NOT_IMPLEMENTED" {
+		t.Fatalf("ASSERT_V2_SOURCE_NOT_DEPLOYMENT: %v", matrix)
+	}
+	valid := map[string]any{"session_id": "s", "generation": 1, "seed_manifest": map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///fixture/a.go", "line": 0, "character": 0}}, "required_targets": []any{}}}
+	raw, _ := json.Marshal(valid)
+	if err := mcpcontract.ValidateJSON(mcpcontract.AcquisitionV2InputID, raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"workspace", "seed_file", "uri", "symbol", "acquisition_version", "max_nodes"} {
+		bad := cloneMap(valid)
+		bad[key] = "caller-choice"
+		raw, _ := json.Marshal(bad)
+		if mcpcontract.ValidateJSON(mcpcontract.AcquisitionV2InputID, raw) == nil {
+			t.Fatalf("ASSERT_V2_UNKNOWN_SELECTOR_REJECTED: %s", key)
+		}
+	}
+	for _, bad := range []any{"/tmp/manifest.json", nil} {
+		in := cloneMap(valid)
+		in["seed_manifest"] = bad
+		raw, _ := json.Marshal(in)
+		if mcpcontract.ValidateJSON(mcpcontract.AcquisitionV2InputID, raw) == nil {
+			t.Fatal("ASSERT_V2_STRUCTURED_NOT_PATH")
+		}
+	}
+}

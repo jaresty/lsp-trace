@@ -33,10 +33,11 @@ const (
 type ExecutorFamily string
 
 const (
-	OfflineExecutorFamily   ExecutorFamily = "offline"
-	LifecycleExecutorFamily ExecutorFamily = "lifecycle"
-	IncomingExecutorFamily  ExecutorFamily = "incoming"
-	SliceExecutorFamily     ExecutorFamily = "slice"
+	OfflineExecutorFamily       ExecutorFamily = "offline"
+	LifecycleExecutorFamily     ExecutorFamily = "lifecycle"
+	IncomingExecutorFamily      ExecutorFamily = "incoming"
+	SliceExecutorFamily         ExecutorFamily = "slice"
+	AcquisitionV2ExecutorFamily ExecutorFamily = "acquisition-v2"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -92,6 +93,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	}
 	manifest = mcpcontract.WithRetainedCalls(manifest)
 	descriptions := map[string]string{
+		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
 		"lsp_trace_v1_bounded_retained_ranking":  "Bounded PageRank or exact-seed PPR over admitted historical retained unit CALLS groups; not source completeness or authentication",
 		"lsp_trace_v1_bounded_retained_metrics":  "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
 		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
@@ -103,6 +105,8 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_schema_get":                "Retrieve the exact schema contract for an evidence family and version",
 		"lsp_trace_v1_capabilities":              "Discover canonical LSP Trace tools, schemas, publication support, and limits",
 		"lsp_trace_v1_execute":                   "Execute one canonical request through the shared transport-neutral operation",
+		"lsp_trace_v2_slice":                     "Acquire ordered required targets with shared limits and retained directed witnesses; source implementation, not deployed qualification or analyzed-source authentication",
+		"lsp_trace_v2_incoming":                  "Acquire ordered required callers with shared limits and required-to-root witnesses; source implementation, not deployed qualification or analyzed-source authentication",
 		"lsp_trace_v1_incoming":                  "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
 		"lsp_trace_v1_slice":                     "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
 	}
@@ -127,6 +131,8 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			executorFamily = IncomingExecutorFamily
 		} else if contract.Name == "lsp_trace_v1_slice" {
 			executorFamily = SliceExecutorFamily
+		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" {
+			executorFamily = AcquisitionV2ExecutorFamily
 		}
 		tools = append(tools, Tool{
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
@@ -160,6 +166,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			addNormalizedProviderInputProperties(tools[i].InputSchema)
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedMetricsArtifactID)
@@ -213,6 +220,9 @@ func appendUnique(ids []string, id string) []string {
 func withoutPublicationEnvelopes(ids []string) []string {
 	out := ids[:0]
 	for _, id := range ids {
+		if id == mcpcontract.AcquisitionV2EnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.AcquisitionV2EnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.AcquisitionV2EnvelopeID(publicationErrorEnvelopeSchemaID) {
+			continue
+		}
 		if id == mcpcontract.BoundedRankingEnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.BoundedRankingEnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.BoundedRankingEnvelopeID(publicationErrorEnvelopeSchemaID) {
 			continue
 		}
@@ -364,7 +374,18 @@ func (r *Registry) Capabilities() map[string]any {
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"tools": r.Tools(), "selector_publication_supported": r.publicationSupported,
 		"configured_providers": r.providerInventory.Entries(),
-		"inline_byte_limit":    uint64(inlineByteLimit), "list_page_max": uint32(100),
+		"acquisition_v2": map[string]any{
+			"contract_version": "lsp-trace.public-acquisition.v2", "default_acquisition_version": "v1",
+			"source_implementation": "EXPERIMENTAL", "deployed_availability": "UNKNOWN",
+			"producers":       []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming"},
+			"cli_producers":   []string{"slice --acquisition-version v2", "incoming --acquisition-version v2"},
+			"input_schema_id": mcpcontract.AcquisitionV2InputID, "output_schema_id": mcpcontract.GraphProvenanceV2ArtifactID,
+			"public_consumers": []string{"validate --family graph-provenance --version v2", "verify --family graph-provenance --version v2", "lsp_trace_v1_validate (explicit graph-provenance/v2)", "lsp_trace_v2_verify"},
+			"public_export":    "NOT_IMPLEMENTED", "public_analysis": "NOT_IMPLEMENTED",
+			"coordinate_convention": "zero-based-session", "max_targets": 64, "max_input_bytes": 262144,
+			"authority": "EXACT_HOST_SESSION_GENERATION_WORKSPACE", "analyzed_source": "UNVERIFIED",
+		},
+		"inline_byte_limit": uint64(inlineByteLimit), "list_page_max": uint32(100),
 		"normalized_relations": map[string]any{
 			"kinds":                []string{"CALLS", "BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"},
 			"default_when_omitted": "CALLS_ONLY", "provider_authority": "HOST_PROVISIONED_ONLY",

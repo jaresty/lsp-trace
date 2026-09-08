@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"time"
 
+	"lsp-trace/acquisitionops"
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/custodyevidence"
 	executionruntime "lsp-trace/internal/execution"
@@ -163,6 +164,7 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.New(selected))
 	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
 	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
+	server.Executors[mcp.AcquisitionV2ExecutorFamily] = acquisitionops.NewExecutor(selected)
 }
 
 func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
@@ -228,6 +230,7 @@ func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.Con
 	if err != nil {
 		return nil, nil, err
 	}
+	handlers[operation.VerifyV2] = operation.NewVerifyV2Handler(commandCustodyLoader{})
 	handlers[operation.ExportRetainedCalls] = operation.ExportRetainedCallsHandler
 	handlers[operation.BoundedRetainedAnalysis] = operation.BoundedRetainedAnalysisHandler
 	handlers[operation.BoundedRetainedMetrics] = operation.BoundedRetainedMetricsHandler
@@ -251,9 +254,10 @@ func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.Con
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
-			mcp.LifecycleExecutorFamily: lifecycleops.NewExecutor(lifecycleops.New(manager)),
-			mcp.IncomingExecutorFamily:  incomingops.NewExecutor(manager),
-			mcp.SliceExecutorFamily:     sliceops.NewExecutor(manager),
+			mcp.LifecycleExecutorFamily:     lifecycleops.NewExecutor(lifecycleops.New(manager)),
+			mcp.IncomingExecutorFamily:      incomingops.NewExecutor(manager),
+			mcp.SliceExecutorFamily:         sliceops.NewExecutor(manager),
+			mcp.AcquisitionV2ExecutorFamily: acquisitionops.NewExecutor(manager),
 		},
 		PublicationRoot: publicationRoot, Publisher: publication.NewPublisher(),
 	}, manager, nil

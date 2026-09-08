@@ -31,6 +31,7 @@ var embeddedSkill string
 const usageText = `usage:
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
+  lsp-trace slice|incoming --acquisition-version v2 --workspace PATH --server COMMAND --seed-manifest PATH
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
@@ -72,6 +73,19 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
+		version, rest, err := acquisitionVersion(args[1:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if version == "v2" {
+			return runAcquisitionV2(args[0], rest, os.Stdout, os.Stderr)
+		}
+		if version == "v1" {
+			args = append([]string{args[0]}, rest...)
+		}
+	}
 	if len(args) > 0 && args[0] == "bounded-retained-ranking" {
 		return runBoundedRanking(args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}

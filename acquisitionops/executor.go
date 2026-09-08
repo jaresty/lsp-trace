@@ -1,0 +1,239 @@
+// Package acquisitionops is the shared public v2 managed acquisition boundary.
+// Legacy incoming/slice operation contracts are deliberately not extended.
+package acquisitionops
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io"
+	"time"
+
+	"lsp-trace/incomingops"
+	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisition/sessionclient"
+	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/session"
+	"lsp-trace/internal/strictjson"
+	"lsp-trace/sessionruntime"
+)
+
+const (
+	Slice           operation.Name = "slice_v2"
+	Incoming        operation.Name = "incoming_v2"
+	ManifestVersion                = "lsp-trace.seed-manifest.v2"
+	MaxInputBytes                  = 256 << 10
+)
+
+type Runtime interface {
+	Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure)
+	RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
+	Records() []sessionruntime.Record
+}
+type Executor struct{ runtime Runtime }
+
+func NewExecutor(r Runtime) *Executor { return &Executor{runtime: r} }
+
+type Target struct {
+	ID        string              `json:"id"`
+	Locator   acquisition.Locator `json:"locator"`
+	DownDepth *int                `json:"down_depth,omitempty"`
+	UpDepth   *int                `json:"up_depth,omitempty"`
+}
+type Limits struct {
+	MaxNodes         *int `json:"max_nodes,omitempty"`
+	MaxRequests      *int `json:"max_requests,omitempty"`
+	MaxEvidenceBytes *int `json:"max_evidence_bytes,omitempty"`
+	MaxPathWork      *int `json:"max_path_work,omitempty"`
+	TimeoutMS        *int `json:"timeout_ms,omitempty"`
+	RequestTimeoutMS *int `json:"request_timeout_ms,omitempty"`
+	MaxResponseBytes *int `json:"max_response_bytes,omitempty"`
+	MaxMessages      *int `json:"max_messages,omitempty"`
+}
+type Manifest struct {
+	SchemaVersion        string   `json:"schema_version"`
+	CoordinateConvention string   `json:"coordinate_convention"`
+	Root                 Target   `json:"root"`
+	RequiredTargets      []Target `json:"required_targets"`
+	Limits               Limits   `json:"limits,omitempty"`
+}
+type Input struct {
+	SessionID    string   `json:"session_id"`
+	Generation   uint64   `json:"generation"`
+	SeedManifest Manifest `json:"seed_manifest"`
+}
+
+// DecodeManifest applies the same closed, bounded decoding used by MCP. It reads
+// bytes only; the CLI owns file access and MCP never accepts a manifest filepath.
+func DecodeManifest(raw []byte, mode operation.Name) (Manifest, error) {
+	var m Manifest
+	if err := decode(raw, &m); err != nil {
+		return m, err
+	}
+	_, err := m.Request(mode)
+	return m, err
+}
+func decode(raw []byte, v any) error {
+	if len(raw) > MaxInputBytes {
+		return fmt.Errorf("acquisition input exceeds %d bytes", MaxInputBytes)
+	}
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		return err
+	}
+	if len(bytes.TrimSpace(raw)) == 0 || bytes.TrimSpace(raw)[0] != '{' {
+		return fmt.Errorf("object required")
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		return err
+	}
+	if err := d.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("one JSON object required")
+	}
+	// Null is not omission: rejecting it also preserves explicit coordinate and
+	// count presence through pointer decoding.
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	var check func(any) error
+	check = func(v any) error {
+		switch x := v.(type) {
+		case nil:
+			return fmt.Errorf("null acquisition member is not permitted")
+		case map[string]any:
+			// Preserve present-versus-omitted selector semantics before typed
+			// decoding can turn an empty string into an omitted selector.
+			for _, key := range []string{"symbol", "language_id"} {
+				if value, present := x[key]; present && value == "" {
+					return fmt.Errorf("%s must not be empty when present", key)
+				}
+			}
+			for _, v := range x {
+				if err := check(v); err != nil {
+					return err
+				}
+			}
+		case []any:
+			for _, v := range x {
+				if err := check(v); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return check(value)
+}
+func val(p *int, fallback int) int {
+	if p != nil {
+		return *p
+	}
+	return fallback
+}
+
+// Request is a prelaunch normalizer. Its context is a validation placeholder,
+// replaced only by exact host metadata in Execute, never caller authority.
+func (m Manifest) Request(mode operation.Name) (acquisition.Request, error) {
+	r := acquisition.Request{Context: acquisition.AcquisitionContext{ID: "preflight", SessionID: "preflight", Generation: 1, PositionEncoding: "utf-16"}}
+	switch mode {
+	case Slice:
+		r.Mode = acquisition.Slice
+	case Incoming:
+		r.Mode = acquisition.Incoming
+	default:
+		return r, fmt.Errorf("unsupported acquisition operation %q", mode)
+	}
+	if m.SchemaVersion != ManifestVersion {
+		return r, fmt.Errorf("unsupported seed manifest version %q", m.SchemaVersion)
+	}
+	if m.CoordinateConvention != "zero-based-session" {
+		return r, fmt.Errorf("coordinate_convention must be zero-based-session")
+	}
+	if m.RequiredTargets == nil {
+		return r, fmt.Errorf("required_targets array is required (may be empty)")
+	}
+	target := func(t Target) acquisition.Target {
+		return acquisition.Target{ID: t.ID, Locator: t.Locator, DownDepth: val(t.DownDepth, 2), UpDepth: val(t.UpDepth, 2)}
+	}
+	r.Root = target(m.Root)
+	r.RequiredTargets = make([]acquisition.Target, len(m.RequiredTargets))
+	for i, t := range m.RequiredTargets {
+		r.RequiredTargets[i] = target(t)
+	}
+	l := m.Limits
+	timeout, requestTimeout := val(l.TimeoutMS, 5000), val(l.RequestTimeoutMS, 1000)
+	if timeout < 1 || timeout > 60000 || requestTimeout < 1 || requestTimeout > 60000 {
+		return r, fmt.Errorf("timeouts must be 1..60000 milliseconds")
+	}
+	r.Limits = acquisition.Limits{MaxNodes: val(l.MaxNodes, 100), MaxRequests: val(l.MaxRequests, 1000), MaxEvidenceBytes: val(l.MaxEvidenceBytes, 4<<20), MaxPathWork: val(l.MaxPathWork, 100000), Timeout: time.Duration(timeout) * time.Millisecond, RequestTimeout: time.Duration(requestTimeout) * time.Millisecond, MaxResponseBytes: val(l.MaxResponseBytes, 4<<20), MaxMessages: val(l.MaxMessages, 64)}
+	return r, acquisition.ValidateRequest(r)
+}
+
+func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation.Result, *operation.Failure) {
+	fail := func(code string, err error) (operation.Result, *operation.Failure) {
+		return operation.Result{}, &operation.Failure{Code: code, Err: err}
+	}
+	if op.Name != Slice && op.Name != Incoming {
+		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
+	}
+	var in Input
+	if err := decode(op.Input, &in); err != nil {
+		return fail(operation.FailureInvalidInput, err)
+	}
+	req, err := in.SeedManifest.Request(op.Name)
+	if err != nil {
+		return fail(operation.FailureInvalidInput, err)
+	}
+	if in.SessionID == "" || in.Generation == 0 {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("session_id and exact generation are required"))
+	}
+	if e == nil || e.runtime == nil {
+		return fail(operation.FailureInternal, fmt.Errorf("managed runtime required"))
+	}
+	id, generation, failure := incomingops.ResolveSession(e.runtime, in.SessionID, in.Generation)
+	if failure != "" {
+		return fail(string(failure), nil)
+	}
+	metadata, failure := e.runtime.Metadata(id, generation)
+	if failure != "" {
+		return fail(string(failure), nil)
+	}
+	workspace := ""
+	for _, record := range e.runtime.Records() {
+		if record.SessionID == id && record.Generation == generation {
+			if workspace != "" {
+				return fail(operation.FailureInternal, fmt.Errorf("ambiguous host workspace"))
+			}
+			workspace = record.Profile.Workspace().String()
+		}
+	}
+	if workspace == "" {
+		return fail(operation.FailureInternal, fmt.Errorf("host workspace unavailable"))
+	}
+	if _, ok := e.runtime.(interface {
+		PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
+	}); !ok {
+		return fail(operation.FailureInternal, fmt.Errorf("managed document supply unavailable"))
+	}
+	req.Context = acquisition.AcquisitionContext{SessionID: id, Generation: generation, PositionEncoding: metadata.PositionEncoding}
+	// Stable request/context identity, not authenticated acquisition-event identity.
+	identity, _ := json.Marshal(req)
+	req.Context.ID = fmt.Sprintf("public-acquisition-v2:%x", sha256.Sum256(identity))
+	if err := acquisition.ValidateRequest(req); err != nil {
+		return fail(operation.FailureInvalidInput, err)
+	}
+	result, err := acquisition.Acquire(ctx, sessionclient.New(e.runtime), req)
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
+	}
+	raw, err := graphprovenance.CaptureV2(ctx, result, workspace)
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
+	}
+	return operation.Result{Artifact: raw}, nil
+}

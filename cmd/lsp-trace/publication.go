@@ -463,6 +463,8 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	admit := graph.ValidateSemanticBundle
 	switch {
 	case *family == "graph" && (*version == "" || *version == "v3"):
+	case *family == graphprovenance.Family && (*version == "v2" || *version == "lsp-trace.graph-provenance.v2"):
+		admit = admitAcquisitionV2
 	case *family == graphprovenance.Family && *version == "v1":
 		admit = admitGraphProvenance
 	case *family == "retained-calls" && *version == "v1":

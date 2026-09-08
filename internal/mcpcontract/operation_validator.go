@@ -26,6 +26,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.SchemaGet:               "lsp_trace_v1_schema_get",
 		operation.Validate:                "lsp_trace_v1_validate",
 		operation.Verify:                  "lsp_trace_v1_verify",
+		operation.VerifyV2:                "lsp_trace_v2_verify",
 		operation.Inspect:                 "lsp_trace_v1_inspect",
 		operation.Filter:                  "lsp_trace_v1_filter",
 		operation.CustodyExecute:          "lsp_trace_v1_execute",

@@ -282,7 +282,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			code = failure.Code
 			return bindLifecycleEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 		}
-		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily {
+		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily {
 			code = failure.Code
 			switch code {
 			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS", "LANGUAGE_ID_UNAVAILABLE":
@@ -411,6 +411,9 @@ func bindLifecycleEnvelope(base response, _ Tool, env envelope) response {
 }
 
 func bindEnvelope(base response, tool Tool, env envelope) response {
+	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
+		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.Name == "lsp_trace_v1_export_retained_calls" {
 		env.EnvelopeSchemaID = mcpcontract.RetainedCallsEnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -588,6 +591,8 @@ func operationName(canonical string) operation.Name {
 		return operation.SchemaGet
 	case "lsp_trace_v1_validate":
 		return operation.Validate
+	case "lsp_trace_v2_verify":
+		return operation.VerifyV2
 	case "lsp_trace_v1_verify":
 		return operation.Verify
 	case "lsp_trace_v1_inspect":
@@ -602,6 +607,10 @@ func operationName(canonical string) operation.Name {
 		return operation.BoundedRetainedMetrics
 	case "lsp_trace_v1_bounded_retained_ranking":
 		return operation.BoundedRetainedRanking
+	case "lsp_trace_v2_slice":
+		return operation.Name("slice_v2")
+	case "lsp_trace_v2_incoming":
+		return operation.Name("incoming_v2")
 	case "lsp_trace_v1_incoming":
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":
