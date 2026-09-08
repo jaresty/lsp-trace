@@ -84,13 +84,59 @@ func (m Message) Kind() Kind {
 	return KindInvalid
 }
 
-type Reader struct {
-	r      *bufio.Reader
-	limits Limits
+// Event is a closed, scalar-only observation of transport work. It never
+// retains frame bytes, JSON values, methods, paths, URIs, or error text.
+type Event struct {
+	Stage       EventStage
+	Bytes       int64
+	Kind        Kind
+	Disposition ResponseDisposition
+	Flush       FlushState
+	Closed      bool
 }
 
-func NewReader(r io.Reader, limits Limits) *Reader {
-	return &Reader{r: bufio.NewReader(r), limits: limits.normalized()}
+type EventStage uint8
+
+const (
+	EventMarshal EventStage = iota + 1
+	EventFrame
+	EventBodyWrite
+	EventFlush
+	EventHeaderRead
+	EventBodyRead
+	EventDecode
+	EventPendingBegin
+	EventPendingResponse
+)
+
+type FlushState uint8
+
+const (
+	FlushUnavailable FlushState = iota
+	FlushSucceeded
+	FlushFailed
+)
+
+type Observer func(Event)
+
+func emit(observer Observer, event Event) {
+	if observer == nil {
+		return
+	}
+	// Diagnostics are secondary and cannot alter transport behavior.
+	defer func() { _ = recover() }()
+	observer(event)
+}
+
+type Reader struct {
+	r        *bufio.Reader
+	limits   Limits
+	observer Observer
+}
+
+func NewReader(r io.Reader, limits Limits) *Reader { return NewReaderObserved(r, limits, nil) }
+func NewReaderObserved(r io.Reader, limits Limits, observer Observer) *Reader {
+	return &Reader{r: bufio.NewReader(r), limits: limits.normalized(), observer: observer}
 }
 func (r *Reader) Read() (Message, error) {
 	length := -1
@@ -98,10 +144,11 @@ func (r *Reader) Read() (Message, error) {
 	var used int64
 	for {
 		line, err := r.r.ReadString('\n')
+		used += int64(len(line))
+		emit(r.observer, Event{Stage: EventHeaderRead, Bytes: int64(len(line)), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe)})
 		if err != nil {
 			return Message{}, err
 		}
-		used += int64(len(line))
 		if used > r.limits.MaxHeaderBytes {
 			return Message{}, ErrHeaderTooLarge
 		}
@@ -132,13 +179,16 @@ func (r *Reader) Read() (Message, error) {
 		return Message{}, fmt.Errorf("%w: %d > %d", ErrFrameTooLarge, length, r.limits.MaxBodyBytes)
 	}
 	body := make([]byte, length)
-	if _, err := io.ReadFull(r.r, body); err != nil {
+	n, err := io.ReadFull(r.r, body)
+	emit(r.observer, Event{Stage: EventBodyRead, Bytes: int64(n), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)})
+	if err != nil {
 		return Message{}, err
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.UseNumber()
 	var m Message
 	if err := dec.Decode(&m); err != nil {
+		emit(r.observer, Event{Stage: EventDecode})
 		return Message{}, fmt.Errorf("%w: %v", ErrMalformedJSON, err)
 	}
 	if dec.Decode(&struct{}{}) != io.EOF {
@@ -148,33 +198,76 @@ func (r *Reader) Read() (Message, error) {
 		return Message{}, fmt.Errorf("%w: %q", ErrWrongVersion, m.JSONRPC)
 	}
 	if m.Kind() == KindInvalid {
+		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid})
 		return Message{}, ErrInvalidMessage
 	}
+	emit(r.observer, Event{Stage: EventDecode, Kind: m.Kind()})
 	return m, nil
 }
 
 type Writer struct {
-	w      io.Writer
-	limits Limits
-	mu     sync.Mutex
+	w        io.Writer
+	limits   Limits
+	observer Observer
+	mu       sync.Mutex
 }
 
-func NewWriter(w io.Writer, limits Limits) *Writer { return &Writer{w: w, limits: limits.normalized()} }
+func NewWriter(w io.Writer, limits Limits) *Writer { return NewWriterObserved(w, limits, nil) }
+func NewWriterObserved(w io.Writer, limits Limits, observer Observer) *Writer {
+	return &Writer{w: w, limits: limits.normalized(), observer: observer}
+}
 func (w *Writer) Write(m Message) error {
 	if m.JSONRPC == "" {
 		m.JSONRPC = Version
 	}
 	body, err := json.Marshal(m)
+	emit(w.observer, Event{Stage: EventMarshal, Bytes: int64(len(body))})
 	if err != nil {
 		return err
 	}
 	if int64(len(body)) > w.limits.MaxBodyBytes {
 		return ErrFrameTooLarge
 	}
+	header := []byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))
+	var events []Event
 	w.mu.Lock()
-	defer w.mu.Unlock()
-	_, err = fmt.Fprintf(w.w, "Content-Length: %d\r\n\r\n%s", len(body), body)
+	n, err := writeExact(w.w, header)
+	events = append(events, Event{Stage: EventFrame, Bytes: int64(n), Closed: errors.Is(err, io.ErrClosedPipe)})
+	if err == nil {
+		n, err = writeExact(w.w, body)
+		events = append(events, Event{Stage: EventBodyWrite, Bytes: int64(n), Closed: errors.Is(err, io.ErrClosedPipe)})
+	}
+	if err == nil {
+		state := FlushUnavailable
+		if flusher, ok := w.w.(interface{ Flush() error }); ok {
+			state = FlushSucceeded
+			if err = flusher.Flush(); err != nil {
+				state = FlushFailed
+			}
+		}
+		events = append(events, Event{Stage: EventFlush, Flush: state, Closed: errors.Is(err, io.ErrClosedPipe)})
+	}
+	w.mu.Unlock()
+	for _, event := range events {
+		emit(w.observer, event)
+	}
 	return err
+}
+
+func writeExact(w io.Writer, p []byte) (int, error) {
+	total := 0
+	for len(p) > 0 {
+		n, err := w.Write(p)
+		total += n
+		p = p[n:]
+		if err != nil {
+			return total, err
+		}
+		if n == 0 {
+			return total, io.ErrShortWrite
+		}
+	}
+	return total, nil
 }
 
 type RequestKey struct {
@@ -205,6 +298,7 @@ type pendingEntry struct {
 }
 type Pending struct {
 	mu          sync.Mutex
+	observer    Observer
 	next        uint64
 	cap         int
 	active      map[uint64]pendingEntry
@@ -213,39 +307,42 @@ type Pending struct {
 	generations map[uint64]struct{}
 }
 
-func NewPending(tombstoneCapacity int) *Pending {
+func NewPending(tombstoneCapacity int) *Pending { return NewPendingObserved(tombstoneCapacity, nil) }
+func NewPendingObserved(tombstoneCapacity int, observer Observer) *Pending {
 	if tombstoneCapacity < 0 {
 		tombstoneCapacity = 0
 	}
-	return &Pending{cap: tombstoneCapacity, active: map[uint64]pendingEntry{}, tomb: map[RequestKey]struct{}{}, generations: map[uint64]struct{}{}}
+	return &Pending{cap: tombstoneCapacity, observer: observer, active: map[uint64]pendingEntry{}, tomb: map[RequestKey]struct{}{}, generations: map[uint64]struct{}{}}
 }
 func (p *Pending) Begin(g uint64) RequestKey {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.next++
 	p.active[p.next] = pendingEntry{generation: g}
 	p.generations[g] = struct{}{}
-	return RequestKey{g, p.next}
+	key := RequestKey{g, p.next}
+	p.mu.Unlock()
+	emit(p.observer, Event{Stage: EventPendingBegin})
+	return key
 }
 func (p *Pending) Accept(k ResponseKey) ResponseDisposition {
 	p.mu.Lock()
-	defer p.mu.Unlock()
+	d := ResponseUnknown
 	if _, ok := p.tomb[k]; ok {
-		return ResponseDuplicate
-	}
-	e, ok := p.active[k.ID]
-	if !ok {
+		d = ResponseDuplicate
+	} else if e, ok := p.active[k.ID]; !ok {
 		if _, seen := p.generations[k.Generation]; !seen && len(p.generations) > 0 {
-			return ResponseWrongGeneration
+			d = ResponseWrongGeneration
 		}
-		return ResponseUnknown
+	} else if e.generation != k.Generation {
+		d = ResponseWrongGeneration
+	} else {
+		delete(p.active, k.ID)
+		p.addTomb(k)
+		d = ResponseAccepted
 	}
-	if e.generation != k.Generation {
-		return ResponseWrongGeneration
-	}
-	delete(p.active, k.ID)
-	p.addTomb(k)
-	return ResponseAccepted
+	p.mu.Unlock()
+	emit(p.observer, Event{Stage: EventPendingResponse, Disposition: d})
+	return d
 }
 func (p *Pending) addTomb(k RequestKey) {
 	if p.cap == 0 {
