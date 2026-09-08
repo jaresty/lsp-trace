@@ -3,6 +3,7 @@ package operation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"lsp-trace/internal/retainedcalls"
 	"lsp-trace/internal/strictjson"
 )
@@ -17,7 +18,8 @@ func ExportRetainedCallsHandler(ctx context.Context, request Request) (Result, *
 		return Result{}, inputFailure("INPUT_INVALID", err)
 	}
 	var input struct {
-		Input json.RawMessage `json:"input"`
+		Input   json.RawMessage `json:"input"`
+		Version string          `json:"version"`
 	}
 	if err := json.Unmarshal(request.Input, &input); err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
@@ -26,11 +28,24 @@ func ExportRetainedCallsHandler(ctx context.Context, request Request) (Result, *
 	if json.Unmarshal(input.Input, &text) == nil {
 		input.Input = []byte(text)
 	}
-	raw, err := retainedcalls.Export(input.Input)
+	version := input.Version
+	if version == "" {
+		version = "v1"
+	}
+	var raw []byte
+	var err error
+	switch version {
+	case "v1":
+		raw, err = retainedcalls.Export(input.Input)
+	case "v2":
+		raw, err = retainedcalls.ExportV2(input.Input)
+	default:
+		return Result{}, inputFailure("INPUT_INVALID", fmt.Errorf("unsupported retained-calls version %q", version))
+	}
 	if err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
 	}
-	if _, err = retainedcalls.ValidateFor(raw, retainedcalls.Family, "v1"); err != nil {
+	if _, err = retainedcalls.ValidateFor(raw, retainedcalls.Family, version); err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
 	}
 	return Result{Artifact: raw}, nil

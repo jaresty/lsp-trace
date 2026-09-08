@@ -14,16 +14,20 @@ import (
 	"lsp-trace/internal/retainedcalls"
 )
 
-func admitRetainedCalls(raw []byte) error {
-	_, err := retainedcalls.ValidateFor(raw, retainedcalls.Family, "v1")
-	return err
+func admitRetainedCallsVersion(version string) func([]byte) error {
+	return func(raw []byte) error {
+		_, err := retainedcalls.ValidateFor(raw, retainedcalls.Family, version)
+		return err
+	}
 }
+func admitRetainedCalls(raw []byte) error { return admitRetainedCallsVersion("v1")(raw) }
 func runRetainedCalls(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("export-retained-calls", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	output := fs.String("output", "", "immutable generation selector (no replace)")
-	if fs.Parse(args) != nil || fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace export-retained-calls [--output SELECTOR] PATH|-")
+	version := fs.String("version", "v1", "retained contract version: v1 or v2")
+	if fs.Parse(args) != nil || fs.NArg() != 1 || (*version != "v1" && *version != "v2") {
+		fmt.Fprintln(stderr, "usage: lsp-trace export-retained-calls [--version v1|v2] [--output SELECTOR] PATH|-")
 		return 1
 	}
 	reader := stdin
@@ -45,22 +49,32 @@ func runRetainedCalls(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 		fmt.Fprintln(stderr, "provenance envelope byte limit")
 		return 1
 	}
-	input, _ := json.Marshal(map[string]any{"input": string(raw)})
-	validator, err := mcpcontract.NewOperationInputValidator()
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	executor := operation.NewOffline(validator, map[operation.Name]operation.Handler{operation.ExportRetainedCalls: operation.ExportRetainedCallsHandler})
-	result, failure := executor.ExecuteExportRetainedCalls(context.Background(), operation.Request{Input: input})
-	if failure != nil {
-		fmt.Fprintln(stderr, failure)
-		return 1
-	}
-	if *output != "" {
-		err = publishValidatedBundle(*output, result.Artifact, admitRetainedCalls)
+	var artifact []byte
+	if *version == "v2" {
+		artifact, err = retainedcalls.ExportV2(raw)
 	} else {
-		_, err = stdout.Write(result.Artifact)
+		// Keep the historical v1 operation request byte-for-byte unchanged.
+		input, _ := json.Marshal(map[string]any{"input": string(raw)})
+		validator, validatorErr := mcpcontract.NewOperationInputValidator()
+		if validatorErr != nil {
+			fmt.Fprintln(stderr, validatorErr)
+			return 1
+		}
+		executor := operation.NewOffline(validator, map[operation.Name]operation.Handler{operation.ExportRetainedCalls: operation.ExportRetainedCallsHandler})
+		result, failure := executor.ExecuteExportRetainedCalls(context.Background(), operation.Request{Input: input})
+		if failure != nil {
+			fmt.Fprintln(stderr, failure)
+			return 1
+		}
+		artifact = result.Artifact
+	}
+	if err == nil {
+		_, err = retainedcalls.ValidateFor(artifact, retainedcalls.Family, *version)
+	}
+	if *output != "" && err == nil {
+		err = publishValidatedBundle(*output, artifact, admitRetainedCallsVersion(*version))
+	} else if err == nil {
+		_, err = stdout.Write(artifact)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
