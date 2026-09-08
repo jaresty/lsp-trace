@@ -20,7 +20,11 @@ const StartupDiagnosticsMaxBytes = 65536
 
 // StartupDiagnosticSink is a private CLI-owned destination. Root is caller-
 // approved; Selector is interpreted only beneath Root.
-type StartupDiagnosticSink struct{ Root, Selector string }
+type StartupDiagnosticSink struct {
+	Root, Selector string
+	// afterRootLstat is a package-private deterministic race seam used only by tests.
+	afterRootLstat func()
+}
 type StartupDiagnosticReceipt struct {
 	Status string `json:"status"`
 	Digest string `json:"digest,omitempty"`
@@ -70,9 +74,12 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 	if err != nil {
 		return StartupDiagnosticReceipt{Status: "omitted"}, err
 	}
-	rootInfo, err := os.Stat(s.Root)
-	if err != nil || !rootInfo.IsDir() || rootInfo.Mode().Perm()&0222 == 0 || rootInfo.Mode().Perm()&0077 != 0 {
+	pathInfo, err := os.Lstat(s.Root)
+	if err != nil || pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.IsDir() {
 		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root must be a private writable directory")
+	}
+	if s.afterRootLstat != nil {
+		s.afterRootLstat()
 	}
 	doc, err := projectStartupDiagnostics(attempt, generation)
 	if err != nil {
@@ -107,6 +114,15 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 		return StartupDiagnosticReceipt{Status: "omitted"}, err
 	}
 	defer root.Close()
+	opened, err := root.Open(".")
+	if err != nil {
+		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root unavailable")
+	}
+	openedInfo, statErr := opened.Stat()
+	closeErr := opened.Close()
+	if statErr != nil || closeErr != nil || !openedInfo.IsDir() || !os.SameFile(pathInfo, openedInfo) || openedInfo.Mode().Perm()&0222 == 0 || openedInfo.Mode().Perm()&0077 != 0 {
+		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root must be a private writable directory")
+	}
 	if dir := filepath.Dir(selector); dir != "." {
 		if err := root.MkdirAll(dir, 0700); err != nil {
 			return StartupDiagnosticReceipt{Status: "omitted"}, err
@@ -130,7 +146,7 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 	if _, err = f.Write(raw); err == nil {
 		err = f.Sync()
 	}
-	closeErr := f.Close()
+	closeErr = f.Close()
 	if err == nil {
 		err = closeErr
 	}
@@ -196,6 +212,79 @@ func projectStartupDiagnostics(a StartupAttemptQuery, q QueryResult) (startupDia
 	return d, nil
 }
 
+func validateProjectedAttempt(a startupAttemptProjection) error {
+	switch a.Status {
+	case AttemptAvailable:
+		idRaw, err := hex.DecodeString(string(a.AttemptID))
+		if err != nil || len(idRaw) != sha256.Size || string(a.AttemptID) != strings.ToLower(string(a.AttemptID)) {
+			return errors.New("startup diagnostic attempt identity")
+		}
+		reason := Fact[string]{}
+		if a.Reason != "" {
+			reason = Fact[string]{Status: Observed, Value: a.Reason}
+		}
+		r := StartupAttemptRecord{SchemaVersion: StartupAttemptSchemaVersion, AttemptID: a.AttemptID, Sequence: 1, Outcome: a.Outcome, Reason: reason, Stderr: a.Stderr, ProcessExit: a.ProcessExit, Admission: a.Admission}
+		if err := ValidateStartupAttempt(r); err != nil {
+			return fmt.Errorf("startup diagnostic attempt: %w", err)
+		}
+	case AttemptUnavailable, AttemptEvicted, AttemptQueryStatus("omitted"):
+		if a.AttemptID != "" || a.Outcome != "" || a.Reason != "" || a.Admission != nil || a.Stderr != (Stderr{}) || a.ProcessExit != (ProcessExit{}) {
+			return errors.New("unavailable startup diagnostic attempt carries detail")
+		}
+	default:
+		return errors.New("startup diagnostic attempt status")
+	}
+	return nil
+}
+
+func validateProjectedRecord(p startupRecordProjection) error {
+	if p.Sequence == 0 {
+		return errors.New("startup diagnostic record sequence")
+	}
+	rule, ok := diagnosticPhaseRules[p.Phase]
+	if !ok || !rule.terminals[p.Terminal] {
+		return errors.New("startup diagnostic record phase or terminal")
+	}
+	if !validIO(p.Read) || !validIO(p.Write) || !validStatus(p.Stderr.Status) || !validFact(p.Stderr.ObservedByteCount) || !validFact(p.Stderr.Truncated) || !validStatus(p.ProcessExit.Status) || !validFact(p.ProcessExit.ExitCode) || !validFact(p.ProcessExit.ObservedBeforeCleanup) || !validFact(p.ProcessExit.CleanupInduced) ||
+		!validFact(p.Limits.RequestedDeadlineNS) || !validFact(p.Limits.EffectiveDeadlineNS) || !validFact(p.Limits.RequestedMaxBytes) || !validFact(p.Limits.EffectiveMaxBytes) || !validFact(p.Limits.RequestedMaxMessages) || !validFact(p.Limits.EffectiveMaxMessages) {
+		return errors.New("startup diagnostic record hidden or invalid fact")
+	}
+	if p.Stderr.ByteCap < 0 || p.Stderr.ObservedByteCount.Value < 0 || p.Limits.RequestedDeadlineNS.Value < 0 || p.Limits.EffectiveDeadlineNS.Value < 0 || p.Limits.RequestedMaxBytes.Value < 0 || p.Limits.EffectiveMaxBytes.Value < 0 || p.Limits.RequestedMaxMessages.Value < 0 || p.Limits.EffectiveMaxMessages.Value < 0 {
+		return errors.New("startup diagnostic record negative value")
+	}
+	if p.Stderr.Status != Observed && (p.Stderr.ByteCap != 0 || p.Stderr.ObservedByteCount.Status == Observed || p.Stderr.Truncated.Status == Observed) {
+		return errors.New("startup diagnostic record unavailable stderr carries detail")
+	}
+	if p.ProcessExit.Status != Observed && (p.ProcessExit.ExitCode.Status == Observed || p.ProcessExit.ObservedBeforeCleanup.Status == Observed || p.ProcessExit.CleanupInduced.Status == Observed) {
+		return errors.New("startup diagnostic record unavailable process exit carries detail")
+	}
+	if p.Terminal == TerminalProcessExited {
+		if p.ProcessExit.Status != Observed || p.ProcessExit.ObservedBeforeCleanup.Status != Observed {
+			return errors.New("startup diagnostic record process exit chronology")
+		}
+	} else if p.ProcessExit.Status == Observed {
+		return errors.New("startup diagnostic record process exit mismatch")
+	}
+	if (p.Limits.RequestedDeadlineNS.Status == Observed && p.Limits.EffectiveDeadlineNS.Status != Observed) || (p.Limits.RequestedMaxBytes.Status == Observed && p.Limits.EffectiveMaxBytes.Status != Observed) || (p.Limits.RequestedMaxMessages.Status == Observed && p.Limits.EffectiveMaxMessages.Status != Observed) {
+		return errors.New("startup diagnostic record effective limit missing")
+	}
+	matched := p.Terminal == TerminalResponseReceived || (rule.matchedResponse && p.Terminal == TerminalProtocolError)
+	if matched && rule.io != "none" && rule.io != "write-only" && (!completedMessages(p.Write, 1) || !completedMessages(p.Read, 1)) {
+		return errors.New("startup diagnostic record matched response IO")
+	}
+	switch rule.io {
+	case "none":
+		if p.Read.State != IOUnavailable || p.Write.State != IOUnavailable {
+			return errors.New("startup diagnostic record unexpected IO")
+		}
+	case "write-only":
+		if p.Read.State != IOUnavailable || p.Write.Messages < 1 || (p.Write.State != IOComplete && p.Write.State != IOFailed) {
+			return errors.New("startup diagnostic record write IO")
+		}
+	}
+	return nil
+}
+
 func ValidateStartupDiagnostics(raw []byte) error {
 	if len(raw) == 0 || len(raw) > StartupDiagnosticsMaxBytes {
 		return errors.New("startup diagnostic byte limit")
@@ -215,21 +304,43 @@ func ValidateStartupDiagnostics(raw []byte) error {
 	if d.Accounting.RequestedRecordLimit != StartupDiagnosticsMaxRecords || d.Accounting.EffectiveRecordLimit != StartupDiagnosticsMaxRecords || d.Accounting.RequestedByteLimit != StartupDiagnosticsMaxBytes || d.Accounting.EffectiveByteLimit != StartupDiagnosticsMaxBytes {
 		return errors.New("startup diagnostic limits mismatch")
 	}
-	if d.Accounting.RetainedBytes != len(raw) || d.Accounting.RetainedRecordCount != len(d.Records) || len(d.Records) > StartupDiagnosticsMaxRecords {
+	if d.Accounting.RetainedBytes != len(raw) || d.Accounting.RetainedRecordCount != len(d.Records) || len(d.Records) > StartupDiagnosticsMaxRecords || d.Accounting.OmittedRecordCount < 0 {
 		return errors.New("startup diagnostic accounting mismatch")
 	}
-	if d.Attempt.Status == AttemptAvailable {
-		if d.Attempt.AttemptID == "" || len(d.Attempt.AttemptID) != 64 {
-			return errors.New("startup diagnostic attempt identity")
-		}
-		if d.Attempt.Outcome == StartupFailed && d.Attempt.Admission != nil {
-			return errors.New("failed startup diagnostic admission")
-		}
-	} else if d.Attempt.Status != AttemptUnavailable && d.Attempt.Status != AttemptEvicted {
-		return errors.New("startup diagnostic attempt status")
+	if !validRetainedStrings(string(d.Attempt.Status), string(d.Attempt.AttemptID), string(d.Attempt.Outcome), d.Attempt.Reason, string(d.RecordsStatus)) {
+		return errors.New("startup diagnostic retained string limit")
 	}
-	if d.RecordsStatus != "available" && d.RecordsStatus != "unavailable" && d.RecordsStatus != "evicted" && d.RecordsStatus != "omitted" {
+	if err := validateProjectedAttempt(d.Attempt); err != nil {
+		return err
+	}
+	switch d.RecordsStatus {
+	case "available":
+		if d.Accounting.Truncated != (d.Accounting.OmittedRecordCount > 0) {
+			return errors.New("startup diagnostic truncation mismatch")
+		}
+	case "evicted":
+		if len(d.Records) != 0 || d.Accounting.EvictedRecordCount == 0 || d.Accounting.OmittedRecordCount != 0 || d.Accounting.Truncated {
+			return errors.New("startup diagnostic evicted records mismatch")
+		}
+	case "unavailable", "omitted":
+		if len(d.Records) != 0 || d.Accounting.EvictedRecordCount != 0 || d.Accounting.OmittedRecordCount != 0 || d.Accounting.Truncated {
+			return errors.New("startup diagnostic unavailable records carry detail")
+		}
+	default:
 		return errors.New("startup diagnostic records status")
+	}
+	var previous uint64
+	for _, r := range d.Records {
+		if r.Sequence <= previous {
+			return errors.New("startup diagnostic record sequence order")
+		}
+		previous = r.Sequence
+		if !validRetainedStrings(string(r.Phase), string(r.Terminal), string(r.Read.State), string(r.Write.State), string(r.Stderr.Status), string(r.ProcessExit.Status)) {
+			return errors.New("startup diagnostic retained string limit")
+		}
+		if err := validateProjectedRecord(r); err != nil {
+			return err
+		}
 	}
 	return nil
 }

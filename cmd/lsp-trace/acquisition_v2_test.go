@@ -1,9 +1,11 @@
 package main
 
 import (
-	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -22,11 +24,26 @@ func TestAcquisitionVersionPreservesArgumentValues(t *testing.T) {
 	}
 }
 
-func TestPrivateStartupSinkCLIExistsOnInitializationFailureAndStderrIsGeneric(t *testing.T) {
-	const assertion = "ASSERT_FR23_PRIVATE_STARTUP_CLI_INITIALIZATION_FAILED_PATH_FREE"
+func buildStartupSinkCLI(t *testing.T) string {
+	t.Helper()
+	binary := filepath.Join(t.TempDir(), "lsp-trace")
+	cmd := exec.Command("go", "build", "-o", binary, ".")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v: %s", err, out)
+	}
+	return binary
+}
+
+func startupSinkCLIArgs(workspace, manifestPath string) []string {
+	return []string{"slice", "--acquisition-version=v2", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestRuntimeHelperServer$", "--server-env", "LSP_TRACE_RUNTIME_HELPER=1", "--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1", "--seed-manifest", manifestPath}
+}
+
+func TestPrivateStartupSinkBuiltCLIInitializationFailureAndOptIn(t *testing.T) {
+	const assertion = "ASSERT_FR23_PRIVATE_STARTUP_BUILT_CLI_INITIALIZATION_FAILED_PATH_FREE"
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
+	binary := buildStartupSinkCLI(t)
 	workspace := t.TempDir()
 	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///private/secret.go", "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 1}}
 	raw, _ := json.Marshal(manifest)
@@ -38,36 +55,53 @@ func TestPrivateStartupSinkCLIExistsOnInitializationFailureAndStderrIsGeneric(t 
 	if err := os.Chmod(root, 0700); err != nil {
 		t.Fatal(err)
 	}
-	var stdout, stderr bytes.Buffer
-	code := runAcquisitionVersion("slice", "v2", []string{"--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestRuntimeHelperServer$", "--server-env", "LSP_TRACE_RUNTIME_HELPER=1", "--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1", "--seed-manifest", manifestPath, "--private-startup-diagnostic-root", root, "--private-startup-diagnostic-selector", "attempt.json"}, &stdout, &stderr)
-	artifact, err := os.ReadFile(filepath.Join(root, "attempt.json"))
-	if err != nil {
-		t.Fatalf("%s: artifact: %v stderr=%q", assertion, err, stderr.String())
+	args := append(startupSinkCLIArgs(workspace, manifestPath), "--private-startup-diagnostic-root", root, "--private-startup-diagnostic-selector", "attempt.json")
+	cmd := exec.Command(binary, args...)
+	stdout, stderr := strings.Builder{}, strings.Builder{}
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	artifact, readErr := os.ReadFile(filepath.Join(root, "attempt.json"))
+	if readErr != nil {
+		t.Fatalf("%s: artifact: %v stderr=%q", assertion, readErr, stderr.String())
 	}
-	if code == 0 || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "managed readiness: INITIALIZATION_FAILED" || strings.Contains(stderr.String(), root) || strings.Contains(stderr.String(), workspace) || strings.Contains(stderr.String(), "runtime helper diagnostic") {
-		t.Fatalf("%s: code=%d stdout=%q stderr=%q", assertion, code, stdout.String(), stderr.String())
+	if err == nil || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "managed readiness: INITIALIZATION_FAILED" || strings.Contains(stderr.String(), root) || strings.Contains(stderr.String(), workspace) || strings.Contains(stderr.String(), manifestPath) {
+		t.Fatalf("%s: err=%v stdout=%q stderr=%q", assertion, err, stdout.String(), stderr.String())
 	}
-	if err := manageddiagnostic.ValidateStartupDiagnostics(artifact); err != nil {
-		t.Fatalf("%s: %v", assertion, err)
-	}
-
-	badRoot := t.TempDir()
-	if err := os.Chmod(badRoot, 0755); err != nil {
-		t.Fatal(err)
-	}
-	stdout.Reset()
-	stderr.Reset()
-	code = runAcquisitionVersion("slice", "v2", []string{"--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestRuntimeHelperServer$", "--server-env", "LSP_TRACE_RUNTIME_HELPER=1", "--server-env", "LSP_TRACE_RUNTIME_HELPER_EXIT_INITIALIZE=1", "--seed-manifest", manifestPath, "--private-startup-diagnostic-root", badRoot, "--private-startup-diagnostic-selector", "attempt.json"}, &stdout, &stderr)
-	if code == 0 || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "managed readiness: INITIALIZATION_FAILED" {
-		t.Fatalf("ASSERT_FR23_STARTUP_SINK_FAILURE_PRESERVES_PRIMARY: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
-	}
-	if _, err := os.Stat(filepath.Join(badRoot, "attempt.json")); !os.IsNotExist(err) {
-		t.Fatalf("ASSERT_FR23_STARTUP_SINK_FAILURE_PRESERVES_PRIMARY: artifact err=%v", err)
+	sum := sha256.Sum256(artifact)
+	if err := manageddiagnostic.VerifyStartupDiagnostics(artifact, "sha256:"+hex.EncodeToString(sum[:]), len(artifact)); err != nil {
+		t.Fatalf("%s: verify: %v", assertion, err)
 	}
 }
 
-func TestPrivateStartupSinkAbsentOptInWritesNothing(t *testing.T) {
-	const assertion = "ASSERT_FR23_PRIVATE_STARTUP_CLI_NO_DEFAULT_OUTPUT"
+func TestPrivateStartupSinkBuiltCLIAbsentOptInWritesNothingAndBothFlagsRequired(t *testing.T) {
+	const assertion = "ASSERT_FR23_PRIVATE_STARTUP_BUILT_CLI_NO_DEFAULT_OUTPUT"
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	binary := buildStartupSinkCLI(t)
+	workspace, root := t.TempDir(), t.TempDir()
+	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///private/secret.go", "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 1}}
+	raw, _ := json.Marshal(manifest)
+	if err := os.WriteFile(manifestPath, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(binary, startupSinkCLIArgs(workspace, manifestPath)...)
+	_, _ = cmd.CombinedOutput()
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("%s: entries=%v err=%v", assertion, entries, err)
+	}
+	for _, partial := range [][]string{{"--private-startup-diagnostic-root", root}, {"--private-startup-diagnostic-selector", "attempt.json"}} {
+		args := append(startupSinkCLIArgs(workspace, manifestPath), partial...)
+		if err := exec.Command(binary, args...).Run(); err == nil {
+			t.Fatalf("%s: partial opt-in accepted: %v", assertion, partial)
+		}
+	}
+	entries, err = os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("%s: partial opt-in wrote entries=%v err=%v", assertion, entries, err)
+	}
 	version, rest, err := acquisitionVersion([]string{"--server", "x"})
 	if err != nil || version != "" || !reflect.DeepEqual(rest, []string{"--server", "x"}) {
 		t.Fatalf("%s: parser changed", assertion)
