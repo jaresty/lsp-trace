@@ -405,8 +405,8 @@ or invokes a provider. There is no hydration request-file CLI in this increment.
 
 Canonical tool: `lsp_trace_v1_inspect_hydrated` (no alias). It dispatches
 `operation.InspectHydratedHandler`, the same handler used by the CLI. The existing
-`lsp_trace_v1_inspect` is unchanged. Runtime discovery now has 21 tools; the frozen
-Stage-1 13-tool contract and separate 20-tool retained-calls composition are unchanged.
+`lsp_trace_v1_inspect` is unchanged. Runtime discovery now has 22 tools; the frozen
+Stage-1 13-tool contract and historical 20-tool retained-calls composition are unchanged.
 
 ```json
 {

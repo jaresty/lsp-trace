@@ -29,7 +29,9 @@ func ExportRetainedCallsHandler(ctx context.Context, request Request) (Result, *
 		input.Input = []byte(text)
 	}
 	version := input.Version
-	if version == "" {
+	if request.Name == ExportRetainedCallsV2 {
+		version = "v2"
+	} else if version == "" {
 		version = "v1"
 	}
 	var raw []byte

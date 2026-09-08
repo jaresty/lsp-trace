@@ -33,6 +33,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.Filter:                  "lsp_trace_v1_filter",
 		operation.CustodyExecute:          "lsp_trace_v1_execute",
 		operation.ExportRetainedCalls:     "lsp_trace_v1_export_retained_calls",
+		operation.ExportRetainedCallsV2:   "lsp_trace_v2_export_retained_calls",
 		operation.BoundedRetainedAnalysis: "lsp_trace_v1_bounded_retained_analysis",
 		operation.BoundedRetainedMetrics:  "lsp_trace_v1_bounded_retained_metrics",
 		operation.BoundedRetainedRanking:  "lsp_trace_v1_bounded_retained_ranking",

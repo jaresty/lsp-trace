@@ -60,14 +60,15 @@ Preserve existing evidence ceilings: MCP transport, envelopes, inline bytes, pub
 
 ## Export retained CALLS offline
 
-`lsp-trace export-retained-calls [--output SELECTOR] PATH|-` accepts only an
-admitted graph-provenance/v1 envelope and emits retained-calls/v1. MCP uses
-`lsp_trace_v1_export_retained_calls` with `input` containing the original JSON
-text, and optional immutable `output_selector`. Both share one offline operation.
-No source checkout or running server is required. Use `schema get` and `validate`
-with `--family retained-calls --version v1`; selected CLI verification requires
-that explicit family. Historical graph-only verification and inspect semantics
-are unchanged. `--output` never replaces an existing selector.
+`lsp-trace export-retained-calls [--version v1|v2] [--output SELECTOR] PATH|-`
+keeps V1 as the default and accepts graph-provenance/v2 only with explicit V2.
+MCP keeps `lsp_trace_v1_export_retained_calls` and its alias frozen to V1, while
+canonical `lsp_trace_v2_export_retained_calls` accepts exact V2 JSON text plus an
+optional immutable `output_selector`; it has no alias or version field. No source
+checkout, running server, or MCP-side input filepath is used. V2 is source
+implemented, not deployed qualification. Use explicit retained-calls family and
+version for schema validation or selected CLI verification. `--output` never
+replaces an existing selector.
 
 Each distinct retained range gets one occurrence; no-range edges stay UNREPORTED
 groups. Support remains once per historical relation group, never once per

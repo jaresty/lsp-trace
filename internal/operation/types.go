@@ -13,14 +13,15 @@ import (
 type Name string
 
 const (
-	Capabilities        Name = "capabilities"
-	SchemaGet           Name = "schema_get"
-	Validate            Name = "validate"
-	Verify              Name = "verify"
-	Inspect             Name = "inspect"
-	Filter              Name = "filter"
-	CustodyExecute      Name = "execute"
-	ExportRetainedCalls Name = "export_retained_calls"
+	Capabilities          Name = "capabilities"
+	SchemaGet             Name = "schema_get"
+	Validate              Name = "validate"
+	Verify                Name = "verify"
+	Inspect               Name = "inspect"
+	Filter                Name = "filter"
+	CustodyExecute        Name = "execute"
+	ExportRetainedCalls   Name = "export_retained_calls"
+	ExportRetainedCallsV2 Name = "export_retained_calls_v2"
 )
 
 var ErrNotImplemented = errors.New("operation not implemented")

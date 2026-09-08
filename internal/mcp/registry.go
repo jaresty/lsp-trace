@@ -99,6 +99,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_bounded_retained_metrics":  "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
 		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
 		"lsp_trace_v1_export_retained_calls":     "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
+		"lsp_trace_v2_export_retained_calls":     "Export admitted graph-provenance/v2 as retained-calls/v2 offline; source implemented, not deployed qualification",
 		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",
 		"lsp_trace_v1_filter":                    "Compare exactly two retained seed evidence sets with a mechanical filter",
 		"lsp_trace_v1_validate":                  "Validate retained evidence against its schema contract",
@@ -169,6 +170,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedMetricsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedRankingArtifactID)
@@ -233,7 +235,7 @@ func withoutPublicationEnvelopes(ids []string) []string {
 		if id == mcpcontract.BoundedAnalysisEnvelopeID(publicationEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(compactEnvelopeSchemaID) || id == mcpcontract.BoundedAnalysisEnvelopeID(publicationErrorEnvelopeSchemaID) {
 			continue
 		}
-		if id != publicationEnvelopeSchemaID && id != compactEnvelopeSchemaID && id != publicationErrorEnvelopeSchemaID && id != mcpcontract.RetainedCallsEnvelopeID(publicationEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(compactEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(publicationErrorEnvelopeSchemaID) {
+		if id != publicationEnvelopeSchemaID && id != compactEnvelopeSchemaID && id != publicationErrorEnvelopeSchemaID && id != mcpcontract.RetainedCallsEnvelopeID(publicationEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(compactEnvelopeSchemaID) && id != mcpcontract.RetainedCallsEnvelopeID(publicationErrorEnvelopeSchemaID) && id != mcpcontract.RetainedCallsV2EnvelopeID(publicationEnvelopeSchemaID) && id != mcpcontract.RetainedCallsV2EnvelopeID(compactEnvelopeSchemaID) && id != mcpcontract.RetainedCallsV2EnvelopeID(publicationErrorEnvelopeSchemaID) {
 			out = append(out, id)
 		}
 	}
@@ -382,7 +384,11 @@ func (r *Registry) Capabilities() map[string]any {
 			"cli_producers":   []string{"slice --acquisition-version v2", "incoming --acquisition-version v2"},
 			"input_schema_id": mcpcontract.AcquisitionV2InputID, "output_schema_id": mcpcontract.GraphProvenanceV2ArtifactID,
 			"public_consumers": []string{"validate --family graph-provenance --version v2", "verify --family graph-provenance --version v2", "lsp_trace_v1_validate (explicit graph-provenance/v2)", "lsp_trace_v2_verify"},
-			"public_export":    "NOT_IMPLEMENTED", "public_analysis": "NOT_IMPLEMENTED",
+			"public_export": map[string]any{
+				"source_implementation": "IMPLEMENTED", "deployed_availability": "UNKNOWN",
+				"mcp_tool": "lsp_trace_v2_export_retained_calls", "cli": "export-retained-calls --version v2",
+			},
+			"public_analysis":       "NOT_IMPLEMENTED",
 			"coordinate_convention": "zero-based-session", "max_targets": 64, "max_input_bytes": 262144,
 			"authority": "EXACT_HOST_SESSION_GENERATION_WORKSPACE", "analyzed_source": "UNVERIFIED",
 		},

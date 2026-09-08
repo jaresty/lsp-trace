@@ -37,6 +37,26 @@ func WithAcquisitionV2(m *Manifest) *Manifest {
 // readContractSchema adds immutable v2 resources without broadening historical
 // schemas. The envelope shape is inherited, but identity and tool enums are new.
 func readContractSchema(name string) ([]byte, error) {
+	if name == "testdata/schemas/input-export-retained-calls.v2.schema.json" {
+		return []byte(`{"$id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-export-retained-calls.v2.schema.json","$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"detail":{"enum":["compact","full"],"type":"string"},"input":{"minLength":1,"type":"string"},"output_selector":{"minLength":1,"type":"string"}},"required":["input"],"type":"object"}`), nil
+	}
+	if strings.HasPrefix(name, "testdata/schemas/envelope-retained-calls-v2-") && strings.HasSuffix(name, ".v1.schema.json") {
+		old := strings.Replace(name, "envelope-retained-calls-v2-", "envelope-", 1)
+		raw, err := contractFiles.ReadFile(old)
+		if err != nil {
+			return nil, err
+		}
+		var s map[string]any
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, err
+		}
+		id := RetainedCallsV2EnvelopeID(s["$id"].(string))
+		s["$id"] = id
+		p := s["properties"].(map[string]any)
+		p["envelope_schema_id"] = map[string]any{"const": id}
+		p["tool"] = map[string]any{"const": "lsp_trace_v2_export_retained_calls"}
+		return json.Marshal(s)
+	}
 	if name == "testdata/schemas/input-verify.v2.schema.json" {
 		return []byte(`{"$id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify.v2.schema.json","$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["input","schema"],"properties":{"input":{"type":"string","minLength":1},"schema":{"type":"object","additionalProperties":false,"required":["family","version"],"properties":{"family":{"const":"graph-provenance"},"version":{"enum":["v2","lsp-trace.graph-provenance.v2"]}}},"output_selector":{"type":"string","minLength":1},"detail":{"enum":["full","compact"]}}}`), nil
 	}

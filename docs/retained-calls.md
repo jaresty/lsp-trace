@@ -1,8 +1,8 @@
 # Retained CALLS export
 
-The public export operation remains **V1** (bounded A3). The additive FR20 V2
-export/reconstruction API described below is **internal only**; no acquisition,
-export, or downstream-analysis V2 CLI/MCP operation is wired by this stage.
+The frozen V1 export remains bounded A3. The additive FR20 V2 export is now
+source-implemented in both CLI and MCP, but is not deployed qualification,
+provider authentication, or downstream-analysis enablement.
 
 ## V1 (frozen bounded A3)
 
@@ -33,9 +33,12 @@ Inspect and validate keep their existing meanings; export is a separate operatio
 MCP `lsp_trace_v1_export_retained_calls` (alias
 `lsp_trace_export_retained_calls`) takes `{"input":"<original envelope JSON>"}`.
 Use inline JSON **text** for exact-byte custody through map-based clients; object
-input is also admitted but the transport reencodes that object. The CLI and MCP
-use the same offline handler and return identical export bytes for identical
-input bytes. No input string is interpreted as a path by MCP.
+input remains admitted only by this frozen V1 tool and the transport reencodes it.
+The canonical `lsp_trace_v2_export_retained_calls` tool accepts only an exact
+Graph Provenance V2 JSON **string** plus optional `output_selector` and `detail`;
+it has no alias or version field. The CLI and MCP V2 paths share the explicit V2
+offline operation and return identical canonical bytes. No MCP input string is
+interpreted as a server-side path.
 
 `output_selector` uses the existing host publication root and immutable no-replace
 publication. `detail: "compact"` requires a selector and keeps the full export in
@@ -166,7 +169,9 @@ func ValidateFor(raw []byte, family, version string) (string, error)
 version, V1 envelope, or unrelated family silently selects V2. Generic schema
 retrieval exposes the additive schema; core schema-only validation still fails
 closed because shape alone cannot establish semantic admission. Public V1 export
-and downstream analysis continue to request V1 explicitly.
+and downstream analysis continue to request V1 explicitly. Public source now
+also exposes `lsp_trace_v2_export_retained_calls`; this is implemented, not a
+claim of deployed availability or qualification.
 
 ### Tables and reconstruction
 
@@ -274,5 +279,6 @@ resource boundaries, and a controlled shared-producer reduction. This is a
 hermetic fake-Go-provider qualification, not real-public-gopls qualification,
 complete FR20, FR21 source-context/span selection, normative `relations.v1`,
 source authentication, or independent numeric support. Existing authentication
-and completeness ceilings continue unchanged. Public V2 acquisition/export and
-downstream version adapters remain subsequent stages.
+and completeness ceilings continue unchanged. V2 export is source-implemented
+for CLI and MCP; deployment qualification and downstream version adapters remain
+subsequent stages.

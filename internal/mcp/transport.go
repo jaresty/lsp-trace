@@ -420,6 +420,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.Name == "lsp_trace_v1_export_retained_calls" {
 		env.EnvelopeSchemaID = mcpcontract.RetainedCallsEnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == "lsp_trace_v2_export_retained_calls" {
+		env.EnvelopeSchemaID = mcpcontract.RetainedCallsV2EnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.Name == "lsp_trace_v1_bounded_retained_analysis" {
 		env.EnvelopeSchemaID = mcpcontract.BoundedAnalysisEnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -606,6 +609,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Filter
 	case "lsp_trace_v1_export_retained_calls":
 		return operation.ExportRetainedCalls
+	case "lsp_trace_v2_export_retained_calls":
+		return operation.ExportRetainedCallsV2
 	case "lsp_trace_v1_bounded_retained_analysis":
 		return operation.BoundedRetainedAnalysis
 	case "lsp_trace_v1_bounded_retained_metrics":
