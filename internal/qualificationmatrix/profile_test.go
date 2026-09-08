@@ -182,6 +182,10 @@ func TestLanguageProviderFrameworkTransportQualificationIsExactAndAuthorityBound
 	}
 	results[0].Status = StatusUnknown
 	results[0].RealServerEvidence = true
+	results[0].EvidenceProviderClass = cells[0].Values["provider_class"]
+	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "without APPROVED_WAIVER") {
+		t.Fatalf("%s: UNKNOWN admitted without approved waiver: %v", authorityAssertion, err)
+	}
 	results[0].Waiver = validWaiver(cells[0].ID, now)
 	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err != nil {
 		t.Fatalf("%s: explicit non-promoting UNKNOWN rejected: %v", authorityAssertion, err)
