@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/source"
 )
@@ -121,25 +122,29 @@ type Config struct {
 	// Now is an optional monotonic clock seam for deterministic runtime observations.
 	Now func() time.Time
 	// Diagnostics is an optional internal-only exact-generation store.
-	Diagnostics *manageddiagnostic.Store
+	Diagnostics           *manageddiagnostic.Store
+	SeedRevisionAuthority seedbinding.RevisionAuthority
+	SeedBindingValidator  seedbinding.Validator
 	// Unexported seams keep deterministic fixtures inside this package; callers
 	// cannot provide bytes that appear directly in a production attempt ID.
 	startupAttemptEntropy func(uint64) []byte
 	startupAttemptRandom  io.Reader
 }
 type StartRequest struct {
-	Profile    runtimeprofile.Profile
-	Process    managedprocess.Spec
-	LanguageID string
-	Deadline   time.Time
+	Profile     runtimeprofile.Profile
+	SeedBinding *seedbinding.Manifest
+	Process     managedprocess.Spec
+	LanguageID  string
+	Deadline    time.Time
 }
 type StartResult struct {
-	AttemptID  manageddiagnostic.StartupAttemptID
-	SessionID  string
-	Generation uint64
-	State      session.State
-	Failure    session.Failure
-	Start      managedprocess.StartObservation
+	AttemptID    manageddiagnostic.StartupAttemptID
+	PublicDetail string
+	SessionID    string
+	Generation   uint64
+	State        session.State
+	Failure      session.Failure
+	Start        managedprocess.StartObservation
 }
 type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations, Operations, Workers int }
 type Observation struct {
@@ -253,6 +258,8 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 	}
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
 	configured := r.languageID
+	retainedSource, retained := r.seedSources[req.URI]
+	retainedSource = append([]byte(nil), retainedSource...)
 	m.mu.Unlock()
 	rel, err := filepath.Rel(workspace, path)
 	if err != nil || rel == ".." || filepath.IsAbs(rel) || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
@@ -269,7 +276,9 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		return DocumentResult{Failure: LanguageIDUnavailable}
 	}
 	var text []byte
-	if req.CaptureSupply {
+	if retained {
+		text = retainedSource
+	} else if req.CaptureSupply {
 		// Bind scope to the host-owned workspace, not an arbitrary URI path.
 		// Exact canonical file URI spelling rejects query/fragment/alias forms.
 		if req.URI != (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() {
@@ -627,6 +636,7 @@ type runtimeSession struct {
 	metadata       SessionMetadata
 	languageID     string
 	documents      map[string]openDocument
+	seedSources    map[string][]byte
 }
 
 type Manager struct {
@@ -649,6 +659,8 @@ type Manager struct {
 	workerDone            chan struct{}
 	closed                bool
 	diagnostics           *manageddiagnostic.Store
+	seedRevisionAuthority seedbinding.RevisionAuthority
+	seedBindingValidator  seedbinding.Validator
 	startupAttemptNonce   [16]byte
 	startupAttemptEntropy func(uint64) []byte
 	startupAttemptSeq     uint64
@@ -685,10 +697,18 @@ func New(c Config) (*Manager, error) {
 	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
 		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, seedBindingValidator: c.SeedBindingValidator, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
+	seedSources := map[string][]byte{}
+	if req.SeedBinding != nil {
+		outcome := seedbinding.Validate(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority, m.seedBindingValidator)
+		if outcome.Status != seedbinding.Match {
+			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: outcome.Terminal}
+		}
+		seedSources[req.SeedBinding.Locator.URI] = append([]byte(nil), outcome.Source...)
+	}
 	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
 	defer func() {
 		result.AttemptID = attemptID
@@ -739,7 +759,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
 	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
-	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument)}
+	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }
