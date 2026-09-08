@@ -37,7 +37,21 @@ func TestDeadlineHelper(t *testing.T) {
 	if mode != "open" {
 		_ = os.Stdout.Close()
 	}
-	if err := os.WriteFile(os.Getenv("PROVIDER_DEADLINE_MARKER"), []byte(strconv.Itoa(os.Getpid())), 0600); err != nil {
+	marker := os.Getenv("PROVIDER_DEADLINE_MARKER")
+	markerTemp := marker + ".tmp"
+	defer os.Remove(markerTemp)
+	file, err := os.OpenFile(markerTemp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		os.Exit(32)
+	}
+	if _, err := file.WriteString(strconv.Itoa(os.Getpid())); err != nil {
+		_ = file.Close()
+		os.Exit(32)
+	}
+	if err := file.Close(); err != nil {
+		os.Exit(32)
+	}
+	if err := os.Rename(markerTemp, marker); err != nil {
 		os.Exit(32)
 	}
 	switch mode {
@@ -91,7 +105,13 @@ func TestDeadlineCompletion(t *testing.T) {
 			name += "-cancel"
 		}
 		t.Run(name, func(t *testing.T) {
-			marker := filepath.Join(t.TempDir(), "helper.pid")
+			dir := t.TempDir()
+			marker := filepath.Join(dir, "helper.pid")
+			markerTemp := marker + ".tmp"
+			t.Cleanup(func() {
+				_ = os.Remove(marker)
+				_ = os.Remove(markerTemp)
+			})
 			registry := NewRegistry()
 			err := registry.Register(Registration{ID: "deadline", Path: os.Args[0], Args: []string{"-test.run=^TestDeadlineHelper$"}, Env: append(os.Environ(), "PROVIDER_DEADLINE_HELPER="+tc.mode, "PROVIDER_DEADLINE_MARKER="+marker, "GORACE=atexit_sleep_ms=0")})
 			if err != nil {
@@ -115,11 +135,10 @@ func TestDeadlineCompletion(t *testing.T) {
 			var pid int
 			for until := time.Now().Add(3 * time.Second); time.Now().Before(until); {
 				if b, err := os.ReadFile(marker); err == nil {
-					pid, err = strconv.Atoi(string(b))
-					if err != nil {
-						t.Fatal(err)
+					if parsed, err := strconv.Atoi(string(b)); err == nil && parsed > 0 {
+						pid = parsed
+						break
 					}
-					break
 				}
 				time.Sleep(time.Millisecond)
 			}
