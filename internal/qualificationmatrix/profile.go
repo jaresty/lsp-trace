@@ -13,7 +13,7 @@ import (
 
 const SchemaVersion = "lsp-trace.qualification-matrix-profile.v1"
 
-var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "language", "framework"}
+var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "provider_version", "language", "framework"}
 
 type Axis struct {
 	Name    string   `json:"name"`
@@ -76,16 +76,50 @@ type Waiver struct {
 	BlockedOperations           []string   `json:"blocked_operations"`
 }
 type Result struct {
-	CellID                string  `json:"cell_id"`
-	Status                Status  `json:"status"`
-	RealServerEvidence    bool    `json:"real_server_evidence"`
-	EvidenceProviderClass string  `json:"evidence_provider_class,omitempty"`
-	Waiver                *Waiver `json:"waiver,omitempty"`
+	CellID                  string  `json:"cell_id"`
+	Status                  Status  `json:"status"`
+	RealServerEvidence      bool    `json:"real_server_evidence"`
+	EvidenceProviderClass   string  `json:"evidence_provider_class,omitempty"`
+	EvidenceProviderVersion string  `json:"evidence_provider_version,omitempty"`
+	Waiver                  *Waiver `json:"waiver,omitempty"`
 }
 type AdmissionRequest struct {
 	Results             []Result `json:"results"`
 	RequestedClaims     []string `json:"requested_claims,omitempty"`
 	RequestedOperations []string `json:"requested_operations,omitempty"`
+}
+
+type AdmissionBinding struct {
+	BuildRevision string
+	Operation     string
+	Scope         string
+}
+
+// ProgramBAdmission is opaque outside this package. Its zero value is never valid.
+type ProgramBAdmission struct{ binding admissionBinding }
+type admissionBinding struct {
+	buildRevision  string
+	operation      string
+	scope          string
+	profileID      string
+	profileVersion string
+}
+
+func (a ProgramBAdmission) Matches(buildRevision, operation, scope string) bool {
+	return a.binding.buildRevision != "" && a.binding.buildRevision == buildRevision && a.binding.operation == operation && a.binding.scope == scope
+}
+
+func VerifyProgramBAdmission(p Profile, req AdmissionRequest, binding AdmissionBinding, now time.Time) (ProgramBAdmission, error) {
+	if strings.TrimSpace(binding.BuildRevision) == "" || strings.TrimSpace(binding.Operation) == "" || strings.TrimSpace(binding.Scope) == "" {
+		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED binding requires build revision, operation, and scope")
+	}
+	if len(req.RequestedOperations) != 1 || req.RequestedOperations[0] != binding.Operation {
+		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED operation must be requested exactly")
+	}
+	if err := ProgramBAdmitted(p, req, now); err != nil {
+		return ProgramBAdmission{}, err
+	}
+	return ProgramBAdmission{binding: admissionBinding{buildRevision: binding.BuildRevision, operation: binding.Operation, scope: binding.Scope, profileID: p.ProfileID, profileVersion: p.Version}}, nil
 }
 
 func ValidateProfile(p Profile) error {
@@ -203,6 +237,9 @@ func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error
 			}
 			seenAxis[n] = true
 			used[n] = true
+		}
+		if seenAxis["provider_class"] != seenAxis["provider_version"] {
+			return nil, nil, nil, fmt.Errorf("product %q must bind provider_class and provider_version together", product.ID)
 		}
 		products[product.ID] = product
 		tuples := []map[string]string{{}}
@@ -391,7 +428,10 @@ func ProgramBAdmitted(p Profile, req AdmissionRequest, now time.Time) error {
 		switch r.Status {
 		case StatusPass:
 			if want := cell.Values["provider_class"]; want != "" && r.EvidenceProviderClass != want {
-				return fmt.Errorf("evidence provider %q does not match native provider %q", r.EvidenceProviderClass, want)
+				return fmt.Errorf("evidence provider class %q does not match native provider class %q", r.EvidenceProviderClass, want)
+			}
+			if want := cell.Values["provider_version"]; want != "" && r.EvidenceProviderVersion != want {
+				return fmt.Errorf("evidence provider version %q does not match native provider version %q", r.EvidenceProviderVersion, want)
 			}
 			if r.Waiver != nil {
 				return fmt.Errorf("PASS cell %q cannot carry a waiver", r.CellID)
