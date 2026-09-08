@@ -28,7 +28,7 @@ func preflightBoundedWire(raw []byte) error {
 	if name == "lsp_trace_v1_inspect_hydrated" {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
-	if name == "lsp_trace_v2_slice" || name == "lsp_trace_v2_incoming" || name == "lsp_trace_v2_verify" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == "graph-provenance" && (header.Params.Arguments.Schema.Version == "v2" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v2")) {
+	if name == "lsp_trace_v2_slice" || name == "lsp_trace_v2_incoming" || name == "lsp_trace_v2_verify" || name == "lsp_trace_v3_slice" || name == "lsp_trace_v3_incoming" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == "graph-provenance" && (header.Params.Arguments.Schema.Version == "v2" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v2" || header.Params.Arguments.Schema.Version == "v3" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v3")) {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
 	if name == "lsp_trace_v1_bounded_retained_ranking" || name == "lsp_trace_bounded_retained_ranking" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == "bounded-retained-ranking") {
@@ -51,7 +51,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return false, nil
 	}
-	selected := header.Name == "lsp_trace_v2_slice" || header.Name == "lsp_trace_v2_incoming" || header.Name == "lsp_trace_v2_verify" || header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
+	selected := header.Name == "lsp_trace_v2_slice" || header.Name == "lsp_trace_v2_incoming" || header.Name == "lsp_trace_v2_verify" || header.Name == "lsp_trace_v3_slice" || header.Name == "lsp_trace_v3_incoming" || header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
 	selected = selected || header.Name == "lsp_trace_v1_inspect_hydrated"
 	selected = selected || header.Name == "lsp_trace_v1_bounded_retained_ranking" || header.Name == "lsp_trace_bounded_retained_ranking"
 	if header.Name == "lsp_trace_v1_validate" || header.Name == "lsp_trace_validate" {
@@ -62,7 +62,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 			} `json:"schema"`
 		}
 		_ = json.Unmarshal(header.Arguments, &h)
-		selected = h.Schema.Family == boundedanalysis.Family || h.Schema.Family == "bounded-retained-metrics" || h.Schema.Family == "bounded-retained-ranking" || (h.Schema.Family == "graph-provenance" && (h.Schema.Version == "v2" || h.Schema.Version == "lsp-trace.graph-provenance.v2"))
+		selected = h.Schema.Family == boundedanalysis.Family || h.Schema.Family == "bounded-retained-metrics" || h.Schema.Family == "bounded-retained-ranking" || (h.Schema.Family == "graph-provenance" && (h.Schema.Version == "v2" || h.Schema.Version == "lsp-trace.graph-provenance.v2" || h.Schema.Version == "v3" || h.Schema.Version == "lsp-trace.graph-provenance.v3"))
 	}
 	if !selected {
 		return false, nil
