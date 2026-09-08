@@ -198,25 +198,15 @@ type ProgramAAdmission struct {
 	SubstrateID               string          `json:"substrate_id,omitempty"`
 	authorityID               string
 	provisioningReceiptDigest string
+	keyID                     string
 	assessmentID              string
+	nonce                     string
+	issuanceEpoch             int64
+	evaluationScope           string
+	admissionPolicyID         string
+	admissionPolicyVersion    string
+	operation                 string
 	receiptDigests            [6]string
-}
-
-// ProgramABinding is a read-only projection of an admitted opaque composition.
-// Program B accepts ProgramAAdmission itself, never caller-created ProgramABinding values.
-type ProgramABinding struct {
-	AuthorityID               string
-	ProvisioningReceiptDigest string
-	AssessmentID              string
-	ReceiptDigests            [6]string
-}
-
-func (a ProgramAAdmission) ProgramABinding() (ProgramABinding, bool) {
-	valid := a.Status == SubstrateAdmitted && a.authorityID != "" && a.provisioningReceiptDigest != "" && a.assessmentID != ""
-	for _, digest := range a.receiptDigests {
-		valid = valid && digest != ""
-	}
-	return ProgramABinding{AuthorityID: a.authorityID, ProvisioningReceiptDigest: a.provisioningReceiptDigest, AssessmentID: a.assessmentID, ReceiptDigests: a.receiptDigests}, valid
 }
 
 func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, error) {
@@ -268,5 +258,5 @@ func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, 
 	if len(reasons) != 0 {
 		return ProgramAAdmission{Status: SubstrateRejected, Reasons: reasons}, nil
 	}
-	return ProgramAAdmission{Status: SubstrateAdmitted, Reasons: []string{}, Revision: revision, SubstrateID: substrate, authorityID: authority, provisioningReceiptDigest: provisioning, assessmentID: assessment, receiptDigests: digests}, nil
+	return ProgramAAdmission{Status: SubstrateAdmitted, Reasons: []string{}, Revision: revision, SubstrateID: substrate, authorityID: authority, keyID: key, provisioningReceiptDigest: provisioning, assessmentID: assessment, nonce: nonce, issuanceEpoch: issuance, evaluationScope: scope, admissionPolicyID: policyID, admissionPolicyVersion: policyVersion, operation: operation, receiptDigests: digests}, nil
 }

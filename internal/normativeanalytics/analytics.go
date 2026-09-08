@@ -3,7 +3,7 @@ package normativeanalytics
 
 import (
 	"errors"
-	"lsp-trace/internal/qualificationmatrix"
+	"lsp-trace/internal/qualificationpolicy"
 )
 
 const (
@@ -50,11 +50,12 @@ type Executor interface {
 	Execute(Operation) (int64, error)
 }
 type Request struct {
-	Operation     Operation
-	BuildRevision string
-	Admission     qualificationmatrix.ProgramBAdmission
-	Limit         int64
-	Executor      Executor
+	Operation                                    Operation
+	BuildRevision                                string
+	SubstrateID, MatrixDigest, EvidenceSetDigest string
+	Admission                                    qualificationpolicy.ProgramBAdmission
+	Limit                                        int64
+	Executor                                     Executor
 }
 type Accounting struct{ Units, Limit int64 }
 type Result struct {
@@ -66,7 +67,13 @@ type Result struct {
 }
 
 func Evaluate(request Request) (Result, error) {
-	if !request.Admission.Matches(request.BuildRevision, string(request.Operation), Scope) {
+	return evaluate(request, func() error {
+		return request.Admission.VerifyExecution(qualificationpolicy.ProgramBExecutionExpectation{BuildRevision: request.BuildRevision, Operation: string(request.Operation), Scope: Scope, SubstrateID: request.SubstrateID, MatrixDigest: request.MatrixDigest, EvidenceSetDigest: request.EvidenceSetDigest})
+	})
+}
+
+func evaluate(request Request, verifyAdmission func() error) (Result, error) {
+	if verifyAdmission == nil || verifyAdmission() != nil {
 		return Result{}, ErrProgramBNotAdmitted
 	}
 	if !validOperation(request.Operation) || request.BuildRevision == "" || request.Limit < 1 || request.Executor == nil {

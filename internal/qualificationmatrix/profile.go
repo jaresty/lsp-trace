@@ -93,42 +93,6 @@ type AdmissionRequest struct {
 	RequestedOperations []string `json:"requested_operations,omitempty"`
 }
 
-type AdmissionBinding struct {
-	BuildRevision string
-	Operation     string
-	Scope         string
-}
-
-// ProgramBAdmission is opaque outside this package. Its zero value is never valid.
-type ProgramBAdmission struct{ binding admissionBinding }
-type admissionBinding struct {
-	buildRevision  string
-	operation      string
-	scope          string
-	profileID      string
-	profileVersion string
-}
-
-func (a ProgramBAdmission) Matches(buildRevision, operation, scope string) bool {
-	return a.binding.buildRevision != "" && a.binding.buildRevision == buildRevision && a.binding.operation == operation && a.binding.scope == scope
-}
-
-func VerifyProgramBAdmission(p Profile, req AdmissionRequest, binding AdmissionBinding, now time.Time) (ProgramBAdmission, error) {
-	if p.SchemaVersion != SchemaVersionV2 {
-		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED normative admission requires schema_version %q", SchemaVersionV2)
-	}
-	if strings.TrimSpace(binding.BuildRevision) == "" || strings.TrimSpace(binding.Operation) == "" || strings.TrimSpace(binding.Scope) == "" {
-		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED binding requires build revision, operation, and scope")
-	}
-	if len(req.RequestedOperations) != 1 || req.RequestedOperations[0] != binding.Operation {
-		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED operation must be requested exactly")
-	}
-	if err := ProgramBAdmitted(p, req, now); err != nil {
-		return ProgramBAdmission{}, err
-	}
-	return ProgramBAdmission{binding: admissionBinding{buildRevision: binding.BuildRevision, operation: binding.Operation, scope: binding.Scope, profileID: p.ProfileID, profileVersion: p.Version}}, nil
-}
-
 func ValidateProfile(p Profile) error {
 	axes, products, raw, err := validateCore(p)
 	if err != nil {

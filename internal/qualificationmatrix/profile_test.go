@@ -91,9 +91,6 @@ func TestHistoricalV1CompatibilityAndV2Identity(t *testing.T) {
 	if err := ProgramBAdmitted(v1, req, now); err != nil {
 		t.Fatalf("ASSERT_V1_HISTORICAL_ADMISSION_SEMANTICS: %v", err)
 	}
-	if _, err := VerifyProgramBAdmission(v1, req, AdmissionBinding{BuildRevision: "r", Operation: "RANKING", Scope: "NORMATIVE_PROGRAM_B_ONLY"}, now); err == nil || !strings.Contains(err.Error(), "requires schema_version") {
-		t.Fatalf("ASSERT_NORMATIVE_PROGRAM_B_REQUIRES_V2: %v", err)
-	}
 }
 
 func TestProfileRequiresNormativeIdentityAndMandatoryAxes(t *testing.T) {
@@ -306,36 +303,6 @@ func TestAdmissionEnforcesBlockedOperationsAndAdmitsCompleteMatrix(t *testing.T)
 	}
 	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results[:len(results)-1]}, now); err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("ASSERT_MISSING_CELL_REJECTED: %v", err)
-	}
-}
-
-func TestVerifiedProgramBAdmissionBindsRevisionOperationAndScope(t *testing.T) {
-	now := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
-	p := testProfile(t)
-	cells := mustGenerate(t, p)
-	p.FoundationalCellIDs = []string{cells[1].ID}
-	results := passingResults(cells)
-	binding := AdmissionBinding{BuildRevision: "526f658", Operation: "RANKING", Scope: "NORMATIVE_PROGRAM_B_ONLY"}
-	req := AdmissionRequest{Results: results, RequestedOperations: []string{"RANKING"}}
-	admission, err := VerifyProgramBAdmission(p, req, binding, now)
-	if err != nil || !admission.Matches("526f658", "RANKING", "NORMATIVE_PROGRAM_B_ONLY") || admission.Matches("other", "RANKING", "NORMATIVE_PROGRAM_B_ONLY") {
-		t.Fatalf("ASSERT_OPAQUE_PROGRAM_B_ADMISSION_BOUND: admission=%#v err=%v", admission, err)
-	}
-	if _, err := VerifyProgramBAdmission(p, AdmissionRequest{Results: results, RequestedOperations: []string{"ANALYSIS"}}, binding, now); err == nil || !strings.Contains(err.Error(), "requested exactly") {
-		t.Fatalf("ASSERT_PROGRAM_B_OPERATION_BINDING_REJECTED: %v", err)
-	}
-	if _, err := VerifyProgramBAdmission(p, AdmissionRequest{RequestedOperations: []string{"RANKING"}}, binding, now); err == nil || !strings.Contains(err.Error(), "missing") {
-		t.Fatalf("ASSERT_PROGRAM_B_NO_RECEIPT_REJECTED: %v", err)
-	}
-	results[0].Status = StatusBlocked
-	results[0].Waiver = validWaiver(cells[0].ID, now)
-	blocked := AdmissionRequest{Results: results, RequestedOperations: []string{"pagerank"}}
-	if _, err := VerifyProgramBAdmission(p, blocked, AdmissionBinding{BuildRevision: "526f658", Operation: "pagerank", Scope: "NORMATIVE_PROGRAM_B_ONLY"}, now); err == nil || !strings.Contains(err.Error(), "blocked operation") {
-		t.Fatalf("ASSERT_PROGRAM_B_BLOCKED_OPERATION_REJECTED: %v", err)
-	}
-	waived := AdmissionRequest{Results: results, RequestedOperations: []string{"RANKING"}}
-	if _, err := VerifyProgramBAdmission(p, waived, binding, now); err != nil {
-		t.Fatalf("ASSERT_PROGRAM_B_VALID_WAIVER_ADMITTED: %v", err)
 	}
 }
 
