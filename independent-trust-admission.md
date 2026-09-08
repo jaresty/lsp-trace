@@ -16,6 +16,14 @@ This is generic immutable host-side allowlisting of independently approved recei
 
 Legacy AdmitTrust and ValidateTrustAuthentication are unchanged compatibility primitives. Structural validity is neither independent provisioning nor operational admission. No deployment, live secrets/config changes, program acceptance, crypto implementation, provider semantics, or end-to-end authenticated execution is claimed.
 
+## Program A contextual anti-replay
+
+Program A does not treat verification as global one-time consumption. An immutable receipt is intentionally and deterministically re-verifiable offline when its signed inputs and evaluator-supplied expected context are unchanged. Authorization is contextual: the canonical length-prefixed signature payload binds authority ID, key ID, pinned provisioning-receipt digest, authority-issued assessment ID and nonce, issuance epoch, evaluation scope, admission policy ID/version, operation, revision, substrate, evaluator, order, evidence digest, and custody reference. Changing any one of those fields or presenting the receipt under a different expected assessment context rejects.
+
+All six verified receipts must carry exactly the same authority/key, provisioning receipt, assessment/nonce/issuance epoch, evaluation scope, admission policy/version, operation, revision, and substrate. Mixed authority or mixed assessment composition rejects. The issuance epoch is an immutable context identifier, not an expiry check: no PRD validity interval is asserted here, so verification intentionally uses revision-bound immutable evidence and no ambient wall clock. If a future policy requires expiry, it must add an explicit signed validity interval and compare it with an evaluator-supplied trusted clock rather than process-local time.
+
+Program A authority construction is package-private. The old exported `NewProgramAReceiptAuthority` authoritative path is removed; generic `schema.NewHostTrustStore` remains a compatibility primitive but cannot produce the unexported Program A authority. Canonical host provisioning requires an independently pinned provisioning-receipt digest and a key ID derived from the provisioned Ed25519 public key. Tests use only a package-private ephemeral-key seam; no private key is embedded.
+
 ## Evidence
 
 Existing schema Trust/Authentication suite exercised live before changes: PASS (initial namespace trust-baseline.log; parent can retain it). New present rejecting stub produced assertion-specific failures in TestHostTrustPositive, TestHostTrustMissing, TestHostTrustProvisioningRejects and TestHostTrustFrozenEvidence, followed by GREEN after implementation. Initial namespace trust-red.log/trust-green.log are already produced artifacts, not rewritten after isolation correction.

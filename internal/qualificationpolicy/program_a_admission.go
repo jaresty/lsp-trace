@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"lsp-trace/internal/schema"
 	"sort"
 	"strings"
 )
@@ -30,43 +29,59 @@ const (
 	ProjectionDimension             Dimension = "projection"
 )
 
-const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v1"
+const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v2"
+const receiptSignatureDomain = "llsp-trace.program-a-evidence-receipt.v2\x00"
 
-const receiptSignatureDomain = "llsp-trace.program-a-evidence-receipt.v1\x00"
-
-// ProgramATrustProvisioning is privileged verifier-host configuration. The
-// authority and policy are pinned with the key; receipt producers never supply it.
-type ProgramATrustProvisioning struct {
-	Store       *schema.HostTrustStore
-	Request     schema.HostTrustRequest
-	AuthorityID string
-	PolicyID    string
-	PublicKey   ed25519.PublicKey
+// AssessmentContext identifies the one admission evaluation for which receipts are valid.
+// Receipts are immutable and intentionally re-verifiable offline in this exact context.
+type AssessmentContext struct {
+	AssessmentID           string
+	Nonce                  string
+	IssuanceEpoch          int64
+	EvaluationScope        string
+	AdmissionPolicyID      string
+	AdmissionPolicyVersion string
+	Operation              string
 }
 
-// ProgramAReceiptAuthority is an opaque, provisioned verifier trust root.
-type ProgramAReceiptAuthority struct {
-	authorityID string
-	policyID    string
-	publicKey   ed25519.PublicKey
+// hostProgramATrustProvisioning is canonical host-only input. It is deliberately
+// unexported: arbitrary Go callers cannot turn self-created keys into authority.
+type hostProgramATrustProvisioning struct {
+	authorityID                     string
+	keyID                           string
+	policyID                        string
+	provisioningReceipt             []byte
+	pinnedProvisioningReceiptDigest string
+	publicKey                       ed25519.PublicKey
 }
 
-func NewProgramAReceiptAuthority(p ProgramATrustProvisioning) (*ProgramAReceiptAuthority, error) {
-	if strings.TrimSpace(p.AuthorityID) == "" || strings.TrimSpace(p.PolicyID) == "" {
-		return nil, fmt.Errorf("program A trust provisioning requires authority and policy identity")
+// verifiedProgramAAuthority is opaque and can only result from host provisioning
+// verification in this package (or the package-private ephemeral test seam).
+type verifiedProgramAAuthority struct {
+	authorityID               string
+	keyID                     string
+	policyID                  string
+	provisioningReceiptDigest string
+	publicKey                 ed25519.PublicKey
+}
+
+func provisionVerifiedProgramAAuthority(p hostProgramATrustProvisioning) (*verifiedProgramAAuthority, error) {
+	if strings.TrimSpace(p.authorityID) == "" || strings.TrimSpace(p.keyID) == "" || strings.TrimSpace(p.policyID) == "" {
+		return nil, fmt.Errorf("program A host provisioning requires authority, key, and policy identity")
 	}
-	admission, err := p.Store.Admit(p.Request)
-	if err != nil || admission.Status != schema.AuthenticationAuthenticated {
-		return nil, fmt.Errorf("program A trust provisioning is not host-authenticated: %v", err)
+	if len(p.publicKey) != ed25519.PublicKeySize || len(p.provisioningReceipt) == 0 {
+		return nil, fmt.Errorf("program A host provisioning requires receipt and Ed25519 public key")
 	}
-	if len(p.PublicKey) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("program A trust provisioning requires Ed25519 public key")
+	receiptSum := sha256.Sum256(p.provisioningReceipt)
+	receiptDigest := "sha256:" + hex.EncodeToString(receiptSum[:])
+	if receiptDigest != p.pinnedProvisioningReceiptDigest {
+		return nil, fmt.Errorf("program A provisioning receipt does not match independently pinned digest")
 	}
-	wantAnchor := sha256.Sum256(p.PublicKey)
-	if p.AuthorityID != p.Request.ClaimedSourceSnapshotIdentity || p.PolicyID != "sha256:"+hex.EncodeToString(wantAnchor[:]) {
-		return nil, fmt.Errorf("program A trust provisioning identity/policy does not bind public key")
+	keySum := sha256.Sum256(p.publicKey)
+	if p.keyID != "sha256:"+hex.EncodeToString(keySum[:]) {
+		return nil, fmt.Errorf("program A key identity mismatch")
 	}
-	return &ProgramAReceiptAuthority{authorityID: p.AuthorityID, policyID: p.PolicyID, publicKey: append(ed25519.PublicKey(nil), p.PublicKey...)}, nil
+	return &verifiedProgramAAuthority{authorityID: p.authorityID, keyID: p.keyID, policyID: p.policyID, provisioningReceiptDigest: receiptDigest, publicKey: append(ed25519.PublicKey(nil), p.publicKey...)}, nil
 }
 
 var evaluatorContract = map[Dimension]struct{ family, version string }{
@@ -78,28 +93,42 @@ var evaluatorContract = map[Dimension]struct{ family, version string }{
 	ProjectionDimension:             {"projection", "v1"},
 }
 
-// ReceiptBytes is the canonical output supplied by an independent evaluator.
+// ReceiptBytes is the canonical signed output supplied by an independent evaluator.
 type ReceiptBytes struct {
-	Dimension     Dimension
-	EvaluatorID   string
-	SchemaVersion string
-	Family        string
-	Version       string
-	Digest        string
-	CustodyRef    string
-	Revision      string
-	SubstrateID   string
-	Sequence      int
-	Status        SubstrateStatus
-	Signature     []byte
+	Dimension                 Dimension
+	EvaluatorID               string
+	SchemaVersion             string
+	Family                    string
+	Version                   string
+	Digest                    string
+	CustodyRef                string
+	Revision                  string
+	SubstrateID               string
+	Sequence                  int
+	Status                    SubstrateStatus
+	AuthorityID               string
+	KeyID                     string
+	ProvisioningReceiptDigest string
+	AssessmentID              string
+	Nonce                     string
+	IssuanceEpoch             int64
+	EvaluationScope           string
+	AdmissionPolicyID         string
+	AdmissionPolicyVersion    string
+	Operation                 string
+	EvidenceDigest            string
+	Signature                 []byte
 }
 
-// VerifiedReceipt has no exported state; only VerifyReceipt can issue one.
+// VerifiedReceipt has no exported state; only a verifiedProgramAAuthority can issue one.
 type VerifiedReceipt struct{ receipt verifiedReceipt }
-type verifiedReceipt struct{ raw ReceiptBytes }
+type verifiedReceipt struct {
+	raw           ReceiptBytes
+	receiptDigest string
+}
 
-func (a *ProgramAReceiptAuthority) VerifyReceipt(raw ReceiptBytes) (VerifiedReceipt, error) {
-	if a == nil || a.authorityID == "" || a.policyID == "" || len(a.publicKey) != ed25519.PublicKeySize {
+func (a *verifiedProgramAAuthority) VerifyReceipt(raw ReceiptBytes, expected AssessmentContext) (VerifiedReceipt, error) {
+	if a == nil || a.authorityID == "" || a.keyID == "" || a.provisioningReceiptDigest == "" || len(a.publicKey) != ed25519.PublicKeySize {
 		return VerifiedReceipt{}, fmt.Errorf("program A receipt authority is not provisioned")
 	}
 	contract, ok := evaluatorContract[raw.Dimension]
@@ -115,10 +144,16 @@ func (a *ProgramAReceiptAuthority) VerifyReceipt(raw ReceiptBytes) (VerifiedRece
 	if raw.Status != SubstrateAdmitted {
 		return VerifiedReceipt{}, fmt.Errorf("%s: %s", raw.Dimension, raw.Status)
 	}
-	if strings.TrimSpace(raw.CustodyRef) == "" || strings.TrimSpace(raw.Revision) == "" || strings.TrimSpace(raw.SubstrateID) == "" {
-		return VerifiedReceipt{}, fmt.Errorf("%s: missing custody/revision/substrate", raw.Dimension)
+	if strings.TrimSpace(raw.CustodyRef) == "" || strings.TrimSpace(raw.Revision) == "" || strings.TrimSpace(raw.SubstrateID) == "" || strings.TrimSpace(raw.EvidenceDigest) == "" {
+		return VerifiedReceipt{}, fmt.Errorf("%s: missing custody/revision/substrate/evidence", raw.Dimension)
 	}
-	for _, s := range []string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.Digest, raw.CustodyRef, raw.Revision, raw.SubstrateID, string(raw.Status)} {
+	if raw.AuthorityID != a.authorityID || raw.KeyID != a.keyID || raw.ProvisioningReceiptDigest != a.provisioningReceiptDigest || raw.AdmissionPolicyID != a.policyID {
+		return VerifiedReceipt{}, fmt.Errorf("%s: authority provisioning mismatch", raw.Dimension)
+	}
+	if raw.AssessmentID != expected.AssessmentID || raw.Nonce != expected.Nonce || raw.IssuanceEpoch != expected.IssuanceEpoch || raw.EvaluationScope != expected.EvaluationScope || raw.AdmissionPolicyID != expected.AdmissionPolicyID || raw.AdmissionPolicyVersion != expected.AdmissionPolicyVersion || raw.Operation != expected.Operation {
+		return VerifiedReceipt{}, fmt.Errorf("%s: assessment context mismatch", raw.Dimension)
+	}
+	for _, s := range receiptFields(raw) {
 		if strings.ContainsRune(s, '\x00') {
 			return VerifiedReceipt{}, fmt.Errorf("%s: receipt string contains NUL", raw.Dimension)
 		}
@@ -130,13 +165,15 @@ func (a *ProgramAReceiptAuthority) VerifyReceipt(raw ReceiptBytes) (VerifiedRece
 	if !ed25519.Verify(a.publicKey, payload, raw.Signature) {
 		return VerifiedReceipt{}, fmt.Errorf("%s: evaluator signature mismatch", raw.Dimension)
 	}
-	return VerifiedReceipt{receipt: verifiedReceipt{raw: raw}}, nil
+	return VerifiedReceipt{receipt: verifiedReceipt{raw: raw, receiptDigest: raw.Digest}}, nil
 }
 
+func receiptFields(raw ReceiptBytes) []string {
+	return []string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.CustodyRef, raw.Revision, raw.SubstrateID, fmt.Sprint(raw.Sequence), string(raw.Status), raw.AuthorityID, raw.KeyID, raw.ProvisioningReceiptDigest, raw.AssessmentID, raw.Nonce, fmt.Sprint(raw.IssuanceEpoch), raw.EvaluationScope, raw.AdmissionPolicyID, raw.AdmissionPolicyVersion, raw.Operation, raw.EvidenceDigest}
+}
 func receiptPayload(raw ReceiptBytes) []byte {
 	payload := []byte(receiptSignatureDomain)
-	fields := []string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.CustodyRef, raw.Revision, raw.SubstrateID, fmt.Sprint(raw.Sequence), string(raw.Status)}
-	for _, field := range fields {
+	for _, field := range receiptFields(raw) {
 		var size [4]byte
 		binary.BigEndian.PutUint32(size[:], uint32(len(field)))
 		payload = append(payload, size[:]...)
@@ -155,30 +192,50 @@ type VerifiedProgramASubstrate struct {
 }
 
 type ProgramAAdmission struct {
-	Status      SubstrateStatus `json:"status"`
-	Reasons     []string        `json:"reasons"`
-	Revision    string          `json:"revision,omitempty"`
-	SubstrateID string          `json:"substrate_id,omitempty"`
+	Status                    SubstrateStatus `json:"status"`
+	Reasons                   []string        `json:"reasons"`
+	Revision                  string          `json:"revision,omitempty"`
+	SubstrateID               string          `json:"substrate_id,omitempty"`
+	authorityID               string
+	provisioningReceiptDigest string
+	assessmentID              string
+	receiptDigests            [6]string
+}
+
+// ProgramABinding is a read-only projection of an admitted opaque composition.
+// Program B accepts ProgramAAdmission itself, never caller-created ProgramABinding values.
+type ProgramABinding struct {
+	AuthorityID               string
+	ProvisioningReceiptDigest string
+	AssessmentID              string
+	ReceiptDigests            [6]string
+}
+
+func (a ProgramAAdmission) ProgramABinding() (ProgramABinding, bool) {
+	valid := a.Status == SubstrateAdmitted && a.authorityID != "" && a.provisioningReceiptDigest != "" && a.assessmentID != ""
+	for _, digest := range a.receiptDigests {
+		valid = valid && digest != ""
+	}
+	return ProgramABinding{AuthorityID: a.authorityID, ProvisioningReceiptDigest: a.provisioningReceiptDigest, AssessmentID: a.assessmentID, ReceiptDigests: a.receiptDigests}, valid
 }
 
 func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, error) {
 	receipts := []struct {
 		dimension Dimension
 		receipt   VerifiedReceipt
-	}{
-		{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity},
-		{RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection},
-	}
+	}{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}}
 	reasons := make([]string, 0)
-	var revision, substrate string
-	for _, item := range receipts {
+	var revision, substrate, authority, key, provisioning, assessment, nonce, scope, policyID, policyVersion, operation string
+	var issuance int64
+	var digests [6]string
+	for i, item := range receipts {
 		raw := item.receipt.receipt.raw
 		if raw.Dimension != item.dimension {
 			reasons = append(reasons, string(item.dimension)+": no validated receipt")
 			continue
 		}
 		if revision == "" {
-			revision, substrate = raw.Revision, raw.SubstrateID
+			revision, substrate, authority, key, provisioning, assessment, nonce, issuance, scope, policyID, policyVersion, operation = raw.Revision, raw.SubstrateID, raw.AuthorityID, raw.KeyID, raw.ProvisioningReceiptDigest, raw.AssessmentID, raw.Nonce, raw.IssuanceEpoch, raw.EvaluationScope, raw.AdmissionPolicyID, raw.AdmissionPolicyVersion, raw.Operation
 		}
 		if raw.Revision != revision {
 			reasons = append(reasons, string(item.dimension)+": revision mismatch")
@@ -186,6 +243,19 @@ func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, 
 		if raw.SubstrateID != substrate {
 			reasons = append(reasons, string(item.dimension)+": substrate mismatch")
 		}
+		if raw.AuthorityID != authority || raw.KeyID != key {
+			reasons = append(reasons, string(item.dimension)+": authority mismatch")
+		}
+		if raw.ProvisioningReceiptDigest != provisioning {
+			reasons = append(reasons, string(item.dimension)+": provisioning mismatch")
+		}
+		if raw.AssessmentID != assessment || raw.Nonce != nonce || raw.IssuanceEpoch != issuance {
+			reasons = append(reasons, string(item.dimension)+": assessment mismatch")
+		}
+		if raw.EvaluationScope != scope || raw.AdmissionPolicyID != policyID || raw.AdmissionPolicyVersion != policyVersion || raw.Operation != operation {
+			reasons = append(reasons, string(item.dimension)+": evaluation scope/policy mismatch")
+		}
+		digests[i] = item.receipt.receipt.receiptDigest
 	}
 	n, s, p := input.RelationNormalization.receipt.raw.Sequence, input.SupportAccounting.receipt.raw.Sequence, input.Projection.receipt.raw.Sequence
 	if n >= s {
@@ -198,5 +268,5 @@ func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, 
 	if len(reasons) != 0 {
 		return ProgramAAdmission{Status: SubstrateRejected, Reasons: reasons}, nil
 	}
-	return ProgramAAdmission{Status: SubstrateAdmitted, Reasons: []string{}, Revision: revision, SubstrateID: substrate}, nil
+	return ProgramAAdmission{Status: SubstrateAdmitted, Reasons: []string{}, Revision: revision, SubstrateID: substrate, authorityID: authority, provisioningReceiptDigest: provisioning, assessmentID: assessment, receiptDigests: digests}, nil
 }
