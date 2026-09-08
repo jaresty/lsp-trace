@@ -236,9 +236,13 @@ missing/truncated content, caller-boundary opt-in, coordinate authority, BOM/
 CRLF/non-BMP coordinates, independent interval unions, privacy, global exact
 budget edges, immutable paging, unknown families, and coherent output tampering.
 
-The historical ownership allow-list currently rejects the new package during
-`go test ./...`. It is deliberately unchanged. Parent integration must add the
-package ownership mapping, register the owned schemas/operation versions and
-wire CLI/MCP selectors, body opt-in, inline/explicit immutable publication and
-capability discovery. Public parity, publication custody, real-provider boundary
-support and deployed availability are **not qualified by these internal tests**.
+FR20/FR21 package, document and schema ownership is explicitly registered in the
+integrated-conformance dirty-change guard; unrelated paths remain rejected.
+`TestFR20HydrationIntegration` feeds original public CLI graph-provenance/v2 bytes
+from the local wire fixture (and installed gopls positional fixture when available)
+to this core, deletes the checkout, and checks exact shared native/caller-sidecar
+bodies, omissions, authority separation and complete paged replay. This is a
+bounded integration proof, not public hydration. Public schema/operation
+registration, CLI/MCP selectors, body opt-in, publication and capability discovery
+remain deferred. Public parity, publication custody, real-provider boundary
+support and deployed availability are **not qualified by this proof**.
