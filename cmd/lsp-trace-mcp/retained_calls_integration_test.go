@@ -31,6 +31,8 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := runCLIProcess(t, cli, "export-retained-calls", "--version", "v2", inputPath)
+	selector := filepath.Join(t.TempDir(), "selected-retained-v2.json")
+	runCLIProcess(t, cli, "export-retained-calls", "--version", "v2", "--output", selector, inputPath)
 	var exported retainedcalls.EvidenceV2
 	if err = json.Unmarshal(want, &exported); err != nil {
 		t.Fatal(err)
@@ -44,10 +46,12 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 		callRequest(2, "lsp_trace_v2_export_retained_calls", map[string]any{"input": string(input), "output_selector": "retained-v2.json"}),
 		callRequest(3, "lsp_trace_v2_export_retained_calls", map[string]any{"input": string(input), "output_selector": "compact-v2.json", "detail": "compact"}),
 		callRequest(4, "lsp_trace_v1_validate", map[string]any{"input": string(want), "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
-		callRequest(5, "lsp_trace_v2_export_retained_calls", map[string]any{"input": `{}`}),
-		callRequest(6, "lsp_trace_v1_export_retained_calls", map[string]any{"input": string(input)}),
+		callRequest(5, "lsp_trace_v2_verify_retained_calls", map[string]any{"input": selector, "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
+		callRequest(6, "lsp_trace_v2_verify_retained_calls", map[string]any{"input": filepath.Join(publication, "missing.json"), "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
+		callRequest(7, "lsp_trace_v2_export_retained_calls", map[string]any{"input": `{}`}),
+		callRequest(8, "lsp_trace_v1_export_retained_calls", map[string]any{"input": string(input)}),
 	})
-	for _, i := range []int{0, 1, 2, 3} {
+	for _, i := range []int{0, 1, 2, 3, 4} {
 		if call := decodeProcessCall(t, calls[i]); call.env["operation_status"] != "SUCCEEDED" {
 			t.Fatalf("ASSERT_MCP_RETAINED_V2_SUCCESS_%d: %v", i, call.env)
 		}
@@ -69,10 +73,17 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 	if publicationCall["artifact_schema_id"] != "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.retained-calls.v2.schema.json" || receipt["artifact_schema_id"] != publicationCall["artifact_schema_id"] {
 		t.Fatal("ASSERT_MCP_RETAINED_V2_PUBLICATION_FAMILY", publicationCall)
 	}
-	if call := decodeProcessCall(t, calls[4]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
-		t.Fatal("ASSERT_MCP_RETAINED_V2_CORRUPT_REJECT", call.env)
+	verified := decodeProcessCall(t, calls[4]).env
+	if verified["publication_receipt"] != nil || verified["content"] == nil || strings.Contains(fmt.Sprint(verified), publication) {
+		t.Fatal("ASSERT_MCP_RETAINED_V2_VERIFY_PATH_FREE_RECEIPT", verified)
 	}
 	if call := decodeProcessCall(t, calls[5]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
+		t.Fatal("ASSERT_MCP_RETAINED_V2_VERIFY_MISSING_TARGET", call.env)
+	}
+	if call := decodeProcessCall(t, calls[6]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
+		t.Fatal("ASSERT_MCP_RETAINED_V2_CORRUPT_REJECT", call.env)
+	}
+	if call := decodeProcessCall(t, calls[7]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
 		t.Fatal("ASSERT_MCP_RETAINED_V1_REJECTS_V2", call.env)
 	}
 	if got, err := retainedcalls.ExportV2(input); err != nil || !bytes.Equal(got, want) {

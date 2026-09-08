@@ -43,9 +43,21 @@ interpreted as a server-side path.
 `output_selector` uses the existing host publication root and immutable no-replace
 publication. `detail: "compact"` requires a selector and keeps the full export in
 the selected artifact. Schema retrieval and composed validation accept the new
-family. The runtime has fourteen canonical tools: the unchanged historical
-thirteen-tool manifest plus an additive export registration and separately
-versioned export envelopes. Historical manifest/envelope schemas stay unchanged.
+family. Canonical `lsp_trace_v2_verify_retained_calls` accepts a standard immutable
+generation selector plus explicit `schema:{family:"retained-calls",version:"v2"}`;
+it verifies receipt custody before composed retained-calls/v2 admission. It has no
+alias and does not widen `lsp_trace_v1_verify` or graph-provenance `lsp_trace_v2_verify`.
+
+The current runtime has exactly 23 canonical tools, sorted as: `lsp_session_v1_list`,
+`lsp_session_v1_restart`, `lsp_session_v1_status`, `lsp_session_v1_stop`,
+`lsp_trace_v1_bounded_retained_analysis`, `lsp_trace_v1_bounded_retained_metrics`,
+`lsp_trace_v1_bounded_retained_ranking`, `lsp_trace_v1_capabilities`,
+`lsp_trace_v1_execute`, `lsp_trace_v1_export_retained_calls`, `lsp_trace_v1_filter`,
+`lsp_trace_v1_incoming`, `lsp_trace_v1_inspect`, `lsp_trace_v1_inspect_hydrated`,
+`lsp_trace_v1_schema_get`, `lsp_trace_v1_slice`, `lsp_trace_v1_validate`,
+`lsp_trace_v1_verify`, `lsp_trace_v2_export_retained_calls`, `lsp_trace_v2_incoming`,
+`lsp_trace_v2_slice`, `lsp_trace_v2_verify`, and `lsp_trace_v2_verify_retained_calls`.
+Historical thirteen- and twenty-tool contracts remain historical and unchanged.
 
 ## Identity contract
 

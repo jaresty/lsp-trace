@@ -28,6 +28,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.Validate:                "lsp_trace_v1_validate",
 		operation.Verify:                  "lsp_trace_v1_verify",
 		operation.VerifyV2:                "lsp_trace_v2_verify",
+		operation.VerifyRetainedCallsV2:   "lsp_trace_v2_verify_retained_calls",
 		operation.Inspect:                 "lsp_trace_v1_inspect",
 		operation.InspectHydrated:         HydratedTool,
 		operation.Filter:                  "lsp_trace_v1_filter",
@@ -40,7 +41,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range WithHydratedInspection(WithRetainedCalls(manifest)).Tools {
+		for _, tool := range WithHydratedInspection(WithRetainedCallsV2Verifier(WithRetainedCalls(manifest))).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break

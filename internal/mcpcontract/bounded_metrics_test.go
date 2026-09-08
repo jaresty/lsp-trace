@@ -17,7 +17,7 @@ func TestMetricsAdditiveContractAndClosedInputs(t *testing.T) {
 	before, _ := json.Marshal(historical)
 	runtime := WithRetainedCalls(historical)
 	after, _ := json.Marshal(historical)
-	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(runtime.Tools) != 20 {
+	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(runtime.Tools) != 21 {
 		t.Fatal("ASSERT_METRICS_HISTORICAL_MANIFEST_UNCHANGED")
 	}
 	for i, tool := range historical.Tools {

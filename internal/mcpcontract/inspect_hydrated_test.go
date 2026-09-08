@@ -16,7 +16,7 @@ func TestHydratedContractAdditive(t *testing.T) {
 	previous := WithRetainedCalls(historical)
 	runtime := WithHydratedInspection(previous)
 	after, _ := json.Marshal(historical)
-	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(previous.Tools) != 20 || len(runtime.Tools) != 21 {
+	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(previous.Tools) != 21 || len(runtime.Tools) != 22 {
 		t.Fatal("PUBLIC_ADDITIVE_CONTRACT FAIL")
 	}
 	for _, id := range []string{hi.InputSchemaID, hi.SchemaID, HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-artifact.v1.schema.json"), HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json")} {
@@ -32,5 +32,5 @@ func TestHydratedContractAdditive(t *testing.T) {
 			t.Fatal("PUBLIC_ADDITIVE_CONTRACT FAIL: loose input")
 		}
 	}
-	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 runtime=21; no publication schema")
+	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=21 runtime=22; no publication schema")
 }

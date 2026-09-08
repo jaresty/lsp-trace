@@ -39,6 +39,26 @@ func TestRetainedCallsV2VerifyRegistrationAndCurrentCount(t *testing.T) {
 	if got := len(r.Advertised()); got != 23 {
 		t.Fatalf("%s: got %d", cardinality, got)
 	}
+	if tool.InputSchemaID != mcpcontract.VerifyRetainedCallsV2InputID || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.RetainedCallsV2ArtifactID {
+		t.Fatalf("%s: contracts=%+v", registered, tool)
+	}
+}
+
+func TestRetainedCallsV2VerifyInputContractIsClosedAndRequiresSelector(t *testing.T) {
+	const assertion = "ASSERT_MCP_RETAINED_CALLS_V2_VERIFY_CLOSED_INPUT"
+	valid := []byte(`{"input":"retained-v2.json","schema":{"family":"retained-calls","version":"v2"}}`)
+	if err := mcpcontract.ValidateJSON(mcpcontract.VerifyRetainedCallsV2InputID, valid); err != nil {
+		t.Fatalf("%s: valid contract rejected: %v", assertion, err)
+	}
+	for _, request := range [][]byte{
+		[]byte(`{"schema":{"family":"retained-calls","version":"v2"}}`),
+		[]byte(`{"input":"retained-v2.json","schema":{"family":"graph-provenance","version":"v2"}}`),
+		[]byte(`{"input":"retained-v2.json","schema":{"family":"retained-calls","version":"v2"},"target":"server-path"}`),
+	} {
+		if err := mcpcontract.ValidateJSON(mcpcontract.VerifyRetainedCallsV2InputID, request); err == nil {
+			t.Fatalf("%s: admitted %s", assertion, request)
+		}
+	}
 }
 
 func TestRetainedCallsV2InputContractIsClosedStringOnly(t *testing.T) {

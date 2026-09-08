@@ -22,6 +22,7 @@ const (
 	CustodyExecute        Name = "execute"
 	ExportRetainedCalls   Name = "export_retained_calls"
 	ExportRetainedCallsV2 Name = "export_retained_calls_v2"
+	VerifyRetainedCallsV2 Name = "verify_retained_calls_v2"
 )
 
 var ErrNotImplemented = errors.New("operation not implemented")

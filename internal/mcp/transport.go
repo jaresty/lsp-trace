@@ -417,6 +417,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
 		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == "lsp_trace_v2_verify_retained_calls" {
+		env.EnvelopeSchemaID = mcpcontract.VerifyRetainedCallsV2EnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.Name == "lsp_trace_v1_export_retained_calls" {
 		env.EnvelopeSchemaID = mcpcontract.RetainedCallsEnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -599,6 +602,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Validate
 	case "lsp_trace_v2_verify":
 		return operation.VerifyV2
+	case "lsp_trace_v2_verify_retained_calls":
+		return operation.VerifyRetainedCallsV2
 	case "lsp_trace_v1_verify":
 		return operation.Verify
 	case mcpcontract.HydratedTool:

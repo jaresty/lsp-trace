@@ -60,6 +60,26 @@ func readContractSchema(name string) ([]byte, error) {
 	if name == "testdata/schemas/input-verify.v2.schema.json" {
 		return []byte(`{"$id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify.v2.schema.json","$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["input","schema"],"properties":{"input":{"type":"string","minLength":1},"schema":{"type":"object","additionalProperties":false,"required":["family","version"],"properties":{"family":{"const":"graph-provenance"},"version":{"enum":["v2","lsp-trace.graph-provenance.v2"]}}},"output_selector":{"type":"string","minLength":1},"detail":{"enum":["full","compact"]}}}`), nil
 	}
+	if name == "testdata/schemas/input-verify-retained-calls.v2.schema.json" {
+		return []byte(`{"$id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify-retained-calls.v2.schema.json","$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["input","schema"],"properties":{"input":{"type":"string","minLength":1},"schema":{"type":"object","additionalProperties":false,"required":["family","version"],"properties":{"family":{"const":"retained-calls"},"version":{"enum":["v2","lsp-trace.retained-calls.v2"]}}},"output_selector":{"type":"string","minLength":1},"detail":{"enum":["full","compact"]}}}`), nil
+	}
+	if strings.HasPrefix(name, "testdata/schemas/envelope-verify-retained-calls-v2-") && strings.HasSuffix(name, ".v1.schema.json") {
+		old := strings.Replace(name, "envelope-verify-retained-calls-v2-", "envelope-", 1)
+		raw, err := contractFiles.ReadFile(old)
+		if err != nil {
+			return nil, err
+		}
+		var s map[string]any
+		if err := json.Unmarshal(raw, &s); err != nil {
+			return nil, err
+		}
+		id := VerifyRetainedCallsV2EnvelopeID(s["$id"].(string))
+		s["$id"] = id
+		p := s["properties"].(map[string]any)
+		p["envelope_schema_id"] = map[string]any{"const": id}
+		p["tool"] = map[string]any{"const": "lsp_trace_v2_verify_retained_calls"}
+		return json.Marshal(s)
+	}
 	if name == "testdata/schemas/input-acquisition.v2.schema.json" {
 		return json.Marshal(acquisitionV2InputSchema())
 	}
