@@ -174,7 +174,7 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 		}
 	}
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 22 {
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 23 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
 	}
 }
