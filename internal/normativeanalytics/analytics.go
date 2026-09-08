@@ -1,9 +1,10 @@
-// Package normativeanalytics defines the post-admission Program B analytics v2
-// contract. It intentionally does not register public command or protocol routes;
-// callers must first provide independently validated Program B admission.
+// Package normativeanalytics defines dormant post-admission Program B analytics v2 contracts.
 package normativeanalytics
 
-import "errors"
+import (
+	"errors"
+	"lsp-trace/internal/qualificationpolicy"
+)
 
 const (
 	Family        = "normative-analytics"
@@ -28,87 +29,68 @@ const (
 )
 
 var (
-	ErrProgramBNotAdmitted = errors.New("normative analytics v2: PROGRAM_B_ADMITTED is required")
+	ErrProgramBNotAdmitted = errors.New("normative analytics v2: PROGRAM_B_ADMITTED is required for exact revision, operation, and scope")
 	ErrInvalidRequest      = errors.New("normative analytics v2: invalid request")
 )
 
 type Descriptor struct {
-	Operation Operation
-	Command   string
-	Protocol  string
+	Operation         Operation
+	Command, Protocol string
 }
 
-var descriptors = [...]Descriptor{
-	{Operation: Analysis, Command: "normative-analysis", Protocol: "lsp_trace_v2_normative_analysis"},
-	{Operation: Metrics, Command: "normative-metrics", Protocol: "lsp_trace_v2_normative_metrics"},
-	{Operation: Ranking, Command: "normative-ranking", Protocol: "lsp_trace_v2_normative_ranking"},
-}
+var descriptors = [...]Descriptor{{Analysis, "normative-analysis", "lsp_trace_v2_normative_analysis"}, {Metrics, "normative-metrics", "lsp_trace_v2_normative_metrics"}, {Ranking, "normative-ranking", "lsp_trace_v2_normative_ranking"}}
 
-// Descriptors returns equivalent, unregistered command and protocol identities for
-// each v2 operation. Registration is a separate, admission-governed integration.
 func Descriptors() []Descriptor {
-	result := make([]Descriptor, len(descriptors))
-	copy(result, descriptors[:])
-	return result
+	out := make([]Descriptor, len(descriptors))
+	copy(out, descriptors[:])
+	return out
 }
 
-type Admission struct {
-	ProgramBAdmitted bool
+type Executor interface {
+	Execute(Operation) (int64, error)
 }
-
 type Request struct {
-	Operation Operation
-	Admission Admission
-	Units     int64
-	Limit     int64
+	Operation                                    Operation
+	BuildRevision                                string
+	SubstrateID, MatrixDigest, EvidenceSetDigest string
+	Admission                                    qualificationpolicy.ProgramBAdmission
+	Limit                                        int64
+	Executor                                     Executor
 }
-
-type Accounting struct {
-	Units int64
-	Limit int64
-}
-
+type Accounting struct{ Units, Limit int64 }
 type Result struct {
-	Family     string
-	Version    string
-	Scope      string
-	Operation  Operation
-	Status     Status
-	Accounting Accounting
-	Evidence   string
+	Family, Version, Scope string
+	Operation              Operation
+	Status                 Status
+	Accounting             Accounting
+	Evidence               string
 }
 
-// Evaluate enforces admission before validating or accounting for normative work.
-// Units are supplied by the operation-specific executor under its versioned policy;
-// this contract records and bounds them without estimating or using wall-clock time.
 func Evaluate(request Request) (Result, error) {
-	if !request.Admission.ProgramBAdmitted {
+	return evaluate(request, func() error {
+		return request.Admission.VerifyExecution(qualificationpolicy.ProgramBExecutionExpectation{BuildRevision: request.BuildRevision, Operation: string(request.Operation), Scope: Scope, SubstrateID: request.SubstrateID, MatrixDigest: request.MatrixDigest, EvidenceSetDigest: request.EvidenceSetDigest})
+	})
+}
+
+func evaluate(request Request, verifyAdmission func() error) (Result, error) {
+	if verifyAdmission == nil || verifyAdmission() != nil {
 		return Result{}, ErrProgramBNotAdmitted
 	}
-	if !validOperation(request.Operation) || request.Units < 0 || request.Limit < 1 {
+	if !validOperation(request.Operation) || request.BuildRevision == "" || request.Limit < 1 || request.Executor == nil {
 		return Result{}, ErrInvalidRequest
 	}
-	result := Result{
-		Family:     Family,
-		Version:    Version,
-		Scope:      Scope,
-		Operation:  request.Operation,
-		Status:     Complete,
-		Accounting: Accounting{Units: request.Units, Limit: request.Limit},
+	units, err := request.Executor.Execute(request.Operation)
+	if err != nil || units < 0 {
+		return Result{}, ErrInvalidRequest
 	}
-	if request.Units > request.Limit {
+	result := Result{Family: Family, Version: Version, Scope: Scope, Operation: request.Operation, Status: Complete, Accounting: Accounting{Units: units, Limit: request.Limit}}
+	if units > request.Limit {
 		result.Status = Limit
 		return result, nil
 	}
 	result.Evidence = "ADMITTED_NORMATIVE_RESULT"
 	return result, nil
 }
-
 func validOperation(operation Operation) bool {
-	switch operation {
-	case Analysis, Metrics, Ranking:
-		return true
-	default:
-		return false
-	}
+	return operation == Analysis || operation == Metrics || operation == Ranking
 }

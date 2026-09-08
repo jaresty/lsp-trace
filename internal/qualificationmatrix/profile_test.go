@@ -10,7 +10,7 @@ import (
 func testProfile(t *testing.T) Profile {
 	t.Helper()
 	p := Profile{
-		SchemaVersion:              SchemaVersion,
+		SchemaVersion:              SchemaVersionV2,
 		ProfileID:                  "substrate-v1",
 		Version:                    "1.0.0",
 		Authority:                  "release-council",
@@ -24,6 +24,7 @@ func testProfile(t *testing.T) Profile {
 			{Name: "transport", Members: []string{"CLI", "MCP"}},
 			{Name: "publication_mode", Members: []string{"INLINE", "IMMUTABLE"}},
 			{Name: "provider_class", Members: []string{"TYPESCRIPT_LANGUAGE_SERVER", "ELIXIR_LS"}},
+			{Name: "provider_version", Members: []string{"5.7.3", "0.27.2"}},
 			{Name: "language", Members: []string{"TYPESCRIPT", "ELIXIR"}},
 			{Name: "framework", Members: []string{"NONE", "EMBER"}},
 		},
@@ -33,7 +34,7 @@ func testProfile(t *testing.T) Profile {
 			{ID: "state", Version: "1", Axes: []string{"state"}},
 			{ID: "projection", Version: "1", Axes: []string{"projection_class"}},
 			{ID: "publication", Version: "1", Axes: []string{"publication_mode"}},
-			{ID: "language-provider-framework-transport", Version: "1", Axes: []string{"language", "provider_class", "framework", "transport"}},
+			{ID: "language-provider-version-framework-transport", Version: "2", Axes: []string{"language", "provider_class", "provider_version", "framework", "transport"}},
 		},
 	}
 	cells, err := Generate(Profile{
@@ -47,6 +48,49 @@ func testProfile(t *testing.T) Profile {
 		p.FoundationalCellIDs = []string{"placeholder"}
 	}
 	return p
+}
+
+func historicalV1Profile(t *testing.T) Profile {
+	t.Helper()
+	p := testProfile(t)
+	p.SchemaVersion = SchemaVersion
+	p.Axes = append([]Axis(nil), p.Axes[:7]...)
+	p.Axes = append(p.Axes, p.Axes[:0]...)
+	p.Axes = []Axis{
+		{Name: "relation_family", Members: []string{"CALLS", "TYPE_RELATION"}}, {Name: "custody_adapter", Members: []string{"GIT_WORKTREE", "IMMUTABLE_MANIFEST"}}, {Name: "state", Members: []string{"COMPLETE", "PARTIAL", "FAILED", "UNSUPPORTED", "UNKNOWN"}}, {Name: "projection_class", Members: []string{"DIRECTED", "UNDIRECTED"}}, {Name: "transport", Members: []string{"CLI", "MCP"}}, {Name: "publication_mode", Members: []string{"INLINE", "IMMUTABLE"}}, {Name: "provider_class", Members: []string{"TYPESCRIPT_LANGUAGE_SERVER", "ELIXIR_LS"}}, {Name: "language", Members: []string{"TYPESCRIPT", "ELIXIR"}}, {Name: "framework", Members: []string{"NONE", "EMBER"}},
+	}
+	p.Products[len(p.Products)-1] = Product{ID: "language-provider-framework-transport", Version: "1", Axes: []string{"language", "provider_class", "framework", "transport"}}
+	p.FoundationalCellIDs = nil
+	cells, err := Generate(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.FoundationalCellIDs = []string{cells[0].ID}
+	return p
+}
+
+func TestHistoricalV1CompatibilityAndV2Identity(t *testing.T) {
+	v1 := historicalV1Profile(t)
+	cells1, err := Generate(v1)
+	if err != nil || len(cells1) != 31 {
+		t.Fatalf("ASSERT_FROZEN_V1_31_CELLS: len=%d err=%v", len(cells1), err)
+	}
+	if err := ValidateProfile(v1); err != nil {
+		t.Fatalf("ASSERT_FROZEN_V1_ACCEPTED: %v", err)
+	}
+	v2 := testProfile(t)
+	cells2 := mustGenerate(t, v2)
+	v1id := findCellID(cells1, "relation-transport", map[string]string{"relation_family": "CALLS", "transport": "CLI"})
+	v2id := findCellID(cells2, "relation-transport", map[string]string{"relation_family": "CALLS", "transport": "CLI"})
+	if v1id == v2id {
+		t.Fatal("ASSERT_V2_SCHEMA_BINDS_CELL_ID")
+	}
+	now := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	v1.FoundationalCellIDs = []string{cells1[1].ID}
+	req := AdmissionRequest{Results: passingResults(cells1), RequestedOperations: []string{"RANKING"}}
+	if err := ProgramBAdmitted(v1, req, now); err != nil {
+		t.Fatalf("ASSERT_V1_HISTORICAL_ADMISSION_SEMANTICS: %v", err)
+	}
 }
 
 func TestProfileRequiresNormativeIdentityAndMandatoryAxes(t *testing.T) {
@@ -70,8 +114,8 @@ func TestGeneratorProducesAtomicDeterministicProduct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first) != 31 {
-		t.Fatalf("ASSERT_EXACT_PRODUCT_ROWS: got %d want 31", len(first))
+	if len(first) != 47 {
+		t.Fatalf("ASSERT_EXACT_PRODUCT_ROWS: got %d want 47", len(first))
 	}
 	for i := range first {
 		if !matchesDeclaredProduct(first[i], p.Products) {
@@ -137,7 +181,7 @@ func TestEquivalenceReductionRequiresVersionedEvidenceAndExactOmissions(t *testi
 func TestLanguageProviderFrameworkTransportQualificationIsExactAndAuthorityBounded(t *testing.T) {
 	const matrixAssertion = "ASSERT_LANGUAGE_PROVIDER_FRAMEWORK_TRANSPORT_MATRIX"
 	p := testProfile(t)
-	for _, missing := range []string{"language", "framework"} {
+	for _, missing := range []string{"language", "framework", "provider_version"} {
 		reduced := p
 		reduced.Axes = nil
 		for _, axis := range p.Axes {
@@ -161,15 +205,15 @@ func TestLanguageProviderFrameworkTransportQualificationIsExactAndAuthorityBound
 	cells := mustGenerate(t, p)
 	matrixCells := 0
 	for _, cell := range cells {
-		if cell.ProductID == "language-provider-framework-transport" {
+		if cell.ProductID == "language-provider-version-framework-transport" {
 			matrixCells++
-			if len(cell.Values) != 4 || cell.Values["language"] == "" || cell.Values["provider_class"] == "" || cell.Values["framework"] == "" || cell.Values["transport"] == "" {
+			if len(cell.Values) != 5 || cell.Values["language"] == "" || cell.Values["provider_class"] == "" || cell.Values["provider_version"] == "" || cell.Values["framework"] == "" || cell.Values["transport"] == "" {
 				t.Fatalf("%s: non-atomic cell: %#v", matrixAssertion, cell)
 			}
 		}
 	}
-	if matrixCells != 16 {
-		t.Fatalf("%s: got %d matrix cells want 16", matrixAssertion, matrixCells)
+	if matrixCells != 32 {
+		t.Fatalf("%s: got %d matrix cells want 32", matrixAssertion, matrixCells)
 	}
 
 	const authorityAssertion = "ASSERT_QUALIFICATION_DISPOSITIONS_PRESERVE_EVIDENCE_AUTHORITY"
@@ -177,12 +221,19 @@ func TestLanguageProviderFrameworkTransportQualificationIsExactAndAuthorityBound
 	p.FoundationalCellIDs = []string{cells[1].ID}
 	results := passingResults(cells)
 	results[0].EvidenceProviderClass = ""
-	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "native provider") {
+	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "native provider class") {
 		t.Fatalf("%s: empty native provider identity admitted: %v", authorityAssertion, err)
 	}
+	results = passingResults(cells)
+	results[0].EvidenceProviderVersion = "wrong-version"
+	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "native provider version") {
+		t.Fatalf("ASSERT_PROVIDER_VERSION_MISMATCH_REJECTED: %v", err)
+	}
+	results = passingResults(cells)
 	results[0].Status = StatusUnknown
 	results[0].RealServerEvidence = true
 	results[0].EvidenceProviderClass = cells[0].Values["provider_class"]
+	results[0].EvidenceProviderVersion = cells[0].Values["provider_version"]
 	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "without APPROVED_WAIVER") {
 		t.Fatalf("%s: UNKNOWN admitted without approved waiver: %v", authorityAssertion, err)
 	}
@@ -302,7 +353,7 @@ func values(c Cell, axes []string) []string {
 func passingResults(cells []Cell) []Result {
 	out := make([]Result, len(cells))
 	for i, c := range cells {
-		out[i] = Result{CellID: c.ID, Status: StatusPass, RealServerEvidence: true, EvidenceProviderClass: c.Values["provider_class"]}
+		out[i] = Result{CellID: c.ID, Status: StatusPass, RealServerEvidence: true, EvidenceProviderClass: c.Values["provider_class"], EvidenceProviderVersion: c.Values["provider_version"]}
 	}
 	return out
 }
