@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/sessionruntime"
 )
 
@@ -42,6 +44,35 @@ func TestBootstrapConfigIsStrictAndHostOwned(t *testing.T) {
 		}
 	})
 	t.Log("PASS " + assertion)
+}
+
+func TestBootstrapSeedBindingRequiresMatchingHostAuthority(t *testing.T) {
+	workspace := t.TempDir()
+	identity := seedbinding.ValidatorIdentity{Language: "csharp", Authority: "HOST_CONFIG", Name: "fake", Version: "1"}
+	manifest := &seedbinding.Manifest{SchemaVersion: seedbinding.VersionV2, ID: "seed", SourceRevision: "rev", Validator: identity}
+	process := bootstrapProcessConfig{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "csharp", EnvironmentReference: "host"}, Execution: managedExecutionAuthority{Path: "/validator-not-provider", Directory: workspace}, SeedBinding: manifest}
+	config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{process}}
+	raw, _ := json.Marshal(config)
+	path := filepath.Join(t.TempDir(), "bootstrap.json")
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadBootstrapConfig(path); err == nil || !strings.Contains(err.Error(), "matching host validator") {
+		t.Fatalf("ASSERT_BOOTSTRAP_SEED_AUTHORITY_REQUIRED: %v", err)
+	}
+	config.SeedValidator = &seedbinding.ExternalConfig{Protocol: seedbinding.ExternalProtocolV1, Identity: identity, Executable: "/validator-not-provider", Directory: workspace, TimeoutMillis: 100, RequestBytes: 4096, ResponseBytes: 4096}
+	raw, _ = json.Marshal(config)
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := loadBootstrapConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := prepareBootstrap(loaded)
+	if err != nil || prepared[0].seedBinding != loaded.Processes[0].SeedBinding || seedRevisionFromConfig(loaded) != "rev" {
+		t.Fatalf("ASSERT_BOOTSTRAP_SEED_MANIFEST_EXACT: prepared=%+v err=%v", prepared, err)
+	}
 }
 
 func TestBootstrapHostOwnedAliases(t *testing.T) {

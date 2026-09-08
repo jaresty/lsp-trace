@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -90,6 +91,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var profile profileFlags
 	var manifestPath string
 	var diagnosticRoot, diagnosticSelector string
+	var bindingRoot, bindingSelector, validatorRoot, validatorSelector string
 	fs.StringVar(&c.workspace, "workspace", "", "host workspace path")
 	fs.StringVar(&c.command, "server", "", "trusted language server executable")
 	fs.StringVar(&profile.Name, "profile", "", "named server profile")
@@ -101,6 +103,10 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&c.output, "output", "", "immutable output selector")
 	fs.StringVar(&diagnosticRoot, "private-startup-diagnostic-root", "", "caller-approved private diagnostic root")
 	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
+	fs.StringVar(&bindingRoot, "private-seed-binding-root", "", "caller-approved seed-binding root (v3 only)")
+	fs.StringVar(&bindingSelector, "private-seed-binding-selector", "", "safe relative seed-binding selector (v3 only)")
+	fs.StringVar(&validatorRoot, "private-seed-validator-root", "", "host-approved validator-config root (v3 only)")
+	fs.StringVar(&validatorSelector, "private-seed-validator-selector", "", "safe relative validator-config selector (v3 only)")
 	fs.BoolVar(&c.pretty, "pretty", false, "indent outer JSON without changing embedded graph bytes")
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -113,6 +119,10 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	if (diagnosticRoot == "") != (diagnosticSelector == "") {
 		return fail(fmt.Errorf("private startup diagnostic root and selector must be supplied together"))
+	}
+	bindingRequested := bindingRoot != "" || bindingSelector != "" || validatorRoot != "" || validatorSelector != ""
+	if bindingRequested && (version != "v3" || bindingRoot == "" || bindingSelector == "" || validatorRoot == "" || validatorSelector == "") {
+		return fail(fmt.Errorf("private seed binding requires v3 and both rooted selector pairs"))
 	}
 	op := acquisitionops.Slice
 	if mode == "incoming" {
@@ -183,7 +193,33 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if diagnosticRoot != "" {
 		diagnosticStore = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: manageddiagnostic.StartupDiagnosticsMaxRecords, MaxBytes: manageddiagnostic.StartupDiagnosticsMaxBytes})
 	}
-	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore})
+	var binding *seedbinding.Manifest
+	var bindingValidator seedbinding.Validator
+	var bindingRevision seedbinding.RevisionAuthority
+	if bindingRequested {
+		bindingBytes, readErr := readPrivateSeedInput(bindingRoot, bindingSelector)
+		if readErr != nil {
+			return fail(fmt.Errorf("seed binding unavailable"))
+		}
+		decoded, decodeErr := seedbinding.DecodeV2(bindingBytes)
+		if decodeErr != nil {
+			return fail(fmt.Errorf("seed binding invalid"))
+		}
+		configBytes, readErr := readPrivateSeedInput(validatorRoot, validatorSelector)
+		if readErr != nil {
+			return fail(fmt.Errorf("seed validator unavailable"))
+		}
+		validatorConfig, decodeErr := seedbinding.DecodeExternalConfig(configBytes)
+		if decodeErr != nil {
+			return fail(fmt.Errorf("seed validator invalid"))
+		}
+		external, validatorErr := seedbinding.NewExternalValidator(validatorConfig)
+		if validatorErr != nil {
+			return fail(fmt.Errorf("seed validator invalid"))
+		}
+		binding, bindingValidator, bindingRevision = &decoded, external, seedbinding.ExactRevisionAuthority{Revision: decoded.SourceRevision}
+	}
+	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore, SeedRevisionAuthority: bindingRevision, SeedBindingValidator: bindingValidator})
 	if err != nil {
 		return fail(err)
 	}
@@ -191,7 +227,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	defer cancel()
 	ctx, deadlineCancel := context.WithTimeout(ctx, effective.Limits.Timeout)
 	defer deadlineCancel()
-	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
+	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
 	if diagnosticRoot != "" {
 		defer func() {
 			generation := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
@@ -246,4 +282,16 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		return fail(err)
 	}
 	return 0 // Every structurally valid acquisition retains partial outcomes.
+}
+
+func readPrivateSeedInput(rootPath, selector string) ([]byte, error) {
+	if !filepath.IsAbs(rootPath) || selector == "" || filepath.IsAbs(selector) || filepath.Clean(selector) != selector || selector == ".." || strings.HasPrefix(selector, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("unsafe private selector")
+	}
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return source.ReadRegularInputBounded(root, selector, acquisitionops.MaxInputBytes)
 }

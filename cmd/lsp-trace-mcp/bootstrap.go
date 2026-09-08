@@ -14,20 +14,23 @@ import (
 
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/sessionruntime"
 )
 
 type bootstrapConfig struct {
-	Version   int                            `json:"version"`
-	Processes []bootstrapProcessConfig       `json:"processes,omitempty"`
-	Providers []bootstrapProviderDeclaration `json:"providers,omitempty"`
+	Version       int                            `json:"version"`
+	Processes     []bootstrapProcessConfig       `json:"processes,omitempty"`
+	Providers     []bootstrapProviderDeclaration `json:"providers,omitempty"`
+	SeedValidator *seedbinding.ExternalConfig    `json:"seed_validator,omitempty"`
 }
 
 type bootstrapProcessConfig struct {
-	Alias      string                    `json:"alias,omitempty"`
-	LanguageID string                    `json:"language_id,omitempty"`
-	Profile    bootstrapProfileIdentity  `json:"profile"`
-	Execution  managedExecutionAuthority `json:"execution"`
+	Alias       string                    `json:"alias,omitempty"`
+	LanguageID  string                    `json:"language_id,omitempty"`
+	Profile     bootstrapProfileIdentity  `json:"profile"`
+	Execution   managedExecutionAuthority `json:"execution"`
+	SeedBinding *seedbinding.Manifest     `json:"seed_binding,omitempty"`
 }
 
 type bootstrapProfileIdentity struct {
@@ -87,14 +90,27 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if err := validateBootstrapProviders(config); err != nil {
 		return bootstrapConfig{}, err
 	}
+	if config.SeedValidator != nil {
+		if _, err := seedbinding.NewExternalValidator(*config.SeedValidator); err != nil {
+			return bootstrapConfig{}, err
+		}
+	}
+	for i, process := range config.Processes {
+		if process.SeedBinding != nil {
+			if config.SeedValidator == nil || process.SeedBinding.SchemaVersion != seedbinding.VersionV2 || process.SeedBinding.Validator != config.SeedValidator.Identity {
+				return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding lacks matching host validator", i)
+			}
+		}
+	}
 	return config, nil
 }
 
 type preparedBootstrap struct {
-	alias      string
-	languageID string
-	profile    runtimeprofile.Profile
-	process    managedprocess.Spec
+	alias       string
+	languageID  string
+	profile     runtimeprofile.Profile
+	process     managedprocess.Spec
+	seedBinding *seedbinding.Manifest
 }
 
 func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
@@ -124,7 +140,7 @@ func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 		seen[id] = struct{}{}
 		prepared = append(prepared, preparedBootstrap{
 			alias: process.Alias, languageID: process.LanguageID, profile: profile,
-			process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)},
+			process: managedprocess.Spec{Path: process.Execution.Path, Args: append([]string(nil), process.Execution.Arguments...), Dir: process.Execution.Directory, Env: append([]string(nil), process.Execution.Environment...)}, seedBinding: process.SeedBinding,
 		})
 	}
 	for i, process := range prepared {
@@ -150,9 +166,10 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 	}
 	for i, process := range prepared {
 		result := manager.Start(ctx, sessionruntime.StartRequest{
-			Profile:    process.profile,
-			Process:    process.process,
-			LanguageID: process.languageID,
+			Profile:     process.profile,
+			Process:     process.process,
+			LanguageID:  process.languageID,
+			SeedBinding: process.seedBinding,
 		})
 		if result.Failure != "" {
 			rollback()
@@ -188,6 +205,23 @@ func pinnedGitMetadata(directory string) (string, string) {
 		return "", ""
 	}
 	return filepath.Clean(root), strings.TrimSpace(string(commitBytes))
+}
+
+func seedRevisionFromConfig(config bootstrapConfig) string {
+	var revision string
+	for _, process := range config.Processes {
+		if process.SeedBinding == nil {
+			continue
+		}
+		if revision == "" {
+			revision = process.SeedBinding.SourceRevision
+			continue
+		}
+		if revision != process.SeedBinding.SourceRevision {
+			return ""
+		}
+	}
+	return revision
 }
 
 func stopBootstrap(ctx context.Context, manager *sessionruntime.Manager, sessions []bootstrapSession) error {
