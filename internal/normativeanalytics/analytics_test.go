@@ -21,7 +21,7 @@ func admission(t *testing.T, revision string, operation Operation) qualification
 	for _, x := range []struct{ n, v string }{{"relation_family", "CALLS"}, {"custody_adapter", "GIT"}, {"state", "COMPLETE"}, {"projection_class", "DIRECTED"}, {"transport", "CLI"}, {"publication_mode", "INLINE"}, {"provider_class", "TYPESCRIPT_LANGUAGE_SERVER"}, {"provider_version", "5.7.3"}, {"language", "TYPESCRIPT"}, {"framework", "NONE"}} {
 		axes = append(axes, qualificationmatrix.Axis{Name: x.n, Members: []string{x.v}})
 	}
-	p := qualificationmatrix.Profile{SchemaVersion: qualificationmatrix.SchemaVersion, ProfileID: "analytics-profile", Version: "2", Authority: "release-council", CustodyReceiptID: "receipt", CustodyAuthenticationState: "AUTHENTICATED", Axes: axes, Products: []qualificationmatrix.Product{{ID: "analytics-provider-5.7.3", Version: "2", Axes: []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "provider_version", "language", "framework"}}}}
+	p := qualificationmatrix.Profile{SchemaVersion: qualificationmatrix.SchemaVersionV2, ProfileID: "analytics-profile", Version: "2", Authority: "release-council", CustodyReceiptID: "receipt", CustodyAuthenticationState: "AUTHENTICATED", Axes: axes, Products: []qualificationmatrix.Product{{ID: "analytics-provider-5.7.3", Version: "2", Axes: []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "provider_version", "language", "framework"}}}}
 	cells, err := qualificationmatrix.Generate(p)
 	if err != nil {
 		t.Fatal(err)

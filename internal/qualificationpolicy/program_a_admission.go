@@ -3,8 +3,10 @@ package qualificationpolicy
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"lsp-trace/internal/schema"
 	"sort"
 	"strings"
 )
@@ -30,7 +32,42 @@ const (
 
 const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v1"
 
-var evaluatorPublicKey = ed25519.PublicKey{0xd7, 0x5a, 0x98, 0x01, 0x82, 0xb1, 0x0a, 0xb7, 0xd5, 0x4b, 0xfe, 0xd3, 0xc9, 0x64, 0x07, 0x3a, 0x0e, 0xe1, 0x72, 0xf3, 0xda, 0xa6, 0x23, 0x25, 0xaf, 0x02, 0x1a, 0x68, 0xf7, 0x07, 0x51, 0x1a}
+const receiptSignatureDomain = "llsp-trace.program-a-evidence-receipt.v1\x00"
+
+// ProgramATrustProvisioning is privileged verifier-host configuration. The
+// authority and policy are pinned with the key; receipt producers never supply it.
+type ProgramATrustProvisioning struct {
+	Store       *schema.HostTrustStore
+	Request     schema.HostTrustRequest
+	AuthorityID string
+	PolicyID    string
+	PublicKey   ed25519.PublicKey
+}
+
+// ProgramAReceiptAuthority is an opaque, provisioned verifier trust root.
+type ProgramAReceiptAuthority struct {
+	authorityID string
+	policyID    string
+	publicKey   ed25519.PublicKey
+}
+
+func NewProgramAReceiptAuthority(p ProgramATrustProvisioning) (*ProgramAReceiptAuthority, error) {
+	if strings.TrimSpace(p.AuthorityID) == "" || strings.TrimSpace(p.PolicyID) == "" {
+		return nil, fmt.Errorf("program A trust provisioning requires authority and policy identity")
+	}
+	admission, err := p.Store.Admit(p.Request)
+	if err != nil || admission.Status != schema.AuthenticationAuthenticated {
+		return nil, fmt.Errorf("program A trust provisioning is not host-authenticated: %v", err)
+	}
+	if len(p.PublicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("program A trust provisioning requires Ed25519 public key")
+	}
+	wantAnchor := sha256.Sum256(p.PublicKey)
+	if p.AuthorityID != p.Request.ClaimedSourceSnapshotIdentity || p.PolicyID != "sha256:"+hex.EncodeToString(wantAnchor[:]) {
+		return nil, fmt.Errorf("program A trust provisioning identity/policy does not bind public key")
+	}
+	return &ProgramAReceiptAuthority{authorityID: p.AuthorityID, policyID: p.PolicyID, publicKey: append(ed25519.PublicKey(nil), p.PublicKey...)}, nil
+}
 
 var evaluatorContract = map[Dimension]struct{ family, version string }{
 	CustodyDimension:                {"custody", "v1"},
@@ -61,7 +98,10 @@ type ReceiptBytes struct {
 type VerifiedReceipt struct{ receipt verifiedReceipt }
 type verifiedReceipt struct{ raw ReceiptBytes }
 
-func VerifyReceipt(raw ReceiptBytes) (VerifiedReceipt, error) {
+func (a *ProgramAReceiptAuthority) VerifyReceipt(raw ReceiptBytes) (VerifiedReceipt, error) {
+	if a == nil || a.authorityID == "" || a.policyID == "" || len(a.publicKey) != ed25519.PublicKeySize {
+		return VerifiedReceipt{}, fmt.Errorf("program A receipt authority is not provisioned")
+	}
 	contract, ok := evaluatorContract[raw.Dimension]
 	if !ok {
 		return VerifiedReceipt{}, fmt.Errorf("receipt dimension %q is unsupported", raw.Dimension)
@@ -78,18 +118,31 @@ func VerifyReceipt(raw ReceiptBytes) (VerifiedReceipt, error) {
 	if strings.TrimSpace(raw.CustodyRef) == "" || strings.TrimSpace(raw.Revision) == "" || strings.TrimSpace(raw.SubstrateID) == "" {
 		return VerifiedReceipt{}, fmt.Errorf("%s: missing custody/revision/substrate", raw.Dimension)
 	}
+	for _, s := range []string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.Digest, raw.CustodyRef, raw.Revision, raw.SubstrateID, string(raw.Status)} {
+		if strings.ContainsRune(s, '\x00') {
+			return VerifiedReceipt{}, fmt.Errorf("%s: receipt string contains NUL", raw.Dimension)
+		}
+	}
 	payload := receiptPayload(raw)
 	if raw.Digest != receiptDigest(raw) {
 		return VerifiedReceipt{}, fmt.Errorf("%s: digest mismatch", raw.Dimension)
 	}
-	if !ed25519.Verify(evaluatorPublicKey, payload, raw.Signature) {
+	if !ed25519.Verify(a.publicKey, payload, raw.Signature) {
 		return VerifiedReceipt{}, fmt.Errorf("%s: evaluator signature mismatch", raw.Dimension)
 	}
 	return VerifiedReceipt{receipt: verifiedReceipt{raw: raw}}, nil
 }
 
 func receiptPayload(raw ReceiptBytes) []byte {
-	return []byte(strings.Join([]string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.CustodyRef, raw.Revision, raw.SubstrateID, fmt.Sprint(raw.Sequence), string(raw.Status)}, "\x00"))
+	payload := []byte(receiptSignatureDomain)
+	fields := []string{string(raw.Dimension), raw.EvaluatorID, raw.SchemaVersion, raw.Family, raw.Version, raw.CustodyRef, raw.Revision, raw.SubstrateID, fmt.Sprint(raw.Sequence), string(raw.Status)}
+	for _, field := range fields {
+		var size [4]byte
+		binary.BigEndian.PutUint32(size[:], uint32(len(field)))
+		payload = append(payload, size[:]...)
+		payload = append(payload, field...)
+	}
+	return payload
 }
 func receiptDigest(raw ReceiptBytes) string {
 	sum := sha256.Sum256(receiptPayload(raw))

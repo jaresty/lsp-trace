@@ -3,7 +3,7 @@ package qualificationmatrix
 import "testing"
 
 func TestProviderVersionAxisRequired(t *testing.T) {
-	for _, axis := range mandatoryAxes {
+	for _, axis := range mandatoryAxesV2 {
 		if axis == "provider_version" {
 			return
 		}

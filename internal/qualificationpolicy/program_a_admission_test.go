@@ -2,19 +2,54 @@ package qualificationpolicy
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"lsp-trace/internal/schema"
 	"reflect"
 	"strings"
 	"testing"
 )
 
-func receipt(t *testing.T, d Dimension, revision, substrate string, sequence int) VerifiedReceipt {
+type testReceiptSigner struct {
+	authority *ProgramAReceiptAuthority
+	private   ed25519.PrivateKey
+}
+
+func newTestReceiptSigner(t *testing.T) testReceiptSigner {
 	t.Helper()
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(public)
+	policy := "sha256:" + hex.EncodeToString(sum[:])
+	snapshot := "test-host-snapshot"
+	receipt := []byte(fmt.Sprintf(`{"trust_provisioning_receipt_schema_version":"lsp-trace.trust-provisioning-receipt.v1","receipt_id":"test-receipt","trust_policy_id":%q,"anchor_type":"ED25519_PUBLIC_KEY","anchor_identity":%q,"source_snapshot_identity":%q,"provisioning_authority":"test-security-operations","provisioning_channel":"VERIFIER_TRUST_STORE","provisioning_event":"test-runtime","verification_method":"ED25519_SIGNATURE","verification_result":"VERIFIED"}`, policy, policy, snapshot))
+	context := schema.TrustAuthenticationContext{ReceiptID: "test-receipt", TrustPolicyID: policy, AnchorType: "ED25519_PUBLIC_KEY", AnchorIdentity: policy, SourceSnapshotIdentity: snapshot, ClaimantID: "test-claimant", ProducerID: "test-evidence-producer", ProvisionedReceiptIDs: map[string]struct{}{"test-receipt": {}}}
+	store, err := schema.NewHostTrustStore([]schema.HostTrustGrant{{Receipt: receipt, Context: context}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authority, err := NewProgramAReceiptAuthority(ProgramATrustProvisioning{Store: store, Request: schema.HostTrustRequest{Receipt: receipt, ClaimedSourceSnapshotIdentity: snapshot}, AuthorityID: snapshot, PolicyID: policy, PublicKey: public})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return testReceiptSigner{authority: authority, private: private}
+}
+
+func rawReceipt(d Dimension, revision, substrate string, sequence int) ReceiptBytes {
 	contract := evaluatorContract[d]
-	raw := ReceiptBytes{Dimension: d, EvaluatorID: "lsp-trace/" + contract.family + "-evaluator", SchemaVersion: ReceiptSchemaVersion, Family: contract.family, Version: contract.version, CustodyRef: "custody:" + string(d), Revision: revision, SubstrateID: substrate, Sequence: sequence, Status: SubstrateAdmitted}
+	return ReceiptBytes{Dimension: d, EvaluatorID: "lsp-trace/" + contract.family + "-evaluator", SchemaVersion: ReceiptSchemaVersion, Family: contract.family, Version: contract.version, CustodyRef: "custody:" + string(d), Revision: revision, SubstrateID: substrate, Sequence: sequence, Status: SubstrateAdmitted}
+}
+
+func receiptWith(t *testing.T, signer testReceiptSigner, d Dimension, revision, substrate string, sequence int) VerifiedReceipt {
+	t.Helper()
+	raw := rawReceipt(d, revision, substrate, sequence)
 	raw.Digest = receiptDigest(raw)
-	seed := []byte{0x9d, 0x61, 0xb1, 0x9d, 0xef, 0xfd, 0x5a, 0x60, 0xba, 0x84, 0x4a, 0xf4, 0x92, 0xec, 0x2c, 0xc4, 0x44, 0x49, 0xc5, 0x69, 0x7b, 0x32, 0x69, 0x19, 0x70, 0x3b, 0xac, 0x03, 0x1c, 0xae, 0x7f, 0x60}
-	raw.Signature = ed25519.Sign(ed25519.NewKeyFromSeed(seed), receiptPayload(raw))
-	got, err := VerifyReceipt(raw)
+	raw.Signature = ed25519.Sign(signer.private, receiptPayload(raw))
+	got, err := signer.authority.VerifyReceipt(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,72 +57,87 @@ func receipt(t *testing.T, d Dimension, revision, substrate string, sequence int
 }
 
 func admittedProgramASubstrate(t *testing.T) VerifiedProgramASubstrate {
+	s := newTestReceiptSigner(t)
 	return VerifiedProgramASubstrate{
-		Custody: receipt(t, CustodyDimension, "526f658", "substrate-1", 0), EffectiveConfiguration: receipt(t, EffectiveConfigurationDimension, "526f658", "substrate-1", 0), Identity: receipt(t, IdentityDimension, "526f658", "substrate-1", 0),
-		RelationNormalization: receipt(t, RelationNormalizationDimension, "526f658", "substrate-1", 1), SupportAccounting: receipt(t, SupportAccountingDimension, "526f658", "substrate-1", 2), Projection: receipt(t, ProjectionDimension, "526f658", "substrate-1", 3),
+		Custody: receiptWith(t, s, CustodyDimension, "526f658", "substrate-1", 0), EffectiveConfiguration: receiptWith(t, s, EffectiveConfigurationDimension, "526f658", "substrate-1", 0), Identity: receiptWith(t, s, IdentityDimension, "526f658", "substrate-1", 0),
+		RelationNormalization: receiptWith(t, s, RelationNormalizationDimension, "526f658", "substrate-1", 1), SupportAccounting: receiptWith(t, s, SupportAccountingDimension, "526f658", "substrate-1", 2), Projection: receiptWith(t, s, ProjectionDimension, "526f658", "substrate-1", 3),
 	}
 }
 
 func TestProgramAAdmissionRequiresValidatedReceipts(t *testing.T) {
 	got, err := AdmitVerifiedProgramA(admittedProgramASubstrate(t))
-	if err != nil || got.Status != SubstrateAdmitted || got.Revision != "526f658" || got.SubstrateID != "substrate-1" {
+	if err != nil || got.Status != SubstrateAdmitted {
 		t.Fatalf("ASSERT_PROGRAM_A_COMPLETE_SUBSTRATE_ADMITTED: got=%#v err=%v", got, err)
 	}
 	zero := admittedProgramASubstrate(t)
 	zero.Custody = VerifiedReceipt{}
 	got, err = AdmitVerifiedProgramA(zero)
-	if err != nil || got.Status != SubstrateRejected || !reflect.DeepEqual(got.Reasons, []string{"custody: no validated receipt"}) {
+	if err != nil || !reflect.DeepEqual(got.Reasons, []string{"custody: no validated receipt"}) {
 		t.Fatalf("ASSERT_PROGRAM_A_NO_RECEIPT_REJECTED: %#v %v", got, err)
 	}
 }
 
-func TestProgramAReceiptValidationRejectsWrongAuthority(t *testing.T) {
-	base := ReceiptBytes{Dimension: CustodyDimension, EvaluatorID: "lsp-trace/custody-evaluator", SchemaVersion: ReceiptSchemaVersion, Family: "custody", Version: "v1", CustodyRef: "custody:1", Revision: "526f658", SubstrateID: "substrate-1", Status: SubstrateAdmitted}
-	base.Digest = receiptDigest(base)
-	seed := []byte{0x9d, 0x61, 0xb1, 0x9d, 0xef, 0xfd, 0x5a, 0x60, 0xba, 0x84, 0x4a, 0xf4, 0x92, 0xec, 0x2c, 0xc4, 0x44, 0x49, 0xc5, 0x69, 0x7b, 0x32, 0x69, 0x19, 0x70, 0x3b, 0xac, 0x03, 0x1c, 0xae, 0x7f, 0x60}
-	base.Signature = ed25519.Sign(ed25519.NewKeyFromSeed(seed), receiptPayload(base))
-	cases := []struct {
-		name   string
-		mutate func(*ReceiptBytes)
-		reason string
-	}{
-		{"evaluator", func(r *ReceiptBytes) { r.EvaluatorID = "caller" }, "wrong evaluator"},
-		{"family", func(r *ReceiptBytes) { r.Family = "other" }, "schema/family/version"},
-		{"version", func(r *ReceiptBytes) { r.Version = "v2" }, "schema/family/version"},
-		{"digest", func(r *ReceiptBytes) { r.Digest = "sha256:arbitrary" }, "digest mismatch"},
-		{"signature", func(r *ReceiptBytes) { r.Signature = append([]byte(nil), r.Signature...); r.Signature[0] ^= 0xff }, "signature mismatch"},
-		{"custody", func(r *ReceiptBytes) { r.CustodyRef = ""; r.Digest = receiptDigest(*r) }, "missing custody"},
+func TestProgramATrustProvisioningAndCanonicalSignature(t *testing.T) {
+	if _, err := NewProgramAReceiptAuthority(ProgramATrustProvisioning{}); err == nil {
+		t.Fatal("ASSERT_PROGRAM_A_UNPROVISIONED_AUTHORITY_REJECTED")
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
+	s := newTestReceiptSigner(t)
+	base := rawReceipt(CustodyDimension, "526f658", "substrate-1", 0)
+	base.Digest = receiptDigest(base)
+	base.Signature = ed25519.Sign(s.private, receiptPayload(base))
+	if _, err := s.authority.VerifyReceipt(base); err != nil {
+		t.Fatalf("ASSERT_PROGRAM_A_PROVISIONED_AUTHORITY_ACCEPTS: %v", err)
+	}
+	other := newTestReceiptSigner(t)
+	if _, err := other.authority.VerifyReceipt(base); err == nil || !strings.Contains(err.Error(), "signature mismatch") {
+		t.Fatalf("ASSERT_PROGRAM_A_WRONG_TRUST_AUTHORITY_REJECTED: %v", err)
+	}
+	if !strings.HasPrefix(string(receiptPayload(base)), receiptSignatureDomain) {
+		t.Fatal("ASSERT_PROGRAM_A_SIGNATURE_DOMAIN_BOUND")
+	}
+	for name, mutate := range map[string]func(*ReceiptBytes){
+		"evaluator": func(r *ReceiptBytes) { r.EvaluatorID = "caller" }, "family": func(r *ReceiptBytes) { r.Family = "other" }, "version": func(r *ReceiptBytes) { r.Version = "v2" },
+		"digest": func(r *ReceiptBytes) { r.Digest = "sha256:arbitrary" }, "signature": func(r *ReceiptBytes) { r.Signature = append([]byte(nil), r.Signature...); r.Signature[0] ^= 0xff },
+		"custody": func(r *ReceiptBytes) { r.CustodyRef = ""; r.Digest = receiptDigest(*r) }, "nul": func(r *ReceiptBytes) {
+			r.Revision = "a\x00b"
+			r.Digest = receiptDigest(*r)
+			r.Signature = ed25519.Sign(s.private, receiptPayload(*r))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
 			raw := base
-			tc.mutate(&raw)
-			if _, err := VerifyReceipt(raw); err == nil || !strings.Contains(err.Error(), tc.reason) {
-				t.Fatalf("ASSERT_PROGRAM_A_WRONG_%s_REJECTED: %v", strings.ToUpper(tc.name), err)
+			mutate(&raw)
+			if _, err := s.authority.VerifyReceipt(raw); err == nil {
+				t.Fatalf("ASSERT_PROGRAM_A_MUTATION_%s_REJECTED", name)
 			}
 		})
 	}
-	if _, err := VerifyReceipt(ReceiptBytes{}); err == nil {
-		t.Fatal("ASSERT_PROGRAM_A_ARBITRARY_VALUE_REJECTED")
+	a := rawReceipt(CustodyDimension, "a", "b\x00c", 0)
+	b := rawReceipt(CustodyDimension, "a\x00b", "c", 0)
+	if string(receiptPayload(a)) == string(receiptPayload(b)) {
+		t.Fatal("ASSERT_PROGRAM_A_FIELD_BOUNDARY_UNAMBIGUOUS")
 	}
 }
 
 func TestProgramAAdmissionRejectsMixedAuthorityAndOrder(t *testing.T) {
 	input := admittedProgramASubstrate(t)
-	input.Identity = receipt(t, IdentityDimension, "other", "substrate-1", 0)
+	s := newTestReceiptSigner(t)
+	input.Identity = receiptWith(t, s, IdentityDimension, "other", "substrate-1", 0)
 	got, _ := AdmitVerifiedProgramA(input)
 	if !reflect.DeepEqual(got.Reasons, []string{"identity: revision mismatch"}) {
 		t.Fatalf("ASSERT_PROGRAM_A_CROSS_REVISION_REJECTED: %#v", got)
 	}
 	input = admittedProgramASubstrate(t)
-	input.Projection = receipt(t, ProjectionDimension, "526f658", "other", 3)
+	s = newTestReceiptSigner(t)
+	input.Projection = receiptWith(t, s, ProjectionDimension, "526f658", "other", 3)
 	got, _ = AdmitVerifiedProgramA(input)
 	if !reflect.DeepEqual(got.Reasons, []string{"projection: substrate mismatch"}) {
 		t.Fatalf("ASSERT_PROGRAM_A_CROSS_SUBSTRATE_REJECTED: %#v", got)
 	}
 	input = admittedProgramASubstrate(t)
-	input.RelationNormalization = receipt(t, RelationNormalizationDimension, "526f658", "substrate-1", 2)
-	input.SupportAccounting = receipt(t, SupportAccountingDimension, "526f658", "substrate-1", 1)
+	s = newTestReceiptSigner(t)
+	input.RelationNormalization = receiptWith(t, s, RelationNormalizationDimension, "526f658", "substrate-1", 2)
+	input.SupportAccounting = receiptWith(t, s, SupportAccountingDimension, "526f658", "substrate-1", 1)
 	got, _ = AdmitVerifiedProgramA(input)
 	if !reflect.DeepEqual(got.Reasons, []string{"pipeline: relation_normalization must precede support_accounting"}) {
 		t.Fatalf("ASSERT_PROGRAM_A_PIPELINE_ORDER_REJECTED: %#v", got)

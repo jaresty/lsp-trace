@@ -11,9 +11,13 @@ import (
 	"time"
 )
 
-const SchemaVersion = "lsp-trace.qualification-matrix-profile.v1"
+const (
+	SchemaVersion   = "lsp-trace.qualification-matrix-profile.v1"
+	SchemaVersionV2 = "lsp-trace.qualification-matrix-profile.v2"
+)
 
-var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "provider_version", "language", "framework"}
+var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "language", "framework"}
+var mandatoryAxesV2 = append(append([]string(nil), mandatoryAxes...), "provider_version")
 
 type Axis struct {
 	Name    string   `json:"name"`
@@ -110,6 +114,9 @@ func (a ProgramBAdmission) Matches(buildRevision, operation, scope string) bool 
 }
 
 func VerifyProgramBAdmission(p Profile, req AdmissionRequest, binding AdmissionBinding, now time.Time) (ProgramBAdmission, error) {
+	if p.SchemaVersion != SchemaVersionV2 {
+		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED normative admission requires schema_version %q", SchemaVersionV2)
+	}
 	if strings.TrimSpace(binding.BuildRevision) == "" || strings.TrimSpace(binding.Operation) == "" || strings.TrimSpace(binding.Scope) == "" {
 		return ProgramBAdmission{}, fmt.Errorf("PROGRAM_B_ADMITTED binding requires build revision, operation, and scope")
 	}
@@ -190,8 +197,12 @@ func ValidateProfile(p Profile) error {
 }
 
 func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error) {
-	if p.SchemaVersion != SchemaVersion {
-		return nil, nil, nil, fmt.Errorf("schema_version must be %q", SchemaVersion)
+	if p.SchemaVersion != SchemaVersion && p.SchemaVersion != SchemaVersionV2 {
+		return nil, nil, nil, fmt.Errorf("unsupported schema_version %q", p.SchemaVersion)
+	}
+	mandatory := mandatoryAxes
+	if p.SchemaVersion == SchemaVersionV2 {
+		mandatory = mandatoryAxesV2
 	}
 	for n, v := range map[string]string{"profile_id": p.ProfileID, "version": p.Version, "authority": p.Authority, "custody_receipt_id": p.CustodyReceiptID} {
 		if strings.TrimSpace(v) == "" {
@@ -205,7 +216,7 @@ func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	for _, n := range mandatoryAxes {
+	for _, n := range mandatory {
 		if _, ok := axes[n]; !ok {
 			return nil, nil, nil, fmt.Errorf("mandatory axis %q is required", n)
 		}
@@ -238,7 +249,7 @@ func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error
 			seenAxis[n] = true
 			used[n] = true
 		}
-		if seenAxis["provider_class"] != seenAxis["provider_version"] {
+		if p.SchemaVersion == SchemaVersionV2 && seenAxis["provider_class"] != seenAxis["provider_version"] {
 			return nil, nil, nil, fmt.Errorf("product %q must bind provider_class and provider_version together", product.ID)
 		}
 		products[product.ID] = product
@@ -258,7 +269,7 @@ func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error
 			tuples = next
 		}
 		for _, v := range tuples {
-			id := cellID(product.ID, product.Version, v)
+			id := cellIDForSchema(p.SchemaVersion, product.ID, product.Version, v)
 			if seenCells[id] {
 				return nil, nil, nil, fmt.Errorf("duplicate generated tuple %s", id)
 			}
@@ -266,7 +277,7 @@ func validateCore(p Profile) (map[string]Axis, map[string]Product, []Cell, error
 			out = append(out, Cell{ID: id, ProductID: product.ID, ProductVersion: product.Version, Values: v})
 		}
 	}
-	for _, n := range mandatoryAxes {
+	for _, n := range mandatory {
 		if !used[n] {
 			return nil, nil, nil, fmt.Errorf("mandatory axis %q is not assigned to a Cartesian product", n)
 		}
@@ -333,13 +344,20 @@ func Generate(p Profile) ([]Cell, error) {
 	return out, nil
 }
 func cellID(product, version string, v map[string]string) string {
+	return cellIDForSchema(SchemaVersion, product, version, v)
+}
+func cellIDForSchema(schemaVersion, product, version string, v map[string]string) string {
 	keys := make([]string, 0, len(v))
 	for k := range v {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	var b strings.Builder
-	b.WriteString("QUALIFICATION_CELL_V1\x00")
+	if schemaVersion == SchemaVersionV2 {
+		b.WriteString("QUALIFICATION_CELL_V2\x00")
+	} else {
+		b.WriteString("QUALIFICATION_CELL_V1\x00")
+	}
 	b.WriteString(product)
 	b.WriteByte(0)
 	b.WriteString(version)

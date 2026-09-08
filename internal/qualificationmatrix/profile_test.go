@@ -10,7 +10,7 @@ import (
 func testProfile(t *testing.T) Profile {
 	t.Helper()
 	p := Profile{
-		SchemaVersion:              SchemaVersion,
+		SchemaVersion:              SchemaVersionV2,
 		ProfileID:                  "substrate-v1",
 		Version:                    "1.0.0",
 		Authority:                  "release-council",
@@ -48,6 +48,52 @@ func testProfile(t *testing.T) Profile {
 		p.FoundationalCellIDs = []string{"placeholder"}
 	}
 	return p
+}
+
+func historicalV1Profile(t *testing.T) Profile {
+	t.Helper()
+	p := testProfile(t)
+	p.SchemaVersion = SchemaVersion
+	p.Axes = append([]Axis(nil), p.Axes[:7]...)
+	p.Axes = append(p.Axes, p.Axes[:0]...)
+	p.Axes = []Axis{
+		{Name: "relation_family", Members: []string{"CALLS", "TYPE_RELATION"}}, {Name: "custody_adapter", Members: []string{"GIT_WORKTREE", "IMMUTABLE_MANIFEST"}}, {Name: "state", Members: []string{"COMPLETE", "PARTIAL", "FAILED", "UNSUPPORTED", "UNKNOWN"}}, {Name: "projection_class", Members: []string{"DIRECTED", "UNDIRECTED"}}, {Name: "transport", Members: []string{"CLI", "MCP"}}, {Name: "publication_mode", Members: []string{"INLINE", "IMMUTABLE"}}, {Name: "provider_class", Members: []string{"TYPESCRIPT_LANGUAGE_SERVER", "ELIXIR_LS"}}, {Name: "language", Members: []string{"TYPESCRIPT", "ELIXIR"}}, {Name: "framework", Members: []string{"NONE", "EMBER"}},
+	}
+	p.Products[len(p.Products)-1] = Product{ID: "language-provider-framework-transport", Version: "1", Axes: []string{"language", "provider_class", "framework", "transport"}}
+	p.FoundationalCellIDs = nil
+	cells, err := Generate(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.FoundationalCellIDs = []string{cells[0].ID}
+	return p
+}
+
+func TestHistoricalV1CompatibilityAndV2Identity(t *testing.T) {
+	v1 := historicalV1Profile(t)
+	cells1, err := Generate(v1)
+	if err != nil || len(cells1) != 31 {
+		t.Fatalf("ASSERT_FROZEN_V1_31_CELLS: len=%d err=%v", len(cells1), err)
+	}
+	if err := ValidateProfile(v1); err != nil {
+		t.Fatalf("ASSERT_FROZEN_V1_ACCEPTED: %v", err)
+	}
+	v2 := testProfile(t)
+	cells2 := mustGenerate(t, v2)
+	v1id := findCellID(cells1, "relation-transport", map[string]string{"relation_family": "CALLS", "transport": "CLI"})
+	v2id := findCellID(cells2, "relation-transport", map[string]string{"relation_family": "CALLS", "transport": "CLI"})
+	if v1id == v2id {
+		t.Fatal("ASSERT_V2_SCHEMA_BINDS_CELL_ID")
+	}
+	now := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	v1.FoundationalCellIDs = []string{cells1[1].ID}
+	req := AdmissionRequest{Results: passingResults(cells1), RequestedOperations: []string{"RANKING"}}
+	if err := ProgramBAdmitted(v1, req, now); err != nil {
+		t.Fatalf("ASSERT_V1_HISTORICAL_ADMISSION_SEMANTICS: %v", err)
+	}
+	if _, err := VerifyProgramBAdmission(v1, req, AdmissionBinding{BuildRevision: "r", Operation: "RANKING", Scope: "NORMATIVE_PROGRAM_B_ONLY"}, now); err == nil || !strings.Contains(err.Error(), "requires schema_version") {
+		t.Fatalf("ASSERT_NORMATIVE_PROGRAM_B_REQUIRES_V2: %v", err)
+	}
 }
 
 func TestProfileRequiresNormativeIdentityAndMandatoryAxes(t *testing.T) {
