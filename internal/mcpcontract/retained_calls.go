@@ -26,9 +26,7 @@ func WithRetainedCalls(manifest *Manifest) *Manifest {
 	copy := *manifest
 	copy.Schemas = append(append([]SchemaRegistration{}, manifest.Schemas...),
 		SchemaRegistration{ID: RetainedCallsInputID, Family: "input-export-retained-calls.v1", Layer: "input", Path: "schemas/input-export-retained-calls.v1.schema.json"},
-		SchemaRegistration{ID: RetainedCallsV2InputID, Family: "input-export-retained-calls.v2", Layer: "input", Path: "schemas/input-export-retained-calls.v2.schema.json"},
-		SchemaRegistration{ID: RetainedCallsArtifactID, Family: "lsp-trace.retained-calls.v1", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.retained-calls.v1.schema.json"},
-		SchemaRegistration{ID: RetainedCallsV2ArtifactID, Family: "lsp-trace.retained-calls.v2", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.retained-calls.v2.schema.json"})
+		SchemaRegistration{ID: RetainedCallsArtifactID, Family: "lsp-trace.retained-calls.v1", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.retained-calls.v1.schema.json"})
 	copy.Tools = append([]ToolContract{}, manifest.Tools...)
 	for _, tool := range manifest.Tools {
 		if tool.Name == "lsp_trace_v1_validate" {
@@ -40,17 +38,35 @@ func WithRetainedCalls(manifest *Manifest) *Manifest {
 				envelopes = append(envelopes, added)
 			}
 			copy.Tools = append(copy.Tools, ToolContract{Name: "lsp_trace_v1_export_retained_calls", Aliases: []string{"lsp_trace_export_retained_calls"}, InputSchemaID: RetainedCallsInputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{RetainedCallsArtifactID}, Advertised: true, Availability: "ENABLED"})
-			v2Envelopes := make([]string, 0, len(tool.EnvelopeSchemaIDs))
-			for _, id := range tool.EnvelopeSchemaIDs {
-				added := RetainedCallsV2EnvelopeID(id)
-				filename := strings.TrimPrefix(added, "https://jaresty.github.io/lsp-trace/mcp/schemas/")
-				copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: added, Family: strings.TrimSuffix(filename, ".schema.json"), Layer: "envelope", Path: "schemas/" + filename})
-				v2Envelopes = append(v2Envelopes, added)
-			}
-			copy.Tools = append(copy.Tools, ToolContract{Name: "lsp_trace_v2_export_retained_calls", Aliases: []string{}, InputSchemaID: RetainedCallsV2InputID, EnvelopeSchemaIDs: v2Envelopes, ArtifactSchemaIDs: []string{RetainedCallsV2ArtifactID}, Advertised: true, Availability: "ENABLED"})
 		}
 	}
 	return WithAcquisitionV2(WithBoundedRanking(WithBoundedMetrics(WithBoundedAnalysis(&copy))))
+}
+
+// WithRetainedCallsV2Export adds the current retained-calls v2 exporter without
+// changing the preserved historical twenty-tool WithRetainedCalls composition.
+func WithRetainedCallsV2Export(manifest *Manifest) *Manifest {
+	copy := *manifest
+	copy.Schemas = append([]SchemaRegistration{}, manifest.Schemas...)
+	copy.Tools = append([]ToolContract{}, manifest.Tools...)
+	for _, tool := range manifest.Tools {
+		if tool.Name != "lsp_trace_v1_validate" {
+			continue
+		}
+		envelopes := make([]string, 0, len(tool.EnvelopeSchemaIDs))
+		for _, id := range tool.EnvelopeSchemaIDs {
+			added := RetainedCallsV2EnvelopeID(id)
+			filename := strings.TrimPrefix(added, "https://jaresty.github.io/lsp-trace/mcp/schemas/")
+			copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: added, Family: strings.TrimSuffix(filename, ".schema.json"), Layer: "envelope", Path: "schemas/" + filename})
+			envelopes = append(envelopes, added)
+		}
+		copy.Schemas = append(copy.Schemas,
+			SchemaRegistration{ID: RetainedCallsV2InputID, Family: "input-export-retained-calls.v2", Layer: "input", Path: "schemas/input-export-retained-calls.v2.schema.json"},
+			SchemaRegistration{ID: RetainedCallsV2ArtifactID, Family: "lsp-trace.retained-calls.v2", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.retained-calls.v2.schema.json"})
+		copy.Tools = append(copy.Tools, ToolContract{Name: "lsp_trace_v2_export_retained_calls", Aliases: []string{}, InputSchemaID: RetainedCallsV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{RetainedCallsV2ArtifactID}, Advertised: true, Availability: "ENABLED"})
+		break
+	}
+	return &copy
 }
 
 // WithRetainedCallsV2Verifier adds the current retained-calls verifier without

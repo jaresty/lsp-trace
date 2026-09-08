@@ -150,7 +150,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithHydratedInspection(WithRetainedCallsV2Verifier(WithRetainedCalls(manifest))).Schemas {
+	for _, registration := range WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -171,7 +171,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(WithHydratedInspection(WithRetainedCallsV2Verifier(WithRetainedCalls(manifest))), schemaID)
+	compiled, err := compileSchema(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))), schemaID)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
-	manifest = WithHydratedInspection(WithRetainedCallsV2Verifier(WithRetainedCalls(manifest)))
+	manifest = WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))
 	// Load the immutable resource set once, not once per envelope. Every
 	// envelope is still compiled and checked for exhaustive exclusivity.
 	compiler, _, err := registeredCompiler(manifest)

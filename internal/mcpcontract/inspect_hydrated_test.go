@@ -14,10 +14,12 @@ func TestHydratedContractAdditive(t *testing.T) {
 	}
 	before, _ := json.Marshal(historical)
 	previous := WithRetainedCalls(historical)
-	runtime := WithHydratedInspection(previous)
+	hydrated := WithHydratedInspection(previous)
+	exportedV2 := WithRetainedCallsV2Export(hydrated)
+	runtime := WithRetainedCallsV2Verifier(exportedV2)
 	after, _ := json.Marshal(historical)
-	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(previous.Tools) != 21 || len(runtime.Tools) != 22 {
-		t.Fatal("PUBLIC_ADDITIVE_CONTRACT FAIL")
+	if !bytes.Equal(before, after) || len(historical.Tools) != 13 || len(previous.Tools) != 20 || len(hydrated.Tools) != 21 || len(exportedV2.Tools) != 22 || len(runtime.Tools) != 23 {
+		t.Fatalf("PUBLIC_ADDITIVE_CONTRACT FAIL: historical=%d previous=%d hydrated=%d exported_v2=%d runtime=%d", len(historical.Tools), len(previous.Tools), len(hydrated.Tools), len(exportedV2.Tools), len(runtime.Tools))
 	}
 	for _, id := range []string{hi.InputSchemaID, hi.SchemaID, HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-artifact.v1.schema.json"), HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json")} {
 		if _, err := SchemaJSON(id); err != nil {
@@ -32,5 +34,5 @@ func TestHydratedContractAdditive(t *testing.T) {
 			t.Fatal("PUBLIC_ADDITIVE_CONTRACT FAIL: loose input")
 		}
 	}
-	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=21 runtime=22; no publication schema")
+	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 hydrated=21 exported_v2=22 runtime=23; no publication schema")
 }

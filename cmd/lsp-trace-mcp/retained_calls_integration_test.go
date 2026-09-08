@@ -33,6 +33,14 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 	want := runCLIProcess(t, cli, "export-retained-calls", "--version", "v2", inputPath)
 	selector := filepath.Join(t.TempDir(), "selected-retained-v2.json")
 	runCLIProcess(t, cli, "export-retained-calls", "--version", "v2", "--output", selector, inputPath)
+	selectorBytes, err := os.ReadFile(selector)
+	if err != nil {
+		t.Fatal(err)
+	}
+	absentGenerationSelector := filepath.Join(t.TempDir(), "selected-retained-v2.json")
+	if err = os.WriteFile(absentGenerationSelector, selectorBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
 	var exported retainedcalls.EvidenceV2
 	if err = json.Unmarshal(want, &exported); err != nil {
 		t.Fatal(err)
@@ -47,7 +55,7 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 		callRequest(3, "lsp_trace_v2_export_retained_calls", map[string]any{"input": string(input), "output_selector": "compact-v2.json", "detail": "compact"}),
 		callRequest(4, "lsp_trace_v1_validate", map[string]any{"input": string(want), "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
 		callRequest(5, "lsp_trace_v2_verify_retained_calls", map[string]any{"input": selector, "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
-		callRequest(6, "lsp_trace_v2_verify_retained_calls", map[string]any{"input": filepath.Join(publication, "missing.json"), "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
+		callRequest(6, "lsp_trace_v2_verify_retained_calls", map[string]any{"input": absentGenerationSelector, "schema": map[string]any{"family": "retained-calls", "version": "v2"}}),
 		callRequest(7, "lsp_trace_v2_export_retained_calls", map[string]any{"input": `{}`}),
 		callRequest(8, "lsp_trace_v1_export_retained_calls", map[string]any{"input": string(input)}),
 	})
@@ -77,8 +85,8 @@ func TestRetainedCallsV2OfflineCLIAndMCP(t *testing.T) {
 	if verified["publication_receipt"] != nil || verified["content"] == nil || strings.Contains(fmt.Sprint(verified), publication) {
 		t.Fatal("ASSERT_MCP_RETAINED_V2_VERIFY_PATH_FREE_RECEIPT", verified)
 	}
-	if call := decodeProcessCall(t, calls[5]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
-		t.Fatal("ASSERT_MCP_RETAINED_V2_VERIFY_MISSING_TARGET", call.env)
+	if call := decodeProcessCall(t, calls[5]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" || !strings.Contains(fmt.Sprint(call.env["diagnostics"]), "incomplete selected generation") {
+		t.Fatal("ASSERT_MCP_RETAINED_V2_VERIFY_ABSENT_GENERATION", call.env)
 	}
 	if call := decodeProcessCall(t, calls[6]); call.env["operation_status"] != "FAILED" || call.env["code"] != "INPUT_INVALID" {
 		t.Fatal("ASSERT_MCP_RETAINED_V2_CORRUPT_REJECT", call.env)

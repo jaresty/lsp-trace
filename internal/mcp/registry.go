@@ -91,7 +91,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCalls(manifest)))
+	manifest = mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
