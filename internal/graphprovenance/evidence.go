@@ -232,6 +232,9 @@ func ValidateFor(data []byte, family, version string) (string, error) {
 	if family != Family {
 		return custodyevidence.ValidateFor(data, family, version)
 	}
+	if version == "v2" || version == VersionV2 {
+		return validateForV2(data)
+	}
 	if len(data) > MaxEnvelopeBytes {
 		return "", errors.New("provenance envelope byte limit")
 	}

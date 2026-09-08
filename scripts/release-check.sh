@@ -289,6 +289,15 @@ else
   printf 'FAIL R-GRAPH-PROVENANCE-SCHEMA: schema bytes differ\n'
   exit 1
 fi
+if go test ./internal/graphprovenance -run '^TestV2' -count=1; then
+  printf 'PASS R-GRAPH-PROVENANCE-V2: internal coordinator replay, exact native bytes, source supplies/captures and bounded census\n'
+else
+  printf 'FAIL R-GRAPH-PROVENANCE-V2: internal composed admission failed\n'
+  exit 1
+fi
+"$release_tmp/lsp-trace" schema get --family graph-provenance --version v2 > "$release_tmp/graph-provenance-v2.schema.json"
+cmp "$release_tmp/graph-provenance-v2.schema.json" "$root/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json"
+printf 'PASS R-GRAPH-PROVENANCE-V2-SCHEMA: exact committed additive schema\n'
 if go test ./internal/retainedcalls ./sliceops ./internal/mcp -run 'TestRetainedCalls|TestDistinctCallsites|TestUnreported|TestContextIdentity|TestCoherentResealing|TestStrictInput|TestIdentityFixedVectors' -count=1; then
   printf 'PASS R-RETAINED-CALLS: tables-only replay, scoped support, strict admission and fake-wire ceilings\n'
 else
