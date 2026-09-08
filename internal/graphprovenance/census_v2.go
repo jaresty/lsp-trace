@@ -42,6 +42,10 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 	for _, n := range r.Graph.Nodes {
 		nodes[n.ID] = n.URI
 	}
+	callers := map[string]string{}
+	for _, edge := range r.Graph.Edges {
+		callers[edge.RelationID] = nodes[edge.CallerNodeID]
+	}
 	labels := map[string]string{r.Request.Root.ID: r.Request.Root.Locator.URI}
 	for _, t := range r.Request.RequiredTargets {
 		labels[t.ID] = t.Locator.URI
@@ -65,8 +69,8 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 		out = append(out, Binding{Pointer: pointer, URI: uri, Attribution: attr, ReceiptIDs: []string{}})
 	}
 	escape := func(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1") }
-	var walk func(any, string)
-	walk = func(value any, p string) {
+	var walk func(any, string, string)
+	walk = func(value any, p, symbolURI string) {
 		if failure != nil {
 			return
 		}
@@ -74,6 +78,32 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 		case map[string]any:
 			text := func(k string) string { s, _ := v[k].(string); return s }
 			uri := text("uri")
+			if strings.HasPrefix(p, "/acquisition/requests/") && strings.Count(p, "/") == 3 {
+				method := text("method")
+				if method == "textDocument/documentSymbol" {
+					params, _ := v["params"].(map[string]any)
+					document, _ := params["textDocument"].(map[string]any)
+					symbolURI, _ = document["uri"].(string)
+				}
+				if method == "callHierarchy/incomingCalls" || method == "callHierarchy/outgoingCalls" {
+					rows, _ := v["response"].([]any)
+					for i, row := range rows {
+						call, _ := row.(map[string]any)
+						owner := nodes[text("node_id")]
+						if method == "callHierarchy/incomingCalls" {
+							from, _ := call["from"].(map[string]any)
+							owner, _ = from["uri"].(string)
+						}
+						ranges, _ := call["fromRanges"].([]any)
+						for j := range ranges {
+							add(fmt.Sprintf("%s/response/%d/fromRanges/%d", p, i, j), owner)
+							if failure != nil {
+								return
+							}
+						}
+					}
+				}
+			}
 			if _, exists := v["position"]; exists {
 				owner := ""
 				for _, key := range []string{"identity", "textDocument"} {
@@ -147,12 +177,7 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 					if k == "call_sites" {
 						owner := nodes[text("caller_node_id")]
 						if owner == "" {
-							for _, e := range r.Graph.Edges {
-								if e.RelationID == text("relation_id") {
-									owner = nodes[e.CallerNodeID]
-									break
-								}
-							}
+							owner = callers[text("relation_id")]
 						}
 						for i := range xs {
 							add(fmt.Sprintf("%s/%d", q, i), owner)
@@ -161,24 +186,26 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 				}
 				if k == "range" || k == "selection_range" || k == "selectionRange" {
 					owner := uri
-					if owner == "" {
-						owner = nodes[text("node_id")]
+					if _, explicit := v["uri"]; !explicit {
+						if _, nodeReference := v["node_id"]; nodeReference {
+							owner = nodes[text("node_id")]
+						} else {
+							owner = symbolURI
+						}
 					}
-					if owner != "" {
-						add(q, owner)
-					}
+					add(q, owner)
 				}
-				walk(v[k], q)
+				walk(v[k], q, symbolURI)
 			}
 		case []any:
 			for i, x := range v {
-				walk(x, fmt.Sprintf("%s/%d", p, i))
+				walk(x, fmt.Sprintf("%s/%d", p, i), symbolURI)
 			}
 		}
 	}
-	walk(doc["graph"], "/graph")
+	walk(doc["graph"], "/graph", "")
 	delete(doc, "graph")
-	walk(doc, "/acquisition")
+	walk(doc, "/acquisition", "")
 	if failure != nil {
 		return nil, failure
 	}

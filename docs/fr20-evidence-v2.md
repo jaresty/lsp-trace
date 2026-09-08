@@ -75,7 +75,11 @@ logical decoded pointer space, not JSON Pointers into the base64 string.
 The census includes native nodes/ranges, call groups/sites, seed selectors and
 memberships, diagnostics, portable/replay-input locators, plus **all requested
 selectors**, target resolution/traversal metadata, request parameters/responses,
-edge observations and connection witness references. Node references outside the
+edge observations and connection witness references. URI-less document-symbol
+ranges inherit their query URI; outgoing `fromRanges` use the queried caller and
+incoming `fromRanges` use the response's `from.uri`, not the queried callee.
+Edge-observation ranges join the native group's caller through an indexed lookup.
+Node references outside the
 admitted node table retain their available typed URI or an explicit non-source
 classification. `SOURCE_ARTIFACT.locator` is used as its own URI, not misread as a
 seed label. Free-text messages and opaque `data`/supply-observation bodies are not
