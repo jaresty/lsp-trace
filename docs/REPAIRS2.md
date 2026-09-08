@@ -32,4 +32,11 @@ Focused GREEN observations before final verification:
 - matrix/runtime guards: 30 passed;
 - both-store sizing/startup guards: 22 passed.
 
-Final focused, race, vet, and build results are recorded in the terminal repair summary after execution.
+Final bounded verification (no full suite and no D01 run):
+
+- `go test ./internal/manageddiagnostic ./sessionruntime ./internal/provider -count=1` — 202 passed;
+- `go test -race ./internal/manageddiagnostic ./sessionruntime ./internal/provider -count=1` — 202 passed;
+- focused `go vet` — clean;
+- focused `go build` — clean.
+
+A race-only ordering failure in the persisted readiness-completion guard exposed that the waiter could return before its diagnostic was retained. Commit `9271525` performs the minimal in-scope ordering correction; the assertion-specific race guard then passed 20 consecutive applications before the final race run.
