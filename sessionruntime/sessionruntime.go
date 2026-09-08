@@ -882,8 +882,8 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Observed, Value: manageddiagnostic.SubstepInitializedNotification}, manageddiagnostic.TerminalProtocolError, "initialized-notification-write-failed")
 			return
 		}
-		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
 		m.recordSuccessfulReadiness(opID, int64(len(initializeBody)), int64(len(initializedBody)))
+		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
 	case <-ctx.Done():
 		failure := session.RequestCancelled
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
