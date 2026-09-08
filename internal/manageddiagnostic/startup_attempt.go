@@ -47,6 +47,9 @@ func (r StartupAttemptRecord) Clone() StartupAttemptRecord {
 }
 
 func ValidateStartupAttempt(r StartupAttemptRecord) error {
+	if !validRetainedStrings(startupAttemptStrings(r)...) {
+		return errors.New("startup attempt string limit exceeded")
+	}
 	if r.SchemaVersion != StartupAttemptSchemaVersion {
 		return errors.New("unknown startup attempt schema version")
 	}
@@ -110,10 +113,34 @@ type StartupAttemptQuery struct {
 	Record *StartupAttemptRecord
 }
 
-func startupAttemptSize(r StartupAttemptRecord) int {
-	size := 256 + len(r.SchemaVersion) + len(r.AttemptID) + len(r.Reason.Value) + len(r.Timing.Scope) + len(r.SafeSubcodes)*32
+func startupAttemptStrings(r StartupAttemptRecord) []string {
+	values := []string{
+		r.SchemaVersion, string(r.AttemptID), string(r.Outcome), string(r.Reason.Status), r.Reason.Value,
+		r.Timing.Scope, string(r.Timing.Start.Status), string(r.Timing.End.Status), string(r.Timing.Elapsed.Status),
+		string(r.Limits.RequestedDeadlineNS.Status), string(r.Limits.EffectiveDeadlineNS.Status),
+		string(r.Limits.RequestedMaxBytes.Status), string(r.Limits.EffectiveMaxBytes.Status),
+		string(r.Limits.RequestedMaxMessages.Status), string(r.Limits.EffectiveMaxMessages.Status),
+		string(r.Stderr.Status), string(r.Stderr.ObservedByteCount.Status), string(r.Stderr.Truncated.Status),
+		string(r.ProcessExit.Status), string(r.ProcessExit.ExitCode.Status), string(r.ProcessExit.ObservedBeforeCleanup.Status), string(r.ProcessExit.CleanupInduced.Status),
+	}
 	if r.Admission != nil {
-		size += len(r.Admission.SessionID) + 8
+		values = append(values, r.Admission.SessionID)
+	}
+	return append(values, r.SafeSubcodes...)
+}
+
+func startupAttemptSizeOK(r StartupAttemptRecord) (int, bool) {
+	base := 256
+	if r.Admission != nil {
+		base += 8
+	}
+	return checkedRetainedSize(base, startupAttemptStrings(r)...)
+}
+
+func startupAttemptSize(r StartupAttemptRecord) int {
+	size, ok := startupAttemptSizeOK(r)
+	if !ok {
+		return int(^uint(0) >> 1)
 	}
 	return size
 }
@@ -122,8 +149,11 @@ func (s *Store) RecordStartupAttempt(r StartupAttemptRecord) bool {
 	if s == nil || ValidateStartupAttempt(r) != nil || s.bounds.MaxRecords <= 0 || s.bounds.MaxBytes <= 0 {
 		return false
 	}
+	size, ok := startupAttemptSizeOK(r)
+	if !ok || size > s.bounds.MaxBytes {
+		return false
+	}
 	r = r.Clone()
-	size := startupAttemptSize(r)
 	if size > s.bounds.MaxBytes {
 		return false
 	}

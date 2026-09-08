@@ -4,6 +4,7 @@ package manageddiagnostic
 
 import (
 	"errors"
+	"math"
 	"sync"
 	"time"
 )
@@ -112,6 +113,27 @@ func (r Record) Clone() Record { r.SafeSubcodes = append([]string(nil), r.SafeSu
 
 func validStatus(s Status) bool { return s == Observed || s == Unavailable || s == Withheld }
 
+const maxRetainedStringBytes = 4096
+
+func checkedRetainedSize(base int, values ...string) (int, bool) {
+	if base < 0 {
+		return 0, false
+	}
+	size := base
+	for _, value := range values {
+		if len(value) > maxRetainedStringBytes || size > math.MaxInt-len(value) {
+			return 0, false
+		}
+		size += len(value)
+	}
+	return size, true
+}
+
+func validRetainedStrings(values ...string) bool {
+	_, ok := checkedRetainedSize(0, values...)
+	return ok
+}
+
 func validFact[T comparable](f Fact[T]) bool {
 	var zero T
 	// A wholly zero fact is the Go representation of an omitted partial fact.
@@ -206,6 +228,10 @@ func validatePhaseMatrix(r Record) error {
 }
 
 func Validate(r Record) error {
+	strings := recordStrings(r)
+	if !validRetainedStrings(strings...) {
+		return errors.New("diagnostic string limit exceeded")
+	}
 	if r.SessionID == "" || r.Generation == 0 || r.Sequence == 0 {
 		return errors.New("diagnostic identity is required")
 	}
@@ -299,15 +325,41 @@ type Store struct {
 func NewStore(b Bounds) *Store {
 	return &Store{bounds: b, buckets: make(map[generationKey]bucket), attempts: make(map[StartupAttemptID]StartupAttemptRecord), evictedAttempts: make(map[StartupAttemptID]struct{})}
 }
+func recordStrings(r Record) []string {
+	values := []string{
+		r.SessionID, string(r.Phase), string(r.Substep.Status), string(r.Substep.Value), string(r.Terminal),
+		string(r.Reason.Status), r.Reason.Value, r.Timing.Scope,
+		string(r.Timing.Start.Status), string(r.Timing.End.Status), string(r.Timing.Elapsed.Status),
+		string(r.Limits.RequestedDeadlineNS.Status), string(r.Limits.EffectiveDeadlineNS.Status),
+		string(r.Limits.RequestedMaxBytes.Status), string(r.Limits.EffectiveMaxBytes.Status),
+		string(r.Limits.RequestedMaxMessages.Status), string(r.Limits.EffectiveMaxMessages.Status),
+		string(r.Request.Method.Status), r.Request.Method.Value, string(r.Request.TargetID.Status), r.Request.TargetID.Value,
+		string(r.Request.CallerID.Status), r.Request.CallerID.Value, string(r.Request.OwnerSequence.Status), string(r.Request.ProtocolID.Status),
+		string(r.Read.State), string(r.Write.State), string(r.CallHierarchy.Status), string(r.DocumentSupplyCompleted.Status),
+		string(r.ProcessExit.Status), string(r.ProcessExit.ExitCode.Status), string(r.ProcessExit.ObservedBeforeCleanup.Status), string(r.ProcessExit.CleanupInduced.Status),
+		string(r.Stderr.Status), string(r.Stderr.ObservedByteCount.Status), string(r.Stderr.Truncated.Status), string(r.NumericRPCCode.Status),
+	}
+	return append(values, r.SafeSubcodes...)
+}
+
+func recordSizeOK(r Record) (int, bool) { return checkedRetainedSize(256, recordStrings(r)...) }
+
 func recordSize(r Record) int {
-	return 256 + len(r.SessionID) + len(r.Timing.Scope) + len(r.Reason.Value) + len(r.Request.Method.Value) + len(r.Request.TargetID.Value) + len(r.Request.CallerID.Value) + len(r.SafeSubcodes)*32
+	size, ok := recordSizeOK(r)
+	if !ok {
+		return math.MaxInt
+	}
+	return size
 }
 func (s *Store) Record(r Record) bool {
 	if s == nil || Validate(r) != nil || s.bounds.MaxRecords <= 0 || s.bounds.MaxBytes <= 0 {
 		return false
 	}
+	size, ok := recordSizeOK(r)
+	if !ok || size > s.bounds.MaxBytes {
+		return false
+	}
 	r = r.Clone()
-	size := recordSize(r)
 	if size > s.bounds.MaxBytes {
 		return false
 	}

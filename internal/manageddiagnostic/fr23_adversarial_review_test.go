@@ -1,6 +1,7 @@
 package manageddiagnostic
 
 import (
+	"math"
 	"strings"
 	"testing"
 )
@@ -20,6 +21,15 @@ func TestReviewRetainedBytesCountActualStringsInBothStores(t *testing.T) {
 	a.SafeSubcodes = []string{strings.Repeat("X", huge)}
 	if NewStore(Bounds{MaxRecords: 1, MaxBytes: 400}).RecordStartupAttempt(a) {
 		t.Fatal("ASSERT_FR23_ATTEMPT_ACTUAL_STRING_BYTES: huge subcode admitted")
+	}
+}
+
+func TestReviewRetainedSizeOverflowAndPerStringCap(t *testing.T) {
+	if _, ok := checkedRetainedSize(math.MaxInt, "x"); ok {
+		t.Fatal("ASSERT_FR23_RETAINED_SIZE_OVERFLOW_REFUSED")
+	}
+	if _, ok := checkedRetainedSize(0, strings.Repeat("x", maxRetainedStringBytes+1)); ok {
+		t.Fatal("ASSERT_FR23_RETAINED_PER_STRING_CAP")
 	}
 }
 
