@@ -13,7 +13,7 @@ import (
 
 const SchemaVersion = "lsp-trace.qualification-matrix-profile.v1"
 
-var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class"}
+var mandatoryAxes = []string{"relation_family", "custody_adapter", "state", "projection_class", "transport", "publication_mode", "provider_class", "language", "framework"}
 
 type Axis struct {
 	Name    string   `json:"name"`
@@ -57,6 +57,7 @@ const (
 	StatusBlocked      Status = "BLOCKED"
 	StatusFail         Status = "FAIL"
 	StatusNotQualified Status = "NOT_QUALIFIED"
+	StatusUnknown      Status = "UNKNOWN"
 )
 
 type Waiver struct {
@@ -387,16 +388,16 @@ func ProgramBAdmitted(p Profile, req AdmissionRequest, now time.Time) error {
 		if !r.RealServerEvidence {
 			return fmt.Errorf("cell %q lacks required real-server evidence", r.CellID)
 		}
-		if want := cell.Values["provider_class"]; want != "" && r.EvidenceProviderClass != "" && r.EvidenceProviderClass != want {
-			return fmt.Errorf("companion provider %q cannot replace native provider %q", r.EvidenceProviderClass, want)
-		}
 		switch r.Status {
 		case StatusPass:
+			if want := cell.Values["provider_class"]; want != "" && r.EvidenceProviderClass != want {
+				return fmt.Errorf("evidence provider %q does not match native provider %q", r.EvidenceProviderClass, want)
+			}
 			if r.Waiver != nil {
 				return fmt.Errorf("PASS cell %q cannot carry a waiver", r.CellID)
 			}
 			continue
-		case StatusBlocked, StatusFail, StatusNotQualified:
+		case StatusBlocked, StatusFail, StatusNotQualified, StatusUnknown:
 		default:
 			return fmt.Errorf("cell %q has unsupported status %q", r.CellID, r.Status)
 		}

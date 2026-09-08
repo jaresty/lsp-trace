@@ -24,6 +24,8 @@ func testProfile(t *testing.T) Profile {
 			{Name: "transport", Members: []string{"CLI", "MCP"}},
 			{Name: "publication_mode", Members: []string{"INLINE", "IMMUTABLE"}},
 			{Name: "provider_class", Members: []string{"TYPESCRIPT_LANGUAGE_SERVER", "ELIXIR_LS"}},
+			{Name: "language", Members: []string{"TYPESCRIPT", "ELIXIR"}},
+			{Name: "framework", Members: []string{"NONE", "EMBER"}},
 		},
 		Products: []Product{
 			{ID: "relation-transport", Version: "1", Axes: []string{"relation_family", "transport"}},
@@ -31,7 +33,7 @@ func testProfile(t *testing.T) Profile {
 			{ID: "state", Version: "1", Axes: []string{"state"}},
 			{ID: "projection", Version: "1", Axes: []string{"projection_class"}},
 			{ID: "publication", Version: "1", Axes: []string{"publication_mode"}},
-			{ID: "provider", Version: "1", Axes: []string{"provider_class"}},
+			{ID: "language-provider-framework-transport", Version: "1", Axes: []string{"language", "provider_class", "framework", "transport"}},
 		},
 	}
 	cells, err := Generate(Profile{
@@ -68,8 +70,8 @@ func TestGeneratorProducesAtomicDeterministicProduct(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first) != 17 {
-		t.Fatalf("ASSERT_EXACT_PRODUCT_ROWS: got %d want 17", len(first))
+	if len(first) != 31 {
+		t.Fatalf("ASSERT_EXACT_PRODUCT_ROWS: got %d want 31", len(first))
 	}
 	for i := range first {
 		if !matchesDeclaredProduct(first[i], p.Products) {
@@ -130,6 +132,69 @@ func TestEquivalenceReductionRequiresVersionedEvidenceAndExactOmissions(t *testi
 	if err := ValidateProfile(p); err == nil || !strings.Contains(err.Error(), "evidence") {
 		t.Fatalf("ASSERT_UNSUPPORTED_REDUCTION_REJECTED: %v", err)
 	}
+}
+
+func TestLanguageProviderFrameworkTransportQualificationIsExactAndAuthorityBounded(t *testing.T) {
+	const matrixAssertion = "ASSERT_LANGUAGE_PROVIDER_FRAMEWORK_TRANSPORT_MATRIX"
+	p := testProfile(t)
+	for _, missing := range []string{"language", "framework"} {
+		reduced := p
+		reduced.Axes = nil
+		for _, axis := range p.Axes {
+			if axis.Name != missing {
+				reduced.Axes = append(reduced.Axes, axis)
+			}
+		}
+		reduced.Products = append([]Product(nil), p.Products...)
+		reduced.Products[len(reduced.Products)-1].Axes = nil
+		for _, axis := range p.Products[len(p.Products)-1].Axes {
+			if axis != missing {
+				reduced.Products[len(reduced.Products)-1].Axes = append(reduced.Products[len(reduced.Products)-1].Axes, axis)
+			}
+		}
+		reduced.FoundationalCellIDs = []string{cellID("relation-transport", "1", map[string]string{"relation_family": "CALLS", "transport": "CLI"})}
+		if err := ValidateProfile(reduced); err == nil || !strings.Contains(err.Error(), missing) {
+			t.Fatalf("%s: missing %s matrix axis accepted: %v", matrixAssertion, missing, err)
+		}
+	}
+
+	cells := mustGenerate(t, p)
+	matrixCells := 0
+	for _, cell := range cells {
+		if cell.ProductID == "language-provider-framework-transport" {
+			matrixCells++
+			if len(cell.Values) != 4 || cell.Values["language"] == "" || cell.Values["provider_class"] == "" || cell.Values["framework"] == "" || cell.Values["transport"] == "" {
+				t.Fatalf("%s: non-atomic cell: %#v", matrixAssertion, cell)
+			}
+		}
+	}
+	if matrixCells != 16 {
+		t.Fatalf("%s: got %d matrix cells want 16", matrixAssertion, matrixCells)
+	}
+
+	const authorityAssertion = "ASSERT_QUALIFICATION_DISPOSITIONS_PRESERVE_EVIDENCE_AUTHORITY"
+	now := time.Date(2026, 9, 4, 0, 0, 0, 0, time.UTC)
+	p.FoundationalCellIDs = []string{cells[1].ID}
+	results := passingResults(cells)
+	results[0].EvidenceProviderClass = ""
+	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err == nil || !strings.Contains(err.Error(), "native provider") {
+		t.Fatalf("%s: empty native provider identity admitted: %v", authorityAssertion, err)
+	}
+	results[0].Status = StatusUnknown
+	results[0].RealServerEvidence = true
+	results[0].Waiver = validWaiver(cells[0].ID, now)
+	if err := ProgramBAdmitted(p, AdmissionRequest{Results: results}, now); err != nil {
+		t.Fatalf("%s: explicit non-promoting UNKNOWN rejected: %v", authorityAssertion, err)
+	}
+}
+
+func mustGenerate(t *testing.T, p Profile) []Cell {
+	t.Helper()
+	cells, err := Generate(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cells
 }
 
 func TestWaiverCannotAdmitFoundationalExpiredOrProducerApprovedCell(t *testing.T) {
@@ -233,7 +298,7 @@ func values(c Cell, axes []string) []string {
 func passingResults(cells []Cell) []Result {
 	out := make([]Result, len(cells))
 	for i, c := range cells {
-		out[i] = Result{CellID: c.ID, Status: StatusPass, RealServerEvidence: true}
+		out[i] = Result{CellID: c.ID, Status: StatusPass, RealServerEvidence: true, EvidenceProviderClass: c.Values["provider_class"]}
 	}
 	return out
 }
