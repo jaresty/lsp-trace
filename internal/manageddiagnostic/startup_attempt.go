@@ -59,8 +59,17 @@ func ValidateStartupAttempt(r StartupAttemptRecord) error {
 	if r.Outcome != StartupFailed && r.Outcome != StartupAdmitted {
 		return errors.New("unknown startup outcome")
 	}
-	if !validStatus(r.Reason.Status) || !validStatus(r.Stderr.Status) || !validStatus(r.ProcessExit.Status) {
-		return errors.New("startup fact status required")
+	if !validFact(r.Reason) || !validStatus(r.Stderr.Status) || !validFact(r.Stderr.ObservedByteCount) || !validFact(r.Stderr.Truncated) || !validStatus(r.ProcessExit.Status) || !validFact(r.ProcessExit.ExitCode) || !validFact(r.ProcessExit.ObservedBeforeCleanup) || !validFact(r.ProcessExit.CleanupInduced) {
+		return errors.New("invalid startup fact status or hidden value")
+	}
+	if r.Stderr.ByteCap < 0 || r.Stderr.ObservedByteCount.Value < 0 {
+		return errors.New("negative startup stderr accounting")
+	}
+	if r.Stderr.Status != Observed && (r.Stderr.ByteCap != 0 || r.Stderr.ObservedByteCount.Status == Observed || r.Stderr.Truncated.Status == Observed) {
+		return errors.New("unavailable startup stderr carries observed detail")
+	}
+	if r.ProcessExit.Status != Observed && (r.ProcessExit.ExitCode.Status == Observed || r.ProcessExit.ObservedBeforeCleanup.Status == Observed || r.ProcessExit.CleanupInduced.Status == Observed) {
+		return errors.New("unavailable startup process exit carries observed detail")
 	}
 	if r.Timing.Elapsed.Status == Observed {
 		if r.Timing.Elapsed.Value < 0 {
@@ -75,6 +84,12 @@ func ValidateStartupAttempt(r StartupAttemptRecord) error {
 	}
 	if r.Outcome == StartupAdmitted && (r.Admission == nil || r.Admission.SessionID == "" || r.Admission.Generation == 0) {
 		return errors.New("admitted startup requires exact generation")
+	}
+	if r.Outcome == StartupAdmitted && r.Reason.Status == Observed && r.Reason.Value != "startup-admitted" {
+		return errors.New("admitted startup carries failure reason")
+	}
+	if r.Outcome == StartupFailed && r.ProcessExit.Status == Observed && r.ProcessExit.CleanupInduced.Status == Observed && r.ProcessExit.CleanupInduced.Value {
+		return errors.New("failed startup cannot claim cleanup-induced exit")
 	}
 	if r.ProcessExit.Status == Observed && r.ProcessExit.ObservedBeforeCleanup.Status != Observed {
 		return errors.New("startup process exit chronology required")

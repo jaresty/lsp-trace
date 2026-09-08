@@ -2,6 +2,7 @@ package sessionruntime
 
 import (
 	"strconv"
+	"strings"
 
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/session"
@@ -12,10 +13,14 @@ func (m *Manager) beginStartupAttempt() (manageddiagnostic.StartupAttemptID, uin
 	defer m.mu.Unlock()
 	m.startupAttemptSeq++
 	sequence := m.startupAttemptSeq
-	id := m.startupAttemptIDSource(sequence)
-	if id == "" {
-		id = manageddiagnostic.StartupAttemptID("startup-invalid-source-" + strconv.FormatUint(sequence, 10))
+	nonce := strings.TrimSpace(string(m.startupAttemptIDSource(sequence)))
+	if nonce == "" {
+		nonce = "startup"
 	}
+	// The source contributes nonce material only. The manager-owned monotonic
+	// sequence is always part of the final identity, so hostile duplicate or
+	// empty sources cannot alias starts and no issued-ID set grows over time.
+	id := manageddiagnostic.StartupAttemptID(nonce + "-" + strconv.FormatUint(sequence, 10))
 	return id, sequence, m.now().UnixNano()
 }
 
@@ -58,9 +63,9 @@ func staticStartupReason(result StartResult) string {
 	}
 }
 
-func (m *Manager) finishStartupAttempt(id manageddiagnostic.StartupAttemptID, sequence uint64, started int64, result StartResult) {
+func (m *Manager) finishStartupAttempt(id manageddiagnostic.StartupAttemptID, sequence uint64, started int64, result StartResult) bool {
 	if m.diagnostics == nil {
-		return
+		return true
 	}
 	ended := m.now().UnixNano()
 	if ended < started {
@@ -80,5 +85,5 @@ func (m *Manager) finishStartupAttempt(id manageddiagnostic.StartupAttemptID, se
 		r.Outcome = manageddiagnostic.StartupAdmitted
 		r.Admission = &manageddiagnostic.StartupAdmission{SessionID: result.SessionID, Generation: result.Generation}
 	}
-	m.diagnostics.RecordStartupAttempt(r)
+	return m.diagnostics.RecordStartupAttempt(r)
 }

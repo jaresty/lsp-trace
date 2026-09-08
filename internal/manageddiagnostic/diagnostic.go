@@ -27,6 +27,8 @@ const (
 	PhaseSpawn              Phase = "spawn"
 	PhaseInitializeWrite    Phase = "initialize-write"
 	PhaseInitializeResponse Phase = "initialize-response"
+	PhaseRequestDispatch    Phase = "request-dispatch"
+	PhaseReadinessComplete  Phase = "readiness-complete"
 	PhaseDocumentSupply     Phase = "document-supply"
 	PhaseCapabilityCheck    Phase = "capability-check"
 )
@@ -109,12 +111,37 @@ type Record struct {
 func (r Record) Clone() Record { r.SafeSubcodes = append([]string(nil), r.SafeSubcodes...); return r }
 
 func validStatus(s Status) bool { return s == Observed || s == Unavailable || s == Withheld }
+
+func validFact[T comparable](f Fact[T]) bool {
+	var zero T
+	// A wholly zero fact is the Go representation of an omitted partial fact.
+	// Any explicit unavailable/withheld fact must likewise carry no value.
+	if f.Status == "" {
+		return f.Value == zero
+	}
+	if !validStatus(f.Status) {
+		return false
+	}
+	return f.Status == Observed || f.Value == zero
+}
+
+func validIO(io IOFacts) bool {
+	switch io.State {
+	case IOUnavailable:
+		return io.Messages == 0 && io.Bytes == 0
+	case IOAttempted, IOComplete, IOFailed:
+		return io.Messages >= 0 && io.Bytes >= 0
+	default:
+		return false
+	}
+}
+
 func Validate(r Record) error {
 	if r.SessionID == "" || r.Generation == 0 || r.Sequence == 0 {
 		return errors.New("diagnostic identity is required")
 	}
 	switch r.Phase {
-	case PhaseSpawn, PhaseInitializeWrite, PhaseInitializeResponse, PhaseDocumentSupply, PhaseCapabilityCheck:
+	case PhaseSpawn, PhaseInitializeWrite, PhaseInitializeResponse, PhaseRequestDispatch, PhaseReadinessComplete, PhaseDocumentSupply, PhaseCapabilityCheck:
 	default:
 		return errors.New("unknown phase")
 	}
@@ -123,8 +150,30 @@ func Validate(r Record) error {
 	default:
 		return errors.New("unknown terminal")
 	}
-	if !validStatus(r.Reason.Status) || !validStatus(r.Request.Method.Status) || !validStatus(r.CallHierarchy.Status) || !validStatus(r.DocumentSupplyCompleted.Status) || !validStatus(r.ProcessExit.Status) || !validStatus(r.Stderr.Status) {
-		return errors.New("optional fact status required")
+	if !validFact(r.Reason) || !validFact(r.Substep) || !validFact(r.Timing.Start) || !validFact(r.Timing.End) || !validFact(r.Timing.Elapsed) ||
+		!validFact(r.Limits.RequestedDeadlineNS) || !validFact(r.Limits.EffectiveDeadlineNS) || !validFact(r.Limits.RequestedMaxBytes) || !validFact(r.Limits.EffectiveMaxBytes) || !validFact(r.Limits.RequestedMaxMessages) || !validFact(r.Limits.EffectiveMaxMessages) ||
+		!validFact(r.Request.Method) || !validFact(r.Request.TargetID) || !validFact(r.Request.CallerID) || !validFact(r.Request.OwnerSequence) || !validFact(r.Request.ProtocolID) ||
+		!validFact(r.CallHierarchy) || !validFact(r.DocumentSupplyCompleted) || !validStatus(r.ProcessExit.Status) || !validFact(r.ProcessExit.ExitCode) || !validFact(r.ProcessExit.ObservedBeforeCleanup) || !validFact(r.ProcessExit.CleanupInduced) ||
+		!validStatus(r.Stderr.Status) || !validFact(r.Stderr.ObservedByteCount) || !validFact(r.Stderr.Truncated) || !validFact(r.NumericRPCCode) {
+		return errors.New("invalid fact status or hidden value")
+	}
+	if !validIO(r.Read) || !validIO(r.Write) {
+		return errors.New("invalid IO accounting")
+	}
+	if r.Stderr.ByteCap < 0 || r.Stderr.ObservedByteCount.Value < 0 || r.Limits.RequestedDeadlineNS.Value < 0 || r.Limits.EffectiveDeadlineNS.Value < 0 || r.Limits.RequestedMaxBytes.Value < 0 || r.Limits.EffectiveMaxBytes.Value < 0 || r.Limits.RequestedMaxMessages.Value < 0 || r.Limits.EffectiveMaxMessages.Value < 0 {
+		return errors.New("negative diagnostic value")
+	}
+	if r.Substep.Status == Observed && r.Substep.Value != SubstepInitializedNotification {
+		return errors.New("unknown substep")
+	}
+	if r.Substep.Status == Observed && r.Phase != PhaseInitializeWrite && r.Phase != PhaseReadinessComplete {
+		return errors.New("substep does not belong to phase")
+	}
+	if r.ProcessExit.Status != Observed && (r.ProcessExit.ExitCode.Status == Observed || r.ProcessExit.ObservedBeforeCleanup.Status == Observed || r.ProcessExit.CleanupInduced.Status == Observed) {
+		return errors.New("unavailable process exit carries observed detail")
+	}
+	if r.Stderr.Status != Observed && (r.Stderr.ByteCap != 0 || r.Stderr.ObservedByteCount.Status == Observed || r.Stderr.Truncated.Status == Observed) {
+		return errors.New("unavailable stderr carries observed detail")
 	}
 	if r.Timing.Elapsed.Status == Observed {
 		if r.Timing.Elapsed.Value < 0 {
@@ -249,6 +298,7 @@ type RequestOutcome struct {
 	Reason                      string
 	ReadState, WriteState       IOState
 	RequestBytes, ResponseBytes int64
+	ResponseMessages            int
 	NumericRPCCode              Fact[int]
 }
 
@@ -266,7 +316,7 @@ func RecordRequest(o RequestObservation, call func() RequestOutcome) Record {
 		}
 		return Fact[string]{Status: Observed, Value: v}
 	}
-	r := Record{SessionID: o.SessionID, Generation: o.Generation, Sequence: o.Sequence, Phase: PhaseInitializeResponse, Terminal: result.Terminal, Reason: fstr(result.Reason), Timing: Timing{Scope: "round-trip", Start: Fact[int64]{Observed, start}, End: Fact[int64]{Observed, end}, Elapsed: Fact[int64]{Observed, end - start}}, Request: RequestFacts{Method: fstr(o.Method), TargetID: fstr(o.TargetID), CallerID: fstr(o.CallerID), OwnerSequence: Fact[uint64]{Observed, o.Sequence}, ProtocolID: Fact[uint64]{Observed, o.ProtocolID}}, Read: IOFacts{State: result.ReadState, Bytes: result.ResponseBytes}, Write: IOFacts{State: result.WriteState, Messages: 1, Bytes: result.RequestBytes}, NumericRPCCode: result.NumericRPCCode, CallHierarchy: Fact[bool]{Status: Unavailable}, DocumentSupplyCompleted: Fact[bool]{Status: Unavailable}, ProcessExit: ProcessExit{Status: Unavailable}, Stderr: Stderr{Status: Withheld}}
+	r := Record{SessionID: o.SessionID, Generation: o.Generation, Sequence: o.Sequence, Phase: PhaseRequestDispatch, Terminal: result.Terminal, Reason: fstr(result.Reason), Timing: Timing{Scope: "round-trip", Start: Fact[int64]{Observed, start}, End: Fact[int64]{Observed, end}, Elapsed: Fact[int64]{Observed, end - start}}, Request: RequestFacts{Method: fstr(o.Method), TargetID: fstr(o.TargetID), CallerID: fstr(o.CallerID), OwnerSequence: Fact[uint64]{Observed, o.Sequence}, ProtocolID: Fact[uint64]{Observed, o.ProtocolID}}, Read: IOFacts{State: result.ReadState, Messages: result.ResponseMessages, Bytes: result.ResponseBytes}, Write: IOFacts{State: result.WriteState, Messages: 1, Bytes: result.RequestBytes}, NumericRPCCode: result.NumericRPCCode, CallHierarchy: Fact[bool]{Status: Unavailable}, DocumentSupplyCompleted: Fact[bool]{Status: Unavailable}, ProcessExit: ProcessExit{Status: Unavailable}, Stderr: Stderr{Status: Withheld}}
 	r.Limits = Limits{Fact[int64]{Observed, int64(o.RequestedDeadline)}, Fact[int64]{Observed, int64(o.EffectiveDeadline)}, Fact[int64]{Observed, o.RequestedMaxBytes}, Fact[int64]{Observed, o.EffectiveMaxBytes}, Fact[int]{Observed, o.RequestedMaxMessages}, Fact[int]{Observed, o.EffectiveMaxMessages}}
 	return r
 }

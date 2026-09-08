@@ -17,7 +17,7 @@ func validRecord() Record {
 		Limits:  Limits{RequestedDeadlineNS: Fact[int64]{Status: Unavailable}, EffectiveDeadlineNS: Fact[int64]{Status: Observed, Value: 100}, RequestedMaxBytes: Fact[int64]{Status: Observed, Value: 1024}, EffectiveMaxBytes: Fact[int64]{Status: Observed, Value: 1024}, RequestedMaxMessages: Fact[int]{Status: Observed, Value: 1}, EffectiveMaxMessages: Fact[int]{Status: Observed, Value: 1}},
 		Read:    IOFacts{State: IOComplete, Messages: 1, Bytes: 50}, Write: IOFacts{State: IOComplete, Messages: 1, Bytes: 40},
 		CallHierarchy: Fact[bool]{Status: Observed, Value: true}, DocumentSupplyCompleted: Fact[bool]{Status: Unavailable}, ProcessExit: ProcessExit{Status: Unavailable},
-		Stderr: Stderr{Status: Withheld, ByteCap: 4096, ObservedByteCount: Fact[int64]{Status: Unavailable}},
+		Stderr: Stderr{Status: Withheld, ObservedByteCount: Fact[int64]{Status: Unavailable}},
 	}
 }
 
@@ -83,9 +83,9 @@ func TestTypedHooksAndFakeClock(t *testing.T) {
 	now := int64(100)
 	clock := func() int64 { now += 5; return now }
 	rec := RecordRequest(RequestObservation{SessionID: "session-opaque", Generation: 7, Sequence: 2, Method: "textDocument/prepareCallHierarchy", ProtocolID: 9, TargetID: "target-opaque", CallerID: "caller-opaque", RequestedDeadline: time.Second, EffectiveDeadline: 900 * time.Millisecond, RequestedMaxBytes: 1000, EffectiveMaxBytes: 900, RequestedMaxMessages: 3, EffectiveMaxMessages: 2, Clock: clock}, func() RequestOutcome {
-		return RequestOutcome{Terminal: TerminalResponseReceived, ReadState: IOComplete, WriteState: IOComplete, RequestBytes: 44, ResponseBytes: 55}
+		return RequestOutcome{Terminal: TerminalResponseReceived, ReadState: IOComplete, WriteState: IOComplete, RequestBytes: 44, ResponseBytes: 55, ResponseMessages: 2}
 	})
-	if rec.Request.ProtocolID.Value != 9 || rec.Request.TargetID.Value != "target-opaque" || rec.Timing.Elapsed.Value != 5 {
+	if rec.Phase != PhaseRequestDispatch || rec.Read.Messages != 2 || rec.Request.ProtocolID.Value != 9 || rec.Request.TargetID.Value != "target-opaque" || rec.Timing.Elapsed.Value != 5 {
 		t.Fatalf("ASSERT_DIAGNOSTIC_ACTUAL_REQUEST_JOIN: %+v", rec)
 	}
 	cap := RecordCapabilityCheck(CapabilityObservation{SessionID: "session-opaque", Generation: 7, Sequence: 3, Supported: false})

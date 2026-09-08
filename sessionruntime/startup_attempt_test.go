@@ -58,7 +58,7 @@ func TestStartupAttemptFailedLookupNoAdmissionAndSafe(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := m.Start(context.Background(), StartRequest{Profile: profile(t)})
-	if got.AttemptID != "attempt-a" {
+	if got.AttemptID == "" {
 		t.Fatalf("%s: result=%+v", assertAttemptFailedLookup, got)
 	}
 	q := m.GetStartupAttempt(got.AttemptID)
@@ -109,7 +109,7 @@ func TestStartupAttemptSuccessBindsExactGeneration(t *testing.T) {
 	}
 	got := m.Start(context.Background(), StartRequest{Profile: profile(t)})
 	q := m.GetStartupAttempt(got.AttemptID)
-	if got.AttemptID != "attempt-success" || got.Generation != 1 || q.Record == nil || q.Record.Admission == nil || q.Record.Admission.SessionID != got.SessionID || q.Record.Admission.Generation != got.Generation {
+	if got.AttemptID == "" || got.Generation != 1 || q.Record == nil || q.Record.Admission == nil || q.Record.Admission.SessionID != got.SessionID || q.Record.Admission.Generation != got.Generation {
 		t.Fatalf("%s: result=%+v query=%+v", assertAttemptSuccessBind, got, q)
 	}
 }
@@ -139,7 +139,13 @@ func TestStartupAttemptUniqueConcurrentAndEvictionClone(t *testing.T) {
 		seen[id] = true
 	}
 	third := m.Start(context.Background(), StartRequest{Profile: profile(t)})
-	if q := m.GetStartupAttempt("attempt-1"); q.Status != manageddiagnostic.AttemptEvicted {
+	var firstID manageddiagnostic.StartupAttemptID
+	for id := range seen {
+		if firstID == "" || id < firstID {
+			firstID = id
+		}
+	}
+	if q := m.GetStartupAttempt(firstID); q.Status != manageddiagnostic.AttemptEvicted {
 		t.Fatalf("%s: %+v", assertAttemptEviction, q)
 	}
 	q := m.GetStartupAttempt(third.AttemptID)
@@ -169,11 +175,11 @@ func TestStartupAttemptRestartBindsActualNextGeneration(t *testing.T) {
 	first := m.Start(context.Background(), StartRequest{Profile: profile(t)})
 	accepted := m.Restart(context.Background(), first.SessionID, "attempt-restart-caller")
 	terminal := waitOperation(t, m, accepted.IntentID, OperationComplete)
-	q := m.GetStartupAttempt("attempt-restart")
+	q := m.GetStartupAttempt("attempt-restart-2")
 	if terminal.Failure != "" || q.Record == nil || q.Record.Admission == nil || q.Record.Admission.Generation != 2 || q.Record.Admission.SessionID != first.SessionID {
 		t.Fatalf("%s: operation=%+v query=%+v", assertAttemptRestart, terminal, q)
 	}
-	if original := m.GetStartupAttempt("attempt-initial"); original.Record == nil || original.Record.Admission == nil || original.Record.Admission.Generation != 1 {
+	if original := m.GetStartupAttempt(first.AttemptID); original.Record == nil || original.Record.Admission == nil || original.Record.Admission.Generation != 1 {
 		t.Fatalf("ASSERT_FR23_STALE_GENERATION_NOT_OVERWRITTEN: %+v", original)
 	}
 }
