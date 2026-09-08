@@ -1,0 +1,23 @@
+{
+  "schema_id": "lsp-trace.compatibility-matrix.v1",
+  "source_ready": true,
+  "deployment": {
+    "status": "UNKNOWN",
+    "reason": "NO_LIVE_INSTANCE_INSPECTED"
+  },
+  "transitions": [
+    {
+      "id": "native-v1-to-retained-v1",
+      "producer": {"surface": "fixture", "status": "HISTORICAL_RETAINED", "schema_id": "lsp-trace.graph.v1"},
+      "consumer": {"surface": "offline-qualification", "status": "SOURCE_IMPLEMENTED", "schema_id": "lsp-trace.retained-export.v1"},
+      "diagnostics": {"unsupported_transition": "EXPLICIT_FAILURE", "failure_is_empty": false},
+      "input": {"path": "historical-native-graph.v1.json", "sha256": "784e827c53cb16ba20eb3626095f6c89246a4af31f027bab0bf6027500406fff"},
+      "output": {"path": "normalized-retained-export.v1.json", "sha256": "47f8952fed4a56c0d54b760933988817fb0f3725b840236cfc0b612fa91b42e8"}
+    }
+  ],
+  "publication": {
+    "kind": "LOCAL_IMMUTABLE_EVIDENCE",
+    "offline_validatable": true,
+    "deployment_claim": false
+  }
+}
