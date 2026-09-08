@@ -8,6 +8,21 @@ import (
 	"testing"
 )
 
+func TestInspectHelpIncludesHydratedOptions(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := runInspect([]string{"--help"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("help exit = %d, stderr = %q", code, stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("help wrote stdout: %q", stdout.String())
+	}
+	for _, want := range []string{"-hydrated", "-node", "-relation", "-seed"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("help omits %q: %q", want, stderr.String())
+		}
+	}
+}
+
 func TestHydratedCLIRejectsBeforeIO(t *testing.T) {
 	for _, args := range [][]string{
 		{"absent.json", "--hydrated", "--all-seeds"},

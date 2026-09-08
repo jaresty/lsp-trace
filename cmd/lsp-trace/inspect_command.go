@@ -34,16 +34,24 @@ func validateAllSeedAccounting(projection inspectAllProjection) error {
 	return inspection.ValidateAllSeedAccounting(projection)
 }
 
-const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]"
+const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID] [options]"
 
 func runInspect(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 {
-		fmt.Fprintln(stderr, inspectUsage)
-		return 1
-	}
-	input := args[0]
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		fmt.Fprintln(stderr, inspectUsage)
+		fs.PrintDefaults()
+	}
+	if len(args) == 0 {
+		fs.Usage()
+		return 1
+	}
+	if args[0] == "-h" || args[0] == "--help" {
+		fs.Usage()
+		return 0
+	}
+	input := args[0]
 	seedLabel := fs.String("seed", "", "existing seed label")
 	allSeeds := fs.Bool("all-seeds", false, "inspect every stored seed")
 	jsonOutput := fs.Bool("json", false, "emit JSON")
