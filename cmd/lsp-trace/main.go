@@ -79,8 +79,8 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
-		if version == "v2" {
-			return runAcquisitionV2(args[0], rest, os.Stdout, os.Stderr)
+		if version == "v2" || version == "v3" {
+			return runAcquisitionVersion(args[0], version, rest, os.Stdout, os.Stderr)
 		}
 		if version == "v1" {
 			args = append([]string{args[0]}, rest...)

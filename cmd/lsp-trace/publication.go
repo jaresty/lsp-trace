@@ -465,6 +465,8 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	case *family == "graph" && (*version == "" || *version == "v3"):
 	case *family == graphprovenance.Family && (*version == "v2" || *version == "lsp-trace.graph-provenance.v2"):
 		admit = admitAcquisitionV2
+	case *family == graphprovenance.Family && (*version == "v3" || *version == graphprovenance.VersionV3):
+		admit = admitAcquisitionV3
 	case *family == graphprovenance.Family && *version == "v1":
 		admit = admitGraphProvenance
 	case *family == "retained-calls" && *version == "v1":

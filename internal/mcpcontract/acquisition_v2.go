@@ -8,6 +8,7 @@ import (
 const AcquisitionV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-acquisition.v2.schema.json"
 const VerifyV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify.v2.schema.json"
 const GraphProvenanceV2ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v2.schema.json"
+const GraphProvenanceV3ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v3.schema.json"
 
 func AcquisitionV2EnvelopeID(id string) string {
 	return strings.Replace(strings.Replace(id, "/envelope-", "/envelope-acquisition-", 1), ".v1.schema.json", ".v2.schema.json", 1)
@@ -31,6 +32,23 @@ func WithAcquisitionV2(m *Manifest) *Manifest {
 	}
 	copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: VerifyV2InputID, Family: "input-verify.v2", Layer: "input", Path: "schemas/input-verify.v2.schema.json"})
 	copy.Tools = append(copy.Tools, ToolContract{Name: "lsp_trace_v2_verify", Aliases: []string{}, InputSchemaID: VerifyV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{GraphProvenanceV2ArtifactID}, Advertised: true, Availability: "ENABLED"})
+	return &copy
+}
+
+// WithAcquisitionV3 adds only the current graph-provenance V3 traversal tools,
+// preserving every historical manifest composition and cardinality.
+func WithAcquisitionV3(m *Manifest) *Manifest {
+	copy := *m
+	copy.Schemas = append([]SchemaRegistration{}, m.Schemas...)
+	copy.Tools = append([]ToolContract{}, m.Tools...)
+	copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: GraphProvenanceV3ArtifactID, Family: "lsp-trace.graph-provenance.v3", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.graph-provenance.v3.schema.json"})
+	envelopes := make([]string, 0, 5)
+	for _, kind := range []string{"artifact", "publication", "compact-publication", "publication-error", "domain-error"} {
+		envelopes = append(envelopes, AcquisitionV2EnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-"+kind+".v1.schema.json"))
+	}
+	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
+		copy.Tools = append(copy.Tools, ToolContract{Name: name, Aliases: []string{}, InputSchemaID: AcquisitionV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{GraphProvenanceV3ArtifactID}, Advertised: true, Availability: "ENABLED"})
+	}
 	return &copy
 }
 
@@ -97,7 +115,7 @@ func readContractSchema(name string) ([]byte, error) {
 		s["$id"] = id
 		p := s["properties"].(map[string]any)
 		p["envelope_schema_id"] = map[string]any{"const": id}
-		p["tool"] = map[string]any{"enum": []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming", "lsp_trace_v2_verify"}}
+		p["tool"] = map[string]any{"enum": []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming", "lsp_trace_v2_verify", "lsp_trace_v3_slice", "lsp_trace_v3_incoming"}}
 		return json.Marshal(s)
 	}
 	return contractFiles.ReadFile(name)

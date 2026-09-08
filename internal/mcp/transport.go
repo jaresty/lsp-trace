@@ -626,6 +626,10 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("slice_v2")
 	case "lsp_trace_v2_incoming":
 		return operation.Name("incoming_v2")
+	case "lsp_trace_v3_slice":
+		return operation.Name("slice_v3")
+	case "lsp_trace_v3_incoming":
+		return operation.Name("incoming_v3")
 	case "lsp_trace_v1_incoming":
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":

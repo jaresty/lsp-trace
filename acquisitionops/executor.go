@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/acquisition/sessionclient"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
@@ -24,6 +25,8 @@ import (
 const (
 	Slice           operation.Name = "slice_v2"
 	Incoming        operation.Name = "incoming_v2"
+	SliceV3         operation.Name = "slice_v3"
+	IncomingV3      operation.Name = "incoming_v3"
 	ManifestVersion                = "lsp-trace.seed-manifest.v2"
 	MaxInputBytes                  = 256 << 10
 )
@@ -141,9 +144,9 @@ func val(p *int, fallback int) int {
 func (m Manifest) Request(mode operation.Name) (acquisition.Request, error) {
 	r := acquisition.Request{Context: acquisition.AcquisitionContext{ID: "preflight", SessionID: "preflight", Generation: 1, PositionEncoding: "utf-16"}}
 	switch mode {
-	case Slice:
+	case Slice, SliceV3:
 		r.Mode = acquisition.Slice
-	case Incoming:
+	case Incoming, IncomingV3:
 		r.Mode = acquisition.Incoming
 	default:
 		return r, fmt.Errorf("unsupported acquisition operation %q", mode)
@@ -178,7 +181,7 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	fail := func(code string, err error) (operation.Result, *operation.Failure) {
 		return operation.Result{}, &operation.Failure{Code: code, Err: err}
 	}
-	if op.Name != Slice && op.Name != Incoming {
+	if op.Name != Slice && op.Name != Incoming && op.Name != SliceV3 && op.Name != IncomingV3 {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var in Input
@@ -234,6 +237,18 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	raw, err := graphprovenance.CaptureV2(ctx, result, workspace)
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
+	}
+	if op.Name == SliceV3 || op.Name == IncomingV3 {
+		query := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
+		if diagnostics, ok := e.runtime.(interface {
+			Diagnostics(string, uint64) manageddiagnostic.QueryResult
+		}); ok {
+			query = diagnostics.Diagnostics(id, generation)
+		}
+		raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
+		if err != nil {
+			return fail("OUTPUT_VALIDATION_FAILED", err)
+		}
 	}
 	return operation.Result{Artifact: raw}, nil
 }

@@ -91,7 +91,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))
+	manifest = mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest)))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
@@ -110,6 +110,8 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_execute":                   "Execute one canonical request through the shared transport-neutral operation",
 		"lsp_trace_v2_slice":                     "Acquire ordered required targets with shared limits and retained directed witnesses; source implementation, not deployed qualification or analyzed-source authentication",
 		"lsp_trace_v2_incoming":                  "Acquire ordered required callers with shared limits and required-to-root witnesses; source implementation, not deployed qualification or analyzed-source authentication",
+		"lsp_trace_v3_slice":                     "Acquire graph-provenance/v3 with exact embedded V2 bytes and bounded managed diagnostics for one exact session generation",
+		"lsp_trace_v3_incoming":                  "Acquire incoming graph-provenance/v3 with exact embedded V2 bytes and bounded managed diagnostics for one exact session generation",
 		"lsp_trace_v1_incoming":                  "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
 		"lsp_trace_v1_slice":                     "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
 	}
@@ -134,7 +136,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 			executorFamily = IncomingExecutorFamily
 		} else if contract.Name == "lsp_trace_v1_slice" {
 			executorFamily = SliceExecutorFamily
-		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" {
+		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
 		tools = append(tools, Tool{
@@ -170,6 +172,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV3ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)

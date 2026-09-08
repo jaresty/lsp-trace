@@ -60,7 +60,7 @@ func acquisitionVersion(args []string) (string, []string, error) {
 			}
 			version = args[i]
 		}
-		if version != "v1" && version != "v2" {
+		if version != "v1" && version != "v2" && version != "v3" {
 			return "", nil, fmt.Errorf("unsupported acquisition version %q", version)
 		}
 	}
@@ -72,7 +72,16 @@ func admitAcquisitionV2(data []byte) error {
 	return err
 }
 
+func admitAcquisitionV3(data []byte) error {
+	_, err := graphprovenance.ValidateFor(data, graphprovenance.Family, "v3")
+	return err
+}
+
 func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int {
+	return runAcquisitionVersion(mode, "v2", args, stdout, stderr)
+}
+
+func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
 	fs := flag.NewFlagSet(mode+" v2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -101,6 +110,12 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 	op := acquisitionops.Slice
 	if mode == "incoming" {
 		op = acquisitionops.Incoming
+	}
+	if version == "v3" {
+		op = acquisitionops.SliceV3
+		if mode == "incoming" {
+			op = acquisitionops.IncomingV3
+		}
 	}
 	// Bounded regular-file input: no FIFO or unbounded ReadAll, no MCP path analogue.
 	manifestRoot, err := os.OpenRoot(filepath.Dir(manifestPath))
@@ -194,7 +209,11 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 		data = append(pretty.Bytes(), '\n')
 	}
 	if c.output != "" {
-		err = publishValidatedBundle(c.output, data, admitAcquisitionV2)
+		admit := admitAcquisitionV2
+		if version == "v3" {
+			admit = admitAcquisitionV3
+		}
+		err = publishValidatedBundle(c.output, data, admit)
 	} else {
 		_, err = stdout.Write(data)
 	}

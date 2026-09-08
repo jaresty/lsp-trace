@@ -235,6 +235,9 @@ func ValidateFor(data []byte, family, version string) (string, error) {
 	if version == "v2" || version == VersionV2 {
 		return validateForV2(data)
 	}
+	if version == "v3" || version == VersionV3 {
+		return validateForV3(data)
+	}
 	if len(data) > MaxEnvelopeBytes {
 		return "", errors.New("provenance envelope byte limit")
 	}
