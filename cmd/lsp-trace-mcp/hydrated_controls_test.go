@@ -140,6 +140,7 @@ func TestHydratedPublicControls(t *testing.T) {
 		{"input": string(raw), "include_bodies": 1}, {"input": string(raw), "include_bodies": nil},
 		{"input": string(raw), "core_policy": map[string]any{"max_work": json.Number("9007199254740993")}},
 		{"input": string(raw), "core_policy": map[string]any{"max_work": json.Number("1.5")}},
+		{"input": string(raw), "core_policy": map[string]any{"max_work": json.Number("1.00000000000000001")}},
 		{"input": string(raw), "output_selector": "never-published.json"},
 		{"input": map[string]any{}}, {"input": string(raw), "position_encoding": "guess"},
 	}

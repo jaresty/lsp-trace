@@ -46,8 +46,29 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	seedLabel := fs.String("seed", "", "existing seed label")
 	allSeeds := fs.Bool("all-seeds", false, "inspect every stored seed")
-	_ = fs.Bool("json", false, "emit JSON (currently the only format)")
+	jsonOutput := fs.Bool("json", false, "emit JSON")
+	hydrated := addHydratedFlags(fs)
 	if err := fs.Parse(args[1:]); err != nil {
+		return 1
+	}
+	legacyVisited, hydratedVisited := false, false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "seed" || f.Name == "all-seeds" {
+			legacyVisited = true
+		}
+		if hydratedFlag(f.Name) {
+			hydratedVisited = true
+		}
+	})
+	if hydrated.enabled {
+		if legacyVisited || fs.NArg() != 0 {
+			fmt.Fprintln(stderr, "inspect: INVALID_INPUT: hydrated and legacy selectors are incompatible")
+			return 1
+		}
+		return runInspectHydrated(input, hydrated, *jsonOutput, stdout, stderr)
+	}
+	if hydratedVisited {
+		fmt.Fprintln(stderr, "inspect: INVALID_INPUT: focused options require --hydrated")
 		return 1
 	}
 	if (*seedLabel == "") == !*allSeeds || fs.NArg() != 0 {

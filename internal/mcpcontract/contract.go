@@ -150,14 +150,14 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithRetainedCalls(manifest).Schemas {
+	for _, registration := range WithHydratedInspection(WithRetainedCalls(manifest)).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
 		if strings.HasPrefix(registration.Path, "../") {
 			return nil, fmt.Errorf("external schema %q has no embedded contract document", schemaID)
 		}
-		raw, err := readContractSchema(path.Join("testdata", registration.Path))
+		raw, err := readPublicContractSchema(path.Join("testdata", registration.Path))
 		if err != nil {
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(WithRetainedCalls(manifest), schemaID)
+	compiled, err := compileSchema(WithHydratedInspection(WithRetainedCalls(manifest)), schemaID)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
-	manifest = WithRetainedCalls(manifest)
+	manifest = WithHydratedInspection(WithRetainedCalls(manifest))
 	// Load the immutable resource set once, not once per envelope. Every
 	// envelope is still compiled and checked for exhaustive exclusivity.
 	compiler, _, err := registeredCompiler(manifest)
@@ -281,7 +281,7 @@ func registeredCompiler(manifest *Manifest) (*jsonschema.Compiler, map[string]bo
 		if registration.Path[:min(len(registration.Path), 3)] == "../" {
 			continue
 		}
-		raw, err := readContractSchema(path.Join("testdata", registration.Path))
+		raw, err := readPublicContractSchema(path.Join("testdata", registration.Path))
 		if err != nil {
 			return nil, nil, err
 		}

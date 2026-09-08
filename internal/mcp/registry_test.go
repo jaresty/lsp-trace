@@ -97,7 +97,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	const assertion = "ASSERT_ALWAYS_LOCAL_THIRTEEN_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 20 {
+	if got := len(r.Advertised()); got != 21 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -171,7 +171,7 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 		}
 	}
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 20 {
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 21 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
 	}
 }
@@ -222,10 +222,10 @@ func TestRegistryContract(t *testing.T) {
 
 	for _, enabledFlag := range []bool{false, true} {
 		r := NewRegistry(enabledFlag)
-		if got := len(r.Tools()); got != 20 {
+		if got := len(r.Tools()); got != 21 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 20 {
+		if got := len(r.Advertised()); got != 21 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/boundedanalysis"
+	"lsp-trace/internal/hydratedinspection"
 	"lsp-trace/internal/operation"
 )
 
@@ -28,6 +29,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.Verify:                  "lsp_trace_v1_verify",
 		operation.VerifyV2:                "lsp_trace_v2_verify",
 		operation.Inspect:                 "lsp_trace_v1_inspect",
+		operation.InspectHydrated:         HydratedTool,
 		operation.Filter:                  "lsp_trace_v1_filter",
 		operation.CustodyExecute:          "lsp_trace_v1_execute",
 		operation.ExportRetainedCalls:     "lsp_trace_v1_export_retained_calls",
@@ -37,7 +39,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range WithRetainedCalls(manifest).Tools {
+		for _, tool := range WithHydratedInspection(WithRetainedCalls(manifest)).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break
@@ -55,6 +57,9 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 func (v *OperationInputValidator) ValidateOperationInput(name operation.Name, input json.RawMessage) error {
 	if v == nil {
 		return fmt.Errorf("operation input validator is nil")
+	}
+	if name == operation.InspectHydrated {
+		return hydratedinspection.ValidateInputJSON(input)
 	}
 	bounded := name == operation.BoundedRetainedAnalysis || name == operation.BoundedRetainedMetrics || name == operation.BoundedRetainedRanking
 	if name == operation.Validate {

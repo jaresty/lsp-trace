@@ -230,6 +230,7 @@ func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.Con
 	if err != nil {
 		return nil, nil, err
 	}
+	handlers[operation.InspectHydrated] = operation.InspectHydratedHandler
 	handlers[operation.VerifyV2] = operation.NewVerifyV2Handler(commandCustodyLoader{})
 	handlers[operation.ExportRetainedCalls] = operation.ExportRetainedCallsHandler
 	handlers[operation.BoundedRetainedAnalysis] = operation.BoundedRetainedAnalysisHandler

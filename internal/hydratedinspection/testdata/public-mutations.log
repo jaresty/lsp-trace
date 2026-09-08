@@ -1,0 +1,186 @@
+MUTATION closed COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-gxyw64lg/overlay.json ./internal/hydratedinspection -run ^TestPublicClosedPreflight$ -count=1 -v
+=== RUN   TestPublicClosedPreflight
+    inspection_test.go:240: PUBLIC_CLOSED_PREFLIGHT FAIL: {"input":"{}","node_ids":null}
+--- FAIL: TestPublicClosedPreflight (0.00s)
+FAIL
+FAIL	lsp-trace/internal/hydratedinspection	0.324s
+FAIL
+
+REJECTED SMALLER ARTIFACT: closed PUBLIC_CLOSED_PREFLIGHT FAIL
+RESTORED closed COMMAND go test -p 1 ./internal/hydratedinspection -run ^TestPublicClosedPreflight$ -count=1 -v
+=== RUN   TestPublicClosedPreflight
+    inspection_test.go:267: PUBLIC_CLOSED_PREFLIGHT PASS; PUBLIC_CLOSED_OUTPUT PASS
+--- PASS: TestPublicClosedPreflight (0.19s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	0.459s
+
+MUTATION privacy COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-nvwge5s8/overlay.json ./internal/hydratedinspection -run ^TestPublicPrivacyAndNativeText$ -count=1 -v
+=== RUN   TestPublicPrivacyAndNativeText
+    inspection_test.go:51: PUBLIC_PRIVACY FAIL
+--- FAIL: TestPublicPrivacyAndNativeText (0.19s)
+FAIL
+FAIL	lsp-trace/internal/hydratedinspection	0.437s
+FAIL
+
+REJECTED SMALLER ARTIFACT: privacy PUBLIC_PRIVACY FAIL
+RESTORED privacy COMMAND go test -p 1 ./internal/hydratedinspection -run ^TestPublicPrivacyAndNativeText$ -count=1 -v
+=== RUN   TestPublicPrivacyAndNativeText
+    inspection_test.go:91: PUBLIC_CORE_TEXT PASS core=6032 focused=5480 catalog=5 origins=3 spans=3
+    inspection_test.go:118: PUBLIC_PRIVACY PASS; PUBLIC_MANIFEST_ONLY PASS; PUBLIC_WHOLE_FILE PASS; PUBLIC_ENDPOINT_OPTIN PASS
+--- PASS: TestPublicPrivacyAndNativeText (1.42s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	1.585s
+
+MUTATION producer COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-xc4uf7qf/overlay.json ./internal/hydratedinspection -run ^TestPublicProducerValidation$ -count=1 -v
+=== RUN   TestPublicProducerValidation
+=== RUN   TestPublicProducerValidation/error
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: error
+=== RUN   TestPublicProducerValidation/manifest
+    producer_test.go:31: PUBLIC_PRODUCER_VALIDATION FAIL: manifest
+=== RUN   TestPublicProducerValidation/core
+    producer_test.go:31: PUBLIC_PRODUCER_VALIDATION FAIL: core
+--- FAIL: TestPublicProducerValidation (0.22s)
+    --- PASS: TestPublicProducerValidation/error (0.08s)
+    --- FAIL: TestPublicProducerValidation/manifest (0.07s)
+    --- FAIL: TestPublicProducerValidation/core (0.07s)
+FAIL
+FAIL	lsp-trace/internal/hydratedinspection	0.451s
+FAIL
+
+REJECTED SMALLER ARTIFACT: producer PUBLIC_PRODUCER_VALIDATION FAIL
+RESTORED producer COMMAND go test -p 1 ./internal/hydratedinspection -run ^TestPublicProducerValidation$ -count=1 -v
+=== RUN   TestPublicProducerValidation
+=== RUN   TestPublicProducerValidation/error
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: error
+=== RUN   TestPublicProducerValidation/manifest
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: manifest
+=== RUN   TestPublicProducerValidation/core
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: core
+--- PASS: TestPublicProducerValidation (0.35s)
+    --- PASS: TestPublicProducerValidation/error (0.08s)
+    --- PASS: TestPublicProducerValidation/manifest (0.10s)
+    --- PASS: TestPublicProducerValidation/core (0.17s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	0.512s
+
+MUTATION cursor COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-xdwfzd7t/overlay.json ./internal/hydratedinspection -run ^TestPublicPagingAndValidation$ -count=1 -v
+=== RUN   TestPublicPagingAndValidation
+    inspection_test.go:213: PUBLIC_CURSOR_BINDING FAIL: unknown
+--- FAIL: TestPublicPagingAndValidation (1.54s)
+FAIL
+FAIL	lsp-trace/internal/hydratedinspection	1.790s
+FAIL
+
+REJECTED SMALLER ARTIFACT: cursor PUBLIC_CURSOR_BINDING FAIL
+RESTORED cursor COMMAND go test -p 1 ./internal/hydratedinspection -run ^TestPublicPagingAndValidation$ -count=1 -v
+=== RUN   TestPublicPagingAndValidation
+    inspection_test.go:234: PUBLIC_PAGING PASS pages=3; PUBLIC_CURSOR_BINDING PASS; PUBLIC_PAGE_JOIN PASS; PUBLIC_PAGE_MANIFEST PASS; PUBLIC_FULL_VALIDATION PASS
+--- PASS: TestPublicPagingAndValidation (3.62s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	3.792s
+
+MUTATION text COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-yy4sxjct/overlay.json ./internal/hydratedinspection -run ^TestPublicPrivacyAndNativeText$ -count=1 -v
+=== RUN   TestPublicPrivacyAndNativeText
+    inspection_test.go:88: PUBLIC_CORE_TEXT FAIL: unrelated bookkeeping
+--- FAIL: TestPublicPrivacyAndNativeText (0.69s)
+FAIL
+FAIL	lsp-trace/internal/hydratedinspection	0.940s
+FAIL
+
+REJECTED SMALLER ARTIFACT: text PUBLIC_CORE_TEXT FAIL
+RESTORED text COMMAND go test -p 1 ./internal/hydratedinspection -run ^TestPublicPrivacyAndNativeText$ -count=1 -v
+=== RUN   TestPublicPrivacyAndNativeText
+    inspection_test.go:91: PUBLIC_CORE_TEXT PASS core=6032 focused=5480 catalog=5 origins=3 spans=3
+    inspection_test.go:118: PUBLIC_PRIVACY PASS; PUBLIC_MANIFEST_ONLY PASS; PUBLIC_WHOLE_FILE PASS; PUBLIC_ENDPOINT_OPTIN PASS
+--- PASS: TestPublicPrivacyAndNativeText (1.41s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	1.570s
+
+MUTATION ownership COMMAND go test -p 1 -overlay /private/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-aba54ff5-7801-498-a1c9e289/public-hydration-mutation-m0kutll3/overlay.json ./internal/integratedconformance -run ^TestFR20FR21OwnershipRegistration$ -count=1 -v
+=== RUN   TestFR20FR21OwnershipRegistration
+=== RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
+    fr20_fr21_ownership_test.go:48: ASSERT_FR20_FR21_REGISTERED: unowned path "focused-final-tests.log"
+=== RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-red.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-hydration.claim.md
+=== RUN   TestFR20FR21OwnershipRegistration/focused-vet.log
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json
+=== RUN   TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md
+=== RUN   TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json
+--- FAIL: TestFR20FR21OwnershipRegistration (0.00s)
+    --- FAIL: TestFR20FR21OwnershipRegistration/focused-final-tests.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-mutation.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-red.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-hydration.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-vet.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json (0.00s)
+FAIL
+FAIL	lsp-trace/internal/integratedconformance	0.261s
+FAIL
+
+REJECTED SMALLER ARTIFACT: ownership unowned path "focused-final-tests.log"
+RESTORED ownership COMMAND go test -p 1 ./internal/integratedconformance -run ^TestFR20FR21OwnershipRegistration$ -count=1 -v
+=== RUN   TestFR20FR21OwnershipRegistration
+=== RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-red.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-hydration.claim.md
+=== RUN   TestFR20FR21OwnershipRegistration/focused-vet.log
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json
+=== RUN   TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md
+=== RUN   TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json
+--- PASS: TestFR20FR21OwnershipRegistration (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-final-tests.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-mutation.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-red.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-hydration.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-vet.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json (0.00s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.259s
+
+MUTATION WITNESSES PASS: six reductions rejected and restored guards passed

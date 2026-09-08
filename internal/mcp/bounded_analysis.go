@@ -25,6 +25,9 @@ func preflightBoundedWire(raw []byte) error {
 		return nil
 	}
 	name := header.Params.Name
+	if name == "lsp_trace_v1_inspect_hydrated" {
+		return boundedanalysis.Preflight(raw, 4*1024*1024)
+	}
 	if name == "lsp_trace_v2_slice" || name == "lsp_trace_v2_incoming" || name == "lsp_trace_v2_verify" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == "graph-provenance" && (header.Params.Arguments.Schema.Version == "v2" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v2")) {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
@@ -49,6 +52,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 		return false, nil
 	}
 	selected := header.Name == "lsp_trace_v2_slice" || header.Name == "lsp_trace_v2_incoming" || header.Name == "lsp_trace_v2_verify" || header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
+	selected = selected || header.Name == "lsp_trace_v1_inspect_hydrated"
 	selected = selected || header.Name == "lsp_trace_v1_bounded_retained_ranking" || header.Name == "lsp_trace_bounded_retained_ranking"
 	if header.Name == "lsp_trace_v1_validate" || header.Name == "lsp_trace_validate" {
 		var h struct {
@@ -79,7 +83,7 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 	dst.Name = header.Name
 	dst.Arguments = map[string]any{}
 	for k, v := range values {
-		if k == "input" && len(bytes.TrimSpace(v)) > 0 && bytes.TrimSpace(v)[0] == '{' {
+		if header.Name != "lsp_trace_v1_inspect_hydrated" && k == "input" && len(bytes.TrimSpace(v)) > 0 && bytes.TrimSpace(v)[0] == '{' {
 			dst.Arguments[k] = string(v)
 			continue
 		}

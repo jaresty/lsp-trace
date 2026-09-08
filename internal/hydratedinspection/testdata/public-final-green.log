@@ -1,0 +1,247 @@
+=== RUN   TestPublicPrivacyAndNativeText
+    inspection_test.go:91: PUBLIC_CORE_TEXT PASS core=6032 focused=5480 catalog=5 origins=3 spans=3
+    inspection_test.go:118: PUBLIC_PRIVACY PASS; PUBLIC_MANIFEST_ONLY PASS; PUBLIC_WHOLE_FILE PASS; PUBLIC_ENDPOINT_OPTIN PASS
+--- PASS: TestPublicPrivacyAndNativeText (1.52s)
+=== RUN   TestPublicSidecarPrivacyAuthority
+    inspection_test.go:159: PUBLIC_SIDECAR_PRIVACY PASS; PUBLIC_SIDECAR_AUTHORITY PASS
+--- PASS: TestPublicSidecarPrivacyAuthority (0.90s)
+=== RUN   TestPublicPagingAndValidation
+    inspection_test.go:234: PUBLIC_PAGING PASS pages=3; PUBLIC_CURSOR_BINDING PASS; PUBLIC_PAGE_JOIN PASS; PUBLIC_PAGE_MANIFEST PASS; PUBLIC_FULL_VALIDATION PASS
+--- PASS: TestPublicPagingAndValidation (3.90s)
+=== RUN   TestPublicClosedPreflight
+    inspection_test.go:267: PUBLIC_CLOSED_PREFLIGHT PASS; PUBLIC_CLOSED_OUTPUT PASS
+--- PASS: TestPublicClosedPreflight (0.19s)
+=== RUN   TestPublicProducerValidation
+=== RUN   TestPublicProducerValidation/error
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: error
+=== RUN   TestPublicProducerValidation/manifest
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: manifest
+=== RUN   TestPublicProducerValidation/core
+    producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: core
+--- PASS: TestPublicProducerValidation (0.37s)
+    --- PASS: TestPublicProducerValidation/error (0.07s)
+    --- PASS: TestPublicProducerValidation/manifest (0.11s)
+    --- PASS: TestPublicProducerValidation/core (0.19s)
+=== RUN   TestPublicV1ZeroSiteAndLegacyParity
+    v1_test.go:104: PUBLIC_V1_ZERO_SITE PASS: zero-site manifest remains visible while Bundle.Complete=true; separately derived V1 fixture, no acquisition
+--- PASS: TestPublicV1ZeroSiteAndLegacyParity (0.07s)
+PASS
+ok  	lsp-trace/internal/hydratedinspection	7.248s
+=== RUN   TestPublicationPropagatesDirectoryDurabilityFailures
+=== RUN   TestPublicationPropagatesDirectoryDurabilityFailures/destination_directory_open
+=== RUN   TestPublicationPropagatesDirectoryDurabilityFailures/generation_directory_open
+=== RUN   TestPublicationPropagatesDirectoryDurabilityFailures/generation_directory_sync
+=== RUN   TestPublicationPropagatesDirectoryDurabilityFailures/destination_directory_sync
+--- PASS: TestPublicationPropagatesDirectoryDurabilityFailures (0.04s)
+    --- PASS: TestPublicationPropagatesDirectoryDurabilityFailures/destination_directory_open (0.00s)
+    --- PASS: TestPublicationPropagatesDirectoryDurabilityFailures/generation_directory_open (0.00s)
+    --- PASS: TestPublicationPropagatesDirectoryDurabilityFailures/generation_directory_sync (0.02s)
+    --- PASS: TestPublicationPropagatesDirectoryDurabilityFailures/destination_directory_sync (0.02s)
+=== RUN   TestPublicationAllowsUnavailableDirectoryDurabilityWithAtomicNoReplace
+--- PASS: TestPublicationAllowsUnavailableDirectoryDurabilityWithAtomicNoReplace (0.01s)
+=== RUN   TestPublicationFailureRecordPropagatesDirectorySyncFailure
+--- PASS: TestPublicationFailureRecordPropagatesDirectorySyncFailure (0.00s)
+=== RUN   TestInspectSeedProjectsSameReadOnlyEvidenceFromArtifactAndSelector
+--- PASS: TestInspectSeedProjectsSameReadOnlyEvidenceFromArtifactAndSelector (0.02s)
+=== RUN   TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly
+--- PASS: TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly (0.02s)
+=== RUN   TestInspectProjectsFailedSeedWithoutFabricatingMembership
+--- PASS: TestInspectProjectsFailedSeedWithoutFabricatingMembership (0.02s)
+=== RUN   TestInspectCLICompatibilityModesAndUsage
+=== RUN   TestInspectCLICompatibilityModesAndUsage/legacy_seed_mode_remains_accepted
+=== RUN   TestInspectCLICompatibilityModesAndUsage/all-seeds_projects_copied_records_and_normalized_references
+=== RUN   TestInspectCLICompatibilityModesAndUsage/mode_required
+=== RUN   TestInspectCLICompatibilityModesAndUsage/modes_exclusive
+--- PASS: TestInspectCLICompatibilityModesAndUsage (0.02s)
+    --- PASS: TestInspectCLICompatibilityModesAndUsage/legacy_seed_mode_remains_accepted (0.00s)
+    --- PASS: TestInspectCLICompatibilityModesAndUsage/all-seeds_projects_copied_records_and_normalized_references (0.00s)
+    --- PASS: TestInspectCLICompatibilityModesAndUsage/mode_required (0.00s)
+    --- PASS: TestInspectCLICompatibilityModesAndUsage/modes_exclusive (0.00s)
+=== RUN   TestInspectRejectsUnknownSeedAndTamperedSelector
+--- PASS: TestInspectRejectsUnknownSeedAndTamperedSelector (0.02s)
+=== RUN   TestHydratedCLIRejectsBeforeIO
+    inspect_hydrated_test.go:30: PUBLIC_CLI_PREFLIGHT PASS
+--- PASS: TestHydratedCLIRejectsBeforeIO (0.00s)
+=== RUN   TestHydratedCLIExplicitInputSafety
+    inspect_hydrated_test.go:56: PUBLIC_CLI_INPUT_SAFETY PASS
+--- PASS: TestHydratedCLIExplicitInputSafety (0.00s)
+=== RUN   TestHydratedCLIFIFO
+    inspect_hydrated_unix_test.go:31: PUBLIC_FIFO PASS
+--- PASS: TestHydratedCLIFIFO (0.00s)
+PASS
+ok  	lsp-trace/cmd/lsp-trace	0.398s
+=== RUN   TestHydratedPublicControls
+=== RUN   TestHydratedPublicControls/private
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: private
+=== RUN   TestHydratedPublicControls/ranges
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: ranges
+=== RUN   TestHydratedPublicControls/whole
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: whole
+=== RUN   TestHydratedPublicControls/endpoints
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: endpoints
+=== RUN   TestHydratedPublicControls/sidecar
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: sidecar
+=== RUN   TestHydratedPublicControls/page
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: page
+=== NAME  TestHydratedPublicControls
+    hydrated_controls_test.go:155: PUBLIC_MCP_PREFLIGHT PASS; PUBLIC_OFFLINE_SOURCE_ABSENT PASS
+--- PASS: TestHydratedPublicControls (5.10s)
+    --- PASS: TestHydratedPublicControls/private (1.00s)
+    --- PASS: TestHydratedPublicControls/ranges (0.52s)
+    --- PASS: TestHydratedPublicControls/whole (0.51s)
+    --- PASS: TestHydratedPublicControls/endpoints (0.52s)
+    --- PASS: TestHydratedPublicControls/sidecar (0.60s)
+    --- PASS: TestHydratedPublicControls/page (1.34s)
+=== RUN   TestHydratedPublicOffline
+=== RUN   TestHydratedPublicOffline/CLI
+    hydrated_public_test.go:34: ASSERTION: PUBLIC_CLI_VALIDATED_FOCUS
+    hydrated_public_test.go:43: PUBLIC_CLI_VALIDATED_FOCUS PASS
+=== RUN   TestHydratedPublicOffline/MCP
+    hydrated_public_test.go:46: ASSERTION: PUBLIC_MCP_VALIDATED_FOCUS
+    hydrated_public_test.go:70: PUBLIC_MCP_VALIDATED_FOCUS PASS
+--- PASS: TestHydratedPublicOffline (1.34s)
+    --- PASS: TestHydratedPublicOffline/CLI (0.48s)
+    --- PASS: TestHydratedPublicOffline/MCP (0.49s)
+PASS
+ok  	lsp-trace/cmd/lsp-trace-mcp	6.699s
+=== RUN   TestRegistrySnapshotsAreImmutable
+    registry_test.go:10: ASSERTION: registry snapshots cannot mutate canonical aliases schemas or availability
+--- PASS: TestRegistrySnapshotsAreImmutable (0.00s)
+=== RUN   TestComputedRoutingIsFrozenAndAliasesStayHidden
+    registry_test.go:43: ASSERTION: routing metadata is computed once while canonical and alias resolution stays unambiguous and aliases stay hidden
+--- PASS: TestComputedRoutingIsFrozenAndAliasesStayHidden (0.00s)
+=== RUN   TestRegistryRejectsAmbiguousNames
+    registry_test.go:82: ASSERTION: canonical and alias collisions are rejected during construction
+--- PASS: TestRegistryRejectsAmbiguousNames (0.00s)
+=== RUN   TestCanonicalDescriptionsRouteUserIntent
+    registry_test.go:181: ASSERTION: ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS
+--- PASS: TestCanonicalDescriptionsRouteUserIntent (0.00s)
+=== RUN   TestRegistryContract
+    registry_test.go:219: ASSERTION: registry has fifteen entries including separate retained CALLS export and bounded analysis
+    registry_test.go:220: ASSERTION: each exact alias resolves to its canonical identity and aliases are not advertised
+    registry_test.go:221: ASSERTION: unknown and unsupported versioned names are not recognized
+--- PASS: TestRegistryContract (0.01s)
+PASS
+ok  	lsp-trace/internal/mcp	0.246s
+=== RUN   TestHydratedContractAdditive
+    inspect_hydrated_test.go:35: PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 runtime=21; no publication schema
+--- PASS: TestHydratedContractAdditive (0.01s)
+PASS
+ok  	lsp-trace/internal/mcpcontract	0.212s
+=== RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults
+=== RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults/seed
+=== RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults/all
+--- PASS: TestInspectHandlerPreservesSeedAndAllSeedCoreResults (0.00s)
+    --- PASS: TestInspectHandlerPreservesSeedAndAllSeedCoreResults/seed (0.00s)
+    --- PASS: TestInspectHandlerPreservesSeedAndAllSeedCoreResults/all (0.00s)
+=== RUN   TestInspectHandlerPreservesErrorAndAuthority
+--- PASS: TestInspectHandlerPreservesErrorAndAuthority (0.00s)
+=== RUN   TestInspectHandlerDeterministicConcurrentBytes
+--- PASS: TestInspectHandlerDeterministicConcurrentBytes (0.01s)
+=== RUN   TestHydratedOperationPreflight
+    inspect_hydrated_test.go:32: PUBLIC_OPERATION_PREFLIGHT PASS: structural failure before shared semantic dispatch
+--- PASS: TestHydratedOperationPreflight (0.00s)
+PASS
+ok  	lsp-trace/internal/operation	0.242s
+=== RUN   TestFR20FR21OwnershipRegistration
+=== RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-red.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-hydration.claim.md
+=== RUN   TestFR20FR21OwnershipRegistration/focused-vet.log
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json
+=== RUN   TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md
+=== RUN   TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json
+--- PASS: TestFR20FR21OwnershipRegistration (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-final-tests.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-mutation.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-red.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-hydration.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-vet.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json (0.00s)
+=== RUN   TestFR20FR21OwnershipRejectsUnowned
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/focused-other.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json
+--- PASS: TestFR20FR21OwnershipRejectsUnowned (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/focused-other.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json (0.00s)
+=== RUN   TestDisabledIntegratedConformance
+=== RUN   TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY
+    harness_test.go:643: PASS ASSERT_PACKAGE_OWNERSHIP_ONLY
+--- PASS: TestDisabledIntegratedConformance (0.11s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.02s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.334s
+=== RUN   TestFocusedTypedJoin
+--- PASS: TestFocusedTypedJoin (0.07s)
+=== RUN   TestFocusedUnknownDuplicate
+--- PASS: TestFocusedUnknownDuplicate (0.07s)
+=== RUN   TestFocusedCatalogNonSource
+--- PASS: TestFocusedCatalogNonSource (0.14s)
+=== RUN   TestFocusedPrivacyRangesVersions
+--- PASS: TestFocusedPrivacyRangesVersions (0.33s)
+=== RUN   TestFocusedEndpointPolicy
+--- PASS: TestFocusedEndpointPolicy (0.07s)
+=== RUN   TestFocusedTampering
+=== RUN   TestFocusedTampering/drop-requested
+=== RUN   TestFocusedTampering/drop-callsite
+=== RUN   TestFocusedTampering/authority
+=== RUN   TestFocusedTampering/resolved-unknown
+=== RUN   TestFocusedTampering/input
+=== RUN   TestFocusedTampering/policy
+--- PASS: TestFocusedTampering (0.74s)
+    --- PASS: TestFocusedTampering/drop-requested (0.11s)
+    --- PASS: TestFocusedTampering/drop-callsite (0.11s)
+    --- PASS: TestFocusedTampering/authority (0.18s)
+    --- PASS: TestFocusedTampering/resolved-unknown (0.11s)
+    --- PASS: TestFocusedTampering/input (0.11s)
+    --- PASS: TestFocusedTampering/policy (0.11s)
+=== RUN   TestFocusedSidecarStates
+--- PASS: TestFocusedSidecarStates (0.19s)
+=== RUN   TestFocusedActualFR20Measurement
+    focused_test.go:304: MEASURE actual-fr20 sha256=8913b3d062312be15531728f801e2f677f4a65852fd5fbeaf4ef1007ae1f83cf selected_core_text_utf8_bytes=6032 all_catalog_core_text_utf8_bytes=249648 focused_json_bytes=13582 unique_selected_content_bytes=1 unique_retained_source_bytes=9 catalog_sources=5 catalog_records=272 selected_origins=3
+--- PASS: TestFocusedActualFR20Measurement (0.37s)
+PASS
+ok  	lsp-trace/internal/hydratedevidence	2.223s

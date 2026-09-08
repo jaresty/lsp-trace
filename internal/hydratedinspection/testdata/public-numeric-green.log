@@ -1,0 +1,24 @@
+=== RUN   TestHydratedPublicControls
+=== RUN   TestHydratedPublicControls/private
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: private
+=== RUN   TestHydratedPublicControls/ranges
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: ranges
+=== RUN   TestHydratedPublicControls/whole
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: whole
+=== RUN   TestHydratedPublicControls/endpoints
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: endpoints
+=== RUN   TestHydratedPublicControls/sidecar
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: sidecar
+=== RUN   TestHydratedPublicControls/page
+    hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: page
+=== NAME  TestHydratedPublicControls
+    hydrated_controls_test.go:156: PUBLIC_MCP_PREFLIGHT PASS; PUBLIC_OFFLINE_SOURCE_ABSENT PASS
+--- PASS: TestHydratedPublicControls (4.83s)
+    --- PASS: TestHydratedPublicControls/private (0.85s)
+    --- PASS: TestHydratedPublicControls/ranges (0.51s)
+    --- PASS: TestHydratedPublicControls/whole (0.52s)
+    --- PASS: TestHydratedPublicControls/endpoints (0.53s)
+    --- PASS: TestHydratedPublicControls/sidecar (0.60s)
+    --- PASS: TestHydratedPublicControls/page (1.35s)
+PASS
+ok  	lsp-trace/cmd/lsp-trace-mcp	5.137s

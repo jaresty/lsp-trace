@@ -1,7 +1,10 @@
-# Internal bounded hydrated evidence core
+# Bounded focused hydrated evidence
 
-**Internal-only FR21 increment. Not a public CLI/MCP feature, registry entry,
-publication service, provider installation, or deployment claim.**
+**Public offline focused inspection over the internal FR21 core. No acquisition,
+publication service, provider installation, deployment, or full FR21 qualification.**
+
+The core contract and earlier checkpoint below remain documented separately from
+its new [public wrapper](#public-focused-inspection).
 
 `internal/hydratedevidence` packages explicitly selected retained source context.
 It does not acquire source, infer semantic relevance, discover containing
@@ -242,10 +245,9 @@ integrated-conformance dirty-change guard; unrelated paths remain rejected.
 from the local wire fixture (and installed gopls positional fixture when available)
 to this core, deletes the checkout, and checks exact shared native/caller-sidecar
 bodies, omissions, authority separation and complete paged replay. This is a
-bounded integration proof, not public hydration. Public schema/operation
-registration, CLI/MCP selectors, body opt-in, publication and capability discovery
-remain deferred. Public parity, publication custody, real-provider boundary
-support and deployed availability are **not qualified by this proof**.
+bounded core integration proof, not public hydration qualification. The later
+public wrapper has separate offline tests below. Publication custody, real-provider
+boundary support and deployed availability are **not qualified by either proof**.
 
 ## Internal focused-selection checkpoint
 
@@ -308,9 +310,11 @@ selected with empty source IDs and not reported as missing-source warnings.
 The **full** catalog remains available through `Inspect`, and the **full source
 catalog remains in the core bundle** because core semantic validation requires
 it. It is a validation dependency, not an instruction to capture/render every
-source. The manifest determines focused selection; a future public renderer can
-project it without trimming the validated bundle. Existing core `Text` still
-prints the complete source catalog and only the selected origins/spans.
+source. The manifest determines focused selection; the public renderer projects
+it without trimming the validated bundle. Existing core `Text` still prints the
+complete source catalog and only the selected origins/spans. `FocusedText` first
+validates the focus result, prepends safely quoted manifest dispositions, and uses
+the same core text renderer restricted to sources referenced by selected origins.
 
 The manifest digest binds exact input digests, exact focus-request/policy digest,
 declared policies, ordered requested occurrences and all site/origin mappings.
@@ -344,4 +348,146 @@ selected span-content bytes and distinct full retained source-content bytes
 (SHA-256 deduplication for measurement only, not receipt identity merging).
 These are this pinned fixture's measurements, not the unprovided D01 trial, not
 public renderer measurements, and not a universal reduction ratio. D01 replay,
-CLI/MCP parity, deployment and full FR21 acceptance remain deferred.
+deployment and full FR21 acceptance remain deferred. Public wrapper parity is
+separately tested on these pinned bytes; it does not qualify a named gopls run.
+
+## Public focused inspection
+
+### CLI
+
+```sh
+# Human view; no source bodies by default. Repeat exact native selectors.
+lsp-trace inspect retained.json --hydrated --node NODE_ID --relation RELATION_ID
+
+# The original pinned FR20 two-relation replay, with retained-range bodies:
+lsp-trace inspect internal/hydratedevidence/testdata/focused-fr20.v2.json \
+  --hydrated --include-bodies --json \
+  --relation sha256:e16c80b01aa9de78ff896b411d93746a6bfa749c1a80bc7b1c3bd251df81fa4b \
+  --relation sha256:42df1c10ff307e342f79d0a3d3f28cf115a501f6274619801c612e8705bef707
+
+# Asserted records have a distinct selector, never a native ID shortcut.
+lsp-trace inspect retained.json --hydrated --sidecar asserted.json \
+  --sidecar-record 'sidecar:sha256:EXACT_SIDECAR_DIGEST:RECORD_ID' --json
+
+# First page: explicit, not a full bundle. Repeat the same files/options for continuation.
+lsp-trace inspect retained.json --hydrated --relation RELATION_ID \
+  --include-bodies --json --page --max-page-bytes 4096
+lsp-trace inspect retained.json --hydrated --relation RELATION_ID \
+  --include-bodies --json --page --max-page-bytes 4096 --cursor NEXT_CURSOR
+```
+
+The artifact is the first argument. `--whole-file` selects whole retained receipt
+bytes separately from `--include-bodies`; `--endpoint-context` separately includes
+caller/callee retained node ranges. `--position-encoding utf-8|utf-16|utf-32` is an
+explicit conversion choice, especially for V1. None infer containing functions.
+Node, relation, sidecar and sidecar-record flags are repeatable. Unknown IDs,
+empty IDs and duplicate occurrences remain manifest entries; they are not parser
+errors. No selectors is an explicit empty selection, not an all-catalog request.
+
+Policies: `--max-input-bytes`, `--max-output-bytes`, `--max-body-bytes`,
+`--max-origins`, `--max-spans`, `--max-work`, `--max-page-bytes`, `--max-pages`
+start at the core defaults above. Zero body/origin/span/work budgets are valid
+bounded omissions; input/output/page-count budgets must be positive. Core limits
+and the stricter public caps both apply. No `--catalog` flag is implemented:
+advanced catalog use remains the Go core `hydratedevidence.Inspect` API only.
+
+Legacy `inspect ARTIFACT --seed LABEL` and `--all-seeds` retain their original
+JSON behavior. Mixing legacy and hydrated flags (even explicitly false legacy
+flags), using focused flags without `--hydrated`, unsupported encodings, invalid
+limits, or paging without `--json` fails before artifact I/O. Hydrated inspection
+never accepts publication selectors as implicit artifact indirection. It reads
+only explicitly named regular nonsymlink artifact/sidecar files, with combined
+byte accounting and the existing scoped nonblocking regular-file opener. It
+never follows a retained source URI, opens the source checkout, starts a session,
+or invokes a provider. There is no hydration request-file CLI in this increment.
+
+### MCP and shared operation
+
+Canonical tool: `lsp_trace_v1_inspect_hydrated` (no alias). It dispatches
+`operation.InspectHydratedHandler`, the same handler used by the CLI. The existing
+`lsp_trace_v1_inspect` is unchanged. Runtime discovery now has 21 tools; the frozen
+Stage-1 13-tool contract and separate 20-tool retained-calls composition are unchanged.
+
+```json
+{
+  "input": "<exact graph-provenance.v1 or .v2 JSON text, not a path>",
+  "sidecars": ["<exact hydrated-sidecar.v1 JSON text>"],
+  "node_ids": ["NODE_ID"],
+  "relation_ids": ["RELATION_ID"],
+  "sidecar_record_ids": [],
+  "include_bodies": false,
+  "whole_file": false,
+  "endpoint_context": false,
+  "position_encoding": "",
+  "core_policy": {"max_page_bytes": 4096},
+  "page": true
+}
+```
+
+Only `input` is required. Omitted policy fields retain core defaults. `cursor`
+is the previous response's `next_cursor` and requires `page: true`. Closed input
+schemas reject unknown fields, null booleans/lists, noninteger limits, unsupported
+encodings, duplicate keys and object-valued input. Numeric values remain exact
+JSON numbers until typed integer decoding. `core_policy.include_bodies` and
+`allow_caller_boundaries` must remain false: top-level `include_bodies` is the only
+body opt-in. Sidecar kinds such as `CALLS` remain `CALLER_ASSERTED` /
+`NON_AUTHORITATIVE`, including when they reference native receipt bytes.
+
+Public admission is exactly the matrix above: native graph-provenance V1/V2,
+optionally accompanied by asserted hydrated-sidecar V1. No retained-calls,
+operational-custody, arbitrary graph, provider package or automatic adapter input.
+
+### Output, validation and continuation
+
+The inline artifact is the operation-specific closed
+`lsp-trace.inspect-hydrated.v1` contract, with `$id`
+`https://jaresty.github.io/lsp-trace/mcp/schemas/output-inspect-hydrated.v1.schema.json`.
+Its mandatory `manifest`, effective `focus_request`, and core `request` accompany
+either `delivery: FULL` plus `bundle`, or `delivery: PAGE` plus a core `page`.
+`next_cursor` is empty at completion. The full source catalog remains in the full
+bundle or ordered page sequence, never silently trimmed for output validation.
+A page is only part of the core evidence; every page repeats the full manifest so
+unknown/zero-site/unmapped requested records cannot disappear on header-only pages.
+`Bundle.Complete` is **not** aggregate focus completeness. Human output quotes
+manifest IDs/dispositions and renders selected core context, excluding unrelated
+catalog bookkeeping and manufactured NON_SOURCE missing-source warnings.
+
+`hydratedinspection.InputSchema()` and `OutputSchema()` are exact schema documents
+registered in the MCP contract layer; `ValidateInputJSON` and `ValidateOutputJSON`
+perform closed structural validation. This is an **operation-specific contract**,
+not a newly advertised standalone `lsp_trace_v1_validate` / CLI `validate` family.
+Schema-only success does not establish semantic completeness. Exact semantic APIs:
+
+```go
+r, err := hydratedinspection.Decode(requestJSON) // retain r and original byte strings
+view, err := hydratedinspection.Inspect(r)      // mandatory ValidateFocused internally
+err = hydratedinspection.ValidateFull(r, view)  // FULL only; checks original input/focus
+// For PAGE, start with r.Page=true and r.Cursor="", retain every ordered View:
+result, err := hydratedinspection.Reassemble(r, allViews)
+// Reassemble calls core Reassemble then ValidateFocused on result.
+```
+
+Consumers must retain **exact original artifact bytes, every exact sidecar byte
+string, and the effective focus parameters/policy** independently of the output.
+The output intentionally does not re-embed private full input bodies merely to
+pretend it is self-contained. Changed inputs/selection/policy reject continuation,
+including changed unknown IDs that generate no core origin. A public cursor wraps
+the core cursor and binds the full manifest digest; every call rebuilds and validates
+`core.NewSnapshot` from the same input, with no hidden cache. Replay is stable;
+missing/repeated/reordered/mixed pages fail complete semantic reassembly.
+
+Public transport bounds supplement core budgets: combined decoded artifact plus
+sidecars **1 MiB**, request JSON **4 MiB**, inline response (including its newline)
+**1 MiB**, human text **1 MiB**, complete public page sequence **64 MiB**, at most
+64 sidecars. IDs retain the core 1024-byte and selection 4-MiB bounds. The manifest
+and request repeat on pages and must fit these caps; `max_page_bytes` bounds the
+**core page**, not the entire public response. Paging does not reset body/work
+budgets. The MCP wire line also must fit its existing 4-MiB transport limit.
+Filesystem I/O has no new wall-clock/RSS guarantee.
+
+Immutable publication is **NOT_IMPLEMENTED** for this operation. There is no
+`output_selector`, publication receipt, implicit artifact write, or claimed
+selector fallback. Oversized public output fails closed; choose bounded paging
+or a smaller explicit selection. D01 is **pending: original artifact unavailable**.
+Named gopls replay remains **unqualified** here. The pinned offline parity tests
+and 6,032-byte existing core Text measurement are not a full FR21/AC17 claim.

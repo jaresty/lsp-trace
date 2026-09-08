@@ -411,6 +411,9 @@ func bindLifecycleEnvelope(base response, _ Tool, env envelope) response {
 }
 
 func bindEnvelope(base response, tool Tool, env envelope) response {
+	if tool.Name == mcpcontract.HydratedTool {
+		env.EnvelopeSchemaID = mcpcontract.HydratedEnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
 		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -595,6 +598,8 @@ func operationName(canonical string) operation.Name {
 		return operation.VerifyV2
 	case "lsp_trace_v1_verify":
 		return operation.Verify
+	case mcpcontract.HydratedTool:
+		return operation.InspectHydrated
 	case "lsp_trace_v1_inspect":
 		return operation.Inspect
 	case "lsp_trace_v1_filter":

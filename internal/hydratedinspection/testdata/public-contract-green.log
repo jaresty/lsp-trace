@@ -1,0 +1,100 @@
+=== RUN   TestRegistrySnapshotsAreImmutable
+    registry_test.go:10: ASSERTION: registry snapshots cannot mutate canonical aliases schemas or availability
+--- PASS: TestRegistrySnapshotsAreImmutable (0.01s)
+=== RUN   TestComputedRoutingIsFrozenAndAliasesStayHidden
+    registry_test.go:43: ASSERTION: routing metadata is computed once while canonical and alias resolution stays unambiguous and aliases stay hidden
+--- PASS: TestComputedRoutingIsFrozenAndAliasesStayHidden (0.01s)
+=== RUN   TestRegistryRejectsAmbiguousNames
+    registry_test.go:82: ASSERTION: canonical and alias collisions are rejected during construction
+--- PASS: TestRegistryRejectsAmbiguousNames (0.00s)
+=== RUN   TestCanonicalDescriptionsRouteUserIntent
+    registry_test.go:181: ASSERTION: ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS
+--- PASS: TestCanonicalDescriptionsRouteUserIntent (0.00s)
+=== RUN   TestRegistryContract
+    registry_test.go:219: ASSERTION: registry has fifteen entries including separate retained CALLS export and bounded analysis
+    registry_test.go:220: ASSERTION: each exact alias resolves to its canonical identity and aliases are not advertised
+    registry_test.go:221: ASSERTION: unknown and unsupported versioned names are not recognized
+--- PASS: TestRegistryContract (0.01s)
+PASS
+ok  	lsp-trace/internal/mcp	0.359s
+=== RUN   TestHydratedContractAdditive
+    inspect_hydrated_test.go:35: PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 runtime=21; no publication schema
+--- PASS: TestHydratedContractAdditive (0.01s)
+PASS
+ok  	lsp-trace/internal/mcpcontract	0.264s
+=== RUN   TestHydratedOperationPreflight
+    inspect_hydrated_test.go:32: PUBLIC_OPERATION_PREFLIGHT PASS: structural failure before shared semantic dispatch
+--- PASS: TestHydratedOperationPreflight (0.00s)
+PASS
+ok  	lsp-trace/internal/operation	0.320s
+=== RUN   TestFR20FR21OwnershipRegistration
+=== RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-red.log
+=== RUN   TestFR20FR21OwnershipRegistration/focused-hydration.claim.md
+=== RUN   TestFR20FR21OwnershipRegistration/focused-vet.log
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor.go
+=== RUN   TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json
+=== RUN   TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md
+=== RUN   TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go
+=== RUN   TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go
+=== RUN   TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json
+--- PASS: TestFR20FR21OwnershipRegistration (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-final-tests.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-mutation.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-red.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-hydration.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/focused-vet.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/acquisitionops/executor_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/acquisition/coordinator.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/admission.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/hydratedevidence/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/fr20-public-acquisition.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/docs/hydrated-evidence.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace/acquisition_v2_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_hydration_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/fr20_native_test.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/cmd/lsp-trace-mcp/testdata/fr20-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRegistration/internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json (0.00s)
+=== RUN   TestFR20FR21OwnershipRejectsUnowned
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/focused-other.log
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json
+=== RUN   TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json
+--- PASS: TestFR20FR21OwnershipRejectsUnowned (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/focused-other.log (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/unowned.claim.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/unregistered/new.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/docs/unregistered.md (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/hydratedevidence-other/schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/acquisitionops-other/executor.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/acquisition-other/acquisition.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/testdata/unknown-server/main.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/cmd/lsp-trace-mcp/public_hydration.go (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/lsp-trace.hydrated-evidence.v1.schema.json (0.00s)
+    --- PASS: TestFR20FR21OwnershipRejectsUnowned/internal/schema/schemas/unowned.json (0.00s)
+=== RUN   TestDisabledIntegratedConformance
+=== RUN   TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY
+    harness_test.go:643: PASS ASSERT_PACKAGE_OWNERSHIP_ONLY
+--- PASS: TestDisabledIntegratedConformance (0.13s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.01s)
+PASS
+ok  	lsp-trace/internal/integratedconformance	0.284s

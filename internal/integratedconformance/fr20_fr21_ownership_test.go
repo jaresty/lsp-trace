@@ -5,17 +5,21 @@ import (
 	"testing"
 )
 
-// This registration is limited to FR20 acquisition and the internal FR21 core.
-// It grants no public hydration operation or provider adapter ownership.
+// This registration covers FR20, the FR21 core and its bounded public wrapper.
+// It grants no provider adapter ownership or wildcard root evidence exception.
 func ownsFR20FR21Path(path string) bool {
 	// Match package boundaries, never all internal/, docs/, schema/ or cmd/.
-	for _, prefix := range []string{"acquisitionops/", "internal/acquisition/", "internal/hydratedevidence/"} {
+	for _, prefix := range []string{"acquisitionops/", "internal/acquisition/", "internal/hydratedevidence/", "internal/hydratedinspection/"} {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
 	}
 	switch path {
-	case "docs/fr20-public-acquisition.md", "docs/hydrated-evidence.md",
+	case "focused-final-tests.log", "focused-mutation.log", "focused-red.log", "focused-hydration.claim.md", "focused-vet.log",
+		"public-hydration-red.log",
+		"cmd/lsp-trace/inspect_command.go", "cmd/lsp-trace/inspect_hydrated.go", "cmd/lsp-trace/inspect_hydrated_test.go", "cmd/lsp-trace/inspect_hydrated_unix_test.go", "cmd/lsp-trace-mcp/hydrated_public_test.go", "cmd/lsp-trace-mcp/hydrated_controls_test.go",
+		"internal/mcpcontract/inspect_hydrated.go", "internal/operation/inspect_hydrated.go", "internal/operation/inspect_hydrated_test.go",
+		"docs/fr20-public-acquisition.md", "docs/hydrated-evidence.md",
 		"cmd/lsp-trace/acquisition_v2.go", "cmd/lsp-trace/acquisition_v2_test.go", "cmd/lsp-trace/publication.go",
 		"cmd/lsp-trace-mcp/fr20_graph_test.go", "cmd/lsp-trace-mcp/fr20_legacy_test.go", "cmd/lsp-trace-mcp/fr20_native_test.go", "cmd/lsp-trace-mcp/fr20_public_test.go", "cmd/lsp-trace-mcp/fr20_hydration_test.go",
 		"cmd/lsp-trace-mcp/testdata/fr20-server/main.go",

@@ -66,6 +66,10 @@ func Text(input Input, r Request, b Bundle) (string, error) {
 	if e := Validate(input, r, b); e != nil {
 		return "", e
 	}
+	return text(r, b, nil)
+}
+
+func text(r Request, b Bundle, selectedSources map[string]bool) (string, error) {
 	var out strings.Builder
 	fmt.Fprintf(&out, "Retained context %s\nOrigins: %d; spans: %d; requested context complete: %t\nNo analyzed-version, source-completeness or independent-support claim.\n", b.Digest, b.TotalOrigins, b.TotalSpans, b.Complete)
 	optional := func(s *string) string {
@@ -75,6 +79,9 @@ func Text(input Input, r Request, b Bundle) (string, error) {
 		return *s
 	}
 	for _, s := range b.Sources {
+		if selectedSources != nil && !selectedSources[s.ID] {
+			continue
+		}
 		fmt.Fprintf(&out, "Source %q uri=%q receipt=%q version=%q revision=%q hash=%q state=%s authority=%s/%s acquisition=%s analyzed=%s\n", s.ID, s.URI, s.ReceiptReference, s.VersionReference, optional(s.Revision), optional(s.ContentHash), s.State, s.Authority, s.Qualification, s.Classification, s.AnalyzedVersion)
 		if out.Len() > r.Policy.MaxOutputBytes {
 			return "", errors.New("text output byte budget")
