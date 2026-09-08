@@ -29,7 +29,7 @@ func qualifyV3(v2 []byte, session string, generation uint64, f *qualificationDia
 	return CaptureV3(v2, session, generation, q)
 }
 
-func TestFR23DeterministicPublicOutcomeMatrix(t *testing.T) {
+func TestFR23DeterministicPublicFifteenOutcomeMatrix(t *testing.T) {
 	result, root := coordinatorV2Fixture(t, nil)
 	v2, err := CaptureV2(context.Background(), result, root)
 	if err != nil {
@@ -75,6 +75,10 @@ func TestFR23DeterministicPublicOutcomeMatrix(t *testing.T) {
 		{"unavailable", manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}},
 		{"evicted", manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryEvicted, Records: []manageddiagnostic.Record{}, EvictedRecords: 1}},
 	}
+	preV2Rows := []string{"pre-v2-protocol", "pre-v2-deadline", "pre-v2-process-exit", "pre-v2-transport", "pre-v2-capability", "pre-v2-document-unavailable"}
+	if got := len(rows) + len(preV2Rows); got != 15 {
+		t.Fatalf("ASSERT_FR23_V3_EXACTLY_FIFTEEN_INDEPENDENT_OUTCOMES: got=%d", got)
+	}
 	for _, row := range rows {
 		t.Run(row.name, func(t *testing.T) {
 			fake := &qualificationDiagnostics{result: row.q}
@@ -105,7 +109,7 @@ func TestFR23DeterministicPublicOutcomeMatrix(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{"pre-v2-protocol", "pre-v2-deadline", "pre-v2-process-exit", "pre-v2-transport", "pre-v2-capability", "pre-v2-document-unavailable"} {
+	for _, name := range preV2Rows {
 		t.Run(name, func(t *testing.T) {
 			inherited := errors.New("inherited-no-artifact")
 			fake := &qualificationDiagnostics{}

@@ -42,7 +42,7 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 	}
 	config := map[string]any{"version": 1, "processes": []any{map[string]any{
 		"alias": "fixture", "language_id": "go",
-		"profile":   map[string]any{"trust_domain": "fr23-v3-process-parity", "workspace": workspace, "profile": "cli", "environment_reference": "deterministic-fake"},
+		"profile":   map[string]any{"trust_domain": "public-acquisition", "workspace": workspace, "profile": "cli", "environment_reference": "cli"},
 		"execution": map[string]any{"path": fake, "directory": workspace, "environment": os.Environ()},
 	}}}
 
@@ -61,7 +61,20 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 	}
 	mcpArtifact := inlineArtifactBytes(t, call.env)
 	if !bytes.Equal(cliStdout.Bytes(), mcpArtifact) {
-		t.Fatalf("%s: CLI bytes=%d MCP bytes=%d", assertion, cliStdout.Len(), len(mcpArtifact))
+		at := 0
+		for ; at < cliStdout.Len() && at < len(mcpArtifact) && cliStdout.Bytes()[at] == mcpArtifact[at]; at++ {
+		}
+		start, end := at-80, at+160
+		if start < 0 {
+			start = 0
+		}
+		if end > cliStdout.Len() {
+			end = cliStdout.Len()
+		}
+		if end > len(mcpArtifact) {
+			end = len(mcpArtifact)
+		}
+		t.Fatalf("%s: CLI bytes=%d MCP bytes=%d first_diff=%d CLI=%q MCP=%q", assertion, cliStdout.Len(), len(mcpArtifact), at, cliStdout.Bytes()[start:end], mcpArtifact[start:end])
 	}
 	if _, err := graphprovenance.ValidateFor(mcpArtifact, graphprovenance.Family, "v3"); err != nil {
 		t.Fatalf("%s: admission: %v", assertion, err)
