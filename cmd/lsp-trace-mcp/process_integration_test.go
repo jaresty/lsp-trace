@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -54,19 +55,35 @@ func TestExecutableNameMatchesTargetPlatform(t *testing.T) {
 	}
 }
 
+var (
+	processBuildMu    sync.Mutex
+	processBuildCache = map[string]string{}
+)
+
 func buildBinary(t *testing.T, name, packagePath string) string {
 	t.Helper()
+	processBuildMu.Lock()
+	defer processBuildMu.Unlock()
+	key := name + "\x00" + packagePath
+	if binary := processBuildCache[key]; binary != "" {
+		return binary
+	}
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("ASSERT_REAL_PROCESS_BINARY: caller path unavailable")
 	}
 	repo := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
-	binary := filepath.Join(t.TempDir(), executableName(name, runtime.GOOS))
+	dir, err := os.MkdirTemp("", "lsp-trace-process-binaries-")
+	if err != nil {
+		t.Fatalf("ASSERT_REAL_PROCESS_BINARY: temp dir: %v", err)
+	}
+	binary := filepath.Join(dir, executableName(name, runtime.GOOS))
 	cmd := exec.Command("go", "build", "-o", binary, packagePath)
 	cmd.Dir = repo
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("ASSERT_REAL_PROCESS_BINARY: build %s: %v\n%s", packagePath, err, out)
 	}
+	processBuildCache[key] = binary
 	return binary
 }
 
