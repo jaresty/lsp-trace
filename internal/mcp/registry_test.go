@@ -113,8 +113,12 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify", "lsp_trace_v2_incoming", "lsp_trace_v2_slice", "lsp_trace_v2_verify"}
-	for i, tool := range r.Advertised() {
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking", "lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify", "lsp_trace_v2_incoming", "lsp_trace_v2_slice", "lsp_trace_v2_verify"}
+	advertised := r.Advertised()
+	if len(want) != len(advertised) {
+		t.Fatalf("%s: want=%d advertised=%d", assertion, len(want), len(advertised))
+	}
+	for i, tool := range advertised {
 		if tool.Name != want[i] {
 			t.Fatalf("%s: tool[%d]=%q want %q", assertion, i, tool.Name, want[i])
 		}
@@ -127,7 +131,6 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 	} else if alias, aliasOK := r.Resolve("lsp_trace_slice"); !aliasOK || alias.Name != slice.Name || alias.Availability != Enabled || alias.ExecutorFamily != ExecutorFamily("slice") {
 		t.Fatalf("ASSERT_SLICE_CALLABLE_CANONICAL_ALIAS: alias=%+v found=%v", alias, aliasOK)
 	}
-	advertised := r.Advertised()
 	for i := 1; i < len(advertised); i++ {
 		if advertised[i-1].Name > advertised[i].Name {
 			t.Fatalf("%s: order=%v", assertion, advertised)

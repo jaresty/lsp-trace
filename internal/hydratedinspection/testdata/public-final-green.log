@@ -1,16 +1,16 @@
 === RUN   TestPublicPrivacyAndNativeText
     inspection_test.go:91: PUBLIC_CORE_TEXT PASS core=6032 focused=5480 catalog=5 origins=3 spans=3
     inspection_test.go:118: PUBLIC_PRIVACY PASS; PUBLIC_MANIFEST_ONLY PASS; PUBLIC_WHOLE_FILE PASS; PUBLIC_ENDPOINT_OPTIN PASS
---- PASS: TestPublicPrivacyAndNativeText (1.52s)
+--- PASS: TestPublicPrivacyAndNativeText (1.51s)
 === RUN   TestPublicSidecarPrivacyAuthority
     inspection_test.go:159: PUBLIC_SIDECAR_PRIVACY PASS; PUBLIC_SIDECAR_AUTHORITY PASS
---- PASS: TestPublicSidecarPrivacyAuthority (0.90s)
+--- PASS: TestPublicSidecarPrivacyAuthority (0.88s)
 === RUN   TestPublicPagingAndValidation
     inspection_test.go:234: PUBLIC_PAGING PASS pages=3; PUBLIC_CURSOR_BINDING PASS; PUBLIC_PAGE_JOIN PASS; PUBLIC_PAGE_MANIFEST PASS; PUBLIC_FULL_VALIDATION PASS
 --- PASS: TestPublicPagingAndValidation (3.90s)
 === RUN   TestPublicClosedPreflight
     inspection_test.go:267: PUBLIC_CLOSED_PREFLIGHT PASS; PUBLIC_CLOSED_OUTPUT PASS
---- PASS: TestPublicClosedPreflight (0.19s)
+--- PASS: TestPublicClosedPreflight (0.18s)
 === RUN   TestPublicProducerValidation
 === RUN   TestPublicProducerValidation/error
     producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: error
@@ -18,15 +18,15 @@
     producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: manifest
 === RUN   TestPublicProducerValidation/core
     producer_test.go:33: PUBLIC_PRODUCER_VALIDATION PASS: core
---- PASS: TestPublicProducerValidation (0.37s)
+--- PASS: TestPublicProducerValidation (0.35s)
     --- PASS: TestPublicProducerValidation/error (0.07s)
     --- PASS: TestPublicProducerValidation/manifest (0.11s)
-    --- PASS: TestPublicProducerValidation/core (0.19s)
+    --- PASS: TestPublicProducerValidation/core (0.17s)
 === RUN   TestPublicV1ZeroSiteAndLegacyParity
     v1_test.go:104: PUBLIC_V1_ZERO_SITE PASS: zero-site manifest remains visible while Bundle.Complete=true; separately derived V1 fixture, no acquisition
---- PASS: TestPublicV1ZeroSiteAndLegacyParity (0.07s)
+--- PASS: TestPublicV1ZeroSiteAndLegacyParity (0.06s)
 PASS
-ok  	lsp-trace/internal/hydratedinspection	7.248s
+ok  	lsp-trace/internal/hydratedinspection	7.169s
 === RUN   TestPublicationPropagatesDirectoryDurabilityFailures
 === RUN   TestPublicationPropagatesDirectoryDurabilityFailures/destination_directory_open
 === RUN   TestPublicationPropagatesDirectoryDurabilityFailures/generation_directory_open
@@ -44,7 +44,7 @@ ok  	lsp-trace/internal/hydratedinspection	7.248s
 === RUN   TestInspectSeedProjectsSameReadOnlyEvidenceFromArtifactAndSelector
 --- PASS: TestInspectSeedProjectsSameReadOnlyEvidenceFromArtifactAndSelector (0.02s)
 === RUN   TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly
---- PASS: TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly (0.02s)
+--- PASS: TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly (0.03s)
 === RUN   TestInspectProjectsFailedSeedWithoutFabricatingMembership
 --- PASS: TestInspectProjectsFailedSeedWithoutFabricatingMembership (0.02s)
 === RUN   TestInspectCLICompatibilityModesAndUsage
@@ -69,7 +69,7 @@ ok  	lsp-trace/internal/hydratedinspection	7.248s
     inspect_hydrated_unix_test.go:31: PUBLIC_FIFO PASS
 --- PASS: TestHydratedCLIFIFO (0.00s)
 PASS
-ok  	lsp-trace/cmd/lsp-trace	0.398s
+ok  	lsp-trace/cmd/lsp-trace	0.520s
 === RUN   TestHydratedPublicControls
 === RUN   TestHydratedPublicControls/private
     hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: private
@@ -84,14 +84,14 @@ ok  	lsp-trace/cmd/lsp-trace	0.398s
 === RUN   TestHydratedPublicControls/page
     hydrated_controls_test.go:124: PUBLIC_CONTROL_PARITY PASS: page
 === NAME  TestHydratedPublicControls
-    hydrated_controls_test.go:155: PUBLIC_MCP_PREFLIGHT PASS; PUBLIC_OFFLINE_SOURCE_ABSENT PASS
+    hydrated_controls_test.go:156: PUBLIC_MCP_PREFLIGHT PASS; PUBLIC_OFFLINE_SOURCE_ABSENT PASS
 --- PASS: TestHydratedPublicControls (5.10s)
-    --- PASS: TestHydratedPublicControls/private (1.00s)
-    --- PASS: TestHydratedPublicControls/ranges (0.52s)
+    --- PASS: TestHydratedPublicControls/private (1.11s)
+    --- PASS: TestHydratedPublicControls/ranges (0.50s)
     --- PASS: TestHydratedPublicControls/whole (0.51s)
-    --- PASS: TestHydratedPublicControls/endpoints (0.52s)
-    --- PASS: TestHydratedPublicControls/sidecar (0.60s)
-    --- PASS: TestHydratedPublicControls/page (1.34s)
+    --- PASS: TestHydratedPublicControls/endpoints (0.50s)
+    --- PASS: TestHydratedPublicControls/sidecar (0.59s)
+    --- PASS: TestHydratedPublicControls/page (1.30s)
 === RUN   TestHydratedPublicOffline
 === RUN   TestHydratedPublicOffline/CLI
     hydrated_public_test.go:34: ASSERTION: PUBLIC_CLI_VALIDATED_FOCUS
@@ -99,14 +99,14 @@ ok  	lsp-trace/cmd/lsp-trace	0.398s
 === RUN   TestHydratedPublicOffline/MCP
     hydrated_public_test.go:46: ASSERTION: PUBLIC_MCP_VALIDATED_FOCUS
     hydrated_public_test.go:70: PUBLIC_MCP_VALIDATED_FOCUS PASS
---- PASS: TestHydratedPublicOffline (1.34s)
-    --- PASS: TestHydratedPublicOffline/CLI (0.48s)
-    --- PASS: TestHydratedPublicOffline/MCP (0.49s)
+--- PASS: TestHydratedPublicOffline (1.36s)
+    --- PASS: TestHydratedPublicOffline/CLI (0.49s)
+    --- PASS: TestHydratedPublicOffline/MCP (0.52s)
 PASS
-ok  	lsp-trace/cmd/lsp-trace-mcp	6.699s
+ok  	lsp-trace/cmd/lsp-trace-mcp	6.727s
 === RUN   TestRegistrySnapshotsAreImmutable
     registry_test.go:10: ASSERTION: registry snapshots cannot mutate canonical aliases schemas or availability
---- PASS: TestRegistrySnapshotsAreImmutable (0.00s)
+--- PASS: TestRegistrySnapshotsAreImmutable (0.01s)
 === RUN   TestComputedRoutingIsFrozenAndAliasesStayHidden
     registry_test.go:43: ASSERTION: routing metadata is computed once while canonical and alias resolution stays unambiguous and aliases stay hidden
 --- PASS: TestComputedRoutingIsFrozenAndAliasesStayHidden (0.00s)
@@ -114,20 +114,20 @@ ok  	lsp-trace/cmd/lsp-trace-mcp	6.699s
     registry_test.go:82: ASSERTION: canonical and alias collisions are rejected during construction
 --- PASS: TestRegistryRejectsAmbiguousNames (0.00s)
 === RUN   TestCanonicalDescriptionsRouteUserIntent
-    registry_test.go:181: ASSERTION: ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS
+    registry_test.go:184: ASSERTION: ASSERT_CANONICAL_DESCRIPTIONS_ROUTE_DISTINCT_USER_INTENTS
 --- PASS: TestCanonicalDescriptionsRouteUserIntent (0.00s)
 === RUN   TestRegistryContract
-    registry_test.go:219: ASSERTION: registry has fifteen entries including separate retained CALLS export and bounded analysis
-    registry_test.go:220: ASSERTION: each exact alias resolves to its canonical identity and aliases are not advertised
-    registry_test.go:221: ASSERTION: unknown and unsupported versioned names are not recognized
+    registry_test.go:222: ASSERTION: registry has fifteen entries including separate retained CALLS export and bounded analysis
+    registry_test.go:223: ASSERTION: each exact alias resolves to its canonical identity and aliases are not advertised
+    registry_test.go:224: ASSERTION: unknown and unsupported versioned names are not recognized
 --- PASS: TestRegistryContract (0.01s)
 PASS
-ok  	lsp-trace/internal/mcp	0.246s
+ok  	lsp-trace/internal/mcp	0.199s
 === RUN   TestHydratedContractAdditive
     inspect_hydrated_test.go:35: PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 runtime=21; no publication schema
 --- PASS: TestHydratedContractAdditive (0.01s)
 PASS
-ok  	lsp-trace/internal/mcpcontract	0.212s
+ok  	lsp-trace/internal/mcpcontract	0.153s
 === RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults
 === RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults/seed
 === RUN   TestInspectHandlerPreservesSeedAndAllSeedCoreResults/all
@@ -142,7 +142,7 @@ ok  	lsp-trace/internal/mcpcontract	0.212s
     inspect_hydrated_test.go:32: PUBLIC_OPERATION_PREFLIGHT PASS: structural failure before shared semantic dispatch
 --- PASS: TestHydratedOperationPreflight (0.00s)
 PASS
-ok  	lsp-trace/internal/operation	0.242s
+ok  	lsp-trace/internal/operation	0.164s
 === RUN   TestFR20FR21OwnershipRegistration
 === RUN   TestFR20FR21OwnershipRegistration/focused-final-tests.log
 === RUN   TestFR20FR21OwnershipRegistration/focused-mutation.log
@@ -211,17 +211,17 @@ ok  	lsp-trace/internal/operation	0.242s
 === RUN   TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY
     harness_test.go:643: PASS ASSERT_PACKAGE_OWNERSHIP_ONLY
 --- PASS: TestDisabledIntegratedConformance (0.11s)
-    --- PASS: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.02s)
+    --- PASS: TestDisabledIntegratedConformance/ASSERT_PACKAGE_OWNERSHIP_ONLY (0.01s)
 PASS
-ok  	lsp-trace/internal/integratedconformance	0.334s
+ok  	lsp-trace/internal/integratedconformance	0.267s
 === RUN   TestFocusedTypedJoin
---- PASS: TestFocusedTypedJoin (0.07s)
+--- PASS: TestFocusedTypedJoin (0.08s)
 === RUN   TestFocusedUnknownDuplicate
 --- PASS: TestFocusedUnknownDuplicate (0.07s)
 === RUN   TestFocusedCatalogNonSource
 --- PASS: TestFocusedCatalogNonSource (0.14s)
 === RUN   TestFocusedPrivacyRangesVersions
---- PASS: TestFocusedPrivacyRangesVersions (0.33s)
+--- PASS: TestFocusedPrivacyRangesVersions (0.31s)
 === RUN   TestFocusedEndpointPolicy
 --- PASS: TestFocusedEndpointPolicy (0.07s)
 === RUN   TestFocusedTampering
@@ -231,17 +231,17 @@ ok  	lsp-trace/internal/integratedconformance	0.334s
 === RUN   TestFocusedTampering/resolved-unknown
 === RUN   TestFocusedTampering/input
 === RUN   TestFocusedTampering/policy
---- PASS: TestFocusedTampering (0.74s)
-    --- PASS: TestFocusedTampering/drop-requested (0.11s)
-    --- PASS: TestFocusedTampering/drop-callsite (0.11s)
+--- PASS: TestFocusedTampering (0.70s)
+    --- PASS: TestFocusedTampering/drop-requested (0.10s)
+    --- PASS: TestFocusedTampering/drop-callsite (0.10s)
     --- PASS: TestFocusedTampering/authority (0.18s)
-    --- PASS: TestFocusedTampering/resolved-unknown (0.11s)
+    --- PASS: TestFocusedTampering/resolved-unknown (0.10s)
     --- PASS: TestFocusedTampering/input (0.11s)
     --- PASS: TestFocusedTampering/policy (0.11s)
 === RUN   TestFocusedSidecarStates
---- PASS: TestFocusedSidecarStates (0.19s)
+--- PASS: TestFocusedSidecarStates (0.18s)
 === RUN   TestFocusedActualFR20Measurement
     focused_test.go:304: MEASURE actual-fr20 sha256=8913b3d062312be15531728f801e2f677f4a65852fd5fbeaf4ef1007ae1f83cf selected_core_text_utf8_bytes=6032 all_catalog_core_text_utf8_bytes=249648 focused_json_bytes=13582 unique_selected_content_bytes=1 unique_retained_source_bytes=9 catalog_sources=5 catalog_records=272 selected_origins=3
---- PASS: TestFocusedActualFR20Measurement (0.37s)
+--- PASS: TestFocusedActualFR20Measurement (0.36s)
 PASS
-ok  	lsp-trace/internal/hydratedevidence	2.223s
+ok  	lsp-trace/internal/hydratedevidence	2.164s
