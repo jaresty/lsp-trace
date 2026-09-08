@@ -66,7 +66,7 @@ Acquisition records exact native returned items, directed evidence, session/gene
 
 ## Validation, immutable publication and verification
 
-Producers validate the graph-provenance/v2 family, not graph-v3. CLI `--output-selector` and MCP `output_selector` publish the same admitted bytes through existing immutable publication custody. Inline and selected publication are not distinct evidence semantics.
+Producers validate the graph-provenance/v2 family, not graph-v3. CLI `--output` and MCP `output_selector` publish the same admitted bytes through existing immutable publication custody. Inline and selected publication are not distinct evidence semantics.
 
 ```sh
 lsp-trace schema get --family graph-provenance --version v2
