@@ -28,9 +28,9 @@ func TestV2RawCarrierLimits(t *testing.T) {
 	if err := preflightGraphV2([]byte(nodes)); err == nil || !strings.Contains(err.Error(), "row limit") {
 		t.Fatalf("ASSERT_V2_RAW_NODE_LIMIT: %v", err)
 	}
-	e := EvidenceV2{Captures: []Receipt{{URI: "file:///a", ID: strings.Repeat("x", 71)}}, Bindings: make([]Binding, MaxBindings)}
+	e := EvidenceV2{Captures: []Receipt{{URI: "file:///a", ID: strings.Repeat("x", 71)}}, Bindings: make([]BindingV2, MaxBindings)}
 	for i := range e.Bindings {
-		e.Bindings[i] = Binding{Pointer: "/graph/" + strings.Repeat("x", 64), URI: "file:///a", Attribution: "SOURCE"}
+		e.Bindings[i] = BindingV2{Pointer: "/graph/" + strings.Repeat("x", 64), URI: "file:///a", Attribution: "SOURCE"}
 	}
 	if err := bindV2(&e); err == nil {
 		t.Fatal("ASSERT_V2_BINDING_AMPLIFICATION_LIMIT")

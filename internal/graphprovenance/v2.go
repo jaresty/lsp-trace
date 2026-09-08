@@ -46,7 +46,7 @@ type EvidenceV2 struct {
 	Acquisition            acquisition.Result `json:"-"`
 	Supplies               []SupplyReceiptV2  `json:"supplies"`
 	Captures               []Receipt          `json:"captures"`
-	Bindings               []Binding          `json:"bindings"`
+	Bindings               []BindingV2        `json:"bindings"`
 }
 
 type SupplyReceiptV2 struct {
@@ -297,6 +297,9 @@ func validateReceiptV2(workspace string, r Receipt) error {
 func suppliesV2(r acquisition.Result, workspace string) ([]SupplyReceiptV2, error) {
 	out := []SupplyReceiptV2{}
 	versions := map[string]bool{}
+	// Runtime keeps one effective language per URI in this exact session
+	// generation. This links only available language observations, not bytes.
+	languages := map[string]string{}
 	for _, rec := range r.Requests {
 		if rec.Method != "source/prepareDocument" || rec.Outcome != "SUCCESS" {
 			continue
@@ -312,6 +315,17 @@ func suppliesV2(r acquisition.Result, workspace string) ([]SupplyReceiptV2, erro
 		if supply.URI != locator.URI {
 			continue
 		} // coordinator retains failure, not a supply
+		// Nonempty explicit input is used verbatim by PrepareDocument. Empty
+		// input may use an unavailable configured default before file inference.
+		if locator.LanguageID != "" && locator.LanguageID != supply.LanguageID {
+			return nil, errors.New("V2 supplied language differs from explicit locator")
+		}
+		if supply.LanguageID != "" {
+			if previous := languages[supply.URI]; previous != "" && previous != supply.LanguageID {
+				return nil, errors.New("V2 contradictory runtime language observations")
+			}
+			languages[supply.URI] = supply.LanguageID
+		}
 		row := SupplyReceiptV2{RequestID: rec.ID, Status: "NO_NOTIFICATION_OBSERVATION", Observation: supply}
 		if len(supply.Observation) > 0 && !bytes.Equal(supply.Observation, []byte("null")) {
 			if err := preflightV2(supply.Observation, 4*MaxFileBytes); err != nil {
@@ -345,6 +359,19 @@ func suppliesV2(r acquisition.Result, workspace string) ([]SupplyReceiptV2, erro
 			rr := receiptV2(s.URI, name, Supplied, "READABLE", s.Content, &SupplyMetadata{SessionID: s.SessionID, Generation: s.Generation, Version: s.DocumentVersion, Method: s.Method, Params: s.Params})
 			if err := validateSupplyV2(&rr); err != nil {
 				return nil, err
+			}
+			if s.Method == "textDocument/didOpen" {
+				var params struct {
+					TextDocument struct {
+						LanguageID string `json:"languageId"`
+					} `json:"textDocument"`
+				}
+				if err := json.Unmarshal(s.Params, &params); err != nil {
+					return nil, err
+				}
+				if params.TextDocument.LanguageID != supply.LanguageID {
+					return nil, errors.New("V2 didOpen language differs from joined supply")
+				}
 			}
 			row.Status = "OBSERVED_NOTIFICATION"
 			row.Receipt = &rr
@@ -401,7 +428,7 @@ func CaptureV2(ctx context.Context, r acquisition.Result, workspace string) ([]b
 	if _, err = schema.Validate(raw, "v3"); err != nil {
 		return nil, err
 	}
-	e := EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: (&url.URL{Scheme: "file", Path: workspace}).String(), AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []Binding{}}
+	e := EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: (&url.URL{Scheme: "file", Path: workspace}).String(), AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
 	if err = checkResultV2(e); err != nil {
 		return nil, err
 	}
@@ -418,7 +445,7 @@ func CaptureV2(ctx context.Context, r acquisition.Result, workspace string) ([]b
 		defer root.Close()
 	}
 	used, attempts := 0, 0
-	for _, uri := range sourceURIs(e.Bindings) {
+	for _, uri := range sourceURIsV2(e.Bindings) {
 		name, status := RelativeURI(e.WorkspaceURI, uri)
 		var content []byte
 		if status == "" {
@@ -547,7 +574,7 @@ func ValidateV2(e EvidenceV2) error {
 	if err != nil {
 		return err
 	}
-	uris := sourceURIs(bindings)
+	uris := sourceURIsV2(bindings)
 	if len(uris) != len(e.Captures) {
 		return errors.New("V2 missing/extra capture")
 	}

@@ -59,7 +59,7 @@ func TestV2ResponseRangeContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	byPointer := map[string]Binding{}
+	byPointer := map[string]BindingV2{}
 	for _, binding := range bindings {
 		byPointer[binding.Pointer] = binding
 	}

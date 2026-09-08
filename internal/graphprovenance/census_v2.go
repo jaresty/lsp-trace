@@ -14,7 +14,7 @@ import (
 // CensusV2 addresses /graph/... in authoritative GraphBytes and
 // /acquisition/... in the complete descriptor. It derives locators from Request,
 // never from resolution success, and does not interpret names or free text.
-func CensusV2(r acquisition.Result) ([]Binding, error) {
+func CensusV2(r acquisition.Result) ([]BindingV2, error) {
 	graphBytes, err := json.Marshal(r.Graph)
 	if err != nil {
 		return nil, err
@@ -50,7 +50,7 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 	for _, t := range r.Request.RequiredTargets {
 		labels[t.ID] = t.Locator.URI
 	}
-	out := []Binding{}
+	out := []BindingV2{}
 	used := 0
 	var failure error
 	add := func(pointer, uri string) {
@@ -66,7 +66,20 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 		if uri == "" {
 			attr = "NON_SOURCE"
 		}
-		out = append(out, Binding{Pointer: pointer, URI: uri, Attribution: attr, ReceiptIDs: []string{}})
+		status := "SOURCE_REFERENCE"
+		if attr == "NON_SOURCE" {
+			status = "NON_SOURCE"
+		}
+		out = append(out, BindingV2{Pointer: pointer, URI: uri, Attribution: attr, AnchorStatus: status, ReceiptIDs: []string{}})
+	}
+	coordinate := func(pointer, uri string, valid bool) {
+		add(pointer, uri)
+		if failure == nil && uri != "" {
+			out[len(out)-1].AnchorStatus = "INVALID_COORDINATES"
+			if valid {
+				out[len(out)-1].AnchorStatus = "VALID_COORDINATES"
+			}
+		}
 	}
 	escape := func(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1") }
 	var walk func(any, string, string)
@@ -96,7 +109,7 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 						}
 						ranges, _ := call["fromRanges"].([]any)
 						for j := range ranges {
-							add(fmt.Sprintf("%s/response/%d/fromRanges/%d", p, i, j), owner)
+							coordinate(fmt.Sprintf("%s/response/%d/fromRanges/%d", p, i, j), owner, validRangeV2(ranges[j], nil))
 							if failure != nil {
 								return
 							}
@@ -114,7 +127,8 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 						}
 					}
 				}
-				add(p+"/position", owner)
+				_, valid := positionV2(v["position"])
+				coordinate(p+"/position", owner, valid)
 			}
 			if strings.HasPrefix(p, "/graph/diagnostics/") && strings.Count(p, "/") == 3 {
 				add(p, nodes[text("node_id")])
@@ -180,7 +194,7 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 							owner = callers[text("relation_id")]
 						}
 						for i := range xs {
-							add(fmt.Sprintf("%s/%d", q, i), owner)
+							coordinate(fmt.Sprintf("%s/%d", q, i), owner, validRangeV2(xs[i], nil))
 						}
 					}
 				}
@@ -193,7 +207,15 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 							owner = symbolURI
 						}
 					}
-					add(q, owner)
+					var enclosing any
+					if k == "selection_range" || k == "selectionRange" {
+						enclosing = v["range"]
+						// A selection requires its containing declaration range.
+						if enclosing == nil {
+							enclosing = false
+						}
+					}
+					coordinate(q, owner, validRangeV2(v[k], enclosing))
 				}
 				walk(v[k], q, symbolURI)
 			}
@@ -201,6 +223,47 @@ func CensusV2(r acquisition.Result) ([]Binding, error) {
 			for i, x := range v {
 				walk(x, fmt.Sprintf("%s/%d", p, i), symbolURI)
 			}
+		}
+	}
+	// These are typed carriers, not guesses based on JSON key suffixes. A
+	// position locator is a tuple at its own pointer, even when no request ran.
+	locator := func(p string, l acquisition.Locator) {
+		if l.Line != nil && l.Character != nil {
+			coordinate(p, l.URI, true)
+		}
+	}
+	locator("/acquisition/request/root/locator", r.Request.Root.Locator)
+	for i, t := range r.Request.RequiredTargets {
+		locator(fmt.Sprintf("/acquisition/request/required_targets/%d/locator", i), t.Locator)
+	}
+	for i, t := range r.Targets {
+		p := fmt.Sprintf("/acquisition/targets/%d", i)
+		locator(p+"/requested/locator", t.Requested.Locator)
+		for j := range t.Connection.Path.GroupIDs {
+			add(fmt.Sprintf("%s/connection/path/group_ids/%d", p, j), "")
+		}
+		for j, ids := range t.Connection.Path.OccurrenceIDs {
+			for k := range ids {
+				add(fmt.Sprintf("%s/connection/path/occurrence_ids/%d/%d", p, j, k), "")
+			}
+		}
+	}
+	for i, rec := range r.Requests {
+		if rec.Method == "source/prepareDocument" && rec.CaptureComplete {
+			var l acquisition.Locator
+			if json.Unmarshal(rec.Params, &l) == nil {
+				locator(fmt.Sprintf("/acquisition/requests/%d/params", i), l)
+			}
+		}
+	}
+	for i, seed := range r.Graph.Seeds {
+		for j := range seed.ReachedRelationIDs {
+			add(fmt.Sprintf("/graph/seeds/%d/reached_relation_ids/%d", i, j), "")
+		}
+	}
+	if r.Graph.Slice != nil {
+		for i := range r.Graph.Slice.OutgoingRelationIDs {
+			add(fmt.Sprintf("/graph/slice/outgoing_relation_ids/%d", i), "")
 		}
 	}
 	walk(doc["graph"], "/graph", "")

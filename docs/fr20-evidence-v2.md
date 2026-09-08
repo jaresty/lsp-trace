@@ -11,7 +11,7 @@ Package `internal/graphprovenance` exposes:
 
 ```go
 func CaptureV2(ctx context.Context, result acquisition.Result, workspace string) ([]byte, error)
-func CensusV2(result acquisition.Result) ([]Binding, error)
+func CensusV2(result acquisition.Result) ([]BindingV2, error)
 func ValidateV2(e EvidenceV2) error
 func ValidateFor(raw []byte, family, version string) (string, error)
 ```
@@ -85,6 +85,22 @@ classification. `SOURCE_ARTIFACT.locator` is used as its own URI, not misread as
 seed label. Free-text messages and opaque `data`/supply-observation bodies are not
 mined for filenames. Opaque strings that look like URIs add no receipts.
 
+Position locators have a tuple binding at the locator pointer, including the
+original request, every requested target row, and captured supply parameters.
+Connection `group_ids` and nested `occurrence_ids`, native seed
+`reached_relation_ids`, and slice `outgoing_relation_ids` have individually
+indexed `NON_SOURCE` bindings: these identify relations/occurrences, not source
+coordinates.
+
+Every V2 binding has `anchor_status`: `SOURCE_REFERENCE` for source references
+without coordinate claims, `VALID_COORDINATES` for typed, present, ordered
+coordinates (including empty ranges), `INVALID_COORDINATES` for unusable source
+coordinate carriers, and `NON_SOURCE` for non-source references. Selection ranges
+must be contained in their declaration range. Invalid coordinates retain the raw
+carrier, URI attribution, and source receipts; they never become usable spans
+merely because a file is readable. Composed admission recomputes every status and
+rejects missing or changed rows. This V2-only contract does not change V1 bindings.
+
 Native group IDs, call-site indices and pointers are not renumbered. The later
 retained-calls exporter must map its occurrences to this admitted pointer space;
 this stage does not invent occurrence IDs or an export context identity.
@@ -99,6 +115,14 @@ coordinator request IDs, not invented JSON-RPC notification IDs.
 
 Known notification observations must match the current runtime `DocumentSupply`
 contract, including exact-number method/parameter/content/version consistency.
+Observed `didOpen.languageId` must exactly equal its joined coordinator supply
+language. Nonempty explicit locator language is used verbatim by the runtime and
+must agree; empty input may use a configured default or inferred language, which
+this envelope does not invent. Available same-URI language observations must
+agree within the retained exact session/generation. `didChange` has no language
+field: only available supply language linkage is compared. Missing/cached
+notification observations do not fabricate a `didOpen` comparison. This language
+linkage does not freeze source bytes across independent document versions.
 Malformed/unsupported nonempty notification shapes are rejected rather than
 fabricated into receipts. A missing/null observation is explicitly
 `NO_NOTIFICATION_OBSERVATION`, with no invented notification receipt. This includes
@@ -126,8 +150,12 @@ Let `D(domain, payload)` be `"sha256:" + hex(SHA256(domain || NUL || payload))`.
 - Receipt ID: `D("lsp-trace.graph-provenance.v2:receipt", json.Marshal(receipt))`
   with that receipt's `ID` set to the empty string. Source bytes and all supplied
   metadata participate through the receipt fields. This is not a self-digest.
-- Byte SHA-256, byte/line counts, UTF-8 state and newline maps use the existing
-  source-receipt algorithm and are recomputed from captured bytes.
+- The existing `source.CanonicalizeReceipt` records item identity/locator,
+  acquisition disposition, provenance, and (for readable content) SHA-256 of
+  acquired bytes; unreadable content requires a failure reason and no bytes.
+  Admission reconstructs that canonical receipt. It does not persist byte/line
+  counts, UTF-8 state, or newline maps. V2 separately checks actual content length,
+  capture budgets, and supplied-content UTF-8 validity.
 
 The graph digest identifies graph bytes, **not the entire acquisition context**.
 A future retained-calls V2 context identity must commit the admitted envelope and
