@@ -25,6 +25,22 @@ func TestRetainedCallsV2ExportRegistration(t *testing.T) {
 	}
 }
 
+func TestRetainedCallsV2VerifyRegistrationAndCurrentCount(t *testing.T) {
+	const registered = "ASSERT_MCP_RETAINED_CALLS_V2_VERIFY_REGISTERED"
+	const cardinality = "ASSERT_MCP_CANONICAL_TOOL_COUNT_23"
+	r := NewRegistryWithPublication(false, true)
+	tool, ok := r.Resolve("lsp_trace_v2_verify_retained_calls")
+	if !ok {
+		t.Fatal(registered + ": canonical tool absent")
+	}
+	if tool.Availability != Enabled || tool.ExecutorFamily != OfflineExecutorFamily || len(tool.Aliases) != 0 {
+		t.Fatalf("%s: tool=%+v", registered, tool)
+	}
+	if got := len(r.Advertised()); got != 23 {
+		t.Fatalf("%s: got %d", cardinality, got)
+	}
+}
+
 func TestRetainedCallsV2InputContractIsClosedStringOnly(t *testing.T) {
 	const assertion = "ASSERT_MCP_RETAINED_CALLS_V2_CLOSED_STRING_INPUT"
 	for _, request := range []map[string]any{
