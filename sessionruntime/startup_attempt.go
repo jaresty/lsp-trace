@@ -1,8 +1,10 @@
 package sessionruntime
 
 import (
-	"strconv"
-	"strings"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"math"
 
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/session"
@@ -11,17 +13,30 @@ import (
 func (m *Manager) beginStartupAttempt() (manageddiagnostic.StartupAttemptID, uint64, int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.startupAttemptSeq == math.MaxUint64 {
+		panic("sessionruntime: startup attempt sequence exhausted")
+	}
 	m.startupAttemptSeq++
 	sequence := m.startupAttemptSeq
-	nonce := strings.TrimSpace(string(m.startupAttemptIDSource(sequence)))
-	if nonce == "" {
-		nonce = "startup"
+	var entropy []byte
+	if m.startupAttemptEntropy != nil {
+		entropy = m.startupAttemptEntropy(sequence)
 	}
-	// The source contributes nonce material only. The manager-owned monotonic
-	// sequence is always part of the final identity, so hostile duplicate or
-	// empty sources cannot alias starts and no issued-ID set grows over time.
-	id := manageddiagnostic.StartupAttemptID(nonce + "-" + strconv.FormatUint(sequence, 10))
-	return id, sequence, m.now().UnixNano()
+	return deriveStartupAttemptID(m.startupAttemptNonce, sequence, entropy), sequence, m.now().UnixNano()
+}
+
+func deriveStartupAttemptID(managerNonce [16]byte, sequence uint64, testEntropy []byte) manageddiagnostic.StartupAttemptID {
+	// The final fixed-format identity is a one-way, domain-separated digest of
+	// manager-owned random state and its strictly monotonic sequence. Optional
+	// package-private test entropy is hashed and can neither leak nor select it.
+	h := sha256.New()
+	_, _ = h.Write([]byte("lsp-trace/startup-attempt/v1\x00"))
+	_, _ = h.Write(managerNonce[:])
+	var encodedSequence [8]byte
+	binary.BigEndian.PutUint64(encodedSequence[:], sequence)
+	_, _ = h.Write(encodedSequence[:])
+	_, _ = h.Write(testEntropy)
+	return manageddiagnostic.StartupAttemptID(hex.EncodeToString(h.Sum(nil)))
 }
 
 func staticStartupReason(result StartResult) string {

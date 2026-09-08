@@ -1,6 +1,7 @@
 package sessionruntime
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -41,12 +42,13 @@ func attemptConfig(starter Starter, ids ...manageddiagnostic.StartupAttemptID) C
 	return Config{
 		Limits:  Limits{MaxSessions: 4, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 16},
 		Starter: starter, Diagnostics: store,
-		StartupAttemptIDSource: func(uint64) manageddiagnostic.StartupAttemptID {
+		startupAttemptRandom: bytes.NewReader(make([]byte, 16)),
+		startupAttemptEntropy: func(uint64) []byte {
 			mu.Lock()
 			defer mu.Unlock()
 			id := ids[n]
 			n++
-			return id
+			return []byte(id)
 		},
 	}
 }
@@ -139,14 +141,14 @@ func TestStartupAttemptUniqueConcurrentAndEvictionClone(t *testing.T) {
 		seen[id] = true
 	}
 	third := m.Start(context.Background(), StartRequest{Profile: profile(t)})
-	var firstID manageddiagnostic.StartupAttemptID
+	evicted := 0
 	for id := range seen {
-		if firstID == "" || id < firstID {
-			firstID = id
+		if q := m.GetStartupAttempt(id); q.Status == manageddiagnostic.AttemptEvicted {
+			evicted++
 		}
 	}
-	if q := m.GetStartupAttempt(firstID); q.Status != manageddiagnostic.AttemptEvicted {
-		t.Fatalf("%s: %+v", assertAttemptEviction, q)
+	if evicted != 1 {
+		t.Fatalf("%s: evicted=%d", assertAttemptEviction, evicted)
 	}
 	q := m.GetStartupAttempt(third.AttemptID)
 	q.Record.SafeSubcodes = append(q.Record.SafeSubcodes, "mutated")
@@ -175,7 +177,7 @@ func TestStartupAttemptRestartBindsActualNextGeneration(t *testing.T) {
 	first := m.Start(context.Background(), StartRequest{Profile: profile(t)})
 	accepted := m.Restart(context.Background(), first.SessionID, "attempt-restart-caller")
 	terminal := waitOperation(t, m, accepted.IntentID, OperationComplete)
-	q := m.GetStartupAttempt("attempt-restart-2")
+	q := m.GetStartupAttempt(deriveStartupAttemptID([16]byte{}, 2, []byte("attempt-restart")))
 	if terminal.Failure != "" || q.Record == nil || q.Record.Admission == nil || q.Record.Admission.Generation != 2 || q.Record.Admission.SessionID != first.SessionID {
 		t.Fatalf("%s: operation=%+v query=%+v", assertAttemptRestart, terminal, q)
 	}

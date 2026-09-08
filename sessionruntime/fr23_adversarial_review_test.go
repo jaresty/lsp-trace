@@ -2,6 +2,7 @@ package sessionruntime
 
 import (
 	"context"
+	"math"
 	"strings"
 	"sync"
 	"testing"
@@ -29,6 +30,33 @@ func TestReviewAttemptIDDoesNotLeakInjectedPreimage(t *testing.T) {
 			t.Fatalf("ASSERT_FR23_ATTEMPT_ID_PATH_SAFE: %q", id)
 		}
 	}
+}
+
+func TestReviewStartupAttemptRandomFailureObservable(t *testing.T) {
+	cfg := attemptConfig(failingStarter{reason: "process start failed"}, "attempt")
+	cfg.startupAttemptRandom = strings.NewReader("short")
+	if _, err := New(cfg); err == nil || !strings.Contains(err.Error(), "startup attempt identity unavailable") {
+		t.Fatalf("ASSERT_FR23_ATTEMPT_RANDOM_FAILURE_OBSERVABLE: %v", err)
+	}
+}
+
+func TestReviewStartupAttemptSequenceMaxThenWrapFailsClosed(t *testing.T) {
+	cfg := attemptConfig(failingStarter{reason: "process start failed"}, "max")
+	m, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.startupAttemptSeq = math.MaxUint64 - 1
+	got := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	if got.AttemptID == "" || m.startupAttemptSeq != math.MaxUint64 {
+		t.Fatalf("ASSERT_FR23_ATTEMPT_MAX_SEQUENCE: id=%q sequence=%d", got.AttemptID, m.startupAttemptSeq)
+	}
+	defer func() {
+		if recover() == nil {
+			t.Fatal("ASSERT_FR23_ATTEMPT_SEQUENCE_WRAP_REFUSED")
+		}
+	}()
+	_ = m.Start(context.Background(), StartRequest{Profile: profile(t)})
 }
 
 func TestReviewDuplicateInjectedAttemptIDDoesNotAlias(t *testing.T) {

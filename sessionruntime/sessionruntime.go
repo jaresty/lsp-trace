@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -123,8 +122,10 @@ type Config struct {
 	Now func() time.Time
 	// Diagnostics is an optional internal-only exact-generation store.
 	Diagnostics *manageddiagnostic.Store
-	// StartupAttemptIDSource is an optional host-owned deterministic test seam.
-	StartupAttemptIDSource func(uint64) manageddiagnostic.StartupAttemptID
+	// Unexported seams keep deterministic fixtures inside this package; callers
+	// cannot provide bytes that appear directly in a production attempt ID.
+	startupAttemptEntropy func(uint64) []byte
+	startupAttemptRandom  io.Reader
 }
 type StartRequest struct {
 	Profile    runtimeprofile.Profile
@@ -629,27 +630,28 @@ type runtimeSession struct {
 }
 
 type Manager struct {
-	mu                     sync.Mutex
-	limits                 Limits
-	wire                   lspwire.Limits
-	starter                Starter
-	algebra                *session.Manager
-	sessions               map[string]*runtimeSession
-	operations             map[string]OperationSnapshot
-	operationIDs           []string
-	readiness              map[string]*readinessOperation
-	readinessIDs           map[string]string
-	observations           []Observation
-	sequence               uint64
-	readinessSeq           uint64
-	readinessTimeout       time.Duration
-	now                    func() time.Time
-	workers                int
-	workerDone             chan struct{}
-	closed                 bool
-	diagnostics            *manageddiagnostic.Store
-	startupAttemptIDSource func(uint64) manageddiagnostic.StartupAttemptID
-	startupAttemptSeq      uint64
+	mu                    sync.Mutex
+	limits                Limits
+	wire                  lspwire.Limits
+	starter               Starter
+	algebra               *session.Manager
+	sessions              map[string]*runtimeSession
+	operations            map[string]OperationSnapshot
+	operationIDs          []string
+	readiness             map[string]*readinessOperation
+	readinessIDs          map[string]string
+	observations          []Observation
+	sequence              uint64
+	readinessSeq          uint64
+	readinessTimeout      time.Duration
+	now                   func() time.Time
+	workers               int
+	workerDone            chan struct{}
+	closed                bool
+	diagnostics           *manageddiagnostic.Store
+	startupAttemptNonce   [16]byte
+	startupAttemptEntropy func(uint64) []byte
+	startupAttemptSeq     uint64
 }
 
 func New(c Config) (*Manager, error) {
@@ -675,18 +677,15 @@ func New(c Config) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	attemptSource := c.StartupAttemptIDSource
-	if attemptSource == nil {
-		managerNonce := make([]byte, 16)
-		if _, err := rand.Read(managerNonce); err != nil {
-			return nil, errors.New("sessionruntime: startup attempt identity unavailable")
-		}
-		prefix := "startup-" + hex.EncodeToString(managerNonce) + "-"
-		attemptSource = func(sequence uint64) manageddiagnostic.StartupAttemptID {
-			return manageddiagnostic.StartupAttemptID(prefix + strconv.FormatUint(sequence, 10))
-		}
+	random := c.startupAttemptRandom
+	if random == nil {
+		random = rand.Reader
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, startupAttemptIDSource: attemptSource}, nil
+	var managerNonce [16]byte
+	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
+		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
