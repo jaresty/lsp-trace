@@ -1,0 +1,47 @@
+=== RUN   TestFocusedTypedJoin
+    focused_test.go:31: ASSERT_TYPED_JOIN: all node/edge groups required
+--- FAIL: TestFocusedTypedJoin (0.00s)
+=== RUN   TestFocusedUnknownDuplicate
+    focused_test.go:44: ASSERT_OCCURRENCES: unknown and duplicate IDs must remain typed and explicit
+--- FAIL: TestFocusedUnknownDuplicate (0.00s)
+=== RUN   TestFocusedCatalogNonSource
+    focused_test.go:53: ASSERT_CATALOG_NON_SOURCE: complete source catalog retained, bookkeeping excluded
+--- FAIL: TestFocusedCatalogNonSource (0.04s)
+=== RUN   TestFocusedPrivacyRangesVersions
+    focused_test.go:61: ASSERT_PRIVACY_RANGES: default body exclusion and both receipts
+--- FAIL: TestFocusedPrivacyRangesVersions (0.00s)
+=== RUN   TestFocusedEndpointPolicy
+    focused_test.go:76: ASSERT_ENDPOINT_POLICY: explicit endpoints must accompany actual site
+--- FAIL: TestFocusedEndpointPolicy (0.00s)
+=== RUN   TestFocusedTampering
+=== RUN   TestFocusedTampering/drop-requested
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+=== RUN   TestFocusedTampering/drop-callsite
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+=== RUN   TestFocusedTampering/authority
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+=== RUN   TestFocusedTampering/resolved-unknown
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+=== RUN   TestFocusedTampering/input
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+=== RUN   TestFocusedTampering/policy
+    focused_test.go:84: ASSERT_MANIFEST_REJECTS_TAMPER: empty manifest accepted
+--- FAIL: TestFocusedTampering (0.00s)
+    --- FAIL: TestFocusedTampering/drop-requested (0.00s)
+    --- FAIL: TestFocusedTampering/drop-callsite (0.00s)
+    --- FAIL: TestFocusedTampering/authority (0.00s)
+    --- FAIL: TestFocusedTampering/resolved-unknown (0.00s)
+    --- FAIL: TestFocusedTampering/input (0.00s)
+    --- FAIL: TestFocusedTampering/policy (0.00s)
+=== RUN   TestFocusedSidecarStates
+    focused_test.go:111: ASSERT_SIDECAR_STATES: missing explicit asserted origins
+--- FAIL: TestFocusedSidecarStates (0.00s)
+=== RUN   TestFocusedUnsupported
+    focused_test.go:118: ASSERT_UNSUPPORTED: no generic provider family
+--- FAIL: TestFocusedUnsupported (0.00s)
+=== RUN   TestFocusedActualFR20Measurement
+    focused_test.go:123: ASSERT_ACTUAL_REPLAY: actual two edge identities must resolve
+--- FAIL: TestFocusedActualFR20Measurement (0.00s)
+FAIL
+FAIL	lsp-trace/internal/hydratedevidence	0.276s
+FAIL
