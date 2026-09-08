@@ -1,15 +1,24 @@
 package acquisitionops
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"lsp-trace/internal/operation"
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
+	"net/url"
+	"os"
+	"path/filepath"
 )
 
 type forbiddenRuntime struct{ calls int }
@@ -55,6 +64,78 @@ func TestManifestClosedPreflight(t *testing.T) {
 }
 func request(mode, raw string) operation.Request {
 	return operation.Request{Name: operation.Name(mode), Input: json.RawMessage(raw)}
+}
+
+type v3ParityRuntime struct {
+	profile runtimeprofile.Profile
+	uri     string
+	queries int
+}
+
+func (r *v3ParityRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
+	return sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, ""
+}
+func (r *v3ParityRuntime) Records() []sessionruntime.Record {
+	return []sessionruntime.Record{{SessionID: "fixture", Profile: r.profile, Generation: 9007199254740993, State: session.Ready}}
+}
+func (r *v3ParityRuntime) PrepareDocument(_ context.Context, req sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
+	content := []byte("package fixture\n")
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "languageId": "go", "version": 1, "text": string(content)}})
+	return sessionruntime.DocumentResult{URI: req.URI, LanguageID: "go", Supply: &sessionruntime.DocumentSupply{URI: req.URI, SessionID: req.SessionID, Generation: req.Generation, DocumentVersion: 1, Classification: graphprovenance.Supplied, Method: "textDocument/didOpen", Params: params, Content: content}}
+}
+func (r *v3ParityRuntime) RoundTrip(_ context.Context, req sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	if req.Method == "textDocument/prepareCallHierarchy" {
+		item := lsp.CallHierarchyItem{Name: "leaf", Kind: 12, URI: r.uri, Range: lsp.Range{End: lsp.Position{Character: 4}}, SelectionRange: lsp.Range{End: lsp.Position{Character: 4}}}
+		raw, _ := json.Marshal([]lsp.CallHierarchyItem{item})
+		return sessionruntime.RoundTripResult{Result: raw}
+	}
+	return sessionruntime.RoundTripResult{Result: json.RawMessage(`[]`)}
+}
+func (r *v3ParityRuntime) Diagnostics(string, uint64) manageddiagnostic.QueryResult {
+	r.queries++
+	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
+}
+
+func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "fr23-parity", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}}
+	typed, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest})
+	manifestRaw, _ := json.Marshal(manifest)
+	mcpRaw := []byte(`{"session_id":"fixture","generation":9007199254740993,"seed_manifest":` + string(manifestRaw) + `}`)
+	run := func(name operation.Name, input []byte) ([]byte, *v3ParityRuntime) {
+		runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+		got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: name, Input: input})
+		if failure != nil {
+			t.Fatalf("ASSERT_FR23_PUBLIC_PARITY_EXECUTION/%s: %v", name, failure)
+		}
+		return got.Artifact, runtime
+	}
+	cliV3, cliRuntime := run(SliceV3, typed)
+	mcpV3, mcpRuntime := run(SliceV3, mcpRaw)
+	if !bytes.Equal(cliV3, mcpV3) || cliRuntime.queries != 1 || mcpRuntime.queries != 1 {
+		t.Fatalf("ASSERT_FR23_V3_CANONICAL_BYTES: equal=%v queries=%d/%d", bytes.Equal(cliV3, mcpV3), cliRuntime.queries, mcpRuntime.queries)
+	}
+	if _, err := graphprovenance.ValidateFor(cliV3, graphprovenance.Family, "v3"); err != nil {
+		t.Fatal(err)
+	}
+	cliV2, _ := run(Slice, typed)
+	mcpV2, _ := run(Slice, mcpRaw)
+	if !bytes.Equal(cliV2, mcpV2) {
+		t.Fatal("ASSERT_FR23_V2_DEFAULT_BYTES_FROZEN")
+	}
+}
+
+func lspLocator(uri string) acquisition.Locator {
+	zero := uint32(0)
+	return acquisition.Locator{URI: uri, Line: &zero, Character: &zero, LanguageID: "go"}
 }
 
 func TestManifestDefaultsAndBounds(t *testing.T) {

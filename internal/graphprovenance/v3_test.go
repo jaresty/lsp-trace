@@ -58,32 +58,34 @@ func TestV3OfflineAdmissionRejectsSemanticMutations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mutate := func(t *testing.T, assertion string, change func(map[string]any)) {
-		t.Helper()
-		var doc map[string]any
-		if err := json.Unmarshal(raw, &doc); err != nil {
-			t.Fatal(err)
-		}
-		change(doc)
-		bad, err := json.Marshal(doc)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := ValidateFor(bad, Family, "v3"); err == nil {
-			t.Fatal(assertion)
-		}
+	mutate := func(name, assertion string, change func(map[string]any)) {
+		t.Run(name, func(t *testing.T) {
+			var doc map[string]any
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				t.Fatal(err)
+			}
+			change(doc)
+			bad, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ValidateFor(bad, Family, "v3"); err == nil {
+				t.Fatal(assertion)
+			}
+			t.Log("PASS " + assertion)
+		})
 	}
-	mutate(t, "ASSERT_FR23_V3_REPLAY_BINDS_AUTHORITY/session", func(d map[string]any) { d["session_id"] = "wrong" })
-	mutate(t, "ASSERT_FR23_V3_REPLAY_BINDS_AUTHORITY/generation", func(d map[string]any) { d["generation"] = float64(generation + 1) })
-	mutate(t, "ASSERT_FR23_V3_REPLAY_DIAGNOSTIC_SEMANTICS/status", func(d map[string]any) { d["diagnostics"].(map[string]any)["status"] = "future" })
-	mutate(t, "ASSERT_FR23_V3_REPLAY_ACCOUNTING/bytes", func(d map[string]any) { d["diagnostics"].(map[string]any)["retained_bytes"] = float64(0) })
-	mutate(t, "ASSERT_FR23_V3_REPLAY_ACCOUNTING/omitted", func(d map[string]any) { d["diagnostics"].(map[string]any)["omitted_records"] = float64(1) })
-	mutate(t, "ASSERT_FR23_V3_REPLAY_ORDERING/duplicate", func(d map[string]any) {
+	mutate("wrong-session", "ASSERT_FR23_V3_REPLAY_BINDS_AUTHORITY/session", func(d map[string]any) { d["session_id"] = "wrong" })
+	mutate("wrong-generation", "ASSERT_FR23_V3_REPLAY_BINDS_AUTHORITY/generation", func(d map[string]any) { d["generation"] = float64(generation + 1) })
+	mutate("unknown-status", "ASSERT_FR23_V3_REPLAY_DIAGNOSTIC_SEMANTICS/status", func(d map[string]any) { d["diagnostics"].(map[string]any)["status"] = "future" })
+	mutate("wrong-bytes", "ASSERT_FR23_V3_REPLAY_ACCOUNTING/bytes", func(d map[string]any) { d["diagnostics"].(map[string]any)["retained_bytes"] = float64(0) })
+	mutate("wrong-omitted", "ASSERT_FR23_V3_REPLAY_ACCOUNTING/omitted", func(d map[string]any) { d["diagnostics"].(map[string]any)["omitted_records"] = float64(1) })
+	mutate("duplicate", "ASSERT_FR23_V3_REPLAY_ORDERING/duplicate", func(d map[string]any) {
 		diag := d["diagnostics"].(map[string]any)
 		records := diag["records"].([]any)
 		diag["records"] = append(records, records[0])
 	})
-	mutate(t, "ASSERT_FR23_V3_REPLAY_ORDERING/reorder", func(d map[string]any) {
+	mutate("reorder", "ASSERT_FR23_V3_REPLAY_ORDERING/reorder", func(d map[string]any) {
 		diag := d["diagnostics"].(map[string]any)
 		r := diag["records"].([]any)[0].(map[string]any)
 		copy := make(map[string]any, len(r))
@@ -93,14 +95,26 @@ func TestV3OfflineAdmissionRejectsSemanticMutations(t *testing.T) {
 		copy["sequence"] = float64(2)
 		diag["records"] = []any{copy, r}
 	})
-	mutate(t, "ASSERT_FR23_V3_REPLAY_HIDDEN_VALUE", func(d map[string]any) {
+	mutate("hidden-value", "ASSERT_FR23_V3_REPLAY_HIDDEN_VALUE", func(d map[string]any) {
 		r := d["diagnostics"].(map[string]any)["records"].([]any)[0].(map[string]any)
 		r["call_hierarchy"] = map[string]any{"status": "unavailable", "value": true}
 	})
-	mutate(t, "ASSERT_FR23_V3_STRUCTURAL_BEFORE_SEMANTIC", func(d map[string]any) { delete(d, "diagnostics") })
+	mutate("structural-omission", "ASSERT_FR23_V3_STRUCTURAL_BEFORE_SEMANTIC", func(d map[string]any) { delete(d, "diagnostics") })
+	mutate("structural-unknown", "ASSERT_FR23_V3_STRUCTURAL_UNKNOWN", func(d map[string]any) { d["unknown"] = true })
 }
 
 func TestV3EnvelopeUsesInheritedV2Limit(t *testing.T) {
+	if got := MaxEnvelopeBytesV2 + MaxDiagnosticBytes; got != 201392128 {
+		t.Fatalf("ASSERT_FR23_V3_EXACT_LIMIT_ARITHMETIC: got %d", got)
+	}
+	result, root := coordinatorV2Fixture(t, nil)
+	v2, err := CaptureV2(context.Background(), result, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := CaptureV3(v2, result.Request.Context.SessionID, result.Request.Context.Generation, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}); err != nil {
+		t.Fatalf("ASSERT_FR23_V3_REPRESENTATIVE_VALID_ARTIFACT: %v", err)
+	}
 	legacyWrongBoundary := MaxEnvelopeBytes + MaxDiagnosticBytes + 1
 	if _, err := validateForV3(bytes.Repeat([]byte{' '}, legacyWrongBoundary)); err == nil || err.Error() == "V3 envelope byte limit" {
 		t.Fatalf("ASSERT_FR23_V3_INHERITS_V2_ENVELOPE_LIMIT: %v", err)
