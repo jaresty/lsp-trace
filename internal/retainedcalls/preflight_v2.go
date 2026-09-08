@@ -31,6 +31,8 @@ func scanExportV2(raw []byte, max int, carriers bool, admission *envelopeAdmissi
 	}
 	stack := []frame{}
 	roots := 0
+	var authoritativeInput []byte
+	nestedInput := false
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	for {
@@ -94,14 +96,19 @@ func scanExportV2(raw []byte, max int, carriers bool, admission *envelopeAdmissi
 						if err != nil {
 							return err
 						}
-						// The finite input->graph/canonical receipt carrier grammar cannot recurse
-						// arbitrarily: nested input_bytes are not admitted by any typed contract.
-						if key == "input_bytes" {
-							if err = admission.admit(decoded); err != nil {
+						// Structurally scan every decoded carrier before semantic recursion.
+						// Only input_bytes directly owned by the outer root object is
+						// authoritative; identically named nested members remain unknown
+						// typed fields and must never trigger full semantic admission.
+						if key == "input_bytes" && len(stack) == 1 {
+							authoritativeInput = append(authoritativeInput[:0], decoded...)
+						} else {
+							if err = scanLeafV2(decoded, limit); err != nil {
 								return err
 							}
-						} else if err = scanLeafV2(decoded, limit); err != nil {
-							return err
+							if key == "input_bytes" {
+								nestedInput = true
+							}
 						}
 						top.key = true
 					}
@@ -125,6 +132,11 @@ func scanExportV2(raw []byte, max int, carriers bool, admission *envelopeAdmissi
 	}
 	if roots != 1 || len(stack) != 0 {
 		return errors.New("V2 requires one JSON value")
+	}
+	if carriers && !nestedInput && len(authoritativeInput) > 0 {
+		if err := admission.admit(authoritativeInput); err != nil {
+			return err
+		}
 	}
 	return nil
 }

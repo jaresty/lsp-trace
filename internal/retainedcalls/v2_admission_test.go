@@ -33,6 +33,66 @@ func TestRetainedV2SingleAdmission(t *testing.T) {
 	t.Log("ASSERT_SINGLE_ADMISSION: PASS")
 }
 
+func TestIndependentDistinctValidCarrierAdmissionCount(t *testing.T) {
+	input, _ := fixtureV2(t, acquisition.Slice, "")
+	raw, err := ExportV2(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	distinct := append([]byte(" \n"), input...)
+	invalid := append([]byte(`{"extra":{"input_bytes":"`+base64.StdEncoding.EncodeToString(distinct)+`"},`), raw[1:]...)
+	calls := 0
+	if _, err := validateForV2Observed(invalid, func() { calls++ }); err == nil || err.Error() != `json: unknown field "extra"` {
+		t.Fatalf("ASSERT_DISTINCT_VALID_CARRIER_REJECTION: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("ASSERT_DISTINCT_VALID_CARRIER_ADMISSION_COUNT: got %d full admissions, want 0", calls)
+	}
+	t.Log("ASSERT_DISTINCT_VALID_CARRIER_ADMISSION_COUNT: PASS")
+}
+
+func TestRetainedV2BoundedCarrierArrangementsAdmissionCount(t *testing.T) {
+	input, _ := fixtureV2(t, acquisition.Slice, "")
+	raw, err := ExportV2(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(input)
+	depth := func(n int) string { return strings.Repeat("[", n) + "0" + strings.Repeat("]", n) }
+	cases := []struct {
+		name, prefix, want string
+		wantCalls          int
+	}{
+		{"nested_same", `"extra":{"input_bytes":"` + encoded + `"},`, `json: unknown field "extra"`, 0},
+		{"nested_distinct", `"extra":{"input_bytes":"` + base64.StdEncoding.EncodeToString(append([]byte(" \n"), input...)) + `"},`, `json: unknown field "extra"`, 0},
+		{"nested_wrong_type", `"extra":{"input_bytes":1},`, "V2 known byte carrier type/limit", 0},
+		{"nested_bad_base64", `"extra":{"input_bytes":"!"},`, "illegal base64 data at input byte 0", 0},
+		{"nested_depth_64", `"extra":{"input_bytes":"` + base64.StdEncoding.EncodeToString([]byte(depth(64))) + `"},`, `json: unknown field "extra"`, 0},
+		{"nested_depth_65", `"extra":{"input_bytes":"` + base64.StdEncoding.EncodeToString([]byte(depth(65))) + `"},`, "V2 known-carrier depth limit", 0},
+		{"nested_duplicate", `"extra":{"input_bytes":"` + encoded + `","input_bytes":"` + encoded + `"},`, "V2 duplicate member", 0},
+		{"nested_missing", `"extra":{},`, `json: unknown field "extra"`, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := append([]byte(`{`+tc.prefix), raw[1:]...)
+			calls := 0
+			_, err := validateForV2Observed(candidate, func() { calls++ })
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("ASSERT_BOUNDED_CARRIER_ERROR: want %q, got %v", tc.want, err)
+			}
+			if calls != tc.wantCalls || calls > 1 {
+				t.Fatalf("ASSERT_BOUNDED_CARRIER_ADMISSION_COUNT: got %d, want %d and at most 1", calls, tc.wantCalls)
+			}
+		})
+	}
+	calls := 0
+	if _, err := validateForV2Observed(raw, func() { calls++ }); err != nil || calls != 1 {
+		t.Fatalf("ASSERT_CANONICAL_ADMISSION_COUNT: calls=%d err=%v", calls, err)
+	}
+	t.Log("ASSERT_BOUNDED_CARRIER_ADMISSION_COUNT: PASS")
+	t.Log("ASSERT_CANONICAL_ADMISSION_COUNT: PASS")
+}
+
 func TestRetainedV2AdmissionExactOwnedBytes(t *testing.T) {
 	input, _ := fixtureV2(t, acquisition.Slice, "")
 	calls := 0
@@ -109,7 +169,7 @@ func TestRetainedV2AdmissionSemanticAndOrdering(t *testing.T) {
 		{`{"unknown":1,` + validCarrier + `}`, `json: unknown field "unknown"`},
 		{`{` + validCarrier + `,"n":1,"n":2}`, "V2 duplicate member"},
 		{`{"n":1,"n":2,` + validCarrier + `}`, "V2 duplicate member"},
-		{`{` + validCarrier + `,"extra":{"input_bytes":"e30="}}`, "schema_version: missing or not a string"},
+		{`{` + validCarrier + `,"extra":{"input_bytes":"e30="}}`, `json: unknown field "extra"`},
 	} {
 		_, err := ValidateFor([]byte(tc.raw), Family, "v2")
 		if err == nil || err.Error() != tc.want {
