@@ -136,13 +136,80 @@ func validIO(io IOFacts) bool {
 	}
 }
 
+type phaseRule struct {
+	terminals       map[Terminal]bool
+	substep         string
+	matchedResponse bool
+	io              string
+}
+
+var diagnosticPhaseRules = map[Phase]phaseRule{
+	PhaseSpawn:              {terminals: terminalSet(TerminalProtocolError, TerminalTransportClosed, TerminalCancelled, TerminalDeadlineExceeded, TerminalProcessExited, TerminalUnknown), substep: "none", io: "optional"},
+	PhaseInitializeWrite:    {terminals: terminalSet(TerminalProtocolError, TerminalTransportClosed, TerminalCancelled, TerminalDeadlineExceeded, TerminalProcessExited, TerminalUnknown), substep: "optional", io: "optional"},
+	PhaseInitializeResponse: {terminals: terminalSet(TerminalResponseReceived, TerminalProtocolError, TerminalTransportClosed, TerminalCancelled, TerminalDeadlineExceeded, TerminalProcessExited, TerminalUnknown), substep: "none", io: "optional"},
+	PhaseRequestDispatch:    {terminals: terminalSet(TerminalResponseReceived, TerminalProtocolError, TerminalTransportClosed, TerminalCancelled, TerminalDeadlineExceeded, TerminalProcessExited, TerminalUnknown), substep: "none", matchedResponse: true, io: "optional"},
+	PhaseReadinessComplete:  {terminals: terminalSet(TerminalResponseReceived), substep: "required", matchedResponse: true, io: "round-trip"},
+	PhaseDocumentSupply:     {terminals: terminalSet(TerminalResponseReceived, TerminalProtocolError), substep: "none", io: "write-only"},
+	PhaseCapabilityCheck:    {terminals: terminalSet(TerminalResponseReceived, TerminalProtocolError), substep: "none", io: "none"},
+}
+
+func terminalSet(values ...Terminal) map[Terminal]bool {
+	out := make(map[Terminal]bool, len(values))
+	for _, value := range values {
+		out[value] = true
+	}
+	return out
+}
+
+func completedMessages(io IOFacts, minimum int) bool {
+	return io.State == IOComplete && io.Messages >= minimum
+}
+
+func validatePhaseMatrix(r Record) error {
+	rule, ok := diagnosticPhaseRules[r.Phase]
+	if !ok || !rule.terminals[r.Terminal] {
+		return errors.New("terminal does not belong to phase")
+	}
+	if rule.substep == "required" && (r.Substep.Status != Observed || r.Substep.Value != SubstepInitializedNotification) {
+		return errors.New("phase requires observed substep")
+	}
+	if rule.substep == "none" && r.Substep.Status == Observed {
+		return errors.New("substep does not belong to phase")
+	}
+	if r.Terminal == TerminalProcessExited {
+		if r.ProcessExit.Status != Observed {
+			return errors.New("process exit must be independently observed")
+		}
+	} else if r.ProcessExit.Status == Observed {
+		return errors.New("process exit does not belong to terminal")
+	}
+	matched := r.Terminal == TerminalResponseReceived || (rule.matchedResponse && r.Terminal == TerminalProtocolError)
+	if matched && rule.io != "none" && rule.io != "write-only" && (!completedMessages(r.Write, 1) || !completedMessages(r.Read, 1)) {
+		return errors.New("matched response requires completed request and response IO")
+	}
+	if (r.Limits.RequestedDeadlineNS.Status == Observed && r.Limits.EffectiveDeadlineNS.Status != Observed) ||
+		(r.Limits.RequestedMaxBytes.Status == Observed && r.Limits.EffectiveMaxBytes.Status != Observed) ||
+		(r.Limits.RequestedMaxMessages.Status == Observed && r.Limits.EffectiveMaxMessages.Status != Observed) {
+		return errors.New("requested limit requires effective execution limit")
+	}
+	switch rule.io {
+	case "none":
+		if r.Read.State != IOUnavailable || r.Write.State != IOUnavailable {
+			return errors.New("phase does not carry IO")
+		}
+	case "write-only":
+		if r.Read.State != IOUnavailable || r.Write.Messages < 1 || (r.Write.State != IOComplete && r.Write.State != IOFailed) {
+			return errors.New("document supply requires one completed or failed write")
+		}
+	}
+	return nil
+}
+
 func Validate(r Record) error {
 	if r.SessionID == "" || r.Generation == 0 || r.Sequence == 0 {
 		return errors.New("diagnostic identity is required")
 	}
-	switch r.Phase {
-	case PhaseSpawn, PhaseInitializeWrite, PhaseInitializeResponse, PhaseRequestDispatch, PhaseReadinessComplete, PhaseDocumentSupply, PhaseCapabilityCheck:
-	default:
+	if _, ok := diagnosticPhaseRules[r.Phase]; !ok {
 		return errors.New("unknown phase")
 	}
 	switch r.Terminal {
@@ -166,8 +233,8 @@ func Validate(r Record) error {
 	if r.Substep.Status == Observed && r.Substep.Value != SubstepInitializedNotification {
 		return errors.New("unknown substep")
 	}
-	if r.Substep.Status == Observed && r.Phase != PhaseInitializeWrite && r.Phase != PhaseReadinessComplete {
-		return errors.New("substep does not belong to phase")
+	if err := validatePhaseMatrix(r); err != nil {
+		return err
 	}
 	if r.ProcessExit.Status != Observed && (r.ProcessExit.ExitCode.Status == Observed || r.ProcessExit.ObservedBeforeCleanup.Status == Observed || r.ProcessExit.CleanupInduced.Status == Observed) {
 		return errors.New("unavailable process exit carries observed detail")
@@ -185,9 +252,6 @@ func Validate(r Record) error {
 	}
 	if r.Terminal == TerminalDeadlineExceeded && r.Phase == PhaseInitializeResponse && r.Reason.Value == "initialize-success" {
 		return errors.New("response and timeout conflict")
-	}
-	if r.Terminal == TerminalProcessExited && r.ProcessExit.Status != Observed {
-		return errors.New("process exit must be independently observed")
 	}
 	if r.Phase == PhaseCapabilityCheck && r.Reason.Status == Observed && r.Reason.Value == "unsupported-call-hierarchy" && r.CallHierarchy.Status != Observed {
 		return errors.New("unsupported capability requires observed negotiation")

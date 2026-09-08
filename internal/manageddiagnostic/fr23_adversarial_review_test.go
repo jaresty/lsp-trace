@@ -121,24 +121,83 @@ func matrixRecord(phase Phase, terminal Terminal) Record {
 }
 
 func TestReviewRequestMatchedResponseRequiresCompletedIO(t *testing.T) {
+	states := []IOState{IOUnavailable, IOAttempted, IOComplete, IOFailed}
 	for _, terminal := range []Terminal{TerminalResponseReceived, TerminalProtocolError} {
-		for _, mutate := range []func(*Record){
-			func(r *Record) { r.Write = IOFacts{State: IOUnavailable} },
-			func(r *Record) { r.Write.Messages = 0 },
-			func(r *Record) { r.Read = IOFacts{State: IOUnavailable} },
-			func(r *Record) { r.Read.Messages = 0 },
-		} {
-			r := matrixRecord(PhaseRequestDispatch, terminal)
-			mutate(&r)
-			if Validate(r) == nil {
-				t.Errorf("ASSERT_FR23_REQUEST_MATCHED_IO_%s: accepted %+v", terminal, r)
+		for _, side := range []string{"read", "write"} {
+			for _, state := range states {
+				for _, messages := range []int{0, 1} {
+					r := matrixRecord(PhaseRequestDispatch, terminal)
+					io := IOFacts{State: state, Messages: messages}
+					if state == IOUnavailable && messages != 0 {
+						continue
+					}
+					if side == "read" {
+						r.Read = io
+					} else {
+						r.Write = io
+					}
+					want := state == IOComplete && messages >= 1
+					if got := Validate(r) == nil; got != want {
+						t.Errorf("ASSERT_FR23_REQUEST_MATCHED_IO_%s_%s_%s_%d: valid=%v want=%v", terminal, side, state, messages, got, want)
+					}
+				}
 			}
 		}
 	}
 }
 
+func TestReviewPhaseSubstepProcessAndLimitApplicability(t *testing.T) {
+	for _, phase := range []Phase{PhaseSpawn, PhaseInitializeResponse, PhaseRequestDispatch, PhaseDocumentSupply, PhaseCapabilityCheck} {
+		r := matrixRecord(phase, firstTerminalForPhase(phase))
+		r.Substep = Fact[Substep]{Status: Observed, Value: SubstepInitializedNotification}
+		if Validate(r) == nil {
+			t.Errorf("ASSERT_FR23_SUBSTEP_APPLICABILITY_%s", phase)
+		}
+	}
+	r := matrixRecord(PhaseReadinessComplete, TerminalResponseReceived)
+	r.Substep = Fact[Substep]{Status: Unavailable}
+	if Validate(r) == nil {
+		t.Error("ASSERT_FR23_READINESS_SUBSTEP_REQUIRED")
+	}
+	r = matrixRecord(PhaseRequestDispatch, TerminalCancelled)
+	r.ProcessExit = ProcessExit{Status: Observed, ObservedBeforeCleanup: Fact[bool]{Status: Observed, Value: true}}
+	if Validate(r) == nil {
+		t.Error("ASSERT_FR23_PROCESS_APPLICABILITY")
+	}
+	for _, mutate := range []func(*Record){
+		func(r *Record) {
+			r.Limits.RequestedDeadlineNS = Fact[int64]{Status: Observed, Value: 1}
+			r.Limits.EffectiveDeadlineNS = Fact[int64]{Status: Unavailable}
+		},
+		func(r *Record) {
+			r.Limits.RequestedMaxBytes = Fact[int64]{Status: Observed, Value: 1}
+			r.Limits.EffectiveMaxBytes = Fact[int64]{Status: Unavailable}
+		},
+		func(r *Record) {
+			r.Limits.RequestedMaxMessages = Fact[int]{Status: Observed, Value: 1}
+			r.Limits.EffectiveMaxMessages = Fact[int]{Status: Unavailable}
+		},
+	} {
+		r = matrixRecord(PhaseRequestDispatch, TerminalCancelled)
+		mutate(&r)
+		if Validate(r) == nil {
+			t.Error("ASSERT_FR23_EFFECTIVE_LIMIT_REQUIRED")
+		}
+	}
+}
+
+func firstTerminalForPhase(phase Phase) Terminal {
+	if phase == PhaseDocumentSupply || phase == PhaseCapabilityCheck {
+		return TerminalResponseReceived
+	}
+	return TerminalCancelled
+}
+
 func TestReviewValidatorAllowsExplicitEarlyPartial(t *testing.T) {
-	for _, tc := range []struct{ phase Phase; terminal Terminal }{
+	for _, tc := range []struct {
+		phase    Phase
+		terminal Terminal
+	}{
 		{PhaseSpawn, TerminalUnknown}, {PhaseInitializeWrite, TerminalCancelled},
 		{PhaseInitializeResponse, TerminalDeadlineExceeded}, {PhaseRequestDispatch, TerminalTransportClosed},
 	} {
