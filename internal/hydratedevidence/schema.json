@@ -1,0 +1,902 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lsp-trace:hydrated-evidence:internal:v1",
+  "description": "Internal-only structural contract. Validate against exact original Input and Request for admission, authority, byte fidelity, union, budgets and snapshot semantics. No public registry registration.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/Bundle"
+    },
+    {
+      "$ref": "#/$defs/Sidecar"
+    },
+    {
+      "$ref": "#/$defs/Page"
+    }
+  ],
+  "$defs": {
+    "Policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include_bodies": {
+          "type": "boolean"
+        },
+        "allow_caller_boundaries": {
+          "type": "boolean"
+        },
+        "max_input_bytes": {
+          "type": "integer"
+        },
+        "max_output_bytes": {
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "type": "integer"
+        },
+        "max_spans": {
+          "type": "integer"
+        },
+        "max_origins": {
+          "type": "integer"
+        },
+        "max_work": {
+          "type": "integer"
+        },
+        "max_page_bytes": {
+          "type": "integer"
+        },
+        "max_pages": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "include_bodies",
+        "allow_caller_boundaries",
+        "max_input_bytes",
+        "max_output_bytes",
+        "max_body_bytes",
+        "max_spans",
+        "max_origins",
+        "max_work",
+        "max_page_bytes",
+        "max_pages"
+      ]
+    },
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Selection"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy"
+        }
+      },
+      "required": [
+        "selections",
+        "policy"
+      ]
+    },
+    "Selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "record_id": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "position_encoding": {
+          "type": "string"
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "boundary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Boundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "record_id",
+        "source_id",
+        "mode",
+        "position_encoding",
+        "range",
+        "bytes",
+        "boundary"
+      ]
+    },
+    "Boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "reference": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "qualification": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/Range"
+        }
+      },
+      "required": [
+        "kind",
+        "reference",
+        "authority",
+        "qualification",
+        "source_id",
+        "content_hash",
+        "range"
+      ]
+    },
+    "Sidecar": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "lsp-trace.hydrated-sidecar.v1"
+        },
+        "artifact_digest": {
+          "type": "string"
+        },
+        "authority": {
+          "const": "CALLER_ASSERTED"
+        },
+        "qualification": {
+          "const": "NON_AUTHORITATIVE"
+        },
+        "sources": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AssertedSource"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "records": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/AssertedRecord"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "artifact_digest",
+        "authority",
+        "qualification",
+        "sources",
+        "records"
+      ]
+    },
+    "AssertedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "receipt_reference": {
+          "type": "string"
+        },
+        "version_reference": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content": {
+          "anyOf": [
+            {
+              "type": "string",
+              "contentEncoding": "base64"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_encoding": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "receipt_reference",
+        "version_reference",
+        "uri",
+        "revision",
+        "content_hash",
+        "content",
+        "source_encoding",
+        "state"
+      ]
+    },
+    "AssertedRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "source_ids": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "relationship_references": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position_encoding": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "source_ids",
+        "relationship_references",
+        "range",
+        "position_encoding"
+      ]
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "artifact_digest": {
+          "type": "string"
+        },
+        "receipt_reference": {
+          "type": "string"
+        },
+        "receipt_digest": {
+          "type": "string"
+        },
+        "version_reference": {
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_encoding": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "input_status": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "qualification": {
+          "type": "string"
+        },
+        "classification": {
+          "type": "string"
+        },
+        "analyzed_version": {
+          "type": "string"
+        },
+        "document_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "artifact_digest",
+        "receipt_reference",
+        "receipt_digest",
+        "version_reference",
+        "uri",
+        "revision",
+        "content_hash",
+        "source_encoding",
+        "state",
+        "input_status",
+        "authority",
+        "qualification",
+        "classification",
+        "analyzed_version",
+        "document_version"
+      ]
+    },
+    "Record": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_attribution": {
+          "type": "string"
+        },
+        "anchor_status": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "artifact_digest": {
+          "type": "string"
+        },
+        "pointer": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "native_id": {
+          "type": "string"
+        },
+        "authority": {
+          "type": "string"
+        },
+        "qualification": {
+          "type": "string"
+        },
+        "source_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relationship_references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "position_encoding": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_attribution",
+        "anchor_status",
+        "id",
+        "artifact_digest",
+        "pointer",
+        "kind",
+        "native_id",
+        "authority",
+        "qualification",
+        "source_ids",
+        "relationship_references",
+        "range",
+        "position_encoding"
+      ]
+    },
+    "Catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_digests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Record"
+          }
+        }
+      },
+      "required": [
+        "input_digests",
+        "sources",
+        "records"
+      ]
+    },
+    "Origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_authority": {
+          "type": "string"
+        },
+        "selection": {
+          "$ref": "#/$defs/Selection"
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Record"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "original_range": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "original_coordinates_status": {
+          "type": "string"
+        },
+        "bytes": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Interval"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "span_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "coordinate_authority",
+        "selection",
+        "record",
+        "status",
+        "original_range",
+        "original_coordinates_status",
+        "bytes",
+        "span_ids"
+      ]
+    },
+    "Span": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source_id": {
+          "type": "string"
+        },
+        "position_encoding": {
+          "type": "string"
+        },
+        "bytes": {
+          "$ref": "#/$defs/Interval"
+        },
+        "content": {
+          "type": "string",
+          "contentEncoding": "base64"
+        },
+        "content_hash": {
+          "type": "string"
+        },
+        "origin_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "position_encoding",
+        "bytes",
+        "content",
+        "content_hash",
+        "origin_ids"
+      ]
+    },
+    "Bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "lsp-trace.hydrated-evidence.v1"
+        },
+        "input_digests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "request_digest": {
+          "type": "string"
+        },
+        "policy": {
+          "$ref": "#/$defs/Policy"
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Source"
+          }
+        },
+        "origins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Origin"
+          }
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Span"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "total_origins": {
+          "type": "integer"
+        },
+        "total_spans": {
+          "type": "integer"
+        },
+        "work": {
+          "type": "integer"
+        },
+        "digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "input_digests",
+        "request_digest",
+        "policy",
+        "sources",
+        "origins",
+        "spans",
+        "complete",
+        "total_origins",
+        "total_spans",
+        "work",
+        "digest"
+      ]
+    },
+    "Position": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "line": {
+          "type": "integer"
+        },
+        "character": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "line",
+        "character"
+      ]
+    },
+    "Range": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "$ref": "#/$defs/Position"
+        },
+        "end": {
+          "$ref": "#/$defs/Position"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "Interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "integer"
+        },
+        "end": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ]
+    },
+    "Entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "header": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Bundle"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Source"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Origin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Span"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [],
+      "oneOf": [
+        {
+          "required": [
+            "header"
+          ]
+        },
+        {
+          "required": [
+            "source"
+          ]
+        },
+        {
+          "required": [
+            "origin"
+          ]
+        },
+        {
+          "required": [
+            "span"
+          ]
+        }
+      ]
+    },
+    "Page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer"
+        },
+        "total_pages": {
+          "type": "integer"
+        },
+        "total_origins": {
+          "type": "integer"
+        },
+        "total_spans": {
+          "type": "integer"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Entry"
+          }
+        },
+        "next": {
+          "type": "string"
+        },
+        "digest": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "ordinal",
+        "total_pages",
+        "total_origins",
+        "total_spans",
+        "entries",
+        "next",
+        "digest"
+      ]
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "snapshot": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "snapshot",
+        "ordinal"
+      ]
+    }
+  }
+}
