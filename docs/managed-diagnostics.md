@@ -1,6 +1,6 @@
 # Internal managed diagnostics
 
-FR23's first checkpoint is internal only. `internal/manageddiagnostic` owns safe diagnostic records and semantic validation; `sessionruntime.Manager` optionally retains them by exact opaque session ID and generation. This checkpoint does not register a CLI, MCP tool, public schema family, registry entry, graph-provenance field, or default file sink.
+FR23's first checkpoint is internal only. `internal/manageddiagnostic` owns safe diagnostic records and semantic validation; `sessionruntime.Manager` optionally retains them by exact opaque session ID and generation. The retained stores remain internal and are not a public schema family, registry entry, graph-provenance field, or MCP tool. FR23 now provides one explicit CLI-only private startup sink; it performs no default write and makes no public-release or MCP-availability claim.
 
 ## Current capture
 
@@ -31,6 +31,14 @@ The local validator uses a declarative closed table for the implemented phase/te
 ## Exact future diagnostic extension
 
 The current internal schema records ordinary request dispatch and actual completed read accounting, but does not claim D01 response-disposition or read-loop-state coverage. Requested limits retain raw caller values; effective limits are the exact normalized values used by execution (defaults included). Deadline remaining time is derived once from the absolute request deadline and the manager clock snapshot, then reused for requested/effective facts. A future internal contract version must separately represent request write start and completion; response read and dispatch accounting with `MATCHED`, `UNMATCHED`, and `LATE` states; observed transport read-loop stalled versus observed transport read failure; capability checks; document preparation; and process lifecycle. Each state must preserve observed message/byte accounting and explicit unavailable/withheld facts. Raw stderr content remains withheld. These records are observational reports only: timeout, ordering, and process observations do not establish cause. This checkpoint does not run D01, increase timeout, retry, probe, or access product repositories.
+
+## Private startup sink operator handoff
+
+For a reviewed local startup investigation, pass both `--private-startup-diagnostic-root PRIVATE_ROOT` and `--private-startup-diagnostic-selector SAFE_RELATIVE_NAME` to an acquisition v2/v3 `slice` or `incoming` command. The root must already be a caller-approved writable private directory (no group/other permission bits); the selector must remain beneath it. The sink creates one `0600` artifact with atomic no-replace semantics. A collision, unsafe selector, unavailable root, validation error, or write failure is secondary: it is not retried, is not printed, and cannot replace the primary acquisition failure.
+
+`managed-startup-diagnostics/v1` is a private offline document capped at 64 records, 65,536 exact serialized bytes, and 4,096 bytes per retained internal string. It identifies the manager-owned startup attempt and includes exact session/generation only after admission. It projects only validated lifecycle, phase/terminal, aggregate initialization IO, limits, process-exit facts, and stderr metadata; it never contains stderr text, raw errors, RPC content, source/URI/path, cwd, environment, command, arguments, or opaque data. `available`, `unavailable`, `evicted`, and `omitted` are distinct. Use `ValidateStartupDiagnostics` for closed structural/semantic admission and `VerifyStartupDiagnostics` for exact digest/length checking.
+
+An artifact can show that the manager observed an attempt and its retained states. It does not by itself prove the provider process started, identify a root cause, authenticate the producer, qualify a provider/product, or establish deployment behavior. No D01, provider, network, install, or deployment action is part of this handoff.
 
 ## Deferred integration
 

@@ -17,6 +17,7 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
@@ -88,6 +89,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var c sliceConfig
 	var profile profileFlags
 	var manifestPath string
+	var diagnosticRoot, diagnosticSelector string
 	fs.StringVar(&c.workspace, "workspace", "", "host workspace path")
 	fs.StringVar(&c.command, "server", "", "trusted language server executable")
 	fs.StringVar(&profile.Name, "profile", "", "named server profile")
@@ -97,6 +99,8 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
 	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
 	fs.StringVar(&c.output, "output", "", "immutable output selector")
+	fs.StringVar(&diagnosticRoot, "private-startup-diagnostic-root", "", "caller-approved private diagnostic root")
+	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
 	fs.BoolVar(&c.pretty, "pretty", false, "indent outer JSON without changing embedded graph bytes")
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -106,6 +110,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	if profile.ConfigPath != "" && profile.Name == "" {
 		return fail(fmt.Errorf("--config requires --profile"))
+	}
+	if (diagnosticRoot == "") != (diagnosticSelector == "") {
+		return fail(fmt.Errorf("private startup diagnostic root and selector must be supplied together"))
 	}
 	op := acquisitionops.Slice
 	if mode == "incoming" {
@@ -153,7 +160,12 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	command, err := exec.LookPath(c.command)
 	if err != nil {
-		return fail(err)
+		if diagnosticRoot == "" {
+			return fail(err)
+		}
+		// Opted-in startup diagnostics require manager-owned attempt identity even
+		// when execution is not attempted successfully. Do not claim a start.
+		command = c.command
 	}
 	command, err = filepath.Abs(command)
 	if err != nil {
@@ -167,7 +179,11 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if err != nil {
 		return fail(err)
 	}
-	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}})
+	var diagnosticStore *manageddiagnostic.Store
+	if diagnosticRoot != "" {
+		diagnosticStore = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: manageddiagnostic.StartupDiagnosticsMaxRecords, MaxBytes: manageddiagnostic.StartupDiagnosticsMaxBytes})
+	}
+	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore})
 	if err != nil {
 		return fail(err)
 	}
@@ -176,6 +192,15 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	ctx, deadlineCancel := context.WithTimeout(ctx, effective.Limits.Timeout)
 	defer deadlineCancel()
 	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
+	if diagnosticRoot != "" {
+		defer func() {
+			generation := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
+			if started.SessionID != "" && started.Generation > 0 {
+				generation = manager.Diagnostics(started.SessionID, started.Generation)
+			}
+			_, _ = (manageddiagnostic.StartupDiagnosticSink{Root: diagnosticRoot, Selector: diagnosticSelector}).Finalize(manager.GetStartupAttempt(started.AttemptID), generation)
+		}()
+	}
 	if started.Failure != "" {
 		return fail(fmt.Errorf("managed startup: %s", started.Failure))
 	}
