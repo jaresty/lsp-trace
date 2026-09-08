@@ -10,6 +10,12 @@ Runtime capture currently records initialization write/read/cancellation distinc
 
 Every optional fact carries `observed`, `unavailable`, or `withheld`. EOF is transport closure, not process exit. Process exit is claimed only when the process owner independently observes death before cleanup; teardown-induced death is not causal. Document supply completion is a prerequisite fact, not proof the server consumed or analyzed content.
 
+## Startup-attempt identity
+
+Every `sessionruntime.Manager.Start` invocation receives a distinct host-owned `StartupAttemptID` before deadline, cancellation, availability, pipe, or process-start checks. Restart process starts receive distinct attempts too. The default source is a cryptographically random manager-instance prefix plus a mutex-owned monotonic sequence; tests may inject the complete host-owned source. This is collision-resistant process-runtime identity, not cryptographic authentication. It is not caller asserted, is not derived from session/profile/path/command, does not equal or parse as a generation, and makes no deterministic-order claim across schedules, managers, processes, or runs. Sequence order is observable only within one Manager lifetime.
+
+`managed-startup-attempt/v1` is a separate internal contract. Failed attempts have no session/generation admission fields. Admission is attached only after the exact runtime session generation is installed; readiness snapshots carry the same attempt ID and exact generation. Exact attempt lookup never guesses a current generation. Attempt records are immutable clones retained in a Manager-level count/byte-bounded FIFO; teardown does not specially delete them, and eviction is explicit. Startup reason/subcodes are closed static values. Raw errors, commands, arguments, environment, paths, and stderr content are never copied. Process exit remains unavailable unless independently observed before cleanup; failed spawn does not invent an exit.
+
 ## Security and ownership
 
 Records never contain raw stderr, raw errors, JSON-RPC messages/data, request params, source bytes/URI/path, command, args, or environment. Stderr records only status, configured cap, observed retained-byte count, and truncation; there is no content, digest, reference, or release suggestion. Session/profile identities are existing opaque runtime identities. Callers must pass only opaque target/caller IDs.
@@ -21,6 +27,10 @@ Records and query results clone mutable slices. The store is in-memory, mutex-pr
 Diagnostics are observational and not canonical replay claims. Existing external failure/status codes and V1 evidence bytes are unchanged; no retry, acquisition, timeout, or public operation behavior is added. Retained records support later offline projection without consulting a process.
 
 The local validator rejects negative/mismatched elapsed time, response/timeout contradictions, claimed process exit without an observed process fact, unsupported capability with unknown negotiation, and observed exit without chronology. It intentionally accepts legitimate partial records and does not infer root cause.
+
+## Exact future diagnostic extension
+
+The current internal schema does not yet claim D01 request/dispatch/read-loop coverage. A future internal contract version must separately represent request write start and completion; response read and dispatch accounting with `MATCHED`, `UNMATCHED`, and `LATE` states; observed transport read-loop stalled versus observed transport read failure; capability checks; document preparation; and process lifecycle. Each state must preserve observed message/byte accounting and explicit unavailable/withheld facts. Raw stderr content remains withheld. These records are observational reports only: timeout, ordering, and process observations do not establish cause. This checkpoint does not run D01, increase timeout, retry, probe, or access product repositories.
 
 ## Deferred integration
 

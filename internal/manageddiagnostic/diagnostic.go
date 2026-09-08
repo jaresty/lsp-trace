@@ -173,12 +173,19 @@ type bucket struct {
 	evicted uint64
 }
 type Store struct {
-	mu      sync.RWMutex
-	bounds  Bounds
-	buckets map[generationKey]bucket
+	mu                  sync.RWMutex
+	bounds              Bounds
+	buckets             map[generationKey]bucket
+	attempts            map[StartupAttemptID]StartupAttemptRecord
+	attemptOrder        []StartupAttemptID
+	attemptBytes        int
+	evictedAttempts     map[StartupAttemptID]struct{}
+	evictedAttemptOrder []StartupAttemptID
 }
 
-func NewStore(b Bounds) *Store { return &Store{bounds: b, buckets: make(map[generationKey]bucket)} }
+func NewStore(b Bounds) *Store {
+	return &Store{bounds: b, buckets: make(map[generationKey]bucket), attempts: make(map[StartupAttemptID]StartupAttemptRecord), evictedAttempts: make(map[StartupAttemptID]struct{})}
+}
 func recordSize(r Record) int {
 	return 256 + len(r.SessionID) + len(r.Timing.Scope) + len(r.Reason.Value) + len(r.Request.Method.Value) + len(r.Request.TargetID.Value) + len(r.Request.CallerID.Value) + len(r.SafeSubcodes)*32
 }

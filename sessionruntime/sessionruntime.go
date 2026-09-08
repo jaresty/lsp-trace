@@ -5,7 +5,9 @@ package sessionruntime
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -64,6 +66,7 @@ type SessionMetadata struct {
 
 type ReadinessSnapshot struct {
 	ID               string
+	AttemptID        manageddiagnostic.StartupAttemptID
 	SessionID        string
 	Generation       uint64
 	State            ReadinessState
@@ -120,6 +123,8 @@ type Config struct {
 	Now func() time.Time
 	// Diagnostics is an optional internal-only exact-generation store.
 	Diagnostics *manageddiagnostic.Store
+	// StartupAttemptIDSource is an optional host-owned deterministic test seam.
+	StartupAttemptIDSource func(uint64) manageddiagnostic.StartupAttemptID
 }
 type StartRequest struct {
 	Profile    runtimeprofile.Profile
@@ -128,6 +133,7 @@ type StartRequest struct {
 	Deadline   time.Time
 }
 type StartResult struct {
+	AttemptID  manageddiagnostic.StartupAttemptID
 	SessionID  string
 	Generation uint64
 	State      session.State
@@ -600,6 +606,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 
 type runtimeSession struct {
 	record         Record
+	attemptID      manageddiagnostic.StartupAttemptID
 	process        Child
 	retired        *ownedTransport // joined exact-child retirement, never a replacement lookup
 	spec           managedprocess.Spec
@@ -614,25 +621,27 @@ type runtimeSession struct {
 }
 
 type Manager struct {
-	mu               sync.Mutex
-	limits           Limits
-	wire             lspwire.Limits
-	starter          Starter
-	algebra          *session.Manager
-	sessions         map[string]*runtimeSession
-	operations       map[string]OperationSnapshot
-	operationIDs     []string
-	readiness        map[string]*readinessOperation
-	readinessIDs     map[string]string
-	observations     []Observation
-	sequence         uint64
-	readinessSeq     uint64
-	readinessTimeout time.Duration
-	now              func() time.Time
-	workers          int
-	workerDone       chan struct{}
-	closed           bool
-	diagnostics      *manageddiagnostic.Store
+	mu                     sync.Mutex
+	limits                 Limits
+	wire                   lspwire.Limits
+	starter                Starter
+	algebra                *session.Manager
+	sessions               map[string]*runtimeSession
+	operations             map[string]OperationSnapshot
+	operationIDs           []string
+	readiness              map[string]*readinessOperation
+	readinessIDs           map[string]string
+	observations           []Observation
+	sequence               uint64
+	readinessSeq           uint64
+	readinessTimeout       time.Duration
+	now                    func() time.Time
+	workers                int
+	workerDone             chan struct{}
+	closed                 bool
+	diagnostics            *manageddiagnostic.Store
+	startupAttemptIDSource func(uint64) manageddiagnostic.StartupAttemptID
+	startupAttemptSeq      uint64
 }
 
 func New(c Config) (*Manager, error) {
@@ -658,10 +667,26 @@ func New(c Config) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics}, nil
+	attemptSource := c.StartupAttemptIDSource
+	if attemptSource == nil {
+		managerNonce := make([]byte, 16)
+		if _, err := rand.Read(managerNonce); err != nil {
+			return nil, errors.New("sessionruntime: startup attempt identity unavailable")
+		}
+		prefix := "startup-" + hex.EncodeToString(managerNonce) + "-"
+		attemptSource = func(sequence uint64) manageddiagnostic.StartupAttemptID {
+			return manageddiagnostic.StartupAttemptID(prefix + strconv.FormatUint(sequence, 10))
+		}
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, startupAttemptIDSource: attemptSource}, nil
 }
 
-func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
+func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
+	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
+	defer func() {
+		result.AttemptID = attemptID
+		m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, result)
+	}()
 	if !req.Deadline.IsZero() && !time.Now().Before(req.Deadline) {
 		return StartResult{Failure: session.RequestTimeout}
 	}
@@ -705,7 +730,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
 	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
-	m.sessions[id] = &runtimeSession{record: r, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument)}
+	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument)}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }
@@ -738,7 +763,7 @@ func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint
 	workspace := r.record.Profile.Workspace().String()
 	m.readinessSeq++
 	opID := "readiness-" + strconv.FormatUint(m.readinessSeq, 10)
-	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, SessionID: id, Generation: generation, State: ReadinessPending, ThermalPhase: "COLD"}, started: m.now(), done: make(chan struct{})}
+	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, AttemptID: r.attemptID, SessionID: id, Generation: generation, State: ReadinessPending, ThermalPhase: "COLD"}, started: m.now(), done: make(chan struct{})}
 	m.readiness[opID] = op
 	m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)] = opID
 	r.protocolOwned = true
@@ -948,6 +973,14 @@ func (m *Manager) finishReadiness(id string, state ReadinessState, failure sessi
 	case m.workerDone <- struct{}{}:
 	default:
 	}
+}
+
+// GetStartupAttempt returns only the exact retained startup-attempt observation.
+func (m *Manager) GetStartupAttempt(id manageddiagnostic.StartupAttemptID) manageddiagnostic.StartupAttemptQuery {
+	if m.diagnostics == nil {
+		return manageddiagnostic.StartupAttemptQuery{Status: manageddiagnostic.AttemptUnavailable}
+	}
+	return m.diagnostics.StartupAttempt(id)
 }
 
 // Diagnostics returns only records retained for the exact identity and generation.
@@ -1271,10 +1304,12 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	}
 	m.mu.Unlock()
 
+	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
 	next, start := m.starter.Start(context.Background(), spec)
 	m.mu.Lock()
 	if start.Kind != managedprocess.StartStarted || next == nil || r == nil {
 		operation.State, operation.Failure = OperationFailed, session.SpawnFailure
+		m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Failure: session.SpawnFailure, Start: start})
 		if r != nil {
 			r.record.State = session.Poisoned
 		}
@@ -1284,6 +1319,8 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		return
 	}
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
+	r.attemptID = attemptID
+	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
 	r.retired = nil
 	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
