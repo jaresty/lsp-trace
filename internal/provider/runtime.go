@@ -184,29 +184,49 @@ func (r *Runtime) Execute(parent context.Context, providerID string, request jso
 
 	var raw []byte
 	var waitErr error
-	select {
-	case <-ctx.Done():
-		receipt.Terminated = true
-		terminate(cmd, waitResult, limits.TerminationGrace, &waitErr)
-		receipt.Reaped = true
-		receipt.Stderr = stderr.receipt()
-		if errors.Is(parent.Err(), context.Canceled) {
-			receipt.Failure = failure(Canceled, "caller canceled", parent.Err())
-		} else {
-			receipt.Failure = failure(TimedOut, "wall time exceeded", ctx.Err())
+	var stdinErr error
+	ctxDone := ctx.Done()
+	// EOF completes only stdout, not the provider invocation. Keep cancellation
+	// active through both the stdin write and process wait. This goroutine owns
+	// all completion receives; terminate consumes waitResult only on its behalf.
+	for stdoutResult != nil || writeErr != nil || waitResult != nil {
+		select {
+		case result := <-stdoutResult:
+			raw, err = result.bytes, result.err
+			stdoutResult = nil
+		case stdinErr = <-writeErr:
+			writeErr = nil
+		case waitErr = <-waitResult:
+			waitResult = nil
+		case <-ctxDone:
+			if waitResult != nil {
+				// Do not turn an already completed exit into a manager timeout.
+				select {
+				case waitErr = <-waitResult:
+				default:
+					receipt.Terminated = terminate(cmd, waitResult, limits.TerminationGrace, &waitErr)
+					if receipt.Terminated {
+						if errors.Is(parent.Err(), context.Canceled) {
+							receipt.Failure = failure(Canceled, "caller canceled", parent.Err())
+						} else {
+							receipt.Failure = failure(TimedOut, "wall time exceeded", ctx.Err())
+						}
+					}
+				}
+				waitResult = nil
+			}
+			ctxDone = nil
 		}
-		setExit(&receipt, cmd)
-		return receipt
-	case result := <-stdoutResult:
-		raw, err = result.bytes, result.err
 	}
 	if err == nil {
-		err = <-writeErr
+		err = stdinErr
 	}
-	waitErr = <-waitResult
 	receipt.Reaped = true
 	receipt.Stderr = stderr.receipt()
 	setExit(&receipt, cmd)
+	if receipt.Failure != nil {
+		return receipt
+	}
 	if err != nil {
 		receipt.Failure = failure(ProtocolFailed, "transport I/O", err)
 		return receipt
@@ -238,20 +258,25 @@ func setExit(r *Receipt, cmd *exec.Cmd) {
 		r.ExitCode = cmd.ProcessState.ExitCode()
 	}
 }
-func terminate(cmd *exec.Cmd, waited <-chan error, grace time.Duration, waitErr *error) {
+func terminate(cmd *exec.Cmd, waited <-chan error, grace time.Duration, waitErr *error) bool {
 	if grace <= 0 {
 		grace = 20 * time.Millisecond
 	}
-	_ = cmd.Process.Signal(os.Interrupt)
+	if errors.Is(cmd.Process.Signal(os.Interrupt), os.ErrProcessDone) {
+		// Wait may have completed before its result was published.
+		*waitErr = <-waited
+		return false
+	}
 	timer := time.NewTimer(grace)
 	defer timer.Stop()
 	select {
 	case *waitErr = <-waited:
-		return
+		return true
 	case <-timer.C:
 		_ = cmd.Process.Kill()
 	}
 	*waitErr = <-waited
+	return true
 }
 
 func parseSingleFrame(raw []byte, responseLimit, messageLimit int) (json.RawMessage, int, *Failure) {
