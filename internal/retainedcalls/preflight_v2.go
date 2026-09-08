@@ -1,0 +1,143 @@
+package retainedcalls
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"io"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+
+	"lsp-trace/internal/graphprovenance"
+)
+
+// Scan known carriers iteratively before any recursive schema/semantic decoding.
+// Only the named byte carriers are decoded. Content and opaque data stay opaque.
+func preflightExportV2(raw []byte, max int) error {
+	return scanExportV2(raw, max, true)
+}
+func scanExportV2(raw []byte, max int, carriers bool) error {
+	if len(raw) > max {
+		return &LimitErrorV2{"carrier bytes", max}
+	}
+	if len(raw) == 0 || !utf8.Valid(raw) {
+		return errors.New("V2 invalid JSON UTF-8")
+	}
+	type frame struct {
+		object, key bool
+		keys        map[string]bool
+	}
+	stack := []frame{}
+	roots := 0
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	for {
+		token, err := d.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if len(stack) == 0 {
+			roots++
+		}
+		if n, ok := token.(json.Number); ok {
+			text := n.String()
+			if len(text) > 64 {
+				return errors.New("V2 numeric token limit")
+			}
+			if i := strings.IndexAny(text, "eE"); i >= 0 {
+				x, err := strconv.ParseInt(text[i+1:], 10, 32)
+				if err != nil || x < -1024 || x > 1024 {
+					return errors.New("V2 numeric exponent limit")
+				}
+			}
+		}
+		if len(stack) > 0 {
+			top := &stack[len(stack)-1]
+			if top.object && top.key {
+				if key, ok := token.(string); ok {
+					if top.keys[key] {
+						return errors.New("V2 duplicate member")
+					}
+					top.keys[key] = true
+					top.key = false
+					if key == "data" {
+						var opaque json.RawMessage
+						if err := d.Decode(&opaque); err != nil {
+							return err
+						}
+						top.key = true
+					}
+					limit := 0
+					switch key {
+					case "input_bytes":
+						limit = graphprovenance.MaxEnvelopeBytesV2
+					case "graph_bytes":
+						limit = graphprovenance.MaxGraphBytesV2
+					case "canonical_receipt":
+						limit = 4 << 20
+					}
+					if limit > 0 && carriers {
+						v, err := d.Token()
+						if err != nil {
+							return err
+						}
+						s, ok := v.(string)
+						if !ok || len(s) > base64.StdEncoding.EncodedLen(limit) {
+							return errors.New("V2 known byte carrier type/limit")
+						}
+						decoded, err := base64.StdEncoding.DecodeString(s)
+						if err != nil {
+							return err
+						}
+						// The finite input->graph/canonical receipt carrier grammar cannot recurse
+						// arbitrarily: nested input_bytes are not admitted by any typed contract.
+						if key == "input_bytes" {
+							if err = preflightEnvelopeV2(decoded); err != nil {
+								return err
+							}
+						} else if err = scanLeafV2(decoded, limit); err != nil {
+							return err
+						}
+						top.key = true
+					}
+					continue
+				}
+			} else if top.object {
+				top.key = true
+			}
+		}
+		if delim, ok := token.(json.Delim); ok {
+			switch delim {
+			case '{', '[':
+				stack = append(stack, frame{delim == '{', delim == '{', map[string]bool{}})
+				if len(stack) > 64 {
+					return errors.New("V2 known-carrier depth limit")
+				}
+			case '}', ']':
+				stack = stack[:len(stack)-1]
+			}
+		}
+	}
+	if roots != 1 || len(stack) != 0 {
+		return errors.New("V2 requires one JSON value")
+	}
+	return nil
+}
+
+// Decoded native graphs and canonical source receipts contain no additional
+// encoded JSON carriers. Their typed validators reject unknown members; string
+// values are never interpreted as member names or recursively decoded.
+func scanLeafV2(raw []byte, max int) error {
+	return scanExportV2(raw, max, false)
+}
+func preflightEnvelopeV2(raw []byte) error {
+	// Graph-provenance owns the envelope's complete preflight (including its
+	// graph_bytes) and exact admission. No recursive export validator is invoked.
+	_, err := graphprovenance.ValidateFor(raw, graphprovenance.Family, "v2")
+	return err
+}

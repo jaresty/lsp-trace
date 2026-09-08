@@ -1,0 +1,30 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.retained-calls.v2.schema.json",
+ "title":"Internal retained CALLS V2; composed semantic admission required",
+ "type":"object","additionalProperties":false,
+ "required":["schema_version","policy","input_bytes","input_digest","tables"],
+ "properties":{
+  "schema_version":{"const":"lsp-trace.retained-calls.v2"},
+  "policy":{"const":"EXACT_ENVELOPE_NATIVE_GROUP_DISTINCT_SITE_TYPED_ACQUISITION_V2"},
+  "input_bytes":{"type":"string","contentEncoding":"base64","maxLength":268435456},
+  "input_digest":{"$ref":"#/$defs/digest"},
+  "tables":{"type":"object","additionalProperties":false,"required":["context","endpoints","groups","occurrences","native_fields","native_null_arrays","memberships","receipt_present","support_total","acquisition","acquisition_null_arrays","connections","bindings","supplies","captures"],"properties":{
+   "context":{"type":"object","additionalProperties":false,"required":["id","input_digest","graph_digest","workspace_uri","capture_budget"],"properties":{"id":{"$ref":"#/$defs/digest"},"input_digest":{"$ref":"#/$defs/digest"},"graph_digest":{"$ref":"#/$defs/digest"},"workspace_uri":{"type":"string"},"capture_budget":{"type":"object"}}},
+   "endpoints":{"type":"array","maxItems":4096,"items":{"type":"object"}},
+   "groups":{"type":"array","maxItems":8192,"items":{"type":"object","additionalProperties":false,"required":["id","native_relation_id","native_pointer","execution_bundle_id","caller_node_id","callee_node_id","callsite_state","occurrence_ids","receipt"],"properties":{"id":{"$ref":"#/$defs/digest"},"native_relation_id":{"type":"string"},"native_pointer":{"type":"string","pattern":"^/edges/[0-9]+$"},"execution_bundle_id":{"type":"string"},"caller_node_id":{"type":"string"},"callee_node_id":{"type":"string"},"callsite_state":{"enum":["UNREPORTED","RETAINED_DISTINCT_RANGES"]},"occurrence_ids":{"$ref":"#/$defs/ids"},"receipt":{"type":"object"}}}},
+   "occurrences":{"type":"array","maxItems":50000,"items":{"type":"object","additionalProperties":false,"required":["id","group_id","native_pointer","binding_pointer","range"],"properties":{"id":{"$ref":"#/$defs/digest"},"group_id":{"$ref":"#/$defs/digest"},"native_pointer":{"type":"string","pattern":"^/edges/[0-9]+/call_sites/[0-9]+$"},"binding_pointer":{"type":"string","pattern":"^/graph/edges/[0-9]+/call_sites/[0-9]+$"},"range":{"type":"object"}}}},
+   "native_null_arrays":{"type":"array","maxItems":2,"uniqueItems":true,"items":{"enum":["nodes","edges"]}},
+   "native_fields":{"type":"array","maxItems":128,"items":{"type":"object","additionalProperties":false,"required":["name","value"],"properties":{"name":{"type":"string","minLength":1},"value":{}}}},
+   "memberships":{"type":"array","maxItems":1000000,"items":{"type":"object"}},
+   "receipt_present":{"type":"boolean"},"support_total":{"type":"integer","minimum":0},
+   "acquisition_null_arrays":{"type":"array","maxItems":1000000,"uniqueItems":true,"items":{"type":"string","pattern":"^/"}},
+   "acquisition":{"type":"object","additionalProperties":false,"required":["policy","path_projection","request","targets","requests","supplies","edge_observations","usage","acquisition_complete"],"properties":{"policy":{"type":"string"},"path_projection":{"type":"string"},"request":{"type":"object"},"targets":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object"}},"requests":{"type":"array","maxItems":100000,"items":{"type":"object"}},"supplies":{"type":"array","maxItems":64,"items":{"type":"object"}},"edge_observations":{"type":"array","maxItems":100000,"items":{"type":"object"}},"usage":{"type":"object"},"acquisition_complete":{"type":"boolean"}}},
+   "connections":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"required":["target_id","nodes","export_group_ids","export_occurrence_ids"],"properties":{"target_id":{"type":"string"},"nodes":{"$ref":"#/$defs/ids"},"export_group_ids":{"$ref":"#/$defs/ids"},"export_occurrence_ids":{"type":"array","maxItems":8192,"items":{"$ref":"#/$defs/ids"}}}}},
+   "bindings":{"type":"array","maxItems":50000,"items":{"type":"object"}},
+   "supplies":{"type":"array","maxItems":64,"items":{"type":"object"}},
+   "captures":{"type":"array","maxItems":50000,"items":{"type":"object"}}
+  }}
+ },
+ "$defs":{"digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},"ids":{"type":"array","maxItems":50000,"items":{"type":"string","minLength":1}}}
+}

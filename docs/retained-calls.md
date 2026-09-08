@@ -1,4 +1,10 @@
-# Retained CALLS export (bounded A3)
+# Retained CALLS export
+
+The public export operation remains **V1** (bounded A3). The additive FR20 V2
+export/reconstruction API described below is **internal only**; no acquisition,
+export, or downstream-analysis V2 CLI/MCP operation is wired by this stage.
+
+## V1 (frozen bounded A3)
 
 This additive offline family is **retained-calls**, version
 `lsp-trace.retained-calls.v1`. It accepts only fully admitted
@@ -145,3 +151,128 @@ export, CLI/MCP byte parity, schema retrieval, full validation, selected CLI
 verification, overwrite rejection and MCP publication. Fake-wire findings are
 not real-provider qualification. This bounded increment awaits independent
 review and does not self-approve Program A/B, AC1, FR6, or product acceptance.
+
+## FR20 internal V2 API
+
+```go
+func ExportV2(input []byte) ([]byte, error)
+func ReconstructV2(t TablesV2) (ProjectionV2, error)
+func ValidateFor(raw []byte, family, version string) (string, error)
+```
+
+`ExportV2` accepts only fully admitted `graph-provenance/v2`, through its exact
+`ValidateFor` dispatch. `retained-calls/v2` (or the full version
+`lsp-trace.retained-calls.v2`) selects composed artifact validation. No omitted
+version, V1 envelope, or unrelated family silently selects V2. Generic schema
+retrieval exposes the additive schema; core schema-only validation still fails
+closed because shape alone cannot establish semantic admission. Public V1 export
+and downstream analysis continue to request V1 explicitly.
+
+### Tables and reconstruction
+
+`TablesV2` contains no original envelope or embedded native graph bytes:
+
+- `context`: exact input commitment, policy-bound context ID, native graph digest,
+  host workspace URI, and capture budget.
+- `endpoints`: native nodes and opaque payloads, retaining original native IDs.
+- `groups`: native relation ID, `/edges/i` pointer, execution ID, caller/callee,
+  separately named export ID, native receipt/support and occurrence IDs.
+- `occurrences`: export ID and group ID, original `/edges/i/call_sites/j` pointer,
+  explicit `/graph/edges/i/call_sites/j` binding pointer, and distinct range.
+- `native_fields`: one explicitly named/value row for **every** native top-level
+  field other than nodes, edges, receipt and memberships. This preserves seeds,
+  invocation, diagnostics, frontiers, portable/replay locators, semantic receipt,
+  quality, summary and any slice/non-CALLS provenance fields without a hidden
+  graph fallback. Current coordinator replay rejects invented sibling/dispatch
+  relations even though graph-v3 can represent them; this exporter does not widen
+  that admission boundary.
+- `memberships`, `receipt_present`, `support_total`: original native accounting.
+  Support is once per native group, not per site, alias, cached request replay or
+  acquisition observation. No independent-support claim is added.
+- `acquisition`: complete typed request/limits/context, every target and its
+  resolution/admission/outgoing/incoming/connection, all actual request records,
+  expansions/layers/frontiers, observations, supplies, usage and completeness.
+- `connections`: a row for **every** target, preserving all native path nodes
+  (including intermediates), and separately named exported group/occurrence IDs.
+  Original coordinator witnesses remain in the acquisition target records.
+- `bindings`, `supplies`, `captures`: every admitted census and source row,
+  including exact content/canonical-receipt bytes, failed outcomes, invalid
+  anchors and separate same-URI document versions.
+
+Empty exported arrays are `[]`, including zero-site occurrence lists and typed
+acquisition collections. `native_null_arrays` and `acquisition_null_arrays`
+explicitly preserve historical native empty allocation distinctions for exact
+reconstruction. Optional omitted wire fields stay omitted; opaque JSON and
+source bytes are not normalized as typed arrays. Markers cannot refer to a
+nonempty collection, unknown pointer or duplicate path.
+
+`ReconstructV2` builds edges from groups and occurrences, joins endpoints and
+bindings, assembles the native object from explicit fields, re-admits graph-v3,
+and reconstructs the full coordinator result. It checks native-to-exported
+witness joins independently of the mapping producer, invokes coordinator replay,
+and recomputes the mandatory source census and capture/supply joins through V2
+provenance admission. No filesystem or server is consulted. Invalid anchors stay
+`INVALID_COORDINATES`; a readable file never upgrades them.
+
+Artifact validation admits the original input, re-derives all required tables,
+and separately compares tables-only reconstruction against the original native
+serialization, coordinator descriptor and full source/census records. Export
+also performs this independent conservation check before returning. Shared
+producer loss of intermediate nodes is rejected even when the producer is reused
+for expected-table derivation. Coherently rehashed missing rows or substituted
+ranges, statuses, owners, supplies and mappings do not become admissible merely
+because public commitments are internally consistent.
+
+### V2 identity preimages
+
+Using the same `D(domain, payload)` convention as V1:
+
+- Input: `D("lsp-trace.retained-calls.v2:input", originalEnvelopeBytes)`.
+- Context: `D("lsp-trace.retained-calls.v2:context", canonical([policy,inputDigest]))`.
+- Group: `D("lsp-trace.retained-calls.v2:group", canonical([contextID,
+  nativeRelationID,nativePointer,executionBundleID,callerNodeID,calleeNodeID]))`.
+- Occurrence: `D("lsp-trace.retained-calls.v2:occurrence", canonical([contextID,
+  exportGroupID,nativePointer,bindingPointer,range]))`.
+
+Policy is `EXACT_ENVELOPE_NATIVE_GROUP_DISTINCT_SITE_TYPED_ACQUISITION_V2`.
+Canonical preimages sort object keys, retain array order and JSON number lexemes,
+use Go JSON escaping, and never convert numbers through float64. Native graph
+reconstruction instead retains native typed serialization, including opaque raw
+JSON ordering required by native semantic commitments. Original envelope
+whitespace changes **V2 context and export IDs**, unlike V1. No export identity
+enters the original native PathInput witness or graph/envelope digest, so there
+is no digest cycle. Identities establish integrity, not producer authentication.
+
+### Independent resource contracts
+
+| Boundary | Limit |
+| --- | ---: |
+| Admitted provenance V2 input | 192 MiB (upstream graph allowance 32 MiB) |
+| Native graph accepted by this export | 8 MiB |
+| Export endpoints / native groups | 4,096 / 8,192 |
+| Occurrences / bindings | 50,000 each |
+| Export JSON including trailing newline | 384 MiB |
+| Interpreted JSON carrier depth | 64 |
+| Known numeric token length / exponent magnitude | 64 / 1,024 |
+
+The coordinator's declared 10,000-node limit is preserved, not silently changed
+to 4,096. An actual result exceeding export limits is wholly rejected; it is not
+truncated. `LimitErrorV2` identifies export byte/node/group resource rejection.
+Upstream provenance budgets and their errors continue to apply independently.
+Known base64 JSON carriers are preflighted before recursive validation; source
+content and opaque `data` remain opaque. These are per-artifact limits, not a
+peak-memory guarantee. Future analysis has its own 8 MiB/4,096-node/8,192-group
+contract and is **not** enabled by this export API.
+
+### Qualification boundary
+
+Persisted tests cover frozen V1 bytes/rejection, source-free connected and
+incoming multi-hop paths, disconnected targets, zero-hop aliases, missing and
+ambiguous roots, unadmitted/partial targets, empty and zero-site groups, exact
+numbers, same-URI versions, all-row deletion, rehashed substitutions, depth and
+resource boundaries, and a controlled shared-producer reduction. This is a
+hermetic fake-Go-provider qualification, not real-public-gopls qualification,
+complete FR20, FR21 source-context/span selection, normative `relations.v1`,
+source authentication, or independent numeric support. Existing authentication
+and completeness ceilings continue unchanged. Public V2 acquisition/export and
+downstream version adapters remain subsequent stages.

@@ -2,8 +2,10 @@
 
 This stage adds an internal, offline-replayable provenance envelope around the
 [acquisition coordinator](acquisition-coordinator.md). It does **not** implement
-retained-calls V2, new acquisition/export/analysis CLI or MCP operations, or
-FR21 source-context evidence. Those are separate follow-on stages.
+retained-calls V2 itself, new acquisition/export/analysis CLI or MCP operations,
+or FR21 source-context evidence. The subsequent internal-only
+[retained-calls V2 API](retained-calls.md#fr20-internal-v2-api) now consumes this
+admitted envelope; public operations and FR21 remain follow-on stages.
 
 ## API and exact admission
 
@@ -158,8 +160,9 @@ Let `D(domain, payload)` be `"sha256:" + hex(SHA256(domain || NUL || payload))`.
   capture budgets, and supplied-content UTF-8 validity.
 
 The graph digest identifies graph bytes, **not the entire acquisition context**.
-A future retained-calls V2 context identity must commit the admitted envelope and
-its own explicit policies; it must not silently reuse a V1 or graph-only identity.
+The internal retained-calls V2 context identity commits the exact admitted
+envelope bytes through its input digest and its own explicit V2 policy; it does
+not reuse a V1 or graph-only identity.
 
 ## Resource contract
 
@@ -200,11 +203,12 @@ protections; this does not claim a hard kernel deadline for every filesystem rea
 
 Graph-provenance V1 and retained-calls V1 schemas, identities, canonical bytes and
 closed admissions are unchanged. Native graph-v3 serialization is unchanged;
-the new decoder is used only by the V2 provenance path. No retained-calls V2
-schema/exporter, public acquisition tool, analytics API or new authentication
-claim is included here.
+the decoder supports the V2 provenance path and the subsequent internal V2
+tables-only reconstruction. The retained-calls V2 schema/exporter is documented
+separately; no public acquisition tool, analytics API or new authentication claim
+is included by either internal stage.
 
-The next stage can consume `EvidenceV2.Acquisition` plus the authoritative graph,
+The internal retained-calls V2 stage consumes `EvidenceV2.Acquisition` plus the authoritative graph,
 receipts and census after composed admission, without rereading source files or
 inventing coordinator accounting. Source-free replay and tamper tests cover this
 handoff, but neither validation nor digest consistency proves producer identity,

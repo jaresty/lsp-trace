@@ -353,6 +353,9 @@ func lessRange(a, b graph.Range) bool {
 	return false
 }
 func ValidateFor(raw []byte, family, version string) (string, error) {
+	if family == Family && (version == "v2" || version == VersionV2) {
+		return validateForV2(raw)
+	}
 	if family != Family {
 		return graphprovenance.ValidateFor(raw, family, version)
 	}
