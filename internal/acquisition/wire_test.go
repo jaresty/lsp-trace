@@ -101,6 +101,9 @@ func TestWireDocumentSymbolUnion(t *testing.T) {
 	flat := func(name, uri string) map[string]any {
 		return map[string]any{"name": name, "kind": a.Kind, "location": map[string]any{"uri": uri, "range": a.Range}}
 	}
+	hierarchical := func(name string) map[string]any {
+		return map[string]any{"name": name, "kind": a.Kind, "range": a.Range, "selectionRange": a.SelectionRange}
+	}
 	for _, tc := range []struct {
 		name       string
 		symbols    []map[string]any
@@ -136,6 +139,44 @@ func TestWireDocumentSymbolUnion(t *testing.T) {
 			}
 			if calls != tc.wantCalls {
 				t.Fatalf("ASSERT_FLAT_SYMBOL_%s_SHARED_REQUESTS: got %d want %d", tc.name, calls, tc.wantCalls)
+			}
+		})
+	}
+
+	var malformedReason string
+	for _, tc := range []struct {
+		name    string
+		symbols []map[string]any
+	}{
+		{name: "mixed-hierarchical-flat", symbols: []map[string]any{hierarchical(a.Name), flat(a.Name, a.URI)}},
+		{name: "mixed-flat-hierarchical", symbols: []map[string]any{flat(a.Name, a.URI), hierarchical(a.Name)}},
+		{name: "mixed-distinct-names", symbols: []map[string]any{hierarchical(a.Name), flat("other", a.URI)}},
+		{name: "mixed-ambiguous-name", symbols: []map[string]any{hierarchical(a.Name), flat(a.Name, a.URI), flat(a.Name, a.URI)}},
+		{name: "mixed-foreign-flat", symbols: []map[string]any{hierarchical(a.Name), flat(a.Name, "file:///other.go")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := request(a)
+			r.Root.Locator = Locator{URI: a.URI, Symbol: a.Name}
+			calls := 0
+			client := NewWireClient(func(_ context.Context, _ WireRequest) (json.RawMessage, error) {
+				calls++
+				return json.Marshal(tc.symbols)
+			})
+			got, err := Acquire(context.Background(), client, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolution := got.Targets[0].Resolution
+			if resolution.Status != ResolutionFailed {
+				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_MIXED_UNION_CLOSED_%s: %+v", tc.name, resolution)
+			}
+			if malformedReason == "" {
+				malformedReason = resolution.Reason
+			} else if resolution.Reason != malformedReason {
+				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_MIXED_UNION_SAME_REASON_%s: got %q want %q", tc.name, resolution.Reason, malformedReason)
+			}
+			if calls != 1 {
+				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_MIXED_UNION_SHARED_REQUESTS_%s: got %d want 1", tc.name, calls)
 			}
 		})
 	}

@@ -69,15 +69,25 @@ func (c *WireClient) DocumentSymbols(ctx context.Context, p lsp.DocumentSymbolPa
 	if null || e != nil {
 		return nil, e
 	}
-	out := make([]lsp.DocumentSymbol, 0, len(rows))
-	for _, row := range rows {
+	flat := false
+	for i, row := range rows {
 		var discriminator struct {
 			Location json.RawMessage `json:"location"`
 		}
 		if e := json.Unmarshal(row, &discriminator); e != nil {
 			return nil, e
 		}
-		if len(discriminator.Location) == 0 {
+		rowFlat := len(discriminator.Location) != 0
+		if i == 0 {
+			flat = rowFlat
+		} else if rowFlat != flat {
+			return nil, errors.New("malformed textDocument/documentSymbol: mixed result variants")
+		}
+	}
+
+	out := make([]lsp.DocumentSymbol, 0, len(rows))
+	for _, row := range rows {
+		if !flat {
 			var symbol wireSymbol
 			if e := decodeStrict(row, &symbol); e != nil {
 				return nil, e
