@@ -1,0 +1,10 @@
+Frame 5 live decision-surface witness
+
+Command:
+go test ./internal/execution -run TestAssembleDecisionManifestGuards -count=1 -v
+
+Result:
+Go test: 7 passed in 1 packages
+
+Scope:
+This result witnesses only the existing decision-manifest surface's exact accounting, canonical delegation bytes, and closed assembly errors. It does not qualify or authorize Program C, D01, deployment, installation, network activity, or product behavior.
