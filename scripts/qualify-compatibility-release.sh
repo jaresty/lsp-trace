@@ -14,7 +14,7 @@ repo = pathlib.Path(sys.argv[1])
 root = repo / "qualification" / "compatibility-release"
 paths = {
     "matrix": root / "matrix.v1.json",
-    "historical": root / "historical-native-graph.v1.json",
+    "synthetic": root / "synthetic-compatibility-graph.v1.json",
     "normalized": root / "normalized-retained-export.v1.json",
 }
 raw = {name: path.read_bytes() for name, path in paths.items()}
@@ -34,23 +34,47 @@ require(
     data["matrix"]["schema_id"] == "lsp-trace.compatibility-matrix.v1"
     and transition["input"]["sha256"]
     and transition["output"]["sha256"]
-    and transition["producer"]["schema_id"] == data["historical"]["schema_id"]
+    and transition["producer"]["schema_id"] == data["synthetic"]["schema_id"]
     and transition["consumer"]["schema_id"] == data["normalized"]["schema_id"],
     "matrix version or provenance coordinate is incomplete",
 )
 
-historical_digest = hashlib.sha256(raw["historical"]).hexdigest()
+synthetic_digest = hashlib.sha256(raw["synthetic"]).hexdigest()
 normalized_digest = hashlib.sha256(raw["normalized"]).hexdigest()
 require(
-    "ASSERT_FR22_HISTORICAL_BYTES_IMMUTABLE",
-    historical_digest == transition["input"]["sha256"]
+    "ASSERT_FR22_SYNTHETIC_AUTHORITY",
+    transition["producer"] == {
+        "surface": "fixture",
+        "status": "SOURCE_IMPLEMENTED",
+        "authority": "SYNTHETIC_COMPATIBILITY_FIXTURE",
+        "schema_id": "lsp-trace.graph.v1",
+        "generator": "DECLARED_SYNTHETIC_LITERAL",
+        "acquisition_claim": False,
+        "custody_claim": False,
+    }
+    and transition["consumer"]["checker"] == "scripts/qualify-compatibility-release.sh",
+    "fixture authority or generator/checker identity is overstated",
+)
+
+require(
+    "ASSERT_FR22_FIXTURE_SOURCE_IDENTITY",
+    transition["input"]["source_commit"] == "5ed5e56629bbd6e0ed598dbf2247d42478831651"
+    and transition["input"]["source_blob"] == "c77808a3025e120dff0db493a4da2e3c1e3c4b96"
+    and transition["input"]["exact_bytes_utf8"].encode() == raw["synthetic"],
+    "synthetic fixture differs from its exact introduction identity",
+)
+
+require(
+    "ASSERT_FR22_FIXTURE_BYTES_PINNED",
+    len(raw["synthetic"]) == transition["input"]["byte_length"] == 98
+    and synthetic_digest == transition["input"]["sha256"]
     and normalized_digest == transition["output"]["sha256"],
-    "retained fixture bytes differ from pinned provenance",
+    "fixture bytes, length, or digest differ from pinned provenance",
 )
 
 require(
     "ASSERT_FR22_PRODUCER_CONSUMER_DIAGNOSTICS",
-    transition["producer"]["status"] == "HISTORICAL_RETAINED"
+    transition["producer"]["status"] == "SOURCE_IMPLEMENTED"
     and transition["consumer"]["status"] == "SOURCE_IMPLEMENTED"
     and transition["diagnostics"] == {
         "unsupported_transition": "EXPLICIT_FAILURE",
@@ -61,14 +85,14 @@ require(
 
 require(
     "ASSERT_FR22_NULL_EMPTY_DISTINCT",
-    data["historical"]["nodes"] is None
-    and data["historical"]["edges"] is None
-    and data["historical"]["failure"] is None
+    data["synthetic"]["nodes"] is None
+    and data["synthetic"]["edges"] is None
+    and data["synthetic"]["failure"] is None
     and data["normalized"]["nodes"] == []
     and data["normalized"]["edges"] == []
     and data["normalized"]["failure"] is None
     and data["normalized"]["unresolved_seeds"] == [],
-    "native null, normalized empty, failure, or unresolved states collapsed",
+    "synthetic null, normalized empty, failure, or unresolved states collapsed",
 )
 
 require(
@@ -83,11 +107,11 @@ require(
 
 converted = {
     "schema_id": "lsp-trace.retained-export.v1",
-    "source_schema_id": data["historical"]["schema_id"],
-    "nodes": [] if data["historical"]["nodes"] is None else data["historical"]["nodes"],
-    "edges": [] if data["historical"]["edges"] is None else data["historical"]["edges"],
-    "failure": data["historical"]["failure"],
-    "unresolved_seeds": data["historical"]["unresolved_seeds"],
+    "source_schema_id": data["synthetic"]["schema_id"],
+    "nodes": [] if data["synthetic"]["nodes"] is None else data["synthetic"]["nodes"],
+    "edges": [] if data["synthetic"]["edges"] is None else data["synthetic"]["edges"],
+    "failure": data["synthetic"]["failure"],
+    "unresolved_seeds": data["synthetic"]["unresolved_seeds"],
 }
 replay_one = (json.dumps(converted, separators=(",", ":")) + "\n").encode()
 replay_two = (json.dumps(converted, separators=(",", ":")) + "\n").encode()
@@ -99,7 +123,7 @@ require(
 
 archive_buffer = io.BytesIO()
 with tarfile.open(fileobj=archive_buffer, mode="w:gz") as archive:
-    archive_names = ("historical", "normalized") if os.environ.get("LSP_TRACE_FR22_OMIT_ARCHIVE_MATRIX") == "1" else ("matrix", "historical", "normalized")
+    archive_names = ("synthetic", "normalized") if os.environ.get("LSP_TRACE_FR22_OMIT_ARCHIVE_MATRIX") == "1" else ("matrix", "synthetic", "normalized")
     for name in archive_names:
         info = tarfile.TarInfo(f"compatibility-release/{paths[name].name}")
         info.size = len(raw[name])
