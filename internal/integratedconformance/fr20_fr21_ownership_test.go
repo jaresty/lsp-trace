@@ -29,6 +29,7 @@ func ownsFR20FR21Path(path string) bool {
 
 func TestFR20FR21OwnershipRegistration(t *testing.T) {
 	for _, path := range []string{
+		"focused-final-tests.log", "focused-mutation.log", "focused-red.log", "focused-hydration.claim.md", "focused-vet.log",
 		"acquisitionops/executor.go", "acquisitionops/executor_test.go",
 		"internal/acquisition/coordinator.go",
 		"internal/hydratedevidence/admission.go", "internal/hydratedevidence/schema.json",
@@ -48,6 +49,7 @@ func TestFR20FR21OwnershipRegistration(t *testing.T) {
 
 func TestFR20FR21OwnershipRejectsUnowned(t *testing.T) {
 	for _, path := range []string{
+		"unowned.log", "focused-other.log", "unowned.claim.md",
 		"internal/unregistered/new.go", "docs/unregistered.md",
 		"internal/hydratedevidence-other/schema.json", "acquisitionops-other/executor.go",
 		"internal/acquisition-other/acquisition.go", "cmd/lsp-trace-mcp/testdata/unknown-server/main.go",
