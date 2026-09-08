@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/graph"
 )
 
 // CensusV2 addresses /graph/... in authoritative GraphBytes and
@@ -38,9 +39,29 @@ func CensusV2(r acquisition.Result) ([]BindingV2, error) {
 	if err = d.Decode(&doc); err != nil {
 		return nil, err
 	}
+	var native struct {
+		Nodes            []graph.Node            `json:"nodes"`
+		PortableLocators []graph.PortableLocator `json:"portable_locators"`
+	}
+	if err = json.Unmarshal(graphBytes, &native); err != nil {
+		return nil, err
+	}
 	nodes := map[string]string{}
-	for _, n := range r.Graph.Nodes {
+	nodeRanges := map[string]any{}
+	graphDoc := doc["graph"].(map[string]any)
+	graphNodes, _ := graphDoc["nodes"].([]any)
+	for i, n := range native.Nodes {
 		nodes[n.ID] = n.URI
+		nodeRanges[n.ID] = graphNodes[i].(map[string]any)["range"]
+	}
+	// Native admission above establishes unique node IDs and valid projections.
+	// Portable sources carry a node reference, not a sibling declaration range.
+	// Bind only exact typed carrier indices; never infer ownership from URI/name.
+	portableRanges := map[string]any{}
+	for i, l := range native.PortableLocators {
+		if l.Provenance != nil {
+			portableRanges[fmt.Sprintf("/graph/portable_locators/%d/provenance/source/selection_range", i)] = nodeRanges[l.Provenance.Source.NodeID]
+		}
 	}
 	callers := map[string]string{}
 	for _, edge := range r.Graph.Edges {
@@ -210,6 +231,9 @@ func CensusV2(r acquisition.Result) ([]BindingV2, error) {
 					var enclosing any
 					if k == "selection_range" || k == "selectionRange" {
 						enclosing = v["range"]
+						if nativeRange, portable := portableRanges[q]; portable {
+							enclosing = nativeRange
+						}
 						// A selection requires its containing declaration range.
 						if enclosing == nil {
 							enclosing = false
@@ -249,7 +273,8 @@ func CensusV2(r acquisition.Result) ([]BindingV2, error) {
 		}
 	}
 	for i, rec := range r.Requests {
-		if rec.Method == "source/prepareDocument" && rec.CaptureComplete {
+		// CaptureComplete describes the response, not retained request parameters.
+		if rec.Method == "source/prepareDocument" {
 			var l acquisition.Locator
 			if json.Unmarshal(rec.Params, &l) == nil {
 				locator(fmt.Sprintf("/acquisition/requests/%d/params", i), l)
