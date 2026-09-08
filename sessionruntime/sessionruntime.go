@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
@@ -117,6 +118,8 @@ type Config struct {
 	ReadinessTimeout time.Duration
 	// Now is an optional monotonic clock seam for deterministic runtime observations.
 	Now func() time.Time
+	// Diagnostics is an optional internal-only exact-generation store.
+	Diagnostics *manageddiagnostic.Store
 }
 type StartRequest struct {
 	Profile    runtimeprofile.Profile
@@ -161,6 +164,11 @@ type RoundTripRequest struct {
 	Deadline    time.Time
 	MaxMessages int
 	MaxBytes    int64
+	// Diagnostic join values must be opaque safe identities, never labels or paths.
+	DiagnosticCallerID string
+	DiagnosticTargetID string
+	DiagnosticSequence uint64 // scoped to the acquisition owner, not globally allocated
+	DiagnosticObserver func(manageddiagnostic.Record)
 }
 
 // RoundTripResult is the immutable terminal observation of one transaction.
@@ -348,10 +356,21 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		r.record.State = session.Poisoned
 		r.retired = owner
 		m.observe(req.SessionID, req.Generation, "document-failed", r.record.State, failure)
+		if m.diagnostics != nil {
+			diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: false, Method: method})
+			diagnostic.Terminal = manageddiagnostic.TerminalProtocolError
+			diagnostic.Write = manageddiagnostic.IOFacts{State: manageddiagnostic.IOFailed, Messages: 1}
+			m.diagnostics.Record(diagnostic)
+		}
 		return DocumentResult{Failure: failure}
 	}
 	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
 	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
+	if m.diagnostics != nil {
+		diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: true, Method: method})
+		diagnostic.Write = manageddiagnostic.IOFacts{State: manageddiagnostic.IOComplete, Messages: 1}
+		m.diagnostics.Record(diagnostic)
+	}
 	result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
 	if req.CaptureSupply {
 		result.Supply = &DocumentSupply{
@@ -378,6 +397,8 @@ type RoundTripResult struct {
 	Notifications   []lspwire.Message
 	Responses       []lspwire.Message
 	started         time.Time
+	diagnostic      manageddiagnostic.RequestObservation
+	diagnosticSink  func(manageddiagnostic.Record)
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
@@ -417,7 +438,11 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 	m.observe(req.SessionID, req.Generation, "request", r.record.State, "")
 	m.mu.Unlock()
 
-	result := RoundTripResult{Key: key, ThermalPhase: "WARM", started: m.now()}
+	result := RoundTripResult{Key: key, ThermalPhase: "WARM", started: m.now(), diagnosticSink: req.DiagnosticObserver}
+	result.diagnostic = manageddiagnostic.RequestObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: req.DiagnosticSequence, Method: req.Method, ProtocolID: key.ID, TargetID: req.DiagnosticTargetID, CallerID: req.DiagnosticCallerID, RequestedDeadline: time.Until(req.Deadline), EffectiveDeadline: time.Until(req.Deadline), RequestedMaxBytes: req.MaxBytes, EffectiveMaxBytes: req.MaxBytes, RequestedMaxMessages: req.MaxMessages, EffectiveMaxMessages: req.MaxMessages, Clock: func() int64 { return m.now().UnixNano() }}
+	if result.diagnostic.Sequence == 0 {
+		result.diagnostic.Sequence = key.ID
+	}
 	maxMessages := req.MaxMessages
 	if maxMessages <= 0 {
 		maxMessages = 1
@@ -536,6 +561,32 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	}
 	result.Failure = failure
 	result.Duration = m.now().Sub(result.started)
+	terminal := manageddiagnostic.TerminalResponseReceived
+	readState, writeState := manageddiagnostic.IOComplete, manageddiagnostic.IOComplete
+	if failure != "" {
+		terminal, readState = manageddiagnostic.TerminalProtocolError, manageddiagnostic.IOFailed
+		switch failure {
+		case session.RequestTimeout:
+			terminal = manageddiagnostic.TerminalDeadlineExceeded
+		case session.RequestCancelled:
+			terminal = manageddiagnostic.TerminalCancelled
+		case session.SessionCrashed:
+			terminal = manageddiagnostic.TerminalTransportClosed
+		}
+	}
+	diagnostic := manageddiagnostic.RecordRequest(result.diagnostic, func() manageddiagnostic.RequestOutcome {
+		return manageddiagnostic.RequestOutcome{Terminal: terminal, ReadState: readState, WriteState: writeState, RequestBytes: result.RequestBytes, ResponseBytes: result.Bytes}
+	})
+	if result.ServerError != nil {
+		diagnostic.NumericRPCCode = manageddiagnostic.Fact[int]{Status: manageddiagnostic.Observed, Value: result.ServerError.Code}
+		diagnostic.Terminal = manageddiagnostic.TerminalProtocolError
+	}
+	if m.diagnostics != nil {
+		m.diagnostics.Record(diagnostic)
+	}
+	if result.diagnosticSink != nil {
+		result.diagnosticSink(diagnostic.Clone())
+	}
 	if result.Duration < 0 {
 		result.Duration = 0
 	}
@@ -581,6 +632,7 @@ type Manager struct {
 	workers          int
 	workerDone       chan struct{}
 	closed           bool
+	diagnostics      *manageddiagnostic.Store
 }
 
 func New(c Config) (*Manager, error) {
@@ -606,7 +658,7 @@ func New(c Config) (*Manager, error) {
 	if now == nil {
 		now = time.Now
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1)}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) StartResult {
@@ -732,7 +784,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	initializeBody, _ := json.Marshal(initializeMessage)
 	m.recordReadinessRequest(opID, int64(len(initializeBody)))
 	if err := writer.Write(initializeMessage); err != nil {
-		m.abortReadiness(child, opID, session.InitializationFailure)
+		m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, manageddiagnostic.TerminalProtocolError, "initialize-write-failed")
 		return
 	}
 	type readinessResult struct {
@@ -782,14 +834,18 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	select {
 	case observed := <-response:
 		if observed.err != nil {
-			m.abortReadiness(child, opID, session.InitializationFailure)
+			terminal, reason := manageddiagnostic.TerminalProtocolError, "initialize-response-invalid"
+			if errors.Is(observed.err, io.EOF) {
+				terminal, reason = manageddiagnostic.TerminalTransportClosed, "transport-closed"
+			}
+			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, reason)
 			return
 		}
 		initializedMessage := lspwire.Message{JSONRPC: lspwire.Version, Method: "initialized", Params: json.RawMessage(`{}`)}
 		initializedBody, _ := json.Marshal(initializedMessage)
 		m.recordReadinessRequest(opID, int64(len(initializedBody)))
 		if err := writer.Write(initializedMessage); err != nil {
-			m.abortReadiness(child, opID, session.InitializationFailure)
+			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Observed, Value: manageddiagnostic.SubstepInitializedNotification}, manageddiagnostic.TerminalProtocolError, "initialized-notification-write-failed")
 			return
 		}
 		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
@@ -798,7 +854,42 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			failure = session.InitializationTimeout
 		}
-		m.abortReadiness(child, opID, failure)
+		terminal := manageddiagnostic.TerminalCancelled
+		if failure == session.InitializationTimeout {
+			terminal = manageddiagnostic.TerminalDeadlineExceeded
+		}
+		m.abortReadinessDiagnostic(child, opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended")
+	}
+}
+
+func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var sid string
+	var generation uint64
+	if op != nil {
+		sid, generation = op.snapshot.SessionID, op.snapshot.Generation
+	}
+	m.sequence++
+	sequence := m.sequence
+	m.mu.Unlock()
+	preExit := false
+	if observable, ok := child.(interface {
+		Observe() managedprocess.SurvivorObservation
+	}); ok {
+		preExit = observable.Observe().Kind == managedprocess.SurvivorDead
+	}
+	teardown := child.Teardown(context.Background())
+	_ = child.Close()
+	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
+	if m.diagnostics != nil && sid != "" {
+		exit := manageddiagnostic.ProcessExit{Status: manageddiagnostic.Unavailable}
+		if preExit {
+			terminal = manageddiagnostic.TerminalProcessExited
+			exit = manageddiagnostic.ProcessExit{Status: manageddiagnostic.Observed, ExitCode: manageddiagnostic.Fact[int]{Status: manageddiagnostic.Observed, Value: teardown.Death.ExitCode}, ObservedBeforeCleanup: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: true}, CleanupInduced: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: false}}
+		}
+		r := manageddiagnostic.Record{SessionID: sid, Generation: generation, Sequence: sequence, Phase: phase, Substep: substep, Terminal: terminal, Reason: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: reason}, Request: manageddiagnostic.RequestFacts{Method: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: "initialize"}, TargetID: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Unavailable}, CallerID: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Unavailable}, OwnerSequence: manageddiagnostic.Fact[uint64]{Status: manageddiagnostic.Observed, Value: sequence}, ProtocolID: manageddiagnostic.Fact[uint64]{Status: manageddiagnostic.Observed, Value: 1}}, Read: manageddiagnostic.IOFacts{State: manageddiagnostic.IOFailed}, Write: manageddiagnostic.IOFacts{State: manageddiagnostic.IOAttempted}, CallHierarchy: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Unavailable}, DocumentSupplyCompleted: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Unavailable}, ProcessExit: exit, Stderr: manageddiagnostic.Stderr{Status: manageddiagnostic.Withheld, ObservedByteCount: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: int64(len(teardown.Death.Stderr.Bytes))}, Truncated: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: teardown.Death.Stderr.Truncated}}}
+		m.diagnostics.Record(r)
 	}
 }
 
@@ -857,6 +948,22 @@ func (m *Manager) finishReadiness(id string, state ReadinessState, failure sessi
 	case m.workerDone <- struct{}{}:
 	default:
 	}
+}
+
+// Diagnostics returns only records retained for the exact identity and generation.
+func (m *Manager) Diagnostics(sessionID string, generation uint64) manageddiagnostic.QueryResult {
+	if m.diagnostics == nil {
+		return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
+	}
+	return m.diagnostics.Query(sessionID, generation)
+}
+
+// RecordCapabilityCheck is a typed internal hook for operation owners outside runtime.
+func (m *Manager) RecordCapabilityCheck(observation manageddiagnostic.CapabilityObservation) bool {
+	if m.diagnostics == nil {
+		return false
+	}
+	return m.diagnostics.Record(manageddiagnostic.RecordCapabilityCheck(observation))
 }
 
 func (m *Manager) Readiness(id string) (ReadinessSnapshot, bool) {

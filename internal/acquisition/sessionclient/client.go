@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/sessionruntime"
@@ -21,9 +22,12 @@ type documentRuntime interface {
 // New uses the coordinator's declared exact generation and request context on
 // each call. Runtime, not the coordinator, validates that generation's authority.
 func New(runtime Runtime) acquisition.Client {
+	// Sequence is deterministic within this acquisition-client owner. It is not a
+	// process-global order and therefore does not race unrelated acquisitions.
+	var sequence atomic.Uint64
 	client := acquisition.NewWireClient(func(ctx context.Context, r acquisition.WireRequest) (json.RawMessage, error) {
 		deadline, _ := ctx.Deadline()
-		result := runtime.RoundTrip(ctx, sessionruntime.RoundTripRequest{SessionID: r.Context.SessionID, Generation: r.Context.Generation, Method: r.Method, Params: r.Params, Deadline: deadline, MaxMessages: r.MaxMessages, MaxBytes: int64(r.MaxBytes)})
+		result := runtime.RoundTrip(ctx, sessionruntime.RoundTripRequest{SessionID: r.Context.SessionID, Generation: r.Context.Generation, Method: r.Method, Params: r.Params, Deadline: deadline, MaxMessages: r.MaxMessages, MaxBytes: int64(r.MaxBytes), DiagnosticSequence: sequence.Add(1)})
 		if result.Failure != "" {
 			return nil, fmt.Errorf("%s", result.Failure)
 		}
