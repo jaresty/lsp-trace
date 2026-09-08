@@ -48,7 +48,7 @@ func TestWireClientContract(t *testing.T) {
 	}
 }
 func TestWireRejectsMalformedCoordinates(t *testing.T) {
-	for _, name := range []string{"range-missing", "coordinate-missing", "negative", "null-range", "oversized", "flat-symbol", "bad-json", "nested", "valid-symbol-tags"} {
+	for _, name := range []string{"range-missing", "coordinate-missing", "negative", "null-range", "oversized", "bad-json", "nested", "valid-symbol-tags"} {
 		t.Run(name, func(t *testing.T) {
 			a := item("a", 0)
 			r := request(a)
@@ -65,9 +65,6 @@ func TestWireRejectsMalformedCoordinates(t *testing.T) {
 				data = []byte(`[{"name":"a","kind":12,"uri":"file:///a.go","range":null,"selectionRange":null}]`)
 			case "oversized":
 				data = []byte(strings.Repeat(" ", r.Limits.MaxResponseBytes+1))
-			case "flat-symbol":
-				r.Root.Locator = Locator{URI: a.URI, Symbol: a.Name}
-				data = []byte(`[{"name":"a","kind":12,"location":{"uri":"file:///a.go","range":{"start":{"line":0,"character":2},"end":{"line":0,"character":6}}}}]`)
 			case "bad-json":
 				data = []byte(`[`)
 			case "nested":
@@ -93,6 +90,52 @@ func TestWireRejectsMalformedCoordinates(t *testing.T) {
 			}
 			if got.Targets[0].Resolution.Status != want {
 				t.Fatalf("wire shape %s: %+v", name, got.Targets[0].Resolution)
+			}
+		})
+	}
+}
+
+func TestWireDocumentSymbolUnion(t *testing.T) {
+	a := item("a", 0)
+	a.SelectionRange = a.Range
+	flat := func(name, uri string) map[string]any {
+		return map[string]any{"name": name, "kind": a.Kind, "location": map[string]any{"uri": uri, "range": a.Range}}
+	}
+	for _, tc := range []struct {
+		name       string
+		symbols    []map[string]any
+		wantStatus ResolutionStatus
+		wantCalls  int
+	}{
+		{name: "same-uri", symbols: []map[string]any{flat(a.Name, a.URI)}, wantStatus: Resolved, wantCalls: 4},
+		{name: "foreign-uri", symbols: []map[string]any{flat(a.Name, "file:///other.go")}, wantStatus: Missing, wantCalls: 1},
+		{name: "duplicate", symbols: []map[string]any{flat(a.Name, a.URI), flat(a.Name, a.URI)}, wantStatus: Ambiguous, wantCalls: 1},
+		{name: "missing", symbols: []map[string]any{flat("other", a.URI)}, wantStatus: Missing, wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := request(a)
+			r.Root.Locator = Locator{URI: a.URI, Symbol: a.Name}
+			calls := 0
+			client := NewWireClient(func(_ context.Context, w WireRequest) (json.RawMessage, error) {
+				calls++
+				switch w.Method {
+				case "textDocument/documentSymbol":
+					return json.Marshal(tc.symbols)
+				case "textDocument/prepareCallHierarchy":
+					return json.Marshal([]lsp.CallHierarchyItem{a})
+				default:
+					return json.RawMessage("null"), nil
+				}
+			})
+			got, err := Acquire(context.Background(), client, r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resolution := got.Targets[0].Resolution; resolution.Status != tc.wantStatus {
+				t.Fatalf("ASSERT_FLAT_SYMBOL_%s_STATUS: %+v", tc.name, resolution)
+			}
+			if calls != tc.wantCalls {
+				t.Fatalf("ASSERT_FLAT_SYMBOL_%s_SHARED_REQUESTS: got %d want %d", tc.name, calls, tc.wantCalls)
 			}
 		})
 	}

@@ -64,16 +64,35 @@ func (c *WireClient) call(ctx context.Context, method string, params, target any
 	return false, nil
 }
 func (c *WireClient) DocumentSymbols(ctx context.Context, p lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
-	// Accept only hierarchical DocumentSymbol here. Flat SymbolInformation cannot
-	// supply a trustworthy selectionRange and must not erase its source URI.
-	var symbols []wireSymbol
-	null, e := c.call(ctx, "textDocument/documentSymbol", p, &symbols)
+	var rows []json.RawMessage
+	null, e := c.call(ctx, "textDocument/documentSymbol", p, &rows)
 	if null || e != nil {
 		return nil, e
 	}
-	out := make([]lsp.DocumentSymbol, len(symbols))
-	for i, s := range symbols {
-		out[i] = s.symbol()
+	out := make([]lsp.DocumentSymbol, 0, len(rows))
+	for _, row := range rows {
+		var discriminator struct {
+			Location json.RawMessage `json:"location"`
+		}
+		if e := json.Unmarshal(row, &discriminator); e != nil {
+			return nil, e
+		}
+		if len(discriminator.Location) == 0 {
+			var symbol wireSymbol
+			if e := decodeStrict(row, &symbol); e != nil {
+				return nil, e
+			}
+			out = append(out, symbol.symbol())
+			continue
+		}
+		var symbol symbolInformationWire
+		if e := decodeStrict(row, &symbol); e != nil {
+			return nil, e
+		}
+		if symbol.Location.URI != p.TextDocument.URI {
+			continue
+		}
+		out = append(out, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range, Flat: true})
 	}
 	return out, nil
 }
@@ -104,12 +123,36 @@ type wireSymbol struct {
 	Children       []wireSymbol `json:"children,omitempty"`
 }
 
+type symbolInformationWire struct {
+	Name       string `json:"name"`
+	Kind       int    `json:"kind"`
+	Tags       []int  `json:"tags,omitempty"`
+	Deprecated bool   `json:"deprecated,omitempty"`
+	Location   struct {
+		URI   string    `json:"uri"`
+		Range lsp.Range `json:"range"`
+	} `json:"location"`
+	ContainerName string `json:"containerName,omitempty"`
+}
+
 func (s wireSymbol) symbol() lsp.DocumentSymbol {
 	out := lsp.DocumentSymbol{Name: s.Name, Detail: s.Detail, Kind: s.Kind, Range: s.Range, SelectionRange: s.SelectionRange}
 	for _, child := range s.Children {
 		out.Children = append(out.Children, child.symbol())
 	}
 	return out
+}
+
+func decodeStrict(raw []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if decoder.Decode(&struct{}{}) != io.EOF {
+		return errors.New("multiple JSON values")
+	}
+	return nil
 }
 
 // Check presence separately from Go zero-values; otherwise absent coordinates
@@ -150,6 +193,24 @@ func validateWireShape(method string, raw []byte) error {
 	for _, row := range rows {
 		switch method {
 		case "textDocument/documentSymbol":
+			if location, ok := row["location"]; ok {
+				for _, key := range []string{"name", "kind"} {
+					if v, present := row[key]; !present || bytes.Equal(bytes.TrimSpace(v), []byte("null")) {
+						return fmt.Errorf("missing %s", key)
+					}
+				}
+				var fields map[string]json.RawMessage
+				if e := json.Unmarshal(location, &fields); e != nil {
+					return e
+				}
+				if uri, present := fields["uri"]; !present || bytes.Equal(bytes.TrimSpace(uri), []byte("null")) {
+					return errors.New("missing uri")
+				}
+				if e := requiredRange(fields["range"]); e != nil {
+					return e
+				}
+				continue
+			}
 			stack = append(stack, entry{row, true})
 		case "textDocument/prepareCallHierarchy":
 			stack = append(stack, entry{row, false})

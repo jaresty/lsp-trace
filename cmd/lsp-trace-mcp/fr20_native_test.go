@@ -44,13 +44,16 @@ func TestFR20InstalledGopls(t *testing.T) {
 				}
 			}
 			target := func(id, file, symbol string) map[string]any {
+				return map[string]any{"id": id, "locator": map[string]any{"uri": (&url.URL{Scheme: "file", Path: filepath.Join(root, file)}).String(), "symbol": symbol, "language_id": "go"}, "down_depth": 3, "up_depth": 3}
+			}
+			positional := func(id, file string) map[string]any {
 				return map[string]any{"id": id, "locator": map[string]any{"uri": (&url.URL{Scheme: "file", Path: filepath.Join(root, file)}).String(), "line": 1, "character": 5, "language_id": "go"}, "down_depth": 3, "up_depth": 3}
 			}
-			a, c := target("root", "a.go", "A"), target("end", "c.go", "C")
+			a, c, aliasFile := target("root", "a.go", "A"), target("end", "c.go", "C"), "a.go"
 			if mode == "incoming" {
-				a, c = target("root", "c.go", "C"), target("end", "a.go", "A")
+				a, c, aliasFile = target("root", "c.go", "C"), target("end", "a.go", "A"), "c.go"
 			}
-			manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": a, "required_targets": []any{c, target("disconnected", "d.go", "D")}, "limits": map[string]any{"timeout_ms": 60000, "request_timeout_ms": 10000}}
+			manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": a, "required_targets": []any{c, target("disconnected", "d.go", "D"), positional("positional-alias", aliasFile)}, "limits": map[string]any{"timeout_ms": 60000, "request_timeout_ms": 10000}}
 			raw, _ := json.Marshal(manifest)
 			p := filepath.Join(t.TempDir(), "manifest.json")
 			if err := os.WriteFile(p, raw, 0600); err != nil {
@@ -72,7 +75,7 @@ func TestFR20InstalledGopls(t *testing.T) {
 			if err := json.Unmarshal(mcpRaw, &e); err != nil {
 				t.Fatal(err)
 			}
-			if len(e.Acquisition.Targets) != 3 || e.Acquisition.Targets[1].Connection.Status != "FOUND" || e.Acquisition.Targets[2].Connection.Status != "NOT_FOUND_IN_RETAINED_GRAPH" || len(e.Acquisition.Targets[1].Connection.Path.GroupIDs) != 2 {
+			if len(e.Acquisition.Targets) != 4 || e.Acquisition.Targets[1].Connection.Status != "FOUND" || e.Acquisition.Targets[2].Connection.Status != "NOT_FOUND_IN_RETAINED_GRAPH" || e.Acquisition.Targets[3].Resolution.Status != "RESOLVED" || len(e.Acquisition.Targets[1].Connection.Path.GroupIDs) != 2 {
 				t.Fatalf("ASSERT_NATIVE_CONNECTED_DISCONNECTED: %+v", e.Acquisition.Targets)
 			}
 			if len(e.Captures) != 4 {

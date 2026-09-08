@@ -33,10 +33,12 @@ sliceops. An external-package compilation assertion checks that the existing
 The client contract has DocumentSymbols, PrepareCallHierarchy, IncomingCalls and
 OutgoingCalls. `NewWireClient` accepts a neutral RoundTrip callback; each
 `WireRequest` includes the declared context and effective wire byte/message
-limits. It validates bounded JSON shape (including coordinate presence), rejects
-flat SymbolInformation rather than erasing its URI/pretending it supplies a
-selection range, and accepts successful protocol null as empty. Direct typed
-clients must enforce their own transport limits and structural decoding.
+limits. It validates bounded JSON shape (including coordinate presence), accepts both
+hierarchical DocumentSymbol and flat SymbolInformation, filters flat rows to the
+requested document URI, and normalizes the latter from `location.range` while
+retaining an explicit flat-shape marker for deterministic identity replay. It
+accepts successful protocol null as empty. Direct typed clients must enforce
+their own transport limits and structural decoding.
 Every wire call row requires a non-null `fromRanges` JSON array: missing, null,
 scalar or object values fail the entire wire response, yielding FAILED with no
 edges from that response. `fromRanges:[]` is valid zero-site support; top-level

@@ -436,7 +436,7 @@ func (c *runner) resolve(t Target) Resolution {
 				r.Reason = "PREPARED_IDENTITY_MISMATCH"
 				return r
 			}
-			if symbol != nil && (i.Name != symbol.Name || i.Kind != symbol.Kind || i.SelectionRange != symbol.SelectionRange || !graph.RangeContains(toRange(symbol.Range), toRange(i.Range))) {
+			if symbol != nil && (i.Name != symbol.Name || i.Kind != symbol.Kind || (!symbol.Flat && i.SelectionRange != symbol.SelectionRange) || !graph.RangeContains(toRange(symbol.Range), toRange(i.Range))) {
 				r.Status = ResolutionFailed
 				r.Reason = "PREPARED_SYMBOL_MISMATCH"
 				return r
