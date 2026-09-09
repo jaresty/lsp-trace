@@ -188,17 +188,19 @@ func (r *Reader) Read() (Message, error) {
 	dec.UseNumber()
 	var m Message
 	if err := dec.Decode(&m); err != nil {
-		emit(r.observer, Event{Stage: EventDecode})
+		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid, Closed: true})
 		return Message{}, fmt.Errorf("%w: %v", ErrMalformedJSON, err)
 	}
 	if dec.Decode(&struct{}{}) != io.EOF {
+		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid, Closed: true})
 		return Message{}, ErrMalformedJSON
 	}
 	if m.JSONRPC != Version {
+		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid, Closed: true})
 		return Message{}, fmt.Errorf("%w: %q", ErrWrongVersion, m.JSONRPC)
 	}
 	if m.Kind() == KindInvalid {
-		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid})
+		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid, Closed: true})
 		return Message{}, ErrInvalidMessage
 	}
 	emit(r.observer, Event{Stage: EventDecode, Kind: m.Kind()})
@@ -210,6 +212,9 @@ type Writer struct {
 	limits   Limits
 	observer Observer
 	mu       sync.Mutex
+	eventMu  sync.Mutex
+	events   []Event
+	draining bool
 }
 
 func NewWriter(w io.Writer, limits Limits) *Writer { return NewWriterObserved(w, limits, nil) }
@@ -221,15 +226,15 @@ func (w *Writer) Write(m Message) error {
 		m.JSONRPC = Version
 	}
 	body, err := json.Marshal(m)
-	emit(w.observer, Event{Stage: EventMarshal, Bytes: int64(len(body))})
 	if err != nil {
+		emit(w.observer, Event{Stage: EventMarshal, Bytes: int64(len(body))})
 		return err
 	}
 	if int64(len(body)) > w.limits.MaxBodyBytes {
 		return ErrFrameTooLarge
 	}
 	header := []byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))
-	var events []Event
+	events := []Event{{Stage: EventMarshal, Bytes: int64(len(body))}}
 	w.mu.Lock()
 	n, err := writeExact(w.w, header)
 	events = append(events, Event{Stage: EventFrame, Bytes: int64(n), Closed: errors.Is(err, io.ErrClosedPipe)})
@@ -247,11 +252,38 @@ func (w *Writer) Write(m Message) error {
 		}
 		events = append(events, Event{Stage: EventFlush, Flush: state, Closed: errors.Is(err, io.ErrClosedPipe)})
 	}
+	shouldDrain := w.enqueueEventsLocked(events)
 	w.mu.Unlock()
-	for _, event := range events {
-		emit(w.observer, event)
+	if shouldDrain {
+		w.drainEvents()
 	}
 	return err
+}
+
+func (w *Writer) enqueueEventsLocked(events []Event) bool {
+	w.eventMu.Lock()
+	defer w.eventMu.Unlock()
+	w.events = append(w.events, events...)
+	if w.draining {
+		return false
+	}
+	w.draining = true
+	return true
+}
+
+func (w *Writer) drainEvents() {
+	for {
+		w.eventMu.Lock()
+		if len(w.events) == 0 {
+			w.draining = false
+			w.eventMu.Unlock()
+			return
+		}
+		event := w.events[0]
+		w.events = w.events[1:]
+		w.eventMu.Unlock()
+		emit(w.observer, event)
+	}
 }
 
 func writeExact(w io.Writer, p []byte) (int, error) {
@@ -304,7 +336,8 @@ type Pending struct {
 	active      map[uint64]pendingEntry
 	tomb        map[RequestKey]struct{}
 	order       []RequestKey
-	generations map[uint64]struct{}
+	generations map[uint64]int
+	genOrder    []uint64
 }
 
 func NewPending(tombstoneCapacity int) *Pending { return NewPendingObserved(tombstoneCapacity, nil) }
@@ -312,13 +345,17 @@ func NewPendingObserved(tombstoneCapacity int, observer Observer) *Pending {
 	if tombstoneCapacity < 0 {
 		tombstoneCapacity = 0
 	}
-	return &Pending{cap: tombstoneCapacity, observer: observer, active: map[uint64]pendingEntry{}, tomb: map[RequestKey]struct{}{}, generations: map[uint64]struct{}{}}
+	return &Pending{cap: tombstoneCapacity, observer: observer, active: map[uint64]pendingEntry{}, tomb: map[RequestKey]struct{}{}, generations: map[uint64]int{}}
 }
 func (p *Pending) Begin(g uint64) RequestKey {
 	p.mu.Lock()
 	p.next++
 	p.active[p.next] = pendingEntry{generation: g}
-	p.generations[g] = struct{}{}
+	if _, known := p.generations[g]; !known {
+		p.genOrder = append(p.genOrder, g)
+	}
+	p.generations[g]++
+	p.trimGenerations()
 	key := RequestKey{g, p.next}
 	p.mu.Unlock()
 	emit(p.observer, Event{Stage: EventPendingBegin})
@@ -330,14 +367,14 @@ func (p *Pending) Accept(k ResponseKey) ResponseDisposition {
 	if _, ok := p.tomb[k]; ok {
 		d = ResponseDuplicate
 	} else if e, ok := p.active[k.ID]; !ok {
-		if _, seen := p.generations[k.Generation]; !seen && len(p.generations) > 0 {
-			d = ResponseWrongGeneration
-		}
+		d = ResponseUnknown
 	} else if e.generation != k.Generation {
 		d = ResponseWrongGeneration
 	} else {
 		delete(p.active, k.ID)
+		p.generations[e.generation]--
 		p.addTomb(k)
+		p.trimGenerations()
 		d = ResponseAccepted
 	}
 	p.mu.Unlock()
@@ -356,6 +393,23 @@ func (p *Pending) addTomb(k RequestKey) {
 		delete(p.tomb, old)
 	}
 }
+func (p *Pending) trimGenerations() {
+	for len(p.generations) > p.cap {
+		evicted := false
+		for i, generation := range p.genOrder {
+			if p.generations[generation] == 0 {
+				delete(p.generations, generation)
+				p.genOrder = append(p.genOrder[:i], p.genOrder[i+1:]...)
+				evicted = true
+				break
+			}
+		}
+		if !evicted {
+			return
+		}
+	}
+}
+
 func (p *Pending) TombstoneCount() int { p.mu.Lock(); defer p.mu.Unlock(); return len(p.tomb) }
 func (p *Pending) Cancel(w *Writer, k RequestKey) (CancelState, error) {
 	p.mu.Lock()

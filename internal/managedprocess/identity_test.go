@@ -26,14 +26,48 @@ func TestObserveIdentityDomainsOrderingAndBounds(t *testing.T) {
 	envOrder := spec
 	envOrder.Env = []string{"A=other", "Z=secret"}
 	other := ObserveIdentity(envOrder, "/private/config", "/private/workspace")
-	if got.EnvironmentNames != other.EnvironmentNames || got.EnvironmentPairs == other.EnvironmentPairs {
-		t.Fatal("ASSERT_PROCESS_IDENTITY_ENV_PROJECTIONS")
+	if got.EnvironmentNames != other.EnvironmentNames || got.EnvironmentPairs != other.EnvironmentPairs {
+		t.Fatal("ASSERT_PROCESS_IDENTITY_ENV_ORDER_INSENSITIVE")
+	}
+	envValue := spec
+	envValue.Env = []string{"Z=changed", "A=other"}
+	if got.EnvironmentPairs == ObserveIdentity(envValue, "/private/config", "/private/workspace").EnvironmentPairs {
+		t.Fatal("ASSERT_PROCESS_IDENTITY_ENV_VALUE_SENSITIVE")
+	}
+	duplicate := spec
+	duplicate.Env = []string{"A=first", "A=second"}
+	if status := ObserveIdentity(duplicate, "/private/config", "/private/workspace").ExecutableStatus; status != IdentityUnavailable {
+		t.Fatalf("ASSERT_PROCESS_IDENTITY_DUPLICATE_ENV_REJECTED: %v", status)
 	}
 	v := reflect.ValueOf(got)
 	for i := 0; i < v.NumField(); i++ {
 		if v.Field(i).Kind() == reflect.String {
 			t.Fatalf("ASSERT_PROCESS_IDENTITY_NO_RAW_STRINGS: field %s", v.Type().Field(i).Name)
 		}
+	}
+}
+
+func TestObserveIdentityDescriptorPathRace(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "server")
+	replacement := filepath.Join(dir, "replacement")
+	if err := os.WriteFile(path, []byte("original"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(replacement, []byte("replacement"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	oldStat := identityPathStat
+	defer func() { identityPathStat = oldStat }()
+	identityPathStat = func(name string) (os.FileInfo, error) {
+		if err := os.Rename(replacement, path); err != nil {
+			t.Fatal(err)
+		}
+		return os.Stat(name)
+	}
+	got := ObserveIdentity(Spec{Path: path}, "config", "workspace")
+	if got.ExecutableStatus != IdentityRaced {
+		t.Fatalf("ASSERT_PROCESS_IDENTITY_DESCRIPTOR_PATH_RACE: %v", got.ExecutableStatus)
 	}
 }
 

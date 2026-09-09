@@ -5,11 +5,19 @@ import (
 	"encoding/binary"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
 
 const executableIdentityByteLimit int64 = 1 << 20
+
+var (
+	identityOpen          = os.Open
+	identityCanonicalPath = filepath.EvalSymlinks
+	identityPathLstat     = os.Lstat
+	identityPathStat      = os.Stat
+)
 
 type IdentityStatus uint8
 
@@ -65,39 +73,54 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	}
 	names := make([]string, 0, len(spec.Env))
 	pairs := make([]string, 0, len(spec.Env))
+	seenNames := make(map[string]struct{}, len(spec.Env))
 	for _, pair := range spec.Env {
 		name, _, _ := strings.Cut(pair, "=")
+		if _, duplicate := seenNames[name]; duplicate {
+			return result
+		}
+		seenNames[name] = struct{}{}
 		names = append(names, name)
 		pairs = append(pairs, pair)
 	}
 	sort.Strings(names)
+	sort.Strings(pairs)
 	result.EnvironmentNames = digestDomain("environment-names", names...)
 	result.EnvironmentPairs = digestDomain("environment-secret-pairs", pairs...)
-	before, err := os.Stat(spec.Path)
+
+	f, err := identityOpen(spec.Path)
 	if err != nil {
 		return result
 	}
-	f, err := os.Open(spec.Path)
-	if err != nil {
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !opened.Mode().IsRegular() || opened.Mode().Perm()&0o111 == 0 || opened.Mode().Perm()&0o022 != 0 {
 		return result
 	}
 	h := sha256.New()
 	_, _ = io.WriteString(h, "lsp-trace/managedprocess/identity/v1\x00executable-bytes\x00")
 	n, readErr := io.CopyN(h, f, executableIdentityByteLimit)
 	if readErr != nil && readErr != io.EOF {
-		_ = f.Close()
 		return result
 	}
-	_ = f.Close()
-	after, err := os.Stat(spec.Path)
+	canonical, err := identityCanonicalPath(spec.Path)
 	if err != nil {
+		return result
+	}
+	linked, err := identityPathLstat(canonical)
+	if err != nil || !linked.Mode().IsRegular() {
+		return result
+	}
+	current, err := identityPathStat(canonical)
+	if err != nil {
+		return result
+	}
+	if !os.SameFile(opened, current) || opened.Size() != current.Size() || !opened.ModTime().Equal(current.ModTime()) {
+		result.ExecutableStatus = IdentityRaced
 		return result
 	}
 	result.ExecutableBytesRead = n
 	copy(result.ExecutableBytes[:], h.Sum(nil))
 	result.ExecutableStatus = IdentityObserved
-	if !os.SameFile(before, after) || before.Size() != after.Size() || !before.ModTime().Equal(after.ModTime()) {
-		result.ExecutableStatus = IdentityRaced
-	}
 	return result
 }
