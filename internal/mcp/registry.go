@@ -53,16 +53,17 @@ type Routing struct {
 }
 
 type Tool struct {
-	Name              string         `json:"name"`
-	Aliases           []string       `json:"aliases"`
-	InputSchemaID     string         `json:"input_schema_id"`
-	EnvelopeSchemaIDs []string       `json:"envelope_schema_ids"`
-	ArtifactSchemaIDs []string       `json:"artifact_schema_ids"`
-	Availability      Availability   `json:"availability"`
-	Description       string         `json:"-"`
-	InputSchema       map[string]any `json:"-"`
-	ExecutorFamily    ExecutorFamily `json:"-"`
-	semanticValidator SemanticValidator
+	Name                    string         `json:"name"`
+	Aliases                 []string       `json:"aliases"`
+	InputSchemaID           string         `json:"input_schema_id"`
+	EnvelopeSchemaIDs       []string       `json:"envelope_schema_ids"`
+	ArtifactSchemaIDs       []string       `json:"artifact_schema_ids"`
+	Availability            Availability   `json:"availability"`
+	Description             string         `json:"-"`
+	InputSchema             map[string]any `json:"-"`
+	PresentationInputSchema map[string]any `json:"-"`
+	ExecutorFamily          ExecutorFamily `json:"-"`
+	semanticValidator       SemanticValidator
 }
 
 type Registry struct {
@@ -172,6 +173,9 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		}
 		if tools[i].ExecutorFamily == IncomingExecutorFamily || tools[i].ExecutorFamily == SliceExecutorFamily {
 			addNormalizedProviderInputProperties(tools[i].InputSchema)
+		}
+		if operation, ok := publicAnalyticsV2Operation(tools[i].Name); ok {
+			tools[i].PresentationInputSchema = publicAnalyticsV2PresentationSchema(tools[i].InputSchema, operation)
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
@@ -340,7 +344,40 @@ func cloneTool(tool Tool) Tool {
 	tool.EnvelopeSchemaIDs = append([]string{}, tool.EnvelopeSchemaIDs...)
 	tool.ArtifactSchemaIDs = append([]string{}, tool.ArtifactSchemaIDs...)
 	tool.InputSchema = cloneMap(tool.InputSchema)
+	tool.PresentationInputSchema = cloneMap(tool.PresentationInputSchema)
 	return tool
+}
+
+func publicAnalyticsV2Operation(name string) (string, bool) {
+	switch name {
+	case "lsp_trace_v2_bounded_retained_analysis":
+		return "ANALYSIS", true
+	case "lsp_trace_v2_bounded_retained_metrics":
+		return "METRICS", true
+	case "lsp_trace_v2_bounded_retained_ranking":
+		return "RANKING", true
+	default:
+		return "", false
+	}
+}
+
+func publicAnalyticsV2PresentationSchema(canonical map[string]any, operation string) map[string]any {
+	properties, _ := canonical["properties"].(map[string]any)
+	variant := func(carrier string) map[string]any {
+		variantProperties := make(map[string]any, 5)
+		for _, name := range []string{"filter", "max_work", "output_selector", carrier} {
+			if property, ok := properties[name]; ok {
+				variantProperties[name] = cloneValue(property)
+			}
+		}
+		variantProperties["operation"] = map[string]any{"const": operation}
+		return map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": variantProperties,
+			"required":   []any{"operation", "filter", "max_work", carrier},
+		}
+	}
+	return map[string]any{"type": "object", "oneOf": []any{variant("input"), variant("publication_selector")}}
 }
 
 func cloneMap(input map[string]any) map[string]any {
