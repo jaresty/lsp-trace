@@ -88,7 +88,7 @@ func (a ProgramBAdmissionV2) VerifyExecution(expected ProgramBExecutionExpectati
 }
 
 func validateProgramAForBV2(a ProgramAAdmissionV2) error {
-	if a.Status != SubstrateAdmitted || a.authorityID == "" || a.keyID == "" || a.provisioningReceiptDigest == "" || a.assessmentID == "" || a.nonce == "" || a.issuanceEpoch == 0 || a.evaluationScope == "" || a.admissionPolicyID == "" || a.admissionPolicyVersion != "v2" || a.operation == "" {
+	if a.Status != SubstrateAdmitted || a.authorityID == "" || a.keyID == "" || a.provisioningReceiptDigest == "" || a.assessmentID == "" || a.nonce == "" || a.issuanceEpoch == 0 || a.evaluationScope == "" || a.admissionPolicyID != programAAdmissionPolicyV2 || a.admissionPolicyVersion != "v2" || a.operation == "" || a.admissionFamily != ProgramAAdmissionFamilyV2 || a.admissionVersion != ProgramAAdmissionVersionV2 || a.evidenceDomain != programAEvidenceDomainV2 {
 		return fmt.Errorf("PROGRAM_B_ADMITTED_V2 requires opaque admitted Program A v2 provenance")
 	}
 	seen := map[string]struct{}{}

@@ -34,6 +34,7 @@ const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v2"
 const receiptSignatureDomain = "llsp-trace.program-a-evidence-receipt.v2\x00"
 
 const (
+	ProgramAAdmissionFamilyV2  = "lsp-trace.program-a-admission"
 	ProgramAAdmissionVersionV1 = "lsp-trace.program-a-admission.v1"
 	ProgramAAdmissionVersionV2 = "lsp-trace.program-a-admission.v2"
 	programAAdmissionPolicyV2  = "lsp-trace.program-a-admission-policy.v2"
@@ -242,6 +243,9 @@ type ProgramAAdmissionV2 struct {
 	admissionPolicyID         string
 	admissionPolicyVersion    string
 	operation                 string
+	admissionFamily           string
+	admissionVersion          string
+	evidenceDomain            string
 	receiptDigests            [7]string
 }
 
@@ -275,12 +279,12 @@ func AdmitVerifiedProgramAV2(input VerifiedProgramASubstrateV2) (ProgramAAdmissi
 	if c.status != SubstrateAdmitted {
 		return ProgramAAdmissionV2{Status: c.status, Reasons: c.reasons}, nil
 	}
-	if c.policyVersion != "v2" {
-		return ProgramAAdmissionV2{Status: SubstrateRejected, Reasons: []string{"admission: Program A v2 requires policy version v2"}}, nil
+	if c.policyID != programAAdmissionPolicyV2 || c.policyVersion != "v2" {
+		return ProgramAAdmissionV2{Status: SubstrateRejected, Reasons: []string{"admission: Program A v2 requires policy identity and version v2"}}, nil
 	}
 	var digests [7]string
 	copy(digests[:], c.digests)
-	return ProgramAAdmissionV2{Status: c.status, Reasons: []string{}, Revision: c.revision, SubstrateID: c.substrate, authorityID: c.authority, keyID: c.key, provisioningReceiptDigest: c.provisioning, assessmentID: c.assessment, nonce: c.nonce, issuanceEpoch: c.issuance, evaluationScope: c.scope, admissionPolicyID: c.policyID, admissionPolicyVersion: c.policyVersion, operation: c.operation, receiptDigests: digests}, nil
+	return ProgramAAdmissionV2{Status: c.status, Reasons: []string{}, Revision: c.revision, SubstrateID: c.substrate, authorityID: c.authority, keyID: c.key, provisioningReceiptDigest: c.provisioning, assessmentID: c.assessment, nonce: c.nonce, issuanceEpoch: c.issuance, evaluationScope: c.scope, admissionPolicyID: c.policyID, admissionPolicyVersion: c.policyVersion, operation: c.operation, admissionFamily: ProgramAAdmissionFamilyV2, admissionVersion: ProgramAAdmissionVersionV2, evidenceDomain: programAEvidenceDomainV2, receiptDigests: digests}, nil
 }
 
 func composeProgramA(receipts []programAReceipt) programAComposition {
