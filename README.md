@@ -141,7 +141,7 @@ Incoming and slice also accept `detail: "compact"` only with a caller-chosen `ou
 lsp_trace_v1_incoming {"session_id":"SESSION_FROM_LIST","generation":1,"uri":"file:///absolute/workspace/file.go","line":0,"character":0,"detail":"compact","output_selector":"traces/callers.json"}
 ```
 
-The current default surface publishes exactly 28 canonical tools. The historical thirteen canonical tools and their manifest remain intact; later tools are additive. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the 28-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
+The compatibility default `--tool-profile full` publishes exactly 28 canonical tools. For normal MCP clients, prefer `lsp-trace-mcp --tool-profile compact`: it advertises the ten core lifecycle, capability, gateway, incoming, hydrated-inspection, schema, and slice tools while every canonical tool and alias remains callable directly from a cached registration and every hidden canonical operation remains reachable through `lsp_trace_v1_execute`. The historical thirteen canonical tools and their manifest remain intact; later tools are additive. MCP transport, envelopes, inline delivery, publication receipts, validation, inspection, filtering, and slice traversal do not upgrade graph authority, custody, authenticity, source truth, execution proof, feature identity, coverage, or acceptance. Stage 2 lifecycle tools (`lsp_session_v1_list`, `lsp_session_v1_status`, `lsp_session_v1_stop`, and `lsp_session_v1_restart`) plus bounded `lsp_trace_v1_incoming` and `lsp_trace_v1_slice` traversal are enabled by default and route to one process-local runtime. Both traversal tools require an exact READY session generation with retained call-hierarchy and position-encoding evidence. Slice performs exact-depth outgoing discovery, starts incoming traversal from the sorted deduplicated union of exact-depth frontier nodes and genuine successful empty outgoing leaves, and reports failed/null outgoing responses as incomplete rather than leaves. Its `max_messages` and `max_bytes` inputs bound each individual prepare, outgoing, and incoming LSP wire request; they are not aggregate budgets across the whole slice. Darwin uses local process-group supervision; unsupported platforms retain the 28-tool surface but process-start-dependent behavior fails explicitly without starting a child. Child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted. This design makes no hostile-code safety, native containment, remote execution, or privileged-isolation claim. See [ADR 0003](docs/adr/0003-always-local-stage2.md).
 
 ## Pi direct tools with pi-mcp-adapter
 
@@ -151,7 +151,7 @@ Use the standard adapter rather than maintaining a repository-specific tool brid
 pi install npm:pi-mcp-adapter
 ```
 
-Restart Pi after installation. Preferred project config: `.mcp.json`. The host writes this file and the referenced bootstrap file; they are trusted configuration, not MCP call arguments.
+Restart Pi after installation. Preferred project config: `.mcp.json`. This file is machine-local and ignored by this repository. Preserve the host's existing command, bootstrap, publication, working-directory, lifecycle, timeout, `directTools`, and `searchKeywords` configuration; add only `"--tool-profile", "compact"` to the server's existing `args`. The host writes this file and the referenced bootstrap file; they are trusted configuration, not MCP call arguments.
 
 ```json
 {
@@ -159,6 +159,8 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
     "lsp-trace": {
       "command": "/absolute/path/to/lsp-trace-mcp",
       "args": [
+        "--tool-profile",
+        "compact",
         "--bootstrap-config",
         "/absolute/path/to/bootstrap.json"
       ],
@@ -198,7 +200,7 @@ Restart Pi after installation. Preferred project config: `.mcp.json`. The host w
 }
 ```
 
-The list contains exactly the thirteen canonical MCP names from the historical core whitelist. The additive `lsp_trace_v1_export_retained_calls` remains available through MCP discovery/proxy unless explicitly added to that client whitelist. `toolPrefix: "none"` keeps those names unchanged in Pi. `searchKeywords` is adapter-only routing metadata: it improves proxy search without changing MCP names, descriptions, schemas, direct-tool registration, runtime behavior, or authority. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing thirteen tools and cannot override process configuration.
+The recommended compact profile advertises exactly ten canonical MCP names; this historical explicit client whitelist may retain cached direct names because hidden canonical tools and aliases remain dispatchable. The additive `lsp_trace_v1_export_retained_calls` remains available through MCP discovery/proxy unless explicitly added to that client whitelist. `toolPrefix: "none"` keeps those names unchanged in Pi. `searchKeywords` is adapter-only routing metadata: it improves proxy search without changing MCP names, descriptions, schemas, direct-tool registration, runtime behavior, or authority. Do not add a repository-local Pi extension or a second MCP bridge. Only the host-authored `.mcp.json` command, arguments, and bootstrap file choose executable, environment, or working directory. MCP callers receive the existing thirteen tools and cannot override process configuration.
 
 Natural-language routing examples:
 
@@ -219,7 +221,7 @@ From the repository root, reconnect once so the adapter refreshes cached metadat
 /mcp tools
 ```
 
-Confirm that `lsp-trace` is connected and that the thirteen names in the configuration appear once each. On the first run the adapter may initially expose only its proxy while metadata is cached; reconnecting refreshes and hot-loads the configured direct tools. A missing configured name is compatibility drift: stop and run the repository checks before using the integration. The separately registered retained CALLS export is an intentional addition, not historical-manifest drift.
+Confirm that `lsp-trace` is connected and that the compact profile advertises ten canonical names once each. On the first run the adapter may initially expose only its proxy while metadata is cached; reconnecting refreshes and hot-loads the configured direct tools. A missing configured name is compatibility drift: stop and run the repository checks before using the integration. The separately registered retained CALLS export is an intentional addition, not historical-manifest drift.
 
 ```sh
 ./scripts/check-docs.sh

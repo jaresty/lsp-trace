@@ -107,39 +107,41 @@ func directMatrixCall(server *Server, name string, args map[string]any) response
 func TestExecuteGatewayNestedDirectMatrix(t *testing.T) {
 	const assertion = "ASSERT_MCP_EXECUTE_GATEWAY_MATRIX_DIRECT_EQUIVALENCE"
 	t.Log("ASSERTION: " + assertion)
-	for _, tc := range gatewayMatrixCases() {
-		t.Run(tc.name, func(t *testing.T) {
-			registry := NewRegistryWithPublication(false, false)
-			directExecutor := matrixExecutor(registry)
-			direct := directMatrixCall(matrixServer(registry, directExecutor), tc.tool, tc.args)
-			if direct.Error != nil {
-				t.Fatalf("%s direct target validation: %v", assertion, direct.Error)
-			}
+	for _, profile := range []ToolProfile{ToolProfileFull, ToolProfileCompact} {
+		for _, tc := range gatewayMatrixCases() {
+			t.Run(string(profile)+"/"+tc.name, func(t *testing.T) {
+				registry := NewRegistryWithPublicationAndProfile(false, false, profile)
+				directExecutor := matrixExecutor(registry)
+				direct := directMatrixCall(matrixServer(registry, directExecutor), tc.tool, tc.args)
+				if direct.Error != nil {
+					t.Fatalf("%s direct target validation: %v", assertion, direct.Error)
+				}
 
-			gatewayExecutor := matrixExecutor(registry)
-			nested := map[string]any{"request": map[string]any{"tool": tc.tool, "arguments": tc.args}}
-			wrapped := runServerMessages(t, matrixServer(registry, gatewayExecutor), callMessage("lsp_trace_v1_execute", nested))[0]
-			env := decodeEnvelopeForAssertion(t, assertion, wrapped)
-			delegated, ok := env["delegated_envelope"].(string)
-			if !ok {
-				t.Fatalf("%s missing delegated envelope: %v", assertion, env)
-			}
-			directEnv := direct.Result.(callResult).StructuredContent
-			directBytes, _ := json.Marshal(directEnv)
-			sum := sha256.Sum256([]byte(delegated))
-			if delegated != string(directBytes) || env["delegated_digest"] != "sha256:"+hex.EncodeToString(sum[:]) {
-				t.Fatalf("%s exact bytes/digest: delegated=%s direct=%s env=%v", assertion, delegated, directBytes, env)
-			}
-			if env["requested_tool"] != tc.tool || env["delegated_outcome"] != directEnv.Outcome || env["delegated_is_error"] != directEnv.IsError {
-				t.Fatalf("%s outcome/isError: %v delegated=%v", assertion, env, directEnv)
-			}
-			if len(directExecutor.calls) != 1 || len(gatewayExecutor.calls) != 1 {
-				t.Fatalf("%s executor count: direct=%d gateway=%d", assertion, len(directExecutor.calls), len(gatewayExecutor.calls))
-			}
-			if directExecutor.calls[0].Name != operationName(tc.tool) || gatewayExecutor.calls[0].Name != operationName(tc.tool) || !reflect.DeepEqual(directExecutor.calls[0].Input, gatewayExecutor.calls[0].Input) {
-				t.Fatalf("%s selected operation/input: direct=%#v gateway=%#v", assertion, directExecutor.calls[0], gatewayExecutor.calls[0])
-			}
-		})
+				gatewayExecutor := matrixExecutor(registry)
+				nested := map[string]any{"request": map[string]any{"tool": tc.tool, "arguments": tc.args}}
+				wrapped := runServerMessages(t, matrixServer(registry, gatewayExecutor), callMessage("lsp_trace_v1_execute", nested))[0]
+				env := decodeEnvelopeForAssertion(t, assertion, wrapped)
+				delegated, ok := env["delegated_envelope"].(string)
+				if !ok {
+					t.Fatalf("%s missing delegated envelope: %v", assertion, env)
+				}
+				directEnv := direct.Result.(callResult).StructuredContent
+				directBytes, _ := json.Marshal(directEnv)
+				sum := sha256.Sum256([]byte(delegated))
+				if delegated != string(directBytes) || env["delegated_digest"] != "sha256:"+hex.EncodeToString(sum[:]) {
+					t.Fatalf("%s exact bytes/digest: delegated=%s direct=%s env=%v", assertion, delegated, directBytes, env)
+				}
+				if env["requested_tool"] != tc.tool || env["delegated_outcome"] != directEnv.Outcome || env["delegated_is_error"] != directEnv.IsError {
+					t.Fatalf("%s outcome/isError: %v delegated=%v", assertion, env, directEnv)
+				}
+				if len(directExecutor.calls) != 1 || len(gatewayExecutor.calls) != 1 {
+					t.Fatalf("%s executor count: direct=%d gateway=%d", assertion, len(directExecutor.calls), len(gatewayExecutor.calls))
+				}
+				if directExecutor.calls[0].Name != operationName(tc.tool) || gatewayExecutor.calls[0].Name != operationName(tc.tool) || !reflect.DeepEqual(directExecutor.calls[0].Input, gatewayExecutor.calls[0].Input) {
+					t.Fatalf("%s selected operation/input: direct=%#v gateway=%#v", assertion, directExecutor.calls[0], gatewayExecutor.calls[0])
+				}
+			})
+		}
 	}
 }
 
