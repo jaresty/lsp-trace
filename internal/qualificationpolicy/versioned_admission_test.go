@@ -69,7 +69,7 @@ func programBV2Fixture(t *testing.T) (ProgramAAdmissionV2, qualificationmatrix.P
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding := ProgramBAdmissionBindingV2{BuildRevision: a.Revision, Operation: a.operation, Scope: a.evaluationScope, SubstrateID: a.SubstrateID, MatrixDigest: programBMatrixDigestV2(matrix), EvidenceSetDigest: programAEvidenceSetDigestV2(a.receiptDigests), DecisionPolicy: ProgramBDecisionPolicyV2, ProgramAAdmissionVersion: ProgramAAdmissionVersionV2, ProgramAEvidenceDomain: programAEvidenceDomainV2}
+	binding := ProgramBAdmissionBindingV2{BuildRevision: a.Revision, Operation: a.operation, Scope: a.evaluationScope, SubstrateID: a.SubstrateID, MatrixDigest: programBMatrixDigestV2(matrix), EvidenceSetDigest: programAEvidenceSetDigestV2(a.receiptDigests), DecisionPolicy: ProgramBDecisionPolicyV2, ProgramAAdmissionVersion: ProgramAAdmissionVersionV2, ProgramAEvidenceDomain: programAEvidenceDomainV2, ProgramBAdmissionVersion: ProgramBAdmissionVersionV2}
 	return a, p, req, binding
 }
 
@@ -101,7 +101,7 @@ func TestProgramBV2AcceptsOnlySevenReceiptV2Context(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ASSERT_PROGRAM_B_V2_CONSUMES_ONLY_A2_AND_MATRIX_V2: %v", err)
 	}
-	expected := ProgramBExecutionExpectationV2{BuildRevision: binding.BuildRevision, Operation: binding.Operation, Scope: binding.Scope, SubstrateID: binding.SubstrateID, MatrixDigest: binding.MatrixDigest, EvidenceSetDigest: binding.EvidenceSetDigest, DecisionPolicy: binding.DecisionPolicy, ProgramAAdmissionVersion: binding.ProgramAAdmissionVersion}
+	expected := ProgramBExecutionExpectationV2{BuildRevision: binding.BuildRevision, Operation: binding.Operation, Scope: binding.Scope, SubstrateID: binding.SubstrateID, MatrixDigest: binding.MatrixDigest, EvidenceSetDigest: binding.EvidenceSetDigest, DecisionPolicy: binding.DecisionPolicy, ProgramAAdmissionVersion: binding.ProgramAAdmissionVersion, ProgramBAdmissionVersion: binding.ProgramBAdmissionVersion}
 	if err := admission.VerifyExecution(expected); err != nil {
 		t.Fatal(err)
 	}
@@ -119,6 +119,9 @@ func TestProgramBV2AcceptsOnlySevenReceiptV2Context(t *testing.T) {
 		},
 		"v1-version": func(_ *ProgramAAdmissionV2, b *ProgramBAdmissionBindingV2) {
 			b.ProgramAAdmissionVersion = ProgramAAdmissionVersionV1
+		},
+		"program-b-v1-version": func(_ *ProgramAAdmissionV2, b *ProgramBAdmissionBindingV2) {
+			b.ProgramBAdmissionVersion = "lsp-trace.program-b-admission.v1"
 		},
 	}
 	for name, mutate := range mutations {

@@ -12,21 +12,24 @@ import (
 )
 
 const (
-	ProgramBDecisionPolicyV2 = "lsp-trace.program-b-admission-decision.v2"
-	programBEvidenceDomainV2 = "lsp-trace.program-b-program-a-evidence.v2\x00"
-	programBMatrixDomainV2   = "lsp-trace.program-b-qualification-matrix.v2\x00"
+	ProgramBAdmissionVersionV2 = "lsp-trace.program-b-admission.v2"
+	ProgramBDecisionPolicyV2   = "lsp-trace.program-b-admission-decision.v2"
+	programBEvidenceDomainV2   = "lsp-trace.program-b-program-a-evidence.v2\x00"
+	programBMatrixDomainV2     = "lsp-trace.program-b-qualification-matrix.v2\x00"
 )
 
 type ProgramBAdmissionBindingV2 struct {
 	BuildRevision, Operation, Scope, SubstrateID     string
 	MatrixDigest, EvidenceSetDigest, DecisionPolicy  string
 	ProgramAAdmissionVersion, ProgramAEvidenceDomain string
+	ProgramBAdmissionVersion                         string
 }
 
 type ProgramBExecutionExpectationV2 struct {
 	BuildRevision, Operation, Scope, SubstrateID string
 	MatrixDigest, EvidenceSetDigest              string
 	DecisionPolicy, ProgramAAdmissionVersion     string
+	ProgramBAdmissionVersion                     string
 }
 
 type ProgramBAdmissionV2 struct{ binding programBAdmissionBindingV2 }
@@ -34,6 +37,7 @@ type programBAdmissionBindingV2 struct {
 	buildRevision, operation, scope, substrateID     string
 	matrixDigest, evidenceSetDigest, decisionPolicy  string
 	programAAdmissionVersion, programAEvidenceDomain string
+	programBAdmissionVersion                         string
 	authorityID, keyID, provisioningDigest           string
 	assessmentID, nonce                              string
 	issuanceEpoch                                    int64
@@ -56,7 +60,7 @@ func VerifyProgramBAdmissionV2(a ProgramAAdmissionV2, p qualificationmatrix.Prof
 	if binding.BuildRevision == "" || binding.Operation == "" || binding.Scope == "" || binding.SubstrateID == "" {
 		return ProgramBAdmissionV2{}, fmt.Errorf("PROGRAM_B_ADMITTED_V2 requires exact revision, operation, scope, and substrate")
 	}
-	if binding.DecisionPolicy != ProgramBDecisionPolicyV2 || binding.ProgramAAdmissionVersion != ProgramAAdmissionVersionV2 || binding.ProgramAEvidenceDomain != programAEvidenceDomainV2 || binding.MatrixDigest != matrixDigest || binding.EvidenceSetDigest != evidenceDigest {
+	if binding.DecisionPolicy != ProgramBDecisionPolicyV2 || binding.ProgramBAdmissionVersion != ProgramBAdmissionVersionV2 || binding.ProgramAAdmissionVersion != ProgramAAdmissionVersionV2 || binding.ProgramAEvidenceDomain != programAEvidenceDomainV2 || binding.MatrixDigest != matrixDigest || binding.EvidenceSetDigest != evidenceDigest {
 		return ProgramBAdmissionV2{}, fmt.Errorf("PROGRAM_B_ADMITTED_V2 version, matrix, evidence set, or decision policy mismatch")
 	}
 	if a.Revision != binding.BuildRevision || a.SubstrateID != binding.SubstrateID || a.operation != binding.Operation || a.evaluationScope != binding.Scope {
@@ -73,15 +77,15 @@ func VerifyProgramBAdmissionV2(a ProgramAAdmissionV2, p qualificationmatrix.Prof
 	if err := qualificationmatrix.ProgramBAdmitted(p, req, now); err != nil {
 		return ProgramBAdmissionV2{}, err
 	}
-	return ProgramBAdmissionV2{binding: programBAdmissionBindingV2{buildRevision: binding.BuildRevision, operation: binding.Operation, scope: binding.Scope, substrateID: binding.SubstrateID, matrixDigest: matrixDigest, evidenceSetDigest: evidenceDigest, decisionPolicy: binding.DecisionPolicy, programAAdmissionVersion: binding.ProgramAAdmissionVersion, programAEvidenceDomain: binding.ProgramAEvidenceDomain, authorityID: a.authorityID, keyID: a.keyID, provisioningDigest: a.provisioningReceiptDigest, assessmentID: a.assessmentID, nonce: a.nonce, issuanceEpoch: a.issuanceEpoch, admissionPolicyID: a.admissionPolicyID, admissionPolicyVersion: a.admissionPolicyVersion}}, nil
+	return ProgramBAdmissionV2{binding: programBAdmissionBindingV2{buildRevision: binding.BuildRevision, operation: binding.Operation, scope: binding.Scope, substrateID: binding.SubstrateID, matrixDigest: matrixDigest, evidenceSetDigest: evidenceDigest, decisionPolicy: binding.DecisionPolicy, programAAdmissionVersion: binding.ProgramAAdmissionVersion, programAEvidenceDomain: binding.ProgramAEvidenceDomain, programBAdmissionVersion: binding.ProgramBAdmissionVersion, authorityID: a.authorityID, keyID: a.keyID, provisioningDigest: a.provisioningReceiptDigest, assessmentID: a.assessmentID, nonce: a.nonce, issuanceEpoch: a.issuanceEpoch, admissionPolicyID: a.admissionPolicyID, admissionPolicyVersion: a.admissionPolicyVersion}}, nil
 }
 
 func (a ProgramBAdmissionV2) VerifyExecution(expected ProgramBExecutionExpectationV2) error {
 	b := a.binding
-	if b.buildRevision == "" || b.operation == "" || b.scope == "" || b.substrateID == "" || b.matrixDigest == "" || b.evidenceSetDigest == "" || b.decisionPolicy != ProgramBDecisionPolicyV2 || b.programAAdmissionVersion != ProgramAAdmissionVersionV2 || b.programAEvidenceDomain != programAEvidenceDomainV2 || b.authorityID == "" || b.keyID == "" || b.provisioningDigest == "" || b.assessmentID == "" || b.nonce == "" || b.issuanceEpoch == 0 || b.admissionPolicyID == "" || b.admissionPolicyVersion != "v2" {
+	if b.buildRevision == "" || b.operation == "" || b.scope == "" || b.substrateID == "" || b.matrixDigest == "" || b.evidenceSetDigest == "" || b.decisionPolicy != ProgramBDecisionPolicyV2 || b.programAAdmissionVersion != ProgramAAdmissionVersionV2 || b.programAEvidenceDomain != programAEvidenceDomainV2 || b.programBAdmissionVersion != ProgramBAdmissionVersionV2 || b.authorityID == "" || b.keyID == "" || b.provisioningDigest == "" || b.assessmentID == "" || b.nonce == "" || b.issuanceEpoch == 0 || b.admissionPolicyID == "" || b.admissionPolicyVersion != "v2" {
 		return fmt.Errorf("PROGRAM_B_ADMITTED_V2 opaque admission is invalid")
 	}
-	if expected.BuildRevision != b.buildRevision || expected.Operation != b.operation || expected.Scope != b.scope || expected.SubstrateID != b.substrateID || expected.MatrixDigest != b.matrixDigest || expected.EvidenceSetDigest != b.evidenceSetDigest || expected.DecisionPolicy != b.decisionPolicy || expected.ProgramAAdmissionVersion != b.programAAdmissionVersion {
+	if expected.BuildRevision != b.buildRevision || expected.Operation != b.operation || expected.Scope != b.scope || expected.SubstrateID != b.substrateID || expected.MatrixDigest != b.matrixDigest || expected.EvidenceSetDigest != b.evidenceSetDigest || expected.DecisionPolicy != b.decisionPolicy || expected.ProgramAAdmissionVersion != b.programAAdmissionVersion || expected.ProgramBAdmissionVersion != b.programBAdmissionVersion {
 		return fmt.Errorf("PROGRAM_B_ADMITTED_V2 execution context mismatch")
 	}
 	return nil

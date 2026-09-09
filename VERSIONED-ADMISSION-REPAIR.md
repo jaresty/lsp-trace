@@ -43,6 +43,7 @@ The frozen seven-receipt evidence-set vector digest is `sha256:d5634130ad6ff2fbc
 
 `ProgramBAdmissionV2`, its v2 binding/expectation types, and `VerifyProgramBAdmissionV2` consume only `ProgramAAdmissionV2`. They bind:
 
+- admission version `lsp-trace.program-b-admission.v2`;
 - decision policy `lsp-trace.program-b-admission-decision.v2`;
 - Program A admission version `lsp-trace.program-a-admission.v2`;
 - Program A evidence domain `lsp-trace.program-a-evidence-set.v2\x00`;
