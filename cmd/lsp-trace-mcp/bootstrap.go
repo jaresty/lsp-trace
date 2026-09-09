@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -243,66 +241,61 @@ func pinnedGitMetadata(directory string) (string, string) {
 	return filepath.Clean(root), strings.TrimSpace(string(commitBytes))
 }
 
-type bootstrapSeedTrustFile struct {
-	Keys     map[string]string                `json:"keys"`
-	Receipts []seedbinding.HostCustodyReceipt `json:"receipts"`
+type hostSeedTrustBundle struct {
+	RootVersion uint32
+	RootID      string
+	Policy      seedbinding.HostPreparedPolicy
+	Receipt     seedbinding.HostCustodyReceipt
 }
+
+type hostSeedBootstrapAuthority interface {
+	AuthenticatedRootSet() (seedbinding.HostRootSet, error)
+	AuthenticatedBundles() ([]hostSeedTrustBundle, error)
+}
+
+// officialHostSeedBootstrapAuthority is deliberately not configurable through
+// CLI or MCP input. Official builds fail closed until the embedding host wires
+// an already-authenticated bootstrap authority. Tests inject their authority
+// directly into loadBootstrapSeedTrust and cannot expose it through run.
+func officialHostSeedBootstrapAuthority() hostSeedBootstrapAuthority { return nil }
+
 type bootstrapSeedTrust struct {
 	receipts map[string]seedbinding.HostReceiptAuthority
 }
 
-func loadBootstrapSeedTrust(path string) (*bootstrapSeedTrust, error) {
-	if path == "" {
+func loadBootstrapSeedTrust(host hostSeedBootstrapAuthority, now time.Time) (*bootstrapSeedTrust, error) {
+	if host == nil {
 		return nil, nil
 	}
-	if !filepath.IsAbs(path) {
-		return nil, fmt.Errorf("seed custody trust config path must be absolute")
-	}
-	raw, err := os.ReadFile(path)
+	roots, err := host.AuthenticatedRootSet()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("authenticated host seed roots: %w", err)
 	}
-	if err := strictjson.RejectDuplicates(raw); err != nil {
-		return nil, err
-	}
-	var file bootstrapSeedTrustFile
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&file); err != nil {
-		return nil, err
-	}
-	if err := d.Decode(new(any)); err != io.EOF {
-		return nil, fmt.Errorf("seed custody trust config must contain one JSON value")
+	bundles, err := host.AuthenticatedBundles()
+	if err != nil {
+		return nil, fmt.Errorf("authenticated host seed bundles: %w", err)
 	}
 	trust := &bootstrapSeedTrust{receipts: map[string]seedbinding.HostReceiptAuthority{}}
-	for i, receipt := range file.Receipts {
-		encoded, ok := file.Keys[receipt.KeyID]
-		if !ok {
-			return nil, fmt.Errorf("seed custody receipt %d key is not host-provisioned", i)
+	for i, bundle := range bundles {
+		if bundle.RootVersion != roots.Version {
+			return nil, fmt.Errorf("seed custody bundle %d root version mismatch", i)
 		}
-		publicKey, err := base64.StdEncoding.DecodeString(encoded)
-		if err != nil || len(publicKey) != ed25519.PublicKeySize {
-			return nil, fmt.Errorf("seed custody key %q invalid", receipt.KeyID)
+		root := roots.Keys[bundle.RootID]
+		payload, err := seedbinding.CustodyReceiptSigningBytes(bundle.Receipt)
+		if err != nil || len(root) != ed25519.PublicKeySize || !ed25519.Verify(root, payload, bundle.Receipt.Signature) {
+			return nil, fmt.Errorf("seed custody receipt %d independent-root signature mismatch", i)
 		}
-		keySum := sha256.Sum256(publicKey)
-		if receipt.KeyID != "sha256:"+hex.EncodeToString(keySum[:]) {
-			return nil, fmt.Errorf("seed custody key identity mismatch")
+		verified, err := roots.Verify(bundle.RootID, bundle.Policy, bundle.Receipt, now)
+		if err != nil {
+			return nil, fmt.Errorf("seed custody bundle %d: %w", i, err)
 		}
-		payload, err := seedbinding.CustodyReceiptSigningBytes(receipt)
-		if err != nil || !ed25519.Verify(ed25519.PublicKey(publicKey), payload, receipt.Signature) {
-			return nil, fmt.Errorf("seed custody receipt %d signature mismatch", i)
-		}
-		if receipt.Prepared {
-			if err := receipt.VerifyPrepared(ed25519.PublicKey(publicKey), receipt.TargetPath); err != nil {
-				return nil, err
-			}
-		}
+		receipt := bundle.Receipt
 		receipt.Authenticated = true
 		selector, _ := seedbinding.CustodyReceiptDigest(receipt)
 		if _, exists := trust.receipts[selector]; exists {
 			return nil, fmt.Errorf("duplicate seed custody receipt")
 		}
-		trust.receipts[selector] = seedbinding.HostReceiptAuthority{Receipt: receipt}
+		trust.receipts[selector] = seedbinding.HostReceiptAuthority{Receipt: receipt, PreparedContext: verified}
 	}
 	return trust, nil
 }

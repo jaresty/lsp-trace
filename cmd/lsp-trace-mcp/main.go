@@ -35,7 +35,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
 	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
-	seedCustodyTrustPath := fs.String("seed-custody-trust-config", "", "host-owned signed seed custody receipts and trusted public keys")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -79,9 +78,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	seedTrust, err := loadBootstrapSeedTrust(*seedCustodyTrustPath)
+	seedTrust, err := loadBootstrapSeedTrust(officialHostSeedBootstrapAuthority(), time.Now().UTC())
 	if err != nil {
-		fmt.Fprintln(stderr, "seed custody trust config:", err)
+		fmt.Fprintln(stderr, "authenticated host seed authority:", err)
 		return 1
 	}
 	var seedRevision seedbinding.RevisionAuthority

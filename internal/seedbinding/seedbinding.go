@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -107,18 +108,20 @@ type PreparedModificationManifest struct {
 	FinderSHA256, SourceArchiveSHA256, SourceTreeSHA256, PreparedTreeSHA256 string
 	AllowedChanges                                                          []string
 	TargetPath, TargetUnchangedSHA256                                       string
-	SourceCommit, Adaptations                                               string
+	SourceCommit, Adaptations                                               string // Adaptations is retained for historical source compatibility.
+	AdaptationIDs                                                           []string
+	PolicyID, AssessmentID, ContextID                                       string
 }
 
 func CanonicalPreparedManifest(m PreparedModificationManifest) ([]byte, error) {
-	if m.FinderSHA256 == "" || m.SourceArchiveSHA256 == "" || m.SourceTreeSHA256 == "" || m.PreparedTreeSHA256 == "" || m.TargetPath == "" || m.TargetUnchangedSHA256 == "" || m.SourceCommit == "" || m.Adaptations == "" || m.SourceCommit == m.Adaptations {
+	adaptationsPresent := len(m.AdaptationIDs) != 0 || m.Adaptations != ""
+	if m.FinderSHA256 == "" || m.SourceArchiveSHA256 == "" || m.SourceTreeSHA256 == "" || m.PreparedTreeSHA256 == "" || m.TargetPath == "" || m.TargetUnchangedSHA256 == "" || m.SourceCommit == "" || !adaptationsPresent || m.SourceCommit == m.Adaptations {
 		return nil, fmt.Errorf("prepared modification manifest incomplete")
 	}
 	return json.Marshal(m)
 }
 
-func PreparedManifestSigningBytes(canonical []byte) []byte {
-	const domain = "lsp-trace:prepared-modification-manifest:v1"
+func framedSigningBytes(domain string, canonical []byte) []byte {
 	out := make([]byte, 0, 4+len(domain)+8+len(canonical))
 	var n [8]byte
 	binary.BigEndian.PutUint32(n[:4], uint32(len(domain)))
@@ -127,6 +130,88 @@ func PreparedManifestSigningBytes(canonical []byte) []byte {
 	binary.BigEndian.PutUint64(n[:], uint64(len(canonical)))
 	out = append(out, n[:]...)
 	return append(out, canonical...)
+}
+
+func PreparedManifestSigningBytes(canonical []byte) []byte {
+	return framedSigningBytes("lsp-trace:prepared-modification-manifest:v1", canonical)
+}
+
+// HostPreparedPolicy is signed by a host root that is independent of request and
+// command-line input. Signature is excluded from the canonical signed payload.
+type HostPreparedPolicy struct {
+	Version                             uint32
+	PolicyID, AssessmentID, ContextID   string
+	Prepared                            bool
+	Repository, SourceCommit            string
+	RequiredAdaptations, AllowedChanges []string
+	TargetPath, TargetUnchangedSHA256   string
+	ValidFrom, ValidUntil               time.Time
+	Signature                           []byte
+}
+
+func CanonicalHostPreparedPolicy(p HostPreparedPolicy) ([]byte, error) {
+	p.Signature = nil
+	if p.Version == 0 || p.PolicyID == "" || p.AssessmentID == "" || p.ContextID == "" || !p.Prepared || p.Repository == "" || p.SourceCommit == "" || len(p.RequiredAdaptations) == 0 || p.TargetPath == "" || p.TargetUnchangedSHA256 == "" || p.ValidFrom.IsZero() || !p.ValidUntil.After(p.ValidFrom) {
+		return nil, fmt.Errorf("host prepared policy incomplete")
+	}
+	return json.Marshal(p)
+}
+
+func HostPreparedPolicySigningBytes(canonical []byte) []byte {
+	return framedSigningBytes("lsp-trace:host-prepared-policy:v1", canonical)
+}
+
+// VerifiedPreparedContext is opaque outside this package. It can only be
+// produced by VerifyPrepared under an anchored host root.
+type VerifiedPreparedContext struct{ digest [sha256.Size]byte }
+
+func (v VerifiedPreparedContext) valid() bool { return v.digest != [sha256.Size]byte{} }
+
+type HostRootSet struct {
+	Version uint32
+	Keys    map[string]ed25519.PublicKey
+}
+
+func (r HostRootSet) Verify(rootID string, policy HostPreparedPolicy, receipt HostCustodyReceipt, now time.Time) (VerifiedPreparedContext, error) {
+	key, ok := r.Keys[rootID]
+	if r.Version == 0 || !ok || len(key) != ed25519.PublicKeySize {
+		return VerifiedPreparedContext{}, fmt.Errorf("unsupported host root version")
+	}
+	return VerifyPrepared(policy, receipt, key, now)
+}
+
+func VerifyPrepared(policy HostPreparedPolicy, receipt HostCustodyReceipt, root ed25519.PublicKey, now time.Time) (VerifiedPreparedContext, error) {
+	canonical, err := CanonicalHostPreparedPolicy(policy)
+	if err != nil || len(root) != ed25519.PublicKeySize || len(policy.Signature) != ed25519.SignatureSize || !ed25519.Verify(root, HostPreparedPolicySigningBytes(canonical), policy.Signature) {
+		return VerifiedPreparedContext{}, fmt.Errorf("host prepared policy signature mismatch")
+	}
+	if now.Before(policy.ValidFrom) || !now.Before(policy.ValidUntil) {
+		return VerifiedPreparedContext{}, fmt.Errorf("host prepared policy outside validity")
+	}
+	if !receipt.Prepared || receipt.PolicyID != policy.PolicyID || receipt.AssessmentID != policy.AssessmentID || receipt.ContextID != policy.ContextID || receipt.Repository != policy.Repository || receipt.SourceRevision != policy.SourceCommit || receipt.TargetPath != policy.TargetPath || !strings.EqualFold(receipt.TargetSourceSHA256, policy.TargetUnchangedSHA256) || !equalStrings(receipt.PreparedAllowedChanges, policy.AllowedChanges) {
+		return VerifiedPreparedContext{}, fmt.Errorf("custody receipt does not exactly match host prepared policy")
+	}
+	if err := receipt.VerifyPrepared(root, receipt.TargetPath); err != nil {
+		return VerifiedPreparedContext{}, err
+	}
+	var manifest PreparedModificationManifest
+	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil || manifest.PolicyID != policy.PolicyID || manifest.AssessmentID != policy.AssessmentID || manifest.ContextID != policy.ContextID || manifest.SourceCommit != policy.SourceCommit || !equalStrings(manifest.AdaptationIDs, policy.RequiredAdaptations) || !equalStrings(manifest.AllowedChanges, policy.AllowedChanges) {
+		return VerifiedPreparedContext{}, fmt.Errorf("prepared manifest does not exactly match host policy")
+	}
+	digest := sha256.Sum256(append(HostPreparedPolicySigningBytes(canonical), receipt.Signature...))
+	return VerifiedPreparedContext{digest: digest}, nil
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 type HostCustodyReceipt struct {
@@ -139,6 +224,7 @@ type HostCustodyReceipt struct {
 	PreparedManifest                                           []byte
 	PreparedManifestSignature                                  []byte
 	KeyID                                                      string
+	PolicyID, AssessmentID, ContextID                          string
 	Signature                                                  []byte
 }
 
@@ -149,16 +235,7 @@ func CustodyReceiptSigningBytes(r HostCustodyReceipt) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	const domain = "lsp-trace:seed-custody-receipt:v1"
-	out := make([]byte, 0, 4+len(domain)+8+len(canonical))
-	var n [8]byte
-	binary.BigEndian.PutUint32(n[:4], uint32(len(domain)))
-	out = append(out, n[:4]...)
-	out = append(out, domain...)
-	binary.BigEndian.PutUint64(n[:], uint64(len(canonical)))
-	out = append(out, n[:]...)
-	out = append(out, canonical...)
-	return out, nil
+	return framedSigningBytes("lsp-trace:seed-custody-receipt:v1", canonical), nil
 }
 
 func CustodyReceiptDigest(r HostCustodyReceipt) (string, error) {
@@ -203,10 +280,16 @@ func (r HostCustodyReceipt) VerifyPrepared(publicKey ed25519.PublicKey, target s
 	return nil
 }
 
-type HostReceiptAuthority struct{ Receipt HostCustodyReceipt }
+type HostReceiptAuthority struct {
+	Receipt         HostCustodyReceipt
+	PreparedContext VerifiedPreparedContext
+}
 
 func (a HostReceiptAuthority) Verify(_ context.Context, claim CustodyClaim) error {
 	r := a.Receipt
+	if r.Prepared && !a.PreparedContext.valid() {
+		return fmt.Errorf("verified prepared context unavailable")
+	}
 	if !r.Authenticated || r.Repository == "" || r.SourceRevision == "" || r.TargetPath == "" || r.TargetSourceSHA256 == "" || r.SeedManifestSHA256 == "" {
 		return fmt.Errorf("host custody receipt unauthenticated or unavailable")
 	}

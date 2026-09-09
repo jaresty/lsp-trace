@@ -39,6 +39,16 @@ func signedSeedTrust(t *testing.T, receipt seedbinding.HostCustodyReceipt) (stri
 	return selector, &bootstrapSeedTrust{receipts: map[string]seedbinding.HostReceiptAuthority{selector: {Receipt: receipt}}}
 }
 
+func TestProductionCLIHasNoSeedCustodyRootSelector(t *testing.T) {
+	var stdout, stderr strings.Builder
+	if code := run([]string{"--seed-custody-trust-config", "/tmp/attacker.json"}, strings.NewReader(""), &stdout, &stderr); code != 2 {
+		t.Fatalf("ASSERT_PRODUCTION_ROOT_SELECTOR_REJECTED: code=%d stderr=%q", code, stderr.String())
+	}
+	if officialHostSeedBootstrapAuthority() != nil {
+		t.Fatal("ASSERT_OFFICIAL_AUTHORITY_NOT_REQUEST_INJECTABLE")
+	}
+}
+
 func bindProviderIdentity(t *testing.T, manifest *seedbinding.Manifest, execution managedExecutionAuthority) {
 	t.Helper()
 	payload, err := os.ReadFile(execution.Path)
