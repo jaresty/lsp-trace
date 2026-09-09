@@ -75,9 +75,10 @@ type Retention struct {
 }
 
 type ArtifactBinding struct {
-	Schema string `json:"schema"`
-	Length int    `json:"length"`
-	SHA256 string `json:"sha256"`
+	Schema            string `json:"schema"`
+	Length            int    `json:"length"`
+	SHA256            string `json:"sha256"`
+	PublicationSHA256 string `json:"publication_sha256,omitempty"`
 }
 
 type DocumentModel struct {
@@ -244,7 +245,7 @@ func decodeSemantics(raw []byte) (DocumentModel, error) {
 func validID(s string) bool     { return idPattern.MatchString(s) }
 func validDigest(s string) bool { return digestPattern.MatchString(s) }
 func stringsBounded(d DocumentModel) bool {
-	values := []string{d.SchemaVersion, d.Attempt.AttemptID, d.Attempt.ManagerID, d.Attempt.ProcessID, d.Initialize.OperationID, d.Initialize.Status, d.Retention.Status, d.Artifact.Schema, d.Artifact.SHA256}
+	values := []string{d.SchemaVersion, d.Attempt.AttemptID, d.Attempt.ManagerID, d.Attempt.ProcessID, d.Initialize.OperationID, d.Initialize.Status, d.Retention.Status, d.Artifact.Schema, d.Artifact.SHA256, d.Artifact.PublicationSHA256}
 	for _, x := range d.Documents {
 		values = append(values, x.DocumentID, x.URISHA256, x.DidOpenOperationID, x.DocumentSymbolOperationID)
 	}
@@ -294,7 +295,7 @@ func validateModel(d DocumentModel) error {
 	default:
 		return errors.New("retention status")
 	}
-	if d.Artifact.Schema != PublicV3Schema || d.Artifact.Length < 0 || !validDigest(d.Artifact.SHA256) {
+	if d.Artifact.Schema != PublicV3Schema || d.Artifact.Length <= 0 || !validDigest(d.Artifact.SHA256) || (d.Artifact.PublicationSHA256 != "" && !validDigest(d.Artifact.PublicationSHA256)) {
 		return errors.New("artifact binding")
 	}
 

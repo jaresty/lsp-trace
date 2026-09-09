@@ -13,7 +13,7 @@ import (
 // projectRuntime is the package-private Stage2 adapter. Its input can only be
 // certified by a sessionruntime.Manager from exact opaque attempt/generation/
 // operation handles; callers never supply lifecycle events.
-func projectRuntime(source sessionruntime.DiagnosticSnapshotSet) ([]byte, error) {
+func ProjectRuntime(source sessionruntime.DiagnosticSnapshotSet, publicV3 []byte, publicationDigest string) ([]byte, error) {
 	if !source.Certified() || source.AttemptID() == "" || source.SessionID() == "" || source.Generation() == 0 {
 		return nil, errors.New("uncertified runtime projection source")
 	}
@@ -31,11 +31,14 @@ func projectRuntime(source sessionruntime.DiagnosticSnapshotSet) ([]byte, error)
 	attempt := string(source.AttemptID())
 	managerDigest := sha256.Sum256([]byte("lsp-trace/request-lifecycle/manager/v1\x00" + source.SessionID()))
 	processDigest := operations[0].ProcessIdentity.ExecutableBytes
-	artifactDigest := sha256.Sum256(nil)
+	if len(publicV3) == 0 {
+		return nil, errors.New("finalized public V3 bytes required")
+	}
+	artifactDigest := sha256.Sum256(publicV3)
 	d := DocumentModel{
 		SchemaVersion: SchemaVersion,
 		Attempt:       Attempt{AttemptID: attempt, ManagerID: "manager-" + hex.EncodeToString(managerDigest[:8]), ProcessID: "process-" + hex.EncodeToString(processDigest[:8]), Generation: source.Generation()},
-		Artifact:      ArtifactBinding{Schema: PublicV3Schema, Length: 0, SHA256: "sha256:" + hex.EncodeToString(artifactDigest[:])},
+		Artifact:      ArtifactBinding{Schema: PublicV3Schema, Length: len(publicV3), SHA256: "sha256:" + hex.EncodeToString(artifactDigest[:]), PublicationSHA256: publicationDigest},
 	}
 
 	documentIDs := map[string]string{}
@@ -104,6 +107,12 @@ func projectRuntime(source sessionruntime.DiagnosticSnapshotSet) ([]byte, error)
 		return nil, err
 	}
 	return Project(snapshot)
+}
+
+// projectRuntime remains a package-private compatibility seam for tests that
+// explicitly verify rejection of the former zero-length placeholder.
+func projectRuntime(source sessionruntime.DiagnosticSnapshotSet) ([]byte, error) {
+	return ProjectRuntime(source, nil, "")
 }
 
 func projectEvents(snapshot sessionruntime.DiagnosticSnapshot, opID string, handle uint64) ([]Event, uint64, error) {

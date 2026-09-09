@@ -2,7 +2,9 @@ package requestlifecycle
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -110,11 +112,12 @@ func TestRuntimeProjectionAcceptsOnlyCertifiedExactBoundedSnapshots(t *testing.T
 	if !ok {
 		t.Fatal("ASSERT_STAGE2_CERTIFIED_SET")
 	}
-	raw, err := projectRuntime(set)
+	publicV3 := []byte(`{"schema_version":"lsp-trace.graph-provenance.v3"}` + "\n")
+	raw, err := ProjectRuntime(set, publicV3, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	model, err := Verify(raw, nil)
+	model, err := Verify(raw, publicV3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +129,7 @@ func TestRuntimeProjectionAcceptsOnlyCertifiedExactBoundedSnapshots(t *testing.T
 	if again := set.Operations(); again[0].Events.Events[0].Code == 0xffff {
 		t.Fatal("ASSERT_STAGE2_IMMUTABLE_SET")
 	}
-	if _, err := projectRuntime(sessionruntime.DiagnosticSnapshotSet{}); err == nil {
+	if _, err := ProjectRuntime(sessionruntime.DiagnosticSnapshotSet{}, publicV3, ""); err == nil {
 		t.Fatal("ASSERT_STAGE2_FORGED_SET_REJECTED")
 	}
 	if _, ok := m.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, append(handles, handles[0]), MaxRecords); ok {
@@ -135,7 +138,8 @@ func TestRuntimeProjectionAcceptsOnlyCertifiedExactBoundedSnapshots(t *testing.T
 	if _, ok := m.DiagnosticSnapshotSetFor(started.AttemptID, sessionruntime.DiagnosticGenerationHandle{}, handles, MaxRecords); ok {
 		t.Fatal("ASSERT_STAGE2_STALE_GENERATION_REJECTED")
 	}
-	if !strings.Contains(string(raw), `"length":0`) {
-		t.Fatal("ASSERT_STAGE2_PUBLIC_BINDING_PLACEHOLDER")
+	sum := sha256.Sum256(publicV3)
+	if model.Artifact.Length != len(publicV3) || model.Artifact.SHA256 != fmt.Sprintf("sha256:%x", sum[:]) || strings.Contains(string(raw), `"length":0`) {
+		t.Fatalf("ASSERT_STAGE3_FINAL_PUBLIC_BINDING: %+v", model.Artifact)
 	}
 }
