@@ -1,0 +1,5 @@
+--- FAIL: TestRoundTripDiagnosticCallbackRunsWithoutManagerLock (0.25s)
+    runtime_integration_test.go:30: ASSERT_RUNTIME_CALLBACK_OUTSIDE_MANAGER_LOCK: callback reentry blocked
+FAIL
+FAIL	lsp-trace/sessionruntime	0.550s
+FAIL

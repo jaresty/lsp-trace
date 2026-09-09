@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 
 	"lsp-trace/internal/lspwire"
@@ -62,6 +63,25 @@ func response(id, result json.RawMessage) lspwire.Message {
 
 func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	errout := &cappedWriter{w: stderr, remaining: maxStderrBytes}
+	if socket := os.Getenv("LSP_TRACE_FAKE_LSP_SCHEDULE_BARRIER"); socket != "" {
+		conn, err := net.Dial("unix", socket)
+		if err != nil {
+			fmt.Fprintf(errout, "fake-lsp scheduling barrier: %v\n", err)
+			return fixtureInputErrorCode
+		}
+		if _, err := conn.Write([]byte("scheduled\n")); err != nil {
+			_ = conn.Close()
+			fmt.Fprintf(errout, "fake-lsp scheduling barrier: %v\n", err)
+			return fixtureInputErrorCode
+		}
+		var release [1]byte
+		if _, err := io.ReadFull(conn, release[:]); err != nil || release[0] != 1 {
+			_ = conn.Close()
+			fmt.Fprintf(errout, "fake-lsp scheduling barrier release: %v\n", err)
+			return fixtureInputErrorCode
+		}
+		_ = conn.Close()
+	}
 	trace := func(event string) {
 		if path := os.Getenv("LSP_TRACE_FAKE_LSP_TRACE"); path != "" {
 			if f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
@@ -136,6 +156,10 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				return fixtureInputErrorCode
 			}
 		case "textDocument/prepareCallHierarchy":
+			if os.Getenv("LSP_TRACE_FAKE_LSP_HANG_PREPARE") == "1" {
+				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
+				continue
+			}
 			uri, _ := json.Marshal(documentURI)
 			result := json.RawMessage(fmt.Sprintf(`[{"name":"leaf","kind":12,"uri":%s,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`, uri))
 			if err := w.Write(response(m.ID, result)); err != nil {
