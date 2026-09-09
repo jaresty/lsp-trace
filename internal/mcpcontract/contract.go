@@ -21,6 +21,7 @@ import (
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-ranking.v1.schema.json testdata/schemas/envelope-bounded-ranking-*.schema.json
+//go:embed testdata/schemas/input-bounded-retained-analytics.v2.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 
@@ -150,7 +151,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))).Schemas {
+	for _, registration := range WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))))).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -171,7 +172,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))), schemaID)
+	compiled, err := compileSchema(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))))), schemaID)
 	if err != nil {
 		return err
 	}

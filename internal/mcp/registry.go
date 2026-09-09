@@ -91,7 +91,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest)))))
+	manifest = mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
@@ -99,6 +99,9 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 		"lsp_trace_v1_bounded_retained_ranking":  "Bounded PageRank or exact-seed PPR over admitted historical retained unit CALLS groups; not source completeness or authentication",
 		"lsp_trace_v1_bounded_retained_metrics":  "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
 		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
+		"lsp_trace_v2_bounded_retained_analysis": "Compute bounded local synthetic root and leaf evidence from exact retained graph bytes; not permission or production authority",
+		"lsp_trace_v2_bounded_retained_metrics":  "Compute bounded local synthetic multiplicity, support and density evidence from exact retained graph bytes; not permission or production authority",
+		"lsp_trace_v2_bounded_retained_ranking":  "Compute bounded local synthetic support ranking from exact retained graph bytes; not permission or production authority",
 		"lsp_trace_v1_export_retained_calls":     "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
 		"lsp_trace_v2_export_retained_calls":     "Export admitted graph-provenance/v2 as retained-calls/v2 offline; source implemented, not deployed qualification",
 		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",

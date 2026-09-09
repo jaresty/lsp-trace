@@ -247,7 +247,7 @@ func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
 			if err != nil || !bytes.Equal(published, artifact) {
 				t.Fatalf("%s: bytes=%q err=%v", custody, published, err)
 			}
-			if got := len(server.Registry.Advertised()); got != 25 {
+			if got := len(server.Registry.Advertised()); got != 28 {
 				t.Fatalf("%s: got %d", cardinality, got)
 			}
 		})
@@ -259,7 +259,7 @@ func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *tes
 		fullAssertion        = "ASSERT_REAL_TRAVERSAL_FULL_ENVELOPE_EXCLUSIVE"
 		failureAssertion     = "ASSERT_REAL_TRAVERSAL_FAILURE_DIAGNOSTIC_ENVELOPE_EXCLUSIVE"
 		compactAssertion     = "ASSERT_REAL_TRAVERSAL_COMPACT_IMMUTABLE_PUBLICATION"
-		cardinalityAssertion = "ASSERT_REAL_TRAVERSAL_PRESERVES_EXACTLY_THIRTEEN_TOOLS"
+		cardinalityAssertion = "ASSERT_REAL_TRAVERSAL_CURRENT28_PRESERVES_HISTORICAL_TOOLS"
 	)
 	for _, assertion := range []string{fullAssertion, failureAssertion, compactAssertion, cardinalityAssertion} {
 		t.Log("ASSERTION: " + assertion)
@@ -299,7 +299,7 @@ func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *tes
 	if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
 		t.Fatalf("%s: %v envelope=%s", failureAssertion, err, raw)
 	}
-	if got := len(registry.Advertised()); got != 25 {
+	if got := len(registry.Advertised()); got != 28 {
 		t.Fatalf("%s: got %d", cardinalityAssertion, got)
 	}
 }

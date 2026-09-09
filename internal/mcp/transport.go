@@ -618,6 +618,12 @@ func operationName(canonical string) operation.Name {
 		return operation.ExportRetainedCallsV2
 	case "lsp_trace_v1_bounded_retained_analysis":
 		return operation.BoundedRetainedAnalysis
+	case "lsp_trace_v2_bounded_retained_analysis":
+		return operation.BoundedRetainedAnalysisV2
+	case "lsp_trace_v2_bounded_retained_metrics":
+		return operation.BoundedRetainedMetricsV2
+	case "lsp_trace_v2_bounded_retained_ranking":
+		return operation.BoundedRetainedRankingV2
 	case "lsp_trace_v1_bounded_retained_metrics":
 		return operation.BoundedRetainedMetrics
 	case "lsp_trace_v1_bounded_retained_ranking":
