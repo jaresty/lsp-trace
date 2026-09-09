@@ -172,6 +172,58 @@ func TestIncrementalWorkAccountingExactBoundaries(t *testing.T) {
 	}
 }
 
+func TestEarlyStopInstrumentationAndLimitDigestPolicy(t *testing.T) {
+	raw := graphBytes(t, []string{"a", "b"}, []retainedEdgeJSON{edge("e", "a", "b", "CALLS", "p", "g")})
+
+	prehash := localRequest(Analysis, raw, "CALLS")
+	prehash.Policy.MaxWork = int64(len(raw) - 1)
+	prehashObservation := &localWorkObserver{}
+	got, err := evaluateLocalObserved(prehash, prehashObservation)
+	if err != nil || got.Status != Limit || prehashObservation.HashBytes != 0 || prehashObservation.ParsedNodes != 0 || prehashObservation.ParsedEdges != 0 || prehashObservation.StoppedBefore != "hash" || !prehashObservation.UnprocessedTail {
+		t.Fatalf("ASSERT_PREHASH_LIMIT_LEAVES_ALL_INPUT_UNPROCESSED: result=%#v observation=%#v err=%v", got, prehashObservation, err)
+	}
+	if got.InputDigest != emptyInputDigest {
+		t.Fatalf("ASSERT_LIMIT_DIGEST_IS_EMPTY_PROCESSED_PREFIX: got=%q want=%q", got.InputDigest, emptyInputDigest)
+	}
+	encodedLimit, marshalErr := MarshalLocalResult(got)
+	if marshalErr != nil || ValidateLocalResultJSON(encodedLimit, raw) != nil {
+		t.Fatalf("ASSERT_LIMIT_EMPTY_PREFIX_DIGEST_REPLAYS: marshal=%v result=%#v", marshalErr, got)
+	}
+
+	nodeStop := localRequest(Analysis, raw, "CALLS")
+	nodeStop.Policy.MaxWork = int64(len(raw) + 1)
+	nodeObservation := &localWorkObserver{}
+	got, err = evaluateLocalObserved(nodeStop, nodeObservation)
+	if err != nil || got.Status != Limit || nodeObservation.HashBytes != len(raw) || nodeObservation.ParsedNodes != 1 || nodeObservation.ParsedEdges != 0 || nodeObservation.StoppedBefore != "node" || !nodeObservation.UnprocessedTail {
+		t.Fatalf("ASSERT_NODE_LIMIT_STOPS_BEFORE_UNAFFORDABLE_RECORD: result=%#v observation=%#v err=%v", got, nodeObservation, err)
+	}
+
+	edgeStop := localRequest(Analysis, raw, "CALLS")
+	edgeStop.Policy.MaxWork = int64(len(raw) + 2)
+	edgeObservation := &localWorkObserver{}
+	got, err = evaluateLocalObserved(edgeStop, edgeObservation)
+	if err != nil || got.Status != Limit || edgeObservation.ParsedNodes != 2 || edgeObservation.ParsedEdges != 0 || edgeObservation.StoppedBefore != "edge" || !edgeObservation.UnprocessedTail {
+		t.Fatalf("ASSERT_EDGE_LIMIT_STOPS_BEFORE_SEMANTIC_PARSE: result=%#v observation=%#v err=%v", got, edgeObservation, err)
+	}
+	if got.Accounting.Units != got.Accounting.DecoderUnits+got.Accounting.NodeUnits+got.Accounting.EdgeUnits+got.Accounting.SelectionUnits+got.Accounting.KernelUnits {
+		t.Fatalf("ASSERT_ACCOUNTING_COMPONENT_SUM_EXACT: %#v", got.Accounting)
+	}
+
+	selectionStop := localRequest(Analysis, raw, "CALLS")
+	selectionStop.Policy.MaxWork = int64(len(raw) + 3)
+	selectionObservation := &localWorkObserver{}
+	got, err = evaluateLocalObserved(selectionStop, selectionObservation)
+	if err != nil || got.Status != Limit || selectionObservation.ParsedEdges != 0 || selectionObservation.StoppedBefore != "edge-selection" || !selectionObservation.UnprocessedTail {
+		t.Fatalf("ASSERT_SELECTION_LIMIT_STOPS_BEFORE_SEMANTIC_PARSE: result=%#v observation=%#v err=%v", got, selectionObservation, err)
+	}
+
+	completeObservation := &localWorkObserver{}
+	got, err = evaluateLocalObserved(localRequest(Analysis, raw, "CALLS"), completeObservation)
+	if err != nil || got.Status != Complete || completeObservation.HashBytes != len(raw) || completeObservation.ParsedNodes != 2 || completeObservation.ParsedEdges != 1 || completeObservation.DecoderOffset != int64(len(raw)) || completeObservation.UnprocessedTail {
+		t.Fatalf("ASSERT_STREAMING_COMPLETE_CONTRAST: result=%#v observation=%#v err=%v", got, completeObservation, err)
+	}
+}
+
 func TestResultValidationClosedReplayAndNestedMutations(t *testing.T) {
 	raw := graphBytes(t, []string{"a", "b"}, []retainedEdgeJSON{edge("e", "a", "b", "CALLS", "p", "g")})
 	for _, op := range []Operation{Analysis, Metrics, Ranking} {

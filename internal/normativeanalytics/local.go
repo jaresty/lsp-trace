@@ -66,6 +66,14 @@ type LocalGraph struct {
 	Edges         []RetainedEdge
 }
 type LocalPolicy struct{ MaxWork int64 }
+type localWorkObserver struct {
+	HashBytes       int
+	ParsedNodes     int
+	ParsedEdges     int
+	DecoderOffset   int64
+	StoppedBefore   string
+	UnprocessedTail bool
+}
 type LocalRequest struct {
 	Operation     Operation
 	BuildRevision string
@@ -254,7 +262,133 @@ func limitResult(r LocalRequest, relations []string, digest string, a LocalAccou
 	return res
 }
 
+// A byte-precharge LIMIT has processed no retained input, so InputDigest is the
+// SHA-256 of the empty processed prefix. This keeps LIMIT lexical shape stable
+// without scanning bytes the work policy did not admit.
+var emptyInputDigest = func() string {
+	sum := sha256.Sum256(nil)
+	return "sha256:" + hex.EncodeToString(sum[:])
+}()
+
+func observeStop(observer *localWorkObserver, d *json.Decoder, raw []byte, before string) {
+	if observer == nil {
+		return
+	}
+	observer.DecoderOffset = d.InputOffset()
+	observer.StoppedBefore = before
+	observer.UnprocessedTail = observer.DecoderOffset < int64(len(raw))
+}
+
+func decodeRetainedGraphIncremental(raw []byte, w *workCounter, relations []string, observer *localWorkObserver) (LocalGraph, []RetainedEdge, bool, error) {
+	if len(raw) == 0 || len(raw) > MaxRetainedBytes || !utf8.Valid(raw) {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	expect := func(want any) bool {
+		got, err := d.Token()
+		return err == nil && reflect.DeepEqual(got, want)
+	}
+	if !expect(json.Delim('{')) || !expect("schema_version") {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	var schemaVersion string
+	if d.Decode(&schemaVersion) != nil || schemaVersion != RetainedGraphSchema || !expect("build_revision") {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	var buildRevision string
+	if d.Decode(&buildRevision) != nil || !validString(buildRevision) || !expect("nodes") || !expect(json.Delim('[')) {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	g := LocalGraph{BuildRevision: buildRevision, Nodes: []string{}, Edges: []RetainedEdge{}}
+	seenNodes := map[string]struct{}{}
+	for d.More() {
+		if len(g.Nodes) >= MaxRetainedNodes {
+			return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+		}
+		if !w.charge(&w.accounting.NodeUnits, 1) {
+			observeStop(observer, d, raw, "node")
+			return LocalGraph{}, nil, true, nil
+		}
+		var node string
+		if d.Decode(&node) != nil || !validString(node) || (len(g.Nodes) > 0 && g.Nodes[len(g.Nodes)-1] >= node) {
+			return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+		}
+		g.Nodes = append(g.Nodes, node)
+		seenNodes[node] = struct{}{}
+		if observer != nil {
+			observer.ParsedNodes++
+		}
+	}
+	if !expect(json.Delim(']')) || !expect("edges") || !expect(json.Delim('[')) {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	selected := []RetainedEdge{}
+	seenIdentity := map[string]struct{}{}
+	var previous retainedEdgeJSON
+	for d.More() {
+		if len(g.Edges) >= MaxRetainedEdges {
+			return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+		}
+		if !w.charge(&w.accounting.EdgeUnits, 1) {
+			observeStop(observer, d, raw, "edge")
+			return LocalGraph{}, nil, true, nil
+		}
+		if !w.charge(&w.accounting.SelectionUnits, 1) {
+			observeStop(observer, d, raw, "edge-selection")
+			return LocalGraph{}, nil, true, nil
+		}
+		var wire retainedEdgeJSON
+		if d.Decode(&wire) != nil || !validRetainedEdge(wire, seenNodes) {
+			return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+		}
+		key := wire.ID + "\x00" + wire.ProvenanceID
+		if _, duplicate := seenIdentity[key]; duplicate || (len(g.Edges) > 0 && edgeLess(wire, previous)) {
+			return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+		}
+		seenIdentity[key] = struct{}{}
+		previous = wire
+		edge := RetainedEdge{wire.ID, wire.From, wire.To, wire.Relation, wire.ProvenanceAuthority, wire.ProvenanceCustody, wire.ProvenanceID, wire.SupportGroup}
+		g.Edges = append(g.Edges, edge)
+		if contains(relations, edge.Relation) {
+			selected = append(selected, edge)
+		}
+		if observer != nil {
+			observer.ParsedEdges++
+		}
+	}
+	if !expect(json.Delim(']')) || !expect(json.Delim('}')) || requireEOF(d) != nil {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	canonical, err := json.Marshal(retainedGraphJSON{SchemaVersion: schemaVersion, BuildRevision: buildRevision, Nodes: g.Nodes, Edges: retainedEdgesJSON(g.Edges)})
+	if err != nil || !bytes.Equal(raw, canonical) {
+		return LocalGraph{}, nil, false, ErrInvalidLocalRequest
+	}
+	if observer != nil {
+		observer.DecoderOffset = d.InputOffset()
+	}
+	return g, selected, false, nil
+}
+
+func validRetainedEdge(e retainedEdgeJSON, nodes map[string]struct{}) bool {
+	_, relationOK := supportedRelations[e.Relation]
+	_, fromOK := nodes[e.From]
+	_, toOK := nodes[e.To]
+	return relationOK && validString(e.ID) && validString(e.ProvenanceID) && validString(e.From) && validString(e.To) && validAuthority(e.ProvenanceAuthority) && validCustody(e.ProvenanceCustody) && len(e.SupportGroup) <= MaxRetainedString && utf8.ValidString(e.SupportGroup) && fromOK && toOK
+}
+
+func retainedEdgesJSON(edges []RetainedEdge) []retainedEdgeJSON {
+	out := make([]retainedEdgeJSON, len(edges))
+	for i, e := range edges {
+		out[i] = retainedEdgeJSON{e.ID, e.From, e.To, e.Relation, e.ProvenanceAuthority, e.ProvenanceCustody, e.ProvenanceID, e.SupportGroup}
+	}
+	return out
+}
+
 func EvaluateLocal(r LocalRequest) (LocalResult, error) {
+	return evaluateLocalObserved(r, nil)
+}
+
+func evaluateLocalObserved(r LocalRequest, observer *localWorkObserver) (LocalResult, error) {
 	if !validOperation(r.Operation) || !validString(r.BuildRevision) || r.Policy.MaxWork < 1 {
 		return LocalResult{}, ErrInvalidLocalRequest
 	}
@@ -262,32 +396,25 @@ func EvaluateLocal(r LocalRequest) (LocalResult, error) {
 	if err != nil {
 		return LocalResult{}, err
 	}
-	sum := sha256.Sum256(r.RetainedJSON)
-	inputDigest := "sha256:" + hex.EncodeToString(sum[:])
 	w := workCounter{accounting: LocalAccounting{Limit: r.Policy.MaxWork}}
 	if !w.charge(&w.accounting.DecoderUnits, int64(len(r.RetainedJSON))) {
-		return limitResult(r, relations, inputDigest, w.accounting), nil
+		if observer != nil {
+			observer.StoppedBefore = "hash"
+			observer.UnprocessedTail = len(r.RetainedJSON) > 0
+		}
+		return limitResult(r, relations, emptyInputDigest, w.accounting), nil
 	}
-	g, decodedDigest, err := DecodeRetainedGraph(r.RetainedJSON)
-	if err != nil || g.BuildRevision != r.BuildRevision || decodedDigest != inputDigest {
+	sum := sha256.Sum256(r.RetainedJSON)
+	inputDigest := "sha256:" + hex.EncodeToString(sum[:])
+	if observer != nil {
+		observer.HashBytes = len(r.RetainedJSON)
+	}
+	g, selected, limited, err := decodeRetainedGraphIncremental(r.RetainedJSON, &w, relations, observer)
+	if err != nil || (!limited && g.BuildRevision != r.BuildRevision) {
 		return LocalResult{}, ErrInvalidLocalRequest
 	}
-	for range g.Nodes {
-		if !w.charge(&w.accounting.NodeUnits, 1) {
-			return limitResult(r, relations, inputDigest, w.accounting), nil
-		}
-	}
-	selected := make([]RetainedEdge, 0, len(g.Edges))
-	for _, e := range g.Edges {
-		if !w.charge(&w.accounting.EdgeUnits, 1) {
-			return limitResult(r, relations, inputDigest, w.accounting), nil
-		}
-		if !w.charge(&w.accounting.SelectionUnits, 1) {
-			return limitResult(r, relations, inputDigest, w.accounting), nil
-		}
-		if contains(relations, e.Relation) {
-			selected = append(selected, e)
-		}
+	if limited {
+		return limitResult(r, relations, inputDigest, w.accounting), nil
 	}
 	for range g.Nodes {
 		if !w.charge(&w.accounting.KernelUnits, 1) {
@@ -547,8 +674,12 @@ func ValidateLocalResultJSON(raw []byte, retained ...[]byte) error {
 	if err != nil || !bytes.Equal(raw, canon) || validateResultShape(r) != nil || r.Digest != localDigest(&r) || len(retained) != 1 {
 		return ErrInvalidLocalRequest
 	}
-	sum := sha256.Sum256(retained[0])
-	if r.InputDigest != "sha256:"+hex.EncodeToString(sum[:]) {
+	expectedInputDigest := emptyInputDigest
+	if r.Accounting.DecoderUnits <= r.Accounting.Limit {
+		sum := sha256.Sum256(retained[0])
+		expectedInputDigest = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	if r.InputDigest != expectedInputDigest {
 		return ErrInvalidLocalRequest
 	}
 	replay, err := EvaluateLocal(LocalRequest{Operation: r.Operation, BuildRevision: r.BuildRevision, RetainedJSON: retained[0], Relations: r.SelectedRelations, Policy: LocalPolicy{MaxWork: r.Accounting.Limit}})
