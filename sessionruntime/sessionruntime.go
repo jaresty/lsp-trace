@@ -313,7 +313,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 	diagnosticHandle, collector := m.newDiagnosticOperation(diagnosticGeneration, identity)
 	finishDocument := func(result DocumentResult, terminal uint16) DocumentResult {
 		result.DiagnosticOperation = diagnosticHandle
-		collector.Terminal(terminal)
+		m.completeDiagnosticOperation(diagnosticHandle, collector, terminal)
 		return result
 	}
 
@@ -688,7 +688,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	} else if failure != "" {
 		terminalCode = diagnosticEventTerminalFailure
 	}
-	result.eventCollector.Terminal(terminalCode)
+	m.completeDiagnosticOperationLocked(result.DiagnosticOperation, result.eventCollector, terminalCode)
 	terminal := manageddiagnostic.TerminalResponseReceived
 	readState, writeState := manageddiagnostic.IOComplete, manageddiagnostic.IOComplete
 	if failure != "" {
@@ -774,6 +774,7 @@ type Manager struct {
 	startupAttemptEntropy func(uint64) []byte
 	startupAttemptSeq     uint64
 	diagnosticSequence    uint64
+	diagnosticEvictions   uint64
 	diagnosticOperations  map[DiagnosticOperationHandle]diagnosticOperation
 	diagnosticOrder       []DiagnosticOperationHandle
 }
@@ -825,7 +826,11 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	defer func() {
 		result.AttemptID = attemptID
 		if result.SessionID != "" && result.Generation != 0 {
-			result.DiagnosticGeneration = DiagnosticGenerationHandle{Session: DiagnosticSessionHandle{AttemptID: attemptID, SessionID: result.SessionID}, Generation: result.Generation}
+			m.mu.Lock()
+			if current := m.sessions[result.SessionID]; current != nil && current.record.Generation == result.Generation && current.attemptID == attemptID {
+				result.DiagnosticGeneration = current.diagnosticGeneration
+			}
+			m.mu.Unlock()
 		}
 		if !m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, result) {
 			panic("sessionruntime: startup attempt retention invariant violated")
@@ -882,7 +887,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		copy := *req.SeedBinding
 		retainedBinding = &copy
 	}
-	diagnosticGeneration := DiagnosticGenerationHandle{Session: DiagnosticSessionHandle{AttemptID: attemptID, SessionID: id}, Generation: 1}
+	diagnosticGeneration := m.newDiagnosticGeneration(attemptID, id, 1)
 	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
@@ -1046,6 +1051,16 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		m.terminalReadinessEvent(opID, diagnosticEventTerminalResponse)
 		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
 	case <-ctx.Done():
+		// Retire the readiness-owned transport before closing its diagnostics, then
+		// join the reader so every shutdown read observation precedes the terminal.
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		late := <-response
+		if late.err != nil {
+			m.recordReadinessEvent(opID, diagnosticEventLate, 0, false)
+		} else {
+			m.recordReadinessEvent(opID, diagnosticEventLate, 0, true)
+		}
 		failure := session.RequestCancelled
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			failure = session.InitializationTimeout
@@ -1115,7 +1130,9 @@ func (m *Manager) terminalReadinessEvent(id string, code uint16) {
 		collector = op.diagnostic
 	}
 	m.mu.Unlock()
-	collector.Terminal(code)
+	if op != nil {
+		m.completeDiagnosticOperation(op.snapshot.DiagnosticOperation, collector, code)
+	}
 }
 
 func (m *Manager) recordReadinessRequest(id string, bytes int64) {
@@ -1532,7 +1549,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
 	r.attemptID = attemptID
 	r.identity = identity
-	r.diagnosticGeneration = DiagnosticGenerationHandle{Session: DiagnosticSessionHandle{AttemptID: attemptID, SessionID: operation.SessionID}, Generation: completed.Generation}
+	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, operation.SessionID, completed.Generation)
 	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
 	r.retired = nil
 	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false

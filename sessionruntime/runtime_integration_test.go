@@ -55,14 +55,14 @@ func TestDiagnosticOperationSnapshotRequiresExactAttemptAndIsImmutable(t *testin
 		t.Fatal(err)
 	}
 	started := m.Start(context.Background(), StartRequest{Profile: profile(t), Process: managedprocess.Spec{Path: executable, Args: []string{"--stdio"}, Env: []string{"TOKEN=secret"}}})
-	if started.Failure != "" || started.DiagnosticGeneration.Session.AttemptID != started.AttemptID {
+	if started.Failure != "" || started.DiagnosticGeneration.session.attemptID != started.AttemptID {
 		t.Fatalf("ASSERT_RUNTIME_ATTEMPT_GENERATION_HANDLE: %+v", started)
 	}
 	if ready := m.ObserveInitialization(started.SessionID, started.Generation, true); ready.State != session.Ready {
 		t.Fatal(ready)
 	}
 	result := m.RoundTrip(context.Background(), RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "test/method", Params: json.RawMessage(`{"x":1}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096})
-	if result.Failure != "" || result.DiagnosticOperation.Sequence == 0 {
+	if result.Failure != "" || result.DiagnosticOperation.sequence == 0 {
 		t.Fatalf("ASSERT_RUNTIME_OPERATION_HANDLE: %+v", result)
 	}
 	if _, ok := m.DiagnosticSnapshotFor(manageddiagnostic.StartupAttemptID("foreign"), result.DiagnosticOperation); ok {
@@ -93,15 +93,15 @@ func TestReadinessReturnsClosedAttemptAuthorizedOperation(t *testing.T) {
 		t.Fatalf("ASSERT_RUNTIME_READINESS_CAPABILITY_PROJECTION: %+v found=%t", ready, found)
 	}
 	snapshot, ok := m.DiagnosticSnapshotFor(started.AttemptID, ready.DiagnosticOperation)
-	if !ok || !snapshot.Events.Closed || snapshot.Operation.Generation != started.DiagnosticGeneration {
+	if !ok || !snapshot.Events.Closed || snapshot.Operation.generation != started.DiagnosticGeneration {
 		t.Fatalf("ASSERT_RUNTIME_READINESS_CLOSED_SNAPSHOT: ok=%t snapshot=%+v", ok, snapshot)
 	}
 }
 
 func TestDiagnosticHandlesAreExcludedFromJSONBytes(t *testing.T) {
-	h := DiagnosticOperationHandle{Sequence: 7}
+	h := DiagnosticOperationHandle{sequence: 7}
 	for name, value := range map[string]any{
-		"start":     StartResult{DiagnosticGeneration: DiagnosticGenerationHandle{Generation: 7}},
+		"start":     StartResult{DiagnosticGeneration: DiagnosticGenerationHandle{generation: 7}},
 		"readiness": ReadinessSnapshot{DiagnosticOperation: h},
 		"document":  DocumentResult{DiagnosticOperation: h},
 		"roundtrip": RoundTripResult{DiagnosticOperation: h},
