@@ -3,6 +3,7 @@ package inspection
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -62,6 +63,33 @@ func TestProjectAllSeedsUsesInvocationOrderAndRejectsDuplicateResults(t *testing
 	}
 	if _, err := ProjectAllSeeds(bad); err == nil || !strings.Contains(err.Error(), `seed label "first" has 2 results; expected exactly one`) {
 		t.Fatalf("ASSERT_ALL_SEED_DUPLICATE_RESULT_REJECTED: %v", err)
+	}
+}
+
+func TestProjectAllSeedsV5IncludesExactSiblingEndpointsPerMembership(t *testing.T) {
+	origin := graph.NewNode(graph.Item{Name: "origin", URI: "file:///source.go"})
+	candidate := graph.NewNode(graph.Item{Name: "candidate", URI: "file:///source.go"})
+	relation := graph.SiblingCandidate{RelationID: "sibling-1", SeedLabel: "left", Origin: origin, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING"}
+	bundle := Bundle{
+		SchemaVersion:     graph.SchemaVersionV5,
+		Invocation:        graph.Invocation{Seeds: []graph.InvocationSeed{{Label: "left"}, {Label: "right"}}},
+		Seeds:             []graph.SeedResult{{Label: "left"}, {Label: "right"}},
+		SiblingCandidates: []graph.SiblingCandidate{relation},
+		SeedMemberships:   []graph.SeedMembership{{SeedLabel: "left", EvidenceKind: "SIBLING_CANDIDATE", EndpointID: relation.RelationID}},
+	}
+	raw, err := json.Marshal(bundle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ProjectAllSeeds(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Seeds[0].NativeNodeIDs, []string{origin.ID, candidate.ID}) || len(got.Seeds[1].NativeNodeIDs) != 0 {
+		t.Fatalf("ASSERT_V5_SIBLING_ENDPOINTS_PARTITIONED_PER_SEED: %#v", got.Seeds)
+	}
+	if len(got.Records.SiblingCandidates) != 1 || !reflect.DeepEqual(got.Records.SiblingCandidates[0], relation) {
+		t.Fatalf("ASSERT_V5_SIBLING_CORRESPONDENCE_PRESERVED: %#v", got.Records.SiblingCandidates)
 	}
 }
 

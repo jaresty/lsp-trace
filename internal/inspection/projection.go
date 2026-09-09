@@ -179,6 +179,40 @@ func ValidateAllSeedAccounting(projection AllProjection) error {
 	return nil
 }
 
+func appendUnique(ids []string, additions ...string) []string {
+	seen := make(map[string]struct{}, len(ids)+len(additions))
+	for _, id := range ids {
+		seen[id] = struct{}{}
+	}
+	for _, id := range additions {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; !ok {
+			ids = append(ids, id)
+			seen[id] = struct{}{}
+		}
+	}
+	return ids
+}
+
+func appendUniqueNodes(nodes []graph.Node, additions ...graph.Node) []graph.Node {
+	seen := make(map[string]struct{}, len(nodes)+len(additions))
+	for _, node := range nodes {
+		seen[node.ID] = struct{}{}
+	}
+	for _, node := range additions {
+		if node.ID == "" {
+			continue
+		}
+		if _, ok := seen[node.ID]; !ok {
+			nodes = append(nodes, node)
+			seen[node.ID] = struct{}{}
+		}
+	}
+	return nodes
+}
+
 func ProjectSeed(data []byte, label string) (Projection, error) {
 	var bundle Bundle
 	if err := json.Unmarshal(data, &bundle); err != nil {
@@ -277,6 +311,11 @@ func ProjectAllSeeds(data []byte) (AllProjection, error) {
 		SiblingCandidates:     append([]graph.SiblingCandidate{}, bundle.SiblingCandidates...),
 		Diagnostics:           append([]graph.Diagnostic{}, bundle.Diagnostics...), Terminals: append([]graph.Boundary{}, bundle.Terminals...), Frontier: append([]graph.Boundary{}, bundle.Frontier...),
 	}
+	if bundle.SchemaVersion == graph.SchemaVersionV5 {
+		for _, candidate := range bundle.SiblingCandidates {
+			out.Records.Nodes = appendUniqueNodes(out.Records.Nodes, candidate.Origin, candidate.Candidate)
+		}
+	}
 
 	results := make(map[string][]graph.SeedResult, len(bundle.Seeds))
 	for _, result := range bundle.Seeds {
@@ -312,6 +351,14 @@ func ProjectAllSeeds(data []byte) (AllProjection, error) {
 			entry.SeedMemberships = append(entry.SeedMemberships, membership)
 			if membership.EvidenceKind == "SIBLING_CANDIDATE" || membership.EvidenceKind == "DISPATCH_ASSOCIATION" {
 				entry.DiscoveryNominationIDs = append(entry.DiscoveryNominationIDs, membership.EndpointID)
+			}
+			if membership.EvidenceKind == "SIBLING_CANDIDATE" {
+				for _, candidate := range bundle.SiblingCandidates {
+					if candidate.RelationID == membership.EndpointID {
+						entry.NativeNodeIDs = appendUnique(entry.NativeNodeIDs, candidate.Origin.ID, candidate.Candidate.ID)
+						break
+					}
+				}
 			}
 		}
 		if seed.Failure == nil {

@@ -127,10 +127,16 @@ func loadInspectArtifact(path string) ([]byte, error) {
 		return nil, fmt.Errorf("malformed input: %w", err)
 	}
 	if header.SchemaVersion != "" {
-		if header.SchemaVersion != graph.SchemaVersionV3 {
-			return nil, fmt.Errorf("inspection requires %s", graph.SchemaVersionV3)
+		version := ""
+		switch header.SchemaVersion {
+		case graph.SchemaVersionV3:
+			version = "v3"
+		case graph.SchemaVersionV5:
+			version = "v5"
+		default:
+			return nil, fmt.Errorf("inspection requires %s or %s", graph.SchemaVersionV3, graph.SchemaVersionV5)
 		}
-		if _, err := schema.Validate(input, "v3"); err != nil {
+		if _, err := schema.Validate(input, version); err != nil {
 			return nil, err
 		}
 		return input, nil
