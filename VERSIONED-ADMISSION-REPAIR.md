@@ -63,8 +63,8 @@ No delegation, network access, installation, deployment, product/live-D01 action
 
 At the repair state:
 
-- `go test ./internal/qualificationpolicy -run 'TestProgramA|TestProgramB|TestExternalCaller' -count=1` — 64 passed.
-- `go test ./internal/qualificationmatrix ./internal/qualificationpolicy -run 'ProgramB|ProgramA|ExternalCaller' -count=1` — 65 passed across two packages.
-- The same two-package selection with `-race` — 65 passed.
+- `go test ./internal/qualificationpolicy -run 'TestProgramA|TestProgramB|TestExternalCaller' -count=1` — 65 passed.
+- `go test ./internal/qualificationmatrix ./internal/qualificationpolicy -run 'ProgramB|ProgramA|ExternalCaller' -count=1` — 66 passed across two packages.
+- The same two-package selection with `-race` — 66 passed.
 - `go vet ./internal/qualificationmatrix ./internal/qualificationpolicy` — no diagnostics.
 - `go build ./internal/qualificationmatrix ./internal/qualificationpolicy` — passed.
