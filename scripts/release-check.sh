@@ -322,4 +322,10 @@ printf 'PASS R-BOUNDED-RANKING: independent rational oracle, stationary proof/re
 "$release_tmp/lsp-trace" schema get --family bounded-retained-ranking --version v1 > "$release_tmp/bounded-retained-ranking.schema.json"
 cmp "$release_tmp/bounded-retained-ranking.schema.json" "$root/internal/schema/schemas/lsp-trace.bounded-retained-ranking.v1.schema.json"
 printf 'PASS R-BOUNDED-RANKING-SCHEMA: exact committed additive schema\n'
+if ./scripts/check-installed-pi-mcp-adapter-canary.sh --required; then
+  printf 'PASS R-INSTALLED-PI-MCP-ADAPTER-CANARY: production direct-tool invocation matches retained D01 Program B bytes\n'
+else
+  printf 'FAIL R-INSTALLED-PI-MCP-ADAPTER-CANARY: mandatory installed-adapter integration failed\n'
+  exit 1
+fi
 printf 'RELEASE CHECK PASS\n'
