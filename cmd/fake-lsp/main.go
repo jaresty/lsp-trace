@@ -115,7 +115,7 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		switch m.Method {
 		case "initialize":
-			result := json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","callHierarchyProvider":true},"serverInfo":{"name":"fake-lsp-fixture","version":"1"}}`)
+			result := json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","callHierarchyProvider":true,"documentSymbolProvider":true},"serverInfo":{"name":"fake-lsp-fixture","version":"1"}}`)
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
@@ -148,6 +148,9 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				name = "other"
 			}
 			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"range":%s,"selectionRange":%s}]`, name, rng, rng))
+			if mode == "hierarchical" {
+				result = json.RawMessage(`[{"name":"document","kind":2,"range":{"start":{"line":0,"character":0},"end":{"line":20,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"children":[{"name":"leaf","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}},{"name":"peer","kind":12,"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":4}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":4}}},{"name":"Nested","kind":5,"range":{"start":{"line":4,"character":0},"end":{"line":10,"character":0}},"selectionRange":{"start":{"line":4,"character":0},"end":{"line":4,"character":6}},"children":[{"name":"hidden","kind":6,"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":6}},"selectionRange":{"start":{"line":5,"character":0},"end":{"line":5,"character":6}}}]}]}]`)
+			}
 			if mode == "invalid" {
 				result = json.RawMessage(`[{"name":null}]`)
 			}

@@ -22,7 +22,16 @@ type Options struct {
 	NodeFactory            func(graph.Item) graph.Node
 	SchemaVersion          string
 	IncludeTopmostSiblings bool
+	SiblingEvidence        SiblingEvidence
 }
+
+// SiblingEvidence is supplied by the read-once command boundary. Traversal
+// binds documentSymbol nominations to the exact seed, provider, source bytes,
+// LSP observations, revision, and custody that produced them.
+type SiblingEvidence struct {
+	SeedURI, SeedLabel, SeedIdentity, SourceDigest, ProviderRef, Revision, Custody string
+}
+
 type queued struct {
 	item  lsp.CallHierarchyItem
 	node  graph.Node
@@ -84,6 +93,10 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: status})
 				continue
 			}
+			if !callableKind(matches[0].symbol.Kind) {
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: "UNSUPPORTED_SEED_DECLARATION_KIND"})
+				continue
+			}
 			origin := newNode(symbolItem(seed.URI, matches[0].symbol))
 			for _, declaration := range flat {
 				if declaration.parent != matches[0].parent || !callableKind(declaration.symbol.Kind) || sameDeclaration(declaration.symbol, matches[0].symbol) {
@@ -91,7 +104,15 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				}
 				candidate := newNode(symbolItem(seed.URI, declaration.symbol))
 				if graph.ValidateItem(candidate.Item) == nil {
-					result.SiblingCandidates = append(result.SiblingCandidates, graph.SiblingCandidate{SeedURI: seed.URI, Origin: origin, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING"})
+					evidence := opts.SiblingEvidence
+					result.SiblingCandidates = append(result.SiblingCandidates, graph.SiblingCandidate{
+						SeedURI: seed.URI, SeedLabel: evidence.SeedLabel, SeedIdentity: evidence.SeedIdentity,
+						Origin: origin, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING",
+						ProviderEvidence: []string{evidence.ProviderRef},
+						LSPEvidence:      []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"},
+						SourceDigests:    []string{"candidate=" + evidence.SourceDigest, "origin=" + evidence.SourceDigest},
+						Custody:          evidence.Custody + "@" + evidence.Revision,
+					})
 				}
 			}
 		}

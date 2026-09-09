@@ -189,7 +189,7 @@ func run(args []string) int {
 		return code
 	}
 	publish := publishArtifact
-	if result.SchemaVersion == graph.SchemaVersionV3 {
+	if result.SchemaVersion == graph.SchemaVersionV3 || result.SchemaVersion == graph.SchemaVersionV5 {
 		publish = publishBundle
 	}
 	if err := publish(cfg.output, data); err != nil {
@@ -481,6 +481,9 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	if schemaVersion == "" {
 		schemaVersion = graph.SchemaVersionV3
 	}
+	if c.topmostSiblings {
+		schemaVersion = graph.SchemaVersionV5
+	}
 	type resolvedSeed struct {
 		spec              seedSpec
 		path, uri, source string
@@ -687,11 +690,16 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 			continue
 		}
 		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.uri}, Position: lsp.Position{Line: uint32(seed.line - 1), Character: uint32(seed.column - 1)}}
-		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, IncludeTopmostSiblings: c.topmostSiblings})
-		part.SchemaVersion = schemaVersion
-		for i := range part.SiblingCandidates {
-			part.SiblingCandidates[i].SeedLabel = seed.spec.Label
+		sourceSum := sha256.Sum256([]byte(seed.source))
+		siblingEvidence := traverse.SiblingEvidence{
+			SeedURI: seed.uri, SeedLabel: seed.spec.Label,
+			SeedIdentity: provenance.InvocationID + ":" + seed.spec.Label + ":" + seed.spec.At,
+			SourceDigest: fmt.Sprintf("sha256:%x", sourceSum[:]),
+			ProviderRef:  fmt.Sprintf("command=%s;server_version=%s;invocation=%s", c.command, provenance.ServerVersion, provenance.InvocationID),
+			Revision:     provenance.SourceRevision, Custody: "CALLER_ASSERTED",
 		}
+		part := traverse.Incoming(ctx, timedClient, params, traverse.Options{MaxDepth: c.maxDepth, MaxNodes: c.maxNodes, SchemaVersion: schemaVersion, IncludeTopmostSiblings: c.topmostSiblings, SiblingEvidence: siblingEvidence})
+		part.SchemaVersion = schemaVersion
 		if c.expandDispatchFamily {
 			relationships, diagnostics := resolveDispatchRelationships(ctx, timedClient, params, seed.spec.Label)
 			part.DispatchRelationships = append(part.DispatchRelationships, relationships...)
@@ -699,7 +707,7 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 		}
 		part.Canonicalize()
 		seedResult := graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, PreparedTargetIDs: append([]string(nil), part.Targets...), ReachedEdges: append([]graph.Edge(nil), part.Edges...)}
-		if schemaVersion == graph.SchemaVersionV3 {
+		if schemaVersion == graph.SchemaVersionV3 || schemaVersion == graph.SchemaVersionV5 {
 			for _, edge := range part.Edges {
 				seedResult.ReachedRelationIDs = append(seedResult.ReachedRelationIDs, edge.RelationID)
 			}

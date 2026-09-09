@@ -13,11 +13,13 @@ import (
 )
 
 const (
-	SemanticDigestDomain = "lsp-trace:semantic-bundle:v3"
-	SemanticDigestScope  = "CANONICAL_SEMANTIC_BUNDLE_WITHOUT_RECEIPT"
-	ByteDigestDomain     = "lsp-trace:serialized-output-bytes:v1"
-	ByteDigestScope      = "EXACT_SERIALIZED_OUTPUT_BYTES"
-	ResolvedSeedsDomain  = "lsp-trace:resolved-seed-contents:v1"
+	SemanticDigestDomain   = "lsp-trace:semantic-bundle:v3"
+	SemanticDigestScope    = "CANONICAL_SEMANTIC_BUNDLE_WITHOUT_RECEIPT"
+	SemanticDigestDomainV5 = "lsp-trace:semantic-bundle:v5"
+	SemanticDigestScopeV5  = "CANONICAL_GRAPH_V5_WITH_EXACT_SIBLING_CORRESPONDENCE_WITHOUT_RECEIPT"
+	ByteDigestDomain       = "lsp-trace:serialized-output-bytes:v1"
+	ByteDigestScope        = "EXACT_SERIALIZED_OUTPUT_BYTES"
+	ResolvedSeedsDomain    = "lsp-trace:resolved-seed-contents:v1"
 )
 
 type BundleIdentity struct {
@@ -188,7 +190,7 @@ func (r Result) marshalV3() ([]byte, error) {
 	processContext := projectProcessContext(inv.Server.Environment, inv.EffectiveEnvironment, inv.WorkingDirectory)
 	inv.Server.Environment = nil
 	executionBundleID := semanticExecutionBundleID(inv)
-	edges, siblings, dispatches := projectExecutionBundleRelations(executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
+	edges, siblings, dispatches := projectExecutionBundleRelations(r.SchemaVersion, executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
 	receiptResult := r
 	receiptResult.Edges, receiptResult.SiblingCandidates, receiptResult.DispatchRelationships = edges, siblings, dispatches
 	receipt := receiptResult.evidenceReceipt(inv.Provenance.SourceRevision)
@@ -212,7 +214,8 @@ func (r Result) marshalV3() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(bundleV3{sem, semanticReceiptV3{"lsp-trace.semantic-receipt.v1", domainDigest(SemanticDigestDomain, canonical), SemanticDigestScope}})
+	receiptVersion, digestDomain, digestScope := semanticReceiptCoordinates(r.SchemaVersion)
+	return json.Marshal(bundleV3{sem, semanticReceiptV3{receiptVersion, domainDigest(digestDomain, canonical), digestScope}})
 }
 
 func projectProcessContext(environment map[string]string, effectiveEnvironment []string, workingDirectory string) ProcessContext {
@@ -294,7 +297,14 @@ func semanticExecutionBundleID(inv Invocation) string {
 	return domainDigest("lsp-trace:semantic-execution-bundle:v1", encoded)
 }
 
-func projectExecutionBundleRelations(bundleID string, edges []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship) ([]Edge, []SiblingCandidate, []DispatchRelationship) {
+func semanticReceiptCoordinates(schemaVersion string) (string, string, string) {
+	if schemaVersion == SchemaVersionV5 {
+		return "lsp-trace.semantic-receipt.v5", SemanticDigestDomainV5, SemanticDigestScopeV5
+	}
+	return "lsp-trace.semantic-receipt.v1", SemanticDigestDomain, SemanticDigestScope
+}
+
+func projectExecutionBundleRelations(schemaVersion, bundleID string, edges []Edge, siblings []SiblingCandidate, dispatches []DispatchRelationship) ([]Edge, []SiblingCandidate, []DispatchRelationship) {
 	edges = append([]Edge(nil), edges...)
 	for i := range edges {
 		edges[i].ExecutionBundleID = bundleID
@@ -302,7 +312,11 @@ func projectExecutionBundleRelations(bundleID string, edges []Edge, siblings []S
 	siblings = append([]SiblingCandidate(nil), siblings...)
 	for i := range siblings {
 		siblings[i].ExecutionBundleID = bundleID
-		siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
+		if schemaVersion == SchemaVersionV5 {
+			siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
+		} else {
+			siblings[i].RelationID = canonicalHistoricalSiblingRelationID(siblings[i])
+		}
 	}
 	dispatches = append([]DispatchRelationship(nil), dispatches...)
 	for i := range dispatches {
@@ -607,11 +621,23 @@ func (r Result) ValidateReferences() error {
 		return nil
 	}
 	for _, c := range r.SiblingCandidates {
-		if c.RelationID != canonicalSiblingRelationID(c) {
+		if r.SchemaVersion == SchemaVersionV5 {
+			if c.RelationID != canonicalSiblingRelationID(c) {
+				return fmt.Errorf("invalid canonical v5 sibling relation id %q", c.RelationID)
+			}
+			if c.SeedURI == "" || c.SeedLabel == "" || c.SeedIdentity == "" || c.Direction != "SIBLING" || c.Kind != "TOPMOST_SIBLING" || len(c.ProviderEvidence) == 0 || len(c.LSPEvidence) == 0 || len(c.SourceDigests) < 2 || c.Custody == "" {
+				return fmt.Errorf("incomplete v5 sibling correspondence evidence")
+			}
+		} else if c.ExecutionBundleID != "" && c.RelationID != canonicalHistoricalSiblingRelationID(c) && c.RelationID != canonicalSiblingRelationID(c) {
+			// Admit both the frozen v3 identity and the briefly emitted additive
+			// identity while never rewriting either during historical replay.
 			return fmt.Errorf("invalid canonical sibling relation id %q", c.RelationID)
 		}
-		if err := checkEmbedded("sibling origin", c.Origin); err != nil {
-			return err
+		// Candidate-only discovery records are the frozen historical v3 shape.
+		if c.Origin.ID != "" {
+			if err := checkEmbedded("sibling origin", c.Origin); err != nil {
+				return err
+			}
 		}
 		if err := checkEmbedded("sibling candidate", c.Candidate); err != nil {
 			return err
@@ -651,6 +677,45 @@ func validateEvidenceKinds(receipt *EvidenceReceipt, memberships []SeedMembershi
 	return nil
 }
 
+func validateV5SiblingEvidence(b bundleV3) error {
+	if b.SchemaVersion != SchemaVersionV5 {
+		return nil
+	}
+	seeds := make(map[string]InvocationSeed, len(b.Invocation.Seeds))
+	for _, seed := range b.Invocation.Seeds {
+		seeds[seed.Label] = seed
+	}
+	for _, candidate := range b.SiblingCandidates {
+		seed, ok := seeds[candidate.SeedLabel]
+		if !ok {
+			return fmt.Errorf("v5 sibling seed label has no invocation seed")
+		}
+		expectedIdentity := b.Invocation.Provenance.InvocationID + ":" + seed.Label + ":" + seed.At
+		expectedProvider := fmt.Sprintf("command=%s;server_version=%s;invocation=%s", b.Invocation.Server.Command, b.Invocation.Provenance.ServerVersion, b.Invocation.Provenance.InvocationID)
+		expectedLSP := []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}
+		expectedDigests := []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
+		expectedCustody := "CALLER_ASSERTED@" + b.Invocation.Provenance.SourceRevision
+		checks := []struct {
+			name string
+			ok   bool
+		}{
+			{"distinct_endpoints", candidate.Origin.ID != candidate.Candidate.ID},
+			{"seed_uri", candidate.SeedURI == seed.ResolvedURI && candidate.Origin.URI == seed.ResolvedURI && candidate.Candidate.URI == seed.ResolvedURI},
+			{"seed_identity", candidate.SeedIdentity == expectedIdentity},
+			{"provider_evidence_refs", reflect.DeepEqual(candidate.ProviderEvidence, []string{expectedProvider})},
+			{"lsp_evidence_refs", reflect.DeepEqual(candidate.LSPEvidence, expectedLSP)},
+			{"source_digests", reflect.DeepEqual(candidate.SourceDigests, expectedDigests)},
+			{"custody", candidate.Custody == expectedCustody},
+		}
+		for _, check := range checks {
+			if !check.ok {
+				return fmt.Errorf("v5 sibling correspondence evidence mismatch: %s", check.name)
+			}
+		}
+	}
+	return nil
+}
+
 func ValidateSemanticBundle(data []byte) error {
 	var b bundleV3
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -661,10 +726,13 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return fmt.Errorf("malformed bundle: trailing JSON content")
 	}
-	if b.SchemaVersion != SchemaVersionV3 {
-		return fmt.Errorf("verification requires %s", SchemaVersionV3)
+	if b.SchemaVersion != SchemaVersionV3 && b.SchemaVersion != SchemaVersionV5 {
+		return fmt.Errorf("verification requires %s or %s", SchemaVersionV3, SchemaVersionV5)
 	}
 	if err := validateEvidenceKinds(b.EvidenceReceipt, b.SeedMemberships); err != nil {
+		return err
+	}
+	if err := validateV5SiblingEvidence(b); err != nil {
 		return err
 	}
 	if b.ExecutionBundleID != "" {
@@ -715,7 +783,18 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := verified.ValidateReferences(); err != nil {
 		return err
 	}
+	historicalSiblingIDs := make([]string, len(verified.SiblingCandidates))
+	if b.SchemaVersion == SchemaVersionV3 {
+		for i := range verified.SiblingCandidates {
+			historicalSiblingIDs[i] = verified.SiblingCandidates[i].RelationID
+		}
+	}
 	verified.Canonicalize()
+	if b.SchemaVersion == SchemaVersionV3 {
+		for i := range verified.SiblingCandidates {
+			verified.SiblingCandidates[i].RelationID = historicalSiblingIDs[i]
+		}
+	}
 	if err := validateProcessContext(b.ProcessContext); err != nil {
 		return err
 	}
@@ -800,7 +879,8 @@ func ValidateSemanticBundle(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if receipt.ReceiptVersion != "lsp-trace.semantic-receipt.v1" || receipt.DigestScope != SemanticDigestScope || receipt.SemanticCommitmentDigest != domainDigest(SemanticDigestDomain, canonical) {
+	receiptVersion, digestDomain, digestScope := semanticReceiptCoordinates(b.SchemaVersion)
+	if receipt.ReceiptVersion != receiptVersion || receipt.DigestScope != digestScope || receipt.SemanticCommitmentDigest != domainDigest(digestDomain, canonical) {
 		return fmt.Errorf("embedded semantic receipt mismatch")
 	}
 	return nil

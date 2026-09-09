@@ -110,7 +110,7 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 		return fmt.Errorf("graph provenance requires composed graphprovenance.ValidateFor semantic validation")
 	case structural.Family == FamilyOperationalCustody:
 		return fmt.Errorf("operational custody requires composed custodyevidence.ValidateFor semantic validation")
-	case structural.Family == FamilyGraph && structural.Version == graph.SchemaVersionV3:
+	case structural.Family == FamilyGraph && (structural.Version == graph.SchemaVersionV3 || structural.Version == graph.SchemaVersionV5):
 		err = graph.ValidateSemanticBundle(trimmed)
 	case structural.Family == FamilyInspect && structural.Version == InspectionVersionV1 && structural.document["projection_kind"] == "ALL_SEEDS":
 		err = ValidateAllSeedInspection(trimmed)

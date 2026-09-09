@@ -11,6 +11,7 @@ const (
 	SchemaVersionV1   = "lsp-trace.graph.v1"
 	SchemaVersionV2   = "lsp-trace.graph.v2"
 	SchemaVersionV3   = "lsp-trace.graph.v3"
+	SchemaVersionV5   = "lsp-trace.graph.v5"
 	SchemaVersion     = SchemaVersionV3
 	CompletenessScope = "SERVER_REPORTED_CALL_HIERARCHY"
 	Unknown           = "UNKNOWN"
@@ -158,8 +159,8 @@ type SeedResult struct {
 type SiblingCandidate struct {
 	RelationID        string   `json:"relation_id"`
 	ExecutionBundleID string   `json:"execution_bundle_id,omitempty"`
-	SeedURI           string   `json:"-"`
-	SeedLabel         string   `json:"-"`
+	SeedURI           string   `json:"seed_uri,omitempty"`
+	SeedLabel         string   `json:"seed_label,omitempty"`
 	SeedLabels        []string `json:"-"`
 	Origin            Node     `json:"origin"`
 	Candidate         Node     `json:"candidate"`
@@ -338,7 +339,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		}
 		return out
 	}
-	if r.SchemaVersion == SchemaVersionV3 {
+	if r.SchemaVersion == SchemaVersionV3 || r.SchemaVersion == SchemaVersionV5 {
 		return r.marshalV3()
 	}
 	if r.SchemaVersion == SchemaVersionV1 {
@@ -509,7 +510,10 @@ func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
 		relations = append(relations, relation)
 	}
 	for _, candidate := range r.SiblingCandidates {
-		relation := newEvidenceRelation("SIBLING_CANDIDATE", candidate.Direction, candidate.Origin.ID+"->"+candidate.Candidate.ID, sourceRevision, candidate.SeedURI, candidate.SeedLabel, candidate.Candidate.ID, "", "", candidate.Origin.ID, candidate.Candidate.ID)
+		// The v3 receipt is replayed from serialized fields only. SeedURI and
+		// SeedLabel are producer-only membership inputs and were never part of
+		// the v3 sibling JSON shape.
+		relation := newEvidenceRelation("SIBLING_CANDIDATE", candidate.Direction, candidate.Origin.ID+"->"+candidate.Candidate.ID, sourceRevision, "", "", candidate.Candidate.ID, "", "", candidate.Origin.ID, candidate.Candidate.ID)
 		relation.RelationID = candidate.RelationID
 		relations = append(relations, relation)
 	}
@@ -556,15 +560,23 @@ func canonicalRelationID(kind, direction, locator, candidateID, interfaceID, imp
 }
 
 func canonicalSiblingRelationID(candidate SiblingCandidate) string {
+	return canonicalSiblingRelationIDFor("lsp-trace.sibling-relation.v2", "lsp-trace:sibling-relation:v2", candidate)
+}
+
+func canonicalHistoricalSiblingRelationID(candidate SiblingCandidate) string {
+	return canonicalSiblingRelationIDFor("lsp-trace.sibling-relation.v1", "lsp-trace:sibling-relation:v1", candidate)
+}
+
+func canonicalSiblingRelationIDFor(version, domain string, candidate SiblingCandidate) string {
 	identity := struct {
 		Version, Bundle, Origin, Candidate, Direction, Kind, SeedIdentity, Custody string
 		ProviderEvidence, LSPEvidence, SourceDigests                               []string
-	}{"lsp-trace.sibling-relation.v1", candidate.ExecutionBundleID, candidate.Origin.ID, candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
+	}{version, candidate.ExecutionBundleID, candidate.Origin.ID, candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
 	encoded, err := json.Marshal(identity)
 	if err != nil {
 		panic(err)
 	}
-	return domainDigest("lsp-trace:sibling-relation:v1", encoded)
+	return domainDigest(domain, encoded)
 }
 
 func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID string) EvidenceRelation {

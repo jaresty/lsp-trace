@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/graph"
 )
 
 func TestGraphV4OptionalProviderDiagnosticsSchema(t *testing.T) {
@@ -29,6 +31,29 @@ func TestGraphV4OptionalProviderDiagnosticsSchema(t *testing.T) {
 	diagnostic["unexpected"] = true
 	if failure := validate(); failure == nil {
 		t.Fatal("unknown diagnostic field accepted")
+	}
+}
+
+func TestGraphV5SchemaRetrievalAndValidationPermission(t *testing.T) {
+	got, failure := SchemaGetHandler(context.Background(), Request{Input: json.RawMessage(`{"schema":{"family":"graph","version":"v5"}}`)})
+	if failure != nil || len(got.Artifact) == 0 {
+		t.Fatalf("ASSERT_MCP_GRAPH_V5_SCHEMA_GET_EXECUTES: result=%#v failure=%#v", got, failure)
+	}
+	artifact, err := json.Marshal(graph.Result{SchemaVersion: graph.SchemaVersionV5, Summary: graph.Summary{Complete: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := json.Marshal(map[string]any{"input": json.RawMessage(artifact), "schema": map[string]any{"family": "graph", "version": "v5"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated, failure := ValidateHandler(context.Background(), Request{Input: input})
+	if failure != nil {
+		t.Fatalf("ASSERT_MCP_GRAPH_V5_VALIDATE_EXECUTES: %v artifact=%s", failure.Diagnostics, artifact)
+	}
+	result, ok := validated.Value.(ValidationResult)
+	if !ok || result.SchemaVersion != graph.SchemaVersionV5 {
+		t.Fatalf("ASSERT_MCP_GRAPH_V5_VALIDATE_EXECUTES: result=%#v", validated.Value)
 	}
 }
 
