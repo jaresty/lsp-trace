@@ -114,6 +114,54 @@ func TestHostReceiptAuthorityBindsOpenedTarget(t *testing.T) {
 	}
 }
 
+func TestCallerAssertedLocalMechanicalMatrix(t *testing.T) {
+	root, base := seedFixture(t)
+	base.SchemaVersion = VersionV3
+	base.CustodyMode = CallerAssertedLocal
+	base.Validator.Class = "managed-stdio"
+	base.Validator.ExecutableSHA256 = "sha256:" + strings.Repeat("1", 64)
+	base.Validator.PayloadSHA256 = "sha256:" + strings.Repeat("2", 64)
+	base.Validator.ConfigSHA256 = "sha256:" + strings.Repeat("3", 64)
+	if got := ValidateMechanical(context.Background(), root, base, nil); got.Status != Match || got.Provenance != CallerAssertedLocal {
+		t.Fatalf("ASSERT_CALLER_ASSERTED_LOCAL_EXPLICIT_SUCCESS: %+v", got)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*Manifest)
+	}{
+		{"revision", func(m *Manifest) { m.SourceRevision = "" }},
+		{"digest", func(m *Manifest) { m.SourceSHA256 = strings.Repeat("0", 64) }},
+		{"name", func(m *Manifest) { m.ExpectedSymbol = "" }},
+		{"range", func(m *Manifest) { m.ExpectedDeclarationRange.StartCharacter = 58 }},
+		{"provider", func(m *Manifest) { m.Validator.PayloadSHA256 = "" }},
+		{"prepared-digest", func(m *Manifest) { m.PreparedManifestSHA256 = "not-a-digest" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := base
+			tc.mutate(&m)
+			if got := ValidateMechanical(context.Background(), root, m, nil); got.Status == Match || got.Provenance != CallerAssertedLocal {
+				t.Fatalf("ASSERT_CALLER_ASSERTED_LOCAL_%s_MISMATCH: %+v", strings.ToUpper(tc.name), got)
+			}
+		})
+	}
+	wrong := filepath.Join(root, "Wrong.cs")
+	body, err := os.ReadFile(filepath.Join(root, base.ExpectedDeclaringFile))
+	if err != nil || os.WriteFile(wrong, body, 0600) != nil {
+		t.Fatal(err)
+	}
+	m := base
+	m.Locator.URI = (&url.URL{Scheme: "file", Path: wrong}).String()
+	if got := ValidateMechanical(context.Background(), root, m, nil); got.Status == Match {
+		t.Fatalf("ASSERT_CALLER_ASSERTED_LOCAL_WRONG_FILE_VALID_TEXT: %+v", got)
+	}
+	verified := base
+	verified.CustodyMode = VerifiedHost
+	if got := ValidateMechanical(context.Background(), root, verified, nil); got.Status != Unavailable || got.Provenance != VerifiedHost {
+		t.Fatalf("ASSERT_HOST_FAILURE_CANNOT_DOWNGRADE: %+v", got)
+	}
+}
+
 func TestBindingRejectsDuplicateKeysAndOversizeManifest(t *testing.T) {
 	if _, err := DecodeV2([]byte(`{"schema_version":"lsp-trace.seed-binding.v2","schema_version":"lsp-trace.seed-binding.v2"}`)); err == nil {
 		t.Fatal("ASSERT_SEED_BINDING_DUPLICATE_KEY_REJECTED")

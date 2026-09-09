@@ -145,6 +145,7 @@ type StartRequest struct {
 type StartResult struct {
 	AttemptID            manageddiagnostic.StartupAttemptID
 	PublicDetail         string
+	CustodyProvenance    seedbinding.CustodyMode
 	SessionID            string
 	Generation           uint64
 	DiagnosticGeneration DiagnosticGenerationHandle `json:"-"`
@@ -852,9 +853,17 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 	if req.SeedBinding != nil {
 		outcome := seedbinding.ValidateMechanical(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority)
 		if outcome.Status != seedbinding.Match {
-			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: outcome.Terminal}
+			detail := outcome.Terminal
+			if outcome.Provenance == seedbinding.CallerAssertedLocal {
+				detail = string(seedbinding.CallerAssertedLocal) + ": " + outcome.Terminal
+			}
+			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: detail, CustodyProvenance: outcome.Provenance}
 		}
+		result.CustodyProvenance = outcome.Provenance
 		seedSources[req.SeedBinding.Locator.URI] = append([]byte(nil), outcome.Source...)
+		defer func(provenance seedbinding.CustodyMode) {
+			result.CustodyProvenance = provenance
+		}(outcome.Provenance)
 	}
 	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
 	defer func() {

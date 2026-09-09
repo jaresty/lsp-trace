@@ -87,8 +87,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if config != nil {
 		seedRevision = seedAuthoritiesFromConfig(*config, seedTrust)
 		for _, process := range config.Processes {
-			if process.SeedBinding != nil && seedRevision == nil {
-				fmt.Fprintln(stderr, "seed custody trust unavailable or selector rejected")
+			if process.SeedBinding != nil && process.SeedBinding.CustodyMode != seedbinding.CallerAssertedLocal && seedRevision == nil {
+				fmt.Fprintln(stderr, "VERIFIED_HOST seed custody trust unavailable or selector rejected; no automatic downgrade")
 				return 1
 			}
 		}

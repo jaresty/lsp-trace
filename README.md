@@ -300,6 +300,8 @@ Language servers run with the invoking user's permissions and may execute projec
 
 Field authority is bounded: provenance and requested invocation fields are caller-supplied; normalized identities, digests, memberships, counters, and receipts are tool-derived; capabilities, prepared targets, edges, discovery responses, diagnostics, and opaque data are server-reported; publication receipts establish only the documented integrity/custody commitments. Use only trusted servers and workspaces.
 
+Seed-bound CLI bootstrap supports two explicit custody modes in the additive `lsp-trace.seed-binding.v3` manifest. `VERIFIED_HOST` uses the existing signed host-receipt path. `CALLER_ASSERTED_LOCAL` permits bounded local execution only when revision, source digest, canonical workspace-contained target, complete provider identity, symbol/file/range, and any supplied prepared-manifest digest are pinned. It retains the same read-once mechanical checks and same-generation `didOpen`/`documentSymbol` semantic terminal before target resolution. Local diagnostics and outputs are `CALLER_ASSERTED`, never `VERIFIED` or `AUTHENTICATED`; matching digests do not upgrade authority. A failed host verification never silently downgrades. MCP request schemas do not expose caller-asserted seed mode.
+
 The current implementation includes deterministic graph normalization, bounded slice composition, read-only seed inspection, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI.
 
 ## Read-only presentation
