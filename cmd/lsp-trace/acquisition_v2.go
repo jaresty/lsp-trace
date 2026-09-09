@@ -91,7 +91,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var profile profileFlags
 	var manifestPath string
 	var diagnosticRoot, diagnosticSelector string
-	var bindingRoot, bindingSelector, validatorRoot, validatorSelector string
+	var bindingRoot, bindingSelector string
 	fs.StringVar(&c.workspace, "workspace", "", "host workspace path")
 	fs.StringVar(&c.command, "server", "", "trusted language server executable")
 	fs.StringVar(&profile.Name, "profile", "", "named server profile")
@@ -105,8 +105,6 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
 	fs.StringVar(&bindingRoot, "private-seed-binding-root", "", "caller-approved seed-binding root (v3 only)")
 	fs.StringVar(&bindingSelector, "private-seed-binding-selector", "", "safe relative seed-binding selector (v3 only)")
-	fs.StringVar(&validatorRoot, "private-seed-validator-root", "", "host-approved validator-config root (v3 only)")
-	fs.StringVar(&validatorSelector, "private-seed-validator-selector", "", "safe relative validator-config selector (v3 only)")
 	fs.BoolVar(&c.pretty, "pretty", false, "indent outer JSON without changing embedded graph bytes")
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -120,9 +118,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if (diagnosticRoot == "") != (diagnosticSelector == "") {
 		return fail(fmt.Errorf("private startup diagnostic root and selector must be supplied together"))
 	}
-	bindingRequested := bindingRoot != "" || bindingSelector != "" || validatorRoot != "" || validatorSelector != ""
-	if bindingRequested && (version != "v3" || bindingRoot == "" || bindingSelector == "" || validatorRoot == "" || validatorSelector == "") {
-		return fail(fmt.Errorf("private seed binding requires v3 and both rooted selector pairs"))
+	bindingRequested := bindingRoot != "" || bindingSelector != ""
+	if bindingRequested && (version != "v3" || bindingRoot == "" || bindingSelector == "") {
+		return fail(fmt.Errorf("private seed binding requires v3 and one rooted selector pair"))
 	}
 	op := acquisitionops.Slice
 	if mode == "incoming" {
@@ -194,7 +192,6 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		diagnosticStore = manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: manageddiagnostic.StartupDiagnosticsMaxRecords, MaxBytes: manageddiagnostic.StartupDiagnosticsMaxBytes})
 	}
 	var binding *seedbinding.Manifest
-	var bindingValidator seedbinding.Validator
 	var bindingRevision seedbinding.RevisionAuthority
 	if bindingRequested {
 		bindingBytes, readErr := readPrivateSeedInput(bindingRoot, bindingSelector)
@@ -205,21 +202,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if decodeErr != nil {
 			return fail(fmt.Errorf("seed binding invalid"))
 		}
-		configBytes, readErr := readPrivateSeedInput(validatorRoot, validatorSelector)
-		if readErr != nil {
-			return fail(fmt.Errorf("seed validator unavailable"))
-		}
-		validatorConfig, decodeErr := seedbinding.DecodeExternalConfig(configBytes)
-		if decodeErr != nil {
-			return fail(fmt.Errorf("seed validator invalid"))
-		}
-		external, validatorErr := seedbinding.NewExternalValidator(validatorConfig)
-		if validatorErr != nil {
-			return fail(fmt.Errorf("seed validator invalid"))
-		}
-		binding, bindingValidator, bindingRevision = &decoded, external, seedbinding.ExactRevisionAuthority{Revision: decoded.SourceRevision}
+		binding, bindingRevision = &decoded, seedbinding.WorkspaceGitRevisionAuthority{}
 	}
-	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore, SeedRevisionAuthority: bindingRevision, SeedBindingValidator: bindingValidator})
+	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore, SeedRevisionAuthority: bindingRevision})
 	if err != nil {
 		return fail(err)
 	}

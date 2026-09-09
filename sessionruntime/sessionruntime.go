@@ -124,7 +124,6 @@ type Config struct {
 	// Diagnostics is an optional internal-only exact-generation store.
 	Diagnostics           *manageddiagnostic.Store
 	SeedRevisionAuthority seedbinding.RevisionAuthority
-	SeedBindingValidator  seedbinding.Validator
 	// Unexported seams keep deterministic fixtures inside this package; callers
 	// cannot provide bytes that appear directly in a production attempt ID.
 	startupAttemptEntropy func(uint64) []byte
@@ -399,6 +398,60 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 	return result
 }
 
+func (m *Manager) SeedBindingRequested(sessionID string, generation uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[sessionID]
+	return r != nil && r.record.Generation == generation && r.seedBinding != nil
+}
+
+// AdmitSeedBinding supplies the retained preflight bytes and validates their
+// declaration identity on the same initialized generation before target resolution.
+// Request limits are supplied by the acquisition owner and count against the same
+// deterministic request/time budget as subsequent acquisition requests.
+func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, generation uint64, deadline time.Time, maxMessages int, maxBytes int64) seedbinding.ValidationResult {
+	m.mu.Lock()
+	r := m.sessions[sessionID]
+	if r == nil {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: string(session.SessionNotFound)}
+	}
+	if r.record.Generation != generation {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: string(session.StaleGeneration)}
+	}
+	if r.seedBinding == nil || r.seedAdmitted {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Match}
+	}
+	manifest := *r.seedBinding
+	encoding := r.metadata.PositionEncoding
+	m.mu.Unlock()
+	if encoding == "" || encoding != manifest.Locator.Encoding {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "negotiated position encoding unavailable"}
+	}
+	document := m.PrepareDocument(ctx, DocumentRequest{SessionID: sessionID, Generation: generation, URI: manifest.Locator.URI, LanguageID: manifest.Validator.Language, CaptureSupply: true})
+	if document.Failure != "" || document.Supply == nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "retained document supply unavailable"}
+	}
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": manifest.Locator.URI}})
+	response := m.RoundTrip(ctx, RoundTripRequest{SessionID: sessionID, Generation: generation, Method: "textDocument/documentSymbol", Params: params, Deadline: deadline, MaxMessages: maxMessages, MaxBytes: maxBytes, DiagnosticTargetID: manifest.ID})
+	if response.Failure != "" || response.ServerError != nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "documentSymbol unavailable"}
+	}
+	validation := seedbinding.ValidateDocumentSymbols(response.Result, manifest, document.Supply.Content, encoding)
+	if validation.Status == seedbinding.Match {
+		m.mu.Lock()
+		if current := m.sessions[sessionID]; current != nil && current.record.Generation == generation && current.seedBinding != nil {
+			current.seedAdmitted = true
+		} else {
+			validation = seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: "generation changed during semantic admission"}
+		}
+		m.mu.Unlock()
+	}
+	return validation
+}
+
 type RoundTripResult struct {
 	Key             lspwire.RequestKey
 	Result          json.RawMessage
@@ -637,6 +690,8 @@ type runtimeSession struct {
 	languageID     string
 	documents      map[string]openDocument
 	seedSources    map[string][]byte
+	seedBinding    *seedbinding.Manifest
+	seedAdmitted   bool
 }
 
 type Manager struct {
@@ -660,7 +715,6 @@ type Manager struct {
 	closed                bool
 	diagnostics           *manageddiagnostic.Store
 	seedRevisionAuthority seedbinding.RevisionAuthority
-	seedBindingValidator  seedbinding.Validator
 	startupAttemptNonce   [16]byte
 	startupAttemptEntropy func(uint64) []byte
 	startupAttemptSeq     uint64
@@ -697,13 +751,13 @@ func New(c Config) (*Manager, error) {
 	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
 		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, seedBindingValidator: c.SeedBindingValidator, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
 	seedSources := map[string][]byte{}
 	if req.SeedBinding != nil {
-		outcome := seedbinding.Validate(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority, m.seedBindingValidator)
+		outcome := seedbinding.ValidateMechanical(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority)
 		if outcome.Status != seedbinding.Match {
 			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: outcome.Terminal}
 		}
@@ -759,7 +813,12 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
 	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
-	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources}
+	var retainedBinding *seedbinding.Manifest
+	if req.SeedBinding != nil {
+		copy := *req.SeedBinding
+		retainedBinding = &copy
+	}
+	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }

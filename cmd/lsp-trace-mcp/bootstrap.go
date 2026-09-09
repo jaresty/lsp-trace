@@ -19,10 +19,9 @@ import (
 )
 
 type bootstrapConfig struct {
-	Version       int                            `json:"version"`
-	Processes     []bootstrapProcessConfig       `json:"processes,omitempty"`
-	Providers     []bootstrapProviderDeclaration `json:"providers,omitempty"`
-	SeedValidator *seedbinding.ExternalConfig    `json:"seed_validator,omitempty"`
+	Version   int                            `json:"version"`
+	Processes []bootstrapProcessConfig       `json:"processes,omitempty"`
+	Providers []bootstrapProviderDeclaration `json:"providers,omitempty"`
 }
 
 type bootstrapProcessConfig struct {
@@ -90,16 +89,9 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if err := validateBootstrapProviders(config); err != nil {
 		return bootstrapConfig{}, err
 	}
-	if config.SeedValidator != nil {
-		if _, err := seedbinding.NewExternalValidator(*config.SeedValidator); err != nil {
-			return bootstrapConfig{}, err
-		}
-	}
 	for i, process := range config.Processes {
-		if process.SeedBinding != nil {
-			if config.SeedValidator == nil || process.SeedBinding.SchemaVersion != seedbinding.VersionV2 || process.SeedBinding.Validator != config.SeedValidator.Identity {
-				return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding lacks matching host validator", i)
-			}
+		if process.SeedBinding != nil && process.SeedBinding.SchemaVersion != seedbinding.VersionV2 {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding version invalid", i)
 		}
 	}
 	return config, nil

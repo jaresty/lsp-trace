@@ -78,18 +78,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	var seedValidator seedbinding.Validator
 	var seedRevision seedbinding.RevisionAuthority
-	if config != nil && config.SeedValidator != nil {
-		external, validatorErr := seedbinding.NewExternalValidator(*config.SeedValidator)
-		if validatorErr != nil {
-			fmt.Fprintln(stderr, "seed validator:", validatorErr)
-			return 1
-		}
-		seedValidator = external
-		seedRevision = seedbinding.ExactRevisionAuthority{Revision: seedRevisionFromConfig(*config)}
+	if config != nil {
+		seedRevision = seedbinding.WorkspaceGitRevisionAuthority{}
 	}
-	server, manager, err := newServerRuntimeWithSeedAuthorities(*enableLiveLSP, inventory, custodyTrust, seedRevision, seedValidator, publicationRoot)
+	server, manager, err := newServerRuntimeWithSeedAuthorities(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -220,10 +213,10 @@ func newServerRuntimeWithInventory(enableLiveLSP bool, inventory provider.Config
 }
 
 func newServerRuntimeWithCustodyTrust(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
-	return newServerRuntimeWithSeedAuthorities(enableLiveLSP, inventory, trust, nil, nil, roots...)
+	return newServerRuntimeWithSeedAuthorities(enableLiveLSP, inventory, trust, nil, roots...)
 }
 
-func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, seedValidator seedbinding.Validator, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
+func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, roots ...*publication.Root) (*mcp.Server, *sessionruntime.Manager, error) {
 	var publicationRoot *publication.Root
 	if len(roots) != 0 {
 		publicationRoot = roots[0]
@@ -265,7 +258,7 @@ func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.
 	}
 	manager, err := sessionruntime.New(sessionruntime.Config{
 		Limits:  sessionruntime.Limits{MaxSessions: 8, MaxRequests: 128, MaxChildren: 8, MaxCancels: 128, MaxTombstones: 128, MaxObservations: 1024, MaxOperations: 128},
-		Starter: starter, ReadinessTimeout: 10 * time.Second, SeedRevisionAuthority: revision, SeedBindingValidator: seedValidator,
+		Starter: starter, ReadinessTimeout: 10 * time.Second, SeedRevisionAuthority: revision,
 	})
 	if err != nil {
 		return nil, nil, err

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"unicode/utf16"
@@ -64,33 +65,39 @@ type Manifest struct {
 	SourceSHA256             string            `json:"source_sha256"`
 	Validator                ValidatorIdentity `json:"validator"`
 }
-type ValidationInput struct {
-	Manifest  Manifest
-	Workspace string
-	Source    []byte
-}
 type ValidationResult struct {
 	Status        Status
 	PrivateDetail string
 }
 
-// Validator is a host-selected, language-aware declaration authority. MATCH means
-// the retained coordinate resolves the expected declaration name, declaring file,
-// and declaration name/range. Core deliberately supplies no generic fallback.
-type Validator interface {
-	Identity() ValidatorIdentity
-	Validate(ValidationInput) ValidationResult
-}
 type RevisionAuthority interface {
 	Verify(context.Context, string, string) error
 }
+
+// WorkspaceGitRevisionAuthority authenticates the current workspace commit from
+// host repository custody; neither side of the comparison comes from a caller
+// other than the manifest's claim being checked.
+type WorkspaceGitRevisionAuthority struct{}
+
+func (WorkspaceGitRevisionAuthority) Verify(ctx context.Context, workspace, claimed string) error {
+	cmd := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--verify", "HEAD^{commit}")
+	raw, err := cmd.Output()
+	if err != nil || strings.TrimSpace(string(raw)) == "" || claimed != strings.TrimSpace(string(raw)) {
+		return fmt.Errorf("revision rejected")
+	}
+	return nil
+}
+
 type Outcome struct {
 	Status                  Status
 	Terminal, PrivateDetail string
 	Source                  []byte
 }
 
-func Validate(ctx context.Context, workspace string, m Manifest, revision RevisionAuthority, validator Validator) Outcome {
+// ValidateMechanical authenticates and retains the exact source snapshot before
+// any provider attempt. Semantic declaration admission is generation-bound and
+// deliberately occurs later over the initialized provider's LSP stream.
+func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revision RevisionAuthority) Outcome {
 	invalid := func(code, detail string) Outcome {
 		return Outcome{Status: Invalid, Terminal: code, PrivateDetail: detail}
 	}
@@ -125,9 +132,13 @@ func Validate(ctx context.Context, workspace string, m Manifest, revision Revisi
 	if err != nil || !before.Mode().IsRegular() {
 		return invalid(LocatorInvalid, "source is not regular")
 	}
-	source, err := io.ReadAll(io.LimitReader(f, 64<<20))
+	const maxSourceBytes = 64 << 20
+	source, err := io.ReadAll(io.LimitReader(f, maxSourceBytes+1))
 	if err != nil {
 		return invalid(LocatorInvalid, "source read failed")
+	}
+	if len(source) > maxSourceBytes {
+		return invalid(LocatorInvalid, "source exceeds retained byte limit")
 	}
 	after, err := f.Stat()
 	if err != nil || !os.SameFile(before, after) {
@@ -142,22 +153,14 @@ func Validate(ctx context.Context, workspace string, m Manifest, revision Revisi
 		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "revision authority rejected"}
 	}
 	if !validPosition(source, m.Locator.Line, m.Locator.Character, m.Locator.Encoding) {
-		return invalid(LocatorInvalid, "coordinate outside retained source bytes")
+		return invalid(LocatorInvalid, "coordinate outside retained source bytes or code-unit boundary")
 	}
-	if validator == nil || validator.Identity() != m.Validator {
-		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "validator identity unavailable"}
+	r := m.ExpectedDeclarationRange
+	if !validPosition(source, r.StartLine, r.StartCharacter, m.Locator.Encoding) || !validPosition(source, r.EndLine, r.EndCharacter, m.Locator.Encoding) ||
+		comparePosition(r.StartLine, r.StartCharacter, r.EndLine, r.EndCharacter) > 0 || !manifestRangeContains(r, m.Locator.Line, m.Locator.Character) {
+		return invalid(LocatorInvalid, "declaration range invalid for retained source bytes")
 	}
-	result := validator.Validate(ValidationInput{Manifest: m, Workspace: workspace, Source: append([]byte(nil), source...)})
-	switch result.Status {
-	case Match:
-		return Outcome{Status: Match, Source: source}
-	case Unavailable:
-		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: result.PrivateDetail}
-	case Mismatch, Invalid:
-		return Outcome{Status: result.Status, Terminal: BindingMismatch, PrivateDetail: result.PrivateDetail}
-	default:
-		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "validator returned unknown status"}
-	}
+	return Outcome{Status: Match, Source: source}
 }
 func validPosition(source []byte, line, character uint32, encoding string) bool {
 	if !utf8.Valid(source) {
@@ -167,19 +170,39 @@ func validPosition(source []byte, line, character uint32, encoding string) bool 
 	if uint64(line) >= uint64(len(lines)) {
 		return false
 	}
-	runes := []rune(string(lines[line]))
-	var units int
-	switch encoding {
-	case "utf-8":
-		units = len(lines[line])
-	case "utf-16":
-		units = len(utf16.Encode(runes))
-	case "utf-32":
-		units = len(runes)
-	default:
-		return false
+	lineBytes := lines[line]
+	runes := []rune(string(lineBytes))
+	boundaries := map[uint32]struct{}{0: {}}
+	var units uint32
+	for _, r := range runes {
+		switch encoding {
+		case "utf-8":
+			units += uint32(utf8.RuneLen(r))
+		case "utf-16":
+			units += uint32(len(utf16.Encode([]rune{r})))
+		case "utf-32":
+			units++
+		default:
+			return false
+		}
+		boundaries[units] = struct{}{}
 	}
-	return uint64(character) <= uint64(units)
+	_, ok := boundaries[character]
+	return ok
+}
+
+func comparePosition(aLine, aCharacter, bLine, bCharacter uint32) int {
+	if aLine < bLine || aLine == bLine && aCharacter < bCharacter {
+		return -1
+	}
+	if aLine == bLine && aCharacter == bCharacter {
+		return 0
+	}
+	return 1
+}
+
+func manifestRangeContains(r Range, line, character uint32) bool {
+	return comparePosition(r.StartLine, r.StartCharacter, line, character) <= 0 && comparePosition(line, character, r.EndLine, r.EndCharacter) <= 0
 }
 
 func DecodeV2(raw []byte) (Manifest, error) {
