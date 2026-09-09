@@ -274,7 +274,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	started := time.Now()
 	opResult, failure := executor.Execute(ctx, operation.Request{
-		Name: operationName(tool.Name), RequestID: requestID, Input: opInput,
+		Name: operationName(tool.Name), RequestID: requestID, Input: opInput, PublicationRoot: s.PublicationRoot,
 	})
 	if failure != nil {
 		code, diagnostics := normalizeDomainFailure(failure)
@@ -435,6 +435,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.Name == "lsp_trace_v1_bounded_retained_ranking" {
 		env.EnvelopeSchemaID = mcpcontract.BoundedRankingEnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == "lsp_trace_v2_bounded_retained_analysis" || tool.Name == "lsp_trace_v2_bounded_retained_metrics" || tool.Name == "lsp_trace_v2_bounded_retained_ranking" {
+		env.EnvelopeSchemaID = mcpcontract.PublicAnalyticsV2EnvelopeID(env.EnvelopeSchemaID)
+	}
 	raw, err := json.Marshal(env)
 	if err == nil {
 		err = validateEmittedEnvelope(tool, env, raw)
@@ -535,12 +538,24 @@ func artifactSchemaID(artifact []byte) string {
 		SchemaVersion           string `json:"schema_version"`
 		InspectionSchemaVersion string `json:"inspection_schema_version"`
 		FilterSchemaVersion     string `json:"filter_schema_version"`
+		Family                  string `json:"Family"`
+		Operation               string `json:"Operation"`
 	}
 	if json.Unmarshal(artifact, &identity) != nil {
 		return ""
 	}
 	if identity.ID != "" {
 		return identity.ID
+	}
+	if identity.Family == "normative-analytics" {
+		switch identity.Operation {
+		case "ANALYSIS":
+			return mcpcontract.PublicAnalyticsV2AnalysisArtifactID
+		case "METRICS":
+			return mcpcontract.PublicAnalyticsV2MetricsArtifactID
+		case "RANKING":
+			return mcpcontract.PublicAnalyticsV2RankingArtifactID
+		}
 	}
 	version := identity.SchemaVersion
 	if version == "" {

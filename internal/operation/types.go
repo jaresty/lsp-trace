@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"lsp-trace/internal/publication"
 )
 
 // Name is a canonical operation identity independent of any transport alias.
@@ -36,9 +38,10 @@ const (
 // Request carries structurally validated operation input. Input remains raw so
 // the schema-contract owner, rather than this package, controls its definition.
 type Request struct {
-	Name      Name
-	RequestID string
-	Input     json.RawMessage
+	Name            Name
+	RequestID       string
+	Input           json.RawMessage
+	PublicationRoot *publication.Root
 }
 
 // Result is the transport-independent operation result. Artifact contains the

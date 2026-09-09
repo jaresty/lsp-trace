@@ -21,7 +21,7 @@ import (
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-ranking.v1.schema.json testdata/schemas/envelope-bounded-ranking-*.schema.json
-//go:embed testdata/schemas/input-bounded-retained-analytics.v2.schema.json
+//go:embed testdata/schemas/input-bounded-retained-analytics.v2.schema.json testdata/schemas/envelope-public-analytics-v2-*.schema.json
 //go:embed testdata/transcripts/*.jsonl
 var contractFiles embed.FS
 
@@ -196,7 +196,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
-	manifest = WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))))
+	manifest = WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))))
 	// Load the immutable resource set once, not once per envelope. Every
 	// envelope is still compiled and checked for exhaustive exclusivity.
 	compiler, _, err := registeredCompiler(manifest)

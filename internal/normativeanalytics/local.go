@@ -27,6 +27,8 @@ const (
 	CustodyProviderVerified = "PROVIDER_VERIFIED"
 	CustodyCallerAsserted   = "CALLER_ASSERTED"
 	CustodyUnknown          = "UNKNOWN"
+	ClaimUnverifiedLocal    = "UNVERIFIED_LOCAL"
+	ClaimVerifiedProvenance = "VERIFIED_PROVENANCE"
 	metricsCountingMode     = "edge-instances; structural-relations=unique(from,to,relation); independent-support=unique(validated-authority,custody,provenance-id,support-group)"
 	densityMode             = "ordered-distinct-node-pairs n*(n-1)"
 	rankingCountingMode     = "qualified-support-by-target plus capped-selected-instance-presence"
@@ -114,12 +116,20 @@ type LocalRankingEvidence struct {
 	Schema, CountingMode, Denominator, TieBreak string
 	Ordered                                     []LocalRankedNode
 }
+type VerifierEvidence struct {
+	ArtifactSchemaID string `json:"artifact_schema_id"`
+	ArtifactDigest   string `json:"artifact_digest"`
+	ArtifactLength   uint64 `json:"artifact_byte_length"`
+	Verification     string `json:"verification"`
+}
 type LocalResult struct {
 	Family, Version, Scope, BuildRevision, InputDigest string
 	Operation                                          Operation
 	SelectedRelations                                  []string
 	Status                                             Status
 	Accounting                                         LocalAccounting
+	ClaimLevel                                         string            `json:"claim_level"`
+	Provenance                                         *VerifierEvidence `json:"provenance,omitempty"`
 	Analysis                                           *LocalAnalysisEvidence
 	Metrics                                            *LocalMetricsEvidence
 	Ranking                                            *LocalRankingEvidence
@@ -257,7 +267,7 @@ func (w *workCounter) charge(component *int64, n int64) bool {
 	return w.accounting.Units <= w.accounting.Limit
 }
 func limitResult(r LocalRequest, relations []string, digest string, a LocalAccounting) LocalResult {
-	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: digest, Operation: r.Operation, SelectedRelations: relations, Status: Limit, Accounting: a}
+	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: digest, Operation: r.Operation, SelectedRelations: relations, Status: Limit, Accounting: a, ClaimLevel: ClaimUnverifiedLocal}
 	res.Digest = localDigest(&res)
 	return res
 }
@@ -426,7 +436,7 @@ func evaluateLocalObserved(r LocalRequest, observer *localWorkObserver) (LocalRe
 			return limitResult(r, relations, inputDigest, w.accounting), nil
 		}
 	}
-	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: inputDigest, Operation: r.Operation, SelectedRelations: relations, Status: Complete, Accounting: w.accounting}
+	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: inputDigest, Operation: r.Operation, SelectedRelations: relations, Status: Complete, Accounting: w.accounting, ClaimLevel: ClaimUnverifiedLocal}
 	switch r.Operation {
 	case Analysis:
 		res.Analysis = localAnalyze(g.Nodes, selected)
@@ -563,6 +573,25 @@ func validSHA256(s string) bool {
 	_, err := hex.DecodeString(s[7:])
 	return err == nil && s == "sha256:"+string(bytes.ToLower([]byte(s[7:])))
 }
+
+// Contextualize records the claim ceiling after input custody verification and
+// recomputes the logical digest over that explicit context.
+func Contextualize(r LocalResult, level string, evidence *VerifierEvidence) (LocalResult, error) {
+	if level != ClaimUnverifiedLocal && level != ClaimVerifiedProvenance {
+		return LocalResult{}, ErrInvalidLocalRequest
+	}
+	if level == ClaimVerifiedProvenance {
+		if evidence == nil || evidence.ArtifactSchemaID == "" || !validSHA256(evidence.ArtifactDigest) || evidence.ArtifactLength == 0 || evidence.Verification != "EXACT_BYTES_SCHEMA_DIGEST_VERIFIED" {
+			return LocalResult{}, ErrInvalidLocalRequest
+		}
+	} else if evidence != nil {
+		return LocalResult{}, ErrInvalidLocalRequest
+	}
+	r.ClaimLevel, r.Provenance = level, evidence
+	r.Digest = localDigest(&r)
+	return r, nil
+}
+
 func MarshalLocalResult(r LocalResult) ([]byte, error) {
 	if !validSHA256(r.Digest) || r.Digest != localDigest(&r) {
 		return nil, ErrInvalidLocalRequest
@@ -571,6 +600,16 @@ func MarshalLocalResult(r LocalResult) ([]byte, error) {
 }
 
 func validateResultShape(r LocalResult) error {
+	if r.ClaimLevel != ClaimUnverifiedLocal && r.ClaimLevel != ClaimVerifiedProvenance {
+		return ErrInvalidLocalRequest
+	}
+	if r.ClaimLevel == ClaimVerifiedProvenance {
+		if r.Provenance == nil || r.Provenance.ArtifactSchemaID == "" || !validSHA256(r.Provenance.ArtifactDigest) || r.Provenance.ArtifactLength == 0 || r.Provenance.Verification != "EXACT_BYTES_SCHEMA_DIGEST_VERIFIED" {
+			return ErrInvalidLocalRequest
+		}
+	} else if r.Provenance != nil {
+		return ErrInvalidLocalRequest
+	}
 	if r.Family != Family || r.Version != "local-v1" || r.Scope != LocalScope || !validString(r.BuildRevision) || !validSHA256(r.InputDigest) || !validSHA256(r.Digest) || !validOperation(r.Operation) || (r.Status != Complete && r.Status != Limit) || r.Accounting.Limit < 1 {
 		return ErrInvalidLocalRequest
 	}

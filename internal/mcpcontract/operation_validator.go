@@ -23,25 +23,28 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		return nil, err
 	}
 	canonical := map[operation.Name]string{
-		operation.Capabilities:            "lsp_trace_v1_capabilities",
-		operation.SchemaGet:               "lsp_trace_v1_schema_get",
-		operation.Validate:                "lsp_trace_v1_validate",
-		operation.Verify:                  "lsp_trace_v1_verify",
-		operation.VerifyV2:                "lsp_trace_v2_verify",
-		operation.VerifyRetainedCallsV2:   "lsp_trace_v2_verify_retained_calls",
-		operation.Inspect:                 "lsp_trace_v1_inspect",
-		operation.InspectHydrated:         HydratedTool,
-		operation.Filter:                  "lsp_trace_v1_filter",
-		operation.CustodyExecute:          "lsp_trace_v1_execute",
-		operation.ExportRetainedCalls:     "lsp_trace_v1_export_retained_calls",
-		operation.ExportRetainedCallsV2:   "lsp_trace_v2_export_retained_calls",
-		operation.BoundedRetainedAnalysis: "lsp_trace_v1_bounded_retained_analysis",
-		operation.BoundedRetainedMetrics:  "lsp_trace_v1_bounded_retained_metrics",
-		operation.BoundedRetainedRanking:  "lsp_trace_v1_bounded_retained_ranking",
+		operation.Capabilities:              "lsp_trace_v1_capabilities",
+		operation.SchemaGet:                 "lsp_trace_v1_schema_get",
+		operation.Validate:                  "lsp_trace_v1_validate",
+		operation.Verify:                    "lsp_trace_v1_verify",
+		operation.VerifyV2:                  "lsp_trace_v2_verify",
+		operation.VerifyRetainedCallsV2:     "lsp_trace_v2_verify_retained_calls",
+		operation.Inspect:                   "lsp_trace_v1_inspect",
+		operation.InspectHydrated:           HydratedTool,
+		operation.Filter:                    "lsp_trace_v1_filter",
+		operation.CustodyExecute:            "lsp_trace_v1_execute",
+		operation.ExportRetainedCalls:       "lsp_trace_v1_export_retained_calls",
+		operation.ExportRetainedCallsV2:     "lsp_trace_v2_export_retained_calls",
+		operation.BoundedRetainedAnalysis:   "lsp_trace_v1_bounded_retained_analysis",
+		operation.BoundedRetainedMetrics:    "lsp_trace_v1_bounded_retained_metrics",
+		operation.BoundedRetainedRanking:    "lsp_trace_v1_bounded_retained_ranking",
+		operation.BoundedRetainedAnalysisV2: "lsp_trace_v2_bounded_retained_analysis",
+		operation.BoundedRetainedMetricsV2:  "lsp_trace_v2_bounded_retained_metrics",
+		operation.BoundedRetainedRankingV2:  "lsp_trace_v2_bounded_retained_ranking",
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))).Tools {
+		for _, tool := range WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))))).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break

@@ -103,6 +103,78 @@ func (r *Root) Path() string {
 	return r.path
 }
 
+// ReadSelector reads one bounded regular file beneath the pinned root without
+// following symlinks or creating selector components.
+func (r *Root) ReadSelector(selector string, limit int64) ([]byte, error) {
+	if limit < 1 {
+		return nil, errors.New("positive selector byte limit required")
+	}
+	target, err := existingTarget(r, selector)
+	if err != nil {
+		return nil, err
+	}
+	defer target.close()
+	before, err := target.parent.Lstat(target.name)
+	if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+		return nil, errors.New("no-follow regular selector required")
+	}
+	file, err := target.parent.Open(target.name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	after, err := file.Stat()
+	if err != nil || !os.SameFile(before, after) || after.Size() > limit {
+		return nil, errors.New("selector identity or byte limit invalid")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil || int64(len(raw)) > limit {
+		return nil, errors.New("selector byte limit invalid")
+	}
+	return raw, nil
+}
+
+func existingTarget(root *Root, selector string) (*target, error) {
+	if root == nil || root.file == nil || root.handle == nil || selector == "" || strings.IndexByte(selector, 0) >= 0 || filepath.IsAbs(selector) || !filepath.IsLocal(selector) {
+		return nil, errors.New("unsafe selector")
+	}
+	parts, err := selectorPathParts(runtime.GOOS, selector)
+	if err != nil {
+		return nil, err
+	}
+	current := root.handle
+	owned := false
+	for _, part := range parts[:len(parts)-1] {
+		before, err := current.Lstat(part)
+		if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.IsDir() {
+			if owned {
+				current.Close()
+			}
+			return nil, errors.New("unsafe selector component")
+		}
+		child, err := current.OpenRoot(part)
+		if err != nil {
+			if owned {
+				current.Close()
+			}
+			return nil, errors.New("unsafe selector component")
+		}
+		after, err := child.Stat(".")
+		if err != nil || !os.SameFile(before, after) {
+			child.Close()
+			if owned {
+				current.Close()
+			}
+			return nil, errors.New("selector component identity changed")
+		}
+		if owned {
+			current.Close()
+		}
+		current, owned = child, true
+	}
+	return &target{parent: current, owned: owned, name: parts[len(parts)-1]}, nil
+}
+
 type Request struct {
 	Root             *Root
 	Selector         string
