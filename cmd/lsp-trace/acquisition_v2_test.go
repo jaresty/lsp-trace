@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/seedbinding"
 )
 
 func TestAcquisitionVersionPreservesArgumentValues(t *testing.T) {
@@ -70,6 +71,35 @@ func TestPrivateStartupSinkBuiltCLIInitializationFailureAndOptIn(t *testing.T) {
 	sum := sha256.Sum256(artifact)
 	if err := manageddiagnostic.VerifyStartupDiagnostics(artifact, "sha256:"+hex.EncodeToString(sum[:]), len(artifact)); err != nil {
 		t.Fatalf("%s: verify: %v", assertion, err)
+	}
+}
+
+func TestCLIExplicitLocalV3BindingReachesMechanicalValidationBeforeProvider(t *testing.T) {
+	const assertion = "ASSERT_CLI_LOCAL_V3_BINDING_REACHES_MECHANICAL_VALIDATOR_PREPROVIDER"
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	workspace := t.TempDir()
+	manifest := map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///missing.go", "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}, "required_targets": []any{}, "limits": map[string]any{"max_nodes": 1, "max_requests": 1}}
+	manifestRaw, _ := json.Marshal(manifest)
+	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(manifestPath, manifestRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	bindingRoot := t.TempDir()
+	bindingRaw, _ := json.Marshal(seedbinding.Manifest{SchemaVersion: seedbinding.VersionV3, CustodyMode: seedbinding.CallerAssertedLocal})
+	if err := os.WriteFile(filepath.Join(bindingRoot, "binding.json"), bindingRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(workspace, "provider-started")
+	var stdout, stderr strings.Builder
+	code := runAcquisitionVersion("slice", "v3", []string{"--workspace", workspace, "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch " + marker, "--seed-manifest", manifestPath, "--private-seed-binding-root", bindingRoot, "--private-seed-binding-selector", "binding.json"}, &stdout, &stderr)
+	t.Logf("ASSERTION: %s; code=%d stderr=%q", assertion, code, stderr.String())
+	if code != 1 || !strings.Contains(stderr.String(), seedbinding.LocatorInvalid) {
+		t.Fatalf("%s: expected mechanical taxonomy; code=%d stdout=%q stderr=%q", assertion, code, stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("%s: provider started before mechanical MATCH: %v", assertion, err)
 	}
 }
 
