@@ -24,6 +24,10 @@ const (
 	FamilyBoundedAnalysis          = "bounded-retained-analysis"
 	FamilyBoundedMetrics           = "bounded-retained-metrics"
 	FamilyBoundedRanking           = "bounded-retained-ranking"
+	FamilyBoundedGraphV2           = "bounded-retained-graph-v2"
+	FamilyBoundedAnalysisV2        = "bounded-retained-analysis-v2"
+	FamilyBoundedMetricsV2         = "bounded-retained-metrics-v2"
+	FamilyBoundedRankingV2         = "bounded-retained-ranking-v2"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -41,6 +45,10 @@ var familyVersions = map[string]map[string]string{
 	FamilyBoundedAnalysis:          {"v1": "lsp-trace.bounded-retained-analysis.v1"},
 	FamilyBoundedMetrics:           {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 	FamilyBoundedRanking:           {"v1": "lsp-trace.bounded-retained-ranking.v1"},
+	FamilyBoundedGraphV2:           {"v2": "lsp-trace.normative-retained-graph.v1"},
+	FamilyBoundedAnalysisV2:        {"v2": "lsp-trace.local-normative-analysis.v1", "local-v1": "lsp-trace.local-normative-analysis.v1"},
+	FamilyBoundedMetricsV2:         {"v2": "lsp-trace.local-normative-metrics.v1", "local-v1": "lsp-trace.local-normative-metrics.v1"},
+	FamilyBoundedRankingV2:         {"v2": "lsp-trace.local-normative-ranking.v1", "local-v1": "lsp-trace.local-normative-ranking.v1"},
 }
 
 var versionFields = map[string]string{
@@ -56,6 +64,10 @@ var versionFields = map[string]string{
 	FamilyBoundedAnalysis:          "schema_version",
 	FamilyBoundedMetrics:           "schema_version",
 	FamilyBoundedRanking:           "schema_version",
+	FamilyBoundedGraphV2:           "schema_version",
+	FamilyBoundedAnalysisV2:        "Version",
+	FamilyBoundedMetricsV2:         "Version",
+	FamilyBoundedRankingV2:         "Version",
 }
 
 func normalizeFamily(family, version string) (string, string, error) {

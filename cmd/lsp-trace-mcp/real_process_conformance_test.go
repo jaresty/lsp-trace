@@ -150,8 +150,8 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 	}
 	responses := runMCPProcess(t, binary, nil, requests)
 	tools := responses[0]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 25 {
-		t.Fatalf("ASSERT_PRODUCTION_MCP_TOOL_COUNT_UNCHANGED: got=%d", len(tools))
+	if len(tools) != 28 {
+		t.Fatalf("ASSERT_PRODUCTION_MCP_CURRENT_TOOL_COUNT_28: got=%d", len(tools))
 	}
 	for i, assertion := range []string{"ASSERT_PRODUCTION_MCP_SCHEMA_RETRIEVAL", "ASSERT_PRODUCTION_MCP_SCHEMA_VALIDATION"} {
 		call := decodeProcessCall(t, responses[i+1])

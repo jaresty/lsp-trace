@@ -11,6 +11,14 @@
 
 The tool does not identify domain-specific “roots,” interpret workflows, prove runtime execution, implement compiler semantics, or own source-control custody. It reports the static call relationships supplied by a language server and the exact boundaries of that evidence.
 
+### 1.1 Source-ready local analytics v2
+
+The repository includes an additive, bounded retained analytics v2 surface for synthetic local qualification. Its explicit CLI/MCP routes and four public schema-family mappings preserve historical v1 bytes and do not confer permission, Program B admission, production authority, deployment, or shipment status. Deployment availability remains unknown; see `docs/bounded-retained-analytics-v2.md`.
+
+#### FR22 — rooted publication input parity
+
+All three analytics v2 routes accept either inline canonical graph bytes or one relative selector beneath a process-pinned publication root, never both. Selector admission rejects absolute, escaping, missing, symlinked, colliding, wrong-family, wrong-length, and wrong-digest inputs before analytics. Results identify claim provenance as exactly `UNVERIFIED_LOCAL` or `VERIFIED_PROVENANCE`; only complete rooted exact-byte/schema/digest verifier evidence permits the latter. CLI and MCP preserve exact canonical result-byte parity for equivalent carriers and COMPLETE/LIMIT outcomes, and output publication retains the existing atomic no-replace contract.
+
 ## 2. Problem
 
 Language servers can often answer “who calls this symbol?” for one level through LSP Call Hierarchy. Developers investigating unfamiliar systems need the transitive answer: all resolvable callers, their call sites, and where every branch stops. Existing editor navigation requires repeated manual expansion, obscures branch completeness, and is difficult to automate or retain as evidence.

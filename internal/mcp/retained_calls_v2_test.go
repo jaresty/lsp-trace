@@ -27,7 +27,7 @@ func TestRetainedCallsV2ExportRegistration(t *testing.T) {
 
 func TestRetainedCallsV2VerifyRegistrationAndCurrentCount(t *testing.T) {
 	const registered = "ASSERT_MCP_RETAINED_CALLS_V2_VERIFY_REGISTERED"
-	const cardinality = "ASSERT_MCP_CANONICAL_TOOL_COUNT_25"
+	const cardinality = "ASSERT_MCP_CURRENT_CANONICAL_TOOL_COUNT_28"
 	r := NewRegistryWithPublication(false, true)
 	tool, ok := r.Resolve("lsp_trace_v2_verify_retained_calls")
 	if !ok {
@@ -36,7 +36,7 @@ func TestRetainedCallsV2VerifyRegistrationAndCurrentCount(t *testing.T) {
 	if tool.Availability != Enabled || tool.ExecutorFamily != OfflineExecutorFamily || len(tool.Aliases) != 0 {
 		t.Fatalf("%s: tool=%+v", registered, tool)
 	}
-	if got := len(r.Advertised()); got != 25 {
+	if got := len(r.Advertised()); got != 28 {
 		t.Fatalf("%s: got %d", cardinality, got)
 	}
 	if tool.InputSchemaID != mcpcontract.VerifyRetainedCallsV2InputID || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.RetainedCallsV2ArtifactID {

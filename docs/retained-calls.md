@@ -48,17 +48,19 @@ generation selector plus explicit `schema:{family:"retained-calls",version:"v2"}
 it verifies receipt custody before composed retained-calls/v2 admission. It has no
 alias and does not widen `lsp_trace_v1_verify` or graph-provenance `lsp_trace_v2_verify`.
 
-The current runtime has exactly 25 canonical tools, sorted as: `lsp_session_v1_list`,
+The current runtime has exactly 28 canonical tools, sorted as: `lsp_session_v1_list`,
 `lsp_session_v1_restart`, `lsp_session_v1_status`, `lsp_session_v1_stop`,
 `lsp_trace_v1_bounded_retained_analysis`, `lsp_trace_v1_bounded_retained_metrics`,
 `lsp_trace_v1_bounded_retained_ranking`, `lsp_trace_v1_capabilities`,
 `lsp_trace_v1_execute`, `lsp_trace_v1_export_retained_calls`, `lsp_trace_v1_filter`,
 `lsp_trace_v1_incoming`, `lsp_trace_v1_inspect`, `lsp_trace_v1_inspect_hydrated`,
 `lsp_trace_v1_schema_get`, `lsp_trace_v1_slice`, `lsp_trace_v1_validate`,
-`lsp_trace_v1_verify`, `lsp_trace_v2_export_retained_calls`, `lsp_trace_v2_incoming`,
+`lsp_trace_v1_verify`, `lsp_trace_v2_bounded_retained_analysis`,
+`lsp_trace_v2_bounded_retained_metrics`, `lsp_trace_v2_bounded_retained_ranking`,
+`lsp_trace_v2_export_retained_calls`, `lsp_trace_v2_incoming`,
 `lsp_trace_v2_slice`, `lsp_trace_v2_verify`, `lsp_trace_v2_verify_retained_calls`,
 `lsp_trace_v3_incoming`, and `lsp_trace_v3_slice`.
-Historical thirteen- and twenty-tool contracts remain historical and unchanged.
+Historical thirteen-, twenty-, and twenty-five-tool contracts remain historical and unchanged.
 
 ## Identity contract
 

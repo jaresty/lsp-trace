@@ -258,6 +258,9 @@ func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.
 	handlers[operation.BoundedRetainedAnalysis] = operation.BoundedRetainedAnalysisHandler
 	handlers[operation.BoundedRetainedMetrics] = operation.BoundedRetainedMetricsHandler
 	handlers[operation.BoundedRetainedRanking] = operation.BoundedRetainedRankingHandler
+	handlers[operation.BoundedRetainedAnalysisV2] = operation.BoundedRetainedAnalyticsV2Handler
+	handlers[operation.BoundedRetainedMetricsV2] = operation.BoundedRetainedAnalyticsV2Handler
+	handlers[operation.BoundedRetainedRankingV2] = operation.BoundedRetainedAnalyticsV2Handler
 	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutorWithTrust(trust).Execute
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {

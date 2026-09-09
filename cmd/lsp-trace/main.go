@@ -20,6 +20,7 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/jsonrpc"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/normativeanalytics"
 	"lsp-trace/internal/server"
 	"lsp-trace/internal/source"
 	"lsp-trace/internal/traverse"
@@ -38,6 +39,9 @@ const usageText = `usage:
   lsp-trace export-retained-calls [--version v1|v2] [--output SELECTOR] PATH|-
   lsp-trace bounded-retained-metrics [--output SELECTOR] PATH|-
   lsp-trace bounded-retained-analysis --operation PROJECT|PATH|COMPONENTS [--start ID --end ID | --mode WEAK|STRONG] [--max-work N] [--output SELECTOR] PATH|-
+  lsp-trace bounded-retained-analysis-v2 --operation ANALYSIS --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
+  lsp-trace bounded-retained-metrics-v2 --operation METRICS --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
+  lsp-trace bounded-retained-ranking-v2 --operation RANKING --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-
@@ -86,6 +90,15 @@ func run(args []string) int {
 		if version == "v1" {
 			args = append([]string{args[0]}, rest...)
 		}
+	}
+	if len(args) > 0 && args[0] == "bounded-retained-analysis-v2" {
+		return runBoundedAnalyticsV2(args[0], normativeanalytics.Analysis, args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "bounded-retained-metrics-v2" {
+		return runBoundedAnalyticsV2(args[0], normativeanalytics.Metrics, args[1:], os.Stdin, os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "bounded-retained-ranking-v2" {
+		return runBoundedAnalyticsV2(args[0], normativeanalytics.Ranking, args[1:], os.Stdin, os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "bounded-retained-ranking" {
 		return runBoundedRanking(args[1:], os.Stdin, os.Stdout, os.Stderr)

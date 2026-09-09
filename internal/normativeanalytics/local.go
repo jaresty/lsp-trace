@@ -563,6 +563,7 @@ func validSHA256(s string) bool {
 	_, err := hex.DecodeString(s[7:])
 	return err == nil && s == "sha256:"+string(bytes.ToLower([]byte(s[7:])))
 }
+
 func MarshalLocalResult(r LocalResult) ([]byte, error) {
 	if !validSHA256(r.Digest) || r.Digest != localDigest(&r) {
 		return nil, ErrInvalidLocalRequest

@@ -14,6 +14,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/schema"
 	"lsp-trace/internal/verification"
 )
 
@@ -477,12 +478,17 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		admit = admitBoundedMetrics
 	case *family == "bounded-retained-ranking" && *version == "v1":
 		admit = admitBoundedRanking
+	case (*family == schema.FamilyBoundedAnalysisV2 || *family == schema.FamilyBoundedMetricsV2 || *family == schema.FamilyBoundedRankingV2) && *version == "v2":
+		admit = func(data []byte) error {
+			_, err := schema.ValidateFor(data, *family, *version)
+			return err
+		}
 	default:
 		fmt.Fprintln(stderr, "unsupported verification family/version")
 		return 1
 	}
 	var byteLimit int64
-	if *family == "bounded-retained-analysis" || *family == "bounded-retained-metrics" || *family == "bounded-retained-ranking" {
+	if *family == "bounded-retained-analysis" || *family == "bounded-retained-metrics" || *family == "bounded-retained-ranking" || *family == schema.FamilyBoundedAnalysisV2 || *family == schema.FamilyBoundedMetricsV2 || *family == schema.FamilyBoundedRankingV2 {
 		byteLimit = boundedAnalysisVerificationLimit
 	}
 	data, stage, err := loadCustodiedGenerationLimit(flags.Arg(0), byteLimit)

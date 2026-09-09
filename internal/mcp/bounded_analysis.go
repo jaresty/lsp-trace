@@ -25,6 +25,9 @@ func preflightBoundedWire(raw []byte) error {
 		return nil
 	}
 	name := header.Params.Name
+	if name == "lsp_trace_v2_bounded_retained_analysis" || name == "lsp_trace_v2_bounded_retained_metrics" || name == "lsp_trace_v2_bounded_retained_ranking" {
+		return boundedanalysis.Preflight(raw, 4*1024*1024)
+	}
 	if name == "lsp_trace_v1_inspect_hydrated" {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
@@ -51,7 +54,8 @@ func decodeBoundedParams(raw json.RawMessage, dst *callParams) (bool, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return false, nil
 	}
-	selected := header.Name == "lsp_trace_v2_slice" || header.Name == "lsp_trace_v2_incoming" || header.Name == "lsp_trace_v2_verify" || header.Name == "lsp_trace_v3_slice" || header.Name == "lsp_trace_v3_incoming" || header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
+	selected := header.Name == "lsp_trace_v2_bounded_retained_analysis" || header.Name == "lsp_trace_v2_bounded_retained_metrics" || header.Name == "lsp_trace_v2_bounded_retained_ranking"
+	selected = selected || header.Name == "lsp_trace_v2_slice" || header.Name == "lsp_trace_v2_incoming" || header.Name == "lsp_trace_v2_verify" || header.Name == "lsp_trace_v3_slice" || header.Name == "lsp_trace_v3_incoming" || header.Name == "lsp_trace_v1_bounded_retained_analysis" || header.Name == "lsp_trace_bounded_retained_analysis" || header.Name == "lsp_trace_v1_bounded_retained_metrics" || header.Name == "lsp_trace_bounded_retained_metrics"
 	selected = selected || header.Name == "lsp_trace_v1_inspect_hydrated"
 	selected = selected || header.Name == "lsp_trace_v1_bounded_retained_ranking" || header.Name == "lsp_trace_bounded_retained_ranking"
 	if header.Name == "lsp_trace_v1_validate" || header.Name == "lsp_trace_validate" {

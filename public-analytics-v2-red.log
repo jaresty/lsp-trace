@@ -1,0 +1,6 @@
+=== RUN   TestPublicAnalyticsV2WiringRED
+    public_analytics_v2_test.go:15: ASSERT_PUBLIC_ANALYTICS_V2_WIRING: tool count=25 want=28
+--- FAIL: TestPublicAnalyticsV2WiringRED (0.01s)
+FAIL
+FAIL	lsp-trace/internal/mcp	0.350s
+FAIL
