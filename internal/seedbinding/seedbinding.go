@@ -22,7 +22,15 @@ import (
 )
 
 const VersionV2 = "lsp-trace.seed-binding.v2"
+const VersionV3 = "lsp-trace.seed-binding.v3"
 const MaxManifestBytes = 1 << 20
+
+type CustodyMode string
+
+const (
+	VerifiedHost        CustodyMode = "VERIFIED_HOST"
+	CallerAssertedLocal CustodyMode = "CALLER_ASSERTED_LOCAL"
+)
 const HostPreparedPolicyVersionV1 uint32 = 1
 
 type Status string
@@ -83,6 +91,9 @@ func VerifyProviderIdentity(want, got ProviderIdentity) error {
 
 type Manifest struct {
 	SchemaVersion            string            `json:"schema_version"`
+	CustodyMode              CustodyMode       `json:"custody_mode,omitempty"`
+	PreparedManifestSHA256   string            `json:"prepared_manifest_sha256,omitempty"`
+	PreparedManifestPath     string            `json:"prepared_manifest_path,omitempty"`
 	ID                       string            `json:"id"`
 	Locator                  Locator           `json:"locator"`
 	ExpectedSymbol           string            `json:"expected_symbol"`
@@ -95,6 +106,7 @@ type Manifest struct {
 type ValidationResult struct {
 	Status        Status
 	PrivateDetail string
+	Provenance    CustodyMode
 }
 
 type CustodyClaim struct {
@@ -121,6 +133,56 @@ func CanonicalPreparedManifest(m PreparedModificationManifest) ([]byte, error) {
 		return nil, fmt.Errorf("prepared modification manifest incomplete")
 	}
 	return json.Marshal(m)
+}
+
+// DecodeCanonicalPreparedManifest accepts exactly the canonical, closed JSON
+// bytes used by host prepared custody. It does not confer authentication.
+func DecodeCanonicalPreparedManifest(raw []byte) (PreparedModificationManifest, error) {
+	var m PreparedModificationManifest
+	if len(raw) == 0 || len(raw) > MaxManifestBytes {
+		return m, fmt.Errorf("prepared modification manifest unavailable or exceeds byte limit")
+	}
+	if err := rejectDuplicateJSONKeys(raw); err != nil {
+		return m, err
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&m); err != nil {
+		return m, err
+	}
+	if err := d.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return m, fmt.Errorf("one prepared modification manifest required")
+	}
+	canonical, err := CanonicalPreparedManifest(m)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return m, fmt.Errorf("prepared modification manifest is not exact canonical bytes")
+	}
+	return m, nil
+}
+
+func readRootedRegularOnce(root *os.Root, path string, limit int64) ([]byte, error) {
+	if path == "" || filepath.IsAbs(path) || filepath.Clean(path) != path || filepath.ToSlash(path) != path {
+		return nil, fmt.Errorf("rooted path is not canonical")
+	}
+	f, err := root.Open(filepath.FromSlash(path))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	before, err := f.Stat()
+	if err != nil || !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("rooted input is not regular")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil || int64(len(raw)) > limit {
+		return nil, fmt.Errorf("rooted input unavailable or exceeds byte limit")
+	}
+	after, afterErr := f.Stat()
+	pathAfter, pathErr := root.Stat(filepath.FromSlash(path))
+	if afterErr != nil || pathErr != nil || !os.SameFile(before, after) || !os.SameFile(after, pathAfter) || before.Size() != after.Size() || after.Size() != int64(len(raw)) || !before.ModTime().Equal(after.ModTime()) {
+		return nil, fmt.Errorf("rooted input identity changed")
+	}
+	return raw, nil
 }
 
 func framedSigningBytes(domain string, canonical []byte) []byte {
@@ -323,17 +385,44 @@ type Outcome struct {
 	Status                  Status
 	Terminal, PrivateDetail string
 	Source                  []byte
+	Provenance              CustodyMode
 }
 
 // ValidateMechanical authenticates and retains the exact source snapshot before
 // any provider attempt. Semantic declaration admission is generation-bound and
 // deliberately occurs later over the initialized provider's LSP stream.
 func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revision RevisionAuthority) Outcome {
-	invalid := func(code, detail string) Outcome {
-		return Outcome{Status: Invalid, Terminal: code, PrivateDetail: detail}
+	mode := m.CustodyMode
+	if m.SchemaVersion == VersionV2 {
+		mode = VerifiedHost
 	}
-	if m.SchemaVersion != VersionV2 || m.ID == "" || m.ExpectedSymbol == "" || m.ExpectedDeclaringFile == "" || m.SourceRevision == "" || len(m.SourceSHA256) != 64 || m.Validator.Language == "" || m.Validator.Authority == "" || m.Validator.Name == "" || m.Validator.Version == "" {
+	invalid := func(code, detail string) Outcome {
+		return Outcome{Status: Invalid, Terminal: code, PrivateDetail: detail, Provenance: mode}
+	}
+	if m.SchemaVersion != VersionV2 && m.SchemaVersion != VersionV3 {
+		return invalid(LocatorInvalid, "unsupported seed manifest version")
+	}
+	if m.SchemaVersion == VersionV2 && (m.CustodyMode != "" || m.PreparedManifestSHA256 != "" || m.PreparedManifestPath != "") {
 		return invalid(LocatorInvalid, "invalid closed v2 manifest")
+	}
+	if m.SchemaVersion == VersionV3 && mode != VerifiedHost && mode != CallerAssertedLocal {
+		return invalid(LocatorInvalid, "v3 custody_mode must be explicit")
+	}
+	if m.ID == "" || m.ExpectedSymbol == "" || m.ExpectedDeclaringFile == "" || strings.TrimSpace(m.SourceRevision) == "" || strings.TrimSpace(m.SourceRevision) != m.SourceRevision || len(m.SourceSHA256) != 64 || m.Validator.Language == "" || m.Validator.Authority == "" || m.Validator.Name == "" || m.Validator.Version == "" {
+		return invalid(LocatorInvalid, "seed manifest binding incomplete")
+	}
+	if mode == CallerAssertedLocal {
+		sourceDigest, err := hex.DecodeString(m.SourceSHA256)
+		if err != nil || len(sourceDigest) != sha256.Size || m.SourceSHA256 != strings.ToLower(m.SourceSHA256) {
+			return invalid(SourceMismatch, "CALLER_ASSERTED source digest is not canonical sha256")
+		}
+		if m.Validator.Class == "" || m.Validator.ExecutableSHA256 == "" || m.Validator.PayloadSHA256 == "" || m.Validator.ConfigSHA256 == "" {
+			return invalid(BindingMismatch, "CALLER_ASSERTED provider identity pin incomplete")
+		}
+		decoded, err := hex.DecodeString(m.PreparedManifestSHA256)
+		if err != nil || len(decoded) != sha256.Size || m.PreparedManifestSHA256 != strings.ToLower(m.PreparedManifestSHA256) || m.PreparedManifestPath == "" {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest path and canonical digest required")
+		}
 	}
 	u, err := url.Parse(m.Locator.URI)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.String() != m.Locator.URI || filepath.Clean(u.Path) != u.Path {
@@ -349,13 +438,35 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 		return invalid(LocatorInvalid, "source outside workspace")
 	}
 	if filepath.ToSlash(rel) != m.ExpectedDeclaringFile {
-		return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "declaring file mismatch"}
+		return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "declaring file mismatch", Provenance: mode}
 	}
 	root, err := os.OpenRoot(workspace)
 	if err != nil {
 		return invalid(LocatorInvalid, "workspace descriptor unavailable")
 	}
 	defer root.Close()
+	if mode == CallerAssertedLocal {
+		preparedBytes, err := readRootedRegularOnce(root, m.PreparedManifestPath, MaxManifestBytes)
+		if err != nil {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest rooted read failed: "+err.Error())
+		}
+		preparedDigest := sha256.Sum256(preparedBytes)
+		if hex.EncodeToString(preparedDigest[:]) != m.PreparedManifestSHA256 {
+			return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest digest mismatch", Provenance: mode}
+		}
+		prepared, err := DecodeCanonicalPreparedManifest(preparedBytes)
+		if err != nil {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest invalid: "+err.Error())
+		}
+		if filepath.Clean(prepared.TargetPath) != filepath.Clean(m.ExpectedDeclaringFile) || prepared.TargetUnchangedSHA256 != m.SourceSHA256 || prepared.SourceCommit != m.SourceRevision {
+			return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest source or target binding mismatch", Provenance: mode}
+		}
+		for _, changed := range prepared.AllowedChanges {
+			if filepath.Clean(changed) == filepath.Clean(m.ExpectedDeclaringFile) {
+				return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest changes seed target", Provenance: mode}
+			}
+		}
+	}
 	f, err := root.Open(filepath.FromSlash(m.ExpectedDeclaringFile))
 	if err != nil {
 		return invalid(LocatorInvalid, "source rooted open failed")
@@ -376,12 +487,12 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	after, err := f.Stat()
 	pathAfter, pathErr := root.Stat(filepath.FromSlash(m.ExpectedDeclaringFile))
 	if err != nil || pathErr != nil || !os.SameFile(before, after) || !os.SameFile(after, pathAfter) {
-		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "descriptor/path identity changed"}
+		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "descriptor/path identity changed", Provenance: mode}
 	}
 	digest := sha256.Sum256(source)
 	expected, e := hex.DecodeString(m.SourceSHA256)
 	if e != nil || !bytes.Equal(digest[:], expected) {
-		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "digest mismatch"}
+		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "digest mismatch", Provenance: mode}
 	}
 	manifestBytes, err := json.Marshal(m)
 	if err != nil {
@@ -389,8 +500,12 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	}
 	manifestDigest := sha256.Sum256(manifestBytes)
 	claim := CustodyClaim{Repository: workspace, SourceRevision: m.SourceRevision, TargetPath: m.ExpectedDeclaringFile, TargetSourceSHA256: fmt.Sprintf("%x", digest), SeedManifestSHA256: fmt.Sprintf("%x", manifestDigest)}
-	if revision == nil || revision.Verify(ctx, claim) != nil {
-		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "authenticated custody receipt unavailable or rejected"}
+	if mode == VerifiedHost {
+		if revision == nil || revision.Verify(ctx, claim) != nil {
+			return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "VERIFIED_HOST custody receipt unavailable or rejected", Provenance: mode}
+		}
+	} else if revision != nil {
+		return invalid(BindingMismatch, "CALLER_ASSERTED_LOCAL may not be promoted by host or digest")
 	}
 	if !validPosition(source, m.Locator.Line, m.Locator.Character, m.Locator.Encoding) {
 		return invalid(LocatorInvalid, "coordinate outside retained source bytes or code-unit boundary")
@@ -400,7 +515,11 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 		comparePosition(r.StartLine, r.StartCharacter, r.EndLine, r.EndCharacter) > 0 || !manifestRangeContains(r, m.Locator.Line, m.Locator.Character) {
 		return invalid(LocatorInvalid, "declaration range invalid for retained source bytes")
 	}
-	return Outcome{Status: Match, Source: source}
+	detail := "VERIFIED_HOST mechanical seed binding matched"
+	if mode == CallerAssertedLocal {
+		detail = "CALLER_ASSERTED mechanical seed binding matched; not VERIFIED or AUTHENTICATED"
+	}
+	return Outcome{Status: Match, Source: source, PrivateDetail: detail, Provenance: mode}
 }
 func validPosition(source []byte, line, character uint32, encoding string) bool {
 	if !utf8.Valid(source) {
@@ -445,7 +564,29 @@ func manifestRangeContains(r Range, line, character uint32) bool {
 	return comparePosition(r.StartLine, r.StartCharacter, line, character) <= 0 && comparePosition(line, character, r.EndLine, r.EndCharacter) <= 0
 }
 
+func DecodeV3(raw []byte) (Manifest, error) {
+	m, err := decodeManifest(raw)
+	if err != nil {
+		return m, err
+	}
+	if m.SchemaVersion != VersionV3 || (m.CustodyMode != VerifiedHost && m.CustodyMode != CallerAssertedLocal) {
+		return m, fmt.Errorf("unsupported or implicit seed binding version/custody mode")
+	}
+	return m, nil
+}
+
 func DecodeV2(raw []byte) (Manifest, error) {
+	m, err := decodeManifest(raw)
+	if err != nil {
+		return m, err
+	}
+	if m.SchemaVersion != VersionV2 || m.CustodyMode != "" || m.PreparedManifestSHA256 != "" || m.PreparedManifestPath != "" {
+		return m, fmt.Errorf("unsupported seed binding version")
+	}
+	return m, nil
+}
+
+func decodeManifest(raw []byte) (Manifest, error) {
 	var m Manifest
 	if len(raw) > MaxManifestBytes {
 		return m, fmt.Errorf("seed binding exceeds byte limit")
@@ -460,9 +601,6 @@ func DecodeV2(raw []byte) (Manifest, error) {
 	}
 	if err := d.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return m, fmt.Errorf("one JSON object required")
-	}
-	if m.SchemaVersion != VersionV2 {
-		return m, fmt.Errorf("unsupported seed binding version")
 	}
 	return m, nil
 }

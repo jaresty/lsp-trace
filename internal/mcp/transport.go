@@ -94,6 +94,7 @@ type envelope struct {
 	DurationMS              *uint64              `json:"duration_ms,omitempty"`
 	RequestAccounting       any                  `json:"request_accounting,omitempty"`
 	Progress                string               `json:"progress,omitempty"`
+	CustodyReceipt          any                  `json:"custody_receipt,omitempty"`
 }
 
 type callResult struct {
@@ -334,6 +335,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", ArtifactSchemaID: artifactID,
 			LogicalDigest: opResult.LogicalDigest,
 		}
+		successEnvelope.CustodyReceipt = opResult.CustodyReceipt
 		if compact {
 			duration := uint64(time.Since(started) / time.Millisecond)
 			successEnvelope.EnvelopeSchemaID = compactEnvelopeSchemaID
@@ -371,6 +373,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Content: &content, ArtifactSchemaID: artifactID,
 		LogicalDigest: opResult.LogicalDigest,
 	}
+	env.CustodyReceipt = opResult.CustodyReceipt
 	return bindEnvelope(base, tool, env)
 }
 

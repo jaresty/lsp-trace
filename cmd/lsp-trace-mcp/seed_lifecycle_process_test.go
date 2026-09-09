@@ -26,10 +26,11 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 	for _, tc := range []struct {
 		name, mode, providerVersion string
 		want                        seedbinding.Status
+		local                       bool
 	}{
-		{"match", "", "1", seedbinding.Match}, {"mismatch", "mismatch", "1", seedbinding.Mismatch},
-		{"invalid", "invalid", "1", seedbinding.Invalid}, {"timeout-unavailable", "hang", "1", seedbinding.Unavailable},
-		{"provider-version-substitution", "", "2", seedbinding.Mismatch},
+		{"match", "", "1", seedbinding.Match, false}, {"local-match", "", "1", seedbinding.Match, true}, {"mismatch", "mismatch", "1", seedbinding.Mismatch, false},
+		{"invalid", "invalid", "1", seedbinding.Invalid, false}, {"timeout-unavailable", "hang", "1", seedbinding.Unavailable, false},
+		{"provider-version-substitution", "", "2", seedbinding.Mismatch, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			workspace := t.TempDir()
@@ -42,20 +43,45 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 			sourceSum := sha256.Sum256(source)
 			uri := (&url.URL{Scheme: "file", Path: path}).String()
 			manifest := &seedbinding.Manifest{SchemaVersion: seedbinding.VersionV2, ID: "seed", Locator: seedbinding.Locator{URI: uri, Line: 0, Character: 1, Encoding: "utf-16"}, ExpectedSymbol: "leaf", ExpectedDeclaringFile: "seed.go", ExpectedDeclarationRange: seedbinding.Range{StartLine: 0, StartCharacter: 0, EndLine: 0, EndCharacter: 4}, SourceRevision: "revision", SourceSHA256: fmt.Sprintf("%x", sourceSum), Validator: seedbinding.ValidatorIdentity{Language: "go", Authority: "MANAGED_LSP", Name: "fake-lsp-fixture", Version: tc.providerVersion}}
+			if tc.local {
+				manifest.SchemaVersion = seedbinding.VersionV3
+				manifest.CustodyMode = seedbinding.CallerAssertedLocal
+				prepared := seedbinding.PreparedModificationManifest{Version: 1, FinderSHA256: strings.Repeat("1", 64), SourceArchiveSHA256: strings.Repeat("2", 64), SourceTreeSHA256: strings.Repeat("3", 64), PreparedTreeSHA256: strings.Repeat("4", 64), AllowedChanges: []string{"other.go"}, TargetPath: "seed.go", TargetUnchangedSHA256: manifest.SourceSHA256, SourceCommit: "revision", AdaptationIDs: []string{"fixture"}, PolicyID: "local", AssessmentID: "local", ContextID: "local"}
+				preparedBytes, err := seedbinding.CanonicalPreparedManifest(prepared)
+				if err != nil {
+					t.Fatal(err)
+				}
+				manifest.PreparedManifestPath = "prepared-manifest.json"
+				if err := os.WriteFile(filepath.Join(workspace, manifest.PreparedManifestPath), preparedBytes, 0600); err != nil {
+					t.Fatal(err)
+				}
+				preparedSum := sha256.Sum256(preparedBytes)
+				manifest.PreparedManifestSHA256 = fmt.Sprintf("%x", preparedSum)
+			}
 			execution := managedExecutionAuthority{Path: fake, Directory: workspace, Environment: append(os.Environ(), "LSP_TRACE_FAKE_LSP_TRACE="+trace, "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL="+tc.mode)}
 			bindProviderIdentity(t, manifest, execution)
 			manifestBytes, _ := json.Marshal(manifest)
 			manifestSum := sha256.Sum256(manifestBytes)
 			receipt := seedbinding.HostCustodyReceipt{Repository: workspace, SourceRevision: "revision", TargetPath: "seed.go", TargetSourceSHA256: manifest.SourceSHA256, SeedManifestSHA256: fmt.Sprintf("%x", manifestSum)}
 			selector, trust := signedSeedTrust(t, receipt)
-			config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "fake", EnvironmentReference: "test"}, Execution: execution, SeedBinding: manifest, SeedCustodySelector: selector}}}
-			_, manager, err := newServerRuntimeWithSeedAuthorities(false, provider.ConfiguredInventory{}, nil, seedAuthoritiesFromConfig(config, trust))
+			custodySelector := selector
+			var authority seedbinding.RevisionAuthority
+			if !tc.local {
+				authority = seedAuthoritiesFromConfig(bootstrapConfig{Processes: []bootstrapProcessConfig{{SeedBinding: manifest, SeedCustodySelector: selector}}}, trust)
+			} else {
+				custodySelector = ""
+			}
+			config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "fake", EnvironmentReference: "test"}, Execution: execution, SeedBinding: manifest, SeedCustodySelector: custodySelector}}}
+			_, manager, err := newServerRuntimeWithSeedAuthorities(false, provider.ConfiguredInventory{}, nil, authority)
 			if err != nil {
 				t.Fatal(err)
 			}
 			sessions, err := startBootstrap(context.Background(), manager, config, 5*time.Second)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if tc.local && (sessions[0].CustodyProvenance != seedbinding.CallerAssertedLocal || sessions[0].CustodyProvenance == seedbinding.VerifiedHost) {
+				t.Fatalf("ASSERT_LOCAL_BOOTSTRAP_PROVENANCE_SURVIVES_WITHOUT_PROMOTION: %q", sessions[0].CustodyProvenance)
 			}
 			defer stopBootstrap(context.Background(), manager, sessions)
 			deadline := time.Now().Add(100 * time.Millisecond)

@@ -300,6 +300,16 @@ Language servers run with the invoking user's permissions and may execute projec
 
 Field authority is bounded: provenance and requested invocation fields are caller-supplied; normalized identities, digests, memberships, counters, and receipts are tool-derived; capabilities, prepared targets, edges, discovery responses, diagnostics, and opaque data are server-reported; publication receipts establish only the documented integrity/custody commitments. Use only trusted servers and workspaces.
 
+Seed-bound CLI bootstrap supports two explicit custody modes in the additive `lsp-trace.seed-binding.v3` manifest. `VERIFIED_HOST` uses the existing signed host-receipt path. `CALLER_ASSERTED_LOCAL` permits bounded local execution only when revision, source digest, canonical workspace-contained target, complete provider identity, symbol/file/range, and both `prepared_manifest_path` and `prepared_manifest_sha256` are pinned. The prepared path is a canonical workspace-relative selector opened beneath the workspace descriptor without symlink traversal; its regular-file bytes are read once within the manifest bound, checked for path/descriptor identity changes, hashed before parsing, required to be exact closed canonical JSON, and then interpreted. Its existing `PreparedModificationManifest` fields bind the finder, source archive/tree, prepared tree, allowed source changes, source commit, adaptation identifiers, and policy/assessment/context identifiers; `TargetPath` and `TargetUnchangedSHA256` must bind the unchanged seed target, which may not appear in `AllowedChanges`. This adds no authentication: successful diagnostics and acquisition receipts report `CALLER_ASSERTED_LOCAL` with `authenticated:false`, never `VERIFIED_HOST` or authenticated. Matching digests cannot upgrade authority, and failed host verification never silently downgrades. Graph V1/V2/V3 artifact bytes remain unchanged; provenance travels in the separate acquisition envelope receipt. MCP request schemas do not expose caller-asserted seed mode.
+
+Validate exact local V3 custody without constructing a runtime or starting a provider process:
+
+```sh
+lsp-trace-mcp seed validate-local --workspace /absolute/prepared/workspace --seed-manifest /absolute/path/seed-manifest.v3.json
+```
+
+The command emits only the bounded `lsp-trace.seed-local-validation-receipt.v1` status/code/provenance/authenticated receipt and uses the same `SEED_LOCATOR_INVALID`, `SEED_SOURCE_MISMATCH`, `SEED_BINDING_MISMATCH`, and `SEED_BINDING_UNAVAILABLE` taxonomy. To validate a retained D01 receipt privately, construct the exact canonical prepared manifest and V3 seed manifest from that receipt, place the prepared manifest at its workspace-rooted selector, then substitute the two absolute paths above. This template is not D01 authorization or qualification and does not read product data by itself.
+
 The current implementation includes deterministic graph normalization, bounded slice composition, read-only seed inspection, sequential reverse-BFS traversal, explicit terminals/frontiers, stdio JSON-RPC framing, LSP lifecycle handling, and the `incoming` CLI.
 
 ## Read-only presentation

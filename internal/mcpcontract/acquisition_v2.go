@@ -116,6 +116,14 @@ func readContractSchema(name string) ([]byte, error) {
 		p := s["properties"].(map[string]any)
 		p["envelope_schema_id"] = map[string]any{"const": id}
 		p["tool"] = map[string]any{"enum": []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming", "lsp_trace_v2_verify", "lsp_trace_v3_slice", "lsp_trace_v3_incoming"}}
+		p["custody_receipt"] = map[string]any{
+			"type": "object", "additionalProperties": false,
+			"required": []string{"provenance", "authenticated"},
+			"properties": map[string]any{
+				"provenance":    map[string]any{"enum": []string{"CALLER_ASSERTED_LOCAL", "VERIFIED_HOST"}},
+				"authenticated": map[string]any{"type": "boolean"},
+			},
+		}
 		return json.Marshal(s)
 	}
 	return contractFiles.ReadFile(name)

@@ -43,7 +43,13 @@ type symbolInformation struct {
 // ValidateDocumentSymbols admits exactly one declaration from the strict LSP
 // array-level union. Flat SymbolInformation is qualified because LSP exposes no
 // distinct name range in that representation.
-func ValidateDocumentSymbols(raw []byte, manifest Manifest, source []byte, negotiatedEncoding string) ValidationResult {
+func ValidateDocumentSymbols(raw []byte, manifest Manifest, source []byte, negotiatedEncoding string) (result ValidationResult) {
+	defer func() {
+		result.Provenance = manifest.CustodyMode
+		if manifest.SchemaVersion == VersionV2 {
+			result.Provenance = VerifiedHost
+		}
+	}()
 	if len(raw) > MaxDocumentSymbolBytes {
 		return ValidationResult{Status: Invalid, PrivateDetail: "documentSymbol response exceeds byte limit"}
 	}

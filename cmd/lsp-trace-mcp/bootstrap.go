@@ -55,11 +55,12 @@ type managedExecutionAuthority struct {
 }
 
 type bootstrapSession struct {
-	Alias          string
-	SessionID      string
-	Generation     uint64
-	RepositoryRoot string
-	GitCommit      string
+	Alias             string
+	SessionID         string
+	Generation        uint64
+	RepositoryRoot    string
+	GitCommit         string
+	CustodyProvenance seedbinding.CustodyMode
 }
 
 func loadBootstrapConfig(path string) (bootstrapConfig, error) {
@@ -103,11 +104,28 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 		return bootstrapConfig{}, err
 	}
 	for i, process := range config.Processes {
-		if process.SeedBinding != nil && process.SeedBinding.SchemaVersion != seedbinding.VersionV2 {
+		if process.SeedBinding == nil {
+			if process.SeedCustodySelector != "" {
+				return bootstrapConfig{}, fmt.Errorf("bootstrap process %d custody selector requires seed binding", i)
+			}
+			continue
+		}
+		manifest := process.SeedBinding
+		if manifest.SchemaVersion != seedbinding.VersionV2 && manifest.SchemaVersion != seedbinding.VersionV3 {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding version invalid", i)
 		}
-		if (process.SeedBinding == nil) != (process.SeedCustodySelector == "") {
-			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding and custody selector must be configured together", i)
+		mode := manifest.CustodyMode
+		if manifest.SchemaVersion == seedbinding.VersionV2 {
+			mode = seedbinding.VerifiedHost
+		}
+		if mode == seedbinding.VerifiedHost && process.SeedCustodySelector == "" {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d VERIFIED_HOST seed binding requires custody selector", i)
+		}
+		if mode == seedbinding.CallerAssertedLocal && process.SeedCustodySelector != "" {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d CALLER_ASSERTED_LOCAL forbids custody selector", i)
+		}
+		if mode != seedbinding.VerifiedHost && mode != seedbinding.CallerAssertedLocal {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed custody mode invalid", i)
 		}
 		if process.SeedCustodySelector != "" {
 			decoded, err := hex.DecodeString(process.SeedCustodySelector)
@@ -210,7 +228,7 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 			return nil, fmt.Errorf("bootstrap process %d start: %s", i, result.Failure)
 		}
 		repositoryRoot, gitCommit := pinnedGitMetadata(process.process.Dir)
-		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit}
+		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit, CustodyProvenance: result.CustodyProvenance}
 		started = append(started, session)
 		deadline := time.Now().Add(timeout)
 		pending := manager.BeginReadiness(ctx, session.SessionID, session.Generation, deadline)
@@ -317,7 +335,7 @@ func seedAuthoritiesFromConfig(config bootstrapConfig, trust *bootstrapSeedTrust
 	}
 	authorities := make(bootstrapSeedAuthorities, 0, len(config.Processes))
 	for _, process := range config.Processes {
-		if process.SeedBinding == nil {
+		if process.SeedBinding == nil || process.SeedBinding.CustodyMode == seedbinding.CallerAssertedLocal {
 			continue
 		}
 		authority, ok := trust.receipts[process.SeedCustodySelector]
