@@ -76,6 +76,16 @@ func admittedProgramASubstrateWithSigner(t *testing.T, s testReceiptSigner, c As
 	}
 }
 
+func TestProgramAAdmissionV1ReceiptCountFrozen(t *testing.T) {
+	got, err := AdmitVerifiedProgramA(admittedProgramASubstrate(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.receiptDigests) != 6 {
+		t.Fatalf("ASSERT_PROGRAM_A_V1_RECEIPT_COUNT_FROZEN: got=%d want=6", len(got.receiptDigests))
+	}
+}
+
 func TestProgramAAdmissionRequiresValidatedReceipts(t *testing.T) {
 	got, err := AdmitVerifiedProgramA(admittedProgramASubstrate(t))
 	if err != nil || got.Status != SubstrateAdmitted {
