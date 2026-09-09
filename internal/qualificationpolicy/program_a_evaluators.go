@@ -78,7 +78,7 @@ type programAEvaluation struct {
 }
 
 type programAEvaluationResult struct {
-	Admission   ProgramAAdmission
+	Admission   ProgramAAdmissionV2
 	MissingAxes []Dimension
 	FailedAxes  map[Dimension]string
 }
@@ -131,7 +131,7 @@ func (a *programAEvaluatorAuthority) evaluateProgramA(in programAEvaluation) pro
 	result := programAEvaluationResult{FailedAxes: map[Dimension]string{}}
 	if a == nil || a.verified == nil || len(a.private) != ed25519.PrivateKeySize {
 		result.FailedAxes[CustodyDimension] = "authenticated evaluator authority is unavailable"
-		result.Admission = ProgramAAdmission{Status: SubstrateRejected, Reasons: []string{"authority: authenticated evaluator authority is unavailable"}}
+		result.Admission = ProgramAAdmissionV2{Status: SubstrateRejected, Reasons: []string{"authority: authenticated evaluator authority is unavailable"}}
 		return result
 	}
 
@@ -165,7 +165,7 @@ func (a *programAEvaluatorAuthority) evaluateProgramA(in programAEvaluation) pro
 		}},
 	}
 
-	verified := VerifiedProgramASubstrate{}
+	verified := VerifiedProgramASubstrateV2{}
 	for _, candidate := range candidates {
 		if missingRetainedMetadata(candidate.metadata) {
 			result.MissingAxes = append(result.MissingAxes, candidate.dimension)
@@ -185,7 +185,7 @@ func (a *programAEvaluatorAuthority) evaluateProgramA(in programAEvaluation) pro
 			result.FailedAxes[candidate.dimension] = err.Error()
 			continue
 		}
-		setProgramAReceipt(&verified, candidate.dimension, receipt)
+		setProgramAReceiptV2(&verified, candidate.dimension, receipt)
 	}
 	if len(result.MissingAxes) != 0 || len(result.FailedAxes) != 0 {
 		reasons := make([]string, 0, len(result.MissingAxes)+len(result.FailedAxes))
@@ -198,7 +198,7 @@ func (a *programAEvaluatorAuthority) evaluateProgramA(in programAEvaluation) pro
 		result.Admission = rejectedProgramA(reasons)
 		return result
 	}
-	admission, err := AdmitVerifiedProgramA(verified)
+	admission, err := AdmitVerifiedProgramAV2(verified)
 	if err != nil {
 		result.FailedAxes[Dimension("composition")] = err.Error()
 		result.Admission = rejectedProgramA([]string{"composition: " + err.Error()})
@@ -414,13 +414,30 @@ func setProgramAReceipt(out *VerifiedProgramASubstrate, d Dimension, receipt Ver
 		out.SupportAccounting = receipt
 	case ProjectionDimension:
 		out.Projection = receipt
+	}
+}
+
+func setProgramAReceiptV2(out *VerifiedProgramASubstrateV2, d Dimension, receipt VerifiedReceipt) {
+	switch d {
+	case CustodyDimension:
+		out.Custody = receipt
+	case EffectiveConfigurationDimension:
+		out.EffectiveConfiguration = receipt
+	case IdentityDimension:
+		out.Identity = receipt
+	case RelationNormalizationDimension:
+		out.RelationNormalization = receipt
+	case SupportAccountingDimension:
+		out.SupportAccounting = receipt
+	case ProjectionDimension:
+		out.Projection = receipt
 	case QualificationDimension:
 		out.Qualification = receipt
 	}
 }
 
-func rejectedProgramA(reasons []string) ProgramAAdmission {
+func rejectedProgramA(reasons []string) ProgramAAdmissionV2 {
 	stable := append([]string(nil), reasons...)
 	sort.Strings(stable)
-	return ProgramAAdmission{Status: SubstrateRejected, Reasons: stable}
+	return ProgramAAdmissionV2{Status: SubstrateRejected, Reasons: stable}
 }

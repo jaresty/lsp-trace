@@ -33,6 +33,13 @@ const (
 const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v2"
 const receiptSignatureDomain = "llsp-trace.program-a-evidence-receipt.v2\x00"
 
+const (
+	ProgramAAdmissionVersionV1 = "lsp-trace.program-a-admission.v1"
+	ProgramAAdmissionVersionV2 = "lsp-trace.program-a-admission.v2"
+	programAAdmissionPolicyV2  = "lsp-trace.program-a-admission-policy.v2"
+	programAEvidenceDomainV2   = "lsp-trace.program-a-evidence-set.v2\x00"
+)
+
 // AssessmentContext identifies the one admission evaluation for which receipts are valid.
 // Receipts are immutable and intentionally re-verifiable offline in this exact context.
 type AssessmentContext struct {
@@ -189,6 +196,13 @@ func receiptDigest(raw ReceiptBytes) string {
 }
 
 type VerifiedProgramASubstrate struct {
+	Custody, EffectiveConfiguration, Identity            VerifiedReceipt
+	RelationNormalization, SupportAccounting, Projection VerifiedReceipt
+}
+
+// VerifiedProgramASubstrateV2 is the explicit seven-receipt contract. Qualification
+// remains opaque and cannot be folded into or substituted for a v1 evaluator axis.
+type VerifiedProgramASubstrateV2 struct {
 	Custody, EffectiveConfiguration, Identity                           VerifiedReceipt
 	RelationNormalization, SupportAccounting, Projection, Qualification VerifiedReceipt
 }
@@ -208,18 +222,72 @@ type ProgramAAdmission struct {
 	admissionPolicyID         string
 	admissionPolicyVersion    string
 	operation                 string
+	receiptDigests            [6]string
+}
+
+// ProgramAAdmissionV2 is distinct from v1 so receipt cardinality and digest
+// domains cannot be confused or downgraded through assignment or shared helpers.
+type ProgramAAdmissionV2 struct {
+	Status                    SubstrateStatus `json:"status"`
+	Reasons                   []string        `json:"reasons"`
+	Revision                  string          `json:"revision,omitempty"`
+	SubstrateID               string          `json:"substrate_id,omitempty"`
+	authorityID               string
+	provisioningReceiptDigest string
+	keyID                     string
+	assessmentID              string
+	nonce                     string
+	issuanceEpoch             int64
+	evaluationScope           string
+	admissionPolicyID         string
+	admissionPolicyVersion    string
+	operation                 string
 	receiptDigests            [7]string
 }
 
+type programAReceipt struct {
+	dimension Dimension
+	receipt   VerifiedReceipt
+}
+
+type programAComposition struct {
+	status                                                                                                          SubstrateStatus
+	reasons                                                                                                         []string
+	revision, substrate, authority, key, provisioning, assessment, nonce, scope, policyID, policyVersion, operation string
+	issuance                                                                                                        int64
+	digests                                                                                                         []string
+}
+
 func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, error) {
-	receipts := []struct {
-		dimension Dimension
-		receipt   VerifiedReceipt
-	}{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}, {QualificationDimension, input.Qualification}}
+	receipts := []programAReceipt{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}}
+	c := composeProgramA(receipts)
+	if c.status != SubstrateAdmitted {
+		return ProgramAAdmission{Status: c.status, Reasons: c.reasons}, nil
+	}
+	var digests [6]string
+	copy(digests[:], c.digests)
+	return ProgramAAdmission{Status: c.status, Reasons: []string{}, Revision: c.revision, SubstrateID: c.substrate, authorityID: c.authority, keyID: c.key, provisioningReceiptDigest: c.provisioning, assessmentID: c.assessment, nonce: c.nonce, issuanceEpoch: c.issuance, evaluationScope: c.scope, admissionPolicyID: c.policyID, admissionPolicyVersion: c.policyVersion, operation: c.operation, receiptDigests: digests}, nil
+}
+
+func AdmitVerifiedProgramAV2(input VerifiedProgramASubstrateV2) (ProgramAAdmissionV2, error) {
+	receipts := []programAReceipt{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}, {QualificationDimension, input.Qualification}}
+	c := composeProgramA(receipts)
+	if c.status != SubstrateAdmitted {
+		return ProgramAAdmissionV2{Status: c.status, Reasons: c.reasons}, nil
+	}
+	if c.policyVersion != "v2" {
+		return ProgramAAdmissionV2{Status: SubstrateRejected, Reasons: []string{"admission: Program A v2 requires policy version v2"}}, nil
+	}
+	var digests [7]string
+	copy(digests[:], c.digests)
+	return ProgramAAdmissionV2{Status: c.status, Reasons: []string{}, Revision: c.revision, SubstrateID: c.substrate, authorityID: c.authority, keyID: c.key, provisioningReceiptDigest: c.provisioning, assessmentID: c.assessment, nonce: c.nonce, issuanceEpoch: c.issuance, evaluationScope: c.scope, admissionPolicyID: c.policyID, admissionPolicyVersion: c.policyVersion, operation: c.operation, receiptDigests: digests}, nil
+}
+
+func composeProgramA(receipts []programAReceipt) programAComposition {
 	reasons := make([]string, 0)
 	var revision, substrate, authority, key, provisioning, assessment, nonce, scope, policyID, policyVersion, operation string
 	var issuance int64
-	var digests [7]string
+	digests := make([]string, len(receipts))
 	for i, item := range receipts {
 		raw := item.receipt.receipt.raw
 		if raw.Dimension != item.dimension {
@@ -249,7 +317,17 @@ func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, 
 		}
 		digests[i] = item.receipt.receipt.receiptDigest
 	}
-	n, s, p := input.RelationNormalization.receipt.raw.Sequence, input.SupportAccounting.receipt.raw.Sequence, input.Projection.receipt.raw.Sequence
+	var n, s, p int
+	for _, item := range receipts {
+		switch item.dimension {
+		case RelationNormalizationDimension:
+			n = item.receipt.receipt.raw.Sequence
+		case SupportAccountingDimension:
+			s = item.receipt.receipt.raw.Sequence
+		case ProjectionDimension:
+			p = item.receipt.receipt.raw.Sequence
+		}
+	}
 	if n >= s {
 		reasons = append(reasons, "pipeline: relation_normalization must precede support_accounting")
 	}
@@ -258,7 +336,7 @@ func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, 
 	}
 	sort.Strings(reasons)
 	if len(reasons) != 0 {
-		return ProgramAAdmission{Status: SubstrateRejected, Reasons: reasons}, nil
+		return programAComposition{status: SubstrateRejected, reasons: reasons}
 	}
-	return ProgramAAdmission{Status: SubstrateAdmitted, Reasons: []string{}, Revision: revision, SubstrateID: substrate, authorityID: authority, keyID: key, provisioningReceiptDigest: provisioning, assessmentID: assessment, nonce: nonce, issuanceEpoch: issuance, evaluationScope: scope, admissionPolicyID: policyID, admissionPolicyVersion: policyVersion, operation: operation, receiptDigests: digests}, nil
+	return programAComposition{status: SubstrateAdmitted, reasons: []string{}, revision: revision, substrate: substrate, authority: authority, key: key, provisioning: provisioning, assessment: assessment, nonce: nonce, issuance: issuance, scope: scope, policyID: policyID, policyVersion: policyVersion, operation: operation, digests: digests}
 }
