@@ -82,6 +82,11 @@ func admitAcquisitionV3(data []byte) error {
 	return err
 }
 
+func admitAcquisitionV5(data []byte) error {
+	_, err := graphprovenance.ValidateFor(data, graphprovenance.Family, "v5")
+	return err
+}
+
 func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int {
 	return runAcquisitionVersion(mode, "v2", args, stdout, stderr)
 }
@@ -129,7 +134,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.SetOutput(stderr)
 	var c sliceConfig
 	var profile profileFlags
-	var manifestPath string
+	var manifestPath, outputVersion string
 	var diagnosticRoot, diagnosticSelector string
 	var bindingRoot, bindingSelector string
 	var requestDiagnosticRoot, requestDiagnosticSelector string
@@ -141,6 +146,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.Var(&c.env, "server-env", "server environment KEY=VALUE")
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
 	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
+	fs.StringVar(&outputVersion, "output-version", "", "managed output version (lsp-trace.graph-provenance.v5 requires v3 and topmost siblings)")
 	fs.StringVar(&c.output, "output", "", "immutable output selector")
 	fs.StringVar(&diagnosticRoot, "private-startup-diagnostic-root", "", "caller-approved private diagnostic root")
 	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
@@ -192,6 +198,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	manifest, err := acquisitionops.DecodeManifest(raw, op)
 	if err != nil {
 		return fail(err)
+	}
+	if outputVersion != "" && (outputVersion != graphprovenance.VersionV5 || version != "v3" || !manifest.Expansion.TopmostSiblings) {
+		return fail(fmt.Errorf("graph-provenance v5 output requires acquisition-version v3 and expansion.topmost_siblings=true"))
 	}
 	effective, err := manifest.Request(op)
 	if err != nil {
@@ -304,7 +313,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
-	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest})
+	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest, OutputVersion: outputVersion})
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
 	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
@@ -323,6 +332,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		admit := admitAcquisitionV2
 		if version == "v3" {
 			admit = admitAcquisitionV3
+		}
+		if outputVersion == graphprovenance.VersionV5 {
+			admit = admitAcquisitionV5
 		}
 		err = publishValidatedBundle(c.output, data, admit)
 	} else {

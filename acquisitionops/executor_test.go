@@ -3,12 +3,15 @@ package acquisitionops
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
@@ -71,6 +74,7 @@ type v3ParityRuntime struct {
 	profile runtimeprofile.Profile
 	uri     string
 	queries int
+	methods []string
 }
 
 func (r *v3ParityRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
@@ -85,8 +89,19 @@ func (r *v3ParityRuntime) PrepareDocument(_ context.Context, req sessionruntime.
 	return sessionruntime.DocumentResult{URI: req.URI, LanguageID: "go", Supply: &sessionruntime.DocumentSupply{URI: req.URI, SessionID: req.SessionID, Generation: req.Generation, DocumentVersion: 1, Classification: graphprovenance.Supplied, Method: "textDocument/didOpen", Params: params, Content: content}}
 }
 func (r *v3ParityRuntime) RoundTrip(_ context.Context, req sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	r.methods = append(r.methods, req.Method)
+	leafRange := lsp.Range{End: lsp.Position{Character: 4}}
+	siblingRange := lsp.Range{Start: lsp.Position{Line: 2}, End: lsp.Position{Line: 2, Character: 7}}
+	if req.Method == "textDocument/documentSymbol" {
+		rootRange := lsp.Range{End: lsp.Position{Line: 4}}
+		raw, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "Fixture", Kind: 5, Range: rootRange, SelectionRange: rootRange, Children: []lsp.DocumentSymbol{{Name: "leaf", Kind: 12, Range: leafRange, SelectionRange: leafRange}, {Name: "sibling", Kind: 12, Range: siblingRange, SelectionRange: siblingRange}}}})
+		return sessionruntime.RoundTripResult{Result: raw}
+	}
 	if req.Method == "textDocument/prepareCallHierarchy" {
-		item := lsp.CallHierarchyItem{Name: "leaf", Kind: 12, URI: r.uri, Range: lsp.Range{End: lsp.Position{Character: 4}}, SelectionRange: lsp.Range{End: lsp.Position{Character: 4}}}
+		item := lsp.CallHierarchyItem{Name: "leaf", Kind: 12, URI: r.uri, Range: leafRange, SelectionRange: leafRange}
+		if bytes.Contains(req.Params, []byte(`"line":2`)) {
+			item = lsp.CallHierarchyItem{Name: "sibling", Kind: 12, URI: r.uri, Range: siblingRange, SelectionRange: siblingRange}
+		}
 		raw, _ := json.Marshal([]lsp.CallHierarchyItem{item})
 		return sessionruntime.RoundTripResult{Result: raw}
 	}
@@ -160,6 +175,26 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	}
 	if _, err := graphprovenance.ValidateFor(got.Artifact, graphprovenance.Family, "v5"); err != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_VALID: %v", err)
+	}
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(got.Artifact, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := graph.DecodeNativeV3(native)
+	if err != nil || len(decoded.SiblingCandidates) == 0 {
+		t.Fatalf("ASSERT_MANAGED_V5_NONEMPTY_EXACT_SIBLINGS: count=%d err=%v", len(decoded.SiblingCandidates), err)
+	}
+	if !slices.Contains(runtime.methods, "textDocument/documentSymbol") || !slices.Contains(runtime.methods, "textDocument/prepareCallHierarchy") {
+		t.Fatalf("ASSERT_MANAGED_V5_SHARED_INVOKE_REQUESTS_OBSERVED: %v", runtime.methods)
+	}
+	parityRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	parity, parityFailure := NewExecutor(parityRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	if parityFailure != nil || !bytes.Equal(got.Artifact, parity.Artifact) {
+		t.Fatalf("ASSERT_MANAGED_V5_EXACT_ROUTE_BYTES_PARITY: failure=%v equal=%v", parityFailure, bytes.Equal(got.Artifact, parity.Artifact))
 	}
 	manifest.Expansion.TopmostSiblings = false
 	bad, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})

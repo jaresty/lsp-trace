@@ -14,6 +14,7 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/acquisition/sessionclient"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
@@ -42,6 +43,7 @@ type Executor struct{ runtime Runtime }
 type CustodyReceipt struct {
 	Provenance    seedbinding.CustodyMode `json:"provenance"`
 	Authenticated bool                    `json:"authenticated"`
+	HostReceiptID string                  `json:"host_receipt_id,omitempty"`
 }
 
 func NewExecutor(r Runtime) *Executor { return &Executor{runtime: r} }
@@ -185,6 +187,7 @@ func (m Manifest) Request(mode operation.Name) (acquisition.Request, error) {
 		return r, fmt.Errorf("timeouts must be 1..60000 milliseconds")
 	}
 	r.Limits = acquisition.Limits{MaxNodes: val(l.MaxNodes, 100), MaxRequests: val(l.MaxRequests, 1000), MaxEvidenceBytes: val(l.MaxEvidenceBytes, 4<<20), MaxPathWork: val(l.MaxPathWork, 100000), Timeout: time.Duration(timeout) * time.Millisecond, RequestTimeout: time.Duration(requestTimeout) * time.Millisecond, MaxResponseBytes: val(l.MaxResponseBytes, 4<<20), MaxMessages: val(l.MaxMessages, 64)}
+	r.TopmostSiblings = m.Expansion.TopmostSiblings
 	return r, acquisition.ValidateRequest(r)
 }
 
@@ -283,6 +286,7 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
+	siblings := result.Graph.SiblingCandidates
 	raw, err := graphprovenance.CaptureV2(ctx, result, workspace)
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
@@ -295,9 +299,55 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			query = diagnostics.Diagnostics(id, generation)
 		}
 		if wantsV5 {
-			result.Graph.SchemaVersion = "lsp-trace.graph.v5"
-			result.Graph.Invocation.Expansion.TopmostSiblings = true
-			native, marshalErr := json.Marshal(result.Graph)
+			var carrier struct {
+				GraphBytes []byte `json:"graph_bytes"`
+			}
+			if unmarshalErr := json.Unmarshal(raw, &carrier); unmarshalErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
+			}
+			enriched, decodeErr := graph.DecodeNativeV3(carrier.GraphBytes)
+			if decodeErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", decodeErr)
+			}
+			enriched.SchemaVersion = graph.SchemaVersionV5
+			enriched.Invocation.Expansion.TopmostSiblings = true
+			enriched.SiblingCandidates = siblings
+			if len(enriched.SiblingCandidates) == 0 {
+				return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("topmost sibling expansion produced no exact relations"))
+			}
+			seeds := map[string]graph.InvocationSeed{}
+			for _, seed := range enriched.Invocation.Seeds {
+				seeds[seed.Label] = seed
+			}
+			for i := range enriched.SiblingCandidates {
+				candidate := &enriched.SiblingCandidates[i]
+				seed := seeds[candidate.SeedLabel]
+				candidate.SeedIdentity = enriched.Invocation.Provenance.InvocationID + ":" + seed.Label + ":" + seed.At
+				candidate.ProviderEvidence = []string{fmt.Sprintf("command=%s;server_version=%s;invocation=%s", enriched.Invocation.Server.Command, enriched.Invocation.Provenance.ServerVersion, enriched.Invocation.Provenance.InvocationID)}
+				candidate.SourceDigests = []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
+				candidate.Custody = graph.SourceCustodyEvidence{Class: graph.SourceCustodyCallerAssertedLocal, SourceContentSHA256: seed.ContentSHA256, ClaimCeiling: "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY"}
+				if custodyReceipt != nil && custodyReceipt.Provenance == seedbinding.VerifiedHost {
+					receiptRuntime, ok := e.runtime.(interface {
+						SeedCustodyReceipt(string, uint64) (string, bool)
+					})
+					if !ok {
+						return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("verified host custody requires an exact host receipt identifier"))
+					}
+					receiptID, found := receiptRuntime.SeedCustodyReceipt(id, generation)
+					if !found || receiptID == "" {
+						return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("verified host custody requires an exact host receipt identifier"))
+					}
+					custodyReceipt.HostReceiptID = receiptID
+					candidate.Custody.Class = graph.SourceCustodyVerifiedHost
+					candidate.Custody.HostReceiptID = receiptID
+				}
+				if custodyReceipt == nil {
+					candidate.Custody.Class = graph.SourceCustodyMissing
+					candidate.Custody.SourceContentSHA256 = ""
+				}
+			}
+			enriched.Canonicalize()
+			native, marshalErr := json.Marshal(enriched)
 			if marshalErr != nil {
 				return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
 			}

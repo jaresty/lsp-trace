@@ -168,6 +168,9 @@ func (c *runner) acquireEvidence() error {
 			c.result.AcquisitionComplete = false
 		}
 	}
+	if request.TopmostSiblings {
+		c.expandTopmostSiblings()
+	}
 	if request.Mode == Slice {
 		c.traverse(Outgoing)
 	}
@@ -470,6 +473,82 @@ func (c *runner) resolve(t Target) Resolution {
 		r.Reason = "MAX_PREPARE_PROBES"
 	}
 	return r
+}
+
+func flattenSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
+	out := []lsp.DocumentSymbol{}
+	stack := append([]lsp.DocumentSymbol(nil), symbols...)
+	for len(stack) > 0 {
+		s := stack[0]
+		stack = stack[1:]
+		out = append(out, s)
+		stack = append(stack, s.Children...)
+	}
+	return out
+}
+
+// expandTopmostSiblings runs inside the coordinator so every document-symbol and
+// prepare request consumes the same global time/request/evidence/node budgets as
+// resolution and traversal. It emits discovery evidence only, never CALLS edges.
+func (c *runner) expandTopmostSiblings() {
+	seenSeed := map[string]bool{}
+	for targetIndex := range c.result.Targets {
+		t := &c.result.Targets[targetIndex]
+		if t.Admission != Admitted || t.Resolution.Prepared == nil || seenSeed[t.Resolution.Identity.ID] {
+			continue
+		}
+		seenSeed[t.Resolution.Identity.ID] = true
+		uri := t.Resolution.Prepared.URI
+		params := lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}}
+		value, record := c.invoke(t.Requested.ID, "textDocument/documentSymbol", t.Resolution.Identity.ID, params, func(ctx context.Context) (any, error) {
+			return c.client.DocumentSymbols(ctx, params)
+		})
+		if record.Outcome != "SUCCESS" {
+			c.result.AcquisitionComplete = false
+			continue
+		}
+		all := flattenSymbols(value.([]lsp.DocumentSymbol))
+		var container *lsp.DocumentSymbol
+		for i := range all {
+			if graph.RangeContains(toRange(all[i].Range), toRange(t.Resolution.Prepared.Range)) && len(all[i].Children) > 0 {
+				if container == nil || graph.RangeContains(toRange(container.Range), toRange(all[i].Range)) {
+					copy := all[i]
+					container = &copy
+				}
+			}
+		}
+		if container == nil {
+			continue
+		}
+		children := append([]lsp.DocumentSymbol(nil), container.Children...)
+		sort.SliceStable(children, func(i, j int) bool {
+			if children[i].SelectionRange.Start != children[j].SelectionRange.Start {
+				return less(children[i].SelectionRange.Start, children[j].SelectionRange.Start)
+			}
+			return children[i].Name < children[j].Name
+		})
+		for _, sibling := range children {
+			if sibling.Name == t.Resolution.Prepared.Name && sibling.SelectionRange == t.Resolution.Prepared.SelectionRange {
+				continue
+			}
+			prepare := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: sibling.SelectionRange.Start}
+			prepared, prepRecord := c.invoke(t.Requested.ID, "textDocument/prepareCallHierarchy", t.Resolution.Identity.ID, prepare, func(ctx context.Context) (any, error) {
+				return c.client.PrepareCallHierarchy(ctx, prepare)
+			})
+			if prepRecord.Outcome != "SUCCESS" {
+				c.result.AcquisitionComplete = false
+				continue
+			}
+			for _, item := range prepared.([]lsp.CallHierarchyItem) {
+				candidate := node(item)
+				if item.URI != uri || item.Name != sibling.Name || item.SelectionRange != sibling.SelectionRange || graph.ValidateItem(candidate.Item) != nil || !c.admit(item) {
+					c.result.AcquisitionComplete = false
+					continue
+				}
+				c.result.Graph.SiblingCandidates = append(c.result.Graph.SiblingCandidates, graph.SiblingCandidate{SeedURI: uri, SeedLabel: t.Requested.ID, Origin: *t.Resolution.Identity, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING", LSPEvidence: []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}})
+			}
+		}
+	}
 }
 
 func (c *runner) query(target, id string, d Direction) (queryResult, bool) {

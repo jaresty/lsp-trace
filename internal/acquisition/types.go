@@ -94,6 +94,7 @@ type Request struct {
 	Root            Target             `json:"root"`
 	RequiredTargets []Target           `json:"required_targets"`
 	Limits          Limits             `json:"limits"`
+	TopmostSiblings bool               `json:"topmost_siblings,omitempty"`
 }
 
 // Client must be bound to Request.Context, enforce wire byte/message limits and
