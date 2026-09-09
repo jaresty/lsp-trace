@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "lsp-trace": {
+      "command": "go",
+      "args": [
+        "run",
+        "./cmd/lsp-trace-mcp",
+        "--tool-profile",
+        "compact"
+      ]
+    }
+  }
+}

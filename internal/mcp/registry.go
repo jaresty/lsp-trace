@@ -66,28 +66,62 @@ type Tool struct {
 	semanticValidator       SemanticValidator
 }
 
+// ToolProfile is the closed, immutable process-lifetime MCP advertisement profile.
+type ToolProfile string
+
+const (
+	ToolProfileFull    ToolProfile = "full"
+	ToolProfileCompact ToolProfile = "compact"
+)
+
+var compactToolNames = map[string]struct{}{
+	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_incoming": {},
+	"lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_slice": {},
+}
+
 type Registry struct {
 	tools                []Tool
 	byName               map[string]int
 	publicationSupported bool
 	providerInventory    provider.ConfiguredInventory
+	toolProfile          ToolProfile
 }
 
 func NewRegistry(enableLiveLSP bool) *Registry {
 	return NewRegistryWithPublication(enableLiveLSP, false)
 }
 
-func NewRegistryWithPublication(_ bool, publicationSupported bool) *Registry {
-	return NewRegistryWithRouting(publicationSupported, Routing{})
+func NewRegistryWithProfile(enableLiveLSP bool, profile ToolProfile) *Registry {
+	return NewRegistryWithPublicationAndProfile(enableLiveLSP, false, profile)
 }
 
-func NewRegistryWithProviderInventory(_ bool, publicationSupported bool, inventory provider.ConfiguredInventory) *Registry {
-	registry := NewRegistryWithRouting(publicationSupported, Routing{})
+func NewRegistryWithPublication(enableLiveLSP bool, publicationSupported bool) *Registry {
+	return NewRegistryWithPublicationAndProfile(enableLiveLSP, publicationSupported, ToolProfileFull)
+}
+
+func NewRegistryWithPublicationAndProfile(_ bool, publicationSupported bool, profile ToolProfile) *Registry {
+	return newRegistryWithRoutingAndProfile(publicationSupported, Routing{}, profile)
+}
+
+func NewRegistryWithProviderInventory(enableLiveLSP bool, publicationSupported bool, inventory provider.ConfiguredInventory) *Registry {
+	return NewRegistryWithProviderInventoryAndProfile(enableLiveLSP, publicationSupported, inventory, ToolProfileFull)
+}
+
+func NewRegistryWithProviderInventoryAndProfile(_ bool, publicationSupported bool, inventory provider.ConfiguredInventory, profile ToolProfile) *Registry {
+	registry := newRegistryWithRoutingAndProfile(publicationSupported, Routing{}, profile)
 	registry.providerInventory = inventory
 	return registry
 }
 
 func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registry {
+	return newRegistryWithRoutingAndProfile(publicationSupported, routing, ToolProfileFull)
+}
+
+func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing, profile ToolProfile) *Registry {
+	if profile != ToolProfileFull && profile != ToolProfileCompact {
+		panic(fmt.Sprintf("unknown MCP tool profile %q", profile))
+	}
 	manifest, err := mcpcontract.LoadManifest()
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
@@ -204,9 +238,10 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 				tools[i].ExecutorFamily = OfflineExecutorFamily
 			}
 		}
+		tools[i].Description = completeToolDescription(tools[i])
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
-	r := &Registry{tools: tools, byName: make(map[string]int, len(tools)*2), publicationSupported: publicationSupported}
+	r := &Registry{tools: tools, byName: make(map[string]int, len(tools)*2), publicationSupported: publicationSupported, toolProfile: profile}
 	for i := range tools {
 		names := append([]string{tools[i].Name}, tools[i].Aliases...)
 		for _, name := range names {
@@ -251,6 +286,20 @@ func withoutPublicationEnvelopes(ids []string) []string {
 		}
 	}
 	return out
+}
+
+func completeToolDescription(tool Tool) string {
+	mode := "offline"
+	if tool.ExecutorFamily != OfflineExecutorFamily {
+		mode = "live local"
+	}
+	resultFamily := "MCP result envelope"
+	if len(tool.ArtifactSchemaIDs) != 0 {
+		resultFamily = "MCP result envelope carrying " + strings.Join(tool.ArtifactSchemaIDs, ", ")
+	} else if len(tool.EnvelopeSchemaIDs) != 0 {
+		resultFamily = "MCP result envelope from " + strings.Join(tool.EnvelopeSchemaIDs, ", ")
+	}
+	return fmt.Sprintf("%s. This is a %s operation requiring input matching %s and returning a %s. Results are evidence bounded by the named schemas and do not establish source completeness, runtime execution, producer authentication, permission, or production authority. If this direct tool is hidden by the active advertisement profile, call lsp_trace_v1_execute with its canonical request instead", strings.TrimSuffix(tool.Description, "."), mode, tool.InputSchemaID, resultFamily)
 }
 
 func lifecycleDescription(name string) string {
@@ -417,22 +466,29 @@ func (r *Registry) Tools() []Tool {
 // Capabilities returns immutable Stage 1 metadata for every canonical enabled
 // or reserved tool. Selector publication reflects process-lifetime root configuration.
 func (r *Registry) Capabilities() map[string]any {
+	advertised := r.Advertised()
+	advertisedNames := make([]string, len(advertised))
+	for i := range advertised {
+		advertisedNames[i] = advertised[i].Name
+	}
+	dispatchableNames := make([]string, len(r.tools))
+	for i := range r.tools {
+		dispatchableNames[i] = r.tools[i].Name
+	}
 	return map[string]any{
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
-		"tools": r.Tools(), "selector_publication_supported": r.publicationSupported,
+		"active_tool_profile": string(r.toolProfile), "advertised_tool_names": advertisedNames, "dispatchable_tool_names": dispatchableNames,
+		"tools": advertised, "selector_publication_supported": r.publicationSupported,
 		"configured_providers": r.providerInventory.Entries(),
 		"acquisition_v2": map[string]any{
 			"contract_version": "lsp-trace.public-acquisition.v2", "default_acquisition_version": "v1",
-			"source_implementation": "EXPERIMENTAL", "deployed_availability": "UNKNOWN",
 			"producers":       []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming"},
 			"cli_producers":   []string{"slice --acquisition-version v2", "incoming --acquisition-version v2"},
 			"input_schema_id": mcpcontract.AcquisitionV2InputID, "output_schema_id": mcpcontract.GraphProvenanceV2ArtifactID,
 			"public_consumers": []string{"validate --family graph-provenance --version v2", "verify --family graph-provenance --version v2", "lsp_trace_v1_validate (explicit graph-provenance/v2)", "lsp_trace_v2_verify"},
 			"public_export": map[string]any{
-				"source_implementation": "IMPLEMENTED", "deployed_availability": "UNKNOWN",
 				"mcp_tool": "lsp_trace_v2_export_retained_calls", "cli": "export-retained-calls --version v2",
 			},
-			"public_analysis":       "NOT_IMPLEMENTED",
 			"coordinate_convention": "zero-based-session", "max_targets": 64, "max_input_bytes": 262144,
 			"authority": "EXACT_HOST_SESSION_GENERATION_WORKSPACE", "analyzed_source": "UNVERIFIED",
 		},
@@ -447,9 +503,15 @@ func (r *Registry) Capabilities() map[string]any {
 func (r *Registry) Advertised() []Tool {
 	out := make([]Tool, 0, len(r.tools))
 	for _, tool := range r.tools {
-		if tool.Availability == Enabled {
-			out = append(out, tool)
+		if tool.Availability != Enabled {
+			continue
 		}
+		if r.toolProfile == ToolProfileCompact {
+			if _, ok := compactToolNames[tool.Name]; !ok {
+				continue
+			}
+		}
+		out = append(out, cloneTool(tool))
 	}
 	return out
 }

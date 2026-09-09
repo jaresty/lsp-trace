@@ -15,8 +15,13 @@ func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
 		}
 	}
 	matrix, ok := registry.Capabilities()["acquisition_v2"].(map[string]any)
-	if !ok || matrix["deployed_availability"] != "UNKNOWN" || matrix["default_acquisition_version"] != "v1" || matrix["public_analysis"] != "NOT_IMPLEMENTED" {
-		t.Fatalf("ASSERT_V2_SOURCE_NOT_DEPLOYMENT: %v", matrix)
+	if !ok || matrix["default_acquisition_version"] != "v1" || matrix["authority"] != "EXACT_HOST_SESSION_GENERATION_WORKSPACE" || matrix["analyzed_source"] != "UNVERIFIED" {
+		t.Fatalf("ASSERT_V2_FACTUAL_LIMITS_RETAINED: %v", matrix)
+	}
+	for _, stale := range []string{"source_implementation", "deployed_availability", "public_analysis"} {
+		if _, present := matrix[stale]; present {
+			t.Fatalf("ASSERT_V2_STALE_CAPABILITY_FIELD_REMOVED[%s]: %v", stale, matrix)
+		}
 	}
 	valid := map[string]any{"session_id": "s", "generation": 1, "seed_manifest": map[string]any{"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session", "root": map[string]any{"id": "root", "locator": map[string]any{"uri": "file:///fixture/a.go", "line": 0, "character": 0}}, "required_targets": []any{}}}
 	raw, _ := json.Marshal(valid)

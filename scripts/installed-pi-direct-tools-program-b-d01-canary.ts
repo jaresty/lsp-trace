@@ -35,7 +35,7 @@ const cases = [
   { key: "ranking", tool: "lsp_trace_v2_bounded_retained_ranking", operation: "RANKING", bytes: 1958, payload: "sha256:37f7f723abbdaa0ae1d86a7a6a59881bac2352760fcdedda43920ff766763536", result: "sha256:fa804fddf0944ca874500e87670a8d42e821ba1b55a70af41be0a0d704c4d0e7" },
 ] as const;
 const targetNames = new Set(cases.map(c => c.tool));
-const definition = { command: binary, cwd: root, directTools: [...targetNames], exposeResources: false, lifecycle: "lazy" as const };
+const definition = { command: binary, args: ["--tool-profile", "full"], cwd: root, directTools: [...targetNames], exposeResources: false, lifecycle: "lazy" as const };
 const config = { mcpServers: { canary: definition }, settings: { toolPrefix: "none" as const, directToolResultDetails: "bounded" as const } };
 const manager = new McpServerManager(root);
 const connection = await manager.connect("canary", definition);

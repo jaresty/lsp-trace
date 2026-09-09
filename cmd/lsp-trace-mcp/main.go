@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"lsp-trace/acquisitionops"
@@ -39,7 +40,23 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
+	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileFull), "MCP advertisement profile: full or compact")
 	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	profileCount := 0
+	for _, arg := range args {
+		if arg == "--tool-profile" || arg == "-tool-profile" || strings.HasPrefix(arg, "--tool-profile=") || strings.HasPrefix(arg, "-tool-profile=") {
+			profileCount++
+		}
+	}
+	if profileCount > 1 {
+		fmt.Fprintln(stderr, "--tool-profile may be specified only once")
+		return 2
+	}
+	toolProfile := mcp.ToolProfile(*toolProfileValue)
+	if toolProfile != mcp.ToolProfileFull && toolProfile != mcp.ToolProfileCompact {
+		fmt.Fprintf(stderr, "invalid --tool-profile %q: want full or compact\n", *toolProfileValue)
 		return 2
 	}
 	if fs.NArg() != 0 {
@@ -96,7 +113,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 		}
 	}
-	server, manager, err := newServerRuntimeWithSeedAuthorities(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot)
+	server, manager, err := newServerRuntimeWithSeedAuthoritiesAndProfile(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot, toolProfile)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -235,7 +252,11 @@ func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.
 	if len(roots) != 0 {
 		publicationRoot = roots[0]
 	}
-	registry := mcp.NewRegistryWithProviderInventory(enableLiveLSP, publicationRoot != nil, inventory)
+	return newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP, inventory, trust, revision, publicationRoot, mcp.ToolProfileFull)
+}
+
+func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, publicationRoot *publication.Root, profile mcp.ToolProfile) (*mcp.Server, *sessionruntime.Manager, error) {
+	registry := mcp.NewRegistryWithProviderInventoryAndProfile(enableLiveLSP, publicationRoot != nil, inventory, profile)
 	validator, err := mcpcontract.NewOperationInputValidator()
 	if err != nil {
 		return nil, nil, err

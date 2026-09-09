@@ -227,6 +227,8 @@ else
 fi
 if go test ./internal/mcpcontract ./internal/mcp ./internal/operation ./cmd/lsp-trace-mcp; then
   printf 'PASS R-MCP-CONTRACT: MCP Stage 1 contract, transport, registry, and real-process suites\n'
+  go test ./internal/mcp ./cmd/lsp-trace-mcp -run 'TestToolProfilesPreserveFullAndCompactAdvertisement|TestCompactToolProfileProcessAdvertisementAndHiddenDispatch' -count=1
+  printf 'PASS R-MCP-COMPACT-PROFILE: exact compact advertisement with full hidden dispatch\n'
 else
   printf 'FAIL R-MCP-CONTRACT: MCP Stage 1 contract suite failed\n'
   exit 1

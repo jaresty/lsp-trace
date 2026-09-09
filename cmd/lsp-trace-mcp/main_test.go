@@ -126,6 +126,52 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 	}
 }
 
+func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"tool":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}}}`,
+	}, "\n") + "\n"
+	if code := run([]string{"--tool-profile", "compact"}, strings.NewReader(input), &stdout, &stderr); code != 0 {
+		t.Fatalf("ASSERT_COMPACT_PROCESS_RUNS: code=%d stderr=%s", code, stderr.String())
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("ASSERT_COMPACT_PROCESS_RESPONSES: %q", stdout.String())
+	}
+	var listed struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 10 {
+		t.Fatalf("ASSERT_COMPACT_PROCESS_ADVERTISES_10: err=%v response=%s", err, lines[0])
+	}
+	for i := 1; i < len(listed.Result.Tools); i++ {
+		if listed.Result.Tools[i-1].Name > listed.Result.Tools[i].Name {
+			t.Fatalf("ASSERT_COMPACT_PROCESS_LEXICAL: %+v", listed.Result.Tools)
+		}
+	}
+	if strings.Contains(lines[1], "Unknown tool") || !strings.Contains(lines[1], `"tool":"lsp_trace_v1_validate"`) {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_DIRECT_CACHED_CALL: %s", lines[1])
+	}
+	if strings.Contains(lines[2], "unknown canonical tool") || !strings.Contains(lines[2], `"requested_tool":"lsp_trace_v1_validate"`) {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_EXECUTE_GATEWAY_CALL: %s", lines[2])
+	}
+}
+
+func TestToolProfileCLIRejectsUnknownAndDuplicate(t *testing.T) {
+	for _, args := range [][]string{{"--tool-profile", "other"}, {"--tool-profile", "compact", "--tool-profile=full"}} {
+		var stdout, stderr bytes.Buffer
+		if code := run(args, strings.NewReader(""), &stdout, &stderr); code != 2 {
+			t.Fatalf("ASSERT_TOOL_PROFILE_CLI_STRICT[%v]: code=%d stderr=%s", args, code, stderr.String())
+		}
+	}
+}
+
 func TestRunStdioOnly(t *testing.T) {
 	const assertion = "binary serves newline-delimited MCP on stdio with a conspicuous trusted local process warning"
 	t.Log("ASSERTION: " + assertion)
