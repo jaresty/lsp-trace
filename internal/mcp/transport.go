@@ -95,6 +95,11 @@ type envelope struct {
 	RequestAccounting       any                  `json:"request_accounting,omitempty"`
 	Progress                string               `json:"progress,omitempty"`
 	CustodyReceipt          any                  `json:"custody_receipt,omitempty"`
+	RequestedTool           string               `json:"requested_tool,omitempty"`
+	DelegatedEnvelope       string               `json:"delegated_envelope,omitempty"`
+	DelegatedDigest         string               `json:"delegated_digest,omitempty"`
+	DelegatedOutcome        string               `json:"delegated_outcome,omitempty"`
+	DelegatedIsError        *bool                `json:"delegated_is_error,omitempty"`
 }
 
 type callResult struct {
@@ -229,6 +234,15 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	if err := validateArguments(tool, params.Arguments); err != nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
 		return base
+	}
+	if tool.Name == "lsp_trace_v1_execute" {
+		if nested, selected, err := decodeGatewayRequest(params.Arguments); selected {
+			if err != nil {
+				base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
+				return base
+			}
+			return s.callGatewayContext(ctx, base, nested)
+		}
 	}
 	if tool.semanticValidator != nil {
 		if err := tool.semanticValidator(ctx, tool, cloneMap(params.Arguments)); err != nil {
@@ -379,6 +393,74 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	env.CustodyReceipt = opResult.CustodyReceipt
 	return bindEnvelope(base, tool, env)
+}
+
+type gatewayRequest struct {
+	Tool      string         `json:"tool"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+func decodeGatewayRequest(arguments map[string]any) (gatewayRequest, bool, error) {
+	requestValue, ok := arguments["request"].(map[string]any)
+	if !ok {
+		return gatewayRequest{}, false, nil
+	}
+	if _, selected := requestValue["tool"]; !selected {
+		return gatewayRequest{}, false, nil
+	}
+	raw, err := json.Marshal(requestValue)
+	if err != nil {
+		return gatewayRequest{}, true, err
+	}
+	var nested gatewayRequest
+	if err := decodeClosed(raw, &nested, "tool", "arguments"); err != nil {
+		return gatewayRequest{}, true, err
+	}
+	if nested.Tool == "" || nested.Arguments == nil {
+		return gatewayRequest{}, true, errors.New("gateway request requires canonical tool and arguments object")
+	}
+	return nested, true, nil
+}
+
+func (s *Server) callGatewayContext(ctx context.Context, base response, nested gatewayRequest) response {
+	target, ok := s.Registry.ResolveCanonical(nested.Tool)
+	if !ok {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: gateway target must be a known canonical tool"}
+		return base
+	}
+	if target.Name == "lsp_trace_v1_execute" {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: recursive execute gateway is forbidden"}
+		return base
+	}
+	rawParams, err := json.Marshal(callParams{Name: target.Name, Arguments: nested.Arguments})
+	if err != nil {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments"}
+		return base
+	}
+	delegated := s.callContext(ctx, response{JSONRPC: base.JSONRPC, ID: base.ID}, rawParams)
+	if delegated.Error != nil {
+		return delegated
+	}
+	result, ok := delegated.Result.(callResult)
+	if !ok {
+		base.Error = &rpcError{Code: -32603, Message: "Internal error: invalid delegated result"}
+		return base
+	}
+	delegatedBytes, err := json.Marshal(result.StructuredContent)
+	if err != nil {
+		base.Error = &rpcError{Code: -32603, Message: "Internal error: invalid delegated envelope"}
+		return base
+	}
+	sum := sha256.Sum256(delegatedBytes)
+	isError := result.StructuredContent.IsError
+	env := envelope{
+		EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ExecuteGatewayEnvelopeID, Tool: "lsp_trace_v1_execute", RequestID: s.nextRequestID(),
+		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", RequestedTool: target.Name,
+		DelegatedEnvelope: string(delegatedBytes), DelegatedDigest: "sha256:" + hex.EncodeToString(sum[:]),
+		DelegatedOutcome: result.StructuredContent.Outcome, DelegatedIsError: &isError,
+	}
+	executeTool, _ := s.Registry.ResolveCanonical("lsp_trace_v1_execute")
+	return bindEnvelope(base, executeTool, env)
 }
 
 func compactSummary(artifact []byte) map[string]any {

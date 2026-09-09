@@ -92,7 +92,7 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))))
+	manifest = mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest)))))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
@@ -460,4 +460,15 @@ func (r *Registry) Resolve(name string) (Tool, bool) {
 		return Tool{}, false
 	}
 	return cloneTool(r.tools[i]), true
+}
+
+// ResolveCanonical resolves only exact canonical names, including enabled tools
+// that a presentation layer may choose not to advertise.
+func (r *Registry) ResolveCanonical(name string) (Tool, bool) {
+	for i := range r.tools {
+		if r.tools[i].Name == name {
+			return cloneTool(r.tools[i]), true
+		}
+	}
+	return Tool{}, false
 }
