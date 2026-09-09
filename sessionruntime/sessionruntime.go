@@ -60,10 +60,11 @@ const (
 )
 
 type SessionMetadata struct {
-	PositionEncoding     string
-	CallHierarchySupport bool
-	ProviderName         string
-	ProviderVersion      string
+	PositionEncoding      string
+	CallHierarchySupport  bool
+	DocumentSymbolSupport bool
+	ProviderName          string
+	ProviderVersion       string
 }
 
 type ReadinessSnapshot struct {
@@ -311,6 +312,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 	}
 	digest := sha256.Sum256(text)
 	diagnosticHandle, collector := m.newDiagnosticOperation(diagnosticGeneration, identity)
+	m.describeDiagnosticOperation(diagnosticHandle, "textDocument/didOpen", req.URI, SessionMetadata{})
 	finishDocument := func(result DocumentResult, terminal uint16) DocumentResult {
 		result.DiagnosticOperation = diagnosticHandle
 		m.completeDiagnosticOperation(diagnosticHandle, collector, terminal)
@@ -462,11 +464,17 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "retained document supply unavailable"}
 	}
 	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": manifest.Locator.URI}})
-	response := m.RoundTrip(ctx, RoundTripRequest{SessionID: sessionID, Generation: generation, Method: "textDocument/documentSymbol", Params: params, Deadline: deadline, MaxMessages: maxMessages, MaxBytes: maxBytes, DiagnosticTargetID: manifest.ID})
+	validation := seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "documentSymbol unavailable"}
+	response := m.roundTrip(ctx, RoundTripRequest{SessionID: sessionID, Generation: generation, Method: "textDocument/documentSymbol", Params: params, Deadline: deadline, MaxMessages: maxMessages, MaxBytes: maxBytes, DiagnosticTargetID: manifest.ID}, func(raw json.RawMessage, rpcError *lspwire.RPCError) bool {
+		if rpcError != nil {
+			return false
+		}
+		validation = seedbinding.ValidateDocumentSymbols(raw, manifest, document.Supply.Content, encoding)
+		return validation.Status == seedbinding.Match
+	})
 	if response.Failure != "" || response.ServerError != nil {
 		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "documentSymbol unavailable"}
 	}
-	validation := seedbinding.ValidateDocumentSymbols(response.Result, manifest, document.Supply.Content, encoding)
 	if validation.Status == seedbinding.Match {
 		m.mu.Lock()
 		if current := m.sessions[sessionID]; current != nil && current.record.Generation == generation && current.seedBinding != nil {
@@ -503,6 +511,12 @@ type RoundTripResult struct {
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	return m.roundTrip(parent, req, nil)
+}
+
+// roundTrip is the single transaction path. classify is package-private so only
+// manager-owned workflows can append semantic disposition to the same collector.
+func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool) RoundTripResult {
 	if failure := contextFailure(parent); failure != "" {
 		return RoundTripResult{Failure: failure}
 	}
@@ -538,6 +552,16 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 	m.mu.Unlock()
 
 	handle, collector := m.newDiagnosticOperation(diagnosticGeneration, identity)
+	documentURI := ""
+	var documentParams struct {
+		TextDocument struct {
+			URI string `json:"uri"`
+		} `json:"textDocument"`
+	}
+	if json.Unmarshal(req.Params, &documentParams) == nil {
+		documentURI = documentParams.TextDocument.URI
+	}
+	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
 	started := m.now()
 	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector}
 	maxMessages := req.MaxMessages
@@ -662,6 +686,14 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 			}
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
 			result.Result, result.ServerError = append(json.RawMessage(nil), read.message.Result...), read.message.Error
+			collector.Record(diagnosticEventResponseDecoded, int64(len(result.Result)), result.ServerError == nil)
+			if classify != nil {
+				if classify(result.Result, result.ServerError) {
+					collector.Record(diagnosticEventSemanticMatched, int64(responseID), true)
+				} else {
+					collector.Record(diagnosticEventSemanticUnmatched, int64(responseID), false)
+				}
+			}
 			return m.finishRoundTrip(req.SessionID, owner, result, "", false)
 		}
 	}
@@ -1011,8 +1043,9 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 					Version string `json:"version"`
 				} `json:"serverInfo"`
 				Capabilities struct {
-					PositionEncoding      string          `json:"positionEncoding"`
-					CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider"`
+					PositionEncoding       string          `json:"positionEncoding"`
+					CallHierarchyProvider  json.RawMessage `json:"callHierarchyProvider"`
+					DocumentSymbolProvider json.RawMessage `json:"documentSymbolProvider"`
 				} `json:"capabilities"`
 			}
 			if err := json.Unmarshal(message.Result, &initialized); err != nil {
@@ -1026,6 +1059,8 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			}
 			provider := initialized.Capabilities.CallHierarchyProvider
 			metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+			documentSymbols := initialized.Capabilities.DocumentSymbolProvider
+			metadata.DocumentSymbolSupport = string(documentSymbols) == "true" || (len(documentSymbols) > 0 && string(documentSymbols) != "false" && string(documentSymbols) != "null")
 			response <- readinessResult{metadata: metadata}
 			return
 		}
@@ -1050,6 +1085,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		}
 		m.recordReadinessEvent(opID, diagnosticEventInitialized, int64(len(initializedBody)), true)
 		m.recordSuccessfulReadiness(opID, int64(len(initializeBody)), int64(len(initializedBody)), observed.metadata)
+		m.describeReadinessDiagnostic(opID, observed.metadata)
 		m.terminalReadinessEvent(opID, diagnosticEventTerminalResponse)
 		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
 	case <-ctx.Done():
@@ -1073,6 +1109,17 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		}
 		m.abortReadinessDiagnostic(child, opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended")
 	}
+}
+
+func (m *Manager) describeReadinessDiagnostic(id string, metadata SessionMetadata) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var handle DiagnosticOperationHandle
+	if op != nil {
+		handle = op.snapshot.DiagnosticOperation
+	}
+	m.mu.Unlock()
+	m.describeDiagnosticOperation(handle, "initialize", "", metadata)
 }
 
 func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string) {

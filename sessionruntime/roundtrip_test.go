@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
@@ -144,6 +145,45 @@ func roundTripManager(t *testing.T, mode string) (*Manager, StartResult, *roundT
 		t.Fatal(got)
 	}
 	return m, s, child
+}
+
+func TestRoundTripRetainsProviderClassificationBeforeTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		match bool
+		code  uint16
+	}{{"matched", true, diagnosticEventSemanticMatched}, {"mismatch", false, diagnosticEventSemanticUnmatched}} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := newRoundTripChild("success")
+			store := manageddiagnostic.NewStore(manageddiagnostic.Bounds{MaxRecords: 64, MaxBytes: 65536})
+			m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}, Diagnostics: store})
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+			m.ObserveInitialization(s.SessionID, s.Generation, true)
+			got := m.roundTrip(context.Background(), RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/documentSymbol", Params: json.RawMessage(`{"x":1}`), Deadline: time.Now().Add(time.Second), MaxMessages: 3, MaxBytes: 4096}, func(json.RawMessage, *lspwire.RPCError) bool { return tc.match })
+			snapshot, ok := m.DiagnosticSnapshotFor(s.AttemptID, got.DiagnosticOperation)
+			if !ok {
+				t.Fatal("ASSERT_DOCUMENT_SYMBOL_COLLECTOR_SNAPSHOT")
+			}
+			seen, terminal := false, false
+			for _, event := range snapshot.Events.Events {
+				if event.Code == tc.code {
+					seen = true
+					if terminal {
+						t.Fatal("ASSERT_DOCUMENT_SYMBOL_CLASSIFICATION_AFTER_TERMINAL")
+					}
+				}
+				if event.Kind == manageddiagnostic.EventTerminal {
+					terminal = true
+				}
+			}
+			if !seen {
+				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_%s_CLASSIFICATION: %+v", tc.name, snapshot.Events)
+			}
+		})
+	}
 }
 
 func TestRoundTripMatchesWithinBoundsAndRetainsInterleaving(t *testing.T) {

@@ -26,19 +26,88 @@ type DiagnosticOperationHandle struct {
 }
 
 type DiagnosticSnapshot struct {
-	Operation       DiagnosticOperationHandle
-	Events          manageddiagnostic.EventSnapshot
-	ProcessIdentity managedprocess.Identity
+	Operation       DiagnosticOperationHandle       `json:"-"`
+	Events          manageddiagnostic.EventSnapshot `json:"-"`
+	ProcessIdentity managedprocess.Identity         `json:"-"`
+	Method          string                          `json:"-"`
+	DocumentURI     string                          `json:"-"`
+	Initialize      SessionMetadata                 `json:"-"`
+}
+
+// DiagnosticSnapshotSet is an immutable manager-certified, source-bounded view
+// of exact-generation operation snapshots. Callers cannot construct a valid set.
+type DiagnosticSnapshotSet struct {
+	attempt    manageddiagnostic.StartupAttemptID
+	sessionID  string
+	generation uint64
+	operations []DiagnosticSnapshot
+	omitted    uint64
+	certified  *diagnosticCapability
+}
+
+func (s DiagnosticSnapshotSet) AttemptID() manageddiagnostic.StartupAttemptID { return s.attempt }
+func (s DiagnosticSnapshotSet) SessionID() string                             { return s.sessionID }
+func (s DiagnosticSnapshotSet) Generation() uint64                            { return s.generation }
+func (s DiagnosticSnapshotSet) Omitted() uint64                               { return s.omitted }
+func (s DiagnosticSnapshotSet) Operations() []DiagnosticSnapshot {
+	out := append([]DiagnosticSnapshot(nil), s.operations...)
+	for i := range out {
+		out[i].Events.Events = append([]manageddiagnostic.Event(nil), out[i].Events.Events...)
+	}
+	return out
+}
+func (s DiagnosticSnapshotSet) Certified() bool { return s.certified != nil }
+func (s DiagnosticSnapshot) Handle() uint64     { return s.Operation.sequence }
+
+// DiagnosticEventName closes projection over manager-owned event vocabulary.
+func DiagnosticEventName(code uint16) string {
+	switch code {
+	case diagnosticEventBegin:
+		return "BEGIN"
+	case diagnosticEventWriteAttempt:
+		return "WRITE_ATTEMPT"
+	case diagnosticEventWriteComplete:
+		return "WRITE_COMPLETE"
+	case diagnosticEventReadComplete:
+		return "READ_COMPLETE"
+	case diagnosticEventMatched:
+		return "CORRELATED"
+	case diagnosticEventUnmatched:
+		return "UNCORRELATED"
+	case diagnosticEventLate:
+		return "LATE"
+	case diagnosticEventInitialized:
+		return "INITIALIZED"
+	case diagnosticEventCacheHit:
+		return "CACHE_HIT"
+	case diagnosticEventTerminalResponse:
+		return "TERMINAL_RESPONSE"
+	case diagnosticEventTerminalDeadline:
+		return "TERMINAL_DEADLINE"
+	case diagnosticEventTerminalFailure:
+		return "TERMINAL_FAILURE"
+	case diagnosticEventResponseDecoded:
+		return "RESPONSE_DECODED"
+	case diagnosticEventSemanticMatched:
+		return "SEMANTIC_MATCHED"
+	case diagnosticEventSemanticUnmatched:
+		return "SEMANTIC_UNMATCHED"
+	default:
+		return ""
+	}
 }
 
 type diagnosticOperation struct {
-	collector  *manageddiagnostic.EventCollector
-	identity   managedprocess.Identity
-	attemptID  manageddiagnostic.StartupAttemptID
-	sessionID  string
-	generation uint64
-	sequence   uint64
-	capability *diagnosticCapability
+	collector   *manageddiagnostic.EventCollector
+	identity    managedprocess.Identity
+	attemptID   manageddiagnostic.StartupAttemptID
+	sessionID   string
+	generation  uint64
+	sequence    uint64
+	capability  *diagnosticCapability
+	method      string
+	documentURI string
+	initialize  SessionMetadata
 }
 
 const (
@@ -54,6 +123,9 @@ const (
 	diagnosticEventTerminalResponse
 	diagnosticEventTerminalDeadline
 	diagnosticEventTerminalFailure
+	diagnosticEventResponseDecoded
+	diagnosticEventSemanticMatched
+	diagnosticEventSemanticUnmatched
 )
 
 func (m *Manager) newDiagnosticGeneration(attempt manageddiagnostic.StartupAttemptID, session string, generation uint64) DiagnosticGenerationHandle {
@@ -126,5 +198,53 @@ func (m *Manager) DiagnosticSnapshotFor(attempt manageddiagnostic.StartupAttempt
 	if !s.Closed {
 		return DiagnosticSnapshot{}, false
 	}
-	return DiagnosticSnapshot{Operation: h, Events: s, ProcessIdentity: op.identity}, true
+	return DiagnosticSnapshot{Operation: h, Events: s, ProcessIdentity: op.identity, Method: op.method, DocumentURI: op.documentURI, Initialize: op.initialize}, true
+}
+
+func (m *Manager) describeDiagnosticOperation(h DiagnosticOperationHandle, method, documentURI string, initialize SessionMetadata) {
+	if h == (DiagnosticOperationHandle{}) {
+		return
+	}
+	m.mu.Lock()
+	if op, ok := m.diagnosticOperations[h]; ok {
+		op.method, op.documentURI, op.initialize = method, documentURI, initialize
+		m.diagnosticOperations[h] = op
+	}
+	m.mu.Unlock()
+}
+
+// DiagnosticSnapshotSetFor rejects forged, stale, cross-attempt, duplicate, open,
+// and over-bound sources before returning an immutable certified snapshot set.
+func (m *Manager) DiagnosticSnapshotSetFor(attempt manageddiagnostic.StartupAttemptID, generation DiagnosticGenerationHandle, handles []DiagnosticOperationHandle, maxRecords int) (DiagnosticSnapshotSet, bool) {
+	if attempt == "" || generation.session.capability == nil || generation.session.attemptID != attempt || maxRecords < 1 || len(handles) > maxRecords {
+		return DiagnosticSnapshotSet{}, false
+	}
+	m.mu.Lock()
+	current := m.sessions[generation.session.sessionID]
+	currentGeneration := current != nil && current.record.Generation == generation.generation && current.attemptID == attempt && current.diagnosticGeneration == generation
+	m.mu.Unlock()
+	if !currentGeneration {
+		return DiagnosticSnapshotSet{}, false
+	}
+	seen := make(map[DiagnosticOperationHandle]bool, len(handles))
+	out := make([]DiagnosticSnapshot, 0, len(handles))
+	var omitted uint64
+	retained := 0
+	for _, h := range handles {
+		if seen[h] || h.generation != generation {
+			return DiagnosticSnapshotSet{}, false
+		}
+		seen[h] = true
+		s, ok := m.DiagnosticSnapshotFor(attempt, h)
+		if !ok {
+			return DiagnosticSnapshotSet{}, false
+		}
+		retained += 1 + len(s.Events.Events)
+		if retained > maxRecords {
+			return DiagnosticSnapshotSet{}, false
+		}
+		omitted += s.Events.Omitted + s.Events.Late
+		out = append(out, s)
+	}
+	return DiagnosticSnapshotSet{attempt: attempt, sessionID: generation.session.sessionID, generation: generation.generation, operations: out, omitted: omitted, certified: generation.session.capability}, true
 }
