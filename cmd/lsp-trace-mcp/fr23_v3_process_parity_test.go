@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"testing"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/mcpcontract"
 )
@@ -83,4 +85,45 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 		t.Fatalf("%s: secret marker present", assertion)
 	}
 	t.Logf("PASS %s: cli_bytes=%d mcp_bytes=%d generation=1", assertion, cliStdout.Len(), len(mcpArtifact))
+
+	manifest["expansion"] = map[string]any{"topmost_siblings": true}
+	manifest["limits"] = map[string]any{"max_nodes": 4, "max_requests": 8}
+	manifestBytes, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifestPath, manifestBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hierarchicalEnv := append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
+	config["processes"].([]any)[0].(map[string]any)["execution"].(map[string]any)["environment"] = hierarchicalEnv
+	cliCommand = exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go")
+	cliCommand.Env = hierarchicalEnv
+	cliStdout.Reset()
+	cliStderr.Reset()
+	cliCommand.Stdout, cliCommand.Stderr = &cliStdout, &cliStderr
+	if err := cliCommand.Run(); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: CLI: %v stderr=%s", err, cliStderr.String())
+	}
+	responses = runMCPProcess(t, mcp, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
+		callRequest(1, "lsp_trace_v3_slice", map[string]any{"session_id": "fixture", "generation": 1, "seed_manifest": manifest, "output_version": graphprovenance.VersionV5}),
+	})
+	call = decodeProcessCall(t, responses[0])
+	mcpArtifact = inlineArtifactBytes(t, call.env)
+	if call.env["operation_status"] != "SUCCEEDED" || !bytes.Equal(cliStdout.Bytes(), mcpArtifact) {
+		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: envelope=%v equal=%v stderr=%s", call.env, bytes.Equal(cliStdout.Bytes(), mcpArtifact), cliStderr.String())
+	}
+	var v5 graphprovenance.EvidenceV5
+	if err := json.Unmarshal(mcpArtifact, &v5); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(v5.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := graph.DecodeNativeV3(native)
+	if err != nil || len(decoded.SiblingCandidates) == 0 || len(decoded.Edges) != 0 {
+		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_NONEMPTY_SIBLINGS_NO_CALLS_INFERENCE: siblings=%d edges=%d err=%v", len(decoded.SiblingCandidates), len(decoded.Edges), err)
+	}
+	t.Logf("PASS ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: bytes=%d siblings=%d", len(mcpArtifact), len(decoded.SiblingCandidates))
 }

@@ -82,6 +82,102 @@ func run(t *testing.T, f *fakeClient, r Request) Result {
 	}
 	return got
 }
+func TestTopmostSiblingExpansionDistinctSeedsSharesGlobalRequestBudget(t *testing.T) {
+	f := fixture()
+	a, b, peer := item("a", 0), item("b", 4), item("peer", 2)
+	for _, i := range []lsp.CallHierarchyItem{a, b, peer} {
+		f.add(i)
+	}
+	container := lsp.DocumentSymbol{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, SelectionRange: lsp.Range{}, Children: []lsp.DocumentSymbol{
+		{Name: a.Name, Kind: a.Kind, Range: a.Range, SelectionRange: a.SelectionRange},
+		{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+		{Name: b.Name, Kind: b.Kind, Range: b.Range, SelectionRange: b.SelectionRange},
+	}}
+	f.symbols[a.URI] = []lsp.DocumentSymbol{container}
+	r := request(a, b)
+	r.TopmostSiblings = true
+	// Two seed prepares, then documentSymbol + sibling prepare for the first seed.
+	// The second documentSymbol must observe the same exhausted global budget.
+	r.Limits.MaxRequests = 4
+	one := run(t, f, r)
+	f2 := fixture()
+	for _, i := range []lsp.CallHierarchyItem{a, b, peer} {
+		f2.add(i)
+	}
+	f2.symbols[a.URI] = []lsp.DocumentSymbol{container}
+	two := run(t, f2, r)
+	if !reflect.DeepEqual(one, two) || one.Usage.Requests != 4 || len(one.Graph.SiblingCandidates) != 1 || len(one.Graph.Edges) != 0 || one.AcquisitionComplete {
+		t.Fatalf("ASSERT_TOPMOST_MULTISEED_SHARED_REQUEST_BUDGET_DOCUMENT_SYMBOL_PREPARE: usage=%#v siblings=%d edges=%d complete=%t deterministic=%t calls=%v", one.Usage, len(one.Graph.SiblingCandidates), len(one.Graph.Edges), one.AcquisitionComplete, reflect.DeepEqual(one, two), f.calls)
+	}
+	blocked := false
+	for _, rec := range one.Requests {
+		if rec.Method == "textDocument/documentSymbol" && rec.Outcome == "BUDGET_BLOCKED" {
+			blocked = true
+		}
+	}
+	if !blocked {
+		t.Fatalf("ASSERT_TOPMOST_MULTISEED_PARTIAL_SECOND_SEED: requests=%#v", one.Requests)
+	}
+}
+
+func TestTopmostSiblingExpansionSharedEvidenceNodeAndTimeBudgets(t *testing.T) {
+	seed, peer := item("seed", 0), item("peer", 2)
+	setup := func() *fakeClient {
+		f := fixture()
+		f.add(seed)
+		f.add(peer)
+		f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+			{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange},
+			{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+		}}}
+		return f
+	}
+	baseRequest := request(seed)
+	baseRequest.TopmostSiblings = true
+	baseline := run(t, setup(), baseRequest)
+	var siblingBefore int
+	for _, rec := range baseline.Requests {
+		if rec.Method == "textDocument/prepareCallHierarchy" && rec.Before.Requests > 1 {
+			siblingBefore = rec.Before.EvidenceBytes
+		}
+	}
+	if siblingBefore == 0 || len(baseline.Graph.SiblingCandidates) != 1 {
+		t.Fatalf("ASSERT_TOPMOST_EVIDENCE_BASELINE: before=%d siblings=%d", siblingBefore, len(baseline.Graph.SiblingCandidates))
+	}
+	t.Run("evidence", func(t *testing.T) {
+		r := baseRequest
+		r.Limits.MaxEvidenceBytes = siblingBefore
+		got := run(t, setup(), r)
+		if len(got.Graph.SiblingCandidates) != 0 || got.Usage.EvidenceBytes > siblingBefore || got.AcquisitionComplete {
+			t.Fatalf("ASSERT_TOPMOST_SHARED_EVIDENCE_BUDGET_DOCUMENT_SYMBOL_PREPARE: usage=%#v siblings=%d complete=%t", got.Usage, len(got.Graph.SiblingCandidates), got.AcquisitionComplete)
+		}
+	})
+	t.Run("node", func(t *testing.T) {
+		r := baseRequest
+		r.Limits.MaxNodes = 1
+		got := run(t, setup(), r)
+		if len(got.Graph.SiblingCandidates) != 0 || got.Usage.Nodes != 1 || got.AcquisitionComplete {
+			t.Fatalf("ASSERT_TOPMOST_SHARED_NODE_BUDGET_DOCUMENT_SYMBOL_PREPARE: usage=%#v siblings=%d complete=%t", got.Usage, len(got.Graph.SiblingCandidates), got.AcquisitionComplete)
+		}
+	})
+	t.Run("request-time", func(t *testing.T) {
+		f := setup()
+		f.hook = func(ctx context.Context, key string) error {
+			if key == "symbols:"+seed.URI {
+				<-ctx.Done()
+				return ctx.Err()
+			}
+			return nil
+		}
+		r := baseRequest
+		r.Limits.RequestTimeout = time.Millisecond
+		got := run(t, f, r)
+		if got.AcquisitionComplete || len(got.Graph.SiblingCandidates) != 0 {
+			t.Fatalf("ASSERT_TOPMOST_SHARED_REQUEST_TIME_BUDGET_DOCUMENT_SYMBOL_PREPARE: complete=%t siblings=%d", got.AcquisitionComplete, len(got.Graph.SiblingCandidates))
+		}
+	})
+}
+
 func TestCoordinatorConnectedChain(t *testing.T) {
 	f := fixture()
 	a, b, c := item("a", 0), item("b", 1), item("c", 2)

@@ -156,6 +156,103 @@ func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 	}
 }
 
+type custodyRuntime struct {
+	*v3ParityRuntime
+	provenance   seedbinding.CustodyMode
+	found        bool
+	receipt      string
+	receiptFound bool
+}
+
+func (r *custodyRuntime) SeedCustodyProvenance(string, uint64) (seedbinding.CustodyMode, bool) {
+	return r.provenance, r.found
+}
+func (r *custodyRuntime) SeedCustodyReceipt(string, uint64) (string, bool) {
+	return r.receipt, r.receiptFound
+}
+
+func TestManagedV5ProducerCustodyClosedMatrix(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "v5-custody", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
+	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
+	for _, tc := range []struct {
+		name         string
+		mode         seedbinding.CustodyMode
+		found        bool
+		receipt      string
+		receiptFound bool
+		wantClass    graph.SourceCustodyClass
+		wantFailure  bool
+		wantPromoted bool
+	}{
+		{name: "caller-local", mode: seedbinding.CallerAssertedLocal, found: true, wantClass: graph.SourceCustodyCallerAssertedLocal},
+		{name: "verified-host-receipt", mode: seedbinding.VerifiedHost, found: true, receipt: "host-receipt:fixture:9007199254740993", receiptFound: true, wantClass: graph.SourceCustodyVerifiedHost, wantPromoted: true},
+		{name: "lsp-supplied-no-promotion", mode: seedbinding.CustodyMode(graph.SourceCustodyLSPSuppliedUnauthenticated), found: true, wantFailure: true},
+		{name: "retained-offline-no-promotion", mode: seedbinding.CustodyMode(graph.SourceCustodyRetainedByteConsistency), found: true, wantFailure: true},
+		{name: "unknown-reject", mode: seedbinding.CustodyMode(graph.Unknown), found: true, wantFailure: true},
+		{name: "missing-reject", found: false, wantFailure: true},
+		{name: "verified-host-missing-receipt", mode: seedbinding.VerifiedHost, found: true, wantFailure: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := &custodyRuntime{v3ParityRuntime: &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}, provenance: tc.mode, found: tc.found, receipt: tc.receipt, receiptFound: tc.receiptFound}
+			got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+			if tc.wantFailure {
+				if failure == nil || failure.Code != "OUTPUT_VALIDATION_FAILED" {
+					t.Fatalf("ASSERT_V5_PRODUCER_CUSTODY_REJECTS_WITHOUT_PROMOTION: mode=%q failure=%v", tc.mode, failure)
+				}
+				return
+			}
+			if failure != nil {
+				t.Fatal(failure)
+			}
+			receipt, ok := got.CustodyReceipt.(*CustodyReceipt)
+			if !ok || receipt.Authenticated != tc.wantPromoted || receipt.HostReceiptID != tc.receipt {
+				t.Fatalf("ASSERT_V5_PRODUCER_CUSTODY_RECEIPT_AUTHORITY_CEILING: %#v", got.CustodyReceipt)
+			}
+			var envelope graphprovenance.EvidenceV5
+			if err := json.Unmarshal(got.Artifact, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			native, _ := base64.StdEncoding.DecodeString(envelope.GraphV5)
+			decoded, err := graph.DecodeNativeV3(native)
+			if err != nil || len(decoded.SiblingCandidates) != 1 || decoded.SiblingCandidates[0].Custody.Class != tc.wantClass || decoded.SiblingCandidates[0].Custody.HostReceiptID != tc.receipt {
+				t.Fatalf("ASSERT_V5_PRODUCER_CUSTODY_EXACT_EMBEDDED_BINDING: class=%q receipt=%q err=%v", decoded.SiblingCandidates[0].Custody.Class, decoded.SiblingCandidates[0].Custody.HostReceiptID, err)
+			}
+		})
+	}
+}
+
+func TestTopmostSiblingsRequiresExplicitV5BeforeRuntime(t *testing.T) {
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator("file:///fixture/a.go")}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
+	for _, tc := range []struct {
+		name, version string
+	}{
+		{name: "omitted"},
+		{name: "unsupported", version: graphprovenance.VersionV3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			runtime := &forbiddenRuntime{}
+			input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 1, SeedManifest: manifest, OutputVersion: tc.version})
+			_, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+			if failure == nil || failure.Code != operation.FailureInvalidInput || runtime.calls != 0 {
+				t.Fatalf("ASSERT_TOPMOST_REQUIRES_EXPLICIT_V5_BEFORE_RUNTIME: failure=%v calls=%d", failure, runtime.calls)
+			}
+		})
+	}
+	req, err := manifest.Request(SliceV3)
+	if err != nil || req.TopmostSiblings {
+		t.Fatalf("ASSERT_OMITTED_OUTPUT_FROZEN_V3_REQUEST: topmost=%t err=%v", req.TopmostSiblings, err)
+	}
+}
+
 func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {

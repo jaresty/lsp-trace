@@ -187,7 +187,8 @@ func (m Manifest) Request(mode operation.Name) (acquisition.Request, error) {
 		return r, fmt.Errorf("timeouts must be 1..60000 milliseconds")
 	}
 	r.Limits = acquisition.Limits{MaxNodes: val(l.MaxNodes, 100), MaxRequests: val(l.MaxRequests, 1000), MaxEvidenceBytes: val(l.MaxEvidenceBytes, 4<<20), MaxPathWork: val(l.MaxPathWork, 100000), Timeout: time.Duration(timeout) * time.Millisecond, RequestTimeout: time.Duration(requestTimeout) * time.Millisecond, MaxResponseBytes: val(l.MaxResponseBytes, 4<<20), MaxMessages: val(l.MaxMessages, 64)}
-	r.TopmostSiblings = m.Expansion.TopmostSiblings
+	// Expansion is output-contract gated by Execute. A bare manifest must retain
+	// the frozen v2/v3 acquisition behavior.
 	return r, acquisition.ValidateRequest(r)
 }
 
@@ -202,10 +203,21 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if err := decode(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
+	wantsV5 := in.OutputVersion == graphprovenance.VersionV5
+	if in.OutputVersion != "" && !wantsV5 {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported output_version %q", in.OutputVersion))
+	}
+	if in.SeedManifest.Expansion.TopmostSiblings && !wantsV5 {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
+	}
+	if wantsV5 && ((op.Name != SliceV3 && op.Name != IncomingV3) || !in.SeedManifest.Expansion.TopmostSiblings) {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route and expansion.topmost_siblings=true"))
+	}
 	req, err := in.SeedManifest.Request(op.Name)
 	if err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
+	req.TopmostSiblings = wantsV5
 	if in.SessionID == "" || in.Generation == 0 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("session_id and exact generation are required"))
 	}
@@ -275,12 +287,8 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			custodyReceipt = &CustodyReceipt{Provenance: provenance, Authenticated: provenance == seedbinding.VerifiedHost}
 		}
 	}
-	wantsV5 := in.OutputVersion == graphprovenance.VersionV5
-	if in.OutputVersion != "" && !wantsV5 {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported output_version %q", in.OutputVersion))
-	}
-	if wantsV5 && ((op.Name != SliceV3 && op.Name != IncomingV3) || !in.SeedManifest.Expansion.TopmostSiblings) {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route and expansion.topmost_siblings=true"))
+	if wantsV5 && custodyReceipt == nil {
+		return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("graph-provenance v5 requires closed seed custody provenance"))
 	}
 	result, err := acquisition.Acquire(ctx, sessionclient.New(e.runtime), req)
 	if err != nil {

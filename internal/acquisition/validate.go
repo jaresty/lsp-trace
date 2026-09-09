@@ -253,6 +253,16 @@ func ValidateResult(r Result) error {
 			return errors.New("invalid connection disposition")
 		}
 	}
+	if r.Request.TopmostSiblings {
+		if u.Nodes >= r.Request.Limits.MaxNodes {
+			complete = false
+		}
+		for _, rec := range r.Requests {
+			if (rec.Method == "textDocument/documentSymbol" || rec.Method == "textDocument/prepareCallHierarchy") && rec.Outcome != "SUCCESS" {
+				complete = false
+			}
+		}
+	}
 	if complete != r.AcquisitionComplete {
 		return errors.New("acquisition completeness mismatch")
 	}

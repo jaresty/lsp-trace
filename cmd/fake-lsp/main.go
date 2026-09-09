@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -164,7 +165,11 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				continue
 			}
 			uri, _ := json.Marshal(documentURI)
-			result := json.RawMessage(fmt.Sprintf(`[{"name":"leaf","kind":12,"uri":%s,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"data":{"fixture":"leaf"}}]`, uri))
+			name, line := "leaf", 0
+			if os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL") == "hierarchical" && bytes.Contains(m.Params, []byte(`"line":2`)) {
+				name, line = "peer", 2
+			}
+			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"uri":%s,"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":4}},"selectionRange":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":4}},"data":{"fixture":%q}}]`, name, uri, line, line, line, line, name))
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode

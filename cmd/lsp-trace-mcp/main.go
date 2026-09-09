@@ -203,6 +203,15 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.AcquisitionV2ExecutorFamily] = acquisitionops.NewExecutor(selected)
 }
 
+func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
+	if provenance, found := r.Manager.SeedCustodyProvenance(sessionID, generation); found {
+		return provenance, true
+	}
+	// Bootstrap process selectors are caller-provided local execution authority;
+	// they do not promote to verified-host custody without a manager receipt.
+	return seedbinding.CallerAssertedLocal, true
+}
+
 func (r *hostSelectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
 	if canonical, ok := r.aliases[id]; ok {
 		id = canonical

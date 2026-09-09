@@ -127,6 +127,14 @@ func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request
 	return result
 }
 func (r *privateAcquisitionRuntime) Records() []sessionruntime.Record { return r.manager.Records() }
+func (r *privateAcquisitionRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
+	if provenance, found := r.manager.SeedCustodyProvenance(sessionID, generation); found {
+		return provenance, true
+	}
+	// This private wrapper is constructed only after the CLI has read the caller's
+	// bounded local manifest and workspace and started that exact managed session.
+	return seedbinding.CallerAssertedLocal, true
+}
 
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
@@ -198,6 +206,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	manifest, err := acquisitionops.DecodeManifest(raw, op)
 	if err != nil {
 		return fail(err)
+	}
+	if manifest.Expansion.TopmostSiblings && outputVersion != graphprovenance.VersionV5 {
+		return fail(fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
 	}
 	if outputVersion != "" && (outputVersion != graphprovenance.VersionV5 || version != "v3" || !manifest.Expansion.TopmostSiblings) {
 		return fail(fmt.Errorf("graph-provenance v5 output requires acquisition-version v3 and expansion.topmost_siblings=true"))
