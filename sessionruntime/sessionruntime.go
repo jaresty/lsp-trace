@@ -420,7 +420,7 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 		m.mu.Unlock()
 		return seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: string(session.StaleGeneration)}
 	}
-	if r.seedBinding == nil || r.seedAdmitted {
+	if r.seedBinding == nil || r.seedAdmittedGeneration == generation {
 		m.mu.Unlock()
 		return seedbinding.ValidationResult{Status: seedbinding.Match}
 	}
@@ -443,7 +443,7 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 	if validation.Status == seedbinding.Match {
 		m.mu.Lock()
 		if current := m.sessions[sessionID]; current != nil && current.record.Generation == generation && current.seedBinding != nil {
-			current.seedAdmitted = true
+			current.seedAdmittedGeneration = generation
 		} else {
 			validation = seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: "generation changed during semantic admission"}
 		}
@@ -676,22 +676,22 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 }
 
 type runtimeSession struct {
-	record         Record
-	attemptID      manageddiagnostic.StartupAttemptID
-	process        Child
-	retired        *ownedTransport // joined exact-child retirement, never a replacement lookup
-	spec           managedprocess.Spec
-	pending        *lspwire.Pending
-	requests       map[lspwire.RequestKey]*Request
-	cancels        int
-	protocolOwned  bool
-	lifecycleOwned bool
-	metadata       SessionMetadata
-	languageID     string
-	documents      map[string]openDocument
-	seedSources    map[string][]byte
-	seedBinding    *seedbinding.Manifest
-	seedAdmitted   bool
+	record                 Record
+	attemptID              manageddiagnostic.StartupAttemptID
+	process                Child
+	retired                *ownedTransport // joined exact-child retirement, never a replacement lookup
+	spec                   managedprocess.Spec
+	pending                *lspwire.Pending
+	requests               map[lspwire.RequestKey]*Request
+	cancels                int
+	protocolOwned          bool
+	lifecycleOwned         bool
+	metadata               SessionMetadata
+	languageID             string
+	documents              map[string]openDocument
+	seedSources            map[string][]byte
+	seedBinding            *seedbinding.Manifest
+	seedAdmittedGeneration uint64
 }
 
 type Manager struct {
@@ -1428,6 +1428,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
 	r.retired = nil
 	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
+	r.seedAdmittedGeneration = 0
 	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
 	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")
 	m.mu.Unlock()

@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/strictjson"
 	"lsp-trace/sessionruntime"
 )
 
@@ -66,7 +67,12 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 		return bootstrapConfig{}, err
 	}
 	defer file.Close()
-	decoder := json.NewDecoder(file)
+	const maxBootstrapBytes = 4 << 20
+	raw, err := io.ReadAll(io.LimitReader(file, maxBootstrapBytes+1))
+	if err != nil || len(raw) > maxBootstrapBytes {
+		return bootstrapConfig{}, fmt.Errorf("bootstrap config unavailable or exceeds byte limit")
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	var config bootstrapConfig
 	if err := decoder.Decode(&config); err != nil {
@@ -74,6 +80,9 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config must contain one JSON value")
+	}
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		return bootstrapConfig{}, err
 	}
 	if config.Version != 1 || len(config.Processes)+len(config.Providers) == 0 {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process or provider")

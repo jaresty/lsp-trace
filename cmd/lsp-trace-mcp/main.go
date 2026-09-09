@@ -80,7 +80,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	var seedRevision seedbinding.RevisionAuthority
 	if config != nil {
-		seedRevision = seedbinding.WorkspaceGitRevisionAuthority{}
+		seedRevision = seedbinding.HostReceiptAuthority{}
 	}
 	server, manager, err := newServerRuntimeWithSeedAuthorities(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot)
 	if err != nil {

@@ -7,6 +7,8 @@ import (
 	"io"
 )
 
+const MaxDocumentSymbolBytes = 8 << 20
+
 type lspPosition struct {
 	Line      uint32 `json:"line"`
 	Character uint32 `json:"character"`
@@ -42,6 +44,12 @@ type symbolInformation struct {
 // array-level union. Flat SymbolInformation is qualified because LSP exposes no
 // distinct name range in that representation.
 func ValidateDocumentSymbols(raw []byte, manifest Manifest, source []byte, negotiatedEncoding string) ValidationResult {
+	if len(raw) > MaxDocumentSymbolBytes {
+		return ValidationResult{Status: Invalid, PrivateDetail: "documentSymbol response exceeds byte limit"}
+	}
+	if err := rejectDuplicateJSONKeys(raw); err != nil {
+		return ValidationResult{Status: Invalid, PrivateDetail: "documentSymbol duplicate or malformed JSON"}
+	}
 	if negotiatedEncoding != manifest.Locator.Encoding {
 		return ValidationResult{Status: Unavailable, PrivateDetail: "negotiated position encoding unavailable"}
 	}
@@ -77,12 +85,18 @@ func ValidateDocumentSymbols(raw []byte, manifest Manifest, source []byte, negot
 		}
 		shape = memberShape
 		if memberShape == "hierarchical" {
+			if err := validateDocumentSymbolMembers(entry); err != nil {
+				return ValidationResult{Status: Invalid, PrivateDetail: "DocumentSymbol required member invalid"}
+			}
 			var symbol documentSymbol
 			if err := decodeOne(entry, &symbol); err != nil {
 				return ValidationResult{Status: Invalid, PrivateDetail: "DocumentSymbol invalid"}
 			}
 			visit(symbol)
 		} else {
+			if err := validateSymbolInformationMembers(entry); err != nil {
+				return ValidationResult{Status: Invalid, PrivateDetail: "SymbolInformation required member invalid"}
+			}
 			var symbol symbolInformation
 			if err := decodeOne(entry, &symbol); err != nil {
 				return ValidationResult{Status: Invalid, PrivateDetail: "SymbolInformation invalid"}
@@ -101,6 +115,112 @@ func ValidateDocumentSymbols(raw []byte, manifest Manifest, source []byte, negot
 		detail = "flat SymbolInformation exact name/location range; distinct name range unavailable"
 	}
 	return ValidationResult{Status: Match, PrivateDetail: detail}
+}
+
+func validateDocumentSymbolMembers(raw []byte) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return err
+	}
+	if err := requireString(object, "name"); err != nil {
+		return err
+	}
+	if err := requireKind(object); err != nil {
+		return err
+	}
+	if err := requireRange(object, "range"); err != nil {
+		return err
+	}
+	if err := requireRange(object, "selectionRange"); err != nil {
+		return err
+	}
+	if children, ok := object["children"]; ok {
+		var entries []json.RawMessage
+		if string(children) == "null" || json.Unmarshal(children, &entries) != nil {
+			return fmt.Errorf("children invalid")
+		}
+		for _, child := range entries {
+			if err := validateDocumentSymbolMembers(child); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateSymbolInformationMembers(raw []byte) error {
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return err
+	}
+	if err := requireString(object, "name"); err != nil {
+		return err
+	}
+	if err := requireKind(object); err != nil {
+		return err
+	}
+	location, ok := object["location"]
+	if !ok || string(location) == "null" {
+		return fmt.Errorf("location required")
+	}
+	var loc map[string]json.RawMessage
+	if err := json.Unmarshal(location, &loc); err != nil {
+		return err
+	}
+	if err := requireString(loc, "uri"); err != nil {
+		return err
+	}
+	return requireRange(loc, "range")
+}
+
+func requireString(object map[string]json.RawMessage, key string) error {
+	raw, ok := object[key]
+	if !ok || string(raw) == "null" {
+		return fmt.Errorf("%s required", key)
+	}
+	var value string
+	if json.Unmarshal(raw, &value) != nil || value == "" {
+		return fmt.Errorf("%s invalid", key)
+	}
+	return nil
+}
+
+func requireKind(object map[string]json.RawMessage) error {
+	raw, ok := object["kind"]
+	var kind int
+	if !ok || string(raw) == "null" || json.Unmarshal(raw, &kind) != nil || kind < 1 || kind > 26 {
+		return fmt.Errorf("kind invalid")
+	}
+	return nil
+}
+
+func requireRange(object map[string]json.RawMessage, key string) error {
+	raw, ok := object[key]
+	if !ok || string(raw) == "null" {
+		return fmt.Errorf("%s required", key)
+	}
+	var r map[string]json.RawMessage
+	if json.Unmarshal(raw, &r) != nil {
+		return fmt.Errorf("%s invalid", key)
+	}
+	for _, endpoint := range []string{"start", "end"} {
+		epRaw, ok := r[endpoint]
+		if !ok || string(epRaw) == "null" {
+			return fmt.Errorf("%s.%s required", key, endpoint)
+		}
+		var ep map[string]json.RawMessage
+		if json.Unmarshal(epRaw, &ep) != nil {
+			return fmt.Errorf("%s.%s invalid", key, endpoint)
+		}
+		for _, coordinate := range []string{"line", "character"} {
+			value, ok := ep[coordinate]
+			var n uint32
+			if !ok || string(value) == "null" || json.Unmarshal(value, &n) != nil {
+				return fmt.Errorf("%s.%s.%s invalid", key, endpoint, coordinate)
+			}
+		}
+	}
+	return nil
 }
 
 func decodeOne(raw []byte, value any) error {

@@ -12,7 +12,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"unicode/utf16"
@@ -20,6 +19,7 @@ import (
 )
 
 const VersionV2 = "lsp-trace.seed-binding.v2"
+const MaxManifestBytes = 1 << 20
 
 type Status string
 
@@ -70,20 +70,39 @@ type ValidationResult struct {
 	PrivateDetail string
 }
 
-type RevisionAuthority interface {
-	Verify(context.Context, string, string) error
+type CustodyClaim struct {
+	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
 }
 
-// WorkspaceGitRevisionAuthority authenticates the current workspace commit from
-// host repository custody; neither side of the comparison comes from a caller
-// other than the manifest's claim being checked.
-type WorkspaceGitRevisionAuthority struct{}
+type RevisionAuthority interface {
+	Verify(context.Context, CustodyClaim) error
+}
 
-func (WorkspaceGitRevisionAuthority) Verify(ctx context.Context, workspace, claimed string) error {
-	cmd := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--verify", "HEAD^{commit}")
-	raw, err := cmd.Output()
-	if err != nil || strings.TrimSpace(string(raw)) == "" || claimed != strings.TrimSpace(string(raw)) {
-		return fmt.Errorf("revision rejected")
+type HostCustodyReceipt struct {
+	Authenticated                                              bool
+	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
+	Prepared                                                   bool
+	PreparedManifestSHA256                                     string
+	PreparedAllowedChanges                                     []string
+}
+
+type HostReceiptAuthority struct{ Receipt HostCustodyReceipt }
+
+func (a HostReceiptAuthority) Verify(_ context.Context, claim CustodyClaim) error {
+	r := a.Receipt
+	if !r.Authenticated || r.Repository == "" || r.SourceRevision == "" || r.TargetPath == "" || r.TargetSourceSHA256 == "" {
+		return fmt.Errorf("host custody receipt unauthenticated or unavailable")
+	}
+	if r.Repository != claim.Repository || r.SourceRevision != claim.SourceRevision || r.TargetPath != claim.TargetPath || !strings.EqualFold(r.TargetSourceSHA256, claim.TargetSourceSHA256) {
+		return fmt.Errorf("host custody receipt mismatch")
+	}
+	if r.Prepared && r.PreparedManifestSHA256 == "" {
+		return fmt.Errorf("prepared-copy receipt lacks modification manifest")
+	}
+	for _, changed := range r.PreparedAllowedChanges {
+		if filepath.Clean(changed) == filepath.Clean(claim.TargetPath) {
+			return fmt.Errorf("prepared-copy manifest may not alter seed target")
+		}
 	}
 	return nil
 }
@@ -101,21 +120,18 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	invalid := func(code, detail string) Outcome {
 		return Outcome{Status: Invalid, Terminal: code, PrivateDetail: detail}
 	}
-	if m.SchemaVersion != VersionV2 || m.ID == "" || m.ExpectedSymbol == "" || m.ExpectedDeclaringFile == "" || m.SourceRevision == "" || len(m.SourceSHA256) != 64 {
+	if m.SchemaVersion != VersionV2 || m.ID == "" || m.ExpectedSymbol == "" || m.ExpectedDeclaringFile == "" || m.SourceRevision == "" || len(m.SourceSHA256) != 64 || m.Validator.Language == "" || m.Validator.Authority == "" || m.Validator.Name == "" || m.Validator.Version == "" {
 		return invalid(LocatorInvalid, "invalid closed v2 manifest")
 	}
 	u, err := url.Parse(m.Locator.URI)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.String() != m.Locator.URI || filepath.Clean(u.Path) != u.Path {
 		return invalid(LocatorInvalid, "noncanonical file URI")
 	}
-	workspace, err = filepath.EvalSymlinks(workspace)
+	workspace, err = filepath.Abs(workspace)
 	if err != nil {
 		return invalid(LocatorInvalid, "workspace unavailable")
 	}
-	candidate, err := filepath.EvalSymlinks(filepath.FromSlash(u.Path))
-	if err != nil {
-		return invalid(LocatorInvalid, "source unavailable")
-	}
+	candidate := filepath.FromSlash(u.Path)
 	rel, err := filepath.Rel(workspace, candidate)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return invalid(LocatorInvalid, "source outside workspace")
@@ -123,9 +139,14 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	if filepath.ToSlash(rel) != m.ExpectedDeclaringFile {
 		return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "declaring file mismatch"}
 	}
-	f, err := os.Open(candidate)
+	root, err := os.OpenRoot(workspace)
 	if err != nil {
-		return invalid(LocatorInvalid, "source open failed")
+		return invalid(LocatorInvalid, "workspace descriptor unavailable")
+	}
+	defer root.Close()
+	f, err := root.Open(filepath.FromSlash(m.ExpectedDeclaringFile))
+	if err != nil {
+		return invalid(LocatorInvalid, "source rooted open failed")
 	}
 	defer f.Close()
 	before, err := f.Stat()
@@ -141,16 +162,18 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 		return invalid(LocatorInvalid, "source exceeds retained byte limit")
 	}
 	after, err := f.Stat()
-	if err != nil || !os.SameFile(before, after) {
-		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "descriptor identity changed"}
+	pathAfter, pathErr := root.Stat(filepath.FromSlash(m.ExpectedDeclaringFile))
+	if err != nil || pathErr != nil || !os.SameFile(before, after) || !os.SameFile(after, pathAfter) {
+		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "descriptor/path identity changed"}
 	}
 	digest := sha256.Sum256(source)
 	expected, e := hex.DecodeString(m.SourceSHA256)
 	if e != nil || !bytes.Equal(digest[:], expected) {
 		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "digest mismatch"}
 	}
-	if revision == nil || revision.Verify(ctx, workspace, m.SourceRevision) != nil {
-		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "revision authority rejected"}
+	claim := CustodyClaim{Repository: workspace, SourceRevision: m.SourceRevision, TargetPath: m.ExpectedDeclaringFile, TargetSourceSHA256: fmt.Sprintf("%x", digest)}
+	if revision == nil || revision.Verify(ctx, claim) != nil {
+		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "authenticated custody receipt unavailable or rejected"}
 	}
 	if !validPosition(source, m.Locator.Line, m.Locator.Character, m.Locator.Encoding) {
 		return invalid(LocatorInvalid, "coordinate outside retained source bytes or code-unit boundary")
@@ -207,6 +230,12 @@ func manifestRangeContains(r Range, line, character uint32) bool {
 
 func DecodeV2(raw []byte) (Manifest, error) {
 	var m Manifest
+	if len(raw) > MaxManifestBytes {
+		return m, fmt.Errorf("seed binding exceeds byte limit")
+	}
+	if err := rejectDuplicateJSONKeys(raw); err != nil {
+		return m, err
+	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&m); err != nil {
@@ -219,4 +248,59 @@ func DecodeV2(raw []byte) (Manifest, error) {
 		return m, fmt.Errorf("unsupported seed binding version")
 	}
 	return m, nil
+}
+
+func rejectDuplicateJSONKeys(raw []byte) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	var walk func() error
+	walk = func() error {
+		t, err := d.Token()
+		if err != nil {
+			return err
+		}
+		delim, ok := t.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch delim {
+		case '{':
+			seen := map[string]struct{}{}
+			for d.More() {
+				keyToken, err := d.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return fmt.Errorf("object key invalid")
+				}
+				if _, exists := seen[key]; exists {
+					return fmt.Errorf("duplicate JSON key %q", key)
+				}
+				seen[key] = struct{}{}
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+			_, err = d.Token()
+			return err
+		case '[':
+			for d.More() {
+				if err := walk(); err != nil {
+					return err
+				}
+			}
+			_, err = d.Token()
+			return err
+		default:
+			return fmt.Errorf("invalid JSON delimiter")
+		}
+	}
+	if err := walk(); err != nil {
+		return err
+	}
+	if _, err := d.Token(); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("one JSON value required")
+	}
+	return nil
 }

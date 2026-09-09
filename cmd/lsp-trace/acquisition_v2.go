@@ -202,7 +202,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if decodeErr != nil {
 			return fail(fmt.Errorf("seed binding invalid"))
 		}
-		binding, bindingRevision = &decoded, seedbinding.WorkspaceGitRevisionAuthority{}
+		binding, bindingRevision = &decoded, seedbinding.HostReceiptAuthority{}
 	}
 	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore, SeedRevisionAuthority: bindingRevision})
 	if err != nil {

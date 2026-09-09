@@ -13,8 +13,8 @@ import (
 
 type revisionFixture string
 
-func (r revisionFixture) Verify(_ context.Context, _, revision string) error {
-	if revision != string(r) {
+func (r revisionFixture) Verify(_ context.Context, claim CustodyClaim) error {
+	if claim.SourceRevision != string(r) {
 		return fmt.Errorf("rejected")
 	}
 	return nil
@@ -50,7 +50,7 @@ func TestBindingMechanicalMatrix(t *testing.T) {
 			m.Locator.URI = strings.Replace(m.Locator.URI, "VariableApiController.cs", "./VariableApiController.cs", 1)
 		}},
 		{"digest", SourceMismatch, func(m *Manifest) { m.SourceSHA256 = strings.Repeat("0", 64) }},
-		{"revision", SourceMismatch, func(m *Manifest) { m.SourceRevision = "forged" }},
+		{"revision", BindingUnavailable, func(m *Manifest) { m.SourceRevision = "forged" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -84,6 +84,54 @@ func TestBindingRejectsOversizeAndInvalidCodeUnitBoundaries(t *testing.T) {
 	}
 	if validPosition([]byte("😀\n"), 0, 1, "utf-16") {
 		t.Fatal("ASSERT_SEED_BINDING_UTF16_SURROGATE_HALF_REJECTED")
+	}
+}
+
+func TestHostReceiptAuthorityBindsOpenedTarget(t *testing.T) {
+	root, manifest := seedFixture(t)
+	receipt := HostCustodyReceipt{
+		Authenticated: true, Repository: root, SourceRevision: manifest.SourceRevision,
+		TargetPath: manifest.ExpectedDeclaringFile, TargetSourceSHA256: manifest.SourceSHA256,
+	}
+	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{Receipt: receipt}); got.Status != Match {
+		t.Fatalf("ASSERT_HOST_RECEIPT_EXACT_TARGET_MATCH: %+v", got)
+	}
+	receipt.TargetSourceSHA256 = strings.Repeat("0", 64)
+	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{Receipt: receipt}); got.Status == Match {
+		t.Fatal("ASSERT_HOST_RECEIPT_TARGET_DIGEST_MISMATCH_REJECTED")
+	}
+	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{}); got.Status == Match {
+		t.Fatal("ASSERT_HOST_RECEIPT_UNAUTHENTICATED_FAILS_CLOSED")
+	}
+}
+
+func TestBindingRejectsDuplicateKeysAndOversizeManifest(t *testing.T) {
+	if _, err := DecodeV2([]byte(`{"schema_version":"lsp-trace.seed-binding.v2","schema_version":"lsp-trace.seed-binding.v2"}`)); err == nil {
+		t.Fatal("ASSERT_SEED_BINDING_DUPLICATE_KEY_REJECTED")
+	}
+	if _, err := DecodeV2(make([]byte, MaxManifestBytes+1)); err == nil {
+		t.Fatal("ASSERT_SEED_BINDING_MANIFEST_SIZE_BOUND")
+	}
+}
+
+func TestDocumentSymbolStrictRequiredMembers(t *testing.T) {
+	_, manifest := seedFixture(t)
+	source := []byte("class VariableApiController { void GetSchoolFilterModel() {} }\n")
+	validRange := `{"start":{"line":0,"character":30},"end":{"line":0,"character":57}}`
+	cases := []string{
+		`[{"name":"GetSchoolFilterModel","range":` + validRange + `,"selectionRange":` + validRange + `}]`,
+		`[{"name":"GetSchoolFilterModel","kind":6,"range":` + validRange + `}]`,
+		`[{"name":"GetSchoolFilterModel","kind":6,"location":null}]`,
+		`[{"name":"GetSchoolFilterModel","kind":6,"location":{"range":` + validRange + `}}]`,
+		`[{"name":"GetSchoolFilterModel","name":"GetSchoolFilterModel","kind":6,"range":` + validRange + `,"selectionRange":` + validRange + `}]`,
+	}
+	for i, raw := range cases {
+		if got := ValidateDocumentSymbols([]byte(raw), manifest, source, "utf-8"); got.Status != Invalid {
+			t.Fatalf("ASSERT_STRICT_DOCUMENT_SYMBOL_REQUIRED_%d: %+v", i, got)
+		}
+	}
+	if got := ValidateDocumentSymbols(make([]byte, MaxDocumentSymbolBytes+1), manifest, source, "utf-8"); got.Status != Invalid {
+		t.Fatalf("ASSERT_DOCUMENT_SYMBOL_RESPONSE_SIZE_BOUND: %+v", got)
 	}
 }
 
