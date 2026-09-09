@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"reflect"
 	"sync"
@@ -389,6 +390,9 @@ type readinessChild struct {
 	mode             string
 	initializeParams chan json.RawMessage
 	initialized      chan lspwire.Message
+	mu               sync.Mutex
+	teardowns        int
+	closes           int
 }
 
 func newReadinessChild(mode string) *readinessChild {
@@ -434,7 +438,7 @@ func newReadinessChild(mode string) *readinessChild {
 			_, _ = io.WriteString(output, "Content-Length: 16777217\r\n\r\n")
 		case "death":
 			_ = output.Close()
-		case "hang":
+		case "hang", "cleanup-error", "already-exited":
 		}
 	}()
 	return c
@@ -443,14 +447,36 @@ func newReadinessChild(mode string) *readinessChild {
 func (c *readinessChild) Stdin() io.WriteCloser { return c.stdin }
 func (c *readinessChild) Stdout() io.ReadCloser { return c.stdout }
 func (c *readinessChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.mu.Lock()
+	c.teardowns++
+	c.mu.Unlock()
 	_ = c.stdin.Close()
 	_ = c.input.Close()
 	_ = c.output.Close()
-	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+	observation := managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+	if c.mode == "cleanup-error" {
+		observation.Death.Err = errors.New("fixture cleanup error")
+		observation.Death.Reap = managedprocess.ReapObservation{Kind: managedprocess.ReapFailed, Err: observation.Death.Err}
+	}
+	return observation
+}
+func (c *readinessChild) Observe() managedprocess.SurvivorObservation {
+	if c.mode == "already-exited" {
+		return managedprocess.SurvivorObservation{Kind: managedprocess.SurvivorDead}
+	}
+	return managedprocess.SurvivorObservation{Kind: managedprocess.SurvivorRunning}
 }
 func (c *readinessChild) Close() managedprocess.ResourceObservation {
+	c.mu.Lock()
+	c.closes++
+	c.mu.Unlock()
 	_ = c.stdout.Close()
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+func (c *readinessChild) cleanupCounts() (teardowns, closes int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.teardowns, c.closes
 }
 
 func readinessManager(t *testing.T, child Child) (*Manager, StartResult) {
