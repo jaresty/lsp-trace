@@ -86,7 +86,7 @@ func validateProgramAForB(a ProgramAAdmission) error {
 	seen := map[string]struct{}{}
 	for _, d := range a.receiptDigests {
 		if strings.TrimSpace(d) == "" {
-			return fmt.Errorf("PROGRAM_B_ADMITTED requires exactly six receipt digests")
+			return fmt.Errorf("PROGRAM_B_ADMITTED requires exactly seven receipt digests")
 		}
 		if _, ok := seen[d]; ok {
 			return fmt.Errorf("PROGRAM_B_ADMITTED duplicate receipt digest")
@@ -96,7 +96,7 @@ func validateProgramAForB(a ProgramAAdmission) error {
 	return nil
 }
 
-func programAEvidenceSetDigest(ds [6]string) string {
+func programAEvidenceSetDigest(ds [7]string) string {
 	b := []byte(programBEvidenceDomain)
 	for _, d := range ds {
 		var n [4]byte

@@ -72,7 +72,7 @@ func admittedProgramASubstrate(t *testing.T) VerifiedProgramASubstrate {
 func admittedProgramASubstrateWithSigner(t *testing.T, s testReceiptSigner, c AssessmentContext) VerifiedProgramASubstrate {
 	return VerifiedProgramASubstrate{
 		Custody: receiptWithContext(t, s, CustodyDimension, "526f658", "substrate-1", 0, c), EffectiveConfiguration: receiptWithContext(t, s, EffectiveConfigurationDimension, "526f658", "substrate-1", 0, c), Identity: receiptWithContext(t, s, IdentityDimension, "526f658", "substrate-1", 0, c),
-		RelationNormalization: receiptWithContext(t, s, RelationNormalizationDimension, "526f658", "substrate-1", 1, c), SupportAccounting: receiptWithContext(t, s, SupportAccountingDimension, "526f658", "substrate-1", 2, c), Projection: receiptWithContext(t, s, ProjectionDimension, "526f658", "substrate-1", 3, c),
+		RelationNormalization: receiptWithContext(t, s, RelationNormalizationDimension, "526f658", "substrate-1", 1, c), SupportAccounting: receiptWithContext(t, s, SupportAccountingDimension, "526f658", "substrate-1", 2, c), Projection: receiptWithContext(t, s, ProjectionDimension, "526f658", "substrate-1", 3, c), Qualification: receiptWithContext(t, s, QualificationDimension, "526f658", "substrate-1", 4, c),
 	}
 }
 

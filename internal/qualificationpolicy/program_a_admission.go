@@ -27,6 +27,7 @@ const (
 	RelationNormalizationDimension  Dimension = "relation_normalization"
 	SupportAccountingDimension      Dimension = "support_accounting"
 	ProjectionDimension             Dimension = "projection"
+	QualificationDimension          Dimension = "qualification_matrix"
 )
 
 const ReceiptSchemaVersion = "lsp-trace.program-a-substrate-receipt.v2"
@@ -91,6 +92,7 @@ var evaluatorContract = map[Dimension]struct{ family, version string }{
 	RelationNormalizationDimension:  {"relation-normalization", "v1"},
 	SupportAccountingDimension:      {"support-accounting", "v1"},
 	ProjectionDimension:             {"projection", "v1"},
+	QualificationDimension:          {"qualification-matrix", "v2"},
 }
 
 // ReceiptBytes is the canonical signed output supplied by an independent evaluator.
@@ -187,8 +189,8 @@ func receiptDigest(raw ReceiptBytes) string {
 }
 
 type VerifiedProgramASubstrate struct {
-	Custody, EffectiveConfiguration, Identity            VerifiedReceipt
-	RelationNormalization, SupportAccounting, Projection VerifiedReceipt
+	Custody, EffectiveConfiguration, Identity                           VerifiedReceipt
+	RelationNormalization, SupportAccounting, Projection, Qualification VerifiedReceipt
 }
 
 type ProgramAAdmission struct {
@@ -206,18 +208,18 @@ type ProgramAAdmission struct {
 	admissionPolicyID         string
 	admissionPolicyVersion    string
 	operation                 string
-	receiptDigests            [6]string
+	receiptDigests            [7]string
 }
 
 func AdmitVerifiedProgramA(input VerifiedProgramASubstrate) (ProgramAAdmission, error) {
 	receipts := []struct {
 		dimension Dimension
 		receipt   VerifiedReceipt
-	}{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}}
+	}{{CustodyDimension, input.Custody}, {EffectiveConfigurationDimension, input.EffectiveConfiguration}, {IdentityDimension, input.Identity}, {RelationNormalizationDimension, input.RelationNormalization}, {SupportAccountingDimension, input.SupportAccounting}, {ProjectionDimension, input.Projection}, {QualificationDimension, input.Qualification}}
 	reasons := make([]string, 0)
 	var revision, substrate, authority, key, provisioning, assessment, nonce, scope, policyID, policyVersion, operation string
 	var issuance int64
-	var digests [6]string
+	var digests [7]string
 	for i, item := range receipts {
 		raw := item.receipt.receipt.raw
 		if raw.Dimension != item.dimension {

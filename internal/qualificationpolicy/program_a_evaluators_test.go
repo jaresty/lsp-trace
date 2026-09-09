@@ -17,7 +17,11 @@ func evaluatorAuthorityForTest(t *testing.T) *programAEvaluatorAuthority {
 }
 
 func retained(dimension Dimension, revision, substrate string, sequence int, data []byte) retainedProgramAEvidence {
-	return retainedProgramAEvidence{CustodyRef: "retained:" + string(dimension), Revision: revision, SubstrateID: substrate, Sequence: sequence, Bytes: data}
+	return retainedProgramAEvidence{retainedProgramAMetadata: retainedMetadata(dimension, revision, substrate, sequence), Bytes: data}
+}
+
+func retainedMetadata(dimension Dimension, revision, substrate string, sequence int) retainedProgramAMetadata {
+	return retainedProgramAMetadata{CustodyRef: "retained:" + string(dimension), Revision: revision, SubstrateID: substrate, Sequence: sequence}
 }
 
 func TestProgramAEvaluatorAuthorityFailsClosedWithoutAuthenticatedConfiguration(t *testing.T) {
@@ -71,12 +75,9 @@ func TestProgramAA4RejectsRetainedB05MatrixAsNormativeProfile(t *testing.T) {
 
 func TestProgramAEvaluatorReportsEveryMissingAxis(t *testing.T) {
 	result := evaluatorAuthorityForTest(t).evaluateProgramA(programAEvaluation{Context: testAssessmentContext("assessment-missing", "RANKING", "NORMATIVE_PROGRAM_A")})
-	want := []Dimension{CustodyDimension, EffectiveConfigurationDimension, IdentityDimension, RelationNormalizationDimension, SupportAccountingDimension, ProjectionDimension}
+	want := []Dimension{CustodyDimension, EffectiveConfigurationDimension, IdentityDimension, RelationNormalizationDimension, SupportAccountingDimension, ProjectionDimension, QualificationDimension}
 	if result.Admission.Status != SubstrateRejected || !reflect.DeepEqual(result.MissingAxes, want) {
 		t.Fatalf("ASSERT_PROGRAM_A_EXPLICIT_MISSING_AXES: got=%#v want=%#v", result, want)
-	}
-	if result.FailedAxes[Dimension("qualification_matrix")] == "" {
-		t.Fatalf("ASSERT_PROGRAM_A_EXPLICIT_FAILED_A4_AXIS: %#v", result)
 	}
 }
 
@@ -84,7 +85,7 @@ func TestProgramAEvaluatorReceiptBindsExactAuthorityEvidenceAndPipelineFields(t 
 	authority := evaluatorAuthorityForTest(t)
 	ctx := testAssessmentContext("assessment-receipt", "RANKING", "NORMATIVE_PROGRAM_A")
 	evidence := retained(RelationNormalizationDimension, "c47032f", "substrate-real", 7, []byte("retained-evidence"))
-	receipt, err := authority.issue(RelationNormalizationDimension, evidence, ctx)
+	receipt, err := authority.issue(RelationNormalizationDimension, evidence.retainedProgramAMetadata, evidence.Bytes, ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +110,8 @@ func TestProgramAEvaluatorCompositionRejectsMixedRevisionSubstrateAndOrder(t *te
 			if i >= 3 {
 				sequence = i - 3
 			}
-			receipt, err := authority.issue(dimension, retained(dimension, "c47032f", "substrate-real", sequence, []byte("evidence-"+string(dimension))), ctx)
+			evidence := []byte("evidence-" + string(dimension))
+			receipt, err := authority.issue(dimension, retainedMetadata(dimension, "c47032f", "substrate-real", sequence), evidence, ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,17 +121,17 @@ func TestProgramAEvaluatorCompositionRejectsMixedRevisionSubstrateAndOrder(t *te
 	}
 
 	mixedRevision := makeInput()
-	mixedRevision.Identity, _ = authority.issue(IdentityDimension, retained(IdentityDimension, "other", "substrate-real", 0, []byte("other-revision")), ctx)
+	mixedRevision.Identity, _ = authority.issue(IdentityDimension, retainedMetadata(IdentityDimension, "other", "substrate-real", 0), []byte("other-revision"), ctx)
 	if got, _ := AdmitVerifiedProgramA(mixedRevision); got.Status != SubstrateRejected || !containsReason(got.Reasons, "identity: revision mismatch") {
 		t.Fatalf("ASSERT_PROGRAM_A_EVALUATOR_MIXED_REVISION_REJECTED: %#v", got)
 	}
 	mixedSubstrate := makeInput()
-	mixedSubstrate.Projection, _ = authority.issue(ProjectionDimension, retained(ProjectionDimension, "c47032f", "other", 2, []byte("other-substrate")), ctx)
+	mixedSubstrate.Projection, _ = authority.issue(ProjectionDimension, retainedMetadata(ProjectionDimension, "c47032f", "other", 2), []byte("other-substrate"), ctx)
 	if got, _ := AdmitVerifiedProgramA(mixedSubstrate); got.Status != SubstrateRejected || !containsReason(got.Reasons, "projection: substrate mismatch") {
 		t.Fatalf("ASSERT_PROGRAM_A_EVALUATOR_MIXED_SUBSTRATE_REJECTED: %#v", got)
 	}
 	wrongOrder := makeInput()
-	wrongOrder.RelationNormalization, _ = authority.issue(RelationNormalizationDimension, retained(RelationNormalizationDimension, "c47032f", "substrate-real", 2, []byte("normalization-order")), ctx)
+	wrongOrder.RelationNormalization, _ = authority.issue(RelationNormalizationDimension, retainedMetadata(RelationNormalizationDimension, "c47032f", "substrate-real", 2), []byte("normalization-order"), ctx)
 	if got, _ := AdmitVerifiedProgramA(wrongOrder); got.Status != SubstrateRejected || !containsReason(got.Reasons, "pipeline: relation_normalization must precede support_accounting") {
 		t.Fatalf("ASSERT_PROGRAM_A_EVALUATOR_PIPELINE_ORDER_REJECTED: %#v", got)
 	}
