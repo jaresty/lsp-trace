@@ -46,6 +46,17 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 			if tc.local {
 				manifest.SchemaVersion = seedbinding.VersionV3
 				manifest.CustodyMode = seedbinding.CallerAssertedLocal
+				prepared := seedbinding.PreparedModificationManifest{Version: 1, FinderSHA256: strings.Repeat("1", 64), SourceArchiveSHA256: strings.Repeat("2", 64), SourceTreeSHA256: strings.Repeat("3", 64), PreparedTreeSHA256: strings.Repeat("4", 64), AllowedChanges: []string{"other.go"}, TargetPath: "seed.go", TargetUnchangedSHA256: manifest.SourceSHA256, SourceCommit: "revision", AdaptationIDs: []string{"fixture"}, PolicyID: "local", AssessmentID: "local", ContextID: "local"}
+				preparedBytes, err := seedbinding.CanonicalPreparedManifest(prepared)
+				if err != nil {
+					t.Fatal(err)
+				}
+				manifest.PreparedManifestPath = "prepared-manifest.json"
+				if err := os.WriteFile(filepath.Join(workspace, manifest.PreparedManifestPath), preparedBytes, 0600); err != nil {
+					t.Fatal(err)
+				}
+				preparedSum := sha256.Sum256(preparedBytes)
+				manifest.PreparedManifestSHA256 = fmt.Sprintf("%x", preparedSum)
 			}
 			execution := managedExecutionAuthority{Path: fake, Directory: workspace, Environment: append(os.Environ(), "LSP_TRACE_FAKE_LSP_TRACE="+trace, "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL="+tc.mode)}
 			bindProviderIdentity(t, manifest, execution)
@@ -68,6 +79,9 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 			sessions, err := startBootstrap(context.Background(), manager, config, 5*time.Second)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if tc.local && (sessions[0].CustodyProvenance != seedbinding.CallerAssertedLocal || sessions[0].CustodyProvenance == seedbinding.VerifiedHost) {
+				t.Fatalf("ASSERT_LOCAL_BOOTSTRAP_PROVENANCE_SURVIVES_WITHOUT_PROMOTION: %q", sessions[0].CustodyProvenance)
 			}
 			defer stopBootstrap(context.Background(), manager, sessions)
 			deadline := time.Now().Add(100 * time.Millisecond)

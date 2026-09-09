@@ -429,6 +429,16 @@ func (m *Manager) SeedBindingRequested(sessionID string, generation uint64) bool
 	return r != nil && r.record.Generation == generation && r.seedBinding != nil
 }
 
+func (m *Manager) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[sessionID]
+	if r == nil || r.record.Generation != generation || r.custodyProvenance == "" {
+		return "", false
+	}
+	return r.custodyProvenance, true
+}
+
 // AdmitSeedBinding supplies the retained preflight bytes and validates their
 // declaration identity on the same initialized generation before target resolution.
 // Request limits are supplied by the acquisition owner and count against the same
@@ -778,6 +788,7 @@ type runtimeSession struct {
 	documents              map[string]openDocument
 	seedSources            map[string][]byte
 	seedBinding            *seedbinding.Manifest
+	custodyProvenance      seedbinding.CustodyMode
 	providerIdentity       seedbinding.ProviderIdentity
 	seedAdmittedGeneration uint64
 	identity               managedprocess.Identity
@@ -860,6 +871,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: detail, CustodyProvenance: outcome.Provenance}
 		}
 		result.CustodyProvenance = outcome.Provenance
+		result.PublicDetail = outcome.PrivateDetail
 		seedSources[req.SeedBinding.Locator.URI] = append([]byte(nil), outcome.Source...)
 		defer func(provenance seedbinding.CustodyMode) {
 			result.CustodyProvenance = provenance
@@ -931,7 +943,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		retainedBinding = &copy
 	}
 	diagnosticGeneration := m.newDiagnosticGeneration(attemptID, id, 1)
-	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
+	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }

@@ -39,6 +39,11 @@ type Runtime interface {
 }
 type Executor struct{ runtime Runtime }
 
+type CustodyReceipt struct {
+	Provenance    seedbinding.CustodyMode `json:"provenance"`
+	Authenticated bool                    `json:"authenticated"`
+}
+
 func NewExecutor(r Runtime) *Executor { return &Executor{runtime: r} }
 
 type Target struct {
@@ -251,6 +256,17 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			return fail("SEED_BINDING_INVALID", nil)
 		}
 	}
+	var custodyReceipt *CustodyReceipt
+	if provenanceRuntime, ok := e.runtime.(interface {
+		SeedCustodyProvenance(string, uint64) (seedbinding.CustodyMode, bool)
+	}); ok {
+		if provenance, found := provenanceRuntime.SeedCustodyProvenance(id, generation); found {
+			if provenance != seedbinding.VerifiedHost && provenance != seedbinding.CallerAssertedLocal {
+				return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("invalid retained seed custody provenance"))
+			}
+			custodyReceipt = &CustodyReceipt{Provenance: provenance, Authenticated: provenance == seedbinding.VerifiedHost}
+		}
+	}
 	result, err := acquisition.Acquire(ctx, sessionclient.New(e.runtime), req)
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
@@ -271,5 +287,9 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			return fail("OUTPUT_VALIDATION_FAILED", err)
 		}
 	}
-	return operation.Result{Artifact: raw}, nil
+	opResult := operation.Result{Artifact: raw}
+	if custodyReceipt != nil {
+		opResult.CustodyReceipt = custodyReceipt
+	}
+	return opResult, nil
 }

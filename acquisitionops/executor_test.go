@@ -14,6 +14,7 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 	"net/url"
@@ -95,6 +96,9 @@ func (r *v3ParityRuntime) Diagnostics(string, uint64) manageddiagnostic.QueryRes
 	r.queries++
 	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
 }
+func (r *v3ParityRuntime) SeedCustodyProvenance(string, uint64) (seedbinding.CustodyMode, bool) {
+	return seedbinding.CallerAssertedLocal, true
+}
 
 func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 	root := t.TempDir()
@@ -115,6 +119,10 @@ func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 		got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: name, Input: input})
 		if failure != nil {
 			t.Fatalf("ASSERT_FR23_PUBLIC_PARITY_EXECUTION/%s: %v", name, failure)
+		}
+		receipt, ok := got.CustodyReceipt.(*CustodyReceipt)
+		if !ok || receipt.Provenance != seedbinding.CallerAssertedLocal || receipt.Authenticated {
+			t.Fatalf("ASSERT_CALLER_ASSERTED_LOCAL_PUBLIC_RECEIPT_NO_PROMOTION/%s: %#v", name, got.CustodyReceipt)
 		}
 		return got.Artifact, runtime
 	}

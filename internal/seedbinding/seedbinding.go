@@ -93,6 +93,7 @@ type Manifest struct {
 	SchemaVersion            string            `json:"schema_version"`
 	CustodyMode              CustodyMode       `json:"custody_mode,omitempty"`
 	PreparedManifestSHA256   string            `json:"prepared_manifest_sha256,omitempty"`
+	PreparedManifestPath     string            `json:"prepared_manifest_path,omitempty"`
 	ID                       string            `json:"id"`
 	Locator                  Locator           `json:"locator"`
 	ExpectedSymbol           string            `json:"expected_symbol"`
@@ -132,6 +133,56 @@ func CanonicalPreparedManifest(m PreparedModificationManifest) ([]byte, error) {
 		return nil, fmt.Errorf("prepared modification manifest incomplete")
 	}
 	return json.Marshal(m)
+}
+
+// DecodeCanonicalPreparedManifest accepts exactly the canonical, closed JSON
+// bytes used by host prepared custody. It does not confer authentication.
+func DecodeCanonicalPreparedManifest(raw []byte) (PreparedModificationManifest, error) {
+	var m PreparedModificationManifest
+	if len(raw) == 0 || len(raw) > MaxManifestBytes {
+		return m, fmt.Errorf("prepared modification manifest unavailable or exceeds byte limit")
+	}
+	if err := rejectDuplicateJSONKeys(raw); err != nil {
+		return m, err
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&m); err != nil {
+		return m, err
+	}
+	if err := d.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return m, fmt.Errorf("one prepared modification manifest required")
+	}
+	canonical, err := CanonicalPreparedManifest(m)
+	if err != nil || !bytes.Equal(canonical, raw) {
+		return m, fmt.Errorf("prepared modification manifest is not exact canonical bytes")
+	}
+	return m, nil
+}
+
+func readRootedRegularOnce(root *os.Root, path string, limit int64) ([]byte, error) {
+	if path == "" || filepath.IsAbs(path) || filepath.Clean(path) != path || filepath.ToSlash(path) != path {
+		return nil, fmt.Errorf("rooted path is not canonical")
+	}
+	f, err := root.Open(filepath.FromSlash(path))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	before, err := f.Stat()
+	if err != nil || !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("rooted input is not regular")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil || int64(len(raw)) > limit {
+		return nil, fmt.Errorf("rooted input unavailable or exceeds byte limit")
+	}
+	after, afterErr := f.Stat()
+	pathAfter, pathErr := root.Stat(filepath.FromSlash(path))
+	if afterErr != nil || pathErr != nil || !os.SameFile(before, after) || !os.SameFile(after, pathAfter) || before.Size() != after.Size() || after.Size() != int64(len(raw)) || !before.ModTime().Equal(after.ModTime()) {
+		return nil, fmt.Errorf("rooted input identity changed")
+	}
+	return raw, nil
 }
 
 func framedSigningBytes(domain string, canonical []byte) []byte {
@@ -351,7 +402,7 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	if m.SchemaVersion != VersionV2 && m.SchemaVersion != VersionV3 {
 		return invalid(LocatorInvalid, "unsupported seed manifest version")
 	}
-	if m.SchemaVersion == VersionV2 && (m.CustodyMode != "" || m.PreparedManifestSHA256 != "") {
+	if m.SchemaVersion == VersionV2 && (m.CustodyMode != "" || m.PreparedManifestSHA256 != "" || m.PreparedManifestPath != "") {
 		return invalid(LocatorInvalid, "invalid closed v2 manifest")
 	}
 	if m.SchemaVersion == VersionV3 && mode != VerifiedHost && mode != CallerAssertedLocal {
@@ -368,11 +419,9 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 		if m.Validator.Class == "" || m.Validator.ExecutableSHA256 == "" || m.Validator.PayloadSHA256 == "" || m.Validator.ConfigSHA256 == "" {
 			return invalid(BindingMismatch, "CALLER_ASSERTED provider identity pin incomplete")
 		}
-		if m.PreparedManifestSHA256 != "" {
-			decoded, err := hex.DecodeString(m.PreparedManifestSHA256)
-			if err != nil || len(decoded) != sha256.Size || m.PreparedManifestSHA256 != strings.ToLower(m.PreparedManifestSHA256) {
-				return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest digest invalid")
-			}
+		decoded, err := hex.DecodeString(m.PreparedManifestSHA256)
+		if err != nil || len(decoded) != sha256.Size || m.PreparedManifestSHA256 != strings.ToLower(m.PreparedManifestSHA256) || m.PreparedManifestPath == "" {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest path and canonical digest required")
 		}
 	}
 	u, err := url.Parse(m.Locator.URI)
@@ -396,6 +445,28 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 		return invalid(LocatorInvalid, "workspace descriptor unavailable")
 	}
 	defer root.Close()
+	if mode == CallerAssertedLocal {
+		preparedBytes, err := readRootedRegularOnce(root, m.PreparedManifestPath, MaxManifestBytes)
+		if err != nil {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest rooted read failed: "+err.Error())
+		}
+		preparedDigest := sha256.Sum256(preparedBytes)
+		if hex.EncodeToString(preparedDigest[:]) != m.PreparedManifestSHA256 {
+			return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest digest mismatch", Provenance: mode}
+		}
+		prepared, err := DecodeCanonicalPreparedManifest(preparedBytes)
+		if err != nil {
+			return invalid(BindingMismatch, "CALLER_ASSERTED prepared manifest invalid: "+err.Error())
+		}
+		if filepath.Clean(prepared.TargetPath) != filepath.Clean(m.ExpectedDeclaringFile) || prepared.TargetUnchangedSHA256 != m.SourceSHA256 || prepared.SourceCommit != m.SourceRevision {
+			return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest source or target binding mismatch", Provenance: mode}
+		}
+		for _, changed := range prepared.AllowedChanges {
+			if filepath.Clean(changed) == filepath.Clean(m.ExpectedDeclaringFile) {
+				return Outcome{Status: Mismatch, Terminal: BindingMismatch, PrivateDetail: "CALLER_ASSERTED prepared manifest changes seed target", Provenance: mode}
+			}
+		}
+	}
 	f, err := root.Open(filepath.FromSlash(m.ExpectedDeclaringFile))
 	if err != nil {
 		return invalid(LocatorInvalid, "source rooted open failed")
@@ -509,7 +580,7 @@ func DecodeV2(raw []byte) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
-	if m.SchemaVersion != VersionV2 || m.CustodyMode != "" || m.PreparedManifestSHA256 != "" {
+	if m.SchemaVersion != VersionV2 || m.CustodyMode != "" || m.PreparedManifestSHA256 != "" || m.PreparedManifestPath != "" {
 		return m, fmt.Errorf("unsupported seed binding version")
 	}
 	return m, nil

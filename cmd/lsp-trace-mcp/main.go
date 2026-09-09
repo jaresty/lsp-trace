@@ -30,6 +30,9 @@ import (
 func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "seed" {
+		return runSeedCommand(args[1:], stdout, stderr)
+	}
 	fs := flag.NewFlagSet("lsp-trace-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")

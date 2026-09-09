@@ -55,11 +55,12 @@ type managedExecutionAuthority struct {
 }
 
 type bootstrapSession struct {
-	Alias          string
-	SessionID      string
-	Generation     uint64
-	RepositoryRoot string
-	GitCommit      string
+	Alias             string
+	SessionID         string
+	Generation        uint64
+	RepositoryRoot    string
+	GitCommit         string
+	CustodyProvenance seedbinding.CustodyMode
 }
 
 func loadBootstrapConfig(path string) (bootstrapConfig, error) {
@@ -227,7 +228,7 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 			return nil, fmt.Errorf("bootstrap process %d start: %s", i, result.Failure)
 		}
 		repositoryRoot, gitCommit := pinnedGitMetadata(process.process.Dir)
-		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit}
+		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit, CustodyProvenance: result.CustodyProvenance}
 		started = append(started, session)
 		deadline := time.Now().Add(timeout)
 		pending := manager.BeginReadiness(ctx, session.SessionID, session.Generation, deadline)
