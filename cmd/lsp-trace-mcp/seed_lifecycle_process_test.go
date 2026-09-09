@@ -24,11 +24,12 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 	}
 	fake := buildBinary(t, "fake-lsp-seed", "./cmd/fake-lsp")
 	for _, tc := range []struct {
-		name, mode string
-		want       seedbinding.Status
+		name, mode, providerVersion string
+		want                        seedbinding.Status
 	}{
-		{"match", "", seedbinding.Match}, {"mismatch", "mismatch", seedbinding.Mismatch},
-		{"invalid", "invalid", seedbinding.Invalid}, {"timeout-unavailable", "hang", seedbinding.Unavailable},
+		{"match", "", "1", seedbinding.Match}, {"mismatch", "mismatch", "1", seedbinding.Mismatch},
+		{"invalid", "invalid", "1", seedbinding.Invalid}, {"timeout-unavailable", "hang", "1", seedbinding.Unavailable},
+		{"provider-version-substitution", "", "2", seedbinding.Mismatch},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			workspace := t.TempDir()
@@ -40,12 +41,15 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 			}
 			sourceSum := sha256.Sum256(source)
 			uri := (&url.URL{Scheme: "file", Path: path}).String()
-			manifest := &seedbinding.Manifest{SchemaVersion: seedbinding.VersionV2, ID: "seed", Locator: seedbinding.Locator{URI: uri, Line: 0, Character: 1, Encoding: "utf-16"}, ExpectedSymbol: "leaf", ExpectedDeclaringFile: "seed.go", ExpectedDeclarationRange: seedbinding.Range{StartLine: 0, StartCharacter: 0, EndLine: 0, EndCharacter: 4}, SourceRevision: "revision", SourceSHA256: fmt.Sprintf("%x", sourceSum), Validator: seedbinding.ValidatorIdentity{Language: "go", Authority: "MANAGED_LSP", Name: "fake-lsp", Version: "1"}}
+			manifest := &seedbinding.Manifest{SchemaVersion: seedbinding.VersionV2, ID: "seed", Locator: seedbinding.Locator{URI: uri, Line: 0, Character: 1, Encoding: "utf-16"}, ExpectedSymbol: "leaf", ExpectedDeclaringFile: "seed.go", ExpectedDeclarationRange: seedbinding.Range{StartLine: 0, StartCharacter: 0, EndLine: 0, EndCharacter: 4}, SourceRevision: "revision", SourceSHA256: fmt.Sprintf("%x", sourceSum), Validator: seedbinding.ValidatorIdentity{Language: "go", Authority: "MANAGED_LSP", Name: "fake-lsp-fixture", Version: tc.providerVersion}}
+			execution := managedExecutionAuthority{Path: fake, Directory: workspace, Environment: append(os.Environ(), "LSP_TRACE_FAKE_LSP_TRACE="+trace, "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL="+tc.mode)}
+			bindProviderIdentity(t, manifest, execution)
 			manifestBytes, _ := json.Marshal(manifest)
 			manifestSum := sha256.Sum256(manifestBytes)
-			receipt := &seedbinding.HostCustodyReceipt{Authenticated: true, Repository: workspace, SourceRevision: "revision", TargetPath: "seed.go", TargetSourceSHA256: manifest.SourceSHA256, SeedManifestSHA256: fmt.Sprintf("%x", manifestSum)}
-			config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "fake", EnvironmentReference: "test"}, Execution: managedExecutionAuthority{Path: fake, Directory: workspace, Environment: append(os.Environ(), "LSP_TRACE_FAKE_LSP_TRACE="+trace, "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL="+tc.mode)}, SeedBinding: manifest, SeedCustodyReceipt: receipt}}}
-			_, manager, err := newServerRuntimeWithSeedAuthorities(false, provider.ConfiguredInventory{}, nil, seedAuthoritiesFromConfig(config))
+			receipt := seedbinding.HostCustodyReceipt{Repository: workspace, SourceRevision: "revision", TargetPath: "seed.go", TargetSourceSHA256: manifest.SourceSHA256, SeedManifestSHA256: fmt.Sprintf("%x", manifestSum)}
+			selector, trust := signedSeedTrust(t, receipt)
+			config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "fake", EnvironmentReference: "test"}, Execution: execution, SeedBinding: manifest, SeedCustodySelector: selector}}}
+			_, manager, err := newServerRuntimeWithSeedAuthorities(false, provider.ConfiguredInventory{}, nil, seedAuthoritiesFromConfig(config, trust))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -116,6 +120,9 @@ func TestBuiltFakeLSPSeedAdmissionLifecycle(t *testing.T) {
 				}
 			} else if prepare >= 0 {
 				t.Fatalf("ASSERT_REAL_REJECTED_SEED_NO_PREPARE: %v", events)
+			}
+			if tc.name == "provider-version-substitution" && (index(events, "initialize") < 0 || index(events, "textDocument/didOpen") >= 0 || index(events, "textDocument/documentSymbol") >= 0) {
+				t.Fatalf("ASSERT_PROVIDER_MISMATCH_TERMINAL_BEFORE_SEMANTIC_REQUEST: %v", events)
 			}
 		})
 	}

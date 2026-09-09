@@ -35,6 +35,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
 	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
+	seedCustodyTrustPath := fs.String("seed-custody-trust-config", "", "host-owned signed seed custody receipts and trusted public keys")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -78,9 +79,20 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	seedTrust, err := loadBootstrapSeedTrust(*seedCustodyTrustPath)
+	if err != nil {
+		fmt.Fprintln(stderr, "seed custody trust config:", err)
+		return 1
+	}
 	var seedRevision seedbinding.RevisionAuthority
 	if config != nil {
-		seedRevision = seedAuthoritiesFromConfig(*config)
+		seedRevision = seedAuthoritiesFromConfig(*config, seedTrust)
+		for _, process := range config.Processes {
+			if process.SeedBinding != nil && seedRevision == nil {
+				fmt.Fprintln(stderr, "seed custody trust unavailable or selector rejected")
+				return 1
+			}
+		}
 	}
 	server, manager, err := newServerRuntimeWithSeedAuthorities(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot)
 	if err != nil {

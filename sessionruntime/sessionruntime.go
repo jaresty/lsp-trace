@@ -62,6 +62,8 @@ const (
 type SessionMetadata struct {
 	PositionEncoding     string
 	CallHierarchySupport bool
+	ProviderName         string
+	ProviderVersion      string
 }
 
 type ReadinessSnapshot struct {
@@ -130,11 +132,12 @@ type Config struct {
 	startupAttemptRandom  io.Reader
 }
 type StartRequest struct {
-	Profile     runtimeprofile.Profile
-	SeedBinding *seedbinding.Manifest
-	Process     managedprocess.Spec
-	LanguageID  string
-	Deadline    time.Time
+	Profile          runtimeprofile.Profile
+	SeedBinding      *seedbinding.Manifest
+	ProviderIdentity seedbinding.ProviderIdentity
+	Process          managedprocess.Spec
+	LanguageID       string
+	Deadline         time.Time
 }
 type StartResult struct {
 	AttemptID    manageddiagnostic.StartupAttemptID
@@ -426,7 +429,13 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 	}
 	manifest := *r.seedBinding
 	encoding := r.metadata.PositionEncoding
+	expectedProvider := r.providerIdentity
+	observedProvider := expectedProvider
+	observedProvider.Name, observedProvider.Version = r.metadata.ProviderName, r.metadata.ProviderVersion
 	m.mu.Unlock()
+	if err := seedbinding.VerifyProviderIdentity(expectedProvider, observedProvider); err != nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Mismatch, PrivateDetail: "selected provider identity mismatch before semantic request"}
+	}
 	if encoding == "" || encoding != manifest.Locator.Encoding {
 		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "negotiated position encoding unavailable"}
 	}
@@ -691,6 +700,7 @@ type runtimeSession struct {
 	documents              map[string]openDocument
 	seedSources            map[string][]byte
 	seedBinding            *seedbinding.Manifest
+	providerIdentity       seedbinding.ProviderIdentity
 	seedAdmittedGeneration uint64
 }
 
@@ -818,7 +828,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		copy := *req.SeedBinding
 		retainedBinding = &copy
 	}
-	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding}
+	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, providerIdentity: req.ProviderIdentity}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }
@@ -924,6 +934,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			}
 			metadata := SessionMetadata{}
 			var initialized struct {
+				ServerInfo struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				} `json:"serverInfo"`
 				Capabilities struct {
 					PositionEncoding      string          `json:"positionEncoding"`
 					CallHierarchyProvider json.RawMessage `json:"callHierarchyProvider"`
@@ -934,6 +948,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 				return
 			}
 			metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
+			metadata.ProviderName, metadata.ProviderVersion = initialized.ServerInfo.Name, initialized.ServerInfo.Version
 			if metadata.PositionEncoding == "" {
 				metadata.PositionEncoding = "utf-16"
 			}

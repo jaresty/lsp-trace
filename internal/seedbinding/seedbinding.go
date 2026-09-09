@@ -4,7 +4,9 @@ package seedbinding
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -49,11 +51,34 @@ type Range struct {
 	EndCharacter   uint32 `json:"end_character"`
 }
 type ValidatorIdentity struct {
-	Language  string `json:"language"`
-	Authority string `json:"authority"`
-	Name      string `json:"name"`
-	Version   string `json:"version"`
+	Language         string `json:"language"`
+	Authority        string `json:"authority"`
+	Name             string `json:"name"`
+	Version          string `json:"version"`
+	Class            string `json:"provider_class,omitempty"`
+	ExecutableSHA256 string `json:"executable_sha256,omitempty"`
+	PayloadSHA256    string `json:"payload_sha256,omitempty"`
+	ConfigSHA256     string `json:"config_sha256,omitempty"`
 }
+
+// ProviderIdentity is the exact host-observed identity of the selected managed
+// provider. It is kept outside historical seed-manifest JSON so v1/v2/v3 bytes
+// remain unchanged.
+type ProviderIdentity struct {
+	Class, Authority, Name, Version               string
+	ExecutableSHA256, PayloadSHA256, ConfigSHA256 string
+}
+
+func VerifyProviderIdentity(want, got ProviderIdentity) error {
+	if want.Class == "" || want.Authority == "" || want.Name == "" || want.Version == "" || want.ExecutableSHA256 == "" || want.PayloadSHA256 == "" || want.ConfigSHA256 == "" {
+		return fmt.Errorf("provider identity incomplete")
+	}
+	if want != got {
+		return fmt.Errorf("selected provider identity mismatch")
+	}
+	return nil
+}
+
 type Manifest struct {
 	SchemaVersion            string            `json:"schema_version"`
 	ID                       string            `json:"id"`
@@ -78,6 +103,32 @@ type RevisionAuthority interface {
 	Verify(context.Context, CustodyClaim) error
 }
 
+type PreparedModificationManifest struct {
+	FinderSHA256, SourceArchiveSHA256, SourceTreeSHA256, PreparedTreeSHA256 string
+	AllowedChanges                                                          []string
+	TargetPath, TargetUnchangedSHA256                                       string
+	SourceCommit, Adaptations                                               string
+}
+
+func CanonicalPreparedManifest(m PreparedModificationManifest) ([]byte, error) {
+	if m.FinderSHA256 == "" || m.SourceArchiveSHA256 == "" || m.SourceTreeSHA256 == "" || m.PreparedTreeSHA256 == "" || m.TargetPath == "" || m.TargetUnchangedSHA256 == "" || m.SourceCommit == "" || m.Adaptations == "" || m.SourceCommit == m.Adaptations {
+		return nil, fmt.Errorf("prepared modification manifest incomplete")
+	}
+	return json.Marshal(m)
+}
+
+func PreparedManifestSigningBytes(canonical []byte) []byte {
+	const domain = "lsp-trace:prepared-modification-manifest:v1"
+	out := make([]byte, 0, 4+len(domain)+8+len(canonical))
+	var n [8]byte
+	binary.BigEndian.PutUint32(n[:4], uint32(len(domain)))
+	out = append(out, n[:4]...)
+	out = append(out, domain...)
+	binary.BigEndian.PutUint64(n[:], uint64(len(canonical)))
+	out = append(out, n[:]...)
+	return append(out, canonical...)
+}
+
 type HostCustodyReceipt struct {
 	Authenticated                                              bool
 	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
@@ -85,6 +136,71 @@ type HostCustodyReceipt struct {
 	Prepared                                                   bool
 	PreparedManifestSHA256                                     string
 	PreparedAllowedChanges                                     []string
+	PreparedManifest                                           []byte
+	PreparedManifestSignature                                  []byte
+	KeyID                                                      string
+	Signature                                                  []byte
+}
+
+func CustodyReceiptSigningBytes(r HostCustodyReceipt) ([]byte, error) {
+	r.Authenticated = false
+	r.Signature = nil
+	canonical, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	const domain = "lsp-trace:seed-custody-receipt:v1"
+	out := make([]byte, 0, 4+len(domain)+8+len(canonical))
+	var n [8]byte
+	binary.BigEndian.PutUint32(n[:4], uint32(len(domain)))
+	out = append(out, n[:4]...)
+	out = append(out, domain...)
+	binary.BigEndian.PutUint64(n[:], uint64(len(canonical)))
+	out = append(out, n[:]...)
+	out = append(out, canonical...)
+	return out, nil
+}
+
+func CustodyReceiptDigest(r HostCustodyReceipt) (string, error) {
+	payload, err := CustodyReceiptSigningBytes(r)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func (r HostCustodyReceipt) VerifyPrepared(publicKey ed25519.PublicKey, target string) error {
+	if !r.Prepared {
+		return nil
+	}
+	if len(publicKey) != ed25519.PublicKeySize || len(r.PreparedManifest) == 0 || len(r.PreparedManifestSignature) != ed25519.SignatureSize {
+		return fmt.Errorf("prepared-copy trust unavailable")
+	}
+	var m PreparedModificationManifest
+	if err := json.Unmarshal(r.PreparedManifest, &m); err != nil {
+		return fmt.Errorf("prepared modification manifest invalid")
+	}
+	canonical, err := CanonicalPreparedManifest(m)
+	if err != nil || !bytes.Equal(canonical, r.PreparedManifest) {
+		return fmt.Errorf("prepared modification manifest is not exact canonical bytes")
+	}
+	sum := sha256.Sum256(canonical)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), r.PreparedManifestSHA256) {
+		return fmt.Errorf("prepared modification manifest digest mismatch")
+	}
+	if !ed25519.Verify(publicKey, PreparedManifestSigningBytes(canonical), r.PreparedManifestSignature) {
+		return fmt.Errorf("prepared modification manifest signature mismatch")
+	}
+	if filepath.Clean(m.TargetPath) != filepath.Clean(target) || m.TargetUnchangedSHA256 != r.TargetSourceSHA256 {
+		return fmt.Errorf("prepared target unchanged binding mismatch")
+	}
+	for _, changed := range m.AllowedChanges {
+		if filepath.Clean(changed) == filepath.Clean(target) {
+			return fmt.Errorf("prepared-copy manifest may not alter seed target")
+		}
+	}
+	return nil
 }
 
 type HostReceiptAuthority struct{ Receipt HostCustodyReceipt }
