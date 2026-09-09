@@ -122,6 +122,26 @@ func TestObserveIdentityOriginalPathSymlinkRetargetRace(t *testing.T) {
 	}
 }
 
+func TestObserveIdentityDetectsExecutableReplacementAtBarrier(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "server")
+	replacement := filepath.Join(dir, "replacement")
+	if err := os.WriteFile(path, []byte("before"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(replacement, []byte("after"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	got := observeIdentity(Spec{Path: path}, "config", "workspace", func() {
+		if err := os.Rename(replacement, path); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if got.ExecutableStatus != IdentityRaced {
+		t.Fatalf("ASSERT_PROCESS_IDENTITY_RACE_BARRIER: %+v", got)
+	}
+}
+
 func TestIdentityDomainsDoNotAlias(t *testing.T) {
 	a := digestDomain("cwd", "same")
 	b := digestDomain("workspace", "same")

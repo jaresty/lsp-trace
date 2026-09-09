@@ -63,6 +63,10 @@ func digestDomain(domain string, values ...string) Digest {
 // ObserveIdentity derives privacy-safe identity from the exact Spec before Start.
 // configProvenance and workspace are supplied by their owning runtime boundary.
 func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
+	return observeIdentity(spec, configProvenance, workspace, nil)
+}
+
+func observeIdentity(spec Spec, configProvenance, workspace string, afterRead func()) Identity {
 	result := Identity{
 		PathLocator:      digestDomain("path-locator", spec.Path),
 		OrderedArgs:      digestDomain("ordered-args", spec.Args...),
@@ -106,6 +110,10 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	n, readErr := io.CopyN(h, f, executableIdentityByteLimit)
 	if readErr != nil && readErr != io.EOF {
 		return result
+	}
+	_ = f.Close()
+	if afterRead != nil {
+		afterRead()
 	}
 	canonical, err := identityCanonicalPath(spec.Path)
 	if err != nil {
