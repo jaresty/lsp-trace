@@ -7,38 +7,52 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"reflect"
 	"sort"
 	"unicode/utf8"
 )
 
 const (
-	RetainedGraphSchema = "lsp-trace.normative-retained-graph.v1"
-	LocalAnalysisSchema = "lsp-trace.local-normative-analysis.v1"
-	LocalMetricsSchema  = "lsp-trace.local-normative-metrics.v1"
-	LocalRankingSchema  = "lsp-trace.local-normative-ranking.v1"
-	LocalScope          = "LOCAL_SYNTHETIC_FIXTURE_QUALIFIED_PACKAGE_PRIVATE_UNSHIPPED"
-	MaxRetainedBytes    = 1 << 20
-	MaxRetainedNodes    = 4096
-	MaxRetainedEdges    = 8192
+	RetainedGraphSchema     = "lsp-trace.normative-retained-graph.v1"
+	LocalAnalysisSchema     = "lsp-trace.local-normative-analysis.v1"
+	LocalMetricsSchema      = "lsp-trace.local-normative-metrics.v1"
+	LocalRankingSchema      = "lsp-trace.local-normative-ranking.v1"
+	LocalScope              = "LOCAL_SYNTHETIC_FIXTURE_QUALIFIED_PACKAGE_PRIVATE_UNSHIPPED"
+	MaxRetainedBytes        = 2 << 20
+	MaxRetainedNodes        = 4096
+	MaxRetainedEdges        = 8192
+	MaxRetainedString       = 1024
+	ValidatedAuthority      = "VALIDATED_AUTHORITY"
+	UnvalidatedAuthority    = "UNVALIDATED"
+	CustodyProviderVerified = "PROVIDER_VERIFIED"
+	CustodyCallerAsserted   = "CALLER_ASSERTED"
+	CustodyUnknown          = "UNKNOWN"
+	metricsCountingMode     = "edge-instances; structural-relations=unique(from,to,relation); independent-support=unique(validated-authority,custody,provenance-id,support-group)"
+	densityMode             = "ordered-distinct-node-pairs n*(n-1)"
+	rankingCountingMode     = "qualified-support-by-target plus capped-selected-instance-presence"
+	rankingDenominator      = "selected-edge-instances and unique(validated-authority,custody,provenance-id,support-group,target)"
+	rankingTieBreak         = "score-desc,node-asc"
 )
 
 var ErrInvalidLocalRequest = errors.New("normative analytics local v1: invalid request")
 
 var supportedRelations = map[string]struct{}{
 	"CALLS": {}, "BINDS_ARGUMENT": {}, "PASSES_CALLBACK": {}, "INVOKES_TASK": {},
-	"TRIGGERS_RELOAD": {}, "UPDATES_STATE": {}, "RENDERS_FROM": {}, "SUPPORTS": {},
+	"TRIGGERS_RELOAD": {}, "UPDATES_STATE": {}, "RENDERS_FROM": {},
 }
 
 type RetainedEdge struct {
-	ID, From, To, Relation, ProvenanceID, SupportGroup string
+	ID, From, To, Relation, ProvenanceAuthority, ProvenanceCustody, ProvenanceID, SupportGroup string
 }
 type retainedEdgeJSON struct {
-	ID           string `json:"id"`
-	From         string `json:"from"`
-	To           string `json:"to"`
-	Relation     string `json:"relation"`
-	ProvenanceID string `json:"provenance_id"`
-	SupportGroup string `json:"support_group"`
+	ID                  string `json:"id"`
+	From                string `json:"from"`
+	To                  string `json:"to"`
+	Relation            string `json:"relation"`
+	ProvenanceAuthority string `json:"provenance_authority"`
+	ProvenanceCustody   string `json:"provenance_custody"`
+	ProvenanceID        string `json:"provenance_id"`
+	SupportGroup        string `json:"support_group"`
 }
 type retainedGraphJSON struct {
 	SchemaVersion string             `json:"schema_version"`
@@ -60,7 +74,7 @@ type LocalRequest struct {
 	Policy        LocalPolicy
 }
 type LocalAccounting struct {
-	DecoderUnits, NodeUnits, SelectedEdgeUnits, Units, Limit int64
+	DecoderUnits, NodeUnits, EdgeUnits, SelectionUnits, KernelUnits, Units, Limit int64
 }
 type LocalFinding struct {
 	Kind, Node     string
@@ -108,6 +122,18 @@ func LocalDescriptors() []Descriptor {
 	return []Descriptor{{Analysis, "local-normative-analysis", ""}, {Metrics, "local-normative-metrics", ""}, {Ranking, "local-normative-ranking", ""}}
 }
 
+func validString(s string) bool    { return s != "" && len(s) <= MaxRetainedString && utf8.ValidString(s) }
+func validAuthority(s string) bool { return s == ValidatedAuthority || s == UnvalidatedAuthority }
+func validCustody(s string) bool {
+	return s == CustodyProviderVerified || s == CustodyCallerAsserted || s == CustodyUnknown
+}
+func qualifiedSupport(e RetainedEdge) bool {
+	return e.ProvenanceAuthority == ValidatedAuthority && e.ProvenanceCustody == CustodyProviderVerified && validString(e.ProvenanceID) && validString(e.SupportGroup)
+}
+func supportKey(e RetainedEdge) string {
+	return e.ProvenanceAuthority + "\x00" + e.ProvenanceCustody + "\x00" + e.ProvenanceID + "\x00" + e.SupportGroup
+}
+
 func DecodeRetainedGraph(raw []byte) (LocalGraph, string, error) {
 	if len(raw) == 0 || len(raw) > MaxRetainedBytes || !utf8.Valid(raw) || hasDuplicateJSONKey(raw) {
 		return LocalGraph{}, "", ErrInvalidLocalRequest
@@ -115,27 +141,24 @@ func DecodeRetainedGraph(raw []byte) (LocalGraph, string, error) {
 	var wire retainedGraphJSON
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
-	if err := d.Decode(&wire); err != nil {
-		return LocalGraph{}, "", ErrInvalidLocalRequest
-	}
-	if err := requireEOF(d); err != nil {
+	if d.Decode(&wire) != nil || requireEOF(d) != nil {
 		return LocalGraph{}, "", ErrInvalidLocalRequest
 	}
 	canonical, err := json.Marshal(wire)
-	if err != nil || !bytes.Equal(raw, canonical) || wire.SchemaVersion != RetainedGraphSchema || wire.BuildRevision == "" || wire.Nodes == nil || wire.Edges == nil || len(wire.Nodes) > MaxRetainedNodes || len(wire.Edges) > MaxRetainedEdges {
+	if err != nil || !bytes.Equal(raw, canonical) || wire.SchemaVersion != RetainedGraphSchema || !validString(wire.BuildRevision) || wire.Nodes == nil || wire.Edges == nil || len(wire.Nodes) > MaxRetainedNodes || len(wire.Edges) > MaxRetainedEdges {
 		return LocalGraph{}, "", ErrInvalidLocalRequest
 	}
 	g := LocalGraph{BuildRevision: wire.BuildRevision, Nodes: append([]string(nil), wire.Nodes...), Edges: make([]RetainedEdge, len(wire.Edges))}
 	seenNodes := map[string]struct{}{}
 	for i, n := range g.Nodes {
-		if n == "" || (i > 0 && g.Nodes[i-1] >= n) {
+		if !validString(n) || (i > 0 && g.Nodes[i-1] >= n) {
 			return LocalGraph{}, "", ErrInvalidLocalRequest
 		}
 		seenNodes[n] = struct{}{}
 	}
 	seenIdentity := map[string]struct{}{}
 	for i, e := range wire.Edges {
-		if _, ok := supportedRelations[e.Relation]; !ok || e.ID == "" || e.ProvenanceID == "" || e.From == "" || e.To == "" {
+		if _, ok := supportedRelations[e.Relation]; !ok || !validString(e.ID) || !validString(e.ProvenanceID) || !validString(e.From) || !validString(e.To) || !validAuthority(e.ProvenanceAuthority) || !validCustody(e.ProvenanceCustody) || len(e.SupportGroup) > MaxRetainedString || !utf8.ValidString(e.SupportGroup) {
 			return LocalGraph{}, "", ErrInvalidLocalRequest
 		}
 		if _, ok := seenNodes[e.From]; !ok {
@@ -152,7 +175,7 @@ func DecodeRetainedGraph(raw []byte) (LocalGraph, string, error) {
 		if i > 0 && edgeLess(e, wire.Edges[i-1]) {
 			return LocalGraph{}, "", ErrInvalidLocalRequest
 		}
-		g.Edges[i] = RetainedEdge{e.ID, e.From, e.To, e.Relation, e.ProvenanceID, e.SupportGroup}
+		g.Edges[i] = RetainedEdge{e.ID, e.From, e.To, e.Relation, e.ProvenanceAuthority, e.ProvenanceCustody, e.ProvenanceID, e.SupportGroup}
 	}
 	s := sha256.Sum256(raw)
 	return g, "sha256:" + hex.EncodeToString(s[:]), nil
@@ -215,36 +238,68 @@ func hasDuplicateJSONKey(raw []byte) bool {
 	return walk()
 }
 
+type workCounter struct{ accounting LocalAccounting }
+
+func (w *workCounter) charge(component *int64, n int64) bool {
+	if n < 0 || w.accounting.Units > int64(^uint64(0)>>1)-n {
+		return false
+	}
+	*component += n
+	w.accounting.Units += n
+	return w.accounting.Units <= w.accounting.Limit
+}
+func limitResult(r LocalRequest, relations []string, digest string, a LocalAccounting) LocalResult {
+	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: digest, Operation: r.Operation, SelectedRelations: relations, Status: Limit, Accounting: a}
+	res.Digest = localDigest(&res)
+	return res
+}
+
 func EvaluateLocal(r LocalRequest) (LocalResult, error) {
-	if !validOperation(r.Operation) || r.BuildRevision == "" || r.Policy.MaxWork < 1 {
+	if !validOperation(r.Operation) || !validString(r.BuildRevision) || r.Policy.MaxWork < 1 {
 		return LocalResult{}, ErrInvalidLocalRequest
 	}
 	relations, err := normalizeRelations(r.Relations)
 	if err != nil {
 		return LocalResult{}, err
 	}
-	g, inputDigest, err := DecodeRetainedGraph(r.RetainedJSON)
-	if err != nil || g.BuildRevision != r.BuildRevision {
+	sum := sha256.Sum256(r.RetainedJSON)
+	inputDigest := "sha256:" + hex.EncodeToString(sum[:])
+	w := workCounter{accounting: LocalAccounting{Limit: r.Policy.MaxWork}}
+	if !w.charge(&w.accounting.DecoderUnits, int64(len(r.RetainedJSON))) {
+		return limitResult(r, relations, inputDigest, w.accounting), nil
+	}
+	g, decodedDigest, err := DecodeRetainedGraph(r.RetainedJSON)
+	if err != nil || g.BuildRevision != r.BuildRevision || decodedDigest != inputDigest {
 		return LocalResult{}, ErrInvalidLocalRequest
+	}
+	for range g.Nodes {
+		if !w.charge(&w.accounting.NodeUnits, 1) {
+			return limitResult(r, relations, inputDigest, w.accounting), nil
+		}
 	}
 	selected := make([]RetainedEdge, 0, len(g.Edges))
 	for _, e := range g.Edges {
+		if !w.charge(&w.accounting.EdgeUnits, 1) {
+			return limitResult(r, relations, inputDigest, w.accounting), nil
+		}
+		if !w.charge(&w.accounting.SelectionUnits, 1) {
+			return limitResult(r, relations, inputDigest, w.accounting), nil
+		}
 		if contains(relations, e.Relation) {
 			selected = append(selected, e)
 		}
 	}
-	decoderUnits := int64(len(r.RetainedJSON))
-	required := decoderUnits + int64(len(g.Nodes)) + int64(len(selected))
-	if required < decoderUnits {
-		return LocalResult{}, ErrInvalidLocalRequest
+	for range g.Nodes {
+		if !w.charge(&w.accounting.KernelUnits, 1) {
+			return limitResult(r, relations, inputDigest, w.accounting), nil
+		}
 	}
-	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: inputDigest, Operation: r.Operation, SelectedRelations: relations, Status: Complete, Accounting: LocalAccounting{DecoderUnits: decoderUnits, NodeUnits: int64(len(g.Nodes)), SelectedEdgeUnits: int64(len(selected)), Units: required, Limit: r.Policy.MaxWork}}
-	if required > r.Policy.MaxWork {
-		res.Status = Limit
-		res.Accounting.Units = r.Policy.MaxWork
-		res.Digest = localDigest(&res)
-		return res, nil
+	for range selected {
+		if !w.charge(&w.accounting.KernelUnits, 1) {
+			return limitResult(r, relations, inputDigest, w.accounting), nil
+		}
 	}
+	res := LocalResult{Family: Family, Version: "local-v1", Scope: LocalScope, BuildRevision: r.BuildRevision, InputDigest: inputDigest, Operation: r.Operation, SelectedRelations: relations, Status: Complete, Accounting: w.accounting}
 	switch r.Operation {
 	case Analysis:
 		res.Analysis = localAnalyze(g.Nodes, selected)
@@ -298,28 +353,25 @@ func localAnalyze(nodes []string, edges []RetainedEdge) *LocalAnalysisEvidence {
 	return &LocalAnalysisEvidence{LocalAnalysisSchema, f}
 }
 func localMeasure(nodes []string, edges []RetainedEdge) *LocalMetricsEvidence {
-	m := &LocalMetricsEvidence{Schema: LocalMetricsSchema, CountingMode: "edge-instances; structural-relations=unique(from,to,relation); independent-support=unique-qualified-support-group", DensityDenominatorMode: "ordered-distinct-node-pairs n*(n-1)", NodeCount: len(nodes), EdgeInstanceCount: len(edges), Omissions: []LocalOmission{}, Nodes: make([]LocalNodeMetrics, len(nodes))}
+	m := &LocalMetricsEvidence{Schema: LocalMetricsSchema, CountingMode: metricsCountingMode, DensityDenominatorMode: densityMode, NodeCount: len(nodes), EdgeInstanceCount: len(edges), Omissions: []LocalOmission{}, Nodes: make([]LocalNodeMetrics, len(nodes))}
 	idx := map[string]int{}
 	for i, n := range nodes {
 		m.Nodes[i].Node = n
 		idx[n] = i
 	}
-	structural := map[string]bool{}
-	support := map[string]bool{}
-	pairs := map[string]bool{}
+	structural, support, pairs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, e := range edges {
 		m.Nodes[idx[e.From]].OutDegree++
 		m.Nodes[idx[e.To]].InDegree++
 		structural[e.From+"\x00"+e.To+"\x00"+e.Relation] = true
-		if e.SupportGroup != "" {
-			support[e.SupportGroup] = true
+		if qualifiedSupport(e) {
+			support[supportKey(e)] = true
 		}
 		if e.From != e.To {
 			pairs[e.From+"\x00"+e.To] = true
 		}
 	}
-	m.UniqueStructuralRelationCount = len(structural)
-	m.IndependentSupportCount = len(support)
+	m.UniqueStructuralRelationCount, m.IndependentSupportCount = len(structural), len(support)
 	if len(nodes) < 2 {
 		m.Omissions = append(m.Omissions, LocalOmission{"directed_density", "requires at least two nodes"})
 	} else {
@@ -338,11 +390,11 @@ func localRank(nodes []string, edges []RetainedEdge) *LocalRankingEvidence {
 	for _, e := range edges {
 		x := &scores[idx[e.To]]
 		x.InstanceMultiplicity++
-		if e.SupportGroup != "" {
+		if qualifiedSupport(e) {
 			if groups[e.To] == nil {
 				groups[e.To] = map[string]bool{}
 			}
-			groups[e.To][e.SupportGroup] = true
+			groups[e.To][supportKey(e)] = true
 		}
 	}
 	for i := range scores {
@@ -359,7 +411,7 @@ func localRank(nodes []string, edges []RetainedEdge) *LocalRankingEvidence {
 		}
 		return scores[i].Node < scores[j].Node
 	})
-	return &LocalRankingEvidence{LocalRankingSchema, "support-group-weight plus capped-instance-presence", "selected-edge-instances and unique-qualified-support-groups", "score-desc,node-asc", scores}
+	return &LocalRankingEvidence{LocalRankingSchema, rankingCountingMode, rankingDenominator, rankingTieBreak, scores}
 }
 func localSchema(op Operation) string {
 	if op == Analysis {
@@ -377,13 +429,111 @@ func localDigest(r *LocalResult) string {
 	sum := sha256.Sum256(append(append([]byte(localSchema(r.Operation)), 0), raw...))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
+func validSHA256(s string) bool {
+	if len(s) != 71 || s[:7] != "sha256:" {
+		return false
+	}
+	_, err := hex.DecodeString(s[7:])
+	return err == nil && s == "sha256:"+string(bytes.ToLower([]byte(s[7:])))
+}
 func MarshalLocalResult(r LocalResult) ([]byte, error) {
-	if r.Digest == "" || r.Digest != localDigest(&r) {
+	if !validSHA256(r.Digest) || r.Digest != localDigest(&r) {
 		return nil, ErrInvalidLocalRequest
 	}
 	return json.Marshal(r)
 }
-func ValidateLocalResultJSON(raw []byte) error {
+
+func validateResultShape(r LocalResult) error {
+	if r.Family != Family || r.Version != "local-v1" || r.Scope != LocalScope || !validString(r.BuildRevision) || !validSHA256(r.InputDigest) || !validSHA256(r.Digest) || !validOperation(r.Operation) || (r.Status != Complete && r.Status != Limit) || r.Accounting.Limit < 1 {
+		return ErrInvalidLocalRequest
+	}
+	rels, err := normalizeRelations(r.SelectedRelations)
+	if err != nil || !equalStrings(rels, r.SelectedRelations) {
+		return ErrInvalidLocalRequest
+	}
+	sum := r.Accounting.DecoderUnits + r.Accounting.NodeUnits + r.Accounting.EdgeUnits + r.Accounting.SelectionUnits + r.Accounting.KernelUnits
+	if minAccounting(r.Accounting) < 0 || sum != r.Accounting.Units || r.Accounting.DecoderUnits < 1 {
+		return ErrInvalidLocalRequest
+	}
+	payloads := 0
+	if r.Analysis != nil {
+		payloads++
+	}
+	if r.Metrics != nil {
+		payloads++
+	}
+	if r.Ranking != nil {
+		payloads++
+	}
+	if r.Status == Limit {
+		if payloads != 0 || r.Accounting.Units <= r.Accounting.Limit {
+			return ErrInvalidLocalRequest
+		}
+		return nil
+	}
+	if payloads != 1 || r.Accounting.Units > r.Accounting.Limit {
+		return ErrInvalidLocalRequest
+	}
+	switch r.Operation {
+	case Analysis:
+		if r.Analysis == nil || r.Analysis.Schema != LocalAnalysisSchema || r.Metrics != nil || r.Ranking != nil {
+			return ErrInvalidLocalRequest
+		}
+		for _, f := range r.Analysis.Findings {
+			if (f.Kind != "ROOT" && f.Kind != "LEAF") || !validString(f.Node) || f.Count != len(f.WitnessEdgeIDs) || !sort.StringsAreSorted(f.WitnessEdgeIDs) {
+				return ErrInvalidLocalRequest
+			}
+		}
+	case Metrics:
+		m := r.Metrics
+		if m == nil || m.Schema != LocalMetricsSchema || m.CountingMode != metricsCountingMode || m.DensityDenominatorMode != densityMode || r.Analysis != nil || r.Ranking != nil || m.NodeCount != len(m.Nodes) || m.EdgeInstanceCount < 0 || m.UniqueStructuralRelationCount < 0 || m.UniqueStructuralRelationCount > m.EdgeInstanceCount || m.IndependentSupportCount < 0 || m.IndependentSupportCount > m.EdgeInstanceCount {
+			return ErrInvalidLocalRequest
+		}
+		for i, n := range m.Nodes {
+			if !validString(n.Node) || n.InDegree < 0 || n.OutDegree < 0 || (i > 0 && m.Nodes[i-1].Node >= n.Node) {
+				return ErrInvalidLocalRequest
+			}
+		}
+		if m.NodeCount < 2 {
+			if m.Density != nil || !reflect.DeepEqual(m.Omissions, []LocalOmission{{"directed_density", "requires at least two nodes"}}) {
+				return ErrInvalidLocalRequest
+			}
+		} else {
+			if m.Density == nil || len(m.Omissions) != 0 || m.Density.Numerator < 0 || m.Density.Denominator != int64(m.NodeCount)*int64(m.NodeCount-1) || m.Density.Numerator > m.Density.Denominator {
+				return ErrInvalidLocalRequest
+			}
+		}
+	case Ranking:
+		x := r.Ranking
+		if x == nil || x.Schema != LocalRankingSchema || x.CountingMode != rankingCountingMode || x.Denominator != rankingDenominator || x.TieBreak != rankingTieBreak || r.Analysis != nil || r.Metrics != nil {
+			return ErrInvalidLocalRequest
+		}
+		seen := map[string]bool{}
+		for i, n := range x.Ordered {
+			if !validString(n.Node) || seen[n.Node] || n.SupportGroupWeight < 0 || n.InstanceMultiplicity < 0 || n.Score != n.SupportGroupWeight+min(n.InstanceMultiplicity, 1) || (i > 0 && (x.Ordered[i-1].Score < n.Score || (x.Ordered[i-1].Score == n.Score && x.Ordered[i-1].Node >= n.Node))) {
+				return ErrInvalidLocalRequest
+			}
+			seen[n.Node] = true
+		}
+	}
+	return nil
+}
+func minAccounting(a LocalAccounting) int64 {
+	x := a.DecoderUnits
+	for _, n := range []int64{a.NodeUnits, a.EdgeUnits, a.SelectionUnits, a.KernelUnits} {
+		if n < x {
+			x = n
+		}
+	}
+	return x
+}
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+func ValidateLocalResultJSON(raw []byte, retained ...[]byte) error {
 	if !utf8.Valid(raw) || hasDuplicateJSONKey(raw) {
 		return ErrInvalidLocalRequest
 	}
@@ -393,12 +543,16 @@ func ValidateLocalResultJSON(raw []byte) error {
 	if d.Decode(&r) != nil || requireEOF(d) != nil {
 		return ErrInvalidLocalRequest
 	}
-	canon, e := json.Marshal(r)
-	if e != nil || !bytes.Equal(raw, canon) || r.Family != Family || r.Version != "local-v1" || r.Scope != LocalScope || r.BuildRevision == "" || r.InputDigest == "" || len(r.SelectedRelations) == 0 || r.Digest != localDigest(&r) {
+	canon, err := json.Marshal(r)
+	if err != nil || !bytes.Equal(raw, canon) || validateResultShape(r) != nil || r.Digest != localDigest(&r) || len(retained) != 1 {
 		return ErrInvalidLocalRequest
 	}
-	rels, e := normalizeRelations(r.SelectedRelations)
-	if e != nil || !equalStrings(rels, r.SelectedRelations) {
+	sum := sha256.Sum256(retained[0])
+	if r.InputDigest != "sha256:"+hex.EncodeToString(sum[:]) {
+		return ErrInvalidLocalRequest
+	}
+	replay, err := EvaluateLocal(LocalRequest{Operation: r.Operation, BuildRevision: r.BuildRevision, RetainedJSON: retained[0], Relations: r.SelectedRelations, Policy: LocalPolicy{MaxWork: r.Accounting.Limit}})
+	if err != nil || !reflect.DeepEqual(r, replay) {
 		return ErrInvalidLocalRequest
 	}
 	return nil
