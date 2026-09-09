@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/requestlifecycle"
 )
 
 func buildFR23Binary(t *testing.T, name, pkg string) string {
@@ -67,12 +68,22 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_ARTIFACT_PRESENT: %v stderr=%s", err, stderr.String())
 	}
-	d, err := decodePrivateRequestDiagnostic(bytes.TrimSpace(privateRaw))
+	d, err := requestlifecycle.Verify(privateRaw, stdout.Bytes())
 	if err != nil {
 		t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_ARTIFACT_VALID: %v", err)
 	}
-	if d.SelectedOperation.Method != "textDocument/prepareCallHierarchy" || d.SelectedOperation.Classification != "TIMEOUT_OBSERVED" || d.SelectedOperation.Write.Count != 1 {
-		t.Fatalf("ASSERT_FR23_PRIVATE_EXACT_ONE_ATTEMPT: %+v", d.SelectedOperation)
+	prepareTimeout := false
+	for _, event := range d.Events {
+		if event.Kind == "TERMINAL_TIMEOUT" {
+			for _, operation := range d.Operations {
+				if operation.OperationID == event.OperationID && operation.Method == "textDocument/prepareCallHierarchy" {
+					prepareTimeout = true
+				}
+			}
+		}
+	}
+	if !prepareTimeout || bytes.Contains(privateRaw, []byte(uri)) {
+		t.Fatalf("ASSERT_FR23_PRIVATE_LIFECYCLE_TIMEOUT_AND_PRIVACY: timeout=%v", prepareTimeout)
 	}
 
 	absent := filepath.Join(t.TempDir(), "absent.json")

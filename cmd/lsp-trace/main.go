@@ -46,7 +46,7 @@ const usageText = `usage:
   lsp-trace schema get --schema v1|v2|v3
   lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-
   lsp-trace validate [--schema v1|v2|v3] PATH|-
-  lsp-trace validate-private-request-diagnostics PATH
+  lsp-trace validate-private-request-diagnostics PRIVATE_PATH [PUBLIC_V3_PATH]
   lsp-trace skill get`
 
 type stringsFlag []string

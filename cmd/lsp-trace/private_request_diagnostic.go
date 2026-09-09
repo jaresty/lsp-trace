@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/requestlifecycle"
 	"lsp-trace/internal/strictjson"
 )
 
@@ -221,13 +222,21 @@ func publishPrivateRequestDiagnostic(rootPath, selector string, raw []byte) erro
 }
 
 func runPrivateRequestDiagnosticValidation(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace validate-private-request-diagnostics PATH")
+	if len(args) != 1 && len(args) != 2 {
+		fmt.Fprintln(stderr, "usage: lsp-trace validate-private-request-diagnostics PRIVATE_PATH [PUBLIC_V3_PATH]")
 		return 1
 	}
-	raw, err := os.ReadFile(args[0])
-	if err == nil {
-		_, err = decodePrivateRequestDiagnostic(bytes.TrimSpace(raw))
+	privateRaw, err := os.ReadFile(args[0])
+	if err == nil && len(args) == 1 {
+		_, err = decodePrivateRequestDiagnostic(bytes.TrimSpace(privateRaw))
+	}
+	if err == nil && len(args) == 2 {
+		publicV3, readErr := os.ReadFile(args[1])
+		if readErr != nil {
+			err = readErr
+		} else {
+			_, err = requestlifecycle.Verify(privateRaw, publicV3)
+		}
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, "private request diagnostics invalid")

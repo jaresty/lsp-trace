@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/requestlifecycle"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
@@ -89,78 +90,36 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 // executor contract. Its manager may retain private diagnostics, but those
 // records cannot enter or alter the frozen public V3 composition.
 type privateAcquisitionRuntime struct {
-	manager       *sessionruntime.Manager
-	mu            sync.Mutex
-	requests      []manageddiagnostic.Record
-	retainedBytes int
-	omitted       uint64
+	manager *sessionruntime.Manager
+	mu      sync.Mutex
+	handles []sessionruntime.DiagnosticOperationHandle
 }
 
 func (r *privateAcquisitionRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
 	return r.manager.Metadata(id, generation)
 }
-func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
-	prior := request.DiagnosticObserver
-	request.DiagnosticObserver = func(record manageddiagnostic.Record) {
-		if prior != nil {
-			prior(record)
-		}
-		encoded, encodeErr := json.Marshal(record)
-		withinStrings := true
-		if encodeErr == nil {
-			var value any
-			if json.Unmarshal(encoded, &value) == nil {
-				var visit func(any)
-				visit = func(v any) {
-					switch x := v.(type) {
-					case string:
-						if len(x) > 4096 {
-							withinStrings = false
-						}
-					case []any:
-						for _, item := range x {
-							visit(item)
-						}
-					case map[string]any:
-						for key, item := range x {
-							if len(key) > 4096 {
-								withinStrings = false
-							}
-							visit(item)
-						}
-					}
-				}
-				visit(value)
-			}
-		}
-		r.mu.Lock()
-		if encodeErr != nil || !withinStrings || len(r.requests) >= 64 || r.retainedBytes+len(encoded) > 65536 {
-			r.omitted++
-		} else {
-			r.requests = append(r.requests, record.Clone())
-			r.retainedBytes += len(encoded)
-		}
-		r.mu.Unlock()
+func (r *privateAcquisitionRuntime) retainHandle(handle sessionruntime.DiagnosticOperationHandle) {
+	if handle == (sessionruntime.DiagnosticOperationHandle{}) {
+		return
 	}
-	return r.manager.RoundTrip(ctx, request)
+	r.mu.Lock()
+	r.handles = append(r.handles, handle)
+	r.mu.Unlock()
 }
-func (r *privateAcquisitionRuntime) privateQuery() manageddiagnostic.QueryResult {
+func (r *privateAcquisitionRuntime) diagnosticHandles() []sessionruntime.DiagnosticOperationHandle {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := make([]manageddiagnostic.Record, len(r.requests))
-	for i := range r.requests {
-		out[i] = r.requests[i].Clone()
-	}
-	if len(out) == 0 {
-		if r.omitted > 0 {
-			return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryEvicted, EvictedRecords: r.omitted}
-		}
-		return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
-	}
-	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryAvailable, Records: out, EvictedRecords: r.omitted}
+	return append([]sessionruntime.DiagnosticOperationHandle(nil), r.handles...)
+}
+func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	result := r.manager.RoundTrip(ctx, request)
+	r.retainHandle(result.DiagnosticOperation)
+	return result
 }
 func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
-	return r.manager.PrepareDocument(ctx, request)
+	result := r.manager.PrepareDocument(ctx, request)
+	r.retainHandle(result.DiagnosticOperation)
+	return result
 }
 func (r *privateAcquisitionRuntime) Records() []sessionruntime.Record { return r.manager.Records() }
 
@@ -333,6 +292,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest})
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
+	privateRuntime.retainHandle(ready.DiagnosticOperation)
 	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
 	if failed != nil {
 		return fail(failed)
@@ -360,10 +320,20 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	// Private finalization is synchronous but secondary and non-overriding: the
 	// already-emitted public V3 bytes and their status remain authoritative.
 	if requestDiagnosticsRequested {
-		query := privateRuntime.privateQuery()
-		privateRaw, privateErr := projectPrivateRequestDiagnostic(string(started.AttemptID), started.SessionID, started.Generation, query, data, privateMaxRecords, privateMaxBytes)
-		if privateErr == nil {
-			privateErr = publishPrivateRequestDiagnostic(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw)
+		handles := privateRuntime.diagnosticHandles()
+		sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, requestlifecycle.MaxRecords)
+		var privateErr error
+		if !certified {
+			privateErr = fmt.Errorf("private lifecycle source unavailable")
+		} else {
+			privateRaw, projectionErr := requestlifecycle.ProjectRuntime(sourceSet, data, "")
+			privateErr = projectionErr
+			if privateErr == nil {
+				privateErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, func(raw []byte) error {
+					_, verifyErr := requestlifecycle.Verify(raw, data)
+					return verifyErr
+				})
+			}
 		}
 		if privateErr != nil {
 			fmt.Fprintln(stderr, "private request diagnostics unavailable")
