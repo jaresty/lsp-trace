@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,6 +26,54 @@ func buildFR23Binary(t *testing.T, name, pkg string) string {
 		t.Fatalf("build %s: %v: %s", pkg, err, out)
 	}
 	return path
+}
+
+func runFR23WithScheduledFake(t *testing.T, cmd *exec.Cmd) error {
+	t.Helper()
+	socketFile, err := os.CreateTemp("", "fr23-scheduled-*.sock")
+	if err != nil {
+		t.Fatalf("allocate fake-lsp scheduling barrier: %v", err)
+	}
+	socket := socketFile.Name()
+	if err := socketFile.Close(); err != nil {
+		t.Fatalf("close fake-lsp scheduling barrier placeholder: %v", err)
+	}
+	if err := os.Remove(socket); err != nil {
+		t.Fatalf("prepare fake-lsp scheduling barrier: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(socket) })
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatalf("listen for fake-lsp scheduling barrier: %v", err)
+	}
+	defer listener.Close()
+	cmd.Env = append(cmd.Env, "LSP_TRACE_FAKE_LSP_SCHEDULE_BARRIER="+socket)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	conn, err := listener.Accept()
+	if err != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		return err
+	}
+	var scheduled [10]byte
+	if _, err := io.ReadFull(conn, scheduled[:]); err != nil || string(scheduled[:]) != "scheduled\n" {
+		_ = conn.Close()
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_CHILD_SCHEDULED: marker=%q err=%v", scheduled, err)
+	}
+	if os.Getenv("LSP_TRACE_FR23_WITHHOLD_SCHEDULE_RELEASE") != "1" {
+		if _, err := conn.Write([]byte{1}); err != nil {
+			_ = conn.Close()
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+			t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_CHILD_RELEASED: %v", err)
+		}
+	}
+	_ = conn.Close()
+	return cmd.Wait()
 }
 
 func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
@@ -55,7 +105,7 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	if err := runFR23WithScheduledFake(t, cmd); err != nil {
 		t.Fatalf("ASSERT_FR23_PRIVATE_BUILT_CLI_RUN: %v stderr=%s", err, stderr.String())
 	}
 	if _, err := graphprovenance.ValidateFor(stdout.Bytes(), graphprovenance.Family, "v3"); err != nil {
@@ -89,8 +139,11 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	absent := filepath.Join(t.TempDir(), "absent.json")
 	without := exec.Command(cli, args[:len(args)-4]...)
 	without.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_HANG_PREPARE=1")
-	if out, err := without.CombinedOutput(); err != nil {
-		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_RUN: %v %s", err, out)
+	var withoutOutput bytes.Buffer
+	without.Stdout = &withoutOutput
+	without.Stderr = &withoutOutput
+	if err := runFR23WithScheduledFake(t, without); err != nil {
+		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_RUN: %v %s", err, withoutOutput.Bytes())
 	}
 	if _, err := os.Stat(absent); !os.IsNotExist(err) {
 		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_NO_ARTIFACT: %v", err)
