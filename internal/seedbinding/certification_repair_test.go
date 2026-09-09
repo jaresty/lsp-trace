@@ -14,6 +14,7 @@ func TestPreparedCustodyManifestSignatureAndMutationBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := PreparedModificationManifest{
+		Version:             HostPreparedPolicyVersionV1,
 		FinderSHA256:        hex.EncodeToString(make([]byte, 32)),
 		SourceArchiveSHA256: hex.EncodeToString(make([]byte, 32)),
 		SourceTreeSHA256:    hex.EncodeToString(make([]byte, 32)),
@@ -27,7 +28,7 @@ func TestPreparedCustodyManifestSignatureAndMutationBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(canonical)
-	receipt := HostCustodyReceipt{Authenticated: true, Prepared: true, TargetSourceSHA256: hex.EncodeToString(make([]byte, 32)), PreparedManifest: canonical,
+	receipt := HostCustodyReceipt{Version: HostPreparedPolicyVersionV1, Authenticated: true, Prepared: true, TargetSourceSHA256: hex.EncodeToString(make([]byte, 32)), PreparedManifest: canonical,
 		PreparedManifestSHA256: hex.EncodeToString(digest[:]), PreparedManifestSignature: ed25519.Sign(priv, PreparedManifestSigningBytes(canonical))}
 	if err := receipt.VerifyPrepared(pub, "seed.go"); err != nil {
 		t.Fatalf("ASSERT_PREPARED_MANIFEST_SIGNED_EXACT_ACCEPTED: %v", err)

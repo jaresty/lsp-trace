@@ -23,6 +23,7 @@ import (
 
 const VersionV2 = "lsp-trace.seed-binding.v2"
 const MaxManifestBytes = 1 << 20
+const HostPreparedPolicyVersionV1 uint32 = 1
 
 type Status string
 
@@ -105,6 +106,7 @@ type RevisionAuthority interface {
 }
 
 type PreparedModificationManifest struct {
+	Version                                                                 uint32
 	FinderSHA256, SourceArchiveSHA256, SourceTreeSHA256, PreparedTreeSHA256 string
 	AllowedChanges                                                          []string
 	TargetPath, TargetUnchangedSHA256                                       string
@@ -115,7 +117,7 @@ type PreparedModificationManifest struct {
 
 func CanonicalPreparedManifest(m PreparedModificationManifest) ([]byte, error) {
 	adaptationsPresent := len(m.AdaptationIDs) != 0 || m.Adaptations != ""
-	if m.FinderSHA256 == "" || m.SourceArchiveSHA256 == "" || m.SourceTreeSHA256 == "" || m.PreparedTreeSHA256 == "" || m.TargetPath == "" || m.TargetUnchangedSHA256 == "" || m.SourceCommit == "" || !adaptationsPresent || m.SourceCommit == m.Adaptations {
+	if m.Version != HostPreparedPolicyVersionV1 || m.FinderSHA256 == "" || m.SourceArchiveSHA256 == "" || m.SourceTreeSHA256 == "" || m.PreparedTreeSHA256 == "" || m.TargetPath == "" || m.TargetUnchangedSHA256 == "" || m.SourceCommit == "" || !adaptationsPresent || m.SourceCommit == m.Adaptations {
 		return nil, fmt.Errorf("prepared modification manifest incomplete")
 	}
 	return json.Marshal(m)
@@ -151,7 +153,7 @@ type HostPreparedPolicy struct {
 
 func CanonicalHostPreparedPolicy(p HostPreparedPolicy) ([]byte, error) {
 	p.Signature = nil
-	if p.Version == 0 || p.PolicyID == "" || p.AssessmentID == "" || p.ContextID == "" || !p.Prepared || p.Repository == "" || p.SourceCommit == "" || len(p.RequiredAdaptations) == 0 || p.TargetPath == "" || p.TargetUnchangedSHA256 == "" || p.ValidFrom.IsZero() || !p.ValidUntil.After(p.ValidFrom) {
+	if p.Version != HostPreparedPolicyVersionV1 || p.PolicyID == "" || p.AssessmentID == "" || p.ContextID == "" || !p.Prepared || p.Repository == "" || p.SourceCommit == "" || len(p.RequiredAdaptations) == 0 || p.TargetPath == "" || p.TargetUnchangedSHA256 == "" || p.ValidFrom.IsZero() || !p.ValidUntil.After(p.ValidFrom) {
 		return nil, fmt.Errorf("host prepared policy incomplete")
 	}
 	return json.Marshal(p)
@@ -174,13 +176,16 @@ type HostRootSet struct {
 
 func (r HostRootSet) Verify(rootID string, policy HostPreparedPolicy, receipt HostCustodyReceipt, now time.Time) (VerifiedPreparedContext, error) {
 	key, ok := r.Keys[rootID]
-	if r.Version == 0 || !ok || len(key) != ed25519.PublicKeySize {
+	if r.Version != HostPreparedPolicyVersionV1 || policy.Version != r.Version || !ok || len(key) != ed25519.PublicKeySize {
 		return VerifiedPreparedContext{}, fmt.Errorf("unsupported host root version")
 	}
 	return VerifyPrepared(policy, receipt, key, now)
 }
 
 func VerifyPrepared(policy HostPreparedPolicy, receipt HostCustodyReceipt, root ed25519.PublicKey, now time.Time) (VerifiedPreparedContext, error) {
+	if policy.Version != HostPreparedPolicyVersionV1 || receipt.Version != policy.Version {
+		return VerifiedPreparedContext{}, fmt.Errorf("unsupported or mismatched prepared policy version")
+	}
 	canonical, err := CanonicalHostPreparedPolicy(policy)
 	if err != nil || len(root) != ed25519.PublicKeySize || len(policy.Signature) != ed25519.SignatureSize || !ed25519.Verify(root, HostPreparedPolicySigningBytes(canonical), policy.Signature) {
 		return VerifiedPreparedContext{}, fmt.Errorf("host prepared policy signature mismatch")
@@ -195,7 +200,7 @@ func VerifyPrepared(policy HostPreparedPolicy, receipt HostCustodyReceipt, root 
 		return VerifiedPreparedContext{}, err
 	}
 	var manifest PreparedModificationManifest
-	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil || manifest.PolicyID != policy.PolicyID || manifest.AssessmentID != policy.AssessmentID || manifest.ContextID != policy.ContextID || manifest.SourceCommit != policy.SourceCommit || !equalStrings(manifest.AdaptationIDs, policy.RequiredAdaptations) || !equalStrings(manifest.AllowedChanges, policy.AllowedChanges) {
+	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil || manifest.Version != policy.Version || manifest.PolicyID != policy.PolicyID || manifest.AssessmentID != policy.AssessmentID || manifest.ContextID != policy.ContextID || manifest.SourceCommit != policy.SourceCommit || !equalStrings(manifest.AdaptationIDs, policy.RequiredAdaptations) || !equalStrings(manifest.AllowedChanges, policy.AllowedChanges) {
 		return VerifiedPreparedContext{}, fmt.Errorf("prepared manifest does not exactly match host policy")
 	}
 	digest := sha256.Sum256(append(HostPreparedPolicySigningBytes(canonical), receipt.Signature...))
@@ -215,6 +220,7 @@ func equalStrings(a, b []string) bool {
 }
 
 type HostCustodyReceipt struct {
+	Version                                                    uint32
 	Authenticated                                              bool
 	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
 	SeedManifestSHA256                                         string
@@ -251,12 +257,18 @@ func (r HostCustodyReceipt) VerifyPrepared(publicKey ed25519.PublicKey, target s
 	if !r.Prepared {
 		return nil
 	}
+	if r.Version != HostPreparedPolicyVersionV1 {
+		return fmt.Errorf("unsupported prepared receipt version")
+	}
 	if len(publicKey) != ed25519.PublicKeySize || len(r.PreparedManifest) == 0 || len(r.PreparedManifestSignature) != ed25519.SignatureSize {
 		return fmt.Errorf("prepared-copy trust unavailable")
 	}
 	var m PreparedModificationManifest
 	if err := json.Unmarshal(r.PreparedManifest, &m); err != nil {
 		return fmt.Errorf("prepared modification manifest invalid")
+	}
+	if m.Version != r.Version {
+		return fmt.Errorf("prepared manifest version mismatch")
 	}
 	canonical, err := CanonicalPreparedManifest(m)
 	if err != nil || !bytes.Equal(canonical, r.PreparedManifest) {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -25,7 +26,7 @@ func testPreparedPolicy(t *testing.T) (HostPreparedPolicy, HostCustodyReceipt, e
 		t.Fatal(err)
 	}
 	p.Signature = ed25519.Sign(priv, HostPreparedPolicySigningBytes(canonical))
-	manifest := PreparedModificationManifest{FinderSHA256: zero, SourceArchiveSHA256: zero, SourceTreeSHA256: zero, PreparedTreeSHA256: zero,
+	manifest := PreparedModificationManifest{Version: p.Version, FinderSHA256: zero, SourceArchiveSHA256: zero, SourceTreeSHA256: zero, PreparedTreeSHA256: zero,
 		AllowedChanges: append([]string(nil), p.AllowedChanges...), TargetPath: p.TargetPath, TargetUnchangedSHA256: zero,
 		SourceCommit: p.SourceCommit, AdaptationIDs: append([]string(nil), p.RequiredAdaptations...), PolicyID: p.PolicyID, AssessmentID: p.AssessmentID, ContextID: p.ContextID}
 	manifestBytes, err := CanonicalPreparedManifest(manifest)
@@ -33,7 +34,7 @@ func testPreparedPolicy(t *testing.T) (HostPreparedPolicy, HostCustodyReceipt, e
 		t.Fatal(err)
 	}
 	manifestDigest := sha256.Sum256(manifestBytes)
-	r := HostCustodyReceipt{Authenticated: true, Prepared: true, Repository: p.Repository, SourceRevision: p.SourceCommit, TargetPath: p.TargetPath,
+	r := HostCustodyReceipt{Version: p.Version, Authenticated: true, Prepared: true, Repository: p.Repository, SourceRevision: p.SourceCommit, TargetPath: p.TargetPath,
 		TargetSourceSHA256: zero, SeedManifestSHA256: zero, PreparedAllowedChanges: append([]string(nil), p.AllowedChanges...), PreparedManifest: manifestBytes,
 		PreparedManifestSHA256: hex.EncodeToString(manifestDigest[:]), PreparedManifestSignature: ed25519.Sign(priv, PreparedManifestSigningBytes(manifestBytes)),
 		PolicyID: p.PolicyID, AssessmentID: p.AssessmentID, ContextID: p.ContextID}
@@ -86,6 +87,195 @@ func TestHostPreparedPolicyExactBindingMutationMatrix(t *testing.T) {
 	receipt.PreparedManifestSignature = ed25519.Sign(priv, PreparedManifestSigningBytes(canonical))
 	if _, err := VerifyPrepared(policy, receipt, pub, time.Unix(150, 0).UTC()); err == nil {
 		t.Fatal("ASSERT_HOST_POLICY_ADAPTATION_SUBSTITUTION_REJECTED")
+	}
+}
+
+func resignPreparedPolicy(t *testing.T, policy *HostPreparedPolicy, priv ed25519.PrivateKey) {
+	t.Helper()
+	unsigned := *policy
+	unsigned.Signature = nil
+	canonical, err := json.Marshal(unsigned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy.Signature = ed25519.Sign(priv, HostPreparedPolicySigningBytes(canonical))
+}
+
+func setUint32Version(t *testing.T, target any, version uint32) {
+	t.Helper()
+	value := reflect.ValueOf(target)
+	if value.Kind() != reflect.Pointer || value.Elem().Kind() != reflect.Struct {
+		t.Fatal("version target must be a struct pointer")
+	}
+	field := value.Elem().FieldByName("Version")
+	if !field.IsValid() || !field.CanSet() || field.Kind() != reflect.Uint32 {
+		t.Fatal("ASSERT_PREPARED_VERSION_FIELD_REQUIRED")
+	}
+	field.SetUint(uint64(version))
+}
+
+func TestHostRootPolicyNumericVersionMismatchSameKeyRejected(t *testing.T) {
+	policy, receipt, pub, priv := testPreparedPolicy(t)
+	policy.Version = 2
+	resignPreparedPolicy(t, &policy, priv)
+	roots := HostRootSet{Version: 1, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_ROOT_POLICY_NUMERIC_MISMATCH_SAME_KEY_REJECTED")
+	}
+}
+
+func TestHostRootPolicyNumericVersionMismatchDifferentKeyRejected(t *testing.T) {
+	policy, receipt, _, _ := testPreparedPolicy(t)
+	pubV2, privV2, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy.Version = 2
+	resignPreparedPolicy(t, &policy, privV2)
+	receipt.PreparedManifestSignature = ed25519.Sign(privV2, PreparedManifestSigningBytes(receipt.PreparedManifest))
+	roots := HostRootSet{Version: 1, Keys: map[string]ed25519.PublicKey{"root-v2": pubV2}}
+	if _, err := roots.Verify("root-v2", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_ROOT_POLICY_NUMERIC_MISMATCH_DIFFERENT_KEY_REJECTED")
+	}
+}
+
+func TestHostPolicyUnsupportedNonzeroVersionRejected(t *testing.T) {
+	policy, receipt, pub, priv := testPreparedPolicy(t)
+	policy.Version = 99
+	resignPreparedPolicy(t, &policy, priv)
+	roots := HostRootSet{Version: 99, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_POLICY_UNSUPPORTED_NONZERO_VERSION_REJECTED")
+	}
+}
+
+func TestHostPreparedReceiptVersionMismatchRejected(t *testing.T) {
+	policy, receipt, pub, _ := testPreparedPolicy(t)
+	setUint32Version(t, &receipt, 2)
+	roots := HostRootSet{Version: 1, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_PREPARED_RECEIPT_VERSION_MISMATCH_REJECTED")
+	}
+}
+
+func TestHostPreparedManifestVersionMismatchRejected(t *testing.T) {
+	policy, receipt, pub, priv := testPreparedPolicy(t)
+	var manifest PreparedModificationManifest
+	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	setUint32Version(t, &manifest, 2)
+	canonical, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(canonical)
+	receipt.PreparedManifest = canonical
+	receipt.PreparedManifestSHA256 = hex.EncodeToString(digest[:])
+	receipt.PreparedManifestSignature = ed25519.Sign(priv, PreparedManifestSigningBytes(canonical))
+	roots := HostRootSet{Version: 1, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_PREPARED_MANIFEST_VERSION_MISMATCH_REJECTED")
+	}
+}
+
+func TestHostPolicyDowngradeRejected(t *testing.T) {
+	policy, receipt, pub, _ := testPreparedPolicy(t)
+	roots := HostRootSet{Version: 2, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_POLICY_DOWNGRADE_REJECTED")
+	}
+}
+
+func TestHostPolicyCrossVersionReceiptReplayRejected(t *testing.T) {
+	policy, receipt, pub, priv := testPreparedPolicy(t)
+	policy.Version = 2
+	resignPreparedPolicy(t, &policy, priv)
+	roots := HostRootSet{Version: 2, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_POLICY_CROSS_VERSION_RECEIPT_REPLAY_REJECTED")
+	}
+}
+
+func TestHostPolicyZeroVersionRejected(t *testing.T) {
+	policy, receipt, pub, _ := testPreparedPolicy(t)
+	policy.Version = 0
+	roots := HostRootSet{Version: HostPreparedPolicyVersionV1, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_POLICY_ZERO_VERSION_REJECTED")
+	}
+}
+
+func TestHostPreparedReceiptZeroVersionRejected(t *testing.T) {
+	policy, receipt, pub, _ := testPreparedPolicy(t)
+	receipt.Version = 0
+	roots := HostRootSet{Version: HostPreparedPolicyVersionV1, Keys: map[string]ed25519.PublicKey{"root": pub}}
+	if _, err := roots.Verify("root", policy, receipt, time.Unix(150, 0).UTC()); err == nil {
+		t.Fatal("ASSERT_HOST_PREPARED_RECEIPT_ZERO_VERSION_REJECTED")
+	}
+}
+
+func TestHostPreparedManifestZeroVersionRejected(t *testing.T) {
+	_, receipt, pub, _ := testPreparedPolicy(t)
+	var manifest PreparedModificationManifest
+	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.Version = 0
+	canonical, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(canonical)
+	receipt.PreparedManifest = canonical
+	receipt.PreparedManifestSHA256 = hex.EncodeToString(digest[:])
+	if err := receipt.VerifyPrepared(pub, receipt.TargetPath); err == nil {
+		t.Fatal("ASSERT_HOST_PREPARED_MANIFEST_ZERO_VERSION_REJECTED")
+	}
+}
+
+func TestPreparedVersionsAreInCanonicalSigningPreimages(t *testing.T) {
+	policy, receipt, _, _ := testPreparedPolicy(t)
+	policyV1, err := CanonicalHostPreparedPolicy(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsignedPolicy := policy
+	unsignedPolicy.Signature = nil
+	unsignedPolicy.Version = 2
+	policyV2, err := json.Marshal(unsignedPolicy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(HostPreparedPolicySigningBytes(policyV1)) == string(HostPreparedPolicySigningBytes(policyV2)) {
+		t.Fatal("ASSERT_HOST_POLICY_VERSION_IN_SIGNING_PREIMAGE")
+	}
+
+	receiptV1, err := CustodyReceiptSigningBytes(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt.Version = 2
+	receiptV2, err := CustodyReceiptSigningBytes(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(receiptV1) == string(receiptV2) {
+		t.Fatal("ASSERT_HOST_RECEIPT_VERSION_IN_SIGNING_PREIMAGE")
+	}
+
+	var manifest PreparedModificationManifest
+	if err := json.Unmarshal(receipt.PreparedManifest, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifestV1 := append([]byte(nil), receipt.PreparedManifest...)
+	manifest.Version = 2
+	manifestV2, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(PreparedManifestSigningBytes(manifestV1)) == string(PreparedManifestSigningBytes(manifestV2)) {
+		t.Fatal("ASSERT_HOST_PREPARED_MANIFEST_VERSION_IN_SIGNING_PREIMAGE")
 	}
 }
 
