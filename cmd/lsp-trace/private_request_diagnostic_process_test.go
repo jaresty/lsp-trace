@@ -44,6 +44,9 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 		t.Fatal(err)
 	}
 	privateRoot := t.TempDir()
+	if err := os.Chmod(privateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
 	privatePath := filepath.Join(privateRoot, "private.json")
 	args := []string{"slice", "--acquisition-version", "v3", "--workspace", workspace, "--server", fake, "--seed-manifest", manifestPath, "--language-id", "go", "--private-request-diagnostic-root", privateRoot, "--private-request-diagnostic-selector", "private.json"}
 	cmd := exec.Command(cli, args...)
@@ -73,7 +76,7 @@ func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	}
 
 	absent := filepath.Join(t.TempDir(), "absent.json")
-	without := exec.Command(cli, args[:len(args)-2]...)
+	without := exec.Command(cli, args[:len(args)-4]...)
 	without.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_HANG_PREPARE=1")
 	if out, err := without.CombinedOutput(); err != nil {
 		t.Fatalf("ASSERT_FR23_PRIVATE_NO_OPT_IN_RUN: %v %s", err, out)

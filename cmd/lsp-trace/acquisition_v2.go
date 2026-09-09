@@ -89,9 +89,11 @@ func runAcquisitionV2(mode string, args []string, stdout, stderr io.Writer) int 
 // executor contract. Its manager may retain private diagnostics, but those
 // records cannot enter or alter the frozen public V3 composition.
 type privateAcquisitionRuntime struct {
-	manager  *sessionruntime.Manager
-	mu       sync.Mutex
-	requests []manageddiagnostic.Record
+	manager       *sessionruntime.Manager
+	mu            sync.Mutex
+	requests      []manageddiagnostic.Record
+	retainedBytes int
+	omitted       uint64
 }
 
 func (r *privateAcquisitionRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
@@ -103,8 +105,41 @@ func (r *privateAcquisitionRuntime) RoundTrip(ctx context.Context, request sessi
 		if prior != nil {
 			prior(record)
 		}
+		encoded, encodeErr := json.Marshal(record)
+		withinStrings := true
+		if encodeErr == nil {
+			var value any
+			if json.Unmarshal(encoded, &value) == nil {
+				var visit func(any)
+				visit = func(v any) {
+					switch x := v.(type) {
+					case string:
+						if len(x) > 4096 {
+							withinStrings = false
+						}
+					case []any:
+						for _, item := range x {
+							visit(item)
+						}
+					case map[string]any:
+						for key, item := range x {
+							if len(key) > 4096 {
+								withinStrings = false
+							}
+							visit(item)
+						}
+					}
+				}
+				visit(value)
+			}
+		}
 		r.mu.Lock()
-		r.requests = append(r.requests, record.Clone())
+		if encodeErr != nil || !withinStrings || len(r.requests) >= 64 || r.retainedBytes+len(encoded) > 65536 {
+			r.omitted++
+		} else {
+			r.requests = append(r.requests, record.Clone())
+			r.retainedBytes += len(encoded)
+		}
 		r.mu.Unlock()
 	}
 	return r.manager.RoundTrip(ctx, request)
@@ -117,9 +152,12 @@ func (r *privateAcquisitionRuntime) privateQuery() manageddiagnostic.QueryResult
 		out[i] = r.requests[i].Clone()
 	}
 	if len(out) == 0 {
+		if r.omitted > 0 {
+			return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryEvicted, EvictedRecords: r.omitted}
+		}
 		return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
 	}
-	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryAvailable, Records: out}
+	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryAvailable, Records: out, EvictedRecords: r.omitted}
 }
 func (r *privateAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
 	return r.manager.PrepareDocument(ctx, request)

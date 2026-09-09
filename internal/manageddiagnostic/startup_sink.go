@@ -70,17 +70,6 @@ type startupAccounting struct {
 }
 
 func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation QueryResult) (StartupDiagnosticReceipt, error) {
-	selector, err := safeStartupSelector(s.Selector)
-	if err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, err
-	}
-	pathInfo, err := os.Lstat(s.Root)
-	if err != nil || pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.IsDir() {
-		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root must be a private writable directory")
-	}
-	if s.afterRootLstat != nil {
-		s.afterRootLstat()
-	}
 	doc, err := projectStartupDiagnostics(attempt, generation)
 	if err != nil {
 		return StartupDiagnosticReceipt{Status: "omitted"}, err
@@ -94,7 +83,6 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic byte limit exceeded")
 	}
 	doc.Accounting.RetainedBytes = len(raw)
-	// RetainedBytes changes its own encoding length; converge within a tiny fixed bound.
 	for i := 0; i < 4; i++ {
 		raw, _ = json.Marshal(doc)
 		raw = append(raw, '\n')
@@ -109,37 +97,77 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 	if err := ValidateStartupDiagnostics(raw); err != nil {
 		return StartupDiagnosticReceipt{Status: "omitted"}, err
 	}
-	root, err := os.OpenRoot(s.Root)
-	if err != nil {
+	if err := hardenedPublish(s.Root, s.Selector, raw, ValidateStartupDiagnostics, s.afterRootLstat); err != nil {
 		return StartupDiagnosticReceipt{Status: "omitted"}, err
+	}
+	sum := sha256.Sum256(raw)
+	return StartupDiagnosticReceipt{Status: "available", Digest: "sha256:" + hex.EncodeToString(sum[:]), Bytes: len(raw)}, nil
+}
+
+// PublishHardened writes already-finalized private diagnostic bytes using the
+// same fail-closed publication path as StartupDiagnosticSink.
+func PublishHardened(root, selector string, raw []byte, validate func([]byte) error) error {
+	return hardenedPublish(root, selector, raw, validate, nil)
+}
+
+func hardenedPublish(rootPath, selector string, raw []byte, validate func([]byte) error, afterRootLstat func()) error {
+	selector, err := safeStartupSelector(selector)
+	if err != nil {
+		return err
+	}
+	if validate == nil {
+		return errors.New("private diagnostic validator required")
+	}
+	if err := validate(raw); err != nil {
+		return err
+	}
+	pathInfo, err := os.Lstat(rootPath)
+	if err != nil || pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.IsDir() {
+		return errors.New("diagnostic root must be a private writable directory")
+	}
+	if afterRootLstat != nil {
+		afterRootLstat()
+	}
+	root, err := os.OpenRoot(rootPath)
+	if err != nil {
+		return err
 	}
 	defer root.Close()
 	opened, err := root.Open(".")
 	if err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root unavailable")
+		return errors.New("diagnostic root unavailable")
 	}
 	openedInfo, statErr := opened.Stat()
 	closeErr := opened.Close()
 	if statErr != nil || closeErr != nil || !openedInfo.IsDir() || !os.SameFile(pathInfo, openedInfo) || openedInfo.Mode().Perm()&0222 == 0 || openedInfo.Mode().Perm()&0077 != 0 {
-		return StartupDiagnosticReceipt{Status: "omitted"}, errors.New("startup diagnostic root must be a private writable directory")
+		return errors.New("diagnostic root must be a private writable directory")
 	}
 	if dir := filepath.Dir(selector); dir != "." {
 		if err := root.MkdirAll(dir, 0700); err != nil {
-			return StartupDiagnosticReceipt{Status: "omitted"}, err
+			return err
+		}
+		// Reject symlinks in every existing nested component.
+		parts := strings.Split(dir, string(filepath.Separator))
+		for i := range parts {
+			component := filepath.Join(parts[:i+1]...)
+			info, err := root.Lstat(component)
+			if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+				return errors.New("diagnostic selector parent must be a private directory")
+			}
 		}
 	}
 	var nonce [8]byte
 	if _, err = io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, err
+		return err
 	}
 	tmp := selector + ".tmp-" + hex.EncodeToString(nonce[:])
 	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, err
+		return err
 	}
-	ok := false
+	published := false
 	defer func() {
-		if !ok {
+		if !published {
 			_ = root.Remove(tmp)
 		}
 	}()
@@ -151,15 +179,38 @@ func (s StartupDiagnosticSink) Finalize(attempt StartupAttemptQuery, generation 
 		err = closeErr
 	}
 	if err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, err
+		return err
+	}
+	check, err := root.Open(tmp)
+	if err != nil {
+		return err
+	}
+	stored, readErr := io.ReadAll(check)
+	info, statErr := check.Stat()
+	closeErr = check.Close()
+	if readErr != nil || statErr != nil || closeErr != nil || info.Mode().Perm() != 0600 || info.Mode().IsRegular() == false || info.Sys() == nil || !bytes.Equal(stored, raw) {
+		return errors.New("diagnostic temporary file validation failed")
+	}
+	if err := validate(stored); err != nil {
+		return err
 	}
 	if err = root.Link(tmp, selector); err != nil {
-		return StartupDiagnosticReceipt{Status: "omitted"}, err
+		return err
 	}
-	ok = true
-	_ = root.Remove(tmp)
-	sum := sha256.Sum256(raw)
-	return StartupDiagnosticReceipt{Status: "available", Digest: "sha256:" + hex.EncodeToString(sum[:]), Bytes: len(raw)}, nil
+	published = true
+	if err = root.Remove(tmp); err != nil {
+		return err
+	}
+	dir, err := root.Open(".")
+	if err != nil {
+		return err
+	}
+	err = dir.Sync()
+	closeErr = dir.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 
 func safeStartupSelector(selector string) (string, error) {

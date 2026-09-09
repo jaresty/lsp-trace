@@ -69,6 +69,9 @@ func TestFR23PrivateRequestDiagnosticMutationsAndPublication(t *testing.T) {
 		d["selected_operation"].(map[string]any)["classification"] = "TIMEOUT_OBSERVED"
 	})
 	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(root, "private.json")
 	if err := publishPrivateRequestDiagnostic(root, "private.json", raw); err != nil {
 		t.Fatal(err)

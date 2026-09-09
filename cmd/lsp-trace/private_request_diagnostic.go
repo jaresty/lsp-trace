@@ -214,21 +214,10 @@ func publishPrivateRequestDiagnostic(rootPath, selector string, raw []byte) erro
 	if !filepath.IsAbs(rootPath) {
 		return fmt.Errorf("absolute private diagnostic root required")
 	}
-	if _, err := safeStartupSelector(selector); err != nil {
-		return fmt.Errorf("unsafe private diagnostic selector")
-	}
-	if _, err := decodePrivateRequestDiagnostic(bytes.TrimSpace(raw)); err != nil {
+	return manageddiagnostic.PublishHardened(rootPath, selector, raw, func(data []byte) error {
+		_, err := decodePrivateRequestDiagnostic(bytes.TrimSpace(data))
 		return err
-	}
-	root, err := os.OpenRoot(rootPath)
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-	if err := writeRootFile(root, selector, raw); err != nil {
-		return err
-	}
-	return syncRoot(root)
+	})
 }
 
 func runPrivateRequestDiagnosticValidation(args []string, stdout, stderr io.Writer) int {
