@@ -1112,7 +1112,8 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	case <-ctx.Done():
 		// Retire the readiness-owned transport before closing its diagnostics, then
 		// join the reader so every shutdown read observation precedes the terminal.
-		_ = child.Teardown(context.Background())
+		preExit := readinessChildExited(child)
+		teardown := child.Teardown(context.Background())
 		_ = child.Close()
 		late := <-response
 		if late.err != nil {
@@ -1128,7 +1129,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		if failure == session.InitializationTimeout {
 			terminal = manageddiagnostic.TerminalDeadlineExceeded
 		}
-		m.abortReadinessDiagnostic(child, opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended")
+		m.finishAbortedReadinessDiagnostic(opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended", preExit, teardown)
 	}
 }
 
@@ -1143,7 +1144,23 @@ func (m *Manager) describeReadinessDiagnostic(id string, metadata SessionMetadat
 	m.describeDiagnosticOperation(handle, "initialize", "", metadata)
 }
 
+func readinessChildExited(child Child) bool {
+	if observable, ok := child.(interface {
+		Observe() managedprocess.SurvivorObservation
+	}); ok {
+		return observable.Observe().Kind == managedprocess.SurvivorDead
+	}
+	return false
+}
+
 func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string) {
+	preExit := readinessChildExited(child)
+	teardown := child.Teardown(context.Background())
+	_ = child.Close()
+	m.finishAbortedReadinessDiagnostic(id, failure, phase, substep, terminal, reason, preExit, teardown)
+}
+
+func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string, preExit bool, teardown managedprocess.TeardownObservation) {
 	m.mu.Lock()
 	op := m.readiness[id]
 	var sid string
@@ -1154,14 +1171,6 @@ func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure sessi
 	m.sequence++
 	sequence := m.sequence
 	m.mu.Unlock()
-	preExit := false
-	if observable, ok := child.(interface {
-		Observe() managedprocess.SurvivorObservation
-	}); ok {
-		preExit = observable.Observe().Kind == managedprocess.SurvivorDead
-	}
-	teardown := child.Teardown(context.Background())
-	_ = child.Close()
 	m.terminalReadinessEvent(id, diagnosticEventTerminalFailure)
 	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
 	if m.diagnostics != nil && sid != "" {
