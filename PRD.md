@@ -15,7 +15,7 @@ The tool does not identify domain-specific “roots,” interpret workflows, pro
 
 The repository includes an additive, bounded retained analytics v2 surface for synthetic local qualification. Its explicit CLI/MCP routes and four public schema-family mappings preserve historical v1 bytes and do not confer permission, Program B admission, production authority, deployment, or shipment status. Deployment availability remains unknown; see `docs/bounded-retained-analytics-v2.md`.
 
-#### FR222 — rooted publication input parity
+#### FR22 — rooted publication input parity
 
 All three analytics v2 routes accept either inline canonical graph bytes or one relative selector beneath a process-pinned publication root, never both. Selector admission rejects absolute, escaping, missing, symlinked, colliding, wrong-family, wrong-length, and wrong-digest inputs before analytics. Results identify claim provenance as exactly `UNVERIFIED_LOCAL` or `VERIFIED_PROVENANCE`; only complete rooted exact-byte/schema/digest verifier evidence permits the latter. CLI and MCP preserve exact canonical result-byte parity for equivalent carriers and COMPLETE/LIMIT outcomes, and output publication retains the existing atomic no-replace contract.
 

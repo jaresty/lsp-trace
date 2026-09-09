@@ -17,7 +17,8 @@ const (
 )
 
 // BoundedRetainedAnalyticsV2Handler runs package-certified local synthetic
-// analytics only. ClaimLevel is explicit output context, not authorization.
+// analytics only. Selector verification authenticates input custody without
+// mutating the certified local result payload.
 func BoundedRetainedAnalyticsV2Handler(_ context.Context, request Request) (Result, *Failure) {
 	var input struct {
 		Input               json.RawMessage `json:"input"`
@@ -36,7 +37,6 @@ func BoundedRetainedAnalyticsV2Handler(_ context.Context, request Request) (Resu
 	}
 	var text string
 	var raw []byte
-	var evidence *normativeanalytics.VerifierEvidence
 	if input.PublicationSelector != nil {
 		if len(input.Input) != 0 || request.PublicationRoot == nil || input.PublicationSelector.ArtifactSchemaID != "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.normative-retained-graph.v1.schema.json" {
 			return Result{}, inputFailure("INPUT_INVALID", normativeanalytics.ErrInvalidLocalRequest)
@@ -51,7 +51,6 @@ func BoundedRetainedAnalyticsV2Handler(_ context.Context, request Request) (Resu
 		if uint64(len(raw)) != input.PublicationSelector.ArtifactLength || digest != input.PublicationSelector.ArtifactDigest {
 			return Result{}, inputFailure("INPUT_INVALID", errors.New("publication selector exact-byte verification failed"))
 		}
-		evidence = &normativeanalytics.VerifierEvidence{ArtifactSchemaID: input.PublicationSelector.ArtifactSchemaID, ArtifactDigest: digest, ArtifactLength: uint64(len(raw)), Verification: "EXACT_BYTES_SCHEMA_DIGEST_VERIFIED"}
 	} else {
 		if len(input.Input) == 0 {
 			return Result{}, inputFailure("INPUT_INVALID", normativeanalytics.ErrInvalidLocalRequest)
@@ -74,14 +73,6 @@ func BoundedRetainedAnalyticsV2Handler(_ context.Context, request Request) (Resu
 	result, err := normativeanalytics.EvaluateLocal(normativeanalytics.LocalRequest{Operation: op, BuildRevision: graph.BuildRevision, RetainedJSON: raw, Relations: input.Filter, Policy: normativeanalytics.LocalPolicy{MaxWork: input.MaxWork}})
 	if err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
-	}
-	level := normativeanalytics.ClaimUnverifiedLocal
-	if evidence != nil {
-		level = normativeanalytics.ClaimVerifiedProvenance
-	}
-	result, err = normativeanalytics.Contextualize(result, level, evidence)
-	if err != nil {
-		return Result{}, inputFailure("OUTPUT_VALIDATION_FAILED", err)
 	}
 	artifact, err := normativeanalytics.MarshalLocalResult(result)
 	if err != nil {

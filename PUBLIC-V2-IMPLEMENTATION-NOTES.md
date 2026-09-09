@@ -14,9 +14,9 @@ Completed the additive layer-28 public analytics v2 repair for analysis, metrics
 
 ## Output and provenance
 
-- Results expose exactly `UNVERIFIED_LOCAL` or `VERIFIED_PROVENANCE`.
-- Inline/raw bytes remain `UNVERIFIED_LOCAL`.
-- `VERIFIED_PROVENANCE` requires verifier evidence for rooted exact bytes, schema, digest, and length; digest alone cannot elevate a claim.
+- Results are unverified local deterministic evidence with certified package payload and schema bytes unchanged.
+- Inline/raw and rooted-selector evaluation produce the same canonical result bytes.
+- Rooted exact-byte/schema/digest/length verification remains separate optional verifier/receipt evidence; it does not mutate the result payload, and digest alone cannot elevate a claim.
 - Existing output publication remains atomic, owner-rooted, reread-verified, and no-replace.
 
 ## MCP and parity

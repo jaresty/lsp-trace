@@ -189,7 +189,7 @@ func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T)
 	if compact["progress"] != "completed" {
 		t.Fatalf("%s: %v", progress, compact)
 	}
-	if got := len(server.Registry.Advertised()); got != 25 {
+	if got := len(server.Registry.Advertised()); got != 28 {
 		t.Fatalf("%s: got %d", cardinality, got)
 	}
 }
@@ -438,7 +438,7 @@ func TestServerShutdownCancelsInFlightExecutor(t *testing.T) {
 }
 
 func TestCapabilitiesDispatch(t *testing.T) {
-	const capabilityAssertion = "capabilities returns immutable metadata for all 25 current canonical tools"
+	const capabilityAssertion = "capabilities returns immutable metadata for all 28 current canonical tools"
 	t.Log("ASSERTION: " + capabilityAssertion)
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_capabilities","arguments":{}}}` + "\n"
 	got := runMessages(t, input)
@@ -446,7 +446,7 @@ func TestCapabilitiesDispatch(t *testing.T) {
 	capEnvelope := capCall["structuredContent"].(map[string]any)
 	capResult := capEnvelope["result"].(map[string]any)
 	tools := capResult["tools"].([]any)
-	if len(tools) != 25 {
+	if len(tools) != 28 {
 		t.Errorf("%s: got %d tools", capabilityAssertion, len(tools))
 	}
 	for _, raw := range tools {
@@ -542,7 +542,7 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
-	const listAssertion = "tools/list advertises the 25 current canonical names"
+	const listAssertion = "tools/list advertises the 28 current canonical names"
 	const bindingAssertion = "tools/call binds one canonical operation envelope in structuredContent and one equal text content item"
 	const unknownAssertion = "unknown tool calls use native MCP unknown-tool errors without an operation envelope"
 	for _, a := range []string{transportAssertion, listAssertion, bindingAssertion, unknownAssertion} {
@@ -561,7 +561,7 @@ func TestTransportContract(t *testing.T) {
 	}
 	result, _ := got[1]["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 25 {
+	if len(tools) != 28 {
 		t.Errorf("%s: got %d tools", listAssertion, len(tools))
 	}
 	call, _ := got[2]["result"].(map[string]any)

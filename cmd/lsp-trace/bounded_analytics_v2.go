@@ -39,7 +39,6 @@ func runBoundedAnalyticsV2(command string, op normativeanalytics.Operation, args
 		return 1
 	}
 	var raw []byte
-	var evidence *normativeanalytics.VerifierEvidence
 	var err error
 	if selectorMode {
 		if *publicationRoot == "" || *inputSelector == "" || *inputSchema != "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.normative-retained-graph.v1.schema.json" || *inputLength == 0 {
@@ -58,8 +57,6 @@ func runBoundedAnalyticsV2(command string, op normativeanalytics.Operation, args
 			digest := "sha256:" + hex.EncodeToString(sum[:])
 			if uint64(len(raw)) != *inputLength || digest != *inputDigest {
 				err = fmt.Errorf("publication selector exact-byte verification failed")
-			} else {
-				evidence = &normativeanalytics.VerifierEvidence{ArtifactSchemaID: *inputSchema, ArtifactDigest: digest, ArtifactLength: uint64(len(raw)), Verification: "EXACT_BYTES_SCHEMA_DIGEST_VERIFIED"}
 			}
 		}
 	} else {
@@ -75,15 +72,6 @@ func runBoundedAnalyticsV2(command string, op normativeanalytics.Operation, args
 		return 1
 	}
 	result, err := normativeanalytics.EvaluateLocal(normativeanalytics.LocalRequest{Operation: op, BuildRevision: graph.BuildRevision, RetainedJSON: raw, Relations: filters, Policy: normativeanalytics.LocalPolicy{MaxWork: *maxWork}})
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	level := normativeanalytics.ClaimUnverifiedLocal
-	if evidence != nil {
-		level = normativeanalytics.ClaimVerifiedProvenance
-	}
-	result, err = normativeanalytics.Contextualize(result, level, evidence)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1

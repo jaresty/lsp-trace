@@ -39,9 +39,9 @@ const usageText = `usage:
   lsp-trace export-retained-calls [--version v1|v2] [--output SELECTOR] PATH|-
   lsp-trace bounded-retained-metrics [--output SELECTOR] PATH|-
   lsp-trace bounded-retained-analysis --operation PROJECT|PATH|COMPONENTS [--start ID --end ID | --mode WEAK|STRONG] [--max-work N] [--output SELECTOR] PATH|-
-  lsp-trace bounded-retained-analysis-v2 --operation ANALYSIS --filter RELATION --max-work N --claim-level VERIFIED|UNVERIFIED [--output SELECTOR] PATH|-
-  lsp-trace bounded-retained-metrics-v2 --operation METRICS --filter RELATION --max-work N --claim-level VERIFIED|UNVERIFIED [--output SELECTOR] PATH|-
-  lsp-trace bounded-retained-ranking-v2 --operation RANKING --filter RELATION --max-work N --claim-level VERIFIED|UNVERIFIED [--output SELECTOR] PATH|-
+  lsp-trace bounded-retained-analysis-v2 --operation ANALYSIS --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
+  lsp-trace bounded-retained-metrics-v2 --operation METRICS --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
+  lsp-trace bounded-retained-ranking-v2 --operation RANKING --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
   lsp-trace verify PATH
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-

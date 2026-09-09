@@ -70,14 +70,18 @@ func TestBoundedAnalyticsV2InputParityAndVerifiedSelector(t *testing.T) {
 			if fail != nil {
 				t.Fatal(fail)
 			}
-			if string(inline.Artifact) != string(object.Artifact) {
-				t.Fatal("ASSERT_ANALYTICS_INLINE_RAW_BYTE_PARITY")
+			if string(inline.Artifact) != string(object.Artifact) || string(inline.Artifact) != string(selected.Artifact) {
+				t.Fatal("ASSERT_ANALYTICS_INLINE_RAW_SELECTOR_BYTE_PARITY")
 			}
-			var local, verified map[string]any
-			json.Unmarshal(inline.Artifact, &local)
-			json.Unmarshal(selected.Artifact, &verified)
-			if local["claim_level"] != normativeanalytics.ClaimUnverifiedLocal || verified["claim_level"] != normativeanalytics.ClaimVerifiedProvenance || verified["provenance"] == nil {
-				t.Fatal("ASSERT_ANALYTICS_CLAIM_PROVENANCE")
+			var payload map[string]any
+			if err := json.Unmarshal(selected.Artifact, &payload); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := payload["claim_level"]; ok {
+				t.Fatal("ASSERT_ANALYTICS_CERTIFIED_PAYLOAD_HAS_NO_CLAIM_LEVEL")
+			}
+			if _, ok := payload["provenance"]; ok {
+				t.Fatal("ASSERT_ANALYTICS_CERTIFIED_PAYLOAD_HAS_NO_PROVENANCE")
 			}
 		}
 	}

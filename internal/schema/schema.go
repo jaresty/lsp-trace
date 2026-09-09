@@ -46,9 +46,9 @@ var familyVersions = map[string]map[string]string{
 	FamilyBoundedMetrics:           {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 	FamilyBoundedRanking:           {"v1": "lsp-trace.bounded-retained-ranking.v1"},
 	FamilyBoundedGraphV2:           {"v2": "lsp-trace.normative-retained-graph.v1"},
-	FamilyBoundedAnalysisV2:        {"v2": "lsp-trace.local-normative-analysis.v1"},
-	FamilyBoundedMetricsV2:         {"v2": "lsp-trace.local-normative-metrics.v1"},
-	FamilyBoundedRankingV2:         {"v2": "lsp-trace.local-normative-ranking.v1"},
+	FamilyBoundedAnalysisV2:        {"v2": "lsp-trace.local-normative-analysis.v1", "local-v1": "lsp-trace.local-normative-analysis.v1"},
+	FamilyBoundedMetricsV2:         {"v2": "lsp-trace.local-normative-metrics.v1", "local-v1": "lsp-trace.local-normative-metrics.v1"},
+	FamilyBoundedRankingV2:         {"v2": "lsp-trace.local-normative-ranking.v1", "local-v1": "lsp-trace.local-normative-ranking.v1"},
 }
 
 var versionFields = map[string]string{
