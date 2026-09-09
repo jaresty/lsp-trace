@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
@@ -190,11 +191,69 @@ func writeMessage(t *testing.T, w io.Writer, m lspwire.Message) {
 	}
 }
 
-func rejectPerturbation(t *testing.T, assertion string) {
+func rejectPerturbation(t *testing.T, assertion string, realWrongState ...bool) bool {
 	t.Helper()
-	if os.Getenv("LSP_TRACE_CONFORMANCE_PERTURB") == assertion {
+	matched := os.Getenv("LSP_TRACE_CONFORMANCE_PERTURB") == assertion
+	if matched && len(realWrongState) == 0 {
 		t.Fatalf("%s: FAIL injected minimal wrong state", assertion)
 	}
+	return matched
+}
+
+type historicalRegistryFixtureTool struct {
+	Name          string `json:"name"`
+	InputSchemaID string `json:"input_schema_id"`
+}
+
+type historicalRegistryAdapter struct {
+	tools  []mcp.Tool
+	byName map[string]mcp.Tool
+}
+
+func loadHistoricalRegistryFixture(t *testing.T) []historicalRegistryFixtureTool {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "historical-always-local-registry.v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture []historicalRegistryFixtureTool
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := mcpcontract.LoadManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contracts := make(map[string]mcpcontract.ToolContract, len(manifest.Tools))
+	for _, tool := range manifest.Tools {
+		contracts[tool.Name] = tool
+	}
+	for _, expected := range fixture {
+		contract, ok := contracts[expected.Name]
+		if !ok || contract.InputSchemaID != expected.InputSchemaID {
+			t.Fatalf("ASSERT_HISTORICAL_REGISTRY_FIXTURE_CONTRACT: expected=%+v contract=%+v ok=%v", expected, contract, ok)
+		}
+	}
+	return fixture
+}
+
+func newHistoricalRegistryAdapter(fixture []historicalRegistryFixtureTool) historicalRegistryAdapter {
+	adapter := historicalRegistryAdapter{tools: make([]mcp.Tool, 0, len(fixture)), byName: make(map[string]mcp.Tool, len(fixture))}
+	for _, expected := range fixture {
+		tool := mcp.Tool{Name: expected.Name, InputSchemaID: expected.InputSchemaID, Availability: mcp.Enabled}
+		adapter.tools = append(adapter.tools, tool)
+		adapter.byName[tool.Name] = tool
+	}
+	return adapter
+}
+
+func (r historicalRegistryAdapter) Advertised() []mcp.Tool {
+	return append([]mcp.Tool(nil), r.tools...)
+}
+
+func (r historicalRegistryAdapter) Resolve(name string) (mcp.Tool, bool) {
+	tool, ok := r.byName[name]
+	return tool, ok
 }
 
 func TestDisabledIntegratedConformance(t *testing.T) {
@@ -656,15 +715,19 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 	})
 
 	t.Run("ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
-		rejectPerturbation(t, "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
-		registry := mcp.NewHistoricalAlwaysLocalRegistry()
+		const assertion = "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS"
+		fixture := loadHistoricalRegistryFixture(t)
+		if rejectPerturbation(t, assertion, true) {
+			fixture = fixture[:len(fixture)-1]
+		}
+		registry := newHistoricalRegistryAdapter(fixture)
 		if got := len(registry.Advertised()); got != 12 {
-			t.Fatalf("advertised=%d", got)
+			t.Fatalf("%s: advertised=%d want=12", assertion, got)
 		}
 		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {
 			tool, ok := registry.Resolve(name)
 			if !ok || tool.Availability != mcp.Enabled {
-				t.Fatalf("enabled lifecycle %s=%+v ok=%v", name, tool, ok)
+				t.Fatalf("%s: enabled lifecycle %s=%+v ok=%v", assertion, name, tool, ok)
 			}
 		}
 		starter := sessionruntime.ManagedStarter{Manager: managedprocess.New(containment.NewRuntimeGate(), managedprocess.Options{})}
@@ -673,50 +736,54 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		result := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: profile(t, t.TempDir()), Process: managedprocess.Spec{Path: fake}})
 		after := manager.Census()
 		if result.Failure != session.ProcessContainmentUnavailable || before != after || after != (sessionruntime.Census{}) {
-			t.Fatalf("result=%+v before=%+v after=%+v", result, before, after)
+			t.Fatalf("%s: result=%+v before=%+v after=%+v", assertion, result, before, after)
 		}
-		t.Log("PASS ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
+		t.Log("PASS " + assertion)
 	})
 
 	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT", func(t *testing.T) {
-		registry := mcp.NewRegistry(true)
-		if got := len(registry.Advertised()); got != 28 {
-			t.Fatalf("advertised=%d", got)
+		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT"
+		tools := mcp.NewRegistry(true).Advertised()
+		if rejectPerturbation(t, assertion, true) {
+			tools = tools[:len(tools)-1]
 		}
-		t.Log("PASS ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT")
+		if got := len(tools); got != 28 {
+			t.Fatalf("%s: advertised=%d want=28", assertion, got)
+		}
+		t.Log("PASS " + assertion)
 	})
 
 	t.Run("ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED", func(t *testing.T) {
-		_, file, _, ok := runtime.Caller(0)
-		if !ok {
-			t.Fatal("ASSERT_REGISTRY_EVIDENCE_SOURCE_AVAILABLE")
+		const assertion = "ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED"
+		historical := newHistoricalRegistryAdapter(loadHistoricalRegistryFixture(t)).Advertised()
+		current := mcp.NewRegistry(true).Advertised()
+		if rejectPerturbation(t, assertion, true) {
+			current = append([]mcp.Tool(nil), historical...)
 		}
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
+		currentNames := make(map[string]bool, len(current))
+		for _, tool := range current {
+			currentNames[tool.Name] = true
 		}
-		assertRegistryFixtureUse(t, string(raw), "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", "registry := mcp.NewHistoricalAlwaysLocalRegistry()", "registry := mcp.NewRegistry(")
-		assertRegistryFixtureUse(t, string(raw), "ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT", "registry := mcp.NewRegistry(true)", "registry := mcp.NewHistoricalAlwaysLocalRegistry()")
-		t.Log("PASS ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED")
+		currentOnly := 0
+		for _, tool := range current {
+			found := false
+			for _, old := range historical {
+				found = found || old.Name == tool.Name
+			}
+			if !found {
+				currentOnly++
+			}
+		}
+		for _, tool := range historical {
+			if !currentNames[tool.Name] {
+				t.Fatalf("%s: historical tool missing from current registry: %s", assertion, tool.Name)
+			}
+		}
+		if len(historical) != 12 || len(current) != 28 || currentOnly == 0 {
+			t.Fatalf("%s: historical=%d current=%d current_only=%d", assertion, len(historical), len(current), currentOnly)
+		}
+		t.Log("PASS " + assertion)
 	})
-}
-
-func assertRegistryFixtureUse(t *testing.T, source, assertion, required, forbidden string) {
-	t.Helper()
-	start := strings.Index(source, `t.Run("`+assertion+`"`)
-	if start < 0 {
-		t.Fatalf("%s: test body absent", assertion)
-	}
-	body := source[start:]
-	if next := strings.Index(body[len(assertion):], "\n\tt.Run("); next >= 0 {
-		body = body[:len(assertion)+next]
-	}
-	if !strings.Contains(body, required) {
-		t.Fatalf("%s: required constructor %q absent", assertion, required)
-	}
-	if strings.Contains(body, forbidden) {
-		t.Fatalf("%s: forbidden constructor %q present", assertion, forbidden)
-	}
 }
 
 func executeLifecycle(t *testing.T, executor *lifecycleops.Executor, name operation.Name, sessionID string, generation uint64, callerID string) operation.Result {

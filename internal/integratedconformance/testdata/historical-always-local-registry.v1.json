@@ -1,0 +1,14 @@
+[
+  {"name":"lsp_session_v1_list","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-reserved.v1.schema.json"},
+  {"name":"lsp_session_v1_restart","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-reserved.v1.schema.json"},
+  {"name":"lsp_session_v1_status","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-reserved.v1.schema.json"},
+  {"name":"lsp_session_v1_stop","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-reserved.v1.schema.json"},
+  {"name":"lsp_trace_v1_capabilities","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-capabilities.v1.schema.json"},
+  {"name":"lsp_trace_v1_execute","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-execute.v1.schema.json"},
+  {"name":"lsp_trace_v1_filter","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-filter.v1.schema.json"},
+  {"name":"lsp_trace_v1_incoming","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-incoming.v1.schema.json"},
+  {"name":"lsp_trace_v1_inspect","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-inspect.v1.schema.json"},
+  {"name":"lsp_trace_v1_schema_get","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-schema-get.v1.schema.json"},
+  {"name":"lsp_trace_v1_validate","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-validate.v1.schema.json"},
+  {"name":"lsp_trace_v1_verify","input_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify.v1.schema.json"}
+]
