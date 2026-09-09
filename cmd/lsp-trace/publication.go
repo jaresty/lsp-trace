@@ -468,6 +468,11 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		admit = admitAcquisitionV2
 	case *family == graphprovenance.Family && (*version == "v3" || *version == graphprovenance.VersionV3):
 		admit = admitAcquisitionV3
+	case *family == graphprovenance.Family && (*version == "v5" || *version == graphprovenance.VersionV5):
+		admit = func(data []byte) error {
+			_, err := graphprovenance.ValidateFor(data, graphprovenance.Family, *version)
+			return err
+		}
 	case *family == graphprovenance.Family && *version == "v1":
 		admit = admitGraphProvenance
 	case *family == "retained-calls" && *version == "v1":

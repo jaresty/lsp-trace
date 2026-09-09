@@ -40,7 +40,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyTrustProvisioningReceipt: {"v1": "lsp-trace.trust-provisioning-receipt.v1"},
 	FamilySourceDenominator:        {"v1": SourceDenominatorVersionV1},
 	FamilyOperationalCustody:       {"v1": "lsp-trace.operational-custody.v1"},
-	FamilyGraphProvenance:          {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3"},
+	FamilyGraphProvenance:          {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v5": "lsp-trace.graph-provenance.v5"},
 	FamilyRetainedCalls:            {"v1": "lsp-trace.retained-calls.v1", "v2": "lsp-trace.retained-calls.v2"},
 	FamilyBoundedAnalysis:          {"v1": "lsp-trace.bounded-retained-analysis.v1"},
 	FamilyBoundedMetrics:           {"v1": "lsp-trace.bounded-retained-metrics.v1"},
