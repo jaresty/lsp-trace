@@ -51,6 +51,21 @@ func WithPublicAnalyticsV2(manifest *Manifest) *Manifest {
 		copy.Schemas = append(copy.Schemas, s)
 	}
 	copy.Tools = append([]ToolContract{}, manifest.Tools...)
+	analyticsArtifactIDs := []string{
+		PublicAnalyticsV2GraphArtifactID,
+		PublicAnalyticsV2AnalysisArtifactID,
+		PublicAnalyticsV2MetricsArtifactID,
+		PublicAnalyticsV2RankingArtifactID,
+	}
+	for i := range copy.Tools {
+		if copy.Tools[i].Name != "lsp_trace_v1_schema_get" && copy.Tools[i].Name != "lsp_trace_v1_validate" {
+			continue
+		}
+		copy.Tools[i].ArtifactSchemaIDs = append([]string{}, copy.Tools[i].ArtifactSchemaIDs...)
+		for _, id := range analyticsArtifactIDs {
+			copy.Tools[i].ArtifactSchemaIDs = append(copy.Tools[i].ArtifactSchemaIDs, id)
+		}
+	}
 	for _, x := range []struct{ name, artifact string }{
 		{"lsp_trace_v2_bounded_retained_analysis", PublicAnalyticsV2AnalysisArtifactID},
 		{"lsp_trace_v2_bounded_retained_metrics", PublicAnalyticsV2MetricsArtifactID},
