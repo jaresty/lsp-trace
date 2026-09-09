@@ -3,6 +3,7 @@ package seedbinding
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -89,9 +90,12 @@ func TestBindingRejectsOversizeAndInvalidCodeUnitBoundaries(t *testing.T) {
 
 func TestHostReceiptAuthorityBindsOpenedTarget(t *testing.T) {
 	root, manifest := seedFixture(t)
+	manifestBytes, _ := json.Marshal(manifest)
+	manifestSum := sha256.Sum256(manifestBytes)
 	receipt := HostCustodyReceipt{
 		Authenticated: true, Repository: root, SourceRevision: manifest.SourceRevision,
 		TargetPath: manifest.ExpectedDeclaringFile, TargetSourceSHA256: manifest.SourceSHA256,
+		SeedManifestSHA256: fmt.Sprintf("%x", manifestSum),
 	}
 	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{Receipt: receipt}); got.Status != Match {
 		t.Fatalf("ASSERT_HOST_RECEIPT_EXACT_TARGET_MATCH: %+v", got)
@@ -99,6 +103,11 @@ func TestHostReceiptAuthorityBindsOpenedTarget(t *testing.T) {
 	receipt.TargetSourceSHA256 = strings.Repeat("0", 64)
 	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{Receipt: receipt}); got.Status == Match {
 		t.Fatal("ASSERT_HOST_RECEIPT_TARGET_DIGEST_MISMATCH_REJECTED")
+	}
+	receipt.TargetSourceSHA256 = manifest.SourceSHA256
+	receipt.SeedManifestSHA256 = strings.Repeat("0", 64)
+	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{Receipt: receipt}); got.Status == Match {
+		t.Fatal("ASSERT_HOST_RECEIPT_MANIFEST_DIGEST_MISMATCH_REJECTED")
 	}
 	if got := ValidateMechanical(context.Background(), root, manifest, HostReceiptAuthority{}); got.Status == Match {
 		t.Fatal("ASSERT_HOST_RECEIPT_UNAUTHENTICATED_FAILS_CLOSED")

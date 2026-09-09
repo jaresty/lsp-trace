@@ -49,7 +49,8 @@ func TestBootstrapConfigIsStrictAndHostOwned(t *testing.T) {
 func TestBootstrapSeedBindingUsesManagedProviderWithoutExternalValidator(t *testing.T) {
 	workspace := t.TempDir()
 	manifest := &seedbinding.Manifest{SchemaVersion: seedbinding.VersionV2, ID: "seed", SourceRevision: "rev", Validator: seedbinding.ValidatorIdentity{Language: "csharp", Authority: "MANAGED_LSP", Name: "csharp-ls", Version: "host-pinned"}}
-	process := bootstrapProcessConfig{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "csharp", EnvironmentReference: "host"}, Execution: managedExecutionAuthority{Path: "/managed-provider", Directory: workspace}, SeedBinding: manifest}
+	receipt := &seedbinding.HostCustodyReceipt{Authenticated: true, Repository: workspace, SourceRevision: "rev", TargetPath: "a.cs", TargetSourceSHA256: strings.Repeat("a", 64), SeedManifestSHA256: strings.Repeat("b", 64)}
+	process := bootstrapProcessConfig{Profile: bootstrapProfileIdentity{TrustDomain: "test", Workspace: workspace, Profile: "csharp", EnvironmentReference: "host"}, Execution: managedExecutionAuthority{Path: "/managed-provider", Directory: workspace}, SeedBinding: manifest, SeedCustodyReceipt: receipt}
 	config := bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{process}}
 	raw, _ := json.Marshal(config)
 	path := filepath.Join(t.TempDir(), "bootstrap.json")
@@ -61,8 +62,15 @@ func TestBootstrapSeedBindingUsesManagedProviderWithoutExternalValidator(t *test
 		t.Fatal(err)
 	}
 	prepared, err := prepareBootstrap(loaded)
-	if err != nil || prepared[0].seedBinding != loaded.Processes[0].SeedBinding {
-		t.Fatalf("ASSERT_BOOTSTRAP_SEED_MANIFEST_EXACT_WITHOUT_EXTERNAL_VALIDATOR: prepared=%+v err=%v", prepared, err)
+	if err != nil || prepared[0].seedBinding != loaded.Processes[0].SeedBinding || seedAuthoritiesFromConfig(loaded) == nil {
+		t.Fatalf("ASSERT_BOOTSTRAP_SEED_MANIFEST_AND_HOST_AUTHORITY_EXACT: prepared=%+v err=%v", prepared, err)
+	}
+	withoutReceipt := loaded
+	withoutReceipt.Processes[0].SeedCustodyReceipt = nil
+	raw, _ = json.Marshal(withoutReceipt)
+	_ = os.WriteFile(path, raw, 0600)
+	if _, err := loadBootstrapConfig(path); err == nil {
+		t.Fatal("ASSERT_SEED_V2_WITHOUT_HOST_RECEIPT_FAILS_CLOSED")
 	}
 	loaded.Processes[0].SeedBinding.SchemaVersion = "unknown"
 	raw, _ = json.Marshal(loaded)

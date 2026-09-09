@@ -26,11 +26,12 @@ type bootstrapConfig struct {
 }
 
 type bootstrapProcessConfig struct {
-	Alias       string                    `json:"alias,omitempty"`
-	LanguageID  string                    `json:"language_id,omitempty"`
-	Profile     bootstrapProfileIdentity  `json:"profile"`
-	Execution   managedExecutionAuthority `json:"execution"`
-	SeedBinding *seedbinding.Manifest     `json:"seed_binding,omitempty"`
+	Alias              string                          `json:"alias,omitempty"`
+	LanguageID         string                          `json:"language_id,omitempty"`
+	Profile            bootstrapProfileIdentity        `json:"profile"`
+	Execution          managedExecutionAuthority       `json:"execution"`
+	SeedBinding        *seedbinding.Manifest           `json:"seed_binding,omitempty"`
+	SeedCustodyReceipt *seedbinding.HostCustodyReceipt `json:"seed_custody_receipt,omitempty"`
 }
 
 type bootstrapProfileIdentity struct {
@@ -101,6 +102,12 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	for i, process := range config.Processes {
 		if process.SeedBinding != nil && process.SeedBinding.SchemaVersion != seedbinding.VersionV2 {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding version invalid", i)
+		}
+		if (process.SeedBinding == nil) != (process.SeedCustodyReceipt == nil) {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed binding and custody receipt must be configured together", i)
+		}
+		if process.SeedCustodyReceipt != nil && !process.SeedCustodyReceipt.Authenticated {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d seed custody receipt is not authenticated", i)
 		}
 	}
 	return config, nil
@@ -206,6 +213,30 @@ func pinnedGitMetadata(directory string) (string, string) {
 		return "", ""
 	}
 	return filepath.Clean(root), strings.TrimSpace(string(commitBytes))
+}
+
+type bootstrapSeedAuthorities []seedbinding.HostReceiptAuthority
+
+func (a bootstrapSeedAuthorities) Verify(ctx context.Context, claim seedbinding.CustodyClaim) error {
+	for _, authority := range a {
+		if authority.Verify(ctx, claim) == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no authenticated bootstrap custody receipt matches seed claim")
+}
+
+func seedAuthoritiesFromConfig(config bootstrapConfig) seedbinding.RevisionAuthority {
+	authorities := make(bootstrapSeedAuthorities, 0, len(config.Processes))
+	for _, process := range config.Processes {
+		if process.SeedBinding != nil && process.SeedCustodyReceipt != nil {
+			authorities = append(authorities, seedbinding.HostReceiptAuthority{Receipt: *process.SeedCustodyReceipt})
+		}
+	}
+	if len(authorities) == 0 {
+		return nil
+	}
+	return authorities
 }
 
 func seedRevisionFromConfig(config bootstrapConfig) string {

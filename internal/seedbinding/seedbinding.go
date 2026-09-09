@@ -71,7 +71,7 @@ type ValidationResult struct {
 }
 
 type CustodyClaim struct {
-	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
+	Repository, SourceRevision, TargetPath, TargetSourceSHA256, SeedManifestSHA256 string
 }
 
 type RevisionAuthority interface {
@@ -81,6 +81,7 @@ type RevisionAuthority interface {
 type HostCustodyReceipt struct {
 	Authenticated                                              bool
 	Repository, SourceRevision, TargetPath, TargetSourceSHA256 string
+	SeedManifestSHA256                                         string
 	Prepared                                                   bool
 	PreparedManifestSHA256                                     string
 	PreparedAllowedChanges                                     []string
@@ -90,10 +91,10 @@ type HostReceiptAuthority struct{ Receipt HostCustodyReceipt }
 
 func (a HostReceiptAuthority) Verify(_ context.Context, claim CustodyClaim) error {
 	r := a.Receipt
-	if !r.Authenticated || r.Repository == "" || r.SourceRevision == "" || r.TargetPath == "" || r.TargetSourceSHA256 == "" {
+	if !r.Authenticated || r.Repository == "" || r.SourceRevision == "" || r.TargetPath == "" || r.TargetSourceSHA256 == "" || r.SeedManifestSHA256 == "" {
 		return fmt.Errorf("host custody receipt unauthenticated or unavailable")
 	}
-	if r.Repository != claim.Repository || r.SourceRevision != claim.SourceRevision || r.TargetPath != claim.TargetPath || !strings.EqualFold(r.TargetSourceSHA256, claim.TargetSourceSHA256) {
+	if r.Repository != claim.Repository || r.SourceRevision != claim.SourceRevision || r.TargetPath != claim.TargetPath || !strings.EqualFold(r.TargetSourceSHA256, claim.TargetSourceSHA256) || !strings.EqualFold(r.SeedManifestSHA256, claim.SeedManifestSHA256) {
 		return fmt.Errorf("host custody receipt mismatch")
 	}
 	if r.Prepared && r.PreparedManifestSHA256 == "" {
@@ -171,7 +172,12 @@ func ValidateMechanical(ctx context.Context, workspace string, m Manifest, revis
 	if e != nil || !bytes.Equal(digest[:], expected) {
 		return Outcome{Status: Mismatch, Terminal: SourceMismatch, PrivateDetail: "digest mismatch"}
 	}
-	claim := CustodyClaim{Repository: workspace, SourceRevision: m.SourceRevision, TargetPath: m.ExpectedDeclaringFile, TargetSourceSHA256: fmt.Sprintf("%x", digest)}
+	manifestBytes, err := json.Marshal(m)
+	if err != nil {
+		return invalid(LocatorInvalid, "seed manifest cannot be canonicalized")
+	}
+	manifestDigest := sha256.Sum256(manifestBytes)
+	claim := CustodyClaim{Repository: workspace, SourceRevision: m.SourceRevision, TargetPath: m.ExpectedDeclaringFile, TargetSourceSHA256: fmt.Sprintf("%x", digest), SeedManifestSHA256: fmt.Sprintf("%x", manifestDigest)}
 	if revision == nil || revision.Verify(ctx, claim) != nil {
 		return Outcome{Status: Unavailable, Terminal: BindingUnavailable, PrivateDetail: "authenticated custody receipt unavailable or rejected"}
 	}
