@@ -68,14 +68,30 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	}
 	result.CapabilityQuality.PrepareSucceeded = true
 	if opts.IncludeTopmostSiblings && client.SupportsDocumentSymbols() {
-		symbols, symbolErr := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: params.TextDocument})
-		if symbolErr != nil {
-			result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: symbolErr.Error()})
-		} else {
-			for _, symbol := range topmostSymbols(symbols) {
-				candidate := newNode(graph.Item{Name: symbol.Name, Kind: symbol.Kind, Detail: symbol.Detail, URI: params.TextDocument.URI, Range: rng(symbol.Range), SelectionRange: rng(symbol.SelectionRange)})
+		for _, seed := range items {
+			symbols, symbolErr := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}})
+			if symbolErr != nil {
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: symbolErr.Error()})
+				continue
+			}
+			flat := flattenSymbols(symbols, nil)
+			matches := matchingDeclarations(seed, flat)
+			if len(matches) != 1 {
+				status := "UNRESOLVED_SEED_DECLARATION"
+				if len(matches) > 1 {
+					status = "AMBIGUOUS_SEED_DECLARATION"
+				}
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "siblings", Method: "textDocument/documentSymbol", Message: status})
+				continue
+			}
+			origin := newNode(symbolItem(seed.URI, matches[0].symbol))
+			for _, declaration := range flat {
+				if declaration.parent != matches[0].parent || !callableKind(declaration.symbol.Kind) || sameDeclaration(declaration.symbol, matches[0].symbol) {
+					continue
+				}
+				candidate := newNode(symbolItem(seed.URI, declaration.symbol))
 				if graph.ValidateItem(candidate.Item) == nil {
-					result.SiblingCandidates = append(result.SiblingCandidates, graph.SiblingCandidate{SeedURI: params.TextDocument.URI, Candidate: candidate})
+					result.SiblingCandidates = append(result.SiblingCandidates, graph.SiblingCandidate{SeedURI: seed.URI, Origin: origin, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING"})
 				}
 			}
 		}
@@ -227,12 +243,39 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 	return result
 }
 
-func topmostSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
-	// Hierarchical document symbols are a forest. Flattening the forest while
-	// retaining entries without an ancestor selects exactly its roots.
-	out := make([]lsp.DocumentSymbol, len(symbols))
-	copy(out, symbols)
+type declaration struct {
+	symbol lsp.DocumentSymbol
+	parent *lsp.DocumentSymbol
+}
+
+func flattenSymbols(symbols []lsp.DocumentSymbol, parent *lsp.DocumentSymbol) []declaration {
+	var out []declaration
+	for i := range symbols {
+		symbol := &symbols[i]
+		out = append(out, declaration{symbol: *symbol, parent: parent})
+		out = append(out, flattenSymbols(symbol.Children, symbol)...)
+	}
 	return out
+}
+
+func matchingDeclarations(seed lsp.CallHierarchyItem, declarations []declaration) []declaration {
+	var out []declaration
+	for _, declaration := range declarations {
+		if seed.Kind == declaration.symbol.Kind && seed.Range == declaration.symbol.Range && seed.SelectionRange == declaration.symbol.SelectionRange {
+			out = append(out, declaration)
+		}
+	}
+	return out
+}
+
+func sameDeclaration(a, b lsp.DocumentSymbol) bool {
+	return a.Kind == b.Kind && a.Range == b.Range && a.SelectionRange == b.SelectionRange
+}
+
+func callableKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
+
+func symbolItem(uri string, symbol lsp.DocumentSymbol) graph.Item {
+	return graph.Item{Name: symbol.Name, Kind: symbol.Kind, Detail: symbol.Detail, URI: uri, Range: rng(symbol.Range), SelectionRange: rng(symbol.SelectionRange)}
 }
 
 func node(i lsp.CallHierarchyItem, factory func(graph.Item) graph.Node) graph.Node {

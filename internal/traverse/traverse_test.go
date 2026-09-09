@@ -397,29 +397,53 @@ func TestIncomingCanonicalV2GoldenByteIdentical(t *testing.T) {
 	}
 }
 
-func TestIncomingTopmostSiblingCandidatesAreOptInSeparateAndCanonical(t *testing.T) {
-	leaf := item("leaf", 8)
-	rootB := lsp.DocumentSymbol{Name: "B", Kind: 12, Range: item("B", 20).Range, SelectionRange: item("B", 20).SelectionRange}
-	rootA := lsp.DocumentSymbol{Name: "A", Kind: 12, Range: item("A", 1).Range, SelectionRange: item("A", 1).SelectionRange,
-		Children: []lsp.DocumentSymbol{{Name: "nested", Kind: 12, Range: item("nested", 2).Range, SelectionRange: item("nested", 2).SelectionRange}}}
-	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": {}}, symbolSupported: true,
-		documentSymbols: []lsp.DocumentSymbol{rootB, rootA, rootA}}
-
-	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: leaf.URI}}
+func TestIncomingTopmostSiblingCandidatesUseExactDeclarationContainer(t *testing.T) {
+	seed := item("render", 8)
+	seed.Kind = 6
+	method := func(name string, line uint32) lsp.DocumentSymbol {
+		i := item(name, line)
+		return lsp.DocumentSymbol{Name: name, Kind: 6, Range: i.Range, SelectionRange: i.SelectionRange}
+	}
+	seedSymbol := method("render", 8)
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{seed}, calls: map[string][]lsp.CallHierarchyIncomingCall{"render": {}}, symbolSupported: true,
+		documentSymbols: []lsp.DocumentSymbol{
+			{Name: "ChartController", Kind: 5, Range: item("ChartController", 1).Range, SelectionRange: item("ChartController", 1).SelectionRange, Children: []lsp.DocumentSymbol{
+				method("index", 3), seedSymbol, {Name: "state", Kind: 8, Range: item("state", 9).Range, SelectionRange: item("state", 9).SelectionRange},
+				{Name: "Nested", Kind: 5, Range: item("Nested", 11).Range, SelectionRange: item("Nested", 11).SelectionRange, Children: []lsp.DocumentSymbol{method("render", 12), method("other", 13)}},
+			}},
+			method("topLevel", 20),
+		}}
+	params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}}
 	baseline := Incoming(context.Background(), f, params, Options{})
 	if len(baseline.SiblingCandidates) != 0 || f.symbolRequests != 0 || baseline.Summary.EdgeCount != 0 {
 		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_DEFAULT_OFF_AND_CALLS_UNCHANGED: candidates=%#v requests=%d summary=%#v", baseline.SiblingCandidates, f.symbolRequests, baseline.Summary)
 	}
-
 	got := Incoming(context.Background(), f, params, Options{IncludeTopmostSiblings: true})
-	if f.symbolRequests != 1 || len(got.SiblingCandidates) != 2 {
-		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_OPT_IN_ROOTS_ONLY: requests=%d candidates=%#v", f.symbolRequests, got.SiblingCandidates)
-	}
-	if got.SiblingCandidates[0].Candidate.Name != "A" || got.SiblingCandidates[1].Candidate.Name != "B" {
-		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_CANONICAL_UNIQUE: %#v", got.SiblingCandidates)
+	if f.symbolRequests != 1 || len(got.SiblingCandidates) != 1 || got.SiblingCandidates[0].Origin.Name != "render" || got.SiblingCandidates[0].Candidate.Name != "index" {
+		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_EXACT_DECLARATION_CONTAINER: requests=%d candidates=%#v", f.symbolRequests, got.SiblingCandidates)
 	}
 	if got.Summary.EdgeCount != 0 || len(got.Edges) != 0 {
 		t.Fatalf("ASSERT_TOPMOST_SIBLINGS_NOT_CALL_EDGES: %#v", got.Edges)
+	}
+}
+
+func TestIncomingTopmostSiblingCandidatesRejectZeroAndMultipleExactJoins(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		symbols []lsp.DocumentSymbol
+		want    string
+	}{
+		{"zero", []lsp.DocumentSymbol{{Name: "same-name-wrong-range", Kind: 12, Range: item("x", 2).Range, SelectionRange: item("x", 2).SelectionRange}}, "UNRESOLVED_SEED_DECLARATION"},
+		{"multiple", []lsp.DocumentSymbol{{Name: "a", Kind: 12, Range: item("seed", 8).Range, SelectionRange: item("seed", 8).SelectionRange}, {Name: "b", Kind: 12, Range: item("seed", 8).Range, SelectionRange: item("seed", 8).SelectionRange}}, "AMBIGUOUS_SEED_DECLARATION"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			seed := item("seed", 8)
+			f := &fakeClient{targets: []lsp.CallHierarchyItem{seed}, calls: map[string][]lsp.CallHierarchyIncomingCall{"seed": {}}, symbolSupported: true, documentSymbols: tc.symbols}
+			got := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}}, Options{IncludeTopmostSiblings: true})
+			if len(got.SiblingCandidates) != 0 || len(got.Diagnostics) == 0 || got.Diagnostics[0].Message != tc.want {
+				t.Fatalf("ASSERT_TOPMOST_SIBLINGS_EXACT_SEED_JOIN: got=%#v", got)
+			}
+		})
 	}
 }
 
