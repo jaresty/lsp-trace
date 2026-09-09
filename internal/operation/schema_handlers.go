@@ -55,7 +55,7 @@ func ValidateHandler(_ context.Context, request Request) (Result, *Failure) {
 	}
 	// New-family inline text preserves exact artifact bytes through transports
 	// which historically decode object arguments into maps. It is never a path.
-	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls || family == schema.FamilyBoundedAnalysis || family == boundedmetrics.Family || family == boundedranking.Family {
+	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls || family == schema.FamilyBoundedAnalysis || family == boundedmetrics.Family || family == boundedranking.Family || family == schema.FamilyBoundedGraphV2 || family == schema.FamilyBoundedAnalysisV2 || family == schema.FamilyBoundedMetricsV2 || family == schema.FamilyBoundedRankingV2 {
 		var text string
 		if json.Unmarshal(input.Input, &text) == nil {
 			input.Input = []byte(text)

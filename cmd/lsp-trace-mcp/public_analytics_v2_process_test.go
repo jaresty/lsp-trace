@@ -58,6 +58,22 @@ func TestPublicAnalyticsV2ProcessExactParity(t *testing.T) {
 			if _, err := schema.ValidateFor(cliInline, tc.family, "v2"); err != nil {
 				t.Fatalf("ASSERT_PUBLIC_ANALYTICS_V2_CERTIFIED_SCHEMA %s/%s: %v", tc.operation, max, err)
 			}
+			validated := decodeProcessCall(t, runMCPProcess(t, mcpBinary, nil, []map[string]any{callRequest(20, "lsp_trace_v1_validate", map[string]any{
+				"input": string(cliInline), "schema": map[string]any{"family": tc.family, "version": "v2"},
+			})})[0]).env
+			if validated["outcome"] != "COMPLETE" || validated["operation_status"] != "SUCCEEDED" || !bytes.Equal(inlineArtifactBytes(t, validated), cliInline) {
+				t.Fatalf("ASSERT_PUBLIC_ANALYTICS_V2_MCP_VALIDATE_EXACT_BYTES %s/%s: %v", tc.operation, max, validated)
+			}
+			wrongFamily := schema.FamilyBoundedAnalysisV2
+			if tc.family == wrongFamily {
+				wrongFamily = schema.FamilyBoundedMetricsV2
+			}
+			mixed := decodeProcessCall(t, runMCPProcess(t, mcpBinary, nil, []map[string]any{callRequest(21, "lsp_trace_v1_validate", map[string]any{
+				"input": string(cliInline), "schema": map[string]any{"family": wrongFamily, "version": "v2"},
+			})})[0]).env
+			if mixed["outcome"] != "DOMAIN_ERROR" || mixed["operation_status"] != "FAILED" {
+				t.Fatalf("ASSERT_PUBLIC_ANALYTICS_V2_SCHEMA_IDENTITY_MIXUP_REJECTED %s/%s: %v", tc.operation, max, mixed)
+			}
 			gotSchema := runCLIProcess(t, cliBinary, "schema", "get", "--family", tc.family, "--version", "v2")
 			wantSchema, err := schema.BytesFor(tc.family, "v2")
 			if err != nil || !bytes.Equal(gotSchema, wantSchema) {

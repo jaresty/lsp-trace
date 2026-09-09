@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/schema"
 )
 
@@ -38,6 +39,23 @@ func TestPublicAnalyticsV2WiringRED(t *testing.T) {
 	} {
 		if _, err := schema.BytesFor(family, "v2"); err != nil {
 			t.Fatalf("%s: family=%s: %v", assertion, family, err)
+		}
+	}
+	wantSchemaIDs := []string{
+		mcpcontract.PublicAnalyticsV2GraphArtifactID,
+		mcpcontract.PublicAnalyticsV2AnalysisArtifactID,
+		mcpcontract.PublicAnalyticsV2MetricsArtifactID,
+		mcpcontract.PublicAnalyticsV2RankingArtifactID,
+	}
+	for _, name := range []string{"lsp_trace_v1_schema_get", "lsp_trace_v1_validate"} {
+		tool, ok := r.Resolve(name)
+		if !ok {
+			t.Fatalf("%s: missing tool=%s", assertion, name)
+		}
+		for _, id := range wantSchemaIDs {
+			if !containsString(tool.ArtifactSchemaIDs, id) {
+				t.Fatalf("ASSERT_PUBLIC_ANALYTICS_V2_EXACT_SCHEMA_PERMISSION: tool=%s missing=%s schemas=%v", name, id, tool.ArtifactSchemaIDs)
+			}
 		}
 	}
 }
