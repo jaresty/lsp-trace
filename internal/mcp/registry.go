@@ -87,11 +87,36 @@ func NewRegistryWithProviderInventory(_ bool, publicationSupported bool, invento
 }
 
 func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registry {
+	manifest := loadBaseManifest()
+	manifest = mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))))
+	return newRegistryFromManifest(manifest, publicationSupported, routing)
+}
+
+// NewHistoricalAlwaysLocalRegistry reconstructs the frozen always-local registry
+// boundary introduced before later additive contract layers. It is evidence-only;
+// current process construction must use NewRegistry.
+func NewHistoricalAlwaysLocalRegistry() *Registry {
+	return newRegistryFromManifest(loadBaseManifest(), false, Routing{Availability: func(tool Tool) Availability {
+		switch tool.ExecutorFamily {
+		case LifecycleExecutorFamily, IncomingExecutorFamily:
+			return Enabled
+		case SliceExecutorFamily:
+			return RuntimeDisabled
+		default:
+			return tool.Availability
+		}
+	}})
+}
+
+func loadBaseManifest() *mcpcontract.Manifest {
 	manifest, err := mcpcontract.LoadManifest()
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest))))))
+	return manifest
+}
+
+func newRegistryFromManifest(manifest *mcpcontract.Manifest, publicationSupported bool, routing Routing) *Registry {
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",

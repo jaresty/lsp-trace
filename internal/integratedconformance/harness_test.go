@@ -655,10 +655,10 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS ASSERT_REFERENCE_NOT_PRODUCTION_AUTHORITY")
 	})
 
-	t.Run("ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
-		rejectPerturbation(t, "ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
-		registry := mcp.NewRegistry(true)
-		if got := len(registry.Advertised()); got != 22 {
+	t.Run("ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", func(t *testing.T) {
+		rejectPerturbation(t, "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
+		registry := mcp.NewHistoricalAlwaysLocalRegistry()
+		if got := len(registry.Advertised()); got != 12 {
 			t.Fatalf("advertised=%d", got)
 		}
 		for _, name := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_restart", "lsp_session_v1_stop"} {
@@ -675,8 +675,48 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		if result.Failure != session.ProcessContainmentUnavailable || before != after || after != (sessionruntime.Census{}) {
 			t.Fatalf("result=%+v before=%+v after=%+v", result, before, after)
 		}
-		t.Log("PASS ASSERT_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
+		t.Log("PASS ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS")
 	})
+
+	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT", func(t *testing.T) {
+		registry := mcp.NewRegistry(true)
+		if got := len(registry.Advertised()); got != 28 {
+			t.Fatalf("advertised=%d", got)
+		}
+		t.Log("PASS ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT")
+	})
+
+	t.Run("ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED", func(t *testing.T) {
+		_, file, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("ASSERT_REGISTRY_EVIDENCE_SOURCE_AVAILABLE")
+		}
+		raw, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertRegistryFixtureUse(t, string(raw), "ASSERT_HISTORICAL_ALWAYS_LOCAL_TWELVE_WITH_UNSUPPORTED_START_ZERO_EFFECTS", "registry := mcp.NewHistoricalAlwaysLocalRegistry()", "registry := mcp.NewRegistry(")
+		assertRegistryFixtureUse(t, string(raw), "ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT", "registry := mcp.NewRegistry(true)", "registry := mcp.NewHistoricalAlwaysLocalRegistry()")
+		t.Log("PASS ASSERT_HISTORICAL_AND_CURRENT_REGISTRY_EVIDENCE_SEPARATED")
+	})
+}
+
+func assertRegistryFixtureUse(t *testing.T, source, assertion, required, forbidden string) {
+	t.Helper()
+	start := strings.Index(source, `t.Run("`+assertion+`"`)
+	if start < 0 {
+		t.Fatalf("%s: test body absent", assertion)
+	}
+	body := source[start:]
+	if next := strings.Index(body[len(assertion):], "\n\tt.Run("); next >= 0 {
+		body = body[:len(assertion)+next]
+	}
+	if !strings.Contains(body, required) {
+		t.Fatalf("%s: required constructor %q absent", assertion, required)
+	}
+	if strings.Contains(body, forbidden) {
+		t.Fatalf("%s: forbidden constructor %q present", assertion, forbidden)
+	}
 }
 
 func executeLifecycle(t *testing.T, executor *lifecycleops.Executor, name operation.Name, sessionID string, generation uint64, callerID string) operation.Result {
