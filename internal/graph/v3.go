@@ -189,7 +189,9 @@ func (r Result) marshalV3() ([]byte, error) {
 	inv.Server.Environment = nil
 	executionBundleID := semanticExecutionBundleID(inv)
 	edges, siblings, dispatches := projectExecutionBundleRelations(executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
-	receipt := r.evidenceReceipt(inv.Provenance.SourceRevision)
+	receiptResult := r
+	receiptResult.Edges, receiptResult.SiblingCandidates, receiptResult.DispatchRelationships = edges, siblings, dispatches
+	receipt := receiptResult.evidenceReceipt(inv.Provenance.SourceRevision)
 	if err := validateProducerSeedRelations(r.Seeds); err != nil {
 		return nil, err
 	}
@@ -300,6 +302,7 @@ func projectExecutionBundleRelations(bundleID string, edges []Edge, siblings []S
 	siblings = append([]SiblingCandidate(nil), siblings...)
 	for i := range siblings {
 		siblings[i].ExecutionBundleID = bundleID
+		siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
 	}
 	dispatches = append([]DispatchRelationship(nil), dispatches...)
 	for i := range dispatches {
@@ -604,8 +607,11 @@ func (r Result) ValidateReferences() error {
 		return nil
 	}
 	for _, c := range r.SiblingCandidates {
-		if c.RelationID != canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", c.Candidate.ID, c.Candidate.ID, "", "", "", "") {
+		if c.RelationID != canonicalSiblingRelationID(c) {
 			return fmt.Errorf("invalid canonical sibling relation id %q", c.RelationID)
+		}
+		if err := checkEmbedded("sibling origin", c.Origin); err != nil {
+			return err
 		}
 		if err := checkEmbedded("sibling candidate", c.Candidate); err != nil {
 			return err

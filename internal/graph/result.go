@@ -161,7 +161,15 @@ type SiblingCandidate struct {
 	SeedURI           string   `json:"-"`
 	SeedLabel         string   `json:"-"`
 	SeedLabels        []string `json:"-"`
+	Origin            Node     `json:"origin"`
 	Candidate         Node     `json:"candidate"`
+	Direction         string   `json:"direction"`
+	Kind              string   `json:"kind"`
+	SeedIdentity      string   `json:"seed_identity"`
+	ProviderEvidence  []string `json:"provider_evidence_refs"`
+	LSPEvidence       []string `json:"lsp_evidence_refs"`
+	SourceDigests     []string `json:"source_digests"`
+	Custody           string   `json:"custody"`
 }
 
 type DispatchRelationship struct {
@@ -501,7 +509,7 @@ func (r Result) evidenceReceipt(sourceRevision string) *EvidenceReceipt {
 		relations = append(relations, relation)
 	}
 	for _, candidate := range r.SiblingCandidates {
-		relation := newEvidenceRelation("SIBLING_CANDIDATE", "DISCOVERY", candidate.Candidate.ID, sourceRevision, "", "", candidate.Candidate.ID, "", "", "", "")
+		relation := newEvidenceRelation("SIBLING_CANDIDATE", candidate.Direction, candidate.Origin.ID+"->"+candidate.Candidate.ID, sourceRevision, candidate.SeedURI, candidate.SeedLabel, candidate.Candidate.ID, "", "", candidate.Origin.ID, candidate.Candidate.ID)
 		relation.RelationID = candidate.RelationID
 		relations = append(relations, relation)
 	}
@@ -547,6 +555,18 @@ func canonicalRelationID(kind, direction, locator, candidateID, interfaceID, imp
 	return domainDigest("lsp-trace:evidence-relation:v2", encoded)
 }
 
+func canonicalSiblingRelationID(candidate SiblingCandidate) string {
+	identity := struct {
+		Version, Bundle, Origin, Candidate, Direction, Kind, SeedIdentity, Custody string
+		ProviderEvidence, LSPEvidence, SourceDigests                               []string
+	}{"lsp-trace.sibling-relation.v1", candidate.ExecutionBundleID, candidate.Origin.ID, candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
+	encoded, err := json.Marshal(identity)
+	if err != nil {
+		panic(err)
+	}
+	return domainDigest("lsp-trace:sibling-relation:v1", encoded)
+}
+
 func newEvidenceRelation(kind, direction, locator, sourceRevision, seedURI, seedLabel, candidateID, interfaceID, implementationID, callerID, calleeID string) EvidenceRelation {
 	return EvidenceRelation{
 		RelationID:   canonicalRelationID(kind, direction, locator, candidateID, interfaceID, implementationID, callerID, calleeID),
@@ -588,7 +608,20 @@ func (r *Result) Canonicalize() {
 		r.Edges[i].CallSites = mergeRanges(nil, r.Edges[i].CallSites)
 	}
 	for i := range r.SiblingCandidates {
-		r.SiblingCandidates[i].RelationID = canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", r.SiblingCandidates[i].Candidate.ID, r.SiblingCandidates[i].Candidate.ID, "", "", "", "")
+		candidate := &r.SiblingCandidates[i]
+		if candidate.Direction == "" {
+			candidate.Direction = "SIBLING"
+		}
+		if candidate.Kind == "" {
+			candidate.Kind = "TOPMOST_SIBLING"
+		}
+		if candidate.SeedIdentity == "" {
+			candidate.SeedIdentity = candidate.Origin.ID
+		}
+		candidate.ProviderEvidence = uniqueStrings(candidate.ProviderEvidence)
+		candidate.LSPEvidence = uniqueStrings(candidate.LSPEvidence)
+		candidate.SourceDigests = uniqueStrings(candidate.SourceDigests)
+		candidate.RelationID = canonicalSiblingRelationID(*candidate)
 		if r.SiblingCandidates[i].SeedLabel != "" {
 			r.SiblingCandidates[i].SeedLabels = append(r.SiblingCandidates[i].SeedLabels, r.SiblingCandidates[i].SeedLabel)
 		}

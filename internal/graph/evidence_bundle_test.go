@@ -79,8 +79,8 @@ func TestV3SemanticReplayIdentityContract(t *testing.T) {
 			{Label: "second", ReachedNodeIDs: []string{n1.ID}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", n1.ID+"->"+n2.ID, "", "", "", n1.ID, n2.ID)}, ReachedEdges: []Edge{{CallerNodeID: n1.ID, CalleeNodeID: n2.ID}}},
 		},
 		SiblingCandidates: []SiblingCandidate{
-			{SeedURI: "file:///w/a.go", SeedLabel: "first", Candidate: n1},
-			{SeedURI: "file:///w/a.go", SeedLabel: "second", Candidate: n2},
+			{SeedURI: "file:///w/a.go", SeedLabel: "first", Origin: n2, Candidate: n1},
+			{SeedURI: "file:///w/a.go", SeedLabel: "second", Origin: n1, Candidate: n2},
 		},
 		DispatchRelationships: []DispatchRelationship{{SeedLabel: "first", Interface: n1, Implementation: n2}},
 	}
@@ -186,6 +186,7 @@ func TestValidateSemanticBundleAcceptsMergedSiblingSeedMemberships(t *testing.T)
 		SiblingCandidates: []SiblingCandidate{{
 			SeedLabel:  "seed-a",
 			SeedLabels: []string{"seed-a", "seed-b"},
+			Origin:     candidate,
 			Candidate:  candidate,
 		}},
 		Summary: Summary{Complete: true},
@@ -207,6 +208,7 @@ func TestValidateSemanticBundleRejectsAlteredSiblingSeedMembership(t *testing.T)
 		Seeds:         []SeedResult{{Label: "seed"}},
 		SiblingCandidates: []SiblingCandidate{{
 			SeedLabel: "seed",
+			Origin:    candidate,
 			Candidate: candidate,
 		}},
 		Summary: Summary{Complete: true},
@@ -744,7 +746,7 @@ func TestPrimaryRelationIDsAreV3Only(t *testing.T) {
 		Seeds:                 []SeedResult{{Label: "seed"}},
 		Nodes:                 []Node{caller, callee},
 		Edges:                 MergeEdge(nil, Edge{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}),
-		SiblingCandidates:     []SiblingCandidate{{RelationID: canonicalRelationID("SIBLING_CANDIDATE", "DISCOVERY", "file:///w/a.go", caller.ID, "", "", "", ""), SeedLabel: "seed", Candidate: caller}},
+		SiblingCandidates:     []SiblingCandidate{{SeedLabel: "seed", Origin: callee, Candidate: caller}},
 		DispatchRelationships: []DispatchRelationship{{RelationID: canonicalRelationID("DISPATCH_ASSOCIATION", "INTERFACE_TO_IMPLEMENTATION", caller.ID+"->"+callee.ID, "", caller.ID, callee.ID, "", ""), SeedLabel: "seed", Interface: caller, Implementation: callee}},
 		Summary:               Summary{Complete: true},
 	}
@@ -788,7 +790,7 @@ func TestRelationIdentityIsSemanticAndSeedIndependent(t *testing.T) {
 			{Label: "seed-a", ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}, ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}},
 			{Label: "seed-b", ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}, ReachedEdges: []Edge{{CallerNodeID: caller.ID, CalleeNodeID: callee.ID}}},
 		},
-		SiblingCandidates:     []SiblingCandidate{{SeedURI: "file:///w/a.go", SeedLabel: "seed-a", Candidate: candidate}, {SeedURI: "file:///w/b.go", SeedLabel: "seed-b", Candidate: candidate}},
+		SiblingCandidates:     []SiblingCandidate{{SeedURI: "file:///w/a.go", SeedLabel: "seed-a", Origin: caller, Candidate: candidate}, {SeedURI: "file:///w/b.go", SeedLabel: "seed-b", Origin: caller, Candidate: candidate}},
 		DispatchRelationships: []DispatchRelationship{{SeedLabel: "seed-a", Interface: caller, Implementation: callee}, {SeedLabel: "seed-b", Interface: caller, Implementation: callee}},
 		Summary:               Summary{Complete: true},
 	}
@@ -835,7 +837,7 @@ func TestV3RelationsAndMembershipsShareStableExecutionBundleIdentity(t *testing.
 		}},
 		Nodes: []Node{caller, callee}, Edges: []Edge{edge},
 		Seeds:                 []SeedResult{{Label: seed.Label, ReachedEdges: []Edge{edge}, ReachedRelationIDs: []string{canonicalRelationID("CALL_RELATION", "CALLER_TO_CALLEE", caller.ID+"->"+callee.ID, "", "", "", caller.ID, callee.ID)}}},
-		SiblingCandidates:     []SiblingCandidate{{SeedLabel: seed.Label, Candidate: candidate}},
+		SiblingCandidates:     []SiblingCandidate{{SeedLabel: seed.Label, Origin: caller, Candidate: candidate}},
 		DispatchRelationships: []DispatchRelationship{{SeedLabel: seed.Label, Interface: caller, Implementation: callee}},
 		Summary:               Summary{Complete: true},
 	}
