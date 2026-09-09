@@ -71,4 +71,4 @@ It does **not** construct or claim a semantically valid artifact of exactly 2013
 
 ## Qualification verdict
 
-Source-level V3 outcome, mutation, privacy, arithmetic, canonical typed/raw parity, and ordinary-generation OS-process CLI/MCP byte parity guards are green. Huge-generation OS-process parity is not claimed. D01 remains unauthorized and was not run.
+Source-level V3 outcome, mutation, privacy, arithmetic, canonical typed/raw parity, and ordinary-generation OS-process CLI/MCP byte parity guards are green. Huge-generation OS-process parity is not claimed. No D01 execution occurred in this repository qualification. Operator authorization, if granted, is preserved in an external authorization record and is distinct from technical execution evidence; this repository document neither grants nor categorically denies that external authorization.

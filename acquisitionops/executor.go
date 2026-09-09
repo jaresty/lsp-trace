@@ -17,6 +17,7 @@ import (
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/sessionruntime"
@@ -229,6 +230,26 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	req.Context.ID = fmt.Sprintf("public-acquisition-v2:%x", sha256.Sum256(identity))
 	if err := acquisition.ValidateRequest(req); err != nil {
 		return fail(operation.FailureInvalidInput, err)
+	}
+	if binding, ok := e.runtime.(interface {
+		SeedBindingRequested(string, uint64) bool
+		AdmitSeedBinding(context.Context, string, uint64, time.Time, int, int64) seedbinding.ValidationResult
+	}); ok && binding.SeedBindingRequested(id, generation) {
+		if req.Limits.MaxRequests < 1 {
+			return fail(string(session.ResourceExhausted), fmt.Errorf("semantic seed admission requires one shared acquisition request"))
+		}
+		deadline := time.Now().Add(req.Limits.RequestTimeout)
+		admission := binding.AdmitSeedBinding(ctx, id, generation, deadline, req.Limits.MaxMessages, int64(req.Limits.MaxResponseBytes))
+		req.Limits.MaxRequests--
+		switch admission.Status {
+		case seedbinding.Match:
+		case seedbinding.Mismatch:
+			return fail(seedbinding.BindingMismatch, nil)
+		case seedbinding.Unavailable:
+			return fail(seedbinding.BindingUnavailable, nil)
+		default:
+			return fail("SEED_BINDING_INVALID", nil)
+		}
 	}
 	result, err := acquisition.Acquire(ctx, sessionclient.New(e.runtime), req)
 	if err != nil {

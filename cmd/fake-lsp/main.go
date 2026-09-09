@@ -62,6 +62,15 @@ func response(id, result json.RawMessage) lspwire.Message {
 
 func run(stdin io.Reader, stdout, stderr io.Writer) int {
 	errout := &cappedWriter{w: stderr, remaining: maxStderrBytes}
+	trace := func(event string) {
+		if path := os.Getenv("LSP_TRACE_FAKE_LSP_TRACE"); path != "" {
+			if f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600); err == nil {
+				_, _ = fmt.Fprintln(f, event)
+				_ = f.Close()
+			}
+		}
+	}
+	trace("spawn")
 	if marker := os.Getenv("LSP_TRACE_FAKE_LSP_SCHEDULED"); marker != "" {
 		if err := os.WriteFile(marker, []byte("scheduled\n"), 0o600); err != nil {
 			fmt.Fprintf(errout, "fake-lsp scheduling marker: %v\n", err)
@@ -80,6 +89,9 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 		if err != nil {
 			fmt.Fprintf(errout, "fake-lsp fixture input error: %v\n", err)
 			return fixtureInputErrorCode
+		}
+		if m.Method != "" {
+			trace(m.Method)
 		}
 		switch m.Method {
 		case "initialize":
@@ -103,6 +115,25 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 			if json.Unmarshal(m.Params, &p) == nil && p.TextDocument.URI != "" {
 				documentURI = p.TextDocument.URI
+			}
+		case "textDocument/documentSymbol":
+			mode := os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL")
+			if mode == "hang" {
+				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
+				continue
+			}
+			rng := `{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}`
+			name := "leaf"
+			if mode == "mismatch" {
+				name = "other"
+			}
+			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"range":%s,"selectionRange":%s}]`, name, rng, rng))
+			if mode == "invalid" {
+				result = json.RawMessage(`[{"name":null}]`)
+			}
+			if err := w.Write(response(m.ID, result)); err != nil {
+				fmt.Fprintln(errout, err)
+				return fixtureInputErrorCode
 			}
 		case "textDocument/prepareCallHierarchy":
 			uri, _ := json.Marshal(documentURI)
