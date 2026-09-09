@@ -191,7 +191,11 @@ func (s *Server) handleContext(ctx context.Context, req request) response {
 	case "tools/list":
 		tools := make([]map[string]any, 0, len(s.Registry.Advertised()))
 		for _, tool := range s.Registry.Advertised() {
-			tools = append(tools, map[string]any{"name": tool.Name, "description": tool.Description, "inputSchema": tool.InputSchema})
+			inputSchema := tool.InputSchema
+			if tool.PresentationInputSchema != nil {
+				inputSchema = tool.PresentationInputSchema
+			}
+			tools = append(tools, map[string]any{"name": tool.Name, "description": tool.Description, "inputSchema": inputSchema})
 		}
 		base.Result = map[string]any{"tools": tools}
 	case "tools/call":
