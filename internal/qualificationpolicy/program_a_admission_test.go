@@ -76,6 +76,25 @@ func admittedProgramASubstrateWithSigner(t *testing.T, s testReceiptSigner, c As
 	}
 }
 
+func admittedProgramASubstrateV2WithSigner(t *testing.T, s testReceiptSigner, c AssessmentContext) VerifiedProgramASubstrateV2 {
+	v1 := admittedProgramASubstrateWithSigner(t, s, c)
+	return VerifiedProgramASubstrateV2{
+		Custody: v1.Custody, EffectiveConfiguration: v1.EffectiveConfiguration, Identity: v1.Identity,
+		RelationNormalization: v1.RelationNormalization, SupportAccounting: v1.SupportAccounting, Projection: v1.Projection,
+		Qualification: receiptWithContext(t, s, QualificationDimension, "526f658", "substrate-1", 4, c),
+	}
+}
+
+func TestProgramAAdmissionV1ReceiptCountFrozen(t *testing.T) {
+	got, err := AdmitVerifiedProgramA(admittedProgramASubstrate(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.receiptDigests) != 6 {
+		t.Fatalf("ASSERT_PROGRAM_A_V1_RECEIPT_COUNT_FROZEN: got=%d want=6", len(got.receiptDigests))
+	}
+}
+
 func TestProgramAAdmissionRequiresValidatedReceipts(t *testing.T) {
 	got, err := AdmitVerifiedProgramA(admittedProgramASubstrate(t))
 	if err != nil || got.Status != SubstrateAdmitted {

@@ -841,6 +841,24 @@ The gate defines a versioned set of non-waivable foundational cells, including i
 
 B05 provider admission's `all_requested_relations_supported` flag is not `PROGRAM_B_ADMITTED`. No equivalence may be claimed without a checked mapping from the exact B05 evidence and policy versions to the normative profile's generated tuples and pass predicates. Provider support is not substrate acceptance.
 
+#### Program A evaluator evidence map (source-ready, not admitted)
+
+At source revision `c47032f` plus the evaluator-wiring change, `internal/qualificationpolicy` has a dormant, package-private Program A evaluation path. It can issue opaque `lsp-trace.program-a-substrate-receipt.v2` receipts only after authenticated host provisioning supplies matching evaluator key material and the following existing validators accept retained evidence:
+
+| Program A axis | Receipt dimension | Existing authoritative validator | Exact accepted family/version |
+| --- | --- | --- | --- |
+| A1 custody | `custody` | `custodyevidence.ValidateFor` | `operational-custody` / `v1` (`lsp-trace.operational-custody.v1`) |
+| A1 identity | `identity` | `graph.ValidateSemanticBundle` | `graph` / `v3` (`lsp-trace.graph.v3`) |
+| A2 effective configuration and provider identity | `effective_configuration` | `provider.Provision` | stable `name@version` plus non-empty exact declaration and protocol versions |
+| A3 relation normalization | `relation_normalization` | `graph.ValidateNormalizedRelationsJSON` | `lsp-trace.graph.v4` / `NORMALIZED_RELATIONS` |
+| A3 support accounting | `support_accounting` | `relations.MinimumDependence` | complete retained observation-dependence graph |
+| A3 projection | `projection` | `schema.ValidateAllSeedInspection` | `lsp-trace.inspect.v1` / `ALL_SEEDS` |
+| A4 qualification profile | composition gate | `qualificationmatrix.ValidateProfile` | `lsp-trace.qualification-matrix-profile.v2`, including `provider_version` |
+
+Every issued receipt binds the exact revision, substrate, evaluator ID, family, version, retained-evidence SHA-256, custody reference, and pipeline sequence, in addition to authenticated authority and assessment context. Composition requires all six receipts to share revision, substrate, authority, provisioning, assessment, scope, policy, and operation, and requires normalization before support accounting before projection. Missing and failed axes remain explicit rejections. Caller status, `UNKNOWN`, waivers, B05 support flags, and synthetic fixtures cannot mint or upgrade a receipt.
+
+This wiring is **source-ready evaluator capability, not actual Program A admission**. The tracked TypeScript graph is not V3-qualified, the retained B05 matrix is not the normative profile and lacks the required exact `provider_version` axis, and no authenticated production Program A authority configuration is present. Therefore the current repository fixture remains rejected. Host provisioning stays dormant, and Program B remains false, disabled, and unregistered; this subsection does not authorize registry, executor, deployment, product, or live-environment activation.
+
 Generic graph algorithms have no blanket Ember prerequisite. The independently governed profile must retain every non-waivable foundational cell and specify operation-specific qualified dependencies; native-provider requirements cannot be removed by an implementation or replaced by companion evidence. A generic operation may proceed only after `PROGRAM_B_ADMITTED` validates for its declared scope and no dependency is blocked. This clarification is not an alternative admission route or a waiver of AC12.
 
 ### Program B: Deterministic structural analysis
