@@ -247,11 +247,18 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if readErr != nil {
 			return fail(fmt.Errorf("seed binding unavailable"))
 		}
-		decoded, decodeErr := seedbinding.DecodeV2(bindingBytes)
+		decode := seedbinding.DecodeV2
+		if version == "v3" {
+			decode = seedbinding.DecodeV3
+		}
+		decoded, decodeErr := decode(bindingBytes)
 		if decodeErr != nil {
 			return fail(fmt.Errorf("seed binding invalid"))
 		}
-		binding, bindingRevision = &decoded, seedbinding.HostReceiptAuthority{}
+		binding = &decoded
+		if decoded.CustodyMode != seedbinding.CallerAssertedLocal {
+			bindingRevision = seedbinding.HostReceiptAuthority{}
+		}
 	}
 	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64}, Starter: sessionruntime.ManagedStarter{Manager: supervisor}, Diagnostics: diagnosticStore, SeedRevisionAuthority: bindingRevision})
 	if err != nil {
@@ -261,7 +268,14 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	defer cancel()
 	ctx, deadlineCancel := context.WithTimeout(ctx, effective.Limits.Timeout)
 	defer deadlineCancel()
-	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
+	var providerIdentity seedbinding.ProviderIdentity
+	if binding != nil {
+		providerIdentity = seedbinding.ProviderIdentity{
+			Class: binding.Validator.Class, Authority: binding.Validator.Authority, Name: binding.Validator.Name, Version: binding.Validator.Version,
+			ExecutableSHA256: binding.Validator.ExecutableSHA256, PayloadSHA256: binding.Validator.PayloadSHA256, ConfigSHA256: binding.Validator.ConfigSHA256,
+		}
+	}
+	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
 	if diagnosticRoot != "" {
 		defer func() {
 			generation := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
