@@ -87,12 +87,13 @@ func (m Message) Kind() Kind {
 // Event is a closed, scalar-only observation of transport work. It never
 // retains frame bytes, JSON values, methods, paths, URIs, or error text.
 type Event struct {
-	Stage       EventStage
-	Bytes       int64
-	Kind        Kind
-	Disposition ResponseDisposition
-	Flush       FlushState
-	Closed      bool
+	Stage         EventStage
+	Bytes         int64
+	Kind          Kind
+	Disposition   ResponseDisposition
+	Flush         FlushState
+	Closed        bool
+	pendingDetail pendingResponseDetail
 }
 
 type EventStage uint8
@@ -309,6 +310,14 @@ type RequestKey struct {
 type ResponseKey = RequestKey
 type ResponseDisposition uint8
 
+type pendingResponseDetail uint8
+
+const (
+	pendingResponseNoDetail pendingResponseDetail = iota
+	pendingResponseUnknownKnownGeneration
+	pendingResponseUnknownUnretainedGeneration
+)
+
 const (
 	ResponseAccepted ResponseDisposition = iota
 	ResponseUnknown
@@ -364,10 +373,16 @@ func (p *Pending) Begin(g uint64) RequestKey {
 func (p *Pending) Accept(k ResponseKey) ResponseDisposition {
 	p.mu.Lock()
 	d := ResponseUnknown
+	detail := pendingResponseNoDetail
 	if _, ok := p.tomb[k]; ok {
 		d = ResponseDuplicate
 	} else if e, ok := p.active[k.ID]; !ok {
-		d = ResponseUnknown
+		if _, seen := p.generations[k.Generation]; !seen && len(p.generations) > 0 {
+			d = ResponseWrongGeneration
+			detail = pendingResponseUnknownUnretainedGeneration
+		} else {
+			detail = pendingResponseUnknownKnownGeneration
+		}
 	} else if e.generation != k.Generation {
 		d = ResponseWrongGeneration
 	} else {
@@ -378,7 +393,7 @@ func (p *Pending) Accept(k ResponseKey) ResponseDisposition {
 		d = ResponseAccepted
 	}
 	p.mu.Unlock()
-	emit(p.observer, Event{Stage: EventPendingResponse, Disposition: d})
+	emit(p.observer, Event{Stage: EventPendingResponse, Disposition: d, pendingDetail: detail})
 	return d
 }
 func (p *Pending) addTomb(k RequestKey) {

@@ -120,8 +120,8 @@ func TestPendingGenerationHistoryBoundedAndEvictionHonest(t *testing.T) {
 	if count > 3 {
 		t.Fatalf("ASSERT_LSPWIRE_PENDING_GENERATIONS_BOUNDED: %d", count)
 	}
-	if got := p.Accept(ResponseKey{Generation: 1, ID: 1}); got != ResponseUnknown {
-		t.Fatalf("ASSERT_LSPWIRE_PENDING_EVICTED_UNKNOWN: %v", got)
+	if got := p.Accept(ResponseKey{Generation: 1, ID: 1}); got != ResponseWrongGeneration {
+		t.Fatalf("ASSERT_LSPWIRE_PENDING_EVICTED_HISTORICAL_DISPOSITION: %v", got)
 	}
 
 	active := NewPending(1)

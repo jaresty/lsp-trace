@@ -88,6 +88,10 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	result.EnvironmentNames = digestDomain("environment-names", names...)
 	result.EnvironmentPairs = digestDomain("environment-secret-pairs", pairs...)
 
+	original, err := identityPathLstat(spec.Path)
+	if err != nil || !original.Mode().IsRegular() {
+		return result
+	}
 	f, err := identityOpen(spec.Path)
 	if err != nil {
 		return result
@@ -107,6 +111,11 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	if err != nil {
 		return result
 	}
+	resolvedOriginal, err := identityPathLstat(spec.Path)
+	if err != nil || !resolvedOriginal.Mode().IsRegular() || !sameExecutable(opened, resolvedOriginal) {
+		result.ExecutableStatus = IdentityRaced
+		return result
+	}
 	linked, err := identityPathLstat(canonical)
 	if err != nil || !linked.Mode().IsRegular() {
 		return result
@@ -115,7 +124,12 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	if err != nil {
 		return result
 	}
-	if !os.SameFile(opened, current) || opened.Size() != current.Size() || !opened.ModTime().Equal(current.ModTime()) {
+	final, err := identityPathLstat(spec.Path)
+	if err != nil || !final.Mode().IsRegular() {
+		result.ExecutableStatus = IdentityRaced
+		return result
+	}
+	if !sameExecutable(opened, original) || !sameExecutable(opened, current) || !sameExecutable(opened, final) {
 		result.ExecutableStatus = IdentityRaced
 		return result
 	}
@@ -123,4 +137,8 @@ func ObserveIdentity(spec Spec, configProvenance, workspace string) Identity {
 	copy(result.ExecutableBytes[:], h.Sum(nil))
 	result.ExecutableStatus = IdentityObserved
 	return result
+}
+
+func sameExecutable(opened, path os.FileInfo) bool {
+	return os.SameFile(opened, path) && opened.Size() == path.Size() && opened.ModTime().Equal(path.ModTime())
 }

@@ -71,6 +71,57 @@ func TestObserveIdentityDescriptorPathRace(t *testing.T) {
 	}
 }
 
+func TestObserveIdentityRejectsExecutableSymlink(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	link := filepath.Join(dir, "server")
+	if err := os.WriteFile(target, []byte("target"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if got := ObserveIdentity(Spec{Path: link}, "config", "workspace"); got.ExecutableStatus != IdentityUnavailable {
+		t.Fatalf("ASSERT_PROCESS_IDENTITY_EXECUTABLE_SYMLINK_REJECTED: %v", got.ExecutableStatus)
+	}
+}
+
+func TestObserveIdentityOriginalPathSymlinkRetargetRace(t *testing.T) {
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first")
+	second := filepath.Join(dir, "second")
+	path := filepath.Join(dir, "server")
+	for name, content := range map[string]string{first: "first", second: "second"} {
+		if err := os.WriteFile(name, []byte(content), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Link(first, path); err != nil {
+		t.Fatal(err)
+	}
+
+	oldCanonical := identityCanonicalPath
+	defer func() { identityCanonicalPath = oldCanonical }()
+	identityCanonicalPath = func(name string) (string, error) {
+		canonical, err := filepath.EvalSymlinks(name)
+		if err != nil {
+			return "", err
+		}
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(second, path); err != nil {
+			t.Fatal(err)
+		}
+		return canonical, nil
+	}
+
+	got := ObserveIdentity(Spec{Path: path}, "config", "workspace")
+	if got.ExecutableStatus != IdentityRaced {
+		t.Fatalf("ASSERT_PROCESS_IDENTITY_ORIGINAL_PATH_RETARGET_RACE: %v", got.ExecutableStatus)
+	}
+}
+
 func TestIdentityDomainsDoNotAlias(t *testing.T) {
 	a := digestDomain("cwd", "same")
 	b := digestDomain("workspace", "same")
