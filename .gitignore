@@ -1,4 +1,5 @@
 .DS_Store
+/.mcp.json
 /lsp-trace
 /dist/
 /coverage.out

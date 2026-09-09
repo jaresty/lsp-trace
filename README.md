@@ -151,7 +151,7 @@ Use the standard adapter rather than maintaining a repository-specific tool brid
 pi install npm:pi-mcp-adapter
 ```
 
-Restart Pi after installation. Preferred project config: `.mcp.json`. The host writes this file and the referenced bootstrap file; they are trusted configuration, not MCP call arguments.
+Restart Pi after installation. Preferred project config: `.mcp.json`. This file is machine-local and ignored by this repository. Preserve the host's existing command, bootstrap, publication, working-directory, lifecycle, timeout, `directTools`, and `searchKeywords` configuration; add only `"--tool-profile", "compact"` to the server's existing `args`. The host writes this file and the referenced bootstrap file; they are trusted configuration, not MCP call arguments.
 
 ```json
 {
