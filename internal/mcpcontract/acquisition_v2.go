@@ -9,6 +9,7 @@ const AcquisitionV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/in
 const VerifyV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify.v2.schema.json"
 const GraphProvenanceV2ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v2.schema.json"
 const GraphProvenanceV3ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v3.schema.json"
+const GraphProvenanceV5ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v5.schema.json"
 
 func AcquisitionV2EnvelopeID(id string) string {
 	return strings.Replace(strings.Replace(id, "/envelope-", "/envelope-acquisition-", 1), ".v1.schema.json", ".v2.schema.json", 1)
@@ -41,13 +42,13 @@ func WithAcquisitionV3(m *Manifest) *Manifest {
 	copy := *m
 	copy.Schemas = append([]SchemaRegistration{}, m.Schemas...)
 	copy.Tools = append([]ToolContract{}, m.Tools...)
-	copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: GraphProvenanceV3ArtifactID, Family: "lsp-trace.graph-provenance.v3", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.graph-provenance.v3.schema.json"})
+	copy.Schemas = append(copy.Schemas, SchemaRegistration{ID: GraphProvenanceV3ArtifactID, Family: "lsp-trace.graph-provenance.v3", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.graph-provenance.v3.schema.json"}, SchemaRegistration{ID: GraphProvenanceV5ArtifactID, Family: "lsp-trace.graph-provenance.v5", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.graph-provenance.v5.schema.json"})
 	envelopes := make([]string, 0, 5)
 	for _, kind := range []string{"artifact", "publication", "compact-publication", "publication-error", "domain-error"} {
 		envelopes = append(envelopes, AcquisitionV2EnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-"+kind+".v1.schema.json"))
 	}
 	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
-		copy.Tools = append(copy.Tools, ToolContract{Name: name, Aliases: []string{}, InputSchemaID: AcquisitionV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{GraphProvenanceV3ArtifactID}, Advertised: true, Availability: "ENABLED"})
+		copy.Tools = append(copy.Tools, ToolContract{Name: name, Aliases: []string{}, InputSchemaID: AcquisitionV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{GraphProvenanceV3ArtifactID, GraphProvenanceV5ArtifactID}, Advertised: true, Availability: "ENABLED"})
 	}
 	return &copy
 }
@@ -150,8 +151,9 @@ func acquisitionV2InputSchema() map[string]any {
 		}
 		limits[k] = p
 	}
-	manifest := object(map[string]any{"schema_version": map[string]any{"const": "lsp-trace.seed-manifest.v2"}, "coordinate_convention": map[string]any{"const": "zero-based-session"}, "root": target, "required_targets": map[string]any{"type": "array", "maxItems": 63, "items": target}, "limits": object(limits)}, "schema_version", "coordinate_convention", "root", "required_targets")
-	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
+	expansion := object(map[string]any{"topmost_siblings": map[string]any{"type": "boolean"}})
+	manifest := object(map[string]any{"schema_version": map[string]any{"const": "lsp-trace.seed-manifest.v2"}, "coordinate_convention": map[string]any{"const": "zero-based-session"}, "root": target, "required_targets": map[string]any{"type": "array", "maxItems": 63, "items": target}, "limits": object(limits), "expansion": expansion}, "schema_version", "coordinate_convention", "root", "required_targets")
+	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "output_version": map[string]any{"enum": []string{"lsp-trace.graph-provenance.v5"}}, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
 	out["$id"] = AcquisitionV2InputID
 	out["$schema"] = "https://json-schema.org/draft/2020-12/schema"
 	return out

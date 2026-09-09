@@ -625,7 +625,7 @@ func (r Result) ValidateReferences() error {
 			if c.RelationID != canonicalSiblingRelationID(c) {
 				return fmt.Errorf("invalid canonical v5 sibling relation id %q", c.RelationID)
 			}
-			if c.SeedURI == "" || c.SeedLabel == "" || c.SeedIdentity == "" || c.Direction != "SIBLING" || c.Kind != "TOPMOST_SIBLING" || len(c.ProviderEvidence) == 0 || len(c.LSPEvidence) == 0 || len(c.SourceDigests) < 2 || c.Custody == "" {
+			if c.SeedURI == "" || c.SeedLabel == "" || c.SeedIdentity == "" || c.Direction != "SIBLING" || c.Kind != "TOPMOST_SIBLING" || len(c.ProviderEvidence) == 0 || len(c.LSPEvidence) == 0 || len(c.SourceDigests) < 2 || c.Custody.Class == "" {
 				return fmt.Errorf("incomplete v5 sibling correspondence evidence")
 			}
 		} else if c.ExecutionBundleID != "" && c.RelationID != canonicalHistoricalSiblingRelationID(c) && c.RelationID != canonicalSiblingRelationID(c) {
@@ -694,7 +694,6 @@ func validateV5SiblingEvidence(b bundleV3) error {
 		expectedProvider := fmt.Sprintf("command=%s;server_version=%s;invocation=%s", b.Invocation.Server.Command, b.Invocation.Provenance.ServerVersion, b.Invocation.Provenance.InvocationID)
 		expectedLSP := []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}
 		expectedDigests := []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
-		expectedCustody := "CALLER_ASSERTED@" + b.Invocation.Provenance.SourceRevision
 		checks := []struct {
 			name string
 			ok   bool
@@ -705,7 +704,7 @@ func validateV5SiblingEvidence(b bundleV3) error {
 			{"provider_evidence_refs", reflect.DeepEqual(candidate.ProviderEvidence, []string{expectedProvider})},
 			{"lsp_evidence_refs", reflect.DeepEqual(candidate.LSPEvidence, expectedLSP)},
 			{"source_digests", reflect.DeepEqual(candidate.SourceDigests, expectedDigests)},
-			{"custody", candidate.Custody == expectedCustody},
+			{"custody", validV5SourceCustody(candidate.Custody, seed.ContentSHA256)},
 		}
 		for _, check := range checks {
 			if !check.ok {
@@ -714,6 +713,22 @@ func validateV5SiblingEvidence(b bundleV3) error {
 		}
 	}
 	return nil
+}
+
+func validV5SourceCustody(c SourceCustodyEvidence, sourceDigest string) bool {
+	if c.AuthenticatedAnalyzedSourceIdentity || c.ClaimCeiling != "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY" {
+		return false
+	}
+	switch c.Class {
+	case SourceCustodyVerifiedHost:
+		return c.HostReceiptID != "" && c.SourceContentSHA256 == sourceDigest
+	case SourceCustodyCallerAssertedLocal, SourceCustodyLSPSuppliedUnauthenticated, SourceCustodyRetainedByteConsistency:
+		return c.HostReceiptID == "" && c.SourceContentSHA256 == sourceDigest
+	case SourceCustodyUnknown, SourceCustodyMissing:
+		return c.HostReceiptID == "" && c.SourceContentSHA256 == ""
+	default:
+		return false
+	}
 }
 
 func ValidateSemanticBundle(data []byte) error {

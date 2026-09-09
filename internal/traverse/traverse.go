@@ -32,6 +32,19 @@ type SiblingEvidence struct {
 	SeedURI, SeedLabel, SeedIdentity, SourceDigest, ProviderRef, Revision, Custody string
 }
 
+func siblingCustodyEvidence(e SiblingEvidence) graph.SourceCustodyEvidence {
+	class := graph.SourceCustodyUnknown
+	switch e.Custody {
+	case "VERIFIED_HOST":
+		class = graph.SourceCustodyVerifiedHost
+	case "CALLER_ASSERTED", "CALLER_ASSERTED_LOCAL":
+		class = graph.SourceCustodyCallerAssertedLocal
+	case "LSP_SUPPLIED", "LSP_SUPPLIED_UNAUTHENTICATED":
+		class = graph.SourceCustodyLSPSuppliedUnauthenticated
+	}
+	return graph.SourceCustodyEvidence{Class: class, SourceContentSHA256: e.SourceDigest, AuthenticatedAnalyzedSourceIdentity: false, ClaimCeiling: "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY"}
+}
+
 type queued struct {
 	item  lsp.CallHierarchyItem
 	node  graph.Node
@@ -111,7 +124,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 						ProviderEvidence: []string{evidence.ProviderRef},
 						LSPEvidence:      []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"},
 						SourceDigests:    []string{"candidate=" + evidence.SourceDigest, "origin=" + evidence.SourceDigest},
-						Custody:          evidence.Custody + "@" + evidence.Revision,
+						Custody:          siblingCustodyEvidence(evidence),
 					})
 				}
 			}

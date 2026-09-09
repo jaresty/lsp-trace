@@ -62,17 +62,22 @@ type Limits struct {
 	MaxResponseBytes *int `json:"max_response_bytes,omitempty"`
 	MaxMessages      *int `json:"max_messages,omitempty"`
 }
+type Expansion struct {
+	TopmostSiblings bool `json:"topmost_siblings"`
+}
 type Manifest struct {
-	SchemaVersion        string   `json:"schema_version"`
-	CoordinateConvention string   `json:"coordinate_convention"`
-	Root                 Target   `json:"root"`
-	RequiredTargets      []Target `json:"required_targets"`
-	Limits               Limits   `json:"limits,omitempty"`
+	SchemaVersion        string    `json:"schema_version"`
+	CoordinateConvention string    `json:"coordinate_convention"`
+	Root                 Target    `json:"root"`
+	RequiredTargets      []Target  `json:"required_targets"`
+	Limits               Limits    `json:"limits,omitempty"`
+	Expansion            Expansion `json:"expansion,omitempty"`
 }
 type Input struct {
-	SessionID    string   `json:"session_id"`
-	Generation   uint64   `json:"generation"`
-	SeedManifest Manifest `json:"seed_manifest"`
+	SessionID     string   `json:"session_id"`
+	Generation    uint64   `json:"generation"`
+	SeedManifest  Manifest `json:"seed_manifest"`
+	OutputVersion string   `json:"output_version,omitempty"`
 }
 
 // DecodeManifest applies the same closed, bounded decoding used by MCP. It reads
@@ -267,6 +272,13 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			custodyReceipt = &CustodyReceipt{Provenance: provenance, Authenticated: provenance == seedbinding.VerifiedHost}
 		}
 	}
+	wantsV5 := in.OutputVersion == graphprovenance.VersionV5
+	if in.OutputVersion != "" && !wantsV5 {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported output_version %q", in.OutputVersion))
+	}
+	if wantsV5 && ((op.Name != SliceV3 && op.Name != IncomingV3) || !in.SeedManifest.Expansion.TopmostSiblings) {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route and expansion.topmost_siblings=true"))
+	}
 	result, err := acquisition.Acquire(ctx, sessionclient.New(e.runtime), req)
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
@@ -282,7 +294,17 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		}); ok {
 			query = diagnostics.Diagnostics(id, generation)
 		}
-		raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
+		if wantsV5 {
+			result.Graph.SchemaVersion = "lsp-trace.graph.v5"
+			result.Graph.Invocation.Expansion.TopmostSiblings = true
+			native, marshalErr := json.Marshal(result.Graph)
+			if marshalErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
+			}
+			raw, err = graphprovenance.CaptureV5(native, id, generation, query)
+		} else {
+			raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
+		}
 		if err != nil {
 			return fail("OUTPUT_VALIDATION_FAILED", err)
 		}

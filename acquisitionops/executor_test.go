@@ -141,6 +141,34 @@ func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 	}
 }
 
+func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "v5", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
+	runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
+	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	if failure != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_SUCCESS: %v", failure)
+	}
+	if _, err := graphprovenance.ValidateFor(got.Artifact, graphprovenance.Family, "v5"); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_VALID: %v", err)
+	}
+	manifest.Expansion.TopmostSiblings = false
+	bad, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
+	before := runtime.queries
+	if _, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: bad}); failure == nil || failure.Code != operation.FailureInvalidInput || runtime.queries != before {
+		t.Fatalf("ASSERT_MANAGED_V5_EXPANSION_REQUIRED_BEFORE_ACQUISITION: failure=%v", failure)
+	}
+}
+
 func lspLocator(uri string) acquisition.Locator {
 	zero := uint32(0)
 	return acquisition.Locator{URI: uri, Line: &zero, Character: &zero, LanguageID: "go"}

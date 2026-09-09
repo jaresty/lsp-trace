@@ -156,21 +156,41 @@ type SeedResult struct {
 	Failure            *SeedFailure `json:"failure,omitempty"`
 }
 
+type SourceCustodyClass string
+
+const (
+	SourceCustodyVerifiedHost               SourceCustodyClass = "VERIFIED_HOST"
+	SourceCustodyCallerAssertedLocal        SourceCustodyClass = "CALLER_ASSERTED_LOCAL"
+	SourceCustodyLSPSuppliedUnauthenticated SourceCustodyClass = "LSP_SUPPLIED_UNAUTHENTICATED"
+	SourceCustodyRetainedByteConsistency    SourceCustodyClass = "RETAINED_BYTE_CONSISTENCY"
+	SourceCustodyUnknown                    SourceCustodyClass = "UNKNOWN"
+	SourceCustodyMissing                    SourceCustodyClass = "MISSING"
+)
+
+// SourceCustodyEvidence separates source-identity authority from exact retained-byte consistency.
+type SourceCustodyEvidence struct {
+	Class                               SourceCustodyClass `json:"class"`
+	SourceContentSHA256                 string             `json:"source_content_sha256,omitempty"`
+	HostReceiptID                       string             `json:"host_receipt_id,omitempty"`
+	AuthenticatedAnalyzedSourceIdentity bool               `json:"authenticated_analyzed_source_identity"`
+	ClaimCeiling                        string             `json:"claim_ceiling"`
+}
+
 type SiblingCandidate struct {
-	RelationID        string   `json:"relation_id"`
-	ExecutionBundleID string   `json:"execution_bundle_id,omitempty"`
-	SeedURI           string   `json:"seed_uri,omitempty"`
-	SeedLabel         string   `json:"seed_label,omitempty"`
-	SeedLabels        []string `json:"-"`
-	Origin            Node     `json:"origin"`
-	Candidate         Node     `json:"candidate"`
-	Direction         string   `json:"direction"`
-	Kind              string   `json:"kind"`
-	SeedIdentity      string   `json:"seed_identity"`
-	ProviderEvidence  []string `json:"provider_evidence_refs"`
-	LSPEvidence       []string `json:"lsp_evidence_refs"`
-	SourceDigests     []string `json:"source_digests"`
-	Custody           string   `json:"custody"`
+	RelationID        string                `json:"relation_id"`
+	ExecutionBundleID string                `json:"execution_bundle_id,omitempty"`
+	SeedURI           string                `json:"seed_uri,omitempty"`
+	SeedLabel         string                `json:"seed_label,omitempty"`
+	SeedLabels        []string              `json:"-"`
+	Origin            Node                  `json:"origin"`
+	Candidate         Node                  `json:"candidate"`
+	Direction         string                `json:"direction"`
+	Kind              string                `json:"kind"`
+	SeedIdentity      string                `json:"seed_identity"`
+	ProviderEvidence  []string              `json:"provider_evidence_refs"`
+	LSPEvidence       []string              `json:"lsp_evidence_refs"`
+	SourceDigests     []string              `json:"source_digests"`
+	Custody           SourceCustodyEvidence `json:"custody"`
 }
 
 type DispatchRelationship struct {
@@ -569,8 +589,9 @@ func canonicalHistoricalSiblingRelationID(candidate SiblingCandidate) string {
 
 func canonicalSiblingRelationIDFor(version, domain string, candidate SiblingCandidate) string {
 	identity := struct {
-		Version, Bundle, Origin, Candidate, Direction, Kind, SeedIdentity, Custody string
-		ProviderEvidence, LSPEvidence, SourceDigests                               []string
+		Version, Bundle, Origin, Candidate, Direction, Kind, SeedIdentity string
+		Custody                                                           SourceCustodyEvidence
+		ProviderEvidence, LSPEvidence, SourceDigests                      []string
 	}{version, candidate.ExecutionBundleID, candidate.Origin.ID, candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
 	encoded, err := json.Marshal(identity)
 	if err != nil {
