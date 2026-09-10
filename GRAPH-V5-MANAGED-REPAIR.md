@@ -22,7 +22,7 @@ Base: `3a527fcf38e37be43542a5ab141ec4de5c6e8c7d` (`pi-agent-1fa12b24-648f-440`)
 - Build: `cmd/lsp-trace`, `cmd/lsp-trace-mcp`, and `cmd/fake-lsp` passed.
 - Post-custody focused rerun: 232 tests passed.
 
-No full suite or full race was run. No delegation, network, install, deploy, product, D01, NAIS, or export action was performed.
+No full suite or full race was run. No delegation, network, install, deploy, product, D01, or export action was performed.
 
 ## Independent re-review
 
