@@ -120,6 +120,95 @@ func TestTopmostSiblingExpansionDistinctSeedsSharesGlobalRequestBudget(t *testin
 	}
 }
 
+func TestTopmostSiblingCorrespondenceUsesSelectionIdentity(t *testing.T) {
+	seed := item("seed", 0)
+	declaration := lsp.DocumentSymbol{
+		Name:           "GetSchoolFilterModel",
+		Kind:           6,
+		Range:          lsp.Range{Start: lsp.Position{Line: 3}, End: lsp.Position{Line: 9}},
+		SelectionRange: lsp.Range{Start: lsp.Position{Line: 4, Character: 8}, End: lsp.Position{Line: 4, Character: 28}},
+	}
+	prepared := lsp.CallHierarchyItem{
+		Name:           "GetSchoolFilterModel(string schoolId)",
+		Kind:           declaration.Kind,
+		URI:            seed.URI,
+		Range:          lsp.Range{Start: lsp.Position{Line: 4, Character: 4}, End: lsp.Position{Line: 8}},
+		SelectionRange: declaration.SelectionRange,
+	}
+	setup := func() (*fakeClient, Request) {
+		f := fixture()
+		f.add(seed)
+		f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "container", Kind: 5, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+			{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange},
+			declaration,
+		}}}
+		params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start}
+		f.items[prepareKey(params)] = []lsp.CallHierarchyItem{prepared}
+		r := request(seed)
+		r.TopmostSiblings = true
+		return f, r
+	}
+
+	t.Run("different names and full ranges correspond", func(t *testing.T) {
+		f, r := setup()
+		got, err := Acquire(context.Background(), f, r)
+		if err != nil || len(got.Graph.SiblingCandidates) != 1 {
+			t.Fatalf("ASSERT_SIBLING_SELECTION_IDENTITY_ACCEPTED: err=%v siblings=%#v calls=%v", err, got.Graph.SiblingCandidates, f.calls)
+		}
+		wantPrepare := prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})
+		preparedAtSelectionStart := false
+		for _, call := range f.calls {
+			preparedAtSelectionStart = preparedAtSelectionStart || call == wantPrepare
+		}
+		if !preparedAtSelectionStart {
+			t.Fatalf("ASSERT_SIBLING_PREPARE_AT_EXACT_SELECTION_START: want=%s calls=%v", wantPrepare, f.calls)
+		}
+		gotDeclaration := got.Graph.SiblingCandidates[0].Declaration
+		if gotDeclaration.Name != declaration.Name || gotDeclaration.Range != toRange(declaration.Range) || gotDeclaration.SelectionRange != toRange(declaration.SelectionRange) || got.Graph.SiblingCandidates[0].Candidate.Name != prepared.Name || got.Graph.SiblingCandidates[0].Candidate.Range != toRange(prepared.Range) {
+			t.Fatalf("ASSERT_SIBLING_RETAINS_DISTINCT_DECLARATION_AND_PREPARED_EVIDENCE: %#v", got.Graph.SiblingCandidates[0])
+		}
+	})
+
+	cases := []struct {
+		name   string
+		mutate func(*fakeClient)
+	}{
+		{"uri", func(f *fakeClient) {
+			p := prepared
+			p.URI = "file:///other.go"
+			f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})] = []lsp.CallHierarchyItem{p}
+		}},
+		{"selection", func(f *fakeClient) {
+			p := prepared
+			p.SelectionRange.Start.Character++
+			f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})] = []lsp.CallHierarchyItem{p}
+		}},
+		{"kind", func(f *fakeClient) {
+			p := prepared
+			p.Kind++
+			f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})] = []lsp.CallHierarchyItem{p}
+		}},
+		{"ambiguity", func(f *fakeClient) {
+			p := prepared
+			p.Name += " duplicate"
+			f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})] = []lsp.CallHierarchyItem{prepared, p}
+		}},
+		{"empty", func(f *fakeClient) {
+			f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: seed.URI}, Position: declaration.SelectionRange.Start})] = []lsp.CallHierarchyItem{}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f, r := setup()
+			tc.mutate(f)
+			got, err := Acquire(context.Background(), f, r)
+			if err == nil && (len(got.Graph.SiblingCandidates) != 0 || got.AcquisitionComplete) {
+				t.Fatalf("ASSERT_SIBLING_CORRESPONDENCE_REJECTS_%s: siblings=%#v complete=%t", tc.name, got.Graph.SiblingCandidates, got.AcquisitionComplete)
+			}
+		})
+	}
+}
+
 func TestTopmostSiblingExpansionSharedEvidenceNodeAndTimeBudgets(t *testing.T) {
 	seed, peer := item("seed", 0), item("peer", 2)
 	setup := func() *fakeClient {

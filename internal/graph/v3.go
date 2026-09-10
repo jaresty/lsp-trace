@@ -315,6 +315,7 @@ func projectExecutionBundleRelations(schemaVersion, bundleID string, edges []Edg
 		if schemaVersion == SchemaVersionV5 {
 			siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
 		} else {
+			siblings[i].Declaration = nil
 			siblings[i].RelationID = canonicalHistoricalSiblingRelationID(siblings[i])
 		}
 	}
@@ -639,6 +640,11 @@ func (r Result) ValidateReferences() error {
 				return err
 			}
 		}
+		if r.SchemaVersion == SchemaVersionV5 && c.Declaration != nil {
+			if err := checkEmbedded("sibling declaration", *c.Declaration); err != nil {
+				return err
+			}
+		}
 		if err := checkEmbedded("sibling candidate", c.Candidate); err != nil {
 			return err
 		}
@@ -699,7 +705,8 @@ func validateV5SiblingEvidence(b bundleV3) error {
 			ok   bool
 		}{
 			{"distinct_endpoints", candidate.Origin.ID != candidate.Candidate.ID},
-			{"seed_uri", candidate.SeedURI == seed.ResolvedURI && candidate.Origin.URI == seed.ResolvedURI && candidate.Candidate.URI == seed.ResolvedURI},
+			{"seed_uri", candidate.SeedURI == seed.ResolvedURI && candidate.Origin.URI == seed.ResolvedURI && (candidate.Declaration == nil || candidate.Declaration.URI == seed.ResolvedURI) && candidate.Candidate.URI == seed.ResolvedURI},
+			{"correspondence", candidate.Declaration == nil || candidate.Declaration.URI == candidate.Candidate.URI && candidate.Declaration.SelectionRange == candidate.Candidate.SelectionRange && candidate.Declaration.Kind == candidate.Candidate.Kind},
 			{"seed_identity", candidate.SeedIdentity == expectedIdentity},
 			{"provider_evidence_refs", reflect.DeepEqual(candidate.ProviderEvidence, []string{expectedProvider})},
 			{"lsp_evidence_refs", reflect.DeepEqual(candidate.LSPEvidence, expectedLSP)},

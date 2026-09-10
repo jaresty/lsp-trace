@@ -183,6 +183,7 @@ type SiblingCandidate struct {
 	SeedLabel         string                `json:"seed_label,omitempty"`
 	SeedLabels        []string              `json:"-"`
 	Origin            Node                  `json:"origin"`
+	Declaration       *Node                 `json:"document_symbol,omitempty"`
 	Candidate         Node                  `json:"candidate"`
 	Direction         string                `json:"direction"`
 	Kind              string                `json:"kind"`
@@ -587,12 +588,19 @@ func canonicalHistoricalSiblingRelationID(candidate SiblingCandidate) string {
 	return canonicalSiblingRelationIDFor("lsp-trace.sibling-relation.v1", "lsp-trace:sibling-relation:v1", candidate)
 }
 
+func nodeID(node *Node) string {
+	if node == nil {
+		return ""
+	}
+	return node.ID
+}
+
 func canonicalSiblingRelationIDFor(version, domain string, candidate SiblingCandidate) string {
 	identity := struct {
-		Version, Bundle, Origin, Candidate, Direction, Kind, SeedIdentity string
-		Custody                                                           SourceCustodyEvidence
-		ProviderEvidence, LSPEvidence, SourceDigests                      []string
-	}{version, candidate.ExecutionBundleID, candidate.Origin.ID, candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
+		Version, Bundle, Origin, Declaration, Candidate, Direction, Kind, SeedIdentity string
+		Custody                                                                        SourceCustodyEvidence
+		ProviderEvidence, LSPEvidence, SourceDigests                                   []string
+	}{version, candidate.ExecutionBundleID, candidate.Origin.ID, nodeID(candidate.Declaration), candidate.Candidate.ID, candidate.Direction, candidate.Kind, candidate.SeedIdentity, candidate.Custody, candidate.ProviderEvidence, candidate.LSPEvidence, candidate.SourceDigests}
 	encoded, err := json.Marshal(identity)
 	if err != nil {
 		panic(err)

@@ -528,7 +528,12 @@ func (c *runner) expandTopmostSiblings() {
 			return children[i].Name < children[j].Name
 		})
 		for _, sibling := range children {
-			if sibling.Name == t.Resolution.Prepared.Name && sibling.SelectionRange == t.Resolution.Prepared.SelectionRange {
+			if uri == t.Resolution.Prepared.URI && sibling.SelectionRange == t.Resolution.Prepared.SelectionRange {
+				continue
+			}
+			declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: sibling.SelectionRange})
+			if graph.ValidateItem(declaration.Item) != nil {
+				c.result.AcquisitionComplete = false
 				continue
 			}
 			prepare := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: sibling.SelectionRange.Start}
@@ -539,14 +544,19 @@ func (c *runner) expandTopmostSiblings() {
 				c.result.AcquisitionComplete = false
 				continue
 			}
+			matches := []lsp.CallHierarchyItem{}
 			for _, item := range prepared.([]lsp.CallHierarchyItem) {
 				candidate := node(item)
-				if item.URI != uri || item.Name != sibling.Name || item.SelectionRange != sibling.SelectionRange || graph.ValidateItem(candidate.Item) != nil || !c.admit(item) {
-					c.result.AcquisitionComplete = false
-					continue
+				if canonicalURI(item.URI) && item.URI == uri && item.SelectionRange == sibling.SelectionRange && item.Kind == sibling.Kind && graph.ValidateItem(candidate.Item) == nil {
+					matches = append(matches, item)
 				}
-				c.result.Graph.SiblingCandidates = append(c.result.Graph.SiblingCandidates, graph.SiblingCandidate{SeedURI: uri, SeedLabel: t.Requested.ID, Origin: *t.Resolution.Identity, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING", LSPEvidence: []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}})
 			}
+			if len(matches) != 1 || !c.admit(matches[0]) {
+				c.result.AcquisitionComplete = false
+				continue
+			}
+			candidate := node(matches[0])
+			c.result.Graph.SiblingCandidates = append(c.result.Graph.SiblingCandidates, graph.SiblingCandidate{SeedURI: uri, SeedLabel: t.Requested.ID, Origin: *t.Resolution.Identity, Declaration: &declaration, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING", LSPEvidence: []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}})
 		}
 	}
 }
