@@ -142,7 +142,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",
 		"lsp_trace_v1_filter":                    "Compare exactly two retained seed evidence sets with a mechanical filter",
 		"lsp_trace_v1_validate":                  "Validate retained evidence against its schema contract",
-		"lsp_trace_v1_verify":                    "Verify immutable publication custody, byte length, and digest",
+		"lsp_trace_v1_verify":                    "Verify immutable publication custody, byte length, digest, and native Graph Provenance V5 semantics",
 		"lsp_trace_v1_schema_get":                "Retrieve the exact schema contract for an evidence family and version",
 		"lsp_trace_v1_capabilities":              "Discover canonical LSP Trace tools, schemas, publication support, and limits",
 		"lsp_trace_v1_execute":                   "Execute one canonical request through the shared transport-neutral operation",
@@ -210,6 +210,9 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		}
 		if operation, ok := publicAnalyticsV2Operation(tools[i].Name); ok {
 			tools[i].PresentationInputSchema = publicAnalyticsV2PresentationSchema(tools[i].InputSchema, operation)
+		}
+		if tools[i].Name == "lsp_trace_v1_verify" {
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV5ArtifactID)
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)

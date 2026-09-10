@@ -3,6 +3,8 @@ package mcp
 import (
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/mcpcontract"
 )
 
 func TestRegistrySnapshotsAreImmutable(t *testing.T) {
@@ -176,6 +178,27 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
 	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 28 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
+	}
+}
+
+func TestVerifyAdvertisesGraphProvenanceV5WithoutChangingCardinality(t *testing.T) {
+	registry := NewRegistry(false)
+	if got := len(registry.Tools()); got != 28 {
+		t.Fatalf("ASSERT_VERIFY_V5_CARDINALITY: got=%d want=28", got)
+	}
+	tool, ok := registry.Resolve("lsp_trace_v1_verify")
+	if !ok {
+		t.Fatal("ASSERT_VERIFY_V5_DISCOVERY: verifier missing")
+	}
+	found := false
+	for _, id := range tool.ArtifactSchemaIDs {
+		if id == mcpcontract.GraphProvenanceV5ArtifactID {
+			found = true
+			break
+		}
+	}
+	if !found || !strings.Contains(tool.Description, "Graph Provenance V5") {
+		t.Fatalf("ASSERT_VERIFY_V5_DISCOVERY: tool=%+v", tool)
 	}
 }
 

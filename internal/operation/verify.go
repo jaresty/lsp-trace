@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/verification"
 )
 
@@ -48,18 +49,26 @@ func NewVerifyHandler(loader CustodyLoader) Handler {
 		if err := verification.VerifyReceipt(material.Artifact, material.Receipt); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
 		}
-		if err := graph.ValidateSemanticBundle(bytes.TrimSpace(material.Artifact)); err != nil {
-			return verifyFailure("VERIFICATION_FAILED", err)
-		}
 		var identity struct {
-			TraceReceipt struct {
+			SchemaVersion string `json:"schema_version"`
+			TraceReceipt  struct {
 				SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
 			} `json:"trace_receipt"`
+			GraphV5SHA256 string `json:"graph_v5_sha256"`
 		}
 		if err := json.Unmarshal(material.Artifact, &identity); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
 		}
-		return Result{Artifact: material.Artifact, LogicalDigest: identity.TraceReceipt.SemanticCommitmentDigest}, nil
+		logicalDigest := identity.TraceReceipt.SemanticCommitmentDigest
+		if identity.SchemaVersion == graphprovenance.VersionV5 {
+			if _, err := graphprovenance.ValidateFor(material.Artifact, graphprovenance.Family, "v5"); err != nil {
+				return verifyFailure("VERIFICATION_FAILED", err)
+			}
+			logicalDigest = identity.GraphV5SHA256
+		} else if err := graph.ValidateSemanticBundle(bytes.TrimSpace(material.Artifact)); err != nil {
+			return verifyFailure("VERIFICATION_FAILED", err)
+		}
+		return Result{Artifact: material.Artifact, LogicalDigest: logicalDigest}, nil
 	}
 }
 

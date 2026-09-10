@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/verification"
 )
 
@@ -74,6 +76,55 @@ func TestVerifyHandlerUsesInjectedCustodyAndPreservesExactBytes(t *testing.T) {
 	}
 	if result.LogicalDigest != artifact.TraceReceipt.SemanticCommitmentDigest {
 		t.Fatalf("ASSERT_VERIFY_LOGICAL_DIGEST_PARITY: got=%q want=%q", result.LogicalDigest, artifact.TraceReceipt.SemanticCommitmentDigest)
+	}
+}
+
+func TestVerifyHandlerAcceptsGraphProvenanceV5AndPreservesExactBytes(t *testing.T) {
+	native, err := json.Marshal(graph.Result{
+		SchemaVersion: graph.SchemaVersionV5,
+		Invocation: graph.Invocation{
+			Server:     graph.ServerInvocation{Command: "fake-lsp"},
+			Provenance: graph.InvocationProvenance{InvocationID: "session", SourceRevision: "commit", ServerVersion: "fake@1"},
+		},
+		Summary: graph.Summary{Complete: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := graphprovenance.CaptureV5(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := verification.ReceiptBytes(artifact, verification.DirectoryDurabilityChecked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	material := CustodyMaterial{Artifact: artifact, Receipt: receipt}
+	result, failure := NewVerifyHandler(custodyLoaderFunc(func(context.Context, json.RawMessage) (CustodyMaterial, *Failure) {
+		return material, nil
+	}))(context.Background(), verifyRequest(`"v5-selector.json"`))
+	if failure != nil {
+		t.Fatalf("ASSERT_VERIFY_V5_ACCEPTED: %v", failure)
+	}
+	if !bytes.Equal(result.Artifact, artifact) {
+		t.Fatal("ASSERT_VERIFY_V5_EXACT_ARTIFACT_BYTES")
+	}
+	var carrier graphprovenance.EvidenceV5
+	if err := json.Unmarshal(artifact, &carrier); err != nil {
+		t.Fatal(err)
+	}
+	if result.LogicalDigest != carrier.GraphV5SHA256 {
+		t.Fatalf("ASSERT_VERIFY_V5_LOGICAL_DIGEST: got=%q want=%q", result.LogicalDigest, carrier.GraphV5SHA256)
+	}
+
+	carrier.GraphV5SHA256 = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	material.Artifact, _ = json.Marshal(carrier)
+	material.Receipt, _ = verification.ReceiptBytes(material.Artifact, verification.DirectoryDurabilityChecked)
+	_, failure = NewVerifyHandler(custodyLoaderFunc(func(context.Context, json.RawMessage) (CustodyMaterial, *Failure) {
+		return material, nil
+	}))(context.Background(), verifyRequest(`"v5-selector.json"`))
+	if failure == nil || failure.Code != "VERIFICATION_FAILED" || !strings.Contains(failure.Error(), "digest mismatch") {
+		t.Fatalf("ASSERT_VERIFY_V5_FAIL_CLOSED: %#v", failure)
 	}
 }
 
