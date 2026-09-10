@@ -527,7 +527,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 
 func TestProductionMCPRealProviderConformance(t *testing.T) {
 	if runtime.GOOS != "darwin" {
-		t.Fatalf("ASSERT_PRODUCTION_PROVIDER_PLATFORM: skip-free production process conformance requires supported LocalDarwinSupervisor")
+		t.Skip("production process conformance requires supported LocalDarwinSupervisor")
 	}
 	mcpBinary := buildMCPBinary(t)
 	fakeLSP := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")

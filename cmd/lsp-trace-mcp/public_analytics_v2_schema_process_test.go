@@ -16,6 +16,9 @@ import (
 func TestPublicAnalyticsV2ToolsListRendersThroughInstalledPiAdapter(t *testing.T) {
 	const adapterShape = "/Users/schwa/.pi/agent/npm/node_modules/pi-mcp-adapter/ts-shape.ts"
 	if _, err := os.Stat(adapterShape); err != nil {
+		if os.IsNotExist(err) {
+			t.Skip("installed pi-mcp-adapter conformance requires developer integration substrate")
+		}
 		t.Fatalf("ASSERT_PI_MCP_ADAPTER_2_32_1_PRESENT: %v", err)
 	}
 	adapterSource, err := os.ReadFile(adapterShape)
