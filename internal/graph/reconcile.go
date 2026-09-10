@@ -3,6 +3,7 @@ package graph
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 )
 
 type semanticLocation struct {
@@ -10,6 +11,11 @@ type semanticLocation struct {
 	Kind           int
 	URI            string
 	SelectionRange Range
+}
+
+type exactDeclaration struct {
+	semanticLocation
+	Range Range
 }
 
 // SameSemanticLocation reports whether server presentations identify the same
@@ -26,12 +32,36 @@ func ReconcileIncomingAliases(outgoing Result, incoming *Result) {
 	if incoming == nil {
 		return
 	}
+	byDeclaration := make(map[exactDeclaration][]Node, len(incoming.Nodes))
+	for _, node := range incoming.Nodes {
+		key := exactDeclaration{semanticLocation{node.Name, node.Kind, node.URI, node.SelectionRange}, node.Range}
+		byDeclaration[key] = append(byDeclaration[key], node)
+	}
+	replacements := map[string]Node{}
+	for _, aliases := range byDeclaration {
+		if len(aliases) < 2 {
+			continue
+		}
+		sort.Slice(aliases, func(i, j int) bool { return aliases[i].ID < aliases[j].ID })
+		canonical := aliases[0]
+		for _, alias := range aliases[1:] {
+			if alias.ID == canonical.ID {
+				continue
+			}
+			replacements[alias.ID] = canonical
+			presentation, _ := json.Marshal(alias.Item)
+			incoming.Diagnostics = append(incoming.Diagnostics, Diagnostic{
+				Phase: "slice-reconcile", Method: "callHierarchy/incomingCalls", NodeID: canonical.ID,
+				Message: fmt.Sprintf("INCOMING_SYMBOL_ALIAS_RECONCILED: incoming=%s", presentation),
+			})
+		}
+	}
+
 	byLocation := make(map[semanticLocation][]Node, len(outgoing.Nodes))
 	for _, node := range outgoing.Nodes {
 		key := semanticLocation{node.Name, node.Kind, node.URI, node.SelectionRange}
 		byLocation[key] = append(byLocation[key], node)
 	}
-	replacements := map[string]Node{}
 	for _, node := range incoming.Nodes {
 		key := semanticLocation{node.Name, node.Kind, node.URI, node.SelectionRange}
 		matches := byLocation[key]
@@ -55,11 +85,18 @@ func ReconcileIncomingAliases(outgoing Result, incoming *Result) {
 		}
 		return id
 	}
-	for i := range incoming.Nodes {
-		if node, ok := replacements[incoming.Nodes[i].ID]; ok {
-			incoming.Nodes[i] = node
+	nodes := make([]Node, 0, len(incoming.Nodes))
+	seenNodes := map[string]bool{}
+	for _, node := range incoming.Nodes {
+		if replacement, ok := replacements[node.ID]; ok {
+			node = replacement
+		}
+		if !seenNodes[node.ID] {
+			seenNodes[node.ID] = true
+			nodes = append(nodes, node)
 		}
 	}
+	incoming.Nodes = nodes
 	for i := range incoming.Edges {
 		incoming.Edges[i].CallerNodeID = rewrite(incoming.Edges[i].CallerNodeID)
 		incoming.Edges[i].CalleeNodeID = rewrite(incoming.Edges[i].CalleeNodeID)
