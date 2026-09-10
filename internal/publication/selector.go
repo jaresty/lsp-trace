@@ -187,6 +187,8 @@ type Receipt struct {
 	ByteLength           uint64 `json:"artifact_byte_length"`
 	ArtifactSchemaID     string `json:"artifact_schema_id"`
 	PublicationMechanism string `json:"publication_mechanism"`
+	Generation           string `json:"generation,omitempty"`
+	VerificationSelector string `json:"verification_selector,omitempty"`
 }
 
 type Failure struct {

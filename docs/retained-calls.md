@@ -34,6 +34,15 @@ The companion establishes retained-byte consistency only. Native receipts are no
 checkout, perform network/provider acquisition, add support, or turn a sibling into
 `CALLS`. Its schema family is `graph-v5-source-snapshot`, version `v1`.
 
+When MCP publication is requested for Graph Provenance V5 or this source companion,
+the product preserves the caller-selected flat artifact and additionally creates a
+digest-named immutable verification generation. The returned `publication_receipt`
+contains relative `generation` and `verification_selector` fields. Passing the
+publication-root-resolved selector path to `lsp_trace_v1_verify` performs exact-byte
+receipt verification before semantic validation. The selector is installed last;
+an absent selector never authorizes an incomplete generation. This establishes
+integrity and custody only, not producer authentication or source authenticity.
+
 
 The frozen V1 export remains bounded A3. The additive FR20 V2 export is now
 source-implemented in both CLI and MCP, but is not deployed qualification,

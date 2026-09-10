@@ -376,6 +376,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		publicationResult := publication.NewOperation(publisher, publication.Request{
 			Root: s.PublicationRoot, Selector: selector, Bytes: opResult.Artifact, ArtifactSchemaID: artifactID,
 		}).Publish()
+		if publicationResult.Failure == nil && supportsV1Verification(artifactID) {
+			publicationResult = publisher.PublishVerifiedGeneration(s.PublicationRoot, opResult.Artifact, artifactID)
+		}
 		if publicationResult.Failure != nil {
 			if publicationResult.Failure.Code == publication.CodeOutputSelectorUnsafe {
 				env := domainErrorEnvelope(tool.Name, requestID, publication.CodeOutputSelectorUnsafe, []string{"output selector is unsafe"})
@@ -539,6 +542,10 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	}
 	base.Result = callResult{Content: []any{map[string]any{"type": "text", "text": string(raw)}}, StructuredContent: env, IsError: env.IsError}
 	return base
+}
+
+func supportsV1Verification(artifactID string) bool {
+	return artifactID == mcpcontract.GraphProvenanceV5ArtifactID || artifactID == mcpcontract.GraphV5SourceSnapshotArtifactID
 }
 
 func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
