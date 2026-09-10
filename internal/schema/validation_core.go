@@ -51,37 +51,9 @@ func ValidateStructure(data []byte, family, requested string) (StructuralResult,
 			return StructuralResult{}, fmt.Errorf("schema version mismatch: document=%s requested=%s", full, want)
 		}
 	}
-	raw, err := BytesFor(family, short)
+	compiled, err := compiledSchemaFor(family, short, full)
 	if err != nil {
 		return StructuralResult{}, err
-	}
-	schemaDoc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
-	if err != nil {
-		return StructuralResult{}, fmt.Errorf("embedded schema %s: %w", full, err)
-	}
-	compiler := jsonschema.NewCompiler()
-	compiler.DefaultDraft(jsonschema.Draft2020)
-	if family == FamilyBoundedMetricsV2 || family == FamilyBoundedRankingV2 {
-		baseRaw, baseErr := BytesFor(FamilyBoundedAnalysisV2, "v2")
-		if baseErr != nil {
-			return StructuralResult{}, baseErr
-		}
-		baseDoc, baseErr := jsonschema.UnmarshalJSON(bytes.NewReader(baseRaw))
-		if baseErr != nil {
-			return StructuralResult{}, fmt.Errorf("embedded analysis base schema: %w", baseErr)
-		}
-		baseResource := "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.local-normative-analysis.v1.schema.json"
-		if baseErr = compiler.AddResource(baseResource, baseDoc); baseErr != nil {
-			return StructuralResult{}, fmt.Errorf("embedded analysis base schema: %w", baseErr)
-		}
-	}
-	resource := "https://jaresty.github.io/lsp-trace/schemas/" + full + ".schema.json"
-	if err := compiler.AddResource(resource, schemaDoc); err != nil {
-		return StructuralResult{}, fmt.Errorf("embedded schema %s: %w", full, err)
-	}
-	compiled, err := compiler.Compile(resource)
-	if err != nil {
-		return StructuralResult{}, fmt.Errorf("embedded schema %s: %w", full, err)
 	}
 	if err := compiled.Validate(doc); err != nil {
 		return StructuralResult{}, fmt.Errorf("schema validation %s: %w", full, err)

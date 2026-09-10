@@ -42,6 +42,35 @@ func cloneTablesV2(t *testing.T, x TablesV2) TablesV2 {
 	}
 	return y
 }
+func BenchmarkRetainedV2(b *testing.B) {
+	input, _ := fixtureV2(b, acquisition.Slice, "")
+	raw, err := ExportV2(input)
+	if err != nil {
+		b.Fatal(err)
+	}
+	var evidence EvidenceV2
+	if err := json.Unmarshal(raw, &evidence); err != nil {
+		b.Fatal(err)
+	}
+
+	b.Run("ValidateFor", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := ValidateFor(raw, Family, "v2"); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("ReconstructV2", func(b *testing.B) {
+		b.ReportAllocs()
+		for b.Loop() {
+			if _, err := ReconstructV2(evidence.Tables); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
 func TestRetainedV2RoundtripOracle(t *testing.T) {
 	for _, mode := range []acquisition.Mode{acquisition.Slice, acquisition.Incoming} {
 		for _, variant := range []string{"", "zero", "missing", "empty"} {

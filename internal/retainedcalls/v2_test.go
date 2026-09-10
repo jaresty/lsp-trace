@@ -19,7 +19,7 @@ import (
 // Initial RED used the existing present-but-wrong V1 exporter, not an undefined API.
 var exportV2UnderTest = ExportV2
 
-func fixtureV2(t *testing.T, mode acquisition.Mode, variant string) ([]byte, acquisition.Result) {
+func fixtureV2(t testing.TB, mode acquisition.Mode, variant string) ([]byte, acquisition.Result) {
 	t.Helper()
 	root := t.TempDir()
 	uri := func(name string) string {
