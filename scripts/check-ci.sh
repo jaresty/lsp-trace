@@ -18,11 +18,14 @@ require() {
 
 require CI-FORMAT 'gofmt -l .'
 require CI-TEST 'go test ./...'
+require CI-TEST-UNIX-ONLY "if: runner.os != 'Windows'"
+require CI-WINDOWS-BUILD 'windows-latest'
 require CI-VET 'go vet ./...'
 require CI-BUILD 'go build ./...'
 require CI-PYTHON 'python3 -m py_compile scripts/retain-qualification.py'
 require CI-SHELL 'sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh'
 require CI-RELEASE './scripts/release-check.sh'
+require CI-BUN 'oven-sh/setup-bun@v2'
 require CI-CLEAN 'git status --porcelain'
 if grep -F -- 'go build -trimpath' "$root/scripts/release-check.sh" >/dev/null; then
   printf 'PASS CI-RELEASE-DRY-RUN\n'
