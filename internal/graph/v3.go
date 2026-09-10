@@ -803,16 +803,16 @@ func ValidateSemanticBundle(data []byte) error {
 	if b.SchemaVersion != SchemaVersionV3 && b.SchemaVersion != SchemaVersionV5 {
 		return fmt.Errorf("verification requires %s or %s", SchemaVersionV3, SchemaVersionV5)
 	}
-	var immutableV5Semantic []byte
-	if b.SchemaVersion == SchemaVersionV5 {
+	var immutableSiblingSemantic []byte
+	if b.SchemaVersion == SchemaVersionV5 || (b.SchemaVersion == SchemaVersionV3 && len(b.SiblingCandidates) > 0) {
 		marker := []byte(`,"trace_receipt":`)
 		cut := bytes.LastIndex(data, marker)
 		if cut < 0 {
 			return fmt.Errorf("malformed bundle: trace receipt framing")
 		}
-		immutableV5Semantic = make([]byte, cut+1)
-		copy(immutableV5Semantic, data[:cut])
-		immutableV5Semantic[cut] = '}'
+		immutableSiblingSemantic = make([]byte, cut+1)
+		copy(immutableSiblingSemantic, data[:cut])
+		immutableSiblingSemantic[cut] = '}'
 	}
 	if err := validateEvidenceKinds(b.EvidenceReceipt, b.SeedMemberships); err != nil {
 		return err
@@ -985,8 +985,8 @@ func ValidateSemanticBundle(data []byte) error {
 	}
 	receipt := b.TraceReceipt
 	b.TraceReceipt = semanticReceiptV3{}
-	canonical := immutableV5Semantic
-	if b.SchemaVersion == SchemaVersionV3 {
+	canonical := immutableSiblingSemantic
+	if len(canonical) == 0 {
 		var err error
 		canonical, err = json.Marshal(b.semanticV3)
 		if err != nil {
