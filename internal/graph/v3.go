@@ -816,16 +816,25 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := verified.ValidateReferences(); err != nil {
 		return err
 	}
-	historicalSiblingIDs := make([]string, len(verified.SiblingCandidates))
+	historicalSiblingIDs := map[string]string{}
 	if b.SchemaVersion == SchemaVersionV3 {
-		for i := range verified.SiblingCandidates {
-			historicalSiblingIDs[i] = verified.SiblingCandidates[i].RelationID
+		for _, candidate := range verified.SiblingCandidates {
+			identity := canonicalSiblingRelationID(candidate)
+			if _, exists := historicalSiblingIDs[identity]; exists {
+				return fmt.Errorf("ambiguous historical sibling identity")
+			}
+			historicalSiblingIDs[identity] = candidate.RelationID
 		}
 	}
 	verified.Canonicalize()
 	if b.SchemaVersion == SchemaVersionV3 {
 		for i := range verified.SiblingCandidates {
-			verified.SiblingCandidates[i].RelationID = historicalSiblingIDs[i]
+			identity := canonicalSiblingRelationID(verified.SiblingCandidates[i])
+			historicalID, found := historicalSiblingIDs[identity]
+			if !found {
+				return fmt.Errorf("historical sibling identity mismatch")
+			}
+			verified.SiblingCandidates[i].RelationID = historicalID
 		}
 	}
 	if err := validateProcessContext(b.ProcessContext); err != nil {
