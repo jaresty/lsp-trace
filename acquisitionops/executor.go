@@ -295,12 +295,9 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
 	siblings := result.Graph.SiblingCandidates
-	var raw []byte
-	if !wantsV5 {
-		raw, err = graphprovenance.CaptureV2(ctx, result, workspace)
-		if err != nil {
-			return fail("OUTPUT_VALIDATION_FAILED", err)
-		}
+	raw, err := graphprovenance.CaptureV2(ctx, result, workspace)
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
 	if op.Name == SliceV3 || op.Name == IncomingV3 {
 		query := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
@@ -310,9 +307,16 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			query = diagnostics.Diagnostics(id, generation)
 		}
 		if wantsV5 {
-			// V5 owns the acquired graph directly. It must not pass through the
-			// mutable V2 typed/byte alias or its marshal-equality contract.
-			enriched := result.Graph
+			var carrier struct {
+				GraphBytes []byte `json:"graph_bytes"`
+			}
+			if unmarshalErr := json.Unmarshal(raw, &carrier); unmarshalErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
+			}
+			enriched, decodeErr := graph.DecodeNativeV3(carrier.GraphBytes)
+			if decodeErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", decodeErr)
+			}
 			enriched.SchemaVersion = graph.SchemaVersionV5
 			enriched.Invocation.Expansion.TopmostSiblings = true
 			enriched.SiblingCandidates = siblings
@@ -323,19 +327,11 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			for _, seed := range enriched.Invocation.Seeds {
 				seeds[seed.Label] = seed
 			}
-			invocationID := enriched.Invocation.Provenance.InvocationID
-			if invocationID == "" {
-				invocationID = graph.Unknown
-			}
-			serverVersion := enriched.Invocation.Provenance.ServerVersion
-			if serverVersion == "" {
-				serverVersion = graph.Unknown
-			}
 			for i := range enriched.SiblingCandidates {
 				candidate := &enriched.SiblingCandidates[i]
 				seed := seeds[candidate.SeedLabel]
-				candidate.SeedIdentity = invocationID + ":" + seed.Label + ":" + seed.At
-				candidate.ProviderEvidence = []string{fmt.Sprintf("command=%s;server_version=%s;invocation=%s", enriched.Invocation.Server.Command, serverVersion, invocationID)}
+				candidate.SeedIdentity = enriched.Invocation.Provenance.InvocationID + ":" + seed.Label + ":" + seed.At
+				candidate.ProviderEvidence = []string{fmt.Sprintf("command=%s;server_version=%s;invocation=%s", enriched.Invocation.Server.Command, enriched.Invocation.Provenance.ServerVersion, enriched.Invocation.Provenance.InvocationID)}
 				candidate.SourceDigests = []string{"candidate=" + seed.ContentSHA256, "origin=" + seed.ContentSHA256}
 				candidate.Custody = graph.SourceCustodyEvidence{Class: graph.SourceCustodyCallerAssertedLocal, SourceContentSHA256: seed.ContentSHA256, ClaimCeiling: "NO_AUTHENTICATED_ANALYZED_SOURCE_IDENTITY"}
 				if custodyReceipt != nil && custodyReceipt.Provenance == seedbinding.VerifiedHost {

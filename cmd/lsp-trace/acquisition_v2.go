@@ -357,8 +357,6 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if failed != nil {
 		if len(result.Artifact) > 0 {
 			finalizeRequestDiagnostics(result.Artifact)
-		} else if requestDiagnosticsRequested {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable: PROJECTION_REJECTED")
 		}
 		return fail(failed)
 	}

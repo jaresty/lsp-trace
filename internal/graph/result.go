@@ -360,10 +360,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		}
 		return out
 	}
-	if r.SchemaVersion == SchemaVersionV5 {
-		return r.marshalV5()
-	}
-	if r.SchemaVersion == SchemaVersionV3 {
+	if r.SchemaVersion == SchemaVersionV3 || r.SchemaVersion == SchemaVersionV5 {
 		return r.marshalV3()
 	}
 	if r.SchemaVersion == SchemaVersionV1 {
