@@ -68,8 +68,9 @@ type response struct {
 }
 
 type callParams struct {
-	Name      string         `json:"name"`
-	Arguments map[string]any `json:"arguments"`
+	Name      string          `json:"name"`
+	Arguments map[string]any  `json:"arguments"`
+	Meta      json.RawMessage `json:"_meta,omitempty"`
 }
 
 type envelope struct {
@@ -220,7 +221,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			base.Error = &rpcError{Code: -32602, Message: "Invalid params: " + err.Error()}
 			return base
 		}
-		decodeErr = decodeClosed(raw, &params, "name", "arguments")
+		decodeErr = decodeClosed(raw, &params, "name", "arguments", "_meta")
 	}
 	if decodeErr != nil || params.Name == "" || params.Arguments == nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}

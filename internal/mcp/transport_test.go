@@ -550,6 +550,23 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 	}
 }
 
+func TestToolsCallAcceptsRequestMetadata(t *testing.T) {
+	const assertion = "tools/call accepts standard MCP request metadata without changing tool arguments"
+	t.Log("ASSERTION: " + assertion)
+
+	responses := runMessages(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","arguments":{"operation":"lsp_trace_v3_slice"},"_meta":{"progressToken":3}}}`+"\n")
+	if len(responses) != 1 {
+		t.Fatalf("%s: got %d responses", assertion, len(responses))
+	}
+	if rpcError := responses[0]["error"]; rpcError != nil {
+		t.Fatalf("%s: error=%v", assertion, rpcError)
+	}
+	result, ok := responses[0]["result"].(map[string]any)
+	if !ok || result["isError"] != false {
+		t.Fatalf("%s: result=%v", assertion, responses[0]["result"])
+	}
+}
+
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
 	const listAssertion = "tools/list advertises the 28 current canonical names"
