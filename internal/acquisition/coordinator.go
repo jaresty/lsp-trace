@@ -487,6 +487,66 @@ func flattenSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
 	return out
 }
 
+func callableSymbolKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
+
+func sameDocumentSymbol(a, b lsp.DocumentSymbol) bool {
+	return a.Name == b.Name && a.Kind == b.Kind && a.Range == b.Range && a.SelectionRange == b.SelectionRange
+}
+
+func nearestStrictContainer(symbols []lsp.DocumentSymbol, child lsp.DocumentSymbol) (*lsp.DocumentSymbol, bool) {
+	containers := []lsp.DocumentSymbol{}
+	for _, symbol := range symbols {
+		if symbol.Range != child.Range && graph.RangeContains(toRange(symbol.Range), toRange(child.Range)) {
+			containers = append(containers, symbol)
+		}
+	}
+	nearest := []lsp.DocumentSymbol{}
+	for i, candidate := range containers {
+		containsNarrower := false
+		for j, other := range containers {
+			if i != j && candidate.Range != other.Range && graph.RangeContains(toRange(candidate.Range), toRange(other.Range)) {
+				containsNarrower = true
+				break
+			}
+		}
+		if !containsNarrower {
+			nearest = append(nearest, candidate)
+		}
+	}
+	if len(nearest) != 1 {
+		return nil, false
+	}
+	return &nearest[0], true
+}
+
+func childlessTopmostSiblings(seed lsp.CallHierarchyItem, symbols []lsp.DocumentSymbol) ([]lsp.DocumentSymbol, bool) {
+	seedDeclarations := []lsp.DocumentSymbol{}
+	for _, symbol := range symbols {
+		if callableSymbolKind(symbol.Kind) && symbol.Kind == seed.Kind && symbol.SelectionRange == seed.SelectionRange && graph.RangeContains(toRange(symbol.Range), toRange(seed.Range)) {
+			seedDeclarations = append(seedDeclarations, symbol)
+		}
+	}
+	if len(seedDeclarations) != 1 {
+		return nil, false
+	}
+	seedDeclaration := seedDeclarations[0]
+	seedContainer, ok := nearestStrictContainer(symbols, seedDeclaration)
+	if !ok {
+		return nil, false
+	}
+	peers := []lsp.DocumentSymbol{}
+	for _, symbol := range symbols {
+		if !callableSymbolKind(symbol.Kind) || sameDocumentSymbol(symbol, seedDeclaration) {
+			continue
+		}
+		container, exact := nearestStrictContainer(symbols, symbol)
+		if exact && sameDocumentSymbol(*container, *seedContainer) {
+			peers = append(peers, symbol)
+		}
+	}
+	return peers, true
+}
+
 // expandTopmostSiblings runs inside the coordinator so every document-symbol and
 // prepare request consumes the same global time/request/evidence/node budgets as
 // resolution and traversal. It emits discovery evidence only, never CALLS edges.
@@ -508,6 +568,7 @@ func (c *runner) expandTopmostSiblings() {
 			continue
 		}
 		all := flattenSymbols(value.([]lsp.DocumentSymbol))
+		children := []lsp.DocumentSymbol{}
 		var container *lsp.DocumentSymbol
 		for i := range all {
 			if graph.RangeContains(toRange(all[i].Range), toRange(t.Resolution.Prepared.Range)) && len(all[i].Children) > 0 {
@@ -517,10 +578,15 @@ func (c *runner) expandTopmostSiblings() {
 				}
 			}
 		}
-		if container == nil {
-			continue
+		if container != nil {
+			children = append(children, container.Children...)
+		} else {
+			var exact bool
+			children, exact = childlessTopmostSiblings(*t.Resolution.Prepared, all)
+			if !exact {
+				continue
+			}
 		}
-		children := append([]lsp.DocumentSymbol(nil), container.Children...)
 		sort.SliceStable(children, func(i, j int) bool {
 			if children[i].SelectionRange.Start != children[j].SelectionRange.Start {
 				return less(children[i].SelectionRange.Start, children[j].SelectionRange.Start)

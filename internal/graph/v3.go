@@ -193,6 +193,14 @@ func (r Result) marshalV3() ([]byte, error) {
 	edges, siblings, dispatches := projectExecutionBundleRelations(r.SchemaVersion, executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
 	receiptResult := r
 	receiptResult.Edges, receiptResult.SiblingCandidates, receiptResult.DispatchRelationships = edges, siblings, dispatches
+	if r.SchemaVersion == SchemaVersionV5 {
+		// Producer and verifier must run the same canonicalization after V5
+		// execution-bundle projection changes relation identity inputs.
+		receiptResult.Canonicalize()
+		edges = receiptResult.Edges
+		siblings = receiptResult.SiblingCandidates
+		dispatches = receiptResult.DispatchRelationships
+	}
 	receipt := receiptResult.evidenceReceipt(inv.Provenance.SourceRevision)
 	if err := validateProducerSeedRelations(r.Seeds); err != nil {
 		return nil, err

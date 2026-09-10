@@ -3,6 +3,8 @@ package acquisition
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -179,5 +181,69 @@ func TestWireDocumentSymbolUnion(t *testing.T) {
 				t.Fatalf("ASSERT_DOCUMENT_SYMBOL_MIXED_UNION_SHARED_REQUESTS_%s: got %d want 1", tc.name, calls)
 			}
 		})
+	}
+}
+
+func TestWireChildlessDocumentSymbolsTopmostSiblings(t *testing.T) {
+	seedSelection := lsp.Range{Start: lsp.Position{Line: 3, Character: 4}, End: lsp.Position{Line: 3, Character: 10}}
+	seed := lsp.CallHierarchyItem{Name: "Seed()", Kind: 6, URI: "file:///a.go", Range: seedSelection, SelectionRange: seedSelection, Data: json.RawMessage(`{"opaque":"seed"}`)}
+	seedRange := lsp.Range{Start: lsp.Position{Line: 2}, End: lsp.Position{Line: 8}}
+	peerSelection := lsp.Range{Start: lsp.Position{Line: 10, Character: 4}, End: lsp.Position{Line: 10, Character: 8}}
+	peerRange := lsp.Range{Start: lsp.Position{Line: 9}, End: lsp.Position{Line: 13}}
+	preparedPeer := lsp.CallHierarchyItem{Name: "Peer(int value)", Kind: 6, URI: seed.URI, Range: peerSelection, SelectionRange: peerSelection, Data: json.RawMessage(`{"opaque":"peer"}`)}
+	classRange := lsp.Range{Start: lsp.Position{Line: 1}, End: lsp.Position{Line: 19}}
+	fileRange := lsp.Range{Start: lsp.Position{}, End: lsp.Position{Line: 40}}
+
+	r := request(seed)
+	r.TopmostSiblings = true
+	preparePositions := []lsp.Position{}
+	client := NewWireClient(func(_ context.Context, w WireRequest) (json.RawMessage, error) {
+		switch w.Method {
+		case "textDocument/documentSymbol":
+			return json.Marshal([]wireSymbol{
+				{Name: "a.go", Kind: 1, Range: fileRange, SelectionRange: fileRange},
+				{Name: "pkg", Kind: 3, Range: fileRange, SelectionRange: lsp.Range{Start: lsp.Position{}, End: lsp.Position{Character: 3}}},
+				{Name: "Controller", Kind: 5, Range: classRange, SelectionRange: lsp.Range{Start: lsp.Position{Line: 1}, End: lsp.Position{Line: 1, Character: 10}}},
+				{Name: seed.Name, Kind: seed.Kind, Range: seedRange, SelectionRange: seedSelection},
+				{Name: "Peer", Kind: preparedPeer.Kind, Range: peerRange, SelectionRange: peerSelection},
+				{Name: "Field", Kind: 8, Range: lsp.Range{Start: lsp.Position{Line: 14}, End: lsp.Position{Line: 14, Character: 5}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 14}, End: lsp.Position{Line: 14, Character: 5}}},
+				{Name: "Nested", Kind: 5, Range: lsp.Range{Start: lsp.Position{Line: 15}, End: lsp.Position{Line: 18}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 15}, End: lsp.Position{Line: 15, Character: 6}}},
+				{Name: "NestedPeer", Kind: 6, Range: lsp.Range{Start: lsp.Position{Line: 16}, End: lsp.Position{Line: 17}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 16}, End: lsp.Position{Line: 16, Character: 10}}},
+				{Name: "OtherController", Kind: 5, Range: lsp.Range{Start: lsp.Position{Line: 20}, End: lsp.Position{Line: 39}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 20}, End: lsp.Position{Line: 20, Character: 15}}},
+				{Name: "Other", Kind: 6, Range: lsp.Range{Start: lsp.Position{Line: 21}, End: lsp.Position{Line: 22}}, SelectionRange: lsp.Range{Start: lsp.Position{Line: 21}, End: lsp.Position{Line: 21, Character: 5}}},
+			})
+		case "textDocument/prepareCallHierarchy":
+			var params lsp.PrepareCallHierarchyParams
+			if err := json.Unmarshal(w.Params, &params); err != nil {
+				t.Fatal(err)
+			}
+			preparePositions = append(preparePositions, params.Position)
+			switch params.Position {
+			case seed.SelectionRange.Start:
+				return json.Marshal([]lsp.CallHierarchyItem{seed})
+			case peerSelection.Start:
+				return json.Marshal([]lsp.CallHierarchyItem{preparedPeer})
+			default:
+				return nil, errors.New("unexpected prepare position")
+			}
+		default:
+			return json.RawMessage("null"), nil
+		}
+	})
+
+	got, err := Acquire(context.Background(), client, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPositions := []lsp.Position{seed.SelectionRange.Start, peerSelection.Start}
+	if !reflect.DeepEqual(preparePositions, wantPositions) {
+		t.Fatalf("prepare positions = %#v, want %#v", preparePositions, wantPositions)
+	}
+	if len(got.Graph.SiblingCandidates) != 1 || len(got.Graph.Edges) != 0 {
+		t.Fatalf("sibling candidates = %#v, call edges = %#v", got.Graph.SiblingCandidates, got.Graph.Edges)
+	}
+	sibling := got.Graph.SiblingCandidates[0]
+	if sibling.Declaration == nil || sibling.Declaration.Name != "Peer" || sibling.Declaration.Range != toRange(peerRange) || sibling.Candidate.Name != preparedPeer.Name || sibling.Candidate.Range != toRange(preparedPeer.Range) {
+		t.Fatalf("sibling declaration/prepared evidence = %#v", sibling)
 	}
 }
