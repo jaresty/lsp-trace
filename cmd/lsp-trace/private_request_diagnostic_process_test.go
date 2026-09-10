@@ -76,6 +76,64 @@ func runFR23WithScheduledFake(t *testing.T, cmd *exec.Cmd) error {
 	return cmd.Wait()
 }
 
+func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	cli := buildFR23Binary(t, "lsp-trace", "./cmd/lsp-trace")
+	fake := buildFR23Binary(t, "fake-lsp", "./cmd/fake-lsp")
+	workspace := t.TempDir()
+	sourcePath := filepath.Join(workspace, "main.go")
+	if err := os.WriteFile(sourcePath, []byte("leaf\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: sourcePath}).String()
+	target := map[string]any{"id": "root", "locator": map[string]any{"uri": uri, "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0}
+	manifest := map[string]any{
+		"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session",
+		"root": target, "required_targets": []any{}, "expansion": map[string]any{"topmost_siblings": true},
+		"limits": map[string]any{"max_nodes": 4, "max_requests": 8, "timeout_ms": 5000, "request_timeout_ms": 1000},
+	}
+	manifestRaw, _ := json.Marshal(manifest)
+	manifestPath := filepath.Join(t.TempDir(), "seeds.json")
+	if err := os.WriteFile(manifestPath, manifestRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	privateRoot := t.TempDir()
+	privatePath := filepath.Join(privateRoot, "private.json")
+	cmd := exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch", "--seed-manifest", manifestPath, "--language-id", "go", "--private-request-diagnostic-root", privateRoot, "--private-request-diagnostic-selector", "private.json")
+	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_DOMAIN_ERROR: expected failure")
+	}
+	if !strings.Contains(stderr.String(), "topmost sibling expansion produced no exact relations") {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_DOMAIN_ERROR: %s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), privatePath) || strings.Contains(stderr.String(), uri) {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PUBLIC_REDACTION: %s", stderr.String())
+	}
+	privateRaw, err := os.ReadFile(privatePath)
+	if err != nil {
+		if !strings.Contains(stderr.String(), "private request diagnostics unavailable: PROJECTION_REJECTED") && !strings.Contains(stderr.String(), "private request diagnostics unavailable: SOURCE_UNCERTIFIED") && !strings.Contains(stderr.String(), "private request diagnostics unavailable: PUBLICATION_REJECTED") {
+			t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_FINALIZED_OR_REASON_CENSUS: %v stderr=%s", err, stderr.String())
+		}
+		return
+	}
+	var diagnostic requestlifecycle.DocumentModel
+	if err := json.Unmarshal(privateRaw, &diagnostic); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_VALID: %v", err)
+	}
+	methods := map[string]bool{}
+	for _, operation := range diagnostic.Operations {
+		methods[operation.Method] = true
+	}
+	if !methods["textDocument/documentSymbol"] || !methods["textDocument/prepareCallHierarchy"] {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_RECORDS: methods=%v", methods)
+	}
+}
+
 func TestFR23BuiltCLIPrivateRequestFailureDiagnostic(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")

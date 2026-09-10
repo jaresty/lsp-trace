@@ -321,7 +321,7 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			enriched.Invocation.Expansion.TopmostSiblings = true
 			enriched.SiblingCandidates = siblings
 			if len(enriched.SiblingCandidates) == 0 {
-				return fail("OUTPUT_VALIDATION_FAILED", fmt.Errorf("topmost sibling expansion produced no exact relations"))
+				return operation.Result{Artifact: raw}, &operation.Failure{Code: "OUTPUT_VALIDATION_FAILED", Err: fmt.Errorf("topmost sibling expansion produced no exact relations")}
 			}
 			seeds := map[string]graph.InvocationSeed{}
 			for _, seed := range enriched.Invocation.Seeds {

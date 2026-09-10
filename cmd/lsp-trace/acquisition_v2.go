@@ -327,8 +327,37 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest, OutputVersion: outputVersion})
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
+	finalizeRequestDiagnostics := func(public []byte) {
+		if !requestDiagnosticsRequested {
+			return
+		}
+		handles := privateRuntime.diagnosticHandles()
+		sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, requestlifecycle.MaxRecords)
+		var privateErr error
+		reason := "SOURCE_UNCERTIFIED"
+		if !certified {
+			privateErr = fmt.Errorf("private lifecycle source unavailable")
+		} else {
+			reason = "PROJECTION_REJECTED"
+			privateRaw, projectionErr := requestlifecycle.ProjectRuntime(sourceSet, public, "")
+			privateErr = projectionErr
+			if privateErr == nil {
+				reason = "PUBLICATION_REJECTED"
+				privateErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, func(raw []byte) error {
+					_, verifyErr := requestlifecycle.Verify(raw, public)
+					return verifyErr
+				})
+			}
+		}
+		if privateErr != nil {
+			fmt.Fprintln(stderr, "private request diagnostics unavailable:", reason)
+		}
+	}
 	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
 	if failed != nil {
+		if len(result.Artifact) > 0 {
+			finalizeRequestDiagnostics(result.Artifact)
+		}
 		return fail(failed)
 	}
 	data := result.Artifact
@@ -356,26 +385,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	// Private finalization is synchronous but secondary and non-overriding: the
 	// already-emitted public V3 bytes and their status remain authoritative.
-	if requestDiagnosticsRequested {
-		handles := privateRuntime.diagnosticHandles()
-		sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, requestlifecycle.MaxRecords)
-		var privateErr error
-		if !certified {
-			privateErr = fmt.Errorf("private lifecycle source unavailable")
-		} else {
-			privateRaw, projectionErr := requestlifecycle.ProjectRuntime(sourceSet, data, "")
-			privateErr = projectionErr
-			if privateErr == nil {
-				privateErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, func(raw []byte) error {
-					_, verifyErr := requestlifecycle.Verify(raw, data)
-					return verifyErr
-				})
-			}
-		}
-		if privateErr != nil {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable")
-		}
-	}
+	finalizeRequestDiagnostics(data)
 	return 0 // Every structurally valid acquisition retains partial outcomes.
 }
 
