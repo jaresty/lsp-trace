@@ -3,7 +3,10 @@ package lifecycleops
 
 import (
 	"context"
+	"net/url"
+	"path"
 	"sort"
+	"strings"
 
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
@@ -22,6 +25,9 @@ const (
 	FailureReapIncomplete         Failure = "REAP_INCOMPLETE"
 	FailureLifecycleConflict      Failure = "LIFECYCLE_CONFLICT"
 	FailureInternal               Failure = "INTERNAL"
+	FailureInvalidURI             Failure = "INVALID_URI"
+	FailureApplicableNotFound     Failure = "APPLICABLE_SESSION_NOT_FOUND"
+	FailureApplicableAmbiguous    Failure = "APPLICABLE_SESSION_AMBIGUOUS"
 )
 
 type OperationState string
@@ -48,10 +54,17 @@ type SelectorRuntime interface {
 
 type Service struct{ runtime Runtime }
 
+type SessionResolution struct {
+	URI        string `json:"uri"`
+	SessionID  string `json:"session_id"`
+	Generation uint64 `json:"generation"`
+}
+
 type ListSnapshot struct {
 	Sessions     []sessionruntime.Record
 	Observations []sessionruntime.Observation
 	Census       sessionruntime.Census
+	Resolution   *SessionResolution `json:"resolution,omitempty"`
 }
 type LifecycleRequest struct {
 	SessionID  string
@@ -81,6 +94,41 @@ func (s *Service) List() ListSnapshot {
 	observations := append([]sessionruntime.Observation(nil), s.runtime.Observations()...)
 	sort.Slice(observations, func(i, j int) bool { return observations[i].Sequence < observations[j].Sequence })
 	return ListSnapshot{Sessions: records, Observations: observations, Census: s.runtime.Census()}
+}
+
+func (s *Service) ListForURI(rawURI string) (ListSnapshot, Failure) {
+	snapshot := s.List()
+	parsed, err := url.ParseRequestURI(rawURI)
+	if err != nil || parsed.Scheme != "file" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return ListSnapshot{}, FailureInvalidURI
+	}
+	uriPath := path.Clean(parsed.Path)
+	if parsed.Host != "" && parsed.Host != "localhost" {
+		uriPath = "//" + parsed.Host + uriPath
+	} else if len(uriPath) >= 4 && uriPath[0] == '/' && uriPath[2] == ':' && uriPath[3] == '/' {
+		uriPath = uriPath[1:]
+	}
+	bestLength := -1
+	matches := make([]sessionruntime.Record, 0, 1)
+	for _, record := range snapshot.Sessions {
+		workspace := path.Clean(strings.ReplaceAll(record.Routing.WorkspaceRoot, `\`, "/"))
+		if record.State != session.Ready || (uriPath != workspace && !strings.HasPrefix(uriPath, strings.TrimSuffix(workspace, "/")+"/")) {
+			continue
+		}
+		if len(workspace) > bestLength {
+			bestLength, matches = len(workspace), []sessionruntime.Record{record}
+		} else if len(workspace) == bestLength {
+			matches = append(matches, record)
+		}
+	}
+	if len(matches) == 0 {
+		return ListSnapshot{}, FailureApplicableNotFound
+	}
+	if len(matches) != 1 {
+		return ListSnapshot{}, FailureApplicableAmbiguous
+	}
+	snapshot.Resolution = &SessionResolution{URI: rawURI, SessionID: matches[0].SessionID, Generation: matches[0].Generation}
+	return snapshot, FailureNone
 }
 
 func (s *Service) Status(id string, generation uint64) (sessionruntime.Record, Failure) {

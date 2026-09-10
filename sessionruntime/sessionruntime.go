@@ -135,12 +135,14 @@ type Config struct {
 	startupAttemptRandom  io.Reader
 }
 type StartRequest struct {
-	Profile          runtimeprofile.Profile
-	SeedBinding      *seedbinding.Manifest
-	ProviderIdentity seedbinding.ProviderIdentity
-	Process          managedprocess.Spec
-	LanguageID       string
-	Deadline         time.Time
+	Profile           runtimeprofile.Profile
+	SeedBinding       *seedbinding.Manifest
+	ProviderIdentity  seedbinding.ProviderIdentity
+	Process           managedprocess.Spec
+	BootstrapAlias    string
+	LanguageID        string
+	RelationProviders []string
+	Deadline          time.Time
 }
 type StartResult struct {
 	AttemptID            manageddiagnostic.StartupAttemptID
@@ -160,9 +162,20 @@ type Observation struct {
 	State                session.State
 	Failure              session.Failure
 }
+type RoutingMetadata struct {
+	Alias             string   `json:"alias"`
+	WorkspaceRoot     string   `json:"workspace_root"`
+	LanguageID        string   `json:"language_id"`
+	ServerProfile     string   `json:"server_profile"`
+	RelationProviders []string `json:"relation_providers"`
+	Generation        uint64   `json:"generation"`
+	Readiness         string   `json:"readiness"`
+}
+
 type Record struct {
 	SessionID  string
-	Profile    runtimeprofile.Profile
+	Profile    runtimeprofile.Profile `json:"-"`
+	Routing    RoutingMetadata        `json:"routing"`
 	Generation uint64
 	State      session.State
 	Started    time.Time
@@ -936,7 +949,10 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		_ = child.Close()
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
-	r := Record{SessionID: id, Profile: req.Profile, Generation: 1, State: session.Initializing, Started: time.Now()}
+	r := Record{SessionID: id, Profile: req.Profile, Routing: RoutingMetadata{
+		Alias: req.BootstrapAlias, WorkspaceRoot: req.Profile.Workspace().String(), LanguageID: req.LanguageID,
+		ServerProfile: req.Profile.ProfileName(), RelationProviders: append([]string(nil), req.RelationProviders...),
+	}, Generation: 1, State: session.Initializing, Started: time.Now()}
 	var retainedBinding *seedbinding.Manifest
 	if req.SeedBinding != nil {
 		copy := *req.SeedBinding
@@ -1744,7 +1760,11 @@ func (m *Manager) Records() []Record {
 	defer m.mu.Unlock()
 	out := make([]Record, 0, len(m.sessions))
 	for _, r := range m.sessions {
-		out = append(out, r.record)
+		record := r.record
+		record.Routing.RelationProviders = append([]string(nil), record.Routing.RelationProviders...)
+		record.Routing.Generation = record.Generation
+		record.Routing.Readiness = string(record.State)
+		out = append(out, record)
 	}
 	return out
 }

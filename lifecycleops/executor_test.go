@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/operation"
@@ -21,6 +22,8 @@ const (
 	assertStaleGuidance      = "ASSERT_LIFECYCLE_EXECUTOR_STALE_CURRENT_GENERATION_RETRY"
 	assertRecoveryGuidance   = "ASSERT_LIFECYCLE_EXECUTOR_BOUNDED_HOST_RECOVERY"
 	assertCancellationTruth  = "ASSERT_LIFECYCLE_EXECUTOR_CANCELLATION_TRUTH"
+	assertRoutingMetadata    = "ASSERT_SESSION_LIST_EXPOSES_GENERATION_BOUND_ROUTING_METADATA"
+	assertURIResolution      = "ASSERT_SESSION_LIST_RESOLVES_UNIQUE_MOST_SPECIFIC_READY_WORKSPACE"
 )
 
 func rejectExecutorPerturbation(t *testing.T, assertion string) {
@@ -33,6 +36,74 @@ func rejectExecutorPerturbation(t *testing.T, assertion string) {
 func executeLifecycle(t *testing.T, executor *Executor, name operation.Name, input string) (operation.Result, *operation.Failure) {
 	t.Helper()
 	return executor.Execute(context.Background(), operation.Request{Name: name, RequestID: "request-1", Input: json.RawMessage(input)})
+}
+
+func TestSessionListRoutingContract(t *testing.T) {
+	root := record("root", 4)
+	nested := record("nested", 7)
+	nested.Routing.WorkspaceRoot = "/workspace/nested"
+	f := &fakeRuntime{records: []sessionruntime.Record{root, nested}}
+	executor := NewExecutor(New(f))
+
+	t.Run(assertRoutingMetadata, func(t *testing.T) {
+		result, failure := executeLifecycle(t, executor, OperationList, `{}`)
+		if failure != nil {
+			t.Fatalf("%s: failure=%v", assertRoutingMetadata, failure)
+		}
+		encoded, err := json.Marshal(result.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range []string{`"alias"`, `"workspace_root"`, `"language_id"`, `"server_profile"`, `"relation_providers"`, `"generation"`, `"readiness"`} {
+			if !strings.Contains(string(encoded), field) {
+				t.Fatalf("%s: missing %s in %s", assertRoutingMetadata, field, encoded)
+			}
+		}
+	})
+
+	t.Run(assertURIResolution, func(t *testing.T) {
+		result, failure := executeLifecycle(t, executor, OperationList, `{"uri":"file:///workspace/nested/main.go"}`)
+		if failure != nil {
+			t.Fatalf("%s: failure=%v", assertURIResolution, failure)
+		}
+		encoded, err := json.Marshal(result.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(encoded), `"session_id":"nested"`) || !strings.Contains(string(encoded), `"generation":7`) {
+			t.Fatalf("%s: result=%s", assertURIResolution, encoded)
+		}
+
+		ambiguous := nested
+		ambiguous.SessionID = "nested-peer"
+		f.records = append(f.records, ambiguous)
+		if _, failure := executeLifecycle(t, executor, OperationList, `{"uri":"file:///workspace/nested/main.go"}`); failure == nil || failure.Code != string(FailureApplicableAmbiguous) {
+			t.Fatalf("%s: ambiguity guessed: %v", assertURIResolution, failure)
+		}
+		f.records = []sessionruntime.Record{root, nested}
+		if _, failure := executeLifecycle(t, executor, OperationList, `{"uri":"file:///elsewhere/main.go"}`); failure == nil || failure.Code != string(FailureApplicableNotFound) {
+			t.Fatalf("%s: no-match result=%v", assertURIResolution, failure)
+		}
+		if _, failure := executeLifecycle(t, executor, OperationList, `{"uri":"https://example.com/main.go"}`); failure == nil || failure.Code != string(FailureInvalidURI) {
+			t.Fatalf("%s: non-file URI result=%v", assertURIResolution, failure)
+		}
+	})
+
+	t.Run("ASSERT_SESSION_ROUTING_OMITS_HOST_EXECUTION_AUTHORITY", func(t *testing.T) {
+		result, failure := executeLifecycle(t, executor, OperationList, `{}`)
+		if failure != nil {
+			t.Fatal(failure)
+		}
+		encoded, err := json.Marshal(result.Value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"executable", "environment", "config_path", "Profile"} {
+			if strings.Contains(string(encoded), forbidden) {
+				t.Fatalf("host authority leaked through %q: %s", forbidden, encoded)
+			}
+		}
+	})
 }
 
 func TestExecutorExactFourContracts(t *testing.T) {

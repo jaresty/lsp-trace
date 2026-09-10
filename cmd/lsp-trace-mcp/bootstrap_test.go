@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -219,9 +220,35 @@ func TestBootstrapRollbackAndShutdownOwnEveryStartedSession(t *testing.T) {
 	fake := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	workspace := t.TempDir()
 	valid := bootstrapProcessConfig{
-		Profile:   bootstrapProfileIdentity{TrustDomain: "bootstrap", Workspace: workspace, Profile: "fake", EnvironmentReference: "hermetic"},
-		Execution: managedExecutionAuthority{Path: fake, Directory: workspace},
+		Alias:      "fixture-lsp",
+		LanguageID: "go",
+		Profile:    bootstrapProfileIdentity{TrustDomain: "bootstrap", Workspace: workspace, Profile: "fake", EnvironmentReference: "hermetic"},
+		Execution:  managedExecutionAuthority{Path: fake, Directory: workspace},
 	}
+
+	t.Run("routing metadata", func(t *testing.T) {
+		const assertion = "ASSERT_BOOTSTRAP_SESSION_EXPOSES_EXACT_ROUTING_METADATA"
+		_, manager, err := newServerRuntime(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sessions, err := startBootstrap(context.Background(), manager, bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{valid}}, 5*time.Second)
+		if err != nil {
+			t.Fatalf("%s: start=%v", assertion, err)
+		}
+		records := manager.Records()
+		if len(records) != 1 {
+			t.Fatalf("%s: records=%+v", assertion, records)
+		}
+		routing := records[0].Routing
+		if routing.Alias != valid.Alias || routing.WorkspaceRoot != workspace || routing.LanguageID != valid.LanguageID || routing.ServerProfile != valid.Profile.Profile || routing.Generation != 1 || routing.Readiness != string(session.Ready) || len(routing.RelationProviders) != 0 {
+			t.Fatalf("%s: routing=%+v", assertion, routing)
+		}
+		if err := stopBootstrap(context.Background(), manager, sessions); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("PASS " + assertion)
+	})
 
 	t.Run("rollback", func(t *testing.T) {
 		const assertion = "ASSERT_BOOTSTRAP_PARTIAL_FAILURE_ROLLS_BACK_STARTED_SESSION"

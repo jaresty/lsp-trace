@@ -383,7 +383,9 @@ func addNormalizedProviderInputProperties(input map[string]any) {
 func lifecycleInputSchema(name string) map[string]any {
 	properties := map[string]any{}
 	required := []any{}
-	if name != "lsp_session_v1_list" {
+	if name == "lsp_session_v1_list" {
+		properties["uri"] = map[string]any{"type": "string", "minLength": 1, "format": "uri"}
+	} else {
 		properties = map[string]any{
 			"session_id": map[string]any{"type": "string", "minLength": 1},
 			"generation": map[string]any{"type": "integer", "minimum": 1},

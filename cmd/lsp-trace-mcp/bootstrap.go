@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -234,6 +235,11 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 	if err != nil {
 		return nil, err
 	}
+	providerIDs := make([]string, 0, len(config.Providers))
+	for _, configured := range config.Providers {
+		providerIDs = append(providerIDs, configured.Identity)
+	}
+	sort.Strings(providerIDs)
 	started := make([]bootstrapSession, 0, len(prepared))
 	rollback := func() {
 		rollbackContext, cancel := context.WithTimeout(context.Background(), timeout)
@@ -242,11 +248,13 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 	}
 	for i, process := range prepared {
 		result := manager.Start(ctx, sessionruntime.StartRequest{
-			Profile:          process.profile,
-			Process:          process.process,
-			LanguageID:       process.languageID,
-			SeedBinding:      process.seedBinding,
-			ProviderIdentity: process.providerIdentity,
+			Profile:           process.profile,
+			Process:           process.process,
+			BootstrapAlias:    process.alias,
+			LanguageID:        process.languageID,
+			RelationProviders: providerIDs,
+			SeedBinding:       process.seedBinding,
+			ProviderIdentity:  process.providerIdentity,
 		})
 		if result.Failure != "" {
 			rollback()

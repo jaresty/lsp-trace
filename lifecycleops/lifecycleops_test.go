@@ -93,7 +93,9 @@ func (f *selectorRuntime) ResolveSessionSelector(id string, generation uint64) (
 }
 
 func record(id string, generation uint64) sessionruntime.Record {
-	return sessionruntime.Record{SessionID: id, Generation: generation, State: session.Ready, Profile: runtimeprofile.Profile{}}
+	return sessionruntime.Record{SessionID: id, Generation: generation, State: session.Ready, Routing: sessionruntime.RoutingMetadata{
+		Alias: "fixture", WorkspaceRoot: "/workspace", LanguageID: "go", ServerProfile: "gopls", RelationProviders: []string{}, Generation: generation, Readiness: string(session.Ready),
+	}}
 }
 
 func TestListIsImmutableDeterministicAndBounded(t *testing.T) {

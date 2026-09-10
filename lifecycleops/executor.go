@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -39,11 +40,20 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 	}
 	switch request.Name {
 	case OperationList:
-		var input struct{}
+		var input struct {
+			URI string `json:"uri,omitempty"`
+		}
 		if err := decodeClosed(request.Input, &input); err != nil {
 			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, err)
 		}
-		return operation.Result{Value: e.service.List()}, nil
+		if input.URI == "" {
+			return operation.Result{Value: e.service.List()}, nil
+		}
+		result, failure := e.service.ListForURI(input.URI)
+		if failure != FailureNone {
+			return operation.Result{}, lifecycleFailure(string(failure), errors.New(string(failure)))
+		}
+		return operation.Result{Value: result}, nil
 	case OperationStatus, OperationStop, OperationRestart:
 		var input selectorRequest
 		if err := decodeClosed(request.Input, &input); err != nil {
