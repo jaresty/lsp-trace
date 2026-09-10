@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,9 @@ import (
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/sessionruntime"
 )
+
+//go:embed bootstrap.example.v1.json
+var publicBootstrapExample []byte
 
 type bootstrapConfig struct {
 	Version   int                            `json:"version"`

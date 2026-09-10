@@ -480,6 +480,15 @@ func (r *Registry) Capabilities() map[string]any {
 		"active_tool_profile": string(r.toolProfile), "advertised_tool_names": advertisedNames, "dispatchable_tool_names": dispatchableNames,
 		"tools": advertised, "selector_publication_supported": r.publicationSupported,
 		"configured_providers": r.providerInventory.Entries(),
+		"managed_session_provisioning": map[string]any{
+			"authority":                      "HOST_PROVISIONED_ONLY",
+			"bootstrap_option":               "--bootstrap-config",
+			"public_template_command":        "lsp-trace-mcp --print-bootstrap-example",
+			"caller_create_start_exposed":    false,
+			"full_profile_adds_create_start": false,
+			"discovery_sequence":             []string{"host configures bootstrap", "server starts trusted processes", "caller lists READY sessions", "caller binds exact session_id and generation", "caller invokes traversal"},
+			"environment_policy":             "omit execution.environment unless entries are independently required; private diagnostics are not configuration authority",
+		},
 		"acquisition_v2": map[string]any{
 			"contract_version": "lsp-trace.public-acquisition.v2", "default_acquisition_version": "v1",
 			"producers":       []string{"lsp_trace_v2_slice", "lsp_trace_v2_incoming"},

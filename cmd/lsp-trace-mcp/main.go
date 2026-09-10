@@ -41,6 +41,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileFull), "MCP advertisement profile: full or compact")
+	printBootstrapExample := fs.Bool("print-bootstrap-example", false, "print a safe host-managed process bootstrap template and exit")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -63,7 +64,21 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "lsp-trace-mcp accepts no positional arguments")
 		return 2
 	}
+	if *printBootstrapExample {
+		if *enableLiveLSP || *publicationRootPath != "" || *bootstrapConfigPath != "" || *custodyTrustPath != "" || toolProfile != mcp.ToolProfileFull {
+			fmt.Fprintln(stderr, "--print-bootstrap-example cannot be combined with operational options")
+			return 2
+		}
+		if _, err := stdout.Write(publicBootstrapExample); err != nil {
+			fmt.Fprintln(stderr, "print bootstrap example:", err)
+			return 1
+		}
+		return 0
+	}
 	fmt.Fprintln(stderr, "WARNING: local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted.")
+	if *bootstrapConfigPath == "" {
+		fmt.Fprintln(stderr, "No managed LSP sessions are provisioned. Configure --bootstrap-config; use --print-bootstrap-example for the public template.")
+	}
 	var publicationRoot *publication.Root
 	if *publicationRootPath != "" {
 		var err error

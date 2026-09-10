@@ -95,29 +95,26 @@ Comparison is deterministic, read-only, and limited to explicit per-seed referen
 lsp-trace-mcp
 lsp-trace-mcp --publication-root /absolute/private/root
 lsp-trace-mcp --bootstrap-config /absolute/path/bootstrap.json
+lsp-trace-mcp --print-bootstrap-example
 ```
 
 Traversal requires a READY session. The host—not the MCP caller—provisions trusted sessions before stdio serving with a strict bootstrap file; MCP callers cannot select executable commands. The config path, executable path, workspace, and execution directory are absolute. Unknown fields, trailing JSON values, duplicate session identities, spawn failures, and readiness failures fail closed before MCP stdio is served; partial startup is rolled back within bounded shutdown.
 
-```json
-{
-  "version": 1,
-  "processes": [{
-    "profile": {
-      "trust_domain": "local-development",
-      "workspace": "/absolute/path/to/workspace",
-      "profile": "gopls",
-      "environment_reference": "developer"
-    },
-    "execution": {
-      "path": "/absolute/path/to/gopls",
-      "directory": "/absolute/path/to/workspace"
-    }
-  }]
-}
+`--print-bootstrap-example` prints the exact safe template committed at [`cmd/lsp-trace-mcp/bootstrap.example.v1.json`](cmd/lsp-trace-mcp/bootstrap.example.v1.json) and exits without starting a process. The template shows both `gopls` and `csharp-ls`, including ordered `execution.arguments`. Replace only the explicit placeholders with independently trusted local values.
+
+Bootstrap files are host-authored execution authority. `environment_reference` contributes profile identity but does not supply environment values. Omit `execution.environment` unless a selected server independently requires specific entries; private diagnostics, retained prestart freezes, transcripts, and observed parent-process environments are not configuration authority and must not be copied by inference.
+
+Provisioning follows this order:
+
+```text
+host writes --bootstrap-config
+→ lsp-trace-mcp starts trusted processes
+→ caller invokes lsp_session_v1_list
+→ caller binds an exact READY session_id and generation
+→ caller invokes traversal
 ```
 
-After startup, call `lsp_session_v1_list` to discover the exact READY `session_id` and `generation`; pass that selector to `lsp_trace_v1_incoming` or `lsp_trace_v1_slice`. Process configuration never enters MCP input schemas or session identity. For explicit provider-backed non-CALLS relations, add host-owned `providers` declarations as documented in [Host-provisioned relation providers](docs/PROVIDERS.md); callers select only registered identities, `auto`, or `none`.
+The `compact` and `full` tool profiles change discovery only. Compact already exposes list, status, restart, and stop; full does not add caller-controlled create or start operations. After startup, call `lsp_session_v1_list` to discover the exact READY `session_id` and `generation`; pass that selector to `lsp_trace_v1_incoming` or `lsp_trace_v1_slice`. Process configuration never enters MCP input schemas or session identity. For explicit provider-backed non-CALLS relations, add host-owned `providers` declarations as documented in [Host-provisioned relation providers](docs/PROVIDERS.md); callers select only registered identities, `auto`, or `none`.
 
 The historical Stage 1 offline tools are extended by the separately registered [retained CALLS export](docs/retained-calls.md); each accepts one unadvertised compatibility alias:
 

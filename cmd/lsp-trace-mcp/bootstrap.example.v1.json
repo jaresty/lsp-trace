@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "processes": [
+    {
+      "alias": "project",
+      "language_id": "go",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/absolute/path/to/workspace",
+        "profile": "gopls",
+        "environment_reference": "developer"
+      },
+      "execution": {
+        "path": "/absolute/path/to/gopls",
+        "arguments": [],
+        "directory": "/absolute/path/to/workspace"
+      }
+    },
+    {
+      "alias": "csharp-project",
+      "language_id": "csharp",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/absolute/path/to/csharp/workspace",
+        "profile": "csharp-ls",
+        "environment_reference": "developer"
+      },
+      "execution": {
+        "path": "/absolute/path/to/csharp-ls",
+        "arguments": [
+          "--features",
+          "razor-support",
+          "--solution",
+          "Project.sln"
+        ],
+        "directory": "/absolute/path/to/csharp/workspace"
+      }
+    }
+  ]
+}
