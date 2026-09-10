@@ -77,8 +77,8 @@ func parseSlice(args []string) (sliceConfig, error) {
 		if len(c.ats) != 1 || c.fromFile != "" || c.seedFile != "" || c.traceLSP != "" {
 			return c, fmt.Errorf("--graph-provenance requires exactly one --at and no --from-file, --seed-file or --trace-lsp")
 		}
-		if c.downDepth < 1 || c.downDepth > 64 || c.upDepth < 1 || c.upDepth > 64 || c.maxNodes < 1 || c.maxNodes > 10000 || c.timeout < time.Millisecond || c.timeout > 60*time.Second || c.requestTimeout < time.Millisecond || c.requestTimeout > 60*time.Second {
-			return c, fmt.Errorf("--graph-provenance uses managed bounds: depth 1..64, nodes 1..10000, timeouts 1ms..60s")
+		if c.downDepth < 1 || c.downDepth > 64 || c.upDepth < 0 || c.upDepth > 64 || c.maxNodes < 1 || c.maxNodes > 10000 || c.timeout < time.Millisecond || c.timeout > 60*time.Second || c.requestTimeout < time.Millisecond || c.requestTimeout > 60*time.Second {
+			return c, fmt.Errorf("--graph-provenance uses managed bounds: down-depth 1..64, up-depth 0..64, nodes 1..10000, timeouts 1ms..60s")
 		}
 	}
 	if fs.NArg() != 0 {

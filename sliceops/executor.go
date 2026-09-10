@@ -78,7 +78,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err := decodeClosed(op.Input, &in); err != nil {
 		return operation.Result{}, fail(operation.FailureInvalidInput, err)
 	}
-	applyDefaults(&in)
+	applyDefaults(&in, hasField(op.Input, "up_depth"))
 	if err := validate(in); err != nil {
 		return operation.Result{}, fail(operation.FailureInvalidInput, err)
 	}
@@ -165,7 +165,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	down := graph.Result{SchemaVersion: graph.SchemaVersionV3, Nodes: discovery.Nodes, Edges: discovery.Edges, Diagnostics: discovery.Diagnostics, Summary: graph.Summary{Complete: discovery.Complete, Truncated: discovery.Truncated}}
 	down.Canonicalize()
 	up := graph.Result{SchemaVersion: graph.SchemaVersionV3, Summary: graph.Summary{Complete: true}}
-	if len(discovery.UpwardStartItems) > 0 {
+	if in.UpDepth > 0 && len(discovery.UpwardStartItems) > 0 {
 		remaining := in.MaxNodes - len(discovery.Nodes)
 		if remaining < 0 {
 			remaining = 0
@@ -384,11 +384,11 @@ func decodeStrict(raw []byte, target any) error {
 	return nil
 }
 
-func applyDefaults(r *request) {
+func applyDefaults(r *request, upDepthSet bool) {
 	if r.DownDepth == 0 {
 		r.DownDepth = 2
 	}
-	if r.UpDepth == 0 {
+	if !upDepthSet {
 		r.UpDepth = 2
 	}
 	if r.MaxNodes == 0 {
@@ -421,11 +421,20 @@ func validate(r request) error {
 	if err != nil || !u.IsAbs() {
 		return errors.New("uri must be absolute")
 	}
-	if r.DownDepth < 1 || r.DownDepth > 64 || r.UpDepth < 1 || r.UpDepth > 64 || r.MaxNodes < 1 || r.MaxNodes > 10000 || r.MaxMessages < 1 || r.MaxMessages > 4096 || r.MaxBytes < 1 || r.MaxBytes > 16<<20 || r.TimeoutMS < 1 || r.TimeoutMS > 60000 || r.RequestTimeoutMS < 1 || r.RequestTimeoutMS > 60000 {
+	if r.DownDepth < 1 || r.DownDepth > 64 || r.UpDepth < 0 || r.UpDepth > 64 || r.MaxNodes < 1 || r.MaxNodes > 10000 || r.MaxMessages < 1 || r.MaxMessages > 4096 || r.MaxBytes < 1 || r.MaxBytes > 16<<20 || r.TimeoutMS < 1 || r.TimeoutMS > 60000 || r.RequestTimeoutMS < 1 || r.RequestTimeoutMS > 60000 {
 		return errors.New("limits and deadlines are outside supported bounds")
 	}
 	return nil
 }
+func hasField(raw json.RawMessage, name string) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return false
+	}
+	_, ok := fields[name]
+	return ok
+}
+
 func decodeClosed(raw json.RawMessage, target any) error {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()

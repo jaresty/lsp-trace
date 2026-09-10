@@ -54,7 +54,7 @@ func TestSliceSelectorSchemaRendersThroughInstalledPiAdapter(t *testing.T) {
 
 func TestSliceSelectorDirectProcessValidation(t *testing.T) {
 	binary := buildMCPBinary(t)
-	base := map[string]any{"session_id": "missing", "generation": 1, "start_mode": "at", "uri": "file:///workspace/main.go"}
+	base := map[string]any{"session_id": "missing", "generation": 1, "start_mode": "at", "uri": "file:///workspace/main.go", "up_depth": 0}
 	requests := []map[string]any{}
 	for i, selector := range []map[string]any{{"symbol": "Target"}, {"line": 4, "character": 7}} {
 		arguments := cloneMap(base)

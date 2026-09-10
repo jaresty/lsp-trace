@@ -289,6 +289,37 @@ func TestSliceMalformedIncomingCallerPublishesReferenceClosedResult(t *testing.T
 	}
 }
 
+func TestSliceUpDepthZeroIsOutgoingOnly(t *testing.T) {
+	const assertion = "ASSERT_SLICE_UP_DEPTH_ZERO_OUTGOING_ONLY"
+	t.Log("ASSERTION: " + assertion)
+	root, leaf := item("root", 0), item("leaf", 1)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[{"to":` + leaf + `,"fromRanges":[]}]`)},
+	}}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":0,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":1000,"request_timeout_ms":100}`)
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: input})
+	if failure != nil {
+		t.Fatalf("%s: failure=%v calls=%v", assertion, failure, f.calls)
+	}
+	var got struct {
+		Nodes []graph.Node        `json:"nodes"`
+		Edges []graph.Edge        `json:"edges"`
+		Slice graph.SliceEvidence `json:"slice"`
+	}
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatalf("%s: decode: %v artifact=%s", assertion, err, result.Artifact)
+	}
+	for _, call := range f.calls {
+		if strings.HasPrefix(call, "callHierarchy/incomingCalls:") {
+			t.Fatalf("%s: incoming request issued: calls=%v", assertion, f.calls)
+		}
+	}
+	if got.Slice.UpDepth != 0 || len(got.Nodes) != 2 || len(got.Edges) != 1 {
+		t.Fatalf("%s: slice=%#v nodes=%d edges=%d calls=%v", assertion, got.Slice, len(got.Nodes), len(got.Edges), f.calls)
+	}
+}
+
 func TestSliceWireBoundsReachEveryRoundTrip(t *testing.T) {
 	const assertion = "ASSERT_SLICE_PER_WIRE_REQUEST_BOUNDS"
 	t.Log("ASSERTION: " + assertion)

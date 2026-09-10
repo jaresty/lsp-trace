@@ -58,6 +58,18 @@ func TestSliceDirectAndGatewaySelectorsReachIdenticalAcquisition(t *testing.T) {
 	}
 }
 
+func TestSliceDirectAndGatewayAcceptOutgoingOnlyDepth(t *testing.T) {
+	for _, entry := range []string{"lsp_trace_v1_slice", "lsp_trace_v1_execute"} {
+		executor := &selectorCountingExecutor{}
+		server := &Server{Registry: NewRegistry(false), Executors: map[ExecutorFamily]Executor{SliceExecutorFamily: executor}}
+		arguments := map[string]any{"session_id": "session", "generation": float64(1), "start_mode": "at", "uri": "file:///workspace/main.go", "symbol": "Target", "up_depth": float64(0)}
+		got := sliceSelectorResponse(t, server, entry, arguments)
+		if got.Error != nil || len(executor.calls) != 1 || !strings.Contains(string(executor.calls[0].Input), `"up_depth":0`) {
+			t.Fatalf("ASSERT_SLICE_UP_DEPTH_ZERO_REACHES_ACQUISITION_%s: error=%v calls=%v", entry, got.Error, executor.calls)
+		}
+	}
+}
+
 func TestSliceDirectAndGatewayRejectInvalidSelectorsBeforeAcquisition(t *testing.T) {
 	base := map[string]any{"session_id": "session", "generation": float64(1), "start_mode": "at", "uri": "file:///workspace/main.go"}
 	for _, tc := range []struct {
