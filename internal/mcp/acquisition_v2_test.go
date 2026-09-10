@@ -16,15 +16,15 @@ func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
 			t.Fatalf("ASSERT_V2_EXPLICIT_REGISTRATION: %s %+v", name, tool)
 		}
 		if strings.HasSuffix(name, "_slice") || strings.HasSuffix(name, "_incoming") {
-			if !strings.Contains(tool.Description, "DEPRECATED") || !strings.Contains(tool.Description, "Graph Provenance V5") {
-				t.Fatalf("ASSERT_V2_PRODUCER_DEPRECATION_METADATA: %s %q", name, tool.Description)
+			if !strings.Contains(tool.Description, "V2 output is DEPRECATED") || !strings.Contains(tool.Description, "output_version=lsp-trace.graph-provenance.v5") {
+				t.Fatalf("ASSERT_V2_OUTPUT_DEPRECATION_AND_V5_ROUTE_METADATA: %s %q", name, tool.Description)
 			}
 		}
 	}
 	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
 		tool, ok := registry.Resolve(name)
-		if !ok || !strings.Contains(tool.Description, "DEPRECATED") || !strings.Contains(tool.Description, "Graph Provenance V5") {
-			t.Fatalf("ASSERT_V3_PRODUCER_DEPRECATION_METADATA: %s %+v", name, tool)
+		if !ok || !strings.Contains(tool.Description, "V3 output is DEPRECATED") || !strings.Contains(tool.Description, "output_version=lsp-trace.graph-provenance.v5") {
+			t.Fatalf("ASSERT_V3_OUTPUT_DEPRECATION_AND_V5_ROUTE_METADATA: %s %+v", name, tool)
 		}
 	}
 	matrix, ok := registry.Capabilities()["acquisition_v2"].(map[string]any)
