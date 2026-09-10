@@ -462,6 +462,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	admit := graph.ValidateSemanticBundle
+	directImmutableCarrier := false
 	switch {
 	case *family == "graph" && (*version == "" || *version == "v3"):
 	case *family == graphprovenance.Family && (*version == "v2" || *version == "lsp-trace.graph-provenance.v2"):
@@ -469,6 +470,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	case *family == graphprovenance.Family && (*version == "v3" || *version == graphprovenance.VersionV3):
 		admit = admitAcquisitionV3
 	case *family == graphprovenance.Family && (*version == "v5" || *version == graphprovenance.VersionV5):
+		directImmutableCarrier = true
 		admit = func(data []byte) error {
 			_, err := graphprovenance.ValidateFor(data, graphprovenance.Family, *version)
 			return err
@@ -496,7 +498,15 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	if *family == "bounded-retained-analysis" || *family == "bounded-retained-metrics" || *family == "bounded-retained-ranking" || *family == schema.FamilyBoundedAnalysisV2 || *family == schema.FamilyBoundedMetricsV2 || *family == schema.FamilyBoundedRankingV2 {
 		byteLimit = boundedAnalysisVerificationLimit
 	}
-	data, stage, err := loadCustodiedGenerationLimit(flags.Arg(0), byteLimit)
+	var data []byte
+	var stage string
+	var err error
+	if directImmutableCarrier {
+		stage = "verify"
+		data, err = os.ReadFile(flags.Arg(0))
+	} else {
+		data, stage, err = loadCustodiedGenerationLimit(flags.Arg(0), byteLimit)
+	}
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: %v\n", stage, err)
 		return 1
@@ -505,6 +515,10 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "verify semantic receipt: %v\n", err)
 		return 1
 	}
-	fmt.Fprintln(stdout, "verified integrity and custody")
+	if directImmutableCarrier {
+		fmt.Fprintln(stdout, "verified immutable carrier")
+	} else {
+		fmt.Fprintln(stdout, "verified integrity and custody")
+	}
 	return 0
 }
