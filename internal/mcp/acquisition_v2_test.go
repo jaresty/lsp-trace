@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"encoding/json"
-	"lsp-trace/internal/mcpcontract"
+	"strings"
 	"testing"
+
+	"lsp-trace/internal/mcpcontract"
 )
 
 func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
@@ -12,6 +14,17 @@ func TestAcquisitionV2CapabilitiesAndClosedSchemas(t *testing.T) {
 		tool, ok := registry.Resolve(name)
 		if !ok || tool.Description == "" || len(tool.Aliases) != 0 || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.GraphProvenanceV2ArtifactID {
 			t.Fatalf("ASSERT_V2_EXPLICIT_REGISTRATION: %s %+v", name, tool)
+		}
+		if strings.HasSuffix(name, "_slice") || strings.HasSuffix(name, "_incoming") {
+			if !strings.Contains(tool.Description, "DEPRECATED") || !strings.Contains(tool.Description, "Graph Provenance V5") {
+				t.Fatalf("ASSERT_V2_PRODUCER_DEPRECATION_METADATA: %s %q", name, tool.Description)
+			}
+		}
+	}
+	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
+		tool, ok := registry.Resolve(name)
+		if !ok || !strings.Contains(tool.Description, "DEPRECATED") || !strings.Contains(tool.Description, "Graph Provenance V5") {
+			t.Fatalf("ASSERT_V3_PRODUCER_DEPRECATION_METADATA: %s %+v", name, tool)
 		}
 	}
 	matrix, ok := registry.Capabilities()["acquisition_v2"].(map[string]any)

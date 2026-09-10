@@ -16,6 +16,34 @@ import (
 	"lsp-trace/internal/seedbinding"
 )
 
+func TestDeprecatedAcquisitionVersionsWarnOnlyOnStderr(t *testing.T) {
+	for _, version := range []string{"v2", "v3"} {
+		var stdout, stderr strings.Builder
+		code := runAcquisitionVersion("slice", version, nil, &stdout, &stderr)
+		if code != 1 {
+			t.Fatalf("ASSERT_DEPRECATED_ACQUISITION_REJECTS_INVALID_INPUT[%s]: code=%d", version, code)
+		}
+		if stdout.Len() != 0 {
+			t.Fatalf("ASSERT_DEPRECATION_NOTICE_NOT_JSON_STDOUT[%s]: %q", version, stdout.String())
+		}
+		want := "DEPRECATED: Graph Provenance " + strings.ToUpper(version) + " production is deprecated; migrate new production to source-qualified Graph Provenance V5."
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("ASSERT_DEPRECATED_ACQUISITION_V5_MIGRATION[%s]: stderr=%q", version, stderr.String())
+		}
+	}
+}
+
+func TestSourceQualifiedV5SelectionIsNotDeprecated(t *testing.T) {
+	var stdout, stderr strings.Builder
+	code := runAcquisitionVersion("slice", "v3", []string{"--output-version", "lsp-trace.graph-provenance.v5"}, &stdout, &stderr)
+	if code != 1 || stdout.Len() != 0 {
+		t.Fatalf("ASSERT_V5_INVALID_INPUT_REMAINS_PATH_FREE: code=%d stdout=%q", code, stdout.String())
+	}
+	if strings.Contains(stderr.String(), "DEPRECATED") {
+		t.Fatalf("ASSERT_SOURCE_QUALIFIED_V5_NOT_DEPRECATED: stderr=%q", stderr.String())
+	}
+}
+
 func TestAcquisitionVersionPreservesArgumentValues(t *testing.T) {
 	for _, args := range [][]string{{"--server-arg", "--acquisition-version=v2"}, {"--output", "--acquisition-version"}, {"--server-arg", "--acquisition-version", "--at", "x:1:1"}} {
 		version, rest, err := acquisitionVersion(args)
@@ -65,7 +93,7 @@ func TestPrivateStartupSinkBuiltCLIInitializationFailureAndOptIn(t *testing.T) {
 	if readErr != nil {
 		t.Fatalf("%s: artifact: %v stderr=%q", assertion, readErr, stderr.String())
 	}
-	if err == nil || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "managed readiness: INITIALIZATION_FAILED" || strings.Contains(stderr.String(), root) || strings.Contains(stderr.String(), workspace) || strings.Contains(stderr.String(), manifestPath) {
+	if err == nil || stdout.Len() != 0 || !strings.Contains(stderr.String(), "DEPRECATED: Graph Provenance V2 production is deprecated") || !strings.Contains(stderr.String(), "managed readiness: INITIALIZATION_FAILED") || strings.Contains(stderr.String(), root) || strings.Contains(stderr.String(), workspace) || strings.Contains(stderr.String(), manifestPath) {
 		t.Fatalf("%s: err=%v stdout=%q stderr=%q", assertion, err, stdout.String(), stderr.String())
 	}
 	sum := sha256.Sum256(artifact)

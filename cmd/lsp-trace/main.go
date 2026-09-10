@@ -32,7 +32,7 @@ var embeddedSkill string
 const usageText = `usage:
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
-  lsp-trace slice|incoming --acquisition-version v2 --workspace PATH --server COMMAND --seed-manifest PATH
+  lsp-trace slice|incoming --acquisition-version v2|v3 --workspace PATH --server COMMAND --seed-manifest PATH  # DEPRECATED producer; migrate new production to Graph Provenance V5
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]

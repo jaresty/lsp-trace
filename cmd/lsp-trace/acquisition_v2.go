@@ -166,6 +166,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
+	if outputVersion != graphprovenance.VersionV5 {
+		fmt.Fprintf(stderr, "DEPRECATED: Graph Provenance %s production is deprecated; migrate new production to source-qualified Graph Provenance V5. Historical readers, replay, and validation remain supported.\n", strings.ToUpper(version))
+	}
 	if fs.NArg() != 0 || c.workspace == "" || manifestPath == "" {
 		return fail(fmt.Errorf("v2 requires --workspace and --seed-manifest with no positional arguments"))
 	}
