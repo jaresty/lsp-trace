@@ -689,8 +689,13 @@ func decodeClosed(raw json.RawMessage, dst any, allowed ...string) error {
 }
 
 func validateArguments(tool Tool, arguments map[string]any) error {
+	if tool.Name == "lsp_trace_v1_slice" && tool.Availability == Enabled {
+		if err := validateSliceTargetSelector(arguments); err != nil {
+			return err
+		}
+	}
 	if (tool.ExecutorFamily == LifecycleExecutorFamily || tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily) && tool.Availability == Enabled {
-		return nil // family executor owns closed semantic decoding for the local contract
+		return nil // family executor independently owns closed semantic decoding
 	}
 	raw, err := json.Marshal(arguments)
 	if err != nil {
@@ -703,6 +708,32 @@ func validateArguments(tool Tool, arguments map[string]any) error {
 	// variants. The reserved Stage 1 call shape is therefore exactly {}.
 	if len(arguments) != 0 {
 		return errors.New("reserved Stage 1 input must be exactly an empty object")
+	}
+	return nil
+}
+
+func validateSliceTargetSelector(arguments map[string]any) error {
+	_, hasLine := arguments["line"]
+	_, hasCharacter := arguments["character"]
+	symbol, hasSymbol := arguments["symbol"]
+	if hasSymbol {
+		text, ok := symbol.(string)
+		if !ok || text == "" {
+			return errors.New("symbol must be a non-empty string")
+		}
+		if hasLine || hasCharacter {
+			return errors.New("symbol is mutually exclusive with line and character")
+		}
+		return nil
+	}
+	if hasLine && !hasCharacter {
+		return errors.New("character is required when line is provided")
+	}
+	if hasCharacter && !hasLine {
+		return errors.New("line is required when character is provided")
+	}
+	if !hasLine {
+		return errors.New("one target selector is required: symbol or line and character")
 	}
 	return nil
 }

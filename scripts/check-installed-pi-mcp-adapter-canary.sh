@@ -48,3 +48,4 @@ done
 printf 'PASS ASSERT_ADAPTER_UNMODIFIED: staged source bytes match installed pi-mcp-adapter v2.32.1\n'
 go build -trimpath -o "$work/lsp-trace-mcp" ./cmd/lsp-trace-mcp
 PI_MCP_ADAPTER_ROOT="$work/node_modules/pi-mcp-adapter" LSP_TRACE_MCP_BINARY="$work/lsp-trace-mcp" "$bun_bin" "$root/scripts/installed-pi-direct-tools-program-b-d01-canary.ts"
+PI_MCP_ADAPTER_ROOT="$work/node_modules/pi-mcp-adapter" LSP_TRACE_MCP_BINARY="$work/lsp-trace-mcp" "$bun_bin" "$root/scripts/installed-pi-direct-tools-slice-selector-canary.ts"

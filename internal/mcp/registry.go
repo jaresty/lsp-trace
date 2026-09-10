@@ -208,6 +208,9 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		if tools[i].ExecutorFamily == IncomingExecutorFamily || tools[i].ExecutorFamily == SliceExecutorFamily {
 			addNormalizedProviderInputProperties(tools[i].InputSchema)
 		}
+		if tools[i].ExecutorFamily == SliceExecutorFamily {
+			tools[i].PresentationInputSchema = slicePresentationInputSchema(tools[i].InputSchema)
+		}
 		if operation, ok := publicAnalyticsV2Operation(tools[i].Name); ok {
 			tools[i].PresentationInputSchema = publicAnalyticsV2PresentationSchema(tools[i].InputSchema, operation)
 		}
@@ -413,6 +416,38 @@ func publicAnalyticsV2Operation(name string) (string, bool) {
 		return "RANKING", true
 	default:
 		return "", false
+	}
+}
+
+func slicePresentationInputSchema(canonical map[string]any) map[string]any {
+	properties, ok := canonical["properties"].(map[string]any)
+	if !ok {
+		panic("MCP slice input schema has no properties object")
+	}
+	variant := func(selectorFields ...string) map[string]any {
+		selected := map[string]bool{}
+		for _, field := range selectorFields {
+			selected[field] = true
+		}
+		variantProperties := make(map[string]any, len(properties)-3+len(selectorFields))
+		for name, property := range properties {
+			if name == "line" || name == "character" || name == "symbol" {
+				if !selected[name] {
+					continue
+				}
+			}
+			variantProperties[name] = cloneValue(property)
+		}
+		required := []any{"session_id", "start_mode", "uri"}
+		for _, field := range selectorFields {
+			required = append(required, field)
+		}
+		return map[string]any{"type": "object", "additionalProperties": false, "properties": variantProperties, "required": required}
+	}
+	return map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object",
+		"oneOf":   []any{variant("line", "character"), variant("symbol")},
 	}
 }
 
