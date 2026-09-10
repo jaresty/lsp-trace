@@ -156,6 +156,35 @@ func sensitivityPolicy() SensitivityPolicy {
 	}
 }
 
+func cloneResultV5(r Result) (Result, error) {
+	type wireResult Result
+	type cloneEnvelope struct {
+		Result wireResult     `json:"result"`
+		Seeds  []SeedResult   `json:"seeds"`
+		Tool   ToolIdentity   `json:"tool"`
+		Slice  *SliceEvidence `json:"slice"`
+	}
+	raw, err := json.Marshal(cloneEnvelope{wireResult(r), r.Seeds, r.Tool, r.Slice})
+	if err != nil {
+		return Result{}, err
+	}
+	var cloned cloneEnvelope
+	if err := json.Unmarshal(raw, &cloned); err != nil {
+		return Result{}, err
+	}
+	result := Result(cloned.Result)
+	result.Seeds, result.Tool, result.Slice = cloned.Seeds, cloned.Tool, cloned.Slice
+	return result, nil
+}
+
+func (r Result) marshalV5() ([]byte, error) {
+	cloned, err := cloneResultV5(r)
+	if err != nil {
+		return nil, err
+	}
+	return cloned.marshalV3()
+}
+
 func (r Result) marshalV3() ([]byte, error) {
 	// Producer and verifier must project from the same canonical graph state.
 	r.Canonicalize()
@@ -191,16 +220,15 @@ func (r Result) marshalV3() ([]byte, error) {
 	inv.Server.Environment = nil
 	executionBundleID := semanticExecutionBundleID(inv)
 	edges, siblings, dispatches := projectExecutionBundleRelations(r.SchemaVersion, executionBundleID, r.Edges, r.SiblingCandidates, r.DispatchRelationships)
-	receiptResult := r
-	receiptResult.Edges, receiptResult.SiblingCandidates, receiptResult.DispatchRelationships = edges, siblings, dispatches
-	if r.SchemaVersion == SchemaVersionV5 {
-		// Producer and verifier must run the same canonicalization after V5
-		// execution-bundle projection changes relation identity inputs.
-		receiptResult.Canonicalize()
-		edges = receiptResult.Edges
-		siblings = receiptResult.SiblingCandidates
-		dispatches = receiptResult.DispatchRelationships
+	receiptResult := Result{
+		SchemaVersion:         r.SchemaVersion,
+		Edges:                 append([]Edge(nil), edges...),
+		SiblingCandidates:     append([]SiblingCandidate(nil), siblings...),
+		DispatchRelationships: append([]DispatchRelationship(nil), dispatches...),
 	}
+	// V5 receipt identity is projected directly from the final semantic
+	// relation records. No later canonicalization may reorder IDs independently
+	// of their sibling locators.
 	receipt := receiptResult.evidenceReceipt(inv.Provenance.SourceRevision)
 	if err := validateProducerSeedRelations(r.Seeds); err != nil {
 		return nil, err
@@ -223,7 +251,20 @@ func (r Result) marshalV3() ([]byte, error) {
 		return nil, err
 	}
 	receiptVersion, digestDomain, digestScope := semanticReceiptCoordinates(r.SchemaVersion)
-	return json.Marshal(bundleV3{sem, semanticReceiptV3{receiptVersion, domainDigest(digestDomain, canonical), digestScope}})
+	traceReceipt := semanticReceiptV3{receiptVersion, domainDigest(digestDomain, canonical), digestScope}
+	if r.SchemaVersion == SchemaVersionV5 {
+		receiptBytes, err := json.Marshal(traceReceipt)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]byte, 0, len(canonical)+len(receiptBytes)+17)
+		out = append(out, canonical[:len(canonical)-1]...)
+		out = append(out, `,"trace_receipt":`...)
+		out = append(out, receiptBytes...)
+		out = append(out, '}')
+		return out, nil
+	}
+	return json.Marshal(bundleV3{sem, traceReceipt})
 }
 
 func projectProcessContext(environment map[string]string, effectiveEnvironment []string, workingDirectory string) ProcessContext {
@@ -762,6 +803,17 @@ func ValidateSemanticBundle(data []byte) error {
 	if b.SchemaVersion != SchemaVersionV3 && b.SchemaVersion != SchemaVersionV5 {
 		return fmt.Errorf("verification requires %s or %s", SchemaVersionV3, SchemaVersionV5)
 	}
+	var immutableV5Semantic []byte
+	if b.SchemaVersion == SchemaVersionV5 {
+		marker := []byte(`,"trace_receipt":`)
+		cut := bytes.LastIndex(data, marker)
+		if cut < 0 {
+			return fmt.Errorf("malformed bundle: trace receipt framing")
+		}
+		immutableV5Semantic = make([]byte, cut+1)
+		copy(immutableV5Semantic, data[:cut])
+		immutableV5Semantic[cut] = '}'
+	}
 	if err := validateEvidenceKinds(b.EvidenceReceipt, b.SeedMemberships); err != nil {
 		return err
 	}
@@ -794,12 +846,36 @@ func ValidateSemanticBundle(data []byte) error {
 			}
 		}
 	}
+	working := b.semanticV3
+	if b.SchemaVersion == SchemaVersionV5 {
+		working = semanticV3{}
+		canonical, err := json.Marshal(b.semanticV3)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(canonical, &working); err != nil {
+			return err
+		}
+	}
 	verified := Result{
-		SchemaVersion: b.SchemaVersion, Targets: b.Targets, Nodes: b.Nodes, Edges: b.Edges,
-		Terminals: b.Terminals, Frontier: b.Frontier, Diagnostics: b.Diagnostics, Seeds: b.Seeds,
-		SiblingCandidates: b.SiblingCandidates, DispatchRelationships: b.DispatchRelationships, Slice: b.Slice,
-		Summary:      Summary{Complete: true, Truncated: b.Summary.Truncated},
-		Capabilities: b.Capabilities, CapabilityQuality: b.CapabilityQuality,
+		SchemaVersion: working.SchemaVersion, Targets: working.Targets, Nodes: working.Nodes, Edges: working.Edges,
+		Terminals: working.Terminals, Frontier: working.Frontier, Diagnostics: working.Diagnostics, Seeds: working.Seeds,
+		SiblingCandidates: working.SiblingCandidates, DispatchRelationships: working.DispatchRelationships, Slice: working.Slice,
+		Summary:      Summary{Complete: true, Truncated: working.Summary.Truncated},
+		Capabilities: working.Capabilities, CapabilityQuality: working.CapabilityQuality,
+	}
+	// V5 verifies receipt identity from the exact decoded semantic relation
+	// records. This preserves each relation ID's sibling pairing and avoids
+	// deriving authority from a mutable, canonicalized carrier view.
+	var expectedReceiptV5 *EvidenceReceipt
+	if b.SchemaVersion == SchemaVersionV5 {
+		receiptWorking := Result{
+			SchemaVersion:         b.SchemaVersion,
+			Edges:                 append([]Edge(nil), b.Edges...),
+			SiblingCandidates:     append([]SiblingCandidate(nil), b.SiblingCandidates...),
+			DispatchRelationships: append([]DispatchRelationship(nil), b.DispatchRelationships...),
+		}
+		expectedReceiptV5 = receiptWorking.evidenceReceipt(b.Invocation.Provenance.SourceRevision)
 	}
 	for _, membership := range b.SeedMemberships {
 		for i := range verified.SiblingCandidates {
@@ -816,25 +892,14 @@ func ValidateSemanticBundle(data []byte) error {
 	if err := verified.ValidateReferences(); err != nil {
 		return err
 	}
-	historicalSiblingIDs := map[string]string{}
+	var historicalSiblingIDs map[string][]string
 	if b.SchemaVersion == SchemaVersionV3 {
-		for _, candidate := range verified.SiblingCandidates {
-			identity := canonicalSiblingRelationID(candidate)
-			if _, exists := historicalSiblingIDs[identity]; exists {
-				return fmt.Errorf("ambiguous historical sibling identity")
-			}
-			historicalSiblingIDs[identity] = candidate.RelationID
-		}
+		historicalSiblingIDs = captureHistoricalSiblingIDs(verified.SiblingCandidates)
 	}
 	verified.Canonicalize()
 	if b.SchemaVersion == SchemaVersionV3 {
-		for i := range verified.SiblingCandidates {
-			identity := canonicalSiblingRelationID(verified.SiblingCandidates[i])
-			historicalID, found := historicalSiblingIDs[identity]
-			if !found {
-				return fmt.Errorf("historical sibling identity mismatch")
-			}
-			verified.SiblingCandidates[i].RelationID = historicalID
+		if err := restoreHistoricalSiblingIDs(verified.SiblingCandidates, historicalSiblingIDs); err != nil {
+			return err
 		}
 	}
 	if err := validateProcessContext(b.ProcessContext); err != nil {
@@ -847,6 +912,9 @@ func ValidateSemanticBundle(data []byte) error {
 		return fmt.Errorf("evidence semantics mismatch")
 	}
 	expectedReceipt := verified.evidenceReceipt(b.Invocation.Provenance.SourceRevision)
+	if b.SchemaVersion == SchemaVersionV5 {
+		expectedReceipt = expectedReceiptV5
+	}
 	if err := validateSeedJoins(b.Invocation.Seeds, b.Seeds, verified.SiblingCandidates, verified.DispatchRelationships, expectedReceipt); err != nil {
 		return err
 	}
@@ -917,13 +985,48 @@ func ValidateSemanticBundle(data []byte) error {
 	}
 	receipt := b.TraceReceipt
 	b.TraceReceipt = semanticReceiptV3{}
-	canonical, err := json.Marshal(b.semanticV3)
-	if err != nil {
-		return err
+	canonical := immutableV5Semantic
+	if b.SchemaVersion == SchemaVersionV3 {
+		var err error
+		canonical, err = json.Marshal(b.semanticV3)
+		if err != nil {
+			return err
+		}
 	}
 	receiptVersion, digestDomain, digestScope := semanticReceiptCoordinates(b.SchemaVersion)
-	if receipt.ReceiptVersion != receiptVersion || receipt.DigestScope != digestScope || receipt.SemanticCommitmentDigest != domainDigest(digestDomain, canonical) {
+	expectedDigest := domainDigest(digestDomain, canonical)
+	if receipt.ReceiptVersion != receiptVersion || receipt.DigestScope != digestScope || receipt.SemanticCommitmentDigest != expectedDigest {
 		return fmt.Errorf("embedded semantic receipt mismatch")
+	}
+	return nil
+}
+
+func historicalSiblingIdentity(s SiblingCandidate) string {
+	declarationID := ""
+	if s.Declaration != nil {
+		declarationID = s.Declaration.ID
+	}
+	return fmt.Sprintf("%q|%q|%q|%q|%q|%q|%q", s.SeedLabel, s.SeedURI, s.Origin.ID, declarationID, s.Candidate.ID, s.Direction, s.Kind)
+}
+
+func captureHistoricalSiblingIDs(siblings []SiblingCandidate) map[string][]string {
+	ids := make(map[string][]string, len(siblings))
+	for _, sibling := range siblings {
+		key := historicalSiblingIdentity(sibling)
+		ids[key] = append(ids[key], sibling.RelationID)
+	}
+	return ids
+}
+
+func restoreHistoricalSiblingIDs(siblings []SiblingCandidate, ids map[string][]string) error {
+	for i := range siblings {
+		key := historicalSiblingIdentity(siblings[i])
+		matches := ids[key]
+		if len(matches) == 0 {
+			return fmt.Errorf("historical sibling identity mismatch")
+		}
+		siblings[i].RelationID = matches[0]
+		ids[key] = matches[1:]
 	}
 	return nil
 }

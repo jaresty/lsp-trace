@@ -1,6 +1,6 @@
 # Graph V5 Managed Repair
 
-Base: `3a527fcf38e37be43542a5ab141ec4de5c6e8c7d` (`pi-agent-1fa12b24-648f-440`)
+Base: `99798f9`
 
 ## Repair
 
@@ -12,17 +12,15 @@ Base: `3a527fcf38e37be43542a5ab141ec4de5c6e8c7d` (`pi-agent-1fa12b24-648f-440`)
 - Added CLI `--output-version lsp-trace.graph-provenance.v5`; it is accepted only with acquisition v3 and `expansion.topmost_siblings=true`, and publication validates as V5.
 - Added a hierarchical fake-runtime specimen with one exact seed, a broad root, a sibling method, observed LSP requests, nonempty exact relations, and repeated-route byte parity.
 - VERIFIED_HOST now requires an exact host receipt identifier; CALLER_ASSERTED_LOCAL is not promoted. Existing V5 semantic validation retains the LSP-supplied, retained-byte-consistency, UNKNOWN, and MISSING class rules and rejects authority mutations.
+- V5 capture now branches directly from the acquired graph and never passes through the V2 carrier's mutable typed graph or V2 graph-byte remarshal-equality contract.
+- V5 marshaling canonicalizes only a detached deep working copy. Verification checks the exact base64-decoded `graph_v5` bytes and SHA-256 first, then creates a fresh typed decode solely for structural and semantic validation.
+- V5 semantic receipt verification hashes the exact selected semantic byte prefix. It does not establish authority by repeatedly marshaling `EvidenceV2.Acquisition.Graph` or by sharing typed storage with immutable carrier bytes.
+- Sibling relation IDs include origin, declaration, prepared candidate, correspondence evidence, and custody, preserving identity across reordering of three or more siblings while retaining zero-CALLS semantics.
+- `lsp-trace verify --family graph-provenance --version v5 PATH` verifies a direct immutable V5 carrier and reports `verified immutable carrier`; selector-based historical verification continues to report publication custody.
 
-## Focused validation
+## Validation
 
-- Normal: 1120 tests passed across acquisition, graph, graph provenance, schema, seedbinding, acquisitionops, CLI, and MCP packages.
-- Race: 13 focused managed-V5/budget/custody/authority/parity tests passed.
-- Process/schema: 56 focused CLI/MCP process, managed-V5, acquisition, and schema tests passed.
-- Vet: focused packages passed.
-- Build: `cmd/lsp-trace`, `cmd/lsp-trace-mcp`, and `cmd/fake-lsp` passed.
-- Post-custody focused rerun: 232 tests passed.
-
-No full suite or full race was run. No delegation, network, install, deploy, product, D01, or export action was performed.
+The final implementation is gated by focused immutable-carrier, mutation, sibling-reordering, acquisition, CLI, schema, custody, and privacy tests; the complete suite, changed-package race tests, vet, builds, and the prepared live C# acceptance are run before commit. The live acceptance requires nonempty origin-excluded siblings, distinct declaration/prepared evidence, zero CALLS, exact embedded-byte digest, and successful V5 verification.
 
 ## Independent re-review
 
