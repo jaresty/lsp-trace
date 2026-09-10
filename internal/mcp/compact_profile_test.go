@@ -56,6 +56,35 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	}
 }
 
+func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
+	r := NewRegistryWithProfile(false, ToolProfileCompact)
+	description, ok := r.DescribeOperation("lsp_trace_v3_slice")
+	if !ok {
+		t.Fatal("ASSERT_COMPACT_HIDDEN_OPERATION_DESCRIBABLE")
+	}
+	if description["name"] != "lsp_trace_v3_slice" || description["advertised"] != false || description["dispatchable"] != true || description["invocation_route"] != "lsp_trace_v1_execute" {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_OPERATION_METADATA: %#v", description)
+	}
+	if description["input_schema"] == nil || description["input_schema_id"] == "" || description["graph_v5_production"] == nil {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_V5_RECIPE: %#v", description)
+	}
+	alias, ok := r.DescribeOperation("lsp_trace_validate")
+	if !ok || alias["name"] != "lsp_trace_v1_validate" {
+		t.Fatalf("ASSERT_COMPACT_ALIAS_DESCRIBES_CANONICAL: %#v", alias)
+	}
+	if _, ok := r.DescribeOperation("lsp_trace_v9_missing"); ok {
+		t.Fatal("ASSERT_COMPACT_UNKNOWN_OPERATION_NOT_DESCRIBED")
+	}
+	description["name"] = "mutated"
+	again, _ := r.DescribeOperation("lsp_trace_v3_slice")
+	if again["name"] != "lsp_trace_v3_slice" {
+		t.Fatal("ASSERT_OPERATION_DESCRIPTION_SNAPSHOT_IMMUTABLE")
+	}
+	if len(r.Advertised()) != 10 || len(r.Tools()) != 28 {
+		t.Fatal("ASSERT_OPERATION_DESCRIPTION_PRESERVES_PROFILE_COUNTS")
+	}
+}
+
 func TestToolProfileRejectsUnknown(t *testing.T) {
 	defer func() {
 		if recover() == nil {

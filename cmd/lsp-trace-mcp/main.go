@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -286,8 +287,21 @@ func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory
 		return nil, nil, err
 	}
 	handlers, err := operation.NewRequiredHandlers(map[operation.Name]operation.Handler{
-		operation.Capabilities: func(context.Context, operation.Request) (operation.Result, *operation.Failure) {
-			return operation.Result{Value: registry.Capabilities()}, nil
+		operation.Capabilities: func(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+			var input struct {
+				Operation string `json:"operation"`
+			}
+			if err := json.Unmarshal(request.Input, &input); err != nil {
+				return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: err}
+			}
+			if input.Operation == "" {
+				return operation.Result{Value: registry.Capabilities()}, nil
+			}
+			description, ok := registry.DescribeOperation(input.Operation)
+			if !ok {
+				return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Diagnostics: []string{"unknown canonical operation"}}
+			}
+			return operation.Result{Value: map[string]any{"operation": description}}, nil
 		},
 		operation.SchemaGet: operation.SchemaGetHandler,
 		operation.Validate:  operation.ValidateHandler,

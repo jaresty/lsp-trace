@@ -479,6 +479,16 @@ func TestOversizedArtifactRequiresSelector(t *testing.T) {
 				if _, ok := env["content"]; ok {
 					t.Errorf("ASSERT_OVERSIZED_HAS_NO_CONTENT: envelope=%v", env)
 				}
+				diagnostics, _ := env["diagnostics"].([]any)
+				if len(diagnostics) != 1 {
+					t.Fatalf("ASSERT_OVERSIZED_ACTIONABLE_DIAGNOSTIC: envelope=%v", env)
+				}
+				text, _ := diagnostics[0].(string)
+				for _, phrase := range []string{"1048577 bytes", "inline limit is 1048576 bytes", "--publication-root", "request.arguments.output_selector", "retry reacquires"} {
+					if !strings.Contains(text, phrase) {
+						t.Errorf("ASSERT_OVERSIZED_ACTIONABLE_DIAGNOSTIC: missing %q in %q", phrase, text)
+					}
+				}
 				return
 			}
 			if env["outcome"] != "COMPLETE" || env["operation_status"] != "SUCCEEDED" || env["content"] == nil || env["isError"] != false {

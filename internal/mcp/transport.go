@@ -262,7 +262,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	detail, _ := params.Arguments["detail"].(string)
 	compact := detail == "compact"
 	if compact && !publicationRequested {
-		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{"compact detail requires output_selector so the full artifact remains available"})
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{"compact detail requires output_selector so the full artifact remains available; configure --publication-root and set output_selector on the artifact-producing operation; through lsp_trace_v1_execute use request.arguments.output_selector"})
 		return bindEnvelope(base, tool, env)
 	}
 	if publicationRequested && s.PublicationRoot == nil {
@@ -341,7 +341,8 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, env)
 	}
 	if !publicationRequested && len(opResult.Artifact) > inlineByteLimit {
-		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", nil)
+		diagnostic := fmt.Sprintf("artifact is %d bytes; inline limit is %d bytes; configure --publication-root and retry with output_selector on the artifact-producing operation; through lsp_trace_v1_execute use request.arguments.output_selector; retry reacquires the operation", len(opResult.Artifact), inlineByteLimit)
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{diagnostic})
 		return bindEnvelope(base, tool, env)
 	}
 	if publicationRequested {

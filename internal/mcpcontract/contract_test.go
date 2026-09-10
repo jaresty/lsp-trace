@@ -26,6 +26,9 @@ func TestStage1Contract(t *testing.T) {
 	if err := ValidateJSON(capabilityTool.InputSchemaID, []byte(`{}`)); err != nil {
 		t.Errorf("P3_STRUCTURAL_VALIDATION: valid input rejected: %v", err)
 	}
+	if err := ValidateJSON(capabilityTool.InputSchemaID, []byte(`{"operation":"lsp_trace_v3_slice"}`)); err != nil {
+		t.Errorf("P3_OPERATION_DESCRIPTION_INPUT: valid input rejected: %v", err)
+	}
 	if err := ValidateJSON(capabilityTool.InputSchemaID, []byte(`{"extra":true}`)); err == nil {
 		t.Error("P3_STRUCTURAL_VALIDATION: closed input accepted unknown field")
 	}

@@ -132,12 +132,14 @@ func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"tool":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","arguments":{"operation":"lsp_trace_v3_slice"}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","arguments":{"operation":"lsp_trace_v9_missing"}}}`,
 	}, "\n") + "\n"
 	if code := run([]string{"--tool-profile", "compact"}, strings.NewReader(input), &stdout, &stderr); code != 0 {
 		t.Fatalf("ASSERT_COMPACT_PROCESS_RUNS: code=%d stderr=%s", code, stderr.String())
 	}
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-	if len(lines) != 3 {
+	if len(lines) != 5 {
 		t.Fatalf("ASSERT_COMPACT_PROCESS_RESPONSES: %q", stdout.String())
 	}
 	var listed struct {
@@ -160,6 +162,12 @@ func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
 	}
 	if strings.Contains(lines[2], "unknown canonical tool") || !strings.Contains(lines[2], `"requested_tool":"lsp_trace_v1_validate"`) {
 		t.Fatalf("ASSERT_COMPACT_HIDDEN_EXECUTE_GATEWAY_CALL: %s", lines[2])
+	}
+	if !strings.Contains(lines[3], `"name":"lsp_trace_v3_slice"`) || !strings.Contains(lines[3], `"advertised":false`) || !strings.Contains(lines[3], `"graph_v5_production"`) || !strings.Contains(lines[3], `"request.arguments.output_selector"`) {
+		t.Fatalf("ASSERT_COMPACT_HIDDEN_OPERATION_DESCRIPTION: %s", lines[3])
+	}
+	if !strings.Contains(lines[4], `"code":"INPUT_INVALID"`) || !strings.Contains(lines[4], `unknown canonical operation`) {
+		t.Fatalf("ASSERT_COMPACT_UNKNOWN_OPERATION_DESCRIPTION: %s", lines[4])
 	}
 }
 

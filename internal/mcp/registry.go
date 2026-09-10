@@ -509,6 +509,67 @@ func (r *Registry) Capabilities() map[string]any {
 	}
 }
 
+// DescribeOperation returns static registry-owned metadata for one canonical
+// operation or alias. It does not inspect sessions, bootstrap configuration, or
+// private publication state.
+func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
+	tool, ok := r.Resolve(name)
+	if !ok {
+		return nil, false
+	}
+	advertised := false
+	for _, candidate := range r.Advertised() {
+		if candidate.Name == tool.Name {
+			advertised = true
+			break
+		}
+	}
+	invocationRoute := "lsp_trace_v1_execute"
+	if advertised {
+		invocationRoute = "direct_or_lsp_trace_v1_execute"
+	}
+	if tool.Name == "lsp_trace_v1_execute" {
+		invocationRoute = "direct"
+	}
+	description := map[string]any{
+		"name":                tool.Name,
+		"aliases":             append([]string(nil), tool.Aliases...),
+		"description":         tool.Description,
+		"input_schema_id":     tool.InputSchemaID,
+		"input_schema":        cloneMap(tool.InputSchema),
+		"envelope_schema_ids": append([]string(nil), tool.EnvelopeSchemaIDs...),
+		"artifact_schema_ids": append([]string(nil), tool.ArtifactSchemaIDs...),
+		"advertised":          advertised,
+		"dispatchable":        true,
+		"availability":        tool.Availability,
+		"invocation_route":    invocationRoute,
+	}
+	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {
+		description["graph_v5_production"] = map[string]any{
+			"output_version":                  "lsp-trace.graph-provenance.v5",
+			"requires_topmost_siblings":       true,
+			"sibling_support_contribution":    0,
+			"sibling_relations_are_calls":     false,
+			"delegated_output_selector_field": "request.arguments.output_selector",
+			"request_template": map[string]any{
+				"tool": tool.Name,
+				"arguments": map[string]any{
+					"session_id": "<ready-session-id>", "generation": 1,
+					"seed_manifest": map[string]any{
+						"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session",
+						"root":             map[string]any{"id": "root", "locator": map[string]any{"uri": "<file-uri>", "line": 0, "character": 0, "language_id": "<language-id>"}, "down_depth": 1, "up_depth": 1},
+						"required_targets": []any{map[string]any{"id": "seed", "locator": map[string]any{"uri": "<file-uri>", "line": 0, "character": 0, "language_id": "<language-id>"}, "down_depth": 1, "up_depth": 1}},
+						"expansion":        map[string]any{"topmost_siblings": true},
+						"limits":           map[string]any{"max_nodes": 200, "max_requests": 100, "max_evidence_bytes": 67108864, "max_path_work": 1000000, "timeout_ms": 60000, "request_timeout_ms": 30000, "max_response_bytes": 16777216, "max_messages": 4096},
+					},
+					"output_version": "lsp-trace.graph-provenance.v5", "detail": "full", "output_selector": "graphs/result.json",
+				},
+			},
+		}
+	}
+	return description, true
+}
+
 func (r *Registry) Advertised() []Tool {
 	out := make([]Tool, 0, len(r.tools))
 	for _, tool := range r.tools {
