@@ -9,6 +9,8 @@ const RetainedCallsV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/
 const VerifyRetainedCallsV2InputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-verify-retained-calls.v2.schema.json"
 const RetainedCallsArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.retained-calls.v1.schema.json"
 const RetainedCallsV2ArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.retained-calls.v2.schema.json"
+const RetainedRelationsInputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-export-retained-relations.v1.schema.json"
+const RetainedRelationsArtifactID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.retained-relations.v1.schema.json"
 
 func RetainedCallsEnvelopeID(id string) string {
 	return strings.Replace(id, "/envelope-", "/envelope-retained-calls-", 1)
@@ -41,6 +43,27 @@ func WithRetainedCalls(manifest *Manifest) *Manifest {
 		}
 	}
 	return WithAcquisitionV2(WithBoundedRanking(WithBoundedMetrics(WithBoundedAnalysis(&copy))))
+}
+
+// WithRetainedRelations extends the historical V1 export operation in place.
+// It preserves tool cardinality and all V1 inputs while making explicit V3
+// retained-relations dispatch structurally reachable.
+func WithRetainedRelations(manifest *Manifest) *Manifest {
+	copy := *manifest
+	copy.Schemas = append([]SchemaRegistration{}, manifest.Schemas...)
+	copy.Tools = append([]ToolContract{}, manifest.Tools...)
+	copy.Schemas = append(copy.Schemas,
+		SchemaRegistration{ID: RetainedRelationsInputID, Family: "input-export-retained-relations.v1", Layer: "input", Path: "schemas/input-export-retained-relations.v1.schema.json"},
+		SchemaRegistration{ID: RetainedRelationsArtifactID, Family: "lsp-trace.retained-relations.v1", Layer: "artifact", Path: "../../schema/schemas/lsp-trace.retained-relations.v1.schema.json"},
+	)
+	for i := range copy.Tools {
+		if copy.Tools[i].Name == "lsp_trace_v1_export_retained_calls" {
+			copy.Tools[i].InputSchemaID = RetainedRelationsInputID
+			copy.Tools[i].ArtifactSchemaIDs = append(copy.Tools[i].ArtifactSchemaIDs, RetainedRelationsArtifactID)
+			break
+		}
+	}
+	return &copy
 }
 
 // WithRetainedCallsV2Export adds the current retained-calls v2 exporter without

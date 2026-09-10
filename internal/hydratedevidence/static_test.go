@@ -13,7 +13,7 @@ import (
 
 func TestOfflineProductionSurface(t *testing.T) {
 	allowed := map[string]bool{}
-	for _, p := range []string{"bytes", "crypto/sha256", "encoding/json", "encoding/base64", "embed", "errors", "fmt", "io", "sort", "strconv", "strings", "sync", "unicode/utf8", "lsp-trace/internal/graphprovenance", "lsp-trace/internal/source", "github.com/santhosh-tekuri/jsonschema/v6"} {
+	for _, p := range []string{"bytes", "crypto/sha256", "encoding/json", "encoding/base64", "embed", "errors", "fmt", "io", "sort", "strconv", "strings", "sync", "unicode/utf8", "lsp-trace/internal/graphprovenance", "lsp-trace/internal/source", "lsp-trace/internal/v5sourcesnapshot", "github.com/santhosh-tekuri/jsonschema/v6"} {
 		allowed[p] = true
 	}
 	entries, e := os.ReadDir(".")

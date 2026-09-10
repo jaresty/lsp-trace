@@ -78,6 +78,8 @@ func ValidateSemantics(data []byte, structural StructuralResult) error {
 		return fmt.Errorf("bounded analysis requires composed boundedanalysis.ValidateFor semantic validation")
 	case structural.Family == FamilyRetainedCalls:
 		return fmt.Errorf("retained calls requires composed retainedcalls.ValidateFor semantic validation")
+	case structural.Family == FamilyRetainedRelations:
+		return fmt.Errorf("retained relations requires composed retainedrelations.ValidateFor semantic validation")
 	case structural.Family == FamilyGraphProvenance:
 		return fmt.Errorf("graph provenance requires composed graphprovenance.ValidateFor semantic validation")
 	case structural.Family == FamilyOperationalCustody:

@@ -1,5 +1,40 @@
 # Retained CALLS export
 
+## Additive V3 relation export
+
+`lsp-trace export-retained-calls --version v3` emits the honestly named
+`lsp-trace.retained-relations.v1` artifact. V3 accepts only exact bytes that pass
+`graph-provenance/v5` validation and retains those parent bytes and their digest.
+It keeps `calls` and `sibling_candidates` as separate tables: sibling candidates
+are never coerced into CALLS and always carry zero support. Each sibling row
+retains distinct origin, document-symbol declaration, and prepared-candidate
+identities; both declaration and selection ranges; source digest and optional host
+receipt identity; provider/LSP evidence; custody; execution-bundle and relation
+identities; and exact seed-membership identities. Validation deterministically
+re-derives every table from the retained parent. Historical retained-calls V1 and
+V2 behavior is unchanged.
+
+## Graph V5 retained-source companion
+
+Managed V3 slice/incoming acquisition additionally accepts explicit
+`output_version: "lsp-trace.graph-v5-source-snapshot.v1"`. This separately
+versioned carrier embeds the exact validated Graph Provenance V5 bytes plus
+independently self-verifying source receipts captured by bounded regular-file reads
+of the exact sibling endpoint URIs under the host-owned workspace; it does not
+mutate or replace Graph V5. Six bindings per sibling preserve
+origin/declaration/prepared identity
+across declaration and selection ranges. Each binding requires either the V5
+source digest or exactly one same-URI retained digest, plus at least one exact
+matching receipt. Missing bytes, multiple candidate digests, foreign receipts,
+parent mutation, binding mutation, duplicate JSON members, or trailing JSON fail
+closed.
+
+The companion establishes retained-byte consistency only. Native receipts are not
+`acquisition.Supply` and do not authenticate analyzed source identity, infer a
+checkout, perform network/provider acquisition, add support, or turn a sibling into
+`CALLS`. Its schema family is `graph-v5-source-snapshot`, version `v1`.
+
+
 The frozen V1 export remains bounded A3. The additive FR20 V2 export is now
 source-implemented in both CLI and MCP, but is not deployed qualification,
 provider authentication, or downstream-analysis enablement.

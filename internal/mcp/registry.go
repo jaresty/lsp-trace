@@ -126,7 +126,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedCalls(manifest)))))))
+	manifest = mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
@@ -213,10 +213,13 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		}
 		if tools[i].Name == "lsp_trace_v1_verify" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV5ArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphV5SourceSnapshotArtifactID)
 		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV3ArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV5ArtifactID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphV5SourceSnapshotArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.RetainedCallsV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedAnalysisArtifactID)
@@ -568,6 +571,16 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 					"output_version": "lsp-trace.graph-provenance.v5", "detail": "full", "output_selector": "graphs/result.json",
 				},
 			},
+		}
+		description["graph_v5_source_snapshot"] = map[string]any{
+			"output_version":                "lsp-trace.graph-v5-source-snapshot.v1",
+			"requires_topmost_siblings":     true,
+			"native_bounded_receipts":       true,
+			"retained_bytes_only":           true,
+			"authenticated_source_identity": false,
+			"sibling_support_contribution":  0,
+			"sibling_relations_are_calls":   false,
+			"hydrated_selector":             "sibling_relation_ids",
 		}
 	}
 	return description, true

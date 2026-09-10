@@ -52,6 +52,7 @@ func DefaultRequest() Request {
 	f := he.DefaultFocusRequest()
 	f.NodeIDs = []string{}
 	f.RelationIDs = []string{}
+	f.SiblingRelationIDs = []string{}
 	f.SidecarRecordIDs = []string{}
 	return Request{FocusRequest: f}
 }

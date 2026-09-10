@@ -2,6 +2,7 @@ package hydratedevidence
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/source"
+	"lsp-trace/internal/v5sourcesnapshot"
 )
 
 type admitted struct {
@@ -135,10 +137,16 @@ func admit(input Input, p Policy) (admitted, error) {
 		version = "v1"
 	case graphprovenance.VersionV2:
 		version = "v2"
+	case v5sourcesnapshot.Version:
+		version = "source-snapshot-v1"
 	default:
 		return fail(fmt.Errorf("unsupported evidence family/version: %s", header.SchemaVersion))
 	}
-	if _, e := graphprovenance.ValidateFor(input.Artifact, graphprovenance.Family, version); e != nil {
+	if version == "source-snapshot-v1" {
+		if _, e := v5sourcesnapshot.Validate(input.Artifact); e != nil {
+			return fail(e)
+		}
+	} else if _, e := graphprovenance.ValidateFor(input.Artifact, graphprovenance.Family, version); e != nil {
 		return fail(e)
 	}
 	artifactDigest := Digest(input.Artifact)
@@ -191,7 +199,7 @@ func admit(input Input, p Policy) (admitted, error) {
 			receipts = append(receipts, *e.Supply)
 		}
 		bindings = e.Bindings
-	} else {
+	} else if version == "v2" {
 		var e graphprovenance.EvidenceV2
 		if err := json.Unmarshal(input.Artifact, &e); err != nil {
 			return fail(err)
@@ -207,6 +215,28 @@ func admit(input Input, p Policy) (admitted, error) {
 		for _, b := range e.Bindings {
 			anchorStatuses[b.Pointer] = b.AnchorStatus
 			bindings = append(bindings, graphprovenance.Binding{Pointer: b.Pointer, URI: b.URI, Attribution: b.Attribution, ReceiptIDs: b.ReceiptIDs})
+		}
+	} else {
+		var snapshot v5sourcesnapshot.Artifact
+		if err := json.Unmarshal(input.Artifact, &snapshot); err != nil {
+			return fail(err)
+		}
+		var v5 graphprovenance.EvidenceV5
+		if err := json.Unmarshal(snapshot.GraphV5Bytes, &v5); err != nil {
+			return fail(err)
+		}
+		var err error
+		graphBytes, err = base64.StdEncoding.DecodeString(v5.GraphV5)
+		if err != nil {
+			return fail(err)
+		}
+		for _, r := range snapshot.Receipts {
+			receipts = append(receipts, graphprovenance.Receipt{ID: r.ID, URI: r.URI, Classification: "SOURCE", Status: "READABLE", Content: r.Content, CanonicalReceipt: r.CanonicalReceipt})
+		}
+		encoding = snapshot.PositionEncoding
+		for _, b := range snapshot.Bindings {
+			anchorStatuses[b.Pointer] = "VALID_COORDINATES"
+			bindings = append(bindings, graphprovenance.Binding{Pointer: b.Pointer, URI: b.URI, Attribution: "SOURCE", ReceiptIDs: b.ReceiptIDs})
 		}
 	}
 	if err := preflight(graphBytes); err != nil {
@@ -300,10 +330,9 @@ func admit(input Input, p Policy) (admitted, error) {
 					r.Kind = "NATIVE_RELATION"
 					break
 				}
-				if id, ok := m["id"].(string); ok {
+				if id, ok := m["id"].(string); ok && r.NativeID == "" {
 					r.NativeID = id
 					r.Kind = "NATIVE_RECORD"
-					break
 				}
 			}
 		}

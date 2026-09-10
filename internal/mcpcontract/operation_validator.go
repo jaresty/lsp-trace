@@ -44,7 +44,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))))).Tools {
+		for _, tool := range WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break

@@ -8,6 +8,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/v5sourcesnapshot"
 	"lsp-trace/internal/verification"
 )
 
@@ -55,6 +56,7 @@ func NewVerifyHandler(loader CustodyLoader) Handler {
 				SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
 			} `json:"trace_receipt"`
 			GraphV5SHA256 string `json:"graph_v5_sha256"`
+			GraphV5Digest string `json:"graph_v5_digest"`
 		}
 		if err := json.Unmarshal(material.Artifact, &identity); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
@@ -65,6 +67,11 @@ func NewVerifyHandler(loader CustodyLoader) Handler {
 				return verifyFailure("VERIFICATION_FAILED", err)
 			}
 			logicalDigest = identity.GraphV5SHA256
+		} else if identity.SchemaVersion == v5sourcesnapshot.Version {
+			if _, err := v5sourcesnapshot.Validate(material.Artifact); err != nil {
+				return verifyFailure("VERIFICATION_FAILED", err)
+			}
+			logicalDigest = identity.GraphV5Digest
 		} else if err := graph.ValidateSemanticBundle(bytes.TrimSpace(material.Artifact)); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
 		}

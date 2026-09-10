@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"lsp-trace/internal/retainedcalls"
+	"lsp-trace/internal/retainedrelations"
 	"lsp-trace/internal/strictjson"
 )
 
@@ -41,13 +42,20 @@ func ExportRetainedCallsHandler(ctx context.Context, request Request) (Result, *
 		raw, err = retainedcalls.Export(input.Input)
 	case "v2":
 		raw, err = retainedcalls.ExportV2(input.Input)
+	case "v3":
+		raw, err = retainedrelations.Export(input.Input)
 	default:
 		return Result{}, inputFailure("INPUT_INVALID", fmt.Errorf("unsupported retained-calls version %q", version))
 	}
 	if err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
 	}
-	if _, err = retainedcalls.ValidateFor(raw, retainedcalls.Family, version); err != nil {
+	if version == "v3" {
+		_, err = retainedrelations.Validate(raw)
+	} else {
+		_, err = retainedcalls.ValidateFor(raw, retainedcalls.Family, version)
+	}
+	if err != nil {
 		return Result{}, inputFailure("INPUT_INVALID", err)
 	}
 	return Result{Artifact: raw}, nil

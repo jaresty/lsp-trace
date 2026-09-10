@@ -31,7 +31,8 @@ func addHydratedFlags(fs *flag.FlagSet) *hydratedOptions {
 	r := &o.request
 	fs.BoolVar(&o.enabled, "hydrated", false, "inspect exact retained graph node/relation context offline")
 	fs.Var((*hydratedIDs)(&r.NodeIDs), "node", "exact native node ID (repeatable)")
-	fs.Var((*hydratedIDs)(&r.RelationIDs), "relation", "exact native relation ID (repeatable)")
+	fs.Var((*hydratedIDs)(&r.RelationIDs), "relation", "exact native CALLS relation ID (repeatable)")
+	fs.Var((*hydratedIDs)(&r.SiblingRelationIDs), "sibling-relation", "exact native sibling relation ID (repeatable)")
 	fs.Var((*hydratedIDs)(&r.SidecarRecordIDs), "sidecar-record", "exact asserted sidecar record ID (repeatable)")
 	fs.Var(&o.sidecars, "sidecar", "explicit hydrated-sidecar.v1 JSON file (repeatable)")
 	fs.BoolVar(&r.IncludeBodies, "include-bodies", false, "include selected retained bytes")
@@ -53,7 +54,7 @@ func addHydratedFlags(fs *flag.FlagSet) *hydratedOptions {
 }
 func hydratedFlag(name string) bool {
 	switch name {
-	case "hydrated", "node", "relation", "sidecar-record", "sidecar", "include-bodies", "whole-file", "endpoint-context", "position-encoding", "page", "cursor", "max-input-bytes", "max-output-bytes", "max-body-bytes", "max-origins", "max-spans", "max-work", "max-page-bytes", "max-pages":
+	case "hydrated", "node", "relation", "sibling-relation", "sidecar-record", "sidecar", "include-bodies", "whole-file", "endpoint-context", "position-encoding", "page", "cursor", "max-input-bytes", "max-output-bytes", "max-body-bytes", "max-origins", "max-spans", "max-work", "max-page-bytes", "max-pages":
 		return true
 	}
 	return false

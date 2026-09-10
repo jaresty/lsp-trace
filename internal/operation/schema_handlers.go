@@ -3,11 +3,14 @@ package operation
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"lsp-trace/internal/boundedmetrics"
 	"lsp-trace/internal/boundedranking"
+	"lsp-trace/internal/retainedrelations"
 	"lsp-trace/internal/schema"
+	"lsp-trace/internal/v5sourcesnapshot"
 )
 
 // ValidationResult identifies the schema version admitted by validation.
@@ -55,13 +58,26 @@ func ValidateHandler(_ context.Context, request Request) (Result, *Failure) {
 	}
 	// New-family inline text preserves exact artifact bytes through transports
 	// which historically decode object arguments into maps. It is never a path.
-	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls || family == schema.FamilyBoundedAnalysis || family == boundedmetrics.Family || family == boundedranking.Family || family == schema.FamilyBoundedGraphV2 || family == schema.FamilyBoundedAnalysisV2 || family == schema.FamilyBoundedMetricsV2 || family == schema.FamilyBoundedRankingV2 {
+	if family == schema.FamilyOperationalCustody || family == schema.FamilyGraphProvenance || family == schema.FamilyRetainedCalls || family == schema.FamilyRetainedRelations || family == schema.FamilyGraphV5SourceSnapshot || family == schema.FamilyBoundedAnalysis || family == boundedmetrics.Family || family == boundedranking.Family || family == schema.FamilyBoundedGraphV2 || family == schema.FamilyBoundedAnalysisV2 || family == schema.FamilyBoundedMetricsV2 || family == schema.FamilyBoundedRankingV2 {
 		var text string
 		if json.Unmarshal(input.Input, &text) == nil {
 			input.Input = []byte(text)
 		}
 	}
-	detected, err := boundedranking.ValidateFor(input.Input, family, version)
+	var detected string
+	var err error
+	switch family {
+	case schema.FamilyRetainedRelations:
+		detected, err = retainedrelations.ValidateFor(input.Input, family, version)
+	case schema.FamilyGraphV5SourceSnapshot:
+		if version != "v1" && version != v5sourcesnapshot.Version {
+			err = fmt.Errorf("unsupported schema version %q for family %q", version, family)
+		} else {
+			detected, err = v5sourcesnapshot.Validate(input.Input)
+		}
+	default:
+		detected, err = boundedranking.ValidateFor(input.Input, family, version)
+	}
 	if err != nil {
 		code := "INPUT_INVALID"
 		if strings.HasPrefix(err.Error(), "unsupported schema family ") || strings.HasPrefix(err.Error(), "unsupported schema version ") || strings.HasPrefix(err.Error(), "schema version mismatch:") {

@@ -15,10 +15,10 @@ func CheckFocusRequest(f FocusRequest) error {
 	if f.PositionEncoding != "" && f.PositionEncoding != "utf-8" && f.PositionEncoding != "utf-16" && f.PositionEncoding != "utf-32" {
 		return errors.New("unsupported position encoding")
 	}
-	if len(f.NodeIDs)+len(f.RelationIDs)+len(f.SidecarRecordIDs) > f.CorePolicy.MaxOrigins {
+	if len(f.NodeIDs)+len(f.RelationIDs)+len(f.SiblingRelationIDs)+len(f.SidecarRecordIDs) > f.CorePolicy.MaxOrigins {
 		return errors.New("focused origin input budget")
 	}
-	for _, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SidecarRecordIDs} {
+	for _, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SiblingRelationIDs, f.SidecarRecordIDs} {
 		for _, id := range ids {
 			if len(id) > 1024 {
 				return errors.New("focused ID byte budget")

@@ -12,6 +12,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/retainedcalls"
+	"lsp-trace/internal/retainedrelations"
 )
 
 func admitRetainedCallsVersion(version string) func([]byte) error {
@@ -25,9 +26,9 @@ func runRetainedCalls(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 	fs := flag.NewFlagSet("export-retained-calls", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	output := fs.String("output", "", "immutable generation selector (no replace)")
-	version := fs.String("version", "v1", "retained contract version: v1 or v2")
-	if fs.Parse(args) != nil || fs.NArg() != 1 || (*version != "v1" && *version != "v2") {
-		fmt.Fprintln(stderr, "usage: lsp-trace export-retained-calls [--version v1|v2] [--output SELECTOR] PATH|-")
+	version := fs.String("version", "v1", "retained contract version: v1, v2, or v3")
+	if fs.Parse(args) != nil || fs.NArg() != 1 || (*version != "v1" && *version != "v2" && *version != "v3") {
+		fmt.Fprintln(stderr, "usage: lsp-trace export-retained-calls [--version v1|v2|v3] [--output SELECTOR] PATH|-")
 		return 1
 	}
 	reader := stdin
@@ -52,6 +53,8 @@ func runRetainedCalls(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 	var artifact []byte
 	if *version == "v2" {
 		artifact, err = retainedcalls.ExportV2(raw)
+	} else if *version == "v3" {
+		artifact, err = retainedrelations.Export(raw)
 	} else {
 		// Keep the historical v1 operation request byte-for-byte unchanged.
 		input, _ := json.Marshal(map[string]any{"input": string(raw)})
@@ -69,10 +72,18 @@ func runRetainedCalls(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 		artifact = result.Artifact
 	}
 	if err == nil {
-		_, err = retainedcalls.ValidateFor(artifact, retainedcalls.Family, *version)
+		if *version == "v3" {
+			_, err = retainedrelations.Validate(artifact)
+		} else {
+			_, err = retainedcalls.ValidateFor(artifact, retainedcalls.Family, *version)
+		}
+	}
+	admit := admitRetainedCallsVersion(*version)
+	if *version == "v3" {
+		admit = func(raw []byte) error { _, err := retainedrelations.Validate(raw); return err }
 	}
 	if *output != "" && err == nil {
-		err = publishValidatedBundle(*output, artifact, admitRetainedCallsVersion(*version))
+		err = publishValidatedBundle(*output, artifact, admit)
 	} else if err == nil {
 		_, err = stdout.Write(artifact)
 	}

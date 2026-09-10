@@ -21,6 +21,8 @@ const (
 	FamilyOperationalCustody       = "operational-custody"
 	FamilyGraphProvenance          = "graph-provenance"
 	FamilyRetainedCalls            = "retained-calls"
+	FamilyRetainedRelations        = "retained-relations"
+	FamilyGraphV5SourceSnapshot    = "graph-v5-source-snapshot"
 	FamilyBoundedAnalysis          = "bounded-retained-analysis"
 	FamilyBoundedMetrics           = "bounded-retained-metrics"
 	FamilyBoundedRanking           = "bounded-retained-ranking"
@@ -42,6 +44,8 @@ var familyVersions = map[string]map[string]string{
 	FamilyOperationalCustody:       {"v1": "lsp-trace.operational-custody.v1"},
 	FamilyGraphProvenance:          {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v5": "lsp-trace.graph-provenance.v5"},
 	FamilyRetainedCalls:            {"v1": "lsp-trace.retained-calls.v1", "v2": "lsp-trace.retained-calls.v2"},
+	FamilyRetainedRelations:        {"v1": "lsp-trace.retained-relations.v1"},
+	FamilyGraphV5SourceSnapshot:    {"v1": "lsp-trace.graph-v5-source-snapshot.v1"},
 	FamilyBoundedAnalysis:          {"v1": "lsp-trace.bounded-retained-analysis.v1"},
 	FamilyBoundedMetrics:           {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 	FamilyBoundedRanking:           {"v1": "lsp-trace.bounded-retained-ranking.v1"},
@@ -61,6 +65,8 @@ var versionFields = map[string]string{
 	FamilyOperationalCustody:       "schema_version",
 	FamilyGraphProvenance:          "schema_version",
 	FamilyRetainedCalls:            "schema_version",
+	FamilyRetainedRelations:        "schema_version",
+	FamilyGraphV5SourceSnapshot:    "schema_version",
 	FamilyBoundedAnalysis:          "schema_version",
 	FamilyBoundedMetrics:           "schema_version",
 	FamilyBoundedRanking:           "schema_version",

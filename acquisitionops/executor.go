@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
+	"lsp-trace/internal/v5sourcesnapshot"
 	"lsp-trace/sessionruntime"
 )
 
@@ -203,7 +204,8 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if err := decode(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	wantsV5 := in.OutputVersion == graphprovenance.VersionV5
+	wantsSnapshot := in.OutputVersion == v5sourcesnapshot.Version
+	wantsV5 := in.OutputVersion == graphprovenance.VersionV5 || wantsSnapshot
 	if in.OutputVersion != "" && !wantsV5 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported output_version %q", in.OutputVersion))
 	}
@@ -364,6 +366,9 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 				return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
 			}
 			raw, err = graphprovenance.CaptureV5(native, id, generation, query)
+			if err == nil && wantsSnapshot {
+				raw, err = v5sourcesnapshot.Build(raw, workspace, metadata.PositionEncoding)
+			}
 		} else {
 			raw, err = graphprovenance.CaptureV3(raw, id, generation, query)
 		}

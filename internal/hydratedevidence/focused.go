@@ -1,25 +1,28 @@
 package hydratedevidence
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/v5sourcesnapshot"
 )
 
 // FocusRequest selects native graph identities, not names or catalog prefixes.
 // CorePolicy limits remain mandatory; IncludeBodies here controls body release.
 type FocusRequest struct {
-	NodeIDs          []string `json:"node_ids"`
-	RelationIDs      []string `json:"relation_ids"`
-	SidecarRecordIDs []string `json:"sidecar_record_ids"`
-	IncludeBodies    bool     `json:"include_bodies"`
-	WholeFile        bool     `json:"whole_file"`
-	EndpointContext  bool     `json:"endpoint_context"`
-	PositionEncoding string   `json:"position_encoding"`
-	CorePolicy       Policy   `json:"core_policy"`
+	NodeIDs            []string `json:"node_ids"`
+	RelationIDs        []string `json:"relation_ids"`
+	SiblingRelationIDs []string `json:"sibling_relation_ids"`
+	SidecarRecordIDs   []string `json:"sidecar_record_ids"`
+	IncludeBodies      bool     `json:"include_bodies"`
+	WholeFile          bool     `json:"whole_file"`
+	EndpointContext    bool     `json:"endpoint_context"`
+	PositionEncoding   string   `json:"position_encoding"`
+	CorePolicy         Policy   `json:"core_policy"`
 }
 
 func DefaultFocusRequest() FocusRequest { return FocusRequest{CorePolicy: DefaultPolicy()} }
@@ -76,6 +79,27 @@ type focusGraph struct {
 		Callee    string            `json:"callee_node_id"`
 		CallSites []json.RawMessage `json:"call_sites"`
 	} `json:"edges"`
+	SiblingCandidates []struct {
+		ID     string `json:"relation_id"`
+		Origin struct {
+			ID             string          `json:"id"`
+			URI            string          `json:"uri"`
+			Range          json.RawMessage `json:"range"`
+			SelectionRange json.RawMessage `json:"selection_range"`
+		} `json:"origin"`
+		Declaration struct {
+			ID             string          `json:"id"`
+			URI            string          `json:"uri"`
+			Range          json.RawMessage `json:"range"`
+			SelectionRange json.RawMessage `json:"selection_range"`
+		} `json:"document_symbol"`
+		Candidate struct {
+			ID             string          `json:"id"`
+			URI            string          `json:"uri"`
+			Range          json.RawMessage `json:"range"`
+			SelectionRange json.RawMessage `json:"selection_range"`
+		} `json:"candidate"`
+	} `json:"sibling_candidates"`
 }
 
 // focusPlan re-admits original input and derives every expected carrier from
@@ -89,14 +113,14 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 	if err := checkPolicy(p); err != nil {
 		return fail(err)
 	}
-	if len(f.NodeIDs)+len(f.RelationIDs)+len(f.SidecarRecordIDs) > p.MaxOrigins {
+	if len(f.NodeIDs)+len(f.RelationIDs)+len(f.SiblingRelationIDs)+len(f.SidecarRecordIDs) > p.MaxOrigins {
 		return fail(errors.New("focused origin input budget"))
 	}
 	raw, err := json.Marshal(f)
 	if err != nil || len(raw) > 4<<20 {
 		return fail(errors.New("focused selection byte budget"))
 	}
-	for _, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SidecarRecordIDs} {
+	for _, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SiblingRelationIDs, f.SidecarRecordIDs} {
 		for _, id := range ids {
 			if len(id) > 1024 {
 				return fail(errors.New("focused ID byte budget"))
@@ -114,13 +138,29 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 	if err = json.Unmarshal(input.Artifact, &env); err != nil {
 		return fail(err)
 	}
-	var g focusGraph
-	if err = json.Unmarshal(env.GraphBytes, &g); err != nil {
-		return fail(err)
-	}
+	graphBytes := env.GraphBytes
 	prefix := ""
 	if env.SchemaVersion == graphprovenance.VersionV2 {
 		prefix = "/graph"
+	}
+	if env.SchemaVersion == v5sourcesnapshot.Version {
+		var snapshot v5sourcesnapshot.Artifact
+		var v5 graphprovenance.EvidenceV5
+		if err = json.Unmarshal(input.Artifact, &snapshot); err != nil {
+			return fail(err)
+		}
+		if err = json.Unmarshal(snapshot.GraphV5Bytes, &v5); err != nil {
+			return fail(err)
+		}
+		graphBytes, err = base64.StdEncoding.DecodeString(v5.GraphV5)
+		if err != nil {
+			return fail(err)
+		}
+		prefix = "/graph"
+	}
+	var g focusGraph
+	if err = json.Unmarshal(graphBytes, &g); err != nil {
+		return fail(err)
 	}
 	assertedRecords := map[string]bool{}
 	for _, raw := range input.Sidecars {
@@ -134,11 +174,15 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 	}
 	nodes := map[string][]int{}
 	edges := map[string][]int{}
+	siblings := map[string][]int{}
 	for i, n := range g.Nodes {
 		nodes[n.ID] = append(nodes[n.ID], i)
 	}
 	for i, e := range g.Edges {
 		edges[e.ID] = append(edges[e.ID], i)
+	}
+	for i, sibling := range g.SiblingCandidates {
+		siblings[sibling.ID] = append(siblings[sibling.ID], i)
 	}
 	m = FocusManifest{InputDigests: a.InputDigests, SelectionDigest: valueDigest(f), DuplicatePolicy: "PRESERVE_OCCURRENCES", ReceiptPolicy: "ALL_EXACT_BOUND_RECEIPTS", NodePolicy: "RETAINED_NODE_RANGE", Origins: []FocusOrigin{}}
 	for _, rec := range a.Records {
@@ -176,6 +220,8 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 			identityOK := rec.NativeID == site.NodeID
 			if site.Role == "CALL_SITE" {
 				identityOK = includes(rec.RelationshipReferences, site.RelationID)
+			} else if site.RelationID != "" {
+				identityOK = identityOK && includes(rec.RelationshipReferences, site.RelationID)
 			}
 			if rec.Authority != Native || rec.Pointer != site.Pointer || !identityOK {
 				planErr = errors.New("focused native binding identity mismatch")
@@ -236,9 +282,9 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 		ptr := fmt.Sprintf("%s/nodes/%d/range", prefix, i)
 		add(o, FocusSite{Role: role, Pointer: ptr, RecordID: "native:" + ptr, NodeID: n.ID, URI: n.URI}, n.Range, false)
 	}
-	for kind, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SidecarRecordIDs} {
+	for kind, ids := range [][]string{f.NodeIDs, f.RelationIDs, f.SiblingRelationIDs, f.SidecarRecordIDs} {
 		for _, id := range ids {
-			o := FocusOrigin{Ordinal: len(m.Origins), Kind: []string{"NODE", "RELATION", "SIDECAR_RECORD"}[kind], RequestedID: id, Status: "UNKNOWN_ID", Sites: []FocusSite{}}
+			o := FocusOrigin{Ordinal: len(m.Origins), Kind: []string{"NODE", "RELATION", "SIBLING_RELATION", "SIDECAR_RECORD"}[kind], RequestedID: id, Status: "UNKNOWN_ID", Sites: []FocusSite{}}
 			switch kind {
 			case 0:
 				if len(nodes[id]) > 1 {
@@ -274,6 +320,26 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 					}
 				}
 			case 2:
+				if len(siblings[id]) > 1 {
+					o.Status = "AMBIGUOUS_ID"
+				} else if len(siblings[id]) == 1 {
+					i := siblings[id]
+					sibling := g.SiblingCandidates[i[0]]
+					o.Status = "MAPPED"
+					for _, endpoint := range []struct {
+						name, role, nodeID, uri          string
+						declarationRange, selectionRange json.RawMessage
+					}{{"origin", "ORIGIN", sibling.Origin.ID, sibling.Origin.URI, sibling.Origin.Range, sibling.Origin.SelectionRange}, {"document_symbol", "DECLARATION", sibling.Declaration.ID, sibling.Declaration.URI, sibling.Declaration.Range, sibling.Declaration.SelectionRange}, {"candidate", "PREPARED", sibling.Candidate.ID, sibling.Candidate.URI, sibling.Candidate.Range, sibling.Candidate.SelectionRange}} {
+						for _, site := range []struct {
+							field, role string
+							rg          json.RawMessage
+						}{{"range", endpoint.role + "_DECLARATION_RANGE", endpoint.declarationRange}, {"selection_range", endpoint.role + "_SELECTION_RANGE", endpoint.selectionRange}} {
+							ptr := fmt.Sprintf("%s/sibling_candidates/%d/%s/%s", prefix, i[0], endpoint.name, site.field)
+							add(&o, FocusSite{Role: site.role, Pointer: ptr, RecordID: "native:" + ptr, NodeID: endpoint.nodeID, RelationID: sibling.ID, URI: endpoint.uri}, site.rg, false)
+						}
+					}
+				}
+			case 3:
 				if rec, ok := a.recordMap[id]; ok {
 					// Only the existing sidecar record contract is admitted here. Receipt
 					// handles and native catalog pointers are not sidecar record selectors.
@@ -354,13 +420,30 @@ func auditNativeFocus(input Input, f FocusRequest, result FocusResult) error {
 	if e := json.Unmarshal(input.Artifact, &env); e != nil {
 		return e
 	}
-	var g focusGraph
-	if e := json.Unmarshal(env.GraphBytes, &g); e != nil {
-		return e
-	}
+	graphBytes := env.GraphBytes
 	prefix := ""
 	if env.SchemaVersion == graphprovenance.VersionV2 {
 		prefix = "/graph"
+	}
+	if env.SchemaVersion == v5sourcesnapshot.Version {
+		var snapshot v5sourcesnapshot.Artifact
+		var v5 graphprovenance.EvidenceV5
+		if e := json.Unmarshal(input.Artifact, &snapshot); e != nil {
+			return e
+		}
+		if e := json.Unmarshal(snapshot.GraphV5Bytes, &v5); e != nil {
+			return e
+		}
+		var e error
+		graphBytes, e = base64.StdEncoding.DecodeString(v5.GraphV5)
+		if e != nil {
+			return e
+		}
+		prefix = "/graph"
+	}
+	var g focusGraph
+	if e := json.Unmarshal(graphBytes, &g); e != nil {
+		return e
 	}
 	a, e := admit(input, result.Request.Policy)
 	if e != nil {
@@ -464,6 +547,41 @@ func auditNativeFocus(input Input, f FocusRequest, result FocusResult) error {
 							}
 						}
 					}
+				}
+			}
+		}
+		if found == 0 && (o.Status != "UNKNOWN_ID" || len(o.Sites) != 0) {
+			return bad()
+		}
+	}
+	for _, id := range f.SiblingRelationIDs {
+		if ordinal >= len(result.Manifest.Origins) {
+			return bad()
+		}
+		o := result.Manifest.Origins[ordinal]
+		ordinal++
+		if o.RequestedID != id || o.Kind != "SIBLING_RELATION" {
+			return bad()
+		}
+		found := 0
+		for i, sibling := range g.SiblingCandidates {
+			if sibling.ID != id {
+				continue
+			}
+			found++
+			if len(o.Sites) != 6 {
+				return bad()
+			}
+			siteIndex := 0
+			for _, endpoint := range []struct {
+				name, role, nodeID, uri string
+			}{{"origin", "ORIGIN", sibling.Origin.ID, sibling.Origin.URI}, {"document_symbol", "DECLARATION", sibling.Declaration.ID, sibling.Declaration.URI}, {"candidate", "PREPARED", sibling.Candidate.ID, sibling.Candidate.URI}} {
+				for _, rangeRow := range []struct{ field, role string }{{"range", endpoint.role + "_DECLARATION_RANGE"}, {"selection_range", endpoint.role + "_SELECTION_RANGE"}} {
+					pointer := fmt.Sprintf("%s/sibling_candidates/%d/%s/%s", prefix, i, endpoint.name, rangeRow.field)
+					if !check(o.Sites[siteIndex], pointer, rangeRow.role, endpoint.nodeID, id, endpoint.uri) {
+						return bad()
+					}
+					siteIndex++
 				}
 			}
 		}

@@ -6,14 +6,14 @@
       "language_id": "go",
       "profile": {
         "trust_domain": "local-development",
-        "workspace": "/absolute/path/to/workspace",
+        "workspace": "./workspace",
         "profile": "gopls",
         "environment_reference": "developer"
       },
       "execution": {
-        "path": "/absolute/path/to/gopls",
+        "path": "./bin/gopls",
         "arguments": [],
-        "directory": "/absolute/path/to/workspace"
+        "directory": "./workspace"
       }
     },
     {
@@ -21,19 +21,19 @@
       "language_id": "csharp",
       "profile": {
         "trust_domain": "local-development",
-        "workspace": "/absolute/path/to/csharp/workspace",
+        "workspace": "./csharp-workspace",
         "profile": "csharp-ls",
         "environment_reference": "developer"
       },
       "execution": {
-        "path": "/absolute/path/to/csharp-ls",
+        "path": "./bin/csharp-ls",
         "arguments": [
           "--features",
           "razor-support",
           "--solution",
           "Project.sln"
         ],
-        "directory": "/absolute/path/to/csharp/workspace"
+        "directory": "./csharp-workspace"
       }
     }
   ]

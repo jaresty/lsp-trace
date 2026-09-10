@@ -17,13 +17,17 @@ No existing graph/provenance schema, identity, or artifact bytes are rewritten.
 |---|---|---|---|
 | `lsp-trace.graph-provenance.v1` | Existing `graphprovenance.ValidateFor`, v1 | Existing validated bindings, supply and capture receipts | Native retained attribution; integrity only; analyzed version unverified |
 | `lsp-trace.graph-provenance.v2` | Existing `graphprovenance.ValidateFor`, v2 | Existing graph/acquisition binding pointers, supplies and captures | Same ceiling; exact typed acquisition coordinate encoding retained |
+| `lsp-trace.graph-v5-source-snapshot.v1` | Closed schema plus exact-V5, native-receipt, and deterministic binding replay | Exact embedded V5 sibling identities joined to independently self-verifying bounded workspace source receipts | Retained-byte consistency only; no authenticated analyzed-source identity; siblings contribute zero CALLS support |
 | `lsp-trace.hydrated-sidecar.v1` | Owned explicit sidecar contract, bound to exact main artifact digest | Explicit asserted source receipts and source references | `CALLER_ASSERTED` / `NON_AUTHORITATIVE` only |
 | Any other main or sidecar family/version | Explicit error | None | No implicit conversion or dropped contribution |
 
 No dependency on retained-calls v2 or its pending review is introduced. Standalone
 retained-calls exports, operational custody envelopes and provider packages are
-not admitted by this increment. A provider's name or arbitrary opaque JSON does
-not establish a source-anchor contract. No new provider source API is assumed.
+not admitted by this increment. Raw Graph Provenance V5 remains structural and is
+not silently treated as source-bearing; sibling hydration requires the separately
+selected digest-bound source-snapshot carrier. A provider's name or arbitrary
+opaque JSON does not establish a source-anchor contract. No new provider source
+API is assumed.
 
 Sidecars can accompany an admitted native artifact and refer to its native
 receipt IDs, or retain their own asserted bytes/references. They cannot serve as
@@ -257,9 +261,10 @@ not their public CLI/MCP surfaces or full AC17 qualification:
 ```go
 focus := hydratedevidence.DefaultFocusRequest()
 focus.NodeIDs = []string{/* exact native graph node IDs */}
-focus.RelationIDs = []string{/* exact native graph edge relation IDs */}
+focus.RelationIDs = []string{/* exact native CALLS edge relation IDs */}
+focus.SiblingRelationIDs = []string{/* exact native V5 sibling relation IDs */}
 focus.SidecarRecordIDs = []string{/* exact admitted sidecar catalog record IDs */}
-// All three default false; each is an independent explicit choice.
+// All three policy booleans default false; each is an independent explicit choice.
 focus.IncludeBodies = true
 focus.WholeFile = false
 focus.EndpointContext = false
@@ -286,10 +291,16 @@ Selection policy is deliberately narrow and recorded in the manifest:
 - A native `edges[i].relation_id` selects **every** `edges[i]/call_sites[j]` with
   the exact caller node's URI and retained range. Endpoint declaration ranges
   are added only with `EndpointContext`. No acquisition bookkeeping is mined.
+- A native Graph V5 sibling `relation_id` is selected only through
+  `SiblingRelationIDs` (MCP `sibling_relation_ids`, CLI `--sibling-relation`). It
+  expands to six separately identified sites: origin, document-symbol declaration,
+  and prepared candidate, each with declaration and selection range. Every site
+  must match its endpoint node ID, enclosing sibling relation ID, exact URI, range,
+  source digest, and retained receipt IDs. It never enters the CALLS edge map.
 - `ALL_EXACT_BOUND_RECEIPTS`: all receipt IDs bound to each selected carrier are
   included in sorted source-ID order, including distinct supply and post-capture
   receipts at the same URI. This is not a latest/analyzed-version decision.
-- `PRESERVE_OCCURRENCES`: input order is node IDs, relation IDs, then sidecar IDs;
+- `PRESERVE_OCCURRENCES`: input order is node IDs, CALLS relation IDs, sibling relation IDs, then sidecar IDs;
   order and duplicate occurrences within each list are preserved. Generated core
   origin IDs distinguish each occurrence/site/receipt. Empty IDs remain unknown.
 - Only actual records in an admitted `hydrated-sidecar.v1` envelope are accepted

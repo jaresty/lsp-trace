@@ -13,12 +13,14 @@ import (
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/hydratedinspection"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
+	"lsp-trace/internal/v5sourcesnapshot"
 	"lsp-trace/sessionruntime"
 	"net/url"
 	"os"
@@ -299,6 +301,132 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	if parityFailure != nil || !bytes.Equal(got.Artifact, parity.Artifact) {
 		t.Fatalf("ASSERT_MANAGED_V5_EXACT_ROUTE_BYTES_PARITY: failure=%v equal=%v", parityFailure, bytes.Equal(got.Artifact, parity.Artifact))
 	}
+
+	snapshotInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: v5sourcesnapshot.Version})
+	snapshotRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	snapshotResult, snapshotFailure := NewExecutor(snapshotRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: snapshotInput})
+	if snapshotFailure != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_SUCCESS: %v", snapshotFailure)
+	}
+	if _, err := v5sourcesnapshot.Validate(snapshotResult.Artifact); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_VALID: %v", err)
+	}
+	for _, mutation := range []struct {
+		name  string
+		apply func(map[string]any)
+	}{
+		{"v5-parent-digest", func(doc map[string]any) { doc["graph_v5_digest"] = "sha256:" + strings.Repeat("0", 64) }},
+		{"receipt-content", func(doc map[string]any) { doc["receipts"].([]any)[0].(map[string]any)["content"] = "bXV0YXRlZA==" }},
+		{"receipt-digest", func(doc map[string]any) {
+			doc["receipts"].([]any)[0].(map[string]any)["content_digest"] = "sha256:" + strings.Repeat("0", 64)
+		}},
+		{"receipt-id", func(doc map[string]any) {
+			doc["receipts"].([]any)[0].(map[string]any)["id"] = "sha256:" + strings.Repeat("0", 64)
+		}},
+		{"missing-receipt", func(doc map[string]any) { doc["receipts"] = []any{} }},
+		{"duplicate-receipt", func(doc map[string]any) {
+			doc["receipts"] = append(doc["receipts"].([]any), doc["receipts"].([]any)[0])
+		}},
+		{"binding-source-digest", func(doc map[string]any) {
+			doc["bindings"].([]any)[0].(map[string]any)["source_digest"] = "sha256:" + strings.Repeat("0", 64)
+		}},
+		{"binding-receipt-id", func(doc map[string]any) {
+			doc["bindings"].([]any)[0].(map[string]any)["receipt_ids"] = []any{"sha256:" + strings.Repeat("0", 64)}
+		}},
+		{"binding-identity", func(doc map[string]any) { doc["bindings"].([]any)[0].(map[string]any)["node_id"] = "wrong" }},
+	} {
+		t.Run("source-snapshot-rejects-"+mutation.name, func(t *testing.T) {
+			var doc map[string]any
+			if err := json.Unmarshal(snapshotResult.Artifact, &doc); err != nil {
+				t.Fatal(err)
+			}
+			mutation.apply(doc)
+			bad, _ := json.Marshal(doc)
+			if _, err := v5sourcesnapshot.Validate(bad); err == nil {
+				t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_MUTATION_REJECTED")
+			}
+		})
+	}
+	if _, err := v5sourcesnapshot.Validate(append(append([]byte{}, snapshotResult.Artifact...), []byte(`{}`)...)); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_TRAILING_JSON_REJECTED")
+	}
+	duplicate := bytes.Replace(snapshotResult.Artifact, []byte(`{"schema_version":`), []byte(`{"schema_version":"duplicate","schema_version":`), 1)
+	if _, err := v5sourcesnapshot.Validate(duplicate); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_DUPLICATE_JSON_REJECTED")
+	}
+	var snapshot v5sourcesnapshot.Artifact
+	if err := json.Unmarshal(snapshotResult.Artifact, &snapshot); err != nil || len(snapshot.Bindings) != 6 {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_SIX_EXACT_ENDPOINT_RANGES: bindings=%d err=%v", len(snapshot.Bindings), err)
+	}
+	for _, binding := range snapshot.Bindings {
+		if binding.Status != "RETAINED_BYTES" || len(binding.ReceiptIDs) != 1 {
+			t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_RETAINED_BYTES: %+v", binding)
+		}
+	}
+	replayRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	replayResult, replayFailure := NewExecutor(replayRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: snapshotInput})
+	if replayFailure != nil || !bytes.Equal(snapshotResult.Artifact, replayResult.Artifact) {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_DETERMINISTIC_REPLAY: failure=%v equal=%v", replayFailure, bytes.Equal(snapshotResult.Artifact, replayResult.Artifact))
+	}
+	inspect := hydratedinspection.DefaultRequest()
+	inspect.Input = string(snapshotResult.Artifact)
+	inspect.SiblingRelationIDs = []string{sibling.RelationID}
+	inspect.IncludeBodies = true
+	view, err := hydratedinspection.Inspect(inspect)
+	if err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_HYDRATES: %v", err)
+	}
+	if len(view.Manifest.Origins) != 1 || view.Manifest.Origins[0].Kind != "SIBLING_RELATION" || len(view.Manifest.Origins[0].Sites) != 6 {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_SIX_HYDRATED_SITES: %+v", view.Manifest.Origins)
+	}
+	seenNode := map[string]bool{}
+	for _, site := range view.Manifest.Origins[0].Sites {
+		if site.Status != "MAPPED" || site.RelationID != sibling.RelationID || len(site.SourceIDs) == 0 || len(site.OriginIDs) == 0 {
+			t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_EXACT_SITE: %+v", site)
+		}
+		seenNode[site.NodeID] = true
+	}
+	if len(seenNode) != 3 {
+		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_DISTINCT_IDENTITIES: %v", seenNode)
+	}
+
+	sourcePath := filepath.Join(root, "a.go")
+	originalSource, err := os.ReadFile(sourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v5sourcesnapshot.Build(snapshot.GraphV5Bytes, root, snapshot.PositionEncoding); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_MISSING_SOURCE_REJECTED")
+	}
+	if err := os.Mkdir(sourcePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v5sourcesnapshot.Build(snapshot.GraphV5Bytes, root, snapshot.PositionEncoding); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_NONREGULAR_SOURCE_REJECTED")
+	}
+	if err := os.Remove(sourcePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sourcePath, originalSource, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v5sourcesnapshot.Build(snapshot.GraphV5Bytes, root, snapshot.PositionEncoding); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_UNREADABLE_SOURCE_REJECTED")
+	}
+	if err := os.Chmod(sourcePath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(root, "inside")
+	if err := os.Mkdir(inside, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := v5sourcesnapshot.Build(snapshot.GraphV5Bytes, inside, snapshot.PositionEncoding); err == nil {
+		t.Fatal("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_OUTSIDE_WORKSPACE_REJECTED")
+	}
+
 	manifest.Expansion.TopmostSiblings = false
 	bad, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
 	before := runtime.queries

@@ -68,10 +68,12 @@ type bootstrapSession struct {
 }
 
 func loadBootstrapConfig(path string) (bootstrapConfig, error) {
-	if !filepath.IsAbs(path) {
-		return bootstrapConfig{}, fmt.Errorf("bootstrap config path must be absolute")
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return bootstrapConfig{}, fmt.Errorf("bootstrap config path: %w", err)
 	}
-	file, err := os.Open(path)
+	absolutePath = filepath.Clean(absolutePath)
+	file, err := os.Open(absolutePath)
 	if err != nil {
 		return bootstrapConfig{}, err
 	}
@@ -96,13 +98,32 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if config.Version != 1 || len(config.Processes)+len(config.Providers) == 0 {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process or provider")
 	}
-	for i, process := range config.Processes {
-		if !filepath.IsAbs(process.Execution.Path) || !filepath.IsAbs(process.Execution.Directory) {
-			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d execution path and directory must be absolute", i)
+	base := filepath.Dir(absolutePath)
+	resolve := func(value string) string {
+		if value == "" {
+			return ""
+		}
+		if filepath.IsAbs(value) {
+			return filepath.Clean(value)
+		}
+		return filepath.Clean(filepath.Join(base, value))
+	}
+	for i := range config.Processes {
+		process := &config.Processes[i]
+		process.Profile.Workspace = resolve(process.Profile.Workspace)
+		process.Execution.Path = resolve(process.Execution.Path)
+		process.Execution.Directory = resolve(process.Execution.Directory)
+		if process.Profile.Workspace == "." || process.Execution.Path == "." || process.Execution.Directory == "." {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d requires nonempty workspace, execution path and directory", i)
 		}
 		if strings.TrimSpace(process.LanguageID) != process.LanguageID {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d language_id is not canonical", i)
 		}
+	}
+	for i := range config.Providers {
+		provider := &config.Providers[i]
+		provider.Execution.Path = resolve(provider.Execution.Path)
+		provider.Execution.Directory = resolve(provider.Execution.Directory)
 	}
 	if err := validateBootstrapProviders(config); err != nil {
 		return bootstrapConfig{}, err

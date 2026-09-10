@@ -17,7 +17,7 @@ import (
 //go:embed testdata/stage1-manifest.v1.json
 //go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-incoming.v1.schema.json testdata/schemas/input-slice.v1.schema.json testdata/schemas/input-execute.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
 //go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-compact-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json testdata/schemas/envelope-execute-artifact.v1.schema.json testdata/schemas/envelope-execute-publication.v1.schema.json testdata/schemas/envelope-execute-publication-error.v1.schema.json testdata/schemas/envelope-execute-domain-error.v1.schema.json testdata/schemas/envelope-execute-gateway.v1.schema.json
-//go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
+//go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/input-export-retained-relations.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-ranking.v1.schema.json testdata/schemas/envelope-bounded-ranking-*.schema.json
@@ -151,7 +151,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))))).Schemas {
+	for _, registration := range WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -172,7 +172,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest))))))), schemaID)
+	compiled, err := compileSchema(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))), schemaID)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
-	manifest = WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedCalls(manifest)))))))
+	manifest = WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))
 	// Load the immutable resource set once, not once per envelope. Every
 	// envelope is still compiled and checked for exhaustive exclusivity.
 	compiler, _, err := registeredCompiler(manifest)

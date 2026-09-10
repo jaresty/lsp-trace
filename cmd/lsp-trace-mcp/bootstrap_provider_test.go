@@ -75,21 +75,22 @@ func TestBootstrapProviderDeclarationRejectsUnknownNestedField(t *testing.T) {
 	}
 }
 
-func TestBootstrapProviderDeclarationRejectsRelativePathsAndHostLimitOverflow(t *testing.T) {
-	const assertion = "ASSERT_BOOTSTRAP_PROVIDER_DECLARATION_ABSOLUTE_AND_HOST_BOUNDED"
+func TestBootstrapProviderDeclarationResolvesRelativePathsAndRejectsHostLimitOverflow(t *testing.T) {
+	const assertion = "ASSERT_BOOTSTRAP_PROVIDER_DECLARATION_CONFIG_BOUND_AND_HOST_BOUNDED"
 	t.Log("ASSERTION: " + assertion)
-	for name, tc := range map[string]struct {
-		body, want string
-	}{
-		"relative executable": {validBootstrapProviderJSON("provider", "/workspace"), "executable path must be absolute"},
-		"relative directory":  {validBootstrapProviderJSON("/provider", "workspace"), "working directory must be absolute"},
-		"limit overflow":      {strings.Replace(validBootstrapProviderJSON("/provider", "/workspace"), `"request_bytes": 1024`, `"request_bytes": 16777217`, 1), "within host maxima"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if _, err := loadBootstrapConfig(writeBootstrapProviderConfig(t, tc.body)); err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("%s: err=%v want=%q", assertion, err, tc.want)
-			}
-		})
+	path := writeBootstrapProviderConfig(t, validBootstrapProviderJSON("bin/provider", "workspace"))
+	config, err := loadBootstrapConfig(path)
+	if err != nil {
+		t.Fatalf("%s: relative paths rejected: %v", assertion, err)
+	}
+	base := filepath.Dir(path)
+	got := config.Providers[0].Execution
+	if got.Path != filepath.Join(base, "bin/provider") || got.Directory != filepath.Join(base, "workspace") {
+		t.Fatalf("%s: execution=%+v", assertion, got)
+	}
+	body := strings.Replace(validBootstrapProviderJSON("/provider", "/workspace"), `"request_bytes": 1024`, `"request_bytes": 16777217`, 1)
+	if _, err := loadBootstrapConfig(writeBootstrapProviderConfig(t, body)); err == nil || !strings.Contains(err.Error(), "within host maxima") {
+		t.Fatalf("%s: host limit err=%v", assertion, err)
 	}
 }
 

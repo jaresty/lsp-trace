@@ -97,10 +97,34 @@ func TestBootstrapConfigIsStrictAndHostOwned(t *testing.T) {
 			t.Fatalf("%s: err=%v", assertion, err)
 		}
 	})
-	t.Run("relative execution", func(t *testing.T) {
-		body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"server","directory":"/workspace"}}]}`
-		if _, err := loadBootstrapConfig(write(t, body)); err == nil || !strings.Contains(err.Error(), "must be absolute") {
+	t.Run("relative paths resolve from config directory", func(t *testing.T) {
+		body := `{"version":1,"processes":[{"profile":{"trust_domain":"test","workspace":"workspace","profile":"go","environment_reference":"local"},"execution":{"path":"bin/server","directory":"workspace"}}]}`
+		path := write(t, body)
+		config, err := loadBootstrapConfig(path)
+		if err != nil {
 			t.Fatalf("%s: err=%v", assertion, err)
+		}
+		base := filepath.Dir(path)
+		process := config.Processes[0]
+		if process.Profile.Workspace != filepath.Join(base, "workspace") || process.Execution.Directory != filepath.Join(base, "workspace") || process.Execution.Path != filepath.Join(base, "bin/server") {
+			t.Fatalf("ASSERT_BOOTSTRAP_RELATIVE_PATHS_CONFIG_BOUND: %+v", process)
+		}
+		local, err := os.CreateTemp(".", ".bootstrap-relative-*.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		localName := local.Name()
+		t.Cleanup(func() { _ = os.Remove(localName) })
+		if _, err = local.WriteString(body); err != nil {
+			t.Fatal(err)
+		}
+		if err = local.Close(); err != nil {
+			t.Fatal(err)
+		}
+		relativeConfig := filepath.Base(localName)
+		fromRelative, err := loadBootstrapConfig(relativeConfig)
+		if err != nil || !filepath.IsAbs(fromRelative.Processes[0].Execution.Path) {
+			t.Fatalf("ASSERT_BOOTSTRAP_RELATIVE_CONFIG_PATH: config=%+v err=%v", fromRelative, err)
 		}
 	})
 	t.Log("PASS " + assertion)

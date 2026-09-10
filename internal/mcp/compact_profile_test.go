@@ -65,7 +65,7 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if description["name"] != "lsp_trace_v3_slice" || description["advertised"] != false || description["dispatchable"] != true || description["invocation_route"] != "lsp_trace_v1_execute" {
 		t.Fatalf("ASSERT_COMPACT_HIDDEN_OPERATION_METADATA: %#v", description)
 	}
-	if description["input_schema"] == nil || description["input_schema_id"] == "" || description["graph_v5_production"] == nil {
+	if description["input_schema"] == nil || description["input_schema_id"] == "" || description["graph_v5_production"] == nil || description["graph_v5_source_snapshot"] == nil {
 		t.Fatalf("ASSERT_COMPACT_HIDDEN_V5_RECIPE: %#v", description)
 	}
 	alias, ok := r.DescribeOperation("lsp_trace_validate")
