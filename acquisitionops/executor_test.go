@@ -100,7 +100,9 @@ func (r *v3ParityRuntime) RoundTrip(_ context.Context, req sessionruntime.RoundT
 	if req.Method == "textDocument/prepareCallHierarchy" {
 		item := lsp.CallHierarchyItem{Name: "leaf", Kind: 12, URI: r.uri, Range: leafRange, SelectionRange: leafRange}
 		if bytes.Contains(req.Params, []byte(`"line":2`)) {
-			item = lsp.CallHierarchyItem{Name: "sibling", Kind: 12, URI: r.uri, Range: siblingRange, SelectionRange: siblingRange}
+			preparedRange := siblingRange
+			preparedRange.End.Character++
+			item = lsp.CallHierarchyItem{Name: "sibling", Kind: 12, URI: r.uri, Range: preparedRange, SelectionRange: siblingRange}
 		}
 		raw, _ := json.Marshal([]lsp.CallHierarchyItem{item})
 		return sessionruntime.RoundTripResult{Result: raw}
@@ -284,6 +286,10 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	decoded, err := graph.DecodeNativeV3(native)
 	if err != nil || len(decoded.SiblingCandidates) == 0 {
 		t.Fatalf("ASSERT_MANAGED_V5_NONEMPTY_EXACT_SIBLINGS: count=%d err=%v", len(decoded.SiblingCandidates), err)
+	}
+	sibling := decoded.SiblingCandidates[0]
+	if sibling.Declaration == nil || sibling.Declaration.ID == sibling.Candidate.ID {
+		t.Fatalf("ASSERT_MANAGED_V5_DISTINCT_DECLARATION_PREPARED_IDENTITY_SURVIVES_V3_CAPTURE: declaration=%v candidate=%q", sibling.Declaration, sibling.Candidate.ID)
 	}
 	if !slices.Contains(runtime.methods, "textDocument/documentSymbol") || !slices.Contains(runtime.methods, "textDocument/prepareCallHierarchy") {
 		t.Fatalf("ASSERT_MANAGED_V5_SHARED_INVOKE_REQUESTS_OBSERVED: %v", runtime.methods)

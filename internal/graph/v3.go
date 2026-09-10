@@ -327,6 +327,9 @@ func projectExecutionBundleRelations(schemaVersion, bundleID string, edges []Edg
 			siblings[i].RelationID = canonicalHistoricalSiblingRelationID(siblings[i])
 		}
 	}
+	if schemaVersion == SchemaVersionV5 {
+		sort.Slice(siblings, func(i, j int) bool { return siblings[i].RelationID < siblings[j].RelationID })
+	}
 	dispatches = append([]DispatchRelationship(nil), dispatches...)
 	for i := range dispatches {
 		dispatches[i].ExecutionBundleID = bundleID
