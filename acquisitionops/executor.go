@@ -304,7 +304,10 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
-	siblings := result.Graph.SiblingCandidates
+	siblings, err := cloneSiblingCandidatesForV5(result.Graph.SiblingCandidates)
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
+	}
 	carrierRaw, err := graphprovenance.CaptureV2(ctx, result, workspace)
 	if err != nil {
 		return fail("OUTPUT_VALIDATION_FAILED", err)
@@ -394,6 +397,18 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		opResult.CustodyReceipt = custodyReceipt
 	}
 	return opResult, nil
+}
+
+func cloneSiblingCandidatesForV5(source []graph.SiblingCandidate) ([]graph.SiblingCandidate, error) {
+	raw, err := json.Marshal(source)
+	if err != nil {
+		return nil, fmt.Errorf("clone sibling candidates for v5: marshal: %w", err)
+	}
+	var cloned []graph.SiblingCandidate
+	if err := json.Unmarshal(raw, &cloned); err != nil {
+		return nil, fmt.Errorf("clone sibling candidates for v5: decode: %w", err)
+	}
+	return cloned, nil
 }
 
 func cloneGraphForV5(source graph.Result) (graph.Result, error) {

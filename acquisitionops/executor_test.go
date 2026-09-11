@@ -117,6 +117,11 @@ func TestCloneGraphForV5DoesNotMutateFrozenV2Graph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	independentSiblings, err := cloneSiblingCandidatesForV5(source.SiblingCandidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloned.SiblingCandidates = independentSiblings
 	cloned.SiblingCandidates[0].SeedIdentity = "enriched"
 	cloned.SiblingCandidates[0].ProviderEvidence[0] = "enriched-provider"
 	after, err := json.Marshal(frozenCarrier)
