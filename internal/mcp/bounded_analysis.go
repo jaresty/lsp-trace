@@ -29,6 +29,8 @@ func preflightBoundedWire(raw []byte) error {
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
 	if name == "lsp_trace_v1_inspect_hydrated" {
+		// This bounds the whole JSON-RPC request. The public inline input value
+		// remains independently capped at 1 MiB by the registered input schema.
 		return boundedanalysis.Preflight(raw, 4*1024*1024)
 	}
 	if name == "lsp_trace_v2_slice" || name == "lsp_trace_v2_incoming" || name == "lsp_trace_v2_verify" || name == "lsp_trace_v3_slice" || name == "lsp_trace_v3_incoming" || ((name == "lsp_trace_v1_validate" || name == "lsp_trace_validate") && header.Params.Arguments.Schema.Family == "graph-provenance" && (header.Params.Arguments.Schema.Version == "v2" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v2" || header.Params.Arguments.Schema.Version == "v3" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v3" || header.Params.Arguments.Schema.Version == "v5" || header.Params.Arguments.Schema.Version == "lsp-trace.graph-provenance.v5")) {

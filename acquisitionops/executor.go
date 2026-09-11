@@ -81,6 +81,7 @@ type Input struct {
 	Generation    uint64   `json:"generation"`
 	SeedManifest  Manifest `json:"seed_manifest"`
 	OutputVersion string   `json:"output_version,omitempty"`
+	ProductionV5  bool     `json:"production_v5,omitempty"`
 }
 
 // DecodeManifest applies the same closed, bounded decoding used by MCP. It reads
@@ -203,6 +204,13 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	var in Input
 	if err := decode(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
+	}
+	if in.ProductionV5 {
+		if in.OutputVersion != "" && in.OutputVersion != graphprovenance.VersionV5 {
+			return fail(operation.FailureInvalidInput, fmt.Errorf("production_v5 conflicts with output_version %q", in.OutputVersion))
+		}
+		in.OutputVersion = graphprovenance.VersionV5
+		in.SeedManifest.Expansion.TopmostSiblings = true
 	}
 	wantsSnapshot := in.OutputVersion == v5sourcesnapshot.Version
 	wantsV5 := in.OutputVersion == graphprovenance.VersionV5 || wantsSnapshot

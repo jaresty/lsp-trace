@@ -564,7 +564,13 @@ func (r *Registry) Capabilities() map[string]any {
 	}
 	return map[string]any{
 		"serving_binary_version": version, "build_revision": revision,
-		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
+		"mcp_adapter_revision":                "lsp-trace-mcp.v1",
+		"supported_acquisition_versions":      []string{"v1", "v2", "v3"},
+		"supported_graph_provenance_versions": []string{"v1", "v2", "v3", "v5"},
+		"source_supply_retention_compiled":    true,
+		"max_inline_hydration_bytes":          uint64(inlineByteLimit),
+		"selector_support":                    false,
+		"capabilities_version":                "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"active_tool_profile": string(r.toolProfile), "advertised_tool_names": advertisedNames, "dispatchable_tool_names": dispatchableNames,
 		"tools": advertised, "selector_publication_supported": r.publicationSupported,
 		"operation_discovery": map[string]any{

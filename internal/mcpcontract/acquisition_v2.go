@@ -158,7 +158,7 @@ func acquisitionV2InputSchema() map[string]any {
 	}
 	expansion := object(map[string]any{"topmost_siblings": map[string]any{"type": "boolean"}})
 	manifest := object(map[string]any{"schema_version": map[string]any{"const": "lsp-trace.seed-manifest.v2"}, "coordinate_convention": map[string]any{"const": "zero-based-session"}, "root": target, "required_targets": map[string]any{"type": "array", "maxItems": 63, "items": target}, "limits": object(limits), "expansion": expansion}, "schema_version", "coordinate_convention", "root", "required_targets")
-	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "output_version": map[string]any{"enum": []string{"lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}}, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
+	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "output_version": map[string]any{"enum": []string{"lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}}, "production_v5": map[string]any{"type": "boolean"}, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
 	out["$id"] = AcquisitionV2InputID
 	out["$schema"] = "https://json-schema.org/draft/2020-12/schema"
 	return out
