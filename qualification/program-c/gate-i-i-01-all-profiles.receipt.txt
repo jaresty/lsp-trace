@@ -1,0 +1,18 @@
+gate_id: I-01
+result: PASS
+current: true
+repository_revision: 07b0b32ffe627be15ad3eab5c7753fee02526b71
+supersedes: qualification/program-c/gate-i-i-01-calls-v1.receipt.txt
+supersedes_sha256: sha256:a8f85578ff8e0417a48dee757a3d06f32101588d1a9b4e36a599441709495d73
+command: python3 scripts/check-program-c-profiles.py --root . --profiles qualification/program-c/projection-profiles.v1.json --matrix qualification/program-c/profile-qualification.tsv --require-profile all-qualified-v1
+policy_matrix: calls-v1@sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9; callback-flow-v1@sha256:2465dc8d224e71532966cd0c3b396b3c35f3b4ad5c64a7ed0915a472d773daca; state-flow-v1@sha256:5588cbf11b1ca62efcd339c6e3b0051814a724cbe4f706becd538a7926de5fd8; ui-lifecycle-v1@sha256:7fcd4d2ad0e0670b0e8aab117d45f0a181b629beda4f5ee895814fcffe430af3; qualification/program-c/profile-qualification.tsv@sha256:4adee0cc0bb561275dcdbe2d7698c667f1894545d47b11034801ed1ff29a534b
+tool: python3 scripts/check-program-c-profiles.py at repository revision 07b0b32ffe627be15ad3eab5c7753fee02526b71
+run_id: program-c-i-01-all-profiles-07b0b32
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/projection-profiles.v1.json; qualification/program-c/profile-qualification.tsv; qualification/program-c/calls-v1-csharp-csharp-ls-0.27.0.0.receipt.json; qualification/program-c/calls-v1-go-gopls-0.23.0.receipt.json; qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json; qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json; qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json
+input_sha256: sha256:705e82d770ffe94bf6bf981a443d08d47ccaf7ff08e306bcef6244b447de5240
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:ca583746faa1a282a4832b3f71ba8ad41db6a2e33fac53e5c15afcbf70071fcc
+coordinate_receipts: csharp=sha256:9f09091e4cd5510fe80dc0edcb4111ef640c064d6ed1f0999421a35fdfe9bd2c; go=sha256:36ff70993224c2c5a4534424896ace7462c3eed140d0b8903c255d6681853890; callback-flow=sha256:3cae12defcd6a3433721d635f916504a06d4c4a697d717f5e910bf2e251eab34; state-flow=sha256:731eceff4a94571644a7a23a734f2bbed2569f2eba9403e00f5b8b738bcf66f1; ui-lifecycle=sha256:e991f7c1245348c9685820b28a5f3e2449aaf4f2060728f820a3a6a5e890bda4
+outcomes: PASS=5 FAIL=0 BLOCKED=0
+claim_ceiling: I-01 qualifies only the five exact required coordinates and four profile digests named above; it is a reproducibility record, not production adoption, source completeness, authentication, or cross-coordinate transfer.
