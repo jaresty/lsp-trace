@@ -1,0 +1,2582 @@
+{
+  "schema": "lsp-trace.private.program-c.gonum-louvain.gate-ii-qualification.v1",
+  "result": "PASS",
+  "recommendation": "IMPLEMENTATION_CANDIDATE",
+  "repository": {
+    "dirty": false,
+    "revision": "8c99aefbd55f1cf589450602394d0968591026e3",
+    "status_porcelain_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "command": [
+    "/tmp/program-c-gonum-louvain-qualifier-8c99aef",
+    "-repo-root",
+    "/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4",
+    "-fixture-inventory",
+    "qualification/program-c/a-06-fixture-inventory.v1.json",
+    "-candidate",
+    "/tmp/program-c-gonum-louvain-8c99aef",
+    "-receipt",
+    "/tmp/candidate-qualification.louvain.8c99aef.receipt.json",
+    "-go-tool",
+    "/opt/homebrew/bin/go",
+    "-candidate-build-command",
+    "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-louvain build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-louvain-8c99aef ./cmd/candidate",
+    "-qualifier-build-command",
+    "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-louvain build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-louvain-qualifier-8c99aef ./cmd/qualify-gate-ii"
+  ],
+  "inputs": {
+    "internal/retainedcalls/testdata/frozen-v1-export.json": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011",
+    "qualification/program-c/a-06-fixture-inventory.v1.json": "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc",
+    "qualification/program-c/fixtures/adversarial-order.json": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+    "qualification/program-c/fixtures/disconnected-singleton.json": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+    "qualification/program-c/fixtures/high-degree-hub.json": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+    "qualification/program-c/fixtures/retained-calls-v1.json": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/gonum-leiden-69ca49f.LICENSE": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "qualification/program-c/i-03-candidate-inventory.v2.json": "sha256:cdf9d729cc548500ff8220580479e82010b7b405693cf61cef66069f4dc9e5ab",
+    "qualification/program-c/i-04-license-inputs.v2.json": "sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d",
+    "qualification/program-c/i-06-determinism-policy.v1.json": "sha256:5fb811b9a3286e719d97c7d9b99ccd6fa32f75f90200d8124fca1fff4d4eb333",
+    "qualification/program-c/i-07-resource-envelope.v1.json": "sha256:f9f28a10719a06417d74486508d0f830d457cb8389101a6d035eae60a9927e03",
+    "qualification/program-c/profile-qualification.tsv": "sha256:4adee0cc0bb561275dcdbe2d7698c667f1894545d47b11034801ed1ff29a534b",
+    "qualification/program-c/projection-profiles.v1.json": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8"
+  },
+  "fixture_inventory": {
+    "inventory_id": "program-c-gate-ii-final-qualification-v1",
+    "path": "qualification/program-c/a-06-fixture-inventory.v1.json",
+    "sha256": "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc"
+  },
+  "fixtures": [
+    {
+      "id": "retained-calls-v1",
+      "provenance": {
+        "kind": "DERIVED_FROM_EXACT_RETAINED_PRIVATE_PROGRAM_C_INPUT",
+        "source_path": "internal/retainedcalls/testdata/frozen-v1-export.json",
+        "source_sha256": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011",
+        "derivation": "All exact endpoint identities and only SERVER_REPORTED_CALL_HIERARCHY groups; edge weight is exact admitted occurrence count."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/retained-calls-v1.json",
+        "sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 2,
+      "directed_weighted_edge_count": 1,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted"
+      ]
+    },
+    {
+      "id": "disconnected-singleton",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "source_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "derivation": "Bounded private calls-v1 shape retained exactly to isolate disconnected components and a zero-degree singleton."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 5,
+      "directed_weighted_edge_count": 3,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "disconnected",
+        "singleton"
+      ]
+    },
+    {
+      "id": "high-degree-hub",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "source_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with one node incident to sixteen of seventeen directed weighted edges."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 10,
+      "directed_weighted_edge_count": 17,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "high-degree-hub"
+      ]
+    },
+    {
+      "id": "adversarial-order",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/adversarial-order.json",
+        "source_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with deliberately non-lexicographic node and edge byte order."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/adversarial-order.json",
+        "sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 4,
+      "directed_weighted_edge_count": 4,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "adversarial-input-order"
+      ]
+    }
+  ],
+  "candidate": {
+    "algorithm": "community.Modularize",
+    "executable": "/tmp/program-c-gonum-louvain-8c99aef",
+    "executable_sha256": "sha256:165000a0e0494a1604d0b8bcf09535e8964ba450df00a055923a28c48aba8258",
+    "module": "gonum.org/v1/gonum",
+    "module_sum": "h1:XKuoEMdKHiUPRL0QhxePqGI7Mb6r7+elIvbVqMpvmTI=",
+    "name": "Gonum Louvain",
+    "version": "v0.17.0"
+  },
+  "build": {
+    "candidate_command": "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-louvain build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-louvain-8c99aef ./cmd/candidate",
+    "go_tool": {
+      "path": "/opt/homebrew/bin/go",
+      "sha256": "sha256:3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0"
+    },
+    "qualifier_command": "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-louvain build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-louvain-qualifier-8c99aef ./cmd/qualify-gate-ii",
+    "required_flags": [
+      "-trimpath",
+      "-buildvcs=false",
+      "-ldflags=-buildid="
+    ]
+  },
+  "supervisor": {
+    "canonicalization_boundary": "external parent supervisor process",
+    "fail_closed": true,
+    "implementation": {
+      "path": "/tmp/program-c-gonum-louvain-qualifier-8c99aef",
+      "sha256": "sha256:a3117cc00a393f50b572ed0871f0a16ad4859ff8ba860e6ff7375ea81a5de733"
+    },
+    "poll_interval_milliseconds": 20,
+    "process_group": true,
+    "ps": {
+      "path": "/bin/ps",
+      "sha256": "sha256:472992c470606d28f577590decfecd7f4a20f832fd92c671bebc6d44790b5d02"
+    },
+    "rss_metric": "aggregate descendant RSS from /bin/ps -axo pid=,ppid=,rss="
+  },
+  "runtime": {
+    "go": "go1.26.5",
+    "goarch": "arm64",
+    "goos": "darwin"
+  },
+  "schedule": {
+    "base_repeats_per_fixture_seed": 3,
+    "deterministic_input_permutations_per_fixture_seed": 1,
+    "seed_inventory": [
+      1,
+      2
+    ]
+  },
+  "limits": {
+    "aggregate_process_tree_rss_bytes": 536870912,
+    "directed_weighted_edges": 100000,
+    "nodes": 10000,
+    "wall_seconds": 60
+  },
+  "counts": {
+    "completed_runs": 32,
+    "expected_runs": 32,
+    "failed_runs": 0,
+    "fixtures": 4,
+    "seeds": 2
+  },
+  "runs": [
+    {
+      "index": 0,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 254283583,
+          "peak_tree_rss_bytes": 4472832,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18293708,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 55848166,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 74112500,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 93680416,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 113515083,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 134620208,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 155565166,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 176527000,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 194206625,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 214390916,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 234466875,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 254282125,
+              "tree_rss_bytes": 4472832
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 1,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15519709,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15128750,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 2,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16643625,
+          "peak_tree_rss_bytes": 4751360,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16171750,
+              "tree_rss_bytes": 4751360
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 3,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:80ab9cadd59f90d4c87e768169d991e51b761b5e57bf72d89c16954d2ec5f5da",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15851708,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15425000,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 4,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16013000,
+          "peak_tree_rss_bytes": 4866048,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15559834,
+              "tree_rss_bytes": 4866048
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 5,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16257583,
+          "peak_tree_rss_bytes": 4997120,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15810167,
+              "tree_rss_bytes": 4997120
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 6,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15242208,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 14846333,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 7,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:8d6f3443b60fe725c33caac31a2cd7f36c2b83eca8fc818d5a0a88b8c5455045",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16409500,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15938750,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 8,
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:cac41bd3c00f08e2a77812284ff40bf45f876fdeead81f847bb13d1a9657c220",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-d",
+              "component-c"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16025291,
+          "peak_tree_rss_bytes": 4882432,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15576500,
+              "tree_rss_bytes": 4882432
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 9,
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:cac41bd3c00f08e2a77812284ff40bf45f876fdeead81f847bb13d1a9657c220",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-d",
+              "component-c"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15726792,
+          "peak_tree_rss_bytes": 4882432,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15308792,
+              "tree_rss_bytes": 4882432
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 10,
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:cac41bd3c00f08e2a77812284ff40bf45f876fdeead81f847bb13d1a9657c220",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-d",
+              "component-c"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15909208,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15489125,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 11,
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 1,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:bafeea81057c10d07c6263856063d8ee650a7988ecfa77086e1aaf2ac7d70169",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-d",
+              "component-c"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15314583,
+          "peak_tree_rss_bytes": 5029888,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 14853833,
+              "tree_rss_bytes": 5029888
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 12,
+      "fixture_id": "disconnected-singleton",
+      "seed": 2,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:7f3236ab11f6c1175a87dcf8055bf9798888a33e554d2026610550072ff3baff",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16243625,
+          "peak_tree_rss_bytes": 4833280,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15784291,
+              "tree_rss_bytes": 4833280
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 13,
+      "fixture_id": "disconnected-singleton",
+      "seed": 2,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:7f3236ab11f6c1175a87dcf8055bf9798888a33e554d2026610550072ff3baff",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16173875,
+          "peak_tree_rss_bytes": 4751360,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15750083,
+              "tree_rss_bytes": 4751360
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 14,
+      "fixture_id": "disconnected-singleton",
+      "seed": 2,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:7f3236ab11f6c1175a87dcf8055bf9798888a33e554d2026610550072ff3baff",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15619916,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15177208,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 15,
+      "fixture_id": "disconnected-singleton",
+      "seed": 2,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 2,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:eefa35598357ef6a79ac3538b1f99ab176cdfd57f209330a8e0fb3893a88dc8c",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "singleton"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "component-a",
+              "component-b"
+            ],
+            [
+              "component-c",
+              "component-d"
+            ],
+            [
+              "singleton"
+            ]
+          ],
+          "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16176333,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15733208,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 16,
+      "fixture_id": "high-degree-hub",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2146be6121f875ee852cbd31e9b457b0d24d89e1540154207cf155557f5e5354",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-5",
+              "leaf-4",
+              "leaf-2",
+              "leaf-8",
+              "leaf-6",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "tail",
+              "leaf-1"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15721084,
+          "peak_tree_rss_bytes": 4866048,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15228959,
+              "tree_rss_bytes": 4866048
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 17,
+      "fixture_id": "high-degree-hub",
+      "seed": 1,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2146be6121f875ee852cbd31e9b457b0d24d89e1540154207cf155557f5e5354",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-5",
+              "leaf-4",
+              "leaf-2",
+              "leaf-8",
+              "leaf-6",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "tail",
+              "leaf-1"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16531458,
+          "peak_tree_rss_bytes": 4833280,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16016833,
+              "tree_rss_bytes": 4833280
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 18,
+      "fixture_id": "high-degree-hub",
+      "seed": 1,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2146be6121f875ee852cbd31e9b457b0d24d89e1540154207cf155557f5e5354",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-5",
+              "leaf-4",
+              "leaf-2",
+              "leaf-8",
+              "leaf-6",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "tail",
+              "leaf-1"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16140333,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15686125,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 19,
+      "fixture_id": "high-degree-hub",
+      "seed": 1,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 1,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:13563e662fb22b0fdd3b19488b2f771f1b81d2f55ca0110f36e6c3cca229dc5f",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-5",
+              "leaf-4",
+              "leaf-2",
+              "leaf-8",
+              "leaf-6",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "tail",
+              "leaf-1"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16340042,
+          "peak_tree_rss_bytes": 4734976,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15839708,
+              "tree_rss_bytes": 4734976
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 20,
+      "fixture_id": "high-degree-hub",
+      "seed": 2,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2fe2671f1ad913b3b02a9cc0b12316a8ddf4be5fa8128791f70b01562b2dea8c",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-6",
+              "leaf-4",
+              "leaf-2",
+              "leaf-5",
+              "leaf-8",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15609875,
+          "peak_tree_rss_bytes": 4866048,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15178250,
+              "tree_rss_bytes": 4866048
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 21,
+      "fixture_id": "high-degree-hub",
+      "seed": 2,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2fe2671f1ad913b3b02a9cc0b12316a8ddf4be5fa8128791f70b01562b2dea8c",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-6",
+              "leaf-4",
+              "leaf-2",
+              "leaf-5",
+              "leaf-8",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15531667,
+          "peak_tree_rss_bytes": 4751360,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15080458,
+              "tree_rss_bytes": 4751360
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 22,
+      "fixture_id": "high-degree-hub",
+      "seed": 2,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:2fe2671f1ad913b3b02a9cc0b12316a8ddf4be5fa8128791f70b01562b2dea8c",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-6",
+              "leaf-4",
+              "leaf-2",
+              "leaf-5",
+              "leaf-8",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16476625,
+          "peak_tree_rss_bytes": 4882432,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15994542,
+              "tree_rss_bytes": 4882432
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 23,
+      "fixture_id": "high-degree-hub",
+      "seed": 2,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "high-degree-hub",
+          "graph_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"hub\",\n    \"leaf-1\",\n    \"leaf-2\",\n    \"leaf-3\",\n    \"leaf-4\",\n    \"leaf-5\",\n    \"leaf-6\",\n    \"leaf-7\",\n    \"leaf-8\",\n    \"tail\"\n  ],\n  \"edges\": [\n    {\"from\": \"hub\", \"to\": \"leaf-1\", \"weight\": 8},\n    {\"from\": \"leaf-1\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-2\", \"weight\": 7},\n    {\"from\": \"leaf-2\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-3\", \"weight\": 6},\n    {\"from\": \"leaf-3\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-4\", \"weight\": 5},\n    {\"from\": \"leaf-4\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-5\", \"weight\": 4},\n    {\"from\": \"leaf-5\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-6\", \"weight\": 3},\n    {\"from\": \"leaf-6\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-7\", \"weight\": 2},\n    {\"from\": \"leaf-7\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"hub\", \"to\": \"leaf-8\", \"weight\": 1},\n    {\"from\": \"leaf-8\", \"to\": \"hub\", \"weight\": 1},\n    {\"from\": \"tail\", \"to\": \"leaf-1\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 10,
+          "directed_weighted_edge_count": 17
+        },
+        "seed": 2,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:671bd36db2abac49872b1fcb21493ba6da451de0535af255211136cb00bba9be",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-6",
+              "leaf-4",
+              "leaf-2",
+              "leaf-5",
+              "leaf-8",
+              "leaf-7",
+              "leaf-3"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "hub",
+              "leaf-2",
+              "leaf-3",
+              "leaf-4",
+              "leaf-5",
+              "leaf-6",
+              "leaf-7",
+              "leaf-8"
+            ],
+            [
+              "leaf-1",
+              "tail"
+            ]
+          ],
+          "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16208375,
+          "peak_tree_rss_bytes": 4833280,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15720625,
+              "tree_rss_bytes": 4833280
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 24,
+      "fixture_id": "adversarial-order",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:e6f6c8c283f22585360a60c525b03454967fa54937de1475d9375cfac1f67749",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "middle",
+              "beta"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16850167,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16375458,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 25,
+      "fixture_id": "adversarial-order",
+      "seed": 1,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:e6f6c8c283f22585360a60c525b03454967fa54937de1475d9375cfac1f67749",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "middle",
+              "beta"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15661958,
+          "peak_tree_rss_bytes": 4767744,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15273667,
+              "tree_rss_bytes": 4767744
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 26,
+      "fixture_id": "adversarial-order",
+      "seed": 1,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:e6f6c8c283f22585360a60c525b03454967fa54937de1475d9375cfac1f67749",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "middle",
+              "beta"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15271167,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 14875000,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 27,
+      "fixture_id": "adversarial-order",
+      "seed": 1,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 1,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:1fa0177e2dadac0ded2ded9611eae812c4a72ac7a7fa52ed62cb2517fa90e496",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "middle",
+              "beta"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16731042,
+          "peak_tree_rss_bytes": 4751360,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16255000,
+              "tree_rss_bytes": 4751360
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 28,
+      "fixture_id": "adversarial-order",
+      "seed": 2,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:53c35bc2f4f1fa44f5125b54cf10f2d69a79b1d60b695af2c08e8be711da5a81",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16147917,
+          "peak_tree_rss_bytes": 4964352,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15702333,
+              "tree_rss_bytes": 4964352
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 29,
+      "fixture_id": "adversarial-order",
+      "seed": 2,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:53c35bc2f4f1fa44f5125b54cf10f2d69a79b1d60b695af2c08e8be711da5a81",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 16512750,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16022542,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 30,
+      "fixture_id": "adversarial-order",
+      "seed": 2,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:53c35bc2f4f1fa44f5125b54cf10f2d69a79b1d60b695af2c08e8be711da5a81",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 15757458,
+          "peak_tree_rss_bytes": 4882432,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 15324583,
+              "tree_rss_bytes": 4882432
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 31,
+      "fixture_id": "adversarial-order",
+      "seed": 2,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "adversarial-order",
+          "graph_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"zeta\",\n    \"alpha\",\n    \"middle\",\n    \"beta\"\n  ],\n  \"edges\": [\n    {\"from\": \"zeta\", \"to\": \"alpha\", \"weight\": 5},\n    {\"from\": \"beta\", \"to\": \"zeta\", \"weight\": 1},\n    {\"from\": \"alpha\", \"to\": \"middle\", \"weight\": 2},\n    {\"from\": \"middle\", \"to\": \"beta\", \"weight\": 3}\n  ]\n}\n",
+          "node_count": 4,
+          "directed_weighted_edge_count": 4
+        },
+        "seed": 2,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:416321f9226824f4424908b4cde91006e3032a3cb27790f47ef888aaae329187",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "alpha",
+              "zeta"
+            ],
+            [
+              "beta",
+              "middle"
+            ]
+          ],
+          "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+        },
+        "canonicalization": {
+          "boundary": "external parent supervisor process",
+          "empty_communities_removed": 0
+        },
+        "observation": {
+          "elapsed_nanos": 14896416,
+          "peak_tree_rss_bytes": 4751360,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 14515333,
+              "tree_rss_bytes": 4751360
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    }
+  ],
+  "canonical_outputs": [
+    {
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "output": {
+        "communities": [
+          [
+            "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+          ],
+          [
+            "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+          ]
+        ],
+        "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+      }
+    },
+    {
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "output": {
+        "communities": [
+          [
+            "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+          ],
+          [
+            "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+          ]
+        ],
+        "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+      }
+    },
+    {
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "output": {
+        "communities": [
+          [
+            "component-a",
+            "component-b"
+          ],
+          [
+            "component-c",
+            "component-d"
+          ],
+          [
+            "singleton"
+          ]
+        ],
+        "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+      }
+    },
+    {
+      "fixture_id": "disconnected-singleton",
+      "seed": 2,
+      "output": {
+        "communities": [
+          [
+            "component-a",
+            "component-b"
+          ],
+          [
+            "component-c",
+            "component-d"
+          ],
+          [
+            "singleton"
+          ]
+        ],
+        "digest": "sha256:2a861269e0e228b7abd4cb6001d069629f5ee9f0ddd57bc20cd12b3e93c5dbe1"
+      }
+    },
+    {
+      "fixture_id": "high-degree-hub",
+      "seed": 1,
+      "output": {
+        "communities": [
+          [
+            "hub",
+            "leaf-2",
+            "leaf-3",
+            "leaf-4",
+            "leaf-5",
+            "leaf-6",
+            "leaf-7",
+            "leaf-8"
+          ],
+          [
+            "leaf-1",
+            "tail"
+          ]
+        ],
+        "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+      }
+    },
+    {
+      "fixture_id": "high-degree-hub",
+      "seed": 2,
+      "output": {
+        "communities": [
+          [
+            "hub",
+            "leaf-2",
+            "leaf-3",
+            "leaf-4",
+            "leaf-5",
+            "leaf-6",
+            "leaf-7",
+            "leaf-8"
+          ],
+          [
+            "leaf-1",
+            "tail"
+          ]
+        ],
+        "digest": "sha256:c2f19d88111b0f2d8bc20f86e4e9282c44ef9e1101b1562b208f1db4d845e656"
+      }
+    },
+    {
+      "fixture_id": "adversarial-order",
+      "seed": 1,
+      "output": {
+        "communities": [
+          [
+            "alpha",
+            "zeta"
+          ],
+          [
+            "beta",
+            "middle"
+          ]
+        ],
+        "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+      }
+    },
+    {
+      "fixture_id": "adversarial-order",
+      "seed": 2,
+      "output": {
+        "communities": [
+          [
+            "alpha",
+            "zeta"
+          ],
+          [
+            "beta",
+            "middle"
+          ]
+        ],
+        "digest": "sha256:46d12612f6ad999361434ef243a02770fed1b7e54319b0d49d4db35b36593537"
+      }
+    }
+  ],
+  "typed_failure_policy": [
+    "CAP_BREACH",
+    "DERIVATION_REJECTED",
+    "IDENTITY_FAILURE",
+    "INPUT_DIGEST_MISMATCH",
+    "MEMORY_EXCEEDED",
+    "MEMORY_UNSUPPORTED",
+    "NONCANONICAL_OUTPUT",
+    "NONDETERMINISM",
+    "NONZERO_EXIT",
+    "PANIC",
+    "RECEIPT_INVALID",
+    "RECEIPT_WRITE",
+    "SCHEDULE_INVALID",
+    "SUPERVISOR_UNSUPPORTED",
+    "TIMEOUT"
+  ],
+  "no_fallback_policy": {
+    "approximation": false,
+    "fallback": false,
+    "sampling": false,
+    "silent_omission": false,
+    "substitution": false,
+    "truncation": false
+  },
+  "claim_ceiling": "This receipt qualifies only exact bounded execution of Gonum Louvain v0.17.0 over the declared private Program C fixture and seed inventory. It does not authorize production implementation, dependency adoption, public surfaces, deployment, other candidates, revisions, licenses, or distribution modes.",
+  "receipt_sha256": "sha256:935e10f4d52dafa48edab94118ed5dc3fde04ba04a3ea63e431cc8fced943851"
+}
