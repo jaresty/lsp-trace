@@ -28,6 +28,24 @@ func TestTopLevelHelpSucceedsOnStdout(t *testing.T) {
 	}
 }
 
+func TestVersionSucceedsWithBuildIdentityOnStdout(t *testing.T) {
+	for _, arg := range []string{"--version", "version"} {
+		stdout, stderr, code := captureRun(t, []string{arg})
+		if code != 0 || stderr != "" || !strings.HasPrefix(stdout, "lsp-trace ") || !strings.Contains(stdout, " revision=") || !strings.Contains(stdout, " modified=") {
+			t.Fatalf("ASSERT_VERSION_BUILD_IDENTITY: arg=%s code=%d stdout=%q stderr=%q", arg, code, stdout, stderr)
+		}
+	}
+}
+
+func TestSliceHelpSucceedsOnStdout(t *testing.T) {
+	for _, arg := range []string{"--help", "-h"} {
+		stdout, stderr, code := captureRun(t, []string{"slice", arg})
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "Usage of slice:") || !strings.Contains(stdout, "generation selector") {
+			t.Fatalf("ASSERT_SLICE_HELP_SUCCESS: arg=%s code=%d stdout=%q stderr=%q", arg, code, stdout, stderr)
+		}
+	}
+}
+
 func TestTopLevelUsageAdvertisesFilterAndSchemaFamilies(t *testing.T) {
 	stdout, stderr, code := captureRun(t, nil)
 	if code != 1 || stdout != "" {
@@ -580,6 +598,9 @@ func TestRunRequestTimeoutTraceStderrAndExitPolicy(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code = %d, want structured-incomplete exit 2; stdout=%s stderr=%s", code, stdout, stderr)
 	}
+	if !strings.Contains(stderr, "exit code 2 is not an invocation failure") || !strings.Contains(stderr, "inspect summary.traversal_complete and each seed.failure") {
+		t.Fatalf("ASSERT_STRUCTURED_INCOMPLETE_GUIDANCE: stderr=%q", stderr)
+	}
 	var result struct {
 		Terminals []struct {
 			Reason string `json:"reason"`
@@ -654,9 +675,9 @@ func TestCaptureRunDrainsLargeStdout(t *testing.T) {
 }
 
 func TestSliceHelpSaysZeroUpDepthDisablesTraversal(t *testing.T) {
-	_, stderr, _ := captureRun(t, []string{"slice", "--help"})
-	if !strings.Contains(stderr, "incoming traversal depth; 0 disables") || strings.Contains(stderr, "incoming traversal depth; 0 unlimited") {
-		t.Fatalf("ASSERT_SLICE_UP_DEPTH_ZERO_HELP: stderr=%q", stderr)
+	stdout, stderr, code := captureRun(t, []string{"slice", "--help"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "incoming traversal depth; 0 disables") || strings.Contains(stdout, "incoming traversal depth; 0 unlimited") {
+		t.Fatalf("ASSERT_SLICE_UP_DEPTH_ZERO_HELP: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

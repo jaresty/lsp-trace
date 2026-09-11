@@ -37,6 +37,12 @@ func parseSlice(args []string) (sliceConfig, error) {
 	var profiles profileFlags
 	fs := flag.NewFlagSet("slice", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			fs.SetOutput(os.Stdout)
+			break
+		}
+	}
 	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
 	fs.StringVar(&profiles.ConfigPath, "config", "", "profile config path (replaces default discovery)")
 	fs.StringVar(&profiles.Name, "profile", "", "named server profile")
@@ -52,7 +58,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.IntVar(&c.maxNodes, "max-nodes", 10000, "maximum graph nodes; 0 unlimited")
 	fs.DurationVar(&c.timeout, "timeout", 5*time.Minute, "global timeout; 0 unlimited")
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")
-	fs.StringVar(&c.output, "output", "", "output file")
+	fs.StringVar(&c.output, "output", "", "generation selector; full graph is stored in the selected generation's artifact.json")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
 	fs.BoolVar(&c.graphProvenance, "graph-provenance", false, "bounded supplied/post-traversal evidence via managed single-at slice; no analyzed-source authentication")
@@ -269,6 +275,9 @@ func writeSliceDiagnostics(w io.Writer, diagnostics []graph.Diagnostic) {
 func runSlice(args []string) int {
 	cfg, err := parseSlice(args)
 	if err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -540,6 +549,7 @@ func runSlice(args []string) int {
 		return 1
 	}
 	if !result.Summary.Complete {
+		writeStructuredIncompleteStatus(os.Stderr, cfg.output != "")
 		return 2
 	}
 	return 0

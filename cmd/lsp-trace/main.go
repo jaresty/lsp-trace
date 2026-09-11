@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,7 +30,41 @@ import (
 //go:embed SKILL.md
 var embeddedSkill string
 
+var (
+	buildVersion = "devel"
+	buildCommit  = "UNKNOWN"
+)
+
+func versionText() string {
+	version, revision, modified := buildVersion, buildCommit, "UNKNOWN"
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if version == "devel" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.revision":
+				if revision == "UNKNOWN" {
+					revision = setting.Value
+				}
+			case "vcs.modified":
+				modified = setting.Value
+			}
+		}
+	}
+	return fmt.Sprintf("lsp-trace %s revision=%s modified=%s", version, revision, modified)
+}
+
+func writeStructuredIncompleteStatus(w io.Writer, published bool) {
+	destination := "full graph was written to stdout"
+	if published {
+		destination = "--output contains a generation selector; the full graph is the selected generation's artifact.json"
+	}
+	fmt.Fprintf(w, "status: structured incomplete graph serialized (%s); exit code 2 is not an invocation failure; inspect summary.traversal_complete and each seed.failure before interpreting seed collections\n", destination)
+}
+
 const usageText = `usage:
+  lsp-trace --version
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace slice|incoming --acquisition-version v2|v3 --workspace PATH --server COMMAND --seed-manifest PATH  # DEPRECATED producer; migrate new production to Graph Provenance V5
@@ -80,6 +115,10 @@ func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(os.Stdout, usageText)
+		return 0
+	}
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		fmt.Fprintln(os.Stdout, versionText())
 		return 0
 	}
 	if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
@@ -190,6 +229,9 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, err)
 			return 1
 		}
+		if code == 2 {
+			writeStructuredIncompleteStatus(os.Stderr, false)
+		}
 		return code
 	}
 	publish := publishArtifact
@@ -206,6 +248,9 @@ func run(args []string) int {
 		}
 		fmt.Fprintf(os.Stderr, "publish: %v\n", err)
 		return 1
+	}
+	if code == 2 {
+		writeStructuredIncompleteStatus(os.Stderr, true)
 	}
 	return code
 }

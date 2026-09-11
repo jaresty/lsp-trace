@@ -7,6 +7,8 @@ builds:
     env: [CGO_ENABLED=0]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.buildVersion={{.Version}} -X main.buildCommit={{.Commit}}
   - id: lsp-trace-mcp
     main: ./cmd/lsp-trace-mcp
     binary: lsp-trace-mcp
