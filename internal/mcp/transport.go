@@ -424,34 +424,31 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 }
 
 type gatewayRequest struct {
-	Tool      string         `json:"tool"`
+	Operation string         `json:"operation"`
 	Arguments map[string]any `json:"arguments"`
 }
 
 func decodeGatewayRequest(arguments map[string]any) (gatewayRequest, bool, error) {
 	requestValue, ok := arguments["request"].(map[string]any)
 	if !ok {
-		return gatewayRequest{}, false, nil
-	}
-	if _, selected := requestValue["tool"]; !selected {
-		return gatewayRequest{}, false, nil
+		return gatewayRequest{}, true, errors.New("gateway request requires request object")
 	}
 	raw, err := json.Marshal(requestValue)
 	if err != nil {
 		return gatewayRequest{}, true, err
 	}
 	var nested gatewayRequest
-	if err := decodeClosed(raw, &nested, "tool", "arguments"); err != nil {
+	if err := decodeClosed(raw, &nested, "operation", "arguments"); err != nil {
 		return gatewayRequest{}, true, err
 	}
-	if nested.Tool == "" || nested.Arguments == nil {
-		return gatewayRequest{}, true, errors.New("gateway request requires canonical tool and arguments object")
+	if nested.Operation == "" || nested.Arguments == nil {
+		return gatewayRequest{}, true, errors.New("gateway request requires canonical operation and arguments object")
 	}
 	return nested, true, nil
 }
 
 func (s *Server) callGatewayContext(ctx context.Context, base response, nested gatewayRequest) response {
-	target, ok := s.Registry.ResolveCanonical(nested.Tool)
+	target, ok := s.Registry.ResolveCanonical(nested.Operation)
 	if !ok {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: gateway target must be a known canonical tool"}
 		return base

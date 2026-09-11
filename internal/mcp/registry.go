@@ -88,6 +88,8 @@ type Registry struct {
 	publicationSupported bool
 	providerInventory    provider.ConfiguredInventory
 	toolProfile          ToolProfile
+	servingVersion       string
+	buildRevision        string
 }
 
 func NewRegistry(enableLiveLSP bool) *Registry {
@@ -261,6 +263,12 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		tools[i].OutputFamiliesVersions = registeredOutputFamilies(tools[i].ArtifactSchemaIDs, registeredFamilies)
 		tools[i].Description = completeToolDescription(tools[i])
 	}
+	for i := range tools {
+		if tools[i].Name == "lsp_trace_v1_execute" {
+			tools[i].InputSchema = canonicalExecuteInputSchema(tools)
+			break
+		}
+	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	r := &Registry{tools: tools, byName: make(map[string]int, len(tools)*2), publicationSupported: publicationSupported, toolProfile: profile}
 	for i := range tools {
@@ -276,6 +284,17 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		}
 	}
 	return r
+}
+
+// SetBuildIdentity installs bounded serving-binary identity supplied by the owning command.
+func (r *Registry) SetBuildIdentity(version, revision string) {
+	if version == "" {
+		version = "UNKNOWN"
+	}
+	if revision == "" {
+		revision = "UNKNOWN"
+	}
+	r.servingVersion, r.buildRevision = version, revision
 }
 
 func appendUnique(ids []string, id string) []string {
@@ -535,7 +554,15 @@ func (r *Registry) Capabilities() map[string]any {
 	for i := range r.tools {
 		dispatchableNames[i] = r.tools[i].Name
 	}
+	version, revision := r.servingVersion, r.buildRevision
+	if version == "" {
+		version = "UNKNOWN"
+	}
+	if revision == "" {
+		revision = "UNKNOWN"
+	}
 	return map[string]any{
+		"serving_binary_version": version, "build_revision": revision,
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"active_tool_profile": string(r.toolProfile), "advertised_tool_names": advertisedNames, "dispatchable_tool_names": dispatchableNames,
 		"tools": advertised, "selector_publication_supported": r.publicationSupported,
@@ -743,6 +770,33 @@ func schemaSelectorProperties(schema map[string]any) []string {
 	}
 	sort.Strings(selectors)
 	return selectors
+}
+
+func canonicalExecuteInputSchema(tools []Tool) map[string]any {
+	branches := make([]any, 0, len(tools)-1)
+	for _, tool := range tools {
+		if tool.Name == "lsp_trace_v1_execute" {
+			continue
+		}
+		arguments := cloneMap(tool.InputSchema)
+		delete(arguments, "$schema")
+		delete(arguments, "$id")
+		branches = append(branches, map[string]any{
+			"type": "object", "additionalProperties": false,
+			"properties": map[string]any{
+				"operation": map[string]any{"const": tool.Name},
+				"arguments": arguments,
+			},
+			"required": []any{"operation", "arguments"},
+		})
+	}
+	return map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"$id":     "https://jaresty.github.io/lsp-trace/mcp/schemas/input-execute.v1.schema.json",
+		"type":    "object", "additionalProperties": false,
+		"properties": map[string]any{"request": map[string]any{"oneOf": branches}},
+		"required":   []any{"request"},
+	}
 }
 
 func operationShortName(name string) string {

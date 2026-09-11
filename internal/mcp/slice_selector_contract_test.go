@@ -22,7 +22,7 @@ func (e *selectorCountingExecutor) Execute(_ context.Context, request operation.
 func sliceSelectorResponse(t *testing.T, server *Server, tool string, arguments map[string]any) response {
 	t.Helper()
 	if tool == "lsp_trace_v1_execute" {
-		arguments = map[string]any{"request": map[string]any{"tool": "lsp_trace_v1_slice", "arguments": arguments}}
+		arguments = map[string]any{"request": map[string]any{"operation": "lsp_trace_v1_slice", "arguments": arguments}}
 	}
 	return server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, tool, arguments))
 }

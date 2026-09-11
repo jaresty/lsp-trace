@@ -119,7 +119,7 @@ func TestExecuteGatewayNestedDirectMatrix(t *testing.T) {
 				}
 
 				gatewayExecutor := matrixExecutor(registry)
-				nested := map[string]any{"request": map[string]any{"tool": tc.tool, "arguments": tc.args}}
+				nested := map[string]any{"request": map[string]any{"operation": tc.tool, "arguments": tc.args}}
 				wrapped := runServerMessages(t, matrixServer(registry, gatewayExecutor), callMessage("lsp_trace_v1_execute", nested))[0]
 				env := decodeEnvelopeForAssertion(t, assertion, wrapped)
 				delegated, ok := env["delegated_envelope"].(string)
@@ -169,7 +169,7 @@ func TestExecuteGatewayPublicationSelectorParity(t *testing.T) {
 				server.PublicationRoot = root
 				args := map[string]any{"input": `{}`, "output_selector": "matrix.json"}
 				if gateway {
-					args = map[string]any{"request": map[string]any{"tool": "lsp_trace_v1_export_retained_calls", "arguments": args}}
+					args = map[string]any{"request": map[string]any{"operation": "lsp_trace_v1_export_retained_calls", "arguments": args}}
 					return server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, "lsp_trace_v1_execute", args)), executor.calls
 				}
 				return server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, "lsp_trace_v1_export_retained_calls", args)), executor.calls
@@ -203,7 +203,7 @@ func TestExecuteGatewayValidationAndErrorParity(t *testing.T) {
 	registry := NewRegistry(false)
 	invalid := map[string]any{"input": `{}`, "algorithm": "UNKNOWN"}
 	direct := directMatrixCall(matrixServer(registry, matrixExecutor(registry)), "lsp_trace_v1_bounded_retained_ranking", invalid)
-	nested := map[string]any{"request": map[string]any{"tool": "lsp_trace_v1_bounded_retained_ranking", "arguments": invalid}}
+	nested := map[string]any{"request": map[string]any{"operation": "lsp_trace_v1_bounded_retained_ranking", "arguments": invalid}}
 	wrapped := runServerMessages(t, matrixServer(registry, matrixExecutor(registry)), callMessage("lsp_trace_v1_execute", nested))[0]
 	if wrapped["error"] == nil || direct.Error == nil || wrapped["error"].(map[string]any)["message"] != direct.Error.Message {
 		t.Fatalf("%s target validation differs: direct=%v nested=%v", assertion, direct.Error, wrapped)
@@ -217,7 +217,7 @@ func TestExecuteGatewayValidationAndErrorParity(t *testing.T) {
 		direct = directMatrixCall(matrixServer(registry, directExecutor), "lsp_trace_v2_incoming", gatewayMatrixCases()[12].args)
 		gatewayExecutor := matrixExecutor(registry)
 		gatewayExecutor.failure = failure
-		nested = map[string]any{"request": map[string]any{"tool": "lsp_trace_v2_incoming", "arguments": gatewayMatrixCases()[12].args}}
+		nested = map[string]any{"request": map[string]any{"operation": "lsp_trace_v2_incoming", "arguments": gatewayMatrixCases()[12].args}}
 		wrapped = runServerMessages(t, matrixServer(registry, gatewayExecutor), callMessage("lsp_trace_v1_execute", nested))[0]
 		env := decodeEnvelopeForAssertion(t, assertion, wrapped)
 		directBytes, _ := json.Marshal(direct.Result.(callResult).StructuredContent)
@@ -247,21 +247,9 @@ func TestExecuteGatewayRejectsAliasUnknownRecursiveAndMalformed(t *testing.T) {
 func TestExecuteGatewayNoDepthBypass(t *testing.T) {
 	const assertion = "ASSERT_MCP_EXECUTE_GATEWAY_NO_DEPTH_BYPASS"
 	server := matrixServer(NewRegistry(false), &gatewayMatrixExecutor{artifacts: map[operation.Name][]byte{}})
-	request := map[string]any{"tool": "lsp_trace_v1_execute", "arguments": map[string]any{"request": map[string]any{"tool": "lsp_trace_v1_capabilities", "arguments": map[string]any{}}}}
+	request := map[string]any{"operation": "lsp_trace_v1_execute", "arguments": map[string]any{"request": map[string]any{"operation": "lsp_trace_v1_capabilities", "arguments": map[string]any{}}}}
 	response := runServerMessages(t, server, callMessage("lsp_trace_v1_execute", map[string]any{"request": request}))[0]
 	if response["error"] == nil || !strings.Contains(response["error"].(map[string]any)["message"].(string), "recursive execute gateway is forbidden") {
 		t.Fatalf("%s: %v", assertion, response)
-	}
-}
-
-func TestExecuteGatewayPreservesLegacyCustodyPath(t *testing.T) {
-	const assertion = "ASSERT_MCP_EXECUTE_GATEWAY_LEGACY_CUSTODY_UNCHANGED"
-	artifact := []byte(`{"$id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.execution.v1.schema.json","execution_version":"1","result":{}}`)
-	executor := &executionTransportExecutor{artifact: artifact, digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
-	server := &Server{Registry: NewRegistry(false), Executor: executor}
-	response := runServerMessages(t, server, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{}}}}`+"\n")[0]
-	env := decodeEnvelopeForAssertion(t, assertion, response)
-	if len(executor.calls) != 1 || env["content"] != string(artifact) || env["delegated_envelope"] != nil {
-		t.Fatalf("%s: calls=%v envelope=%v", assertion, executor.calls, env)
 	}
 }

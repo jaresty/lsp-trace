@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -30,6 +31,32 @@ import (
 	"lsp-trace/sliceops"
 )
 
+var (
+	buildVersion = "devel"
+	buildCommit  = "UNKNOWN"
+)
+
+func buildIdentity() (string, string) {
+	version, revision := buildVersion, buildCommit
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if version == "devel" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" && revision == "UNKNOWN" && setting.Value != "" {
+				revision = setting.Value
+			}
+		}
+	}
+	if version == "" {
+		version = "UNKNOWN"
+	}
+	if revision == "" {
+		revision = "UNKNOWN"
+	}
+	return version, revision
+}
+
 func main() {
 	if handled, code := programc.RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
 		os.Exit(code)
@@ -49,6 +76,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileFull), "MCP advertisement profile: full or compact")
 	printBootstrapExample := fs.Bool("print-bootstrap-example", false, "print a safe host-managed process bootstrap template and exit")
+	printVersion := fs.Bool("version", false, "print binary version and build revision")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -57,6 +85,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		if arg == "--tool-profile" || arg == "-tool-profile" || strings.HasPrefix(arg, "--tool-profile=") || strings.HasPrefix(arg, "-tool-profile=") {
 			profileCount++
 		}
+	}
+	if *printVersion {
+		version, revision := buildIdentity()
+		fmt.Fprintf(stdout, "lsp-trace-mcp %s revision=%s\n", version, revision)
+		return 0
 	}
 	if profileCount > 1 {
 		fmt.Fprintln(stderr, "--tool-profile may be specified only once")
@@ -288,6 +321,8 @@ func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.
 
 func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, publicationRoot *publication.Root, profile mcp.ToolProfile) (*mcp.Server, *sessionruntime.Manager, error) {
 	registry := mcp.NewRegistryWithProviderInventoryAndProfile(enableLiveLSP, publicationRoot != nil, inventory, profile)
+	version, buildRevision := buildIdentity()
+	registry.SetBuildIdentity(version, buildRevision)
 	validator, err := mcpcontract.NewOperationInputValidator()
 	if err != nil {
 		return nil, nil, err

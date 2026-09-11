@@ -126,12 +126,22 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 	}
 }
 
+func TestVersionReportsExplicitBuildIdentity(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run([]string{"--version"}, strings.NewReader(""), &stdout, &stderr); code != 0 {
+		t.Fatalf("ASSERT_MCP_VERSION_EXIT: code=%d stderr=%s", code, stderr.String())
+	}
+	if got := stdout.String(); !strings.HasPrefix(got, "lsp-trace-mcp ") || !strings.Contains(got, " revision=") {
+		t.Fatalf("ASSERT_MCP_VERSION_IDENTITY: %q", got)
+	}
+}
+
 func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"tool":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"operation":"lsp_trace_v1_validate","arguments":{"input":"{}"}}}}}`,
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","arguments":{"operation":"lsp_trace_v3_slice"}}}`,
 		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","arguments":{"operation":"lsp_trace_v9_missing"}}}`,
 	}, "\n") + "\n"
