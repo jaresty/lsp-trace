@@ -1,0 +1,26 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-10-test-plan-review.v1",
+  "result": "APPROVED",
+  "read_only": true,
+  "independent_process": true,
+  "plan_sha256": "sha256:9e74da97af92c6e5c83b9f18678dc8a1305ba7f62f14fd4b8f2815dc8d2c87a6",
+  "raw_review_sha256": "sha256:d82b6626f54bb8d7df25d6d86a5e2d2335ed701c067b9d200eef2f7b84756aae",
+  "reviewed_commit": "f1db3f8810fb2462234ffd3efa961faa468c5844",
+  "reviewer": {
+    "tool": "pi-general-purpose-agent",
+    "model": "openai-codex/gpt-5.6-sol"
+  },
+  "coverage_confirmed": [
+    "boundary_accounting",
+    "canonicalization",
+    "cli_mcp_parity",
+    "compatibility",
+    "instability",
+    "resources",
+    "seed_replay",
+    "validation"
+  ],
+  "execution_status_confirmed": "NOT_EXECUTED",
+  "tests_pass_claimed_confirmed": false,
+  "claim_ceiling": "This review establishes plan completeness only. It does not establish that planned tests exist, ran, or passed, and it does not authorize implementation or production adoption."
+}
