@@ -72,6 +72,13 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if !ok || alias["name"] != "lsp_trace_v1_validate" {
 		t.Fatalf("ASSERT_COMPACT_ALIAS_DESCRIBES_CANONICAL: %#v", alias)
 	}
+	short, ok := r.DescribeOperation("capabilities")
+	if !ok || short["name"] != "lsp_trace_v1_capabilities" {
+		t.Fatalf("ASSERT_UNIQUE_SHORT_OPERATION_DESCRIBES_CANONICAL: %#v", short)
+	}
+	if _, ok := r.DescribeOperation("slice"); ok {
+		t.Fatal("ASSERT_AMBIGUOUS_SHORT_OPERATION_NOT_DESCRIBED")
+	}
 	if _, ok := r.DescribeOperation("lsp_trace_v9_missing"); ok {
 		t.Fatal("ASSERT_COMPACT_UNKNOWN_OPERATION_NOT_DESCRIBED")
 	}

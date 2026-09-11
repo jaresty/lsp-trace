@@ -558,7 +558,19 @@ func (r *Registry) Capabilities() map[string]any {
 func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 	tool, ok := r.Resolve(name)
 	if !ok {
-		return nil, false
+		for i := range r.tools {
+			candidate := r.tools[i]
+			if operationShortName(candidate.Name) != name {
+				continue
+			}
+			if ok {
+				return nil, false
+			}
+			tool, ok = candidate, true
+		}
+		if !ok {
+			return nil, false
+		}
 	}
 	advertised := false
 	for _, candidate := range r.Advertised() {
@@ -621,6 +633,25 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 		}
 	}
 	return description, true
+}
+
+func operationShortName(name string) string {
+	parts := strings.Split(name, "_")
+	for i := 0; i+1 < len(parts); i++ {
+		if len(parts[i]) >= 2 && parts[i][0] == 'v' {
+			version := true
+			for _, digit := range parts[i][1:] {
+				if digit < '0' || digit > '9' {
+					version = false
+					break
+				}
+			}
+			if version {
+				return strings.Join(parts[i+1:], "_")
+			}
+		}
+	}
+	return name
 }
 
 func (r *Registry) Advertised() []Tool {
