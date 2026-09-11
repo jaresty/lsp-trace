@@ -179,17 +179,23 @@ func (r *Runtime) Execute(parent context.Context, providerID string, request jso
 		b, err := io.ReadAll(io.LimitReader(stdout, int64(limits.ResponseBytes)+8193))
 		stdoutResult <- readResult{bytes: b, err: err}
 	}()
-	waitResult := make(chan error, 1)
-	go func() { waitResult <- cmd.Wait() }()
-
 	var raw []byte
 	var waitErr error
 	var stdinErr error
+	var waitResult chan error
+	var killTimer *time.Timer
+	waitStarted := false
 	ctxDone := ctx.Done()
-	// EOF completes only stdout, not the provider invocation. Keep cancellation
-	// active through both the stdin write and process wait. This goroutine owns
-	// all completion receives; terminate consumes waitResult only on its behalf.
-	for stdoutResult != nil || writeErr != nil || waitResult != nil {
+	// os/exec requires all StdoutPipe reads to complete before Wait. Start Wait
+	// only after stdout and stdin ownership have settled. Cancellation signals
+	// the process directly and schedules kill escalation so those operations
+	// unblock without racing Wait against ReadAll.
+	for stdoutResult != nil || writeErr != nil || waitResult != nil || !waitStarted {
+		if stdoutResult == nil && writeErr == nil && !waitStarted {
+			waitResult = make(chan error, 1)
+			waitStarted = true
+			go func(ch chan<- error) { ch <- cmd.Wait() }(waitResult)
+		}
 		select {
 		case result := <-stdoutResult:
 			raw, err = result.bytes, result.err
@@ -198,22 +204,27 @@ func (r *Runtime) Execute(parent context.Context, providerID string, request jso
 			writeErr = nil
 		case waitErr = <-waitResult:
 			waitResult = nil
+			if killTimer != nil {
+				killTimer.Stop()
+			}
 		case <-ctxDone:
 			if waitResult != nil {
-				// Do not turn an already completed exit into a manager timeout.
-				select {
-				case waitErr = <-waitResult:
-				default:
-					receipt.Terminated = terminate(cmd, waitResult, limits.TerminationGrace, &waitErr)
-					if receipt.Terminated {
-						if errors.Is(parent.Err(), context.Canceled) {
-							receipt.Failure = failure(Canceled, "caller canceled", parent.Err())
-						} else {
-							receipt.Failure = failure(TimedOut, "wall time exceeded", ctx.Err())
-						}
-					}
-				}
+				receipt.Terminated = terminate(cmd, waitResult, limits.TerminationGrace, &waitErr)
 				waitResult = nil
+			} else if signalErr := cmd.Process.Signal(os.Interrupt); !errors.Is(signalErr, os.ErrProcessDone) {
+				receipt.Terminated = true
+				grace := limits.TerminationGrace
+				if grace <= 0 {
+					grace = 20 * time.Millisecond
+				}
+				killTimer = time.AfterFunc(grace, func() { _ = cmd.Process.Kill() })
+			}
+			if receipt.Terminated {
+				if errors.Is(parent.Err(), context.Canceled) {
+					receipt.Failure = failure(Canceled, "caller canceled", parent.Err())
+				} else {
+					receipt.Failure = failure(TimedOut, "wall time exceeded", ctx.Err())
+				}
 			}
 			ctxDone = nil
 		}
