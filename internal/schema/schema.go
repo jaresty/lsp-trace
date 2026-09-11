@@ -35,6 +35,7 @@ const (
 	FamilyCommunity                = "community"
 	FamilyCommunityBoundary        = "community-boundary"
 	FamilyCommunityInstability     = "community-instability"
+	FamilyCommunityPresentation    = "community-presentation"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -62,6 +63,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyCommunity:                {"v1": "lsp-trace.community.v1"},
 	FamilyCommunityBoundary:        {"v1": "lsp-trace.community-boundary.v1"},
 	FamilyCommunityInstability:     {"v1": "lsp-trace.community-instability.v1"},
+	FamilyCommunityPresentation:    {"v1": "lsp-trace.community-presentation.v1"},
 }
 
 var versionFields = map[string]string{
@@ -87,6 +89,7 @@ var versionFields = map[string]string{
 	FamilyCommunity:                "schema_version",
 	FamilyCommunityBoundary:        "schema_version",
 	FamilyCommunityInstability:     "schema_version",
+	FamilyCommunityPresentation:    "schema_version",
 }
 
 // RegisteredFamilies returns a detached, lexically ordered snapshot of the
