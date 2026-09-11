@@ -1,0 +1,18 @@
+gate_id: I-02
+result: PASS
+current: true
+repository_revision: 42dde1114f1433504489e6e3e31ad338a062a257
+command: scripts/check-program-c-i-02.sh
+policy_matrix: calls-v1@sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9; docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md
+profile_manifest_sha256: sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8
+tool: scripts/check-program-c-i-02.sh at repository revision 42dde1114f1433504489e6e3e31ad338a062a257
+run_id: program-c-i-02-calls-v1-42dde11
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md; qualification/program-c/projection-profiles.v1.json; internal/retainedcalls/testdata/frozen-v1-export.json; cmd/lsp-trace-mcp/testdata/d01-program-b-normative-graph.json; cmd/lsp-trace-mcp/program_c_i02_qualification_test.go; scripts/check-program-c-i-02.sh
+input_sha256: sha256:f82fc2dd280dcabb1d850c050b56720634b6db89b37d08d283d0195941ec779a
+fixture_digests: retained-calls-v1=sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011; normative-retained-graph-v1=sha256:36f10abcad7d0f7780922f04064db032c77bf536e9c6ad864d759b57344b8cfb
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:da7ba2d9fa0a22c0f378403d2e51bf11e8f354fc949343aa0b0dd1e35aff17f5
+obligations: frozen repository inputs; projection and weak/strong components; metrics; PageRank; seeded PPR; exact replay; deterministic input/node/edge/work/output bounds and typed incomplete outcomes; CLI/MCP byte parity; normative local-v2 parity
+outcomes: PASS=9 FAIL=0 BLOCKED=0
+claim_ceiling: I-02 qualifies existing deterministic calls-v1 analytics only; it executes no community candidate, does not establish candidate resource behavior, and does not admit Program C while I-03 through I-08 remain missing.
