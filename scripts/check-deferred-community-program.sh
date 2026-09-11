@@ -146,6 +146,18 @@ assert_receipts() {
       failed=1
       continue
     fi
+    if ! grep -Eq '^repository_revision: [^[:space:]].*$' "$receipt_file" ||
+       ! grep -Eq '^command: [^[:space:]].*$' "$receipt_file" ||
+       ! grep -Eq '^policy_matrix: [^[:space:]].*$' "$receipt_file" ||
+       ! grep -Eq '^tool: [^[:space:]].*$' "$receipt_file" ||
+       ! grep -Eq '^run_id: [^[:space:]].*$' "$receipt_file" ||
+       ! grep -Eq '^input_sha256: sha256:[0-9a-f]{64}$' "$receipt_file" ||
+       ! grep -Eq '^result_sha256: sha256:[0-9a-f]{64}$' "$receipt_file" ||
+       ! grep -Eq '^outcomes: PASS=[0-9]+ FAIL=0 BLOCKED=0$' "$receipt_file"; then
+      printf '%s result=FAIL reason=incomplete-local-reproducibility-fields\n' "$assertion"
+      failed=1
+      continue
+    fi
     printf '%s result=PASS receipt=%s\n' "$assertion" "$receipt"
   done < "$index"
 }
@@ -159,7 +171,9 @@ assert_all ASSERT_DECISION_PACKAGE_SCOPE \
   'The spike must not add public schemas, CLI/MCP commands, operation-registry entries, production packages, deployment configuration, or community implementation code.'
 assert_gate ASSERT_INVESTIGATION_GATE_EXACT I 1 8 \
   'INVESTIGATION_ADMITTED = PASS(I-01..I-08)' \
-  'No partial admission exists.'
+  'No partial admission exists.' \
+  'Each passing receipt is a reproducibility record, not a cryptographic attestation.' \
+  'Gate I does not require an authority, key, signature, opaque Program A token, or cross-user trust.'
 assert_receipt_index
 if [ "$failed" -eq 0 ]; then
   assert_receipts
