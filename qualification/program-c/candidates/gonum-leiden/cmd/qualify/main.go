@@ -28,6 +28,7 @@ type receipt struct {
 	Schema          string            `json:"schema"`
 	Recommendation  string            `json:"recommendation"`
 	Repository      map[string]any    `json:"repository"`
+	Profile         map[string]string `json:"profile"`
 	Command         []string          `json:"command"`
 	Inputs          map[string]string `json:"inputs"`
 	Candidate       map[string]string `json:"candidate"`
@@ -120,6 +121,9 @@ func main() {
 		"qualification/program-c/i-06-determinism-policy.v1.json",
 		"qualification/program-c/i-07-resource-envelope.v1.json",
 		"qualification/program-c/gate-i-i-01-all-profiles.receipt.txt",
+		"qualification/program-c/gate-i-i-03-pinned-gonum-leiden.receipt.txt",
+		"qualification/program-c/gate-i-i-04-pinned-gonum-leiden.receipt.txt",
+		"qualification/program-c/gate-i-receipts.tsv",
 	}
 	boundInputs, e := repositoryDigests(root, policyPaths)
 	if e != nil {
@@ -127,7 +131,7 @@ func main() {
 	}
 	boundInputs["retained_export_path"] = input
 	boundInputs["retained_export_sha256"] = q.Digest(raw)
-	r := receipt{Schema: "lsp-trace.private.program-c.gonum-leiden.qualification.v1", Recommendation: "REJECTED", Repository: map[string]any{"revision": rev, "dirty": dirtyText != "", "status_porcelain_sha256": q.Digest([]byte(dirtyText))}, Command: append([]string{self}, os.Args[1:]...), Inputs: boundInputs, Candidate: map[string]string{"name": "gonum Leiden", "revision": q.CandidateRevision, "version": q.CandidateVersion, "module": "gonum.org/v1/gonum", "module_sum": q.GonumModuleSum, "go_mod_sum": q.GonumGoModSum, "license_sha256": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3", "module_zip_sha256": "sha256:7b10c89b38171e0f45ac55cd9e8791a83e43313e27594037303ab39c42c3f844", "module_mod_sha256": "sha256:8a17681ea0d86cd2de00b2a87745287f5a8d7a0ad55ec0c26c5b52f3552d30e7", "acquisition_command": "go mod download -json gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe", "executable": cid.Path, "executable_sha256": cid.SHA256}, Build: map[string]any{"go_tool": goid, "candidate_command": candidateBuild, "qualifier_command": qualifierBuild, "required_flags": []string{"-trimpath", "-buildvcs=false", "-ldflags=-buildid="}}, Supervisor: map[string]any{"implementation": sid, "ps": psid, "process_group": true, "rss_metric": "aggregate descendant RSS from /bin/ps -axo pid=,ppid=,rss=", "poll_interval_milliseconds": 20, "fail_closed": true}, Runtime: map[string]string{"go": runtime.Version(), "goos": runtime.GOOS, "goarch": runtime.GOARCH}, Parameters: map[string]any{"seed": uint64(1), "resolution": 1.0, "directed": true, "base_runs": q.Runs, "reverse_insertion_permutations": q.Permutations}, Limits: map[string]any{"wall_seconds": 60, "aggregate_process_tree_rss_bytes": int64(512 << 20), "nodes": q.MaxNodes, "edges": q.MaxEdges}}
+	r := receipt{Schema: "lsp-trace.private.program-c.gonum-leiden.qualification.v1", Recommendation: "REJECTED", Repository: map[string]any{"revision": rev, "dirty": dirtyText != "", "status_porcelain_sha256": q.Digest([]byte(dirtyText))}, Profile: map[string]string{"name": q.ProfileName, "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9", "projection_manifest": "qualification/program-c/projection-profiles.v1.json"}, Command: append([]string{self}, os.Args[1:]...), Inputs: boundInputs, Candidate: map[string]string{"name": "gonum Leiden", "revision": q.CandidateRevision, "version": q.CandidateVersion, "module": "gonum.org/v1/gonum", "module_sum": q.GonumModuleSum, "go_mod_sum": q.GonumGoModSum, "license_sha256": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3", "module_zip_sha256": "sha256:7b10c89b38171e0f45ac55cd9e8791a83e43313e27594037303ab39c42c3f844", "module_mod_sha256": "sha256:8a17681ea0d86cd2de00b2a87745287f5a8d7a0ad55ec0c26c5b52f3552d30e7", "acquisition_command": "go mod download -json gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe", "executable": cid.Path, "executable_sha256": cid.SHA256}, Build: map[string]any{"go_tool": goid, "candidate_command": candidateBuild, "qualifier_command": qualifierBuild, "required_flags": []string{"-trimpath", "-buildvcs=false", "-ldflags=-buildid="}}, Supervisor: map[string]any{"implementation": sid, "ps": psid, "process_group": true, "rss_metric": "aggregate descendant RSS from /bin/ps -axo pid=,ppid=,rss=", "poll_interval_milliseconds": 20, "fail_closed": true}, Runtime: map[string]string{"go": runtime.Version(), "goos": runtime.GOOS, "goarch": runtime.GOARCH}, Parameters: map[string]any{"seed": uint64(1), "resolution": 1.0, "directed": true, "base_runs": q.Runs, "reverse_insertion_permutations": q.Permutations}, Limits: map[string]any{"wall_seconds": 60, "aggregate_process_tree_rss_bytes": int64(512 << 20), "nodes": q.MaxNodes, "edges": q.MaxEdges}}
 	sup := q.DarwinSupervisor()
 	for i := 0; i < q.Runs+q.Permutations; i++ {
 		kind := "base"
