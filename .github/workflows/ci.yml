@@ -24,7 +24,9 @@ jobs:
       - name: Check Program C profiles
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 scripts/test-program-c-profiles.py
+        run: |
+          python3 scripts/test-program-c-profiles.py
+          python3 scripts/test-program-c-documentary-sources.py
       - name: Check shell syntax
         run: sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh
       - name: Check CI contract

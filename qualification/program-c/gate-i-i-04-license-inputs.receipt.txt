@@ -9,9 +9,9 @@ tool: python3 scripts/check-program-c-i-04.py at repository revision 57e72085390
 run_id: program-c-i-04-license-57e7208
 input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
 input_files: qualification/program-c/i-04-license-inputs.v1.json; scripts/check-program-c-i-04.py
-input_sha256: sha256:cff1bd2692f43252fb9885e57f802c9bc92a7f844b96152b76f6a2b23cc4fbcd
+input_sha256: sha256:76704c1087539f1781125da5206879744a4f8067ac092221ac14e2a8cb38bfc2
 result_scope: exact stdout bytes from the named command
-result_sha256: sha256:4f94d751cbb70e945b03ef51c6510dba973caf4cf1683428115273f2c5be20f9
+result_sha256: sha256:033eae78c4670d841bf04925e8909d8b2d202fbc137601063458ce188e81a4b7
 license_inventory: PASS=3 FAIL=0 BLOCKED=0
-outcomes: PASS=6 FAIL=0 BLOCKED=0
+outcomes: PASS=3 FAIL=0 BLOCKED=0
 claim_ceiling: I-04 records descriptive license and linkage inputs only for later authorized review; it states no legal compatibility conclusion and qualifies no candidate execution or Program C admission.
