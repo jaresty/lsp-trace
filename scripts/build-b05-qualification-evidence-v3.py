@@ -5,8 +5,9 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 legacy = root / 'qualification/retained/b05/qualification-matrix.v2.json'
-target = root / 'qualification/retained/b05/current/qualification-evidence.v3.json'
-selector = root / 'qualification/retained/b05/current/release-selection.v1.json'
+current_dir = root / 'qualification/retained/b05/current'
+initial_target = current_dir / 'qualification-evidence.v3.json'
+selector = current_dir / 'release-selection.v1.json'
 historical = 'git-blob:0bd7501a1fa9307002fd09c10e4bb3843141df0e'
 
 def canonical(value):
@@ -33,7 +34,19 @@ def atomic_no_replace_or_equal(path, data):
     finally:
         Path(name).unlink(missing_ok=True)
 
-def build(source=legacy):
+def atomic_replace(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix=path.name + '.', suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(name, path)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+def build(source=legacy, generation=1, supersedes=None):
     old = json.loads(source.read_text())
     boundary = {
         'transport': 'real-lsp-trace-mcp-stdio',
@@ -48,8 +61,8 @@ def build(source=legacy):
         'schema_version': 'lsp-trace.b05-qualification-evidence.v3',
         'evidence_id': '',
         'family': 'b05-production-provider-qualification',
-        'generation': 1,
-        'supersedes': None,
+        'generation': generation,
+        'supersedes': supersedes,
         'derived_from': [{
             'family': 'lsp-trace.b05-qualification-matrix',
             'schema_version': 'v2',
@@ -70,28 +83,50 @@ def build(source=legacy):
         'release_check': old['release_check']
     }
     evidence['evidence_id'] = logical_id(evidence)
-    selection = {
+    return evidence
+
+def substance(value):
+    body = dict(value)
+    for key in ('evidence_id', 'generation', 'supersedes'):
+        body.pop(key, None)
+    return body
+
+def next_evidence(source):
+    if not selector.exists():
+        return build(source), initial_target
+    selected = json.loads(selector.read_text())
+    previous_path = root / selected['selected_evidence']
+    previous = json.loads(previous_path.read_text())
+    candidate = build(source, previous['generation'], previous.get('supersedes'))
+    if substance(candidate) == substance(previous):
+        return previous, previous_path
+    generation = previous['generation'] + 1
+    target = current_dir / f'qualification-evidence.v3.generation-{generation}.json'
+    return build(source, generation, previous['evidence_id']), target
+
+def release_selection(evidence, target):
+    return {
         'schema_version': 'lsp-trace.b05-release-selection.v1',
-        'selected_evidence': 'qualification/retained/b05/current/qualification-evidence.v3.json',
+        'selected_evidence': target.relative_to(root).as_posix(),
         'selected_evidence_id': evidence['evidence_id'],
         'admission_ceiling': 'PROGRAM_B_NOT_ADMITTED'
     }
-    return evidence, selection
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--retain', action='store_true', help='publish generation 1 and its release selector')
+    parser.add_argument('--retain', action='store_true', help='publish an immutable generation and update its release selector')
     parser.add_argument('--output', type=Path, help='write an unretained candidate at this path')
     parser.add_argument('--legacy-input', type=Path, default=legacy, help='v2 candidate to convert')
     args = parser.parse_args()
     if args.retain and args.output:
         parser.error('--retain and --output are mutually exclusive')
-    evidence, selection = build(args.legacy_input)
+    evidence, target = next_evidence(args.legacy_input)
+    selection = release_selection(evidence, target)
     data = (json.dumps(evidence, indent=2) + '\n').encode()
     if args.retain:
         atomic_no_replace_or_equal(target, data)
-        atomic_no_replace_or_equal(selector, (json.dumps(selection, indent=2) + '\n').encode())
-        print(f'PASS ASSERT_B05_V3_RETAINED evidence_id={evidence["evidence_id"]}')
+        atomic_replace(selector, (json.dumps(selection, indent=2) + '\n').encode())
+        print(f'PASS ASSERT_B05_V3_RETAINED generation={evidence["generation"]} evidence_id={evidence["evidence_id"]}')
     else:
         output = args.output or Path(tempfile.mkstemp(prefix='b05-qualification-evidence-v3.', suffix='.json')[1])
         output.write_bytes(data)

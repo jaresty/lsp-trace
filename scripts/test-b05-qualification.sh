@@ -10,6 +10,7 @@ for path in \
   qualification/retained/b05/archive/qualification-matrix.v2.git-0bd7501a1fa9307002fd09c10e4bb3843141df0e.json \
   qualification/retained/b05/archive/qualification-matrix.v2.git-0bd7501a1fa9307002fd09c10e4bb3843141df0e.manifest.json \
   qualification/retained/b05/current/qualification-evidence.v3.json \
+  qualification/retained/b05/current/qualification-evidence.v3.generation-2.json \
   qualification/retained/b05/current/release-selection.v1.json \
   schema/schemas/lsp-trace.immutable-evidence-manifest.v1.schema.json \
   schema/schemas/lsp-trace.b05-qualification-evidence.v3.schema.json \

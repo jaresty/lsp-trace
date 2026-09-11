@@ -1,9 +1,35 @@
 {
-  "schema_version": "lsp-trace.b05-qualification-matrix.v2",
-  "provider_package_sha256": "sha256:1ed4318d7bdf103efa279d5a5bb5eff12ec2f1a4fb435d5328ef2082ebc3a8da",
-  "provider_executable_sha256": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
-  "PROGRAM_B_ADMITTED": false,
-  "admission_rule": "all_requested_relations_supported",
+  "schema_version": "lsp-trace.b05-qualification-evidence.v3",
+  "evidence_id": "sha256:37e8243b24b4c1722c03fe8b8865e75d6d740ec4f97bed78158e642fc3bcbaaf",
+  "family": "b05-production-provider-qualification",
+  "generation": 2,
+  "supersedes": "sha256:13f4110c7d715794eac7176e80e1b2bc5898852add8b91b44dd3820f385c0f62",
+  "derived_from": [
+    {
+      "family": "lsp-trace.b05-qualification-matrix",
+      "schema_version": "v2",
+      "identity": "git-blob:0bd7501a1fa9307002fd09c10e4bb3843141df0e",
+      "relationship": "ADDITIVE_SUCCESSOR"
+    }
+  ],
+  "production_boundary": {
+    "transport": "real-lsp-trace-mcp-stdio",
+    "provider_identity": "ember-glint@1",
+    "provider_path_kind": "independently-packed-installed",
+    "workspace_custody": "PROVIDER_PROVED",
+    "provider_package_sha256": "sha256:1ed4318d7bdf103efa279d5a5bb5eff12ec2f1a4fb435d5328ef2082ebc3a8da",
+    "provider_executable_sha256": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
+    "evidence_kind": "NATIVE_PROVIDER"
+  },
+  "admission": {
+    "rule": "all_requested_relations_supported",
+    "ceiling": "PROGRAM_B_NOT_ADMITTED",
+    "PROGRAM_B_ADMITTED": false,
+    "blocked_relations": [
+      "INVOKES_TASK",
+      "TRIGGERS_RELOAD"
+    ]
+  },
   "seeds": [
     {
       "ID": "binds-argument-positive",
@@ -131,7 +157,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "binds-argument-positive-slice",
@@ -161,7 +188,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "binds-argument-negative-incoming",
@@ -179,7 +207,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "binds-argument-negative-slice",
@@ -197,7 +226,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "passes-callback-positive-incoming",
@@ -227,7 +257,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "passes-callback-positive-slice",
@@ -257,7 +288,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "passes-callback-negative-incoming",
@@ -275,7 +307,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "passes-callback-negative-slice",
@@ -293,7 +326,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "invokes-task-positive-incoming",
@@ -312,7 +346,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "invokes-task-positive-slice",
@@ -331,7 +366,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "invokes-task-negative-incoming",
@@ -350,7 +386,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "invokes-task-negative-slice",
@@ -369,7 +406,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "triggers-reload-positive-incoming",
@@ -388,7 +426,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "triggers-reload-positive-slice",
@@ -407,7 +446,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "triggers-reload-negative-incoming",
@@ -426,7 +466,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "triggers-reload-negative-slice",
@@ -445,7 +486,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_NOT_SUPPORTED",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "updates-state-positive-incoming",
@@ -475,7 +517,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "updates-state-positive-slice",
@@ -505,7 +548,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "updates-state-negative-incoming",
@@ -523,7 +567,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "updates-state-negative-slice",
@@ -541,7 +586,8 @@
       "DeterministicReplay": true,
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
-      "CoverageBoundary": "frozen-confusable-negative-seed-only"
+      "CoverageBoundary": "frozen-confusable-negative-seed-only",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "renders-from-positive-incoming",
@@ -571,7 +617,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "renders-from-positive-slice",
@@ -601,7 +648,8 @@
       "DoesNotSupport": [
         "runtime_execution",
         "whole_source_completeness"
-      ]
+      ],
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "renders-from-negative-incoming",
@@ -620,7 +668,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_PROVIDER_UNAVAILABLE",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     },
     {
       "ID": "renders-from-negative-slice",
@@ -639,7 +688,8 @@
       "CanonicalEnvelope": true,
       "OverclaimsAbsence": false,
       "DomainCode": "RELATION_PROVIDER_UNAVAILABLE",
-      "CoverageBoundary": "frozen-seed-analysis-unavailable"
+      "CoverageBoundary": "frozen-seed-analysis-unavailable",
+      "EvidenceKind": "NATIVE_PROVIDER"
     }
   ],
   "stages": [

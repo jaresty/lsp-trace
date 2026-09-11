@@ -74,8 +74,9 @@ func loadFrame6(t *testing.T) frame6Matrix {
 }
 func TestFrame6ExactQualificationMatrix(t *testing.T) {
 	m := loadFrame6(t)
-	if m.SchemaVersion != "lsp-trace.b05-qualification-evidence.v3" || m.Family != "b05-production-provider-qualification" || m.Generation != 1 || m.Supersedes != nil {
-		t.Fatal("ASSERT_B05_FRAME6_MATRIX_SCHEMA")
+	const predecessor = "sha256:13f4110c7d715794eac7176e80e1b2bc5898852add8b91b44dd3820f385c0f62"
+	if m.SchemaVersion != "lsp-trace.b05-qualification-evidence.v3" || m.Family != "b05-production-provider-qualification" || m.Generation != 2 || m.Supersedes == nil || *m.Supersedes != predecessor {
+		t.Fatal("ASSERT_B05_FRAME6_ADDITIVE_GENERATION_SCHEMA")
 	}
 	if len(m.Seeds) != 12 {
 		t.Fatalf("ASSERT_B05_FRAME6_EXACT_TWELVE_SEEDS: %d", len(m.Seeds))
