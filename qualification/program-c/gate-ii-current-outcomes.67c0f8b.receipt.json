@@ -1,0 +1,66 @@
+{
+  "schema_version": "lsp-trace.private.program-c.gate-ii-evaluation.v1",
+  "repository_revision": "67c0f8b43e90f775f2320bbc9907d012f3236142",
+  "command": [
+    "python3",
+    "scripts/check-program-c-gate-ii.py",
+    "--root",
+    ".",
+    "--outcomes",
+    "qualification/program-c/gate-ii-current-outcomes.tsv"
+  ],
+  "inputs": {
+    "docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md": "sha256:117613aee7e6ec4fcc6dc03cdf5461cb90f84b91b400fd25497ec112cdea60f6",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:02e7a1528ad6a1e96c4f258c7887f6e1bd0734de259218c3b442613019e56ec2",
+    "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt": "sha256:577c05a0aecba29cc3406f4f1dbc8748830fcaf726d950730f677c00e292a8c5",
+    "qualification/program-c/gate-i-i-02-deterministic-analysis.receipt.txt": "sha256:e629849196a17acac577a0323c4abdbdaa8b08604c913a317a7021d658608fd9",
+    "qualification/program-c/gate-i-i-03-candidate-inventory.receipt.txt": "sha256:b387abd191742933bb30c0310da36c7528e5f7889dda51c9a54904aafa4293ab",
+    "qualification/program-c/gate-i-i-04-license-inputs.receipt.txt": "sha256:4a97236f4eb8da36025552be410896543e09c4ee99f6901a197f07687bb3dfea",
+    "qualification/program-c/gate-i-i-05-portability.receipt.txt": "sha256:fef1dab77b92289277bba13da89d79e5038d226384501d0daf5f178e4b12b492",
+    "qualification/program-c/gate-i-i-06-determinism.receipt.txt": "sha256:397dbe040ac842d6b40f5426b60ab6214ee43dcfac153eb4680f9a8abe9d1619",
+    "qualification/program-c/gate-i-i-07-resource.receipt.txt": "sha256:9f5428397171b74f7b2b387893c7a1471b9dcca2fb0162770b3d915d272b778e",
+    "qualification/program-c/gate-i-i-08-neutrality.receipt.txt": "sha256:cfecdd2b61ab92b6fcbbf8341dc5673b1e28df0bc5d4fdfd1193cbec620aa16b",
+    "qualification/program-c/i-03-candidate-inventory.v1.json": "sha256:bea2dca0a82aad0518c0eab0acb233cebe5ec766b2e75b58cbcc4a3c33991f2e",
+    "qualification/program-c/i-04-license-inputs.v1.json": "sha256:177f8d988df26bd8bce60908ce38fe11d206476f2d005e386a1573bbc53a22a1",
+    "qualification/program-c/i-05-portability-questions.v1.json": "sha256:f04593ae8aa3580601a7b66b3c116a443a12681ca2fce120e8139d4ab79df5e7",
+    "qualification/program-c/i-08-neutrality-examples.v1.json": "sha256:465740e1726aab5cdaa28696fcb81d2ded844c610ab80f8ddbc305f005593043",
+    "qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json": "sha256:7ccee10a0303138c91152874ec1bfbb396834358c7e3341766b115ebf5a2073d",
+    "qualification/program-c/gate-ii-current-outcomes.tsv": "sha256:780c42d7f80beace5b8f82dac4b340aeb81a7a95822bdac4292571adb32082c4",
+    "scripts/check-program-c-gate-ii.py": "sha256:b6aa81e0769fb5bcb4797ff8aee517baa3c792ed8d89c53f21402cfca0d9b37a"
+  },
+  "input_digest_policy": "SHA-256 over exact bytes of each named repository-relative input; path-to-digest map is part of the canonical receipt",
+  "result": {
+    "stdout": "PROGRAM_C_GATE_II PASS=2 FAIL=4 BLOCKED=4 IMPLEMENTATION_DECISION_ALLOWED=false\n",
+    "stdout_sha256": "sha256:ef1ab3cdcb5d1243ad2ae4b4bbbab18241bc692dab2549308e885e2720f69b87",
+    "counts": {
+      "PASS": 2,
+      "FAIL": 4,
+      "BLOCKED": 4
+    },
+    "implementation_decision_allowed": false
+  },
+  "outcomes": {
+    "A-01": "PASS",
+    "A-02": "FAIL",
+    "A-03": "BLOCKED",
+    "A-04": "FAIL",
+    "A-05": "FAIL",
+    "A-06": "FAIL",
+    "A-07": "BLOCKED",
+    "A-08": "BLOCKED",
+    "A-09": "PASS",
+    "A-10": "BLOCKED"
+  },
+  "missing_evidence": [
+    "A-02 requires comparison against two evaluated candidates.",
+    "A-03 requires authorized license approval for the selected distribution and linkage model.",
+    "A-04 requires reproducible qualification across declared required platform coordinates.",
+    "A-05 requires complete projection identity and declared runtime-scope replay.",
+    "A-06 requires the complete bounded fixture-category inventory and outcomes.",
+    "A-07 requires a complete boundary accounting contract.",
+    "A-08 requires a complete instability contract.",
+    "A-10 requires a reviewed Gate II test plan."
+  ],
+  "claim_ceiling": "This receipt records a bounded Gate II evaluation only. It does not authorize implementation, production dependency adoption, public schemas, CLI or MCP surfaces, deployment, or semantic feature/business-boundary claims.",
+  "receipt_sha256": "sha256:febe16307721e83cd3d89ca260ccc6c64faa4dc034d047604adbc5e5d2e1b95b"
+}
