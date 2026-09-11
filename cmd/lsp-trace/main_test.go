@@ -19,6 +19,15 @@ import (
 	"lsp-trace/internal/lsp"
 )
 
+func TestTopLevelHelpSucceedsOnStdout(t *testing.T) {
+	for _, arg := range []string{"--help", "-h"} {
+		stdout, stderr, code := captureRun(t, []string{arg})
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "usage:\n") || !strings.Contains(stdout, "lsp-trace incoming") {
+			t.Fatalf("ASSERT_TOP_LEVEL_HELP_SUCCESS: arg=%s code=%d stdout=%q stderr=%q", arg, code, stdout, stderr)
+		}
+	}
+}
+
 func TestTopLevelUsageAdvertisesFilterAndSchemaFamilies(t *testing.T) {
 	stdout, stderr, code := captureRun(t, nil)
 	if code != 1 || stdout != "" {

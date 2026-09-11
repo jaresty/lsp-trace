@@ -78,6 +78,10 @@ type config struct {
 
 func main() { code := run(os.Args[1:]); os.Exit(code) }
 func run(args []string) int {
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Fprintln(os.Stdout, usageText)
+		return 0
+	}
 	if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
 		version, rest, err := acquisitionVersion(args[1:])
 		if err != nil {
