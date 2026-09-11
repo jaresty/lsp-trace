@@ -116,8 +116,9 @@ func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing
 	}
 	privateRaw, err := os.ReadFile(privatePath)
 	if err != nil {
-		if !strings.Contains(stderr.String(), "private request diagnostics unavailable: PROJECTION_REJECTED") && !strings.Contains(stderr.String(), "private request diagnostics unavailable: SOURCE_UNCERTIFIED") && !strings.Contains(stderr.String(), "private request diagnostics unavailable: PUBLICATION_REJECTED") {
-			t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_FINALIZED_OR_REASON_CENSUS: %v stderr=%s", err, stderr.String())
+		const reason = "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding"
+		if !strings.Contains(stderr.String(), reason) {
+			t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_ARTIFACT_DEPENDENCY_GUIDANCE: %v stderr=%s", err, stderr.String())
 		}
 		return
 	}

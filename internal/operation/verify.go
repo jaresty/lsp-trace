@@ -8,6 +8,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/retainedrelations"
 	"lsp-trace/internal/v5sourcesnapshot"
 	"lsp-trace/internal/verification"
 )
@@ -72,6 +73,11 @@ func NewVerifyHandler(loader CustodyLoader) Handler {
 				return verifyFailure("VERIFICATION_FAILED", err)
 			}
 			logicalDigest = identity.GraphV5Digest
+		} else if identity.SchemaVersion == retainedrelations.Version {
+			if _, err := retainedrelations.Validate(material.Artifact); err != nil {
+				return verifyFailure("VERIFICATION_FAILED", err)
+			}
+			logicalDigest = ""
 		} else if err := graph.ValidateSemanticBundle(bytes.TrimSpace(material.Artifact)); err != nil {
 			return verifyFailure("VERIFICATION_FAILED", err)
 		}

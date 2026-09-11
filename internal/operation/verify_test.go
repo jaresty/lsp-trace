@@ -12,6 +12,7 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/retainedrelations"
 	"lsp-trace/internal/verification"
 )
 
@@ -125,6 +126,42 @@ func TestVerifyHandlerAcceptsGraphProvenanceV5AndPreservesExactBytes(t *testing.
 	}))(context.Background(), verifyRequest(`"v5-selector.json"`))
 	if failure == nil || failure.Code != "VERIFICATION_FAILED" || !strings.Contains(failure.Error(), "digest mismatch") {
 		t.Fatalf("ASSERT_VERIFY_V5_FAIL_CLOSED: %#v", failure)
+	}
+}
+
+func TestVerifyHandlerAcceptsRetainedRelationsWithoutGraphParseFallback(t *testing.T) {
+	native, err := json.Marshal(graph.Result{
+		SchemaVersion: graph.SchemaVersionV5,
+		Invocation: graph.Invocation{
+			Server:     graph.ServerInvocation{Command: "fake-lsp"},
+			Provenance: graph.InvocationProvenance{InvocationID: "session", SourceRevision: "commit", ServerVersion: "fake@1"},
+		},
+		Summary: graph.Summary{Complete: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := graphprovenance.CaptureV5(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := retainedrelations.Export(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := verification.ReceiptBytes(artifact, verification.DirectoryDurabilityChecked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	material := CustodyMaterial{Artifact: artifact, Receipt: receipt}
+	result, failure := NewVerifyHandler(custodyLoaderFunc(func(context.Context, json.RawMessage) (CustodyMaterial, *Failure) {
+		return material, nil
+	}))(context.Background(), verifyRequest(`"retained-relations.selector.json"`))
+	if failure != nil {
+		t.Fatalf("ASSERT_VERIFY_RETAINED_RELATIONS_ACCEPTED: %v diagnostics=%v", failure, failure.Diagnostics)
+	}
+	if !bytes.Equal(result.Artifact, artifact) || result.LogicalDigest != "" {
+		t.Fatalf("ASSERT_VERIFY_RETAINED_RELATIONS_EXACT_BYTES_NO_INVENTED_DIGEST: digest=%q", result.LogicalDigest)
 	}
 }
 

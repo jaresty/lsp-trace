@@ -361,7 +361,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if len(result.Artifact) > 0 {
 			finalizeRequestDiagnostics(result.Artifact)
 		} else if requestDiagnosticsRequested {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable: PROJECTION_REJECTED")
+			fmt.Fprintln(stderr, "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding")
 		}
 		return fail(failed)
 	}

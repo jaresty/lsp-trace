@@ -24,10 +24,7 @@ type commandCustodyLoader struct{}
 func (commandCustodyLoader) Load(_ context.Context, input json.RawMessage) (operation.CustodyMaterial, *operation.Failure) {
 	var selectorPath string
 	if err := json.Unmarshal(input, &selectorPath); err != nil || selectorPath == "" {
-		if err == nil {
-			err = fmt.Errorf("verification selector path is required")
-		}
-		return custodyFailure(err)
+		return custodyFailure(fmt.Errorf("verify requires input shaped as {\"input\":\"<generation-selector-path>\"}; pass the publication selector, not artifact, family, or version fields"))
 	}
 	material, err := loadCustodyMaterial(selectorPath)
 	if err != nil {
