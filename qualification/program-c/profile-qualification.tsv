@@ -3,4 +3,4 @@ calls-v1	csharp	none	csharp-ls	0.27.0.0	yes	PASS	qualification/program-c/calls-v
 calls-v1	go	none	gopls	0.23.0	yes	PASS	qualification/program-c/calls-v1-go-gopls-0.23.0.receipt.json	sha256:36ff70993224c2c5a4534424896ace7462c3eed140d0b8903c255d6681853890
 callback-flow-v1	typescript	ember	ember-glint	1.0.3	yes	PASS	qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json	sha256:3cae12defcd6a3433721d635f916504a06d4c4a697d717f5e910bf2e251eab34
 state-flow-v1	typescript	ember	ember-glint	1.0.3	yes	PASS	qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json	sha256:731eceff4a94571644a7a23a734f2bbed2569f2eba9403e00f5b8b738bcf66f1
-ui-lifecycle-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
+ui-lifecycle-v1	typescript	ember	ember-glint	1.0.3	yes	PASS	qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json	sha256:e991f7c1245348c9685820b28a5f3e2449aaf4f2060728f820a3a6a5e890bda4

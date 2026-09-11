@@ -1,0 +1,96 @@
+{
+  "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
+  "result": "PASS",
+  "current": true,
+  "repository_revision": "4fe57d27a8a22c2744c6be45aeccd2d812256644",
+  "selection": {
+    "status": "CURRENT",
+    "supersedes": null
+  },
+  "profile": {
+    "name": "ui-lifecycle-v1",
+    "logical_digest": "sha256:7fcd4d2ad0e0670b0e8aab117d45f0a181b629beda4f5ee895814fcffe430af3",
+    "relations": [
+      "RENDERS_FROM",
+      "TRIGGERS_RELOAD"
+    ]
+  },
+  "coordinate": {
+    "language": "typescript",
+    "framework": "ember",
+    "provider": "ember-glint",
+    "provider_version": "1.0.3",
+    "observed_provider_identity": "ember-glint",
+    "observed_provider_version": "1.0.3"
+  },
+  "policy_matrix_identity": {
+    "profile_manifest": "qualification/program-c/projection-profiles.v1.json",
+    "profile_manifest_sha256": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix": "qualification/program-c/profile-qualification.tsv",
+    "qualification_matrix_prepublication_sha256": "sha256:b822e02ebf466ffb03332aea37a418bd7c2713748c5f02bb9aa27dab4e8c1024",
+    "matrix_row": [
+      "ui-lifecycle-v1",
+      "typescript",
+      "ember",
+      "ember-glint",
+      "1.0.3",
+      "yes",
+      "PASS"
+    ]
+  },
+  "tool_identity": {
+    "name": "lsp-trace",
+    "revision": "4fe57d27a8a22c2744c6be45aeccd2d812256644",
+    "version_output": "lsp-trace program-c-ui-lifecycle-qualifier/1 revision=4fe57d27a8a22c2744c6be45aeccd2d812256644 modified=false"
+  },
+  "exact_command": [
+    "node",
+    "scripts/qualify-program-c-ui-lifecycle.mjs",
+    "--revision",
+    "$REVISION",
+    "--output",
+    "$OUTPUT"
+  ],
+  "command_bindings": {
+    "REVISION": "4fe57d27a8a22c2744c6be45aeccd2d812256644",
+    "OUTPUT": "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json"
+  },
+  "run_identity": {
+    "run_id": "program-c-ui-lifecycle-4fe57d27a8a2",
+    "generation": "1",
+    "replay_runs_per_relation": "2"
+  },
+  "input_sha256": {
+    "profile_manifest": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix_prepublication": "sha256:b822e02ebf466ffb03332aea37a418bd7c2713748c5f02bb9aa27dab4e8c1024",
+    "provider_package_manifest": "sha256:f860fa188675806f040f354a6c83f255f798712714b86dbc7436add849a9c5a6",
+    "provider_executable": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
+    "qualifier_script": "sha256:05b50849df5650462731eb1a86fdc77155853b2fe1ec5847a5266c3d30334835",
+    "renders_from_fixture": "sha256:76a994838e224f5e4a3977ef59dc11a499cc996ea767c3cd822635e638d4cbd2",
+    "triggers_reload_fixture": "sha256:c8670238cc637334cd393c02d3de334793118ac9c11a991879e926c435aa1343",
+    "requests": "sha256:00784993b0de754a6e9bd8e9e52db9ea880ee7a3bdb6dbd0769b351aae04e4c6"
+  },
+  "result_sha256": "sha256:9adfc50f5c29e742c7938983fc426130e613e121dfb859ccc25715cf6fcb09b3",
+  "relation_evidence": [
+    {
+      "relation": "RENDERS_FROM",
+      "status": "PASS",
+      "count": 1,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    },
+    {
+      "relation": "TRIGGERS_RELOAD",
+      "status": "PASS",
+      "count": 1,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    }
+  ],
+  "claim_ceiling": {
+    "scope": "EXACT_COORDINATE_AND_INPUTS_ONLY",
+    "whole_source_complete": false,
+    "source_authenticated": false,
+    "cross_coordinate_transfer": false
+  }
+}
