@@ -1,0 +1,109 @@
+{
+  "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
+  "result": "PASS",
+  "current": true,
+  "repository_revision": "d3f2b4f6edad68ada53f2d7e392b1a1db411fcb0",
+  "selection": {
+    "status": "CURRENT",
+    "supersedes": null
+  },
+  "profile": {
+    "name": "callback-flow-v1",
+    "logical_digest": "sha256:2465dc8d224e71532966cd0c3b396b3c35f3b4ad5c64a7ed0915a472d773daca",
+    "relations": [
+      "BINDS_ARGUMENT",
+      "PASSES_CALLBACK",
+      "INVOKES_TASK"
+    ]
+  },
+  "coordinate": {
+    "language": "typescript",
+    "framework": "ember",
+    "provider": "ember-glint",
+    "provider_version": "1.0.3",
+    "observed_provider_identity": "ember-glint",
+    "observed_provider_version": "1.0.3"
+  },
+  "policy_matrix_identity": {
+    "profile_manifest": "qualification/program-c/projection-profiles.v1.json",
+    "profile_manifest_sha256": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix": "qualification/program-c/profile-qualification.tsv",
+    "qualification_matrix_prepublication_sha256": "sha256:0727f82ba22c6f1e8664013ccec9c38822aba14625e909bf3adaccdcb41075ec",
+    "matrix_row": [
+      "callback-flow-v1",
+      "typescript",
+      "ember",
+      "ember-glint",
+      "1.0.3",
+      "yes",
+      "PASS"
+    ]
+  },
+  "tool_identity": {
+    "name": "lsp-trace",
+    "revision": "d3f2b4f6edad68ada53f2d7e392b1a1db411fcb0",
+    "version_output": "lsp-trace program-c-ember-callback-flow-qualifier/1 revision=d3f2b4f6edad68ada53f2d7e392b1a1db411fcb0 modified=false"
+  },
+  "exact_command": [
+    "python3",
+    "scripts/qualify-program-c-ember-callback-flow.py",
+    "--repository-revision",
+    "$REPOSITORY_REVISION",
+    "--output",
+    "$RECEIPT"
+  ],
+  "command_bindings": {
+    "REPOSITORY_REVISION": "d3f2b4f6edad68ada53f2d7e392b1a1db411fcb0",
+    "RECEIPT": "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json"
+  },
+  "run_identity": {
+    "run_id": "program-c-ember-callback-flow-2f56b37640afdb5b1788b850",
+    "generation": "2f56b37640afdb5b1788b850"
+  },
+  "input_sha256": {
+    "profile_manifest": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix_prepublication": "sha256:0727f82ba22c6f1e8664013ccec9c38822aba14625e909bf3adaccdcb41075ec",
+    "provider_package_manifest": "sha256:f860fa188675806f040f354a6c83f255f798712714b86dbc7436add849a9c5a6",
+    "provider_executable": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
+    "qualifier_script": "sha256:c1fd4e883b874a9a7657d3d0e9294644858619f3e51af7504adb566c3fcf676f",
+    "binds_argument_fixture": "sha256:ea9bd1bec781e4ecaaed3b8045c4fd158a24ee1ff98cdcfd8ec9d866ba834e8a",
+    "binds_argument_request": "sha256:b527963c7cf852c6257d99110521994df60caf30ef1fefdf0b5c406405359b0a",
+    "binds_argument_result": "sha256:61cc529e0791503ab043d6ad25404a69aab4329b90a834e744936c5a7e38dafb",
+    "passes_callback_fixture": "sha256:2293d3baacb7121b6d15c15c94d45aab07e7a775db9b5bc9e04825efc52463aa",
+    "passes_callback_request": "sha256:c4cd1ba641a6d7a17694e61e7f486555aa9cc947bdae4e747a964d31ca9d7eb7",
+    "passes_callback_result": "sha256:f21cb1d00d149574f726a54679c848c87fcd9e5bd60accf2351257618c60730f",
+    "invokes_task_fixture": "sha256:e2db819ac3a170f7632a7d883cd30e5783add8bb0a90b56a72158df375d7ca2a",
+    "invokes_task_request": "sha256:80a4fe5d5b3123d3430fea1a0ea95fa3cfc7025a3d07cc3b551822cd73b453b3",
+    "invokes_task_result": "sha256:51dd6abe15efe770693ba447e1ea52f6cd728761973771851fed0e6978a13eab"
+  },
+  "result_sha256": "sha256:2af2b563795a37eac6974e9829be8139f7c6e12a083c0484c79088ac46e59fb8",
+  "relation_evidence": [
+    {
+      "relation": "BINDS_ARGUMENT",
+      "status": "PASS",
+      "count": 1,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    },
+    {
+      "relation": "PASSES_CALLBACK",
+      "status": "PASS",
+      "count": 1,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    },
+    {
+      "relation": "INVOKES_TASK",
+      "status": "PASS",
+      "count": 1,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    }
+  ],
+  "claim_ceiling": {
+    "scope": "EXACT_COORDINATE_AND_INPUTS_ONLY",
+    "whole_source_complete": false,
+    "source_authenticated": false,
+    "cross_coordinate_transfer": false
+  }
+}

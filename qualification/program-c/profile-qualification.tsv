@@ -1,6 +1,6 @@
 # profile	language	framework	provider	provider_version	required	status	receipt	receipt_sha256
 calls-v1	csharp	none	csharp-ls	0.27.0.0	yes	PASS	qualification/program-c/calls-v1-csharp-csharp-ls-0.27.0.0.receipt.json	sha256:9f09091e4cd5510fe80dc0edcb4111ef640c064d6ed1f0999421a35fdfe9bd2c
 calls-v1	go	none	gopls	0.23.0	yes	PASS	qualification/program-c/calls-v1-go-gopls-0.23.0.receipt.json	sha256:36ff70993224c2c5a4534424896ace7462c3eed140d0b8903c255d6681853890
-callback-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
+callback-flow-v1	typescript	ember	ember-glint	1.0.3	yes	PASS	qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json	sha256:3cae12defcd6a3433721d635f916504a06d4c4a697d717f5e910bf2e251eab34
 state-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
 ui-lifecycle-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
