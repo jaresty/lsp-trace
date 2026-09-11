@@ -3,6 +3,7 @@ package programccompose
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,7 +17,11 @@ import (
 func capture(t *testing.T, suffix string, nodes []graph.Node, edges []graph.Edge, complete, truncated bool) Input {
 	t.Helper()
 	seed := graph.InvocationSeed{Label: "seed" + suffix, At: "a.go:1:1", ResolvedURI: "file:///w/a.go", ContentSHA256: "sha256:" + strings.Repeat("a", 64), LanguageID: "go"}
-	r := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Seeds: []graph.InvocationSeed{seed}, Provenance: graph.InvocationProvenance{InvocationID: "session", SourceRevision: "commit", ServerVersion: "gopls@1"}}, Nodes: nodes, Edges: edges, Seeds: []graph.SeedResult{{Label: seed.Label}}, Summary: graph.Summary{Complete: complete, Truncated: truncated}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
+	var frontier []graph.Boundary
+	if len(nodes) > 0 {
+		frontier = []graph.Boundary{{NodeID: nodes[0].ID, Reason: graph.MaxDepth}}
+	}
+	r := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Seeds: []graph.InvocationSeed{seed}, Provenance: graph.InvocationProvenance{InvocationID: "invocation-" + suffix, SourceRevision: "commit", ServerVersion: "gopls@1"}}, Nodes: nodes, Edges: edges, Seeds: []graph.SeedResult{{Label: seed.Label}}, Frontier: frontier, Diagnostics: []graph.Diagnostic{{Phase: "capture-" + suffix, Message: "diagnostic-" + suffix}}, Summary: graph.Summary{Complete: complete, Truncated: truncated}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
 	native, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -58,6 +63,19 @@ func TestComposePermutationUnionDedupeReplayAndConservativeCompleteness(t *testi
 	}
 	if len(one.Artifact.Nodes) != 3 || len(one.Artifact.Edges) != 3 || len(one.Artifact.Constituents) != 3 {
 		t.Fatalf("ASSERT_DISJOINT_OVERLAP_UNION_AND_RECEIPT_MULTIPLICITY nodes=%d edges=%d constituents=%d", len(one.Artifact.Nodes), len(one.Artifact.Edges), len(one.Artifact.Constituents))
+	}
+	compatibilityJSON, _ := json.Marshal(one.Artifact.Compatibility)
+	invocations := map[string]bool{}
+	for _, c := range one.Artifact.Constituents {
+		invocations[c.InvocationID] = true
+	}
+	if len(invocations) < 2 || bytes.Contains(compatibilityJSON, []byte("InvocationID")) {
+		t.Fatal("ASSERT_DISTINCT_INVOCATIONS_ALLOWED_WITHOUT_HOMOGENEOUS_CLAIM")
+	}
+	for _, c := range one.Artifact.Constituents {
+		if c.InvocationID == "" || len(c.Invocation) == 0 || len(c.Seeds) == 0 || len(c.Frontier) == 0 || len(c.Diagnostics) == 0 || len(c.Summary) == 0 {
+			t.Fatal("ASSERT_CONSTITUENT_TRAVERSAL_DIAGNOSTICS_AND_INVOCATION_PRESERVED")
+		}
 	}
 	occ := 0
 	self := false
@@ -162,21 +180,85 @@ func TestPolicyIdentity(t *testing.T) {
 	t.Logf("POLICY_DIGEST=%s POLICY_BYTES=%q", PolicyDigest(), PolicyBytes)
 }
 
-func TestAggregateCapEqualityAndPlusOne(t *testing.T) {
-	if err := enforceAggregateCaps(0, 10_000, 100_000); err != nil {
-		t.Fatal("ASSERT_AGGREGATE_CAP_EQUALITY", err)
+func TestResourceAndSemanticWorkCapEqualityAndPlusOne(t *testing.T) {
+	atLimit := WorkAccounting{Inputs: MaxInputs, NodeRecords: 10_000, EdgeRecords: 100_000, Occurrences: 100_000, ReceiptRecords: MaxWorkUnits - MaxInputs - 10_000 - 100_000 - 100_000}
+	if err := enforceResourceCaps(MaxTotalInputBytes, atLimit); err != nil {
+		t.Fatal("ASSERT_BYTE_AND_SEMANTIC_WORK_CAP_EQUALITY", err)
 	}
-	if err := enforceAggregateCaps(0, 10_001, 100_000); err == nil {
+	if err := enforceResourceCaps(MaxTotalInputBytes+1, atLimit); err == nil {
+		t.Fatal("ASSERT_BYTE_CAP_PLUS_ONE")
+	}
+	tooMuchWork := atLimit
+	tooMuchWork.ReceiptRecords++
+	if err := enforceResourceCaps(MaxTotalInputBytes, tooMuchWork); err == nil {
+		t.Fatal("ASSERT_SEMANTIC_WORK_CAP_PLUS_ONE")
+	}
+	if err := enforceResourceCaps(0, WorkAccounting{NodeRecords: 10_001, MergedNodes: 10_001}); err == nil {
 		t.Fatal("ASSERT_NODE_CAP_PLUS_ONE")
 	}
-	if err := enforceAggregateCaps(0, 10_000, 100_001); err == nil {
+	if err := enforceResourceCaps(0, WorkAccounting{Occurrences: 100_001}); err == nil {
 		t.Fatal("ASSERT_OCCURRENCE_CAP_PLUS_ONE")
 	}
-	if err := enforceAggregateCaps(MaxWorkUnits, 0, 0); err != nil {
-		t.Fatal("ASSERT_WORK_CAP_EQUALITY", err)
+}
+
+func TestInvocationIdentityMutationReplacementAndReorderingBindings(t *testing.T) {
+	a := node("a")
+	x := capture(t, "x", []graph.Node{a}, nil, true, false)
+	y := capture(t, "y", []graph.Node{a}, nil, true, false)
+	original, err := Compose([]Input{x, y})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := enforceAggregateCaps(MaxWorkUnits+1, 0, 0); err == nil {
-		t.Fatal("ASSERT_WORK_CAP_PLUS_ONE")
+	replaced := capture(t, "replacement", []graph.Node{a}, nil, true, false)
+	changed, err := Compose([]Input{x, replaced})
+	if err != nil {
+		t.Fatal("ASSERT_DISTINCT_INVOCATION_REPLACEMENT_NOT_FALSE_CONFLICT", err)
+	}
+	if original.Artifact.CompositeID == changed.Artifact.CompositeID {
+		t.Fatal("ASSERT_INVOCATION_REPLACEMENT_CHANGES_COMPOSITE_ID")
+	}
+	mutated := original.Artifact
+	mutated.Constituents[0].InvocationID = "tampered"
+	mutated.CompositeID, mutated.OutputSHA256 = "", ""
+	pre, _ := json.Marshal(mutated)
+	mutated.CompositeID = digest("lsp-trace:program-c-compose:identity:v1", pre)
+	pre, _ = json.Marshal(mutated)
+	mutated.OutputSHA256 = digest("lsp-trace:program-c-compose:output:v1", pre)
+	raw, _ := json.Marshal(mutated)
+	if _, err := Validate(append(raw, '\n')); err == nil {
+		t.Fatal("ASSERT_RESEALED_INVOCATION_TAMPER_REJECTED")
+	}
+	reordered := original.Artifact
+	reordered.Constituents[0], reordered.Constituents[1] = reordered.Constituents[1], reordered.Constituents[0]
+	reordered.CompositeID, reordered.OutputSHA256 = "", ""
+	pre, _ = json.Marshal(reordered)
+	reordered.CompositeID = digest("lsp-trace:program-c-compose:identity:v1", pre)
+	pre, _ = json.Marshal(reordered)
+	reordered.OutputSHA256 = digest("lsp-trace:program-c-compose:output:v1", pre)
+	raw, _ = json.Marshal(reordered)
+	if _, err := Validate(append(raw, '\n')); err == nil {
+		t.Fatal("ASSERT_RESEALED_CONSTITUENT_REORDER_REJECTED")
+	}
+}
+
+func TestFutureSourceSupplyShapeFailsClosed(t *testing.T) {
+	a := node("a")
+	x := capture(t, "x", []graph.Node{a}, nil, true, false)
+	var env map[string]any
+	if err := json.Unmarshal(x.Bytes, &env); err != nil {
+		t.Fatal(err)
+	}
+	graphBytes, _ := base64.StdEncoding.DecodeString(env["graph_v5"].(string))
+	var native map[string]any
+	_ = json.Unmarshal(graphBytes, &native)
+	native["source_supply"] = map[string]any{"future": true}
+	graphBytes, _ = json.Marshal(native)
+	env["graph_v5"] = base64.StdEncoding.EncodeToString(graphBytes)
+	env["graph_v5_sha256"] = rawDigest(graphBytes)
+	raw, _ := json.Marshal(env)
+	x.Bytes, x.ByteLength, x.SHA256 = append(raw, '\n'), len(raw)+1, rawDigest(append(raw, '\n'))
+	if _, err := Compose([]Input{x, x}); err == nil {
+		t.Fatal("ASSERT_UNADAPTED_V5_SOURCE_SUPPLY_FAILS_CLOSED")
 	}
 }
 

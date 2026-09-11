@@ -26,7 +26,7 @@ const (
 	ClaimCeiling       = "STRUCTURAL_SERVER_REPORTED_CALLS_UNION_ONLY;NO_WHOLE_WORKSPACE_COMPLETENESS;NO_FEATURE_IDENTITY;NO_OWNERSHIP;NO_ARCHITECTURE;NO_RUNTIME_EXECUTION;NO_PRODUCER_AUTHENTICATION;NO_PERMISSION;NO_PRODUCTION_AUTHORITY"
 )
 
-var PolicyBytes = []byte("program-c-multi-capture-policy.v1\ninputs=2..16\ntotal_input_bytes<=268435456\nwork_units=input_bytes+nodes+occurrences<=400000\nnodes<=10000\noccurrences<=100000\nsame_session_generation_revision_workspace_encoding_provider_language_semantics_sensitivity\nexact-id-equivalent-content-dedupe;conflict-fails\nno-inference;no-truncation;constituents-preserved\n")
+var PolicyBytes = []byte("program-c-multi-capture-policy.v1\ninputs=2..16\ntotal_input_bytes<=268435456\nsemantic_work_units=inputs+traversed_node_records+traversed_edge_records+traversed_occurrences+traversed_receipt_or_source_supply_records<=400000\nnodes<=10000\noccurrences<=100000\nsame_session_generation_revision_custody_workspace_encoding_provider_language_acquisition_evidence_sensitivity_privacy\ndistinct_invocations_preserved_and_canonical_identity_bound;no_homogeneous_invocation_claim\nexact-id-equivalent-canonical-typed-content-dedupe;conflict-fails\nno-inference;no-truncation;constituent_seeds_traversal_frontier_completeness_diagnostics_preserved\nno_forged_producer_provenance;not_one_native_capture;conservative_claim_ceiling\nsource_supply_adaptation=blocked_until_converged_v5_contract\n")
 
 func PolicyDigest() string { return digest("lsp-trace:program-c-compose:policy:v1", PolicyBytes) }
 
@@ -50,15 +50,17 @@ type Constituent struct {
 	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID string
 	ByteLength, GraphByteLength                                 int
 	BytesBase64                                                 string
-	SessionID                                                   string
+	SessionID, InvocationID                                     string
 	Generation                                                  uint64
+	Invocation, Seeds, Frontier, Diagnostics, Summary, Slice    json.RawMessage
+	SourceSupplyStatus                                          string
 }
 
 type Compatibility struct {
-	WorkspaceURI, SourceRevision, InvocationID, PositionEncoding string
-	RevisionCustody, AcquisitionSemantics, PrivacyPolicy         string
-	ServerCommand, ServerVersion, LanguageID                     string
-	EvidenceSemantics, SensitivityPolicy                         json.RawMessage
+	WorkspaceURI, SourceRevision, PositionEncoding       string
+	RevisionCustody, AcquisitionSemantics, PrivacyPolicy string
+	ServerCommand, ServerVersion, LanguageID             string
+	EvidenceSemantics, SensitivityPolicy                 json.RawMessage
 }
 
 type Completeness struct {
@@ -68,10 +70,15 @@ type Completeness struct {
 	PerInput             []json.RawMessage
 }
 
+type WorkAccounting struct {
+	Inputs, NodeRecords, EdgeRecords, Occurrences, ReceiptRecords, MergedNodes, SemanticWork int
+}
+
 type Artifact struct {
 	Version, PolicyVersion, PolicySHA256, CompositeID, OutputSHA256, ClaimCeiling string
 	Constituents                                                                  []Constituent
 	Compatibility                                                                 Compatibility
+	Work                                                                          WorkAccounting
 	Nodes                                                                         []graph.Node
 	Edges                                                                         []graph.Edge
 	Completeness                                                                  Completeness
@@ -93,20 +100,33 @@ type envelope struct {
 }
 
 type native struct {
-	SchemaVersion string `json:"schema_version"`
-	Invocation    struct {
-		WorkspaceURI, LanguageID string
-		Server                   graph.ServerInvocation
-		Provenance               graph.InvocationProvenance
-		Seeds                    []graph.InvocationSeed
-	} `json:"invocation"`
-	Nodes             []graph.Node           `json:"nodes"`
-	Edges             []graph.Edge           `json:"edges"`
-	EvidenceSemantics json.RawMessage        `json:"evidence_semantics"`
-	SensitivityPolicy json.RawMessage        `json:"sensitivity_policy"`
-	EvidenceReceipt   *graph.EvidenceReceipt `json:"evidence_receipt"`
-	Summary           json.RawMessage        `json:"summary"`
-	PositionEncoding  string                 `json:"position_encoding"`
+	SchemaVersion         string          `json:"schema_version"`
+	ExecutionBundleID     json.RawMessage `json:"execution_bundle_id"`
+	Tool                  json.RawMessage `json:"tool"`
+	Invocation            json.RawMessage `json:"invocation"`
+	Identity              json.RawMessage `json:"identity"`
+	SensitivityPolicy     json.RawMessage `json:"sensitivity_policy"`
+	ProcessContext        json.RawMessage `json:"process_context"`
+	EvidenceSemantics     json.RawMessage `json:"evidence_semantics"`
+	EvidenceReceipt       json.RawMessage `json:"evidence_receipt"`
+	SeedMemberships       json.RawMessage `json:"seed_memberships"`
+	ReplayInputManifest   json.RawMessage `json:"replay_input_manifest"`
+	PortableLocators      json.RawMessage `json:"portable_locators"`
+	Capabilities          json.RawMessage `json:"capabilities"`
+	CapabilityQuality     json.RawMessage `json:"capability_quality"`
+	Targets               json.RawMessage `json:"targets"`
+	Nodes                 []graph.Node    `json:"nodes"`
+	Edges                 []graph.Edge    `json:"edges"`
+	Terminals             json.RawMessage `json:"terminals"`
+	Frontier              json.RawMessage `json:"frontier"`
+	Diagnostics           json.RawMessage `json:"diagnostics"`
+	SiblingCandidates     json.RawMessage `json:"sibling_candidates"`
+	DispatchRelationships json.RawMessage `json:"dispatch_relationships"`
+	Seeds                 json.RawMessage `json:"seeds"`
+	Slice                 json.RawMessage `json:"slice"`
+	Summary               json.RawMessage `json:"summary"`
+	TraceReceipt          json.RawMessage `json:"trace_receipt"`
+	inv                   graph.Invocation
 }
 
 type summary struct {
@@ -155,13 +175,16 @@ func Compose(inputs []Input) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		var n native
-		if err := json.Unmarshal(gb, &n); err != nil {
+		n, err := parseNative(gb)
+		if err != nil {
 			return Result{}, fmt.Errorf("input %d graph: %w", i, err)
 		}
-		items[i] = admitted{in: in, env: e, n: n, c: Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation}}
+		items[i] = admitted{in: in, env: e, n: n, c: Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice), SourceSupplyStatus: "BLOCKED_PENDING_CONVERGED_V5_CONTRACT"}}
 	}
 	sort.Slice(items, func(i, j int) bool {
+		if items[i].c.InvocationID != items[j].c.InvocationID {
+			return items[i].c.InvocationID < items[j].c.InvocationID
+		}
 		if items[i].in.SHA256 != items[j].in.SHA256 {
 			return items[i].in.SHA256 < items[j].in.SHA256
 		}
@@ -173,6 +196,7 @@ func Compose(inputs []Input) (Result, error) {
 	}
 	nodes := map[string]graph.Node{}
 	edges := map[string]graph.Edge{}
+	work := WorkAccounting{Inputs: len(items)}
 	occurrenceCount := 0
 	per := make([]json.RawMessage, len(items))
 	allComplete := true
@@ -187,6 +211,9 @@ func Compose(inputs []Input) (Result, error) {
 		}
 		allComplete = allComplete && s.TraversalComplete
 		anyTruncated = anyTruncated || s.Truncated
+		work.NodeRecords += len(x.n.Nodes)
+		work.EdgeRecords += len(x.n.Edges)
+		work.ReceiptRecords += receiptRecordCount(x.n.EvidenceReceipt)
 		for _, n := range x.n.Nodes {
 			if old, ok := nodes[n.ID]; ok && !canonicalEqual(old, n) {
 				return Result{}, fmt.Errorf("node id conflict %q", n.ID)
@@ -195,6 +222,7 @@ func Compose(inputs []Input) (Result, error) {
 		}
 		for _, e := range x.n.Edges {
 			occurrenceCount += len(e.CallSites)
+			work.Occurrences += len(e.CallSites)
 			if occurrenceCount > programc.MaxOccurrences {
 				return Result{}, errors.New("occurrence cap exceeded")
 			}
@@ -207,7 +235,9 @@ func Compose(inputs []Input) (Result, error) {
 			}
 		}
 	}
-	if err := enforceAggregateCaps(total, len(nodes), occurrenceCount); err != nil {
+	work.MergedNodes = len(nodes)
+	work.SemanticWork = semanticWork(work)
+	if err := enforceResourceCaps(total, work); err != nil {
 		return Result{}, err
 	}
 	ns := make([]graph.Node, 0, len(nodes))
@@ -220,7 +250,7 @@ func Compose(inputs []Input) (Result, error) {
 		es = append(es, e)
 	}
 	sort.Slice(es, func(i, j int) bool { return es[i].RelationID < es[j].RelationID })
-	a := Artifact{Version: Version, PolicyVersion: PolicyVersion, PolicySHA256: PolicyDigest(), ClaimCeiling: ClaimCeiling, Constituents: constituents, Compatibility: compat, Nodes: ns, Edges: es, Completeness: Completeness{AllTraversalComplete: allComplete, AnyTruncated: anyTruncated, WholeWorkspace: false, PerInput: per}}
+	a := Artifact{Version: Version, PolicyVersion: PolicyVersion, PolicySHA256: PolicyDigest(), ClaimCeiling: ClaimCeiling, Constituents: constituents, Compatibility: compat, Work: work, Nodes: ns, Edges: es, Completeness: Completeness{AllTraversalComplete: allComplete, AnyTruncated: anyTruncated, WholeWorkspace: false, PerInput: per}}
 	pre, _ := json.Marshal(a)
 	a.CompositeID = digest("lsp-trace:program-c-compose:identity:v1", pre)
 	pre, _ = json.Marshal(a)
@@ -252,7 +282,11 @@ func Validate(raw []byte) (Artifact, error) {
 	if id != digest("lsp-trace:program-c-compose:identity:v1", pre) {
 		return a, errors.New("composite identity mismatch")
 	}
-	for _, c := range a.Constituents {
+	replayInputs := make([]Input, len(a.Constituents))
+	for i, c := range a.Constituents {
+		if i > 0 && constituentAfter(a.Constituents[i-1], c) {
+			return a, errors.New("constituent canonical order mismatch")
+		}
 		b, err := base64.StdEncoding.DecodeString(c.BytesBase64)
 		if err != nil || len(b) != c.ByteLength || rawDigest(b) != c.SHA256 {
 			return a, errors.New("constituent replay mismatch")
@@ -260,43 +294,77 @@ func Validate(raw []byte) (Artifact, error) {
 		if _, err = graphprovenance.ValidateFor(b, graphprovenance.Family, "v5"); err != nil {
 			return a, err
 		}
+		var e envelope
+		if err = strictDecode(b, &e); err != nil {
+			return a, err
+		}
+		gb, decodeErr := base64.StdEncoding.DecodeString(e.GraphV5)
+		if decodeErr != nil {
+			return a, decodeErr
+		}
+		n, parseErr := parseNative(gb)
+		if parseErr != nil {
+			return a, parseErr
+		}
+		want := Constituent{Identity: c.Identity, SHA256: c.SHA256, ByteLength: len(b), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: c.BytesBase64, SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice), SourceSupplyStatus: "BLOCKED_PENDING_CONVERGED_V5_CONTRACT"}
+		if !canonicalEqual(c, want) {
+			return a, errors.New("constituent projected binding mismatch")
+		}
+		replayInputs[i] = Input{Bytes: b, Identity: c.Identity, SHA256: c.SHA256, ByteLength: c.ByteLength, ExactMetadata: ExactMetadata{WorkspaceIdentity: a.Compatibility.WorkspaceURI, RevisionCustody: a.Compatibility.RevisionCustody, PositionEncoding: a.Compatibility.PositionEncoding, AcquisitionSemantics: a.Compatibility.AcquisitionSemantics, PrivacyPolicy: a.Compatibility.PrivacyPolicy}}
+	}
+	if a.Work.SemanticWork != semanticWork(a.Work) {
+		return a, errors.New("semantic work accounting mismatch")
+	}
+	replayed, err := Compose(replayInputs)
+	if err != nil {
+		return a, fmt.Errorf("constituent recomposition failed: %w", err)
+	}
+	if !bytes.Equal(raw, replayed.Bytes) {
+		return a, errors.New("composite does not equal canonical constituent recomposition")
 	}
 	return a, nil
 }
 
 func compatible(xs []admitted) (Compatibility, error) {
 	first := xs[0]
-	c := Compatibility{WorkspaceURI: first.in.ExactMetadata.WorkspaceIdentity, SourceRevision: first.n.Invocation.Provenance.SourceRevision, InvocationID: first.n.Invocation.Provenance.InvocationID, PositionEncoding: first.in.ExactMetadata.PositionEncoding, RevisionCustody: first.in.ExactMetadata.RevisionCustody, AcquisitionSemantics: first.in.ExactMetadata.AcquisitionSemantics, PrivacyPolicy: first.in.ExactMetadata.PrivacyPolicy, ServerCommand: first.n.Invocation.Server.Command, ServerVersion: first.n.Invocation.Provenance.ServerVersion, LanguageID: language(first.n), EvidenceSemantics: cloneRaw(first.n.EvidenceSemantics), SensitivityPolicy: cloneRaw(first.n.SensitivityPolicy)}
-	if c.WorkspaceURI == "" || c.SourceRevision == "" || c.InvocationID == "" || c.ServerCommand == "" || c.ServerVersion == "" || c.LanguageID == "" || len(c.EvidenceSemantics) == 0 || len(c.SensitivityPolicy) == 0 {
+	c := Compatibility{WorkspaceURI: first.in.ExactMetadata.WorkspaceIdentity, SourceRevision: first.n.inv.Provenance.SourceRevision, PositionEncoding: first.in.ExactMetadata.PositionEncoding, RevisionCustody: first.in.ExactMetadata.RevisionCustody, AcquisitionSemantics: first.in.ExactMetadata.AcquisitionSemantics, PrivacyPolicy: first.in.ExactMetadata.PrivacyPolicy, ServerCommand: first.n.inv.Server.Command, ServerVersion: first.n.inv.Provenance.ServerVersion, LanguageID: language(first.n), EvidenceSemantics: cloneRaw(first.n.EvidenceSemantics), SensitivityPolicy: cloneRaw(first.n.SensitivityPolicy)}
+	if c.WorkspaceURI == "" || c.SourceRevision == "" || first.n.inv.Provenance.InvocationID == "" || c.ServerCommand == "" || c.ServerVersion == "" || c.LanguageID == "" || len(c.EvidenceSemantics) == 0 || len(c.SensitivityPolicy) == 0 {
 		return c, errors.New("ambiguous required compatibility identity")
 	}
 	for _, x := range xs[1:] {
-		if x.env.SessionID != first.env.SessionID || x.env.Generation != first.env.Generation || x.in.ExactMetadata != first.in.ExactMetadata || x.n.Invocation.Provenance.SourceRevision != c.SourceRevision || x.n.Invocation.Provenance.InvocationID != c.InvocationID || x.n.Invocation.Server.Command != c.ServerCommand || x.n.Invocation.Provenance.ServerVersion != c.ServerVersion || language(x.n) != c.LanguageID || !bytes.Equal(x.n.EvidenceSemantics, c.EvidenceSemantics) || !bytes.Equal(x.n.SensitivityPolicy, c.SensitivityPolicy) {
+		if x.n.inv.Provenance.InvocationID == "" || x.env.SessionID != first.env.SessionID || x.env.Generation != first.env.Generation || x.in.ExactMetadata != first.in.ExactMetadata || x.n.inv.Provenance.SourceRevision != c.SourceRevision || x.n.inv.Server.Command != c.ServerCommand || x.n.inv.Provenance.ServerVersion != c.ServerVersion || language(x.n) != c.LanguageID || !bytes.Equal(x.n.EvidenceSemantics, c.EvidenceSemantics) || !bytes.Equal(x.n.SensitivityPolicy, c.SensitivityPolicy) {
 			return c, errors.New("capture compatibility mismatch")
 		}
 	}
 	return c, nil
 }
-func enforceAggregateCaps(inputBytes, nodes, occurrences int) error {
-	if nodes > programc.MaxNodes {
+func enforceResourceCaps(inputBytes int, work WorkAccounting) error {
+	if inputBytes > MaxTotalInputBytes {
+		return errors.New("total input byte cap exceeded")
+	}
+	if work.MergedNodes > programc.MaxNodes {
 		return errors.New("node cap exceeded")
 	}
-	if occurrences > programc.MaxOccurrences {
+	if work.Occurrences > programc.MaxOccurrences {
 		return errors.New("occurrence cap exceeded")
 	}
-	if inputBytes+nodes+occurrences > MaxWorkUnits {
-		return errors.New("work unit cap exceeded")
+	if semanticWork(work) > MaxWorkUnits {
+		return errors.New("semantic work unit cap exceeded")
 	}
 	return nil
 }
 
+func semanticWork(w WorkAccounting) int {
+	return w.Inputs + w.NodeRecords + w.EdgeRecords + w.Occurrences + w.ReceiptRecords
+}
+
 func language(n native) string {
-	if n.Invocation.LanguageID != "" {
-		return n.Invocation.LanguageID
+	if n.inv.LanguageID != "" {
+		return n.inv.LanguageID
 	}
-	if len(n.Invocation.Seeds) > 0 {
-		v := n.Invocation.Seeds[0].LanguageID
-		for _, s := range n.Invocation.Seeds {
+	if len(n.inv.Seeds) > 0 {
+		v := n.inv.Seeds[0].LanguageID
+		for _, s := range n.inv.Seeds {
 			if s.LanguageID != v {
 				return ""
 			}
@@ -305,6 +373,49 @@ func language(n native) string {
 	}
 	return ""
 }
+func parseNative(b []byte) (native, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(b, &fields); err != nil {
+		return native{}, err
+	}
+	for name := range fields {
+		if name == "source_supply" || name == "source_bindings" || name == "source_supply_receipts" {
+			return native{}, fmt.Errorf("source-supply field %q requires the converged V5 adaptation", name)
+		}
+	}
+	var n native
+	if err := strictDecode(b, &n); err != nil {
+		return native{}, fmt.Errorf("unsupported Graph V5 shape (source-supply adaptation required before admitting new fields): %w", err)
+	}
+	if err := strictDecode(n.Invocation, &n.inv); err != nil {
+		return native{}, fmt.Errorf("invocation: %w", err)
+	}
+	return n, nil
+}
+
+func receiptRecordCount(raw json.RawMessage) int {
+	if len(raw) == 0 || bytes.Equal(raw, []byte("null")) {
+		return 0
+	}
+	var receipt graph.EvidenceReceipt
+	if err := strictDecode(raw, &receipt); err != nil {
+		// The enclosing V5 validation has already accepted the bytes. Returning the
+		// cap-saturating value fails closed if this old adapter cannot count them.
+		return MaxWorkUnits + 1
+	}
+	return 1 + len(receipt.Relations)
+}
+
+func constituentAfter(a, b Constituent) bool {
+	if a.InvocationID != b.InvocationID {
+		return a.InvocationID > b.InvocationID
+	}
+	if a.SHA256 != b.SHA256 {
+		return a.SHA256 > b.SHA256
+	}
+	return a.Identity > b.Identity
+}
+
 func strictDecode(b []byte, v any) error {
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.DisallowUnknownFields()
