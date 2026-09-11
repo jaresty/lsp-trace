@@ -1,0 +1,54 @@
+{
+  "schema_version": "lsp-trace.private.program-c.gate-ii-evaluation.v1",
+  "repository_revision": "6935c05bd4aa672186d754313b6673b883dc0cac",
+  "supersedes": {
+    "path": "qualification/program-c/gate-ii-current-outcomes.67c0f8b.receipt.json",
+    "sha256": "sha256:3f80ebfe423318653311bafaa49cd6136984463a3d8511493f61e7a698e0b15d"
+  },
+  "command": [
+    "python3",
+    "scripts/check-program-c-gate-ii.py",
+    "--root",
+    ".",
+    "--outcomes",
+    "qualification/program-c/gate-ii-current-outcomes.v2.tsv"
+  ],
+  "inputs": {
+    "docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md": "sha256:2ff40cd64adc32c451fc46c40d59d2d03854d4a313092184f4a70b2a23003f33",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/gate-i-i-03-pinned-gonum-leiden.receipt.txt": "sha256:1d49d7498579be64b736966f47312726726c7170ce94be20550e2360a4cbc6d7",
+    "qualification/program-c/gate-i-i-04-pinned-gonum-leiden.receipt.txt": "sha256:2d0f0d9664addd5c58bd25672b0fdf0cfabe4adb8303f5a65893b69e25d33509",
+    "qualification/program-c/i-03-candidate-inventory.v2.json": "sha256:cdf9d729cc548500ff8220580479e82010b7b405693cf61cef66069f4dc9e5ab",
+    "qualification/program-c/i-04-license-inputs.v2.json": "sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d",
+    "qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json": "sha256:7ccee10a0303138c91152874ec1bfbb396834358c7e3341766b115ebf5a2073d",
+    "qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json": "sha256:9ed8f669b4f49a0b66da908f25c59706045c180c4bb7e53918396b9efeef2093",
+    "qualification/program-c/candidate-comparison.v1.json": "sha256:50ca4fb616b311c652d79d418978b862eca6426d4573adcd35645fd1c924d950",
+    "qualification/program-c/gate-ii-current-outcomes.v2.tsv": "sha256:3772f2a2beaf118daf8ba3a5443b2bdda0ce3165a31f02461ec52d582ab31cee",
+    "qualification/program-c/gate-ii-current-outcomes.67c0f8b.receipt.json": "sha256:3f80ebfe423318653311bafaa49cd6136984463a3d8511493f61e7a698e0b15d",
+    "scripts/check-program-c-gate-ii.py": "sha256:b6aa81e0769fb5bcb4797ff8aee517baa3c792ed8d89c53f21402cfca0d9b37a"
+  },
+  "result": {
+    "stdout": "PROGRAM_C_GATE_II PASS=4 FAIL=2 BLOCKED=4 IMPLEMENTATION_DECISION_ALLOWED=false\n",
+    "stdout_sha256": "sha256:dac530e498b155c296a691de5abb3c3733dc8c9acbd66756f2255bead28e7e4e",
+    "counts": {
+      "PASS": 4,
+      "FAIL": 2,
+      "BLOCKED": 4
+    },
+    "implementation_decision_allowed": false
+  },
+  "outcomes": {
+    "A-01": "PASS",
+    "A-02": "PASS",
+    "A-03": "BLOCKED",
+    "A-04": "FAIL",
+    "A-05": "PASS",
+    "A-06": "FAIL",
+    "A-07": "BLOCKED",
+    "A-08": "BLOCKED",
+    "A-09": "PASS",
+    "A-10": "BLOCKED"
+  },
+  "claim_ceiling": "This additive receipt records Gate II after exact pinned-commit Leiden qualification and two-candidate comparison. It does not authorize implementation, production dependency adoption, public surfaces, deployment, or semantic boundary claims.",
+  "receipt_sha256": "sha256:ac898ba0ca0341bef570dde1c375e4d0a5ef087a742a2a33170a3b02e4c5f767"
+}
