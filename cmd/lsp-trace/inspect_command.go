@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 
+	"lsp-trace/internal/ancillaryinspection"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/inspection"
 	"lsp-trace/internal/schema"
@@ -34,7 +35,7 @@ func validateAllSeedAccounting(projection inspectAllProjection) error {
 	return inspection.ValidateAllSeedAccounting(projection)
 }
 
-const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]"
+const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]"
 
 func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
@@ -54,6 +55,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	input := args[0]
 	seedLabel := fs.String("seed", "", "existing seed label")
 	allSeeds := fs.Bool("all-seeds", false, "inspect every stored seed")
+	ancillary := fs.Bool("ancillary", false, "emit lsp-trace.inspect-ancillary.v1 delivery")
 	jsonOutput := fs.Bool("json", false, "emit JSON")
 	hydrated := addHydratedFlags(fs)
 	if err := fs.Parse(args[1:]); err != nil {
@@ -69,14 +71,44 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		}
 	})
 	if hydrated.enabled {
-		if legacyVisited || fs.NArg() != 0 {
+		if legacyVisited || *ancillary || fs.NArg() != 0 {
 			fmt.Fprintln(stderr, "inspect: INVALID_INPUT: hydrated and legacy selectors are incompatible")
 			return 1
 		}
 		return runInspectHydrated(input, hydrated, *jsonOutput, stdout, stderr)
 	}
+	if *ancillary {
+		if !*allSeeds || *seedLabel != "" || fs.NArg() != 0 {
+			fmt.Fprintln(stderr, inspectUsage)
+			return 1
+		}
+		if hydrated.request.Page && !*jsonOutput {
+			fmt.Fprintln(stderr, "inspect ancillary: INVALID_INPUT: --page requires --json")
+			return 1
+		}
+		data, err := loadInspectArtifact(input)
+		if err != nil {
+			fmt.Fprintf(stderr, "inspect ancillary: %v\n", err)
+			return 1
+		}
+		raw, _ := json.Marshal(data)
+		r := ancillaryinspection.Request{Input: raw, Ancillary: true, Page: hydrated.request.Page, Cursor: hydrated.request.Cursor, Policy: ancillaryinspection.Policy{MaxPageBytes: hydrated.request.CorePolicy.MaxPageBytes, MaxPages: hydrated.request.CorePolicy.MaxPages, MaxOutputBytes: hydrated.request.CorePolicy.MaxOutputBytes}}
+		r.Selector.AllSeeds = true
+		view, err := ancillaryinspection.Inspect(r)
+		if err != nil {
+			fmt.Fprintf(stderr, "inspect ancillary: %v\n", err)
+			return 1
+		}
+		encoded, _ := json.Marshal(view)
+		_, err = stdout.Write(append(encoded, '\n'))
+		if err != nil {
+			fmt.Fprintf(stderr, "inspect ancillary: %v\n", err)
+			return 1
+		}
+		return 0
+	}
 	if hydratedVisited {
-		fmt.Fprintln(stderr, "inspect: INVALID_INPUT: focused options require --hydrated")
+		fmt.Fprintln(stderr, "inspect: INVALID_INPUT: focused options require --hydrated or --ancillary")
 		return 1
 	}
 	if (*seedLabel == "") == !*allSeeds || fs.NArg() != 0 {
