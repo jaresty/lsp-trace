@@ -1,8 +1,8 @@
 # gate_id	state	receipt	sha256
 I-01	PASS	qualification/program-c/gate-i-i-01-all-profiles.receipt.txt	sha256:577c05a0aecba29cc3406f4f1dbc8748830fcaf726d950730f677c00e292a8c5
 I-02	PASS	qualification/program-c/gate-i-i-02-deterministic-analysis.receipt.txt	sha256:e629849196a17acac577a0323c4abdbdaa8b08604c913a317a7021d658608fd9
-I-03	PASS	qualification/program-c/gate-i-i-03-candidate-inventory.receipt.txt	sha256:b387abd191742933bb30c0310da36c7528e5f7889dda51c9a54904aafa4293ab
-I-04	PASS	qualification/program-c/gate-i-i-04-license-inputs.receipt.txt	sha256:4a97236f4eb8da36025552be410896543e09c4ee99f6901a197f07687bb3dfea
+I-03	PASS	qualification/program-c/gate-i-i-03-pinned-gonum-leiden.receipt.txt	sha256:1d49d7498579be64b736966f47312726726c7170ce94be20550e2360a4cbc6d7
+I-04	PASS	qualification/program-c/gate-i-i-04-pinned-gonum-leiden.receipt.txt	sha256:2d0f0d9664addd5c58bd25672b0fdf0cfabe4adb8303f5a65893b69e25d33509
 I-05	PASS	qualification/program-c/gate-i-i-05-portability.receipt.txt	sha256:fef1dab77b92289277bba13da89d79e5038d226384501d0daf5f178e4b12b492
 I-06	PASS	qualification/program-c/gate-i-i-06-determinism.receipt.txt	sha256:397dbe040ac842d6b40f5426b60ab6214ee43dcfac153eb4680f9a8abe9d1619
 I-07	PASS	qualification/program-c/gate-i-i-07-resource.receipt.txt	sha256:9f5428397171b74f7b2b387893c7a1471b9dcca2fb0162770b3d915d272b778e

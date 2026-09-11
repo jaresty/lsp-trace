@@ -1,0 +1,19 @@
+gate_id: I-03
+result: PASS
+current: true
+repository_revision: b3efafda0f530ba0a768fef6e74e4759ee8f1f02
+supersedes: qualification/program-c/gate-i-i-03-candidate-inventory.receipt.txt
+supersedes_sha256: sha256:b387abd191742933bb30c0310da36c7528e5f7889dda51c9a54904aafa4293ab
+command: python3 scripts/check-program-c-i-03.py
+policy_matrix: qualification/program-c/i-03-candidate-inventory.v2.json
+packet_sha256: sha256:cdf9d729cc548500ff8220580479e82010b7b405693cf61cef66069f4dc9e5ab
+tool: python3 scripts/check-program-c-i-03.py at repository revision b3efafda0f530ba0a768fef6e74e4759ee8f1f02
+run_id: program-c-i-03-pinned-gonum-leiden-b3efafd
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/i-03-candidate-inventory.v2.json; qualification/program-c/i-03-candidate-inventory.v1.json; scripts/check-program-c-i-03.py
+input_sha256: sha256:8089a071f56d6310df7b1d82bbdb7709f9282f44f065ac74914bc6f7b752df4e
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:6c455798285ce4a7da5bfa3f937322f5cdf13877049f6d59f61670edb713fe58
+candidate_inventory: gonum-v0.17.0=louvain-comparator; gonum-leiden-69ca49f=authorized-qualification-only; infomap-v2.15.1=external-reference; leidenalg-0.12.0=rejected
+outcomes: PASS=7 FAIL=0 BLOCKED=0
+claim_ceiling: I-03 qualifies the exact pinned-commit inventory and acquisition boundary only; it does not establish runtime behavior, implementation authority, or production adoption.

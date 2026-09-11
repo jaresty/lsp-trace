@@ -1,0 +1,19 @@
+gate_id: I-04
+result: PASS
+current: true
+repository_revision: b3efafda0f530ba0a768fef6e74e4759ee8f1f02
+supersedes: qualification/program-c/gate-i-i-04-license-inputs.receipt.txt
+supersedes_sha256: sha256:4a97236f4eb8da36025552be410896543e09c4ee99f6901a197f07687bb3dfea
+command: python3 scripts/check-program-c-i-04.py
+policy_matrix: qualification/program-c/i-04-license-inputs.v2.json
+packet_sha256: sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d
+tool: python3 scripts/check-program-c-i-04.py at repository revision b3efafda0f530ba0a768fef6e74e4759ee8f1f02
+run_id: program-c-i-04-pinned-gonum-leiden-b3efafd
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/i-04-license-inputs.v2.json; qualification/program-c/i-04-license-inputs.v1.json; qualification/program-c/gonum-leiden-69ca49f.LICENSE; scripts/check-program-c-i-04.py
+input_sha256: sha256:0398bc2635c673fc7411219c7c4d934ea0ee818632213702f9850d7f8d0d15b9
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:0fab77969ef3d37af236cce13529def4e2b6dc8c8366431367e5a2f270132a1e
+license_inventory: exact Gonum pinned-commit BSD-3-Clause bytes retained; qualification-only linkage input
+outcomes: PASS=7 FAIL=0 BLOCKED=0
+claim_ceiling: I-04 records exact descriptive license bytes for qualification-only review; it is not legal approval and does not authorize production distribution or adoption.
