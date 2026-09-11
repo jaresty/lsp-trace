@@ -1,0 +1,17 @@
+{
+  "schema_version": "lsp-trace.private.program-c.graph-fixture.v1",
+  "directed": true,
+  "weighted": true,
+  "nodes": [
+    "zeta",
+    "alpha",
+    "middle",
+    "beta"
+  ],
+  "edges": [
+    {"from": "zeta", "to": "alpha", "weight": 5},
+    {"from": "beta", "to": "zeta", "weight": 1},
+    {"from": "alpha", "to": "middle", "weight": 2},
+    {"from": "middle", "to": "beta", "weight": 3}
+  ]
+}

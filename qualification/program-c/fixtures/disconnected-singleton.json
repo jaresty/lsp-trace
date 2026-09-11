@@ -1,0 +1,17 @@
+{
+  "schema_version": "lsp-trace.private.program-c.graph-fixture.v1",
+  "directed": true,
+  "weighted": true,
+  "nodes": [
+    "component-a",
+    "component-b",
+    "component-c",
+    "component-d",
+    "singleton"
+  ],
+  "edges": [
+    {"from": "component-a", "to": "component-b", "weight": 3},
+    {"from": "component-b", "to": "component-a", "weight": 1},
+    {"from": "component-c", "to": "component-d", "weight": 2}
+  ]
+}

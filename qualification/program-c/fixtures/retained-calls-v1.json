@@ -1,0 +1,16 @@
+{
+  "schema_version": "lsp-trace.private.program-c.graph-fixture.v1",
+  "directed": true,
+  "weighted": true,
+  "nodes": [
+    "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce",
+    "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+  ],
+  "edges": [
+    {
+      "from": "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce",
+      "to": "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413",
+      "weight": 2
+    }
+  ]
+}

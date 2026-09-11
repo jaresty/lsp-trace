@@ -1,0 +1,140 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-06-fixture-inventory.v1",
+  "inventory_id": "program-c-gate-ii-final-qualification-v1",
+  "candidate_scope": [
+    {
+      "name": "Gonum Louvain",
+      "module": "gonum.org/v1/gonum",
+      "version": "v0.17.0"
+    },
+    {
+      "name": "Gonum Leiden",
+      "module": "gonum.org/v1/gonum",
+      "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+      "version": "v0.17.1-0.20260426204603-69ca49f456a7"
+    }
+  ],
+  "seed_inventory": [1, 2],
+  "schedule": {
+    "base_repeats_per_candidate_fixture_seed": 3,
+    "deterministic_input_permutations_per_candidate_fixture_seed": 1,
+    "permutation": "reverse exact node insertion order and exact directed-edge insertion order"
+  },
+  "limits": {
+    "wall_seconds_per_run": 60,
+    "aggregate_process_tree_rss_bytes_per_run": 536870912,
+    "maximum_nodes_per_fixture": 10000,
+    "maximum_directed_weighted_edges_per_fixture": 100000
+  },
+  "required_classes": [
+    "directed",
+    "weighted",
+    "disconnected",
+    "singleton",
+    "high-degree-hub",
+    "adversarial-input-order"
+  ],
+  "fixtures": [
+    {
+      "id": "retained-calls-v1",
+      "provenance": {
+        "kind": "DERIVED_FROM_EXACT_RETAINED_PRIVATE_PROGRAM_C_INPUT",
+        "source_path": "internal/retainedcalls/testdata/frozen-v1-export.json",
+        "source_sha256": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011",
+        "derivation": "All exact endpoint identities and only SERVER_REPORTED_CALL_HIERARCHY groups; edge weight is exact admitted occurrence count."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/retained-calls-v1.json",
+        "sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 2,
+      "directed_weighted_edge_count": 1,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": ["directed", "weighted"]
+    },
+    {
+      "id": "disconnected-singleton",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "source_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "derivation": "Bounded private calls-v1 shape retained exactly to isolate disconnected components and a zero-degree singleton."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 5,
+      "directed_weighted_edge_count": 3,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": ["directed", "weighted", "disconnected", "singleton"]
+    },
+    {
+      "id": "high-degree-hub",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "source_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with one node incident to sixteen of seventeen directed weighted edges."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 10,
+      "directed_weighted_edge_count": 17,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": ["directed", "weighted", "high-degree-hub"]
+    },
+    {
+      "id": "adversarial-order",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/adversarial-order.json",
+        "source_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with deliberately non-lexicographic node and edge byte order."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/adversarial-order.json",
+        "sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 4,
+      "directed_weighted_edge_count": 4,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": ["directed", "weighted", "adversarial-input-order"]
+    }
+  ],
+  "claim_ceiling": "This private fixture inventory authorizes only exact bounded Program C qualification of the two named Gonum candidates after Gate I admission. It authorizes no fallback, substitution, sampling, truncation, approximation, production implementation, dependency adoption, public surface, or deployment."
+}

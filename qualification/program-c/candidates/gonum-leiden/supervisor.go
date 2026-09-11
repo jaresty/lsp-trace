@@ -21,13 +21,19 @@ type Limits struct {
 	RSSBytes int64
 	Poll     time.Duration
 }
+type ResourceSample struct {
+	ElapsedNanos int64 `json:"elapsed_nanos"`
+	TreeRSSBytes int64 `json:"tree_rss_bytes"`
+}
 type Observation struct {
-	ElapsedNanos     int64  `json:"elapsed_nanos"`
-	PeakTreeRSSBytes int64  `json:"peak_tree_rss_bytes"`
-	ExitKind         string `json:"exit_kind"`
+	ElapsedNanos     int64            `json:"elapsed_nanos"`
+	PeakTreeRSSBytes int64            `json:"peak_tree_rss_bytes"`
+	ExitKind         string           `json:"exit_kind"`
+	ResourceSamples  []ResourceSample `json:"resource_samples"`
 }
 type SupervisedResult struct {
-	Output      Output      `json:"output"`
+	RawOutput   RawOutput   `json:"raw_candidate_output"`
+	Output      Output      `json:"externally_canonicalized_output"`
 	Observation Observation `json:"observation"`
 }
 type Supervisor struct {
@@ -111,6 +117,7 @@ func (s Supervisor) Run(executable string, req Request) (SupervisedResult, error
 		kill()
 		return z, Fail("MEMORY_EXCEEDED", fmt.Sprint(peak))
 	}
+	samples := []ResourceSample{{ElapsedNanos: time.Since(started).Nanoseconds(), TreeRSSBytes: peak}}
 	if _, err = stdin.Write(in); err != nil {
 		kill()
 		return z, Fail("NONZERO_EXIT", err.Error())
@@ -124,7 +131,7 @@ func (s Supervisor) Run(executable string, req Request) (SupervisedResult, error
 	for {
 		select {
 		case err = <-done:
-			z.Observation = Observation{ElapsedNanos: time.Since(started).Nanoseconds(), PeakTreeRSSBytes: peak, ExitKind: "OK"}
+			z.Observation = Observation{ElapsedNanos: time.Since(started).Nanoseconds(), PeakTreeRSSBytes: peak, ExitKind: "OK", ResourceSamples: samples}
 			if err != nil {
 				detail := strings.TrimSpace(stderr.String())
 				if ee, ok := err.(*exec.ExitError); ok {
@@ -137,10 +144,19 @@ func (s Supervisor) Run(executable string, req Request) (SupervisedResult, error
 				}
 				return z, Fail("NONZERO_EXIT", detail)
 			}
-			if err = json.Unmarshal(stdout.Bytes(), &z.Output); err != nil {
+			if err = json.Unmarshal(stdout.Bytes(), &z.RawOutput); err != nil {
 				return z, Fail("NONCANONICAL_OUTPUT", "invalid JSON")
 			}
-			if err = ValidateCanonical(z.Output); err != nil {
+			expectedNodes := req.Fixture.Nodes
+			if req.Fixture.GraphBytes != "" {
+				graph, graphErr := parseGraphFixture(req.Fixture)
+				if graphErr != nil {
+					return z, graphErr
+				}
+				expectedNodes = graph.Nodes
+			}
+			z.Output, err = Canonicalize(z.RawOutput, expectedNodes)
+			if err != nil {
 				return z, err
 			}
 			return z, nil
@@ -154,6 +170,7 @@ func (s Supervisor) Run(executable string, req Request) (SupervisedResult, error
 				kill()
 				return z, Fail("MEMORY_UNSUPPORTED", e.Error())
 			}
+			samples = append(samples, ResourceSample{ElapsedNanos: time.Since(started).Nanoseconds(), TreeRSSBytes: rss})
 			if rss > peak {
 				peak = rss
 			}

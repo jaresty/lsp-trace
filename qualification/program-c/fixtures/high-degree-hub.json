@@ -1,0 +1,36 @@
+{
+  "schema_version": "lsp-trace.private.program-c.graph-fixture.v1",
+  "directed": true,
+  "weighted": true,
+  "nodes": [
+    "hub",
+    "leaf-1",
+    "leaf-2",
+    "leaf-3",
+    "leaf-4",
+    "leaf-5",
+    "leaf-6",
+    "leaf-7",
+    "leaf-8",
+    "tail"
+  ],
+  "edges": [
+    {"from": "hub", "to": "leaf-1", "weight": 8},
+    {"from": "leaf-1", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-2", "weight": 7},
+    {"from": "leaf-2", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-3", "weight": 6},
+    {"from": "leaf-3", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-4", "weight": 5},
+    {"from": "leaf-4", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-5", "weight": 4},
+    {"from": "leaf-5", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-6", "weight": 3},
+    {"from": "leaf-6", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-7", "weight": 2},
+    {"from": "leaf-7", "to": "hub", "weight": 1},
+    {"from": "hub", "to": "leaf-8", "weight": 1},
+    {"from": "leaf-8", "to": "hub", "weight": 1},
+    {"from": "tail", "to": "leaf-1", "weight": 2}
+  ]
+}
