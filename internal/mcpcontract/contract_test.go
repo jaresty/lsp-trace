@@ -41,6 +41,23 @@ func TestStage1Contract(t *testing.T) {
 	}
 }
 
+func TestInspectInputRejectsCallerAssertedGeneration(t *testing.T) {
+	manifest, err := LoadManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := findTool(manifest, "lsp_trace_v1_inspect")
+	if tool == nil {
+		t.Fatal("P_ANCILLARY_FORGED_GENERATION_REJECTED: inspect tool missing")
+	}
+	for _, forged := range []string{"forged", "generation-7"} {
+		raw := []byte(`{"input":"{}","selector":{"all_seeds":true},"ancillary":true,"generation":"` + forged + `"}`)
+		if err := ValidateJSON(tool.InputSchemaID, raw); err == nil {
+			t.Fatalf("P_ANCILLARY_FORGED_GENERATION_REJECTED: accepted %q", forged)
+		}
+	}
+}
+
 func findTool(manifest *Manifest, name string) *ToolContract {
 	for i := range manifest.Tools {
 		if manifest.Tools[i].Name == name {

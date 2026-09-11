@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/ancillaryinspection"
 	"lsp-trace/internal/graph"
 )
 
@@ -113,6 +114,42 @@ func TestInspectAllSeedsIsDeterministicEquivalentAndReadOnly(t *testing.T) {
 	selectorAfter, selectorErr := os.ReadFile(selector)
 	if artifactErr != nil || selectorErr != nil || !bytes.Equal(artifactAfter, artifactBytes) || !bytes.Equal(selectorAfter, selectorBefore) {
 		t.Fatalf("ASSERT_INSPECT_ALL_SEEDS_READ_ONLY: artifact_err=%v selector_err=%v artifact_equal=%v selector_equal=%v", artifactErr, selectorErr, bytes.Equal(artifactAfter, artifactBytes), bytes.Equal(selectorAfter, selectorBefore))
+	}
+}
+
+func TestInspectAncillaryGenerationComesOnlyFromValidatedSelector(t *testing.T) {
+	_, paths := inspectFixture(t)
+	artifact, selector, _ := strings.Cut(paths, "\x00")
+	selected, err := readGenerationSelector(selector)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name, input, wantGeneration string
+	}{
+		{name: "direct artifact omits generation", input: artifact},
+		{name: "validated selector binds exact generation", input: selector, wantGeneration: selected.Generation},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := captureRun(t, []string{"inspect", tc.input, "--all-seeds", "--ancillary", "--page", "--max-page-bytes", "4096", "--max-pages", "100", "--max-output-bytes", "1048576", "--json"})
+			if code != 0 || stderr != "" {
+				t.Fatalf("P_ANCILLARY_GENERATION_AUTHORITY: code=%d stderr=%q", code, stderr)
+			}
+			var view ancillaryinspection.View
+			if err := json.Unmarshal([]byte(stdout), &view); err != nil {
+				t.Fatal(err)
+			}
+			if view.Generation != tc.wantGeneration {
+				t.Fatalf("P_ANCILLARY_GENERATION_AUTHORITY: generation=%q want=%q", view.Generation, tc.wantGeneration)
+			}
+			if view.NextCursor != "" {
+				continued, continuedErr, continuedCode := captureRun(t, []string{"inspect", tc.input, "--all-seeds", "--ancillary", "--page", "--cursor", view.NextCursor, "--max-page-bytes", "4096", "--max-pages", "100", "--max-output-bytes", "1048576", "--json"})
+				if continuedCode != 0 || continuedErr != "" || !strings.Contains(continued, fmt.Sprintf(`"generation":%q`, tc.wantGeneration)) && tc.wantGeneration != "" {
+					t.Fatalf("P_ANCILLARY_CURSOR_GENERATION_BINDING: code=%d stderr=%q output=%q", continuedCode, continuedErr, continued)
+				}
+			}
+		})
 	}
 }
 

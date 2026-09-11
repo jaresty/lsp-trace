@@ -415,41 +415,55 @@ func openRootDirectoryNoFollow(root *os.Root, name string) (*os.Root, error) {
 	return child, nil
 }
 
+type validatedCustodiedGeneration struct {
+	artifact   []byte
+	generation string
+}
+
 func loadCustodiedGeneration(path string) ([]byte, string, error) {
 	return loadCustodiedGenerationLimit(path, 0)
 }
 
 func loadCustodiedGenerationLimit(path string, limit int64) ([]byte, string, error) {
+	loaded, stage, err := loadValidatedCustodiedGenerationLimit(path, limit)
+	return loaded.artifact, stage, err
+}
+
+func loadValidatedCustodiedGeneration(path string) (validatedCustodiedGeneration, string, error) {
+	return loadValidatedCustodiedGenerationLimit(path, 0)
+}
+
+func loadValidatedCustodiedGenerationLimit(path string, limit int64) (validatedCustodiedGeneration, string, error) {
 	parent, finalName, err := openPinnedPublicationParent(path)
 	if err != nil {
-		return nil, "verify", err
+		return validatedCustodiedGeneration{}, "verify", err
 	}
 	defer parent.Close()
 	selectorData, err := readRootRegularNoFollowLimit(parent, finalName, limit)
 	if err != nil {
-		return nil, "verify", err
+		return validatedCustodiedGeneration{}, "verify", err
 	}
 	selector, err := decodeGenerationSelector(selectorData)
 	if err != nil {
-		return nil, "verify", err
+		return validatedCustodiedGeneration{}, "verify", err
 	}
 	generation, err := openRootDirectoryNoFollow(parent, selector.Generation)
 	if err != nil {
-		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
+		return validatedCustodiedGeneration{}, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	defer generation.Close()
 	data, err := readRootRegularNoFollowLimit(generation, generationArtifactName, limit)
 	if err != nil {
-		return nil, "verify", fmt.Errorf("incomplete selected generation: %w", err)
+		return validatedCustodiedGeneration{}, "verify", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	receiptData, err := readRootRegularNoFollowLimit(generation, generationReceiptName, limit)
 	if err != nil {
-		return nil, "verify receipt", fmt.Errorf("incomplete selected generation: %w", err)
+		return validatedCustodiedGeneration{}, "verify receipt", fmt.Errorf("incomplete selected generation: %w", err)
 	}
 	if err = verification.VerifyReceipt(data, receiptData); err != nil {
-		return nil, "verify receipt", err
+		return validatedCustodiedGeneration{}, "verify receipt", err
 	}
-	return data, "", nil
+	return validatedCustodiedGeneration{artifact: data, generation: selector.Generation}, "", nil
 }
 
 func runVerify(args []string, stdout, stderr io.Writer) int {

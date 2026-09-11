@@ -16,11 +16,10 @@ type inspectInput struct {
 		Seed     *string `json:"seed,omitempty"`
 		AllSeeds bool    `json:"all_seeds,omitempty"`
 	} `json:"selector"`
-	Ancillary  bool                       `json:"ancillary,omitempty"`
-	Page       bool                       `json:"page,omitempty"`
-	Cursor     string                     `json:"cursor,omitempty"`
-	Generation string                     `json:"generation,omitempty"`
-	Policy     ancillaryinspection.Policy `json:"policy,omitempty"`
+	Ancillary bool                       `json:"ancillary,omitempty"`
+	Page      bool                       `json:"page,omitempty"`
+	Cursor    string                     `json:"cursor,omitempty"`
+	Policy    ancillaryinspection.Policy `json:"policy,omitempty"`
 }
 
 // NewInspectHandler adapts structurally admitted graph bytes to the accepted
@@ -36,7 +35,7 @@ func NewInspectHandler() Handler {
 			return inspectFailure(err)
 		}
 		if input.Ancillary {
-			r := ancillaryinspection.Request{Input: input.Input, Ancillary: true, Page: input.Page, Cursor: input.Cursor, Generation: input.Generation, Policy: input.Policy}
+			r := ancillaryinspection.Request{Input: input.Input, Ancillary: true, Page: input.Page, Cursor: input.Cursor, Policy: input.Policy}
 			r.Selector.AllSeeds = input.Selector.AllSeeds
 			view, err := ancillaryinspection.Inspect(r)
 			if err != nil {
@@ -48,7 +47,7 @@ func NewInspectHandler() Handler {
 			}
 			return Result{Value: view, Artifact: append(artifact, '\n')}, nil
 		}
-		if input.Page || input.Cursor != "" || input.Generation != "" || input.Policy != (ancillaryinspection.Policy{}) {
+		if input.Page || input.Cursor != "" || input.Policy != (ancillaryinspection.Policy{}) {
 			return inspectFailure(fmt.Errorf("ancillary pagination options require ancillary"))
 		}
 

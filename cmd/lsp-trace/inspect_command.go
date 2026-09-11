@@ -86,13 +86,13 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "inspect ancillary: INVALID_INPUT: --page requires --json")
 			return 1
 		}
-		data, err := loadInspectArtifact(input)
+		loaded, err := loadInspectArtifactWithCustody(input)
 		if err != nil {
 			fmt.Fprintf(stderr, "inspect ancillary: %v\n", err)
 			return 1
 		}
-		raw, _ := json.Marshal(data)
-		r := ancillaryinspection.Request{Input: raw, Ancillary: true, Page: hydrated.request.Page, Cursor: hydrated.request.Cursor, Policy: ancillaryinspection.Policy{MaxPageBytes: hydrated.request.CorePolicy.MaxPageBytes, MaxPages: hydrated.request.CorePolicy.MaxPages, MaxOutputBytes: hydrated.request.CorePolicy.MaxOutputBytes}}
+		raw, _ := json.Marshal(string(loaded.artifact))
+		r := ancillaryinspection.Request{Input: raw, Ancillary: true, Page: hydrated.request.Page, Cursor: hydrated.request.Cursor, Generation: loaded.selectorGeneration, Policy: ancillaryinspection.Policy{MaxPageBytes: hydrated.request.CorePolicy.MaxPageBytes, MaxPages: hydrated.request.CorePolicy.MaxPages, MaxOutputBytes: hydrated.request.CorePolicy.MaxOutputBytes}}
 		r.Selector.AllSeeds = true
 		view, err := ancillaryinspection.Inspect(r)
 		if err != nil {
@@ -147,16 +147,26 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+type inspectArtifactLoad struct {
+	artifact           []byte
+	selectorGeneration string
+}
+
 func loadInspectArtifact(path string) ([]byte, error) {
+	loaded, err := loadInspectArtifactWithCustody(path)
+	return loaded.artifact, err
+}
+
+func loadInspectArtifactWithCustody(path string) (inspectArtifactLoad, error) {
 	input, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return inspectArtifactLoad{}, err
 	}
 	var header struct {
 		SchemaVersion string `json:"schema_version"`
 	}
 	if err := json.Unmarshal(input, &header); err != nil {
-		return nil, fmt.Errorf("malformed input: %w", err)
+		return inspectArtifactLoad{}, fmt.Errorf("malformed input: %w", err)
 	}
 	if header.SchemaVersion != "" {
 		version := ""
@@ -166,20 +176,20 @@ func loadInspectArtifact(path string) ([]byte, error) {
 		case graph.SchemaVersionV5:
 			version = "v5"
 		default:
-			return nil, fmt.Errorf("inspection requires %s or %s", graph.SchemaVersionV3, graph.SchemaVersionV5)
+			return inspectArtifactLoad{}, fmt.Errorf("inspection requires %s or %s", graph.SchemaVersionV3, graph.SchemaVersionV5)
 		}
 		if _, err := schema.Validate(input, version); err != nil {
-			return nil, err
+			return inspectArtifactLoad{}, err
 		}
-		return input, nil
+		return inspectArtifactLoad{artifact: input}, nil
 	}
 
-	artifact, _, err := loadCustodiedGeneration(path)
+	loaded, _, err := loadValidatedCustodiedGeneration(path)
 	if err != nil {
-		return nil, err
+		return inspectArtifactLoad{}, err
 	}
-	if _, err := schema.Validate(artifact, "v3"); err != nil {
-		return nil, err
+	if _, err := schema.Validate(loaded.artifact, "v3"); err != nil {
+		return inspectArtifactLoad{}, err
 	}
-	return artifact, nil
+	return inspectArtifactLoad{artifact: loaded.artifact, selectorGeneration: loaded.generation}, nil
 }
