@@ -1,0 +1,211 @@
+{
+  "schema": "lsp-trace.private.program-c.gonum-leiden.qualification.v1",
+  "recommendation": "IMPLEMENTATION_CANDIDATE",
+  "repository": {
+    "dirty": false,
+    "revision": "af7f0381055d10b1501f8cda3c82eb998a1b53c8",
+    "status_porcelain_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "profile": {
+    "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+    "name": "calls-v1",
+    "projection_manifest": "qualification/program-c/projection-profiles.v1.json"
+  },
+  "command": [
+    "/tmp/lsp-trace-program-c-gonum-leiden-af7f038-qualify",
+    "--repo-root",
+    "/Users/schwa/dev/lsp-trace",
+    "--input",
+    "/Users/schwa/dev/lsp-trace/internal/retainedcalls/testdata/frozen-v1-export.json",
+    "--candidate",
+    "/tmp/lsp-trace-program-c-gonum-leiden-af7f038-candidate",
+    "--receipt",
+    "/Users/schwa/dev/lsp-trace/qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json",
+    "--go-tool",
+    "/opt/homebrew/bin/go",
+    "--candidate-build-command",
+    "/opt/homebrew/bin/go -C /Users/schwa/dev/lsp-trace/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/lsp-trace-program-c-gonum-leiden-af7f038-candidate ./cmd/candidate",
+    "--qualifier-build-command",
+    "/opt/homebrew/bin/go -C /Users/schwa/dev/lsp-trace/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/lsp-trace-program-c-gonum-leiden-af7f038-qualify ./cmd/qualify"
+  ],
+  "inputs": {
+    "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt": "sha256:577c05a0aecba29cc3406f4f1dbc8748830fcaf726d950730f677c00e292a8c5",
+    "qualification/program-c/gate-i-i-03-pinned-gonum-leiden.receipt.txt": "sha256:1d49d7498579be64b736966f47312726726c7170ce94be20550e2360a4cbc6d7",
+    "qualification/program-c/gate-i-i-04-pinned-gonum-leiden.receipt.txt": "sha256:2d0f0d9664addd5c58bd25672b0fdf0cfabe4adb8303f5a65893b69e25d33509",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/gonum-leiden-69ca49f.LICENSE": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "qualification/program-c/i-03-candidate-inventory.v2.json": "sha256:cdf9d729cc548500ff8220580479e82010b7b405693cf61cef66069f4dc9e5ab",
+    "qualification/program-c/i-04-license-inputs.v2.json": "sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d",
+    "qualification/program-c/i-06-determinism-policy.v1.json": "sha256:5fb811b9a3286e719d97c7d9b99ccd6fa32f75f90200d8124fca1fff4d4eb333",
+    "qualification/program-c/i-07-resource-envelope.v1.json": "sha256:f9f28a10719a06417d74486508d0f830d457cb8389101a6d035eae60a9927e03",
+    "qualification/program-c/profile-qualification.tsv": "sha256:4adee0cc0bb561275dcdbe2d7698c667f1894545d47b11034801ed1ff29a534b",
+    "qualification/program-c/projection-profiles.v1.json": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "retained_export_path": "/Users/schwa/dev/lsp-trace/internal/retainedcalls/testdata/frozen-v1-export.json",
+    "retained_export_sha256": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011"
+  },
+  "candidate": {
+    "acquisition_command": "go mod download -json gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "executable": "/tmp/lsp-trace-program-c-gonum-leiden-af7f038-candidate",
+    "executable_sha256": "sha256:7aadd55ed805b546bb8b529664ca667555f2543630cd729e8f4e860719ade7f4",
+    "go_mod_sum": "h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=",
+    "license_sha256": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "module": "gonum.org/v1/gonum",
+    "module_mod_sha256": "sha256:8a17681ea0d86cd2de00b2a87745287f5a8d7a0ad55ec0c26c5b52f3552d30e7",
+    "module_sum": "h1:V43GU8qUQ/EYbEPGzTP0PANTR6RiJgEJdU/vgsFhQiU=",
+    "module_zip_sha256": "sha256:7b10c89b38171e0f45ac55cd9e8791a83e43313e27594037303ab39c42c3f844",
+    "name": "gonum Leiden",
+    "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "version": "v0.17.1-0.20260426204603-69ca49f456a7"
+  },
+  "build": {
+    "candidate_command": "/opt/homebrew/bin/go -C /Users/schwa/dev/lsp-trace/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/lsp-trace-program-c-gonum-leiden-af7f038-candidate ./cmd/candidate",
+    "go_tool": {
+      "path": "/opt/homebrew/bin/go",
+      "sha256": "sha256:3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0"
+    },
+    "qualifier_command": "/opt/homebrew/bin/go -C /Users/schwa/dev/lsp-trace/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/lsp-trace-program-c-gonum-leiden-af7f038-qualify ./cmd/qualify",
+    "required_flags": [
+      "-trimpath",
+      "-buildvcs=false",
+      "-ldflags=-buildid="
+    ]
+  },
+  "supervisor": {
+    "fail_closed": true,
+    "implementation": {
+      "path": "/tmp/lsp-trace-program-c-gonum-leiden-af7f038-qualify",
+      "sha256": "sha256:d0362d0fa67ae7c5979e48039df55dee538cdd2218c88291e10e606754fbbf06"
+    },
+    "poll_interval_milliseconds": 20,
+    "process_group": true,
+    "ps": {
+      "path": "/bin/ps",
+      "sha256": "sha256:472992c470606d28f577590decfecd7f4a20f832fd92c671bebc6d44790b5d02"
+    },
+    "rss_metric": "aggregate descendant RSS from /bin/ps -axo pid=,ppid=,rss="
+  },
+  "runtime": {
+    "go": "go1.26.5",
+    "goarch": "arm64",
+    "goos": "darwin"
+  },
+  "parameters": {
+    "base_runs": 3,
+    "directed": true,
+    "resolution": 1,
+    "reverse_insertion_permutations": 1,
+    "seed": 1
+  },
+  "limits": {
+    "aggregate_process_tree_rss_bytes": 536870912,
+    "edges": 100000,
+    "nodes": 10000,
+    "wall_seconds": 60
+  },
+  "runs": [
+    {
+      "index": 0,
+      "kind": "base",
+      "request_sha256": "sha256:a769be10c94558e7909df8c9112c6f1757ab1a0167ee1625c52057ae0468b344",
+      "result": {
+        "output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18582250,
+          "peak_tree_rss_bytes": 4931584,
+          "exit_kind": "OK"
+        }
+      }
+    },
+    {
+      "index": 1,
+      "kind": "base",
+      "request_sha256": "sha256:a769be10c94558e7909df8c9112c6f1757ab1a0167ee1625c52057ae0468b344",
+      "result": {
+        "output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 16312958,
+          "peak_tree_rss_bytes": 4833280,
+          "exit_kind": "OK"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "kind": "base",
+      "request_sha256": "sha256:a769be10c94558e7909df8c9112c6f1757ab1a0167ee1625c52057ae0468b344",
+      "result": {
+        "output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 16265125,
+          "peak_tree_rss_bytes": 4718592,
+          "exit_kind": "OK"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "kind": "reverse_insertion",
+      "request_sha256": "sha256:f4f535baa3445cf4c65ad5f574b24b8ca86af2fd166b97c49a272d1bbffed257",
+      "result": {
+        "output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18158167,
+          "peak_tree_rss_bytes": 4849664,
+          "exit_kind": "OK"
+        }
+      }
+    }
+  ],
+  "canonical_output": {
+    "communities": [
+      [
+        "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+      ],
+      [
+        "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+      ]
+    ],
+    "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+  },
+  "receipt_sha256": "sha256:6fa2b114bf50257feece8006dbf67c6a9b031f6a5a062448fc7540625f97ebb7"
+}
