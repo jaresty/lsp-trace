@@ -2,7 +2,11 @@ package slicer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	"lsp-trace/internal/graph"
@@ -223,6 +227,7 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 			continue
 		}
 		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
+		omittedCalleeIDs := make([]string, 0)
 		for _, call := range calls {
 			callee := node(call.To)
 			var semanticMatches []graph.Node
@@ -253,15 +258,19 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 			if !valid {
 				continue
 			}
-			result.Edges = graph.MergeEdge(result.Edges, graph.Edge{CallerNodeID: q.node.ID, CalleeNodeID: callee.ID, CallSites: ranges})
 			if _, known := itemsByID[callee.ID]; !known {
 				if opts.MaxNodes > 0 && len(itemsByID) >= opts.MaxNodes {
+					omittedCalleeIDs = append(omittedCalleeIDs, callee.ID)
 					result.Complete, result.Truncated = false, true
 					continue
 				}
 				itemsByID[callee.ID], nodesByID[callee.ID], depthByID[callee.ID] = call.To, callee, q.depth+1
 				queue = append(queue, queued{item: call.To, node: callee, depth: q.depth + 1})
 			}
+			result.Edges = graph.MergeEdge(result.Edges, graph.Edge{CallerNodeID: q.node.ID, CalleeNodeID: callee.ID, CallSites: ranges})
+		}
+		if len(omittedCalleeIDs) != 0 {
+			result.Diagnostics = append(result.Diagnostics, omittedCalleeDiagnostic(q.node.ID, omittedCalleeIDs))
 		}
 	}
 
@@ -326,6 +335,21 @@ func flatten(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
 		out = append(out, flatten(symbol.Children)...)
 	}
 	return out
+}
+
+func omittedCalleeDiagnostic(nodeID string, reportedIDs []string) graph.Diagnostic {
+	unique := append([]string(nil), reportedIDs...)
+	sort.Strings(unique)
+	out := unique[:0]
+	for _, id := range unique {
+		if len(out) == 0 || out[len(out)-1] != id {
+			out = append(out, id)
+		}
+	}
+	encoded, _ := json.Marshal(out)
+	digest := sha256.Sum256(encoded)
+	message := fmt.Sprintf("callees omitted by node bound: reports=%d unique_callees=%d ids_digest=sha256:%s identities=OMITTED_FROM_BOUNDED_SLICE", len(reportedIDs), len(out), hex.EncodeToString(digest[:]))
+	return graph.Diagnostic{Phase: "slice-traverse", Method: "callHierarchy/outgoingCalls", NodeID: nodeID, Message: message}
 }
 
 func lessPosition(a, b lsp.Position) bool {

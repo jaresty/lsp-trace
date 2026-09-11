@@ -2,7 +2,11 @@ package traverse
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 
 	"lsp-trace/internal/graph"
@@ -209,6 +213,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			result.Terminals = append(result.Terminals, graph.Boundary{NodeID: q.node.ID, Reason: graph.ServerReportedNoIncoming})
 			continue
 		}
+		omittedCallerIDs := make([]string, 0)
 		for _, call := range calls {
 			caller := node(call.From, newNode)
 			if err := graph.ValidateItem(caller.Item); err != nil {
@@ -245,7 +250,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 			}
 			_, known := seen[caller.ID]
 			if !known && opts.MaxNodes > 0 && len(seen) >= opts.MaxNodes {
-				result.Frontier = append(result.Frontier, graph.Boundary{NodeID: q.node.ID, Reason: graph.MaxNodes, Message: "caller omitted by node bound: " + caller.ID})
+				omittedCallerIDs = append(omittedCallerIDs, caller.ID)
 				result.Summary.Complete = false
 				result.Summary.Truncated = true
 				continue
@@ -269,12 +274,30 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 				}
 			}
 		}
+		if len(omittedCallerIDs) != 0 {
+			result.Frontier = append(result.Frontier, omittedCallerBoundary(q.node.ID, omittedCallerIDs))
+		}
 	}
 	for _, n := range seen {
 		result.Nodes = append(result.Nodes, n)
 	}
 	result.Canonicalize()
 	return result
+}
+
+func omittedCallerBoundary(nodeID string, reportedIDs []string) graph.Boundary {
+	unique := append([]string(nil), reportedIDs...)
+	sort.Strings(unique)
+	out := unique[:0]
+	for _, id := range unique {
+		if len(out) == 0 || out[len(out)-1] != id {
+			out = append(out, id)
+		}
+	}
+	encoded, _ := json.Marshal(out)
+	digest := sha256.Sum256(encoded)
+	message := fmt.Sprintf("callers omitted by node bound: reports=%d unique_callers=%d ids_digest=sha256:%s identities=OMITTED_FROM_BOUNDED_FRONTIER", len(reportedIDs), len(out), hex.EncodeToString(digest[:]))
+	return graph.Boundary{NodeID: nodeID, Reason: graph.MaxNodes, Message: message}
 }
 
 type declaration struct {

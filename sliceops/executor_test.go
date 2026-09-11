@@ -147,6 +147,40 @@ func TestSliceSymbolUsesSharedBoundedPrepareReconciliation(t *testing.T) {
 	}
 }
 
+func TestSliceMaxNodesDoesNotPublishDanglingOutgoingEdges(t *testing.T) {
+	const assertion = "ASSERT_SLICE_MAX_NODES_NO_DANGLING_OUTGOING_EDGE"
+	root := item("root", 0)
+	calls := make([]string, 100)
+	for i := range calls {
+		calls[i] = `{"to":` + item(fmt.Sprintf("callee-%03d", i), 1) + `,"fromRanges":[]}`
+	}
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string]sessionruntime.RoundTripResult{
+		"textDocument/prepareCallHierarchy:": {Result: json.RawMessage(`[` + root + `]`)},
+		"callHierarchy/outgoingCalls:root":   {Result: json.RawMessage(`[` + strings.Join(calls, ",") + `]`)},
+	}}
+	input := json.RawMessage(`{"session_id":"s","generation":1,"start_mode":"at","uri":"file:///w/a.go","line":0,"character":0,"down_depth":1,"up_depth":0,"max_nodes":1,"timeout_ms":1000,"request_timeout_ms":100}`)
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationSlice, Input: input})
+	if failure != nil {
+		t.Fatalf("%s: failure=%v", assertion, failure)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatalf("%s: unmarshal=%v artifact=%s", assertion, err, result.Artifact)
+	}
+	if got.Summary.Complete || !got.Summary.Truncated || len(got.Nodes) != 1 || len(got.Edges) != 0 {
+		t.Fatalf("%s: summary=%#v nodes=%d edges=%d", assertion, got.Summary, len(got.Nodes), len(got.Edges))
+	}
+	var aggregate string
+	for _, diagnostic := range got.Diagnostics {
+		if diagnostic.Phase == "slice-traverse" && strings.Contains(diagnostic.Message, "callees omitted by node bound") {
+			aggregate = diagnostic.Message
+		}
+	}
+	if !strings.Contains(aggregate, "reports=100") || !strings.Contains(aggregate, "unique_callees=100") || !strings.Contains(aggregate, "ids_digest=sha256:") || strings.Contains(aggregate, "callee-000") {
+		t.Fatalf("%s: aggregate=%q diagnostics=%#v", assertion, aggregate, got.Diagnostics)
+	}
+}
+
 func TestSliceExactFrontierLeavesAndUpwardUnion(t *testing.T) {
 	for _, assertion := range []string{"ASSERT_SLICE_EXACT_DEPTH_FRONTIER", "ASSERT_SLICE_FAILED_NULL_NOT_LEAF", "ASSERT_SLICE_UPWARD_SORTED_DEDUP_UNION", "ASSERT_SLICE_CAUSAL_CLOSURE_SEED_MEMBERSHIP"} {
 		t.Log("ASSERTION: " + assertion)

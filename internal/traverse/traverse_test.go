@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -106,6 +107,35 @@ func TestIncomingMaxNodesPreservesObservedGraphAndFrontier(t *testing.T) {
 	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{MaxNodes: 1})
 	if r.Summary.Complete || !r.Summary.Truncated || r.Summary.NodeCount != 1 || r.Summary.EdgeCount != 0 || len(r.Frontier) != 1 || r.Frontier[0].Reason != graph.MaxNodes {
 		t.Fatalf("ASSERT_MAX_NODES_ACCOUNTED: summary=%#v frontier=%#v", r.Summary, r.Frontier)
+	}
+}
+
+func TestIncomingMaxNodesAggregatesOmittedCallerFrontierDeterministically(t *testing.T) {
+	leaf := item("leaf", 1000)
+	calls := make([]lsp.CallHierarchyIncomingCall, 100)
+	for i := range calls {
+		caller := item(fmt.Sprintf("caller-%03d", i), uint32(i))
+		calls[i] = lsp.CallHierarchyIncomingCall{From: caller}
+	}
+	reversed := append([]lsp.CallHierarchyIncomingCall(nil), calls...)
+	for left, right := 0, len(reversed)-1; left < right; left, right = left+1, right-1 {
+		reversed[left], reversed[right] = reversed[right], reversed[left]
+	}
+	var messages []string
+	for _, order := range [][]lsp.CallHierarchyIncomingCall{calls, reversed} {
+		f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{"leaf": order}}
+		r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{MaxNodes: 1})
+		if r.Summary.Complete || !r.Summary.Truncated || r.Summary.NodeCount != 1 || r.Summary.EdgeCount != 0 || len(r.Frontier) != 1 || r.Frontier[0].Reason != graph.MaxNodes {
+			t.Fatalf("ASSERT_MAX_NODES_AGGREGATED_FRONTIER: summary=%#v frontier=%#v", r.Summary, r.Frontier)
+		}
+		message := r.Frontier[0].Message
+		if !strings.Contains(message, "reports=100") || !strings.Contains(message, "unique_callers=100") || !strings.Contains(message, "ids_digest=sha256:") || !strings.Contains(message, "identities=OMITTED_FROM_BOUNDED_FRONTIER") || strings.Contains(message, "caller-000") {
+			t.Fatalf("ASSERT_MAX_NODES_AGGREGATED_ACCOUNTING: %q", message)
+		}
+		messages = append(messages, message)
+	}
+	if messages[0] != messages[1] {
+		t.Fatalf("ASSERT_MAX_NODES_AGGREGATED_DETERMINISM: %q != %q", messages[0], messages[1])
 	}
 }
 
