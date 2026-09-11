@@ -71,6 +71,7 @@ func gatewayMatrixCases() []gatewayMatrixCase {
 		{"v3-slice", "lsp_trace_v3_slice", map[string]any{"session_id": "s", "generation": 1, "seed_manifest": manifest}},
 		{"lifecycle", "lsp_session_v1_list", map[string]any{}},
 		{"traversal", "lsp_trace_v1_incoming", map[string]any{"session_id": "s", "uri": "file:///workspace/main.go", "symbol": "Root"}},
+		{"v1-slice", "lsp_trace_v1_slice", map[string]any{"session_id": "s", "start_mode": "at", "uri": "file:///workspace/main.go", "symbol": "Root"}},
 		{"hydrated", "lsp_trace_v1_inspect_hydrated", map[string]any{"input": `{}`, "node_ids": []any{"n"}}},
 	}
 }

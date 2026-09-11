@@ -31,6 +31,7 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 		if got := len(registry.Advertised()); got != 28 {
 			t.Fatalf("ASSERT_%s_ADVERTISED_28: got %d", name, got)
 		}
+		assertSliceOutputSelectorAdvertised(t, name, registry)
 	}
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	if got := toolNames(compact.Advertised()); !reflect.DeepEqual(got, compactCanonicalNames) {
@@ -39,6 +40,7 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	if got := len(compact.Tools()); got != 28 {
 		t.Fatalf("ASSERT_COMPACT_DISPATCHABLE_28: got %d", got)
 	}
+	assertSliceOutputSelectorAdvertised(t, "compact", compact)
 	for _, hidden := range []string{"lsp_trace_v1_validate", "lsp_trace_v2_slice", "lsp_trace_v3_incoming"} {
 		tool, ok := compact.Resolve(hidden)
 		if !ok || tool.Name != hidden {
@@ -53,6 +55,19 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	advertised[0].Name = "mutated"
 	if got := compact.Advertised()[0].Name; got != compactCanonicalNames[0] {
 		t.Fatalf("ASSERT_PROFILE_SNAPSHOT_IMMUTABLE: %q", got)
+	}
+}
+
+func assertSliceOutputSelectorAdvertised(t *testing.T, profile string, registry *Registry) {
+	t.Helper()
+	tool, ok := registry.Resolve("lsp_trace_v1_slice")
+	properties, _ := tool.InputSchema["properties"].(map[string]any)
+	selector, _ := properties["output_selector"].(map[string]any)
+	if !ok || selector["type"] != "string" || selector["minLength"] != float64(1) {
+		t.Fatalf("ASSERT_SLICE_OUTPUT_SELECTOR_ADVERTISED[%s]: tool=%+v selector=%#v", profile, tool, selector)
+	}
+	if got := registry.Capabilities()["inline_byte_limit"]; got != uint64(1048576) {
+		t.Fatalf("ASSERT_SLICE_OUTPUT_SELECTOR_PRESERVES_1MIB_LIMIT[%s]: %v", profile, got)
 	}
 }
 

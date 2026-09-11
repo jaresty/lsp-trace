@@ -33,6 +33,22 @@ func TestNormalizedProviderManifestAndRequestSchemas(t *testing.T) {
 		if err := ValidateJSON(tool.InputSchemaID, request); err != nil {
 			t.Fatalf("ASSERT_MCP_NORMALIZED_RELATION_STATIC_SCHEMA: %s: %v", name, err)
 		}
+		if name == "lsp_trace_v1_slice" {
+			var selected map[string]any
+			if err := json.Unmarshal(request, &selected); err != nil {
+				t.Fatal(err)
+			}
+			selected["output_selector"] = "slice.json"
+			selectedRequest, _ := json.Marshal(selected)
+			if err := ValidateJSON(tool.InputSchemaID, selectedRequest); err != nil {
+				t.Fatalf("ASSERT_MCP_SLICE_DIRECT_OUTPUT_SELECTOR_ADMITTED: %v", err)
+			}
+			selected["output_selector"] = ""
+			emptyRequest, _ := json.Marshal(selected)
+			if err := ValidateJSON(tool.InputSchemaID, emptyRequest); err == nil {
+				t.Fatal("ASSERT_MCP_SLICE_DIRECT_OUTPUT_SELECTOR_NONEMPTY: empty selector admitted")
+			}
+		}
 		if !contractContains(tool.ArtifactSchemaIDs, contractGraphV4SchemaID) {
 			t.Fatalf("ASSERT_MCP_GRAPH_V4_MANIFEST_PUBLICATION: %s schemas=%v", name, tool.ArtifactSchemaIDs)
 		}
