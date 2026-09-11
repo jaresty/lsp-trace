@@ -199,8 +199,12 @@ func NewSnapshot(source []byte, p inspection.AllProjection, policy Policy, gener
 	all := entries(p)
 	parts := [][]Entry{}
 	cur := []Entry{}
+	manifest := counts(p)
 	fits := func(es []Entry) bool {
-		raw, _ := json.Marshal(Page{Snapshot: binding, Ordinal: 9999, TotalPages: 9999, Section: "seed_memberships", Offset: 999999, Entries: es, Digest: "sha256:" + string(make([]byte, 64))})
+		page := Page{Snapshot: binding, Ordinal: 9999, TotalPages: 10000, Section: "seed_memberships", Offset: 999999, Entries: es, Digest: "sha256:" + string(make([]byte, 64))}
+		next := encode(cursor{Snapshot: binding, Projection: Projection, Section: "seed_memberships", Offset: 999999, Policy: pol, Generation: generation, Ordinal: 9999})
+		view := View{SchemaVersion: Version, Projection: Projection, SourceDigest: p.ArtifactIdentity.ExactSerializedBytesDigest, Generation: generation, Delivery: "PAGE", Manifest: manifest, Page: &page, NextCursor: next}
+		raw, _ := json.Marshal(view)
 		return len(raw) <= pol.MaxPageBytes
 	}
 	for _, x := range all {

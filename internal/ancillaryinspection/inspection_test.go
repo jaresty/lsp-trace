@@ -47,8 +47,8 @@ func TestAncillaryCanonicalPagesReassembleExactlyAndReportCounts(t *testing.T) {
 			t.Fatal(err)
 		}
 		raw, _ := json.Marshal(v)
-		if len(raw) > r.Policy.MaxOutputBytes || v.Page == nil {
-			t.Fatalf("%s: bytes=%d", assertBounded, len(raw))
+		if len(raw) > r.Policy.MaxPageBytes || v.Page == nil {
+			t.Fatalf("%s: bytes=%d limit=%d", assertBounded, len(raw), r.Policy.MaxPageBytes)
 		}
 		totalReturned := v.Manifest.Seeds.Returned + v.Manifest.SeedMemberships.Returned + v.Manifest.Frontier.Returned + v.Manifest.Terminals.Returned + v.Manifest.Diagnostics.Returned
 		if totalReturned != len(v.Page.Entries) {
