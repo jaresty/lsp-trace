@@ -105,6 +105,7 @@ const usageText = `usage:
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace slice --graph-provenance --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN | --from-file PATH --symbol NAME)
+  lsp-trace slice|incoming --production-v5 --workspace PATH --server COMMAND --seed-manifest PATH  # expands to acquisition v3 + Graph Provenance V5 output
   lsp-trace slice|incoming --acquisition-version v2|v3 --workspace PATH --server COMMAND --seed-manifest PATH  # DEPRECATED producer; migrate new production to Graph Provenance V5
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]

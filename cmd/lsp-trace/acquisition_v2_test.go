@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/seedbinding"
 )
@@ -45,10 +48,80 @@ func TestSourceQualifiedV5SelectionIsNotDeprecated(t *testing.T) {
 }
 
 func TestAcquisitionVersionPreservesArgumentValues(t *testing.T) {
-	for _, args := range [][]string{{"--server-arg", "--acquisition-version=v2"}, {"--output", "--acquisition-version"}, {"--server-arg", "--acquisition-version", "--at", "x:1:1"}} {
+	for _, args := range [][]string{{"--server-arg", "--acquisition-version=v2"}, {"--output", "--acquisition-version"}, {"--server-arg", "--acquisition-version", "--at", "x:1:1"}, {"--server-arg", "--production-v5"}} {
 		version, rest, err := acquisitionVersion(args)
 		if err != nil || version != "" || !reflect.DeepEqual(args, rest) {
 			t.Fatalf("ASSERT_VERSION_FLAG_NOT_ARGUMENT_VALUE: %v -> %q %v %v", args, version, rest, err)
+		}
+	}
+}
+
+func TestProductionV5ExpandsToCanonicalVersions(t *testing.T) {
+	canonical := []string{"--workspace", "/tmp/work", "--output", "graphs/result.json", "--output-version", graphprovenance.VersionV5}
+	for _, args := range [][]string{
+		{"--production-v5", "--workspace", "/tmp/work", "--output", "graphs/result.json"},
+		{"--output-version=" + graphprovenance.VersionV5, "--acquisition-version=v3", "--production-v5", "--workspace", "/tmp/work", "--output", "graphs/result.json"},
+	} {
+		version, rest, err := acquisitionVersion(args)
+		if err != nil || version != "v3" || !reflect.DeepEqual(rest, canonical) {
+			t.Fatalf("ASSERT_PRODUCTION_V5_CANONICAL_EXPANSION: %v -> %q %v %v", args, version, rest, err)
+		}
+	}
+}
+
+func TestProductionV5RejectsConflictingExplicitVersions(t *testing.T) {
+	for _, args := range [][]string{
+		{"--production-v5", "--acquisition-version", "v2"},
+		{"--output-version", "lsp-trace.graph-provenance.v3", "--production-v5"},
+		{"--output-version", "lsp-trace.graph-provenance.v3", "--output-version", graphprovenance.VersionV5, "--production-v5"},
+	} {
+		if _, _, err := acquisitionVersion(args); err == nil || !strings.Contains(err.Error(), "--production-v5 conflicts with") {
+			t.Fatalf("ASSERT_PRODUCTION_V5_CONFLICT_REJECTED: %v err=%v", args, err)
+		}
+	}
+}
+
+func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	cli := buildStartupSinkCLI(t)
+	fake := filepath.Join(t.TempDir(), "fake-lsp")
+	if out, err := exec.Command("go", "build", "-o", fake, "../fake-lsp").CombinedOutput(); err != nil {
+		t.Fatalf("build fake LSP: %v: %s", err, out)
+	}
+	workspace := t.TempDir()
+	sourcePath := filepath.Join(workspace, "main.go")
+	if err := os.WriteFile(sourcePath, []byte("leaf\n\ncaller\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: sourcePath}).String()
+	manifest := map[string]any{
+		"schema_version": "lsp-trace.seed-manifest.v2", "coordinate_convention": "zero-based-session",
+		"root":             map[string]any{"id": "root", "locator": map[string]any{"uri": uri, "line": 0, "character": 0}, "down_depth": 0, "up_depth": 0},
+		"required_targets": []any{}, "limits": map[string]any{"max_nodes": 4, "max_requests": 8, "timeout_ms": 60000, "request_timeout_ms": 30000},
+		"expansion": map[string]any{"topmost_siblings": true},
+	}
+	raw, _ := json.Marshal(manifest)
+	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
+	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	common := []string{"--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--seed-manifest", manifestPath, "--language-id", "go"}
+	for _, mode := range []string{"slice", "incoming"} {
+		canonical := append([]string{mode, "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5}, common...)
+		shorthand := append([]string{mode, "--production-v5"}, common...)
+		run := func(args []string) []byte {
+			cmd := exec.Command(cli, args...)
+			cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: %v: %s", mode, err, out)
+			}
+			return out
+		}
+		if explicit, alias := run(canonical), run(shorthand); !bytes.Equal(explicit, alias) {
+			t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: canonical=%d shorthand=%d", mode, len(explicit), len(alias))
 		}
 	}
 }

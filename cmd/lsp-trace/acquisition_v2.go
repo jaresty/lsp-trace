@@ -30,45 +30,94 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-// Version dispatch is explicit. Without the flag, legacy parsing and bytes are
-// untouched. Duplicate flags fail closed, including conflicting v1/v2 values.
+func productionV5Requested(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" || !strings.HasPrefix(arg, "-") || arg == "-" {
+			return false
+		}
+		name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+		if name == "production-v5" {
+			return true
+		}
+		boolean := name == "pretty" || name == "graph-provenance" || name == "expand-topmost-siblings" || name == "expand-dispatch-family" || name == "help" || name == "h"
+		if !boolean && !strings.Contains(name, "=") && i+1 < len(args) {
+			i++
+		}
+	}
+	return false
+}
+
+// Version dispatch is explicit. Without a selector, legacy parsing and bytes
+// are untouched. --production-v5 is removed before dispatch and contributes
+// only the canonical v3 acquisition and Graph Provenance V5 output selectors.
 func acquisitionVersion(args []string) (string, []string, error) {
-	version := ""
-	out := make([]string, 0, len(args))
+	version, outputVersion := "", ""
+	productionV5 := productionV5Requested(args)
+	productionV5Seen := false
+	out := make([]string, 0, len(args)+2)
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" || !strings.HasPrefix(arg, "-") || arg == "-" {
 			out = append(out, args[i:]...)
 			break
 		}
-		name := strings.TrimPrefix(arg, "-")
-		name = strings.TrimPrefix(name, "-")
-		if name != "acquisition-version" && !strings.HasPrefix(name, "acquisition-version=") {
+		name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+		isAcquisition := name == "acquisition-version" || strings.HasPrefix(name, "acquisition-version=")
+		isProductionV5 := name == "production-v5"
+		isOutput := name == "output-version" || strings.HasPrefix(name, "output-version=")
+		if !isAcquisition && !isProductionV5 && !(productionV5 && isOutput) {
 			out = append(out, arg)
 			// All existing non-boolean flags consume one following value.
 			// Do not mistake a server argument or filename for our selector.
-			boolean := name == "pretty" || name == "graph-provenance" || name == "expand-topmost-siblings" || name == "expand-dispatch-family" || name == "help" || name == "h"
+			boolean := name == "pretty" || name == "graph-provenance" || name == "expand-topmost-siblings" || name == "expand-dispatch-family" || name == "production-v5" || name == "help" || name == "h"
 			if !boolean && !strings.Contains(name, "=") && i+1 < len(args) {
 				i++
 				out = append(out, args[i])
 			}
 			continue
 		}
-		if version != "" {
-			return "", nil, fmt.Errorf("duplicate acquisition-version")
+		if isProductionV5 {
+			if productionV5Seen {
+				return "", nil, fmt.Errorf("duplicate production-v5")
+			}
+			productionV5Seen = true
+			continue
 		}
+		value := ""
 		if _, v, ok := strings.Cut(name, "="); ok {
-			version = v
+			value = v
 		} else {
 			i++
 			if i >= len(args) {
-				return "", nil, fmt.Errorf("acquisition-version requires a value")
+				return "", nil, fmt.Errorf("%s requires a value", strings.TrimSuffix(name, "="))
 			}
-			version = args[i]
+			value = args[i]
 		}
+		if isOutput {
+			if productionV5 && value != graphprovenance.VersionV5 {
+				return "", nil, fmt.Errorf("--production-v5 conflicts with --output-version %s", value)
+			}
+			outputVersion = value
+			continue
+		}
+		if version != "" {
+			return "", nil, fmt.Errorf("duplicate acquisition-version")
+		}
+		version = value
 		if version != "v1" && version != "v2" && version != "v3" {
 			return "", nil, fmt.Errorf("unsupported acquisition version %q", version)
 		}
+	}
+	if productionV5 {
+		if version != "" && version != "v3" {
+			return "", nil, fmt.Errorf("--production-v5 conflicts with --acquisition-version %s", version)
+		}
+		if outputVersion != "" && outputVersion != graphprovenance.VersionV5 {
+			return "", nil, fmt.Errorf("--production-v5 conflicts with --output-version %s", outputVersion)
+		}
+		version = "v3"
+		out = append(out, "--output-version", graphprovenance.VersionV5)
 	}
 	return version, out, nil
 }
