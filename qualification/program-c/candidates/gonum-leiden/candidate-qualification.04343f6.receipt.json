@@ -1,0 +1,824 @@
+{
+  "schema": "lsp-trace.private.program-c.gonum-leiden.gate-ii-qualification.v1",
+  "result": "FAIL",
+  "recommendation": "REJECTED",
+  "repository": {
+    "dirty": false,
+    "revision": "04343f62cb7e2c5cc9d1222eee49438e254d8812",
+    "status_porcelain_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "command": [
+    "/tmp/program-c-gonum-leiden-qualifier-04343f6",
+    "-repo-root",
+    "/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4",
+    "-fixture-inventory",
+    "qualification/program-c/a-06-fixture-inventory.v1.json",
+    "-candidate",
+    "/tmp/program-c-gonum-leiden-04343f6",
+    "-receipt",
+    "/var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-leiden/candidate-qualification.04343f6.receipt.json",
+    "-go-tool",
+    "/opt/homebrew/bin/go",
+    "-candidate-build-command",
+    "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-leiden-04343f6 ./cmd/candidate",
+    "-qualifier-build-command",
+    "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-leiden-qualifier-04343f6 ./cmd/qualify-gate-ii"
+  ],
+  "inputs": {
+    "internal/retainedcalls/testdata/frozen-v1-export.json": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011",
+    "qualification/program-c/a-06-fixture-inventory.v1.json": "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc",
+    "qualification/program-c/fixtures/adversarial-order.json": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+    "qualification/program-c/fixtures/disconnected-singleton.json": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+    "qualification/program-c/fixtures/high-degree-hub.json": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+    "qualification/program-c/fixtures/retained-calls-v1.json": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/gonum-leiden-69ca49f.LICENSE": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "qualification/program-c/i-03-candidate-inventory.v2.json": "sha256:cdf9d729cc548500ff8220580479e82010b7b405693cf61cef66069f4dc9e5ab",
+    "qualification/program-c/i-04-license-inputs.v2.json": "sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d",
+    "qualification/program-c/i-06-determinism-policy.v1.json": "sha256:5fb811b9a3286e719d97c7d9b99ccd6fa32f75f90200d8124fca1fff4d4eb333",
+    "qualification/program-c/i-07-resource-envelope.v1.json": "sha256:f9f28a10719a06417d74486508d0f830d457cb8389101a6d035eae60a9927e03",
+    "qualification/program-c/profile-qualification.tsv": "sha256:4adee0cc0bb561275dcdbe2d7698c667f1894545d47b11034801ed1ff29a534b",
+    "qualification/program-c/projection-profiles.v1.json": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8"
+  },
+  "fixture_inventory": {
+    "inventory_id": "program-c-gate-ii-final-qualification-v1",
+    "path": "qualification/program-c/a-06-fixture-inventory.v1.json",
+    "sha256": "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc"
+  },
+  "fixtures": [
+    {
+      "id": "retained-calls-v1",
+      "provenance": {
+        "kind": "DERIVED_FROM_EXACT_RETAINED_PRIVATE_PROGRAM_C_INPUT",
+        "source_path": "internal/retainedcalls/testdata/frozen-v1-export.json",
+        "source_sha256": "sha256:b7f3da235f18aa0ddd66f6a1184e84ea066e4244940f377c02598e8adec52011",
+        "derivation": "All exact endpoint identities and only SERVER_REPORTED_CALL_HIERARCHY groups; edge weight is exact admitted occurrence count."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/retained-calls-v1.json",
+        "sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 2,
+      "directed_weighted_edge_count": 1,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted"
+      ]
+    },
+    {
+      "id": "disconnected-singleton",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "source_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "derivation": "Bounded private calls-v1 shape retained exactly to isolate disconnected components and a zero-degree singleton."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/disconnected-singleton.json",
+        "sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 5,
+      "directed_weighted_edge_count": 3,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "disconnected",
+        "singleton"
+      ]
+    },
+    {
+      "id": "high-degree-hub",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "source_sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with one node incident to sixteen of seventeen directed weighted edges."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/high-degree-hub.json",
+        "sha256": "sha256:6caa7617773c1106dfd8647ed25db8a1ef168a1aae96e7de18781a18c6d4ddfc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 10,
+      "directed_weighted_edge_count": 17,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "high-degree-hub"
+      ]
+    },
+    {
+      "id": "adversarial-order",
+      "provenance": {
+        "kind": "EXACT_PRIVATE_PROGRAM_C_QUALIFICATION_INPUT",
+        "source_path": "qualification/program-c/fixtures/adversarial-order.json",
+        "source_sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "derivation": "Bounded private calls-v1 shape retained exactly with deliberately non-lexicographic node and edge byte order."
+      },
+      "graph": {
+        "path": "qualification/program-c/fixtures/adversarial-order.json",
+        "sha256": "sha256:c13f48fd1c27c74aabfaa296104a486b69f02aa72290d9d659c46eb0c8696fdc",
+        "bytes": "exact UTF-8 file bytes including final LF; no normalization before hashing"
+      },
+      "projection": {
+        "name": "calls-v1",
+        "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+        "manifest": "qualification/program-c/projection-profiles.v1.json"
+      },
+      "node_count": 4,
+      "directed_weighted_edge_count": 4,
+      "directed": true,
+      "weighted": true,
+      "weight_semantics": "positive integer admitted CALL occurrence count",
+      "covered_classes": [
+        "directed",
+        "weighted",
+        "adversarial-input-order"
+      ]
+    }
+  ],
+  "candidate": {
+    "algorithm": "community.Leiden",
+    "executable": "/tmp/program-c-gonum-leiden-04343f6",
+    "executable_sha256": "sha256:5358362fe62dc4a1f2efedf8526fb0b156fae866bc503c1bd1dbe798584d8b4c",
+    "go_mod_sum": "h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=",
+    "license_sha256": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "module": "gonum.org/v1/gonum",
+    "module_mod_sha256": "sha256:8a17681ea0d86cd2de00b2a87745287f5a8d7a0ad55ec0c26c5b52f3552d30e7",
+    "module_sum": "h1:V43GU8qUQ/EYbEPGzTP0PANTR6RiJgEJdU/vgsFhQiU=",
+    "module_zip_sha256": "sha256:7b10c89b38171e0f45ac55cd9e8791a83e43313e27594037303ab39c42c3f844",
+    "name": "Gonum Leiden",
+    "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "version": "v0.17.1-0.20260426204603-69ca49f456a7"
+  },
+  "build": {
+    "candidate_command": "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-leiden-04343f6 ./cmd/candidate",
+    "go_tool": {
+      "path": "/opt/homebrew/bin/go",
+      "sha256": "sha256:3f947495f00cb7f8088a5cfd694da8dc43869b33f5e7377b048fb18922ffb7e0"
+    },
+    "qualifier_command": "CGO_ENABLED=0 /opt/homebrew/bin/go -C /var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/pi-agent-2d945610-37be-494-a76ea7f4/qualification/program-c/candidates/gonum-leiden build -trimpath -buildvcs=false -ldflags=-buildid= -o /tmp/program-c-gonum-leiden-qualifier-04343f6 ./cmd/qualify-gate-ii",
+    "required_flags": [
+      "-trimpath",
+      "-buildvcs=false",
+      "-ldflags=-buildid="
+    ]
+  },
+  "supervisor": {
+    "canonicalization_boundary": "external parent supervisor process",
+    "fail_closed": true,
+    "implementation": {
+      "path": "/tmp/program-c-gonum-leiden-qualifier-04343f6",
+      "sha256": "sha256:c8101ebda5a330ca9b52f3fa5cc4f990b8bdab1d5da95437fa35b1583740544f"
+    },
+    "poll_interval_milliseconds": 20,
+    "process_group": true,
+    "ps": {
+      "path": "/bin/ps",
+      "sha256": "sha256:472992c470606d28f577590decfecd7f4a20f832fd92c671bebc6d44790b5d02"
+    },
+    "rss_metric": "aggregate descendant RSS from /bin/ps -axo pid=,ppid=,rss="
+  },
+  "runtime": {
+    "go": "go1.26.5",
+    "goarch": "arm64",
+    "goos": "darwin"
+  },
+  "schedule": {
+    "base_repeats_per_fixture_seed": 3,
+    "deterministic_input_permutations_per_fixture_seed": 1,
+    "seed_inventory": [
+      1,
+      2
+    ]
+  },
+  "limits": {
+    "aggregate_process_tree_rss_bytes": 536870912,
+    "directed_weighted_edges": 100000,
+    "nodes": 10000,
+    "wall_seconds": 60
+  },
+  "counts": {
+    "completed_runs": 8,
+    "expected_runs": 32,
+    "failed_runs": 1,
+    "fixtures": 4,
+    "seeds": 2
+  },
+  "runs": [
+    {
+      "index": 0,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 199280875,
+          "peak_tree_rss_bytes": 32768,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 20588042,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 60721917,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 77706042,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 96529667,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 117670875,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 136858167,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 156819458,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 177846417,
+              "tree_rss_bytes": 32768
+            },
+            {
+              "elapsed_nanos": 199280458,
+              "tree_rss_bytes": 32768
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 1,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18237625,
+          "peak_tree_rss_bytes": 4964352,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 17689583,
+              "tree_rss_bytes": 4964352
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 2,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:71f28695b2c593d8ff9cabea218cfc82bc0a3b0a0ba555c2f1a7fa91c92626ae",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 17796750,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 17301958,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 3,
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 1,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:80ab9cadd59f90d4c87e768169d991e51b761b5e57bf72d89c16954d2ec5f5da",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 17447000,
+          "peak_tree_rss_bytes": 4866048,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 16972625,
+              "tree_rss_bytes": 4866048
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 4,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18776500,
+          "peak_tree_rss_bytes": 4931584,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18227250,
+              "tree_rss_bytes": 4931584
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 5,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 2,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18629625,
+          "peak_tree_rss_bytes": 4882432,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18038292,
+              "tree_rss_bytes": 4882432
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 6,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 3,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:edd3ed3167926d514d7c33193f7b43b5281b3139d72093ee424f5c6805f1fd06",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18946042,
+          "peak_tree_rss_bytes": 4734976,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18431667,
+              "tree_rss_bytes": 4734976
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 7,
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "repeat": 0,
+      "kind": "deterministic_input_permutation",
+      "request": {
+        "fixture": {
+          "id": "retained-calls-v1",
+          "graph_sha256": "sha256:d88ac90b49ea63eef5744fb1cb5174cbc39dc720170f2254eea01d67debff1a4",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n    \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\"\n  ],\n  \"edges\": [\n    {\n      \"from\": \"733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce\",\n      \"to\": \"7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413\",\n      \"weight\": 2\n    }\n  ]\n}\n",
+          "node_count": 2,
+          "directed_weighted_edge_count": 1
+        },
+        "seed": 2,
+        "reverse_insertion": true
+      },
+      "request_sha256": "sha256:8d6f3443b60fe725c33caac31a2cd7f36c2b83eca8fc818d5a0a88b8c5455045",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": [
+            [
+              "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+            ],
+            [
+              "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+            ]
+          ],
+          "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+        },
+        "observation": {
+          "elapsed_nanos": 18796292,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18248208,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "PASS",
+      "failure": null
+    },
+    {
+      "index": 8,
+      "fixture_id": "disconnected-singleton",
+      "seed": 1,
+      "repeat": 1,
+      "kind": "base_repeat",
+      "request": {
+        "fixture": {
+          "id": "disconnected-singleton",
+          "graph_sha256": "sha256:6b2b834c38a3b76477e21c187ecacfe40808cb3fcd121945239e8228572d0554",
+          "graph_bytes": "{\n  \"schema_version\": \"lsp-trace.private.program-c.graph-fixture.v1\",\n  \"directed\": true,\n  \"weighted\": true,\n  \"nodes\": [\n    \"component-a\",\n    \"component-b\",\n    \"component-c\",\n    \"component-d\",\n    \"singleton\"\n  ],\n  \"edges\": [\n    {\"from\": \"component-a\", \"to\": \"component-b\", \"weight\": 3},\n    {\"from\": \"component-b\", \"to\": \"component-a\", \"weight\": 1},\n    {\"from\": \"component-c\", \"to\": \"component-d\", \"weight\": 2}\n  ]\n}\n",
+          "node_count": 5,
+          "directed_weighted_edge_count": 3
+        },
+        "seed": 1,
+        "reverse_insertion": false
+      },
+      "request_sha256": "sha256:cac41bd3c00f08e2a77812284ff40bf45f876fdeead81f847bb13d1a9657c220",
+      "result": {
+        "raw_candidate_output": {
+          "communities": [
+            [
+              "singleton"
+            ],
+            [
+              "component-b",
+              "component-a"
+            ],
+            null,
+            [
+              "component-c",
+              "component-d"
+            ]
+          ]
+        },
+        "externally_canonicalized_output": {
+          "communities": null,
+          "digest": ""
+        },
+        "observation": {
+          "elapsed_nanos": 19183709,
+          "peak_tree_rss_bytes": 4898816,
+          "exit_kind": "OK",
+          "resource_samples": [
+            {
+              "elapsed_nanos": 18524875,
+              "tree_rss_bytes": 4898816
+            }
+          ]
+        }
+      },
+      "outcome": "FAIL",
+      "failure": {
+        "kind": "NONCANONICAL_OUTPUT",
+        "detail": "empty community"
+      }
+    }
+  ],
+  "canonical_outputs": [
+    {
+      "fixture_id": "retained-calls-v1",
+      "seed": 1,
+      "output": {
+        "communities": [
+          [
+            "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+          ],
+          [
+            "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+          ]
+        ],
+        "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+      }
+    },
+    {
+      "fixture_id": "retained-calls-v1",
+      "seed": 2,
+      "output": {
+        "communities": [
+          [
+            "733cfdf26515b3f2a292951d996e82439f72fa59b45487bc0f048ea1b48170ce"
+          ],
+          [
+            "7d1ba850dd1e0e952580557b0b3eaf9a910db13b25725f211e7fcdb20ae84413"
+          ]
+        ],
+        "digest": "sha256:608392f708f29738f0f1926f9a28b776d010b56e37c1ad6b9a88c6685fd0823e"
+      }
+    }
+  ],
+  "typed_failure_policy": [
+    "CAP_BREACH",
+    "DERIVATION_REJECTED",
+    "IDENTITY_FAILURE",
+    "INPUT_DIGEST_MISMATCH",
+    "MEMORY_EXCEEDED",
+    "MEMORY_UNSUPPORTED",
+    "NONCANONICAL_OUTPUT",
+    "NONDETERMINISM",
+    "NONZERO_EXIT",
+    "PANIC",
+    "RECEIPT_INVALID",
+    "RECEIPT_WRITE",
+    "SCHEDULE_INVALID",
+    "SUPERVISOR_UNSUPPORTED",
+    "TIMEOUT"
+  ],
+  "no_fallback_policy": {
+    "approximation": false,
+    "fallback": false,
+    "sampling": false,
+    "silent_omission": false,
+    "substitution": false,
+    "truncation": false
+  },
+  "claim_ceiling": "This receipt qualifies only exact bounded execution of Gonum Leiden commit 69ca49f456a7a38cf370131834a2178d9aae17fe (v0.17.1-0.20260426204603-69ca49f456a7) over the declared private Program C fixture and seed inventory. It does not authorize production implementation, dependency adoption, public surfaces, deployment, other candidates, revisions, licenses, or distribution modes.",
+  "receipt_sha256": "sha256:85dafb5b013b64454a28592cdaac61842bef8809f21a4205873217ed206a7228"
+}
