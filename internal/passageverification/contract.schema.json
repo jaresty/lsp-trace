@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/internal/passage-verification-batch.v1.schema.json",
+  "title": "Internal retained passage verification batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["records"],
+  "properties": {
+    "records": {
+      "type": "array",
+      "maxItems": 235,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["artifact", "expected_artifact_sha256", "inspection_id", "seed_label", "node_id", "expected_uri", "range_match_mode", "position_encoding", "position_convention", "expected_range", "expected_passage_sha256"],
+        "properties": {
+          "artifact": {"type": "object", "additionalProperties": false, "required": ["bytes"], "properties": {"bytes": {"type": "string", "contentEncoding": "base64"}, "descriptor": {"type": "object", "additionalProperties": false, "required": ["admission_status", "exact_sha256", "inspection_id"], "properties": {"admission_status": {"const": "CUSTODY_ADMITTED"}, "exact_sha256": {"type": "string"}, "inspection_id": {"type": "string"}}}}},
+          "expected_artifact_sha256": {"type": "string"}, "inspection_id": {"type": "string"}, "seed_label": {"type": "string"}, "node_id": {"type": "string"}, "expected_uri": {"type": "string"},
+          "range_match_mode": {"enum": ["EXACT", "INTERSECTS"]}, "position_encoding": {"enum": ["utf-8", "utf-16", "utf-32"]}, "position_convention": {"const": "LSP_ZERO_BASED_END_EXCLUSIVE"},
+          "expected_range": {"$ref": "#/$defs/range"}, "expected_passage_sha256": {"type": "string"}
+        }
+      }
+    }
+  },
+  "$defs": {"position": {"type": "object", "additionalProperties": false, "required": ["line", "character"], "properties": {"line": {"type": "integer", "minimum": 0}, "character": {"type": "integer", "minimum": 0}}}, "range": {"type": "object", "additionalProperties": false, "required": ["start", "end"], "properties": {"start": {"$ref": "#/$defs/position"}, "end": {"$ref": "#/$defs/position"}}}}
+}
