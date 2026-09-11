@@ -529,7 +529,7 @@ func TestOversizedArtifactRequiresSelector(t *testing.T) {
 					t.Fatalf("ASSERT_OVERSIZED_ACTIONABLE_DIAGNOSTIC: envelope=%v", env)
 				}
 				text, _ := diagnostics[0].(string)
-				for _, phrase := range []string{"1048577 bytes", "inline limit is 1048576 bytes", "--publication-root", "request.arguments.output_selector", "retry reacquires"} {
+				for _, phrase := range []string{"1048577 bytes", "inline limit is 1048576 bytes", "caller-supplied publication destination", "not the artifact or its schema identity", "--publication-root", "request.arguments.output_selector", "retry reacquires"} {
 					if !strings.Contains(text, phrase) {
 						t.Errorf("ASSERT_OVERSIZED_ACTIONABLE_DIAGNOSTIC: missing %q in %q", phrase, text)
 					}

@@ -83,6 +83,32 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if description["input_schema"] == nil || description["input_schema_id"] == "" || description["graph_v5_production"] == nil || description["graph_v5_source_snapshot"] == nil {
 		t.Fatalf("ASSERT_COMPACT_HIDDEN_V5_RECIPE: %#v", description)
 	}
+	guidance, ok := description["guidance"].(map[string]any)
+	if !ok {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_PRESENT: %#v", description)
+	}
+	if guidance["canonical_operation"] != "lsp_trace_v3_slice" || guidance["direct_tool"] != "lsp_trace_v3_slice" || guidance["compact_visibility"] != "hidden" {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_IDENTITY: %#v", guidance)
+	}
+	if !reflect.DeepEqual(guidance["required_arguments"], []string{"session_id", "generation", "seed_manifest"}) {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_REQUIRED_ARGUMENTS: %#v", guidance)
+	}
+	if !reflect.DeepEqual(guidance["selector_alternatives"], []string{"output_selector"}) || guidance["selector_role"] != "artifact publication destination supplied by the caller; not an artifact or schema identity" {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_SELECTOR_DISTINCTION: %#v", guidance)
+	}
+	if !reflect.DeepEqual(guidance["output_schema_ids"], description["artifact_schema_ids"]) || guidance["output_schema_source"] != "registered artifact schema IDs and versioned families; no schema identity is inferred from a selector" {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_AUTHORITY: %#v", guidance)
+	}
+	families, _ := guidance["output_families_versions"].([]string)
+	if !reflect.DeepEqual(families, []string{"lsp-trace.graph-provenance.v3", "lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}) {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_FAMILY_VERSION: %#v", guidance)
+	}
+	if guidance["position_convention"] != "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based" {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_POSITION_BASES: %#v", guidance)
+	}
+	if guidance["output_version_guidance"] != "acquisition route v3; select Graph Provenance V5 output with output_version=lsp-trace.graph-provenance.v5" {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_V3_V5_DISTINCTION: %#v", guidance)
+	}
 	alias, ok := r.DescribeOperation("lsp_trace_validate")
 	if !ok || alias["name"] != "lsp_trace_v1_validate" {
 		t.Fatalf("ASSERT_COMPACT_ALIAS_DESCRIBES_CANONICAL: %#v", alias)
@@ -128,6 +154,13 @@ func TestCompactCapabilitiesAreExactAndDescriptionsSelfContained(t *testing.T) {
 	if got := caps["tools"].([]Tool); len(got) != 10 {
 		t.Fatalf("ASSERT_CAPABILITY_TOOLS_MEANS_ADVERTISED: %d", len(got))
 	}
+	discovery, ok := caps["operation_discovery"].(map[string]any)
+	if !ok || discovery["describe_with"] != "lsp_trace_v1_capabilities" || discovery["operation_argument"] != "operation" || discovery["compact_tools_are_advertised_only"] != true || discovery["hidden_operations_remain_dispatchable"] != true {
+		t.Fatalf("ASSERT_CAPABILITY_PROACTIVE_OPERATION_DISCOVERY: %#v", discovery)
+	}
+	if !strings.Contains(discovery["schema_identity_authority"].(string), "never infer schema identity from a selector") {
+		t.Fatalf("ASSERT_CAPABILITY_SELECTOR_NOT_SCHEMA: %#v", discovery)
+	}
 	text := strings.ToLower(strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(toString(caps), " ", ""), "\n", ""), "\t", "")))
 	for _, stale := range []string{"source_implementation", "deployed_availability", "public_analysis"} {
 		if strings.Contains(text, stale) {
@@ -147,6 +180,24 @@ func TestCompactCapabilitiesAreExactAndDescriptionsSelfContained(t *testing.T) {
 }
 
 func toString(v any) string { raw, _ := json.Marshal(v); return string(raw) }
+
+func TestGuidanceUsesRegisteredSelectorAndRequiredAlternatives(t *testing.T) {
+	description, ok := NewRegistryWithProfile(false, ToolProfileCompact).DescribeOperation("lsp_trace_v2_bounded_retained_analysis")
+	if !ok {
+		t.Fatal("ASSERT_GUIDANCE_ANALYTICS_DESCRIBABLE")
+	}
+	guidance := description["guidance"].(map[string]any)
+	if !reflect.DeepEqual(guidance["selector_alternatives"], []string{"output_selector", "publication_selector"}) {
+		t.Fatalf("ASSERT_GUIDANCE_SELECTORS_FROM_REGISTERED_SCHEMA: %#v", guidance)
+	}
+	if !reflect.DeepEqual(guidance["required_arguments"], []string{"operation", "filter", "max_work"}) {
+		t.Fatalf("ASSERT_GUIDANCE_COMMON_REQUIRED_FROM_SCHEMA: %#v", guidance)
+	}
+	sets := guidance["required_argument_sets"].([][]string)
+	if len(sets) != 2 || !reflect.DeepEqual(sets[0], []string{"input"}) || !reflect.DeepEqual(sets[1], []string{"publication_selector"}) {
+		t.Fatalf("ASSERT_GUIDANCE_REQUIRED_ALTERNATIVES_FROM_SCHEMA: %#v", guidance)
+	}
+}
 
 func TestPublicAnalyticsPresentationSchemaKeepsCarrierCoupling(t *testing.T) {
 	for _, name := range []string{"lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics", "lsp_trace_v2_bounded_retained_ranking"} {

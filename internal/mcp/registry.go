@@ -58,6 +58,7 @@ type Tool struct {
 	InputSchemaID           string         `json:"input_schema_id"`
 	EnvelopeSchemaIDs       []string       `json:"envelope_schema_ids"`
 	ArtifactSchemaIDs       []string       `json:"artifact_schema_ids"`
+	OutputFamiliesVersions  []string       `json:"-"`
 	Availability            Availability   `json:"availability"`
 	Description             string         `json:"-"`
 	InputSchema             map[string]any `json:"-"`
@@ -148,10 +149,14 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v1_execute":                   "Execute one canonical request through the shared transport-neutral operation",
 		"lsp_trace_v2_slice":                     "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
 		"lsp_trace_v2_incoming":                  "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
-		"lsp_trace_v3_slice":                     "Graph Provenance V3 output is DEPRECATED; set output_version=lsp-trace.graph-provenance.v5 for source-qualified production. Historical V3 dispatch remains compatible",
-		"lsp_trace_v3_incoming":                  "Graph Provenance V3 output is DEPRECATED; set output_version=lsp-trace.graph-provenance.v5 for source-qualified production. Historical V3 dispatch remains compatible",
+		"lsp_trace_v3_slice":                     "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
+		"lsp_trace_v3_incoming":                  "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
 		"lsp_trace_v1_incoming":                  "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
 		"lsp_trace_v1_slice":                     "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
+	}
+	registeredFamilies := make(map[string]string, len(manifest.Schemas))
+	for _, schema := range manifest.Schemas {
+		registeredFamilies[schema.ID] = schema.Family
 	}
 	tools := make([]Tool, 0, len(manifest.Tools))
 	for _, contract := range manifest.Tools {
@@ -180,7 +185,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		tools = append(tools, Tool{
 			Name: contract.Name, Aliases: append([]string{}, contract.Aliases...), InputSchemaID: contract.InputSchemaID,
 			EnvelopeSchemaIDs: envelopeSchemaIDs, ArtifactSchemaIDs: append([]string{}, contract.ArtifactSchemaIDs...),
-			Availability: Availability(contract.Availability), Description: descriptions[contract.Name], InputSchema: inputSchema,
+			OutputFamiliesVersions: registeredOutputFamilies(contract.ArtifactSchemaIDs, registeredFamilies),
+			Availability:           Availability(contract.Availability), Description: descriptions[contract.Name], InputSchema: inputSchema,
 			ExecutorFamily: executorFamily,
 		})
 	}
@@ -250,6 +256,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 				tools[i].ExecutorFamily = OfflineExecutorFamily
 			}
 		}
+		tools[i].OutputFamiliesVersions = registeredOutputFamilies(tools[i].ArtifactSchemaIDs, registeredFamilies)
 		tools[i].Description = completeToolDescription(tools[i])
 	}
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
@@ -410,6 +417,7 @@ func cloneTool(tool Tool) Tool {
 	tool.Aliases = append([]string{}, tool.Aliases...)
 	tool.EnvelopeSchemaIDs = append([]string{}, tool.EnvelopeSchemaIDs...)
 	tool.ArtifactSchemaIDs = append([]string{}, tool.ArtifactSchemaIDs...)
+	tool.OutputFamiliesVersions = append([]string{}, tool.OutputFamiliesVersions...)
 	tool.InputSchema = cloneMap(tool.InputSchema)
 	tool.PresentationInputSchema = cloneMap(tool.PresentationInputSchema)
 	return tool
@@ -529,6 +537,11 @@ func (r *Registry) Capabilities() map[string]any {
 		"capabilities_version": "1", "selected_envelope_version": "1", "supported_envelope_versions": []string{"1"},
 		"active_tool_profile": string(r.toolProfile), "advertised_tool_names": advertisedNames, "dispatchable_tool_names": dispatchableNames,
 		"tools": advertised, "selector_publication_supported": r.publicationSupported,
+		"operation_discovery": map[string]any{
+			"describe_with": "lsp_trace_v1_capabilities", "operation_argument": "operation",
+			"compact_tools_are_advertised_only": true, "hidden_operations_remain_dispatchable": true,
+			"schema_identity_authority": "describe the operation and use its registered output schema IDs; never infer schema identity from a selector",
+		},
 		"configured_providers": r.providerInventory.Entries(),
 		"managed_session_provisioning": map[string]any{
 			"authority":                      "HOST_PROVISIONED_ONLY",
@@ -605,6 +618,7 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 		"dispatchable":        true,
 		"availability":        tool.Availability,
 		"invocation_route":    invocationRoute,
+		"guidance":            operationGuidance(tool, advertised),
 	}
 	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {
 		description["graph_v5_production"] = map[string]any{
@@ -640,6 +654,93 @@ func (r *Registry) DescribeOperation(name string) (map[string]any, bool) {
 		}
 	}
 	return description, true
+}
+
+func operationGuidance(tool Tool, advertised bool) map[string]any {
+	visibility := "hidden"
+	if advertised {
+		visibility = "advertised"
+	}
+	guidance := map[string]any{
+		"canonical_operation":      tool.Name,
+		"direct_tool":              tool.Name,
+		"compact_visibility":       visibility,
+		"required_arguments":       schemaStringArray(tool.InputSchema, "required"),
+		"required_argument_sets":   schemaRequiredAlternatives(tool.InputSchema),
+		"selector_alternatives":    schemaSelectorProperties(tool.InputSchema),
+		"selector_role":            "artifact publication destination supplied by the caller; not an artifact or schema identity",
+		"output_schema_ids":        append([]string(nil), tool.ArtifactSchemaIDs...),
+		"output_families_versions": append([]string(nil), tool.OutputFamiliesVersions...),
+		"output_schema_source":     "registered artifact schema IDs and versioned families; no schema identity is inferred from a selector",
+	}
+	if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily {
+		guidance["position_convention"] = "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based"
+	}
+	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {
+		guidance["output_version_guidance"] = "acquisition route v3; select Graph Provenance V5 output with output_version=lsp-trace.graph-provenance.v5"
+	}
+	return guidance
+}
+
+func registeredOutputFamilies(ids []string, registered map[string]string) []string {
+	families := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if family, ok := registered[id]; ok {
+			families = append(families, family)
+		}
+	}
+	return families
+}
+
+func schemaStringArray(schema map[string]any, key string) []string {
+	raw, _ := schema[key].([]any)
+	values := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if value, ok := item.(string); ok {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+func schemaRequiredAlternatives(schema map[string]any) [][]string {
+	variants, _ := schema["oneOf"].([]any)
+	alternatives := make([][]string, 0, len(variants))
+	for _, raw := range variants {
+		variant, _ := raw.(map[string]any)
+		if required := schemaStringArray(variant, "required"); len(required) > 0 {
+			alternatives = append(alternatives, required)
+		}
+	}
+	return alternatives
+}
+
+func schemaSelectorProperties(schema map[string]any) []string {
+	set := map[string]struct{}{}
+	var collect func(map[string]any)
+	collect = func(candidate map[string]any) {
+		properties, _ := candidate["properties"].(map[string]any)
+		for name := range properties {
+			if name == "selector" || strings.HasSuffix(name, "_selector") {
+				set[name] = struct{}{}
+			}
+		}
+		for _, keyword := range []string{"oneOf", "anyOf"} {
+			variants, _ := candidate[keyword].([]any)
+			for _, raw := range variants {
+				if variant, ok := raw.(map[string]any); ok {
+					collect(variant)
+				}
+			}
+		}
+	}
+	collect(schema)
+	selectors := make([]string, 0, len(set))
+	for name := range set {
+		selectors = append(selectors, name)
+	}
+	sort.Strings(selectors)
+	return selectors
 }
 
 func operationShortName(name string) string {
