@@ -219,8 +219,9 @@ assert_all ASSERT_BOUNDED_INVESTIGATION \
   '- **Questions:**' \
   '- **Inputs:**' \
   '- **Candidate algorithms and implementations:**' \
-  "the proposed primary is Gonum's native-Go Leiden implementation only after it appears in an exact tagged Gonum release" \
-  'Gonum Louvain from that same release is the comparator.' \
+  "the proposed primary is Gonum's native-Go Leiden implementation at exact commit \`69ca49f456a7a38cf370131834a2178d9aae17fe\`" \
+  'Gonum Louvain `v0.17.0` is the evaluated comparator.' \
+  'any different module or revision requires new explicit authorization.' \
   'Infomap is optional external-reference material' \
   '`vtraag/leidenalg` is rejected' \
   '- **Fixture cap:**' \
@@ -228,7 +229,7 @@ assert_all ASSERT_BOUNDED_INVESTIGATION \
   '- **Resource cap:**' \
   '- **Outputs:**' \
   '- **Stopping conditions:**' \
-  'D01 execution or deployment, network access, installation, product-repository work, and a full test suite are outside this package.'
+  'D01 execution or deployment, general network access, installation, product-repository work, and a full test suite are outside this package.'
 assert_gate ASSERT_IMPLEMENTATION_GATE_EXACT A 1 10 \
   'IMPLEMENTATION_DECISION_ALLOWED = INVESTIGATION_ADMITTED && PASS(A-01..A-10)' \
   'it does not itself authorize implementation.'
@@ -236,7 +237,8 @@ assert_all ASSERT_BOUNDARY_NEUTRALITY \
   'Crossings are structural observations under an identified projection' \
   'never product, ownership, service, organizational, or business-boundary evidence.'
 assert_all ASSERT_EXCLUDED_EXECUTION \
-  'D01 execution or deployment, network access, installation, product-repository work, and a full test suite are outside this package.' \
+  'D01 execution or deployment, general network access, installation, product-repository work, and a full test suite are outside this package.' \
+  'The sole network exception is Go-module acquisition of `gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe` for the private qualification module.' \
   'The spike must not add public schemas, CLI/MCP commands, operation-registry entries, production packages, deployment configuration, or community implementation code.'
 
 if [ "$failed" -ne 0 ]; then

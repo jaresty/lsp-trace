@@ -1,0 +1,22 @@
+{
+  "schema_version": "lsp-trace.program-c-license-inputs.v2",
+  "gate_id": "I-04",
+  "predecessor": {
+    "path": "qualification/program-c/i-04-license-inputs.v1.json",
+    "sha256": "sha256:177f8d988df26bd8bce60908ce38fe11d206476f2d005e386a1573bbc53a22a1"
+  },
+  "entry": {
+    "candidate": "Gonum Leiden",
+    "module": "gonum.org/v1/gonum",
+    "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "pseudo_version": "v0.17.1-0.20260426204603-69ca49f456a7",
+    "license": "BSD-3-Clause",
+    "mode": "qualification-only native-Go separate module; not a root or production dependency",
+    "license_path_in_module": "LICENSE",
+    "retained_license_path": "qualification/program-c/gonum-leiden-69ca49f.LICENSE",
+    "license_sha256": "sha256:b44d9e394ba3efc15de4e5a8ebd843bd8d6325f6ffbb0a4ff6db7181aa15dda3",
+    "source": "Go module zip for v0.17.1-0.20260426204603-69ca49f456a7"
+  },
+  "policy": "Descriptive exact license input only; no legal compatibility conclusion or production adoption approval is made.",
+  "claim_ceiling": "This exact-byte license input supports qualification-only review of the pinned commit and no other revision or distribution mode."
+}

@@ -1,0 +1,22 @@
+{
+  "schema_version": "lsp-trace.program-c-candidate-inventory.v2",
+  "gate_id": "I-03",
+  "predecessor": {
+    "path": "qualification/program-c/i-03-candidate-inventory.v1.json",
+    "sha256": "sha256:bea2dca0a82aad0518c0eab0acb233cebe5ec766b2e75b58cbcc4a3c33991f2e"
+  },
+  "policy": "Qualification-only exception: only Gonum commit 69ca49f456a7a38cf370131834a2178d9aae17fe may be acquired, and only through Go's module mechanism. Any different revision or any general network fallback requires new explicit authorization. This does not authorize production adoption.",
+  "authorized_candidate": {
+    "name": "Gonum Leiden",
+    "module": "gonum.org/v1/gonum",
+    "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "acquisition": "go mod download -json gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "allowed_network": "Go module mechanism for this exact module and revision only",
+    "role": "qualification-only Leiden comparator",
+    "surfaces": ["private separate qualification module"],
+    "variants": ["directed Leiden"],
+    "maximum_outcome": "IMPLEMENTATION_CANDIDATE"
+  },
+  "other_candidates": "The v1 inventory remains historical evidence. No other candidate or revision gains acquisition or execution authorization.",
+  "claim_ceiling": "This successor authorizes only acquisition and qualification of the exact pinned Gonum commit. It does not authorize another revision, general network fallback, root-module dependency changes, public or production surfaces, deployment, or production adoption."
+}
