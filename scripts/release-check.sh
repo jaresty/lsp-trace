@@ -101,6 +101,8 @@ assert_file ASSERT_FOUNDATION_ROOT_MIT_PRESERVED LICENSE
 assert_file ASSERT_FOUNDATION_GONUM_NOTICE THIRD_PARTY_NOTICES
 assert_contains ASSERT_FOUNDATION_GONUM_NO_ENDORSEMENT THIRD_PARTY_NOTICES 'Neither the name of the Gonum project'
 assert_contains ASSERT_FOUNDATION_GONUM_DISCLAIMER THIRD_PARTY_NOTICES 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"'
+assert_contains ASSERT_FOUNDATION_X_TEXT_COPYRIGHT THIRD_PARTY_NOTICES 'Copyright 2009 The Go Authors.'
+assert_contains ASSERT_FOUNDATION_X_TEXT_BINARY_NOTICE THIRD_PARTY_NOTICES 'Redistributions in binary form must reproduce the above copyright'
 assert_contains ASSERT_FOUNDATION_ARCHIVE_LICENSE .goreleaser.yaml '- LICENSE'
 assert_contains ASSERT_FOUNDATION_ARCHIVE_NOTICES .goreleaser.yaml '- THIRD_PARTY_NOTICES'
 for family in community community-boundary community-instability; do
