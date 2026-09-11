@@ -1,0 +1,73 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-07-boundary-accounting-contract.v1",
+  "gate_id": "A-07",
+  "contract_status": "COMPLETE",
+  "implementation_status": "NOT_IMPLEMENTED",
+  "identity_bindings": [
+    "admitted_graph_sha256",
+    "projection_sha256",
+    "projection_policy_id",
+    "community_artifact_sha256",
+    "algorithm_name",
+    "algorithm_version",
+    "parameters_canonical_sha256",
+    "seed",
+    "resource_policy_sha256"
+  ],
+  "relation_occurrence_universe": {
+    "unit": "admitted directed relation occurrence retaining multiplicity and explicit weight",
+    "denominator": "count of all admitted relation occurrences under the bound projection",
+    "partition": ["INTRA_COMMUNITY", "CROSSING_COMMUNITY"],
+    "invariant": "intra_count + crossing_count = admitted_relation_occurrence_count",
+    "duplicate_accounting": "each admitted relation occurrence contributes exactly once"
+  },
+  "required_measures": {
+    "intra_occurrences": {"numerator": "INTRA_COMMUNITY occurrence count", "denominator": "admitted_relation_occurrence_count"},
+    "crossing_occurrences": {"numerator": "CROSSING_COMMUNITY occurrence count", "denominator": "admitted_relation_occurrence_count"},
+    "conductance": {
+      "name": "weighted directed cut conductance",
+      "numerator": "sum of explicit weights of crossing occurrences incident to the community",
+      "denominator": "minimum of total admitted weighted out-volume of the community and its complement",
+      "zero_denominator_outcome": "UNAVAILABLE"
+    },
+    "high_centrality_crossing_nodes": {
+      "centrality_metric_identity_required": true,
+      "threshold_and_tie_policy_required": true,
+      "denominator": "all admitted nodes with an available bound centrality value",
+      "classification": "node has at least one admitted crossing occurrence"
+    },
+    "bridges_and_articulation_points": {
+      "graph_view_identity_required": true,
+      "bridge_definition": "removal of the identified projected edge increases weakly connected component count",
+      "articulation_definition": "removal of the identified projected node increases weakly connected component count",
+      "parallel_occurrence_policy": "occurrence multiplicity is retained and parallel occurrences prevent a unique edge occurrence from being a bridge"
+    },
+    "path_witnesses": {
+      "required_fields": ["source_node_id", "target_node_id", "ordered_node_ids", "ordered_relation_occurrence_ids", "projection_sha256"],
+      "selection_policy_required": true,
+      "no_path_outcome": "EMPTY"
+    },
+    "hub_crossing_status": {
+      "hub_metric_identity_required": true,
+      "hub_threshold_and_tie_policy_required": true,
+      "states": ["CROSSING_HUB", "NON_CROSSING_HUB", "NOT_HUB", "UNAVAILABLE"]
+    }
+  },
+  "outcome_accounting": {
+    "EMPTY": "computation completed over a non-missing admitted universe and yielded zero members; denominators remain reported",
+    "INCOMPLETE": "some admitted item could not be accounted for; missing count and witnessed item identities are required and publication is blocked",
+    "UNAVAILABLE": "the named measure is undefined or its required input is unavailable; reason and affected denominator are required",
+    "required_counts": ["admitted_relation_occurrence_count", "accounted_relation_occurrence_count", "unaccounted_relation_occurrence_count", "admitted_node_count", "accounted_node_count", "unaccounted_node_count"]
+  },
+  "witness_policy": {
+    "crossing_witnesses_required_when_nonempty": true,
+    "path_witnesses_required_when_nonempty": true,
+    "witnesses_are_examples_not_denominators": true
+  },
+  "publication_policy": {"block_on_incomplete": true, "block_on_identity_mismatch": true},
+  "claim_ceiling": {
+    "structural_only": true,
+    "semantic_boundary_claims": false,
+    "text": "All measures and witnesses are structural observations under the exact bound projection. They do not establish feature, product, ownership, service, organizational, or business-boundary identity or explanation."
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-04-platform-scope.v1",
+  "gate_id": "A-04",
+  "policy_id": "program-c-initial-platform-scope-darwin-arm64-v1",
+  "status": "CURRENT_INTENDED_INITIAL_SCOPE",
+  "predecessor_policy": {
+    "path": "qualification/program-c/i-05-portability-questions.v1.json",
+    "sha256": "sha256:f04593ae8aa3580601a7b66b3c116a443a12681ca2fce120e8139d4ab79df5e7",
+    "disposition": "HISTORICAL_POLICY_RETAINED_BYTE_IDENTICAL"
+  },
+  "candidate": {
+    "module": "gonum.org/v1/gonum",
+    "revision": "69ca49f456a7a38cf370131834a2178d9aae17fe",
+    "pseudo_version": "v0.17.1-0.20260426204603-69ca49f456a7",
+    "package": "./cmd/candidate",
+    "packaging_mode": "qualification-only native-Go separate module"
+  },
+  "current_required_coordinates": [
+    {"goos": "darwin", "goarch": "arm64", "cgo_enabled": "0"}
+  ],
+  "historical_broader_coordinates": [
+    {"goos": "linux", "goarch": "amd64", "disposition": "OUT_OF_CURRENT_SCOPE"},
+    {"goos": "linux", "goarch": "arm64", "disposition": "OUT_OF_CURRENT_SCOPE"},
+    {"goos": "darwin", "goarch": "amd64", "disposition": "OUT_OF_CURRENT_SCOPE"},
+    {"goos": "windows", "goarch": "amd64", "disposition": "OUT_OF_CURRENT_SCOPE"},
+    {"goos": "windows", "goarch": "arm64", "disposition": "OUT_OF_CURRENT_SCOPE"}
+  ],
+  "out_of_scope_is_not": ["PASS", "WAIVED", "QUALIFIED", "UNSUPPORTED"],
+  "reproducibility_requirement": {
+    "minimum_identical_input_builds": 2,
+    "executable_digest": "SHA-256",
+    "all_executable_digests_must_match": true,
+    "required_identities": ["tool", "source", "module", "command", "GOOS", "GOARCH", "CGO_ENABLED", "package"],
+    "typed_outcomes": ["PASS", "PLATFORM_MISMATCH", "TOOL_IDENTITY_FAILURE", "SOURCE_IDENTITY_FAILURE", "MODULE_ACQUISITION_FAILURE", "BUILD_FAILURE", "EXECUTABLE_IDENTITY_FAILURE", "HASH_MISMATCH"],
+    "network_policy": "Only go mod download -json gonum.org/v1/gonum@69ca49f456a7a38cf370131834a2178d9aae17fe is authorized; no proxy, VCS, URL, alternate revision, or general network fallback is authorized by this policy."
+  },
+  "claim_ceiling": "A PASS qualifies reproducible construction only for Gonum Leiden commit 69ca49f456a7a38cf370131834a2178d9aae17fe on Darwin/macOS arm64 with CGO disabled. Historical broader coordinates are out of current scope, not passed, waived, qualified, or declared unsupported. This policy does not authorize production adoption or behavior."
+}

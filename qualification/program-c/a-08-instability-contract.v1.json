@@ -1,0 +1,56 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-08-instability-contract.v1",
+  "gate_id": "A-08",
+  "contract_status": "COMPLETE",
+  "implementation_status": "NOT_IMPLEMENTED",
+  "comparison_identity": ["admitted_graph_sha256", "projection_sha256", "projection_policy_id", "algorithm_name", "algorithm_version", "parameters_canonical_sha256", "resource_policy_sha256"],
+  "label_independent_matching": {
+    "numeric_or_text_labels_are_identities": false,
+    "community_identity": "sorted member-node identity set",
+    "pair_score": "Jaccard intersection-over-union of member-node identity sets",
+    "assignment": "maximum-total-score one-to-one bipartite matching",
+    "tie_break": "lexicographic order of the two sorted member-node identity sets",
+    "canonical_pair_order": "descending pair score, then lexicographic left member set, then lexicographic right member set"
+  },
+  "unmatched_handling": {
+    "left_unmatched": "match to explicit EMPTY_RIGHT sentinel with zero overlap",
+    "right_unmatched": "match to explicit EMPTY_LEFT sentinel with zero overlap",
+    "included_in_denominators": true,
+    "never_dropped": true
+  },
+  "metrics": {
+    "node_reassignment_rate": {"numerator": "nodes whose matched community member set differs between the run pair", "denominator": "union of admitted node identities in both runs"},
+    "unmatched_community_rate": {"numerator": "left-unmatched plus right-unmatched communities", "denominator": "left community count plus right community count"},
+    "variation_of_information_bits": {"log_base": 2, "denominator": "union of admitted node identities in both runs", "unmatched_nodes": "explicit singleton missing-side bins"},
+    "pairwise_jaccard_summary": {"values": ["minimum", "median", "mean"], "denominator": "all matched pairs including unmatched sentinel pairs"}
+  },
+  "thresholds": {
+    "node_reassignment_rate_max": 0.05,
+    "unmatched_community_rate_max": 0.05,
+    "variation_of_information_bits_max": 0.10,
+    "pairwise_jaccard_minimum_min": 0.80,
+    "comparison_result": "STABLE only when every threshold is satisfied for every complete pairwise comparison"
+  },
+  "run_accounting": {
+    "seed_inventory_required_before_execution": true,
+    "minimum_distinct_seeds": 2,
+    "runs_per_seed": 3,
+    "maximum_runs_per_seed": 3,
+    "pair_denominator": "all unordered pairs of complete runs across all declared seeds, including same-seed replay pairs",
+    "required_counts": ["declared_seed_count", "declared_run_count", "completed_run_count", "failed_run_count", "incomplete_run_count", "expected_pair_count", "completed_pair_count", "blocked_pair_count"]
+  },
+  "failed_incomplete_policy": {
+    "failed_run": "typed failure remains in run denominator and blocks every incident comparison",
+    "incomplete_run": "typed incomplete remains in run denominator and blocks every incident comparison",
+    "missing_run": "treated as INCOMPLETE, never omitted or replaced",
+    "unstable_outcome": "UNSTABLE",
+    "incomplete_outcome": "INCOMPLETE"
+  },
+  "publication_policy": {
+    "block_on_unstable": true,
+    "block_on_incomplete": true,
+    "block_on_failed_run": true,
+    "block_on_identity_mismatch": true
+  },
+  "claim_ceiling": "STABLE means only that the declared metrics met the declared thresholds for the exact bound graph, projection, implementation, parameters, seeds, and completed runs. It is label-independent, structural, and not a universal stability or semantic-community claim."
+}

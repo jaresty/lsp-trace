@@ -1,0 +1,32 @@
+{
+  "schema_version": "lsp-trace.private.program-c.a-10-implementation-test-plan.v1",
+  "gate_id": "A-10",
+  "plan_status": "READY_FOR_REVIEW",
+  "execution_status": "NOT_EXECUTED",
+  "tests_pass_claimed": false,
+  "provenance": {
+    "starting_repository_revision": "057e2395fb361f753d05c43f18d0e5764b8f063c",
+    "requirements_path": "docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md",
+    "requirements_sha256": "sha256:2ff40cd64adc32c451fc46c40d59d2d03854d4a313092184f4a70b2a23003f33",
+    "predecessor_ledger_path": "qualification/program-c/gate-ii-current-outcomes.v2.tsv",
+    "predecessor_ledger_sha256": "sha256:3772f2a2beaf118daf8ba3a5443b2bdda0ce3165a31f02461ec52d582ab31cee"
+  },
+  "planned_guard_classes": {
+    "seed_replay": ["same seed and identical admitted bytes reproduce canonical partition digest", "declared seed and run inventories are exact"],
+    "canonicalization": ["numeric labels are ignored", "member identities and community ordering canonicalize deterministically", "input-order permutation yields canonical equivalence"],
+    "instability": ["maximum-weight label-independent matching", "unmatched communities remain accounted", "threshold boundary cases", "failed and incomplete runs block publication"],
+    "boundary_accounting": ["all occurrences partition exactly into intra and crossing", "empty/incomplete/unavailable outcomes preserve denominators", "conductance zero denominator", "centrality crossings, bridges, articulation points, paths, and hubs retain witnesses"],
+    "resources": ["wall and aggregate RSS ceilings", "pre-execution identity and size limits", "no fallback, truncation, substitution, approximation, or silent sampling"],
+    "validation": ["unknown fields and invalid identities fail closed", "digest and denominator mismatches fail", "structural neutrality ceiling is enforced"],
+    "compatibility": ["historical accepted artifacts remain accepted byte-for-byte", "version dispatch rejects unknown versions", "root module and production surfaces remain unchanged"],
+    "cli_mcp_parity": ["shared internal result bytes for equivalent CLI and MCP inputs", "typed failures and incomplete outcomes agree", "publication blocking agrees"]
+  },
+  "planned_levels": ["unit", "property", "fixture", "golden", "CLI integration", "MCP integration", "compatibility"],
+  "review_requirement": {
+    "independent_read_only_review_required": true,
+    "review_must_bind_plan_sha256": true,
+    "review_must_bind_reviewed_commit": true,
+    "review_evidence_status_before_review": "ABSENT"
+  },
+  "claim_ceiling": "This is a reviewed-eligible implementation test plan only. execution_status is NOT_EXECUTED; it does not claim that any planned test exists, ran, passed, or authorizes implementation, public schemas, CLI/MCP operations, dependencies, deployment, or production behavior."
+}
