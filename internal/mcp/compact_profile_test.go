@@ -25,11 +25,11 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	for name, registry := range map[string]*Registry{
 		"default": NewRegistry(false), "full": NewRegistryWithProfile(false, ToolProfileFull),
 	} {
-		if got := len(registry.Tools()); got != 29 {
-			t.Fatalf("ASSERT_%s_DISPATCHABLE_29: got %d", name, got)
+		if got := len(registry.Tools()); got != 30 {
+			t.Fatalf("ASSERT_%s_DISPATCHABLE_30: got %d", name, got)
 		}
-		if got := len(registry.Advertised()); got != 29 {
-			t.Fatalf("ASSERT_%s_ADVERTISED_29: got %d", name, got)
+		if got := len(registry.Advertised()); got != 30 {
+			t.Fatalf("ASSERT_%s_ADVERTISED_30: got %d", name, got)
 		}
 		assertSliceOutputSelectorAdvertised(t, name, registry)
 	}
@@ -37,8 +37,8 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	if got := toolNames(compact.Advertised()); !reflect.DeepEqual(got, compactCanonicalNames) {
 		t.Fatalf("ASSERT_COMPACT_ADVERTISED_EXACT10_LEXICAL: got %v", got)
 	}
-	if got := len(compact.Tools()); got != 29 {
-		t.Fatalf("ASSERT_COMPACT_DISPATCHABLE_29: got %d", got)
+	if got := len(compact.Tools()); got != 30 {
+		t.Fatalf("ASSERT_COMPACT_DISPATCHABLE_30: got %d", got)
 	}
 	assertSliceOutputSelectorAdvertised(t, "compact", compact)
 	for _, hidden := range []string{"lsp_trace_v1_validate", "lsp_trace_v2_slice", "lsp_trace_v3_incoming"} {
@@ -128,7 +128,7 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if again["name"] != "lsp_trace_v3_slice" {
 		t.Fatal("ASSERT_OPERATION_DESCRIPTION_SNAPSHOT_IMMUTABLE")
 	}
-	if len(r.Advertised()) != 10 || len(r.Tools()) != 29 {
+	if len(r.Advertised()) != 10 || len(r.Tools()) != 30 {
 		t.Fatal("ASSERT_OPERATION_DESCRIPTION_PRESERVES_PROFILE_COUNTS")
 	}
 }
@@ -148,8 +148,8 @@ func TestCompactCapabilitiesAreExactAndDescriptionsSelfContained(t *testing.T) {
 	if caps["active_tool_profile"] != "compact" || !reflect.DeepEqual(caps["advertised_tool_names"], compactCanonicalNames) {
 		t.Fatalf("ASSERT_CAPABILITY_ACTIVE_AND_ADVERTISED_EXACT: %#v", caps)
 	}
-	if got := caps["dispatchable_tool_names"].([]string); len(got) != 29 {
-		t.Fatalf("ASSERT_CAPABILITY_DISPATCHABLE_29: %v", got)
+	if got := caps["dispatchable_tool_names"].([]string); len(got) != 30 {
+		t.Fatalf("ASSERT_CAPABILITY_DISPATCHABLE_30: %v", got)
 	}
 	if got := caps["tools"].([]Tool); len(got) != 10 {
 		t.Fatalf("ASSERT_CAPABILITY_TOOLS_MEANS_ADVERTISED: %d", len(got))

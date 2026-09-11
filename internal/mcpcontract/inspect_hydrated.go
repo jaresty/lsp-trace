@@ -30,6 +30,9 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 	return &c
 }
 func readPublicContractSchema(name string) ([]byte, error) {
+	if raw, ok, err := programCLeidenSchema(name); ok {
+		return raw, err
+	}
 	switch name {
 	case "testdata/schemas/input-inspect-hydrated.v1.schema.json":
 		return hi.InputSchema(), nil

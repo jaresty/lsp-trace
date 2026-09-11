@@ -96,10 +96,10 @@ func TestRegistryRejectsAmbiguousNames(t *testing.T) {
 }
 
 func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
-	const assertion = "ASSERT_ALWAYS_LOCAL_TWENTY_NINE_TOOL_ORDER"
+	const assertion = "ASSERT_ALWAYS_LOCAL_THIRTY_TOOL_ORDER"
 	t.Log("ASSERTION: " + assertion)
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 29 {
+	if got := len(r.Advertised()); got != 30 {
 		t.Fatalf("%s: advertised=%d", assertion, got)
 	}
 	for _, canonical := range []string{"lsp_session_v1_list", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_session_v1_restart"} {
@@ -115,7 +115,7 @@ func TestLifecycleExecutorFamilyIsEnabledAndAdvertisedByDefault(t *testing.T) {
 			t.Fatalf("%s[%s alias]: tool=%+v ok=%v", assertion, canonical, alias, ok)
 		}
 	}
-	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking", "lsp_trace_v1_capabilities", "lsp_trace_v1_custody_execute", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify", "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics", "lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_incoming", "lsp_trace_v2_slice", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls", "lsp_trace_v3_incoming", "lsp_trace_v3_slice"}
+	want := []string{"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop", "lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking", "lsp_trace_v1_capabilities", "lsp_trace_v1_custody_execute", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_incoming", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice", "lsp_trace_v1_validate", "lsp_trace_v1_verify", "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics", "lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_incoming", "lsp_trace_v2_slice", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls", "lsp_trace_v3_incoming", "lsp_trace_v3_slice"}
 	advertised := r.Advertised()
 	if len(want) != len(advertised) {
 		t.Fatalf("%s: want=%d advertised=%d", assertion, len(want), len(advertised))
@@ -176,7 +176,7 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 		}
 	}
 	properties, _ := tool.InputSchema["properties"].(map[string]any)
-	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 29 {
+	if _, ok := properties["symbol"]; !ok || tool.InputSchema["oneOf"] == nil || len(NewRegistry(false).Advertised()) != 30 {
 		t.Fatalf("%s: schema=%v advertised=%d", assertion, tool.InputSchema, len(NewRegistry(false).Advertised()))
 	}
 }
@@ -222,8 +222,8 @@ func TestCapabilitiesReportExactMCPBuildAndProductionMetadata(t *testing.T) {
 
 func TestVerifyAdvertisesGraphProvenanceV5WithoutChangingCardinality(t *testing.T) {
 	registry := NewRegistry(false)
-	if got := len(registry.Tools()); got != 29 {
-		t.Fatalf("ASSERT_VERIFY_V5_CARDINALITY: got=%d want=29", got)
+	if got := len(registry.Tools()); got != 30 {
+		t.Fatalf("ASSERT_VERIFY_V5_CARDINALITY: got=%d want=30", got)
 	}
 	tool, ok := registry.Resolve("lsp_trace_v1_verify")
 	if !ok {
@@ -289,10 +289,10 @@ func TestRegistryContract(t *testing.T) {
 
 	for _, enabledFlag := range []bool{false, true} {
 		r := NewRegistry(enabledFlag)
-		if got := len(r.Tools()); got != 29 {
+		if got := len(r.Tools()); got != 30 {
 			t.Errorf("%s: got %d entries", canonicalAssertion, got)
 		}
-		if got := len(r.Advertised()); got != 29 {
+		if got := len(r.Advertised()); got != 30 {
 			t.Errorf("%s: got %d advertised entries", canonicalAssertion, got)
 		}
 		expected := map[string]string{
