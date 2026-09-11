@@ -1,0 +1,80 @@
+{
+  "schema_version": "lsp-trace.private.program-c.gate-ii-evaluation.v4",
+  "predecessor_revision": "440371930eac5ad0a9c7d132d5097dcfa8f131b4",
+  "supersedes": {
+    "path": "qualification/program-c/gate-ii-current-outcomes.v3.2a00a7d.receipt.json",
+    "receipt_sha256": "sha256:76f6473900e41aae7ad6202316e63b659afbe0418954e07041888acb56ce8c3f"
+  },
+  "predecessor_commits": {
+    "starting_main": "d10517418c5dd61c93d09916d4787a62adedacf9",
+    "qualifier_implementation": "04343f62cb7e2c5cc9d1222eee49438e254d8812",
+    "failed_attempt_receipts": "13a5d7179753a20c0fe63d82fa901fb9be3add20",
+    "canonicalization_repair": "8c99aefbd55f1cf589450602394d0968591026e3",
+    "successful_candidate_receipts": "faa52ec2f39e4430f33d25e4ca6b75e5ff172649",
+    "caller_approval": "440371930eac5ad0a9c7d132d5097dcfa8f131b4"
+  },
+  "command": [
+    "python3",
+    "scripts/check-program-c-gate-ii-v4.py",
+    "--root",
+    ".",
+    "--outcomes",
+    "qualification/program-c/gate-ii-current-outcomes.v4.tsv",
+    "--receipt",
+    "qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json"
+  ],
+  "inputs": {
+    ".github/workflows/ci.yml": "sha256:9a5512377b2c27ea0fdb07bc8f037ee583ccad9dc483f795159e35b6bb8d9d31",
+    "docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md": "sha256:2ff40cd64adc32c451fc46c40d59d2d03854d4a313092184f4a70b2a23003f33",
+    "go.mod": "sha256:866858049c124378b4f27184216e47f0b30e9ff4a094bbfaffd864a91da0cf5d",
+    "go.sum": "sha256:10bbdccf64ee8a5bdb0f8858587f9911bf689ce77fb2ef3a4b704a7472f36fa0",
+    "qualification/program-c/a-03-caller-approval.v1.json": "sha256:56dc1a49a2708fcc15b61bb2d574698521349ae8fb7bf843fd394b12d7be3f7d",
+    "qualification/program-c/a-04-current-platform-scope.v1.json": "sha256:2a7a646eafeabcc2cc3595321dd2c32fc42da5ec1991dc1b7ee0446002139e68",
+    "qualification/program-c/a-04-darwin-arm64-build-reproducibility.v1.json": "sha256:33b5da0a2cad66ecdb39b439bd65629e8e5966a65a4d0b6ab1692e0a6a2b6828",
+    "qualification/program-c/a-06-fixture-inventory.v1.json": "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc",
+    "qualification/program-c/a-07-boundary-accounting-contract.v1.json": "sha256:c1db3492683647493f1db0024b9df2cbf5059a27958a2da31fb49eec54c94264",
+    "qualification/program-c/a-08-instability-contract.v1.json": "sha256:dfb94e6ff3cde9432a81be706bb1d6aff9637e34a40935f4639d4162f785a0af",
+    "qualification/program-c/a-10-implementation-test-plan.v1.json": "sha256:9e74da97af92c6e5c83b9f18678dc8a1305ba7f62f14fd4b8f2815dc8d2c87a6",
+    "qualification/program-c/a-10-implementation-test-plan.v1.review.json": "sha256:b220dd2b205c35f41ca6abdd0643a7be5cb4382842c2dc1b5ffb9951a274500d",
+    "qualification/program-c/a-10-implementation-test-plan.v1.review.txt": "sha256:d82b6626f54bb8d7df25d6d86a5e2d2335ed701c067b9d200eef2f7b84756aae",
+    "qualification/program-c/candidate-comparison.v1.json": "sha256:50ca4fb616b311c652d79d418978b862eca6426d4573adcd35645fd1c924d950",
+    "qualification/program-c/candidates/gonum-leiden/candidate-qualification.04343f6.receipt.json": "sha256:64c82e4440085a2ea0592f681ed01513cac4385cc5ac51334e8f266f86815ff7",
+    "qualification/program-c/candidates/gonum-leiden/candidate-qualification.8c99aef.receipt.json": "sha256:3684ce8994dff593316c1e4e14d2a6c3effe62996fd7d1493e0561f0128d4084",
+    "qualification/program-c/candidates/gonum-louvain/candidate-qualification.04343f6.receipt.json": "sha256:653665e9028e209848b45d34541a1d8cffb4d53bfbf43fb485e4a3484f3e1fd6",
+    "qualification/program-c/candidates/gonum-louvain/candidate-qualification.8c99aef.receipt.json": "sha256:256ca22dc84e025f04adceb96d0c5475d93de17d94669d5c5f037efc153cfcc9",
+    "qualification/program-c/gate-i-i-08-neutrality.receipt.txt": "sha256:cfecdd2b61ab92b6fcbbf8341dc5673b1e28df0bc5d4fdfd1193cbec620aa16b",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/gate-ii-current-outcomes.v3.2a00a7d.receipt.json": "sha256:65e7b430c168353c0d8091fdc4b0935c082f8afb0ecb4960636e78fd2521f29c",
+    "qualification/program-c/gate-ii-current-outcomes.v3.tsv": "sha256:e74e09b069945644986224b66ef84083ebbd4e41c34e65d1f0c3f52c580c4e64",
+    "qualification/program-c/i-08-neutrality-examples.v1.json": "sha256:465740e1726aab5cdaa28696fcb81d2ded844c610ab80f8ddbc305f005593043",
+    "scripts/check-ci.sh": "sha256:0339c756df1b01b62785c805e9fcdb47d7315c6427782f1817119a3df246898e",
+    "scripts/check-program-c-gate-ii-v4.py": "sha256:e6436441f27d6fa8740c0cf10fdadd70846521c321ea00dfa189afd8c31964d6",
+    "scripts/check-program-c-gate-ii.py": "sha256:bc489cb099abd71d57ef27a253e93db6f3f71babc8ff539f45fd8a7c6eb09943",
+    "scripts/test-program-c-gate-ii-v4.py": "sha256:3197137b94c2dfde8b805f4a8d8ea0d661c380c77554227cec928ef9c07f21a1",
+    "scripts/test-program-c-gate-ii.py": "sha256:a3675ad6bb8e5346c8e8cf54a2ba803adb48f3db349e521394483d63656366ee"
+  },
+  "result": {
+    "stdout": "PROGRAM_C_GATE_II PASS=10 FAIL=0 BLOCKED=0 IMPLEMENTATION_DECISION_ALLOWED=true\n",
+    "stdout_sha256": "sha256:80da7cd561454c09a46b1a8183f8c7656cf70a4bb46d2107fab5840b63cbda51",
+    "counts": {
+      "PASS": 10,
+      "FAIL": 0,
+      "BLOCKED": 0
+    },
+    "implementation_decision_allowed": true
+  },
+  "outcomes": {
+    "A-01": "PASS",
+    "A-02": "PASS",
+    "A-03": "PASS",
+    "A-04": "PASS",
+    "A-05": "PASS",
+    "A-06": "PASS",
+    "A-07": "PASS",
+    "A-08": "PASS",
+    "A-09": "PASS",
+    "A-10": "PASS"
+  },
+  "claim_ceiling": "This exact bounded Program C Gate II successor records implementation candidate qualification only for Gonum Louvain v0.17.0 and Gonum Leiden commit 69ca49f456a7 under the declared private fixtures and Darwin supervisor. It does not authorize production adoption, public surfaces, deployment, semantic boundary claims, other candidates or revisions, or organization-wide license policy.",
+  "receipt_sha256": "sha256:987c9ba7ecd8f1566e448bf28f03d9aa3b7df7ea7a2dd54c90b5363cfeca1713"
+}

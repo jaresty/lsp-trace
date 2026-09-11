@@ -20,7 +20,7 @@ jobs:
       - name: Check Python syntax
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -m py_compile scripts/retain-qualification.py scripts/check-program-c-profiles.py scripts/test-program-c-profiles.py scripts/check-program-c-gate-ii.py scripts/test-program-c-gate-ii.py
+        run: python3 -m py_compile scripts/retain-qualification.py scripts/check-program-c-profiles.py scripts/test-program-c-profiles.py scripts/check-program-c-gate-ii.py scripts/test-program-c-gate-ii.py scripts/check-program-c-gate-ii-v4.py scripts/test-program-c-gate-ii-v4.py
       - name: Check Program C profiles
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -28,7 +28,8 @@ jobs:
           python3 scripts/test-program-c-profiles.py
           python3 scripts/test-program-c-documentary-sources.py
           python3 scripts/test-program-c-gate-ii.py
-          python3 scripts/check-program-c-gate-ii.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v3.tsv
+          python3 scripts/test-program-c-gate-ii-v4.py
+          python3 scripts/check-program-c-gate-ii-v4.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v4.tsv --receipt qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json
       - name: Check shell syntax
         run: sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh
       - name: Check CI contract
