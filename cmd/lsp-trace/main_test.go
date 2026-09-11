@@ -91,8 +91,23 @@ func TestVersionSucceedsWithBuildIdentityOnStdout(t *testing.T) {
 func TestSliceHelpSucceedsOnStdout(t *testing.T) {
 	for _, arg := range []string{"--help", "-h"} {
 		stdout, stderr, code := captureRun(t, []string{"slice", arg})
-		if code != 0 || stderr != "" || !strings.Contains(stdout, "Usage of slice:") || !strings.Contains(stdout, "generation selector") {
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "Usage of slice:") {
 			t.Fatalf("ASSERT_SLICE_HELP_SUCCESS: arg=%s code=%d stdout=%q stderr=%q", arg, code, stdout, stderr)
+		}
+	}
+}
+
+func TestSliceHelpDistinguishesSelectorsAndPublication(t *testing.T) {
+	stdout, stderr, code := captureRun(t, []string{"slice", "--help"})
+	for _, want := range []string{
+		"all-symbol census from one source file (legacy mode)",
+		"exact target selector by document symbol",
+		"exact target selector by PATH:LINE:COLUMN",
+		"output destination; caller-provided publication location",
+		"artifact selector is the product-generated immutable artifact reference",
+	} {
+		if code != 0 || stderr != "" || !strings.Contains(stdout, want) {
+			t.Fatalf("ASSERT_SLICE_SELECTOR_TERMINOLOGY: missing=%q code=%d stdout=%q stderr=%q", want, code, stdout, stderr)
 		}
 	}
 }
@@ -231,6 +246,15 @@ func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
 	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds)") || !strings.Contains(usageText, "lsp-trace skill get") {
 		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
 	}
+	for _, want := range []string{
+		"target selector identifies a symbol or position",
+		"output destination is a caller-provided publication location",
+		"artifact selector is a product-generated immutable artifact reference",
+	} {
+		if !strings.Contains(usageText, want) {
+			t.Fatalf("ASSERT_USAGE_SELECTOR_TERMINOLOGY: missing=%q usage=%q", want, usageText)
+		}
+	}
 }
 
 func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
@@ -260,6 +284,11 @@ func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
 		"direct canonical call-relation IDs",
 		"does not resolve cwd symlink aliases",
 		"Field authority",
+		"Target selector",
+		"Output destination",
+		"Artifact selector",
+		"all-symbol census",
+		"--from-file PATH --symbol NAME",
 	}
 	for _, required := range requiredContract {
 		if !strings.Contains(stdout.String(), required) {
@@ -770,8 +799,15 @@ func TestParseSliceUsesSymmetricDepthFlagsAndExclusiveStartModes(t *testing.T) {
 			{"--graph-provenance", "--symbol", "Target"},
 			{"--graph-provenance", "--from-file", "a.go", "--symbol", "Target", "--at", "a.go:1:1"},
 		} {
-			if _, err := parseSlice(append(append([]string{}, base...), extra...)); err == nil || !strings.Contains(err.Error(), "exactly one managed target selector") {
-				t.Errorf("ASSERT_MANAGED_CLI_SELECTOR_FAILS_CLOSED: args=%v err=%v", extra, err)
+			_, err := parseSlice(append(append([]string{}, base...), extra...))
+			for _, want := range []string{
+				"exactly one managed target selector",
+				"--at PATH:LINE:COLUMN",
+				"--from-file PATH --symbol NAME",
+			} {
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Errorf("ASSERT_MANAGED_CLI_SELECTOR_FAILS_CLOSED: args=%v missing=%q err=%v", extra, want, err)
+				}
 			}
 		}
 	})
