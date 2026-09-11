@@ -20,6 +20,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/observationadapter"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/programc"
 	"lsp-trace/internal/provider"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/seedbinding"
@@ -29,7 +30,12 @@ import (
 	"lsp-trace/sliceops"
 )
 
-func main() { os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)) }
+func main() {
+	if handled, code := programc.RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
+		os.Exit(code)
+	}
+	os.Exit(run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr))
+}
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "seed" {
