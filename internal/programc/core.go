@@ -63,12 +63,12 @@ type Projection struct {
 }
 type Community struct{ Members []string }
 type Outcome struct {
-	ProfileID, ProfileDigest, Algorithm, LogicalDigest, ClaimCeiling string
-	Resolution                                                       float64
-	Seed                                                             uint64
-	Communities                                                      []Community
-	Projection                                                       Projection
-	Source                                                           SourceBinding
+	Outcome, ProfileID, ProfileDigest, Algorithm, LogicalDigest, ClaimCeiling string
+	Resolution                                                                float64
+	Seed                                                                      uint64
+	Communities                                                               []Community
+	Projection                                                                Projection
+	Source                                                                    SourceBinding
 }
 
 // SemanticReceipt identifies the validated native Graph V5 semantic commitment.
@@ -191,12 +191,15 @@ func Project(input []byte) (Projection, *Failure) {
 	if err := json.Unmarshal(exact, &doc); err != nil {
 		return Projection{}, &Failure{Code: CodeInvalidProvenance, Message: err.Error()}
 	}
-	if doc.EvidenceReceipt == nil || doc.EvidenceSemantics.CallEdges.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || doc.EvidenceSemantics.CallEdges.SupportContribution != 1 {
+	if doc.EvidenceSemantics.CallEdges.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || doc.EvidenceSemantics.CallEdges.SupportContribution != 1 || (len(doc.Edges) != 0 && doc.EvidenceReceipt == nil) {
 		return Projection{}, &Failure{Code: CodeInvalidCalls, Message: "exact server-reported call-hierarchy semantics required"}
 	}
-	receipts := make(map[string]lgraph.EvidenceRelation, len(doc.EvidenceReceipt.Relations))
-	for _, r := range doc.EvidenceReceipt.Relations {
-		receipts[r.RelationID] = r
+	receipts := make(map[string]lgraph.EvidenceRelation)
+	if doc.EvidenceReceipt != nil {
+		receipts = make(map[string]lgraph.EvidenceRelation, len(doc.EvidenceReceipt.Relations))
+		for _, r := range doc.EvidenceReceipt.Relations {
+			receipts[r.RelationID] = r
+		}
 	}
 	ids := make([]string, len(doc.Nodes))
 	for i, n := range doc.Nodes {
@@ -223,10 +226,12 @@ func Project(input []byte) (Projection, *Failure) {
 	}
 	inputSum := sha256.Sum256(input)
 	callRole := ""
-	for _, relation := range doc.EvidenceReceipt.Relations {
-		if relation.RelationKind == "CALL_RELATION" {
-			callRole = relation.EvidenceRole
-			break
+	if doc.EvidenceReceipt != nil {
+		for _, relation := range doc.EvidenceReceipt.Relations {
+			if relation.RelationKind == "CALL_RELATION" {
+				callRole = relation.EvidenceRole
+				break
+			}
 		}
 	}
 	binding := SourceBinding{
@@ -239,7 +244,10 @@ func Project(input []byte) (Projection, *Failure) {
 		DiagnosticsStatus: envelope.Diagnostics.Status, DiagnosticsOmittedRecords: envelope.Diagnostics.OmittedRecords, DiagnosticsEvictedRecords: envelope.Diagnostics.EvictedRecords,
 		Completeness:      SourceCompleteness{doc.Summary.TraversalComplete, doc.Summary.SourceGraphComplete, doc.Summary.CompletenessScope, doc.Summary.Truncated},
 		CallEvidenceClass: doc.EvidenceSemantics.CallEdges.EvidenceClass, CallEvidenceRole: callRole,
-		sensitivity: doc.SensitivityPolicy, replayManifest: doc.ReplayInputManifest, semantics: doc.EvidenceSemantics, admissionReceipt: *doc.EvidenceReceipt, bundleIdentity: doc.Identity,
+		sensitivity: doc.SensitivityPolicy, replayManifest: doc.ReplayInputManifest, semantics: doc.EvidenceSemantics, bundleIdentity: doc.Identity,
+	}
+	if doc.EvidenceReceipt != nil {
+		binding.admissionReceipt = *doc.EvidenceReceipt
 	}
 	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64), Source: binding}
 	for _, edge := range doc.Edges {
@@ -290,29 +298,50 @@ func Compute(input []byte, seed uint64) (Outcome, *Failure) {
 	if failure != nil {
 		return Outcome{}, failure
 	}
-	g := newDirected(p)
-	var reduced community.ReducedGraph
-	func() {
-		defer func() {
-			if recover() != nil {
-				reduced = nil
-			}
+	outcome := "COMPLETE"
+	canonical := make([]Community, 0, len(p.NodeIdentities))
+	seen := make(map[string]bool, len(p.NodeIdentities))
+	if len(p.Occurrences) == 0 {
+		outcome = "EMPTY"
+	} else {
+		g := newDirected(p)
+		var reduced community.ReducedGraph
+		func() {
+			defer func() {
+				if recover() != nil {
+					reduced = nil
+				}
+			}()
+			reduced = community.Leiden(g, 1, rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 		}()
-		reduced = community.Leiden(g, 1, rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
-	}()
-	if reduced == nil {
-		return Outcome{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden computation failed"}
-	}
-	communities := reduced.Communities()
-	canonical := make([]Community, len(communities))
-	for i, members := range communities {
-		for _, n := range members {
-			canonical[i].Members = append(canonical[i].Members, p.NodeIdentities[n.ID()])
+		if reduced == nil {
+			return Outcome{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden computation failed"}
 		}
-		sort.Strings(canonical[i].Members)
+		for _, members := range reduced.Communities() {
+			if len(members) == 0 {
+				continue
+			}
+			c := Community{Members: make([]string, 0, len(members))}
+			for _, n := range members {
+				id := n.ID()
+				if id < 0 || int(id) >= len(p.NodeIdentities) || seen[p.NodeIdentities[id]] {
+					return Outcome{}, &Failure{Code: CodeComputation, Message: "Gonum Leiden returned invalid partition"}
+				}
+				member := p.NodeIdentities[id]
+				seen[member] = true
+				c.Members = append(c.Members, member)
+			}
+			sort.Strings(c.Members)
+			canonical = append(canonical, c)
+		}
+	}
+	for _, id := range p.NodeIdentities {
+		if !seen[id] {
+			canonical = append(canonical, Community{Members: []string{id}})
+		}
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: ClaimCeiling, Projection: p, Source: p.Source}, nil
+	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: ClaimCeiling, Projection: p, Source: p.Source}, nil
 }
 
 func logicalDigest(c []Community) string {

@@ -65,6 +65,7 @@ type workerRequest struct {
 	Seed    uint64 `json:"seed"`
 }
 type workerOutcome struct {
+	Outcome       string      `json:"outcome"`
 	ProfileID     string      `json:"profile_id"`
 	ProfileDigest string      `json:"profile_digest"`
 	Algorithm     string      `json:"algorithm"`
@@ -128,7 +129,7 @@ func RunPrivateWorker(args []string, stdin io.Reader, stdout, stderr io.Writer) 
 		}
 		return true, writeWorkerResponse(stdout, workerResponse{Version: workerVersion, Failure: failure(code, failed)})
 	}
-	wire := workerOutcome{ProfileID: out.ProfileID, ProfileDigest: out.ProfileDigest, Algorithm: out.Algorithm, LogicalDigest: out.LogicalDigest, ClaimCeiling: out.ClaimCeiling, Resolution: out.Resolution, Seed: out.Seed, Communities: out.Communities}
+	wire := workerOutcome{Outcome: out.Outcome, ProfileID: out.ProfileID, ProfileDigest: out.ProfileDigest, Algorithm: out.Algorithm, LogicalDigest: out.LogicalDigest, ClaimCeiling: out.ClaimCeiling, Resolution: out.Resolution, Seed: out.Seed, Communities: out.Communities}
 	return true, writeWorkerResponse(stdout, workerResponse{Version: workerVersion, Outcome: &wire})
 }
 
@@ -161,8 +162,9 @@ func reconstruct(input []byte, expectedSeed uint64, wire *workerOutcome) (Outcom
 	if failed != nil {
 		return Outcome{}, failure(CodeInternalAdmission, failed)
 	}
-	out := Outcome{ProfileID: wire.ProfileID, ProfileDigest: wire.ProfileDigest, Algorithm: wire.Algorithm, LogicalDigest: wire.LogicalDigest, ClaimCeiling: wire.ClaimCeiling, Resolution: wire.Resolution, Seed: wire.Seed, Communities: wire.Communities, Projection: p, Source: p.Source}
-	if out.ProfileID != ProfileID || out.ProfileDigest != ProfileDigest || out.Algorithm != algorithm || out.Resolution != 1 || out.Seed != expectedSeed || out.ClaimCeiling != ClaimCeiling || out.LogicalDigest != logicalDigest(out.Communities) || !validCanonicalCommunities(out.Communities, p.NodeIdentities) {
+	out := Outcome{Outcome: wire.Outcome, ProfileID: wire.ProfileID, ProfileDigest: wire.ProfileDigest, Algorithm: wire.Algorithm, LogicalDigest: wire.LogicalDigest, ClaimCeiling: wire.ClaimCeiling, Resolution: wire.Resolution, Seed: wire.Seed, Communities: wire.Communities, Projection: p, Source: p.Source}
+	validOutcome := (len(p.Occurrences) == 0 && out.Outcome == "EMPTY") || (len(p.Occurrences) > 0 && out.Outcome == "COMPLETE")
+	if !validOutcome || out.ProfileID != ProfileID || out.ProfileDigest != ProfileDigest || out.Algorithm != algorithm || out.Resolution != 1 || out.Seed != expectedSeed || out.ClaimCeiling != ClaimCeiling || out.LogicalDigest != logicalDigest(out.Communities) || !validCanonicalCommunities(out.Communities, p.NodeIdentities) {
 		return Outcome{}, failure(CodeMalformedOutput, errors.New("worker output violates Program C invariants"))
 	}
 	return out, nil

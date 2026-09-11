@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 
@@ -169,6 +170,47 @@ func TestCapsAcceptEqualityRejectExcess(t *testing.T) {
 	}
 }
 
+func TestComputeEdgelessIsExactTypedEmptySingletonPartition(t *testing.T) {
+	a, b, c := node("a", 0), node("b", 1), node("c", 2)
+	raw := validV5(t, []graph.Node{c, a, b}, nil)
+	out, failure := Compute(raw, 19)
+	if failure != nil {
+		t.Fatalf("ASSERT_EDGELESS_TYPED_EMPTY_PARTITION: failure=%v", failure)
+	}
+	if len(out.Projection.Occurrences) != 0 || !bytes.Equal(out.Source.InputBytes(), raw) {
+		t.Fatalf("ASSERT_EDGELESS_SOURCE_NO_INVENTED_CALLS: occurrences=%d source_equal=%t", len(out.Projection.Occurrences), bytes.Equal(out.Source.InputBytes(), raw))
+	}
+	want := []Community{{Members: []string{a.ID}}, {Members: []string{b.ID}}, {Members: []string{c.ID}}}
+	sort.Slice(want, func(i, j int) bool { return compareStrings(want[i].Members, want[j].Members) < 0 })
+	if !equalCommunities(out.Communities, want) {
+		t.Fatalf("ASSERT_EDGELESS_TYPED_EMPTY_PARTITION: got=%#v want=%#v", out.Communities, want)
+	}
+	if out.Outcome != "EMPTY" {
+		t.Fatalf("ASSERT_EDGELESS_TYPED_EMPTY_PARTITION: outcome=%q", out.Outcome)
+	}
+}
+
+func TestComputeCanonicalizesGonumEmptySlotsWithoutDroppingIsolates(t *testing.T) {
+	a, b, c, d := node("a", 0), node("b", 1), node("c", 2), node("d", 3)
+	edge := graph.Edge{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}
+	first, failure := Compute(validV5(t, []graph.Node{d, b, c, a}, []graph.Edge{edge}), 19)
+	if failure != nil {
+		t.Fatalf("ASSERT_ISOLATE_CANONICAL_COVERAGE: failure=%v", failure)
+	}
+	second, failure := Compute(validV5(t, []graph.Node{a, c, b, d}, []graph.Edge{edge}), 19)
+	if failure != nil {
+		t.Fatalf("ASSERT_ISOLATE_CANONICAL_COVERAGE: permuted failure=%v", failure)
+	}
+	if !validCanonicalCommunities(first.Communities, first.Projection.NodeIdentities) || !equalCommunities(first.Communities, second.Communities) || first.LogicalDigest != second.LogicalDigest {
+		t.Fatalf("ASSERT_ISOLATE_CANONICAL_COVERAGE: first=%#v second=%#v", first.Communities, second.Communities)
+	}
+	for _, community := range first.Communities {
+		if len(community.Members) == 0 {
+			t.Fatal("ASSERT_EMPTY_GONUM_SLOT_REMOVED: empty community retained")
+		}
+	}
+}
+
 func TestComputeDeterministicAcrossRepeatAndPermutation(t *testing.T) {
 	a, b, c := node("a", 0), node("b", 1), node("c", 2)
 	edges := []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}, {CallerNodeID: b.ID, CalleeNodeID: c.ID, CallSites: []graph.Range{{}}}}
@@ -186,7 +228,7 @@ func TestComputeDeterministicAcrossRepeatAndPermutation(t *testing.T) {
 	if first.Algorithm != "gonum.org/v1/gonum/graph/community.Leiden" || first.Resolution != 1 || first.Seed != 19 {
 		t.Fatalf("ASSERT_EXACT_GONUM_LEIDEN_KERNEL: %#v", first)
 	}
-	const wantDigest = "sha256:76d4637884dfb6b1a039b60376768dc8967205272b807ec1ecbcfdfdd0f55b37"
+	const wantDigest = "sha256:d8ae702930e8ddaa109dec1103fd09196e3a19fe33bb24694e3ac7aad1ec1fd0"
 	if first.LogicalDigest != wantDigest {
 		t.Fatalf("ASSERT_CANONICAL_LOGICAL_DIGEST: got=%q want=%q", first.LogicalDigest, wantDigest)
 	}
