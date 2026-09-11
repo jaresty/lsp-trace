@@ -218,7 +218,31 @@ Acquire more evidence only for a named unresolved question with a proposed seed 
 
 A review may stop as `BOUNDED_REVIEW_DRY` after two consecutive rounds produce no new admissible evidence reference, changed candidate disposition, narrower unresolved alternative, or justified additional acquisition. This is a bounded workflow terminal, never a claim of complete feature or source coverage.
 
+### Arrange a non-authoritative review view
+
 For human review, prefer a one-row-per-candidate summary such as `ID | Working label | Status | Seeds | Evidence | Alternatives | Gaps | Revision`, linked to a detailed appendix containing exact evidence references, failures, boundaries, competing interpretations, and correction lineage. Raw inspection JSON remains evidence input rather than the primary review presentation.
+
+Arrange each candidate from initial comprehension toward audit detail:
+
+```text
+Provisional capability
+→ arranged evidence
+→ bounded examples
+→ relationships and broader context
+→ unknowns and limitations
+→ technical mechanics
+→ audit references
+```
+
+Lead with the provisional capability and public-safe evidence explanation rather than JSON paths. Separate capability and source context, observed implementation footprint, exact workflow or connection evidence, broader organizational context, and unknowns or evidence limits. Render a block only when actual data exists. References alone are insufficient: each explanation states what the cited evidence supports and what it cannot establish, then provides exact records, hashes, revisions, or receipts as optional audit references.
+
+Attach feature-specific examples and relationships only through exact stable joins. Select a bounded number of examples by a stated deterministic rule, and never derive examples from method or module names alone. Evidence that joins only to a broader product or source scope belongs at that broader level rather than being repeated on every candidate. If no exact workflow relationship exists, say `not established`; do not imply absence or convert unresolved technical adjacency into a feature relationship.
+
+Navigation-only chapters or work themes may group candidates without changing their identities. Keep ungrouped evidence visible. Zero candidates assigned to a group is an assignment state, not evidence that the area has no capabilities. Layout, order, containers, proximity, color, attachment counts, and visual density contribute no evidence and establish no feature identity.
+
+Give unresolved merge or split questions first-class boundary records adjacent to the affected candidates. Show why the candidates are being compared, evidence supporting each interpretation, unknowns preventing adjudication, and the correction-safe consequence of each possible disposition; do not visually select an outcome that external adjudication has not admitted. Present repeated actor, trigger, and completion uncertainties as one coherent unknowns block while preserving their distinct fields in the underlying record.
+
+This ordering improves comprehension only. It does not change native evidence, authority, candidate status, or the external adjudication boundary. Any visual regrouping changes inventory state only through an explicit revision with predecessor lineage and an `inventory_state_delta`.
 
 Stop before proposition admission, merge/split adjudication, canonical feature identity or naming, user purpose, production use, value, priority, lifecycle, coverage, or acceptance. Those remain external even when several technical signals agree.
 
