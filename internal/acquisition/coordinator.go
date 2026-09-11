@@ -489,6 +489,8 @@ func flattenSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
 
 func callableSymbolKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
 
+func compatibleCallableKinds(a, b int) bool { return callableSymbolKind(a) && callableSymbolKind(b) }
+
 func sameDocumentSymbol(a, b lsp.DocumentSymbol) bool {
 	return a.Name == b.Name && a.Kind == b.Kind && a.Range == b.Range && a.SelectionRange == b.SelectionRange
 }
@@ -522,7 +524,14 @@ func nearestStrictContainer(symbols []lsp.DocumentSymbol, child lsp.DocumentSymb
 func childlessTopmostSiblings(seed lsp.CallHierarchyItem, symbols []lsp.DocumentSymbol) ([]lsp.DocumentSymbol, bool) {
 	seedDeclarations := []lsp.DocumentSymbol{}
 	for _, symbol := range symbols {
-		if callableSymbolKind(symbol.Kind) && symbol.Kind == seed.Kind && symbol.SelectionRange == seed.SelectionRange && graph.RangeContains(toRange(symbol.Range), toRange(seed.Range)) {
+		if !callableSymbolKind(symbol.Kind) {
+			continue
+		}
+		if symbol.Flat {
+			if compatibleCallableKinds(symbol.Kind, seed.Kind) && graph.RangeContains(toRange(symbol.Range), toRange(seed.SelectionRange)) {
+				seedDeclarations = append(seedDeclarations, symbol)
+			}
+		} else if symbol.Kind == seed.Kind && symbol.SelectionRange == seed.SelectionRange && graph.RangeContains(toRange(symbol.Range), toRange(seed.Range)) {
 			seedDeclarations = append(seedDeclarations, symbol)
 		}
 	}
@@ -530,11 +539,19 @@ func childlessTopmostSiblings(seed lsp.CallHierarchyItem, symbols []lsp.Document
 		return nil, false
 	}
 	seedDeclaration := seedDeclarations[0]
+	peers := []lsp.DocumentSymbol{}
+	if seedDeclaration.Flat {
+		for _, symbol := range symbols {
+			if symbol.Flat && callableSymbolKind(symbol.Kind) && !sameDocumentSymbol(symbol, seedDeclaration) && symbol.ContainerName == seedDeclaration.ContainerName {
+				peers = append(peers, symbol)
+			}
+		}
+		return peers, true
+	}
 	seedContainer, ok := nearestStrictContainer(symbols, seedDeclaration)
 	if !ok {
 		return nil, false
 	}
-	peers := []lsp.DocumentSymbol{}
 	for _, symbol := range symbols {
 		if !callableSymbolKind(symbol.Kind) || sameDocumentSymbol(symbol, seedDeclaration) {
 			continue
@@ -597,27 +614,55 @@ func (c *runner) expandTopmostSiblings() {
 			if uri == t.Resolution.Prepared.URI && sibling.SelectionRange == t.Resolution.Prepared.SelectionRange {
 				continue
 			}
-			declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: sibling.SelectionRange})
-			if graph.ValidateItem(declaration.Item) != nil {
-				c.result.AcquisitionComplete = false
-				continue
-			}
-			prepare := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: sibling.SelectionRange.Start}
-			prepared, prepRecord := c.invoke(t.Requested.ID, "textDocument/prepareCallHierarchy", t.Resolution.Identity.ID, prepare, func(ctx context.Context) (any, error) {
-				return c.client.PrepareCallHierarchy(ctx, prepare)
-			})
-			if prepRecord.Outcome != "SUCCESS" {
-				c.result.AcquisitionComplete = false
-				continue
-			}
+			position := sibling.SelectionRange.Start
 			matches := []lsp.CallHierarchyItem{}
-			for _, item := range prepared.([]lsp.CallHierarchyItem) {
-				candidate := node(item)
-				if canonicalURI(item.URI) && item.URI == uri && item.SelectionRange == sibling.SelectionRange && item.Kind == sibling.Kind && graph.ValidateItem(candidate.Item) == nil {
-					matches = append(matches, item)
+			for probe := uint32(0); probe < MaxPrepareProbes; probe++ {
+				if probe > 0 {
+					if position.Character == ^uint32(0) {
+						break
+					}
+					position.Character++
+				}
+				if !contains(sibling.Range, position) {
+					break
+				}
+				prepare := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: position}
+				prepared, prepRecord := c.invoke(t.Requested.ID, "textDocument/prepareCallHierarchy", t.Resolution.Identity.ID, prepare, func(ctx context.Context) (any, error) {
+					return c.client.PrepareCallHierarchy(ctx, prepare)
+				})
+				if prepRecord.Outcome != "SUCCESS" {
+					if sibling.Flat && prepRecord.CaptureComplete && strings.Contains(prepRecord.Reason, "json-rpc error 0: identifier not found") {
+						c.result.AcquisitionComplete = false
+						continue
+					}
+					break
+				}
+				for _, item := range prepared.([]lsp.CallHierarchyItem) {
+					candidate := node(item)
+					exact := canonicalURI(item.URI) && item.URI == uri && graph.ValidateItem(candidate.Item) == nil
+					if sibling.Flat {
+						exact = exact && compatibleCallableKinds(item.Kind, sibling.Kind) && graph.RangeContains(toRange(sibling.Range), toRange(item.SelectionRange))
+					} else {
+						exact = exact && item.Kind == sibling.Kind && item.SelectionRange == sibling.SelectionRange
+					}
+					if exact {
+						matches = append(matches, item)
+					}
+				}
+				if len(matches) > 0 || !sibling.Flat {
+					break
 				}
 			}
 			if len(matches) != 1 || !c.admit(matches[0]) {
+				c.result.AcquisitionComplete = false
+				continue
+			}
+			selectionRange := sibling.SelectionRange
+			if sibling.Flat {
+				selectionRange = matches[0].SelectionRange
+			}
+			declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: selectionRange})
+			if graph.ValidateItem(declaration.Item) != nil {
 				c.result.AcquisitionComplete = false
 				continue
 			}

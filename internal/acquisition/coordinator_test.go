@@ -120,6 +120,59 @@ func TestTopmostSiblingExpansionDistinctSeedsSharesGlobalRequestBudget(t *testin
 	}
 }
 
+func TestFlatTopmostSiblingCorrespondenceUsesPreparedServerIdentity(t *testing.T) {
+	seed, peer := item("seed", 0), item("peer", 2)
+	setup := func(items []lsp.CallHierarchyItem) (*fakeClient, Request) {
+		f := fixture()
+		f.add(seed)
+		f.items[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: peer.SelectionRange.Start})] = items
+		for character := uint32(0); character < peer.SelectionRange.Start.Character; character++ {
+			position := lsp.Position{Line: peer.Range.Start.Line, Character: character}
+			f.errors[prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: position})] = errors.New("json-rpc error 0: identifier not found")
+		}
+		f.symbols[seed.URI] = []lsp.DocumentSymbol{
+			{Name: "example." + seed.Name, Kind: 6, Range: seed.Range, SelectionRange: seed.Range, Flat: true},
+			{Name: "example." + peer.Name, Kind: 6, Range: peer.Range, SelectionRange: peer.Range, Flat: true},
+		}
+		r := request(seed)
+		r.TopmostSiblings = true
+		return f, r
+	}
+
+	t.Run("exact", func(t *testing.T) {
+		f, r := setup([]lsp.CallHierarchyItem{peer})
+		got := run(t, f, r)
+		if len(got.Graph.SiblingCandidates) != 1 {
+			t.Fatalf("ASSERT_FLAT_SIBLING_RECONCILES_EXACT_PREPARED_IDENTITY: siblings=%#v calls=%v", got.Graph.SiblingCandidates, f.calls)
+		}
+		candidate := got.Graph.SiblingCandidates[0]
+		if candidate.Declaration == nil || candidate.Declaration.Name != "example."+peer.Name || candidate.Declaration.Kind != 6 || candidate.Declaration.Range != toRange(peer.Range) || candidate.Declaration.SelectionRange != toRange(peer.SelectionRange) || candidate.Candidate.ID != node(peer).ID {
+			t.Fatalf("ASSERT_FLAT_SIBLING_RETAINS_FUSED_DECLARATION_AND_PREPARED_IDENTITY: %#v", candidate)
+		}
+	})
+
+	for _, tc := range []struct {
+		name  string
+		items []lsp.CallHierarchyItem
+	}{
+		{name: "selection-outside-declaration", items: []lsp.CallHierarchyItem{func() lsp.CallHierarchyItem {
+			value := peer
+			value.SelectionRange.Start.Line = 100
+			value.SelectionRange.End.Line = 100
+			return value
+		}()}},
+		{name: "ambiguous", items: []lsp.CallHierarchyItem{peer, peer}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f, r := setup(tc.items)
+			got, err := Acquire(context.Background(), f, r)
+			if len(got.Graph.SiblingCandidates) != 0 || got.AcquisitionComplete {
+				t.Fatalf("ASSERT_FLAT_SIBLING_FAILS_CLOSED_%s: err=%v siblings=%#v complete=%t", tc.name, err, got.Graph.SiblingCandidates, got.AcquisitionComplete)
+			}
+		})
+	}
+}
+
 func TestTopmostSiblingCorrespondenceUsesSelectionIdentity(t *testing.T) {
 	seed := item("seed", 0)
 	declaration := lsp.DocumentSymbol{

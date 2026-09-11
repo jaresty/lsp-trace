@@ -106,6 +106,14 @@ func TestWireDocumentSymbolUnion(t *testing.T) {
 	hierarchical := func(name string) map[string]any {
 		return map[string]any{"name": name, "kind": a.Kind, "range": a.Range, "selectionRange": a.SelectionRange}
 	}
+	containerClient := NewWireClient(func(_ context.Context, w WireRequest) (json.RawMessage, error) {
+		return json.Marshal([]map[string]any{{"name": a.Name, "kind": a.Kind, "containerName": "package example", "location": map[string]any{"uri": a.URI, "range": a.Range}}})
+	})
+	containerContext := context.WithValue(context.Background(), callScopeKey{}, callScope{context: AcquisitionContext{ID: "wire-container", SessionID: "fake", Generation: 1, PositionEncoding: "utf-16"}, limits: Limits{MaxResponseBytes: 1 << 20, MaxMessages: 64}})
+	containerSymbols, err := containerClient.DocumentSymbols(containerContext, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: a.URI}})
+	if err != nil || len(containerSymbols) != 1 || !containerSymbols[0].Flat || containerSymbols[0].ContainerName != "package example" {
+		t.Fatalf("ASSERT_FLAT_SYMBOL_CONTAINER_NAME_RETAINED: symbols=%#v err=%v", containerSymbols, err)
+	}
 	for _, tc := range []struct {
 		name       string
 		symbols    []map[string]any

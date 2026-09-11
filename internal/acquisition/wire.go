@@ -102,7 +102,7 @@ func (c *WireClient) DocumentSymbols(ctx context.Context, p lsp.DocumentSymbolPa
 		if symbol.Location.URI != p.TextDocument.URI {
 			continue
 		}
-		out = append(out, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range, Flat: true})
+		out = append(out, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range, Flat: true, ContainerName: symbol.ContainerName})
 	}
 	return out, nil
 }
