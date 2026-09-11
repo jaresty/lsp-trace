@@ -129,7 +129,7 @@ const usageText = `usage:
 terminology:
   target selector identifies a symbol or position
   output destination is a caller-provided publication location
-  artifact selector is a product-generated immutable artifact reference`
+  artifact selector is a product-generated reference to an immutable artifact`
 
 type stringsFlag []string
 

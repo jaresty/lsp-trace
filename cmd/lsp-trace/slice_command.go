@@ -59,10 +59,10 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.IntVar(&c.maxNodes, "max-nodes", 10000, "maximum graph nodes; 0 unlimited")
 	fs.DurationVar(&c.timeout, "timeout", 5*time.Minute, "global timeout; 0 unlimited")
 	fs.DurationVar(&c.requestTimeout, "request-timeout", 30*time.Second, "request timeout")
-	fs.StringVar(&c.output, "output", "", "output destination; caller-provided publication location (artifact selector is the product-generated immutable artifact reference)")
+	fs.StringVar(&c.output, "output", "", "output destination; caller-provided publication location (artifact selector is the product-generated reference to an immutable artifact)")
 	fs.StringVar(&c.traceLSP, "trace-lsp", "", "write JSON-RPC transcript as JSON Lines")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
-	fs.BoolVar(&c.graphProvenance, "graph-provenance", false, "bounded supplied/post-traversal evidence via managed single-at slice; no analyzed-source authentication")
+	fs.BoolVar(&c.graphProvenance, "graph-provenance", false, "bounded supplied/post-traversal evidence via one managed exact target; no analyzed-source authentication")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}

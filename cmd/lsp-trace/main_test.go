@@ -104,7 +104,7 @@ func TestSliceHelpDistinguishesSelectorsAndPublication(t *testing.T) {
 		"exact target selector by document symbol",
 		"exact target selector by PATH:LINE:COLUMN",
 		"output destination; caller-provided publication location",
-		"artifact selector is the product-generated immutable artifact reference",
+		"artifact selector is the product-generated reference to an immutable artifact",
 	} {
 		if code != 0 || stderr != "" || !strings.Contains(stdout, want) {
 			t.Fatalf("ASSERT_SLICE_SELECTOR_TERMINOLOGY: missing=%q code=%d stdout=%q stderr=%q", want, code, stdout, stderr)
@@ -249,7 +249,7 @@ func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
 	for _, want := range []string{
 		"target selector identifies a symbol or position",
 		"output destination is a caller-provided publication location",
-		"artifact selector is a product-generated immutable artifact reference",
+		"artifact selector is a product-generated reference to an immutable artifact",
 	} {
 		if !strings.Contains(usageText, want) {
 			t.Fatalf("ASSERT_USAGE_SELECTOR_TERMINOLOGY: missing=%q usage=%q", want, usageText)
