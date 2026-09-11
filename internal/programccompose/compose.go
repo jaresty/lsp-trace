@@ -26,7 +26,7 @@ const (
 	ClaimCeiling       = "STRUCTURAL_SERVER_REPORTED_CALLS_UNION_ONLY;NO_WHOLE_WORKSPACE_COMPLETENESS;NO_FEATURE_IDENTITY;NO_OWNERSHIP;NO_ARCHITECTURE;NO_RUNTIME_EXECUTION;NO_PRODUCER_AUTHENTICATION;NO_PERMISSION;NO_PRODUCTION_AUTHORITY"
 )
 
-var PolicyBytes = []byte("program-c-multi-capture-policy.v1\ninputs=2..16\ntotal_input_bytes<=268435456\nsemantic_work_units=inputs+traversed_node_records+traversed_edge_records+traversed_occurrences+traversed_receipt_or_source_supply_records<=400000\nnodes<=10000\noccurrences<=100000\nsame_session_generation_revision_custody_workspace_encoding_provider_language_acquisition_evidence_sensitivity_privacy\ndistinct_invocations_preserved_and_canonical_identity_bound;no_homogeneous_invocation_claim\nexact-id-equivalent-canonical-typed-content-dedupe;conflict-fails\nno-inference;no-truncation;constituent_seeds_traversal_frontier_completeness_diagnostics_preserved\nno_forged_producer_provenance;not_one_native_capture;conservative_claim_ceiling\nsource_supply_adaptation=blocked_until_converged_v5_contract\n")
+var PolicyBytes = []byte("program-c-multi-capture-policy.v1\ninputs=2..16\ntotal_input_bytes<=268435456\nsemantic_work_units=inputs+traversed_node_records+traversed_edge_records+traversed_occurrences+traversed_supply_capture_binding_and_native_receipt_records<=400000\nnodes<=10000\noccurrences<=100000\nsame_session_generation_revision_custody_workspace_encoding_provider_language_acquisition_evidence_sensitivity_privacy\ndistinct_invocations_preserved_and_canonical_identity_bound;no_homogeneous_invocation_claim\nexact-typed-id-and-content-digest-equivalence-dedupe;conflict-fails\nno-inference;no-truncation;constituent_source_supply_capture_binding_seeds_traversal_frontier_completeness_diagnostics_preserved\nretained_bytes_never_select_nodes;no_forged_producer_provenance;not_one_native_capture;conservative_claim_ceiling\n")
 
 func PolicyDigest() string { return digest("lsp-trace:program-c-compose:policy:v1", PolicyBytes) }
 
@@ -52,8 +52,13 @@ type Constituent struct {
 	BytesBase64                                                 string
 	SessionID, InvocationID                                     string
 	Generation                                                  uint64
+	SourcePolicy, WorkspaceURI, AnalyzedVersion                 string
+	DependencyCompleteness                                      string
+	CaptureBudget                                               graphprovenance.CaptureBudgetV2
+	Supplies                                                    []graphprovenance.SupplyReceiptV2
+	Captures                                                    []graphprovenance.Receipt
+	Bindings                                                    []graphprovenance.BindingV2
 	Invocation, Seeds, Frontier, Diagnostics, Summary, Slice    json.RawMessage
-	SourceSupplyStatus                                          string
 }
 
 type Compatibility struct {
@@ -71,7 +76,7 @@ type Completeness struct {
 }
 
 type WorkAccounting struct {
-	Inputs, NodeRecords, EdgeRecords, Occurrences, ReceiptRecords, MergedNodes, SemanticWork int
+	Inputs, NodeRecords, EdgeRecords, Occurrences, SupplyRecords, SourceReceiptRecords, CaptureRecords, BindingRecords, NativeReceiptRecords, MergedNodes, SemanticWork int
 }
 
 type Artifact struct {
@@ -89,15 +94,7 @@ type Result struct {
 	Bytes    []byte
 }
 
-type envelope struct {
-	SchemaVersion   string          `json:"schema_version"`
-	SessionID       string          `json:"session_id"`
-	Generation      uint64          `json:"generation"`
-	GraphV5         string          `json:"graph_v5"`
-	GraphV5SHA256   string          `json:"graph_v5_sha256"`
-	GraphV5SchemaID string          `json:"graph_v5_schema_id"`
-	Diagnostics     json.RawMessage `json:"diagnostics"`
-}
+type envelope = graphprovenance.EvidenceV5
 
 type native struct {
 	SchemaVersion         string          `json:"schema_version"`
@@ -179,7 +176,10 @@ func Compose(inputs []Input) (Result, error) {
 		if err != nil {
 			return Result{}, fmt.Errorf("input %d graph: %w", i, err)
 		}
-		items[i] = admitted{in: in, env: e, n: n, c: Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice), SourceSupplyStatus: "BLOCKED_PENDING_CONVERGED_V5_CONTRACT"}}
+		items[i] = admitted{in: in, env: e, n: n, c: constituent(in, e, gb, n)}
+	}
+	if err := validateSourceRecords(items); err != nil {
+		return Result{}, err
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].c.InvocationID != items[j].c.InvocationID {
@@ -213,7 +213,15 @@ func Compose(inputs []Input) (Result, error) {
 		anyTruncated = anyTruncated || s.Truncated
 		work.NodeRecords += len(x.n.Nodes)
 		work.EdgeRecords += len(x.n.Edges)
-		work.ReceiptRecords += receiptRecordCount(x.n.EvidenceReceipt)
+		work.SupplyRecords += len(x.env.Supplies)
+		for _, supply := range x.env.Supplies {
+			if supply.Receipt != nil {
+				work.SourceReceiptRecords++
+			}
+		}
+		work.CaptureRecords += len(x.env.Captures)
+		work.BindingRecords += len(x.env.Bindings)
+		work.NativeReceiptRecords += receiptRecordCount(x.n.EvidenceReceipt)
 		for _, n := range x.n.Nodes {
 			if old, ok := nodes[n.ID]; ok && !canonicalEqual(old, n) {
 				return Result{}, fmt.Errorf("node id conflict %q", n.ID)
@@ -306,7 +314,7 @@ func Validate(raw []byte) (Artifact, error) {
 		if parseErr != nil {
 			return a, parseErr
 		}
-		want := Constituent{Identity: c.Identity, SHA256: c.SHA256, ByteLength: len(b), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: c.BytesBase64, SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice), SourceSupplyStatus: "BLOCKED_PENDING_CONVERGED_V5_CONTRACT"}
+		want := constituent(Input{Bytes: b, Identity: c.Identity, SHA256: c.SHA256, ByteLength: len(b)}, e, gb, n)
 		if !canonicalEqual(c, want) {
 			return a, errors.New("constituent projected binding mismatch")
 		}
@@ -355,7 +363,7 @@ func enforceResourceCaps(inputBytes int, work WorkAccounting) error {
 }
 
 func semanticWork(w WorkAccounting) int {
-	return w.Inputs + w.NodeRecords + w.EdgeRecords + w.Occurrences + w.ReceiptRecords
+	return w.Inputs + w.NodeRecords + w.EdgeRecords + w.Occurrences + w.SupplyRecords + w.SourceReceiptRecords + w.CaptureRecords + w.BindingRecords + w.NativeReceiptRecords
 }
 
 func language(n native) string {
@@ -374,23 +382,76 @@ func language(n native) string {
 	return ""
 }
 func parseNative(b []byte) (native, error) {
-	var fields map[string]json.RawMessage
-	if err := json.Unmarshal(b, &fields); err != nil {
-		return native{}, err
-	}
-	for name := range fields {
-		if name == "source_supply" || name == "source_bindings" || name == "source_supply_receipts" {
-			return native{}, fmt.Errorf("source-supply field %q requires the converged V5 adaptation", name)
-		}
-	}
 	var n native
 	if err := strictDecode(b, &n); err != nil {
-		return native{}, fmt.Errorf("unsupported Graph V5 shape (source-supply adaptation required before admitting new fields): %w", err)
+		return native{}, fmt.Errorf("unsupported Graph V5 shape: %w", err)
 	}
 	if err := strictDecode(n.Invocation, &n.inv); err != nil {
 		return native{}, fmt.Errorf("invocation: %w", err)
 	}
 	return n, nil
+}
+
+func constituent(in Input, e envelope, gb []byte, n native) Constituent {
+	supplies := append([]graphprovenance.SupplyReceiptV2(nil), e.Supplies...)
+	captures := append([]graphprovenance.Receipt(nil), e.Captures...)
+	bindings := append([]graphprovenance.BindingV2(nil), e.Bindings...)
+	sort.Slice(supplies, func(i, j int) bool { return supplies[i].RequestID < supplies[j].RequestID })
+	sort.Slice(captures, func(i, j int) bool { return captures[i].ID < captures[j].ID })
+	sort.Slice(bindings, func(i, j int) bool {
+		a, _ := json.Marshal(bindings[i])
+		b, _ := json.Marshal(bindings[j])
+		return bytes.Compare(a, b) < 0
+	})
+	return Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, SourcePolicy: e.SourcePolicy, WorkspaceURI: e.WorkspaceURI, AnalyzedVersion: e.AnalyzedVersion, DependencyCompleteness: e.DependencyCompleteness, CaptureBudget: e.CaptureBudget, Supplies: supplies, Captures: captures, Bindings: bindings, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice)}
+}
+
+func validateSourceRecords(items []admitted) error {
+	receiptIDs := map[string]any{}
+	requestIDs := map[string]any{}
+	contentDigests := map[string]any{}
+	bindings := map[string]any{}
+	for _, x := range items {
+		for _, s := range x.env.Supplies {
+			if err := exactRecord(requestIDs, "supply request id", s.RequestID, s); err != nil {
+				return err
+			}
+			if s.Receipt != nil {
+				if err := exactRecord(receiptIDs, "receipt id", s.Receipt.ID, *s.Receipt); err != nil {
+					return err
+				}
+				if err := exactRecord(contentDigests, "content digest", rawDigest(s.Receipt.Content), *s.Receipt); err != nil {
+					return err
+				}
+			}
+		}
+		for _, r := range x.env.Captures {
+			if err := exactRecord(receiptIDs, "receipt id", r.ID, r); err != nil {
+				return err
+			}
+			if err := exactRecord(contentDigests, "content digest", rawDigest(r.Content), r); err != nil {
+				return err
+			}
+		}
+		for _, b := range x.env.Bindings {
+			keyBytes, _ := json.Marshal(b)
+			if err := exactRecord(bindings, "binding", string(keyBytes), b); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func exactRecord(seen map[string]any, kind, key string, value any) error {
+	if key == "" {
+		return fmt.Errorf("empty %s", kind)
+	}
+	if old, ok := seen[key]; ok && !canonicalEqual(old, value) {
+		return fmt.Errorf("%s conflict %q", kind, key)
+	}
+	seen[key] = value
+	return nil
 }
 
 func receiptRecordCount(raw json.RawMessage) int {

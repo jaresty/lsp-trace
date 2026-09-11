@@ -181,7 +181,7 @@ func TestPolicyIdentity(t *testing.T) {
 }
 
 func TestResourceAndSemanticWorkCapEqualityAndPlusOne(t *testing.T) {
-	atLimit := WorkAccounting{Inputs: MaxInputs, NodeRecords: 10_000, EdgeRecords: 100_000, Occurrences: 100_000, ReceiptRecords: MaxWorkUnits - MaxInputs - 10_000 - 100_000 - 100_000}
+	atLimit := WorkAccounting{Inputs: MaxInputs, NodeRecords: 10_000, EdgeRecords: 100_000, Occurrences: 100_000, NativeReceiptRecords: MaxWorkUnits - MaxInputs - 10_000 - 100_000 - 100_000}
 	if err := enforceResourceCaps(MaxTotalInputBytes, atLimit); err != nil {
 		t.Fatal("ASSERT_BYTE_AND_SEMANTIC_WORK_CAP_EQUALITY", err)
 	}
@@ -189,7 +189,7 @@ func TestResourceAndSemanticWorkCapEqualityAndPlusOne(t *testing.T) {
 		t.Fatal("ASSERT_BYTE_CAP_PLUS_ONE")
 	}
 	tooMuchWork := atLimit
-	tooMuchWork.ReceiptRecords++
+	tooMuchWork.NativeReceiptRecords++
 	if err := enforceResourceCaps(MaxTotalInputBytes, tooMuchWork); err == nil {
 		t.Fatal("ASSERT_SEMANTIC_WORK_CAP_PLUS_ONE")
 	}
@@ -268,5 +268,49 @@ func TestComposeRetainedSourceCannotAddNode(t *testing.T) {
 	z2.Identity = "capture-z-duplicate"
 	if got, err := Compose([]Input{z, z2}); err != nil || len(got.Artifact.Nodes) != 0 {
 		t.Fatal("ASSERT_RETAINED_BYTES_CANNOT_INTRODUCE_NODE", err)
+	}
+}
+
+func TestConstituentCanonicalizesAndPreservesEveryV5SourceField(t *testing.T) {
+	e := envelope{SchemaVersion: graphprovenance.VersionV5, SessionID: "s", Generation: 1, GraphV5SHA256: "sha256:" + strings.Repeat("a", 64), GraphV5SchemaID: graphprovenance.GraphV5SchemaID, SourcePolicy: graphprovenance.PolicyV2, WorkspaceURI: "file:///w", AnalyzedVersion: "UNVERIFIED", DependencyCompleteness: "UNKNOWN_INCOMPLETE", CaptureBudget: graphprovenance.CaptureBudgetV2{RootStatus: "OPENED", Attempts: 2, ChargedBytes: 3}, Supplies: []graphprovenance.SupplyReceiptV2{{RequestID: "z"}, {RequestID: "a"}}, Captures: []graphprovenance.Receipt{{ID: "z"}, {ID: "a"}}, Bindings: []graphprovenance.BindingV2{{Pointer: "/z"}, {Pointer: "/a"}}}
+	n := native{Invocation: json.RawMessage(`{"provenance":{"invocation_id":"i"}}`)}
+	n.inv.Provenance.InvocationID = "i"
+	c := constituent(Input{Identity: "input", SHA256: "digest"}, e, nil, n)
+	if c.SourcePolicy != e.SourcePolicy || c.WorkspaceURI != e.WorkspaceURI || c.AnalyzedVersion != e.AnalyzedVersion || c.DependencyCompleteness != e.DependencyCompleteness || c.CaptureBudget != e.CaptureBudget {
+		t.Fatal("ASSERT_V5_SOURCE_SCALARS_PRESERVED")
+	}
+	if c.Supplies[0].RequestID != "a" || c.Captures[0].ID != "a" || c.Bindings[0].Pointer != "/a" {
+		t.Fatal("ASSERT_V5_SOURCE_RECORDS_CANONICAL_ORDER")
+	}
+}
+
+func TestSourceRecordExactTypedDedupeAndConflict(t *testing.T) {
+	receipt := graphprovenance.Receipt{ID: "receipt", URI: "file:///w/a.go", Content: []byte("one")}
+	supply := graphprovenance.SupplyReceiptV2{RequestID: "request", Status: "NO_NOTIFICATION_OBSERVATION", Receipt: &receipt}
+	a := admitted{env: envelope{Supplies: []graphprovenance.SupplyReceiptV2{supply}, Bindings: []graphprovenance.BindingV2{{Pointer: "/p", URI: receipt.URI, ReceiptIDs: []string{receipt.ID}}}}}
+	b := admitted{env: a.env}
+	if err := validateSourceRecords([]admitted{a, b}); err != nil {
+		t.Fatal("ASSERT_EXACT_TYPED_SOURCE_DEDUPE", err)
+	}
+	conflict := receipt
+	conflict.URI = "file:///w/other.go"
+	b.env.Supplies = []graphprovenance.SupplyReceiptV2{{RequestID: supply.RequestID, Status: supply.Status, Receipt: &conflict}}
+	if err := validateSourceRecords([]admitted{a, b}); err == nil {
+		t.Fatal("ASSERT_SOURCE_ID_CONFLICT_FAILS_CLOSED")
+	}
+	conflict = receipt
+	conflict.ID = "other-receipt"
+	conflict.URI = receipt.URI
+	conflict.Content = append([]byte(nil), receipt.Content...)
+	b.env.Supplies = []graphprovenance.SupplyReceiptV2{{RequestID: "other-request", Status: supply.Status, Receipt: &conflict}}
+	if err := validateSourceRecords([]admitted{a, b}); err == nil {
+		t.Fatal("ASSERT_CONTENT_DIGEST_METADATA_CONFLICT_FAILS_CLOSED")
+	}
+}
+
+func TestSemanticWorkCountsEveryTraversedV5SourceRecord(t *testing.T) {
+	w := WorkAccounting{Inputs: 2, NodeRecords: 3, EdgeRecords: 4, Occurrences: 5, SupplyRecords: 6, SourceReceiptRecords: 7, CaptureRecords: 8, BindingRecords: 9, NativeReceiptRecords: 10}
+	if got, want := semanticWork(w), 54; got != want {
+		t.Fatalf("ASSERT_V5_SOURCE_SEMANTIC_WORK got=%d want=%d", got, want)
 	}
 }
