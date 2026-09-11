@@ -31,10 +31,15 @@ type Observation struct {
 	ExitKind         string           `json:"exit_kind"`
 	ResourceSamples  []ResourceSample `json:"resource_samples"`
 }
+type CanonicalizationObservation struct {
+	Boundary                string `json:"boundary"`
+	EmptyCommunitiesRemoved int    `json:"empty_communities_removed"`
+}
 type SupervisedResult struct {
-	RawOutput   RawOutput   `json:"raw_candidate_output"`
-	Output      Output      `json:"externally_canonicalized_output"`
-	Observation Observation `json:"observation"`
+	RawOutput        RawOutput                   `json:"raw_candidate_output"`
+	Output           Output                      `json:"externally_canonicalized_output"`
+	Canonicalization CanonicalizationObservation `json:"canonicalization"`
+	Observation      Observation                 `json:"observation"`
 }
 type Supervisor struct {
 	GOOS        string
@@ -146,6 +151,12 @@ func (s Supervisor) Run(executable string, req Request) (SupervisedResult, error
 			}
 			if err = json.Unmarshal(stdout.Bytes(), &z.RawOutput); err != nil {
 				return z, Fail("NONCANONICAL_OUTPUT", "invalid JSON")
+			}
+			z.Canonicalization.Boundary = "external parent supervisor process"
+			for _, community := range z.RawOutput.Communities {
+				if len(community) == 0 {
+					z.Canonicalization.EmptyCommunitiesRemoved++
+				}
 			}
 			expectedNodes := req.Fixture.Nodes
 			if req.Fixture.GraphBytes != "" {

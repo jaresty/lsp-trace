@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -84,6 +85,8 @@ func TestSupervisorHelperProcess(t *testing.T) {
 		os.Exit(23)
 	case "noncanonical":
 		_, _ = os.Stdout.WriteString(`{"communities":[["b","a"],["a"]]}`)
+	case "empty-placeholder":
+		_, _ = os.Stdout.WriteString(`{"communities":[["b"],null,["a"]]}`)
 	}
 	os.Exit(0)
 }
@@ -109,8 +112,35 @@ func TestExternalCanonicalization(t *testing.T) {
 		t.Fatalf("ASSERT_EXTERNAL_CANONICALIZATION_PASS output=%+v error=%v", out, e)
 	}
 	t.Log("PASS ASSERT_EXTERNAL_CANONICALIZATION_PASS")
-	_, e = Canonicalize(RawOutput{Communities: [][]string{{"a"}, {"a"}}}, []string{"a", "b"})
-	kind(t, e, "NONCANONICAL_OUTPUT")
+	out, e = Canonicalize(RawOutput{Communities: [][]string{{"b"}, nil, {"a"}}}, []string{"a", "b"})
+	if e != nil || len(out.Communities) != 2 || out.Communities[0][0] != "a" || out.Communities[1][0] != "b" {
+		t.Fatalf("ASSERT_EMPTY_COMMUNITY_NORMALIZATION_PASS output=%+v error=%v", out, e)
+	}
+	t.Log("PASS ASSERT_EMPTY_COMMUNITY_NORMALIZATION_PASS")
+	result, e := helperSupervisor("empty-placeholder").Run(os.Args[0], request())
+	if e != nil || len(result.RawOutput.Communities) != 3 || result.RawOutput.Communities[1] != nil {
+		t.Fatalf("ASSERT_RAW_OUTPUT_PRESERVED_PASS result=%+v error=%v", result, e)
+	}
+	t.Log("PASS ASSERT_RAW_OUTPUT_PRESERVED_PASS")
+	encoded, e := json.Marshal(result)
+	if e != nil || !strings.Contains(string(encoded), `"empty_communities_removed":1`) {
+		t.Fatalf("ASSERT_EMPTY_NORMALIZATION_COUNT_PASS result=%s error=%v", encoded, e)
+	}
+	t.Log("PASS ASSERT_EMPTY_NORMALIZATION_COUNT_PASS")
+	invalid := []struct {
+		name string
+		raw  RawOutput
+	}{
+		{name: "duplicate", raw: RawOutput{Communities: [][]string{{"a"}, {"a"}}}},
+		{name: "missing", raw: RawOutput{Communities: [][]string{{"a"}}}},
+		{name: "unknown", raw: RawOutput{Communities: [][]string{{"a"}, {"c"}}}},
+		{name: "empty-node-member", raw: RawOutput{Communities: [][]string{{"a"}, {"b", ""}}}},
+	}
+	for _, test := range invalid {
+		_, e = Canonicalize(test.raw, []string{"a", "b"})
+		kind(t, e, "NONCANONICAL_OUTPUT")
+		t.Logf("FAIL-WITNESS ASSERT_INVALID_MEMBER_PARTITION_REJECTED case=%s: %v", test.name, e)
+	}
 }
 func TestCapsAndCandidateValidation(t *testing.T) {
 	r := request()
@@ -146,6 +176,14 @@ func TestRetainedInputDigestAndDerivationRejection(t *testing.T) {
 }
 func repositoryRoot() string {
 	return filepath.Join("..", "..", "..", "..")
+}
+
+func TestQualificationContractUnchanged(t *testing.T) {
+	inventory, fixtures, e := LoadFixtureInventory(repositoryRoot(), "qualification/program-c/a-06-fixture-inventory.v1.json")
+	if e != nil || Runs != 3 || Permutations != 1 || MaxNodes != 10_000 || MaxEdges != 100_000 || CandidateRevision != "69ca49f456a7a38cf370131834a2178d9aae17fe" || CandidateVersion != "v0.17.1-0.20260426204603-69ca49f456a7" || len(fixtures) != 4 || len(inventory.Seeds) != 2 || inventory.Seeds[0] != 1 || inventory.Seeds[1] != 2 {
+		t.Fatalf("ASSERT_QUALIFICATION_CONTRACT_UNCHANGED inventory=%+v fixtures=%d error=%v", inventory, len(fixtures), e)
+	}
+	t.Log("PASS ASSERT_QUALIFICATION_CONTRACT_UNCHANGED")
 }
 
 func TestFixtureInventory(t *testing.T) {

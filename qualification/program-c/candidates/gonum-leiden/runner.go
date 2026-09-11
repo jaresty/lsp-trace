@@ -146,7 +146,7 @@ func Run(req Request) (out RawOutput, err error) {
 }
 
 func Canonicalize(rawOutput RawOutput, expectedNodes []string) (Output, error) {
-	out := Output{Communities: make([][]string, len(rawOutput.Communities))}
+	out := Output{Communities: make([][]string, 0, len(rawOutput.Communities))}
 	expected := make(map[string]bool, len(expectedNodes))
 	for _, node := range expectedNodes {
 		if node == "" || expected[node] {
@@ -155,18 +155,19 @@ func Canonicalize(rawOutput RawOutput, expectedNodes []string) (Output, error) {
 		expected[node] = true
 	}
 	seen := make(map[string]bool, len(expectedNodes))
-	for i, community := range rawOutput.Communities {
+	for _, community := range rawOutput.Communities {
 		if len(community) == 0 {
-			return Output{}, Fail("NONCANONICAL_OUTPUT", "empty community")
+			continue
 		}
-		out.Communities[i] = append([]string(nil), community...)
+		canonicalCommunity := append([]string(nil), community...)
 		for _, node := range community {
 			if !expected[node] || seen[node] {
 				return Output{}, Fail("NONCANONICAL_OUTPUT", "unknown or duplicate community member")
 			}
 			seen[node] = true
 		}
-		sort.Strings(out.Communities[i])
+		sort.Strings(canonicalCommunity)
+		out.Communities = append(out.Communities, canonicalCommunity)
 	}
 	if len(seen) != len(expected) {
 		return Output{}, Fail("NONCANONICAL_OUTPUT", "incomplete community partition")
