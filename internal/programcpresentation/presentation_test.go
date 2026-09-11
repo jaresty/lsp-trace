@@ -9,14 +9,18 @@ import (
 )
 
 func validArtifact() Artifact {
+	id := "sha256:" + strings.Repeat("a", 64)
+	members := []string{"n"}
 	return Artifact{
 		SchemaVersion: Version, Authority: Authority, Outcome: "EMPTY",
+		ProfileID: programc.ProfileID, ProfileSHA256: programc.ProfileDigest, Algorithm: "fixture", PartitionSHA256: id,
+		Policy: programc.BoundaryPolicy, Request: programc.BoundaryRequest{PageRankTopK: 1, HubTopK: 1}, ClaimCeiling: programc.BoundaryClaimCeiling,
 		Disclaimer: Disclaimer, CrossSeedStability: Stability,
 		Communities: []Community{{
-			CommunityID: "sha256:" + strings.Repeat("a", 64),
+			CommunityID: id,
 			Members: []Node{{NodeID: "n", Name: "Name", EnclosingDetail: "Container", Location: Location{
 				URI: "file:///x", StartLine: 1, StartCharacter: 1, EndLine: 2, EndCharacter: 3,
-			}}},
+			}}}, Evidence: programc.BoundaryCommunity{CommunityID: id, Members: members},
 		}},
 		CrossCommunityCalls: []Call{}, HighCentralityCrossingNodes: []programc.BoundaryNodeScore{},
 		HubCrossingNodes: []programc.BoundaryNodeScore{}, CrossingWitnesses: []programc.CrossingWitness{},

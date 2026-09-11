@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/programc"
+	"lsp-trace/internal/schema"
 )
 
 const Version = "lsp-trace.community-presentation.v1"
@@ -20,8 +22,11 @@ const Disclaimer = "Structural communities do not establish feature identity, ow
 const Stability = "Cross-seed stability is unassessed until A-08 exists."
 
 type Location struct {
-	URI                                              string
-	StartLine, StartCharacter, EndLine, EndCharacter int
+	URI            string `json:"uri"`
+	StartLine      int    `json:"start_line"`
+	StartCharacter int    `json:"start_character"`
+	EndLine        int    `json:"end_line"`
+	EndCharacter   int    `json:"end_character"`
 }
 
 func (l Location) MarshalJSON() ([]byte, error) {
@@ -36,8 +41,10 @@ func (l Location) MarshalJSON() ([]byte, error) {
 }
 
 type Node struct {
-	NodeID, Name, EnclosingDetail string
-	Location                      Location
+	NodeID          string   `json:"node_id"`
+	Name            string   `json:"name"`
+	EnclosingDetail string   `json:"enclosing_detail,omitempty"`
+	Location        Location `json:"location"`
 }
 
 func (n Node) MarshalJSON() ([]byte, error) {
@@ -56,9 +63,10 @@ type Community struct {
 	Evidence    programc.BoundaryCommunity `json:"evidence"`
 }
 type Call struct {
-	OccurrenceID   string `json:"occurrence_id"`
-	Caller, Callee Node
-	CallSite       Location `json:"call_site"`
+	OccurrenceID string   `json:"occurrence_id"`
+	Caller       Node     `json:"caller"`
+	Callee       Node     `json:"callee"`
+	CallSite     Location `json:"call_site"`
 }
 
 func (c Call) MarshalJSON() ([]byte, error) {
@@ -72,22 +80,29 @@ func (c Call) MarshalJSON() ([]byte, error) {
 }
 
 type Artifact struct {
-	SchemaVersion                                                                                      string                      `json:"schema_version"`
-	Authority                                                                                          string                      `json:"authority"`
-	Outcome                                                                                            string                      `json:"outcome"`
-	Completeness                                                                                       programc.SourceCompleteness `json:"completeness"`
-	Seed                                                                                               uint64                      `json:"seed"`
-	ProfileID, ProfileSHA256, Algorithm, PartitionSHA256, ClaimCeiling, Disclaimer, CrossSeedStability string
-	Policy                                                                                             programc.BoundaryPolicySpec  `json:"policy"`
-	Request                                                                                            programc.BoundaryRequest     `json:"request"`
-	Accounting                                                                                         programc.BoundaryAccounting  `json:"accounting"`
-	PageRank                                                                                           programc.BoundaryPageRank    `json:"pagerank"`
-	Communities                                                                                        []Community                  `json:"communities"`
-	CrossCommunityCalls                                                                                []Call                       `json:"cross_community_calls"`
-	HighCentralityCrossingNodes                                                                        []programc.BoundaryNodeScore `json:"high_centrality_crossing_nodes"`
-	HubCrossingNodes                                                                                   []programc.BoundaryNodeScore `json:"hub_crossing_nodes"`
-	CrossingWitnesses                                                                                  []programc.CrossingWitness   `json:"crossing_witnesses"`
-	Bridges, ArticulationPoints                                                                        []string
+	SchemaVersion               string                       `json:"schema_version"`
+	Authority                   string                       `json:"authority"`
+	Outcome                     string                       `json:"outcome"`
+	Completeness                programc.SourceCompleteness  `json:"completeness"`
+	Seed                        uint64                       `json:"seed"`
+	ProfileID                   string                       `json:"profile_id"`
+	ProfileSHA256               string                       `json:"profile_sha256"`
+	Algorithm                   string                       `json:"algorithm"`
+	PartitionSHA256             string                       `json:"partition_sha256"`
+	ClaimCeiling                string                       `json:"claim_ceiling"`
+	Disclaimer                  string                       `json:"disclaimer"`
+	CrossSeedStability          string                       `json:"cross_seed_stability"`
+	Policy                      programc.BoundaryPolicySpec  `json:"policy"`
+	Request                     programc.BoundaryRequest     `json:"request"`
+	Accounting                  programc.BoundaryAccounting  `json:"accounting"`
+	PageRank                    programc.BoundaryPageRank    `json:"pagerank"`
+	Communities                 []Community                  `json:"communities"`
+	CrossCommunityCalls         []Call                       `json:"cross_community_calls"`
+	HighCentralityCrossingNodes []programc.BoundaryNodeScore `json:"high_centrality_crossing_nodes"`
+	HubCrossingNodes            []programc.BoundaryNodeScore `json:"hub_crossing_nodes"`
+	CrossingWitnesses           []programc.CrossingWitness   `json:"crossing_witnesses"`
+	Bridges                     []string                     `json:"bridges"`
+	ArticulationPoints          []string                     `json:"articulation_points"`
 }
 
 func (a Artifact) MarshalJSON() ([]byte, error) {
@@ -127,8 +142,19 @@ func loc(uri string, r graph.Range) Location {
 	return Location{uri, int(r.Start.Line) + 1, int(r.Start.Character) + 1, int(r.End.Line) + 1, int(r.End.Character) + 1}
 }
 func Build(o programc.Outcome, b programc.BoundaryArtifact) (Artifact, error) {
-	if b.SchemaVersion != programc.BoundaryVersion || b.Bindings.Seed != o.Seed || b.Bindings.PartitionSHA256 != o.LogicalDigest || b.Bindings.ProfileID != o.ProfileID || b.Bindings.ProfileSHA256 != o.ProfileDigest || b.Bindings.Algorithm != o.Algorithm {
-		return Artifact{}, fmt.Errorf("boundary/outcome binding mismatch")
+	canonicalOutcome, failure := programc.Compute(o.Source.InputBytes(), o.Seed)
+	if failure != nil {
+		return Artifact{}, fmt.Errorf("outcome source revalidation: %w", failure)
+	}
+	if !reflect.DeepEqual(o, canonicalOutcome) {
+		return Artifact{}, fmt.Errorf("outcome semantic validation mismatch")
+	}
+	canonicalBoundary, err := programc.ComputeBoundary(canonicalOutcome, b.Request)
+	if err != nil {
+		return Artifact{}, fmt.Errorf("boundary recomputation: %w", err)
+	}
+	if !reflect.DeepEqual(b, canonicalBoundary) {
+		return Artifact{}, fmt.Errorf("boundary semantic validation mismatch")
 	}
 	var d native
 	dec := json.NewDecoder(bytes.NewReader(o.Source.GraphV5Bytes()))
@@ -239,18 +265,28 @@ func equal(a, b []string) bool {
 	return true
 }
 func Validate(a Artifact) error {
-	if a.SchemaVersion != Version || a.Authority != Authority || a.Disclaimer != Disclaimer || a.CrossSeedStability != Stability {
+	if a.SchemaVersion != Version || a.Authority != Authority || a.Disclaimer != Disclaimer || a.CrossSeedStability != Stability || a.ProfileID != programc.ProfileID || a.ProfileSHA256 != programc.ProfileDigest || a.ClaimCeiling != programc.BoundaryClaimCeiling {
 		return fmt.Errorf("invalid presentation constants")
 	}
-	if len(a.Communities) > programc.MaxNodes {
-		return fmt.Errorf("community limit")
+	if a.Outcome != "COMPLETE" && a.Outcome != "EMPTY" && a.Outcome != "INCOMPLETE" && a.Outcome != "UNAVAILABLE" {
+		return fmt.Errorf("invalid outcome")
 	}
-	seen := map[string]bool{}
+	if !reflect.DeepEqual(a.Policy, programc.BoundaryPolicy) || a.Request.PageRankTopK < 1 || a.Request.HubTopK < 1 || len(a.Communities) > programc.MaxNodes || len(a.CrossCommunityCalls) > programc.MaxOccurrences {
+		return fmt.Errorf("invalid policy, request, or limit")
+	}
+	nodes := map[string]Node{}
+	communities := map[string]string{}
 	var previous []string
 	for _, c := range a.Communities {
+		if c.CommunityID == "" || c.Evidence.CommunityID != c.CommunityID {
+			return fmt.Errorf("community evidence identity mismatch")
+		}
 		current := make([]string, len(c.Members))
 		for i := range c.Members {
 			current[i] = c.Members[i].NodeID
+		}
+		if !equal(current, c.Evidence.Members) {
+			return fmt.Errorf("community evidence members mismatch")
 		}
 		if previous != nil && compareIDs(previous, current) >= 0 {
 			return fmt.Errorf("noncanonical community order")
@@ -258,21 +294,104 @@ func Validate(a Artifact) error {
 		previous = current
 		p := ""
 		for _, n := range c.Members {
-			if n.NodeID <= p && p != "" {
+			if n.NodeID == "" || (p != "" && n.NodeID <= p) {
 				return fmt.Errorf("noncanonical member order")
 			}
-			if seen[n.NodeID] {
+			if _, ok := nodes[n.NodeID]; ok {
 				return fmt.Errorf("duplicate member")
 			}
-			seen[n.NodeID] = true
-			p = n.NodeID
-			if n.Location.StartLine < 1 || n.Location.StartCharacter < 1 || n.Location.EndLine < 1 || n.Location.EndCharacter < 1 {
-				return fmt.Errorf("non-one-based location")
+			if err := validateLocation(n.Location); err != nil {
+				return err
 			}
+			nodes[n.NodeID] = n
+			communities[n.NodeID] = c.CommunityID
+			p = n.NodeID
+		}
+	}
+	occurrences := map[string]Call{}
+	previousOccurrence := ""
+	for _, c := range a.CrossCommunityCalls {
+		if c.OccurrenceID == "" || (previousOccurrence != "" && c.OccurrenceID <= previousOccurrence) {
+			return fmt.Errorf("noncanonical or duplicate call order")
+		}
+		caller, callerOK := nodes[c.Caller.NodeID]
+		callee, calleeOK := nodes[c.Callee.NodeID]
+		if !callerOK || !calleeOK || !reflect.DeepEqual(caller, c.Caller) || !reflect.DeepEqual(callee, c.Callee) || communities[c.Caller.NodeID] == communities[c.Callee.NodeID] {
+			return fmt.Errorf("invalid cross-community call join")
+		}
+		if err := validateLocation(c.CallSite); err != nil {
+			return err
+		}
+		occurrences[c.OccurrenceID] = c
+		previousOccurrence = c.OccurrenceID
+	}
+	if err := validateScores(a.HighCentralityCrossingNodes, nodes); err != nil {
+		return fmt.Errorf("pagerank scores: %w", err)
+	}
+	if err := validateScores(a.HubCrossingNodes, nodes); err != nil {
+		return fmt.Errorf("hub scores: %w", err)
+	}
+	if err := validateReferences(a.Bridges, func(id string) bool { return id != "" }); err != nil {
+		return fmt.Errorf("bridges: %w", err)
+	}
+	if err := validateReferences(a.ArticulationPoints, func(id string) bool { _, ok := nodes[id]; return ok }); err != nil {
+		return fmt.Errorf("articulation points: %w", err)
+	}
+	seenWitness := map[string]bool{}
+	for _, w := range a.CrossingWitnesses {
+		call, ok := occurrences[w.OccurrenceID]
+		sourceCommunity, targetCommunity := communities[w.SourceNodeID], communities[w.TargetNodeID]
+		communityPairMatches := (sourceCommunity == w.CommunityA && targetCommunity == w.CommunityB) || (sourceCommunity == w.CommunityB && targetCommunity == w.CommunityA)
+		if !ok || seenWitness[w.OccurrenceID] || call.Caller.NodeID != w.SourceNodeID || call.Callee.NodeID != w.TargetNodeID || !communityPairMatches || w.CommunityA == w.CommunityB {
+			return fmt.Errorf("invalid crossing witness join")
+		}
+		seenWitness[w.OccurrenceID] = true
+	}
+	return nil
+}
+
+func validateLocation(l Location) error {
+	if l.URI == "" || l.StartLine < 1 || l.StartCharacter < 1 || l.EndLine < 1 || l.EndCharacter < 1 || l.EndLine < l.StartLine || (l.EndLine == l.StartLine && l.EndCharacter < l.StartCharacter) {
+		return fmt.Errorf("invalid one-based location")
+	}
+	return nil
+}
+
+func validateScores(scores []programc.BoundaryNodeScore, nodes map[string]Node) error {
+	seen := map[string]bool{}
+	for i, score := range scores {
+		if _, ok := nodes[score.NodeID]; !ok || seen[score.NodeID] || (i > 0 && (scores[i-1].Score < score.Score || (scores[i-1].Score == score.Score && scores[i-1].NodeID >= score.NodeID))) {
+			return fmt.Errorf("foreign, duplicate, or noncanonical node score")
+		}
+		seen[score.NodeID] = true
+	}
+	return nil
+}
+
+func validateReferences(ids []string, exists func(string) bool) error {
+	for i, id := range ids {
+		if !exists(id) || (i > 0 && ids[i-1] >= id) {
+			return fmt.Errorf("foreign, duplicate, or noncanonical reference")
 		}
 	}
 	return nil
 }
+func ValidateJSON(raw []byte) error {
+	if _, err := schema.ValidateFor(raw, schema.FamilyCommunityPresentation, "v1"); err != nil {
+		return err
+	}
+	var a Artifact
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&a); err != nil {
+		return err
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return fmt.Errorf("presentation must contain exactly one JSON document")
+	}
+	return Validate(a)
+}
+
 func JSON(a Artifact) ([]byte, error) {
 	if err := Validate(a); err != nil {
 		return nil, err
