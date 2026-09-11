@@ -14,6 +14,7 @@ import (
 
 	lgraph "lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/manageddiagnostic"
 
 	ggraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/community"
@@ -58,6 +59,7 @@ type Projection struct {
 	NodeIDs        map[string]int64
 	Occurrences    []Occurrence
 	PairWeights    map[Pair]float64
+	Source         SourceBinding
 }
 type Community struct{ Members []string }
 type Outcome struct {
@@ -66,19 +68,111 @@ type Outcome struct {
 	Seed                                                             uint64
 	Communities                                                      []Community
 	Projection                                                       Projection
+	Source                                                           SourceBinding
+}
+
+// SemanticReceipt identifies the validated native Graph V5 semantic commitment.
+type SemanticReceipt struct {
+	ReceiptVersion, SemanticCommitmentDigest, DigestScope string
+}
+
+// SourceCompleteness retains the native graph's validated completeness ceiling.
+type SourceCompleteness struct {
+	TraversalComplete   bool
+	SourceGraphComplete string
+	CompletenessScope   string
+	Truncated           bool
+}
+
+// SourceBinding is the immutable admission record for a Program C projection.
+// Graph Provenance V5 has no graph-wide custody or separate qualification field:
+// CustodyAvailable and QualificationIdentityAvailable therefore remain false.
+// CallEvidenceClass and CallEvidenceRole are evidence labels, not custody.
+type SourceBinding struct {
+	inputBytes, graphV5Bytes                                 []byte
+	sensitivity                                              lgraph.SensitivityPolicy
+	replayManifest                                           lgraph.ReplayInputManifest
+	semantics                                                lgraph.EvidenceSemantics
+	admissionReceipt                                         lgraph.EvidenceReceipt
+	bundleIdentity                                           lgraph.BundleIdentity
+	InputLength, GraphV5Length                               int
+	InputSHA256, GraphV5SHA256                               string
+	EnvelopeSchemaVersion, GraphSchemaID, GraphSchemaVersion string
+	EnvelopeSchemaID                                         string
+	EnvelopeSchemaIDAvailable                                bool
+	SessionID                                                string
+	Generation                                               uint64
+	ExecutionBundleID                                        string
+	SemanticReceipt                                          SemanticReceipt
+	DiagnosticsStatus                                        manageddiagnostic.QueryStatus
+	DiagnosticsOmittedRecords, DiagnosticsEvictedRecords     uint64
+	Completeness                                             SourceCompleteness
+	CustodyAvailable, QualificationIdentityAvailable         bool
+	CustodyClass, CallEvidenceClass, CallEvidenceRole        string
+}
+
+func (s SourceBinding) InputBytes() []byte   { return append([]byte(nil), s.inputBytes...) }
+func (s SourceBinding) GraphV5Bytes() []byte { return append([]byte(nil), s.graphV5Bytes...) }
+func (s SourceBinding) Sensitivity() lgraph.SensitivityPolicy {
+	v := s.sensitivity
+	v.Covered = append([]string(nil), v.Covered...)
+	return v
+}
+func (s SourceBinding) ReplayManifest() lgraph.ReplayInputManifest {
+	v := s.replayManifest
+	v.Artifacts = append([]lgraph.ReplayArtifact(nil), v.Artifacts...)
+	return v
+}
+func (s SourceBinding) Semantics() lgraph.EvidenceSemantics {
+	v := s.semantics
+	v.CallEdges.Supports = append([]string(nil), v.CallEdges.Supports...)
+	v.CallEdges.DoesNotSupport = append([]string(nil), v.CallEdges.DoesNotSupport...)
+	v.DiscoveryRelations.Supports = append([]string(nil), v.DiscoveryRelations.Supports...)
+	v.DiscoveryRelations.DoesNotSupport = append([]string(nil), v.DiscoveryRelations.DoesNotSupport...)
+	return v
+}
+func (s SourceBinding) AdmissionReceipt() lgraph.EvidenceReceipt {
+	v := s.admissionReceipt
+	v.Relations = append([]lgraph.EvidenceRelation(nil), v.Relations...)
+	return v
+}
+func (s SourceBinding) BundleIdentity() lgraph.BundleIdentity {
+	v := s.bundleIdentity
+	v.ResolvedSeeds = append([]lgraph.InvocationSeed(nil), v.ResolvedSeeds...)
+	return v
+}
+
+type nativeSemanticReceipt struct {
+	ReceiptVersion           string `json:"receipt_version"`
+	SemanticCommitmentDigest string `json:"semantic_commitment_digest"`
+	DigestScope              string `json:"digest_scope"`
+}
+
+type nativeSummary struct {
+	TraversalComplete   bool   `json:"traversal_complete"`
+	SourceGraphComplete string `json:"source_graph_complete"`
+	CompletenessScope   string `json:"completeness_scope"`
+	Truncated           bool   `json:"truncated"`
 }
 
 type native struct {
-	Invocation struct {
+	SchemaVersion     string `json:"schema_version"`
+	ExecutionBundleID string `json:"execution_bundle_id"`
+	Invocation        struct {
 		Server     lgraph.ServerInvocation     `json:"server"`
 		LanguageID string                      `json:"language_id"`
 		Seeds      []lgraph.InvocationSeed     `json:"seeds"`
 		Provenance lgraph.InvocationProvenance `json:"provenance"`
 	} `json:"invocation"`
-	Nodes             []lgraph.Node            `json:"nodes"`
-	Edges             []lgraph.Edge            `json:"edges"`
-	EvidenceSemantics lgraph.EvidenceSemantics `json:"evidence_semantics"`
-	EvidenceReceipt   *lgraph.EvidenceReceipt  `json:"evidence_receipt"`
+	Identity            lgraph.BundleIdentity      `json:"identity"`
+	SensitivityPolicy   lgraph.SensitivityPolicy   `json:"sensitivity_policy"`
+	ReplayInputManifest lgraph.ReplayInputManifest `json:"replay_input_manifest"`
+	Nodes               []lgraph.Node              `json:"nodes"`
+	Edges               []lgraph.Edge              `json:"edges"`
+	EvidenceSemantics   lgraph.EvidenceSemantics   `json:"evidence_semantics"`
+	EvidenceReceipt     *lgraph.EvidenceReceipt    `json:"evidence_receipt"`
+	TraceReceipt        nativeSemanticReceipt      `json:"trace_receipt"`
+	Summary             nativeSummary              `json:"summary"`
 }
 
 func Project(input []byte) (Projection, *Failure) {
@@ -127,7 +221,27 @@ func Project(input []byte) (Projection, *Failure) {
 	if language == "" && len(doc.Invocation.Seeds) == 1 {
 		language = doc.Invocation.Seeds[0].LanguageID
 	}
-	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64)}
+	inputSum := sha256.Sum256(input)
+	callRole := ""
+	for _, relation := range doc.EvidenceReceipt.Relations {
+		if relation.RelationKind == "CALL_RELATION" {
+			callRole = relation.EvidenceRole
+			break
+		}
+	}
+	binding := SourceBinding{
+		inputBytes: append([]byte(nil), input...), graphV5Bytes: append([]byte(nil), exact...),
+		InputLength: len(input), InputSHA256: "sha256:" + hex.EncodeToString(inputSum[:]),
+		GraphV5Length: len(exact), GraphV5SHA256: envelope.GraphV5SHA256,
+		EnvelopeSchemaVersion: envelope.SchemaVersion, GraphSchemaID: envelope.GraphV5SchemaID, GraphSchemaVersion: doc.SchemaVersion,
+		SessionID: envelope.SessionID, Generation: envelope.Generation, ExecutionBundleID: doc.ExecutionBundleID,
+		SemanticReceipt:   SemanticReceipt{doc.TraceReceipt.ReceiptVersion, doc.TraceReceipt.SemanticCommitmentDigest, doc.TraceReceipt.DigestScope},
+		DiagnosticsStatus: envelope.Diagnostics.Status, DiagnosticsOmittedRecords: envelope.Diagnostics.OmittedRecords, DiagnosticsEvictedRecords: envelope.Diagnostics.EvictedRecords,
+		Completeness:      SourceCompleteness{doc.Summary.TraversalComplete, doc.Summary.SourceGraphComplete, doc.Summary.CompletenessScope, doc.Summary.Truncated},
+		CallEvidenceClass: doc.EvidenceSemantics.CallEdges.EvidenceClass, CallEvidenceRole: callRole,
+		sensitivity: doc.SensitivityPolicy, replayManifest: doc.ReplayInputManifest, semantics: doc.EvidenceSemantics, admissionReceipt: *doc.EvidenceReceipt, bundleIdentity: doc.Identity,
+	}
+	p := Projection{NodeIdentities: ids, NodeIDs: nodeIDs, PairWeights: make(map[Pair]float64), Source: binding}
 	for _, edge := range doc.Edges {
 		r, ok := receipts[edge.RelationID]
 		if !ok || r.RelationKind != "CALL_RELATION" || r.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || r.EvidenceRole != "CALL_SUPPORT" || r.Direction != "CALLER_TO_CALLEE" || r.SupportContribution != 1 || r.CallerNodeID != edge.CallerNodeID || r.CalleeNodeID != edge.CalleeNodeID || len(edge.CallSites) == 0 {
@@ -198,7 +312,7 @@ func Compute(input []byte, seed uint64) (Outcome, *Failure) {
 		sort.Strings(canonical[i].Members)
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: ClaimCeiling, Projection: p}, nil
+	return Outcome{ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: ClaimCeiling, Projection: p, Source: p.Source}, nil
 }
 
 func logicalDigest(c []Community) string {

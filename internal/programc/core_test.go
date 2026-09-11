@@ -1,6 +1,7 @@
 package programc
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -32,6 +33,19 @@ func validV5(t *testing.T, nodes []graph.Node, edges []graph.Edge) []byte {
 	return raw
 }
 
+func decodeV5(t *testing.T, raw []byte) (graphprovenance.EvidenceV5, []byte) {
+	t.Helper()
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return envelope, native
+}
+
 func node(name string, line uint32) graph.Node {
 	r := graph.Range{Start: graph.Position{Line: line}, End: graph.Position{Line: line, Character: 1}}
 	return graph.NewNode(graph.Item{Name: name, Kind: 12, URI: "file:///w/a.go", Range: r, SelectionRange: r})
@@ -57,6 +71,74 @@ func TestAdmissionRejectsMalformedAndUnqualifiedCalls(t *testing.T) {
 	bad, _ := json.Marshal(envelope)
 	if _, err := Compute(bad, 7); err == nil || err.Code != CodeInvalidProvenance {
 		t.Fatalf("ASSERT_CALLS_CUSTODY_EVIDENCE_REJECTED: err=%#v", err)
+	}
+}
+
+func TestSourceBindingRetainsExactValidatedV5Evidence(t *testing.T) {
+	a, b := node("a", 0), node("b", 1)
+	raw := validV5(t, []graph.Node{a, b}, []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}})
+	envelope, native := decodeV5(t, raw)
+
+	projection, failure := Project(raw)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	binding := projection.Source
+	inputSum := sha256.Sum256(raw)
+	if !bytes.Equal(binding.InputBytes(), raw) || binding.InputLength != len(raw) || binding.InputSHA256 != fmt.Sprintf("sha256:%x", inputSum) ||
+		!bytes.Equal(binding.GraphV5Bytes(), native) || binding.GraphV5Length != len(native) || binding.GraphV5SHA256 != envelope.GraphV5SHA256 {
+		t.Fatalf("ASSERT_SOURCE_EXACT_BYTE_DIGEST_LENGTH_IDENTITY: binding=%#v", binding)
+	}
+	if binding.EnvelopeSchemaVersion != graphprovenance.VersionV5 || binding.GraphSchemaVersion != graph.SchemaVersionV5 || binding.GraphSchemaID != graphprovenance.GraphV5SchemaID ||
+		binding.EnvelopeSchemaIDAvailable || binding.EnvelopeSchemaID != "" || binding.SessionID != "session" || binding.Generation != 1 {
+		t.Fatalf("ASSERT_SOURCE_SESSION_GENERATION_SCHEMA_IDENTITIES: binding=%#v", binding)
+	}
+	if binding.Sensitivity().AccessControlResponsibility != "BUNDLE_CUSTODIAN" || binding.Completeness.SourceGraphComplete != graph.Unknown ||
+		!binding.Completeness.TraversalComplete || binding.Completeness.Truncated || binding.DiagnosticsStatus != manageddiagnostic.QueryUnavailable ||
+		binding.ReplayManifest().ReplayInputManifestDigest == "" || binding.Semantics().CallEdges.EvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" ||
+		binding.SemanticReceipt.SemanticCommitmentDigest == "" || binding.ExecutionBundleID == "" || binding.BundleIdentity().CallerProvenanceClass != "CALLER_ASSERTED" || len(binding.AdmissionReceipt().Relations) != 1 {
+		t.Fatalf("ASSERT_SOURCE_PRIVACY_COMPLETENESS_ADMISSION_IDENTITIES: access=%q source_complete=%q traversal=%t truncated=%t diagnostic=%q replay=%q evidence=%q semantic=%q bundle=%q relations=%d",
+			binding.Sensitivity().AccessControlResponsibility, binding.Completeness.SourceGraphComplete, binding.Completeness.TraversalComplete,
+			binding.Completeness.Truncated, binding.DiagnosticsStatus, binding.ReplayManifest().ReplayInputManifestDigest,
+			binding.Semantics().CallEdges.EvidenceClass, binding.SemanticReceipt.SemanticCommitmentDigest, binding.ExecutionBundleID, len(binding.AdmissionReceipt().Relations))
+	}
+	if binding.CustodyAvailable || binding.CustodyClass != "" || binding.QualificationIdentityAvailable || binding.CallEvidenceClass != "SERVER_REPORTED_CALL_HIERARCHY" || binding.CallEvidenceRole != "CALL_SUPPORT" {
+		t.Fatalf("ASSERT_CALL_EVIDENCE_NOT_PROMOTED_TO_CUSTODY: binding=%#v", binding)
+	}
+
+	wantRetained := append([]byte(nil), raw...)
+	wantNative := append([]byte(nil), native...)
+	returned := binding.InputBytes()
+	returnedNative := binding.GraphV5Bytes()
+	raw[0] ^= 0xff
+	returned[1] ^= 0xff
+	returnedNative[0] ^= 0xff
+	if bytes.Equal(binding.InputBytes(), raw) || bytes.Equal(binding.InputBytes(), returned) || !bytes.Equal(binding.InputBytes(), wantRetained) ||
+		bytes.Equal(binding.GraphV5Bytes(), returnedNative) || !bytes.Equal(binding.GraphV5Bytes(), wantNative) {
+		t.Fatalf("ASSERT_SOURCE_INPUT_DEFENSIVE_COPY: retained bytes changed")
+	}
+	out, failure := Compute(validV5(t, []graph.Node{a, b}, []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}}), 7)
+	if failure != nil || out.Source.SessionID != "session" || out.Projection.Source.SessionID != out.Source.SessionID {
+		t.Fatalf("ASSERT_OUTCOME_SOURCE_BINDING_PRESERVED: outcome=%#v failure=%v", out, failure)
+	}
+}
+
+func TestAdmissionRejectsResealedSemanticTampering(t *testing.T) {
+	a, b := node("a", 0), node("b", 1)
+	raw := validV5(t, []graph.Node{a, b}, []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}})
+	var envelope map[string]any
+	_ = json.Unmarshal(raw, &envelope)
+	native, _ := base64.StdEncoding.DecodeString(envelope["graph_v5"].(string))
+	var doc map[string]any
+	_ = json.Unmarshal(native, &doc)
+	doc["sensitivity_policy"].(map[string]any)["automatic_redaction"] = true
+	changed, _ := json.Marshal(doc)
+	envelope["graph_v5"] = base64.StdEncoding.EncodeToString(changed)
+	sum := sha256.Sum256(changed)
+	envelope["graph_v5_sha256"] = fmt.Sprintf("sha256:%x", sum)
+	bad, _ := json.Marshal(envelope)
+	if _, failure := Project(bad); failure == nil || failure.Code != CodeInvalidProvenance {
+		t.Fatalf("ASSERT_RESEALED_SEMANTIC_TAMPERING_REJECTED: failure=%#v", failure)
 	}
 }
 
