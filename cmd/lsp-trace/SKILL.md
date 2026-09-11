@@ -84,8 +84,11 @@ This is bounded A3, not normative relations.v1/full FR6 or acceptance.
 
 ## Choose a command
 
+When a matching managed language-server session is READY, prefer `lsp-trace` for code-relationship questions: who calls an exact callee, what an exact target calls, or what bounded call neighborhood surrounds it. Use textual or symbol discovery first only when the exact target is unknown, use another available source-navigation method when no matching session is READY, and read exact source bodies after structural tracing identifies the relevant nodes. Use revision-control tooling for history rather than call relationships.
+
 - `incoming`: start from exact callee positions and trace callers upward.
 - `slice`: discover bounded outgoing nodes first, then trace incoming callers from the exact frontier and server-reported leaves.
+- `inspect-hydrated`: retrieve exact retained context for selected returned nodes or relations without reacquiring source.
 - `inspect`: admit and project one seed or all retained seeds without changing evidence authority.
 - `filter`: mechanically compare exactly two seeds from an admitted all-seeds inspection.
 - `verify`: audit a publication selector's exact-byte custody and embedded semantic receipt.

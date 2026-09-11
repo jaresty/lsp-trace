@@ -181,6 +181,31 @@ func TestTraversalSchemaSelectorContracts(t *testing.T) {
 	}
 }
 
+func TestSchemaGetPermitsAncillaryArtifactIdentity(t *testing.T) {
+	tool, ok := NewRegistry(false).Resolve("lsp_trace_v1_schema_get")
+	if !ok || !containsSchemaID(tool.ArtifactSchemaIDs, inspectAncillaryArtifactSchemaID) {
+		t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_IDENTITY: tool=%+v found=%v", tool, ok)
+	}
+}
+
+func TestSlicePresentationAcceptsDetailForBothTargetSelectors(t *testing.T) {
+	tool, ok := NewRegistry(false).Resolve("lsp_trace_v1_slice")
+	if !ok {
+		t.Fatal("ASSERT_SLICE_PRESENTATION_DETAIL: tool missing")
+	}
+	variants, ok := tool.PresentationInputSchema["oneOf"].([]any)
+	if !ok || len(variants) != 2 {
+		t.Fatalf("ASSERT_SLICE_PRESENTATION_DETAIL: schema=%#v", tool.PresentationInputSchema)
+	}
+	for i, raw := range variants {
+		variant, _ := raw.(map[string]any)
+		properties, _ := variant["properties"].(map[string]any)
+		if _, ok := properties["detail"]; !ok {
+			t.Fatalf("ASSERT_SLICE_PRESENTATION_DETAIL[%d]: properties=%#v", i, properties)
+		}
+	}
+}
+
 func TestVerifyAdvertisesGraphProvenanceV5WithoutChangingCardinality(t *testing.T) {
 	registry := NewRegistry(false)
 	if got := len(registry.Tools()); got != 28 {
@@ -210,8 +235,8 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 		"lsp_session_v1_status":              {"current", "state"},
 		"lsp_session_v1_stop":                {"stop", "generation"},
 		"lsp_session_v1_restart":             {"restart", "generation"},
-		"lsp_trace_v1_incoming":              {"who calls", "callee"},
-		"lsp_trace_v1_slice":                 {"outgoing", "incoming"},
+		"lsp_trace_v1_incoming":              {"prefer", "who calls", "ready"},
+		"lsp_trace_v1_slice":                 {"prefer", "outgoing", "ready"},
 		"lsp_trace_v1_inspect":               {"seed", "retained"},
 		"lsp_trace_v1_filter":                {"compare", "two"},
 		"lsp_trace_v1_validate":              {"schema", "validate"},

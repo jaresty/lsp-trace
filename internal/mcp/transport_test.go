@@ -17,6 +17,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/schema"
 )
 
 type fakeExecutor struct {
@@ -669,6 +670,39 @@ func TestCompactSchemaGetIsInlineAndStructured(t *testing.T) {
 	}
 	if env["content"] != nil {
 		t.Fatalf("%s: compact result unexpectedly encoded schema as content", assertion)
+	}
+}
+
+func TestSchemaGetRetrievesAncillaryFullAndCompact(t *testing.T) {
+	artifact, err := schema.BytesFor(schema.FamilyInspectAncillary, "v1")
+	var parsed map[string]any
+	parseErr := json.Unmarshal(artifact, &parsed)
+	if err != nil || parseErr != nil || artifactSchemaID(artifact) != inspectAncillaryArtifactSchemaID {
+		t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_EMBEDDED_IDENTITY: bytes=%d id=%q read_err=%v parse_err=%v", len(artifact), artifactSchemaID(artifact), err, parseErr)
+	}
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_schema_get","arguments":{"schema":{"family":"inspect-ancillary","version":"v1"}}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_schema_get","arguments":{"schema":{"family":"inspect-ancillary","version":"v1"},"detail":"compact"}}}`,
+	}, "\n") + "\n"
+	responses := runMessages(t, input)
+	if len(responses) != 2 {
+		t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_RESPONSES: %v", responses)
+	}
+	for i, response := range responses {
+		call, _ := response["result"].(map[string]any)
+		env, _ := call["structuredContent"].(map[string]any)
+		if env["outcome"] != "COMPLETE" || env["operation_status"] != "SUCCEEDED" {
+			t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_%d: %v", i, env)
+		}
+		if i == 0 && !strings.Contains(env["content"].(string), `"$id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.inspect-ancillary.v1.schema.json"`) {
+			t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_FULL: %v", env)
+		}
+		if i == 1 {
+			result, _ := env["result"].(map[string]any)
+			if result["schema_id"] != "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.inspect-ancillary.v1.schema.json" {
+				t.Fatalf("ASSERT_SCHEMA_GET_ANCILLARY_COMPACT: %v", env)
+			}
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ const (
 	publicationErrorEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-publication-error.v1.schema.json"
 	inlineByteLimit                  = 1048576
 	graphV4ArtifactSchemaID          = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph.v4.schema.json"
+	inspectAncillaryArtifactSchemaID = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.inspect-ancillary.v1.schema.json"
 	incomingCompositionSchemaID      = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.incoming-composition.v1.schema.json"
 	sliceCompositionSchemaID         = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.slice-composition.v1.schema.json"
 )
@@ -151,8 +152,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v2_incoming":                  "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
 		"lsp_trace_v3_slice":                     "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
 		"lsp_trace_v3_incoming":                  "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
-		"lsp_trace_v1_incoming":                  "Answer who calls this exact callee by tracing bounded incoming calls in a managed local language-server session",
-		"lsp_trace_v1_slice":                     "Explore a bounded outgoing call frontier, then trace incoming callers from its exact frontier and leaves",
+		"lsp_trace_v1_incoming":                  "Prefer this operation to answer who calls an exact callee when a matching managed language-server session is READY; it traces bounded incoming calls",
+		"lsp_trace_v1_slice":                     "Prefer this operation to explore an exact target's bounded outgoing call frontier and incoming callers when a matching managed language-server session is READY",
 	}
 	registeredFamilies := make(map[string]string, len(manifest.Schemas))
 	for _, schema := range manifest.Schemas {
@@ -238,6 +239,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedMetricsArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.BoundedRankingArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, graphV4ArtifactSchemaID)
+			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, inspectAncillaryArtifactSchemaID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
 		}

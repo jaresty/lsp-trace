@@ -42,6 +42,7 @@ func TestSliceDirectAndGatewaySelectorsReachIdenticalAcquisition(t *testing.T) {
 				executor := &selectorCountingExecutor{}
 				server := &Server{Registry: NewRegistry(false), Executors: map[ExecutorFamily]Executor{SliceExecutorFamily: executor}}
 				arguments := cloneMap(base)
+				arguments["detail"] = "full"
 				for key, value := range tc.selector {
 					arguments[key] = value
 				}
