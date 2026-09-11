@@ -1,0 +1,60 @@
+{
+  "schema_version": "lsp-trace.private.program-c.gate-ii-evaluation.v1",
+  "repository_revision": "2a00a7d11fda0865b8644d0c5aa362912a4dcfda",
+  "supersedes": {
+    "path": "qualification/program-c/gate-ii-current-outcomes.v2.6935c05.receipt.json",
+    "sha256": "sha256:07c99d1175776a4cc3a236b0a5197e5296ffe4e92b3a1d4b2c8e8981bdb173ed"
+  },
+  "command": [
+    "python3",
+    "scripts/check-program-c-gate-ii.py",
+    "--root",
+    ".",
+    "--outcomes",
+    "qualification/program-c/gate-ii-current-outcomes.v3.tsv"
+  ],
+  "inputs": {
+    "docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md": "sha256:2ff40cd64adc32c451fc46c40d59d2d03854d4a313092184f4a70b2a23003f33",
+    "qualification/program-c/gate-i-receipts.tsv": "sha256:2da5871e1ec37dbc39810c613c2bd09bfe1cf246218c349e81a8d8de52adf78a",
+    "qualification/program-c/i-04-license-inputs.v2.json": "sha256:ad06b5485058043017ed921018deeab0b9f83aeb143ca816462cf6c93a3cc65d",
+    "qualification/program-c/candidate-comparison.v1.json": "sha256:50ca4fb616b311c652d79d418978b862eca6426d4573adcd35645fd1c924d950",
+    "qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json": "sha256:9ed8f669b4f49a0b66da908f25c59706045c180c4bb7e53918396b9efeef2093",
+    "qualification/program-c/a-04-current-platform-scope.v1.json": "sha256:2a7a646eafeabcc2cc3595321dd2c32fc42da5ec1991dc1b7ee0446002139e68",
+    "qualification/program-c/a-04-darwin-arm64-build-reproducibility.v1.json": "sha256:33b5da0a2cad66ecdb39b439bd65629e8e5966a65a4d0b6ab1692e0a6a2b6828",
+    "qualification/program-c/a-07-boundary-accounting-contract.v1.json": "sha256:c1db3492683647493f1db0024b9df2cbf5059a27958a2da31fb49eec54c94264",
+    "qualification/program-c/a-08-instability-contract.v1.json": "sha256:dfb94e6ff3cde9432a81be706bb1d6aff9637e34a40935f4639d4162f785a0af",
+    "qualification/program-c/a-10-implementation-test-plan.v1.json": "sha256:9e74da97af92c6e5c83b9f18678dc8a1305ba7f62f14fd4b8f2815dc8d2c87a6",
+    "qualification/program-c/a-10-implementation-test-plan.v1.review.json": "sha256:b220dd2b205c35f41ca6abdd0643a7be5cb4382842c2dc1b5ffb9951a274500d",
+    "qualification/program-c/a-10-implementation-test-plan.v1.review.txt": "sha256:d82b6626f54bb8d7df25d6d86a5e2d2335ed701c067b9d200eef2f7b84756aae",
+    "qualification/program-c/i-08-neutrality-examples.v1.json": "sha256:465740e1726aab5cdaa28696fcb81d2ded844c610ab80f8ddbc305f005593043",
+    "qualification/program-c/gate-i-i-08-neutrality.receipt.txt": "sha256:cfecdd2b61ab92b6fcbbf8341dc5673b1e28df0bc5d4fdfd1193cbec620aa16b",
+    "qualification/program-c/gate-ii-current-outcomes.v3.tsv": "sha256:e74e09b069945644986224b66ef84083ebbd4e41c34e65d1f0c3f52c580c4e64",
+    "qualification/program-c/gate-ii-current-outcomes.v2.6935c05.receipt.json": "sha256:07c99d1175776a4cc3a236b0a5197e5296ffe4e92b3a1d4b2c8e8981bdb173ed",
+    "scripts/check-program-c-gate-ii.py": "sha256:bc489cb099abd71d57ef27a253e93db6f3f71babc8ff539f45fd8a7c6eb09943",
+    "scripts/test-program-c-gate-ii.py": "sha256:a3675ad6bb8e5346c8e8cf54a2ba803adb48f3db349e521394483d63656366ee"
+  },
+  "result": {
+    "stdout": "PROGRAM_C_GATE_II PASS=8 FAIL=1 BLOCKED=1 IMPLEMENTATION_DECISION_ALLOWED=false\n",
+    "stdout_sha256": "sha256:76b156c298a3ecac987820d91bd109e35e5cec053368c42074382e94e67fef3c",
+    "counts": {
+      "PASS": 8,
+      "FAIL": 1,
+      "BLOCKED": 1
+    },
+    "implementation_decision_allowed": false
+  },
+  "outcomes": {
+    "A-01": "PASS",
+    "A-02": "PASS",
+    "A-03": "BLOCKED",
+    "A-04": "PASS",
+    "A-05": "PASS",
+    "A-06": "FAIL",
+    "A-07": "PASS",
+    "A-08": "PASS",
+    "A-09": "PASS",
+    "A-10": "PASS"
+  },
+  "claim_ceiling": "This additive receipt records specification-complete A-07 and A-08 contracts, exact Darwin arm64 repeated-build evidence for A-04, and an independently reviewed but unexecuted A-10 test plan. A-03 remains BLOCKED and A-06 remains FAIL. It does not authorize implementation, production dependency adoption, public surfaces, deployment, or semantic boundary claims.",
+  "receipt_sha256": "sha256:76f6473900e41aae7ad6202316e63b659afbe0418954e07041888acb56ce8c3f"
+}
