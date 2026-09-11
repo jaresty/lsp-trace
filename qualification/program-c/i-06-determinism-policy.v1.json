@@ -1,0 +1,10 @@
+{
+ "schema_version":"lsp-trace.program-c-determinism-policy.v1","gate_id":"I-06","status":"policy only; no candidate replay has run",
+ "identity":{"required":["exact input digest","exact profile digest","exact profile version","candidate version or commit","parameters","seed","runtime identity","input order"]},
+ "schedule":{"repeats_per_seed":3,"permutations":1,"rule":"three repeats for each seed and one additional input-order permutation"},
+ "canonicalization":"Sort each community's node IDs ascending; represent each community by that full node-ID vector; sort communities by minimum node ID and then by the full vector; assign canonical labels in that order.",
+ "graph_semantics":"Preserve edge direction, occurrence multiplicity, and explicit weight in every replay and permutation.",
+ "comparison":{"same_declared_runtime_scope":"exact output byte equality is required","allowed_cross_runtime_scope":"logical equality of canonical communities and preserved graph semantics is required; byte equality is not claimed"},
+ "failure_policy":"Any divergence, missing identity, unsupported comparison, noncanonical label set, or incomplete run fails closed and yields no passing replay claim.",
+ "claim_ceiling":"This packet defines a deterministic replay question and mechanism only; it does not claim any candidate, seed, permutation, runtime, or output passed."
+}
