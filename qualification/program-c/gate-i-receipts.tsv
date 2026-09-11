@@ -1,7 +1,7 @@
 # gate_id	state	receipt	sha256
 I-01	PASS	qualification/program-c/gate-i-i-01-calls-v1.receipt.txt	sha256:a8f85578ff8e0417a48dee757a3d06f32101588d1a9b4e36a599441709495d73
 I-02	PASS	qualification/program-c/gate-i-i-02-deterministic-analysis.receipt.txt	sha256:e629849196a17acac577a0323c4abdbdaa8b08604c913a317a7021d658608fd9
-I-03	MISSING	-	-
+I-03	PASS	qualification/program-c/gate-i-i-03-candidate-inventory.receipt.txt	sha256:c29df171006a6cb499b2dc26a019133a20ee9c5364286c26d56d3f4734f562a7
 I-04	MISSING	-	-
 I-05	MISSING	-	-
 I-06	MISSING	-	-
