@@ -16,7 +16,9 @@ Basis: FR12 defers community diagnostics until the substrate and deterministic-a
 
 ## Gate I: admit the bounded investigation
 
-Set `INVESTIGATION_ADMITTED` only when every row is supported by an addressable, current receipt. Missing, stale, partial, waived foundational, or semantically invalid evidence is a failing row.
+Set `INVESTIGATION_ADMITTED` only when every row is supported by an addressable, current receipt. Missing, stale, partial, waived foundational, or semantically invalid evidence is a failing row. The machine-readable index is `qualification/program-c/gate-i-receipts.tsv`; it must contain exactly one row for each ID I-01 through I-08. A passing row names a repository-relative regular receipt file, its exact SHA-256 digest, and `PASS`. The receipt itself must declare the matching `gate_id`, `result: PASS`, and `current: true`. These declarations are reviewable evidence, not a substitute for semantic review of the receipt's authority and scope.
+
+The repository checker has two distinct modes. Its default mode validates the DEFERRED decision-package and receipt-index shape without treating intentionally missing receipts as a CI failure. `--admission` evaluates Gate I and exits unsuccessfully unless every indexed receipt is addressable, digest-matching, current, semantically well-formed, and passing. Checker success in default mode never sets `INVESTIGATION_ADMITTED`.
 
 | ID | Required receipt | Pass condition | Failure disposition |
 |---|---|---|---|
@@ -43,7 +45,7 @@ When Gate I passes, the investigation is limited to a decision spike with these 
 
 - **Questions:** candidate API fitness; license compatibility inputs; cross-platform build feasibility; deterministic replay; seed and label canonicalization; resource behavior; boundary-accounting definitions; repeated-seed instability definitions.
 - **Inputs:** already retained, authenticated graph and projection fixtures plus locally available candidate source/package metadata. No reacquisition and no network fallback.
-- **Candidate algorithms:** Infomap for directed-flow diagnostics and Leiden for an explicitly declared weighted projection. Adding another algorithm requires revising this package before work begins.
+- **Candidate algorithms and implementations:** the proposed primary is Gonum's native-Go Leiden implementation only after it appears in an exact tagged Gonum release. Gonum Louvain from that same release is the comparator. Infomap is optional external-reference material for directed-flow diagnostics only; it is not a linked or production dependency and requires separate provisioning and license approval before any admitted execution. `vtraag/leidenalg` is rejected because its Python/C++/igraph packaging and GPL-3.0-or-later boundary conflict with the preferred native-Go, permissively licensed dependency profile. No unreleased Gonum commit is admitted. Changing these roles or adding an algorithm requires revising this package before work begins.
 - **Fixture cap:** at most six retained fixtures covering directed, weighted, disconnected, singleton, high-degree-hub, and adversarial-order cases; one fixture may cover multiple categories.
 - **Execution cap:** at most three deterministic runs per seed per candidate per fixture, plus one input-order permutation per fixture. Larger statistical studies require a new authorization.
 - **Resource cap:** each run must declare wall-clock and memory ceilings before execution; ceiling exhaustion is typed failure/incomplete, never silent sampling, fallback, approximation, or algorithm substitution.
@@ -90,12 +92,14 @@ The repository checker for this package must emit assertion-specific results for
 1. `ASSERT_PROGRAM_C_REMAINS_DEFERRED`: passes only while the status is `DEFERRED` and the package says it does not authorize implementation.
 2. `ASSERT_DECISION_PACKAGE_SCOPE`: passes only while the package authorizes bounded investigation and a later decision, never implementation or public delivery surfaces.
 3. `ASSERT_INVESTIGATION_GATE_EXACT`: passes only while Gate I contains exactly I-01 through I-08 and uses `PASS(I-01..I-08)`.
-3. `ASSERT_BOUNDED_INVESTIGATION`: passes only while questions, inputs, fixture/execution/resource caps, outputs, stopping conditions, and excluded activities are present.
-4. `ASSERT_IMPLEMENTATION_GATE_EXACT`: passes only while Gate II contains exactly A-01 through A-10, depends on `INVESTIGATION_ADMITTED`, and states that passing permits only a later decision.
-5. `ASSERT_BOUNDARY_NEUTRALITY`: passes only while crossings are structural observations and business-boundary inference remains prohibited.
-6. `ASSERT_EXCLUDED_EXECUTION`: passes only while D01, deployment, network, installation, product work, and full-suite execution remain outside authorization.
+4. `ASSERT_GATE_I_RECEIPT_INDEX`: passes only while the receipt index contains exactly I-01 through I-08 with no duplicate or extra rows and each row uses the declared state/path/digest shape.
+5. `ASSERT_GATE_I_RECEIPT_I_01` through `ASSERT_GATE_I_RECEIPT_I_08`: admission-mode assertions pass only when the corresponding indexed receipt is addressable, digest-matching, current, semantically well-formed, and passing.
+6. `ASSERT_BOUNDED_INVESTIGATION`: passes only while questions, inputs, candidate roles, fixture/execution/resource caps, outputs, stopping conditions, and excluded activities are present.
+7. `ASSERT_IMPLEMENTATION_GATE_EXACT`: passes only while Gate II contains exactly A-01 through A-10, depends on `INVESTIGATION_ADMITTED`, and states that passing permits only a later decision.
+8. `ASSERT_BOUNDARY_NEUTRALITY`: passes only while crossings are structural observations and business-boundary inference remains prohibited.
+9. `ASSERT_EXCLUDED_EXECUTION`: passes only while D01, deployment, network, installation, product work, and full-suite execution remain outside authorization.
 
-Any failure preserves `DEFERRED`; checker success proves only package shape, not that an admission receipt has passed.
+Any failure preserves `DEFERRED`. Default checker success proves only package and index shape, not that an admission receipt has passed; only a successful explicit `--admission` evaluation may support `INVESTIGATION_ADMITTED`.
 
 ## Decision outcomes
 
