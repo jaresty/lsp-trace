@@ -1,0 +1,10 @@
+{
+  "schema_version":"lsp-trace.program-c-license-inputs.v1","gate_id":"I-04",
+  "policy":"Descriptive license and linkage inputs only; no legal compatibility conclusion is made.",
+  "entries":[
+    {"candidate":"Gonum v0.17.0","license":"BSD-3-Clause","mode":"intended native-Go linked module","status":"preferred input","sources":["https://github.com/gonum/gonum/blob/v0.17.0/LICENSE","https://github.com/gonum/gonum/tree/v0.17.0"]},
+    {"candidate":"Infomap v2.15.1","license":"GPL-3.0-or-later (descriptive input from tagged LICENSE_GPLv3.txt)","mode":"optional externally provisioned CLI/reference only; never linked or bundled","status":"requires separate provisioning and authorized license review","sources":["https://github.com/mapequation/infomap/blob/v2.15.1/LICENSE_GPLv3.txt","https://github.com/mapequation/infomap/tree/v2.15.1"]},
+    {"candidate":"vtraag/leidenalg 0.12.0","license":"GPL-3.0-or-later (pyproject license and LICENSE.txt/LICENSE descriptive inputs)","mode":"compiled Python C++ extension _c_leiden linked with libleidenalg and igraph","status":"rejected","sources":["https://github.com/vtraag/leidenalg/blob/0.12.0/pyproject.toml","https://github.com/vtraag/leidenalg/blob/0.12.0/LICENSE.txt","https://github.com/vtraag/leidenalg/tree/0.12.0/src"]}
+  ],
+  "claim_ceiling":"Metadata and intended distribution/linkage modes are recorded for later authorized review. This packet makes no legal advice, approval, compatibility, obligation, build, or admission conclusion."
+}

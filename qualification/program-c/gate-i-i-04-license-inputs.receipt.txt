@@ -1,0 +1,17 @@
+gate_id: I-04
+result: PASS
+current: true
+repository_revision: 76864253d756a977c0ee162953dc3a028fd77c0f
+command: python3 scripts/check-program-c-i-04.py
+policy_matrix: qualification/program-c/i-04-license-inputs.v1.json
+packet_sha256: sha256:d54a352f9c1b95c62776bd4b8fb3eee2022073ec88413182e04af1b716f78acd
+tool: python3 scripts/check-program-c-i-04.py at repository revision 76864253d756a977c0ee162953dc3a028fd77c0f
+run_id: program-c-i-04-license-7686425
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/i-04-license-inputs.v1.json; scripts/check-program-c-i-04.py
+input_sha256: sha256:640b414e3d01e2b14646f4b56f91b3215419d480966fad47cc4f40ca37bd666e
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:4f94d751cbb70e945b03ef51c6510dba973caf4cf1683428115273f2c5be20f9
+license_inventory: PASS=3 FAIL=0 BLOCKED=0
+outcomes: PASS=6 FAIL=0 BLOCKED=0
+claim_ceiling: I-04 records descriptive license and linkage inputs only for later authorized review; it states no legal compatibility conclusion and qualifies no candidate execution or Program C admission.
