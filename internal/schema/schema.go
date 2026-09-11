@@ -32,6 +32,9 @@ const (
 	FamilyBoundedAnalysisV2        = "bounded-retained-analysis-v2"
 	FamilyBoundedMetricsV2         = "bounded-retained-metrics-v2"
 	FamilyBoundedRankingV2         = "bounded-retained-ranking-v2"
+	FamilyCommunity                = "community"
+	FamilyCommunityBoundary        = "community-boundary"
+	FamilyCommunityInstability     = "community-instability"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -56,6 +59,9 @@ var familyVersions = map[string]map[string]string{
 	FamilyBoundedAnalysisV2:        {"v2": "lsp-trace.local-normative-analysis.v1", "local-v1": "lsp-trace.local-normative-analysis.v1"},
 	FamilyBoundedMetricsV2:         {"v2": "lsp-trace.local-normative-metrics.v1", "local-v1": "lsp-trace.local-normative-metrics.v1"},
 	FamilyBoundedRankingV2:         {"v2": "lsp-trace.local-normative-ranking.v1", "local-v1": "lsp-trace.local-normative-ranking.v1"},
+	FamilyCommunity:                {"v1": "lsp-trace.community.v1"},
+	FamilyCommunityBoundary:        {"v1": "lsp-trace.community-boundary.v1"},
+	FamilyCommunityInstability:     {"v1": "lsp-trace.community-instability.v1"},
 }
 
 var versionFields = map[string]string{
@@ -78,6 +84,9 @@ var versionFields = map[string]string{
 	FamilyBoundedAnalysisV2:        "Version",
 	FamilyBoundedMetricsV2:         "Version",
 	FamilyBoundedRankingV2:         "Version",
+	FamilyCommunity:                "schema_version",
+	FamilyCommunityBoundary:        "schema_version",
+	FamilyCommunityInstability:     "schema_version",
 }
 
 // RegisteredFamilies returns a detached, lexically ordered snapshot of the

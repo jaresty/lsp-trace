@@ -106,11 +106,11 @@ func TestCoreArchiveBoundaryRejectsProviderAsset(t *testing.T) {
 		t.Fatal(err)
 	}
 	guard := filepath.Join(root, "scripts", "assert-core-archive-boundary.sh")
-	clean := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "lsp-trace-mcp"))
+	clean := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "lsp-trace-mcp", "LICENSE", "THIRD_PARTY_NOTICES"))
 	if output, err := clean.CombinedOutput(); err != nil || !strings.Contains(string(output), "PASS "+assertion) {
 		t.Fatalf("%s A-pass: err=%v output=%s", assertion, err, output)
 	}
-	injected := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "providers/ember-glint/bin/ember-glint.mjs"))
+	injected := exec.Command(guard, writeCoreArchive(t, "lsp-trace", "LICENSE", "THIRD_PARTY_NOTICES", "providers/ember-glint/bin/ember-glint.mjs"))
 	if output, err := injected.CombinedOutput(); err == nil || !strings.Contains(string(output), "FAIL "+assertion) {
 		t.Fatalf("%s A-fail: err=%v output=%s", assertion, err, output)
 	}

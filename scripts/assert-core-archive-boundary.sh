@@ -14,5 +14,11 @@ for archive in "$@"; do
     printf 'FAIL %s: provider asset crossed core archive boundary: %s\n' "$assertion" "$archive" >&2
     exit 1
   fi
+  for notice in LICENSE THIRD_PARTY_NOTICES; do
+    if ! printf '%s\n' "$entries" | grep -E "(^|/)$notice$" >/dev/null; then
+      printf 'FAIL ASSERT_CORE_ARCHIVES_INCLUDE_MANDATORY_NOTICES: missing %s in %s\n' "$notice" "$archive" >&2
+      exit 1
+    fi
+  done
 done
 printf 'PASS %s\n' "$assertion"

@@ -27,7 +27,7 @@ assert_contains() {
   id=$1
   path=$2
   text=$3
-  if [ -f "$root/$path" ] && grep -F "$text" "$root/$path" >/dev/null; then
+  if [ -f "$root/$path" ] && grep -F -- "$text" "$root/$path" >/dev/null; then
     printf 'PASS %s: %s contains %s\n' "$id" "$path" "$text"
   else
     printf 'FAIL %s: %s must contain %s\n' "$id" "$path" "$text"
@@ -97,6 +97,15 @@ assert_file R-SEMANTICS docs/SEMANTICS.md
 assert_file R-SCHEMA docs/SCHEMA_POLICY.md
 assert_file R-RELEASE docs/RELEASING.md
 assert_file R-PLATFORM .goreleaser.yaml
+assert_file ASSERT_FOUNDATION_ROOT_MIT_PRESERVED LICENSE
+assert_file ASSERT_FOUNDATION_GONUM_NOTICE THIRD_PARTY_NOTICES
+assert_contains ASSERT_FOUNDATION_GONUM_NO_ENDORSEMENT THIRD_PARTY_NOTICES 'Neither the name of the Gonum project'
+assert_contains ASSERT_FOUNDATION_GONUM_DISCLAIMER THIRD_PARTY_NOTICES 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"'
+assert_contains ASSERT_FOUNDATION_ARCHIVE_LICENSE .goreleaser.yaml '- LICENSE'
+assert_contains ASSERT_FOUNDATION_ARCHIVE_NOTICES .goreleaser.yaml '- THIRD_PARTY_NOTICES'
+for family in community community-boundary community-instability; do
+  assert_file "ASSERT_FOUNDATION_SCHEMA-$family" "internal/schema/schemas/lsp-trace.$family.v1.schema.json"
+done
 for version in v1 v2 v3; do
   assert_file "R-SCHEMA-$version" "internal/schema/schemas/lsp-trace.graph.$version.schema.json"
 done
