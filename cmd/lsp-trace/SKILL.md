@@ -174,6 +174,52 @@ Use each seed's own stored result, exact `seed_memberships`, reached IDs, and na
 
 Each reversible technical hypothesis must record a provisional bounded claim, exact supporting record IDs, known missing or failed evidence, competing interpretations, contrary evidence or an observation that would reject it, and the action for withdrawing or splitting it. Shared callers, overlap, labels, and mechanical counts alone do not merge hypotheses.
 
+### Draft external provisional candidate records
+
+Keep inventory records outside native graph and inspection artifacts. A useful external record includes:
+
+```yaml
+candidate_id: stable-external-id
+revision: 1
+status: PROVISIONAL | SPLIT | MERGED | EXCLUDED | UNRESOLVED
+working_label: non-canonical label
+seed_labels: []
+evidence:
+  nodes: []
+  call_relations: []
+  dispatch_relationships: []
+  sibling_candidates: []
+  diagnostic_correlations: []
+missing_or_failed_evidence: []
+competing_interpretations: []
+contrary_evidence: []
+rejection_condition:
+authority_ceiling:
+predecessors: []
+inventory_state_delta:
+revisit_condition:
+```
+
+The working label is not canonical feature identity. Keep evidence namespaces separate and reference exact native record IDs without copying and rewriting native evidence. Preserve `UNKNOWN` explicitly. Every disposition other than `UNRESOLVED` needs a contrary observation or falsifier. Splits and merges preserve predecessor IDs, and every revision records its finite inventory-state delta.
+
+### Run an independent challenge
+
+Have a reviewer or a separate review pass challenge the proposed grouping without simply inheriting it. Independence describes the review relationship, not a required tool, prompting framework, person, agent, or process architecture. Check for unsupported merges or splits; transitive paths treated as direct support; union-graph evidence attributed to one seed; dispatch or sibling nominations treated as calls; successful bounded traversal treated as source completeness; `UNKNOWN` treated as absence; technical structure promoted into feature identity, purpose, or value; missing competing interpretations; and lost correction lineage. Preserve supported disagreement rather than forcing consensus.
+
+### Review coverage gaps
+
+Review failed seeds, successful seeds without membership, seed-accounting mismatches, census symbols absent from every candidate, frontier and terminal nodes, active node/depth/request/time limits, unsupported server capabilities, uninvestigated dispatch or sibling nominations, isolated evidence regions, and relationships that Call Hierarchy may omit such as dynamic behavior, generated code, reflection, templates, configuration, and framework routing.
+
+Classify each gap as `INVESTIGATE`, `ACCEPT_BOUNDARY`, `EXTERNAL_ADJUDICATION`, or `UNRESOLVED`. A caller-owned census of routes, UI surfaces, commands, jobs, APIs, configuration, templates, or documented workflows may reveal investigation leads. It is not call evidence: unmatched entries do not prove missing features, and matching names do not establish identity.
+
+### Iterate under explicit bounds
+
+Acquire more evidence only for a named unresolved question with a proposed seed or evidence method, expected discriminating result, explicit resource bounds, authority ceiling, and stop condition. Retain each round rather than silently replacing earlier evidence.
+
+A review may stop as `BOUNDED_REVIEW_DRY` after two consecutive rounds produce no new admissible evidence reference, changed candidate disposition, narrower unresolved alternative, or justified additional acquisition. This is a bounded workflow terminal, never a claim of complete feature or source coverage.
+
+For human review, prefer a one-row-per-candidate summary such as `ID | Working label | Status | Seeds | Evidence | Alternatives | Gaps | Revision`, linked to a detailed appendix containing exact evidence references, failures, boundaries, competing interpretations, and correction lineage. Raw inspection JSON remains evidence input rather than the primary review presentation.
+
 Stop before proposition admission, merge/split adjudication, canonical feature identity or naming, user purpose, production use, value, priority, lifecycle, coverage, or acceptance. Those remain external even when several technical signals agree.
 
 Important options:
