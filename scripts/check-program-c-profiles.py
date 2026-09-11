@@ -15,6 +15,18 @@ EXPECTED = {
 }
 STATUSES = {"MISSING", "PASS", "FAIL", "BLOCKED", "UNSUPPORTED", "INCOMPLETE"}
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+REVISION = re.compile(r"[0-9a-f]{40}\Z")
+SCHEMA = "lsp-trace.program-c-profile-qualification-receipt.v1"
+LEGACY_CALLS_RECEIPTS = {
+    "sha256:9f09091e4cd5510fe80dc0edcb4111ef640c064d6ed1f0999421a35fdfe9bd2c",
+    "sha256:36ff70993224c2c5a4534424896ace7462c3eed140d0b8903c255d6681853890",
+}
+STRICT_KEYS = {
+    "schema_version", "result", "current", "repository_revision", "selection", "profile",
+    "coordinate", "policy_matrix_identity", "tool_identity", "exact_command", "command_bindings",
+    "run_identity", "input_sha256", "result_sha256", "relation_evidence", "claim_ceiling",
+}
+PLACEHOLDER = re.compile(r"^\$([A-Z][A-Z0-9_]*)$")
 
 
 def canonical_digest(profile):
@@ -39,6 +51,118 @@ def regular_receipt(root, value, digest):
     return actual == digest
 
 
+def exact_keys(value, keys):
+    return isinstance(value, dict) and set(value) == set(keys)
+
+
+def nonempty_strings(value):
+    return isinstance(value, dict) and bool(value) and all(isinstance(k, str) and k and isinstance(v, str) and v for k, v in value.items())
+
+
+def receipt_error(receipt, row, profile, profiles_path, matrix_path, root):
+    profile_name, language, framework, provider, version, required, status, _, file_digest = row
+    if receipt.get("schema_version") != SCHEMA:
+        return "schema-version"
+    if receipt.get("result") != "PASS" or receipt.get("current") is not True:
+        return "result-or-current"
+    revision = receipt.get("repository_revision")
+    tool = receipt.get("tool_identity")
+    if not REVISION.fullmatch(revision or "") or not exact_keys(tool, {"name", "revision", "version_output"}):
+        return "repository-or-tool-identity"
+    if tool["name"] != "lsp-trace" or tool["revision"] != revision or revision not in tool["version_output"]:
+        return "repository-revision-mismatch"
+    coordinate = receipt.get("coordinate")
+    coordinate_keys = {"language", "framework", "provider", "provider_version", "observed_provider_identity", "observed_provider_version"}
+    if not exact_keys(coordinate, coordinate_keys):
+        return "coordinate-shape"
+    if [coordinate[k] for k in ("language", "framework", "provider", "provider_version")] != [language, framework, provider, version]:
+        return "coordinate-mismatch"
+    if coordinate["observed_provider_identity"] != provider or coordinate["observed_provider_version"] != version:
+        return "observed-provider-identity"
+    projected = receipt.get("profile")
+    relations = [item["kind"] for item in profile["relations"]]
+    if not exact_keys(projected, {"name", "logical_digest", "relations"}):
+        return "profile-shape"
+    if projected != {"name": profile_name, "logical_digest": profile["logical_digest"], "relations": relations}:
+        return "profile-mismatch"
+    policy = receipt.get("policy_matrix_identity")
+    policy_keys = {"profile_manifest", "profile_manifest_sha256", "qualification_matrix", "qualification_matrix_prepublication_sha256", "matrix_row"}
+    if not exact_keys(policy, policy_keys):
+        return "policy-binding-shape"
+    try:
+        expected_profiles = profiles_path.resolve().relative_to(root).as_posix()
+        expected_matrix = matrix_path.resolve().relative_to(root).as_posix()
+    except ValueError:
+        return "policy-path-outside-root"
+    manifest_digest = "sha256:" + hashlib.sha256(profiles_path.read_bytes()).hexdigest()
+    if policy["profile_manifest"] != expected_profiles or policy["profile_manifest_sha256"] != manifest_digest:
+        return "manifest-binding"
+    if policy["qualification_matrix"] != expected_matrix or policy["matrix_row"] != row[:7] or not DIGEST.fullmatch(policy["qualification_matrix_prepublication_sha256"] or ""):
+        return "matrix-binding"
+    selection = receipt.get("selection")
+    if not exact_keys(selection, {"status", "supersedes"}) or selection["status"] != "CURRENT" or (selection["supersedes"] is not None and not DIGEST.fullmatch(selection["supersedes"] or "")):
+        return "stale-or-superseded"
+    command = receipt.get("exact_command")
+    bindings = receipt.get("command_bindings")
+    if not isinstance(command, list) or len(command) < 2 or not all(isinstance(v, str) and v for v in command):
+        return "exact-command"
+    if not nonempty_strings(bindings):
+        return "command-bindings"
+    placeholders = {match.group(1) for value in command if (match := PLACEHOLDER.fullmatch(value))}
+    if placeholders != set(bindings):
+        return "resolved-bindings"
+    run = receipt.get("run_identity")
+    if not nonempty_strings(run) or len(run) < 2:
+        return "run-generation-identity"
+    inputs = receipt.get("input_sha256")
+    if not isinstance(inputs, dict) or not inputs or not all(isinstance(k, str) and k and DIGEST.fullmatch(v or "") for k, v in inputs.items()):
+        return "input-digests"
+    if inputs.get("qualification_matrix_prepublication") != policy["qualification_matrix_prepublication_sha256"]:
+        return "matrix-input-digest"
+    if not DIGEST.fullmatch(receipt.get("result_sha256") or ""):
+        return "result-digest"
+    evidence = receipt.get("relation_evidence")
+    if not isinstance(evidence, list) or [item.get("relation") for item in evidence if isinstance(item, dict)] != relations:
+        return "relation-evidence-order"
+    evidence_keys = {"relation", "status", "count", "custody", "replay"}
+    for item in evidence:
+        if not exact_keys(item, evidence_keys) or item["status"] != "PASS" or not isinstance(item["count"], int) or item["count"] < 1:
+            return "blocked-or-empty-relation"
+        expected_custody = "SERVER_REPORTED" if item["relation"] == "CALLS" else "PROVIDER_PROVED"
+        if item["custody"] != expected_custody or item["replay"] != "EXACT_BYTES":
+            return "relation-custody-or-replay"
+    ceiling = receipt.get("claim_ceiling")
+    expected_ceiling = {"scope": "EXACT_COORDINATE_AND_INPUTS_ONLY", "whole_source_complete": False,
+                        "source_authenticated": False, "cross_coordinate_transfer": False}
+    if ceiling != expected_ceiling:
+        return "claim-ceiling"
+    if set(receipt) != STRICT_KEYS:
+        return "receipt-shape"
+    return None
+
+
+def legacy_receipt_error(receipt, row, profile):
+    profile_name, language, framework, provider, version, _, _, _, _ = row
+    relations = [item["kind"] for item in profile["relations"]]
+    if receipt.get("schema_version") != SCHEMA or receipt.get("result") != "PASS" or receipt.get("current") is not True:
+        return "legacy-result"
+    if receipt.get("repository_revision") != receipt.get("tool_identity", {}).get("revision"):
+        return "legacy-revision"
+    if receipt.get("profile") != {"name": profile_name, "logical_digest": profile["logical_digest"], "relations": relations}:
+        return "legacy-profile"
+    coordinate = receipt.get("coordinate", {})
+    if [coordinate.get(k) for k in ("language", "framework", "provider", "provider_version")] != [language, framework, provider, version]:
+        return "legacy-coordinate"
+    if not receipt.get("exact_command") or not receipt.get("input_sha256") or not DIGEST.fullmatch(receipt.get("result_sha256", "")):
+        return "legacy-command-or-digests"
+    evidence = receipt.get("evidence", {})
+    if evidence.get("v5_native_verification") != "PASS" or evidence.get("deterministic_replay") != "EXACT_BYTES":
+        return "legacy-evidence"
+    if not receipt.get("claim_ceiling") and not receipt.get("authority_ceiling"):
+        return "legacy-claim-ceiling"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--profiles", required=True)
@@ -47,9 +171,11 @@ def main():
     parser.add_argument("--require-profile", action="append", default=[])
     args = parser.parse_args()
     root = Path(args.root).resolve()
+    profiles_path = Path(args.profiles)
+    matrix_path = Path(args.matrix)
 
     try:
-        artifact = json.loads(Path(args.profiles).read_text())
+        artifact = json.loads(profiles_path.read_text())
     except (OSError, json.JSONDecodeError) as exc:
         fail("ASSERT_PROGRAM_C_PROFILE_MANIFEST", f"unreadable:{exc}")
 
@@ -96,12 +222,13 @@ def main():
         fail("ASSERT_PROGRAM_C_MIXED_LANGUAGE_POLICY", "missing-fail-closed-rule")
 
     try:
-        with Path(args.matrix).open(newline="") as stream:
+        with matrix_path.open(newline="") as stream:
             rows = [row for row in csv.reader((line for line in stream if not line.startswith("#")), delimiter="\t") if row]
     except OSError as exc:
         fail("ASSERT_PROGRAM_C_PROFILE_MATRIX", f"unreadable:{exc}")
 
     seen = set()
+    legacy_compatibility = 0
     status_by_profile = {name: [] for name in EXPECTED}
     for row in rows:
         if len(row) != 9:
@@ -119,8 +246,21 @@ def main():
             if receipt != "-" or digest != "-":
                 fail("ASSERT_PROGRAM_C_PROFILE_MATRIX", "missing-row-has-receipt")
         else:
+            if status != "PASS":
+                fail("ASSERT_PROGRAM_C_PROFILE_RECEIPT", "non-pass-row-selects-receipt")
             if not DIGEST.fullmatch(digest) or not regular_receipt(root, receipt, digest):
                 fail("ASSERT_PROGRAM_C_PROFILE_MATRIX", "unverified-receipt")
+            try:
+                document = json.loads((root / receipt).read_text())
+            except (OSError, json.JSONDecodeError) as exc:
+                fail("ASSERT_PROGRAM_C_PROFILE_RECEIPT", f"unreadable:{exc}")
+            if digest in LEGACY_CALLS_RECEIPTS:
+                reason = legacy_receipt_error(document, row, by_name[profile])
+                legacy_compatibility += 1
+            else:
+                reason = receipt_error(document, row, by_name[profile], profiles_path, matrix_path, root)
+            if reason:
+                fail("ASSERT_PROGRAM_C_PROFILE_RECEIPT", reason)
         status_by_profile[profile].append((required, status))
 
     for name, statuses in status_by_profile.items():
@@ -134,6 +274,7 @@ def main():
     print("ASSERT_PROGRAM_C_ALL_QUALIFIED result=PASS")
     print("ASSERT_PROGRAM_C_MIXED_LANGUAGE_POLICY result=PASS")
     print(f"ASSERT_PROGRAM_C_PROFILE_MATRIX result=PASS tuples={len(rows)}")
+    print(f"ASSERT_PROGRAM_C_PROFILE_RECEIPT result=PASS legacy_compatibility={legacy_compatibility}")
 
     def require(name):
         if name in EXPECTED:
