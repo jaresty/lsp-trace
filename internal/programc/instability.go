@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"reflect"
 	"sort"
 
 	"lsp-trace/internal/schema"
@@ -50,15 +51,13 @@ func InstabilityPolicyDigest() string {
 }
 
 type InstabilityIdentity struct {
-	AdmittedGraphSHA256          string `json:"admitted_graph_sha256"`
-	ProjectionSHA256             string `json:"projection_sha256"`
-	ProjectionPolicyID           string `json:"projection_policy_id"`
-	LeftCommunityArtifactSHA256  string `json:"left_community_artifact_sha256"`
-	RightCommunityArtifactSHA256 string `json:"right_community_artifact_sha256"`
-	AlgorithmName                string `json:"algorithm_name"`
-	AlgorithmVersion             string `json:"algorithm_version"`
-	ParametersCanonicalSHA256    string `json:"parameters_canonical_sha256"`
-	ResourcePolicySHA256         string `json:"resource_policy_sha256"`
+	AdmittedGraphSHA256       string `json:"admitted_graph_sha256"`
+	ProjectionSHA256          string `json:"projection_sha256"`
+	ProjectionPolicyID        string `json:"projection_policy_id"`
+	AlgorithmName             string `json:"algorithm_name"`
+	AlgorithmVersion          string `json:"algorithm_version"`
+	ParametersCanonicalSHA256 string `json:"parameters_canonical_sha256"`
+	ResourcePolicySHA256      string `json:"resource_policy_sha256"`
 }
 
 type InstabilityThresholds struct {
@@ -100,6 +99,8 @@ type InstabilityAccounting struct {
 type InstabilityPair struct {
 	LeftRunID                             string  `json:"left_run_id"`
 	RightRunID                            string  `json:"right_run_id"`
+	LeftCommunityArtifactSHA256           string  `json:"left_community_artifact_sha256,omitempty"`
+	RightCommunityArtifactSHA256          string  `json:"right_community_artifact_sha256,omitempty"`
 	Outcome                               string  `json:"outcome"`
 	NodeReassignmentNumerator             int     `json:"node_reassignment_numerator"`
 	NodeReassignmentDenominator           int     `json:"node_reassignment_denominator"`
@@ -212,6 +213,7 @@ func validateInstabilityRequest(r InstabilityRequest) error {
 	}
 	ids := map[string]bool{}
 	counts := map[uint64]int{}
+	var campaignSource *SourceBinding
 	for _, run := range r.Runs {
 		if run.RunID == "" || ids[run.RunID] {
 			return fmt.Errorf("invalid run id")
@@ -231,6 +233,15 @@ func validateInstabilityRequest(r InstabilityRequest) error {
 			if err := validateAcceptedRun(run, r.Identity); err != nil {
 				return fmt.Errorf("run %s: %w", run.RunID, err)
 			}
+			if !reflect.DeepEqual(run.Community.Source, run.Community.Projection.Source) {
+				return fmt.Errorf("run %s: outcome/projection source binding mismatch", run.RunID)
+			}
+			if campaignSource == nil {
+				source := run.Community.Source
+				campaignSource = &source
+			} else if !reflect.DeepEqual(*campaignSource, run.Community.Source) {
+				return fmt.Errorf("run %s: cross-run source binding mismatch", run.RunID)
+			}
 		}
 	}
 	for s := range seeds {
@@ -243,6 +254,13 @@ func validateInstabilityRequest(r InstabilityRequest) error {
 
 func validateAcceptedRun(run InstabilityRun, id InstabilityIdentity) error {
 	o := run.Community
+	recomputed, failure := Compute(o.Source.InputBytes(), run.Seed)
+	if failure != nil {
+		return fmt.Errorf("source input recomputation: %w", failure)
+	}
+	if !reflect.DeepEqual(recomputed, o) {
+		return fmt.Errorf("source input semantic recomputation mismatch")
+	}
 	if o.Outcome != "COMPLETE" && o.Outcome != "EMPTY" {
 		return fmt.Errorf("community outcome not complete")
 	}
@@ -260,10 +278,6 @@ func validateAcceptedRun(run InstabilityRun, id InstabilityIdentity) error {
 	}
 	if err := validateCommunityArtifact(run.CommunityArtifact, o, id); err != nil {
 		return err
-	}
-	digest := rawSHA(run.CommunityArtifact)
-	if digest != id.LeftCommunityArtifactSHA256 && digest != id.RightCommunityArtifactSHA256 {
-		return fmt.Errorf("community artifact digest is not comparison-bound")
 	}
 	if len(run.BoundaryArtifact) == 0 {
 		return fmt.Errorf("missing boundary artifact")
@@ -340,7 +354,7 @@ type matchedPair struct {
 }
 
 func comparePartitions(l, r InstabilityRun) (InstabilityPair, error) {
-	p := InstabilityPair{LeftRunID: l.RunID, RightRunID: r.RunID}
+	p := InstabilityPair{LeftRunID: l.RunID, RightRunID: r.RunID, LeftCommunityArtifactSHA256: rawSHA(l.CommunityArtifact), RightCommunityArtifactSHA256: rawSHA(r.CommunityArtifact)}
 	pairs, err := maximumMatching(l.Community.Communities, r.Community.Communities)
 	if err != nil {
 		return p, err
@@ -374,7 +388,7 @@ func comparePartitions(l, r InstabilityRun) (InstabilityPair, error) {
 	}
 	p.UnmatchedCommunityNumerator = unmatched
 	p.UnmatchedCommunityDenominator = len(l.Community.Communities) + len(r.Community.Communities)
-	p.NodeReassignmentNumerator, p.NodeReassignmentDenominator = nodeReassignment(l.Community.Communities, r.Community.Communities)
+	p.NodeReassignmentNumerator, p.NodeReassignmentDenominator = nodeReassignment(pairs)
 	p.VariationOfInformationBits, p.VariationOfInformationNodeDenominator = variationInformation(l.Community.Communities, r.Community.Communities)
 	p.Outcome = "STABLE"
 	if rate(p.NodeReassignmentNumerator, p.NodeReassignmentDenominator) > exactInstabilityThresholds.NodeReassignmentRateMax || rate(p.UnmatchedCommunityNumerator, p.UnmatchedCommunityDenominator) > exactInstabilityThresholds.UnmatchedCommunityRateMax || p.VariationOfInformationBits > exactInstabilityThresholds.VariationOfInformationBitsMax || p.PairwiseJaccardMinimum < exactInstabilityThresholds.PairwiseJaccardMinimumMin {
@@ -537,24 +551,25 @@ func unionNodes(a, b map[string][]string) []string {
 	sort.Strings(v)
 	return v
 }
-func nodeReassignment(a, b []Community) (int, int) {
-	am, bm := communityMap(a), communityMap(b)
-	nodes := unionNodes(am, bm)
+func nodeReassignment(pairs []matchedPair) (int, int) {
+	type matchedSets struct{ left, right []string }
+	byNode := map[string]matchedSets{}
+	for _, pair := range pairs {
+		sets := matchedSets{left: pair.l, right: pair.r}
+		for _, id := range pair.l {
+			byNode[id] = sets
+		}
+		for _, id := range pair.r {
+			byNode[id] = sets
+		}
+	}
 	n := 0
-	for _, id := range nodes {
-		x, ok := am[id]
-		if !ok {
-			x = []string{id}
-		}
-		y, ok := bm[id]
-		if !ok {
-			y = []string{id}
-		}
-		if compareStrings(x, y) != 0 {
+	for _, sets := range byNode {
+		if compareStrings(sets.left, sets.right) != 0 {
 			n++
 		}
 	}
-	return n, len(nodes)
+	return n, len(byNode)
 }
 func variationInformation(a, b []Community) (float64, int) {
 	am, bm := communityMap(a), communityMap(b)
