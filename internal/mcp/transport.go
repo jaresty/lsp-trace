@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -363,7 +364,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if compact {
 			duration := uint64(time.Since(started) / time.Millisecond)
 			successEnvelope.EnvelopeSchemaID = compactEnvelopeSchemaID
-			successEnvelope.Summary = compactSummary(opResult.Artifact)
+			summary := compactSummary(opResult.Artifact)
+			summary["full_output"] = map[string]any{"delivery": "publication_receipt", "output_selector": selector}
+			successEnvelope.Summary = summary
 			successEnvelope.DurationMS = &duration
 			successEnvelope.RequestAccounting = map[string]any{"request_bytes": uint64(len(opInput)), "response_bytes": byteLength}
 			successEnvelope.Progress = "completed"
@@ -511,7 +514,48 @@ func compactSummary(artifact []byte) map[string]any {
 			out[key+"_count"] = len(v)
 		}
 	}
+	if diagnostics, ok := value["diagnostics"].([]any); ok && len(diagnostics) > 0 {
+		out["diagnostic_summary"] = compactDiagnosticSummary(diagnostics)
+	}
 	return out
+}
+
+func compactDiagnosticSummary(diagnostics []any) map[string]any {
+	const maxExamples = 3
+	type example struct {
+		Phase    string `json:"phase"`
+		Method   string `json:"method,omitempty"`
+		Category string `json:"category,omitempty"`
+		Count    int    `json:"count"`
+	}
+	grouped := map[string]example{}
+	for _, raw := range diagnostics {
+		value, _ := raw.(map[string]any)
+		phase, _ := value["phase"].(string)
+		method, _ := value["method"].(string)
+		category, _ := value["category"].(string)
+		key := phase + "\x00" + method + "\x00" + category
+		item := grouped[key]
+		item.Phase, item.Method, item.Category, item.Count = phase, method, category, item.Count+1
+		grouped[key] = item
+	}
+	keys := make([]string, 0, len(grouped))
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	retained := len(keys)
+	if retained > maxExamples {
+		retained = maxExamples
+	}
+	examples := make([]example, 0, retained)
+	for _, key := range keys[:retained] {
+		examples = append(examples, grouped[key])
+	}
+	return map[string]any{
+		"total_count": len(diagnostics), "distinct_count": len(keys), "retained_count": retained,
+		"repeated_count": len(diagnostics) - len(keys), "omitted_count": len(keys) - retained, "examples": examples,
+	}
 }
 
 func (s *Server) nextRequestID() string {

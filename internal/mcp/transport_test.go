@@ -155,7 +155,7 @@ func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T)
 	for _, assertion := range []string{compat, custody, summary, accounting, progress, cardinality} {
 		t.Log("ASSERTION: " + assertion)
 	}
-	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{"traversal_complete":true}}`)
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[{"phase":"prepare","method":"m1","category":"UNRESOLVED_CALL","node_id":"private-1","message":"secret one"},{"phase":"prepare","method":"m1","category":"UNRESOLVED_CALL","node_id":"private-2","message":"secret two"},{"phase":"incoming","method":"m2","message":"secret three"},{"phase":"outgoing","method":"m3","message":"secret four"},{"phase":"shutdown","method":"m4","message":"secret five"}],"summary":{"traversal_complete":true}}`)
 	root, err := publication.OpenRoot(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -180,8 +180,19 @@ func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T)
 	if compact["publication_receipt"] == nil || compact["content"] != nil {
 		t.Fatalf("%s: %v", custody, compact)
 	}
-	if compact["summary"] == nil {
+	compactSummary := compact["summary"].(map[string]any)
+	diagnosticSummary, ok := compactSummary["diagnostic_summary"].(map[string]any)
+	if !ok || diagnosticSummary["total_count"] != float64(5) || diagnosticSummary["distinct_count"] != float64(4) || diagnosticSummary["retained_count"] != float64(3) || diagnosticSummary["repeated_count"] != float64(1) || diagnosticSummary["omitted_count"] != float64(1) {
 		t.Fatalf("%s: %v", summary, compact)
+	}
+	examples, _ := diagnosticSummary["examples"].([]any)
+	fullOutput, _ := compactSummary["full_output"].(map[string]any)
+	if len(examples) != 3 || fullOutput["delivery"] != "publication_receipt" || fullOutput["output_selector"] != "full.json" {
+		t.Fatalf("%s: examples=%v full_output=%v", summary, examples, fullOutput)
+	}
+	rawSummary, _ := json.Marshal(compactSummary)
+	if bytes.Contains(rawSummary, []byte("secret")) || bytes.Contains(rawSummary, []byte("private-")) {
+		t.Fatalf("%s leaked private diagnostic fields: %s", summary, rawSummary)
 	}
 	if compact["duration_ms"] == nil || compact["request_accounting"] == nil {
 		t.Fatalf("%s: %v", accounting, compact)
