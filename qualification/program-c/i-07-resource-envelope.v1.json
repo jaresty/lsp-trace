@@ -1,0 +1,14 @@
+{
+ "schema_version":"lsp-trace.program-c-resource-envelope.v1","gate_id":"I-07","status":"user-selected pre-execution envelope; enforcement has not run",
+ "limits":{"fixtures_max":6,"nodes_per_fixture_max":10000,"directed_weighted_edges_per_fixture_max":100000,"wall_seconds_per_run":60,"memory_mib_per_run":512,"runs_per_seed_candidate_fixture_max":3,"input_order_permutations":1},
+ "typed_failure_or_incomplete":["timeout","memory exhaustion","unsupported measurement","nonzero exit","panic","noncanonical output"],
+ "portable_enforcement_questions":[
+  "Which platform-native supervisor enforces and records 60 wall seconds without candidate-controlled clocks?",
+  "Which platform-native mechanism enforces and measures a 512 MiB process-tree memory ceiling on linux, darwin, and windows?",
+  "How are unsupported measurement and unavailable hard enforcement recorded as typed INCOMPLETE rather than PASS?",
+  "How are nonzero exit, panic, timeout, memory exhaustion, and noncanonical output captured without parsing them as successful output?"
+ ],
+ "mechanism_policy":"Before execution, select an externally controlled, platform-specific process-tree wall-time and memory limiter; bind its exact tool/runtime/version and coordinate in the receipt; capture exit and canonical-output validation separately; unsupported enforcement or measurement is INCOMPLETE and fails closed.",
+ "prohibitions":["never sample","never truncate","never fallback","never approximate","never substitute algorithm or input"],
+ "claim_ceiling":"This packet defines limits, typed outcomes, and portable enforcement questions only. It does not claim a candidate run, timeout, memory measurement, platform mechanism, or fixture passed."
+}

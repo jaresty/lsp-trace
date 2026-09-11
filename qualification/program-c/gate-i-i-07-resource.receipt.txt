@@ -1,0 +1,17 @@
+gate_id: I-07
+result: PASS
+current: true
+repository_revision: 619a520e6ae00953c72f03d0569c2bf163971824
+command: python3 scripts/check-program-c-i-07.py
+policy_matrix: qualification/program-c/i-07-resource-envelope.v1.json
+packet_sha256: sha256:f9f28a10719a06417d74486508d0f830d457cb8389101a6d035eae60a9927e03
+tool: python3 scripts/check-program-c-i-07.py at repository revision 619a520e6ae00953c72f03d0569c2bf163971824
+run_id: program-c-i-07-resource-619a520
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/i-07-resource-envelope.v1.json; scripts/check-program-c-i-07.py
+input_sha256: sha256:ffe0690872878baf4102c5235d207139e2cdcd04e0a15b6c2419471556b39c08
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:79e966435ac427b680afd8e0b5e8fe3da639bd25c7e9afc22578eede042047a6
+limit_inventory: fixtures=6 nodes=10000 directed_weighted_edges=100000 wall_seconds=60 memory_mib=512 runs=3 permutations=1
+outcomes: PASS=6 FAIL=0 BLOCKED=0
+claim_ceiling: I-07 qualifies only the selected resource envelope, typed outcomes, and portable enforcement questions; no candidate run or enforcement mechanism was executed or passed.
