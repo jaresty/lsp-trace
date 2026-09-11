@@ -72,6 +72,62 @@ func request(mode, raw string) operation.Request {
 	return operation.Request{Name: operation.Name(mode), Input: json.RawMessage(raw)}
 }
 
+func TestCloneGraphForV5DoesNotMutateFrozenV2Graph(t *testing.T) {
+	fixture := func() graph.Result {
+		origin := graph.NewNode(graph.Item{Name: "root", Kind: 12, URI: "file:///fixture.go"})
+		candidate := graph.NewNode(graph.Item{Name: "sibling", Kind: 12, URI: "file:///fixture.go"})
+		return graph.Result{
+			SchemaVersion: graph.SchemaVersionV3,
+			Invocation:    graph.Invocation{Seeds: []graph.InvocationSeed{{Label: "root"}}},
+			Seeds:         []graph.SeedResult{{Label: "root"}},
+			SiblingCandidates: []graph.SiblingCandidate{{
+				SeedLabel: "root", Origin: origin, Candidate: candidate,
+				ProviderEvidence: []string{"captured-provider"},
+			}},
+		}
+	}
+	carrier := func(source graph.Result) graphprovenance.EvidenceV2 {
+		graphBytes, err := json.Marshal(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return graphprovenance.EvidenceV2{
+			SchemaVersion: graphprovenance.VersionV2,
+			Policy:        graphprovenance.PolicyV2,
+			GraphBytes:    graphBytes,
+			Acquisition:   acquisition.Result{Graph: source},
+		}
+	}
+
+	shallowCarrier := carrier(fixture())
+	shallow := shallowCarrier.Acquisition.Graph
+	shallow.SiblingCandidates[0].SeedIdentity = "enriched"
+	shallow.SiblingCandidates[0].ProviderEvidence[0] = "enriched-provider"
+	if _, err := json.Marshal(shallowCarrier); err == nil || !strings.Contains(err.Error(), "V2 typed graph differs from captured bytes") {
+		t.Fatalf("ASSERT_V5_SHALLOW_CONTROL_REPRODUCES_CARRIER_FAILURE: %v", err)
+	}
+
+	source := fixture()
+	frozenCarrier := carrier(source)
+	before, err := json.Marshal(frozenCarrier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloned, err := cloneGraphForV5(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloned.SiblingCandidates[0].SeedIdentity = "enriched"
+	cloned.SiblingCandidates[0].ProviderEvidence[0] = "enriched-provider"
+	after, err := json.Marshal(frozenCarrier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("ASSERT_V5_DEEP_CLONE_PRESERVES_FROZEN_V2_CARRIER_BYTES: before=%s after=%s", before, after)
+	}
+}
+
 type v3ParityRuntime struct {
 	profile runtimeprofile.Profile
 	uri     string

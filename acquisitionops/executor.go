@@ -320,7 +320,10 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		if wantsV5 {
 			// V5 owns the acquired graph directly. It must not pass through the
 			// mutable V2 typed/byte alias or its marshal-equality contract.
-			enriched := result.Graph
+			enriched, cloneErr := cloneGraphForV5(result.Graph)
+			if cloneErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", cloneErr)
+			}
 			enriched.SchemaVersion = graph.SchemaVersionV5
 			enriched.Invocation.Expansion.TopmostSiblings = true
 			enriched.SiblingCandidates = siblings
@@ -391,4 +394,16 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		opResult.CustodyReceipt = custodyReceipt
 	}
 	return opResult, nil
+}
+
+func cloneGraphForV5(source graph.Result) (graph.Result, error) {
+	raw, err := json.Marshal(source)
+	if err != nil {
+		return graph.Result{}, fmt.Errorf("clone graph for v5: marshal: %w", err)
+	}
+	cloned, err := graph.DecodeNativeV3(raw)
+	if err != nil {
+		return graph.Result{}, fmt.Errorf("clone graph for v5: decode: %w", err)
+	}
+	return cloned, nil
 }
