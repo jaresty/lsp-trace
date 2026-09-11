@@ -1,0 +1,87 @@
+{
+  "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
+  "result": "PASS",
+  "current": true,
+  "repository_revision": "704f77237a354c226bf1c7bf47621dae0e854072",
+  "selection": {
+    "status": "CURRENT",
+    "supersedes": null
+  },
+  "profile": {
+    "name": "state-flow-v1",
+    "logical_digest": "sha256:5588cbf11b1ca62efcd339c6e3b0051814a724cbe4f706becd538a7926de5fd8",
+    "relations": [
+      "UPDATES_STATE"
+    ]
+  },
+  "coordinate": {
+    "language": "typescript",
+    "framework": "ember",
+    "provider": "ember-glint",
+    "provider_version": "1.0.3",
+    "observed_provider_identity": "ember-glint",
+    "observed_provider_version": "1.0.3"
+  },
+  "policy_matrix_identity": {
+    "profile_manifest": "qualification/program-c/projection-profiles.v1.json",
+    "profile_manifest_sha256": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix": "qualification/program-c/profile-qualification.tsv",
+    "qualification_matrix_prepublication_sha256": "sha256:eb08886aae42b9ed086c0a2b089dc9fa78211f83d9b2a2b018b0c2bfe2617cfa",
+    "matrix_row": [
+      "state-flow-v1",
+      "typescript",
+      "ember",
+      "ember-glint",
+      "1.0.3",
+      "yes",
+      "PASS"
+    ]
+  },
+  "tool_identity": {
+    "name": "lsp-trace",
+    "revision": "704f77237a354c226bf1c7bf47621dae0e854072",
+    "version_output": "lsp-trace program-c-ember-state-flow-qualifier/1 revision=704f77237a354c226bf1c7bf47621dae0e854072 modified=false"
+  },
+  "exact_command": [
+    "python3",
+    "scripts/qualify-program-c-ember-state-flow.py",
+    "--repository-revision",
+    "$REPOSITORY_REVISION",
+    "--output",
+    "$RECEIPT"
+  ],
+  "command_bindings": {
+    "REPOSITORY_REVISION": "704f77237a354c226bf1c7bf47621dae0e854072",
+    "RECEIPT": "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json"
+  },
+  "run_identity": {
+    "run_id": "program-c-ember-state-flow-e141e8f95c2ddea8e0f34ac9",
+    "generation": "e141e8f95c2ddea8e0f34ac9"
+  },
+  "input_sha256": {
+    "profile_manifest": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix_prepublication": "sha256:eb08886aae42b9ed086c0a2b089dc9fa78211f83d9b2a2b018b0c2bfe2617cfa",
+    "provider_package_manifest": "sha256:f860fa188675806f040f354a6c83f255f798712714b86dbc7436add849a9c5a6",
+    "provider_executable": "sha256:d1629def49e9777e5865a5f7d0969d7aadecef30a5c3087b2a29b70987a2861c",
+    "qualifier_script": "sha256:d7e3b8c628a832328f0c1201250c64b7f99e17287fb8af88841747860d37777c",
+    "updates_state_fixture": "sha256:aa6fa3f496e51b54c8a8df5ae7406c58f419736900a396dc182a4d7c3825e086",
+    "updates_state_request": "sha256:e574d784541e6fa6af22187cd616267196658a3aa7075693e64f266f7ca89267",
+    "updates_state_result": "sha256:f4dfa98655425851f820600fa6441f301153813bced095bad38e5bc6a460a87d"
+  },
+  "result_sha256": "sha256:57a76403e8774c53c44903e828845e25a8c0ef159698df40b724b3d687217991",
+  "relation_evidence": [
+    {
+      "relation": "UPDATES_STATE",
+      "status": "PASS",
+      "count": 2,
+      "custody": "PROVIDER_PROVED",
+      "replay": "EXACT_BYTES"
+    }
+  ],
+  "claim_ceiling": {
+    "scope": "EXACT_COORDINATE_AND_INPUTS_ONLY",
+    "whole_source_complete": false,
+    "source_authenticated": false,
+    "cross_coordinate_transfer": false
+  }
+}
