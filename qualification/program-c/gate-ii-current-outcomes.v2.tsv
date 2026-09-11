@@ -1,0 +1,11 @@
+# gate_id	state	evidence	basis
+A-01	PASS	qualification/program-c/gate-i-receipts.tsv	Exact I-01 through I-08 index, including additive pinned-commit I-03 and I-04 successors, is current and passing.
+A-02	PASS	qualification/program-c/candidate-comparison.v1.json	Gonum Louvain v0.17.0 and Gonum Leiden commit 69ca49f were both evaluated; Leiden is selected with bounded rationale and no superiority claim.
+A-03	BLOCKED	qualification/program-c/i-04-license-inputs.v2.json	Exact BSD-3-Clause bytes are retained, but no authorized production distribution and linkage approval is recorded.
+A-04	FAIL	qualification/program-c/i-05-portability-questions.v1.json;qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json	Historical required Linux, Darwin, and Windows coordinates remain unqualified; retained execution covers Darwin arm64 only.
+A-05	PASS	qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json	Exact admitted bytes, calls-v1 projection identity, parameters, ceilings, seed, implementation, Darwin arm64 runtime, repeats, and input permutation reproduced canonical labels and digest.
+A-06	FAIL	qualification/program-c/candidates/gonum-leiden/candidate-execution.af7f038.receipt.json	Only one retained fixture was tried; the complete directed, weighted, disconnected, singleton, high-degree-hub, and adversarial-order fixture inventory is incomplete.
+A-07	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No complete boundary accounting contract is committed.
+A-08	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No complete instability contract is committed.
+A-09	PASS	qualification/program-c/i-08-neutrality-examples.v1.json;qualification/program-c/gate-i-i-08-neutrality.receipt.txt	Positive and prohibited examples preserve structural, run-local, non-semantic claims.
+A-10	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No reviewed Gate II implementation test plan is committed.
