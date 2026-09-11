@@ -1,0 +1,18 @@
+{
+ "schema_version":"lsp-trace.program-c-portability-questions.v1","gate_id":"I-05",
+ "status":"pre-execution policy; no platform coordinate has been tested or passed",
+ "required_os":["linux","darwin","windows"],"required_arch":["amd64","arm64"],
+ "coordinate_rule":"Evaluate every OS/architecture coordinate where the candidate and declared toolchain support it; record unsupported coordinates as observed typed outcomes during an admitted run, never infer PASS.",
+ "questions":[
+  "What exact Go version is required and available at each coordinate?",
+  "What compiler/toolchain and CGO state are required and available?",
+  "What package and packaging mode is used without PATH resolution?",
+  "Does Gonum remain a native-Go module with CGO disabled?",
+  "Where do Infomap or leidenalg cross C++, OpenMP, Python, igraph, or compiled-extension boundaries?",
+  "Can each artifact be externally provisioned and identified exactly without installation by this repository?"
+ ],
+ "candidate_boundaries":{"Gonum":"native Go linked module; preserve no-CGO expectation","Infomap":"externally provisioned CLI/reference; C++ and optional OpenMP/Python/package boundaries","leidenalg":"rejected Python/compiled C++/igraph extension boundary"},
+ "packaging_modes":["Go linked module","externally provisioned pinned CLI/reference","rejected compiled extension"],
+ "enforcement":"Before any admitted execution, pin exact candidate/version, Go/runtime/compiler/toolchain/package identities and packaging mode per coordinate; prohibit PATH lookup; do not install anything until separately admitted; record PASS, FAIL, or UNSUPPORTED/INCOMPLETE for every required supported coordinate.",
+ "claim_ceiling":"This packet makes the portability questions and mechanism explicit. It reports no build, package, platform, toolchain, CGO, OpenMP, Python, igraph, or execution result."
+}
