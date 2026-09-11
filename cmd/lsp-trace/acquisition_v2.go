@@ -411,29 +411,26 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
 	if failed != nil {
-		if len(result.Artifact) > 0 {
-			finalizeRequestDiagnostics(result.Artifact)
-		} else if requestDiagnosticsRequested {
+		projectionFailure := outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations"
+		if requestDiagnosticsRequested && projectionFailure {
 			failureDiagnosticPublished := false
 			failureDiagnosticStage := "PUBLIC_ARTIFACT_UNAVAILABLE"
 			var failurePublicationErr error
-			if outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations" {
-				handles := privateRuntime.diagnosticHandles()
-				sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
-				if certified {
-					privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
-						Operation: mode + "-v3", RequestPolicy: raw,
-						Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
-					})
-					if projectionErr == nil {
-						failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
-						projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
-						failurePublicationErr = projectionErr
-					} else {
-						failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
-					}
-					failureDiagnosticPublished = projectionErr == nil
+			handles := privateRuntime.diagnosticHandles()
+			sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
+			if certified {
+				privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
+					Operation: mode + "-v3", RequestPolicy: raw,
+					Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
+				})
+				if projectionErr == nil {
+					failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
+					projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
+					failurePublicationErr = projectionErr
+				} else {
+					failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
 				}
+				failureDiagnosticPublished = projectionErr == nil
 			}
 			if !failureDiagnosticPublished {
 				fmt.Fprintf(stderr, "private request diagnostics unavailable: %s; PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding\n", failureDiagnosticStage)
@@ -441,6 +438,10 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 					fmt.Fprintln(stderr, "private diagnostic publication remediation:", failurePublicationErr)
 				}
 			}
+		} else if len(result.Artifact) > 0 {
+			finalizeRequestDiagnostics(result.Artifact)
+		} else if requestDiagnosticsRequested {
+			fmt.Fprintln(stderr, "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding")
 		}
 		return fail(failed)
 	}
