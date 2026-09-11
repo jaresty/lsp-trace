@@ -1,5 +1,5 @@
 # gate_id	state	receipt	sha256
-I-01	MISSING	-	-
+I-01	PASS	qualification/program-c/gate-i-i-01-calls-v1.receipt.txt	sha256:a8f85578ff8e0417a48dee757a3d06f32101588d1a9b4e36a599441709495d73
 I-02	MISSING	-	-
 I-03	MISSING	-	-
 I-04	MISSING	-	-

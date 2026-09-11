@@ -1,0 +1,17 @@
+gate_id: I-01
+result: PASS
+current: true
+repository_revision: b032904ab9ba82aea3f23de8a4e11b92ce65ad78
+command: python3 scripts/check-program-c-profiles.py --root . --profiles qualification/program-c/projection-profiles.v1.json --matrix qualification/program-c/profile-qualification.tsv --require-profile calls-v1
+policy_matrix: calls-v1@sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9; qualification/program-c/profile-qualification.tsv
+profile_manifest_sha256: sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8
+tool: python3 scripts/check-program-c-profiles.py at repository revision b032904ab9ba82aea3f23de8a4e11b92ce65ad78
+run_id: program-c-i-01-calls-v1-b032904
+input_packet_policy: SHA256 over each ordered repository-relative path, NUL, decimal byte length, NUL, and exact file bytes
+input_files: qualification/program-c/projection-profiles.v1.json; qualification/program-c/profile-qualification.tsv; qualification/program-c/calls-v1-csharp-csharp-ls-0.27.0.0.receipt.json; qualification/program-c/calls-v1-go-gopls-0.23.0.receipt.json
+input_sha256: sha256:b5e7e1d482570d9ca075cf3b1e52d3e9a4d85e063292607021d07b71b16cdf07
+result_scope: exact stdout bytes from the named command
+result_sha256: sha256:82dd4367b65b434bcded905fff7b0fbf68e790f87839e610c1ed67339e89d102
+coordinate_receipts: csharp=sha256:9f09091e4cd5510fe80dc0edcb4111ef640c064d6ed1f0999421a35fdfe9bd2c; go=sha256:36ff70993224c2c5a4534424896ace7462c3eed140d0b8903c255d6681853890
+outcomes: PASS=2 FAIL=0 BLOCKED=0
+claim_ceiling: I-01 qualifies only the exact calls-v1 profile and its two required coordinates; it does not admit Program C while I-02 through I-08 remain missing.
