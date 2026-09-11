@@ -1,0 +1,75 @@
+{
+  "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
+  "result": "BLOCKED",
+  "current": true,
+  "repository_revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
+  "profile": {
+    "name": "calls-v1",
+    "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+    "relations": ["CALLS"]
+  },
+  "coordinate": {
+    "language": "go",
+    "framework": "none",
+    "provider": "gopls",
+    "provider_version": "0.23.0",
+    "observed_provider_version": "golang.org/x/tools/gopls v0.23.0"
+  },
+  "policy_matrix_identity": {
+    "profile_manifest": "qualification/program-c/projection-profiles.v1.json",
+    "profile_manifest_sha256": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix": "qualification/program-c/profile-qualification.tsv"
+  },
+  "tool_identity": {
+    "name": "lsp-trace",
+    "revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
+    "version_output": "lsp-trace v0.0.0-20260911025958-a7d51484fa6d revision=a7d51484fa6d446c76cc50216c3cf311430815a4 modified=false"
+  },
+  "exact_command": [
+    "$LSP_TRACE_BIN", "slice", "--acquisition-version", "v3",
+    "--workspace", "$WORKSPACE",
+    "--server", "$GOPLS",
+    "--language-id", "go",
+    "--seed-manifest", "$MANIFEST",
+    "--output-version", "lsp-trace.graph-provenance.v5",
+    "--output", "$V5_SELECTOR"
+  ],
+  "input_sha256": {
+    "repository_method_manifest": "sha256:e75d2808771ef588c64ade7d37b76c8755fd16d768a1e48081e03cae5c3e5a71",
+    "synthetic_fixture_manifest": "sha256:5852b4aef504674dbc533f18af3d331a0efe97de98961bb474db873266e02a20",
+    "synthetic_fixture_go_mod": "sha256:123931fa3724750fe540f44df588b3aefdeed963d2483f872c6671c2893c5379",
+    "synthetic_fixture_service_go": "sha256:bf2c157f6082d7dd781ad715e460e56e2fb46dd947dfda512dbdb6601afbece0"
+  },
+  "run_identity": {
+    "synthetic_fixture_revision": "9f979042152d55f08669ae69d5cf1494c7ad4106",
+    "published_generation": null
+  },
+  "result_sha256": null,
+  "attempts": [
+    {
+      "fixture": "repository-main",
+      "target": "cmd/lsp-trace/main.go:113:5",
+      "outcome": "BLOCKED",
+      "diagnostic": "OUTPUT_VALIDATION_FAILED: topmost sibling expansion produced no exact relations"
+    },
+    {
+      "fixture": "repository-publication-method-family",
+      "target": "internal/publication/verifiable.go:19:20",
+      "outcome": "BLOCKED",
+      "diagnostic": "OUTPUT_VALIDATION_FAILED: topmost sibling expansion produced no exact relations"
+    },
+    {
+      "fixture": "committed-synthetic-sibling-method-family",
+      "target": "service.go:4:15",
+      "outcome": "BLOCKED",
+      "diagnostic": "OUTPUT_VALIDATION_FAILED: topmost sibling expansion produced no exact relations"
+    }
+  ],
+  "outcomes": {
+    "PASS": 0,
+    "FAIL": 0,
+    "BLOCKED": 3
+  },
+  "blocker": "No bounded gopls attempt produced the exact declaration-level sibling relations required for Graph Provenance V5; no artifact, receipt, selector, retained-relations projection, or calls-v1 result was published.",
+  "claim_ceiling": "These three bounded attempts do not prove universal gopls incompatibility. They establish only that the required Go qualification coordinate has no passing current receipt."
+}

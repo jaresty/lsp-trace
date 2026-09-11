@@ -1,0 +1,83 @@
+{
+  "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
+  "result": "PASS",
+  "current": true,
+  "repository_revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
+  "profile": {
+    "name": "calls-v1",
+    "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+    "relations": ["CALLS"]
+  },
+  "coordinate": {
+    "language": "csharp",
+    "framework": "none",
+    "provider": "csharp-ls",
+    "provider_version": "0.27.0.0",
+    "observed_provider_version": "csharp-ls, 0.27.0 (Vartai)+d48ab7781176d2d369ceeb31d986503c2ad493e2"
+  },
+  "policy_matrix_identity": {
+    "profile_manifest": "qualification/program-c/projection-profiles.v1.json",
+    "profile_manifest_sha256": "sha256:f7995d736d3dde7c7d419adca9ca6b561f8e83fc1929f927f0b170662c48c9c8",
+    "qualification_matrix": "qualification/program-c/profile-qualification.tsv"
+  },
+  "tool_identity": {
+    "name": "lsp-trace",
+    "revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
+    "version_output": "lsp-trace v0.0.0-20260911025958-a7d51484fa6d revision=a7d51484fa6d446c76cc50216c3cf311430815a4 modified=false"
+  },
+  "source_identity": {
+    "workspace_revision": "77541d935e800f76c84ac7983a5ebe7a98f9f7bf",
+    "target_path": "StatsOnline.Web/Controllers/VariableApiController.cs",
+    "target_zero_based": {"line": 137, "character": 27}
+  },
+  "exact_command": [
+    "$LSP_TRACE_BIN", "slice", "--acquisition-version", "v3",
+    "--workspace", "$WORKSPACE",
+    "--server", "$CSHARP_LS",
+    "--server-arg=--features", "--server-arg=razor-support",
+    "--server-arg=--solution", "--server-arg=DaslAnalysis.sln",
+    "--language-id", "csharp",
+    "--seed-manifest", "$MANIFEST",
+    "--output-version", "lsp-trace.graph-provenance.v5",
+    "--output", "$V5_SELECTOR"
+  ],
+  "command_bindings": {
+    "LSP_TRACE_BIN": "locally built from repository_revision",
+    "WORKSPACE": "local regular workspace at workspace_revision",
+    "CSHARP_LS": "absolute executable producing observed_provider_version",
+    "MANIFEST": "input identified by bounded_manifest_sha256",
+    "V5_SELECTOR": "caller-owned local publication selector"
+  },
+  "run_identity": {
+    "v5_generation": ".lsp-trace-generation-813ed07c2f585e0ae483844fd60b884f",
+    "retained_generation": ".lsp-trace-generation-9055b360e368ff609429b36a414d9893",
+    "replay_generation": ".lsp-trace-generation-340db7f8cb7a4aa6a8962c0ae4a91520"
+  },
+  "input_sha256": {
+    "bounded_manifest": "sha256:9c3dc2a4951dc431d6ca4c0f29feb3193979af47b800eed06e0db18279609d34",
+    "graph_provenance_v5": "sha256:e6ba531edd54b7deabbd796f56b598d16590a55a8f79e9409e676a3ecd8931bd"
+  },
+  "result_sha256": "sha256:6501482c24307bbc629cabfc2ecc5f16a7ec21e48bea893a4a636afc464aaba9",
+  "evidence": {
+    "v5_native_verification": "PASS",
+    "retained_relations_schema": "lsp-trace.retained-relations.v1",
+    "retained_policy": "EXACT_GRAPH_PROVENANCE_V5_DISTINCT_CALLS_AND_SIBLING_CANDIDATES",
+    "calls": 5,
+    "distinct_call_relation_ids": 5,
+    "call_site_occurrences": 6,
+    "sibling_candidates": 14,
+    "deterministic_replay": "EXACT_BYTES",
+    "retained_artifact_bytes": 220360
+  },
+  "outcomes": {
+    "PASS": 1,
+    "FAIL": 0,
+    "BLOCKED": 0
+  },
+  "authority_ceiling": [
+    "CALLS are server-reported structural relations only",
+    "bounded traversal does not establish whole-source completeness",
+    "byte custody does not authenticate source identity",
+    "sibling candidates contribute zero CALLS support"
+  ]
+}

@@ -1,6 +1,6 @@
 # profile	language	framework	provider	provider_version	required	status	receipt	receipt_sha256
-calls-v1	csharp	none	csharp-ls	0.27.0.0	yes	MISSING	-	-
-calls-v1	go	none	gopls	0.23.0	yes	MISSING	-	-
+calls-v1	csharp	none	csharp-ls	0.27.0.0	yes	PASS	qualification/program-c/calls-v1-csharp-csharp-ls-0.27.0.0.receipt.json	sha256:9f09091e4cd5510fe80dc0edcb4111ef640c064d6ed1f0999421a35fdfe9bd2c
+calls-v1	go	none	gopls	0.23.0	yes	BLOCKED	qualification/program-c/calls-v1-go-gopls-0.23.0.receipt.json	sha256:a9174f6e9b52ca323cc694e624f352e84718e2fa07e0c0c63e1094017e0dd6e3
 callback-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
 state-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
 ui-lifecycle-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
