@@ -25,6 +25,7 @@ import (
 const (
 	OperationIncoming          operation.Name = "incoming"
 	maxSymbolPrepareProbeDelta                = uint32(64)
+	maxSymbolSuggestions                      = 8
 )
 
 type Runtime interface {
@@ -174,18 +175,32 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 		return 0, 0, failure("DOCUMENT_SYMBOL_FAILED", err)
 	}
 	var matches []lsp.DocumentSymbol
+	var suggestions []lsp.DocumentSymbol
 	var walk func([]lsp.DocumentSymbol)
 	walk = func(items []lsp.DocumentSymbol) {
 		for _, symbol := range items {
 			if symbol.Name == symbolName {
 				matches = append(matches, symbol)
 			}
+			if len(suggestions) < maxSymbolSuggestions {
+				suggestions = append(suggestions, symbol)
+			}
 			walk(symbol.Children)
 		}
 	}
 	walk(symbols)
 	if len(matches) == 0 {
-		return 0, 0, failure("DOCUMENT_SYMBOL_ABSENT", fmt.Errorf("document symbol %q not found", symbolName))
+		err := fmt.Errorf("document symbol %q not found", symbolName)
+		result := failure("DOCUMENT_SYMBOL_ABSENT", err)
+		if len(suggestions) > 0 {
+			var candidates []string
+			for _, symbol := range suggestions {
+				start := symbol.SelectionRange.Start
+				candidates = append(candidates, fmt.Sprintf("%q at line %d, character %d", symbol.Name, start.Line, start.Character))
+			}
+			result.Diagnostics = append(result.Diagnostics, err.Error()+"; available exact document symbols: "+strings.Join(candidates, "; ")+"; use an exact symbol name above or the line/character selector")
+		}
+		return 0, 0, result
 	}
 	if len(matches) != 1 {
 		return 0, 0, failure("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", symbolName, len(matches)))

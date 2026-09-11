@@ -279,6 +279,22 @@ func TestIncomingSymbolFailuresAreExplicit(t *testing.T) {
 	}
 }
 
+func TestIncomingAbsentSymbolSuggestsExactNamesAndPositions(t *testing.T) {
+	const assertion = "ASSERT_DOCUMENT_SYMBOL_ABSENT_SUGGESTS_EXACT_SELECTORS"
+	symbols := `[{"name":"New","kind":12,"range":{"start":{"line":3,"character":1},"end":{"line":3,"character":4}},"selectionRange":{"start":{"line":3,"character":1},"end":{"line":3,"character":4}}},{"name":"(*Executor).Execute","kind":6,"range":{"start":{"line":9,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":9,"character":18},"end":{"line":9,"character":25}}}]`
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(symbols)}}}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Execute"}`)})
+	if failure == nil || failure.Code != "DOCUMENT_SYMBOL_ABSENT" {
+		t.Fatalf("%s: failure=%v", assertion, failure)
+	}
+	diagnostic := strings.Join(failure.Diagnostics, "\n")
+	for _, want := range []string{`document symbol "Execute" not found`, `"New" at line 3, character 1`, `"(*Executor).Execute" at line 9, character 18`, `use an exact symbol name above or the line/character selector`} {
+		if !strings.Contains(diagnostic, want) {
+			t.Errorf("%s: diagnostic %q missing %q", assertion, diagnostic, want)
+		}
+	}
+}
+
 func TestIncomingRealGoplsSymbolSpecimenReconcilesPreparePosition(t *testing.T) {
 	const assertion = "ASSERT_REAL_GOPLS_NEW_PREPARE_POSITION_355_5"
 	t.Log("ASSERTION: " + assertion)
