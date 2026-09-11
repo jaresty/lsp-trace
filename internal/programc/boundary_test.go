@@ -98,21 +98,162 @@ func TestBoundarySchema(t *testing.T) {
 	}
 }
 
-func TestValidateBoundaryMutations(t *testing.T) {
-	o := boundaryFixture()
-	a, e := ComputeBoundary(o, BoundaryRequest{1, 1})
-	if e != nil {
-		t.Fatal(e)
+func validBoundary(t *testing.T) (Outcome, BoundaryRequest, BoundaryArtifact) {
+	t.Helper()
+	o, r := boundaryFixture(), BoundaryRequest{1, 1}
+	a, err := ComputeBoundary(o, r)
+	if err != nil {
+		t.Fatal(err)
 	}
+	return o, r, a
+}
+func requireBoundaryReject(t *testing.T, o Outcome, r BoundaryRequest, a BoundaryArtifact) {
+	t.Helper()
+	b, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ValidateBoundary(b, o, r) == nil {
+		t.Fatal("mutation accepted")
+	}
+}
+func TestBoundaryPolicyCanonicalBytesAndDigest(t *testing.T) {
+	const wantBytes = `{"conductance":"cut_weight(C)/(min(directed_out_volume(C),directed_out_volume(V\\C)))","conductance_zero_outcome":"UNAVAILABLE:zero minimum directed out-volume","crossing_witness_semantics":"direct-community-pair-minimum-occurrence-identity/v1","hub_score":"weighted-directed-in-plus-out-occurrence-sum/v1","hub_selection":"required-top-k-inclusive-ties-then-crossing/v1","id":"program-c-a-07-boundary-accounting/v2","pagerank":{"alpha":0.85,"arithmetic":"Go-binary64-explicit-rounding-sequential/v1","convergence":"stationary-L1-inclusive/v1","max_iterations":1000,"max_work":1000000,"score":"positive-binary64-node-score/v1","tolerance":1e-9,"work":"evaluation-3n+m/v1"},"pagerank_selection":"required-top-k-inclusive-ties-then-crossing/v1","weak_critical_semantics":"weak-undirected-occurrence-multigraph-bridge-articulation/v1"}`
+	const wantDigest = "sha256:f6d68b67ff8117c573f795b95697accd85e345998228cb3ce0b59864c967d8d7"
+	if string(BoundaryPolicyBytes()) != wantBytes || BoundaryPolicyDigest() != wantDigest {
+		t.Fatalf("ASSERT_POLICY_IDENTITY bytes=%s digest=%s", BoundaryPolicyBytes(), BoundaryPolicyDigest())
+	}
+}
+func TestBoundaryPageRankEnforcesExactMaxWork(t *testing.T) {
+	const n = 10000
+	es := make([]Occurrence, n-1)
+	out := make([]float64, n)
+	for i := 0; i < n-1; i++ {
+		es[i] = Occurrence{Identity: string(rune(i + 1)), From: int64(i), To: int64(i + 1), Weight: 1}
+		out[i] = 1
+	}
+	scores, got := pageRank(n, es, out)
+	if got.Status != "INCOMPLETE" || got.Reason != "LIMIT" || got.Work != boundaryPageRankMaxWork || scores != nil {
+		t.Fatalf("ASSERT_PAGERANK_MAX_WORK %+v scores=%v", got, scores)
+	}
+}
+func TestValidateBoundaryAcceptsRecomputedArtifact(t *testing.T) {
+	o, r, a := validBoundary(t)
 	b, _ := json.Marshal(a)
-	if e = ValidateBoundary(b, o, BoundaryRequest{1, 1}); e != nil {
-		t.Fatal(e)
+	if err := ValidateBoundary(b, o, r); err != nil {
+		t.Fatal(err)
 	}
+}
+func TestValidateBoundaryRejectsArithmeticCountMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Accounting.CrossingOccurrences++
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsArithmeticDenominatorMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Communities[0].Conductance.Denominator++
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsCanonicalOrderingMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Communities[0], a.Communities[1] = a.Communities[1], a.Communities[0]
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsSourceDigestBindingMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Bindings.SourceSHA256 = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsSessionBindingMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Bindings.SessionID = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsGenerationBindingMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Bindings.Generation++
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsClaimCeilingBindingMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.ClaimCeiling = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyAlphaMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.Alpha = .9
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyToleranceMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.Tolerance = 1e-8
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyMaxIterationsMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.MaxIterations--
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyMaxWorkMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.MaxWork--
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyArithmeticIdentityMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.Arithmetic = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyScoreIdentityMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Policy.PageRank.Score = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPolicyDigestMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.Bindings.PolicySHA256 = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsTieForeignKeyMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.HubCrossingNodes[0].NodeID = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsWitnessForeignKeyMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.CrossingWitnesses[0].OccurrenceID = "foreign"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPageRankWorkMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.PageRank.Work++
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPageRankIterationsMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.PageRank.Iterations++
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPageRankResidualMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	v := *a.PageRank.Residual + 1
+	a.PageRank.Residual = &v
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsPageRankConvergenceMutation(t *testing.T) {
+	o, r, a := validBoundary(t)
+	a.PageRank.Status = "INCOMPLETE"
+	a.PageRank.Reason = "NOT_CONVERGED"
+	requireBoundaryReject(t, o, r, a)
+}
+func TestValidateBoundaryRejectsUnknownField(t *testing.T) {
+	o, r, a := validBoundary(t)
+	b, _ := json.Marshal(a)
 	var m map[string]any
 	_ = json.Unmarshal(b, &m)
-	m["digest"] = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-	bad, _ := json.Marshal(m)
-	if ValidateBoundary(bad, o, BoundaryRequest{1, 1}) == nil {
-		t.Fatal("ASSERT_DIGEST_MUTATION")
+	m["unknown"] = true
+	b, _ = json.Marshal(m)
+	if ValidateBoundary(b, o, r) == nil {
+		t.Fatal("unknown field accepted")
 	}
 }

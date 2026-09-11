@@ -8,13 +8,56 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"lsp-trace/internal/schema"
 )
 
 const BoundaryVersion = "lsp-trace.community-boundary.v1"
 const BoundaryClaimCeiling = "All measures and witnesses are structural observations under the exact bound projection. They do not establish feature, product, ownership, service, organizational, or business-boundary identity or explanation."
-const BoundaryPolicy = "program-c-a-07-boundary-accounting/v1;pagerank-top-k-inclusive-ties;hub-top-k-inclusive-ties;weak-undirected-occurrence-multigraph;direct-crossing-min-occurrence/v1"
+const BoundaryPolicyID = "program-c-a-07-boundary-accounting/v2"
+const boundaryPageRankAlpha = .85
+const boundaryPageRankTolerance = 1e-9
+const boundaryPageRankMaxIterations = 1000
+const boundaryPageRankMaxWork = 1000000
 
-var boundaryRankPolicies = []string{"initial-p/v1", "dangling-p/v1", "stationary-L1/v1", "lexical-nodes-occurrence-ID/v1", "Go-binary64-explicit-rounding-sequential/v1", "evaluation-3n+m/v1"}
+type BoundaryPageRankPolicy struct {
+	Alpha         float64 `json:"alpha"`
+	Tolerance     float64 `json:"tolerance"`
+	MaxIterations int     `json:"max_iterations"`
+	MaxWork       int     `json:"max_work"`
+	Arithmetic    string  `json:"arithmetic"`
+	Score         string  `json:"score"`
+	Work          string  `json:"work"`
+	Convergence   string  `json:"convergence"`
+}
+type BoundaryPolicySpec struct {
+	ID                       string                 `json:"id"`
+	Conductance              string                 `json:"conductance"`
+	ConductanceZeroOutcome   string                 `json:"conductance_zero_outcome"`
+	PageRank                 BoundaryPageRankPolicy `json:"pagerank"`
+	PageRankSelection        string                 `json:"pagerank_selection"`
+	HubSelection             string                 `json:"hub_selection"`
+	HubScore                 string                 `json:"hub_score"`
+	WeakCriticalSemantics    string                 `json:"weak_critical_semantics"`
+	CrossingWitnessSemantics string                 `json:"crossing_witness_semantics"`
+}
+
+var BoundaryPolicy = BoundaryPolicySpec{
+	ID:                       BoundaryPolicyID,
+	Conductance:              "cut_weight(C)/(min(directed_out_volume(C),directed_out_volume(V\\C)))",
+	ConductanceZeroOutcome:   "UNAVAILABLE:zero minimum directed out-volume",
+	PageRank:                 BoundaryPageRankPolicy{boundaryPageRankAlpha, boundaryPageRankTolerance, boundaryPageRankMaxIterations, boundaryPageRankMaxWork, "Go-binary64-explicit-rounding-sequential/v1", "positive-binary64-node-score/v1", "evaluation-3n+m/v1", "stationary-L1-inclusive/v1"},
+	PageRankSelection:        "required-top-k-inclusive-ties-then-crossing/v1",
+	HubSelection:             "required-top-k-inclusive-ties-then-crossing/v1",
+	HubScore:                 "weighted-directed-in-plus-out-occurrence-sum/v1",
+	WeakCriticalSemantics:    "weak-undirected-occurrence-multigraph-bridge-articulation/v1",
+	CrossingWitnessSemantics: "direct-community-pair-minimum-occurrence-identity/v1",
+}
+
+func BoundaryPolicyBytes() []byte  { return canonicalBoundary(BoundaryPolicy) }
+func BoundaryPolicyDigest() string { return bHash(BoundaryVersion+":policy", BoundaryPolicy) }
+
+var boundaryRankPolicies = []string{"initial-p/v1", "dangling-p/v1", "stationary-L1-inclusive/v1", "lexical-nodes-occurrence-ID/v1", "Go-binary64-explicit-rounding-sequential/v1", "positive-binary64-node-score/v1", "evaluation-3n+m/v1"}
 
 type BoundaryRequest struct {
 	PageRankTopK int `json:"pagerank_top_k"`
@@ -55,8 +98,18 @@ type CrossingWitness struct {
 	SourceNodeID string `json:"source_node_id"`
 	TargetNodeID string `json:"target_node_id"`
 }
+type BoundaryPageRank struct {
+	Status            string   `json:"status"`
+	Reason            string   `json:"reason"`
+	Iterations        int      `json:"iterations"`
+	Work              int      `json:"work"`
+	Residual          *float64 `json:"residual"`
+	ResidualIteration *int     `json:"residual_iteration"`
+}
 type BoundaryBindings struct {
 	SourceSHA256     string `json:"source_sha256"`
+	SessionID        string `json:"session_id"`
+	Generation       uint64 `json:"generation"`
 	ProfileID        string `json:"profile_id"`
 	ProfileSHA256    string `json:"profile_sha256"`
 	Algorithm        string `json:"algorithm"`
@@ -70,8 +123,9 @@ type BoundaryArtifact struct {
 	Outcome                     string              `json:"outcome"`
 	Bindings                    BoundaryBindings    `json:"bindings"`
 	Request                     BoundaryRequest     `json:"request"`
-	Policy                      string              `json:"policy"`
+	Policy                      BoundaryPolicySpec  `json:"policy"`
 	RankPolicies                []string            `json:"rank_policies"`
+	PageRank                    BoundaryPageRank    `json:"pagerank"`
 	Accounting                  BoundaryAccounting  `json:"accounting"`
 	Communities                 []BoundaryCommunity `json:"communities"`
 	HighCentralityCrossingNodes []BoundaryNodeScore `json:"high_centrality_crossing_nodes"`
@@ -83,13 +137,17 @@ type BoundaryArtifact struct {
 	Digest                      string              `json:"digest"`
 }
 
-func bHash(domain string, v any) string {
+func canonicalBoundary(v any) []byte {
 	b, _ := json.Marshal(v)
 	var x any
 	d := json.NewDecoder(bytes.NewReader(b))
 	d.UseNumber()
 	_ = d.Decode(&x)
 	b, _ = json.Marshal(x)
+	return b
+}
+func bHash(domain string, v any) string {
+	b := canonicalBoundary(v)
 	s := sha256.Sum256(append(append([]byte(domain), 0), b...))
 	return "sha256:" + hex.EncodeToString(s[:])
 }
@@ -100,7 +158,14 @@ func boundarySeal(a BoundaryArtifact) string {
 }
 func add64(a, b float64) float64 { return float64(a + b) }
 func mul64(a, b float64) float64 { return float64(a * b) }
+func sub64(a, b float64) float64 { return float64(a - b) }
 func div64(a, b float64) float64 { return float64(a / b) }
+func positiveZero64(x float64) float64 {
+	if x == 0 {
+		return 0
+	}
+	return x
+}
 
 func ComputeBoundary(o Outcome, r BoundaryRequest) (BoundaryArtifact, error) {
 	n := len(o.Projection.NodeIdentities)
@@ -139,12 +204,8 @@ func ComputeBoundary(o Outcome, r BoundaryRequest) (BoundaryArtifact, error) {
 	if source == "" {
 		source = o.Projection.Source.InputSHA256
 	}
-	bindings := BoundaryBindings{source, o.ProfileID, o.ProfileDigest, o.Algorithm, "gonum-v0.17.1", o.LogicalDigest, bHash(BoundaryVersion+":policy", struct {
-		Policy  string
-		Rank    []string
-		Request BoundaryRequest
-	}{BoundaryPolicy, boundaryRankPolicies, r}), o.Seed}
-	a := BoundaryArtifact{SchemaVersion: BoundaryVersion, Outcome: "COMPLETE", Bindings: bindings, Request: r, Policy: BoundaryPolicy, RankPolicies: append([]string{}, boundaryRankPolicies...), Accounting: BoundaryAccounting{AdmittedOccurrences: len(occ), AccountedOccurrences: len(occ), AdmittedNodes: n, AccountedNodes: n}, ClaimCeiling: BoundaryClaimCeiling, Communities: make([]BoundaryCommunity, len(o.Communities)), Bridges: []string{}, ArticulationPoints: []string{}, CrossingWitnesses: []CrossingWitness{}, HighCentralityCrossingNodes: []BoundaryNodeScore{}, HubCrossingNodes: []BoundaryNodeScore{}}
+	bindings := BoundaryBindings{source, o.Source.SessionID, o.Source.Generation, o.ProfileID, o.ProfileDigest, o.Algorithm, "gonum-v0.17.1", o.LogicalDigest, BoundaryPolicyDigest(), o.Seed}
+	a := BoundaryArtifact{SchemaVersion: BoundaryVersion, Outcome: "COMPLETE", Bindings: bindings, Request: r, Policy: BoundaryPolicy, RankPolicies: append([]string{}, boundaryRankPolicies...), PageRank: BoundaryPageRank{Status: "INCOMPLETE"}, Accounting: BoundaryAccounting{AdmittedOccurrences: len(occ), AccountedOccurrences: len(occ), AdmittedNodes: n, AccountedNodes: n}, ClaimCeiling: BoundaryClaimCeiling, Communities: make([]BoundaryCommunity, len(o.Communities)), Bridges: []string{}, ArticulationPoints: []string{}, CrossingWitnesses: []CrossingWitness{}, HighCentralityCrossingNodes: []BoundaryNodeScore{}, HubCrossingNodes: []BoundaryNodeScore{}}
 	if len(occ) == 0 {
 		a.Outcome = "EMPTY"
 	}
@@ -210,8 +271,13 @@ func ComputeBoundary(o Outcome, r BoundaryRequest) (BoundaryArtifact, error) {
 		a.Communities[i] = bc
 	}
 	sort.Slice(a.Communities, func(i, j int) bool { return a.Communities[i].CommunityID < a.Communities[j].CommunityID })
-	prs := pageRank(n, occ, out)
-	a.HighCentralityCrossingNodes = topScores(o.Projection.NodeIdentities, prs, crossing, r.PageRankTopK)
+	prs, pr := pageRank(n, occ, out)
+	a.PageRank = pr
+	if pr.Status == "COMPLETE" {
+		a.HighCentralityCrossingNodes = topScores(o.Projection.NodeIdentities, prs, crossing, r.PageRankTopK)
+	} else {
+		a.Outcome = "INCOMPLETE"
+	}
 	a.HubCrossingNodes = topScores(o.Projection.NodeIdentities, hub, crossing, r.HubTopK)
 	a.Bridges, a.ArticulationPoints = weakCritical(o.Projection.NodeIdentities, occ)
 	keys := make([][2]int, 0, len(pairWitness))
@@ -231,34 +297,70 @@ func ComputeBoundary(o Outcome, r BoundaryRequest) (BoundaryArtifact, error) {
 	a.Digest = boundarySeal(a)
 	return a, nil
 }
-func pageRank(n int, es []Occurrence, out []float64) []float64 {
+
+// pageRank mirrors internal/boundedranking's binary64 boundaries,
+// stationary-L1-inclusive convergence test, and 3n+m work definition. Its
+// unexported runner ranks unweighted retained-call groups, so Program C keeps
+// this weighted-occurrence adapter bound to the same policy identities.
+func pageRank(n int, es []Occurrence, out []float64) ([]float64, BoundaryPageRank) {
+	result := BoundaryPageRank{Status: "INCOMPLETE"}
 	x := make([]float64, n)
 	for i := range x {
 		x[i] = div64(1, float64(n))
 	}
-	for it := 0; it < 1000; it++ {
+	tick := func() bool {
+		if result.Work == boundaryPageRankMaxWork {
+			result.Reason = "LIMIT"
+			return false
+		}
+		result.Work++
+		return true
+	}
+	for {
 		y := make([]float64, n)
 		dang := 0.
 		for i := range x {
+			if !tick() {
+				return nil, result
+			}
 			if out[i] == 0 {
 				dang = add64(dang, x[i])
 			}
 		}
 		for _, e := range es {
+			if !tick() {
+				return nil, result
+			}
 			y[e.To] = add64(y[e.To], mul64(x[e.From], div64(e.Weight, out[e.From])))
 		}
-		res := 0.
 		for i := range y {
+			if !tick() {
+				return nil, result
+			}
 			p := div64(1, float64(n))
-			y[i] = add64(mul64(.15, p), mul64(.85, add64(y[i], mul64(dang, p))))
-			res = add64(res, math.Abs(y[i]-x[i]))
+			y[i] = positiveZero64(add64(mul64(sub64(1, boundaryPageRankAlpha), p), mul64(boundaryPageRankAlpha, add64(y[i], mul64(dang, p)))))
+		}
+		res := 0.
+		for i := range x {
+			if !tick() {
+				return nil, result
+			}
+			res = add64(res, math.Abs(sub64(y[i], x[i])))
+		}
+		it := result.Iterations
+		result.Residual = &res
+		result.ResidualIteration = &it
+		if res <= boundaryPageRankTolerance {
+			result.Status = "COMPLETE"
+			return x, result
+		}
+		if result.Iterations == boundaryPageRankMaxIterations {
+			result.Reason = "NOT_CONVERGED"
+			return nil, result
 		}
 		x = y
-		if res <= 1e-9 {
-			break
-		}
+		result.Iterations++
 	}
-	return x
 }
 func topScores(ids []string, s []float64, cross map[int64]bool, k int) []BoundaryNodeScore {
 	all := make([]BoundaryNodeScore, len(ids))
@@ -343,6 +445,9 @@ func weakCritical(ids []string, es []Occurrence) ([]string, []string) {
 	return bridges, ap
 }
 func ValidateBoundary(raw []byte, o Outcome, r BoundaryRequest) error {
+	if _, err := schema.ValidateFor(raw, schema.FamilyCommunityBoundary, "v1"); err != nil {
+		return err
+	}
 	var got BoundaryArtifact
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
