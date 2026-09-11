@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -15,6 +16,9 @@ func TestGraphProvenanceCLIOptIn(t *testing.T) {
 }
 
 func TestGraphProvenanceCLIFileSymbolUsesManagedMCPResolver(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed local-process integration is Darwin-only")
+	}
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0o600); err != nil {
 		t.Fatal(err)
