@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -212,14 +213,20 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 	start := symbol.SelectionRange.Start
 	for delta := uint32(0); delta <= maxSymbolPrepareProbeDelta && delta <= ^uint32(0)-start.Character; delta++ {
 		candidate := lsp.Position{Line: start.Line, Character: start.Character + delta}
+		if !rangeContainsPosition(symbol.SelectionRange, candidate) {
+			break
+		}
 		items, err := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: candidate})
 		if err == nil {
-			if len(items) > 0 {
-				return candidate.Line, candidate.Character, nil
+			if len(items) == 0 {
+				continue
 			}
-			continue
+			if len(items) != 1 || !compatiblePreparedMethod(uri, symbol, items[0]) {
+				return 0, 0, failure("DOCUMENT_SYMBOL_PREPARE_MISMATCH", fmt.Errorf("document symbol %q prepared an incompatible or ambiguous identity", symbolName))
+			}
+			return candidate.Line, candidate.Character, nil
 		}
-		if strings.Contains(err.Error(), "json-rpc error 0: identifier not found") {
+		if retryableSymbolPrepareMiss(err) {
 			continue
 		}
 		if errors.Is(err, context.Canceled) {
@@ -325,6 +332,31 @@ func validRange(r lsp.Range) bool {
 
 func rangeContains(outer, inner lsp.Range) bool {
 	return !positionLess(inner.Start, outer.Start) && !positionLess(outer.End, inner.End)
+}
+
+func rangeContainsPosition(r lsp.Range, position lsp.Position) bool {
+	return !positionLess(position, r.Start) && positionLess(position, r.End)
+}
+
+func retryableSymbolPrepareMiss(err error) bool {
+	message, ok := strings.CutPrefix(err.Error(), "json-rpc error 0: ")
+	return ok && (message == "identifier not found" || strings.HasSuffix(message, " is not a function"))
+}
+
+func compatiblePreparedMethod(uri string, symbol lsp.DocumentSymbol, item lsp.CallHierarchyItem) bool {
+	return item.URI == uri && canonicalDocumentURI(item.URI) && callableSymbolKind(item.Kind) &&
+		validRange(item.Range) && validRange(item.SelectionRange) && rangeContains(item.Range, item.SelectionRange) &&
+		rangeContains(symbol.Range, item.Range) && rangeContains(symbol.Range, item.SelectionRange)
+}
+
+func callableSymbolKind(kind int) bool {
+	return kind == 6 || kind == 9 || kind == 12
+}
+
+func canonicalDocumentURI(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.IsAbs() && u.Fragment == "" && u.RawQuery == "" && u.Opaque == "" &&
+		u.Path == path.Clean(u.Path) && u.String() == raw
 }
 
 func positionLess(a, b lsp.Position) bool {

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/provider"
@@ -336,6 +337,94 @@ func TestIncomingRealGoplsSymbolSpecimenReconcilesPreparePosition(t *testing.T) 
 	t.Log("PASS " + assertion)
 }
 
+func TestIncomingRealGoplsMethodSpecimenProbesExactIdentifier(t *testing.T) {
+	const assertion = "ASSERT_GOPLS_METHOD_RECEIVER_PROBES_EXACT_IDENTIFIER"
+	raw, err := os.ReadFile("testdata/gopls-v0.23.0-executor-execute-document-symbol.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response struct {
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		t.Fatalf("%s_SPECIMEN_VALID: %v", assertion, err)
+	}
+	item := `{"name":"Execute","kind":6,"uri":"file:///w/incomingops/executor.go","range":{"start":{"line":69,"character":0},"end":{"line":77,"character":1}},"selectionRange":{"start":{"line":69,"character":19},"end":{"line":69,"character":26}}}`
+	miss := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "e is not a function"}}
+	misses := make([]sessionruntime.RoundTripResult, 13)
+	for i := range misses {
+		misses[i] = miss
+	}
+	f := &fakeRuntime{
+		metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true},
+		results: map[string][]json.RawMessage{
+			"textDocument/documentSymbol":       {response.Result},
+			"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`), json.RawMessage(`[` + item + `]`)},
+			"callHierarchy/incomingCalls":       {json.RawMessage(`[]`)},
+		},
+		observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": misses},
+	}
+	result, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/incomingops/executor.go","symbol":"(*Executor).Execute"}`)})
+	if failure != nil {
+		t.Fatalf("%s: failure=%v", assertion, failure)
+	}
+	var got graph.Result
+	if err := json.Unmarshal(result.Artifact, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Invocation.Target.Line != 69 || got.Invocation.Target.Column != 19 {
+		t.Fatalf("%s: target=%+v", assertion, got.Invocation.Target)
+	}
+	for i, request := range f.requests[1:15] {
+		var params lsp.PrepareCallHierarchyParams
+		if err := json.Unmarshal(request.Params, &params); err != nil || params.Position != (lsp.Position{Line: 69, Character: uint32(6 + i)}) {
+			t.Fatalf("%s: probe[%d]=%s err=%v", assertion, i, request.Params, err)
+		}
+	}
+	t.Log("PASS " + assertion)
+}
+
+func TestIncomingMethodPrepareIdentityFailsClosed(t *testing.T) {
+	const assertion = "ASSERT_GOPLS_METHOD_PREPARE_IDENTITY_FAILS_CLOSED"
+	symbol := `[{"name":"(*Executor).Execute","kind":6,"range":{"start":{"line":69,"character":0},"end":{"line":77,"character":1}},"selectionRange":{"start":{"line":69,"character":6},"end":{"line":69,"character":26}}}]`
+	valid := `{"name":"Execute","kind":6,"uri":"file:///w/executor.go","range":{"start":{"line":69,"character":0},"end":{"line":77,"character":1}},"selectionRange":{"start":{"line":69,"character":19},"end":{"line":69,"character":26}}}`
+	cases := []struct {
+		name, item string
+	}{
+		{"wrong uri", strings.Replace(valid, "file:///w/executor.go", "file:///w/other.go", 1)},
+		{"noncanonical uri", strings.Replace(valid, "file:///w/executor.go", "file:///w/../w/executor.go", 1)},
+		{"noncallable kind", strings.Replace(valid, `"kind":6`, `"kind":5`, 1)},
+		{"range outside symbol", strings.Replace(valid, `"line":77,"character":1`, `"line":78,"character":1`, 1)},
+		{"selection outside symbol", strings.Replace(valid, `"line":69,"character":26`, `"line":78,"character":1`, 1)},
+		{"ambiguous identities", valid + "," + strings.Replace(valid, `"name":"Execute"`, `"name":"Other"`, 1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{
+				"textDocument/documentSymbol":       {json.RawMessage(symbol)},
+				"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + tc.item + `]`)},
+			}}
+			_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/executor.go","symbol":"(*Executor).Execute"}`)})
+			if failure == nil || failure.Code != "DOCUMENT_SYMBOL_PREPARE_MISMATCH" || len(f.requests) != 2 {
+				t.Fatalf("%s: failure=%v requests=%d", assertion, failure, len(f.requests))
+			}
+		})
+	}
+	t.Log("PASS " + assertion)
+}
+
+func TestIncomingMethodProbeExhaustionIsDistinct(t *testing.T) {
+	const assertion = "ASSERT_GOPLS_METHOD_PROBE_EXHAUSTION_DISTINCT"
+	symbol := `[{"name":"(*Executor).Execute","kind":6,"range":{"start":{"line":69,"character":0},"end":{"line":77,"character":1}},"selectionRange":{"start":{"line":69,"character":6},"end":{"line":69,"character":9}}}]`
+	miss := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "e is not a function"}}
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(symbol)}}, observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {miss, miss, miss, miss}}}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/executor.go","symbol":"(*Executor).Execute"}`)})
+	if failure == nil || failure.Code != "DOCUMENT_SYMBOL_UNPREPARABLE" || len(f.requests) != 4 {
+		t.Fatalf("%s: failure=%v requests=%d", assertion, failure, len(f.requests))
+	}
+	t.Log("PASS " + assertion)
+}
+
 func TestIncomingSymbolProbeBoundsAndFailures(t *testing.T) {
 	const symbol = `[{"name":"Target","kind":12,"location":{"uri":"file:///w/a.go","range":{"start":{"line":7,"character":0},"end":{"line":9,"character":1}}}}]`
 	t.Run("bounded", func(t *testing.T) {
@@ -365,6 +454,7 @@ func TestIncomingSymbolProbeBoundsAndFailures(t *testing.T) {
 		{"cancel", "ASSERT_SYMBOL_PROBE_CANCELLATION_STOPS", "CANCELLED", sessionruntime.RoundTripResult{Failure: session.RequestCancelled}},
 		{"timeout", "ASSERT_SYMBOL_PROBE_TIMEOUT_STOPS", "REQUEST_TIMEOUT", sessionruntime.RoundTripResult{Failure: session.RequestTimeout}},
 		{"server", "ASSERT_SYMBOL_PROBE_NON_POSITION_SERVER_ERROR_STOPS", "DOCUMENT_SYMBOL_PREPARE_FAILED", sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32603, Message: "boom"}}},
+		{"code-zero-unrelated", "ASSERT_SYMBOL_PROBE_CODE_ZERO_UNRELATED_STOPS", "DOCUMENT_SYMBOL_PREPARE_FAILED", sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "type information unavailable"}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(symbol)}}, observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {tc.observed}}}
@@ -401,7 +491,7 @@ func TestIncomingSelectorContracts(t *testing.T) {
 		}
 	})
 	for _, tc := range []struct {
-		name, assertion, symbols, wantPosition string
+		name, assertion, symbols, prepared, wantPosition string
 	}{
 		{
 			name:         "gopls hierarchical document symbols",
@@ -413,6 +503,7 @@ func TestIncomingSelectorContracts(t *testing.T) {
 			name:         "flat symbol information",
 			assertion:    "ASSERT_SYMBOL_INFORMATION_LOCATION_START",
 			symbols:      `[{"name":"Target","kind":12,"tags":[],"deprecated":false,"location":{"uri":"file:///w/a.go","range":{"start":{"line":7,"character":4},"end":{"line":9,"character":1}}},"containerName":"Manager"}]`,
+			prepared:     `{"name":"Target","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":7,"character":4},"end":{"line":9,"character":1}},"selectionRange":{"start":{"line":7,"character":4},"end":{"line":9,"character":1}}}`,
 			wantPosition: `"line":7,"character":4`,
 		},
 	} {
@@ -421,7 +512,11 @@ func TestIncomingSelectorContracts(t *testing.T) {
 			if err := json.Unmarshal([]byte(tc.symbols), &specimen); err != nil {
 				t.Fatalf("%s_SPECIMEN_VALID: %v", tc.assertion, err)
 			}
-			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(tc.symbols)}, "textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
+			prepared := tc.prepared
+			if prepared == "" {
+				prepared = item
+			}
+			f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(tc.symbols)}, "textDocument/prepareCallHierarchy": {json.RawMessage(`[` + prepared + `]`)}, "callHierarchy/incomingCalls": {json.RawMessage(`[]`)}}}
 			_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
 			if failure != nil || len(f.requests) < 2 || !strings.Contains(string(f.requests[1].Params), tc.wantPosition) {
 				t.Fatalf("%s: failure=%v requests=%v", tc.assertion, failure, f.requests)

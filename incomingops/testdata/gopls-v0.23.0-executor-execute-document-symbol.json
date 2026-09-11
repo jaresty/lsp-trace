@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": [
+    {
+      "name": "(*Executor).Execute",
+      "detail": "func(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure)",
+      "kind": 6,
+      "tags": [],
+      "deprecated": false,
+      "range": {
+        "start": {"line": 69, "character": 0},
+        "end": {"line": 77, "character": 1}
+      },
+      "selectionRange": {
+        "start": {"line": 69, "character": 6},
+        "end": {"line": 69, "character": 26}
+      }
+    }
+  ]
+}
