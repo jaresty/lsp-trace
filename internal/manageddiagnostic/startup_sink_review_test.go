@@ -1,6 +1,7 @@
 package manageddiagnostic
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -106,6 +107,87 @@ func TestReviewStartupSinkRejectsKnownFieldSemanticSmuggling(t *testing.T) {
 				t.Fatalf("ASSERT_FR23_STARTUP_DOCUMENT_VERIFY_SEMANTICS_%s: accepted", name)
 			}
 		})
+	}
+}
+
+func TestReviewHardenedPublicationRemediationIsBoundedAndPathFree(t *testing.T) {
+	privateRoot := filepath.Join(t.TempDir(), "sensitive-root-name")
+	selector := "sensitive-selector-name.json"
+	valid := func([]byte) error { return nil }
+
+	cases := []struct {
+		name      string
+		root      func(t *testing.T) string
+		selector  string
+		cause     string
+		retryable string
+	}{
+		{name: "relative-root", root: func(t *testing.T) string { return "relative-sensitive-root" }, selector: selector, cause: "ROOT_NOT_ABSOLUTE", retryable: "true"},
+		{name: "missing-root", root: func(t *testing.T) string { return privateRoot }, selector: selector, cause: "ROOT_UNAVAILABLE", retryable: "true"},
+		{name: "public-root-mode", root: func(t *testing.T) string {
+			root := t.TempDir()
+			if err := os.Chmod(root, 0755); err != nil {
+				t.Fatal(err)
+			}
+			return root
+		}, selector: selector, cause: "ROOT_NOT_PRIVATE", retryable: "true"},
+		{name: "root-symlink", root: func(t *testing.T) string {
+			realRoot := t.TempDir()
+			link := filepath.Join(t.TempDir(), "sensitive-root-link")
+			if err := os.Symlink(realRoot, link); err != nil {
+				t.Fatal(err)
+			}
+			return link
+		}, selector: selector, cause: "ROOT_NOT_DESCRIPTOR_SAFE", retryable: "true"},
+		{name: "existing-output", root: func(t *testing.T) string {
+			root := t.TempDir()
+			if err := os.Chmod(root, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(root, selector), []byte("sentinel"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			return root
+		}, selector: selector, cause: "OUTPUT_EXISTS", retryable: "true"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := tc.root(t)
+			err := PublishHardened(root, tc.selector, []byte("private bytes"), valid)
+			if err == nil {
+				t.Fatal("ASSERT_PRIVATE_PUBLICATION_REMEDIATION: unsafe publication accepted")
+			}
+			message := err.Error()
+			for _, required := range []string{
+				"cause=" + tc.cause,
+				"required_action=root must exist and be absolute; use descriptor-rooted private mode 0700; output mode is 0600; publication is create-only",
+				"retryable=" + tc.retryable,
+			} {
+				if !strings.Contains(message, required) {
+					t.Errorf("ASSERT_PRIVATE_PUBLICATION_REMEDIATION/%s: missing %q in %q", tc.name, required, message)
+				}
+			}
+			if len(message) > 512 || strings.Contains(message, root) || strings.Contains(message, tc.selector) {
+				t.Errorf("ASSERT_PRIVATE_PUBLICATION_REMEDIATION/%s: unbounded or private input disclosed: %q", tc.name, message)
+			}
+		})
+	}
+
+	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	raw := []byte("private bytes")
+	if err := PublishHardened(root, "valid.json", raw, valid); err != nil {
+		t.Fatalf("ASSERT_PRIVATE_PUBLICATION_VALID: %v", err)
+	}
+	stored, err := os.ReadFile(filepath.Join(root, "valid.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(root, "valid.json"))
+	if err != nil || !bytes.Equal(stored, raw) || info.Mode().Perm() != 0600 {
+		t.Fatalf("ASSERT_PRIVATE_PUBLICATION_VALID: err=%v bytes=%q mode=%v", err, stored, info.Mode().Perm())
 	}
 }
 

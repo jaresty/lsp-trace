@@ -355,6 +355,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		}
 		if privateErr != nil {
 			fmt.Fprintln(stderr, "private request diagnostics unavailable:", reason)
+			if reason == "PUBLICATION_REJECTED" {
+				fmt.Fprintln(stderr, "private diagnostic publication remediation:", privateErr)
+			}
 		}
 	}
 	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
@@ -364,6 +367,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		} else if requestDiagnosticsRequested {
 			failureDiagnosticPublished := false
 			failureDiagnosticStage := "PUBLIC_ARTIFACT_UNAVAILABLE"
+			var failurePublicationErr error
 			if outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations" {
 				handles := privateRuntime.diagnosticHandles()
 				sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
@@ -375,6 +379,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 					if projectionErr == nil {
 						failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
 						projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
+						failurePublicationErr = projectionErr
 					} else {
 						failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
 					}
@@ -383,6 +388,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 			}
 			if !failureDiagnosticPublished {
 				fmt.Fprintf(stderr, "private request diagnostics unavailable: %s; PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding\n", failureDiagnosticStage)
+				if failurePublicationErr != nil {
+					fmt.Fprintln(stderr, "private diagnostic publication remediation:", failurePublicationErr)
+				}
 			}
 		}
 		return fail(failed)

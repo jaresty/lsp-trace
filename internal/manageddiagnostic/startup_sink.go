@@ -110,27 +110,39 @@ func PublishHardened(root, selector string, raw []byte, validate func([]byte) er
 	return hardenedPublish(root, selector, raw, validate, nil)
 }
 
+const privatePublicationRequiredAction = "root must exist and be absolute; use descriptor-rooted private mode 0700; output mode is 0600; publication is create-only"
+
+func privatePublicationFailure(cause string, retryable bool) error {
+	return fmt.Errorf("cause=%s; required_action=%s; retryable=%t", cause, privatePublicationRequiredAction, retryable)
+}
+
 func hardenedPublish(rootPath, selector string, raw []byte, validate func([]byte) error, afterRootLstat func()) error {
+	if !filepath.IsAbs(rootPath) {
+		return privatePublicationFailure("ROOT_NOT_ABSOLUTE", true)
+	}
 	selector, err := safeStartupSelector(selector)
 	if err != nil {
-		return err
+		return privatePublicationFailure("SELECTOR_UNSAFE", true)
 	}
 	if validate == nil {
-		return errors.New("private diagnostic validator required")
+		return privatePublicationFailure("VALIDATOR_UNAVAILABLE", false)
 	}
 	if err := validate(raw); err != nil {
-		return err
+		return privatePublicationFailure("CONTENT_INVALID", false)
 	}
 	pathInfo, err := os.Lstat(rootPath)
-	if err != nil || pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.IsDir() {
-		return errors.New("diagnostic root must be a private writable directory")
+	if err != nil {
+		return privatePublicationFailure("ROOT_UNAVAILABLE", true)
+	}
+	if pathInfo.Mode()&os.ModeSymlink != 0 || !pathInfo.IsDir() {
+		return privatePublicationFailure("ROOT_NOT_DESCRIPTOR_SAFE", true)
 	}
 	if afterRootLstat != nil {
 		afterRootLstat()
 	}
 	root, err := os.OpenRoot(rootPath)
 	if err != nil {
-		return err
+		return privatePublicationFailure("ROOT_UNAVAILABLE", true)
 	}
 	defer root.Close()
 	opened, err := root.Open(".")
@@ -139,12 +151,15 @@ func hardenedPublish(rootPath, selector string, raw []byte, validate func([]byte
 	}
 	openedInfo, statErr := opened.Stat()
 	closeErr := opened.Close()
-	if statErr != nil || closeErr != nil || !openedInfo.IsDir() || !os.SameFile(pathInfo, openedInfo) || openedInfo.Mode().Perm()&0222 == 0 || openedInfo.Mode().Perm()&0077 != 0 {
-		return errors.New("diagnostic root must be a private writable directory")
+	if statErr != nil || closeErr != nil || !openedInfo.IsDir() || !os.SameFile(pathInfo, openedInfo) {
+		return privatePublicationFailure("ROOT_NOT_DESCRIPTOR_SAFE", true)
+	}
+	if openedInfo.Mode().Perm()&0222 == 0 || openedInfo.Mode().Perm()&0077 != 0 {
+		return privatePublicationFailure("ROOT_NOT_PRIVATE", true)
 	}
 	if dir := filepath.Dir(selector); dir != "." {
 		if err := root.MkdirAll(dir, 0700); err != nil {
-			return err
+			return privatePublicationFailure("PARENT_UNAVAILABLE", true)
 		}
 		// Reject symlinks in every existing nested component.
 		parts := strings.Split(dir, string(filepath.Separator))
@@ -152,18 +167,18 @@ func hardenedPublish(rootPath, selector string, raw []byte, validate func([]byte
 			component := filepath.Join(parts[:i+1]...)
 			info, err := root.Lstat(component)
 			if err != nil || info.Mode()&os.ModeSymlink != 0 || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-				return errors.New("diagnostic selector parent must be a private directory")
+				return privatePublicationFailure("PARENT_NOT_PRIVATE", true)
 			}
 		}
 	}
 	var nonce [8]byte
 	if _, err = io.ReadFull(rand.Reader, nonce[:]); err != nil {
-		return err
+		return privatePublicationFailure("NONCE_UNAVAILABLE", true)
 	}
 	tmp := selector + ".tmp-" + hex.EncodeToString(nonce[:])
 	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
-		return err
+		return privatePublicationFailure("TEMPORARY_CREATE_FAILED", true)
 	}
 	published := false
 	defer func() {
@@ -179,38 +194,41 @@ func hardenedPublish(rootPath, selector string, raw []byte, validate func([]byte
 		err = closeErr
 	}
 	if err != nil {
-		return err
+		return privatePublicationFailure("TEMPORARY_WRITE_FAILED", true)
 	}
 	check, err := root.Open(tmp)
 	if err != nil {
-		return err
+		return privatePublicationFailure("TEMPORARY_VALIDATE_FAILED", true)
 	}
 	stored, readErr := io.ReadAll(check)
 	info, statErr := check.Stat()
 	closeErr = check.Close()
 	if readErr != nil || statErr != nil || closeErr != nil || info.Mode().Perm() != 0600 || info.Mode().IsRegular() == false || info.Sys() == nil || !bytes.Equal(stored, raw) {
-		return errors.New("diagnostic temporary file validation failed")
+		return privatePublicationFailure("TEMPORARY_VALIDATE_FAILED", true)
 	}
 	if err := validate(stored); err != nil {
-		return err
+		return privatePublicationFailure("CONTENT_INVALID", false)
 	}
 	if err = root.Link(tmp, selector); err != nil {
-		return err
+		if errors.Is(err, os.ErrExist) {
+			return privatePublicationFailure("OUTPUT_EXISTS", true)
+		}
+		return privatePublicationFailure("OUTPUT_CREATE_FAILED", true)
 	}
 	published = true
 	if err = root.Remove(tmp); err != nil {
-		return err
+		return privatePublicationFailure("TEMPORARY_CLEANUP_FAILED", true)
 	}
 	dir, err := root.Open(".")
 	if err != nil {
-		return err
+		return privatePublicationFailure("DIRECTORY_SYNC_FAILED", true)
 	}
 	err = dir.Sync()
 	closeErr = dir.Close()
-	if err != nil {
-		return err
+	if err != nil || closeErr != nil {
+		return privatePublicationFailure("DIRECTORY_SYNC_FAILED", true)
 	}
-	return closeErr
+	return nil
 }
 
 func safeStartupSelector(selector string) (string, error) {
