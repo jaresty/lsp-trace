@@ -1,0 +1,53 @@
+{
+  "schema_version": "lsp-trace.program-c-neutrality-examples.v1",
+  "policy": "Program C community labels are run-local structural identifiers and crossings are structural observations under an exact projection.",
+  "allowed": [
+    {
+      "id": "structural-community",
+      "statement": "Under the named graph digest, calls-v1 profile digest, algorithm version, parameters, seed, and resource policy, node n1 was assigned run-local community c0.",
+      "reason": "Binds a run-local label to exact structural inputs without asserting domain identity."
+    },
+    {
+      "id": "structural-crossing",
+      "statement": "Three retained CALLS occurrences cross between run-local communities c0 and c1 under this projection.",
+      "reason": "Reports attributable structural occurrence accounting only."
+    },
+    {
+      "id": "incomplete-result",
+      "statement": "The community run is incomplete because the declared memory ceiling was reached; no labels or crossings are published.",
+      "reason": "Preserves typed resource failure without semantic fallback."
+    }
+  ],
+  "prohibited": [
+    {
+      "id": "feature-identity",
+      "statement": "Community c0 is the billing feature.",
+      "reason": "A run-local structural label cannot identify a product feature."
+    },
+    {
+      "id": "business-boundary",
+      "statement": "The crossing between c0 and c1 proves a business-domain boundary.",
+      "reason": "A structural crossing is not business-boundary evidence."
+    },
+    {
+      "id": "ownership-identity",
+      "statement": "Community c1 belongs to the payments team.",
+      "reason": "The graph does not establish organizational ownership."
+    },
+    {
+      "id": "service-identity",
+      "statement": "Community c2 is an independently deployable service.",
+      "reason": "Community output cannot establish deployment or service identity."
+    },
+    {
+      "id": "stability-overclaim",
+      "statement": "Matching labels across tested seeds prove this architecture is universally stable.",
+      "reason": "Bounded seeded observations do not establish universal stability or architecture meaning."
+    },
+    {
+      "id": "custody-upgrade",
+      "statement": "Successful clustering proves the input graph is complete and authenticated.",
+      "reason": "A community computation cannot upgrade graph custody or completeness."
+    }
+  ]
+}
