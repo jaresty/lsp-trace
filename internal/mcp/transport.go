@@ -668,28 +668,28 @@ func domainErrorEnvelope(tool, requestID, code string, diagnostics []string) env
 }
 
 func artifactSuccessSchemaID(tool string) string {
-	if tool == "lsp_trace_v1_execute" {
+	if tool == mcpcontract.CustodyExecuteTool {
 		return executionArtifactEnvelopeSchemaID
 	}
 	return artifactEnvelopeSchemaID
 }
 
 func publicationSuccessSchemaID(tool string) string {
-	if tool == "lsp_trace_v1_execute" {
+	if tool == mcpcontract.CustodyExecuteTool {
 		return executionPublicationEnvelopeSchemaID
 	}
 	return publicationEnvelopeSchemaID
 }
 
 func publicationFailureSchemaID(tool string) string {
-	if tool == "lsp_trace_v1_execute" {
+	if tool == mcpcontract.CustodyExecuteTool {
 		return executionPublicationErrorEnvelopeSchemaID
 	}
 	return publicationErrorEnvelopeSchemaID
 }
 
 func domainFailureSchemaID(tool string) string {
-	if tool == "lsp_trace_v1_execute" {
+	if tool == mcpcontract.CustodyExecuteTool {
 		return executionDomainErrorEnvelopeSchemaID
 	}
 	return domainEnvelopeSchemaID
@@ -865,7 +865,7 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":
 		return operation.Name("slice")
-	case "lsp_trace_v1_execute":
+	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")

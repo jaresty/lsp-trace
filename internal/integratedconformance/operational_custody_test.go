@@ -66,7 +66,7 @@ func (h operationalHarness) run(mode string, input any, config string, executor 
 			args = append(args, "--custody-trust-config", config)
 		}
 		cmd = exec.Command(h.mcp, args...)
-		line, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": "lsp_trace_v1_execute", "arguments": map[string]any{"request": input}}})
+		line, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": "lsp_trace_v1_custody_execute", "arguments": map[string]any{"request": input}}})
 		cmd.Stdin = bytes.NewReader(append(line, '\n'))
 	}
 	var stderr bytes.Buffer

@@ -297,13 +297,11 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
 	siblings := result.Graph.SiblingCandidates
-	var raw []byte
-	if !wantsV5 {
-		raw, err = graphprovenance.CaptureV2(ctx, result, workspace)
-		if err != nil {
-			return fail("OUTPUT_VALIDATION_FAILED", err)
-		}
+	carrierRaw, err := graphprovenance.CaptureV2(ctx, result, workspace)
+	if err != nil {
+		return fail("OUTPUT_VALIDATION_FAILED", err)
 	}
+	raw := carrierRaw
 	if op.Name == SliceV3 || op.Name == IncomingV3 {
 		query := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
 		if diagnostics, ok := e.runtime.(interface {
@@ -365,7 +363,11 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			if marshalErr != nil {
 				return fail("OUTPUT_VALIDATION_FAILED", marshalErr)
 			}
-			raw, err = graphprovenance.CaptureV5(native, id, generation, query)
+			var carrier graphprovenance.EvidenceV2
+			if unmarshalErr := json.Unmarshal(carrierRaw, &carrier); unmarshalErr != nil {
+				return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
+			}
+			raw, err = graphprovenance.CaptureV5(native, id, generation, query, &carrier)
 			if err == nil && wantsSnapshot {
 				raw, err = v5sourcesnapshot.Build(raw, workspace, metadata.PositionEncoding)
 			}

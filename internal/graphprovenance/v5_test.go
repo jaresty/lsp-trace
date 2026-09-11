@@ -21,7 +21,8 @@ func v5Fixture(t *testing.T) ([]byte, []byte) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := CaptureV5(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}})
+	source := EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, WorkspaceURI: "file:///w", AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Supplies: []SupplyReceiptV2{}, Captures: []Receipt{}, Bindings: []BindingV2{}}
+	raw, err := CaptureV5(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, &source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,12 +42,20 @@ func TestV5ExactNativeCarrierAndMutations(t *testing.T) {
 	if string(decoded) != string(native) {
 		t.Fatal("ASSERT_V5_EXACT_EMBEDDED_BYTES")
 	}
+	if e.SourcePolicy != PolicyV2 || e.WorkspaceURI != "file:///w" || e.Supplies == nil || e.Captures == nil || e.Bindings == nil {
+		t.Fatal("ASSERT_V5_OWNS_SOURCE_SUPPLIES")
+	}
+	again, err := CaptureV5(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, &EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, WorkspaceURI: "file:///w", AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Supplies: []SupplyReceiptV2{}, Captures: []Receipt{}, Bindings: []BindingV2{}})
+	if err != nil || string(again) != string(raw) {
+		t.Fatal("ASSERT_V5_DETERMINISTIC_SOURCE_BYTES", err)
+	}
 	mutations := map[string]func(*EvidenceV5){
 		"digest": func(x *EvidenceV5) {
 			x.GraphV5SHA256 = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 		},
-		"schema": func(x *EvidenceV5) { x.GraphV5SchemaID = "https://example.invalid/substitute" },
-		"bytes":  func(x *EvidenceV5) { x.GraphV5 = base64.StdEncoding.EncodeToString(append(decoded, ' ')) },
+		"schema":        func(x *EvidenceV5) { x.GraphV5SchemaID = "https://example.invalid/substitute" },
+		"bytes":         func(x *EvidenceV5) { x.GraphV5 = base64.StdEncoding.EncodeToString(append(decoded, ' ')) },
+		"source-policy": func(x *EvidenceV5) { x.SourcePolicy = "substitute" },
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

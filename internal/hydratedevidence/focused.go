@@ -64,6 +64,36 @@ type FocusResult struct {
 	Bundle   Bundle        `json:"bundle"`
 }
 
+// focusedGraphBytes extracts only the graph carried by an already-admitted
+// provenance artifact. Retained source bytes never contribute graph membership.
+func focusedGraphBytes(raw []byte) (string, []byte, error) {
+	var env struct {
+		SchemaVersion string `json:"schema_version"`
+		GraphBytes    []byte `json:"graph_bytes"`
+		GraphV5       string `json:"graph_v5"`
+	}
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return "", nil, err
+	}
+	if env.SchemaVersion == graphprovenance.VersionV5 {
+		b, err := base64.StdEncoding.DecodeString(env.GraphV5)
+		return env.SchemaVersion, b, err
+	}
+	if env.SchemaVersion == v5sourcesnapshot.Version {
+		var snapshot v5sourcesnapshot.Artifact
+		var v5 graphprovenance.EvidenceV5
+		if err := json.Unmarshal(raw, &snapshot); err != nil {
+			return "", nil, err
+		}
+		if err := json.Unmarshal(snapshot.GraphV5Bytes, &v5); err != nil {
+			return "", nil, err
+		}
+		b, err := base64.StdEncoding.DecodeString(v5.GraphV5)
+		return env.SchemaVersion, b, err
+	}
+	return env.SchemaVersion, env.GraphBytes, nil
+}
+
 // focusGraph is a typed projection of already validated exact GraphBytes. Raw
 // ranges preserve unusable coordinates without coercing them into valid zeros.
 // Neither names, opaque data nor acquisition request IDs participate in this join.
@@ -131,31 +161,12 @@ func focusPlan(input Input, f FocusRequest) (FocusManifest, Request, error) {
 	if err != nil {
 		return fail(err)
 	}
-	var env struct {
-		SchemaVersion string `json:"schema_version"`
-		GraphBytes    []byte `json:"graph_bytes"`
-	}
-	if err = json.Unmarshal(input.Artifact, &env); err != nil {
+	version, graphBytes, err := focusedGraphBytes(input.Artifact)
+	if err != nil {
 		return fail(err)
 	}
-	graphBytes := env.GraphBytes
 	prefix := ""
-	if env.SchemaVersion == graphprovenance.VersionV2 {
-		prefix = "/graph"
-	}
-	if env.SchemaVersion == v5sourcesnapshot.Version {
-		var snapshot v5sourcesnapshot.Artifact
-		var v5 graphprovenance.EvidenceV5
-		if err = json.Unmarshal(input.Artifact, &snapshot); err != nil {
-			return fail(err)
-		}
-		if err = json.Unmarshal(snapshot.GraphV5Bytes, &v5); err != nil {
-			return fail(err)
-		}
-		graphBytes, err = base64.StdEncoding.DecodeString(v5.GraphV5)
-		if err != nil {
-			return fail(err)
-		}
+	if version == graphprovenance.VersionV2 || version == graphprovenance.VersionV5 || version == v5sourcesnapshot.Version {
 		prefix = "/graph"
 	}
 	var g focusGraph
@@ -413,32 +424,12 @@ func ValidateFocused(input Input, f FocusRequest, result FocusResult) error {
 // Admission has already succeeded; this is not an alternate native validator.
 func auditNativeFocus(input Input, f FocusRequest, result FocusResult) error {
 	bad := func() error { return errors.New("focused independent native coverage mismatch") }
-	var env struct {
-		SchemaVersion string `json:"schema_version"`
-		GraphBytes    []byte `json:"graph_bytes"`
-	}
-	if e := json.Unmarshal(input.Artifact, &env); e != nil {
+	version, graphBytes, e := focusedGraphBytes(input.Artifact)
+	if e != nil {
 		return e
 	}
-	graphBytes := env.GraphBytes
 	prefix := ""
-	if env.SchemaVersion == graphprovenance.VersionV2 {
-		prefix = "/graph"
-	}
-	if env.SchemaVersion == v5sourcesnapshot.Version {
-		var snapshot v5sourcesnapshot.Artifact
-		var v5 graphprovenance.EvidenceV5
-		if e := json.Unmarshal(input.Artifact, &snapshot); e != nil {
-			return e
-		}
-		if e := json.Unmarshal(snapshot.GraphV5Bytes, &v5); e != nil {
-			return e
-		}
-		var e error
-		graphBytes, e = base64.StdEncoding.DecodeString(v5.GraphV5)
-		if e != nil {
-			return e
-		}
+	if version == graphprovenance.VersionV2 || version == graphprovenance.VersionV5 || version == v5sourcesnapshot.Version {
 		prefix = "/graph"
 	}
 	var g focusGraph

@@ -32,7 +32,7 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.Inspect:                   "lsp_trace_v1_inspect",
 		operation.InspectHydrated:           HydratedTool,
 		operation.Filter:                    "lsp_trace_v1_filter",
-		operation.CustodyExecute:            "lsp_trace_v1_execute",
+		operation.CustodyExecute:            CustodyExecuteTool,
 		operation.ExportRetainedCalls:       "lsp_trace_v1_export_retained_calls",
 		operation.ExportRetainedCallsV2:     "lsp_trace_v2_export_retained_calls",
 		operation.BoundedRetainedAnalysis:   "lsp_trace_v1_bounded_retained_analysis",

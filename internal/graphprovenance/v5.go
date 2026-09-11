@@ -21,18 +21,26 @@ const (
 )
 
 type EvidenceV5 struct {
-	SchemaVersion   string        `json:"schema_version"`
-	SessionID       string        `json:"session_id"`
-	Generation      uint64        `json:"generation"`
-	GraphV5         string        `json:"graph_v5"`
-	GraphV5SHA256   string        `json:"graph_v5_sha256"`
-	GraphV5SchemaID string        `json:"graph_v5_schema_id"`
-	Diagnostics     DiagnosticsV3 `json:"diagnostics"`
+	SchemaVersion          string            `json:"schema_version"`
+	SessionID              string            `json:"session_id"`
+	Generation             uint64            `json:"generation"`
+	GraphV5                string            `json:"graph_v5"`
+	GraphV5SHA256          string            `json:"graph_v5_sha256"`
+	GraphV5SchemaID        string            `json:"graph_v5_schema_id"`
+	SourcePolicy           string            `json:"source_policy"`
+	WorkspaceURI           string            `json:"workspace_uri"`
+	AnalyzedVersion        string            `json:"analyzed_version"`
+	DependencyCompleteness string            `json:"dependency_completeness"`
+	CaptureBudget          CaptureBudgetV2   `json:"capture_budget"`
+	Supplies               []SupplyReceiptV2 `json:"supplies"`
+	Captures               []Receipt         `json:"captures"`
+	Bindings               []BindingV2       `json:"bindings"`
+	Diagnostics            DiagnosticsV3     `json:"diagnostics"`
 }
 
 // CaptureV5 retains the native graph.v5 serialization exactly. It deliberately
 // does not project sibling candidates into CALLS or any support relation.
-func CaptureV5(native []byte, sessionID string, generation uint64, query manageddiagnostic.QueryResult) ([]byte, error) {
+func CaptureV5(native []byte, sessionID string, generation uint64, query manageddiagnostic.QueryResult, source ...*EvidenceV2) ([]byte, error) {
 	if sessionID == "" || generation == 0 {
 		return nil, errors.New("V5 exact session and generation required")
 	}
@@ -62,7 +70,42 @@ func CaptureV5(native []byte, sessionID string, generation uint64, query managed
 		return nil, err
 	}
 	sum := sha256.Sum256(native)
-	e := EvidenceV5{SchemaVersion: VersionV5, SessionID: sessionID, Generation: generation, GraphV5: base64.StdEncoding.EncodeToString(native), GraphV5SHA256: fmt.Sprintf("sha256:%x", sum), GraphV5SchemaID: GraphV5SchemaID, Diagnostics: d}
+	e := EvidenceV5{SchemaVersion: VersionV5, SessionID: sessionID, Generation: generation, GraphV5: base64.StdEncoding.EncodeToString(native), GraphV5SHA256: fmt.Sprintf("sha256:%x", sum), GraphV5SchemaID: GraphV5SchemaID, SourcePolicy: PolicyV2, Supplies: []SupplyReceiptV2{}, Captures: []Receipt{}, Bindings: []BindingV2{}, Diagnostics: d}
+	if len(source) > 1 || (len(source) == 1 && source[0] == nil) {
+		return nil, errors.New("V5 requires at most one source snapshot")
+	}
+	if len(source) == 1 {
+		s := source[0]
+		if s.SchemaVersion != VersionV2 || s.Policy != PolicyV2 {
+			return nil, errors.New("V5 source snapshot must be admitted provenance v2")
+		}
+		e.WorkspaceURI, e.AnalyzedVersion, e.DependencyCompleteness, e.CaptureBudget = s.WorkspaceURI, s.AnalyzedVersion, s.DependencyCompleteness, s.CaptureBudget
+		e.Supplies = append(e.Supplies, s.Supplies...)
+		e.Captures = append(e.Captures, s.Captures...)
+		e.Bindings = append(e.Bindings, s.Bindings...)
+		receipts := map[string][]string{}
+		for _, r := range e.Captures {
+			receipts[r.URI] = append(receipts[r.URI], r.ID)
+		}
+		for _, sr := range e.Supplies {
+			if sr.Receipt != nil {
+				receipts[sr.Receipt.URI] = append(receipts[sr.Receipt.URI], sr.Receipt.ID)
+			}
+		}
+		var g graph.Result
+		if err := json.Unmarshal(native, &g); err != nil {
+			return nil, err
+		}
+		for i, relation := range g.SiblingCandidates {
+			for _, endpoint := range []struct {
+				name string
+				node graph.Node
+			}{{"origin", relation.Origin}, {"candidate", relation.Candidate}} {
+				ids := append([]string{}, receipts[endpoint.node.URI]...)
+				e.Bindings = append(e.Bindings, BindingV2{Pointer: fmt.Sprintf("/graph/sibling_candidates/%d/%s/range", i, endpoint.name), URI: endpoint.node.URI, Attribution: "SOURCE", AnchorStatus: "VALID", ReceiptIDs: ids})
+			}
+		}
+	}
 	raw, err := json.Marshal(e)
 	if err != nil {
 		return nil, err
@@ -90,7 +133,7 @@ func validateForV5(raw []byte) (string, error) {
 	if err := d.Decode(&e); err != nil {
 		return "", err
 	}
-	if e.SchemaVersion != VersionV5 || e.SessionID == "" || e.Generation == 0 || e.GraphV5SchemaID != GraphV5SchemaID {
+	if e.SchemaVersion != VersionV5 || e.SessionID == "" || e.Generation == 0 || e.GraphV5SchemaID != GraphV5SchemaID || e.SourcePolicy != PolicyV2 || e.Supplies == nil || e.Captures == nil || e.Bindings == nil {
 		return "", errors.New("invalid V5 identity")
 	}
 	native, err := base64.StdEncoding.DecodeString(e.GraphV5)
@@ -102,6 +145,30 @@ func validateForV5(raw []byte) (string, error) {
 			return "", err
 		}
 		return "", errors.New("embedded graph is not graph.v5")
+	}
+	receipts := map[string]bool{}
+	for _, r := range e.Captures {
+		if receipts[r.ID] || validateReceiptV2(e.WorkspaceURI, r) != nil {
+			return "", errors.New("V5 invalid or duplicate source capture")
+		}
+		receipts[r.ID] = true
+	}
+	for _, supply := range e.Supplies {
+		if supply.Receipt == nil {
+			continue
+		}
+		r := *supply.Receipt
+		if receipts[r.ID] || validateReceiptV2(e.WorkspaceURI, r) != nil || validateSupplyV2(&r) != nil {
+			return "", errors.New("V5 invalid or duplicate source supply")
+		}
+		receipts[r.ID] = true
+	}
+	for _, binding := range e.Bindings {
+		for _, id := range binding.ReceiptIDs {
+			if !receipts[id] {
+				return "", errors.New("V5 source binding foreign key")
+			}
+		}
 	}
 	sum := sha256.Sum256(native)
 	if e.GraphV5SHA256 != fmt.Sprintf("sha256:%x", sum) {

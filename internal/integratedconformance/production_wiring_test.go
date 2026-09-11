@@ -76,7 +76,7 @@ func TestProductionExecutionTransportParity(t *testing.T) {
 	cliObservation := productionParityObservation{Digest: cliEnvelope.LogicalDigest, Artifact: cliArtifact}
 
 	resetPublication()
-	params, _ := json.Marshal(map[string]any{"name": "lsp_trace_v1_execute", "arguments": map[string]any{"request": input}})
+	params, _ := json.Marshal(map[string]any{"name": "lsp_trace_v1_custody_execute", "arguments": map[string]any{"request": input}})
 	line, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": json.RawMessage(params)})
 	mcpCmd := exec.Command(mcp)
 	mcpCmd.Stdin = bytes.NewReader(append(line, '\n'))
@@ -155,7 +155,7 @@ func TestProductionExecutionWiring(t *testing.T) {
 	})
 
 	t.Run("ASSERT_PRODUCTION_MCP_CANONICAL_CUSTODY", func(t *testing.T) {
-		params, _ := json.Marshal(map[string]any{"name": "lsp_trace_v1_execute", "arguments": map[string]any{"request": request()}})
+		params, _ := json.Marshal(map[string]any{"name": "lsp_trace_v1_custody_execute", "arguments": map[string]any{"request": request()}})
 		line, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": json.RawMessage(params)})
 		cmd := exec.Command("go", "run", "./cmd/lsp-trace-mcp")
 		cmd.Dir, cmd.Stdin = root, bytes.NewReader(append(line, '\n'))

@@ -745,14 +745,14 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS " + assertion)
 	})
 
-	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT", func(t *testing.T) {
-		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_EIGHT"
+	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_NINE", func(t *testing.T) {
+		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_TWENTY_NINE"
 		tools := mcp.NewRegistry(true).Advertised()
 		if rejectPerturbation(t, assertion, true) {
 			tools = tools[:len(tools)-1]
 		}
-		if got := len(tools); got != 28 {
-			t.Fatalf("%s: advertised=%d want=28", assertion, got)
+		if got := len(tools); got != 29 {
+			t.Fatalf("%s: advertised=%d want=29", assertion, got)
 		}
 		t.Log("PASS " + assertion)
 	})

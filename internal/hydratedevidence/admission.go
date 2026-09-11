@@ -137,6 +137,8 @@ func admit(input Input, p Policy) (admitted, error) {
 		version = "v1"
 	case graphprovenance.VersionV2:
 		version = "v2"
+	case graphprovenance.VersionV5:
+		version = "v5"
 	case v5sourcesnapshot.Version:
 		version = "source-snapshot-v1"
 	default:
@@ -212,6 +214,26 @@ func admit(input Input, p Policy) (admitted, error) {
 			}
 		}
 		encoding = e.Acquisition.Request.Context.PositionEncoding
+		for _, b := range e.Bindings {
+			anchorStatuses[b.Pointer] = b.AnchorStatus
+			bindings = append(bindings, graphprovenance.Binding{Pointer: b.Pointer, URI: b.URI, Attribution: b.Attribution, ReceiptIDs: b.ReceiptIDs})
+		}
+	} else if version == "v5" {
+		var e graphprovenance.EvidenceV5
+		if err := json.Unmarshal(input.Artifact, &e); err != nil {
+			return fail(err)
+		}
+		var err error
+		graphBytes, err = base64.StdEncoding.DecodeString(e.GraphV5)
+		if err != nil {
+			return fail(err)
+		}
+		receipts = append(receipts, e.Captures...)
+		for _, s := range e.Supplies {
+			if s.Receipt != nil {
+				receipts = append(receipts, *s.Receipt)
+			}
+		}
 		for _, b := range e.Bindings {
 			anchorStatuses[b.Pointer] = b.AnchorStatus
 			bindings = append(bindings, graphprovenance.Binding{Pointer: b.Pointer, URI: b.URI, Attribution: b.Attribution, ReceiptIDs: b.ReceiptIDs})
