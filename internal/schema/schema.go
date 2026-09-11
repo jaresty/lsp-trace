@@ -3,6 +3,7 @@ package schema
 import (
 	"embed"
 	"fmt"
+	"sort"
 	"strings"
 
 	"lsp-trace/internal/graph"
@@ -74,6 +75,21 @@ var versionFields = map[string]string{
 	FamilyBoundedAnalysisV2:        "Version",
 	FamilyBoundedMetricsV2:         "Version",
 	FamilyBoundedRankingV2:         "Version",
+}
+
+// RegisteredFamilies returns a detached, lexically ordered snapshot of the
+// family and version aliases accepted by the schema registry.
+func RegisteredFamilies() map[string][]string {
+	families := make(map[string][]string, len(familyVersions))
+	for family, versions := range familyVersions {
+		aliases := make([]string, 0, len(versions))
+		for alias := range versions {
+			aliases = append(aliases, alias)
+		}
+		sort.Strings(aliases)
+		families[family] = aliases
+	}
+	return families
 }
 
 func normalizeFamily(family, version string) (string, string, error) {

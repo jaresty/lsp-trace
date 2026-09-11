@@ -28,6 +28,57 @@ func TestTopLevelHelpSucceedsOnStdout(t *testing.T) {
 	}
 }
 
+func TestInfoIsDeterministicBoundedAndPrivate(t *testing.T) {
+	const secret = "INFO_MUST_NOT_LEAK_4f3c2a"
+	t.Setenv("LSP_TRACE_BOOTSTRAP_CONFIG", secret)
+	t.Setenv("LSP_TRACE_PRIVATE_PATH", secret)
+	first, stderr, code := captureRun(t, []string{"info"})
+	second, secondStderr, secondCode := captureRun(t, []string{"info"})
+	if code != 0 || secondCode != 0 || stderr != "" || secondStderr != "" {
+		t.Fatalf("ASSERT_INFO_OFFLINE_SUCCESS: codes=%d,%d stderr=%q,%q", code, secondCode, stderr, secondStderr)
+	}
+	if first != second {
+		t.Fatalf("ASSERT_INFO_DETERMINISTIC: first=%q second=%q", first, second)
+	}
+	if len(first) > 16*1024 {
+		t.Fatalf("ASSERT_INFO_BOUNDED_16K: bytes=%d", len(first))
+	}
+	var got struct {
+		Version               string              `json:"version"`
+		BuildRevision         string              `json:"build_revision"`
+		Schemas               map[string][]string `json:"schemas"`
+		DefaultMCPToolProfile string              `json:"default_mcp_tool_profile"`
+		AdvertisedToolCount   int                 `json:"advertised_tool_count"`
+		DispatchableCount     int                 `json:"dispatchable_operation_count"`
+		InlineByteLimit       uint64              `json:"inline_byte_limit"`
+	}
+	if err := json.Unmarshal([]byte(first), &got); err != nil {
+		t.Fatalf("ASSERT_INFO_JSON: %v output=%q", err, first)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(first), &fields); err != nil || len(fields) != 7 {
+		t.Fatalf("ASSERT_INFO_CLOSED_SEVEN_FIELDS: fields=%v err=%v", fields, err)
+	}
+	if got.Version == "" || got.BuildRevision == "" {
+		t.Fatalf("ASSERT_INFO_BUILD_IDENTITY_BOUNDED: %#v", got)
+	}
+	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 28 || got.DispatchableCount != 28 || got.InlineByteLimit != 1048576 {
+		t.Fatalf("ASSERT_INFO_REGISTRY_AUTHORITY: %#v", got)
+	}
+	if !reflect.DeepEqual(got.Schemas["graph"], []string{"v1", "v2", "v3", "v4", "v5"}) || len(got.Schemas) < 10 {
+		t.Fatalf("ASSERT_INFO_SCHEMA_REGISTRY: %#v", got.Schemas)
+	}
+	if strings.Contains(first, secret) {
+		t.Fatalf("ASSERT_INFO_ENVIRONMENT_VALUE_NOT_READ: %s", first)
+	}
+	lower := strings.ToLower(first)
+	for _, forbidden := range []string{"bootstrap", "config", "path", "environment", "session", "provider", "host", "authority"} {
+		if strings.Contains(lower, forbidden) {
+			t.Fatalf("ASSERT_INFO_PRIVACY_EXCLUDES_%s: %s", strings.ToUpper(forbidden), first)
+		}
+	}
+}
+
 func TestVersionSucceedsWithBuildIdentityOnStdout(t *testing.T) {
 	for _, arg := range []string{"--version", "version"} {
 		stdout, stderr, code := captureRun(t, []string{arg})

@@ -21,7 +21,9 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/jsonrpc"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/normativeanalytics"
+	"lsp-trace/internal/schema"
 	"lsp-trace/internal/server"
 	"lsp-trace/internal/source"
 	"lsp-trace/internal/traverse"
@@ -35,8 +37,8 @@ var (
 	buildCommit  = "UNKNOWN"
 )
 
-func versionText() string {
-	version, revision, modified := buildVersion, buildCommit, "UNKNOWN"
+func buildIdentity() (version, revision, modified string) {
+	version, revision, modified = buildVersion, buildCommit, "UNKNOWN"
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if version == "devel" && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
@@ -52,7 +54,41 @@ func versionText() string {
 			}
 		}
 	}
+	return version, revision, modified
+}
+
+func versionText() string {
+	version, revision, modified := buildIdentity()
 	return fmt.Sprintf("lsp-trace %s revision=%s modified=%s", version, revision, modified)
+}
+
+type infoOutput struct {
+	Version                    string              `json:"version"`
+	BuildRevision              string              `json:"build_revision"`
+	Schemas                    map[string][]string `json:"schemas"`
+	DefaultMCPToolProfile      string              `json:"default_mcp_tool_profile"`
+	AdvertisedToolCount        int                 `json:"advertised_tool_count"`
+	DispatchableOperationCount int                 `json:"dispatchable_operation_count"`
+	InlineByteLimit            uint64              `json:"inline_byte_limit"`
+}
+
+func runInfo(stdout, stderr io.Writer) int {
+	version, revision, _ := buildIdentity()
+	registry := mcp.NewRegistry(false)
+	capabilities := registry.Capabilities()
+	output := infoOutput{
+		Version: version, BuildRevision: revision, Schemas: schema.RegisteredFamilies(),
+		DefaultMCPToolProfile: capabilities["active_tool_profile"].(string),
+		AdvertisedToolCount:   len(registry.Advertised()), DispatchableOperationCount: len(registry.Tools()),
+		InlineByteLimit: capabilities["inline_byte_limit"].(uint64),
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(output); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	return 0
 }
 
 func writeStructuredIncompleteStatus(w io.Writer, published bool) {
@@ -65,6 +101,7 @@ func writeStructuredIncompleteStatus(w io.Writer, published bool) {
 
 const usageText = `usage:
   lsp-trace --version
+  lsp-trace info
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace slice --graph-provenance --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN | --from-file PATH --symbol NAME)
@@ -121,6 +158,9 @@ func run(args []string) int {
 	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
 		fmt.Fprintln(os.Stdout, versionText())
 		return 0
+	}
+	if len(args) == 1 && args[0] == "info" {
+		return runInfo(os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
 		version, rest, err := acquisitionVersion(args[1:])

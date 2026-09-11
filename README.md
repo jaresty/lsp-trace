@@ -30,6 +30,19 @@ go build ./...
 
 ## Usage
 
+For a deterministic offline summary of this binary's registered surface, run:
+
+```sh
+lsp-trace info
+```
+
+The JSON result reports bounded binary version/build revision, registered schema
+family/version aliases, the default MCP tool-advertisement profile and its
+advertised/dispatchable counts, and the inline byte limit. It does not inspect or
+report bootstrap configuration, paths, environment, sessions, providers, or host
+authority. A source build may report `"build_revision":"UNKNOWN"` when neither
+release injection nor Go build metadata supplies a revision.
+
 ```sh
 go run ./cmd/lsp-trace incoming \
   --workspace /path/to/workspace \
