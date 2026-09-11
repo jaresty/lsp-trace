@@ -610,6 +610,36 @@ func TestToolsCallAcceptsRequestMetadata(t *testing.T) {
 	}
 }
 
+func TestToolsCallNormalizesOnlyOmittedArguments(t *testing.T) {
+	const omittedAssertion = "tools/call normalizes omitted arguments to an empty object for tools whose schema accepts it"
+	const strictAssertion = "tools/call still rejects explicit null arguments and missing required fields"
+	for _, assertion := range []string{omittedAssertion, strictAssertion} {
+		t.Log("ASSERTION: " + assertion)
+	}
+
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_capabilities","_meta":{"progressToken":"capabilities"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_session_v1_list","_meta":{"progressToken":"sessions"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_session_v1_list","arguments":null}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"lsp_trace_v1_slice"}}`,
+	}, "\n") + "\n"
+	responses := runMessages(t, input)
+	if len(responses) != 4 {
+		t.Fatalf("%s: got %d responses", omittedAssertion, len(responses))
+	}
+	for i := 0; i < 2; i++ {
+		if rpcError := responses[i]["error"]; rpcError != nil {
+			t.Errorf("%s: response %d error=%v", omittedAssertion, i+1, rpcError)
+		}
+	}
+	for i := 2; i < 4; i++ {
+		rpcError, ok := responses[i]["error"].(map[string]any)
+		if !ok || rpcError["code"] != float64(-32602) {
+			t.Errorf("%s: response %d=%v", strictAssertion, i+1, responses[i])
+		}
+	}
+}
+
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
 	const listAssertion = "tools/list advertises the 28 current canonical names"

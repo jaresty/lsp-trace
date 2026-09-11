@@ -224,9 +224,21 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		decodeErr = decodeClosed(raw, &params, "name", "arguments", "_meta")
 	}
-	if decodeErr != nil || params.Name == "" || params.Arguments == nil {
+	if decodeErr != nil || params.Name == "" {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
 		return base
+	}
+	if params.Arguments == nil {
+		var members map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &members); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
+			return base
+		}
+		if _, present := members["arguments"]; present {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
+			return base
+		}
+		params.Arguments = map[string]any{}
 	}
 	tool, ok := s.Registry.Resolve(params.Name)
 	if !ok {
