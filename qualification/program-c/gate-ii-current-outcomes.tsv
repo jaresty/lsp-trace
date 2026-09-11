@@ -1,0 +1,11 @@
+# gate_id	state	evidence	basis
+A-01	PASS	qualification/program-c/gate-i-receipts.tsv	Exact I-01 through I-08 index is current and passing.
+A-02	FAIL	qualification/program-c/i-03-candidate-inventory.v1.json;qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json	Only Gonum v0.17.0 Louvain was evaluated; no rationale against two evaluated candidates exists.
+A-03	BLOCKED	qualification/program-c/i-04-license-inputs.v1.json	License metadata explicitly does not constitute authorized distribution or linkage approval.
+A-04	FAIL	qualification/program-c/i-05-portability-questions.v1.json;qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json	Required Linux, Darwin, and Windows amd64/arm64 coordinates are not qualified; retained execution covers Darwin arm64 only.
+A-05	FAIL	qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json	One Darwin arm64 fixture replayed deterministically, but the complete projection and runtime-scope identity contract is absent.
+A-06	FAIL	qualification/program-c/candidates/gonum-louvain/candidate-execution.384e3fd.receipt.json	Only one retained fixture was tried; the required directed, weighted, disconnected, singleton, high-degree-hub, and adversarial-order fixture inventory is incomplete.
+A-07	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No boundary accounting contract satisfying every required metric, witness, identity, and denominator is committed.
+A-08	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No instability contract defining matching, unmatched handling, metrics, thresholds, accounting, and blocking behavior is committed.
+A-09	PASS	qualification/program-c/i-08-neutrality-examples.v1.json;qualification/program-c/gate-i-i-08-neutrality.receipt.txt	Positive and prohibited examples preserve structural, run-local, non-semantic claims.
+A-10	BLOCKED	docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md	No reviewed Gate II test plan covering all required guard classes is committed.
