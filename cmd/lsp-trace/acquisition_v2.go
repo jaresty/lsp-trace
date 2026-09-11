@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/projectionfailure"
 	"lsp-trace/internal/requestlifecycle"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
@@ -361,7 +362,28 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if len(result.Artifact) > 0 {
 			finalizeRequestDiagnostics(result.Artifact)
 		} else if requestDiagnosticsRequested {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding")
+			failureDiagnosticPublished := false
+			failureDiagnosticStage := "PUBLIC_ARTIFACT_UNAVAILABLE"
+			if outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations" {
+				handles := privateRuntime.diagnosticHandles()
+				sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
+				if certified {
+					privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
+						Operation: mode + "-v3", RequestPolicy: raw,
+						Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
+					})
+					if projectionErr == nil {
+						failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
+						projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
+					} else {
+						failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
+					}
+					failureDiagnosticPublished = projectionErr == nil
+				}
+			}
+			if !failureDiagnosticPublished {
+				fmt.Fprintf(stderr, "private request diagnostics unavailable: %s; PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding\n", failureDiagnosticStage)
+			}
 		}
 		return fail(failed)
 	}

@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/projectionfailure"
 	"lsp-trace/internal/requestlifecycle"
 )
 
@@ -100,6 +101,9 @@ func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing
 		t.Fatal(err)
 	}
 	privateRoot := t.TempDir()
+	if err := os.Chmod(privateRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
 	privatePath := filepath.Join(privateRoot, "private.json")
 	cmd := exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch", "--seed-manifest", manifestPath, "--language-id", "go", "--private-request-diagnostic-root", privateRoot, "--private-request-diagnostic-selector", "private.json")
 	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch")
@@ -116,19 +120,22 @@ func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing
 	}
 	privateRaw, err := os.ReadFile(privatePath)
 	if err != nil {
-		const reason = "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding"
-		if !strings.Contains(stderr.String(), reason) {
-			t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_ARTIFACT_DEPENDENCY_GUIDANCE: %v stderr=%s", err, stderr.String())
-		}
-		return
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_ARTIFACT_PRESENT: %v stderr=%s", err, stderr.String())
 	}
-	var diagnostic requestlifecycle.DocumentModel
-	if err := json.Unmarshal(privateRaw, &diagnostic); err != nil {
+	if err := projectionfailure.Validate(privateRaw); err != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_VALID: %v", err)
 	}
+	var diagnostic projectionfailure.Document
+	if err := json.Unmarshal(privateRaw, &diagnostic); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_DECODE: %v", err)
+	}
 	methods := map[string]bool{}
-	for _, operation := range diagnostic.Operations {
-		methods[operation.Method] = true
+	for _, record := range diagnostic.Records {
+		methods[record.Method] = true
+	}
+	info, statErr := os.Stat(privatePath)
+	if statErr != nil || info.Mode().Perm() != 0600 || diagnostic.Identity.Generation == 0 || diagnostic.Identity.Operation != "slice-v3" || diagnostic.Failure.PublicArtifact != "UNAVAILABLE" || diagnostic.Failure.PublicationStatus != "NOT_PUBLISHED" || strings.Contains(stderr.String(), "PUBLIC_ARTIFACT_UNAVAILABLE") || bytes.Contains(privateRaw, []byte(uri)) || bytes.Contains(privateRaw, []byte(workspace)) || bytes.Contains(privateRaw, []byte("leaf")) {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_IDENTITY_PRIVACY_MODE: stat=%v mode=%v diagnostic=%+v stderr=%s", statErr, info.Mode().Perm(), diagnostic, stderr.String())
 	}
 	if !methods["textDocument/documentSymbol"] || !methods["textDocument/prepareCallHierarchy"] {
 		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_RECORDS: methods=%v", methods)
