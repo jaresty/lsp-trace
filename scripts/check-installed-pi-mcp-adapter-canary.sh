@@ -32,11 +32,15 @@ for dependency in "$HOME/.pi/agent/npm/node_modules"/*; do
   name=$(basename "$dependency")
   [ "$name" = pi-mcp-adapter ] || ln -s "$dependency" "$work/node_modules/$name"
 done
-pi_modules=/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent/node_modules
-ln -s "$pi_modules/typebox" "$work/node_modules/typebox"
-mkdir -p "$work/node_modules/@earendil-works"
-ln -s "$pi_modules/@earendil-works/pi-ai" "$work/node_modules/@earendil-works/pi-ai"
-ln -s /opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent "$work/node_modules/@earendil-works/pi-coding-agent"
+pi_agent_root=${PI_CODING_AGENT_ROOT:-/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent}
+if [ ! -e "$work/node_modules/typebox" ]; then
+  ln -s "$pi_agent_root/node_modules/typebox" "$work/node_modules/typebox"
+fi
+if [ ! -e "$work/node_modules/@earendil-works" ]; then
+  mkdir -p "$work/node_modules/@earendil-works"
+  ln -s "$pi_agent_root/node_modules/@earendil-works/pi-ai" "$work/node_modules/@earendil-works/pi-ai"
+  ln -s "$pi_agent_root" "$work/node_modules/@earendil-works/pi-coding-agent"
+fi
 for source in direct-tools.ts server-manager.ts metadata-cache.ts ts-shape.ts package.json; do
   installed_digest=$(shasum -a 256 "$adapter_root/$source" | cut -d ' ' -f 1)
   staged_digest=$(shasum -a 256 "$work/node_modules/pi-mcp-adapter/$source" | cut -d ' ' -f 1)
