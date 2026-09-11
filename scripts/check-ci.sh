@@ -28,6 +28,7 @@ require CI-RELEASE './scripts/release-check.sh'
 require CI-BUN 'oven-sh/setup-bun@v2'
 require CI-ADAPTER 'pi-mcp-adapter@2.32.1'
 require CI-PI-RUNTIME '@earendil-works/pi-coding-agent@0.84.1'
+require CI-PI-AI-RUNTIME '@earendil-works/pi-ai@0.84.1'
 require CI-TYPEBOX 'typebox@1.3.3'
 require CI-CLEAN 'git status --porcelain'
 if grep -F -- 'go build -trimpath' "$root/scripts/release-check.sh" >/dev/null; then
