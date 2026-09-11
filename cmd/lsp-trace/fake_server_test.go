@@ -657,7 +657,14 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 		case "initialized", "textDocument/didOpen":
 		case "textDocument/documentSymbol":
 			if scenario == "slice-symbol" {
+				var p struct {
+					TextDocument struct {
+						URI string `json:"uri"`
+					} `json:"textDocument"`
+				}
+				_ = json.Unmarshal(m.Params, &p)
 				symbol := item("start", 0)
+				symbol.URI = p.TextDocument.URI
 				err = writeFake(out, m.ID, []any{map[string]any{"name": symbol.Name, "kind": symbol.Kind, "location": map[string]any{"uri": symbol.URI, "range": symbol.Range}}}, nil)
 			} else if scenario == "slice-noisy" {
 				err = writeFake(out, m.ID, []fakeItem{item("start", 0), item("value-a", 1), item("value-b", 2)}, nil)
@@ -672,6 +679,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				break
 			}
 			var p struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
 				Position fakePosition `json:"position"`
 			}
 			_ = json.Unmarshal(m.Params, &p)
@@ -702,7 +712,11 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			if scenario == "multi-duplicate" {
 				line = 0
 			}
-			err = writeFake(out, m.ID, []fakeItem{item(name, line)}, nil)
+			prepared := item(name, line)
+			if scenario == "slice-symbol" {
+				prepared.URI = p.TextDocument.URI
+			}
+			err = writeFake(out, m.ID, []fakeItem{prepared}, nil)
 		case "callHierarchy/outgoingCalls":
 			var p struct {
 				Item fakeItem `json:"item"`
