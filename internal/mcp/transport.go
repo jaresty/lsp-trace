@@ -341,6 +341,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"artifact schema identity is not permitted"})
 		return bindEnvelope(base, tool, env)
 	}
+	outcome, operationStatus := "COMPLETE", "SUCCEEDED"
+	if (tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily) && incompleteTraversalArtifact(opResult.Artifact) {
+		outcome, operationStatus = "PARTIAL", "PARTIAL"
+	}
 	if !publicationRequested && len(opResult.Artifact) > inlineByteLimit {
 		diagnostic := fmt.Sprintf("artifact is %d bytes; inline limit is %d bytes; configure --publication-root and retry with output_selector on the artifact-producing operation; through lsp_trace_v1_execute use request.arguments.output_selector; retry reacquires the operation", len(opResult.Artifact), inlineByteLimit)
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{diagnostic})
@@ -352,7 +356,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		byteLength := uint64(len(opResult.Artifact))
 		successEnvelope := envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: publicationSuccessSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
-			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", ArtifactSchemaID: artifactID,
+			Outcome: outcome, OperationStatus: operationStatus, ArtifactSchemaID: artifactID,
 			LogicalDigest: opResult.LogicalDigest,
 		}
 		successEnvelope.CustodyReceipt = opResult.CustodyReceipt
@@ -393,7 +397,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	content := string(opResult.Artifact)
 	env := envelope{
 		EnvelopeVersion: "1", EnvelopeSchemaID: artifactSuccessSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
-		Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Content: &content, ArtifactSchemaID: artifactID,
+		Outcome: outcome, OperationStatus: operationStatus, Content: &content, ArtifactSchemaID: artifactID,
 		LogicalDigest: opResult.LogicalDigest,
 	}
 	env.CustodyReceipt = opResult.CustodyReceipt
@@ -466,6 +470,26 @@ func (s *Server) callGatewayContext(ctx context.Context, base response, nested g
 	}
 	executeTool, _ := s.Registry.ResolveCanonical("lsp_trace_v1_execute")
 	return bindEnvelope(base, executeTool, env)
+}
+
+func incompleteTraversalArtifact(artifact []byte) bool {
+	var value struct {
+		Complete *bool `json:"complete"`
+		Summary  struct {
+			Complete          *bool `json:"complete"`
+			TraversalComplete *bool `json:"traversal_complete"`
+		} `json:"summary"`
+	}
+	if json.Unmarshal(artifact, &value) != nil {
+		return false
+	}
+	if value.Complete != nil {
+		return !*value.Complete
+	}
+	if value.Summary.Complete != nil {
+		return !*value.Summary.Complete
+	}
+	return value.Summary.TraversalComplete != nil && !*value.Summary.TraversalComplete
 }
 
 func compactSummary(artifact []byte) map[string]any {

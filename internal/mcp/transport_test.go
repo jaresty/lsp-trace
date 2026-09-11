@@ -254,6 +254,38 @@ func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
 	}
 }
 
+func TestIncompleteTraversalArtifactsReportPartialStatus(t *testing.T) {
+	const assertion = "ASSERT_INCOMPLETE_TRAVERSAL_REPORTS_PARTIAL_STATUS"
+	artifact := []byte(`{"schema_version":"lsp-trace.graph.v3","nodes":[],"edges":[],"terminals":[],"frontier":[],"diagnostics":[],"summary":{"traversal_complete":false}}`)
+	for _, tc := range []struct {
+		name      string
+		arguments string
+		family    ExecutorFamily
+	}{
+		{"lsp_trace_v1_incoming", `"session_id":"session","generation":1,"uri":"file:///workspace/main.go","line":0,"character":0`, IncomingExecutorFamily},
+		{"lsp_trace_v1_slice", `"session_id":"session","generation":1,"start_mode":"at","uri":"file:///workspace/main.go","line":0,"character":0`, SliceExecutorFamily},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root, err := publication.OpenRoot(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer root.Close()
+			server := &Server{Registry: NewRegistryWithPublication(false, true), Executors: map[ExecutorFamily]Executor{tc.family: traversalArtifactExecutor{artifact: artifact}}, PublicationRoot: root}
+			responses := runServerMessages(t, server, strings.Join([]string{
+				`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tc.name + `","arguments":{` + tc.arguments + `}}}`,
+				`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"` + tc.name + `","arguments":{` + tc.arguments + `,"detail":"compact","output_selector":"partial.json"}}}`,
+			}, "\n")+"\n")
+			for i, response := range responses {
+				env := decodeEnvelopeForAssertion(t, assertion, response)
+				if env["outcome"] != "PARTIAL" || env["operation_status"] != "PARTIAL" || env["isError"] != false {
+					t.Fatalf("%s response[%d]=%v", assertion, i, env)
+				}
+			}
+		})
+	}
+}
+
 func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *testing.T) {
 	const (
 		fullAssertion        = "ASSERT_REAL_TRAVERSAL_FULL_ENVELOPE_EXCLUSIVE"

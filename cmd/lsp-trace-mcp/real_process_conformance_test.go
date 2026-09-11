@@ -232,7 +232,7 @@ func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 	}
 	callsCall := decodeProcessCall(t, responses[2])
 	callsArtifact := inlineArtifactBytes(t, callsCall.env)
-	if callsCall.env["operation_status"] != "SUCCEEDED" || len(callsArtifact) == 0 || !bytes.Contains(callsArtifact, []byte(`"schema_version":"lsp-trace.slice-composition.v1"`)) || !bytes.Contains(callsArtifact, []byte(`"calls":`)) {
+	if callsCall.env["operation_status"] != "PARTIAL" || callsCall.env["outcome"] != "PARTIAL" || len(callsArtifact) == 0 || !bytes.Contains(callsArtifact, []byte(`"schema_version":"lsp-trace.slice-composition.v1"`)) || !bytes.Contains(callsArtifact, []byte(`"calls":`)) {
 		t.Fatalf("CALLS control: envelope=%v artifact=%q", callsCall.env, callsArtifact)
 	}
 	nonCallsCall := decodeProcessCall(t, responses[3])
@@ -670,7 +670,14 @@ func TestProductionMCPRealProviderConformance(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%s: process=%v", assertion, err)
 			}
-			composition := requireRealProviderComposition(t, assertion, decodeProcessCall(t, responses[0]))
+			call := decodeProcessCall(t, responses[0])
+			if call.env["operation_status"] != "PARTIAL" || call.env["outcome"] != "PARTIAL" {
+				t.Fatalf("%s: envelope=%v", assertion, call.env)
+			}
+			var composition realProviderComposition
+			if err := json.Unmarshal(inlineArtifactBytes(t, call.env), &composition); err != nil {
+				t.Fatalf("%s: decode composition: %v", assertion, err)
+			}
 			var calls graph.Result
 			if len(composition.Calls) == 0 || json.Unmarshal(composition.Calls, &calls) != nil || calls.Summary.Complete || composition.Complete {
 				t.Fatalf("%s: provider success masked CALLS gap: composition_complete=%v calls=%+v", assertion, composition.Complete, calls.Summary)
