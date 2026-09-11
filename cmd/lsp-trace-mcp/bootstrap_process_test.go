@@ -45,7 +45,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	}
 
 	request := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_session_v1_list","arguments":{}}}` + "\n"
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_session_v1_list","arguments":{"detail":"full"}}}` + "\n"
 	cmd := exec.Command(mcpBinary, "--bootstrap-config", configPath)
 	cmd.Stdin = strings.NewReader(request)
 	var stdout, stderr bytes.Buffer

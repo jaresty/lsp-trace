@@ -274,7 +274,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	selector, publicationRequested := params.Arguments["output_selector"].(string)
 	detail, _ := params.Arguments["detail"].(string)
-	compact := detail == "compact"
+	transportDetail := detail
+	if tool.ExecutorFamily == LifecycleExecutorFamily || tool.Name == "lsp_trace_v1_schema_get" {
+		transportDetail = ""
+	}
+	compact := transportDetail == "compact"
 	if compact && !publicationRequested {
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{"compact detail requires output_selector so the full artifact remains available; configure --publication-root and set output_selector on the artifact-producing operation; through lsp_trace_v1_execute use request.arguments.output_selector"})
 		return bindEnvelope(base, tool, env)
@@ -292,10 +296,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, env)
 	}
 	operationArguments := params.Arguments
-	if publicationRequested || detail != "" {
+	if publicationRequested || transportDetail != "" {
 		operationArguments = make(map[string]any, len(params.Arguments))
 		for key, value := range params.Arguments {
-			if key != "output_selector" && key != "detail" {
+			if key != "output_selector" && (key != "detail" || transportDetail == "") {
 				operationArguments[key] = value
 			}
 		}
@@ -342,7 +346,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Result: opResult.Value,
 		})
 	}
-	if tool.Name == "lsp_trace_v1_capabilities" {
+	if tool.Name == "lsp_trace_v1_capabilities" || (tool.Name == "lsp_trace_v1_schema_get" && detail == "compact") {
 		env := envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: resultEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Result: opResult.Value,

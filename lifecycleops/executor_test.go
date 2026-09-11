@@ -22,6 +22,7 @@ const (
 	assertStaleGuidance      = "ASSERT_LIFECYCLE_EXECUTOR_STALE_CURRENT_GENERATION_RETRY"
 	assertRecoveryGuidance   = "ASSERT_LIFECYCLE_EXECUTOR_BOUNDED_HOST_RECOVERY"
 	assertCancellationTruth  = "ASSERT_LIFECYCLE_EXECUTOR_CANCELLATION_TRUTH"
+	assertAliasGuidance      = "ASSERT_SESSION_NOT_FOUND_LISTS_PUBLIC_ALIASES"
 	assertRoutingMetadata    = "ASSERT_SESSION_LIST_EXPOSES_GENERATION_BOUND_ROUTING_METADATA"
 	assertURIResolution      = "ASSERT_SESSION_LIST_RESOLVES_UNIQUE_MOST_SPECIFIC_READY_WORKSPACE"
 )
@@ -54,9 +55,25 @@ func TestSessionListRoutingContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, field := range []string{`"alias"`, `"workspace_root"`, `"language_id"`, `"server_profile"`, `"relation_providers"`, `"generation"`, `"readiness"`} {
+		for _, field := range []string{`"sessions"`, `"session_id"`, `"alias"`, `"language_id"`, `"server_profile"`, `"relation_providers"`, `"generation"`, `"state"`, `"census"`} {
 			if !strings.Contains(string(encoded), field) {
 				t.Fatalf("%s: missing %s in %s", assertRoutingMetadata, field, encoded)
+			}
+		}
+		for _, private := range []string{`"workspace_root"`, `"Observations"`, `"SessionID"`} {
+			if strings.Contains(string(encoded), private) {
+				t.Fatalf("%s: compact output exposed %s in %s", assertRoutingMetadata, private, encoded)
+			}
+		}
+
+		full, failure := executeLifecycle(t, executor, OperationList, `{"detail":"full"}`)
+		if failure != nil {
+			t.Fatalf("%s: full failure=%v", assertRoutingMetadata, failure)
+		}
+		fullEncoded, _ := json.Marshal(full.Value)
+		for _, legacy := range []string{`"workspace_root"`, `"Observations"`, `"SessionID"`} {
+			if !strings.Contains(string(fullEncoded), legacy) {
+				t.Fatalf("%s: full output missing %s in %s", assertRoutingMetadata, legacy, fullEncoded)
 			}
 		}
 	})
@@ -123,8 +140,8 @@ func TestExecutorExactFourContracts(t *testing.T) {
 			input string
 			want  any
 		}{
-			{operation.Name("session_list"), `{}`, ListSnapshot{}},
-			{operation.Name("session_status"), `{"session_id":"known","generation":4}`, sessionruntime.Record{}},
+			{operation.Name("session_list"), `{}`, publicListSnapshot{}},
+			{operation.Name("session_status"), `{"session_id":"known","generation":4}`, publicSession{}},
 			{operation.Name("session_stop"), `{"session_id":"known","generation":4,"caller_id":"caller"}`, Acceptance{}},
 			{operation.Name("session_restart"), `{"session_id":"known","generation":4,"caller_id":"caller"}`, Acceptance{}},
 		}
@@ -192,7 +209,7 @@ func TestExecutorInfersOnlyReadyGeneration(t *testing.T) {
 	t.Log("ASSERTION: " + assertion)
 	ready := &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}}
 	result, failure := executeLifecycle(t, NewExecutor(New(ready)), OperationStatus, `{"session_id":"known"}`)
-	gotRecord, ok := result.Value.(sessionruntime.Record)
+	gotRecord, ok := result.Value.(publicSession)
 	if failure != nil || !ok || gotRecord.Generation != 4 {
 		t.Fatalf("%s: READY omitted generation result=%+v failure=%v", assertion, result, failure)
 	}
@@ -215,6 +232,15 @@ func TestExecutorActionableDiagnostics(t *testing.T) {
 		code      string
 		want      []string
 	}{
+		{
+			assertion: assertAliasGuidance,
+			runtime:   &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}},
+			ctx:       context.Background(),
+			name:      OperationStatus,
+			input:     `{"session_id":"mistyped","generation":4}`,
+			code:      string(FailureSessionNotFound),
+			want:      []string{`available session aliases: "fixture"`, "sessions are host-provisioned; configure bootstrap and restart lsp-trace-mcp to add one"},
+		},
 		{
 			assertion: assertStaleGuidance,
 			runtime:   &fakeRuntime{records: []sessionruntime.Record{record("known", 4)}},

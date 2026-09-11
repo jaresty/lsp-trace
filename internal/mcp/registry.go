@@ -218,6 +218,9 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV5ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphV5SourceSnapshotArtifactID)
 		}
+		if tools[i].Name == "lsp_trace_v1_schema_get" {
+			tools[i].EnvelopeSchemaIDs = appendUnique(tools[i].EnvelopeSchemaIDs, resultEnvelopeSchemaID)
+		}
 		if tools[i].Name == "lsp_trace_v1_schema_get" || tools[i].Name == "lsp_trace_v1_validate" {
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV2ArtifactID)
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, mcpcontract.GraphProvenanceV3ArtifactID)
@@ -385,12 +388,16 @@ func lifecycleInputSchema(name string) map[string]any {
 	required := []any{}
 	if name == "lsp_session_v1_list" {
 		properties["uri"] = map[string]any{"type": "string", "minLength": 1, "format": "uri"}
+		properties["detail"] = map[string]any{"type": "string", "enum": []any{"compact", "full"}}
 	} else {
 		properties = map[string]any{
-			"session_id": map[string]any{"type": "string", "minLength": 1},
+			"session_id": map[string]any{"type": "string", "minLength": 1, "description": "Exact session ID or unique host-configured alias"},
 			"generation": map[string]any{"type": "integer", "minimum": 1},
 		}
 		required = []any{"session_id"}
+		if name == "lsp_session_v1_status" {
+			properties["detail"] = map[string]any{"type": "string", "enum": []any{"compact", "full"}}
+		}
 		if name != "lsp_session_v1_status" {
 			properties["caller_id"] = map[string]any{"type": "string", "minLength": 1}
 			required = append(required, "caller_id")

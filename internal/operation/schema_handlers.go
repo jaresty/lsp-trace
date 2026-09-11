@@ -25,6 +25,7 @@ type schemaRef struct {
 
 type schemaGetInput struct {
 	Schema schemaRef `json:"schema"`
+	Detail string    `json:"detail,omitempty"`
 }
 
 type validateInput struct {
@@ -42,7 +43,19 @@ func SchemaGetHandler(_ context.Context, request Request) (Result, *Failure) {
 	if err != nil {
 		return Result{}, inputFailure("INPUT_FAMILY_MISMATCH", err)
 	}
-	return Result{Artifact: artifact}, nil
+	result := Result{Artifact: artifact}
+	if input.Detail == "compact" {
+		var parsed any
+		if err := json.Unmarshal(artifact, &parsed); err != nil {
+			return Result{}, inputFailure("OUTPUT_VALIDATION_FAILED", err)
+		}
+		schemaID := ""
+		if object, ok := parsed.(map[string]any); ok {
+			schemaID, _ = object["$id"].(string)
+		}
+		result.Value = map[string]any{"schema_id": schemaID, "schema": parsed}
+	}
+	return result, nil
 }
 
 // ValidateHandler validates structure before family semantics and returns the

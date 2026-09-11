@@ -25,11 +25,13 @@ type fakeExecutor struct {
 	logicalDigest string
 }
 
-func (f *fakeExecutor) Execute(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+func (f *fakeExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
 	f.calls = append(f.calls, request.Name)
 	switch request.Name {
 	case operation.Capabilities:
 		return operation.Result{Value: NewRegistry(false).Capabilities()}, nil
+	case operation.SchemaGet:
+		return operation.SchemaGetHandler(ctx, request)
 	case operation.Verify:
 		artifact := f.artifact
 		if artifact == nil {
@@ -637,6 +639,36 @@ func TestToolsCallNormalizesOnlyOmittedArguments(t *testing.T) {
 		if !ok || rpcError["code"] != float64(-32602) {
 			t.Errorf("%s: response %d=%v", strictAssertion, i+1, responses[i])
 		}
+	}
+}
+
+func TestCompactSchemaGetIsInlineAndStructured(t *testing.T) {
+	const assertion = "compact schema retrieval is inline and exposes a parsed schema object"
+	t.Log("ASSERTION: " + assertion)
+	responses := runMessages(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_schema_get","arguments":{"schema":{"family":"filter","version":"v1"},"detail":"compact"}}}`+"\n")
+	if len(responses) != 1 || responses[0]["error"] != nil {
+		t.Fatalf("%s: responses=%v", assertion, responses)
+	}
+	call, ok := responses[0]["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: call=%v", assertion, responses[0]["result"])
+	}
+	env, ok := call["structuredContent"].(map[string]any)
+	if !ok || env["outcome"] != "COMPLETE" || env["operation_status"] != "SUCCEEDED" || env["code"] != nil {
+		t.Fatalf("%s: envelope=%v", assertion, env)
+	}
+	result, ok := env["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("%s: result=%v", assertion, env["result"])
+	}
+	if _, ok := result["schema"].(map[string]any); !ok {
+		t.Fatalf("%s: schema=%T", assertion, result["schema"])
+	}
+	if result["schema_id"] != "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.filter.v1.schema.json" {
+		t.Fatalf("%s: schema_id=%v", assertion, result["schema_id"])
+	}
+	if env["content"] != nil {
+		t.Fatalf("%s: compact result unexpectedly encoded schema as content", assertion)
 	}
 }
 

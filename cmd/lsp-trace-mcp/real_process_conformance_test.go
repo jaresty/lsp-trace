@@ -212,7 +212,7 @@ func TestManagedSliceReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 	calls := cloneMap(base)
 	calls["relations"] = []string{"CALLS"}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
-		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(1, "lsp_session_v1_list", map[string]any{"detail": "full"}),
 		callRequest(2, "lsp_trace_v1_slice", omitted),
 		callRequest(3, "lsp_trace_v1_slice", calls),
 		callRequest(4, "lsp_trace_v1_slice", nonCalls),
@@ -275,7 +275,7 @@ func TestManagedIncomingReturnsGraphV4ForReadyExternalProvider(t *testing.T) {
 		"relations": []string{"PASSES_CALLBACK"}, "providers": []string{"fake@1.0.0"},
 	}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
-		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(1, "lsp_session_v1_list", map[string]any{"detail": "full"}),
 		callRequest(2, "lsp_trace_v1_incoming", request),
 	})
 	if err != nil {
@@ -449,7 +449,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		"fail_on_unknown_revision": true,
 	}
 	responses, err := runMCPProcessForAcceptance(mcpBinary, []string{"--bootstrap-config", writeBootstrapJSON(t, config)}, []map[string]any{
-		callRequest(1, "lsp_session_v1_list", map[string]any{}),
+		callRequest(1, "lsp_session_v1_list", map[string]any{"detail": "full"}),
 		callRequest(2, "lsp_trace_v1_incoming", request),
 		callRequest(3, "lsp_trace_v1_incoming", request),
 	})

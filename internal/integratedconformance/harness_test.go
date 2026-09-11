@@ -638,7 +638,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		}
 		manager, _ := sessionruntime.New(sessionruntime.Config{Limits: limits(1, 1, 1), Starter: &fixedStarter{child: failingChild{}}})
 		executor := lifecycleops.NewExecutor(lifecycleops.New(manager))
-		result, failure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationList, RequestID: "disabled-direct-1", Input: json.RawMessage(`{}`)})
+		result, failure := executor.Execute(context.Background(), operation.Request{Name: lifecycleops.OperationList, RequestID: "disabled-direct-1", Input: json.RawMessage(`{"detail":"full"}`)})
 		if failure != nil {
 			t.Fatalf("direct dispatch failure=%v", failure)
 		}
@@ -792,6 +792,9 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 func executeLifecycle(t *testing.T, executor *lifecycleops.Executor, name operation.Name, sessionID string, generation uint64, callerID string) operation.Result {
 	t.Helper()
 	input := map[string]any{"session_id": sessionID, "generation": generation}
+	if name == lifecycleops.OperationStatus {
+		input["detail"] = "full"
+	}
 	if callerID != "" {
 		input["caller_id"] = callerID
 	}
