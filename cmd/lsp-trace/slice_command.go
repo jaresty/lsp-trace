@@ -24,12 +24,12 @@ import (
 )
 
 type sliceConfig struct {
-	workspace, command, fromFile, seedFile, languageID, output, traceLSP string
-	args, env, ats                                                       stringsFlag
-	downDepth, upDepth, maxNodes                                         int
-	timeout, requestTimeout                                              time.Duration
-	pretty                                                               bool
-	graphProvenance                                                      bool
+	workspace, command, fromFile, symbol, seedFile, languageID, output, traceLSP string
+	args, env, ats                                                               stringsFlag
+	downDepth, upDepth, maxNodes                                                 int
+	timeout, requestTimeout                                                      time.Duration
+	pretty                                                                       bool
+	graphProvenance                                                              bool
 }
 
 func parseSlice(args []string) (sliceConfig, error) {
@@ -50,6 +50,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.Var(&c.args, "server-arg", "repeatable server argument")
 	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
 	fs.StringVar(&c.fromFile, "from-file", "", "enumerate starting symbols from one source file")
+	fs.StringVar(&c.symbol, "symbol", "", "exact document symbol name (managed --from-file only)")
 	fs.Var(&c.ats, "at", "repeatable PATH:LINE:COLUMN starting position")
 	fs.StringVar(&c.seedFile, "seed-file", "", "JSON file containing labeled starting positions")
 	fs.StringVar(&c.languageID, "language-id", "", "document language id")
@@ -80,8 +81,10 @@ func parseSlice(args []string) (sliceConfig, error) {
 		if !explicit["request-timeout"] {
 			c.requestTimeout = time.Second
 		}
-		if len(c.ats) != 1 || c.fromFile != "" || c.seedFile != "" || c.traceLSP != "" {
-			return c, fmt.Errorf("--graph-provenance requires exactly one --at and no --from-file, --seed-file or --trace-lsp")
+		positionTarget := len(c.ats) == 1 && c.fromFile == "" && c.symbol == ""
+		symbolTarget := len(c.ats) == 0 && c.fromFile != "" && c.symbol != ""
+		if (!positionTarget && !symbolTarget) || c.seedFile != "" || c.traceLSP != "" {
+			return c, fmt.Errorf("--graph-provenance requires exactly one managed target selector: --at PATH:LINE:COLUMN or --from-file PATH --symbol NAME; --seed-file and --trace-lsp are unsupported")
 		}
 		if c.downDepth < 1 || c.downDepth > 64 || c.upDepth < 0 || c.upDepth > 64 || c.maxNodes < 1 || c.maxNodes > 10000 || c.timeout < time.Millisecond || c.timeout > 60*time.Second || c.requestTimeout < time.Millisecond || c.requestTimeout > 60*time.Second {
 			return c, fmt.Errorf("--graph-provenance uses managed bounds: down-depth 1..64, up-depth 0..64, nodes 1..10000, timeouts 1ms..60s")

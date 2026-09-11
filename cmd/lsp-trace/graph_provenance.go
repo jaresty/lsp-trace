@@ -27,9 +27,13 @@ func runGraphProvenanceSlice(ctx context.Context, c sliceConfig, stdout, stderr 
 	if err != nil {
 		return fail(err)
 	}
-	file, line, column, err := parseAt(c.ats[0])
-	if err != nil {
-		return fail(err)
+	file := c.fromFile
+	var line, column int
+	if len(c.ats) == 1 {
+		file, line, column, err = parseAt(c.ats[0])
+		if err != nil {
+			return fail(err)
+		}
 	}
 	_, uri, _, err := source.ResolveTarget(workspace, file)
 	if err != nil {
@@ -76,7 +80,14 @@ func runGraphProvenanceSlice(ctx context.Context, c sliceConfig, stdout, stderr 
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
-	input, err := json.Marshal(map[string]any{"session_id": started.SessionID, "generation": started.Generation, "start_mode": "at", "uri": uri, "line": line - 1, "character": column - 1, "language_id": c.languageID, "down_depth": c.downDepth, "up_depth": c.upDepth, "max_nodes": c.maxNodes, "timeout_ms": c.timeout.Milliseconds(), "request_timeout_ms": c.requestTimeout.Milliseconds(), "graph_provenance": true})
+	inputFields := map[string]any{"session_id": started.SessionID, "generation": started.Generation, "start_mode": "at", "uri": uri, "language_id": c.languageID, "down_depth": c.downDepth, "up_depth": c.upDepth, "max_nodes": c.maxNodes, "timeout_ms": c.timeout.Milliseconds(), "request_timeout_ms": c.requestTimeout.Milliseconds(), "graph_provenance": true}
+	if c.symbol != "" {
+		inputFields["symbol"] = c.symbol
+	} else {
+		inputFields["line"] = line - 1
+		inputFields["character"] = column - 1
+	}
+	input, err := json.Marshal(inputFields)
 	if err != nil {
 		return fail(err)
 	}

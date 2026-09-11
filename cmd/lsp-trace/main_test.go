@@ -706,6 +706,24 @@ func TestParseSliceUsesSymmetricDepthFlagsAndExclusiveStartModes(t *testing.T) {
 			t.Errorf("ASSERT_SLICE_START_MODES_EXCLUSIVE: %v", err)
 		}
 	})
+	t.Run("managed symbol from file", func(t *testing.T) {
+		args := append(append([]string{}, base...), "--graph-provenance", "--from-file", "a.go", "--symbol", "Target")
+		cfg, err := parseSlice(args)
+		if err != nil || cfg.fromFile != "a.go" || cfg.symbol != "Target" {
+			t.Errorf("ASSERT_MANAGED_CLI_FILE_SYMBOL_SELECTOR_PARITY: cfg=%#v err=%v", cfg, err)
+		}
+	})
+	t.Run("managed selector failures", func(t *testing.T) {
+		for _, extra := range [][]string{
+			{"--graph-provenance", "--from-file", "a.go"},
+			{"--graph-provenance", "--symbol", "Target"},
+			{"--graph-provenance", "--from-file", "a.go", "--symbol", "Target", "--at", "a.go:1:1"},
+		} {
+			if _, err := parseSlice(append(append([]string{}, base...), extra...)); err == nil || !strings.Contains(err.Error(), "exactly one managed target selector") {
+				t.Errorf("ASSERT_MANAGED_CLI_SELECTOR_FAILS_CLOSED: args=%v err=%v", extra, err)
+			}
+		}
+	})
 	t.Run("no max depth", func(t *testing.T) {
 		if _, err := parseSlice(append(append([]string{}, base...), "--max-depth", "7", "--from-file", "a.go")); err == nil {
 			t.Error("ASSERT_SLICE_MAX_DEPTH_NOT_EXPOSED: accepted --max-depth")

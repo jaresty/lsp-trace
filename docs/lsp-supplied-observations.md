@@ -13,15 +13,27 @@ lsp-trace slice --workspace /absolute/trusted/workspace \
   --server /absolute/path/to/gopls --at f0.go:2:6 \
   --graph-provenance --down-depth 5 --up-depth 1 \
   --timeout 60s --request-timeout 10s
+
+lsp-trace slice --workspace /absolute/trusted/workspace \
+  --server /absolute/path/to/gopls --from-file f0.go --symbol Target \
+  --graph-provenance --down-depth 5 --up-depth 1
 ```
 
 The additive CLI route uses the existing local Darwin managed supervisor and the
 **same `sliceops` operation as MCP**, not a second provenance implementation.
-It requires exactly one `--at`; `--from-file`, `--seed-file`, and `--trace-lsp` are
-unsupported in this mode. Managed bounds are depth 1..64, nodes 1..10000, and
-1ms..60s timeouts. Defaults in this mode are downward/upward depth 2, 100 nodes,
-5s operation timeout and 1s request timeout. Coordinates remain one-based on CLI,
-zero-based in MCP. `--output` and `--pretty` change the outer presentation, never
+It requires exactly one managed target selector: either `--at PATH:LINE:COLUMN`,
+whose CLI line and column are one-based and become MCP's zero-based `line` and
+`character`, or `--from-file PATH --symbol NAME`, which becomes MCP's absolute
+`uri` plus exact `symbol`. A bare managed `--from-file`, a bare `--symbol`, mixed
+forms, `--seed-file`, and `--trace-lsp` fail before process startup. Symbol lookup
+uses the shared bounded `textDocument/documentSymbol` reconciliation and
+`textDocument/prepareCallHierarchy` probes: exact duplicate names fail ambiguous,
+absent-name suggestions are capped at 8, and preparation is capped at 65 provider
+positions. Flat `SymbolInformation` uses its provider range for reconciliation;
+no source parser or syntax-derived range participates. Managed bounds are depth
+1..64, nodes 1..10000, and 1ms..60s timeouts. Defaults in this mode are
+downward/upward depth 2, 100 nodes, 5s operation timeout and 1s request timeout.
+`--output` and `--pretty` change the outer presentation, never
 the embedded graph bytes. Exit 0 means a bounded envelope was published, not that
 traversal is complete; inspect the embedded graph summary. Other platforms fail
 closed for this CLI supervisor; cross-build success is not runtime qualification.

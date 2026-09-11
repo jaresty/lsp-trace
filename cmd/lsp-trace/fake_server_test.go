@@ -656,7 +656,10 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			err = writeFake(out, m.ID, map[string]any{"capabilities": capabilities}, nil)
 		case "initialized", "textDocument/didOpen":
 		case "textDocument/documentSymbol":
-			if scenario == "slice-noisy" {
+			if scenario == "slice-symbol" {
+				symbol := item("start", 0)
+				err = writeFake(out, m.ID, []any{map[string]any{"name": symbol.Name, "kind": symbol.Kind, "location": map[string]any{"uri": symbol.URI, "range": symbol.Range}}}, nil)
+			} else if scenario == "slice-noisy" {
 				err = writeFake(out, m.ID, []fakeItem{item("start", 0), item("value-a", 1), item("value-b", 2)}, nil)
 			} else if scenario == "slice-identity" {
 				err = writeFake(out, m.ID, []fakeItem{item("root", 0)}, nil)
