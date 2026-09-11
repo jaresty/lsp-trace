@@ -1,0 +1,62 @@
+{
+  "schema_version": "lsp-trace.program-c-projection-profiles.v1",
+  "artifact_kind": "PRIVATE_INVESTIGATION_POLICY",
+  "status": "DEFERRED",
+  "normalization": "none",
+  "self_loops": "preserve",
+  "unsupported_policy": "requested relation unavailable yields INCOMPLETE; unrelated profile qualification is unchanged",
+  "ordering": "nodes by canonical node ID; edges by relation kind, source ID, target ID, relation ID",
+  "profiles": [
+    {
+      "name": "calls-v1",
+      "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
+      "relations": [
+        {"kind": "CALLS", "direction": "directed", "multiplicity": "preserve", "weight": 1}
+      ]
+    },
+    {
+      "name": "callback-flow-v1",
+      "logical_digest": "sha256:2465dc8d224e71532966cd0c3b396b3c35f3b4ad5c64a7ed0915a472d773daca",
+      "relations": [
+        {"kind": "BINDS_ARGUMENT", "direction": "directed", "multiplicity": "preserve", "weight": 1},
+        {"kind": "PASSES_CALLBACK", "direction": "directed", "multiplicity": "preserve", "weight": 1},
+        {"kind": "INVOKES_TASK", "direction": "directed", "multiplicity": "preserve", "weight": 1}
+      ]
+    },
+    {
+      "name": "state-flow-v1",
+      "logical_digest": "sha256:5588cbf11b1ca62efcd339c6e3b0051814a724cbe4f706becd538a7926de5fd8",
+      "relations": [
+        {"kind": "UPDATES_STATE", "direction": "directed", "multiplicity": "preserve", "weight": 1}
+      ]
+    },
+    {
+      "name": "ui-lifecycle-v1",
+      "logical_digest": "sha256:7fcd4d2ad0e0670b0e8aab117d45f0a181b629beda4f5ee895814fcffe430af3",
+      "relations": [
+        {"kind": "RENDERS_FROM", "direction": "directed", "multiplicity": "preserve", "weight": 1},
+        {"kind": "TRIGGERS_RELOAD", "direction": "directed", "multiplicity": "preserve", "weight": 1}
+      ]
+    }
+  ],
+  "compositions": [
+    {
+      "name": "all-qualified-v1",
+      "requires_all_members": true,
+      "on_missing_member": "INCOMPLETE",
+      "members": [
+        {"profile": "calls-v1", "digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9"},
+        {"profile": "callback-flow-v1", "digest": "sha256:2465dc8d224e71532966cd0c3b396b3c35f3b4ad5c64a7ed0915a472d773daca"},
+        {"profile": "state-flow-v1", "digest": "sha256:5588cbf11b1ca62efcd339c6e3b0051814a724cbe4f706becd538a7926de5fd8"},
+        {"profile": "ui-lifecycle-v1", "digest": "sha256:7fcd4d2ad0e0670b0e8aab117d45f0a181b629beda4f5ee895814fcffe430af3"}
+      ]
+    }
+  ],
+  "mixed_language_policy": {
+    "require_passing_tuple_per_edge": true,
+    "require_qualified_cross_language_edges": true,
+    "preserve_relation_kind": true,
+    "preserve_provider_identity": true,
+    "preserve_language_framework_scope": true
+  }
+}

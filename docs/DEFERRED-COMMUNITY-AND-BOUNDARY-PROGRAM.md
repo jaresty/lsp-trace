@@ -14,17 +14,31 @@ Basis: FR12 defers community diagnostics until the substrate and deterministic-a
 - A community artifact cannot upgrade graph custody, source completeness, provider coverage, projection authority, or domain meaning.
 - D01 execution or deployment, network access, installation, product-repository work, and a full test suite are outside this package.
 
+## Semantic projection profiles
+
+Program C profiles describe relation semantics, not implementation languages. `qualification/program-c/projection-profiles.v1.json` defines the private investigation profiles and their logical digests:
+
+- `calls-v1`: `CALLS`.
+- `callback-flow-v1`: `BINDS_ARGUMENT`, `PASSES_CALLBACK`, and `INVOKES_TASK`.
+- `state-flow-v1`: `UPDATES_STATE`.
+- `ui-lifecycle-v1`: `RENDERS_FROM` and `TRIGGERS_RELOAD`.
+- `all-qualified-v1`: exact fail-closed composition of all four profiles by member digest.
+
+Every relation is directed, retains occurrence multiplicity, and has an explicit weight. Profile changes require a new profile identity and digest. Language, framework, provider, and provider version are qualification coordinates recorded in `qualification/program-c/profile-qualification.tsv`; they do not define profile identity. A failed, blocked, unsupported, incomplete, or missing tuple remains visible and blocks only requests that require that tuple. It cannot invalidate an independently qualified unrelated profile, and evidence from one tuple cannot satisfy another.
+
+Mixed-language graphs retain relation kind, provider identity, and language/framework scope for every edge. Every contributing edge requires a passing tuple, and cross-language edges require separately qualified evidence. Combining independently qualified node sets does not infer edges between them.
+
 ## Gate I: admit the bounded investigation
 
 Set `INVESTIGATION_ADMITTED` only when every row is supported by an addressable, current local receipt. Missing, stale, partial, waived foundational, or semantically invalid evidence is a failing row. The machine-readable index is `qualification/program-c/gate-i-receipts.tsv`; it must contain exactly one row for each ID I-01 through I-08. A passing row names a repository-relative regular receipt file, its exact SHA-256 digest, and `PASS`.
 
 Each passing receipt is a reproducibility record, not a cryptographic attestation. It must declare the matching `gate_id`, `result: PASS`, `current: true`, repository revision, exact command, policy/matrix identity, tool identity, run identity, one or more input SHA-256 digests, result SHA-256 digest, and explicit counts or inventories for `PASS`, `FAIL`, and `BLOCKED` outcomes. Gate I does not require an authority, key, signature, opaque Program A token, or cross-user trust. A receipt records what one local run established under named inputs and policy; another user may reproduce it independently.
 
-The repository checker has two distinct modes. Its default mode validates the DEFERRED decision-package and receipt-index shape without treating intentionally missing receipts as a CI failure. `--admission` evaluates Gate I and exits unsuccessfully unless every indexed local receipt is addressable, digest-matching, current, structurally complete, and passing. Checker success in default mode never sets `INVESTIGATION_ADMITTED`; structural receipt validation does not replace review of whether the named run actually satisfies its row.
+The repository checker has two distinct modes. Its default mode validates the DEFERRED decision-package, receipt-index, profile manifest, and qualification-matrix shape without treating intentionally missing receipts as a CI failure. Admission evaluation requires an explicit requested profile, for example `scripts/check-deferred-community-program.sh --admission --profile calls-v1`; multiple `--profile` flags form a conjunction. Admission exits unsuccessfully unless every indexed local receipt is addressable, digest-matching, current, structurally complete, and passing and every required tuple for each requested profile passes. `all-qualified-v1` additionally requires every exact member profile. Checker success in default mode never sets `INVESTIGATION_ADMITTED`; structural receipt validation does not replace review of whether the named run actually satisfies its row.
 
 | ID | Required receipt | Pass condition | Failure disposition |
 |---|---|---|---|
-| I-01 | Substrate qualification | A reproducible local run records the exact substrate policy/matrix, inputs, results, and all pass/fail/blocked cells; every required cell passes and blocked cells remain visible. | Keep Program C deferred. |
+| I-01 | Profile-scoped substrate qualification | Reproducible local runs record exact profile digests and qualification coordinates. Every tuple required by the requested profile passes; unavailable optional or unrelated tuples remain visible without blocking an independently qualified profile. | Keep the requested profile deferred. |
 | I-02 | Deterministic-analysis qualification | Reproducible local runs qualify the required projection, components, metrics, PageRank/PPR, replay, resources, and CLI/MCP parity obligations under named inputs and policy. | Keep Program C deferred. |
 | I-03 | Candidate/version inventory | Exact Infomap and Leiden libraries, algorithm variants, versions, maintainers, and implementation surfaces are identified without installation. | Investigation not admitted. |
 | I-04 | License decision inputs | Candidate licenses and intended distribution/linkage modes are recorded for later authorized review; no compatibility conclusion is inferred from package metadata alone. | Investigation not admitted. |
@@ -46,7 +60,7 @@ No partial admission exists. A receipt may close only its own row.
 When Gate I passes, the investigation is limited to a decision spike with these bounds:
 
 - **Questions:** candidate API fitness; license compatibility inputs; cross-platform build feasibility; deterministic replay; seed and label canonicalization; resource behavior; boundary-accounting definitions; repeated-seed instability definitions.
-- **Inputs:** already retained, authenticated graph and projection fixtures plus locally available candidate source/package metadata. No reacquisition and no network fallback.
+- **Inputs:** already retained graph fixtures, exact semantic profile digests, passing qualification tuples for every requested edge source, and locally available candidate source/package metadata. No reacquisition and no network fallback.
 - **Candidate algorithms and implementations:** the proposed primary is Gonum's native-Go Leiden implementation only after it appears in an exact tagged Gonum release. Gonum Louvain from that same release is the comparator. Infomap is optional external-reference material for directed-flow diagnostics only; it is not a linked or production dependency and requires separate provisioning and license approval before any admitted execution. `vtraag/leidenalg` is rejected because its Python/C++/igraph packaging and GPL-3.0-or-later boundary conflict with the preferred native-Go, permissively licensed dependency profile. No unreleased Gonum commit is admitted. Changing these roles or adding an algorithm requires revising this package before work begins.
 - **Fixture cap:** at most six retained fixtures covering directed, weighted, disconnected, singleton, high-degree-hub, and adversarial-order cases; one fixture may cover multiple categories.
 - **Execution cap:** at most three deterministic runs per seed per candidate per fixture, plus one input-order permutation per fixture. Larger statistical studies require a new authorization.
@@ -94,12 +108,15 @@ The repository checker for this package must emit assertion-specific results for
 1. `ASSERT_PROGRAM_C_REMAINS_DEFERRED`: passes only while the status is `DEFERRED` and the package says it does not authorize implementation.
 2. `ASSERT_DECISION_PACKAGE_SCOPE`: passes only while the package authorizes bounded investigation and a later decision, never implementation or public delivery surfaces.
 3. `ASSERT_INVESTIGATION_GATE_EXACT`: passes only while Gate I contains exactly I-01 through I-08 and uses `PASS(I-01..I-08)`.
-4. `ASSERT_GATE_I_RECEIPT_INDEX`: passes only while the receipt index contains exactly I-01 through I-08 with no duplicate or extra rows and each row uses the declared state/path/digest shape.
-5. `ASSERT_GATE_I_RECEIPT_I_01` through `ASSERT_GATE_I_RECEIPT_I_08`: admission-mode assertions pass only when the corresponding indexed local receipt is addressable, digest-matching, current, structurally complete, and passing; the checker requires all reproducibility fields and explicit pass/fail/blocked outcomes without requiring cryptographic authority.
-6. `ASSERT_BOUNDED_INVESTIGATION`: passes only while questions, inputs, candidate roles, fixture/execution/resource caps, outputs, stopping conditions, and excluded activities are present.
-7. `ASSERT_IMPLEMENTATION_GATE_EXACT`: passes only while Gate II contains exactly A-01 through A-10, depends on `INVESTIGATION_ADMITTED`, and states that passing permits only a later decision.
-8. `ASSERT_BOUNDARY_NEUTRALITY`: passes only while crossings are structural observations and business-boundary inference remains prohibited.
-9. `ASSERT_EXCLUDED_EXECUTION`: passes only while D01, deployment, network, installation, product work, and full-suite execution remain outside authorization.
+4. `ASSERT_PROGRAM_C_PROFILE_MANIFEST`, `ASSERT_PROGRAM_C_PROFILE_INVENTORY`, `ASSERT_PROGRAM_C_PROFILE_RELATIONS`, and `ASSERT_PROGRAM_C_PROFILE_DIGESTS`: pass only for the exact semantic profile contract and canonical digests.
+5. `ASSERT_PROGRAM_C_ALL_QUALIFIED` and `ASSERT_PROGRAM_C_MIXED_LANGUAGE_POLICY`: pass only while exact composition and per-edge mixed-language qualification remain fail-closed.
+6. `ASSERT_PROGRAM_C_PROFILE_MATRIX` and `ASSERT_PROGRAM_C_REQUESTED_PROFILE`: pass only for unique, explicit qualification coordinates and passing required tuples for every requested profile.
+7. `ASSERT_GATE_I_RECEIPT_INDEX`: passes only while the receipt index contains exactly I-01 through I-08 with no duplicate or extra rows and each row uses the declared state/path/digest shape.
+8. `ASSERT_GATE_I_RECEIPT_I_01` through `ASSERT_GATE_I_RECEIPT_I_08`: admission-mode assertions pass only when the corresponding indexed local receipt is addressable, digest-matching, current, structurally complete, and passing; the checker requires all reproducibility fields and explicit pass/fail/blocked outcomes without requiring cryptographic authority.
+9. `ASSERT_BOUNDED_INVESTIGATION`: passes only while questions, inputs, candidate roles, fixture/execution/resource caps, outputs, stopping conditions, and excluded activities are present.
+10. `ASSERT_IMPLEMENTATION_GATE_EXACT`: passes only while Gate II contains exactly A-01 through A-10, depends on `INVESTIGATION_ADMITTED`, and states that passing permits only a later decision.
+11. `ASSERT_BOUNDARY_NEUTRALITY`: passes only while crossings are structural observations and business-boundary inference remains prohibited.
+12. `ASSERT_EXCLUDED_EXECUTION`: passes only while D01, deployment, network, installation, product work, and full-suite execution remain outside authorization.
 
 Any failure preserves `DEFERRED`. Default checker success proves only package and index shape, not that an admission receipt has passed; only a successful explicit `--admission` evaluation may support `INVESTIGATION_ADMITTED`.
 

@@ -4,23 +4,43 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 file="$root/docs/DEFERRED-COMMUNITY-AND-BOUNDARY-PROGRAM.md"
 index="$root/qualification/program-c/gate-i-receipts.tsv"
+profiles="$root/qualification/program-c/projection-profiles.v1.json"
+profile_matrix="$root/qualification/program-c/profile-qualification.tsv"
 mode=shape
+requested_profiles=''
+positional=0
 failed=0
 
-if [ "${1:-}" = "--admission" ]; then
-  mode=admission
-  shift
-fi
-if [ "$#" -gt 0 ]; then
-  file=$1
-  shift
-fi
-if [ "$#" -gt 0 ]; then
-  index=$1
-  shift
-fi
-if [ "$#" -ne 0 ]; then
-  printf 'usage: %s [--admission] [decision-package [receipt-index]]\n' "$0" >&2
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --admission)
+      mode=admission
+      shift
+      ;;
+    --profile)
+      [ "$#" -ge 2 ] || { printf '%s\n' 'missing value for --profile' >&2; exit 64; }
+      case "$2" in *[!A-Za-z0-9._-]*|'') printf '%s\n' 'invalid --profile value' >&2; exit 64 ;; esac
+      requested_profiles="$requested_profiles $2"
+      shift 2
+      ;;
+    --*)
+      printf 'usage: %s [--admission --profile NAME ...] [decision-package [receipt-index]]\n' "$0" >&2
+      exit 64
+      ;;
+    *)
+      positional=$((positional + 1))
+      case "$positional" in
+        1) file=$1 ;;
+        2) index=$1 ;;
+        *) printf 'usage: %s [--admission --profile NAME ...] [decision-package [receipt-index]]\n' "$0" >&2; exit 64 ;;
+      esac
+      shift
+      ;;
+  esac
+done
+
+if [ "$mode" = admission ] && [ -z "$requested_profiles" ]; then
+  printf '%s\n' '--admission requires at least one --profile' >&2
   exit 64
 fi
 
@@ -169,12 +189,29 @@ assert_all ASSERT_DECISION_PACKAGE_SCOPE \
   'It authorizes only the bounded, offline investigation described below after the investigation-admission gate passes.' \
   'Even when true, this rule permits a new implementation decision; it does not itself authorize implementation.' \
   'The spike must not add public schemas, CLI/MCP commands, operation-registry entries, production packages, deployment configuration, or community implementation code.'
+assert_all ASSERT_PROGRAM_C_PROFILE_SCOPE \
+  'Program C profiles describe relation semantics, not implementation languages.' \
+  'A failed, blocked, unsupported, incomplete, or missing tuple remains visible and blocks only requests that require that tuple.' \
+  'Every contributing edge requires a passing tuple, and cross-language edges require separately qualified evidence.' \
+  'all-qualified-v1`: exact fail-closed composition of all four profiles by member digest.'
 assert_gate ASSERT_INVESTIGATION_GATE_EXACT I 1 8 \
   'INVESTIGATION_ADMITTED = PASS(I-01..I-08)' \
   'No partial admission exists.' \
   'Each passing receipt is a reproducibility record, not a cryptographic attestation.' \
   'Gate I does not require an authority, key, signature, opaque Program A token, or cross-user trust.'
 assert_receipt_index
+if ! python3 "$root/scripts/check-program-c-profiles.py" --root "$root" --profiles "$profiles" --matrix "$profile_matrix"; then
+  failed=1
+elif [ "$mode" = admission ]; then
+  for requested_profile in $requested_profiles; do
+    if ! python3 "$root/scripts/check-program-c-profiles.py" --root "$root" --profiles "$profiles" --matrix "$profile_matrix" --require-profile "$requested_profile" >/dev/null; then
+      printf 'ASSERT_PROGRAM_C_REQUESTED_PROFILE result=FAIL profile=%s\n' "$requested_profile"
+      failed=1
+    else
+      printf 'ASSERT_PROGRAM_C_REQUESTED_PROFILE result=PASS profile=%s\n' "$requested_profile"
+    fi
+  done
+fi
 if [ "$failed" -eq 0 ]; then
   assert_receipts
 fi

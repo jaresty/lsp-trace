@@ -20,7 +20,11 @@ jobs:
       - name: Check Python syntax
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -m py_compile scripts/retain-qualification.py
+        run: python3 -m py_compile scripts/retain-qualification.py scripts/check-program-c-profiles.py scripts/test-program-c-profiles.py
+      - name: Check Program C profiles
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python3 scripts/test-program-c-profiles.py
       - name: Check shell syntax
         run: sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh
       - name: Check CI contract

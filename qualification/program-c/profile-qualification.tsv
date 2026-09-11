@@ -1,0 +1,6 @@
+# profile	language	framework	provider	provider_version	required	status	receipt	receipt_sha256
+calls-v1	csharp	none	csharp-ls	0.27.0.0	yes	MISSING	-	-
+calls-v1	go	none	gopls	0.23.0	yes	MISSING	-	-
+callback-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
+state-flow-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
+ui-lifecycle-v1	typescript	ember	ember-glint	1.0.3	yes	MISSING	-	-
