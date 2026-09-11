@@ -41,6 +41,12 @@ go run ./cmd/lsp-trace incoming \
 
 Line and column values are one-based. Graph JSON is written to stdout (or `--output`), while diagnostics are written to stderr. Exit code `0` means complete traversal, `2` means a structured but incomplete traversal, `1` means invocation or unrecoverable server failure, and `130` means interruption.
 
+### Coordinate conventions
+
+CLI `--at PATH:LINE:COLUMN` positions are one-based. MCP `line` and `character` inputs, LSP requests and responses, and retained graph ranges are zero-based. Columns and LSP characters count code units in the managed session's negotiated position encoding: `utf-8` counts bytes, `utf-16` counts UTF-16 code units, and `utf-32` counts Unicode code points. They are not visual columns; tabs, combining characters, and wide glyphs do not each imply one unit.
+
+The language server owns this encoding through its initialize response's `capabilities.positionEncoding`. If it omits that capability, LSP's `utf-16` default applies. The managed session records the resulting encoding and uses it for every caller position and server-returned range in that generation; MCP callers cannot override it. The CLI converts its one-based line and column to the corresponding zero-based LSP position without changing the negotiated code-unit meaning.
+
 ## Bounded call-graph slices
 
 Use `slice` to enumerate document symbols in one starting file, prepare every server-accepted callable, walk outgoing calls to an exact depth, and reuse the incoming traversal from the deterministic union of that frontier plus server-reported outgoing leaves reached before it:
@@ -54,7 +60,7 @@ lsp-trace slice \
   --up-depth 8
 ```
 
-Choose exactly one starting mode: `--from-file FILE` enumerates every server-preparable document symbol in one file; repeatable `--at PATH:LINE:COLUMN` uses explicit positions with automatic `seed-1`, `seed-2`, … labels; `--seed-file FILE` uses the existing labeled seed JSON format. Explicit starts are prepared once, deduplicated by native node identity for traversal, and retain each caller-supplied seed occurrence in `invocation.seeds` and `seeds`.
+Choose exactly one starting mode: `--from-file FILE` enumerates every server-preparable document symbol in one file; repeatable `--at PATH:LINE:COLUMN` uses one-based explicit positions with automatic `seed-1`, `seed-2`, … labels; `--seed-file FILE` uses the existing labeled seed JSON format. Explicit starts are prepared once, deduplicated by native node identity for traversal, and retain each caller-supplied seed occurrence in `invocation.seeds` and `seeds`.
 
 `--down-depth` and `--up-depth` count call edges. Zero means no traversal in that direction. Slice output is v3-only and includes `slice.start_mode` plus metadata whose layers, frontier, outgoing terminals, upward starts, and outgoing relations reference the native graph's canonical node and relation IDs. `frontier_node_ids` is only the exact-depth layer. `outgoing_terminal_node_ids` contains successful empty `outgoingCalls` responses reached before that layer. `upward_start_node_ids` is their native-ID-sorted union. Each upward start is depth zero for its own incoming walk, so `--up-depth` is measured independently from every node in that union; it is not measured from the original seed or from every outgoing-discovered node. Null, failed, timed-out, canceled, or node-budget-truncated outgoing expansion is not a server-reported leaf. Hitting the node budget while an outgoing expansion remains unresolved is a conservative hard boundary: it makes traversal incomplete even if the request that was not completed might have returned no calls. Retained advisory range or normalization warnings may coexist with `traversal_complete: true`; that flag means the requested walks completed within their declared bounds, not that warnings are absent or that the graph proves runtime execution, complete feature coverage, source truth, or unreported dynamic, reflective, generated, configuration, template, or framework relationships.
 
