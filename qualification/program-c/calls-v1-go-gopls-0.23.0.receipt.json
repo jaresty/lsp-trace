@@ -1,8 +1,8 @@
 {
   "schema_version": "lsp-trace.program-c-profile-qualification-receipt.v1",
-  "result": "BLOCKED",
+  "result": "PASS",
   "current": true,
-  "repository_revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
+  "repository_revision": "fc37a2b4bca124205fa1a9859c11865f8d2644ee",
   "profile": {
     "name": "calls-v1",
     "logical_digest": "sha256:f4fb309c6e849b5a8e6057f355b1db6ee3c53414c3c430b67be17f68fe9e97f9",
@@ -22,8 +22,8 @@
   },
   "tool_identity": {
     "name": "lsp-trace",
-    "revision": "a7d51484fa6d446c76cc50216c3cf311430815a4",
-    "version_output": "lsp-trace v0.0.0-20260911025958-a7d51484fa6d revision=a7d51484fa6d446c76cc50216c3cf311430815a4 modified=false"
+    "revision": "fc37a2b4bca124205fa1a9859c11865f8d2644ee",
+    "version_output": "lsp-trace v0.0.0-20260911035028-fc37a2b4bca1 revision=fc37a2b4bca124205fa1a9859c11865f8d2644ee modified=false"
   },
   "exact_command": [
     "$LSP_TRACE_BIN", "slice", "--acquisition-version", "v3",
@@ -34,17 +34,35 @@
     "--output-version", "lsp-trace.graph-provenance.v5",
     "--output", "$V5_SELECTOR"
   ],
+  "retained_export_command": [
+    "$LSP_TRACE_BIN", "export-retained-calls", "--version", "v3",
+    "--output", "$RETAINED_SELECTOR", "$V5_ARTIFACT"
+  ],
   "input_sha256": {
     "repository_method_manifest": "sha256:e75d2808771ef588c64ade7d37b76c8755fd16d768a1e48081e03cae5c3e5a71",
     "synthetic_fixture_manifest": "sha256:5852b4aef504674dbc533f18af3d331a0efe97de98961bb474db873266e02a20",
     "synthetic_fixture_go_mod": "sha256:123931fa3724750fe540f44df588b3aefdeed963d2483f872c6671c2893c5379",
-    "synthetic_fixture_service_go": "sha256:bf2c157f6082d7dd781ad715e460e56e2fb46dd947dfda512dbdb6601afbece0"
+    "synthetic_fixture_service_go": "sha256:bf2c157f6082d7dd781ad715e460e56e2fb46dd947dfda512dbdb6601afbece0",
+    "graph_provenance_v5": "sha256:29991a08a462335a5742ccb2e882209e4f4183b5ba824973e5c889812a8d7598"
   },
   "run_identity": {
-    "synthetic_fixture_revision": "9f979042152d55f08669ae69d5cf1494c7ad4106",
-    "published_generation": null
+    "synthetic_fixture_revision": "9f979042152d55f08669d5cf1494c7ad4106",
+    "v5_generation": ".lsp-trace-generation-92322cc2d47a5fe90679e1a7368f89e9",
+    "retained_generation": ".lsp-trace-generation-3dfa65d85757d7c945b30516478f3a7e",
+    "replay_generation": ".lsp-trace-generation-96c7cf11bfe9fb43a551402214445a65"
   },
-  "result_sha256": null,
+  "result_sha256": "sha256:176d3a9dc86ff3535bda980dbf79eec05cc7f56ce38c86ea1049cb1b5b6687e2",
+  "evidence": {
+    "v5_native_verification": "PASS",
+    "retained_relations_schema": "lsp-trace.retained-relations.v1",
+    "retained_policy": "EXACT_GRAPH_PROVENANCE_V5_DISTINCT_CALLS_AND_SIBLING_CANDIDATES",
+    "calls": 1,
+    "distinct_call_relation_ids": 1,
+    "call_site_occurrences": 1,
+    "sibling_candidates": 1,
+    "deterministic_replay": "EXACT_BYTES",
+    "retained_artifact_bytes": 26842
+  },
   "attempts": [
     {
       "fixture": "repository-main",
@@ -59,17 +77,22 @@
       "diagnostic": "OUTPUT_VALIDATION_FAILED: topmost sibling expansion produced no exact relations"
     },
     {
-      "fixture": "committed-synthetic-sibling-method-family",
+      "fixture": "committed-synthetic-sibling-method-family-before-flat-reconciliation",
       "target": "service.go:4:15",
       "outcome": "BLOCKED",
       "diagnostic": "OUTPUT_VALIDATION_FAILED: topmost sibling expansion produced no exact relations"
+    },
+    {
+      "fixture": "committed-synthetic-sibling-method-family-after-flat-reconciliation",
+      "target": "service.go:4:15",
+      "outcome": "PASS",
+      "diagnostic": "verified immutable carrier; deterministic retained-relations replay"
     }
   ],
   "outcomes": {
-    "PASS": 0,
+    "PASS": 1,
     "FAIL": 0,
     "BLOCKED": 3
   },
-  "blocker": "No bounded gopls attempt produced the exact declaration-level sibling relations required for Graph Provenance V5; no artifact, receipt, selector, retained-relations projection, or calls-v1 result was published.",
-  "claim_ceiling": "These three bounded attempts do not prove universal gopls incompatibility. They establish only that the required Go qualification coordinate has no passing current receipt."
+  "claim_ceiling": "This receipt qualifies only the exact calls-v1 Go/gopls 0.23.0 coordinate against the frozen synthetic fixture and named profile digest. Flat document-symbol reconciliation contributes discovery evidence only; CALLS support remains exclusively server-reported."
 }
