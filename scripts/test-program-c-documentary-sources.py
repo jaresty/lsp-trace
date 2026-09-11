@@ -29,44 +29,44 @@ def main():
     i04 = load("i-04")
 
     for assertion, module in (
-        ("ASSERT_I03_EXACT_CANDIDATES", i03),
-        ("ASSERT_I04_EXACT_ENTRIES", i04),
+        ("ASSERT_I03_EXACT_REVISION", i03),
+        ("ASSERT_I04_EXACT_LICENSE", i04),
     ):
         status, output = run(module)
         if status != 0 or f"{assertion} result=PASS" not in output:
             raise SystemExit(f"FAIL {assertion} frozen approved packet\n{output}")
         print(f"PASS {assertion} frozen approved packet")
 
-    inventory_source = ROOT / "qualification/program-c/i-03-candidate-inventory.v1.json"
+    inventory_source = ROOT / "qualification/program-c/i-03-candidate-inventory.v2.json"
     inventory = json.loads(inventory_source.read_text(encoding="utf-8"))
-    inventory["candidates"][0]["version"] = "v0.17.1"
+    inventory["authorized_candidate"]["revision"] = "0" * 40
     with tempfile.TemporaryDirectory() as directory:
         wrong = pathlib.Path(directory) / inventory_source.name
         wrong.write_text(json.dumps(inventory), encoding="utf-8")
-        original = i03.PATH
+        original = i03.V2
         try:
-            i03.PATH = wrong
+            i03.V2 = wrong
             status, output = run(i03)
         finally:
-            i03.PATH = original
-    expected = "ASSERT_I03_EXACT_CANDIDATES result=FAIL"
+            i03.V2 = original
+    expected = "ASSERT_I03_EXACT_REVISION result=FAIL"
     if status == 0 or expected not in output:
         raise SystemExit(f"FAIL ASSERT_I03_WRONG_VERSION_REJECTED\n{output}")
     print(f"PASS ASSERT_I03_WRONG_VERSION_REJECTED observed={expected}")
 
-    source = ROOT / "qualification/program-c/i-04-license-inputs.v1.json"
+    source = ROOT / "qualification/program-c/i-04-license-inputs.v2.json"
     packet = json.loads(source.read_text(encoding="utf-8"))
-    packet["entries"][0]["sources"][0] = "https://github.com/gonum/gonum/blob/v0.17.0/LICENSE.txt"
+    packet["entry"]["license_sha256"] = "sha256:" + "0" * 64
     with tempfile.TemporaryDirectory() as directory:
         wrong = pathlib.Path(directory) / source.name
         wrong.write_text(json.dumps(packet), encoding="utf-8")
-        original = i04.P
+        original = i04.V2
         try:
-            i04.P = wrong
+            i04.V2 = wrong
             status, output = run(i04)
         finally:
-            i04.P = original
-    expected = "ASSERT_I04_EXACT_ENTRIES result=FAIL"
+            i04.V2 = original
+    expected = "ASSERT_I04_EXACT_LICENSE result=FAIL"
     if status == 0 or expected not in output:
         raise SystemExit(f"FAIL ASSERT_I04_WRONG_LICENSE_URL_REJECTED\n{output}")
     print(f"PASS ASSERT_I04_WRONG_LICENSE_URL_REJECTED observed={expected}")
