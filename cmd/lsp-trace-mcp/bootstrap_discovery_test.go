@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,10 @@ import (
 )
 
 func TestPublicBootstrapExampleParsesProductionContract(t *testing.T) {
+	var template bootstrapConfig
+	if err := json.Unmarshal(publicBootstrapExample, &template); err != nil {
+		t.Fatalf("ASSERT_PUBLIC_BOOTSTRAP_EXAMPLE_JSON: %v", err)
+	}
 	path := filepath.Join(t.TempDir(), "bootstrap.json")
 	if err := os.WriteFile(path, publicBootstrapExample, 0o600); err != nil {
 		t.Fatal(err)
@@ -28,6 +33,16 @@ func TestPublicBootstrapExampleParsesProductionContract(t *testing.T) {
 	for i, process := range config.Processes {
 		if len(process.Execution.Environment) != 0 {
 			t.Fatalf("ASSERT_PUBLIC_BOOTSTRAP_EXAMPLE_NO_ENVIRONMENT_VALUES[%d]: %q", i, process.Execution.Environment)
+		}
+		templateProcess := template.Processes[i]
+		for field, value := range map[string]string{
+			"profile.workspace":   templateProcess.Profile.Workspace,
+			"execution.path":      templateProcess.Execution.Path,
+			"execution.directory": templateProcess.Execution.Directory,
+		} {
+			if filepath.IsAbs(value) || filepath.VolumeName(value) != "" || strings.Contains(value, "\\") || (len(value) >= 2 && value[1] == ':') {
+				t.Fatalf("ASSERT_PUBLIC_BOOTSTRAP_EXAMPLE_PORTABLE_RELATIVE_PATH[%d/%s]: %q", i, field, value)
+			}
 		}
 	}
 }
