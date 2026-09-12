@@ -13,13 +13,13 @@ import (
 
 func TestExactBytesAuthorityAssignsAndVerifiesCanonicalConstituent(t *testing.T) {
 	raw := []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)
-	a := ExactBytesAuthority{VerifyGraphProvenanceV5: func(got []byte) error {
+	a := ExactBytesAuthority{AdmitGraphProvenanceV5: func(got []byte) (string, error) {
 		if !bytes.Equal(got, raw) {
 			t.Fatal("ASSERT_AUTHORITY_EXACT_BYTES")
 		}
-		return nil
+		return "native-v5-id", nil
 	}}
-	c, err := a.Constituent(raw, "native-v5-id")
+	c, err := a.Constituent(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,6 +35,14 @@ func TestExactBytesAuthorityAssignsAndVerifiesCanonicalConstituent(t *testing.T)
 	bad.ImmutableSelector = "caller/chosen"
 	if err := a.VerifyConstituent(bad, raw); err == nil {
 		t.Fatal("ASSERT_AUTHORITY_REJECTS_CALLER_SELECTOR")
+	}
+	bad = c
+	bad.NativeV5Identity = "caller-forged-id"
+	if err := a.VerifyConstituent(bad, raw); err == nil {
+		t.Fatal("ASSERT_AUTHORITY_REJECTS_CALLER_NATIVE_IDENTITY")
+	}
+	if _, err := (ExactBytesAuthority{AdmitGraphProvenanceV5: func([]byte) (string, error) { return "", nil }}).Constituent(raw); err == nil {
+		t.Fatal("ASSERT_AUTHORITY_REJECTS_EMPTY_DERIVED_IDENTITY")
 	}
 }
 

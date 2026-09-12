@@ -17,23 +17,24 @@ const (
 	RedactedValue             = "!redacted"
 )
 
-// ExactBytesAuthority is the sole authority in this package that assigns a
-// constituent selector. The injected validator must perform the native V5
-// structural and semantic checks; exact-byte identity is assigned only after it
-// succeeds.
+// ExactBytesAuthority is the sole authority in this package that assigns all
+// constituent metadata. The injected admission must perform native V5
+// structural and semantic checks and derive the native identity from the exact
+// admitted bytes.
 type ExactBytesAuthority struct {
-	VerifyGraphProvenanceV5 func([]byte) error
+	AdmitGraphProvenanceV5 func([]byte) (string, error)
 }
 
-func (a ExactBytesAuthority) Constituent(raw []byte, nativeV5Identity string) (Constituent, error) {
-	if a.VerifyGraphProvenanceV5 == nil {
-		return Constituent{}, errors.New("native V5 verifier required")
+func (a ExactBytesAuthority) Constituent(raw []byte) (Constituent, error) {
+	if a.AdmitGraphProvenanceV5 == nil {
+		return Constituent{}, errors.New("native V5 admission required")
 	}
-	if err := a.VerifyGraphProvenanceV5(raw); err != nil {
-		return Constituent{}, fmt.Errorf("verify native V5 constituent: %w", err)
+	nativeV5Identity, err := a.AdmitGraphProvenanceV5(raw)
+	if err != nil {
+		return Constituent{}, fmt.Errorf("admit native V5 constituent: %w", err)
 	}
 	if nativeV5Identity == "" {
-		return Constituent{}, errors.New("native V5 identity required")
+		return Constituent{}, errors.New("native V5 admission returned empty identity")
 	}
 	sum := sha256.Sum256(raw)
 	hexsum := hex.EncodeToString(sum[:])
@@ -41,7 +42,7 @@ func (a ExactBytesAuthority) Constituent(raw []byte, nativeV5Identity string) (C
 }
 
 func (a ExactBytesAuthority) VerifyConstituent(c Constituent, raw []byte) error {
-	assigned, err := a.Constituent(raw, c.NativeV5Identity)
+	assigned, err := a.Constituent(raw)
 	if err != nil {
 		return err
 	}

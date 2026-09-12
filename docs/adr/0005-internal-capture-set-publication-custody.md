@@ -13,7 +13,7 @@ The existing `lsp-trace.capture-set.v1` manifest composes independently custodie
 
 ### Canonical selectors and authority
 
-`ExactBytesAuthority` is the constituent selector authority. It first invokes the supplied native Graph Provenance V5 structural/semantic verifier, then derives exact-byte metadata. Callers cannot choose or override it.
+`ExactBytesAuthority` is the constituent metadata authority. It first invokes the supplied native Graph Provenance V5 structural/semantic admission, which derives the native V5 identity from the exact admitted bytes, then derives the remaining exact-byte metadata. Callers cannot choose or override the identity, selector, digest, length, or schema ID.
 
 Canonical constituent selector syntax is:
 
