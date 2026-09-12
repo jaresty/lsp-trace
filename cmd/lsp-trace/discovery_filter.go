@@ -4,18 +4,83 @@ import (
 	"fmt"
 	"path"
 	"strings"
+
+	"lsp-trace/internal/slicer"
 )
 
 type discoveryAccounting struct {
-	FilesEnumerated          int
-	FilesSelected            int
-	FilesExcluded            int
-	SymbolsEnumerated        int
-	SymbolsSelected          int
-	SymbolsExcluded          int
-	SymbolsUnsupported       int
-	SymbolsPreparationFailed int
-	SymbolsPrepared          int
+	FilesEnumerated           int
+	FilesSelected             int
+	FilesExcluded             int
+	FilesUnsupported          int
+	FilesDocumentSupplyFailed int
+	FilesDocumentSymbolFailed int
+	FilesProcessed            int
+	FilesIncomplete           int
+	SymbolsEnumerated         int
+	SymbolsSelected           int
+	SymbolsExcluded           int
+	SymbolsUnsupported        int
+	SymbolsPreparationFailed  int
+	SymbolsPrepared           int
+	SymbolsIncomplete         int
+}
+
+func (a discoveryAccounting) ValidateClosedCensus() error {
+	if a.FilesEnumerated != a.FilesExcluded+a.FilesSelected {
+		return fmt.Errorf("file enumeration denominator does not reconcile")
+	}
+	if a.FilesSelected != a.FilesUnsupported+a.FilesDocumentSupplyFailed+a.FilesDocumentSymbolFailed+a.FilesProcessed+a.FilesIncomplete {
+		return fmt.Errorf("selected file denominator does not reconcile")
+	}
+	if a.SymbolsEnumerated != a.SymbolsExcluded+a.SymbolsSelected {
+		return fmt.Errorf("symbol enumeration denominator does not reconcile")
+	}
+	if a.SymbolsSelected != a.SymbolsUnsupported+a.SymbolsPreparationFailed+a.SymbolsPrepared+a.SymbolsIncomplete {
+		return fmt.Errorf("selected symbol denominator does not reconcile")
+	}
+	return nil
+}
+
+func validateDiscoveryPattern(pattern string) error {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" {
+		return fmt.Errorf("automatic discovery pattern must not be empty")
+	}
+	if strings.HasPrefix(pattern, "!") {
+		return fmt.Errorf("automatic discovery pattern does not support leading !")
+	}
+	if strings.HasSuffix(pattern, "\\") {
+		return fmt.Errorf("automatic discovery pattern is malformed")
+	}
+	normalized := strings.ReplaceAll(pattern, "\\", "/")
+	if strings.Contains(normalized, "//") {
+		return fmt.Errorf("automatic discovery pattern is malformed")
+	}
+	normalized = strings.TrimPrefix(normalized, "/")
+	if strings.HasSuffix(normalized, "/") {
+		normalized += "**"
+	}
+	for _, segment := range strings.Split(normalized, "/") {
+		if segment == "**" {
+			continue
+		}
+		if _, err := path.Match(segment, "x"); err != nil {
+			return fmt.Errorf("automatic discovery pattern is malformed")
+		}
+	}
+	return nil
+}
+
+func validateDiscoveryPatterns(includes, excludes []string) error {
+	for _, patterns := range [][]string{includes, excludes} {
+		for _, pattern := range patterns {
+			if err := validateDiscoveryPattern(pattern); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func matchDiscoveryPattern(pattern, candidate string) bool {
@@ -60,6 +125,9 @@ func matchesAnyDiscoveryPattern(patterns []string, candidate string) bool {
 }
 
 func resolveSliceSourcesWithAccounting(cfg sliceConfig) (string, string, []resolvedSliceSource, discoveryAccounting, error) {
+	if err := validateDiscoveryPatterns(cfg.includes, cfg.excludes); err != nil {
+		return "", "", nil, discoveryAccounting{}, err
+	}
 	workspaceURI, scopeURI, sources, err := resolveSliceSources(cfg)
 	accounting := discoveryAccounting{FilesEnumerated: len(sources)}
 	if err != nil {
@@ -88,6 +156,57 @@ func resolveSliceSourcesWithAccounting(cfg sliceConfig) (string, string, []resol
 	return workspaceURI, scopeURI, selected, accounting, nil
 }
 
+func censusSelectedDiscoverySources(sources []resolvedSliceSource, accounting discoveryAccounting, prepare func(resolvedSliceSource) error, discover func(resolvedSliceSource) slicer.Discovery) (map[string]slicer.Discovery, discoveryAccounting, error) {
+	discoveries := make(map[string]slicer.Discovery, len(sources))
+	failed := false
+	for _, source := range sources {
+		if err := prepare(source); err != nil {
+			accounting.FilesDocumentSupplyFailed++
+			failed = true
+			continue
+		}
+		discovery := discover(source)
+		accounting.SymbolsEnumerated += discovery.PreparationAccounting.DocumentSymbols
+		accounting.SymbolsSelected += discovery.PreparationAccounting.Attempted
+		accounting.SymbolsUnsupported += discovery.PreparationAccounting.NotPreparable
+		accounting.SymbolsPreparationFailed += discovery.PreparationAccounting.Failed
+		accounting.SymbolsPrepared += discovery.PreparationAccounting.Prepared
+		discoveries[source.uri] = discovery
+		fileDisposition := "processed"
+		for _, diagnostic := range discovery.Diagnostics {
+			if diagnostic.Phase == "slice-symbols" {
+				fileDisposition = "document-symbol-failed"
+				if strings.Contains(diagnostic.Message, "unsupported") {
+					fileDisposition = "unsupported"
+				}
+				break
+			}
+		}
+		switch fileDisposition {
+		case "unsupported":
+			accounting.FilesUnsupported++
+			failed = true
+		case "document-symbol-failed":
+			accounting.FilesDocumentSymbolFailed++
+			failed = true
+		case "processed":
+			if discovery.PreparationCensusComplete {
+				accounting.FilesProcessed++
+			} else {
+				accounting.FilesIncomplete++
+				failed = true
+			}
+		}
+	}
+	if err := accounting.ValidateClosedCensus(); err != nil {
+		return discoveries, accounting, err
+	}
+	if failed {
+		return discoveries, accounting, fmt.Errorf("automatic seed discovery incomplete")
+	}
+	return discoveries, accounting, nil
+}
+
 type noDiscoveryFilesError struct{ accounting discoveryAccounting }
 
 func (e *noDiscoveryFilesError) Error() string {
@@ -95,6 +214,6 @@ func (e *noDiscoveryFilesError) Error() string {
 }
 
 func formatDiscoveryAccounting(a discoveryAccounting) string {
-	return fmt.Sprintf("automatic discovery accounting: files_enumerated=%d files_selected=%d files_excluded=%d symbols_enumerated=%d symbols_selected=%d symbols_excluded=%d symbols_unsupported=%d symbols_preparation_failed=%d symbols_prepared=%d; operational census only; does not claim endpoint or source completeness",
-		a.FilesEnumerated, a.FilesSelected, a.FilesExcluded, a.SymbolsEnumerated, a.SymbolsSelected, a.SymbolsExcluded, a.SymbolsUnsupported, a.SymbolsPreparationFailed, a.SymbolsPrepared)
+	return fmt.Sprintf("automatic discovery accounting: files_enumerated=%d files_selected=%d files_excluded=%d files_unsupported=%d files_document_supply_failed=%d files_document_symbol_failed=%d files_processed=%d files_incomplete=%d symbols_enumerated=%d symbols_selected=%d symbols_excluded=%d symbols_unsupported=%d symbols_preparation_failed=%d symbols_prepared=%d symbols_incomplete=%d; operational census only; does not claim endpoint or source completeness",
+		a.FilesEnumerated, a.FilesSelected, a.FilesExcluded, a.FilesUnsupported, a.FilesDocumentSupplyFailed, a.FilesDocumentSymbolFailed, a.FilesProcessed, a.FilesIncomplete, a.SymbolsEnumerated, a.SymbolsSelected, a.SymbolsExcluded, a.SymbolsUnsupported, a.SymbolsPreparationFailed, a.SymbolsPrepared, a.SymbolsIncomplete)
 }

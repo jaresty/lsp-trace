@@ -1,11 +1,14 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/slicer"
 )
 
 func TestResolveSliceSourcesCanonicalizesMixedInputs(t *testing.T) {
@@ -93,7 +96,7 @@ func TestAutomaticDiscoveryAccountingIsExactBoundedAndPathFree(t *testing.T) {
 		SymbolsEnumerated: 9, SymbolsSelected: 9, SymbolsUnsupported: 4,
 		SymbolsPreparationFailed: 2, SymbolsPrepared: 3,
 	})
-	for _, want := range []string{"files_enumerated=5", "files_selected=2", "files_excluded=3", "symbols_enumerated=9", "symbols_selected=9", "symbols_excluded=0", "symbols_unsupported=4", "symbols_preparation_failed=2", "symbols_prepared=3", "does not claim endpoint or source completeness"} {
+	for _, want := range []string{"files_enumerated=5", "files_selected=2", "files_excluded=3", "files_unsupported=0", "files_document_supply_failed=0", "files_document_symbol_failed=0", "files_processed=0", "files_incomplete=0", "symbols_enumerated=9", "symbols_selected=9", "symbols_excluded=0", "symbols_unsupported=4", "symbols_preparation_failed=2", "symbols_prepared=3", "symbols_incomplete=0", "does not claim endpoint or source completeness"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("ASSERT_DISCOVERY_ACCOUNTING_EXACT_BOUNDED: missing=%q got=%q", want, got)
 		}
@@ -104,6 +107,52 @@ func TestAutomaticDiscoveryAccountingIsExactBoundedAndPathFree(t *testing.T) {
 }
 
 func workspaceSeparatorForTest() string { return string(filepath.Separator) + "private" }
+
+func TestDiscoveryCensusContinuesAfterDocumentSupplyFailure(t *testing.T) {
+	sources := []resolvedSliceSource{{path: "a.go", uri: "file:///w/a.go"}, {path: "b.go", uri: "file:///w/b.go"}}
+	accounting := discoveryAccounting{FilesEnumerated: 2, FilesSelected: 2}
+	visited := []string{}
+	discoveries, got, err := censusSelectedDiscoverySources(sources, accounting,
+		func(source resolvedSliceSource) error {
+			if source.path == "a.go" {
+				return errors.New("supply failed")
+			}
+			return nil
+		},
+		func(source resolvedSliceSource) slicer.Discovery {
+			visited = append(visited, source.path)
+			return slicer.Discovery{PreparationAccounting: slicer.PreparationAccounting{DocumentSymbols: 1, Attempted: 1, Prepared: 1}, PreparationCensusComplete: true}
+		})
+	if err == nil || len(discoveries) != 1 || !reflect.DeepEqual(visited, []string{"b.go"}) {
+		t.Fatalf("ASSERT_DISCOVERY_CONTINUES_AFTER_DOCUMENT_SUPPLY_FAILURE: visited=%q discoveries=%d err=%v", visited, len(discoveries), err)
+	}
+	if got.FilesDocumentSupplyFailed != 1 || got.FilesProcessed != 1 || got.FilesIncomplete != 0 {
+		t.Fatalf("ASSERT_DISCOVERY_FILE_FAILURE_DISPOSITIONS_EXACT: %#v", got)
+	}
+	if reconcileErr := got.ValidateClosedCensus(); reconcileErr != nil {
+		t.Fatalf("ASSERT_DISCOVERY_DENOMINATORS_RECONCILE_EXACTLY: %v accounting=%#v", reconcileErr, got)
+	}
+}
+
+func TestDiscoveryPatternValidationRejectsInvalidSubsetBeforeMatching(t *testing.T) {
+	for _, pattern := range []string{"", "   ", "!src/**", "src/[abc.go", "src/\\"} {
+		if err := validateDiscoveryPattern(pattern); err == nil {
+			t.Errorf("ASSERT_DISCOVERY_PATTERN_REJECTED_PRESTART[%q]: accepted", pattern)
+		}
+	}
+	for _, pattern := range []string{"*.go", "/src/*.go", "src/**/main.go", "src/[ab].go", "docs/"} {
+		if err := validateDiscoveryPattern(pattern); err != nil {
+			t.Errorf("ASSERT_DISCOVERY_PATTERN_SUBSET_ACCEPTED[%q]: %v", pattern, err)
+		}
+	}
+}
+
+func TestDiscoveryAccountingRejectsMismatchedDenominators(t *testing.T) {
+	bad := discoveryAccounting{FilesEnumerated: 3, FilesSelected: 2, FilesExcluded: 1, FilesProcessed: 1}
+	if err := bad.ValidateClosedCensus(); err == nil {
+		t.Fatal("ASSERT_DISCOVERY_DENOMINATORS_RECONCILE_EXACTLY: mismatch accepted")
+	}
+}
 
 func TestResolveSliceSourcesRejectsEscapeAndSkipsNestedSymlink(t *testing.T) {
 	workspace := t.TempDir()

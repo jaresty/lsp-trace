@@ -437,27 +437,23 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
 	if discoverSeeds {
-		discoveries := make(map[string]slicer.Discovery, len(sources))
 		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
-		preparationComplete := true
-		for _, sourceFile := range sources {
-			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: sourceFile.uri, LanguageID: sourceFile.lang})
-			privateRuntime.retainHandle(prepared.DiagnosticOperation)
-			if prepared.Failure != "" {
-				return fail(fmt.Errorf("automatic seed discovery document supply %s: %s", sourceFile.path, prepared.Failure))
-			}
-			discovery := slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
-			discoveryCounts.SymbolsEnumerated += discovery.PreparationAccounting.DocumentSymbols
-			discoveryCounts.SymbolsSelected += discovery.PreparationAccounting.Attempted
-			discoveryCounts.SymbolsUnsupported += discovery.PreparationAccounting.NotPreparable
-			discoveryCounts.SymbolsPreparationFailed += discovery.PreparationAccounting.Failed
-			discoveryCounts.SymbolsPrepared += discovery.PreparationAccounting.Prepared
-			preparationComplete = preparationComplete && discovery.PreparationCensusComplete
-			discoveries[sourceFile.uri] = discovery
-		}
+		discoveries, counts, censusErr := censusSelectedDiscoverySources(sources, discoveryCounts,
+			func(sourceFile resolvedSliceSource) error {
+				prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: sourceFile.uri, LanguageID: sourceFile.lang})
+				privateRuntime.retainHandle(prepared.DiagnosticOperation)
+				if prepared.Failure != "" {
+					return fmt.Errorf("document supply failed")
+				}
+				return nil
+			},
+			func(sourceFile resolvedSliceSource) slicer.Discovery {
+				return slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
+			})
+		discoveryCounts = counts
 		fmt.Fprintln(stderr, formatDiscoveryAccounting(discoveryCounts))
-		if !preparationComplete {
-			return fail(fmt.Errorf("automatic seed discovery incomplete: selected_files=%d attempted=%d prepared=%d unsupported=%d preparation_failed=%d", discoveryCounts.FilesSelected, discoveryCounts.SymbolsSelected, discoveryCounts.SymbolsPrepared, discoveryCounts.SymbolsUnsupported, discoveryCounts.SymbolsPreparationFailed))
+		if censusErr != nil {
+			return fail(censusErr)
 		}
 		seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
 		if discoveryErr != nil {

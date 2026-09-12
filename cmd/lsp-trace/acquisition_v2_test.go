@@ -150,6 +150,26 @@ func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
 	}
 }
 
+func TestProductionV5RejectsInvalidDiscoveryPatternsBeforeServerResolution(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, pattern := range []string{"", "!src/**", "src/[abc.go"} {
+		var stdout, stderr bytes.Buffer
+		code := runAcquisitionVersion("slice", "v3", []string{
+			"--output-version", graphprovenance.VersionV5,
+			"--workspace", workspace,
+			"--server", filepath.Join(workspace, "must-not-be-resolved"),
+			"--from-file", ".",
+			"--include", pattern,
+		}, &stdout, &stderr)
+		if code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "automatic discovery pattern") || strings.Contains(stderr.String(), "must-not-be-resolved") {
+			t.Fatalf("ASSERT_DISCOVERY_PATTERN_REJECTED_PRESTART[%q]: code=%d stdout=%q stderr=%q", pattern, code, stdout.String(), stderr.String())
+		}
+	}
+}
+
 func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) {
 	const assertion = "ASSERT_PRODUCTION_V5_FROM_FILE_CANONICAL_SEED_CUSTODY"
 	if runtime.GOOS != "darwin" {
