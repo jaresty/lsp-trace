@@ -20,6 +20,13 @@ const (
 	MaxEnvelopeBytesV5 = 192<<20 + MaxDiagnosticBytes
 )
 
+type SeedSpecEvidence struct {
+	SchemaVersion string `json:"schema_version"`
+	Encoding      string `json:"encoding"`
+	Bytes         []byte `json:"bytes"`
+	SHA256        string `json:"sha256"`
+}
+
 type EvidenceV5 struct {
 	SchemaVersion          string            `json:"schema_version"`
 	SessionID              string            `json:"session_id"`
@@ -35,12 +42,24 @@ type EvidenceV5 struct {
 	Supplies               []SupplyReceiptV2 `json:"supplies"`
 	Captures               []Receipt         `json:"captures"`
 	Bindings               []BindingV2       `json:"bindings"`
+	SeedSpec               *SeedSpecEvidence `json:"seed_spec,omitempty"`
 	Diagnostics            DiagnosticsV3     `json:"diagnostics"`
 }
 
 // CaptureV5 retains the native graph.v5 serialization exactly. It deliberately
 // does not project sibling candidates into CALLS or any support relation.
 func CaptureV5(native []byte, sessionID string, generation uint64, query manageddiagnostic.QueryResult, source ...*EvidenceV2) ([]byte, error) {
+	return captureV5(native, sessionID, generation, query, nil, source...)
+}
+
+func CaptureV5WithSeedSpec(native []byte, sessionID string, generation uint64, query manageddiagnostic.QueryResult, seedSpec []byte, source ...*EvidenceV2) ([]byte, error) {
+	if err := validateSeedSpecBytes(seedSpec); err != nil {
+		return nil, err
+	}
+	return captureV5(native, sessionID, generation, query, seedSpec, source...)
+}
+
+func captureV5(native []byte, sessionID string, generation uint64, query manageddiagnostic.QueryResult, seedSpec []byte, source ...*EvidenceV2) ([]byte, error) {
 	if sessionID == "" || generation == 0 {
 		return nil, errors.New("V5 exact session and generation required")
 	}
@@ -71,6 +90,10 @@ func CaptureV5(native []byte, sessionID string, generation uint64, query managed
 	}
 	sum := sha256.Sum256(native)
 	e := EvidenceV5{SchemaVersion: VersionV5, SessionID: sessionID, Generation: generation, GraphV5: base64.StdEncoding.EncodeToString(native), GraphV5SHA256: fmt.Sprintf("sha256:%x", sum), GraphV5SchemaID: GraphV5SchemaID, SourcePolicy: PolicyV2, Supplies: []SupplyReceiptV2{}, Captures: []Receipt{}, Bindings: []BindingV2{}, Diagnostics: d}
+	if seedSpec != nil {
+		seedSum := sha256.Sum256(seedSpec)
+		e.SeedSpec = &SeedSpecEvidence{SchemaVersion: "lsp-trace.seeds.v2", Encoding: "canonical-json", Bytes: append([]byte(nil), seedSpec...), SHA256: fmt.Sprintf("sha256:%x", seedSum)}
+	}
 	if len(source) > 1 || (len(source) == 1 && source[0] == nil) {
 		return nil, errors.New("V5 requires at most one source snapshot")
 	}
@@ -174,8 +197,43 @@ func validateForV5(raw []byte) (string, error) {
 	if e.GraphV5SHA256 != fmt.Sprintf("sha256:%x", sum) {
 		return "", errors.New("V5 embedded graph digest mismatch")
 	}
+	if e.SeedSpec != nil {
+		if err := validateSeedSpecEvidence(*e.SeedSpec); err != nil {
+			return "", err
+		}
+	}
 	if err := validateDiagnosticsV3(e.Diagnostics); err != nil {
 		return "", err
 	}
 	return VersionV5, nil
+}
+
+func validateSeedSpecBytes(raw []byte) error {
+	if len(raw) == 0 || len(raw) > 1<<20 {
+		return errors.New("V5 seed spec unavailable or exceeds byte limit")
+	}
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		return err
+	}
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil || header.SchemaVersion != "lsp-trace.seeds.v2" {
+		return errors.New("V5 seed spec is not lsp-trace.seeds.v2 JSON")
+	}
+	return nil
+}
+
+func validateSeedSpecEvidence(spec SeedSpecEvidence) error {
+	if spec.SchemaVersion != "lsp-trace.seeds.v2" || spec.Encoding != "canonical-json" {
+		return errors.New("V5 seed spec identity invalid")
+	}
+	if err := validateSeedSpecBytes(spec.Bytes); err != nil {
+		return err
+	}
+	sum := sha256.Sum256(spec.Bytes)
+	if spec.SHA256 != fmt.Sprintf("sha256:%x", sum) {
+		return errors.New("V5 seed spec digest mismatch")
+	}
+	return nil
 }
