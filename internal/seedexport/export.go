@@ -171,6 +171,7 @@ func ExportValidated(c ValidatedCarrier) Result {
 	}
 
 	seenID := make(map[string]bool, len(c.Targets))
+	seenLabel := make(map[string]bool, len(c.Targets))
 	seenOrdinal := make(map[uint32]bool, len(c.Targets))
 	seedLabels := make(map[string]int, len(graph.Invocation.Seeds))
 	for _, seed := range graph.Invocation.Seeds {
@@ -182,6 +183,10 @@ func ExportValidated(c ValidatedCarrier) Result {
 			return invalid("DUPLICATE_TARGET", "target identity is absent or duplicated")
 		}
 		seenID[target.ID] = true
+		if seenLabel[target.Label] {
+			return invalid("DUPLICATE_TARGET_LABEL", "target label is duplicated")
+		}
+		seenLabel[target.Label] = true
 		if seenOrdinal[target.Ordinal] || target.Ordinal >= uint32(len(out)) {
 			return invalid("DUPLICATE_TARGET_ORDINAL", "target ordinal is duplicated or non-canonical")
 		}

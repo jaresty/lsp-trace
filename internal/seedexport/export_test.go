@@ -92,6 +92,7 @@ func TestExportValidatedRejectsCarrierMutations(t *testing.T) {
 	}{
 		{"absent targets", func(c *ValidatedCarrier) { c.Targets = nil }, OutcomeNotAvailable, "ORIGINAL_TARGETS_ABSENT"},
 		{"duplicate targets", func(c *ValidatedCarrier) { c.Targets[1].ID = c.Targets[0].ID }, OutcomeInvalid, "DUPLICATE_TARGET"},
+		{"duplicate labels", func(c *ValidatedCarrier) { c.Targets[1].Label = c.Targets[0].Label }, OutcomeInvalid, "DUPLICATE_TARGET_LABEL"},
 		{"duplicate ordinals", func(c *ValidatedCarrier) { c.Targets[1].Ordinal = c.Targets[0].Ordinal }, OutcomeInvalid, "DUPLICATE_TARGET_ORDINAL"},
 		{"invocation binding", func(c *ValidatedCarrier) { c.Binding.InvocationID = "other" }, OutcomeInvalid, "MANIFEST_BINDING_MISMATCH"},
 		{"manifest binding absent", func(c *ValidatedCarrier) { c.Binding.ManifestSHA256 = "" }, OutcomeNotAvailable, "MANIFEST_BINDING_MISSING"},
