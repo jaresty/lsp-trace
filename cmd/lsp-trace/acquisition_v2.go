@@ -26,7 +26,9 @@ import (
 	"lsp-trace/internal/requestlifecycle"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/seedformat"
 	"lsp-trace/internal/session"
+	"lsp-trace/internal/slicer"
 	"lsp-trace/internal/source"
 	"lsp-trace/sessionruntime"
 )
@@ -205,6 +207,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&profile.ConfigPath, "config", "", "profile configuration")
 	fs.Var(&c.args, "server-arg", "server argument")
 	fs.Var(&c.env, "server-env", "server environment KEY=VALUE")
+	fs.Var(&c.fromFiles, "from-file", "repeatable source file or directory for automatic callable-symbol discovery (production V5 slice only)")
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
 	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
 	fs.StringVar(&outputVersion, "output-version", "", "managed output version (lsp-trace.graph-provenance.v5 requires v3 and topmost siblings)")
@@ -238,8 +241,15 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if !grouped && (explicit["community-seed"] || explicit["pagerank-top-k"] || explicit["hub-top-k"]) {
 		return fail(fmt.Errorf("community options require --group-by leiden"))
 	}
-	if fs.NArg() != 0 || c.workspace == "" || manifestPath == "" {
-		return fail(fmt.Errorf("v2 requires --workspace and --seed-manifest with no positional arguments"))
+	discoverSeeds := len(c.fromFiles) > 0
+	if fs.NArg() != 0 || c.workspace == "" || (manifestPath == "" && !discoverSeeds) {
+		return fail(fmt.Errorf("v2 requires --workspace and exactly one of --seed-manifest or production V5 slice --from-file with no positional arguments"))
+	}
+	if manifestPath != "" && discoverSeeds {
+		return fail(fmt.Errorf("--seed-manifest and --from-file are mutually exclusive"))
+	}
+	if discoverSeeds && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5) {
+		return fail(fmt.Errorf("--from-file automatic discovery requires slice --production-v5"))
 	}
 	requestDiagnosticsRequested := requestDiagnosticRoot != "" || requestDiagnosticSelector != ""
 	if requestDiagnosticsRequested && (version != "v3" || requestDiagnosticRoot == "" || requestDiagnosticSelector == "") {
@@ -265,19 +275,38 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 			op = acquisitionops.IncomingV3
 		}
 	}
-	// Bounded regular-file input: no FIFO or unbounded ReadAll, no MCP path analogue.
-	manifestRoot, err := os.OpenRoot(filepath.Dir(manifestPath))
-	if err != nil {
-		return fail(err)
-	}
-	raw, err := source.ReadRegularInputBounded(manifestRoot, filepath.Base(manifestPath), acquisitionops.MaxInputBytes)
-	manifestRoot.Close()
-	if err != nil {
-		return fail(err)
-	}
-	manifest, err := acquisitionops.DecodeManifest(raw, op)
-	if err != nil {
-		return fail(err)
+	var manifest acquisitionops.Manifest
+	var requestPolicy []byte
+	var retainedSeedSpec []byte
+	var sources []resolvedSliceSource
+	var err error
+	if discoverSeeds {
+		_, _, sources, err = resolveSliceSources(c)
+		if err != nil {
+			return fail(err)
+		}
+		defaults := defaultDiscoveryLimits()
+		placeholder := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: "root", Path: sources[0].path, Line: 1, Column: 1}}}}
+		manifest, err = seedformat.Translate(placeholder, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaults, TopmostSiblings: true})
+		if err != nil {
+			return fail(err)
+		}
+	} else {
+		// Bounded regular-file input: no FIFO or unbounded ReadAll, no MCP path analogue.
+		manifestRoot, openErr := os.OpenRoot(filepath.Dir(manifestPath))
+		if openErr != nil {
+			return fail(openErr)
+		}
+		var readErr error
+		requestPolicy, readErr = source.ReadRegularInputBounded(manifestRoot, filepath.Base(manifestPath), acquisitionops.MaxInputBytes)
+		manifestRoot.Close()
+		if readErr != nil {
+			return fail(readErr)
+		}
+		manifest, err = acquisitionops.DecodeManifest(requestPolicy, op)
+		if err != nil {
+			return fail(err)
+		}
 	}
 	if manifest.Expansion.TopmostSiblings && outputVersion != graphprovenance.VersionV5 {
 		return fail(fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
@@ -396,9 +425,35 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
 	}
-	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest, OutputVersion: outputVersion})
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
+	if discoverSeeds {
+		discoveries := make(map[string]slicer.Discovery, len(sources))
+		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
+		for _, sourceFile := range sources {
+			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: sourceFile.uri, LanguageID: sourceFile.lang})
+			privateRuntime.retainHandle(prepared.DiagnosticOperation)
+			if prepared.Failure != "" {
+				return fail(fmt.Errorf("automatic seed discovery document supply %s: %s", sourceFile.path, prepared.Failure))
+			}
+			discovery := slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
+			if !discovery.PreparationCensusComplete {
+				return fail(fmt.Errorf("automatic seed discovery incomplete for %s: attempted=%d prepared=%d not_preparable=%d failed=%d", sourceFile.path, discovery.PreparationAccounting.Attempted, discovery.PreparationAccounting.Prepared, discovery.PreparationAccounting.NotPreparable, discovery.PreparationAccounting.Failed))
+			}
+			discoveries[sourceFile.uri] = discovery
+		}
+		seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
+		if discoveryErr != nil {
+			return fail(discoveryErr)
+		}
+		manifest, discoveryErr = seedformat.Translate(seedFile, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
+		if discoveryErr != nil {
+			return fail(discoveryErr)
+		}
+		retainedSeedSpec = canonical
+		requestPolicy, _ = json.Marshal(manifest)
+	}
+	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest, OutputVersion: outputVersion})
 	finalizeRequestDiagnostics := func(public []byte) {
 		if !requestDiagnosticsRequested {
 			return
@@ -428,7 +483,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 			}
 		}
 	}
-	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input})
+	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input, RetainedSeedSpec: retainedSeedSpec})
 	if failed != nil {
 		projectionFailure := outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations"
 		if requestDiagnosticsRequested && projectionFailure {
@@ -439,7 +494,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 			sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
 			if certified {
 				privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
-					Operation: mode + "-v3", RequestPolicy: raw,
+					Operation: mode + "-v3", RequestPolicy: requestPolicy,
 					Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
 				})
 				if projectionErr == nil {
