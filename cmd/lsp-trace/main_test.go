@@ -445,6 +445,39 @@ func TestMaterializeSkillIsTransactionalPrivateAndNoOverwrite(t *testing.T) {
 	}
 }
 
+func TestMaterializeSkillPublicationRaceNeverReplacesCompetitor(t *testing.T) {
+	parent := t.TempDir()
+	destination := filepath.Join(parent, "skill")
+	originalPublish := publishSkillDirectory
+	t.Cleanup(func() { publishSkillDirectory = originalPublish })
+	var competitorInfo os.FileInfo
+	publishSkillDirectory = func(parentHandle, stagingHandle *os.File, staging, final string) error {
+		competitor := filepath.Join(parent, final)
+		if err := os.Mkdir(competitor, 0o700); err != nil {
+			return err
+		}
+		var err error
+		competitorInfo, err = os.Stat(competitor)
+		if err != nil {
+			return err
+		}
+		return originalPublish(parentHandle, stagingHandle, staging, final)
+	}
+
+	err := materializeSkill(destination, map[string][]byte{"SKILL.md": []byte("publisher")})
+	if err == nil || err.Error() != "skill destination already exists" {
+		t.Fatalf("ASSERT_SKILL_PUBLICATION_RACE_NORMALIZED_EXISTS: err=%v", err)
+	}
+	finalInfo, statErr := os.Stat(destination)
+	if statErr != nil || competitorInfo == nil || !os.SameFile(competitorInfo, finalInfo) {
+		t.Fatalf("ASSERT_SKILL_PUBLICATION_RACE_NEVER_REPLACES: competitor=%v final=%v err=%v", competitorInfo, finalInfo, statErr)
+	}
+	entries, readDirErr := os.ReadDir(parent)
+	if readDirErr != nil || len(entries) != 1 || entries[0].Name() != "skill" {
+		t.Fatalf("ASSERT_SKILL_PUBLICATION_RACE_CLEANS_STAGING: entries=%v err=%v", entries, readDirErr)
+	}
+}
+
 func TestParseAcceptsDispatchFamilyOptIn(t *testing.T) {
 	cfg, err := parse(append(validArgs(t.TempDir()), "--expand-dispatch-family"))
 	if err != nil || !cfg.expandDispatchFamily {

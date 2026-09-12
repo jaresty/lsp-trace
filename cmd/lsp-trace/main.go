@@ -428,11 +428,24 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 		}
 	}
 
+	parentHandle, err := os.Open(parent)
+	if err != nil {
+		return fmt.Errorf("skill destination parent: %w", err)
+	}
+	defer parentHandle.Close()
 	root, err := os.OpenRoot(parent)
 	if err != nil {
 		return fmt.Errorf("skill destination parent: %w", err)
 	}
 	defer root.Close()
+	parentInfo, err := parentHandle.Stat()
+	if err != nil {
+		return fmt.Errorf("skill destination parent: %w", err)
+	}
+	rootInfo, err := root.Stat(".")
+	if err != nil || !os.SameFile(parentInfo, rootInfo) {
+		return errors.New("skill destination parent changed while opening")
+	}
 	if _, err := root.Lstat(final); err == nil {
 		return errors.New("skill destination already exists")
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -477,7 +490,12 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	if err := root.Rename(staging, final); err != nil {
+	stagingHandle, err := root.Open(staging)
+	if err != nil {
+		return err
+	}
+	defer stagingHandle.Close()
+	if err := publishStagedSkill(parentHandle, stagingHandle, staging, final); err != nil {
 		return err
 	}
 	staging = ""
