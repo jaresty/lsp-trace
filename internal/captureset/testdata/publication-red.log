@@ -1,0 +1,12 @@
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"# lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:15:7: undefined: ExactBytesAuthority\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:35:12: undefined: Redact\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:38:37: undefined: RedactedValue\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:51:9: undefined: NewPublisher\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:53:23: undefined: PublicationResult\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:57:14: undefined: PublicationReceipt\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-output","Output":"internal/captureset/publication_test.go:62:60: undefined: CaptureSetPublicationSelector\n"}
+{"ImportPath":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]","Action":"build-fail"}
+{"Time":"2026-09-12T10:32:59.483555-07:00","Action":"start","Package":"lsp-trace/internal/captureset"}
+{"Time":"2026-09-12T10:32:59.483606-07:00","Action":"output","Package":"lsp-trace/internal/captureset","Output":"FAIL\tlsp-trace/internal/captureset [build failed]\n"}
+{"Time":"2026-09-12T10:32:59.483611-07:00","Action":"fail","Package":"lsp-trace/internal/captureset","Elapsed":0,"FailedBuild":"lsp-trace/internal/captureset [lsp-trace/internal/captureset.test]"}

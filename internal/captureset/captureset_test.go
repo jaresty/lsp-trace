@@ -17,7 +17,8 @@ func fixture(n int) ([]Target, []Constituent, Ledger, Ledger) {
 	}
 	cs := make([]Constituent, (n+62)/63)
 	for i := range cs {
-		cs[i] = Constituent{ImmutableSelector: "sel-" + string(rune('a'+i)), SchemaID: "lsp-trace.graph-provenance.v5", SHA256: dg("c" + string(rune(i))), ByteLength: i + 1, NativeV5Identity: "v5-" + string(rune('a'+i))}
+		digest := dg("c" + string(rune(i)))
+		cs[i] = Constituent{ImmutableSelector: ConstituentSelectorPrefix + strings.TrimPrefix(digest, "sha256:"), SchemaID: "lsp-trace.graph-provenance.v5", SHA256: digest, ByteLength: i + 1, NativeV5Identity: "v5-" + string(rune('a'+i))}
 	}
 	l := Ledger{Denominator: 1, Entries: []LedgerEntry{{Ordinal: 0, Identity: "x", Disposition: "processed"}}}
 	return ts, cs, l, l
@@ -109,13 +110,10 @@ func TestRejectMissingDuplicateReorderedForeignAndBounds(t *testing.T) {
 func TestRedactionHasDistinctIdentity(t *testing.T) {
 	ts, cs, f, s := fixture(64)
 	m, _ := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")
-	r := m
-	r.Targets = append([]Target(nil), m.Targets...)
-	r.Disclosure = "REDACTED"
-	r.Targets[0].CanonicalSeedV2 = "!redacted"
-	r.Targets[0].CanonicalSeedV2SHA256 = dg("!redacted")
-	r.LogicalDigest = ""
-	r.ImmutableSelector = ""
+	r, err := Redact(m)
+	if err != nil {
+		t.Fatal(err)
+	}
 	raw, err := EncodeCanonical(r)
 	if err != nil {
 		t.Fatal(err)

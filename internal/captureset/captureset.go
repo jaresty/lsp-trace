@@ -229,6 +229,12 @@ func validateContent(m Manifest, identity bool) error {
 		if c.ImmutableSelector == "" || c.NativeV5Identity == "" || c.ByteLength < 1 || !validDigest(c.SHA256) {
 			return errors.New("invalid constituent identity")
 		}
+		if m.Disclosure == "PRIVATE" && c.ImmutableSelector != ConstituentSelectorPrefix+strings.TrimPrefix(c.SHA256, "sha256:") {
+			return errors.New("constituent selector was not assigned from exact bytes")
+		}
+		if m.Disclosure == "REDACTED" && !strings.HasPrefix(c.ImmutableSelector, RedactedValue+":") {
+			return errors.New("invalid redacted constituent selector")
+		}
 		if seenC[c.ImmutableSelector] {
 			return errors.New("duplicate constituent")
 		}
