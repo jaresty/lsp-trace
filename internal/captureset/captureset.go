@@ -108,10 +108,8 @@ func ValidateSchema(raw []byte) error {
 	return compiledSchema.Validate(value)
 }
 
-func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger, censusPolicy, duplicatePolicy string) (Manifest, error) {
-	if len(targets) < 1 || len(targets) > MaxTargets {
-		return Manifest{}, fmt.Errorf("target count outside [1,%d]", MaxTargets)
-	}
+// OrderTargets returns a canonical copy without mutating its input.
+func OrderTargets(targets []Target) []Target {
 	ordered := append([]Target(nil), targets...)
 	sort.SliceStable(ordered, func(i, j int) bool {
 		if ordered[i].CanonicalSeedV2 != ordered[j].CanonicalSeedV2 {
@@ -119,19 +117,36 @@ func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger
 		}
 		return ordered[i].CensusOrdinal < ordered[j].CensusOrdinal
 	})
-	cs := append([]Constituent(nil), constituents...)
-	sort.Slice(cs, func(i, j int) bool { return cs[i].ImmutableSelector < cs[j].ImmutableSelector })
-	n := (len(ordered) + MaxBatchTargets - 1) / MaxBatchTargets
-	if len(cs) != n {
-		return Manifest{}, fmt.Errorf("constituent count %d does not match batch count %d", len(cs), n)
+	return ordered
+}
+
+// PlanBatches returns maximal contiguous batches bounded by MaxBatchTargets.
+func PlanBatches(targetCount int) []Batch {
+	if targetCount <= 0 {
+		return nil
 	}
+	n := (targetCount + MaxBatchTargets - 1) / MaxBatchTargets
 	batches := make([]Batch, n)
 	for i := range batches {
-		count := len(ordered) - i*MaxBatchTargets
+		count := targetCount - i*MaxBatchTargets
 		if count > MaxBatchTargets {
 			count = MaxBatchTargets
 		}
 		batches[i] = Batch{Ordinal: i, TargetStart: i * MaxBatchTargets, TargetCount: count, ConstituentIndex: i}
+	}
+	return batches
+}
+
+func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger, censusPolicy, duplicatePolicy string) (Manifest, error) {
+	if len(targets) < 1 || len(targets) > MaxTargets {
+		return Manifest{}, fmt.Errorf("target count outside [1,%d]", MaxTargets)
+	}
+	ordered := OrderTargets(targets)
+	cs := append([]Constituent(nil), constituents...)
+	sort.Slice(cs, func(i, j int) bool { return cs[i].ImmutableSelector < cs[j].ImmutableSelector })
+	batches := PlanBatches(len(ordered))
+	if len(cs) != len(batches) {
+		return Manifest{}, fmt.Errorf("constituent count %d does not match batch count %d", len(cs), len(batches))
 	}
 	m := Manifest{SchemaVersion: Version, Disclosure: "PRIVATE", SourceGraphComplete: "UNKNOWN", CrossCaptureCalls: []string{}, CensusPolicy: censusPolicy, DuplicatePolicy: duplicatePolicy, FileLedger: cloneLedger(files), SymbolLedger: cloneLedger(symbols), Targets: ordered, Constituents: cs, Batches: batches}
 	if err := validateContent(m, false); err != nil {

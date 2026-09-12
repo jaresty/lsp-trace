@@ -103,6 +103,7 @@ func writeStructuredIncompleteStatus(w io.Writer, published bool) {
 const usageText = `usage:
   lsp-trace --version
   lsp-trace info
+  lsp-trace census --publication-root ABSOLUTE_PRIVATE_DIRECTORY [--workspace PATH] [--include PATTERN...] [--exclude PATTERN...] [--format human|json | --json]
   lsp-trace program-c compose PATH|-
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
@@ -181,6 +182,9 @@ func run(args []string) int {
 	}
 	if len(args) == 1 && args[0] == "info" {
 		return runInfo(os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "census" {
+		return runCensus(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 1 && args[0] == "program-c" && args[1] == "compose" {
 		return runProgramCCompose(args[2:], os.Stdin, os.Stdout, os.Stderr)
