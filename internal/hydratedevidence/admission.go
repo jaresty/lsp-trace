@@ -358,6 +358,20 @@ func admit(input Input, p Policy) (admitted, error) {
 				}
 			}
 		}
+		if old, ok := a.recordMap[r.ID]; ok {
+			merged, mergeErr := mergeRepeatedNativeBinding(old, r)
+			if mergeErr != nil {
+				return fail(mergeErr)
+			}
+			a.recordMap[r.ID] = merged
+			for i := range a.Records {
+				if a.Records[i].ID == r.ID {
+					a.Records[i] = merged
+					break
+				}
+			}
+			continue
+		}
 		if err := addRecord(r); err != nil {
 			return fail(err)
 		}
@@ -443,6 +457,28 @@ func admit(input Input, p Policy) (admitted, error) {
 	sort.Slice(a.Records, func(i, j int) bool { return a.Records[i].ID < a.Records[j].ID })
 	return a, nil
 }
+func mergeRepeatedNativeBinding(old, next Record) (Record, error) {
+	left, right := old, next
+	left.SourceIDs, right.SourceIDs = nil, nil
+	if !same(left, right) {
+		return Record{}, errors.New("conflicting repeated native binding identity")
+	}
+	seen := make(map[string]bool, len(old.SourceIDs)+len(next.SourceIDs))
+	merged := append([]string(nil), old.SourceIDs...)
+	for _, id := range merged {
+		seen[id] = true
+	}
+	for _, id := range next.SourceIDs {
+		if !seen[id] {
+			seen[id] = true
+			merged = append(merged, id)
+		}
+	}
+	sort.Strings(merged)
+	old.SourceIDs = merged
+	return old, nil
+}
+
 func pointer(doc any, path string) any {
 	if path == "" {
 		return doc
