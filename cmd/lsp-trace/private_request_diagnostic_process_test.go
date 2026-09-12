@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net"
@@ -13,8 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
-	"lsp-trace/internal/projectionfailure"
 	"lsp-trace/internal/requestlifecycle"
 )
 
@@ -77,7 +78,7 @@ func runFR23WithScheduledFake(t *testing.T, cmd *exec.Cmd) error {
 	return cmd.Wait()
 }
 
-func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing.T) {
+func TestManagedV5ZeroExactRelationsIsExplicitSuccessfulOutcome(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
 	}
@@ -100,45 +101,33 @@ func TestManagedV5ZeroExactRelationsFinalizesPrivateRequestDiagnostic(t *testing
 	if err := os.WriteFile(manifestPath, manifestRaw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	privateRoot := t.TempDir()
-	if err := os.Chmod(privateRoot, 0700); err != nil {
-		t.Fatal(err)
-	}
-	privatePath := filepath.Join(privateRoot, "private.json")
-	cmd := exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch", "--seed-manifest", manifestPath, "--language-id", "go", "--private-request-diagnostic-root", privateRoot, "--private-request-diagnostic-selector", "private.json")
+	cmd := exec.Command(cli, "slice", "--acquisition-version", "v3", "--output-version", graphprovenance.VersionV5, "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch", "--seed-manifest", manifestPath, "--language-id", "go")
 	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=mismatch")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err == nil {
-		t.Fatal("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_DOMAIN_ERROR: expected failure")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_SUCCEEDS: %v stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "topmost sibling expansion produced no exact relations") {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_DOMAIN_ERROR: %s", stderr.String())
+	if strings.Contains(stderr.String(), "topmost sibling expansion produced no exact relations") {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_NOT_ERROR: %s", stderr.String())
 	}
-	if strings.Contains(stderr.String(), privatePath) || strings.Contains(stderr.String(), uri) {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PUBLIC_REDACTION: %s", stderr.String())
+	if _, err := graphprovenance.ValidateFor(stdout.Bytes(), graphprovenance.Family, "v5"); err != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_VALID_V5: %v", err)
 	}
-	privateRaw, err := os.ReadFile(privatePath)
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
 	if err != nil {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_ARTIFACT_PRESENT: %v stderr=%s", err, stderr.String())
+		t.Fatal(err)
 	}
-	if err := projectionfailure.Validate(privateRaw); err != nil {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_VALID: %v", err)
+	var result graph.Result
+	if err := json.Unmarshal(native, &result); err != nil {
+		t.Fatal(err)
 	}
-	var diagnostic projectionfailure.Document
-	if err := json.Unmarshal(privateRaw, &diagnostic); err != nil {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_DECODE: %v", err)
-	}
-	methods := map[string]bool{}
-	for _, record := range diagnostic.Records {
-		methods[record.Method] = true
-	}
-	info, statErr := os.Stat(privatePath)
-	if statErr != nil || info.Mode().Perm() != 0600 || diagnostic.Identity.Generation == 0 || diagnostic.Identity.Operation != "slice-v3" || diagnostic.Failure.PublicArtifact != "UNAVAILABLE" || diagnostic.Failure.PublicationStatus != "NOT_PUBLISHED" || strings.Contains(stderr.String(), "PUBLIC_ARTIFACT_UNAVAILABLE") || bytes.Contains(privateRaw, []byte(uri)) || bytes.Contains(privateRaw, []byte(workspace)) || bytes.Contains(privateRaw, []byte("leaf")) {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_IDENTITY_PRIVACY_MODE: stat=%v mode=%v diagnostic=%+v stderr=%s", statErr, info.Mode().Perm(), diagnostic, stderr.String())
-	}
-	if !methods["textDocument/documentSymbol"] || !methods["textDocument/prepareCallHierarchy"] {
-		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_PRIVATE_RECORDS: methods=%v", methods)
+	if result.Invocation.Expansion.TopmostSiblingOutcome != graph.TopmostSiblingNoExactRelations {
+		t.Fatalf("ASSERT_MANAGED_V5_ZERO_EXACT_RELATIONS_EXPLICIT_OUTCOME: %q", result.Invocation.Expansion.TopmostSiblingOutcome)
 	}
 }
 
