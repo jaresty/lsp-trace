@@ -700,7 +700,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				strings.HasPrefix(path, "internal/retainedrelations/") || strings.HasPrefix(path, "internal/v5sourcesnapshot/") || strings.HasPrefix(path, "internal/hydratedevidence/") || strings.HasPrefix(path, "internal/hydratedinspection/") || strings.HasPrefix(path, "internal/passageverification/") || path == "qualification/retained-passage-verification-core-4b98a4e.md" ||
 				path == "internal/seedformat/QUALIFICATION.md" || path == "internal/seedformat/schema.go" || path == "internal/seedformat/schema.json" || path == "internal/seedformat/seedformat.go" || path == "internal/seedformat/seedformat_test.go" ||
 				path == "internal/mcp/retained_calls_test.go" || path == "internal/operation/retained_calls.go" || path == "internal/operation/schema_handlers.go" || path == "internal/operation/retained_calls_version_test.go" || path == "internal/schema/schemas/lsp-trace.retained-relations.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" || path == "schema/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json" ||
-				strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
+				strings.HasPrefix(path, "internal/programc/") || strings.HasPrefix(path, "internal/programcpresentation/") || strings.HasPrefix(path, "internal/programctestfixture/") || path == "internal/mcp/program_c_leiden_test.go" || path == "internal/mcpcontract/program_c_leiden.go" || path == "internal/operation/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden.go" || path == "cmd/lsp-trace/program_c_leiden_test.go" || strings.HasPrefix(path, "internal/programccompose/") || path == "internal/mcp/program_c_compose_test.go" || path == "internal/mcpcontract/program_c_compose.go" || path == "internal/operation/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose.go" || path == "cmd/lsp-trace/program_c_compose_test.go" || path == "schema/schemas/lsp-trace.community-presentation.v1.schema.json" || path == "scripts/check-program-c-profiles.py" || path == "scripts/test-program-c-profiles.py" || path == "scripts/qualify-program-c-ember-callback-flow.py" || path == "scripts/test-program-c-ember-callback-flow.py" || path == "scripts/qualify-program-c-ember-state-flow.py" || path == "scripts/test-program-c-ember-state-flow.py" || path == "scripts/qualify-program-c-ui-lifecycle.mjs" || path == "scripts/test-program-c-ui-lifecycle.mjs" || path == "qualification/program-c/profile-qualification-receipt.v1.schema.json" || path == "qualification/program-c/profile-qualification.tsv" || path == "qualification/program-c/callback-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/state-flow-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/ui-lifecycle-v1-typescript-ember-ember-glint-1.0.3.receipt.json" || path == "qualification/program-c/gate-i-receipts.tsv" || path == "qualification/program-c/gate-i-i-01-all-profiles.receipt.txt" || path == "schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "internal/schema/schemas/lsp-trace.program-c-profile-qualification-receipt.v1.schema.json" || path == "schema/schemas/lsp-trace.community-boundary.v1.schema.json"
 			if !owned {
 				t.Fatalf("unowned path %q", path)
 			}
@@ -746,14 +746,14 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS " + assertion)
 	})
 
-	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY", func(t *testing.T) {
-		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY"
+	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY_ONE", func(t *testing.T) {
+		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY_ONE"
 		tools := mcp.NewRegistry(true).Advertised()
 		if rejectPerturbation(t, assertion, true) {
 			tools = tools[:len(tools)-1]
 		}
-		if got := len(tools); got != 30 {
-			t.Fatalf("%s: advertised=%d want=30", assertion, got)
+		if got := len(tools); got != 31 {
+			t.Fatalf("%s: advertised=%d want=31", assertion, got)
 		}
 		t.Log("PASS " + assertion)
 	})
@@ -784,7 +784,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				t.Fatalf("%s: historical tool missing from current registry: %s", assertion, tool.Name)
 			}
 		}
-		if len(historical) != 12 || len(current) != 30 || currentOnly == 0 {
+		if len(historical) != 12 || len(current) != 31 || currentOnly == 0 {
 			t.Fatalf("%s: historical=%d current=%d current_only=%d", assertion, len(historical), len(current), currentOnly)
 		}
 		t.Log("PASS " + assertion)
