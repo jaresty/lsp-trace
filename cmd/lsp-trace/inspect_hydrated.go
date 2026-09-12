@@ -92,15 +92,13 @@ func runInspectHydrated(input string, o *hydratedOptions, jsonOutput bool, stdou
 	if err := hi.Check(r); err != nil {
 		return fail(err)
 	}
-	limit := hi.MaxArtifactBytes
-	if r.CorePolicy.MaxInputBytes < limit {
-		limit = r.CorePolicy.MaxInputBytes
-	}
+	limit := r.CorePolicy.MaxInputBytes
 	raw, err := readHydratedFile(input, limit)
 	if err != nil {
 		return fail(err)
 	}
 	r.Input = string(raw)
+	used := len(raw)
 	limit -= len(raw)
 	for _, file := range o.sidecars {
 		raw, err = readHydratedFile(file, limit)
@@ -108,23 +106,44 @@ func runInspectHydrated(input string, o *hydratedOptions, jsonOutput bool, stdou
 			return fail(err)
 		}
 		r.Sidecars = append(r.Sidecars, string(raw))
+		used += len(raw)
 		limit -= len(raw)
 	}
-	request, err := json.Marshal(r)
-	if err != nil {
-		return fail(err)
-	}
-	result, failure := operation.InspectHydratedHandler(context.Background(), operation.Request{Name: operation.InspectHydrated, Input: request})
-	if failure != nil {
-		return fail(failure)
-	}
-	output := result.Artifact
-	if !jsonOutput {
-		v, ok := result.Value.(hi.View)
+	var view hi.View
+	var output []byte
+	if used > hi.MaxArtifactBytes {
+		view, err = hi.InspectAdmitted(r)
+		if err != nil {
+			return fail(err)
+		}
+		output, err = json.Marshal(view)
+		if err != nil {
+			return fail(err)
+		}
+		output = append(output, '\n')
+	} else {
+		request, marshalErr := json.Marshal(r)
+		if marshalErr != nil {
+			return fail(marshalErr)
+		}
+		result, failure := operation.InspectHydratedHandler(context.Background(), operation.Request{Name: operation.InspectHydrated, Input: request})
+		if failure != nil {
+			return fail(failure)
+		}
+		output = result.Artifact
+		var ok bool
+		view, ok = result.Value.(hi.View)
 		if !ok {
 			return fail(errors.New("unexpected operation result"))
 		}
-		text, err := hi.Text(r, v)
+	}
+	if !jsonOutput {
+		var text string
+		if used > hi.MaxArtifactBytes {
+			text, err = hi.TextAdmitted(r, view)
+		} else {
+			text, err = hi.Text(r, view)
+		}
 		if err != nil {
 			return fail(err)
 		}

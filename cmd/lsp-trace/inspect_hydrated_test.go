@@ -57,9 +57,13 @@ func TestHydratedCLIAcceptsLargeRegularArtifactWithoutWeakeningInlineTransport(t
 	if err := os.WriteFile(path, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	var stdout, stderr bytes.Buffer
-	if code := runInspect([]string{path, "--hydrated", "--node", "unknown", "--json"}, &stdout, &stderr); code != 0 || stdout.Len() == 0 {
-		t.Fatalf("ASSERT_HYDRATED_CLI_LARGE_REGULAR_ARTIFACT: code=%d stderr=%s", code, stderr.String())
+	for _, extra := range [][]string{{"--json"}, nil} {
+		args := []string{path, "--hydrated", "--node", "unknown"}
+		args = append(args, extra...)
+		var stdout, stderr bytes.Buffer
+		if code := runInspect(args, &stdout, &stderr); code != 0 || stdout.Len() == 0 {
+			t.Fatalf("ASSERT_HYDRATED_CLI_LARGE_REGULAR_ARTIFACT: args=%v code=%d stderr=%s", args, code, stderr.String())
+		}
 	}
 }
 

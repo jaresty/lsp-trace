@@ -72,7 +72,9 @@ func Decode(raw []byte) (Request, error) {
 
 // Check is input-only, including selection policy, before any artifact admission.
 // The CLI calls it with a placeholder input before reading explicit files.
-func Check(r Request) error {
+func Check(r Request) error { return checkWithArtifactLimit(r, MaxArtifactBytes) }
+
+func checkWithArtifactLimit(r Request, artifactLimit int) error {
 	if err := he.CheckFocusRequest(r.FocusRequest); err != nil {
 		return err
 	}
@@ -92,7 +94,7 @@ func Check(r Request) error {
 	for _, s := range r.Sidecars {
 		total += len(s)
 	}
-	if total == 0 || total > MaxArtifactBytes || total > r.CorePolicy.MaxInputBytes {
+	if artifactLimit < 1 || total == 0 || total > artifactLimit || total > r.CorePolicy.MaxInputBytes {
 		return errors.New("combined explicit input byte limit")
 	}
 	return nil
@@ -134,11 +136,22 @@ func decodeCursor(manifest, token string) (string, error) {
 // Inspect rehydrates statelessly from the same original bytes on every request.
 // Both producer outputs are validated; no hidden session/cache is cursor authority.
 func Inspect(r Request) (View, error) {
-	return inspectWithProducer(r, he.HydrateFocused)
+	return inspectWithProducerLimit(r, he.HydrateFocused, MaxArtifactBytes)
+}
+
+// InspectAdmitted is for host-side callers that already acquired exact bytes
+// through an explicit bounded file/selector ingress. It does not enlarge the
+// public inline transport contract.
+func InspectAdmitted(r Request) (View, error) {
+	return inspectWithProducerLimit(r, he.HydrateFocused, r.CorePolicy.MaxInputBytes)
 }
 
 func inspectWithProducer(r Request, produce func(he.Input, he.FocusRequest) (he.FocusResult, error)) (View, error) {
-	if err := Check(r); err != nil {
+	return inspectWithProducerLimit(r, produce, MaxArtifactBytes)
+}
+
+func inspectWithProducerLimit(r Request, produce func(he.Input, he.FocusRequest) (he.FocusResult, error), artifactLimit int) (View, error) {
+	if err := checkWithArtifactLimit(r, artifactLimit); err != nil {
 		return View{}, err
 	}
 	input := r.InputBytes()
@@ -184,7 +197,11 @@ func inspectWithProducer(r Request, produce func(he.Input, he.FocusRequest) (he.
 // ValidateFull requires independently retained original input and focus parameters.
 // Neither digests nor a presented view authenticate the original acquisition.
 func ValidateFull(r Request, v View) error {
-	if err := Check(r); err != nil {
+	return validateFullWithLimit(r, v, MaxArtifactBytes)
+}
+
+func validateFullWithLimit(r Request, v View, artifactLimit int) error {
+	if err := checkWithArtifactLimit(r, artifactLimit); err != nil {
 		return err
 	}
 	raw, err := json.Marshal(v)
@@ -260,7 +277,16 @@ func Reassemble(r Request, views []View) (he.FocusResult, error) {
 
 // Text is deliberately full-view only: a first page is not a complete human view.
 func Text(r Request, v View) (string, error) {
-	if err := ValidateFull(r, v); err != nil {
+	return textWithLimit(r, v, MaxArtifactBytes)
+}
+
+// TextAdmitted renders a full CLI-only pre-admitted view.
+func TextAdmitted(r Request, v View) (string, error) {
+	return textWithLimit(r, v, r.CorePolicy.MaxInputBytes)
+}
+
+func textWithLimit(r Request, v View, artifactLimit int) (string, error) {
+	if err := validateFullWithLimit(r, v, artifactLimit); err != nil {
 		return "", err
 	}
 	text, err := he.FocusedText(r.InputBytes(), r.FocusRequest, he.FocusResult{Manifest: v.Manifest, Request: v.Request, Bundle: *v.Bundle})
