@@ -72,6 +72,37 @@ func TestDecodeStrictTypedSeeds(t *testing.T) {
 	}
 }
 
+func TestEncodeCanonicalRoundTripsAndIsStable(t *testing.T) {
+	w := workspace(t)
+	down, up := 3, 1
+	file := File{
+		SchemaVersion: Version, CoordinateConvention: CoordinateConvention,
+		Defaults: Defaults{DownDepth: &down},
+		Seeds: []Seed{
+			{Type: PositionType, Position: &Position{Label: "alpha", Path: "a.go", Line: 7, Column: 4}},
+			{Type: SliceType, Position: &Position{Label: "beta"}, Target: &Seed{Type: SymbolType, Symbol: &Symbol{Label: "ignored", Path: "b.go", Symbol: "Run"}}, UpDepth: &up},
+		},
+	}
+	first, err := EncodeCanonical(file, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := EncodeCanonical(file, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatalf("ASSERT_SEEDS_V2_CANONICAL_BYTES_STABLE: first=%q second=%q", first, second)
+	}
+	decoded, err := Decode(first, w)
+	if err != nil {
+		t.Fatalf("ASSERT_SEEDS_V2_CANONICAL_BYTES_STRICTLY_DECODABLE: %v bytes=%s", err, first)
+	}
+	if !reflect.DeepEqual(decoded, file) {
+		t.Fatalf("ASSERT_SEEDS_V2_CANONICAL_ROUND_TRIP: got=%#v want=%#v", decoded, file)
+	}
+}
+
 func TestDecodeRejectsDuplicateMembersAndBounds(t *testing.T) {
 	w := workspace(t)
 	duplicate := bytes.Replace(validJSON(), []byte(`"line":3`), []byte(`"line":3,"line":4`), 1)
