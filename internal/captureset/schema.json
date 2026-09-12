@@ -1,0 +1,17 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"https://lsp-trace.dev/schema/lsp-trace.capture-set.v1.schema.json",
+ "title":"lsp-trace capture set manifest v1","type":"object","additionalProperties":false,
+ "required":["schema_version","logical_digest","immutable_selector","disclosure","authority","source_graph_complete","native_single_capture_custody","cross_capture_calls","leiden_admissible","census_policy","duplicate_policy","file_ledger","symbol_ledger","targets","constituents","batches"],
+ "properties":{
+  "schema_version":{"const":"lsp-trace.capture-set.v1"},"logical_digest":{"$ref":"#/$defs/digest"},"immutable_selector":{"type":"string","minLength":1},"disclosure":{"enum":["PRIVATE","REDACTED"]},"authority":{"const":0},"source_graph_complete":{"const":"UNKNOWN"},"native_single_capture_custody":{"const":false},"cross_capture_calls":{"type":"array","maxItems":0},"leiden_admissible":{"const":false},"census_policy":{"type":"string","minLength":1},"duplicate_policy":{"type":"string","minLength":1},"file_ledger":{"$ref":"#/$defs/ledger"},"symbol_ledger":{"$ref":"#/$defs/ledger"},"targets":{"type":"array","minItems":1,"maxItems":10000,"items":{"$ref":"#/$defs/target"}},"constituents":{"type":"array","minItems":2,"maxItems":159,"items":{"$ref":"#/$defs/constituent"}},"batches":{"type":"array","minItems":2,"maxItems":159,"items":{"$ref":"#/$defs/batch"}}
+ },
+ "$defs":{
+  "digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+  "entry":{"type":"object","additionalProperties":false,"required":["ordinal","identity","disposition"],"properties":{"ordinal":{"type":"integer","minimum":0},"identity":{"type":"string","minLength":1},"disposition":{"type":"string","minLength":1}}},
+  "ledger":{"type":"object","additionalProperties":false,"required":["denominator","entries"],"properties":{"denominator":{"type":"integer","minimum":0,"maximum":10000},"entries":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/entry"}}}},
+  "target":{"type":"object","additionalProperties":false,"required":["census_ordinal","canonical_seed_v2","canonical_seed_v2_sha256"],"properties":{"census_ordinal":{"type":"integer","minimum":0},"canonical_seed_v2":{"type":"string","minLength":1},"canonical_seed_v2_sha256":{"$ref":"#/$defs/digest"}}},
+  "constituent":{"type":"object","additionalProperties":false,"required":["immutable_selector","schema_id","sha256","byte_length","native_v5_identity"],"properties":{"immutable_selector":{"type":"string","minLength":1},"schema_id":{"const":"lsp-trace.graph-provenance.v5"},"sha256":{"$ref":"#/$defs/digest"},"byte_length":{"type":"integer","minimum":1},"native_v5_identity":{"type":"string","minLength":1}}},
+  "batch":{"type":"object","additionalProperties":false,"required":["ordinal","target_start","target_count","constituent_index"],"properties":{"ordinal":{"type":"integer","minimum":0},"target_start":{"type":"integer","minimum":0},"target_count":{"type":"integer","minimum":1,"maximum":63},"constituent_index":{"type":"integer","minimum":0}}}
+ }
+}
