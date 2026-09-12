@@ -151,6 +151,10 @@ func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: %v: %s", mode, err, out)
 			}
+			var envelope graphprovenance.EvidenceV5
+			if decodeErr := json.Unmarshal(out, &envelope); decodeErr != nil || envelope.SeedSpec != nil {
+				t.Fatalf("ASSERT_LEGACY_SEED_MANIFEST_HAS_NO_RETAINED_SEED_SPEC[%s]: decode=%v seed=%v", mode, decodeErr, envelope.SeedSpec)
+			}
 			return out
 		}
 		if explicit, alias := run(canonical), run(shorthand); !bytes.Equal(explicit, alias) {

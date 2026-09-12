@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
@@ -402,9 +403,9 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 		}
 	}
 	var manifest acquisitionops.Manifest
+	var custodySeedFile seedformat.File
 	var traceSeedFile seedformat.File
 	var requestPolicy []byte
-	var retainedSeedSpec []byte
 	var sources []resolvedSliceSource
 	var discoveryCounts discoveryAccounting
 	var err error
@@ -440,6 +441,7 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 			}
 			combined.Seeds = append(combined.Seeds, seedformat.WithEffectiveDepths(decoded)...)
 		}
+		custodySeedFile = combined
 		manifest, err = seedformat.Translate(combined, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
 		if err != nil {
 			return fail(fmt.Errorf("invalid --seed-file replay: %w", err))
@@ -559,10 +561,12 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 		runtime := managed.(*initializedAcquisitionRuntime)
 		privateRuntime := runtime.privateAcquisitionRuntime
 		startedSessionID, startedGeneration := managed.SessionID(), managed.Generation()
+		var tracePrepared *sessionruntime.DocumentResult
 		if traceSeeds && len(traceSeedFile.Seeds) == 1 && traceSeedFile.Seeds[0].Type == seedformat.SymbolType {
 			seed := traceSeedFile.Seeds[0].Symbol
 			locator := manifest.Root.Locator
-			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: startedSessionID, Generation: startedGeneration, URI: locator.URI, LanguageID: c.languageID})
+			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: startedSessionID, Generation: startedGeneration, URI: locator.URI, LanguageID: c.languageID, CaptureSupply: true})
+			tracePrepared = &prepared
 			privateRuntime.retainHandle(prepared.DiagnosticOperation)
 			if prepared.Failure != "" {
 				return fail(fmt.Errorf("trace symbol document supply: %s", prepared.Failure))
@@ -620,18 +624,19 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 			if censusErr != nil {
 				return fail(censusErr)
 			}
-			seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
+			seedFile, _, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
 			if discoveryErr != nil {
 				return fail(discoveryErr)
 			}
+			custodySeedFile = seedFile
 			manifest, discoveryErr = seedformat.Translate(seedFile, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
 			if discoveryErr != nil {
 				return fail(discoveryErr)
 			}
-			retainedSeedSpec = canonical
 			requestPolicy, _ = json.Marshal(manifest)
 		}
-		input, _ := json.Marshal(acquisitionops.Input{SessionID: startedSessionID, Generation: startedGeneration, SeedManifest: manifest, OutputVersion: outputVersion})
+		requestInput := acquisitionops.Input{SessionID: startedSessionID, Generation: startedGeneration, SeedManifest: manifest, OutputVersion: outputVersion}
+		input, _ := json.Marshal(requestInput)
 		finalizeRequestDiagnostics := func(public []byte) {
 			if !requestDiagnosticsRequested {
 				return
@@ -661,7 +666,45 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 				}
 			}
 		}
-		result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input, RetainedSeedSpec: retainedSeedSpec})
+		requestID := "cli-acquisition"
+		request := operation.Request{Name: op, RequestID: requestID, Input: input}
+		var result operation.Result
+		var failed *operation.Failure
+		if traceSeeds {
+			admittedSeeds := traceSeedFile
+			admittedSeeds.Seeds = append([]seedformat.Seed(nil), traceSeedFile.Seeds...)
+			targets := append([]acquisitionops.Target{manifest.Root}, manifest.RequiredTargets...)
+			for i := range admittedSeeds.Seeds {
+				if admittedSeeds.Seeds[i].Position != nil {
+					position := *admittedSeeds.Seeds[i].Position
+					position.Label = targets[i].ID
+					admittedSeeds.Seeds[i].Position = &position
+				}
+			}
+			seedSpec, marshalErr := seedformat.EncodeCanonical(admittedSeeds, c.workspace)
+			if marshalErr != nil {
+				return fail(marshalErr)
+			}
+			if tracePrepared != nil {
+				result, failed = acquisitionorchestration.ExecuteExplicitTracePrepared(ctx, privateRuntime, request, seedSpec, *tracePrepared)
+			} else {
+				result, failed = acquisitionorchestration.ExecuteExplicitTrace(ctx, privateRuntime, request, seedSpec)
+			}
+		} else if replaySeeds {
+			seedSpec, marshalErr := seedformat.EncodeCanonical(custodySeedFile, c.workspace)
+			if marshalErr != nil {
+				return fail(marshalErr)
+			}
+			result, failed = acquisitionorchestration.ExecuteSeedFile(ctx, privateRuntime, request, seedSpec)
+		} else if discoverSeeds {
+			seedSpec, marshalErr := seedformat.EncodeCanonical(custodySeedFile, c.workspace)
+			if marshalErr != nil {
+				return fail(marshalErr)
+			}
+			result, failed = acquisitionorchestration.ExecuteAutomaticFile(ctx, privateRuntime, request, seedSpec)
+		} else {
+			result, failed = acquisitionorchestration.ExecuteLegacyManifest(ctx, privateRuntime, request)
+		}
 		if failed != nil {
 			projectionFailure := outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations"
 			if requestDiagnosticsRequested && projectionFailure {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/hydratedinspection"
@@ -42,6 +43,13 @@ func (r *forbiddenRuntime) RoundTrip(context.Context, sessionruntime.RoundTripRe
 func (r *forbiddenRuntime) Records() []sessionruntime.Record { r.calls++; return nil }
 
 const validManifest = `{"schema_version":"lsp-trace.seed-manifest.v2","coordinate_convention":"zero-based-session","root":{"id":"root","locator":{"uri":"file:///fixture/a.go","line":0,"character":0}},"required_targets":[]}`
+
+func executeTrustedV5(ctx context.Context, runtime Runtime, request operation.Request) (operation.Result, *operation.Failure) {
+	if request.RequestID == "" {
+		request.RequestID = "test-trusted-v5"
+	}
+	return acquisitionorchestration.ExecuteLegacyManifest(ctx, runtime, request)
+}
 
 func TestManifestClosedPreflight(t *testing.T) {
 	for _, change := range []struct{ name, old, new string }{
@@ -151,7 +159,7 @@ func TestUngroupedProductionV5PreservesExactBaselineBytesAndSchema(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, failure := NewExecutor(&v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}).Execute(context.Background(), operation.Request{Name: SliceV3, Input: raw})
+		result, failure := executeTrustedV5(context.Background(), &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}, operation.Request{Name: SliceV3, Input: raw})
 		if failure != nil {
 			t.Fatalf("ASSERT_UNGROUPED_PRODUCTION_V5_BASELINE_SUCCESS: %v", failure)
 		}
@@ -227,7 +235,10 @@ func (r *v3ParityRuntime) Diagnostics(string, uint64) manageddiagnostic.QueryRes
 	return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}
 }
 func (r *v3ParityRuntime) SeedCustodyProvenance(string, uint64) (seedbinding.CustodyMode, bool) {
-	return seedbinding.CallerAssertedLocal, true
+	return seedbinding.VerifiedHost, true
+}
+func (r *v3ParityRuntime) SeedCustodyReceipt(string, uint64) (string, bool) {
+	return "host-receipt:fixture:9007199254740993", true
 }
 
 type zeroSiblingRuntime struct{ *v3ParityRuntime }
@@ -273,7 +284,7 @@ func TestManagedV5AdmitsAttemptedExpansionWithNoExactSiblingRelations(t *testing
 			t.Fatal(marshalErr)
 		}
 		request.Input = raw
-		result, failure := NewExecutor(&zeroSiblingRuntime{v3ParityRuntime: &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}}).Execute(context.Background(), request)
+		result, failure := executeTrustedV5(context.Background(), &zeroSiblingRuntime{v3ParityRuntime: &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}}, request)
 		if failure != nil {
 			t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_ADMITTED/grouped=%t: %v", grouped, failure)
 		}
@@ -322,7 +333,7 @@ func TestManagedV5DoesNotRequestOptionalSiblingExpansion(t *testing.T) {
 	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}}
 	runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
 	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true})
-	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	got, failure := executeTrustedV5(context.Background(), runtime, operation.Request{Name: SliceV3, Input: input})
 	if failure != nil {
 		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_NOT_REQUESTED_ADMITTED: %v", failure)
 	}
@@ -354,7 +365,7 @@ func TestManagedV5DoesNotRequestOptionalSiblingExpansion(t *testing.T) {
 	defer publicationRoot.Close()
 	groupedInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true, GroupBy: "leiden", GroupOptions: &GroupOptions{Seed: 19, PageRankTopK: 1, HubTopK: 1}, OutputSelector: "graph.json"})
 	groupedRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	grouped, groupedFailure := NewExecutor(groupedRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
+	grouped, groupedFailure := executeTrustedV5(context.Background(), groupedRuntime, operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
 	if groupedFailure != nil || !bytes.Contains(grouped.Artifact, []byte(programcpresentation.Version)) || slices.Contains(groupedRuntime.methods, "textDocument/documentSymbol") {
 		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_GROUPED_LEIDEN: failure=%v methods=%v artifact=%s", groupedFailure, groupedRuntime.methods, grouped.Artifact)
 	}
@@ -387,9 +398,8 @@ func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 		if failure != nil {
 			t.Fatalf("ASSERT_FR23_PUBLIC_PARITY_EXECUTION/%s: %v", name, failure)
 		}
-		receipt, ok := got.CustodyReceipt.(*CustodyReceipt)
-		if !ok || receipt.Provenance != seedbinding.CallerAssertedLocal || receipt.Authenticated {
-			t.Fatalf("ASSERT_CALLER_ASSERTED_LOCAL_PUBLIC_RECEIPT_NO_PROMOTION/%s: %#v", name, got.CustodyReceipt)
+		if got.CustodyReceipt != nil {
+			t.Fatalf("ASSERT_ORDINARY_PUBLIC_PARITY_HAS_NO_CUSTODY_PROMOTION/%s: %#v", name, got.CustodyReceipt)
 		}
 		return got.Artifact, runtime
 	}
@@ -445,8 +455,8 @@ func TestManagedV5ProducerCustodyClosedMatrix(t *testing.T) {
 		wantFailure  bool
 		wantPromoted bool
 	}{
-		{name: "caller-local", mode: seedbinding.CallerAssertedLocal, found: true, wantClass: graph.SourceCustodyCallerAssertedLocal},
-		{name: "verified-host-receipt", mode: seedbinding.VerifiedHost, found: true, receipt: "host-receipt:fixture:9007199254740993", receiptFound: true, wantClass: graph.SourceCustodyVerifiedHost, wantPromoted: true},
+		{name: "caller-local-ordinary-rejected", mode: seedbinding.CallerAssertedLocal, found: true, wantFailure: true},
+		{name: "verified-host-ordinary-rejected", mode: seedbinding.VerifiedHost, found: true, receipt: "host-receipt:fixture:9007199254740993", receiptFound: true, wantFailure: true},
 		{name: "lsp-supplied-no-promotion", mode: seedbinding.CustodyMode(graph.SourceCustodyLSPSuppliedUnauthenticated), found: true, wantFailure: true},
 		{name: "retained-offline-no-promotion", mode: seedbinding.CustodyMode(graph.SourceCustodyRetainedByteConsistency), found: true, wantFailure: true},
 		{name: "unknown-reject", mode: seedbinding.CustodyMode(graph.Unknown), found: true, wantFailure: true},
@@ -518,8 +528,7 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
 	runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
 	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
-	seedSpec := []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"root","path":"a.go","line":1,"column":1}]}`)
-	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input, RetainedSeedSpec: seedSpec})
+	got, failure := executeTrustedV5(context.Background(), runtime, operation.Request{Name: SliceV3, Input: input})
 	if failure != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_SUCCESS: %v", failure)
 	}
@@ -530,8 +539,8 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	if err := json.Unmarshal(got.Artifact, &envelope); err != nil {
 		t.Fatal(err)
 	}
-	if envelope.SeedSpec == nil || !bytes.Equal(envelope.SeedSpec.Bytes, seedSpec) {
-		t.Fatalf("ASSERT_MANAGED_V5_RETAINS_EXACT_GENERATED_SEED_SPEC: %#v", envelope.SeedSpec)
+	if envelope.SeedSpec != nil {
+		t.Fatalf("ASSERT_ORDINARY_ACQUISITION_HAS_NO_EXPLICIT_SEED_AUTHORITY: %#v", envelope.SeedSpec)
 	}
 	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
 	if err != nil {
@@ -556,7 +565,7 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	defer publicationRoot.Close()
 	groupedInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true, GroupBy: "leiden", GroupOptions: &GroupOptions{Seed: 19, PageRankTopK: 2, HubTopK: 2}, OutputSelector: "graph.json"})
 	groupedRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	grouped, groupedFailure := NewExecutor(groupedRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
+	grouped, groupedFailure := executeTrustedV5(context.Background(), groupedRuntime, operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
 	if groupedFailure != nil || !bytes.Contains(grouped.Artifact, []byte(programcpresentation.Version)) {
 		t.Fatalf("ASSERT_GROUPED_SLICE_PRESENTATION_SUCCESS: failure=%v artifact=%s", groupedFailure, grouped.Artifact)
 	}
@@ -569,14 +578,14 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	}
 
 	parityRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	parity, parityFailure := NewExecutor(parityRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input, RetainedSeedSpec: seedSpec})
+	parity, parityFailure := executeTrustedV5(context.Background(), parityRuntime, operation.Request{Name: SliceV3, Input: input})
 	if parityFailure != nil || !bytes.Equal(got.Artifact, parity.Artifact) {
 		t.Fatalf("ASSERT_MANAGED_V5_EXACT_ROUTE_BYTES_PARITY: failure=%v equal=%v", parityFailure, bytes.Equal(got.Artifact, parity.Artifact))
 	}
 
 	snapshotInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: v5sourcesnapshot.Version})
 	snapshotRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	snapshotResult, snapshotFailure := NewExecutor(snapshotRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: snapshotInput})
+	snapshotResult, snapshotFailure := executeTrustedV5(context.Background(), snapshotRuntime, operation.Request{Name: SliceV3, Input: snapshotInput})
 	if snapshotFailure != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_SUCCESS: %v", snapshotFailure)
 	}
@@ -636,7 +645,7 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 		}
 	}
 	replayRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	replayResult, replayFailure := NewExecutor(replayRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: snapshotInput})
+	replayResult, replayFailure := executeTrustedV5(context.Background(), replayRuntime, operation.Request{Name: SliceV3, Input: snapshotInput})
 	if replayFailure != nil || !bytes.Equal(snapshotResult.Artifact, replayResult.Artifact) {
 		t.Fatalf("ASSERT_MANAGED_V5_SOURCE_SNAPSHOT_DETERMINISTIC_REPLAY: failure=%v equal=%v", replayFailure, bytes.Equal(snapshotResult.Artifact, replayResult.Artifact))
 	}
@@ -702,7 +711,7 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	manifest.Expansion.TopmostSiblings = false
 	optional, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
 	optionalRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	if _, failure := NewExecutor(optionalRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: optional}); failure != nil {
+	if _, failure := executeTrustedV5(context.Background(), optionalRuntime, operation.Request{Name: SliceV3, Input: optional}); failure != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_OPTIONAL_SIBLING_EXPANSION_ACCEPTED: failure=%v", failure)
 	}
 }
