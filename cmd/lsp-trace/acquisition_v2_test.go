@@ -167,9 +167,17 @@ func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) 
 	args := []string{"slice", "--production-v5", "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--from-file", "main.go", "--language-id", "go"}
 	cmd := exec.Command(cli, args...)
 	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
-	out, err := cmd.CombinedOutput()
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	out := stdout.Bytes()
 	if err != nil {
-		t.Fatalf("%s: command failed: %v: %s", assertion, err, out)
+		t.Fatalf("%s: command failed: %v: stdout=%s stderr=%s", assertion, err, out, stderr.String())
+	}
+	for _, count := range []string{"files_enumerated=1", "files_selected=1", "files_excluded=0", "symbols_enumerated=5", "symbols_selected=5", "symbols_excluded=0", "symbols_unsupported=0", "symbols_preparation_failed=0", "symbols_prepared=5", "does not claim endpoint or source completeness"} {
+		if !strings.Contains(stderr.String(), count) {
+			t.Fatalf("%s: missing accounting %q: %s", assertion, count, stderr.String())
+		}
 	}
 	var artifact struct {
 		SeedSpec struct {

@@ -208,6 +208,8 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.Var(&c.args, "server-arg", "server argument")
 	fs.Var(&c.env, "server-env", "server environment KEY=VALUE")
 	fs.Var(&c.fromFiles, "from-file", "repeatable source file or directory for automatic callable-symbol discovery (production V5 slice only)")
+	fs.Var(&c.includes, "include", "repeatable workspace-relative gitignore-style path pattern for automatic discovery")
+	fs.Var(&c.excludes, "exclude", "repeatable workspace-relative gitignore-style path pattern; excludes take precedence")
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
 	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
 	fs.StringVar(&outputVersion, "output-version", "", "managed output version (lsp-trace.graph-provenance.v5 requires v3 and topmost siblings)")
@@ -248,6 +250,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if manifestPath != "" && discoverSeeds {
 		return fail(fmt.Errorf("--seed-manifest and --from-file are mutually exclusive"))
 	}
+	if !discoverSeeds && (len(c.includes) > 0 || len(c.excludes) > 0) {
+		return fail(fmt.Errorf("--include and --exclude require automatic discovery with --from-file"))
+	}
 	if discoverSeeds && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5) {
 		return fail(fmt.Errorf("--from-file automatic discovery requires slice --production-v5"))
 	}
@@ -279,10 +284,14 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var requestPolicy []byte
 	var retainedSeedSpec []byte
 	var sources []resolvedSliceSource
+	var discoveryCounts discoveryAccounting
 	var err error
 	if discoverSeeds {
-		_, _, sources, err = resolveSliceSources(c)
+		_, _, sources, discoveryCounts, err = resolveSliceSourcesWithAccounting(c)
 		if err != nil {
+			if discoveryCounts.FilesEnumerated > 0 {
+				fmt.Fprintln(stderr, formatDiscoveryAccounting(discoveryCounts))
+			}
 			return fail(err)
 		}
 		defaults := defaultDiscoveryLimits()
@@ -430,6 +439,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if discoverSeeds {
 		discoveries := make(map[string]slicer.Discovery, len(sources))
 		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
+		preparationComplete := true
 		for _, sourceFile := range sources {
 			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: sourceFile.uri, LanguageID: sourceFile.lang})
 			privateRuntime.retainHandle(prepared.DiagnosticOperation)
@@ -437,10 +447,17 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 				return fail(fmt.Errorf("automatic seed discovery document supply %s: %s", sourceFile.path, prepared.Failure))
 			}
 			discovery := slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
-			if !discovery.PreparationCensusComplete {
-				return fail(fmt.Errorf("automatic seed discovery incomplete for %s: attempted=%d prepared=%d not_preparable=%d failed=%d", sourceFile.path, discovery.PreparationAccounting.Attempted, discovery.PreparationAccounting.Prepared, discovery.PreparationAccounting.NotPreparable, discovery.PreparationAccounting.Failed))
-			}
+			discoveryCounts.SymbolsEnumerated += discovery.PreparationAccounting.DocumentSymbols
+			discoveryCounts.SymbolsSelected += discovery.PreparationAccounting.Attempted
+			discoveryCounts.SymbolsUnsupported += discovery.PreparationAccounting.NotPreparable
+			discoveryCounts.SymbolsPreparationFailed += discovery.PreparationAccounting.Failed
+			discoveryCounts.SymbolsPrepared += discovery.PreparationAccounting.Prepared
+			preparationComplete = preparationComplete && discovery.PreparationCensusComplete
 			discoveries[sourceFile.uri] = discovery
+		}
+		fmt.Fprintln(stderr, formatDiscoveryAccounting(discoveryCounts))
+		if !preparationComplete {
+			return fail(fmt.Errorf("automatic seed discovery incomplete: selected_files=%d attempted=%d prepared=%d unsupported=%d preparation_failed=%d", discoveryCounts.FilesSelected, discoveryCounts.SymbolsSelected, discoveryCounts.SymbolsPrepared, discoveryCounts.SymbolsUnsupported, discoveryCounts.SymbolsPreparationFailed))
 		}
 		seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
 		if discoveryErr != nil {

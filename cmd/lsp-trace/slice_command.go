@@ -26,7 +26,7 @@ import (
 
 type sliceConfig struct {
 	workspace, command, fromFile, symbol, seedFile, languageID, output, traceLSP string
-	args, env, ats, fromFiles                                                    stringsFlag
+	args, env, ats, fromFiles, includes, excludes                                stringsFlag
 	downDepth, upDepth, maxNodes                                                 int
 	timeout, requestTimeout                                                      time.Duration
 	pretty                                                                       bool

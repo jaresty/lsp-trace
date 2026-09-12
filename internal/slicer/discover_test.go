@@ -52,24 +52,27 @@ func TestDiscoverPreparedUsesSameOutgoingBFS(t *testing.T) {
 
 func TestDiscoverAccountsForEveryDocumentSymbolPreparation(t *testing.T) {
 	a := callItem("a", 1)
+	container, value, broken := symbol("container", 20, symbol("a", 1), symbol("value", 2)), symbol("value", 2), symbol("broken", 3)
+	container.Kind, container.Children[0].Kind, container.Children[1].Kind = 2, 12, 13
+	value.Kind, broken.Kind = 14, 5
 	f := &fakeClient{
-		symbols:       []lsp.DocumentSymbol{symbol("container", 20, symbol("a", 1), symbol("value", 2)), symbol("broken", 3)},
+		symbols:       []lsp.DocumentSymbol{container, value, broken},
 		prepared:      map[uint32][]lsp.CallHierarchyItem{1: {a}},
 		prepareErrors: map[uint32]error{3: errors.New("prepare failed")},
 		outgoing:      map[string][]lsp.CallHierarchyOutgoingCall{"a": {}},
 	}
 
 	got := Discover(context.Background(), f, "file:///w/code.go", Options{DownDepth: 0})
-	if got.PreparationAccounting.DocumentSymbols != 4 || got.PreparationAccounting.Attempted != 4 || got.PreparationAccounting.Prepared != 1 || got.PreparationAccounting.NotPreparable != 2 || got.PreparationAccounting.Failed != 1 {
+	if got.PreparationAccounting.DocumentSymbols != 5 || got.PreparationAccounting.Attempted != 5 || got.PreparationAccounting.Prepared != 1 || got.PreparationAccounting.NotPreparable != 3 || got.PreparationAccounting.Failed != 1 {
 		t.Fatalf("ASSERT_SLICE_PREPARATION_COUNTS_EXACT: %#v", got.PreparationAccounting)
 	}
 	if got.PreparationCensusComplete || !got.TraversalComplete {
 		t.Fatalf("ASSERT_SLICE_CENSUS_COMPLETENESS_INDEPENDENT: census=%t traversal=%t", got.PreparationCensusComplete, got.TraversalComplete)
 	}
-	if len(got.PreparationDispositions) != 4 {
+	if len(got.PreparationDispositions) != 5 {
 		t.Fatalf("ASSERT_SLICE_EVERY_SYMBOL_HAS_DISPOSITION: %#v", got.PreparationDispositions)
 	}
-	want := []string{"prepared", "not_preparable", "failed", "not_preparable"}
+	want := []string{"prepared", "not_preparable", "not_preparable", "failed", "not_preparable"}
 	for i, disposition := range got.PreparationDispositions {
 		if disposition.Status != want[i] {
 			t.Fatalf("ASSERT_SLICE_PREPARATION_DISPOSITIONS_DETERMINISTIC: index=%d got=%#v", i, got.PreparationDispositions)
