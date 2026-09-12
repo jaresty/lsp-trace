@@ -14,6 +14,29 @@ import (
 	"lsp-trace/internal/programctestfixture"
 )
 
+func TestVerifyDefaultSelectorRoutesGraphProvenanceV5(t *testing.T) {
+	valid := programctestfixture.ValidV5(t)
+	validSelector := filepath.Join(t.TempDir(), "valid-v5.selector.json")
+	if err := publishValidatedBundle(validSelector, valid, admitAcquisitionV5); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	if code := runVerify([]string{validSelector}, &stdout, &stderr); code != 0 || stdout.String() != "verified integrity and custody\n" || stderr.Len() != 0 {
+		t.Fatalf("ASSERT_VERIFY_DEFAULT_SELECTOR_ROUTES_GRAPH_PROVENANCE_V5: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+
+	malformed := []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)
+	malformedSelector := filepath.Join(t.TempDir(), "malformed-v5.selector.json")
+	if err := publishValidatedBundle(malformedSelector, malformed, func([]byte) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := runVerify([]string{malformedSelector}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "verify semantic receipt:") {
+		t.Fatalf("ASSERT_VERIFY_DEFAULT_SELECTOR_V5_SEMANTICS_FAIL_CLOSED: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestProgramCLeidenRequiresTopK(t *testing.T) {
 	var out, errout strings.Builder
 	if code := runProgramCLeiden([]string{"--seed", "1", "-"}, strings.NewReader("{}"), &out, &errout); code != 1 || out.Len() != 0 || !strings.Contains(errout.String(), "--pagerank-top-k") {

@@ -466,6 +466,19 @@ func loadValidatedCustodiedGenerationLimit(path string, limit int64) (validatedC
 	return validatedCustodiedGeneration{artifact: data, generation: selector.Generation}, "", nil
 }
 
+func admitDefaultCustodiedArtifact(data []byte) error {
+	var header struct {
+		SchemaVersion string `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &header); err != nil {
+		return err
+	}
+	if header.SchemaVersion == graphprovenance.VersionV5 {
+		return admitAcquisitionV5(data)
+	}
+	return graph.ValidateSemanticBundle(data)
+}
+
 func runVerify(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -478,7 +491,9 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 	admit := graph.ValidateSemanticBundle
 	directImmutableCarrier := false
 	switch {
-	case *family == "graph" && (*version == "" || *version == "v3"):
+	case *family == "graph" && *version == "":
+		admit = admitDefaultCustodiedArtifact
+	case *family == "graph" && *version == "v3":
 	case *family == graphprovenance.Family && (*version == "v2" || *version == "lsp-trace.graph-provenance.v2"):
 		admit = admitAcquisitionV2
 	case *family == graphprovenance.Family && (*version == "v3" || *version == graphprovenance.VersionV3):
