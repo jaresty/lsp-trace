@@ -44,34 +44,36 @@ func TestTraceProcessV5ParityAndNoSeedSpecCustody(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\nfunc start() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	traceArgs := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0")
+	defaultArgs := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0")
+	defaultOut, defaultErr, defaultCode := captureRun(t, append([]string{"trace"}, defaultArgs...))
+	defaultEnvelope, defaultGraph := decodeTraceV5(t, defaultOut)
+	if defaultCode != 0 || defaultErr != "" || defaultEnvelope.SeedSpec != nil || defaultGraph.Invocation.Expansion.TopmostSiblings {
+		t.Fatalf("ASSERT_TRACE_DEFAULT_SIBLINGS_OFF_NO_SEED_SPEC: code=%d stderr=%q expansion=%+v seed=%v", defaultCode, defaultErr, defaultGraph.Invocation.Expansion, defaultEnvelope.SeedSpec)
+	}
+
+	traceArgs := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0", "--timeout", "60s", "--request-timeout", "30s", "--siblings")
 	traceOut, traceErr, traceCode := captureRun(t, append([]string{"trace"}, traceArgs...))
 	cfg, err := parseTrace(traceArgs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	seeds, _, err := traceSeeds(cfg)
+	_, seedBytes, err := traceSeeds(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := traceManifest(cfg, seeds)
-	if err != nil {
+	seedPath := filepath.Join(t.TempDir(), "seeds.v2.json")
+	if err := os.WriteFile(seedPath, seedBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	var sliceOut, sliceErr strings.Builder
-	acquisitionArgs := traceFakeArgs(workspace, "slice-symbol")
-	forward := append(acquisitionArgs[:12:12], "--output-version", graphprovenance.VersionV5)
-	sliceCode := runTraceAcquisition("slice", "v3", forward, &sliceOut, &sliceErr, traceAcquisitionInput{manifest: manifest, seeds: seeds})
+	sliceArgs := []string{"--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-symbol", "--language-id", "go", "--seed-file", seedPath}
+	sliceOut, sliceErr, sliceCode := captureRun(t, append([]string{"slice", "--production-v5"}, sliceArgs...))
 	if traceCode != 0 || sliceCode != 0 {
-		t.Fatalf("ASSERT_TRACE_PROCESS_COMPLETES: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceOut=%q sliceOut=%q", traceCode, sliceCode, traceErr, sliceErr.String(), traceOut, sliceOut.String())
+		t.Fatalf("ASSERT_TRACE_PUBLIC_SLICE_PROCESS_COMPLETES: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceOut=%q sliceOut=%q", traceCode, sliceCode, traceErr, sliceErr, traceOut, sliceOut)
 	}
 	traceEnvelope, traceGraph := decodeTraceV5(t, traceOut)
-	sliceEnvelope, sliceGraph := decodeTraceV5(t, sliceOut.String())
+	sliceEnvelope, sliceGraph := decodeTraceV5(t, sliceOut)
 	if traceCode != sliceCode || traceEnvelope.SeedSpec != nil || sliceEnvelope.SeedSpec != nil || traceEnvelope.GraphV5 != sliceEnvelope.GraphV5 || traceEnvelope.GraphV5SHA256 != sliceEnvelope.GraphV5SHA256 || !reflect.DeepEqual(traceGraph.Edges, sliceGraph.Edges) {
-		t.Fatalf("ASSERT_TRACE_PROCESS_V5_GRAPH_DIGEST_CALLS_PARITY_NO_SEED_SPEC: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceDigest=%s sliceDigest=%s traceSeed=%v sliceSeed=%v", traceCode, sliceCode, traceErr, sliceErr.String(), traceEnvelope.GraphV5SHA256, sliceEnvelope.GraphV5SHA256, traceEnvelope.SeedSpec, sliceEnvelope.SeedSpec)
-	}
-	if traceGraph.Invocation.Expansion.TopmostSiblings {
-		t.Fatalf("ASSERT_TRACE_DEFAULT_SIBLINGS_OFF: %+v", traceGraph.Invocation.Expansion)
+		t.Fatalf("ASSERT_TRACE_PUBLIC_SLICE_V5_GRAPH_DIGEST_CALLS_PARITY_NO_SEED_SPEC: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceDigest=%s sliceDigest=%s traceSeed=%v sliceSeed=%v", traceCode, sliceCode, traceErr, sliceErr, traceEnvelope.GraphV5SHA256, sliceEnvelope.GraphV5SHA256, traceEnvelope.SeedSpec, sliceEnvelope.SeedSpec)
 	}
 }
 
