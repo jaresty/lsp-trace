@@ -62,7 +62,7 @@ func TestInfoIsDeterministicBoundedAndPrivate(t *testing.T) {
 	if got.Version == "" || got.BuildRevision == "" {
 		t.Fatalf("ASSERT_INFO_BUILD_IDENTITY_BOUNDED: %#v", got)
 	}
-	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 30 || got.DispatchableCount != 30 || got.InlineByteLimit != 1048576 {
+	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 31 || got.DispatchableCount != 31 || got.InlineByteLimit != 1048576 {
 		t.Fatalf("ASSERT_INFO_REGISTRY_AUTHORITY: %#v", got)
 	}
 	if !reflect.DeepEqual(got.Schemas["graph"], []string{"v1", "v2", "v3", "v4", "v5"}) || len(got.Schemas) < 10 {

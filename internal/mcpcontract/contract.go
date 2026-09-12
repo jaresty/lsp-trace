@@ -151,7 +151,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))).Schemas {
+	for _, registration := range WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -172,7 +172,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	compiled, err := compileSchema(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))), schemaID)
+	compiled, err := compileSchema(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))), schemaID)
 	if err != nil {
 		return err
 	}
@@ -196,7 +196,7 @@ func ValidateEnvelopeExclusive(data []byte) error {
 		return err
 	}
 	named, _ := value["envelope_schema_id"].(string)
-	manifest = WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))
+	manifest = WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))
 	// Load the immutable resource set once, not once per envelope. Every
 	// envelope is still compiled and checked for exhaustive exclusivity.
 	compiler, _, err := registeredCompiler(manifest)

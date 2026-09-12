@@ -130,10 +130,11 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))
+	manifest = mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
-		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact Graph Provenance V5 envelope bytes; cross-seed stability and passage verification are unassessed",
+		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
+		mcpcontract.ProgramCComposeTool:          "Deterministically compose compatible Graph Provenance V5 captures while preserving exact constituent bytes and identities; no cross-capture CALLS inference, native-capture custody, or Leiden admission",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
 		"lsp_trace_v2_verify_retained_calls":     "Verify immutable selected-publication custody before explicit retained-calls/v2 admission; consistency is not producer authentication",
 		"lsp_trace_v1_bounded_retained_ranking":  "Bounded PageRank or exact-seed PPR over admitted historical retained unit CALLS groups; not source completeness or authentication",

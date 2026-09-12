@@ -26,6 +26,7 @@ const (
 	ExportRetainedCallsV2 Name = "export_retained_calls_v2"
 	VerifyRetainedCallsV2 Name = "verify_retained_calls_v2"
 	ProgramCLeiden        Name = "program_c_leiden"
+	ProgramCCompose       Name = "program_c_compose"
 )
 
 var ErrNotImplemented = errors.New("operation not implemented")

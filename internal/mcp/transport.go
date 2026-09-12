@@ -364,6 +364,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"artifact schema identity is not permitted"})
 		return bindEnvelope(base, tool, env)
 	}
+	if tool.Name == mcpcontract.ProgramCComposeTool {
+		if err := mcpcontract.ValidateJSON(artifactID, opResult.Artifact); err != nil {
+			env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"composite artifact does not satisfy the registered requested schema"})
+			return bindEnvelope(base, tool, env)
+		}
+	}
 	outcome, operationStatus := "COMPLETE", "SUCCEEDED"
 	if (tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily) && incompleteTraversalArtifact(opResult.Artifact) {
 		outcome, operationStatus = "PARTIAL", "PARTIAL"
@@ -598,6 +604,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.Name == mcpcontract.ProgramCLeidenTool {
 		env.EnvelopeSchemaID = mcpcontract.ProgramCLeidenEnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == mcpcontract.ProgramCComposeTool {
+		env.EnvelopeSchemaID = mcpcontract.ProgramCComposeEnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
 		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -728,6 +737,7 @@ func artifactSchemaID(artifact []byte) string {
 		FilterSchemaVersion     string `json:"filter_schema_version"`
 		Family                  string `json:"Family"`
 		Operation               string `json:"Operation"`
+		CompositeVersion        string `json:"Version"`
 	}
 	if json.Unmarshal(artifact, &identity) != nil {
 		return ""
@@ -751,6 +761,9 @@ func artifactSchemaID(artifact []byte) string {
 	}
 	if version == "" {
 		version = identity.FilterSchemaVersion
+	}
+	if version == "" {
+		version = identity.CompositeVersion
 	}
 	if version == "" {
 		return ""
@@ -844,6 +857,8 @@ func operationName(canonical string) operation.Name {
 		return operation.InspectHydrated
 	case mcpcontract.ProgramCLeidenTool:
 		return operation.ProgramCLeiden
+	case mcpcontract.ProgramCComposeTool:
+		return operation.ProgramCCompose
 	case "lsp_trace_v1_inspect":
 		return operation.Inspect
 	case "lsp_trace_v1_filter":
