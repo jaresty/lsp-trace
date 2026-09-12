@@ -44,6 +44,25 @@ func TestHydratedCLIRejectsBeforeIO(t *testing.T) {
 	}
 	t.Log("PUBLIC_CLI_PREFLIGHT PASS")
 }
+func TestHydratedCLIAcceptsLargeRegularArtifactWithoutWeakeningInlineTransport(t *testing.T) {
+	raw, err := os.ReadFile("../../internal/hydratedevidence/testdata/focused-fr20.v2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) >= 1<<20+1 {
+		t.Fatal("fixture unexpectedly exceeds padding target")
+	}
+	raw = append(raw, bytes.Repeat([]byte(" "), 1<<20+1-len(raw))...)
+	path := filepath.Join(t.TempDir(), "large.json")
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := runInspect([]string{path, "--hydrated", "--node", "unknown", "--json"}, &stdout, &stderr); code != 0 || stdout.Len() == 0 {
+		t.Fatalf("ASSERT_HYDRATED_CLI_LARGE_REGULAR_ARTIFACT: code=%d stderr=%s", code, stderr.String())
+	}
+}
+
 func TestHydratedCLIExplicitInputSafety(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "source.json")
