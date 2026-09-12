@@ -66,24 +66,35 @@ func TestStrictAndMutationRejection(t *testing.T) {
 func TestRejectMissingDuplicateReorderedForeignAndBounds(t *testing.T) {
 	ts, cs, f, s := fixture(64)
 	base, _ := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")
+	clone := func() Manifest {
+		x := base
+		x.Constituents = append([]Constituent(nil), base.Constituents...)
+		return x
+	}
 	cases := map[string]Manifest{}
-	x := base
+	x := clone()
 	x.Constituents = x.Constituents[:1]
 	cases["missing"] = x
-	x = base
-	x.Constituents = []Constituent{base.Constituents[0], base.Constituents[0]}
+	x = clone()
+	x.Constituents = []Constituent{x.Constituents[0], x.Constituents[0]}
 	cases["duplicate"] = x
-	x = base
-	x.Constituents = []Constituent{base.Constituents[1], base.Constituents[0]}
+	x = clone()
+	x.Constituents[0], x.Constituents[1] = x.Constituents[1], x.Constituents[0]
 	cases["reordered"] = x
-	x = base
+	x = clone()
 	x.Constituents[0].SchemaID = "foreign"
 	cases["foreign"] = x
+	wantErrors := map[string]string{
+		"missing":   "missing constituent or batch",
+		"duplicate": "duplicate constituent",
+		"reordered": "reordered constituent",
+		"foreign":   "foreign constituent",
+	}
 	for n, m := range cases {
 		m.LogicalDigest = ""
 		m.ImmutableSelector = ""
-		if _, err := EncodeCanonical(m); err == nil {
-			t.Fatalf("ASSERT_REJECT_%s", n)
+		if _, err := EncodeCanonical(m); err == nil || !strings.Contains(err.Error(), wantErrors[n]) {
+			t.Fatalf("ASSERT_REJECT_%s: err=%v", n, err)
 		}
 	}
 	too := make([]Target, MaxTargets+1)
