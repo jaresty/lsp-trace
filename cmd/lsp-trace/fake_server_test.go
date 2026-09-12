@@ -15,6 +15,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/schema"
+	"lsp-trace/internal/source"
 )
 
 type fakeMessage struct {
@@ -96,6 +97,33 @@ func TestSubprocessSliceRetainsServerStderrOnOutgoingFailure(t *testing.T) {
 	}
 	if !found || strings.Count(stderr, causal) != 1 {
 		t.Fatalf("ASSERT_SLICE_OUTGOING_SERVER_STDERR_RETAINED_RELAYED: diagnostics=%#v stderr=%q", got.Diagnostics, stderr)
+	}
+}
+
+func TestSubprocessSliceDiscoversAllRepeatedFiles(t *testing.T) {
+	workspace := t.TempDir()
+	for _, name := range []string{"a.go", "b.go"} {
+		if err := os.WriteFile(filepath.Join(workspace, name), []byte("package fixture\nfunc leaf() {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--from-file", "b.go", "--from-file", "a.go", "--down-depth", "1", "--up-depth", "0", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var got struct {
+		Nodes []graph.Node `json:"nodes"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); code != 0 || err != nil {
+		t.Fatalf("ASSERT_SLICE_REPEATABLE_FILES_EXECUTE: code=%d decode=%v stderr=%q stdout=%q", code, err, stderr, stdout)
+	}
+	uris := map[string]bool{}
+	for _, node := range got.Nodes {
+		uris[node.Item.URI] = true
+	}
+	for _, name := range []string{"a.go", "b.go"} {
+		_, uri, _, err := source.ResolveTarget(workspace, name)
+		if err != nil || !uris[uri] {
+			t.Fatalf("ASSERT_SLICE_REPEATABLE_FILES_RETAIN_ALL_SOURCES: name=%s uri=%s err=%v uris=%v", name, uri, err, uris)
+		}
 	}
 }
 
