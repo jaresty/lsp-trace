@@ -126,11 +126,15 @@ func ValidatePlanningTargets(targets []Target) error {
 	if len(targets) < 1 || len(targets) > MaxTargets {
 		return fmt.Errorf("target count outside [1,%d]", MaxTargets)
 	}
+	seenOrdinal := make(map[int]struct{}, len(targets))
 	seenIdentity := make(map[string]struct{}, len(targets))
 	seenDigest := make(map[string]struct{}, len(targets))
 	for i, target := range targets {
 		if err := validateTarget(i, target); err != nil {
 			return err
+		}
+		if _, duplicate := seenOrdinal[target.CensusOrdinal]; duplicate {
+			return fmt.Errorf("duplicate census ordinal at index %d", i)
 		}
 		if _, duplicate := seenIdentity[target.CanonicalSeedV2]; duplicate {
 			return fmt.Errorf("duplicate target identity at index %d", i)
@@ -138,6 +142,7 @@ func ValidatePlanningTargets(targets []Target) error {
 		if _, duplicate := seenDigest[target.CanonicalSeedV2SHA256]; duplicate {
 			return fmt.Errorf("duplicate target digest at index %d", i)
 		}
+		seenOrdinal[target.CensusOrdinal] = struct{}{}
 		seenIdentity[target.CanonicalSeedV2] = struct{}{}
 		seenDigest[target.CanonicalSeedV2SHA256] = struct{}{}
 	}
@@ -145,7 +150,7 @@ func ValidatePlanningTargets(targets []Target) error {
 }
 
 func validateTarget(index int, target Target) error {
-	if target.CensusOrdinal < 0 || strings.TrimSpace(target.CanonicalSeedV2) == "" || target.CanonicalSeedV2SHA256 != rawDigest([]byte(target.CanonicalSeedV2)) {
+	if target.CensusOrdinal < 0 || target.CanonicalSeedV2 == "" || target.CanonicalSeedV2SHA256 != rawDigest([]byte(target.CanonicalSeedV2)) {
 		return fmt.Errorf("target %d mutation", index)
 	}
 	return nil

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/captureset"
@@ -122,6 +123,13 @@ func TestPlanTargetsValidationAndDeterministicMaximalBatches(t *testing.T) {
 				t.Fatal("input mutated")
 			}
 		})
+	}
+}
+
+func TestPlanTargetsRejectsDuplicateCensusOrdinal(t *testing.T) {
+	targets := []captureset.Target{target(0, "seed"), target(0, "other")}
+	if _, err := PlanTargets(targets); err == nil || !strings.Contains(err.Error(), "duplicate census ordinal") {
+		t.Fatalf("duplicate census ordinal accepted: %v", err)
 	}
 }
 

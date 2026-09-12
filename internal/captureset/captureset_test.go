@@ -54,6 +54,22 @@ func TestVersionedSchemaAcceptsCanonicalAndRejectsUnknown(t *testing.T) {
 	}
 }
 
+func TestValidatePlanningTargetsRejectsDuplicateCensusOrdinal(t *testing.T) {
+	targets, _, _, _ := fixture(2)
+	targets[1].CensusOrdinal = targets[0].CensusOrdinal
+	if err := ValidatePlanningTargets(targets); err == nil || !strings.Contains(err.Error(), "duplicate census ordinal") {
+		t.Fatalf("ASSERT_DUPLICATE_CENSUS_ORDINAL_REJECTED: %v", err)
+	}
+}
+
+func TestValidatePlanningTargetsPreservesNonemptySeedCompatibility(t *testing.T) {
+	seed := " "
+	target := Target{CensusOrdinal: 0, CanonicalSeedV2: seed, CanonicalSeedV2SHA256: dg(seed)}
+	if err := ValidatePlanningTargets([]Target{target}); err != nil {
+		t.Fatalf("ASSERT_NONEMPTY_SEED_ACCEPTED: %v", err)
+	}
+}
+
 func TestStrictAndMutationRejection(t *testing.T) {
 	ts, cs, f, s := fixture(64)
 	m, _ := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")
