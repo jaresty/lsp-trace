@@ -16,15 +16,16 @@ import (
 // retained outputs so it can land independently of discovery filtering and
 // capture-set production.
 //
-// Current RED dependency: --seed-manifest is decoded as an acquisition manifest,
-// while automatic discovery retains canonical lsp-trace.seeds.v2 bytes. Until
-// the concurrent replay-admission lane accepts those exact retained bytes, set
+// Current RED dependency: automatic discovery retains canonical
+// lsp-trace.seeds.v2 bytes, whose future unified replay input is --seed-file.
+// --seed-manifest remains the legacy acquisition-manifest input. Until the
+// concurrent replay-admission lane adds --seed-file, set
 // LSP_TRACE_QUALIFY_DISCOVERY_REPLAY=1 to observe the fail-closed blocker:
-// "json: unknown field \"defaults\"".
+// "flag provided but not defined: -seed-file".
 func TestAutomaticDiscoveryRetainedSeedReplayQualification(t *testing.T) {
 	const assertion = "ASSERT_AUTOMATIC_DISCOVERY_EXACT_RETAINED_SEED_REPLAY_EQUIVALENCE"
 	if os.Getenv("LSP_TRACE_QUALIFY_DISCOVERY_REPLAY") != "1" {
-		t.Skip(`BLOCKED_RETAINED_SEEDS_V2_REPLAY_ADMISSION: set LSP_TRACE_QUALIFY_DISCOVERY_REPLAY=1; current RED is json: unknown field "defaults"`)
+		t.Skip(`BLOCKED_UNIFIED_SEED_FILE_REPLAY_ADMISSION: set LSP_TRACE_QUALIFY_DISCOVERY_REPLAY=1; current RED is flag provided but not defined: -seed-file`)
 	}
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed process CLI uses Darwin supervisor")
@@ -78,13 +79,13 @@ func TestAutomaticDiscoveryRetainedSeedReplayQualification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, replayArtifactBytes := run([]string{"--seed-manifest", manifestPath}, false, "")
+	_, replayArtifactBytes := run([]string{"--seed-file", manifestPath}, false, "")
 	assertEquivalentQualificationV5(t, discoveryArtifactBytes, replayArtifactBytes)
 
 	discoveryGraph := filepath.Join(t.TempDir(), "discovery-v5.json")
 	replayGraph := filepath.Join(t.TempDir(), "replay-v5.json")
 	discoveryGrouped, discoveryGroupedArtifact := run([]string{"--from-file", "main.go"}, true, discoveryGraph)
-	replayGrouped, replayGroupedArtifact := run([]string{"--seed-manifest", manifestPath}, true, replayGraph)
+	replayGrouped, replayGroupedArtifact := run([]string{"--seed-file", manifestPath}, true, replayGraph)
 	assertEquivalentQualificationV5(t, discoveryGroupedArtifact, replayGroupedArtifact)
 	if !bytes.Equal(discoveryGrouped, replayGrouped) {
 		t.Fatalf("ASSERT_DISCOVERY_REPLAY_GROUPED_LEIDEN_EXACT: discovery=%q replay=%q", discoveryGrouped, replayGrouped)
