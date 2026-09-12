@@ -309,6 +309,64 @@ func TestManagedV5AdmitsAttemptedExpansionWithNoExactSiblingRelations(t *testing
 	}
 }
 
+func TestManagedV5DoesNotRequestOptionalSiblingExpansion(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "v5-siblings-not-requested", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}}
+	runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true})
+	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	if failure != nil {
+		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_NOT_REQUESTED_ADMITTED: %v", failure)
+	}
+	if slices.Contains(runtime.methods, "textDocument/documentSymbol") {
+		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_NOT_ACQUIRED: methods=%v", runtime.methods)
+	}
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(got.Artifact, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(native, &document); err != nil {
+		t.Fatal(err)
+	}
+	expansion := document["invocation"].(map[string]any)["expansion"].(map[string]any)
+	if expansion["topmost_siblings"] != false || expansion["topmost_sibling_outcome"] != "NOT_REQUESTED" {
+		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_EXPLICIT_NOT_REQUESTED: expansion=%#v", expansion)
+	}
+
+	publicationDir := t.TempDir()
+	publicationRoot, err := publication.OpenRoot(publicationDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer publicationRoot.Close()
+	groupedInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true, GroupBy: "leiden", GroupOptions: &GroupOptions{Seed: 19, PageRankTopK: 1, HubTopK: 1}, OutputSelector: "graph.json"})
+	groupedRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	grouped, groupedFailure := NewExecutor(groupedRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
+	if groupedFailure != nil || !bytes.Contains(grouped.Artifact, []byte(programcpresentation.Version)) || slices.Contains(groupedRuntime.methods, "textDocument/documentSymbol") {
+		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_GROUPED_LEIDEN: failure=%v methods=%v artifact=%s", groupedFailure, groupedRuntime.methods, grouped.Artifact)
+	}
+	published, err := os.ReadFile(filepath.Join(publicationDir, "graph.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := graphprovenance.ValidateFor(published, graphprovenance.Family, "v5"); err != nil {
+		t.Fatalf("ASSERT_V5_OPTIONAL_SIBLINGS_GROUPED_PUBLISHED_V5: %v", err)
+	}
+}
+
 func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
@@ -638,10 +696,10 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	}
 
 	manifest.Expansion.TopmostSiblings = false
-	bad, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
-	before := runtime.queries
-	if _, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: bad}); failure == nil || failure.Code != operation.FailureInvalidInput || runtime.queries != before {
-		t.Fatalf("ASSERT_MANAGED_V5_EXPANSION_REQUIRED_BEFORE_ACQUISITION: failure=%v", failure)
+	optional, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
+	optionalRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	if _, failure := NewExecutor(optionalRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: optional}); failure != nil {
+		t.Fatalf("ASSERT_MANAGED_V5_OPTIONAL_SIBLING_EXPANSION_ACCEPTED: failure=%v", failure)
 	}
 }
 

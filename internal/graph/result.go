@@ -79,6 +79,7 @@ type ExpansionConfig struct {
 }
 
 const (
+	TopmostSiblingNotRequested        = "NOT_REQUESTED"
 	TopmostSiblingExactRelationsFound = "EXACT_RELATIONS_FOUND"
 	TopmostSiblingNoExactRelations    = "NO_EXACT_RELATIONS"
 )

@@ -233,7 +233,6 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			return fail(operation.FailureInvalidInput, fmt.Errorf("production_v5 conflicts with output_version %q", in.OutputVersion))
 		}
 		in.OutputVersion = graphprovenance.VersionV5
-		in.SeedManifest.Expansion.TopmostSiblings = true
 	}
 	wantsSnapshot := in.OutputVersion == v5sourcesnapshot.Version
 	wantsV5 := in.OutputVersion == graphprovenance.VersionV5 || wantsSnapshot
@@ -243,14 +242,14 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if in.SeedManifest.Expansion.TopmostSiblings && !wantsV5 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
 	}
-	if wantsV5 && ((op.Name != SliceV3 && op.Name != IncomingV3) || !in.SeedManifest.Expansion.TopmostSiblings) {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route and expansion.topmost_siblings=true"))
+	if wantsV5 && op.Name != SliceV3 && op.Name != IncomingV3 {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("graph-provenance v5 requires current v3 route"))
 	}
 	req, err := in.SeedManifest.Request(op.Name)
 	if err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	req.TopmostSiblings = wantsV5
+	req.TopmostSiblings = wantsV5 && in.SeedManifest.Expansion.TopmostSiblings
 	if in.SessionID == "" || in.Generation == 0 {
 		return fail(operation.FailureInvalidInput, fmt.Errorf("session_id and exact generation are required"))
 	}
@@ -351,11 +350,14 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 				return fail("OUTPUT_VALIDATION_FAILED", cloneErr)
 			}
 			enriched.SchemaVersion = graph.SchemaVersionV5
-			enriched.Invocation.Expansion.TopmostSiblings = true
+			enriched.Invocation.Expansion.TopmostSiblings = req.TopmostSiblings
 			enriched.SiblingCandidates = siblings
-			enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNoExactRelations
-			if len(enriched.SiblingCandidates) > 0 {
-				enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingExactRelationsFound
+			enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNotRequested
+			if req.TopmostSiblings {
+				enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNoExactRelations
+				if len(enriched.SiblingCandidates) > 0 {
+					enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingExactRelationsFound
+				}
 			}
 			seeds := map[string]graph.InvocationSeed{}
 			for _, seed := range enriched.Invocation.Seeds {

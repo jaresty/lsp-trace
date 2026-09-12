@@ -745,13 +745,17 @@ func validateV5SiblingEvidence(b bundleV3) error {
 	switch b.Invocation.Expansion.TopmostSiblingOutcome {
 	case "":
 		// Retained V5 artifacts produced before explicit outcome accounting remain readable.
+	case TopmostSiblingNotRequested:
+		if b.Invocation.Expansion.TopmostSiblings || len(b.SiblingCandidates) != 0 {
+			return fmt.Errorf("v5 sibling expansion outcome contradicts unrequested expansion")
+		}
 	case TopmostSiblingExactRelationsFound:
-		if len(b.SiblingCandidates) == 0 {
-			return fmt.Errorf("v5 sibling expansion outcome requires exact relations")
+		if !b.Invocation.Expansion.TopmostSiblings || len(b.SiblingCandidates) == 0 {
+			return fmt.Errorf("v5 sibling expansion outcome requires requested exact relations")
 		}
 	case TopmostSiblingNoExactRelations:
-		if len(b.SiblingCandidates) != 0 {
-			return fmt.Errorf("v5 sibling expansion outcome contradicts exact relations")
+		if !b.Invocation.Expansion.TopmostSiblings || len(b.SiblingCandidates) != 0 {
+			return fmt.Errorf("v5 sibling expansion outcome contradicts requested relation count")
 		}
 	default:
 		return fmt.Errorf("unknown v5 sibling expansion outcome %q", b.Invocation.Expansion.TopmostSiblingOutcome)

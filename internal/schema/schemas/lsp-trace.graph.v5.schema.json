@@ -28,7 +28,7 @@
       "properties": {
         "workspace_uri": {"type": "string"}, "target": {"type": "object"}, "server": {"type": "object"}, "limits": {"type": "object"},
         "request_timeout_ms": {"type": "integer", "minimum": 0}, "concurrency": {"type": "integer", "minimum": 0}, "language_id": {"type": "string"},
-        "expansion": {"type": "object", "properties": {"topmost_siblings": {"type": "boolean"}, "topmost_sibling_outcome": {"enum": ["EXACT_RELATIONS_FOUND", "NO_EXACT_RELATIONS"]}, "dispatch_family": {"type": "boolean"}}, "additionalProperties": false}, "trace": {"type": "object"}, "output_mode": {"type": "string"}, "output_path": {"type": "string"},
+        "expansion": {"type": "object", "properties": {"topmost_siblings": {"type": "boolean"}, "topmost_sibling_outcome": {"enum": ["NOT_REQUESTED", "EXACT_RELATIONS_FOUND", "NO_EXACT_RELATIONS"]}, "dispatch_family": {"type": "boolean"}}, "additionalProperties": false}, "trace": {"type": "object"}, "output_mode": {"type": "string"}, "output_path": {"type": "string"},
         "seeds": {"type": ["array", "null"]}, "provenance": {"type": "object"}
       },
       "additionalProperties": false

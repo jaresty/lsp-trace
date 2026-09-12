@@ -95,6 +95,7 @@ func TestV5SiblingExpansionOutcomeMustMatchExactRelationCount(t *testing.T) {
 		remove    bool
 		wantError bool
 	}{
+		{name: "not-requested", outcome: TopmostSiblingNotRequested, remove: true},
 		{name: "exact-relations-found", outcome: TopmostSiblingExactRelationsFound},
 		{name: "no-exact-relations", outcome: TopmostSiblingNoExactRelations, remove: true},
 		{name: "claimed-exact-with-zero", outcome: TopmostSiblingExactRelationsFound, remove: true, wantError: true},
@@ -104,6 +105,9 @@ func TestV5SiblingExpansionOutcomeMustMatchExactRelationCount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := validV5SiblingResult()
 			result.Invocation.Expansion.TopmostSiblingOutcome = tc.outcome
+			if tc.outcome == TopmostSiblingNotRequested {
+				result.Invocation.Expansion.TopmostSiblings = false
+			}
 			if tc.remove {
 				result.SiblingCandidates = nil
 			}
