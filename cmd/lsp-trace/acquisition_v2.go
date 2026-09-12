@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/programcpresentation"
 	"lsp-trace/internal/projectionfailure"
 	"lsp-trace/internal/requestlifecycle"
 	"lsp-trace/internal/runtimeprofile"
@@ -192,7 +193,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.SetOutput(stderr)
 	var c sliceConfig
 	var profile profileFlags
-	var manifestPath, outputVersion string
+	var manifestPath, outputVersion, groupBy string
+	var communitySeed uint64
+	var pageRankTopK, hubTopK int
 	var diagnosticRoot, diagnosticSelector string
 	var bindingRoot, bindingSelector string
 	var requestDiagnosticRoot, requestDiagnosticSelector string
@@ -205,7 +208,11 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
 	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
 	fs.StringVar(&outputVersion, "output-version", "", "managed output version (lsp-trace.graph-provenance.v5 requires v3 and topmost siblings)")
-	fs.StringVar(&c.output, "output", "", "immutable output selector")
+	fs.StringVar(&c.output, "output", "", "immutable graph output selector")
+	fs.StringVar(&groupBy, "group-by", "", "optional post-acquisition grouping: leiden or none")
+	fs.Uint64Var(&communitySeed, "community-seed", 0, "Leiden deterministic community seed")
+	fs.IntVar(&pageRankTopK, "pagerank-top-k", 0, "mandatory positive grouped PageRank result count")
+	fs.IntVar(&hubTopK, "hub-top-k", 0, "mandatory positive grouped hub result count")
 	fs.StringVar(&diagnosticRoot, "private-startup-diagnostic-root", "", "caller-approved private diagnostic root")
 	fs.StringVar(&diagnosticSelector, "private-startup-diagnostic-selector", "", "safe relative startup diagnostic selector")
 	fs.StringVar(&bindingRoot, "private-seed-binding-root", "", "caller-approved seed-binding root (v3 only)")
@@ -216,8 +223,20 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
+	explicit := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
 	if outputVersion != graphprovenance.VersionV5 {
 		fmt.Fprintf(stderr, "DEPRECATED: Graph Provenance %s production is deprecated; migrate new production to source-qualified Graph Provenance V5. Historical readers, replay, and validation remain supported.\n", strings.ToUpper(version))
+	}
+	grouped := groupBy != "" && groupBy != "none"
+	if groupBy != "" && groupBy != "none" && groupBy != "leiden" {
+		return fail(fmt.Errorf("unsupported --group-by %q", groupBy))
+	}
+	if grouped && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5 || c.output == "" || !explicit["community-seed"] || pageRankTopK < 1 || hubTopK < 1) {
+		return fail(fmt.Errorf("--group-by leiden requires slice acquisition v3, Graph Provenance V5/--production-v5, --output, --community-seed, and positive --pagerank-top-k and --hub-top-k"))
+	}
+	if !grouped && (explicit["community-seed"] || explicit["pagerank-top-k"] || explicit["hub-top-k"]) {
+		return fail(fmt.Errorf("community options require --group-by leiden"))
 	}
 	if fs.NArg() != 0 || c.workspace == "" || manifestPath == "" {
 		return fail(fmt.Errorf("v2 requires --workspace and --seed-manifest with no positional arguments"))
@@ -467,6 +486,15 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	if err != nil {
 		return fail(err)
+	}
+	if grouped {
+		presentation, groupErr := programcpresentation.Handle(programcpresentation.Request{Input: result.Artifact, Seed: communitySeed, PageRankTopK: pageRankTopK, HubTopK: hubTopK})
+		if groupErr != nil {
+			return fail(fmt.Errorf("grouping computation: %w", groupErr))
+		}
+		if groupErr = programcpresentation.Text(stdout, presentation); groupErr != nil {
+			return fail(fmt.Errorf("presentation publication: %w", groupErr))
+		}
 	}
 	// Private finalization is synchronous but secondary and non-overriding: the
 	// already-emitted public V3 bytes and their status remain authoritative.

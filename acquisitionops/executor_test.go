@@ -17,6 +17,8 @@ import (
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/programcpresentation"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
@@ -130,6 +132,54 @@ func TestCloneGraphForV5DoesNotMutateFrozenV2Graph(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatalf("ASSERT_V5_DEEP_CLONE_PRESERVES_FROZEN_V2_CARRIER_BYTES: before=%s after=%s", before, after)
+	}
+}
+
+func TestUngroupedProductionV5PreservesExactBaselineBytesAndSchema(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "v5-baseline", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
+	run := func(input Input) []byte {
+		raw, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, failure := NewExecutor(&v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}).Execute(context.Background(), operation.Request{Name: SliceV3, Input: raw})
+		if failure != nil {
+			t.Fatalf("ASSERT_UNGROUPED_PRODUCTION_V5_BASELINE_SUCCESS: %v", failure)
+		}
+		return result.Artifact
+	}
+	baseline := run(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
+	production := run(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true})
+	baselineSchema, baselineErr := graphprovenance.ValidateFor(baseline, graphprovenance.Family, "v5")
+	productionSchema, productionErr := graphprovenance.ValidateFor(production, graphprovenance.Family, "v5")
+	if baselineErr != nil || productionErr != nil || baselineSchema != productionSchema {
+		t.Fatalf("ASSERT_UNGROUPED_PRODUCTION_V5_SCHEMA_FOR_SCHEMA_BASELINE: baseline=%q/%v production=%q/%v", baselineSchema, baselineErr, productionSchema, productionErr)
+	}
+	if !bytes.Equal(baseline, production) {
+		t.Fatalf("ASSERT_UNGROUPED_PRODUCTION_V5_BYTE_FOR_BYTE_BASELINE: baseline=%s production=%s", baseline, production)
+	}
+}
+
+func TestGroupedSliceRejectsInvalidModesBeforeRuntime(t *testing.T) {
+	for _, raw := range []string{
+		`{"session_id":"s","generation":1,"seed_manifest":` + validManifest + `,"group_by":"unknown"}`,
+		`{"session_id":"s","generation":1,"seed_manifest":` + validManifest + `,"group_by":"leiden"}`,
+		`{"session_id":"s","generation":1,"seed_manifest":` + validManifest + `,"group_by":"leiden","group_options":{"seed":1,"pagerank_top_k":1,"hub_top_k":1},"output_selector":"graph.json","production_v5":true}`,
+	} {
+		runtime := &forbiddenRuntime{}
+		_, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: json.RawMessage(raw)})
+		if failure == nil || failure.Code != operation.FailureInvalidInput || runtime.calls != 0 {
+			t.Fatalf("ASSERT_GROUPED_SLICE_PREFLIGHT_BEFORE_ACQUISITION: failure=%v calls=%d", failure, runtime.calls)
+		}
 	}
 }
 
@@ -357,6 +407,26 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	if !slices.Contains(runtime.methods, "textDocument/documentSymbol") || !slices.Contains(runtime.methods, "textDocument/prepareCallHierarchy") {
 		t.Fatalf("ASSERT_MANAGED_V5_SHARED_INVOKE_REQUESTS_OBSERVED: %v", runtime.methods)
 	}
+	publicationDir := t.TempDir()
+	publicationRoot, err := publication.OpenRoot(publicationDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer publicationRoot.Close()
+	groupedInput, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, ProductionV5: true, GroupBy: "leiden", GroupOptions: &GroupOptions{Seed: 19, PageRankTopK: 2, HubTopK: 2}, OutputSelector: "graph.json"})
+	groupedRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
+	grouped, groupedFailure := NewExecutor(groupedRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: groupedInput, PublicationRoot: publicationRoot})
+	if groupedFailure != nil || !bytes.Contains(grouped.Artifact, []byte(programcpresentation.Version)) {
+		t.Fatalf("ASSERT_GROUPED_SLICE_PRESENTATION_SUCCESS: failure=%v artifact=%s", groupedFailure, grouped.Artifact)
+	}
+	published, err := os.ReadFile(filepath.Join(publicationDir, "graph.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := graphprovenance.ValidateFor(published, graphprovenance.Family, "v5"); err != nil {
+		t.Fatalf("ASSERT_GROUPED_SLICE_SEPARATE_EXACT_V5_PUBLICATION: %v", err)
+	}
+
 	parityRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
 	parity, parityFailure := NewExecutor(parityRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
 	if parityFailure != nil || !bytes.Equal(got.Artifact, parity.Artifact) {

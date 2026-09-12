@@ -53,7 +53,11 @@ func WithAcquisitionV3(m *Manifest) *Manifest {
 		envelopes = append(envelopes, AcquisitionV2EnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-"+kind+".v1.schema.json"))
 	}
 	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
-		copy.Tools = append(copy.Tools, ToolContract{Name: name, Aliases: []string{}, InputSchemaID: AcquisitionV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{GraphProvenanceV3ArtifactID, GraphProvenanceV5ArtifactID, GraphV5SourceSnapshotArtifactID}, Advertised: true, Availability: "ENABLED"})
+		artifacts := []string{GraphProvenanceV3ArtifactID, GraphProvenanceV5ArtifactID, GraphV5SourceSnapshotArtifactID}
+		if name == "lsp_trace_v3_slice" {
+			artifacts = append(artifacts, ProgramCLeidenArtifactID)
+		}
+		copy.Tools = append(copy.Tools, ToolContract{Name: name, Aliases: []string{}, InputSchemaID: AcquisitionV2InputID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: artifacts, Advertised: true, Availability: "ENABLED"})
 	}
 	return &copy
 }
@@ -158,7 +162,9 @@ func acquisitionV2InputSchema() map[string]any {
 	}
 	expansion := object(map[string]any{"topmost_siblings": map[string]any{"type": "boolean"}})
 	manifest := object(map[string]any{"schema_version": map[string]any{"const": "lsp-trace.seed-manifest.v2"}, "coordinate_convention": map[string]any{"const": "zero-based-session"}, "root": target, "required_targets": map[string]any{"type": "array", "maxItems": 63, "items": target}, "limits": object(limits), "expansion": expansion}, "schema_version", "coordinate_convention", "root", "required_targets")
-	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "output_version": map[string]any{"enum": []string{"lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}}, "production_v5": map[string]any{"type": "boolean"}, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
+	groupOptions := object(map[string]any{"seed": map[string]any{"type": "integer", "minimum": 0}, "pagerank_top_k": map[string]any{"type": "integer", "minimum": 1, "maximum": 10000}, "hub_top_k": map[string]any{"type": "integer", "minimum": 1, "maximum": 10000}}, "seed", "pagerank_top_k", "hub_top_k")
+	out := object(map[string]any{"session_id": text(), "generation": map[string]any{"type": "integer", "minimum": 1}, "seed_manifest": manifest, "output_version": map[string]any{"enum": []string{"lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}}, "production_v5": map[string]any{"type": "boolean"}, "group_by": map[string]any{"enum": []string{"none", "leiden"}}, "group_options": groupOptions, "detail": map[string]any{"enum": []string{"full", "compact"}}, "output_selector": text()}, "session_id", "generation", "seed_manifest")
+	out["allOf"] = []any{map[string]any{"if": map[string]any{"required": []string{"group_by"}, "properties": map[string]any{"group_by": map[string]any{"const": "leiden"}}}, "then": map[string]any{"required": []string{"group_options", "output_selector", "production_v5"}, "properties": map[string]any{"production_v5": map[string]any{"const": true}}}}}
 	out["$id"] = AcquisitionV2InputID
 	out["$schema"] = "https://json-schema.org/draft/2020-12/schema"
 	return out

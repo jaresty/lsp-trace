@@ -273,6 +273,8 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, env)
 	}
 	selector, publicationRequested := params.Arguments["output_selector"].(string)
+	groupBy, _ := params.Arguments["group_by"].(string)
+	groupedSlice := tool.Name == "lsp_trace_v3_slice" && groupBy == "leiden"
 	detail, _ := params.Arguments["detail"].(string)
 	transportDetail := detail
 	if tool.ExecutorFamily == LifecycleExecutorFamily || tool.Name == "lsp_trace_v1_schema_get" {
@@ -299,7 +301,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	if publicationRequested || transportDetail != "" {
 		operationArguments = make(map[string]any, len(params.Arguments))
 		for key, value := range params.Arguments {
-			if key != "output_selector" && (key != "detail" || transportDetail == "") {
+			if (key != "output_selector" || groupedSlice) && (key != "detail" || transportDetail == "") {
 				operationArguments[key] = value
 			}
 		}
@@ -313,6 +315,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	opResult, failure := executor.Execute(ctx, operation.Request{
 		Name: operationName(tool.Name), RequestID: requestID, Input: opInput, PublicationRoot: s.PublicationRoot,
 	})
+	if groupedSlice {
+		publicationRequested = false
+		compact = false
+	}
 	if failure != nil {
 		code, diagnostics := normalizeDomainFailure(failure)
 		if tool.ExecutorFamily == LifecycleExecutorFamily {
@@ -332,7 +338,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				code = "RESOURCE_EXHAUSTED"
 			case "CANCELLED":
 				code = "REQUEST_CANCELLED"
-			case "REQUEST_TIMEOUT", "SESSION_NOT_FOUND", "STALE_GENERATION", "LIFECYCLE_CONFLICT", "SESSION_POISONED", "RESOURCE_EXHAUSTED", "SESSION_CRASHED", "REQUEST_CANCELLED", "UNSUPPORTED_CALL_HIERARCHY", "UNSUPPORTED_POSITION_ENCODING", "INPUT_FAMILY_MISMATCH", "RELATION_CUSTODY_FAILED":
+			case "REQUEST_TIMEOUT", "SESSION_NOT_FOUND", "STALE_GENERATION", "LIFECYCLE_CONFLICT", "SESSION_POISONED", "RESOURCE_EXHAUSTED", "SESSION_CRASHED", "REQUEST_CANCELLED", "UNSUPPORTED_CALL_HIERARCHY", "UNSUPPORTED_POSITION_ENCODING", "INPUT_FAMILY_MISMATCH", "RELATION_CUSTODY_FAILED", "GRAPH_PUBLICATION_FAILED", "GROUPING_VALIDATION_FAILED", "GROUPING_COMPUTATION_FAILED", "PRESENTATION_PUBLICATION_FAILED":
 				// Already in the closed public vocabulary.
 			default:
 				code = "OUTPUT_VALIDATION_FAILED"

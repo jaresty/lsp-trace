@@ -17,7 +17,10 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/programcpresentation"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
@@ -76,12 +79,21 @@ type Manifest struct {
 	Limits               Limits    `json:"limits,omitempty"`
 	Expansion            Expansion `json:"expansion,omitempty"`
 }
+type GroupOptions struct {
+	Seed         uint64 `json:"seed"`
+	PageRankTopK int    `json:"pagerank_top_k"`
+	HubTopK      int    `json:"hub_top_k"`
+}
+
 type Input struct {
-	SessionID     string   `json:"session_id"`
-	Generation    uint64   `json:"generation"`
-	SeedManifest  Manifest `json:"seed_manifest"`
-	OutputVersion string   `json:"output_version,omitempty"`
-	ProductionV5  bool     `json:"production_v5,omitempty"`
+	SessionID      string        `json:"session_id"`
+	Generation     uint64        `json:"generation"`
+	SeedManifest   Manifest      `json:"seed_manifest"`
+	OutputVersion  string        `json:"output_version,omitempty"`
+	ProductionV5   bool          `json:"production_v5,omitempty"`
+	GroupBy        string        `json:"group_by,omitempty"`
+	GroupOptions   *GroupOptions `json:"group_options,omitempty"`
+	OutputSelector string        `json:"output_selector,omitempty"`
 }
 
 // DecodeManifest applies the same closed, bounded decoding used by MCP. It reads
@@ -204,6 +216,17 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	var in Input
 	if err := decode(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
+	}
+	grouped := in.GroupBy != "" && in.GroupBy != "none"
+	if in.GroupBy != "" && in.GroupBy != "none" && in.GroupBy != "leiden" {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("unsupported group_by %q", in.GroupBy))
+	}
+	if grouped {
+		if op.Name != SliceV3 || !in.ProductionV5 || in.GroupOptions == nil || in.GroupOptions.PageRankTopK < 1 || in.GroupOptions.HubTopK < 1 || in.OutputSelector == "" || op.PublicationRoot == nil {
+			return fail(operation.FailureInvalidInput, fmt.Errorf("group_by leiden requires slice_v3, production_v5, output_selector, and mandatory positive seed options pagerank_top_k and hub_top_k"))
+		}
+	} else if in.GroupOptions != nil || in.OutputSelector != "" {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("group_options and internal output_selector require group_by leiden"))
 	}
 	if in.ProductionV5 {
 		if in.OutputVersion != "" && in.OutputVersion != graphprovenance.VersionV5 {
@@ -396,7 +419,25 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 	if custodyReceipt != nil {
 		opResult.CustodyReceipt = custodyReceipt
 	}
-	return opResult, nil
+	if !grouped {
+		return opResult, nil
+	}
+	if _, err := graphprovenance.ValidateFor(raw, graphprovenance.Family, "v5"); err != nil {
+		return fail("GROUPING_VALIDATION_FAILED", err)
+	}
+	published := publication.NewOperation(publication.NewPublisher(), publication.Request{Root: op.PublicationRoot, Selector: in.OutputSelector, Bytes: raw, ArtifactSchemaID: mcpcontract.GraphProvenanceV5ArtifactID}).Publish()
+	if published.Failure != nil {
+		return fail("GRAPH_PUBLICATION_FAILED", published.Failure)
+	}
+	presentation, err := programcpresentation.Handle(programcpresentation.Request{Input: raw, Seed: in.GroupOptions.Seed, PageRankTopK: in.GroupOptions.PageRankTopK, HubTopK: in.GroupOptions.HubTopK})
+	if err != nil {
+		return fail("GROUPING_COMPUTATION_FAILED", err)
+	}
+	encoded, err := programcpresentation.JSON(presentation)
+	if err != nil {
+		return fail("PRESENTATION_PUBLICATION_FAILED", err)
+	}
+	return operation.Result{Artifact: encoded, LogicalDigest: presentation.PartitionSHA256, CustodyReceipt: custodyReceipt}, nil
 }
 
 func cloneSiblingCandidatesForV5(source []graph.SiblingCandidate) ([]graph.SiblingCandidate, error) {

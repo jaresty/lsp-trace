@@ -100,7 +100,7 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_AUTHORITY: %#v", guidance)
 	}
 	families, _ := guidance["output_families_versions"].([]string)
-	if !reflect.DeepEqual(families, []string{"lsp-trace.graph-provenance.v3", "lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1"}) {
+	if !reflect.DeepEqual(families, []string{"lsp-trace.graph-provenance.v3", "lsp-trace.graph-provenance.v5", "lsp-trace.graph-v5-source-snapshot.v1", "lsp-trace.community-presentation.v1"}) {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_OUTPUT_FAMILY_VERSION: %#v", guidance)
 	}
 	if guidance["position_convention"] != "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based" {

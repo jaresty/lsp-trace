@@ -56,6 +56,29 @@ func TestAcquisitionVersionPreservesArgumentValues(t *testing.T) {
 	}
 }
 
+func TestGroupedSliceCLIRejectsBeforeAcquisition(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"unknown", []string{"--group-by", "louvain"}, "unsupported --group-by"},
+		{"ordinary-v3", []string{"--group-by", "leiden", "--acquisition-version", "v3", "--community-seed", "1", "--pagerank-top-k", "2", "--hub-top-k", "2", "--output", "graph.json"}, "requires slice acquisition v3, Graph Provenance V5"},
+		{"missing-top-k", []string{"--group-by", "leiden", "--production-v5", "--output", "graph.json"}, "positive --pagerank-top-k and --hub-top-k"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			version, rest, err := acquisitionVersion(tc.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out, stderr bytes.Buffer
+			if code := runAcquisitionVersion("slice", version, rest, &out, &stderr); code != 1 || !strings.Contains(stderr.String(), tc.want) || out.Len() != 0 {
+				t.Fatalf("ASSERT_GROUPED_SLICE_CLI_PREFLIGHT: code=%d stdout=%q stderr=%q", code, out.String(), stderr.String())
+			}
+		})
+	}
+}
+
 func TestProductionV5ExpandsToCanonicalVersions(t *testing.T) {
 	canonical := []string{"--workspace", "/tmp/work", "--output", "graphs/result.json", "--output-version", graphprovenance.VersionV5}
 	for _, args := range [][]string{
