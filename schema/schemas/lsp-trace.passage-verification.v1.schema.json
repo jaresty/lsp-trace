@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.passage-verification.v1.schema.json",
+  "title": "Retained passage verification result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "results"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.passage-verification.v1"},
+    "results": {"type": "array", "maxItems": 235, "items": {"$ref": "#/$defs/result"}}
+  },
+  "$defs": {
+    "status": {"enum": ["VERIFIED", "NOT_EVALUATED", "INVALID_INPUT", "ARTIFACT_DIGEST_MISMATCH", "ARTIFACT_INVALID", "UNSUPPORTED_ARTIFACT_FAMILY", "SELECTOR_CUSTODY_NOT_ESTABLISHED", "INSPECTION_ABSENT", "SEED_ABSENT", "SEED_AMBIGUOUS", "NODE_ABSENT", "NODE_AMBIGUOUS", "NODE_NOT_IN_SEED", "PATH_MISMATCH", "RANGE_MISMATCH", "INVALID_COORDINATES", "SOURCE_RECEIPT_UNAVAILABLE", "SOURCE_DIGEST_MISMATCH", "SOURCE_BYTES_UNAVAILABLE", "PASSAGE_DIGEST_MISMATCH", "LIMIT_EXCEEDED"]},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_admission", "artifact_digest", "selector_custody", "inspection", "seed", "membership", "node_identity", "path", "range", "source_receipt", "source_digest", "passage_bytes", "passage_digest", "body_completeness"],
+      "properties": {
+        "artifact_admission": {"$ref": "#/$defs/status"}, "artifact_digest": {"$ref": "#/$defs/status"}, "selector_custody": {"$ref": "#/$defs/status"}, "inspection": {"$ref": "#/$defs/status"}, "seed": {"$ref": "#/$defs/status"}, "membership": {"$ref": "#/$defs/status"}, "node_identity": {"$ref": "#/$defs/status"}, "path": {"$ref": "#/$defs/status"}, "range": {"$ref": "#/$defs/status"}, "source_receipt": {"$ref": "#/$defs/status"}, "source_digest": {"$ref": "#/$defs/status"}, "passage_bytes": {"$ref": "#/$defs/status"}, "passage_digest": {"$ref": "#/$defs/status"}, "body_completeness": {"$ref": "#/$defs/status"}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["index", "overall", "reacquisition_needed", "checks"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0}, "overall": {"$ref": "#/$defs/status"}, "reacquisition_needed": {"type": "boolean"}, "checks": {"$ref": "#/$defs/checks"}, "diagnostic": {"type": "string", "enum": ["REQUEST_INVALID", "ARTIFACT_DIGEST", "ARTIFACT_ADMISSION", "GRAPH_DECODE", "INSPECTION_ID", "SEED_LABEL", "NODE_ID", "SEED_MEMBERSHIP", "URI", "RANGE", "NO_RETAINED_SOURCE", "SOURCE_ADMISSION", "NODE_SOURCE_BINDING", "SOURCE_NOT_RETAINED", "HYDRATION_ADMISSION", "PASSAGE_COORDINATES", "PASSAGE_NOT_RETAINED", "PASSAGE_DIGEST", "BATCH_RECORD_LIMIT", "BATCH_BYTE_LIMIT"]}
+      }
+    }
+  }
+}

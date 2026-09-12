@@ -123,12 +123,13 @@ const usageText = `usage:
   lsp-trace bounded-retained-metrics-v2 --operation METRICS --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
   lsp-trace bounded-retained-ranking-v2 --operation RANKING --filter RELATION --max-work N [--output SELECTOR] (PATH|- | --publication-root ROOT --publication-selector SELECTOR --input-schema-id ID --input-digest sha256:HEX --input-byte-length N)
   lsp-trace verify PATH
+  lsp-trace verify passage --artifact-digest sha256:HEX --inspection-id ID --seed LABEL --node ID --uri URI --range-mode EXACT|INTERSECTS --position-encoding utf-8|utf-16|utf-32 --start-line N --start-character N --end-line N --end-character N --passage-digest sha256:HEX [immutable ingress flags] PATH_OR_SELECTOR
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-
   lsp-trace provider conformance --executable ABSOLUTE_PATH --input PATH|- [--arg VALUE...]
-  lsp-trace schema get --family graph|inspect|filter --version VERSION
+  lsp-trace schema get --family graph|inspect|filter|passage-verification --version VERSION
   lsp-trace schema get --schema v1|v2|v3
-  lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-
+  lsp-trace validate --family graph|inspect|filter|passage-verification --version VERSION PATH|-
   lsp-trace validate [--schema v1|v2|v3] PATH|-
   lsp-trace validate-private-request-diagnostics PRIVATE_PATH [PUBLIC_V3_PATH]
   lsp-trace skill get
@@ -234,6 +235,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "render" {
 		return runRender(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 1 && args[0] == "verify" && args[1] == "passage" {
+		return runVerifyPassage(args[2:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "verify" {
 		return runVerify(args[1:], os.Stdout, os.Stderr)

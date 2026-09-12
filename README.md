@@ -92,6 +92,22 @@ Selector inspection verifies complete-generation exact-byte custody before struc
 
 Inspection is deterministic and read-only. Global boundaries and diagnostics remain global; reached-node diagnostic indexes are correlations rather than per-seed custody or causation. Record and reference counts do not establish feature coverage, evidence sufficiency, runtime execution, domain meaning, or acceptance. Standalone `verify` remains an explicit selector custody audit.
 
+### Verify an exact retained passage
+
+`lsp-trace verify passage` applies the offline retained-passage verification core to one exact node range and expected passage digest. It emits `lsp-trace.passage-verification.v1` JSON and validates that JSON against the committed output schema before writing it. The result keeps artifact admission/digest, selector custody, inspection, seed, membership, node, URI, range, source receipt/digest, passage bytes/digest, and body completeness separate; `body_completeness` is always `NOT_EVALUATED`. It does not acquire source, start an LSP server, read Git, use the network, reacquire missing bytes, authenticate evidence, publish output, or establish feature, runtime, domain, acceptance, or source-authority claims.
+
+A direct artifact must be a nonsymlink regular file no larger than 192 MiB and establishes no selector custody. Large immutable ingress reuses the hydration CLI's exactly-one-mode contract: a verified publication selector (`--publication-root`), a canonical sha256 content ID (`--artifact-store`), or an explicitly enabled root-confined private selector (`--private-root --enable-private-paths`), each with exact schema, digest, generation, and byte-length bindings. Only verified publication-selector ingress can produce `selector_custody: VERIFIED`; content-addressed and private-root ingress retain their narrower custody evidence without upgrading that check.
+
+```sh
+lsp-trace verify passage \
+  --artifact-digest sha256:HEX --inspection-id ID --seed LABEL --node ID --uri URI \
+  --range-mode EXACT --position-encoding utf-16 \
+  --start-line 0 --start-character 0 --end-line 0 --end-character 4 \
+  --passage-digest sha256:HEX artifact.json
+```
+
+Graph v3 can verify attribution but reports `SOURCE_BYTES_UNAVAILABLE`. Graph Provenance V5 and validated `lsp-trace.graph-v5-source-snapshot.v1` carriers can verify retained passage bytes when their existing source receipts and bindings admit them.
+
 ## Compare retained seed evidence
 
 After producing an `ALL_SEEDS` inspection document, compare exactly two stored seed labels without starting a language server or changing the input:

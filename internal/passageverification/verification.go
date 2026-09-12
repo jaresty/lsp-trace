@@ -305,6 +305,16 @@ func uncheckedGraph(raw []byte) ([]byte, bool) {
 	return nil, false
 }
 
+// ValidateArtifact applies the core's exact artifact-family admission without
+// performing passage selection or granting custody or authority.
+func ValidateArtifact(raw []byte) error {
+	_, _, status := admit(raw)
+	if status != Verified {
+		return fmt.Errorf("artifact admission: %s", status)
+	}
+	return nil
+}
+
 func admit(raw []byte) ([]byte, bool, Status) {
 	var h struct {
 		SchemaVersion string `json:"schema_version"`

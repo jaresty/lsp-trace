@@ -319,6 +319,12 @@ Both modes emit `lsp-trace.inspect.v1` JSON and are read-only. Single-seed outpu
 
 Direct artifacts pass Draft 2020-12 structural and v3 semantic validation but gain no custody claim. Selectors additionally require a complete generation and valid exact-byte custody receipt. Aggregate native records are copied once; per-seed collections reference them. `TOOL_DERIVED_NODE_CORRELATION` identifies reached-node diagnostic correlation only, never exact per-seed custody or causation. Inspection adds no feature or consumer semantics and does not replace graph validation or selector custody verification.
 
+### Verify an exact retained passage
+
+Use `lsp-trace verify passage` with exact artifact digest, inspection ID, seed label, native node ID, URI, range, position encoding, and passage digest. Direct input is one nonsymlink regular file bounded at 192 MiB. Alternatively choose exactly one complete immutable ingress mode already used by hydrated inspection: verified publication selector, canonical sha256 artifact store, or explicitly enabled root-confined private selector, with exact schema/generation/byte-length bindings.
+
+The command emits schema-validated `lsp-trace.passage-verification.v1` JSON. Only verified publication-selector ingress may establish `selector_custody`; other modes do not gain that claim. Graph v3 is attribution-only, missing retained bytes fail as `SOURCE_BYTES_UNAVAILABLE`, and `body_completeness` is always `NOT_EVALUATED`. The command is offline and read-only: it performs no Git, LSP, network, live-source, reacquisition, publication, authentication, feature inference, or acceptance decision.
+
 ### Compare two retained seed-evidence sets
 
 First retain an aggregate inspection, then compare exactly two distinct stored labels:

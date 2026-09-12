@@ -12,7 +12,7 @@ import (
 	traceschema "lsp-trace/internal/schema"
 )
 
-const schemaGetUsage = "usage: lsp-trace schema get (--family graph|inspect|filter --version VERSION | --schema v1|v2|v3)"
+const schemaGetUsage = "usage: lsp-trace schema get (--family graph|inspect|filter|passage-verification --version VERSION | --schema v1|v2|v3)"
 
 func runSchema(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 || args[0] != "get" {
@@ -52,7 +52,7 @@ func runSchema(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-const validateUsage = "usage: lsp-trace validate [--family graph|inspect|filter --version VERSION | --schema v1|v2|v3] PATH|-"
+const validateUsage = "usage: lsp-trace validate [--family graph|inspect|filter|passage-verification --version VERSION | --schema v1|v2|v3] PATH|-"
 
 func runValidate(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("validate", flag.ContinueOnError)

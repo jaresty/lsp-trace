@@ -44,6 +44,12 @@ Single-seed state, reached IDs, same-label `seed_memberships`, and corresponding
 
 Aggregate accounting is recomputed from output arrays before emission. Requested seeds partition into successful and failed seeds; successful seeds partition into with-membership and without-membership seeds; record counters equal copied collection lengths; reference counters equal per-seed occurrence totals and may exceed global counts. These counts do not establish feature coverage, evidence sufficiency, confidence, or acceptance. Inspection is deterministic and read-only, starts no server, changes no input, emits no replacement graph or receipt, and introduces no feature or consumer semantics.
 
+## Retained passage verification operational contract
+
+`verify passage` is a CLI-only adapter over the qualified offline core. It admits exact bytes from one bounded regular file or one existing immutable hydration ingress mode, then evaluates artifact integrity, graph attribution, retained-source binding, coordinate extraction, and expected passage digest without source acquisition. Direct, content-addressed, and private-root inputs do not establish selector custody; only a verified publication selector bound to the same artifact digest and inspection ID can do so. Graph v3 remains attribution-only and returns `SOURCE_BYTES_UNAVAILABLE`; body completeness remains `NOT_EVALUATED` for every result.
+
+The closed `lsp-trace.passage-verification.v1` output schema preserves every independent check and fixed non-content diagnostic. The command validates actual output before emission. Failure messages do not include source text, artifact fragments, expected passage digests, or expected URIs. Verification does not authenticate source or execution, grant graph/receipt/domain/feature/runtime/acceptance authority, reacquire bytes, access Git or a language server, use the network, publish an artifact, or add an MCP operation.
+
 ## Pairwise seed-evidence filter operational contract
 
 `filter` accepts exactly one path to a validated `lsp-trace.inspect.v1` `ALL_SEEDS` document and exactly two ordered, distinct, known `--compare-seeds` labels. CLI mode validation precedes input reading. Admission then discriminates the inspection family, applies Draft 2020-12 structural validation, recomputes all-seed semantic, accounting, uniqueness, and reference invariants, derives the pairwise projection, validates its semantics and accounting, validates it against the closed `lsp-trace.filter.v1` schema, and only then emits JSON. Any failure exits without projection JSON.

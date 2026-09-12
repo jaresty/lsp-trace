@@ -119,8 +119,8 @@ func TestTopLevelUsageAdvertisesFilterAndSchemaFamilies(t *testing.T) {
 	}
 	for _, want := range []string{
 		"lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]",
-		"lsp-trace schema get --family graph|inspect|filter --version VERSION",
-		"lsp-trace validate --family graph|inspect|filter --version VERSION PATH|-",
+		"lsp-trace schema get --family graph|inspect|filter|passage-verification --version VERSION",
+		"lsp-trace validate --family graph|inspect|filter|passage-verification --version VERSION PATH|-",
 		"lsp-trace execute --request-id ID --input PATH|-",
 	} {
 		if !strings.Contains(stderr, want) {

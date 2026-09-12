@@ -169,6 +169,10 @@ func runInspectHydrated(input string, o *hydratedOptions, jsonOutput bool, stdou
 }
 
 func admitHydratedCLI(input string, o *hydratedOptions, limit int64) ([]byte, error) {
+	return admitHydratedCLIValidated(input, o, limit, operation.ValidateHydratedIngress)
+}
+
+func admitHydratedCLIValidated(input string, o *hydratedOptions, limit int64, validate artifactingress.Validator) ([]byte, error) {
 	modes := 0
 	for _, active := range []bool{o.publicationRoot != "", o.artifactStore != "", o.privateRoot != "" || o.enablePrivatePaths} {
 		if active {
@@ -181,7 +185,7 @@ func admitHydratedCLI(input string, o *hydratedOptions, limit int64) ([]byte, er
 	if modes != 1 || o.artifactSchemaID == "" || o.artifactDigest == "" || o.artifactGeneration == "" || o.artifactByteLength == 0 {
 		return nil, errors.New("exactly one complete hydrated ingress mode required")
 	}
-	cfg := artifactingress.Config{MaxBytes: limit, Validate: operation.ValidateHydratedIngress}
+	cfg := artifactingress.Config{MaxBytes: limit, Validate: validate}
 	expected := artifactingress.Expected{SchemaID: o.artifactSchemaID, ByteLength: o.artifactByteLength, Generation: o.artifactGeneration}
 	if o.publicationRoot != "" {
 		root, err := publication.OpenRoot(o.publicationRoot)
