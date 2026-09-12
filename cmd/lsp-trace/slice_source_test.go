@@ -121,7 +121,11 @@ func TestDiscoveryCensusContinuesAfterDocumentSupplyFailure(t *testing.T) {
 		},
 		func(source resolvedSliceSource) slicer.Discovery {
 			visited = append(visited, source.path)
-			return slicer.Discovery{PreparationAccounting: slicer.PreparationAccounting{DocumentSymbols: 1, Attempted: 1, Prepared: 1}, PreparationCensusComplete: true}
+			return slicer.Discovery{
+				PreparationAccounting:     slicer.PreparationAccounting{DocumentSymbols: 1, Attempted: 1, Prepared: 1},
+				PreparationDispositions:   []slicer.PreparationDisposition{{Status: "prepared"}},
+				PreparationCensusComplete: true,
+			}
 		})
 	if err == nil || len(discoveries) != 1 || !reflect.DeepEqual(visited, []string{"b.go"}) {
 		t.Fatalf("ASSERT_DISCOVERY_CONTINUES_AFTER_DOCUMENT_SUPPLY_FAILURE: visited=%q discoveries=%d err=%v", visited, len(discoveries), err)
@@ -151,6 +155,45 @@ func TestDiscoveryAccountingRejectsMismatchedDenominators(t *testing.T) {
 	bad := discoveryAccounting{FilesEnumerated: 3, FilesSelected: 2, FilesExcluded: 1, FilesProcessed: 1}
 	if err := bad.ValidateClosedCensus(); err == nil {
 		t.Fatal("ASSERT_DISCOVERY_DENOMINATORS_RECONCILE_EXACTLY: mismatch accepted")
+	}
+}
+
+func TestDiscoverySymbolCensusRejectsEveryUnreconciledReturnedSymbol(t *testing.T) {
+	valid := slicer.Discovery{
+		PreparationAccounting:   slicer.PreparationAccounting{DocumentSymbols: 3, Attempted: 3, Prepared: 1, NotPreparable: 1, Failed: 1},
+		PreparationDispositions: []slicer.PreparationDisposition{{Status: "prepared"}, {Status: "not_preparable"}, {Status: "failed"}},
+	}
+	if err := validateDiscoverySymbolCensus(valid); err != nil {
+		t.Fatalf("ASSERT_DISCOVERY_EVERY_RETURNED_SYMBOL_RECONCILES: valid census rejected: %v", err)
+	}
+	cases := map[string]slicer.Discovery{
+		"attempted":       {PreparationAccounting: slicer.PreparationAccounting{DocumentSymbols: 3, Attempted: 2, Prepared: 1, NotPreparable: 1}, PreparationDispositions: valid.PreparationDispositions[:2]},
+		"missing":         {PreparationAccounting: valid.PreparationAccounting, PreparationDispositions: valid.PreparationDispositions[:2]},
+		"unknown":         {PreparationAccounting: valid.PreparationAccounting, PreparationDispositions: []slicer.PreparationDisposition{{Status: "prepared"}, {Status: "not_preparable"}, {Status: "incomplete"}}},
+		"reported-counts": {PreparationAccounting: slicer.PreparationAccounting{DocumentSymbols: 3, Attempted: 3, Prepared: 2, NotPreparable: 1}, PreparationDispositions: valid.PreparationDispositions},
+	}
+	for name, discovery := range cases {
+		if err := validateDiscoverySymbolCensus(discovery); err == nil {
+			t.Errorf("ASSERT_DISCOVERY_RETURNED_SYMBOL_GAP_FAILS_CLOSED[%s]: malformed census accepted", name)
+		}
+	}
+}
+
+func TestDiscoveryCensusAccountsMalformedReturnedSymbolsAsIncomplete(t *testing.T) {
+	sources := []resolvedSliceSource{{path: "a.go", uri: "file:///w/a.go"}}
+	_, got, err := censusSelectedDiscoverySources(sources, discoveryAccounting{FilesEnumerated: 1, FilesSelected: 1},
+		func(resolvedSliceSource) error { return nil },
+		func(resolvedSliceSource) slicer.Discovery {
+			return slicer.Discovery{
+				PreparationAccounting:   slicer.PreparationAccounting{DocumentSymbols: 2, Attempted: 1, Prepared: 1},
+				PreparationDispositions: []slicer.PreparationDisposition{{Status: "prepared"}},
+			}
+		})
+	if err == nil || got.SymbolsEnumerated != 2 || got.SymbolsSelected != 2 || got.SymbolsPrepared != 1 || got.SymbolsIncomplete != 1 || got.FilesIncomplete != 1 {
+		t.Fatalf("ASSERT_DISCOVERY_MALFORMED_SYMBOL_CENSUS_EXACT: accounting=%#v err=%v", got, err)
+	}
+	if reconcileErr := got.ValidateClosedCensus(); reconcileErr != nil {
+		t.Fatalf("ASSERT_DISCOVERY_MALFORMED_SYMBOL_DENOMINATOR_CLOSED: %v accounting=%#v", reconcileErr, got)
 	}
 }
 

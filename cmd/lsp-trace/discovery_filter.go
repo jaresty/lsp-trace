@@ -156,6 +156,30 @@ func resolveSliceSourcesWithAccounting(cfg sliceConfig) (string, string, []resol
 	return workspaceURI, scopeURI, selected, accounting, nil
 }
 
+func validateDiscoverySymbolCensus(discovery slicer.Discovery) error {
+	counts := discovery.PreparationAccounting
+	if counts.DocumentSymbols != counts.Attempted || counts.Attempted != len(discovery.PreparationDispositions) {
+		return fmt.Errorf("returned symbol denominator does not reconcile")
+	}
+	prepared, unsupported, failed := 0, 0, 0
+	for _, disposition := range discovery.PreparationDispositions {
+		switch disposition.Status {
+		case "prepared":
+			prepared++
+		case "not_preparable":
+			unsupported++
+		case "failed":
+			failed++
+		default:
+			return fmt.Errorf("returned symbol disposition does not reconcile")
+		}
+	}
+	if counts.Prepared != prepared || counts.NotPreparable != unsupported || counts.Failed != failed || counts.Attempted != prepared+unsupported+failed {
+		return fmt.Errorf("returned symbol dispositions do not reconcile")
+	}
+	return nil
+}
+
 func censusSelectedDiscoverySources(sources []resolvedSliceSource, accounting discoveryAccounting, prepare func(resolvedSliceSource) error, discover func(resolvedSliceSource) slicer.Discovery) (map[string]slicer.Discovery, discoveryAccounting, error) {
 	discoveries := make(map[string]slicer.Discovery, len(sources))
 	failed := false
@@ -166,11 +190,31 @@ func censusSelectedDiscoverySources(sources []resolvedSliceSource, accounting di
 			continue
 		}
 		discovery := discover(source)
-		accounting.SymbolsEnumerated += discovery.PreparationAccounting.DocumentSymbols
-		accounting.SymbolsSelected += discovery.PreparationAccounting.Attempted
-		accounting.SymbolsUnsupported += discovery.PreparationAccounting.NotPreparable
-		accounting.SymbolsPreparationFailed += discovery.PreparationAccounting.Failed
-		accounting.SymbolsPrepared += discovery.PreparationAccounting.Prepared
+		counts := discovery.PreparationAccounting
+		accounting.SymbolsEnumerated += counts.DocumentSymbols
+		accounting.SymbolsSelected += counts.DocumentSymbols // every returned symbol is selected for preparation
+		dispositioned := 0
+		for _, disposition := range discovery.PreparationDispositions {
+			switch disposition.Status {
+			case "prepared":
+				accounting.SymbolsPrepared++
+				dispositioned++
+			case "not_preparable":
+				accounting.SymbolsUnsupported++
+				dispositioned++
+			case "failed":
+				accounting.SymbolsPreparationFailed++
+				dispositioned++
+			}
+		}
+		if dispositioned < counts.DocumentSymbols {
+			accounting.SymbolsIncomplete += counts.DocumentSymbols - dispositioned
+		}
+		if err := validateDiscoverySymbolCensus(discovery); err != nil {
+			accounting.FilesIncomplete++
+			failed = true
+			continue
+		}
 		discoveries[source.uri] = discovery
 		fileDisposition := "processed"
 		for _, diagnostic := range discovery.Diagnostics {
