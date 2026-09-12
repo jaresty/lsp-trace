@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.seeds.v2.schema.json",
+  "title": "lsp-trace typed seed file v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "coordinate_convention", "seeds"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.seeds.v2"},
+    "coordinate_convention": {"const": "one-based"},
+    "defaults": {"$ref": "#/$defs/depths"},
+    "seeds": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "#/$defs/seed"}}
+  },
+  "$defs": {
+    "label": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$"},
+    "path": {"type": "string", "minLength": 1},
+    "depth": {"type": "integer", "minimum": 0, "maximum": 64},
+    "depths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"down_depth": {"$ref": "#/$defs/depth"}, "up_depth": {"$ref": "#/$defs/depth"}}
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label", "path", "line", "column"],
+      "properties": {
+        "type": {"const": "position"}, "label": {"$ref": "#/$defs/label"}, "path": {"$ref": "#/$defs/path"},
+        "line": {"type": "integer", "minimum": 1, "maximum": 4294967296},
+        "column": {"type": "integer", "minimum": 1, "maximum": 4294967296}
+      }
+    },
+    "symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label", "path", "symbol"],
+      "properties": {
+        "type": {"const": "symbol"}, "label": {"$ref": "#/$defs/label"}, "path": {"$ref": "#/$defs/path"},
+        "symbol": {"type": "string", "minLength": 1, "pattern": "^\\S(?:.*\\S)?$"}
+      }
+    },
+    "target": {"oneOf": [{"$ref": "#/$defs/position"}, {"$ref": "#/$defs/symbol"}]},
+    "slice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "label", "target"],
+      "properties": {
+        "type": {"const": "slice"}, "label": {"$ref": "#/$defs/label"}, "target": {"$ref": "#/$defs/target"},
+        "down_depth": {"$ref": "#/$defs/depth"}, "up_depth": {"$ref": "#/$defs/depth"}
+      }
+    },
+    "seed": {"oneOf": [{"$ref": "#/$defs/position"}, {"$ref": "#/$defs/symbol"}, {"$ref": "#/$defs/slice"}]}
+  }
+}
