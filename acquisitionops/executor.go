@@ -407,7 +407,11 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			if unmarshalErr := json.Unmarshal(carrierRaw, &carrier); unmarshalErr != nil {
 				return fail("OUTPUT_VALIDATION_FAILED", unmarshalErr)
 			}
-			raw, err = graphprovenance.CaptureV5(native, id, generation, query, &carrier)
+			if len(op.RetainedSeedSpec) > 0 {
+				raw, err = graphprovenance.CaptureV5WithSeedSpec(native, id, generation, query, op.RetainedSeedSpec, &carrier)
+			} else {
+				raw, err = graphprovenance.CaptureV5(native, id, generation, query, &carrier)
+			}
 			if err == nil && wantsSnapshot {
 				raw, err = v5sourcesnapshot.Build(raw, workspace, metadata.PositionEncoding)
 			}

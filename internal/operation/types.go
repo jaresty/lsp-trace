@@ -39,10 +39,11 @@ const (
 // Request carries structurally validated operation input. Input remains raw so
 // the schema-contract owner, rather than this package, controls its definition.
 type Request struct {
-	Name            Name
-	RequestID       string
-	Input           json.RawMessage
-	PublicationRoot *publication.Root
+	Name             Name
+	RequestID        string
+	Input            json.RawMessage
+	PublicationRoot  *publication.Root
+	RetainedSeedSpec []byte // internal validated canonical lsp-trace.seeds.v2 bytes; never populated directly by MCP JSON
 }
 
 // Result is the transport-independent operation result. Artifact contains the

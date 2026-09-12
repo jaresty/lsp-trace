@@ -518,7 +518,8 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
 	runtime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
 	input, _ := json.Marshal(Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
-	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	seedSpec := []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"root","path":"a.go","line":1,"column":1}]}`)
+	got, failure := NewExecutor(runtime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input, RetainedSeedSpec: seedSpec})
 	if failure != nil {
 		t.Fatalf("ASSERT_MANAGED_V5_SUCCESS: %v", failure)
 	}
@@ -528,6 +529,9 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	var envelope graphprovenance.EvidenceV5
 	if err := json.Unmarshal(got.Artifact, &envelope); err != nil {
 		t.Fatal(err)
+	}
+	if envelope.SeedSpec == nil || !bytes.Equal(envelope.SeedSpec.Bytes, seedSpec) {
+		t.Fatalf("ASSERT_MANAGED_V5_RETAINS_EXACT_GENERATED_SEED_SPEC: %#v", envelope.SeedSpec)
 	}
 	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
 	if err != nil {
@@ -565,7 +569,7 @@ func TestManagedV5ExplicitOutputAndNoDowngrade(t *testing.T) {
 	}
 
 	parityRuntime := &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}
-	parity, parityFailure := NewExecutor(parityRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input})
+	parity, parityFailure := NewExecutor(parityRuntime).Execute(context.Background(), operation.Request{Name: SliceV3, Input: input, RetainedSeedSpec: seedSpec})
 	if parityFailure != nil || !bytes.Equal(got.Artifact, parity.Artifact) {
 		t.Fatalf("ASSERT_MANAGED_V5_EXACT_ROUTE_BYTES_PARITY: failure=%v equal=%v", parityFailure, bytes.Equal(got.Artifact, parity.Artifact))
 	}
