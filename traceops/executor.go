@@ -133,14 +133,19 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	ctx, cancel := context.WithTimeout(parent, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 	positions := append([]Position(nil), in.Positions...)
-	var prepared *sessionruntime.DocumentResult
+	var preparedCapability sessionruntime.PreparedDocumentCapability
+	var preparedBinding sessionruntime.PreparedOperationBinding
+	prepared := false
 	if d, ok := e.runtime.(documentRuntime); ok {
-		doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true})
+		doc, capability, prepareErr := sessionruntime.PrepareDocumentForOperation(ctx, d, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true}, op.RequestID)
 		if doc.Failure != "" {
 			return fail(string(doc.Failure), nil)
 		}
+		if prepareErr != nil {
+			return fail("DOCUMENT_SUPPLY_UNAVAILABLE", prepareErr)
+		}
 		in.LanguageID = doc.LanguageID
-		prepared = &doc
+		preparedCapability, preparedBinding, prepared = capability, capability.Binding(), true
 	}
 	if in.Symbol != "" {
 		p, f := resolveSymbol(ctx, e.runtime, resolvedID, generation, in.URI, in.Symbol, requestTimeout)
@@ -164,57 +169,57 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}
-	seedSpec, err := explicitSeedSpec(e.runtime, resolvedID, generation, in, positions)
+	seedSpec, workspace, err := explicitSeedSpec(e.runtime, resolvedID, generation, in, positions)
 	if err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore, RetainedSeedSpec: seedSpec}
-	if prepared != nil {
+	admission, err := acquisitionops.NewExplicitTraceAdmission(seedSpec, workspace, op.RequestID, request)
+	if err != nil {
+		return fail(operation.FailureInvalidInput, err)
+	}
+	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore}
+	if prepared {
 		if acquisition, ok := e.acquisition.(interface {
-			ExecuteWithPreparedDocument(context.Context, operation.Request, sessionruntime.DocumentResult) (operation.Result, *operation.Failure)
+			ExecuteExplicitTrace(context.Context, operation.Request, acquisitionops.ExplicitTraceAdmission, sessionruntime.PreparedDocumentCapability, sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure)
 		}); ok {
-			return acquisition.ExecuteWithPreparedDocument(ctx, requestOp, *prepared)
+			return acquisition.ExecuteExplicitTrace(ctx, requestOp, admission, preparedCapability, preparedBinding)
 		}
 	}
-	return e.acquisition.Execute(ctx, requestOp)
+	return fail(operation.FailureInternal, fmt.Errorf("explicit trace acquisition unavailable"))
 }
 
-func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, positions []Position) ([]byte, error) {
+func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, positions []Position) ([]byte, string, error) {
 	workspace := ""
 	for _, record := range runtime.Records() {
 		if record.SessionID == id && record.Generation == generation {
 			if workspace != "" {
-				return nil, fmt.Errorf("ambiguous host workspace")
+				return nil, "", fmt.Errorf("ambiguous host workspace")
 			}
 			workspace = record.Profile.Workspace().String()
 		}
 	}
 	if workspace == "" {
-		return nil, fmt.Errorf("host workspace unavailable")
+		return nil, "", fmt.Errorf("host workspace unavailable")
 	}
 	u, err := url.Parse(in.URI)
 	if err != nil || u.Scheme != "file" || u.Host != "" {
-		return nil, fmt.Errorf("canonical file URI required")
+		return nil, "", fmt.Errorf("canonical file URI required")
 	}
 	rel, err := filepath.Rel(workspace, filepath.FromSlash(u.Path))
 	if err != nil || rel == ".." || filepath.IsAbs(rel) {
-		return nil, fmt.Errorf("trace URI is outside managed workspace")
+		return nil, "", fmt.Errorf("trace URI is outside managed workspace")
 	}
 	path := filepath.ToSlash(rel)
-	file := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention}
-	if in.Symbol != "" {
-		file.Seeds = []seedformat.Seed{{Type: seedformat.SymbolType, Symbol: &seedformat.Symbol{Label: "root", Path: path, Symbol: in.Symbol}}}
-	} else {
-		file.Seeds = make([]seedformat.Seed, len(positions))
-		for i, p := range positions {
-			label := fmt.Sprintf("trace-%03d", i)
-			if i == 0 {
-				label = "root"
-			}
-			file.Seeds[i] = seedformat.Seed{Type: seedformat.PositionType, Position: &seedformat.Position{Label: label, Path: path, Line: uint64(p.Line) + 1, Column: uint64(p.Character) + 1}}
+	file := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: make([]seedformat.Seed, len(positions))}
+	for i, p := range positions {
+		label := fmt.Sprintf("trace-%03d", i)
+		if i == 0 {
+			label = "root"
 		}
+		file.Seeds[i] = seedformat.Seed{Type: seedformat.PositionType, Position: &seedformat.Position{Label: label, Path: path, Line: uint64(p.Line) + 1, Column: uint64(p.Character) + 1}}
 	}
-	return seedformat.EncodeCanonical(file, workspace)
+	encoded, err := seedformat.EncodeCanonical(file, workspace)
+	return encoded, workspace, err
 }
 
 func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation uint64, uri, name string, requestTimeout int) (Position, *operation.Failure) {

@@ -64,6 +64,10 @@ func (f *fakeAcquirer) Execute(_ context.Context, r operation.Request) (operatio
 	f.requests = append(f.requests, r)
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)}, nil
 }
+func (f *fakeAcquirer) ExecuteExplicitTrace(_ context.Context, r operation.Request, _ acquisitionops.ExplicitTraceAdmission, _ sessionruntime.PreparedDocumentCapability, _ sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure) {
+	f.requests = append(f.requests, r)
+	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)}, nil
+}
 
 type supplyAcquirer struct {
 	runtime  *fakeRuntime
@@ -79,10 +83,11 @@ func (a *supplyAcquirer) Execute(_ context.Context, _ operation.Request) (operat
 	}
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","source_supply":"LSP_SUPPLIED"}`)}, nil
 }
-func (a *supplyAcquirer) ExecuteWithPreparedDocument(_ context.Context, _ operation.Request, doc sessionruntime.DocumentResult) (operation.Result, *operation.Failure) {
+func (a *supplyAcquirer) ExecuteExplicitTrace(_ context.Context, _ operation.Request, _ acquisitionops.ExplicitTraceAdmission, capability sessionruntime.PreparedDocumentCapability, binding sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure) {
 	a.symbol = true
-	if doc.Supply == nil {
-		return operation.Result{}, &operation.Failure{Code: "MISSING_SOURCE_SUPPLY"}
+	doc, err := sessionruntime.ConsumePreparedDocumentCapability(capability, binding)
+	if err != nil || doc.Supply == nil {
+		return operation.Result{}, &operation.Failure{Code: "MISSING_SOURCE_SUPPLY", Err: err}
 	}
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","source_supply":"LSP_SUPPLIED"}`)}, nil
 }
@@ -169,8 +174,8 @@ func TestMultiPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *te
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
 	e := &Executor{runtime: r, acquisition: a}
-	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","positions":[{"line":1,"character":2},{"line":3,"character":4}]}`), RetainedSeedSpec: []byte("forged")})
-	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 || !strings.Contains(string(a.requests[0].RetainedSeedSpec), `"schema_version":"lsp-trace.seeds.v2"`) || strings.Contains(string(a.requests[0].RetainedSeedSpec), "discover") {
+	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","positions":[{"line":1,"character":2},{"line":3,"character":4}]}`)})
+	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 {
 		t.Fatalf("ASSERT_TRACE_MULTI_POSITION_ONE_NATIVE_EXPLICIT_CUSTODY: failure=%v requests=%+v", f, a.requests)
 	}
 	var in acquisitionops.Input

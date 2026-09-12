@@ -3,6 +3,7 @@ package graphprovenance
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -296,7 +297,7 @@ func validateReceiptV2(workspace string, r Receipt) error {
 
 func suppliesV2(r acquisition.Result, workspace string) ([]SupplyReceiptV2, error) {
 	out := []SupplyReceiptV2{}
-	versions := map[string]bool{}
+	seenSupplies := map[string]bool{}
 	// Runtime keeps one effective language per URI in this exact session
 	// generation. This links only available language observations, not bytes.
 	languages := map[string]string{}
@@ -351,11 +352,12 @@ func suppliesV2(r acquisition.Result, workspace string) ([]SupplyReceiptV2, erro
 			if status != "" || s.URI != supply.URI || s.Classification != Supplied || s.SessionID != ctx.SessionID || s.Generation != ctx.Generation || len(s.Content) > MaxFileBytes || !utf8.Valid(s.Content) {
 				return nil, errors.New("V2 supply context/scope mismatch")
 			}
-			key := fmt.Sprintf("%s\x00%d", s.URI, s.DocumentVersion)
-			if versions[key] {
-				return nil, errors.New("V2 duplicate supplied document version")
+			contentDigest := sha256.Sum256(s.Content)
+			key := fmt.Sprintf("%s\x00%d\x00%s\x00%d\x00%x", s.SessionID, s.Generation, s.URI, s.DocumentVersion, contentDigest)
+			if seenSupplies[key] {
+				continue
 			}
-			versions[key] = true
+			seenSupplies[key] = true
 			rr := receiptV2(s.URI, name, Supplied, "READABLE", s.Content, &SupplyMetadata{SessionID: s.SessionID, Generation: s.Generation, Version: s.DocumentVersion, Method: s.Method, Params: s.Params})
 			if err := validateSupplyV2(&rr); err != nil {
 				return nil, err

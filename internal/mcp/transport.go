@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
@@ -372,7 +375,18 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 	}
 	outcome, operationStatus := "COMPLETE", "SUCCEEDED"
-	if (tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily) && incompleteTraversalArtifact(opResult.Artifact) {
+	partial := false
+	if tool.ExecutorFamily == TraceExecutorFamily {
+		var classifyErr error
+		partial, classifyErr = incompleteTraceV5Artifact(opResult.Artifact)
+		if classifyErr != nil {
+			env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"trace artifact is not a valid Graph Provenance V5 envelope with a valid native graph"})
+			return bindEnvelope(base, tool, env)
+		}
+	} else if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily {
+		partial = incompleteTraversalArtifact(opResult.Artifact)
+	}
+	if partial {
 		outcome, operationStatus = "PARTIAL", "PARTIAL"
 	}
 	if !publicationRequested && len(opResult.Artifact) > inlineByteLimit {
@@ -499,6 +513,25 @@ func (s *Server) callGatewayContext(ctx context.Context, base response, nested g
 	}
 	executeTool, _ := s.Registry.ResolveCanonical("lsp_trace_v1_execute")
 	return bindEnvelope(base, executeTool, env)
+}
+
+func incompleteTraceV5Artifact(artifact []byte) (bool, error) {
+	if _, err := graphprovenance.ValidateFor(artifact, graphprovenance.Family, "v5"); err != nil {
+		return false, err
+	}
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(artifact, &envelope); err != nil {
+		return false, err
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		return false, err
+	}
+	decoded, err := graph.DecodeNativeV3(native)
+	if err != nil {
+		return false, err
+	}
+	return !decoded.Summary.Complete || decoded.Summary.Truncated, nil
 }
 
 func incompleteTraversalArtifact(artifact []byte) bool {

@@ -125,7 +125,12 @@ func TestV2ActualSupplyVersionsAndOfflineConnections(t *testing.T) {
 		}
 	}
 	r, root := suppliedV2Fixture(t, acquisition.Slice, true, true)
-	if _, err := CaptureV2(context.Background(), r, root); err == nil {
-		t.Fatal("ASSERT_V2_DUPLICATE_ACTUAL_VERSION_REJECT")
+	raw, err := CaptureV2(context.Background(), r, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deduplicated EvidenceV2
+	if err := json.Unmarshal(raw, &deduplicated); err != nil || len(deduplicated.Supplies) != 2 || deduplicated.Supplies[0].Receipt.ID == deduplicated.Supplies[1].Receipt.ID {
+		t.Fatalf("ASSERT_V2_SAME_VERSION_DISTINCT_DIGESTS_PRESERVED: supplies=%d err=%v", len(deduplicated.Supplies), err)
 	}
 }
