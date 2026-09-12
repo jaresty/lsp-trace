@@ -3,14 +3,16 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -32,6 +34,9 @@ import (
 
 //go:embed SKILL.md
 var embeddedSkill string
+
+//go:embed SKILL.md references/*.md embedded-skills/**
+var embeddedSkills embed.FS
 
 var (
 	buildVersion = "devel"
@@ -134,6 +139,7 @@ const usageText = `usage:
   lsp-trace validate [--schema v1|v2|v3] PATH|-
   lsp-trace validate-private-request-diagnostics PRIVATE_PATH [PUBLIC_V3_PATH]
   lsp-trace skill get
+  lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION
 
 terminology:
   target selector identifies a symbol or position
@@ -335,15 +341,147 @@ func run(args []string) int {
 }
 
 func runSkill(args []string, stdout, stderr io.Writer) int {
-	if len(args) != 1 || args[0] != "get" {
-		fmt.Fprintln(stderr, "usage: lsp-trace skill get")
+	const usage = "usage: lsp-trace skill get [(lsp-trace|lsp-trace-feature-inventory) DESTINATION]"
+	if len(args) == 1 && args[0] == "get" {
+		if _, err := io.WriteString(stdout, embeddedSkill); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	}
+	if len(args) != 3 || args[0] != "get" {
+		fmt.Fprintln(stderr, usage)
 		return 1
 	}
-	if _, err := io.WriteString(stdout, embeddedSkill); err != nil {
+	files, err := embeddedSkillFiles(args[1])
+	if err == nil {
+		err = materializeSkill(args[2], files)
+	}
+	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
 	return 0
+}
+
+func embeddedSkillFiles(name string) (map[string][]byte, error) {
+	files := make(map[string][]byte)
+	add := func(source, destination string) error {
+		data, err := embeddedSkills.ReadFile(source)
+		if err != nil {
+			return err
+		}
+		files[destination] = data
+		return nil
+	}
+	switch name {
+	case "lsp-trace":
+		if err := add("SKILL.md", "SKILL.md"); err != nil {
+			return nil, err
+		}
+		err := fs.WalkDir(embeddedSkills, "references", func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+			return add(path, path)
+		})
+		return files, err
+	case "lsp-trace-feature-inventory":
+		const root = "embedded-skills/lsp-trace-feature-inventory"
+		err := fs.WalkDir(embeddedSkills, root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return err
+			}
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			return add(path, filepath.ToSlash(relative))
+		})
+		return files, err
+	default:
+		return nil, fmt.Errorf("unknown skill %q", name)
+	}
+}
+
+func materializeSkill(destination string, files map[string][]byte) (err error) {
+	if destination == "" || destination == "." || filepath.Clean(destination) == string(filepath.Separator) {
+		return errors.New("unsafe skill destination")
+	}
+	for _, part := range strings.FieldsFunc(destination, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return errors.New("skill destination traversal is not allowed")
+		}
+	}
+	absolute, err := filepath.Abs(destination)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Lstat(absolute); err == nil {
+		return errors.New("skill destination already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	parent := filepath.Dir(absolute)
+	info, err := os.Lstat(parent)
+	if err != nil {
+		return fmt.Errorf("skill destination parent: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return errors.New("skill destination parent must be a non-symlink directory")
+	}
+	if err := rejectSymlinkComponents(parent); err != nil {
+		return err
+	}
+	if err := os.Mkdir(absolute, 0o700); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = os.RemoveAll(absolute)
+		}
+	}()
+	for relative, data := range files {
+		if relative == "" || filepath.IsAbs(relative) || strings.Contains(relative, "..") {
+			return errors.New("unsafe embedded skill path")
+		}
+		path := filepath.Join(absolute, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return err
+		}
+		file, openErr := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if openErr != nil {
+			return openErr
+		}
+		_, writeErr := file.Write(data)
+		closeErr := file.Close()
+		if writeErr != nil {
+			return writeErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
+}
+
+func rejectSymlinkComponents(path string) error {
+	volume := filepath.VolumeName(path)
+	current := volume + string(filepath.Separator)
+	for _, part := range strings.Split(strings.TrimPrefix(path, current), string(filepath.Separator)) {
+		if part == "" {
+			continue
+		}
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return errors.New("skill destination path must contain only non-symlink directories")
+		}
+	}
+	return nil
 }
 
 func parse(args []string) (config, error) {

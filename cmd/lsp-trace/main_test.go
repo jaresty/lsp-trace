@@ -260,63 +260,102 @@ func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
 	}
 }
 
-func TestEmbeddedSkillGetIsExactAndHermetic(t *testing.T) {
+func TestSkillDispatcherPreservesGetAndSelectsBothSkills(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if code := runSkill([]string{"get"}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != embeddedSkill {
-		t.Fatalf("ASSERT_EMBEDDED_SKILL_GET: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+		t.Fatalf("ASSERT_SKILL_GET_BACKWARD_COMPATIBLE: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
-	requiredContract := []string{
-		"name: lsp-trace",
-		"lsp-trace inspect SELECTOR_OR_ARTIFACT --seed LABEL",
-		"--all-seeds",
-		"lsp-trace.inspect.v1",
-		"NON_AUTHORITATIVE_DERIVED_VIEW",
-		"TOOL_DERIVED_NODE_CORRELATION",
-		"## Build technical inputs for a feature inventory",
-		"### Choose a traversal",
-		"### Handle traversal status",
-		"### Reconcile all stored seeds",
-		"### Draft external provisional candidate records",
-		"### Run an independent challenge",
-		"### Review coverage gaps",
-		"### Iterate under explicit bounds",
-		"inventory_state_delta",
-		"matching names do not establish identity",
-		"BOUNDED_REVIEW_DRY",
-		"never a claim of complete feature or source coverage",
-		"### Arrange a non-authoritative review view",
-		"bounded number of examples by a stated deterministic rule",
-		"not established",
-		"Zero candidates assigned to a group is an assignment state",
-		"visual density contribute no evidence and establish no feature identity",
-		"first-class boundary records",
-		"audit references",
-		"--expand-dispatch-family",
-		"--expand-topmost-siblings",
-		`{"seeds":[`,
-		"evidence_semantics",
-		"trace_receipt",
-		"support_contribution",
-		"--provenance-source-revision",
-		"exactly one `seeds` result",
-		"direct canonical call-relation IDs",
-		"does not resolve cwd symlink aliases",
-		"Field authority",
-		"Target selector",
-		"Output destination",
-		"Artifact selector",
-		"all-symbol census",
-		"--from-file PATH --symbol NAME",
-	}
-	for _, required := range requiredContract {
-		if !strings.Contains(stdout.String(), required) {
-			t.Fatalf("ASSERT_EMBEDDED_SKILL_DOWNSTREAM_CONTRACT: missing=%q skill=%s", required, stdout.String())
+	for _, name := range []string{"lsp-trace", "lsp-trace-feature-inventory"} {
+		files, err := embeddedSkillFiles(name)
+		if err != nil || len(files) < 2 || len(files["SKILL.md"]) == 0 {
+			t.Fatalf("ASSERT_SKILL_DISPATCH: name=%s files=%d err=%v", name, len(files), err)
 		}
 	}
-	stdout.Reset()
-	stderr.Reset()
-	if code := runSkill([]string{"list"}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "usage: lsp-trace skill get") {
-		t.Fatalf("ASSERT_EMBEDDED_SKILL_REJECTS_UNSUPPORTED: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	for _, args := range [][]string{{"list"}, {"get", "unknown", "destination"}, {"get", "lsp-trace"}} {
+		stdout.Reset()
+		stderr.Reset()
+		if code := runSkill(args, &stdout, &stderr); code == 0 || stdout.Len() != 0 {
+			t.Fatalf("ASSERT_SKILL_REJECTS_UNSUPPORTED: args=%v code=%d stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
+		}
+	}
+}
+
+func TestSkillExportIsCompleteAndByteExact(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name     string
+		expected map[string]string
+	}{
+		{"lsp-trace", map[string]string{
+			"SKILL.md":                          "SKILL.md",
+			"references/evidence-boundaries.md": "references/evidence-boundaries.md",
+			"references/live-tracing.md":        "references/live-tracing.md",
+			"references/offline-evidence.md":    "references/offline-evidence.md",
+			"references/transport-routing.md":   "references/transport-routing.md",
+		}},
+		{"lsp-trace-feature-inventory", map[string]string{
+			"SKILL.md":                                  "../../.pi/skills/lsp-trace-feature-inventory/SKILL.md",
+			"references/preparation-and-grouping.md":    "../../.pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md",
+			"references/adjudication-and-acceptance.md": "../../.pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md",
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			destination := filepath.Join(root, tc.name)
+			var stdout, stderr bytes.Buffer
+			if code := runSkill([]string{"get", tc.name, destination}, &stdout, &stderr); code != 0 || stdout.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("ASSERT_SKILL_EXPORT: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			for relative, source := range tc.expected {
+				want, err := os.ReadFile(source)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(relative)))
+				if err != nil || !bytes.Equal(got, want) {
+					t.Fatalf("ASSERT_SKILL_EXPORT_BYTE_EXACT: file=%s err=%v", relative, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSkillExportRejectsUnsafeDestinations(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	existing := filepath.Join(root, "existing")
+	if err := os.Mkdir(existing, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	fileParent := filepath.Join(root, "file")
+	if err := os.WriteFile(fileParent, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	realParent := filepath.Join(root, "real")
+	if err := os.Mkdir(realParent, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	symlinkParent := filepath.Join(root, "link")
+	if err := os.Symlink(realParent, symlinkParent); err != nil {
+		t.Fatal(err)
+	}
+	for _, destination := range []string{
+		".",
+		root + string(filepath.Separator) + ".." + string(filepath.Separator) + "escaped",
+		existing,
+		filepath.Join(fileParent, "skill"),
+		filepath.Join(symlinkParent, "skill"),
+		filepath.Join(root, "missing", "skill"),
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := runSkill([]string{"get", "lsp-trace", destination}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || stderr.Len() == 0 {
+			t.Fatalf("ASSERT_SKILL_EXPORT_REJECTS_UNSAFE: destination=%q code=%d stdout=%q stderr=%q", destination, code, stdout.String(), stderr.String())
+		}
 	}
 }
 

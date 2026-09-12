@@ -37,6 +37,14 @@ lsp-trace incoming \
 
 Paths resolve against the workspace. Labels are unique and match `[A-Za-z][A-Za-z0-9._-]*`. Unknown fields fail. Failed seeds remain represented rather than disappearing. Use each seed's stored result, membership, reached IDs, and native references; never attribute the deduplicated union graph to every seed.
 
+## Transient structural design orientation
+
+An LLM may start from one symbol and quickly obtain live design or refactoring context from a READY managed LSP session. Graph Provenance and source capture are not prerequisites for this bounded orientation. Route through the available live MCP incoming and slice operations, using exact session and generation identity; future orchestration may compose those existing operations but must not invent a new command.
+
+Treat the transient live graph as suitable for bounded questions about callers and callees, likely impact, centrality, architectural boundaries, and refactor risk. Its claim ceiling remains low: it is not retained, replayable, or source-grounded evidence, and it does not establish runtime behavior, complete source coverage, or feature identity.
+
+Escalate optionally to Capture/V5 when the work needs durable review, retained hydration, publication, replay, or stronger source-bearing evidence. That escalation is never the default prerequisite for live structural orientation.
+
 ## Traversal selection
 
 Use `incoming` when exact supplied positions are callees and only upward caller expansion is needed. Use `slice` when bounded outgoing discovery must choose the nodes from which incoming traversal begins.

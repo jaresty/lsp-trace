@@ -16,6 +16,18 @@ assert_contains() {
   fi
 }
 
+assert_same() {
+  id=$1
+  left=$2
+  right=$3
+  if cmp -s "$root/$left" "$root/$right"; then
+    printf 'PASS %s: %s matches %s byte-for-byte\n' "$id" "$left" "$right"
+  else
+    printf 'FAIL %s: %s must match %s byte-for-byte\n' "$id" "$left" "$right"
+    failed=1
+  fi
+}
+
 assert_heading_order() {
   id=$1
   path=$2
@@ -65,6 +77,16 @@ assert_contains DOC-UNKNOWN-BOUNDARY cmd/lsp-trace/references/evidence-boundarie
 assert_contains DOC-MECHANICAL-NO-ACCEPT .pi/skills/lsp-trace-feature-inventory/SKILL.md 'Mechanical preparation cannot accept feature identity.'
 assert_contains DOC-COMMUNITY-INSTABILITY .pi/skills/lsp-trace-feature-inventory/SKILL.md 'communities, centrality, instability'
 assert_contains DOC-FUTURE-SYNTAX .pi/skills/lsp-trace-feature-inventory/SKILL.md 'label it `FUTURE/PROPOSED`'
+assert_contains DOC-LEIDEN-HEADLINE .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'a community is a structurally notable set worth examining, never a feature'
+assert_contains DOC-LEIDEN-INDEPENDENT-CENSUS .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'independent entry-point census'
+assert_contains DOC-LEIDEN-INSTABILITY .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'A-08 instability campaigns'
+assert_contains DOC-LEIDEN-RECAPTURE .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'Recapture only bytes that are missing, mismatched, or unavailable'
+assert_contains DOC-LIVE-ORIENTATION cmd/lsp-trace/references/live-tracing.md 'Graph Provenance and source capture are not prerequisites'
+assert_contains DOC-LIVE-CLAIM-CEILING cmd/lsp-trace/references/live-tracing.md 'it is not retained, replayable, or source-grounded evidence'
+assert_contains DOC-LIVE-OPTIONAL-ESCALATION cmd/lsp-trace/references/live-tracing.md 'That escalation is never the default prerequisite'
+assert_same DOC-FEATURE-EMBEDDED-SKILL .pi/skills/lsp-trace-feature-inventory/SKILL.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/SKILL.md
+assert_same DOC-FEATURE-EMBEDDED-PREP .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md
+assert_same DOC-FEATURE-EMBEDDED-ADJUDICATION .pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md
 
 assert_contains DOC-README README.md '## Inspect retained seeds'
 assert_contains DOC-SEMANTICS docs/SEMANTICS.md '## Seed inspection operational contract'
