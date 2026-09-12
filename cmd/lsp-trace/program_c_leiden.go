@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"lsp-trace/internal/communityregister"
 	"lsp-trace/internal/programcpresentation"
 	"lsp-trace/internal/schema"
 )
@@ -18,8 +19,9 @@ func runProgramCLeiden(args []string, stdin io.Reader, stdout, stderr io.Writer)
 	hubTopK := fs.Int("hub-top-k", 0, "mandatory positive hub top-k")
 	format := fs.String("format", "text", "text or json")
 	output := fs.String("output", "", "immutable generation selector (no replace)")
+	emitRegister := fs.String("emit-community-register", "", "write a separate schema-validated technical community register")
 	if fs.Parse(args) != nil || fs.NArg() != 1 || (*format != "text" && *format != "json") || *pagerankTopK < 1 || *hubTopK < 1 {
-		fmt.Fprintln(stderr, "usage: lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] PATH|-")
+		fmt.Fprintln(stderr, "usage: lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-")
 		return 1
 	}
 	var raw []byte
@@ -42,6 +44,22 @@ func runProgramCLeiden(args []string, stdin io.Reader, stdout, stderr io.Writer)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
+	}
+	if *emitRegister != "" {
+		register, registerErr := communityregister.Aggregate(raw, data)
+		if registerErr != nil {
+			fmt.Fprintln(stderr, registerErr)
+			return 1
+		}
+		registerData, registerErr := communityregister.JSON(register)
+		if registerErr != nil {
+			fmt.Fprintln(stderr, registerErr)
+			return 1
+		}
+		if registerErr = os.WriteFile(*emitRegister, registerData, 0600); registerErr != nil {
+			fmt.Fprintln(stderr, registerErr)
+			return 1
+		}
 	}
 	if *output != "" {
 		if err = publishValidatedBundle(*output, data, func(b []byte) error {
