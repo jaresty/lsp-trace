@@ -34,5 +34,22 @@ func TestHydratedContractAdditive(t *testing.T) {
 			t.Fatal("PUBLIC_ADDITIVE_CONTRACT FAIL: loose input")
 		}
 	}
-	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 hydrated=21 exported_v2=22 runtime=23; no publication schema")
+	for _, raw := range []string{
+		`{"publication_selector":{"selector":"g.selector.json","artifact_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact_byte_length":2097152,"artifact_schema_id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json","publication_mechanism":"atomic_no_replace_with_verified_generation","generation":"g-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","verification_selector":"g.selector.json"},"node_ids":["unknown"]}`,
+		`{"content_addressed_artifact":{"id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact_byte_length":2097152,"artifact_schema_id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json","generation":"g-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"node_ids":["unknown"]}`,
+	} {
+		if err := ValidateJSON(hi.InputSchemaID, []byte(raw)); err != nil {
+			t.Fatalf("PUBLIC_HYDRATION_CARRIER_SCHEMA FAIL: %v", err)
+		}
+	}
+	for _, raw := range []string{
+		`{"input":"{}","content_addressed_artifact":{"id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact_byte_length":2,"artifact_schema_id":"x","generation":"g-x"}}`,
+		`{"private_path":"/secret"}`,
+		`{"publication_selector":{"selector":"x"}}`,
+	} {
+		if err := ValidateJSON(hi.InputSchemaID, []byte(raw)); err == nil {
+			t.Fatalf("PUBLIC_HYDRATION_CARRIER_SCHEMA FAIL: accepted %s", raw)
+		}
+	}
+	t.Log("PUBLIC_ADDITIVE_CONTRACT PASS: historical=13 previous=20 hydrated=21 exported_v2=22 runtime=23; closed hydration carriers")
 }

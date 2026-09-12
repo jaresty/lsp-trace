@@ -71,7 +71,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("lsp-trace-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
-	publicationRootPath := fs.String("publication-root", "", "permit output_selector publication beneath this pinned root")
+	publicationRootPath := fs.String("publication-root", "", "permit verified publication hydration and output_selector beneath this pinned root")
+	artifactStorePath := fs.String("artifact-store", "", "pinned immutable sha256 artifact store for hydration")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileFull), "MCP advertisement profile: full or compact")
@@ -105,7 +106,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *printBootstrapExample {
-		if *enableLiveLSP || *publicationRootPath != "" || *bootstrapConfigPath != "" || *custodyTrustPath != "" || toolProfile != mcp.ToolProfileFull {
+		if *enableLiveLSP || *publicationRootPath != "" || *artifactStorePath != "" || *bootstrapConfigPath != "" || *custodyTrustPath != "" || toolProfile != mcp.ToolProfileFull {
 			fmt.Fprintln(stderr, "--print-bootstrap-example cannot be combined with operational options")
 			return 2
 		}
@@ -120,14 +121,23 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "No managed LSP sessions are provisioned. Configure --bootstrap-config; use --print-bootstrap-example for the public template.")
 	}
 	var publicationRoot *publication.Root
+	var err error
 	if *publicationRootPath != "" {
-		var err error
 		publicationRoot, err = publication.OpenRoot(*publicationRootPath)
 		if err != nil {
 			fmt.Fprintln(stderr, "publication root:", err)
 			return 1
 		}
 		defer publicationRoot.Close()
+	}
+	var artifactStore *publication.Root
+	if *artifactStorePath != "" {
+		artifactStore, err = publication.OpenRoot(*artifactStorePath)
+		if err != nil {
+			fmt.Fprintln(stderr, "artifact store:", err)
+			return 1
+		}
+		defer artifactStore.Close()
 	}
 	var config *bootstrapConfig
 	var provisioned provider.Provisioned
@@ -168,7 +178,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			}
 		}
 	}
-	server, manager, err := newServerRuntimeWithSeedAuthoritiesAndProfile(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot, toolProfile)
+	server, manager, err := newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(*enableLiveLSP, inventory, custodyTrust, seedRevision, publicationRoot, artifactStore, toolProfile)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -320,6 +330,10 @@ func newServerRuntimeWithSeedAuthorities(enableLiveLSP bool, inventory provider.
 }
 
 func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, publicationRoot *publication.Root, profile mcp.ToolProfile) (*mcp.Server, *sessionruntime.Manager, error) {
+	return newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP, inventory, trust, revision, publicationRoot, nil, profile)
+}
+
+func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, publicationRoot, artifactStore *publication.Root, profile mcp.ToolProfile) (*mcp.Server, *sessionruntime.Manager, error) {
 	registry := mcp.NewRegistryWithProviderInventoryAndProfile(enableLiveLSP, publicationRoot != nil, inventory, profile)
 	version, buildRevision := buildIdentity()
 	registry.SetBuildIdentity(version, buildRevision)
@@ -389,6 +403,6 @@ func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory
 			mcp.SliceExecutorFamily:         sliceops.NewExecutor(manager),
 			mcp.AcquisitionV2ExecutorFamily: acquisitionops.NewExecutor(manager),
 		},
-		PublicationRoot: publicationRoot, Publisher: publication.NewPublisher(),
+		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil
 }

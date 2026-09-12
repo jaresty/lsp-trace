@@ -132,7 +132,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	}
 	manifest = mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))
 	descriptions := map[string]string{
-		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline with explicit focus dispositions and body opt-in; no source acquisition or publication",
+		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
 		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact Graph Provenance V5 envelope bytes; cross-seed stability and passage verification are unassessed",
 		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
 		"lsp_trace_v2_verify_retained_calls":     "Verify immutable selected-publication custody before explicit retained-calls/v2 admission; consistency is not producer authentication",

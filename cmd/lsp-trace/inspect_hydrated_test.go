@@ -16,7 +16,7 @@ func TestInspectHelpIncludesHydratedOptions(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("help wrote stdout: %q", stdout.String())
 	}
-	for _, want := range []string{"-hydrated", "-node", "-relation", "-seed"} {
+	for _, want := range []string{"-hydrated", "-node", "-relation", "-seed", "-publication-root", "-artifact-store", "-private-root", "-enable-private-paths"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Fatalf("help omits %q: %q", want, stderr.String())
 		}
@@ -64,6 +64,15 @@ func TestHydratedCLIAcceptsLargeRegularArtifactWithoutWeakeningInlineTransport(t
 		if code := runInspect(args, &stdout, &stderr); code != 0 || stdout.Len() == 0 {
 			t.Fatalf("ASSERT_HYDRATED_CLI_LARGE_REGULAR_ARTIFACT: args=%v code=%d stderr=%s", args, code, stderr.String())
 		}
+	}
+}
+
+func TestHydratedCLIPrivatePathsDisabledByDefault(t *testing.T) {
+	var out, stderr bytes.Buffer
+	privateRoot := t.TempDir()
+	args := []string{"artifact.json", "--hydrated", "--private-root", privateRoot, "--artifact-schema-id", "schema", "--artifact-digest", "sha256:" + strings.Repeat("a", 64), "--artifact-generation", "g-" + strings.Repeat("a", 64), "--artifact-byte-length", "2", "--node", "unknown", "--json"}
+	if code := runInspect(args, &out, &stderr); code == 0 || out.Len() != 0 || !strings.Contains(stderr.String(), "PATH_DISABLED") || strings.Contains(stderr.String(), privateRoot) {
+		t.Fatalf("ASSERT_HYDRATED_PRIVATE_PATH_DEFAULT_DISABLED: code=%d out=%s err=%s", code, out.String(), stderr.String())
 	}
 }
 

@@ -42,6 +42,7 @@ type Server struct {
 	Executor        Executor
 	Executors       map[ExecutorFamily]Executor
 	PublicationRoot *publication.Root
+	ArtifactStore   *publication.Root
 	Publisher       *publication.Publisher
 	requestSequence atomic.Uint64
 	lifecycleMu     sync.Mutex
@@ -313,7 +314,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	started := time.Now()
 	opResult, failure := executor.Execute(ctx, operation.Request{
-		Name: operationName(tool.Name), RequestID: requestID, Input: opInput, PublicationRoot: s.PublicationRoot,
+		Name: operationName(tool.Name), RequestID: requestID, Input: opInput, PublicationRoot: s.PublicationRoot, ArtifactStore: s.ArtifactStore,
 	})
 	if groupedSlice {
 		publicationRequested = false
