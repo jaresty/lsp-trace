@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/lsp"
@@ -42,5 +44,20 @@ func TestCanonicalDiscoveredSeedsUseSelectionRangeAndStableOrder(t *testing.T) {
 	reencoded, err := seedformat.EncodeCanonical(file, workspace)
 	if err != nil || !bytes.Equal(raw, reencoded) {
 		t.Fatalf("ASSERT_DISCOVERED_SEEDS_CANONICAL_BYTES: err=%v raw=%q reencoded=%q", err, raw, reencoded)
+	}
+}
+
+func TestCanonicalDiscoveredSeedsFailsClosedOnEmptyAndOverflow(t *testing.T) {
+	workspace := t.TempDir()
+	source := resolvedSliceSource{path: "a.go", uri: "file:///a.go"}
+	if _, _, err := canonicalDiscoveredSeeds(workspace, []resolvedSliceSource{source}, map[string]slicer.Discovery{}); err == nil || !strings.Contains(err.Error(), "no callable seeds") {
+		t.Fatalf("ASSERT_DISCOVERED_SEEDS_EMPTY_FAILS_CLOSED: %v", err)
+	}
+	dispositions := make([]slicer.PreparationDisposition, seedformat.MaxSeeds+1)
+	for i := range dispositions {
+		dispositions[i] = slicer.PreparationDisposition{Name: fmt.Sprintf("F%d", i), Kind: 12, Status: "prepared", SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i)}}}
+	}
+	if _, _, err := canonicalDiscoveredSeeds(workspace, []resolvedSliceSource{source}, map[string]slicer.Discovery{source.uri: {PreparationDispositions: dispositions}}); err == nil || !strings.Contains(err.Error(), "65 callable seeds; maximum is 64") {
+		t.Fatalf("ASSERT_DISCOVERED_SEEDS_OVERFLOW_FAILS_CLOSED_WITH_DENOMINATOR: %v", err)
 	}
 }
