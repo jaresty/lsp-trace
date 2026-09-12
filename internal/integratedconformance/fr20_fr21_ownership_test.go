@@ -20,7 +20,7 @@ func ownsFR20FR21Path(path string) bool {
 		"cmd/lsp-trace/inspect_command.go", "cmd/lsp-trace/inspect_hydrated.go", "cmd/lsp-trace/inspect_hydrated_test.go", "cmd/lsp-trace/inspect_hydrated_unix_test.go", "cmd/lsp-trace-mcp/hydrated_public_test.go", "cmd/lsp-trace-mcp/hydrated_controls_test.go",
 		"internal/mcpcontract/inspect_hydrated.go", "internal/operation/inspect_hydrated.go", "internal/operation/inspect_hydrated_test.go",
 		"docs/fr20-public-acquisition.md", "docs/hydrated-evidence.md",
-		"cmd/lsp-trace/acquisition_v2.go", "cmd/lsp-trace/acquisition_v2_test.go", "cmd/lsp-trace/discovery_filter.go", "cmd/lsp-trace/slice_source_test.go", "cmd/lsp-trace/publication.go",
+		"cmd/lsp-trace/acquisition_v2.go", "cmd/lsp-trace/acquisition_v2_test.go", "cmd/lsp-trace/automatic_discovery_replay_qualification_test.go", "cmd/lsp-trace/discovery_filter.go", "cmd/lsp-trace/slice_source_test.go", "cmd/lsp-trace/publication.go",
 		"cmd/lsp-trace-mcp/fr20_graph_test.go", "cmd/lsp-trace-mcp/fr20_legacy_test.go", "cmd/lsp-trace-mcp/fr20_native_test.go", "cmd/lsp-trace-mcp/fr20_public_test.go", "cmd/lsp-trace-mcp/fr20_hydration_test.go",
 		"cmd/lsp-trace-mcp/testdata/fr20-server/main.go",
 		"internal/mcp/acquisition_v2_numbers_test.go", "internal/mcp/acquisition_v2_test.go", "internal/mcp/bounded_analysis.go",

@@ -359,6 +359,29 @@ type TranslateOptions struct {
 	TopmostSiblings bool
 }
 
+// WithEffectiveDepths returns seeds whose file defaults have been applied at
+// seed scope. This permits independently decoded seed files to be combined
+// without changing the meaning of omitted per-seed depths.
+func WithEffectiveDepths(file File) []Seed {
+	out := make([]Seed, len(file.Seeds))
+	for i, seed := range file.Seeds {
+		down, up := file.Defaults.DownDepth, file.Defaults.UpDepth
+		if seed.Type == SliceType {
+			if seed.DownDepth != nil {
+				down = seed.DownDepth
+			}
+			if seed.UpDepth != nil {
+				up = seed.UpDepth
+			}
+			seed.DownDepth, seed.UpDepth = down, up
+			out[i] = seed
+			continue
+		}
+		out[i] = Seed{Type: SliceType, Position: &Position{Label: seed.Label()}, Target: &seed, DownDepth: down, UpDepth: up}
+	}
+	return out
+}
+
 // Translate creates a slice acquisition manifest. It preserves seed order by
 // mapping the first seed to Root and each later seed to RequiredTargets.
 func Translate(file File, options TranslateOptions) (acquisitionops.Manifest, error) {

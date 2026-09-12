@@ -196,6 +196,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	var c sliceConfig
 	var profile profileFlags
 	var manifestPath, outputVersion, groupBy string
+	var seedFiles stringsFlag
 	var communitySeed uint64
 	var pageRankTopK, hubTopK int
 	var diagnosticRoot, diagnosticSelector string
@@ -210,8 +211,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	fs.Var(&c.fromFiles, "from-file", "repeatable source file or directory for automatic callable-symbol discovery (production V5 slice only)")
 	fs.Var(&c.includes, "include", "repeatable workspace-relative gitignore-style path pattern for automatic discovery")
 	fs.Var(&c.excludes, "exclude", "repeatable workspace-relative gitignore-style path pattern; excludes take precedence")
+	fs.Var(&seedFiles, "seed-file", "repeatable complete lsp-trace.seeds.v2 replay file (production V5 slice only)")
 	fs.StringVar(&c.languageID, "language-id", "", "runtime default document language")
-	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 seed manifest file; no inline selector/limit overrides")
+	fs.StringVar(&manifestPath, "seed-manifest", "", "versioned v2 acquisition manifest file; no inline selector/limit overrides")
 	fs.StringVar(&outputVersion, "output-version", "", "managed output version (lsp-trace.graph-provenance.v5 requires v3 and topmost siblings)")
 	fs.StringVar(&c.output, "output", "", "immutable graph output selector")
 	fs.StringVar(&groupBy, "group-by", "", "optional post-acquisition grouping: leiden or none")
@@ -244,11 +246,18 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		return fail(fmt.Errorf("community options require --group-by leiden"))
 	}
 	discoverSeeds := len(c.fromFiles) > 0
-	if fs.NArg() != 0 || c.workspace == "" || (manifestPath == "" && !discoverSeeds) {
-		return fail(fmt.Errorf("v2 requires --workspace and exactly one of --seed-manifest or production V5 slice --from-file with no positional arguments"))
+	replaySeeds := len(seedFiles) > 0
+	inputModes := 0
+	for _, active := range []bool{manifestPath != "", discoverSeeds, replaySeeds} {
+		if active {
+			inputModes++
+		}
 	}
-	if manifestPath != "" && discoverSeeds {
-		return fail(fmt.Errorf("--seed-manifest and --from-file are mutually exclusive"))
+	if fs.NArg() != 0 || c.workspace == "" || inputModes != 1 {
+		return fail(fmt.Errorf("v2 requires --workspace and exactly one of --seed-manifest, production V5 slice --from-file, or production V5 slice --seed-file with no positional arguments"))
+	}
+	if replaySeeds && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5) {
+		return fail(fmt.Errorf("--seed-file replay requires slice --production-v5"))
 	}
 	if !discoverSeeds && (len(c.includes) > 0 || len(c.excludes) > 0) {
 		return fail(fmt.Errorf("--include and --exclude require automatic discovery with --from-file"))
@@ -300,6 +309,29 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		if err != nil {
 			return fail(err)
 		}
+	} else if replaySeeds {
+		combined := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention}
+		for _, seedPath := range seedFiles {
+			seedRoot, openErr := os.OpenRoot(filepath.Dir(seedPath))
+			if openErr != nil {
+				return fail(fmt.Errorf("read --seed-file: %w", openErr))
+			}
+			raw, readErr := source.ReadRegularInputBounded(seedRoot, filepath.Base(seedPath), seedformat.MaxInputBytes)
+			seedRoot.Close()
+			if readErr != nil {
+				return fail(fmt.Errorf("read --seed-file: %w", readErr))
+			}
+			decoded, decodeErr := seedformat.Decode(raw, c.workspace)
+			if decodeErr != nil {
+				return fail(fmt.Errorf("invalid --seed-file %q: %w", seedPath, decodeErr))
+			}
+			combined.Seeds = append(combined.Seeds, seedformat.WithEffectiveDepths(decoded)...)
+		}
+		manifest, err = seedformat.Translate(combined, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
+		if err != nil {
+			return fail(fmt.Errorf("invalid --seed-file replay: %w", err))
+		}
+		requestPolicy, _ = json.Marshal(manifest)
 	} else {
 		// Bounded regular-file input: no FIFO or unbounded ReadAll, no MCP path analogue.
 		manifestRoot, openErr := os.OpenRoot(filepath.Dir(manifestPath))

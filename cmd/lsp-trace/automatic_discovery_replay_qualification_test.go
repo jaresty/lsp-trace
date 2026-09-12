@@ -105,7 +105,17 @@ func readQualificationArtifact(t *testing.T, grouped bool, output string, stdout
 	if !grouped {
 		return append([]byte(nil), stdout...)
 	}
-	raw, err := os.ReadFile(output)
+	selectorRaw, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selector struct {
+		Generation string `json:"generation"`
+	}
+	if err := json.Unmarshal(selectorRaw, &selector); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(output), selector.Generation, "artifact.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

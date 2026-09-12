@@ -109,7 +109,7 @@ const usageText = `usage:
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace slice --graph-provenance --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN | --from-file PATH --symbol NAME)
-  lsp-trace slice --production-v5 --workspace PATH --server COMMAND (--seed-manifest PATH | --from-file PATH... [--include PATTERN...] [--exclude PATTERN...])  # automatic discovery retains canonical lsp-trace.seeds.v2 in V5
+  lsp-trace slice --production-v5 --workspace PATH --server COMMAND (--seed-manifest PATH | --from-file PATH... [--include PATTERN...] [--exclude PATTERN...] | --seed-file PATH...)  # seed-manifest is legacy; discovery alone retains canonical lsp-trace.seeds.v2 custody in V5
   lsp-trace incoming --production-v5 --workspace PATH --server COMMAND --seed-manifest PATH
   lsp-trace slice --production-v5 --output GRAPH_SELECTOR --group-by leiden --community-seed N --pagerank-top-k N --hub-top-k N ...  # publishes graph separately; stdout is grouped text
   lsp-trace slice|incoming --acquisition-version v2|v3 --workspace PATH --server COMMAND --seed-manifest PATH  # DEPRECATED producer; migrate new production to Graph Provenance V5

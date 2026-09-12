@@ -170,6 +170,45 @@ func TestProductionV5RejectsInvalidDiscoveryPatternsBeforeServerResolution(t *te
 	}
 }
 
+func TestProductionV5SeedFileReplayFailsClosedBeforeAcquisition(t *testing.T) {
+	workspace := t.TempDir()
+	valid := filepath.Join(t.TempDir(), "seeds.json")
+	if err := os.WriteFile(valid, []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"entry","path":"main.go","line":1,"column":1}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(t.TempDir(), "manifest.json")
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"from-file", []string{"--seed-file", valid, "--from-file", "main.go"}, "exactly one of"},
+		{"seed-manifest", []string{"--seed-file", valid, "--seed-manifest", legacy}, "exactly one of"},
+		{"inline-target", []string{"--seed-file", valid, "main.go:1:1"}, "no positional arguments"},
+		{"override", []string{"--seed-file", valid, "--down-depth", "1"}, "flag provided but not defined"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"--workspace", workspace, "--server", "/definitely/not/a/server", "--output-version", graphprovenance.VersionV5}
+			args = append(args, tc.args...)
+			var stdout, stderr strings.Builder
+			if code := runAcquisitionVersion("slice", "v3", args, &stdout, &stderr); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), tc.want) {
+				t.Fatalf("ASSERT_SEED_FILE_CONFLICT_FAILS_CLOSED[%s]: code=%d stdout=%q stderr=%q", tc.name, code, stdout.String(), stderr.String())
+			}
+		})
+	}
+
+	invalid := filepath.Join(t.TempDir(), "invalid.json")
+	if err := os.WriteFile(invalid, []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"entry","path":"main.go","line":0,"column":1}]} trailing`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr strings.Builder
+	args := []string{"--workspace", workspace, "--server", "/definitely/not/a/server", "--output-version", graphprovenance.VersionV5, "--seed-file", invalid}
+	if code := runAcquisitionVersion("slice", "v3", args, &stdout, &stderr); code != 1 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "invalid --seed-file") {
+		t.Fatalf("ASSERT_SEED_FILE_STRICT_DECODE_PREPROVIDER: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) {
 	const assertion = "ASSERT_PRODUCTION_V5_FROM_FILE_CANONICAL_SEED_CUSTODY"
 	if runtime.GOOS != "darwin" {
