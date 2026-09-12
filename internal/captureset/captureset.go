@@ -192,6 +192,32 @@ func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger
 	return m, nil
 }
 
+// AssociateBatches binds each target batch to its exact admitted constituent,
+// independent of canonical constituent sorting, and recomputes manifest identity.
+func AssociateBatches(m Manifest, batchConstituents []Constituent) (Manifest, error) {
+	if len(batchConstituents) != len(m.Batches) {
+		return Manifest{}, errors.New("batch constituent cardinality mismatch")
+	}
+	index := make(map[Constituent]int, len(m.Constituents))
+	for i, c := range m.Constituents {
+		index[c] = i
+	}
+	seen := make(map[int]bool, len(m.Batches))
+	for i, c := range batchConstituents {
+		j, ok := index[c]
+		if !ok || seen[j] {
+			return Manifest{}, errors.New("batch constituent association mismatch")
+		}
+		seen[j] = true
+		m.Batches[i].ConstituentIndex = j
+	}
+	setIdentity(&m)
+	if err := validateContent(m, true); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
 func EncodeCanonical(m Manifest) ([]byte, error) {
 	if m.LogicalDigest == "" && m.ImmutableSelector == "" {
 		setIdentity(&m)
@@ -295,14 +321,16 @@ func validateContent(m Manifest, identity bool) error {
 		}
 	}
 	pos := 0
+	seenBatchConstituent := map[int]bool{}
 	for i, b := range m.Batches {
 		want := len(m.Targets) - pos
 		if want > 63 {
 			want = 63
 		}
-		if b.Ordinal != i || b.TargetStart != pos || b.TargetCount != want || b.ConstituentIndex != i {
-			return errors.New("non-consecutive or non-maximal batch assignment")
+		if b.Ordinal != i || b.TargetStart != pos || b.TargetCount != want || b.ConstituentIndex < 0 || b.ConstituentIndex >= len(m.Constituents) || seenBatchConstituent[b.ConstituentIndex] {
+			return errors.New("non-consecutive, non-maximal, or non-bijective batch assignment")
 		}
+		seenBatchConstituent[b.ConstituentIndex] = true
 		pos += b.TargetCount
 	}
 	if pos != len(m.Targets) {

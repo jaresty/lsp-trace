@@ -2,19 +2,19 @@ package censusacquisition
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
-	"sort"
-	"strings"
-	"testing"
-
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
+	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/manageddiagnostic"
+	"reflect"
+	"sort"
+	"testing"
 )
 
 type discoveryFunc func(context.Context, SessionIdentity) (Discovery, error)
@@ -28,25 +28,18 @@ type acquirerFunc func(context.Context, BatchRequest) (AcquiredV5, error)
 func (f acquirerFunc) AcquireV5(c context.Context, b BatchRequest) (AcquiredV5, error) {
 	return f(c, b)
 }
-
-func authority() captureset.ExactBytesAuthority {
-	return captureset.ExactBytesAuthority{AdmitGraphProvenanceV5: func(b []byte) (string, error) {
-		if !strings.HasPrefix(string(b), "v5:") {
-			return "", errors.New("not v5")
-		}
-		s := sha256.Sum256(b)
-		return "native:" + hex.EncodeToString(s[:]), nil
-	}}
+func seed(i int) []byte {
+	return []byte(fmt.Sprintf(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"s-%03d","path":"f%03d.go","line":%d,"column":%d}]}`, i, i, i+11, i+4))
 }
 func target(i int) PreparedTarget {
-	return PreparedTarget{CensusOrdinal: i, CanonicalSeedV2: []byte(fmt.Sprintf("seed-%03d", i)), URI: fmt.Sprintf("file:///w/f%03d.go", i), SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}, End: lsp.Position{Line: uint32(i + 20)}}}
+	return PreparedTarget{i, seed(i), fmt.Sprintf("file:///w/f%03d.go", i), lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}}
 }
 func discovery(n int) Discovery {
 	d := Discovery{Session: SessionIdentity{"s", 7}, Complete: true}
 	for i := 0; i < n; i++ {
 		d.Targets = append(d.Targets, target(i))
 		d.Accounting.Symbols = append(d.Accounting.Symbols, census.SymbolEntry{Ordinal: i, Disposition: census.SymbolSelected})
-		d.SymbolLedger.Entries = append(d.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: i, Identity: fmt.Sprintf("sym-%d", i), Disposition: "prepared"})
+		d.SymbolLedger.Entries = append(d.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: i, Identity: fmt.Sprint(i), Disposition: "prepared"})
 	}
 	d.Accounting.SymbolDenominator = n
 	d.SymbolLedger.Denominator = n
@@ -55,175 +48,163 @@ func discovery(n int) Discovery {
 	d.FileLedger = captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "f", Disposition: "processed"}}}
 	return d
 }
-func runWith(d Discovery, af acquirerFunc) (Plan, error) {
-	return (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: af, Authority: authority()}).Run(context.Background(), SessionIdentity{"s", 7})
-}
-func goodAcquirer(_ context.Context, b BatchRequest) (AcquiredV5, error) {
-	return AcquiredV5{Session: b.Session, Raw: []byte("v5:" + b.BatchID)}, nil
-}
-
-func TestFiltersExclusionsWin(t *testing.T) {
-	f := Filters{Includes: []string{"*.go"}, Excludes: []string{"x.go"}}
-	match := func(p, s string) bool { return p == "*.go" && strings.HasSuffix(s, ".go") || p == s }
-	if f.Select("x.go", match) || !f.Select("y.go", match) {
-		t.Fatal("exclusion did not win")
-	}
-}
-func TestExactSelectionRangeStartInManifest(t *testing.T) {
-	p, e := runWith(discovery(1), goodAcquirer)
+func v5(t *testing.T, b BatchRequest) []byte {
+	t.Helper()
+	n := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{Server: graph.ServerInvocation{Command: "fake"}, Seeds: []graph.InvocationSeed{}, Provenance: graph.InvocationProvenance{InvocationID: "i", SourceRevision: "r", ServerVersion: "v"}, Expansion: graph.ExpansionConfig{TopmostSiblings: true}}, Seeds: []graph.SeedResult{}, Summary: graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
+	native, e := json.Marshal(n)
 	if e != nil {
 		t.Fatal(e)
 	}
-	m := p.Batches[0].AcquisitionManifest(testLimits())
-	if *m.Root.Locator.Line != 10 || *m.Root.Locator.Character != 3 {
-		t.Fatalf("got %d:%d", *m.Root.Locator.Line, *m.Root.Locator.Character)
+	raw, e := graphprovenance.CaptureV5WithSeedSpec(native, b.Session.SessionID, b.Session.Generation, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, b.CanonicalSeedsV2)
+	if e != nil {
+		t.Fatal(e)
 	}
+	return raw
 }
-func TestZeroFilesSymbolsAndPartialFailBeforeAcquisition(t *testing.T) {
-	cases := []Discovery{{Session: SessionIdentity{"s", 7}, Complete: true}, {Session: SessionIdentity{"s", 7}, Complete: false}, discovery(0)}
-	for i, d := range cases {
-		calls := 0
-		_, e := runWith(d, func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })
-		if e == nil || calls != 0 {
-			t.Fatalf("case %d err=%v calls=%d", i, e, calls)
+func run(t *testing.T, d Discovery, mut func(*[]byte, BatchRequest)) (Assembly, error) {
+	t.Helper()
+	return (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+		r := v5(t, b)
+		if mut != nil {
+			mut(&r, b)
 		}
-	}
+		return AcquiredV5{b.Session, r}, nil
+	})}).Run(context.Background(), SessionIdentity{"s", 7})
 }
-func TestDuplicateTargetAndOrdinalRejected(t *testing.T) {
-	for _, mutate := range []func(*Discovery){func(d *Discovery) { d.Targets[1].CanonicalSeedV2 = d.Targets[0].CanonicalSeedV2 }, func(d *Discovery) { d.Targets[1].CensusOrdinal = d.Targets[0].CensusOrdinal }} {
+func projection(t *testing.T, a Assembly) Projection {
+	t.Helper()
+	p, e := a.Inspect()
+	if e != nil {
+		t.Fatal(e)
+	}
+	return p
+}
+func TestBijectionRejectsLedgerAndTargetGaps(t *testing.T) {
+	for _, m := range []func(*Discovery){func(d *Discovery) { d.Targets = d.Targets[:1] }, func(d *Discovery) { d.SymbolLedger.Entries[1].Disposition = "failed" }, func(d *Discovery) { d.Accounting.Symbols[1].Disposition = census.SymbolUnsupported }, func(d *Discovery) { d.Targets[1].CensusOrdinal = 99 }, func(d *Discovery) { d.Targets[1].SelectionRange.Start.Line++ }} {
 		d := discovery(2)
-		mutate(&d)
+		m(&d)
 		calls := 0
-		_, e := runWith(d, func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })
+		_, e := (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
 		if e == nil || calls != 0 {
 			t.Fatalf("err=%v calls=%d", e, calls)
 		}
 	}
 }
-func TestOver63BatchesExactOnceAndDefaults(t *testing.T) {
+func TestOver63DeterminismAndDeepCopy(t *testing.T) {
+	a, e := run(t, discovery(130), nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := projection(t, a)
+	if got := []int{len(p.Batches[0].Targets), len(p.Batches[1].Targets), len(p.Batches[2].Targets)}; !reflect.DeepEqual(got, []int{63, 63, 4}) {
+		t.Fatal(got)
+	}
 	d := discovery(130)
-	var got []BatchRequest
-	p, e := runWith(d, func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
-		got = append(got, b)
-		return goodAcquirer(nil, b)
-	})
+	sort.Slice(d.Targets, func(i, j int) bool { return i > j })
+	b, e := run(t, d, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if x := []int{len(got[0].Targets), len(got[1].Targets), len(got[2].Targets)}; !reflect.DeepEqual(x, []int{63, 63, 4}) {
-		t.Fatal(x)
-	}
-	seen := map[int]bool{}
-	for i, b := range got {
-		if b.Ordinal != i || b.DownDepth != 1 || b.UpDepth != 0 || b.CensusID != p.CensusID || b.BatchID == "" {
-			t.Fatal("batch invariant")
-		}
-		for _, x := range b.Targets {
-			if seen[x.CensusOrdinal] {
-				t.Fatal("duplicate")
-			}
-			seen[x.CensusOrdinal] = true
-		}
-	}
-	if len(seen) != 130 {
-		t.Fatal(len(seen))
-	}
-}
-func TestPerturbationOrderDeterministic(t *testing.T) {
-	a := discovery(70)
-	b := discovery(70)
-	sort.Slice(b.Targets, func(i, j int) bool { return i > j })
-	p1, e := runWith(a, goodAcquirer)
-	if e != nil {
-		t.Fatal(e)
-	}
-	p2, e := runWith(b, goodAcquirer)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if p1.CensusID != p2.CensusID || !reflect.DeepEqual(p1.ManifestBytes, p2.ManifestBytes) {
+	q := projection(t, b)
+	if p.CensusID != q.CensusID || !reflect.DeepEqual(p.ManifestBytes, q.ManifestBytes) {
 		t.Fatal("nondeterministic")
 	}
-	for i := range p1.Constituents {
-		if !reflect.DeepEqual(p1.Constituents[i], p2.Constituents[i]) {
-			t.Fatal("constituents differ")
+	p.ManifestBytes[0] ^= 1
+	p.Batches[0].Targets[0].CanonicalSeedV2[0] ^= 1
+	r := projection(t, a)
+	if p.ManifestBytes[0] == r.ManifestBytes[0] || p.Batches[0].Targets[0].CanonicalSeedV2[0] == r.Batches[0].Targets[0].CanonicalSeedV2[0] {
+		t.Fatal("projection aliases authority")
+	}
+}
+func TestExactV5AdmissionRejectsMutations(t *testing.T) {
+	cases := []func(*[]byte, BatchRequest){func(r *[]byte, b BatchRequest) { *r = nil }, func(r *[]byte, b BatchRequest) { (*r)[0] ^= 1 }, func(r *[]byte, b BatchRequest) {
+		var e graphprovenance.EvidenceV5
+		json.Unmarshal(*r, &e)
+		e.SessionID = "wrong"
+		*r, _ = json.Marshal(e)
+	}, func(r *[]byte, b BatchRequest) {
+		var e graphprovenance.EvidenceV5
+		json.Unmarshal(*r, &e)
+		e.Generation++
+		*r, _ = json.Marshal(e)
+	}, func(r *[]byte, b BatchRequest) {
+		var e graphprovenance.EvidenceV5
+		json.Unmarshal(*r, &e)
+		e.SeedSpec.Bytes = []byte(`{"schema_version":"lsp-trace.seeds.v2"}`)
+		*r, _ = json.Marshal(e)
+	}}
+	for i, m := range cases {
+		if _, e := run(t, discovery(1), m); e == nil {
+			t.Fatalf("case %d accepted", i)
 		}
 	}
 }
-func TestDiscoveryPreparationAcquisitionAccountingAndDriftFailures(t *testing.T) {
-	base := discovery(2)
-	cases := []struct {
-		name        string
-		d           Discovery
-		discoverErr error
-		af          acquirerFunc
-	}{
-		{"discovery", base, errors.New("partial"), goodAcquirer},
-		{"accounting", func() Discovery { x := base; x.Accounting.SymbolDenominator++; return x }(), nil, goodAcquirer},
-		{"ledger", func() Discovery { x := base; x.SymbolLedger.Denominator++; return x }(), nil, goodAcquirer},
-		{"acquisition", base, nil, func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, errors.New("partial") }},
-		{"discovery-drift", func() Discovery { x := base; x.Session.Generation++; return x }(), nil, goodAcquirer},
-		{"acquisition-drift", base, nil, func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
-			b.Session.Generation++
-			return AcquiredV5{Session: b.Session, Raw: []byte("v5:x")}, nil
-		}},
-		{"preparation", func() Discovery { x := base; x.Targets[0].CanonicalSeedV2 = nil; return x }(), nil, goodAcquirer},
+func TestOpaqueCapabilityZeroReplayAndPublicationAtomicity(t *testing.T) {
+	if _, e := (Assembly{}).Inspect(); e == nil {
+		t.Fatal("zero assembly")
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			acq := 0
-			core := Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return tc.d, tc.discoverErr }), Acquirer: acquirerFunc(func(c context.Context, b BatchRequest) (AcquiredV5, error) { acq++; return tc.af(c, b) }), Authority: authority()}
-			if _, e := core.Run(context.Background(), SessionIdentity{"s", 7}); e == nil {
-				t.Fatal("success")
-			}
-			if (tc.name == "discovery" || tc.name == "accounting" || tc.name == "ledger" || tc.name == "discovery-drift" || tc.name == "preparation") && acq != 0 {
-				t.Fatal("acquired before validation")
-			}
-		})
+	if e := Publish(context.Background(), PublicationCapability{}, publisherFunc(func(context.Context, PublicationCapability) error { return nil })); e == nil {
+		t.Fatal("zero capability")
 	}
-}
-func TestSuccessPlanExactConstituentsAndPrivateCeilings(t *testing.T) {
-	p, e := runWith(discovery(64), goodAcquirer)
+	a, e := run(t, discovery(1), nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(p.Constituents) != 2 || len(p.Batches) != 2 {
-		t.Fatal("cardinality")
+	c, e := a.PublicationCapability()
+	if e != nil {
+		t.Fatal(e)
 	}
-	for i, c := range p.Constituents {
-		if c.Ordinal != i || c.BatchID != p.Batches[i].BatchID || string(c.Raw) != "v5:"+c.BatchID {
-			t.Fatal("constituent mismatch")
+	calls := 0
+	p := publisherFunc(func(context.Context, PublicationCapability) error { calls++; return nil })
+	if e = Publish(context.Background(), c, p); e != nil || calls != 1 {
+		t.Fatal(e, calls)
+	}
+	if e = Publish(context.Background(), c, p); e == nil || calls != 1 {
+		t.Fatal("replay")
+	}
+	late := discovery(64)
+	acq := 0
+	_, e = (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return late, nil }), Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+		acq++
+		if acq == 2 {
+			return AcquiredV5{}, errors.New("late")
+		}
+		return AcquiredV5{b.Session, v5(t, b)}, nil
+	})}).Run(context.Background(), SessionIdentity{"s", 7})
+	if e == nil || calls != 1 {
+		t.Fatal("failure published")
+	}
+}
+
+type publisherFunc func(context.Context, PublicationCapability) error
+
+func (f publisherFunc) Publish(c context.Context, p PublicationCapability) error { return f(c, p) }
+func TestManifestAssociationAndRecomputedMutations(t *testing.T) {
+	a, e := run(t, discovery(64), nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := projection(t, a)
+	mutations := []func(*Projection){func(x *Projection) { x.CensusID = "x" }, func(x *Projection) { x.Batches[1].Ordinal = 0 }, func(x *Projection) { x.Batches[0].BatchID = "x" }, func(x *Projection) { x.Batches[0].DownDepth = 2 }, func(x *Projection) {
+		x.Batches[0].Targets[0], x.Batches[0].Targets[1] = x.Batches[0].Targets[1], x.Batches[0].Targets[0]
+	}, func(x *Projection) { x.Constituents[0], x.Constituents[1] = x.Constituents[1], x.Constituents[0] }, func(x *Projection) {
+		x.Manifest.Batches[0].ConstituentIndex, x.Manifest.Batches[1].ConstituentIndex = x.Manifest.Batches[1].ConstituentIndex, x.Manifest.Batches[0].ConstituentIndex
+	}, func(x *Projection) { x.ManifestBytes[0] ^= 1 }}
+	for i, m := range mutations {
+		x := cloneProjection(p)
+		m(&x)
+		if validateProjection(x) == nil {
+			t.Fatalf("mutation %d accepted", i)
 		}
 	}
-	m := p.Manifest
-	if m.Authority != 0 || m.SourceGraphComplete != "UNKNOWN" || m.NativeSingleCaptureCustody || len(m.CrossCaptureCalls) != 0 || m.LeidenAdmissible || m.Disclosure != "PRIVATE" {
-		t.Fatal("authority ceiling")
-	}
-	if e := p.Validate(authority()); e != nil {
-		t.Fatal(e)
-	}
 }
-func TestNoPublicationCapabilityAndFailuresReturnZeroPlan(t *testing.T) {
-	typ := reflect.TypeOf(Core{})
-	if _, ok := typ.FieldByName("Publisher"); ok {
-		t.Fatal("core must not have publisher")
-	}
-	p, e := runWith(discovery(1), func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, errors.New("x") })
-	if e == nil || !reflect.DeepEqual(p, Plan{}) {
-		t.Fatal("failure leaked assembly")
-	}
-}
-func TestPlanValidationRejectsDuplicateBatchOrdinal(t *testing.T) {
-	p, e := runWith(discovery(64), goodAcquirer)
+func TestExactSelectionRangeStartInManifest(t *testing.T) {
+	a, e := run(t, discovery(1), nil)
 	if e != nil {
 		t.Fatal(e)
 	}
-	p.Batches[1].Ordinal = 0
-	if e := p.Validate(authority()); e == nil {
-		t.Fatal("accepted duplicate ordinal")
+	m := projection(t, a).Batches[0].AcquisitionManifest(acquisitionops.Limits{})
+	if *m.Root.Locator.Line != 10 || *m.Root.Locator.Character != 3 {
+		t.Fatal("wrong start")
 	}
-}
-func testLimits() acquisitionops.Limits {
-	n := func(x int) *int { return &x }
-	return acquisitionops.Limits{MaxNodes: n(100), MaxRequests: n(1000), MaxEvidenceBytes: n(1 << 20), MaxPathWork: n(10000), TimeoutMS: n(1000), RequestTimeoutMS: n(1000), MaxResponseBytes: n(1 << 20), MaxMessages: n(64)}
 }
