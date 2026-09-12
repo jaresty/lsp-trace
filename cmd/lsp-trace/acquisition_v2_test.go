@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/url"
@@ -146,6 +147,45 @@ func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
 		if explicit, alias := run(canonical), run(shorthand); !bytes.Equal(explicit, alias) {
 			t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: canonical=%d shorthand=%d", mode, len(explicit), len(alias))
 		}
+	}
+}
+
+func TestProductionV5DiscoversFromFileAndRetainsCanonicalSeedSpec(t *testing.T) {
+	const assertion = "ASSERT_PRODUCTION_V5_FROM_FILE_CANONICAL_SEED_CUSTODY"
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	cli := buildStartupSinkCLI(t)
+	fake := filepath.Join(t.TempDir(), "fake-lsp")
+	if out, err := exec.Command("go", "build", "-o", fake, "../fake-lsp").CombinedOutput(); err != nil {
+		t.Fatalf("build fake LSP: %v: %s", err, out)
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("leaf\n\npeer\n\nNested\nhidden\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--production-v5", "--workspace", workspace, "--server", fake, "--server-env", "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical", "--from-file", "main.go", "--language-id", "go"}
+	cmd := exec.Command(cli, args...)
+	cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s: command failed: %v: %s", assertion, err, out)
+	}
+	var artifact struct {
+		SeedSpec struct {
+			Bytes string `json:"bytes"`
+		} `json:"seed_spec"`
+	}
+	if err := json.Unmarshal(out, &artifact); err != nil {
+		t.Fatalf("%s: decode artifact: %v: %s", assertion, err, out)
+	}
+	got, err := base64.StdEncoding.DecodeString(artifact.SeedSpec.Bytes)
+	if err != nil {
+		t.Fatalf("%s: decode seed bytes: %v", assertion, err)
+	}
+	want := []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","defaults":{},"seeds":[{"type":"position","label":"symbol-001","path":"main.go","line":1,"column":1},{"type":"position","label":"symbol-002","path":"main.go","line":1,"column":1},{"type":"position","label":"symbol-003","path":"main.go","line":3,"column":1},{"type":"position","label":"symbol-004","path":"main.go","line":5,"column":1},{"type":"position","label":"symbol-005","path":"main.go","line":6,"column":1}]}`)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("%s: canonical bytes mismatch\n got: %s\nwant: %s", assertion, got, want)
 	}
 }
 
