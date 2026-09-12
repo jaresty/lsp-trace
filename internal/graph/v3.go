@@ -365,11 +365,14 @@ func projectExecutionBundleRelations(schemaVersion, bundleID string, edges []Edg
 			siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
 		} else {
 			siblings[i].Declaration = nil
-			siblings[i].RelationID = canonicalHistoricalSiblingRelationID(siblings[i])
+			siblings[i].RelationID = canonicalSiblingRelationID(siblings[i])
 		}
 	}
-	if schemaVersion == SchemaVersionV5 {
-		sort.Slice(siblings, func(i, j int) bool { return siblings[i].RelationID < siblings[j].RelationID })
+	sort.Slice(siblings, func(i, j int) bool { return siblings[i].RelationID < siblings[j].RelationID })
+	if schemaVersion != SchemaVersionV5 {
+		for i := range siblings {
+			siblings[i].RelationID = canonicalHistoricalSiblingRelationID(siblings[i])
+		}
 	}
 	dispatches = append([]DispatchRelationship(nil), dispatches...)
 	for i := range dispatches {

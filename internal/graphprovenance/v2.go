@@ -428,13 +428,7 @@ func CaptureV2(ctx context.Context, r acquisition.Result, workspace string) ([]b
 	if _, err = schema.Validate(raw, "v3"); err != nil {
 		return nil, err
 	}
-	frozenGraph, err := graph.DecodeNativeV3(raw)
-	if err != nil {
-		return nil, err
-	}
-	frozenAcquisition := r
-	frozenAcquisition.Graph = frozenGraph
-	e := EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: (&url.URL{Scheme: "file", Path: workspace}).String(), AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: frozenAcquisition, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
+	e := EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, GraphBytes: raw, GraphDigest: digest(VersionV2+":graph", raw), WorkspaceURI: (&url.URL{Scheme: "file", Path: workspace}).String(), AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Acquisition: r, Captures: []Receipt{}, Supplies: []SupplyReceiptV2{}, Bindings: []BindingV2{}}
 	if err = checkResultV2(e); err != nil {
 		return nil, err
 	}

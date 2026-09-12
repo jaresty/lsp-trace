@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -197,6 +198,31 @@ func TestValidateSemanticBundleAcceptsMergedSiblingSeedMemberships(t *testing.T)
 	}
 	if err := ValidateSemanticBundle(encoded); err != nil {
 		t.Fatalf("ASSERT_MERGED_SIBLING_SEED_MEMBERSHIP_REPLAY: %v", err)
+	}
+}
+
+func TestV3DeclarationBearingSiblingsReplayByteIdentically(t *testing.T) {
+	origin := NewNode(Item{Name: "origin", URI: "file:///w/origin.go"})
+	r := Result{SchemaVersion: SchemaVersionV3, Summary: Summary{Complete: true}}
+	for i := 0; i < 42; i++ {
+		candidate := NewNode(Item{Name: "candidate-" + strconv.Itoa(i), URI: "file:///w/candidate-" + strconv.Itoa(i) + ".go"})
+		declaration := NewNode(Item{Name: "declaration-" + strconv.Itoa(41-i), URI: "file:///w/declaration-" + strconv.Itoa(41-i) + ".go"})
+		r.SiblingCandidates = append(r.SiblingCandidates, SiblingCandidate{Origin: origin, Declaration: &declaration, Candidate: candidate})
+	}
+	captured, err := json.Marshal(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replayed, err := DecodeNativeV3(captured)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reencoded, err := json.Marshal(replayed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(captured, reencoded) {
+		t.Fatal("ASSERT_V3_DECLARATION_BEARING_SIBLING_REPLAY_IDENTITY")
 	}
 }
 
