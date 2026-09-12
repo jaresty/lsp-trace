@@ -30,6 +30,9 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 	return &c
 }
 func readPublicContractSchema(name string) ([]byte, error) {
+	if raw, ok, err := traceSchema(name); ok {
+		return raw, err
+	}
 	if raw, ok, err := programCInstabilitySchema(name); ok {
 		return raw, err
 	}

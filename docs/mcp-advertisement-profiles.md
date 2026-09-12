@@ -2,7 +2,7 @@
 
 Status: current advertisement contract for ADR 0004
 
-This document fixes the MCP registry simplification boundary. The current registry implements profile-filtered advertisement for the operations that exist today. It does not add `lsp_trace_v1_trace` or `lsp_trace_v1_discover`, rename a tool, alter a schema, change dispatch, or assign either future tool an operation number.
+This document fixes the MCP registry simplification boundary. The current registry implements profile-filtered advertisement and canonical `lsp_trace_v1_trace` operation 33. It does not add `lsp_trace_v1_discover`, rename historical tools, or renumber operations 1–32.
 
 ## Terms
 
@@ -24,7 +24,7 @@ lsp_trace_v1_discover            # intentionally unmet: not implemented or numbe
 lsp_trace_v1_execute
 lsp_trace_v1_inspect_hydrated
 lsp_trace_v1_program_c_leiden
-lsp_trace_v1_trace               # intentionally unmet: not implemented or numbered
+lsp_trace_v1_trace
 lsp_trace_v1_verify
 ```
 
@@ -65,7 +65,7 @@ lsp_trace_v3_incoming
 lsp_trace_v3_slice
 ```
 
-The three current-operation classes are disjoint and cover all 32 current operations. Advanced advertises `default ∪ advanced-only`; hidden legacy advertises nothing. Hidden legacy names remain discoverable through operation description/capabilities metadata and invocable only through canonical execute when their direct tools are hidden.
+The three current-operation classes are disjoint and cover all 33 current operations. Advanced advertises `default ∪ advanced-only`; hidden legacy advertises nothing. Hidden legacy names remain discoverable through operation description/capabilities metadata and invocable only through canonical execute when their direct tools are hidden.
 
 ### Classification rationale
 
@@ -109,6 +109,7 @@ Operation numbers are append-only compatibility identities, not lexical display 
 | 30 | `lsp_trace_v1_program_c_leiden` | default |
 | 31 | `lsp_trace_v1_program_c_compose` | advanced |
 | 32 | `lsp_trace_v1_program_c_instability` | advanced |
+| 33 | `lsp_trace_v1_trace` | default |
 
 Operations 31 and 32 MUST remain composition and A-08 instability respectively. New operations MUST be appended after 32; profile work MUST NOT fill, move, reuse, or reinterpret an existing number.
 
@@ -121,16 +122,15 @@ For every operation 1–32:
 
 ## Current state and RED boundary
 
-The process default is `default`; it advertises the five currently implemented default operations, omitting the intentionally absent `lsp_trace_v1_trace` and `lsp_trace_v1_discover`. `advanced` advertises those five plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
+The process default is `default`; it advertises the six currently implemented default operations, omitting only the intentionally absent `lsp_trace_v1_discover`. `advanced` advertises those five plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
 
-The explicit compatibility profiles remain available: `full` advertises all 32 current operations and `compact` advertises its frozen 10-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
+The explicit compatibility profiles remain available: `full` advertises all 33 current operations and `compact` advertises its frozen 10-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
 
 The future exact default advertisement test remains opt-in and intentionally RED under `LSP_TRACE_RUN_ADR0004_RED_GUARDS=1` because:
 
-- `lsp_trace_v1_trace` is not implemented or numbered;
 - `lsp_trace_v1_discover` is not implemented or numbered.
 
-All non-opt-in tests are regression guards and MUST remain GREEN. A failure prefixed `REGRESSION` means current 32-operation compatibility changed. A failure prefixed `INTENTIONAL RED` means a future ADR 0004 advertisement requirement remains unmet; it does not authorize weakening a current compatibility guard.
+All non-opt-in tests are regression guards and MUST remain GREEN. A failure prefixed `REGRESSION` means current 33-operation compatibility or the frozen historical 1–32 ledger changed. A failure prefixed `INTENTIONAL RED` means a future ADR 0004 advertisement requirement remains unmet; it does not authorize weakening a current compatibility guard.
 
 ## Implementation gate for the next step
 

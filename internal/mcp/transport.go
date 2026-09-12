@@ -326,7 +326,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			code = failure.Code
 			return bindLifecycleEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 		}
-		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily {
+		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily {
 			code = failure.Code
 			switch code {
 			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS", "LANGUAGE_ID_UNAVAILABLE":
@@ -614,6 +614,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
 		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.ExecutorFamily == TraceExecutorFamily {
+		env.EnvelopeSchemaID = mcpcontract.TraceEnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.Name == "lsp_trace_v2_verify_retained_calls" {
 		env.EnvelopeSchemaID = mcpcontract.VerifyRetainedCallsV2EnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -897,6 +900,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("incoming")
 	case "lsp_trace_v1_slice":
 		return operation.Name("slice")
+	case mcpcontract.TraceTool:
+		return operation.Name("trace")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

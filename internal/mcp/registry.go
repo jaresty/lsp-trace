@@ -39,6 +39,7 @@ const (
 	IncomingExecutorFamily      ExecutorFamily = "incoming"
 	SliceExecutorFamily         ExecutorFamily = "slice"
 	AcquisitionV2ExecutorFamily ExecutorFamily = "acquisition-v2"
+	TraceExecutorFamily         ExecutorFamily = "trace"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -83,7 +84,7 @@ const (
 
 var defaultToolNames = map[string]struct{}{
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
-	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_verify": {},
+	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_verify": {},
 }
 
 var advancedToolNames = map[string]struct{}{
@@ -91,7 +92,7 @@ var advancedToolNames = map[string]struct{}{
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
 	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
-	"lsp_trace_v1_program_c_instability": {}, "lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_validate": {},
+	"lsp_trace_v1_program_c_instability": {}, "lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_validate": {},
 	"lsp_trace_v1_verify": {}, "lsp_trace_v2_bounded_retained_analysis": {}, "lsp_trace_v2_bounded_retained_metrics": {},
 	"lsp_trace_v2_bounded_retained_ranking": {}, "lsp_trace_v2_export_retained_calls": {}, "lsp_trace_v2_verify": {},
 	"lsp_trace_v2_verify_retained_calls": {},
@@ -153,7 +154,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))
+	manifest = mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))))
 	descriptions := map[string]string{
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
 		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
@@ -176,6 +177,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v1_schema_get":                "Retrieve the exact schema contract for an evidence family and version",
 		"lsp_trace_v1_capabilities":              "Discover canonical LSP Trace tools, schemas, publication support, and limits",
 		"lsp_trace_v1_execute":                   "Execute one canonical request through the closed shared transport-neutral dispatcher",
+		mcpcontract.TraceTool:                    "Trace one exact symbol or one or more exact zero-based positions through one managed Graph Provenance V5 acquisition",
 		mcpcontract.CustodyExecuteTool:           "Execute one host-approved identity- and receipt-bound custody operation; not general shell execution",
 		"lsp_trace_v2_slice":                     "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
 		"lsp_trace_v2_incoming":                  "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
@@ -209,6 +211,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = IncomingExecutorFamily
 		} else if contract.Name == "lsp_trace_v1_slice" {
 			executorFamily = SliceExecutorFamily
+		} else if contract.Name == mcpcontract.TraceTool {
+			executorFamily = TraceExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
@@ -735,7 +739,7 @@ func operationGuidance(tool Tool, advertised bool) map[string]any {
 		"output_families_versions": append([]string(nil), tool.OutputFamiliesVersions...),
 		"output_schema_source":     "registered artifact schema IDs and versioned families; no schema identity is inferred from a selector",
 	}
-	if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily {
+	if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily {
 		guidance["position_convention"] = "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based"
 	}
 	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {

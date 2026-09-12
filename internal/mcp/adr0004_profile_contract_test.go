@@ -44,6 +44,7 @@ var adr0004OperationNumbers = []string{
 	"lsp_trace_v1_program_c_leiden",          // 30
 	"lsp_trace_v1_program_c_compose",         // 31
 	"lsp_trace_v1_program_c_instability",     // 32
+	"lsp_trace_v1_trace",                     // 33
 }
 
 var adr0004DefaultCurrent = []string{
@@ -51,6 +52,7 @@ var adr0004DefaultCurrent = []string{
 	"lsp_trace_v1_execute",
 	"lsp_trace_v1_inspect_hydrated",
 	"lsp_trace_v1_program_c_leiden",
+	"lsp_trace_v1_trace",
 	"lsp_trace_v1_verify",
 }
 
@@ -69,20 +71,23 @@ var adr0004HiddenLegacy = []string{
 	"lsp_trace_v3_incoming", "lsp_trace_v3_slice",
 }
 
-func TestADR0004RegressionGuardCanonicalExecuteKeepsNumbered32(t *testing.T) {
+func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical32AndAppends33(t *testing.T) {
 	r := NewRegistry(false)
-	if len(adr0004OperationNumbers) != 32 {
-		t.Fatalf("REGRESSION: operation fixture has %d entries, want 32", len(adr0004OperationNumbers))
+	if len(adr0004OperationNumbers) != 33 {
+		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 33", len(adr0004OperationNumbers))
 	}
 	if adr0004OperationNumbers[30] != "lsp_trace_v1_program_c_compose" || adr0004OperationNumbers[31] != "lsp_trace_v1_program_c_instability" {
-		t.Fatalf("REGRESSION: operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
+		t.Fatalf("REGRESSION: historical operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
+	}
+	if adr0004OperationNumbers[32] != "lsp_trace_v1_trace" {
+		t.Fatalf("REGRESSION: operation 33 is %q, want trace", adr0004OperationNumbers[32])
 	}
 
 	got := toolNames(r.Tools())
 	want := append([]string(nil), adr0004OperationNumbers...)
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("REGRESSION: canonical 32-operation inventory changed\n got: %v\nwant: %v", got, want)
+		t.Fatalf("REGRESSION: canonical append-only operation inventory changed\n got: %v\nwant: %v", got, want)
 	}
 	for number, name := range adr0004OperationNumbers {
 		if tool, ok := r.ResolveCanonical(name); !ok || tool.Name != name {
@@ -103,8 +108,8 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsNumbered32(t *testing.T) {
 		operation := properties["operation"].(map[string]any)["const"].(string)
 		seen[operation] = true
 	}
-	if len(seen) != 31 {
-		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 31", len(seen))
+	if len(seen) != 32 {
+		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 32", len(seen))
 	}
 	for _, name := range adr0004OperationNumbers {
 		if name != "lsp_trace_v1_execute" && !seen[name] {
@@ -113,7 +118,7 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsNumbered32(t *testing.T) {
 	}
 }
 
-func TestADR0004RegressionGuardProfilePartitionCoversNumbered32(t *testing.T) {
+func TestADR0004RegressionGuardProfilePartitionCoversNumbered33(t *testing.T) {
 	classified := append(append(append([]string{}, adr0004DefaultCurrent...), adr0004AdvancedOnly...), adr0004HiddenLegacy...)
 	sort.Strings(classified)
 	want := append([]string(nil), adr0004OperationNumbers...)
@@ -155,10 +160,10 @@ func TestADR0004CurrentAdvertisementProfiles(t *testing.T) {
 
 func TestADR0004IntentionalREDFutureDefaultAdvertisement(t *testing.T) {
 	if os.Getenv("LSP_TRACE_RUN_ADR0004_RED_GUARDS") != "1" {
-		t.Skip("INTENTIONAL RED: ADR 0004 target profiles require unimplemented lsp_trace_v1_trace/discover")
+		t.Skip("INTENTIONAL RED: ADR 0004 target profiles require unimplemented lsp_trace_v1_discover")
 	}
 
-	defaultTarget := append([]string{"lsp_trace_v1_discover", "lsp_trace_v1_trace"}, adr0004DefaultCurrent...)
+	defaultTarget := append([]string{"lsp_trace_v1_discover"}, adr0004DefaultCurrent...)
 	sort.Strings(defaultTarget)
 	gotDefault := toolNames(NewRegistryWithProfile(false, ToolProfileDefault).Advertised())
 	if !reflect.DeepEqual(gotDefault, defaultTarget) {
