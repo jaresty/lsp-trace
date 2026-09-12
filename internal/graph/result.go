@@ -73,9 +73,16 @@ type InvocationSeed struct {
 	LanguageID    string `json:"language_id"`
 }
 type ExpansionConfig struct {
-	TopmostSiblings bool `json:"topmost_siblings"`
-	DispatchFamily  bool `json:"dispatch_family"`
+	TopmostSiblings       bool   `json:"topmost_siblings"`
+	TopmostSiblingOutcome string `json:"topmost_sibling_outcome,omitempty"`
+	DispatchFamily        bool   `json:"dispatch_family"`
 }
+
+const (
+	TopmostSiblingExactRelationsFound = "EXACT_RELATIONS_FOUND"
+	TopmostSiblingNoExactRelations    = "NO_EXACT_RELATIONS"
+)
+
 type TraceConfig struct {
 	Enabled       bool   `json:"enabled"`
 	Path          string `json:"path,omitempty"`

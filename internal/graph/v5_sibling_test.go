@@ -88,6 +88,37 @@ func TestV5SiblingEvidenceRoundTripAndFieldMutations(t *testing.T) {
 	}
 }
 
+func TestV5SiblingExpansionOutcomeMustMatchExactRelationCount(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		outcome   string
+		remove    bool
+		wantError bool
+	}{
+		{name: "exact-relations-found", outcome: TopmostSiblingExactRelationsFound},
+		{name: "no-exact-relations", outcome: TopmostSiblingNoExactRelations, remove: true},
+		{name: "claimed-exact-with-zero", outcome: TopmostSiblingExactRelationsFound, remove: true, wantError: true},
+		{name: "claimed-zero-with-exact", outcome: TopmostSiblingNoExactRelations, wantError: true},
+		{name: "unknown", outcome: "UNKNOWN_OUTCOME", wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validV5SiblingResult()
+			result.Invocation.Expansion.TopmostSiblingOutcome = tc.outcome
+			if tc.remove {
+				result.SiblingCandidates = nil
+			}
+			raw, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = ValidateSemanticBundle(raw)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("ASSERT_V5_SIBLING_OUTCOME_MATCHES_RELATION_COUNT: outcome=%q relations=%d err=%v", tc.outcome, len(result.SiblingCandidates), err)
+			}
+		})
+	}
+}
+
 func TestV5SiblingRejectsRehashedBundleRelationAndMembershipMutations(t *testing.T) {
 	raw, err := json.Marshal(validV5SiblingResult())
 	if err != nil {

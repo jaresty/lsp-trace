@@ -353,8 +353,9 @@ func (e *Executor) Execute(ctx context.Context, op operation.Request) (operation
 			enriched.SchemaVersion = graph.SchemaVersionV5
 			enriched.Invocation.Expansion.TopmostSiblings = true
 			enriched.SiblingCandidates = siblings
-			if len(enriched.SiblingCandidates) == 0 {
-				return operation.Result{Artifact: raw}, &operation.Failure{Code: "OUTPUT_VALIDATION_FAILED", Err: fmt.Errorf("topmost sibling expansion produced no exact relations")}
+			enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNoExactRelations
+			if len(enriched.SiblingCandidates) > 0 {
+				enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingExactRelationsFound
 			}
 			seeds := map[string]graph.InvocationSeed{}
 			for _, seed := range enriched.Invocation.Seeds {

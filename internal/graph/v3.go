@@ -742,6 +742,20 @@ func validateV5SiblingEvidence(b bundleV3) error {
 	if b.SchemaVersion != SchemaVersionV5 {
 		return nil
 	}
+	switch b.Invocation.Expansion.TopmostSiblingOutcome {
+	case "":
+		// Retained V5 artifacts produced before explicit outcome accounting remain readable.
+	case TopmostSiblingExactRelationsFound:
+		if len(b.SiblingCandidates) == 0 {
+			return fmt.Errorf("v5 sibling expansion outcome requires exact relations")
+		}
+	case TopmostSiblingNoExactRelations:
+		if len(b.SiblingCandidates) != 0 {
+			return fmt.Errorf("v5 sibling expansion outcome contradicts exact relations")
+		}
+	default:
+		return fmt.Errorf("unknown v5 sibling expansion outcome %q", b.Invocation.Expansion.TopmostSiblingOutcome)
+	}
 	seeds := make(map[string]InvocationSeed, len(b.Invocation.Seeds))
 	for _, seed := range b.Invocation.Seeds {
 		seeds[seed.Label] = seed

@@ -230,6 +230,85 @@ func (r *v3ParityRuntime) SeedCustodyProvenance(string, uint64) (seedbinding.Cus
 	return seedbinding.CallerAssertedLocal, true
 }
 
+type zeroSiblingRuntime struct{ *v3ParityRuntime }
+
+func (r *zeroSiblingRuntime) RoundTrip(ctx context.Context, req sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	if req.Method == "textDocument/documentSymbol" {
+		leafRange := lsp.Range{End: lsp.Position{Character: 4}}
+		raw, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "leaf", Kind: 12, Range: leafRange, SelectionRange: leafRange}})
+		return sessionruntime.RoundTripResult{Result: raw}
+	}
+	return r.v3ParityRuntime.RoundTrip(ctx, req)
+}
+
+func TestManagedV5AdmitsAttemptedExpansionWithNoExactSiblingRelations(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "v5-zero-siblings", Workspace: root, Profile: "fake", EnvironmentReference: "hermetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	uri := (&url.URL{Scheme: "file", Path: filepath.Join(root, "a.go")}).String()
+	manifest := Manifest{SchemaVersion: ManifestVersion, CoordinateConvention: "zero-based-session", Root: Target{ID: "root", Locator: lspLocator(uri)}, RequiredTargets: []Target{}, Expansion: Expansion{TopmostSiblings: true}}
+	run := func(grouped bool) operation.Result {
+		input := Input{SessionID: "fixture", Generation: 9007199254740993, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5}
+		request := operation.Request{Name: SliceV3}
+		if grouped {
+			input.ProductionV5 = true
+			input.OutputVersion = ""
+			input.GroupBy = "leiden"
+			input.GroupOptions = &GroupOptions{Seed: 19, PageRankTopK: 1, HubTopK: 1}
+			input.OutputSelector = "graph.json"
+			publicationRoot, openErr := publication.OpenRoot(t.TempDir())
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+			defer publicationRoot.Close()
+			request.PublicationRoot = publicationRoot
+		}
+		raw, marshalErr := json.Marshal(input)
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		request.Input = raw
+		result, failure := NewExecutor(&zeroSiblingRuntime{v3ParityRuntime: &v3ParityRuntime{profile: runtimeprofile.Resolve(selector), uri: uri}}).Execute(context.Background(), request)
+		if failure != nil {
+			t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_ADMITTED/grouped=%t: %v", grouped, failure)
+		}
+		return result
+	}
+
+	ungrouped := run(false)
+	if _, err := graphprovenance.ValidateFor(ungrouped.Artifact, graphprovenance.Family, "v5"); err != nil {
+		t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_VALID: %v", err)
+	}
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(ungrouped.Artifact, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(native, &document); err != nil {
+		t.Fatal(err)
+	}
+	expansion := document["invocation"].(map[string]any)["expansion"].(map[string]any)
+	if expansion["topmost_sibling_outcome"] != "NO_EXACT_RELATIONS" {
+		t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_EXPLICIT_OUTCOME: expansion=%#v", expansion)
+	}
+	if siblings, present := document["sibling_candidates"]; present && siblings != nil && len(siblings.([]any)) != 0 {
+		t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_NO_INVENTED_RELATIONS: %#v", siblings)
+	}
+	grouped := run(true)
+	if !bytes.Contains(grouped.Artifact, []byte(programcpresentation.Version)) {
+		t.Fatalf("ASSERT_V5_ZERO_EXACT_SIBLINGS_GROUPED_LEIDEN: %s", grouped.Artifact)
+	}
+}
+
 func TestFR23CanonicalPublicSurfaceByteParity(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "a.go"), []byte("package fixture\n"), 0o600); err != nil {
