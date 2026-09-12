@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
@@ -142,7 +143,64 @@ type resolvedSliceSource struct {
 func resolveSliceSources(cfg sliceConfig) (string, string, []resolvedSliceSource, error) {
 	var specs []seedSpec
 	if cfg.fromFile != "" {
-		specs = []seedSpec{{Label: "slice-source", At: cfg.fromFile + ":1:1"}}
+		workspace, err := filepath.Abs(cfg.workspace)
+		if err != nil {
+			return "", "", nil, err
+		}
+		resolvedPath, err := filepath.Abs(filepath.Join(workspace, cfg.fromFile))
+		if err != nil {
+			return "", "", nil, err
+		}
+		relativeToWorkspace, err := filepath.Rel(workspace, resolvedPath)
+		if err != nil || relativeToWorkspace == ".." || strings.HasPrefix(relativeToWorkspace, ".."+string(filepath.Separator)) {
+			return "", "", nil, fmt.Errorf("--from-file must remain within workspace")
+		}
+		info, err := os.Lstat(resolvedPath)
+		if err != nil {
+			return "", "", nil, err
+		}
+		paths := []string{cfg.fromFile}
+		if info.IsDir() {
+			paths = nil
+			err = filepath.WalkDir(resolvedPath, func(path string, entry os.DirEntry, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if entry.Type()&os.ModeSymlink != 0 {
+					if entry.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+				if entry.IsDir() {
+					return nil
+				}
+				fileInfo, err := entry.Info()
+				if err != nil {
+					return err
+				}
+				if !fileInfo.Mode().IsRegular() {
+					return nil
+				}
+				relative, err := filepath.Rel(cfg.workspace, path)
+				if err != nil {
+					return err
+				}
+				paths = append(paths, relative)
+				return nil
+			})
+			if err != nil {
+				return "", "", nil, err
+			}
+			sort.Strings(paths)
+			if len(paths) == 0 {
+				return "", "", nil, fmt.Errorf("--from-file directory contains no regular files")
+			}
+		}
+		specs = make([]seedSpec, len(paths))
+		for i, path := range paths {
+			specs[i] = seedSpec{Label: fmt.Sprintf("slice-source-%d", i+1), At: path + ":1:1"}
+		}
 	} else {
 		seedConfig := config{seedFile: cfg.seedFile, ats: cfg.ats}
 		if err := loadSeeds(&seedConfig); err != nil {
