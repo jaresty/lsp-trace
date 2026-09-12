@@ -2,15 +2,21 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/ancillaryinspection"
+	"lsp-trace/internal/captureset"
+	"lsp-trace/internal/capturesetinspection"
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/publication"
 )
 
 func inspectFixture(t *testing.T) ([]byte, string) {
@@ -337,6 +343,114 @@ func TestProjectAllSeedInspectionRequiresExactlyOneResultPerInvocationSeed(t *te
 				t.Fatalf("ASSERT_INSPECT_ALL_SEEDS_EXACT_RESULT_CARDINALITY: got=%v want=%q", err, want)
 			}
 		})
+	}
+}
+
+func captureSetFixture(t *testing.T) (string, string, captureset.Manifest) {
+	t.Helper()
+	seed := "private-seed-material"
+	sum := sha256.Sum256([]byte(seed))
+	targets := []captureset.Target{{CensusOrdinal: 0, CanonicalSeedV2: seed, CanonicalSeedV2SHA256: "sha256:" + hex.EncodeToString(sum[:])}}
+	constituents := []captureset.Constituent{{ImmutableSelector: "graph-provenance-v5/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SchemaID: captureset.NativeV5SchemaID, SHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ByteLength: 7, NativeV5Identity: "private-native-identity"}}
+	files := captureset.Ledger{Denominator: 2, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private/file/a", Disposition: "CAPTURED"}, {Ordinal: 1, Identity: "private/file/b", Disposition: "SKIPPED"}}}
+	symbols := captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private-symbol", Disposition: "CAPTURED"}}}
+	manifest, err := captureset.Prepare(targets, constituents, files, symbols, "census.v1", "retain.v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPath := t.TempDir()
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := captureset.NewPublisher(root).Publish(manifest)
+	if closeErr := root.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	return rootPath, result.Receipt.Selector, manifest
+}
+
+func TestInspectPrivateCaptureSetRequiresExplicitSafeRootAndCanonicalSelector(t *testing.T) {
+	root, selector, _ := captureSetFixture(t)
+	stdout, stderr, code := captureRun(t, []string{"inspect", selector, "--json"})
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "PRIVATE_PATHS_DISABLED") {
+		t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_DISABLED_DEFAULT: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	for _, tc := range []struct{ name, selector, root string }{
+		{name: "relative root", selector: selector, root: "."},
+		{name: "root traversal", selector: selector, root: root + string(filepath.Separator) + ".."},
+		{name: "selector traversal", selector: "capture-sets/v1/sha256/../manifest.json", root: root},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := captureRun(t, []string{"inspect", tc.selector, "--private-capture-set-root", tc.root, "--json"})
+			if code != 1 || stdout != "" || stderr == "" {
+				t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_MALFORMED_FAILS_CLOSED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+		})
+	}
+	if runtime.GOOS != "windows" {
+		link := filepath.Join(t.TempDir(), "root-link")
+		if err := os.Symlink(root, link); err != nil {
+			t.Fatal(err)
+		}
+		stdout, stderr, code = captureRun(t, []string{"inspect", selector, "--private-capture-set-root", link, "--json"})
+		if code != 1 || stdout != "" || !strings.Contains(stderr, "no-follow directory") {
+			t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_ROOT_SYMLINK_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	}
+}
+
+func TestInspectPrivateCaptureSetVerifiedDeterministicPrivateSummary(t *testing.T) {
+	root, selector, manifest := captureSetFixture(t)
+	args := []string{"inspect", selector, "--private-capture-set-root", root, "--json"}
+	left, leftErr, leftCode := captureRun(t, args)
+	right, rightErr, rightCode := captureRun(t, args)
+	if leftCode != 0 || rightCode != 0 || leftErr != "" || rightErr != "" || left != right {
+		t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_DETERMINISTIC: left=%q right=%q errors=%q/%q", left, right, leftErr, rightErr)
+	}
+	var got capturesetinspection.Result
+	if err := json.Unmarshal([]byte(left), &got); err != nil {
+		t.Fatal(err)
+	}
+	if err := capturesetinspection.Validate(got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CaptureSetIdentity != manifest.ImmutableSelector || got.TargetCount != 1 || got.BatchCount != 1 || got.ConstituentCount != 1 || got.Files.Denominator != 2 || got.Symbols.Denominator != 1 || got.Authority != 0 || got.SourceGraphComplete != "UNKNOWN" || got.NativeSingleCaptureCustody || got.CrossCaptureCalls || got.LeidenAdmissible {
+		t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_EXACT_VERIFIED_SUMMARY: %+v", got)
+	}
+	for _, private := range []string{"private-seed-material", root, "private/file/a", "private-native-identity", "graph-provenance-v5/"} {
+		if strings.Contains(left, private) {
+			t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_NON_DISCLOSURE: %q in %s", private, left)
+		}
+	}
+	human, humanErr, humanCode := captureRun(t, []string{"inspect", selector, "--private-capture-set-root", root})
+	if humanCode != 0 || humanErr != "" {
+		t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_HUMAN_SUCCESS: code=%d stderr=%q", humanCode, humanErr)
+	}
+	for _, ceiling := range []string{"authority: 0", "source_graph_complete: UNKNOWN", "native_single_capture_custody: false", "cross_capture_calls: false", "leiden_admissible: false"} {
+		if !strings.Contains(human, ceiling) {
+			t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_CEILING_VISIBLE: %q missing from %s", ceiling, human)
+		}
+	}
+}
+
+func TestInspectPrivateCaptureSetRejectsTamperedExactBytes(t *testing.T) {
+	root, selector, _ := captureSetFixture(t)
+	path := filepath.Join(root, filepath.FromSlash(selector))
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw[len(raw)-2] ^= 1
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"inspect", selector, "--private-capture-set-root", root, "--json"})
+	if code != 1 || stdout != "" || stderr == "" {
+		t.Fatalf("ASSERT_CAPTURE_SET_INSPECTION_TAMPER_REJECTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

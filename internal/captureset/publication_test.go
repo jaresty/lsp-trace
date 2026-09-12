@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"sync"
 	"testing"
 
@@ -73,6 +74,23 @@ func TestRedactAppliesExactPolicyAndDistinctIdentity(t *testing.T) {
 func TestCaptureSetRemainsOutsidePublicSchemaRegistry(t *testing.T) {
 	if _, ok := publicschema.RegisteredFamilies()["capture-set"]; ok {
 		t.Fatal("ASSERT_CAPTURE_SET_NOT_PUBLICLY_REGISTERED")
+	}
+}
+
+func TestValidatePublicationSelectorRejectsMalformedBeforeVerification(t *testing.T) {
+	valid := CaptureSetSelectorPrefix + strings.Repeat("a", 64) + "/manifest.json"
+	if err := ValidatePublicationSelector(valid); err != nil {
+		t.Fatalf("ASSERT_CANONICAL_CAPTURE_SET_SELECTOR: %v", err)
+	}
+	for _, selector := range []string{
+		"../" + valid,
+		CaptureSetSelectorPrefix + strings.Repeat("A", 64) + "/manifest.json",
+		CaptureSetSelectorPrefix + strings.Repeat("a", 63) + "/manifest.json",
+		CaptureSetSelectorPrefix + strings.Repeat("z", 64) + "/manifest.json",
+	} {
+		if err := ValidatePublicationSelector(selector); err == nil {
+			t.Fatalf("ASSERT_MALFORMED_CAPTURE_SET_SELECTOR_REJECTED: %q", selector)
+		}
 	}
 }
 

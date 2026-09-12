@@ -76,6 +76,18 @@ Constituent custody remains independently native; capture-set publication does n
 - preserving private identity on redaction: rejected because identity would falsely denote different bytes/semantics.
 - registering the internal schema now: rejected because internal implementation existence is not sufficient justification for a public compatibility surface.
 
+## Private inspection
+
+The existing `inspect` CLI may compose this private verification API only through:
+
+```text
+lsp-trace inspect CAPTURE_SET_SELECTOR --private-capture-set-root ABSOLUTE_ROOT [--json]
+```
+
+Capture-set inspection is disabled unless the root flag is explicitly present. The root must be a cleaned absolute no-follow directory and the selector must be the canonical relative capture-set publication selector; the command opens one pinned `publication.Root` and delegates immutable verification to `captureset.Publisher.Verify`. It never accepts a manifest artifact path as capture-set custody.
+
+Default output is a bounded human summary. `--json` emits the separate internal `lsp-trace.capture-set-inspection.v1` projection, not the manifest. Both expose only capture-set logical identity, disclosure, target/batch/constituent counts, closed file/symbol denominator and disposition counts, and the fixed authority/completeness/custody/CALLS/Leiden ceilings. They omit canonical seeds, the private root, constituent selectors and native identities, and ledger resource identities. This projection remains internal and is not registered with public schema-get, validation, or MCP surfaces.
+
 ## Consequences
 
-Hosts receive a small in-process exact-byte API and must provision the pinned publication root and native V5 verifier independently. No CLI/MCP command, language-server acquisition, seed-file lane, arbitrary-path reader, cross-capture edge construction, or Leiden pipeline is added.
+Hosts receive a small in-process exact-byte API and must provision the pinned publication root and native V5 verifier independently. Private read-only CLI inspection is the sole added command composition. No MCP command, language-server acquisition, seed-file lane, arbitrary-path reader, cross-capture edge construction, or Leiden pipeline is added.

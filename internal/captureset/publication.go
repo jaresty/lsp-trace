@@ -136,9 +136,23 @@ func (p *Publisher) Publish(m Manifest) PublicationResult {
 	return PublicationResult{Receipt: &PublicationReceipt{Selector: selector, Disclosure: "PRIVATE", ArtifactSHA256: result.Receipt.Digest, ByteLength: result.Receipt.ByteLength, Mechanism: result.Receipt.PublicationMechanism}}
 }
 
-func (p *Publisher) Verify(selector string) (Manifest, error) {
+func ValidatePublicationSelector(selector string) error {
 	if !strings.HasPrefix(selector, CaptureSetSelectorPrefix) || !strings.HasSuffix(selector, "/manifest.json") {
-		return Manifest{}, errors.New("non-canonical capture-set selector")
+		return errors.New("non-canonical capture-set selector")
+	}
+	digest := strings.TrimSuffix(strings.TrimPrefix(selector, CaptureSetSelectorPrefix), "/manifest.json")
+	if len(digest) != 64 || strings.ToLower(digest) != digest {
+		return errors.New("non-canonical capture-set selector")
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return errors.New("non-canonical capture-set selector")
+	}
+	return nil
+}
+
+func (p *Publisher) Verify(selector string) (Manifest, error) {
+	if err := ValidatePublicationSelector(selector); err != nil {
+		return Manifest{}, err
 	}
 	raw, err := p.root.ReadSelector(selector, 32<<20)
 	if err != nil {

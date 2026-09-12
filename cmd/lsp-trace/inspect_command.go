@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"lsp-trace/internal/ancillaryinspection"
+	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/inspection"
 	"lsp-trace/internal/schema"
@@ -35,7 +36,7 @@ func validateAllSeedAccounting(projection inspectAllProjection) error {
 	return inspection.ValidateAllSeedAccounting(projection)
 }
 
-const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]\n       lsp-trace inspect SELECTOR --hydrated (--publication-root ROOT | --artifact-store ROOT | --private-root ROOT --enable-private-paths) --artifact-schema-id ID --artifact-digest sha256:HEX --artifact-generation g-HEX --artifact-byte-length N [options]"
+const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect CAPTURE_SET_SELECTOR --private-capture-set-root ABSOLUTE_ROOT [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]\n       lsp-trace inspect SELECTOR --hydrated (--publication-root ROOT | --artifact-store ROOT | --private-root ROOT --enable-private-paths) --artifact-schema-id ID --artifact-digest sha256:HEX --artifact-generation g-HEX --artifact-byte-length N [options]"
 
 func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
@@ -57,11 +58,12 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	allSeeds := fs.Bool("all-seeds", false, "inspect every stored seed")
 	ancillary := fs.Bool("ancillary", false, "emit lsp-trace.inspect-ancillary.v1 delivery")
 	jsonOutput := fs.Bool("json", false, "emit JSON")
+	privateCaptureSetRoot := fs.String("private-capture-set-root", "", "cleaned absolute pinned private capture-set publication root")
 	hydrated := addHydratedFlags(fs)
 	if err := fs.Parse(args[1:]); err != nil {
 		return 1
 	}
-	legacyVisited, hydratedVisited := false, false
+	legacyVisited, hydratedVisited, privateCaptureSetVisited := false, false, false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "seed" || f.Name == "all-seeds" {
 			legacyVisited = true
@@ -69,7 +71,21 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		if hydratedFlag(f.Name) {
 			hydratedVisited = true
 		}
+		if f.Name == "private-capture-set-root" {
+			privateCaptureSetVisited = true
+		}
 	})
+	if privateCaptureSetVisited {
+		if *privateCaptureSetRoot == "" || legacyVisited || hydratedVisited || hydrated.enabled || *ancillary || fs.NArg() != 0 {
+			fmt.Fprintln(stderr, "inspect capture-set: INVALID_INPUT: private capture-set inspection requires only SELECTOR, --private-capture-set-root ABSOLUTE_ROOT, and optional --json")
+			return 1
+		}
+		return runInspectCaptureSet(input, *privateCaptureSetRoot, *jsonOutput, stdout, stderr)
+	}
+	if len(input) >= len(captureset.CaptureSetSelectorPrefix) && input[:len(captureset.CaptureSetSelectorPrefix)] == captureset.CaptureSetSelectorPrefix {
+		fmt.Fprintln(stderr, "inspect capture-set: PRIVATE_PATHS_DISABLED: --private-capture-set-root is required")
+		return 1
+	}
 	if hydrated.enabled {
 		if legacyVisited || *ancillary || fs.NArg() != 0 {
 			fmt.Fprintln(stderr, "inspect: INVALID_INPUT: hydrated and legacy selectors are incompatible")
