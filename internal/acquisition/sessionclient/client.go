@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"lsp-trace/internal/acquisition"
@@ -40,6 +41,8 @@ func New(runtime Runtime) acquisition.Client {
 	if !ok {
 		return client
 	}
+	var supplyMu sync.Mutex
+	seenSupply := make(map[string]int)
 	return acquisition.WithDocumentSupply(client, func(ctx context.Context, a acquisition.AcquisitionContext, l acquisition.Locator) (acquisition.Supply, error) {
 		document := supplier.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: a.SessionID, Generation: a.Generation, URI: l.URI, LanguageID: l.LanguageID, CaptureSupply: true})
 		if document.Failure != "" {
@@ -47,10 +50,18 @@ func New(runtime Runtime) acquisition.Client {
 		}
 		var observation json.RawMessage
 		if document.Supply != nil {
-			var err error
-			observation, err = json.Marshal(document.Supply)
-			if err != nil {
-				return acquisition.Supply{}, err
+			supplyMu.Lock()
+			alreadySeen := seenSupply[document.Supply.URI] == document.Supply.DocumentVersion
+			if !alreadySeen {
+				seenSupply[document.Supply.URI] = document.Supply.DocumentVersion
+			}
+			supplyMu.Unlock()
+			if !alreadySeen {
+				var err error
+				observation, err = json.Marshal(document.Supply)
+				if err != nil {
+					return acquisition.Supply{}, err
+				}
 			}
 		}
 		return acquisition.Supply{URI: document.URI, LanguageID: document.LanguageID, Observation: observation}, nil

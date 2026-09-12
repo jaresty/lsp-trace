@@ -91,6 +91,9 @@ func TestTraceProcessRepeatedAtUsesOneMultiTargetV5Acquisition(t *testing.T) {
 	methodLog := filepath.Join(t.TempDir(), "methods.log")
 	args := append(traceFakeArgs(workspace, "slice-symbol"), "--server-env", "LSP_TRACE_FAKE_METHOD_LOG="+methodLog, "--at", "main.go:1:1", "--at", "main.go:2:1", "--down-depth", "0", "--up-depth", "0")
 	stdout, stderr, code := captureRun(t, append([]string{"trace"}, args...))
+	if code != 0 {
+		t.Fatalf("ASSERT_TRACE_ONE_MULTI_TARGET_V5_ACQUISITION_SETUP: code=%d stderr=%q stdout=%q", code, stderr, stdout)
+	}
 	envelope, _ := decodeTraceV5(t, stdout)
 	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
 	if err != nil {

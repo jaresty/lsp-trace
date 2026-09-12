@@ -4,17 +4,66 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 )
 
-type traceRecordingExecutor struct{ calls []operation.Request }
+type traceRecordingExecutor struct {
+	calls    []operation.Request
+	artifact []byte
+	failure  *operation.Failure
+}
 
 func (e *traceRecordingExecutor) Execute(_ context.Context, r operation.Request) (operation.Result, *operation.Failure) {
 	e.calls = append(e.calls, r)
-	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)}, nil
+	if e.failure != nil {
+		return operation.Result{}, e.failure
+	}
+	artifact := e.artifact
+	if artifact == nil {
+		artifact = []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)
+	}
+	return operation.Result{Artifact: artifact}, nil
+}
+
+func TestTraceIncompleteAndUnsupportedEnvelopeDirectCanonicalParity(t *testing.T) {
+	full := NewRegistryWithProfile(false, ToolProfileFull)
+	valid := map[string]any{"session_id": "s", "uri": "file:///w/a.go", "positions": []any{map[string]any{"line": float64(0), "character": float64(1)}}}
+	for _, tc := range []struct {
+		name     string
+		artifact []byte
+	}{
+		{"partial", []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","summary":{"traversal_complete":false}}`)},
+		{"truncated", []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","complete":false}`)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := &traceRecordingExecutor{artifact: tc.artifact}
+			server := &Server{Registry: full, Executors: map[ExecutorFamily]Executor{TraceExecutorFamily: executor}}
+			for i, params := range []json.RawMessage{mustCallParams(t, mcpcontract.TraceTool, valid), mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.TraceTool, "arguments": valid}})} {
+				response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(i + 1)}, params)
+				raw, _ := json.Marshal(response.Result)
+				want := `"outcome":"PARTIAL"`
+				if i == 1 {
+					want = `"delegated_outcome":"PARTIAL"`
+				}
+				if !strings.Contains(string(raw), want) {
+					t.Fatalf("ASSERT_TRACE_INCOMPLETE_DIRECT_CANONICAL_PARITY_%s: %s", tc.name, raw)
+				}
+			}
+		})
+	}
+	executor := &traceRecordingExecutor{failure: &operation.Failure{Code: "UNSUPPORTED_DOCUMENT_SYMBOL"}}
+	server := &Server{Registry: full, Executors: map[ExecutorFamily]Executor{TraceExecutorFamily: executor}}
+	for i, params := range []json.RawMessage{mustCallParams(t, mcpcontract.TraceTool, map[string]any{"session_id": "s", "uri": "file:///w/a.go", "symbol": "A"}), mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.TraceTool, "arguments": map[string]any{"session_id": "s", "uri": "file:///w/a.go", "symbol": "A"}}})} {
+		response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(i + 1)}, params)
+		raw, _ := json.Marshal(response.Result)
+		if !strings.Contains(string(raw), "UNSUPPORTED_CALL_HIERARCHY") {
+			t.Fatalf("ASSERT_TRACE_UNSUPPORTED_DOCUMENT_SYMBOL_PUBLIC_CODE_PARITY: %s", raw)
+		}
+	}
 }
 
 func TestTraceOperation33ProfilesSchemaAndExecuteParity(t *testing.T) {

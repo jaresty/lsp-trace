@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/seedformat"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/sessionruntime"
@@ -131,15 +134,15 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	defer cancel()
 	positions := append([]Position(nil), in.Positions...)
 	var prepared *sessionruntime.DocumentResult
-	if in.Symbol != "" {
-		if d, ok := e.runtime.(documentRuntime); ok {
-			doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true})
-			if doc.Failure != "" {
-				return fail(string(doc.Failure), nil)
-			}
-			in.LanguageID = doc.LanguageID
-			prepared = &doc
+	if d, ok := e.runtime.(documentRuntime); ok {
+		doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true})
+		if doc.Failure != "" {
+			return fail(string(doc.Failure), nil)
 		}
+		in.LanguageID = doc.LanguageID
+		prepared = &doc
+	}
+	if in.Symbol != "" {
 		p, f := resolveSymbol(ctx, e.runtime, resolvedID, generation, in.URI, in.Symbol, requestTimeout)
 		if f != nil {
 			return operation.Result{}, f
@@ -161,7 +164,11 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}
-	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore}
+	seedSpec, err := explicitSeedSpec(e.runtime, resolvedID, generation, in, positions)
+	if err != nil {
+		return fail(operation.FailureInvalidInput, err)
+	}
+	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore, RetainedSeedSpec: seedSpec}
 	if prepared != nil {
 		if acquisition, ok := e.acquisition.(interface {
 			ExecuteWithPreparedDocument(context.Context, operation.Request, sessionruntime.DocumentResult) (operation.Result, *operation.Failure)
@@ -170,6 +177,44 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		}
 	}
 	return e.acquisition.Execute(ctx, requestOp)
+}
+
+func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, positions []Position) ([]byte, error) {
+	workspace := ""
+	for _, record := range runtime.Records() {
+		if record.SessionID == id && record.Generation == generation {
+			if workspace != "" {
+				return nil, fmt.Errorf("ambiguous host workspace")
+			}
+			workspace = record.Profile.Workspace().String()
+		}
+	}
+	if workspace == "" {
+		return nil, fmt.Errorf("host workspace unavailable")
+	}
+	u, err := url.Parse(in.URI)
+	if err != nil || u.Scheme != "file" || u.Host != "" {
+		return nil, fmt.Errorf("canonical file URI required")
+	}
+	rel, err := filepath.Rel(workspace, filepath.FromSlash(u.Path))
+	if err != nil || rel == ".." || filepath.IsAbs(rel) {
+		return nil, fmt.Errorf("trace URI is outside managed workspace")
+	}
+	path := filepath.ToSlash(rel)
+	file := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention}
+	if in.Symbol != "" {
+		file.Seeds = []seedformat.Seed{{Type: seedformat.SymbolType, Symbol: &seedformat.Symbol{Label: "root", Path: path, Symbol: in.Symbol}}}
+	} else {
+		file.Seeds = make([]seedformat.Seed, len(positions))
+		for i, p := range positions {
+			label := fmt.Sprintf("trace-%03d", i)
+			if i == 0 {
+				label = "root"
+			}
+			file.Seeds[i] = seedformat.Seed{Type: seedformat.PositionType, Position: &seedformat.Position{Label: label, Path: path, Line: uint64(p.Line) + 1, Column: uint64(p.Character) + 1}}
+		}
+	}
+	return seedformat.EncodeCanonical(file, workspace)
 }
 
 func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation uint64, uri, name string, requestTimeout int) (Position, *operation.Failure) {

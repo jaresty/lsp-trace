@@ -219,8 +219,8 @@ func TestGraphProvenanceActualWireMutationAndRestart(t *testing.T) {
 		t.Fatalf("ASSERT_SERVER_ACTUALLY_RECEIVED_A_THEN_B: %q", texts)
 	}
 	cached := run()
-	if cached.Supply != nil || cached.SupplyStatus != "NO_NOTIFICATION_OBSERVATION" {
-		t.Fatal("ASSERT_WIRE_CACHE_NO_MANUFACTURED_CHANGE")
+	if cached.Supply == nil || !bytes.Equal(cached.Supply.Content, b) || cached.Supply.Supply.Version != 2 || len(texts) != 2 {
+		t.Fatal("ASSERT_WIRE_CACHE_REUSES_RETAINED_EXACT_SUPPLY_WITHOUT_MANUFACTURED_CHANGE")
 	}
 	accepted := m.Restart(context.Background(), started.SessionID, "restart")
 	deadline := time.Now().Add(2 * time.Second)

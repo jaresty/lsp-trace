@@ -247,6 +247,7 @@ type openDocument struct {
 	languageID string
 	version    int
 	digest     [32]byte
+	supply     *DocumentSupply
 }
 
 const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
@@ -354,9 +355,16 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
 	}
 	if opened && previous.digest == digest {
+		result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
+		if req.CaptureSupply && previous.supply != nil {
+			copy := *previous.supply
+			copy.Content = append([]byte(nil), previous.supply.Content...)
+			copy.Params = append(json.RawMessage(nil), previous.supply.Params...)
+			result.Supply = &copy
+		}
 		m.mu.Unlock()
 		collector.Record(diagnosticEventCacheHit, int64(previous.version), true)
-		return finishDocument(DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}, diagnosticEventTerminalResponse)
+		return finishDocument(result, diagnosticEventTerminalResponse)
 	}
 	if m.workers >= m.limits.MaxChildren {
 		m.mu.Unlock()
@@ -415,7 +423,16 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: failure}, diagnosticEventTerminalFailure)
 	}
-	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest}
+	var retainedSupply *DocumentSupply
+	if req.CaptureSupply {
+		retainedSupply = &DocumentSupply{
+			Classification: "LSP_SUPPLIED", SessionID: req.SessionID,
+			Generation: req.Generation, URI: req.URI, DocumentVersion: version,
+			Method: method, Content: append([]byte(nil), text...),
+			Params: append(json.RawMessage(nil), params...),
+		}
+	}
+	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest, supply: retainedSupply}
 	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
 	if m.diagnostics != nil {
 		diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: true, Method: method})
@@ -423,13 +440,11 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		m.diagnostics.Record(diagnostic)
 	}
 	result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
-	if req.CaptureSupply {
-		result.Supply = &DocumentSupply{
-			Classification: "LSP_SUPPLIED", SessionID: req.SessionID,
-			Generation: req.Generation, URI: req.URI, DocumentVersion: version,
-			Method: method, Content: append([]byte(nil), text...),
-			Params: append(json.RawMessage(nil), params...),
-		}
+	if retainedSupply != nil {
+		copy := *retainedSupply
+		copy.Content = append([]byte(nil), retainedSupply.Content...)
+		copy.Params = append(json.RawMessage(nil), retainedSupply.Params...)
+		result.Supply = &copy
 	}
 	m.mu.Unlock()
 	return finishDocument(result, diagnosticEventTerminalResponse)

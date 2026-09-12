@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
@@ -26,19 +28,34 @@ func (f *fakeRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, 
 	}
 	return sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true, DocumentSymbolSupport: true}, ""
 }
-func (f *fakeRuntime) Records() []sessionruntime.Record { return nil }
+func (f *fakeRuntime) Records() []sessionruntime.Record {
+	selector, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: "/w", Profile: "test", EnvironmentReference: "test"})
+	if err != nil {
+		panic(err)
+	}
+	return []sessionruntime.Record{{SessionID: "s", Generation: 1, State: session.Ready, Profile: runtimeprofile.Resolve(selector)}}
+}
 func (f *fakeRuntime) PrepareDocument(_ context.Context, req sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
 	f.preparations = append(f.preparations, req)
 	result := sessionruntime.DocumentResult{URI: req.URI, LanguageID: "go", Version: 1}
-	if len(f.preparations) == 1 && req.CaptureSupply {
-		result.Supply = &sessionruntime.DocumentSupply{URI: req.URI, SessionID: req.SessionID, Generation: req.Generation, DocumentVersion: 1, Classification: "LSP_SUPPLIED", Method: "textDocument/didOpen", Content: []byte("package fixture\n"), Params: json.RawMessage(`{"textDocument":{"uri":"file:///w/a.go"}}`)}
+	if req.CaptureSupply {
+		result.Supply = &sessionruntime.DocumentSupply{URI: req.URI, SessionID: req.SessionID, Generation: req.Generation, DocumentVersion: 1, Classification: "LSP_SUPPLIED", Method: "textDocument/didOpen", Content: []byte("package fixture\n"), Params: json.RawMessage(`{"textDocument":{"uri":"file:///w/a.go","languageId":"go","version":1,"text":"package fixture\n"}}`)}
 	}
 	return result
 }
 func (f *fakeRuntime) RoundTrip(_ context.Context, r sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
 	f.methods = append(f.methods, r.Method)
-	raw, _ := json.Marshal(f.symbols)
-	return sessionruntime.RoundTripResult{Result: raw}
+	switch r.Method {
+	case "textDocument/documentSymbol":
+		raw, _ := json.Marshal(f.symbols)
+		return sessionruntime.RoundTripResult{Result: raw}
+	case "textDocument/prepareCallHierarchy":
+		return sessionruntime.RoundTripResult{Result: json.RawMessage(`[{"name":"Target","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":3}},"selectionRange":{"start":{"line":1,"character":2},"end":{"line":1,"character":3}}}]`)}
+	case "callHierarchy/outgoingCalls", "callHierarchy/incomingCalls":
+		return sessionruntime.RoundTripResult{Result: json.RawMessage(`[]`)}
+	default:
+		return sessionruntime.RoundTripResult{Result: json.RawMessage(`[]`)}
+	}
 }
 
 type fakeAcquirer struct{ requests []operation.Request }
@@ -100,7 +117,7 @@ func TestV5SourceSupplySurvivesPositionAndSymbolModes(t *testing.T) {
 			}
 			a := &supplyAcquirer{runtime: r}
 			result, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
-			if failure != nil || !strings.Contains(string(result.Artifact), `"source_supply":"LSP_SUPPLIED"`) || len(r.preparations) != 1 || !r.preparations[0].CaptureSupply || a.symbol != tc.symbol || a.position == tc.symbol {
+			if failure != nil || !strings.Contains(string(result.Artifact), `"source_supply":"LSP_SUPPLIED"`) || len(r.preparations) != 1 || !r.preparations[0].CaptureSupply || !a.symbol || a.position {
 				t.Fatalf("ASSERT_TRACE_%s_V5_FIRST_PREPARATION_SUPPLIES_SOURCE: failure=%v artifact=%s preparations=%+v position=%t symbol=%t", strings.ToUpper(tc.name), failure, result.Artifact, r.preparations, a.position, a.symbol)
 			}
 		})
@@ -148,13 +165,13 @@ func TestTraceMetadataRejectsBeforeDocumentOrLSPActivity(t *testing.T) {
 	}
 }
 
-func TestMultiPositionUsesOneNativeAcquisitionWithDefaultsAndNoSeedCustody(t *testing.T) {
+func TestMultiPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *testing.T) {
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
 	e := &Executor{runtime: r, acquisition: a}
 	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","positions":[{"line":1,"character":2},{"line":3,"character":4}]}`), RetainedSeedSpec: []byte("forged")})
-	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 || len(a.requests[0].RetainedSeedSpec) != 0 {
-		t.Fatalf("ASSERT_TRACE_MULTI_POSITION_ONE_NATIVE_ZERO_CUSTODY: failure=%v requests=%+v", f, a.requests)
+	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 || !strings.Contains(string(a.requests[0].RetainedSeedSpec), `"schema_version":"lsp-trace.seeds.v2"`) || strings.Contains(string(a.requests[0].RetainedSeedSpec), "discover") {
+		t.Fatalf("ASSERT_TRACE_MULTI_POSITION_ONE_NATIVE_EXPLICIT_CUSTODY: failure=%v requests=%+v", f, a.requests)
 	}
 	var in acquisitionops.Input
 	if err := json.Unmarshal(a.requests[0].Input, &in); err != nil {
@@ -166,6 +183,28 @@ func TestMultiPositionUsesOneNativeAcquisitionWithDefaultsAndNoSeedCustody(t *te
 	req, err := in.SeedManifest.Request(acquisitionops.SliceV3)
 	if err != nil || req.Root.DownDepth != 2 || req.Root.UpDepth != 2 || req.TopmostSiblings {
 		t.Fatalf("ASSERT_TRACE_NATIVE_DEFAULTS: req=%+v err=%v", req, err)
+	}
+}
+
+func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeated(t *testing.T) {
+	for _, tc := range []struct{ name, target string }{{"position", `"positions":[{"line":1,"character":2}]`}, {"symbol", `"symbol":"Target"`}} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &fakeRuntime{symbols: []lsp.DocumentSymbol{symbol("Target", 1, 2)}}
+			e := NewExecutor(r)
+			for run := 0; run < 2; run++ {
+				result, failure := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
+				if failure != nil {
+					t.Fatalf("ASSERT_REAL_TRACE_ACQUISITION_V5_ADMITTED_%s_RUN_%d: %v", tc.name, run, failure)
+				}
+				if _, err := graphprovenance.ValidateFor(result.Artifact, graphprovenance.Family, "v5"); err != nil {
+					t.Fatalf("ASSERT_REAL_TRACE_ACQUISITION_V5_SCHEMA_%s_RUN_%d: %v", tc.name, run, err)
+				}
+				var evidence graphprovenance.EvidenceV5
+				if err := json.Unmarshal(result.Artifact, &evidence); err != nil || evidence.SeedSpec == nil || strings.Contains(string(evidence.SeedSpec.Bytes), "discover") {
+					t.Fatalf("ASSERT_REAL_TRACE_EXPLICIT_SEED_CUSTODY_%s_RUN_%d: err=%v evidence=%+v", tc.name, run, err, evidence.SeedSpec)
+				}
+			}
+		})
 	}
 }
 

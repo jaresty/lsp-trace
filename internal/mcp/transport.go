@@ -331,7 +331,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			switch code {
 			case operation.FailureInvalidInput, "DOCUMENT_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_AMBIGUOUS", "LANGUAGE_ID_UNAVAILABLE":
 				code = "INPUT_INVALID"
-			case "DOCUMENT_SYMBOL_UNSUPPORTED", "DOCUMENT_SYMBOL_UNPREPARABLE":
+			case "DOCUMENT_SYMBOL_UNSUPPORTED", "UNSUPPORTED_DOCUMENT_SYMBOL", "DOCUMENT_SYMBOL_UNPREPARABLE":
 				code = "UNSUPPORTED_CALL_HIERARCHY"
 			case "DOCUMENT_SYMBOL_FAILED", "DOCUMENT_SYMBOL_MALFORMED_RANGE", "DOCUMENT_SYMBOL_PREPARE_FAILED", "RELATION_PROVIDER_MALFORMED", "RELATION_PROVIDER_KIND_MISMATCH":
 				code = "OUTPUT_VALIDATION_FAILED"
@@ -372,7 +372,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 	}
 	outcome, operationStatus := "COMPLETE", "SUCCEEDED"
-	if (tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily) && incompleteTraversalArtifact(opResult.Artifact) {
+	if (tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily) && incompleteTraversalArtifact(opResult.Artifact) {
 		outcome, operationStatus = "PARTIAL", "PARTIAL"
 	}
 	if !publicationRequested && len(opResult.Artifact) > inlineByteLimit {

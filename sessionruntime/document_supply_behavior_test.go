@@ -127,8 +127,8 @@ func TestDocumentSupplySameReadSurvivesLaterMutation(t *testing.T) {
 	second.Supply.Params[0] = 'X'
 	before := writer.Len()
 	cached := m.PrepareDocument(context.Background(), req)
-	if cached.Failure != "" || cached.Version != 2 || cached.Supply != nil || writer.Len() != before {
-		t.Fatalf("ASSERT_CACHED_IS_NOT_NEW_SUPPLY: %+v", cached)
+	if cached.Failure != "" || cached.Version != 2 || cached.Supply == nil || cached.Supply == second.Supply || cached.Supply.DocumentVersion != 2 || cached.Supply.Method != "textDocument/didChange" || !bytes.Equal(cached.Supply.Content, b) || writer.Len() != before {
+		t.Fatalf("ASSERT_CACHED_REUSES_EXACT_RETAINED_SUPPLY_WITHOUT_NEW_NOTIFICATION: %+v", cached)
 	}
 	req.Generation++
 	stale := m.PrepareDocument(context.Background(), req)
