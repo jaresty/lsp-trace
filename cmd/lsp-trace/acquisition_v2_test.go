@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -14,10 +15,18 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/session"
+	"lsp-trace/sessionruntime"
 )
 
 func TestDeprecatedAcquisitionVersionsWarnOnlyOnStderr(t *testing.T) {
@@ -367,4 +376,113 @@ func TestPrivateStartupSinkBuiltCLIAbsentOptInWritesNothingAndBothFlagsRequired(
 	if err != nil || version != "" || !reflect.DeepEqual(rest, []string{"--server", "x"}) {
 		t.Fatalf("%s: parser changed", assertion)
 	}
+}
+
+func newInitializedRunnerTestConfig(t *testing.T, timeout time.Duration) initializedAcquisitionRunnerConfig {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed process CLI uses Darwin supervisor")
+	}
+	supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 4096, GracePeriod: 100 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := sessionruntime.New(sessionruntime.Config{
+		Limits:  sessionruntime.Limits{MaxSessions: 1, MaxRequests: 128, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 128, MaxObservations: 64},
+		Starter: sessionruntime.ManagedStarter{Manager: supervisor},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace := t.TempDir()
+	selected, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "public-acquisition", Workspace: workspace, Profile: "cli", EnvironmentReference: "cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return initializedAcquisitionRunnerConfig{
+		manager: manager,
+		start: sessionruntime.StartRequest{
+			Profile: runtimeprofile.Resolve(selected), LanguageID: "go",
+			Process: managedprocess.Spec{Path: os.Args[0], Args: []string{"-test.run=^TestRuntimeHelperServer$"}, Dir: workspace, Env: append(os.Environ(), "LSP_TRACE_RUNTIME_HELPER=1")},
+		},
+		timeout: timeout, requestTimeout: time.Second, stderr: &bytes.Buffer{},
+	}
+}
+
+type runnerObservations struct {
+	starts, stops int
+	sessionID     string
+	generation    uint64
+	stopFailure   string
+}
+
+func instrumentRunner(cfg *initializedAcquisitionRunnerConfig, observed *runnerObservations) {
+	cfg.observeStart = func(result sessionruntime.StartResult) {
+		observed.starts++
+		observed.sessionID, observed.generation = result.SessionID, result.Generation
+	}
+	cfg.observeStop = func(result session.LifecycleResult) {
+		observed.stops++
+		observed.stopFailure = string(result.Failure)
+	}
+}
+
+func assertInitializedRunnerCleaned(t *testing.T, observed runnerObservations) {
+	t.Helper()
+	if observed.starts != 1 || observed.stops != 1 || observed.sessionID == "" || observed.generation != 1 || observed.stopFailure != "" {
+		t.Fatalf("runner lifecycle=%+v", observed)
+	}
+}
+
+func TestInitializedRunnerOneSessionDiscoveryAndRepeatedExecutor(t *testing.T) {
+	const assertion = "ASSERT_INITIALIZED_RUNNER_ONE_SESSION_REPEATED_EXECUTOR"
+	cfg := newInitializedRunnerTestConfig(t, 3*time.Second)
+	var observed runnerObservations
+	instrumentRunner(&cfg, &observed)
+	var sessionID string
+	var generation uint64
+	code := runInitializedAcquisitionSession(cfg, func(ctx context.Context, session initializedAcquisitionSession) int {
+		sessionID, generation = session.SessionID(), session.Generation()
+		if _, err := session.DocumentSymbols(ctx, lsp.DocumentSymbolParams{}); err != nil {
+			t.Fatalf("%s discovery: %v", assertion, err)
+		}
+		for i := 0; i < 2; i++ {
+			input := []byte(`{"session_id":"` + session.SessionID() + `","generation":` + "1" + `}`)
+			_, failure := session.Execute(ctx, operation.Request{Name: acquisitionops.SliceV3, Input: input})
+			if failure == nil {
+				t.Fatalf("%s invocation %d unexpectedly succeeded", assertion, i)
+			}
+			if session.SessionID() != sessionID || session.Generation() != generation {
+				t.Fatalf("%s identity changed", assertion)
+			}
+		}
+		return 0
+	})
+	if code != 0 || sessionID == "" || generation != 1 {
+		t.Fatalf("%s code=%d session=%q generation=%d", assertion, code, sessionID, generation)
+	}
+	assertInitializedRunnerCleaned(t, observed)
+}
+
+func TestInitializedRunnerCallbackFailureCleansUp(t *testing.T) {
+	cfg := newInitializedRunnerTestConfig(t, 3*time.Second)
+	var observed runnerObservations
+	instrumentRunner(&cfg, &observed)
+	if code := runInitializedAcquisitionSession(cfg, func(context.Context, initializedAcquisitionSession) int { return 23 }); code != 23 {
+		t.Fatalf("ASSERT_INITIALIZED_RUNNER_CALLBACK_FAILURE_CLEANS_UP code=%d", code)
+	}
+	assertInitializedRunnerCleaned(t, observed)
+}
+
+func TestInitializedRunnerCancellationCleansUp(t *testing.T) {
+	cfg := newInitializedRunnerTestConfig(t, 50*time.Millisecond)
+	var observed runnerObservations
+	instrumentRunner(&cfg, &observed)
+	if code := runInitializedAcquisitionSession(cfg, func(ctx context.Context, _ initializedAcquisitionSession) int {
+		<-ctx.Done()
+		return 24
+	}); code != 24 {
+		t.Fatalf("ASSERT_INITIALIZED_RUNNER_CANCELLATION_CLEANS_UP code=%d", code)
+	}
+	assertInitializedRunnerCleaned(t, observed)
 }

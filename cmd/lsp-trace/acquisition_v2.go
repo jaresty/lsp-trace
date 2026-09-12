@@ -196,6 +196,99 @@ type traceAcquisitionInput struct {
 	seeds    seedformat.File
 }
 
+// initializedAcquisitionSession is the least-authority view available while one
+// exact managed language-server session is ready. The concrete runtime and its
+// manager remain private to runInitializedAcquisitionSession.
+type initializedAcquisitionSession interface {
+	SessionID() string
+	Generation() uint64
+	PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
+	DocumentSymbols(context.Context, lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error)
+	Execute(context.Context, operation.Request) (operation.Result, *operation.Failure)
+}
+
+type initializedAcquisitionRuntime struct {
+	*privateAcquisitionRuntime
+	ctx                  context.Context
+	sessionID            string
+	generation           uint64
+	requestTimeout       time.Duration
+	attemptID            manageddiagnostic.StartupAttemptID
+	diagnosticGeneration sessionruntime.DiagnosticGenerationHandle
+}
+
+func (r *initializedAcquisitionRuntime) SessionID() string  { return r.sessionID }
+func (r *initializedAcquisitionRuntime) Generation() uint64 { return r.generation }
+func (r *initializedAcquisitionRuntime) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
+	request.SessionID, request.Generation = r.sessionID, r.generation
+	return r.privateAcquisitionRuntime.PrepareDocument(ctx, request)
+}
+func (r *initializedAcquisitionRuntime) DocumentSymbols(ctx context.Context, params lsp.DocumentSymbolParams) ([]lsp.DocumentSymbol, error) {
+	client := productionDiscoveryClient{runtime: r.privateAcquisitionRuntime, sessionID: r.sessionID, generation: r.generation, timeout: r.requestTimeout}
+	return client.DocumentSymbols(ctx, params)
+}
+func (r *initializedAcquisitionRuntime) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	return acquisitionops.NewExecutor(r.privateAcquisitionRuntime).Execute(ctx, request)
+}
+
+type initializedAcquisitionRunnerConfig struct {
+	manager            *sessionruntime.Manager
+	start              sessionruntime.StartRequest
+	timeout            time.Duration
+	requestTimeout     time.Duration
+	diagnosticRoot     string
+	diagnosticSelector string
+	stderr             io.Writer
+	observeStart       func(sessionruntime.StartResult)
+	observeStop        func(session.LifecycleResult)
+}
+
+func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, callback func(context.Context, initializedAcquisitionSession) int) int {
+	fail := func(err error) int { fmt.Fprintln(cfg.stderr, err); return 1 }
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	ctx, deadlineCancel := context.WithTimeout(ctx, cfg.timeout)
+	defer deadlineCancel()
+	started := cfg.manager.Start(ctx, cfg.start)
+	if cfg.observeStart != nil {
+		cfg.observeStart(started)
+	}
+	if cfg.diagnosticRoot != "" {
+		defer func() {
+			generation := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
+			if started.SessionID != "" && started.Generation > 0 {
+				generation = cfg.manager.Diagnostics(started.SessionID, started.Generation)
+			}
+			_, _ = (manageddiagnostic.StartupDiagnosticSink{Root: cfg.diagnosticRoot, Selector: cfg.diagnosticSelector}).Finalize(cfg.manager.GetStartupAttempt(started.AttemptID), generation)
+		}()
+	}
+	if started.Failure != "" {
+		return fail(fmt.Errorf("managed startup: %s", started.Failure))
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		stopped := cfg.manager.Stop(cleanup, started.SessionID, "public-acquisition-cli")
+		if cfg.observeStop != nil {
+			cfg.observeStop(stopped)
+		}
+		if stopped.Failure != "" {
+			fmt.Fprintln(cfg.stderr, "managed cleanup:", stopped.Failure)
+		}
+		if err := cfg.manager.Shutdown(cleanup); err != nil {
+			fmt.Fprintln(cfg.stderr, "managed cleanup:", err)
+		}
+	}()
+	pending := cfg.manager.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(cfg.requestTimeout))
+	ready, ok := cfg.manager.WaitReadiness(ctx, pending.ID)
+	if !ok || ready.State != sessionruntime.ReadinessReady {
+		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
+	}
+	privateRuntime := &privateAcquisitionRuntime{manager: cfg.manager}
+	privateRuntime.retainHandle(ready.DiagnosticOperation)
+	return callback(ctx, &initializedAcquisitionRuntime{privateAcquisitionRuntime: privateRuntime, ctx: ctx, sessionID: started.SessionID, generation: started.Generation, requestTimeout: cfg.requestTimeout, attemptID: started.AttemptID, diagnosticGeneration: started.DiagnosticGeneration})
+}
+
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
 	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil)
 }
@@ -450,10 +543,6 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 	if err != nil {
 		return fail(err)
 	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	ctx, deadlineCancel := context.WithTimeout(ctx, effective.Limits.Timeout)
-	defer deadlineCancel()
 	var providerIdentity seedbinding.ProviderIdentity
 	if binding != nil {
 		providerIdentity = seedbinding.ProviderIdentity{
@@ -461,211 +550,190 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 			ExecutableSHA256: binding.Validator.ExecutableSHA256, PayloadSHA256: binding.Validator.PayloadSHA256, ConfigSHA256: binding.Validator.ConfigSHA256,
 		}
 	}
-	started := manager.Start(ctx, sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}})
-	if diagnosticRoot != "" {
-		defer func() {
-			generation := manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
-			if started.SessionID != "" && started.Generation > 0 {
-				generation = manager.Diagnostics(started.SessionID, started.Generation)
+	return runInitializedAcquisitionSession(initializedAcquisitionRunnerConfig{
+		manager: manager,
+		start:   sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: c.languageID, SeedBinding: binding, ProviderIdentity: providerIdentity, Process: managedprocess.Spec{Path: command, Args: c.args, Dir: workspace, Env: append(os.Environ(), c.env...)}},
+		timeout: effective.Limits.Timeout, requestTimeout: effective.Limits.RequestTimeout,
+		diagnosticRoot: diagnosticRoot, diagnosticSelector: diagnosticSelector, stderr: stderr,
+	}, func(ctx context.Context, managed initializedAcquisitionSession) int {
+		runtime := managed.(*initializedAcquisitionRuntime)
+		privateRuntime := runtime.privateAcquisitionRuntime
+		startedSessionID, startedGeneration := managed.SessionID(), managed.Generation()
+		if traceSeeds && len(traceSeedFile.Seeds) == 1 && traceSeedFile.Seeds[0].Type == seedformat.SymbolType {
+			seed := traceSeedFile.Seeds[0].Symbol
+			locator := manifest.Root.Locator
+			prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: startedSessionID, Generation: startedGeneration, URI: locator.URI, LanguageID: c.languageID})
+			privateRuntime.retainHandle(prepared.DiagnosticOperation)
+			if prepared.Failure != "" {
+				return fail(fmt.Errorf("trace symbol document supply: %s", prepared.Failure))
 			}
-			_, _ = (manageddiagnostic.StartupDiagnosticSink{Root: diagnosticRoot, Selector: diagnosticSelector}).Finalize(manager.GetStartupAttempt(started.AttemptID), generation)
-		}()
-	}
-	if started.Failure != "" {
-		return fail(fmt.Errorf("managed startup: %s", started.Failure))
-	}
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		stopped := manager.Stop(cleanup, started.SessionID, "public-acquisition-cli")
-		if stopped.Failure != "" {
-			fmt.Fprintln(stderr, "managed cleanup:", stopped.Failure)
-		}
-		if err := manager.Shutdown(cleanup); err != nil {
-			fmt.Fprintln(stderr, "managed cleanup:", err)
-		}
-	}()
-	pending := manager.BeginReadiness(ctx, started.SessionID, started.Generation, time.Now().Add(effective.Limits.RequestTimeout))
-	ready, ok := manager.WaitReadiness(ctx, pending.ID)
-	if !ok || ready.State != sessionruntime.ReadinessReady {
-		return fail(fmt.Errorf("managed readiness: %s", ready.Failure))
-	}
-	privateRuntime := &privateAcquisitionRuntime{manager: manager}
-	privateRuntime.retainHandle(ready.DiagnosticOperation)
-	if traceSeeds && len(traceSeedFile.Seeds) == 1 && traceSeedFile.Seeds[0].Type == seedformat.SymbolType {
-		seed := traceSeedFile.Seeds[0].Symbol
-		locator := manifest.Root.Locator
-		prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: locator.URI, LanguageID: c.languageID})
-		privateRuntime.retainHandle(prepared.DiagnosticOperation)
-		if prepared.Failure != "" {
-			return fail(fmt.Errorf("trace symbol document supply: %s", prepared.Failure))
-		}
-		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
-		var symbols []lsp.DocumentSymbol
-		if err := client.call(ctx, "textDocument/documentSymbol", lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: locator.URI}}, &symbols); err != nil {
-			return fail(fmt.Errorf("trace exact symbol lookup: %w", err))
-		}
-		stack := append([]lsp.DocumentSymbol(nil), symbols...)
-		matches := []lsp.DocumentSymbol{}
-		for len(stack) > 0 {
-			symbol := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			if symbol.Name == seed.Symbol {
-				matches = append(matches, symbol)
+			client := productionDiscoveryClient{runtime: privateRuntime, sessionID: startedSessionID, generation: startedGeneration, timeout: effective.Limits.RequestTimeout}
+			var symbols []lsp.DocumentSymbol
+			if err := client.call(ctx, "textDocument/documentSymbol", lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: locator.URI}}, &symbols); err != nil {
+				return fail(fmt.Errorf("trace exact symbol lookup: %w", err))
 			}
-			stack = append(stack, symbol.Children...)
-		}
-		sort.Slice(matches, func(i, j int) bool {
-			a, b := matches[i].SelectionRange.Start, matches[j].SelectionRange.Start
-			return a.Line < b.Line || (a.Line == b.Line && a.Character < b.Character)
-		})
-		if len(matches) != 1 {
-			shown := len(matches)
-			if shown > 8 {
-				shown = 8
-			}
-			fmt.Fprintf(stderr, "trace exact symbol %q: total=%d omitted=%d\n", seed.Symbol, len(matches), len(matches)-shown)
-			for _, candidate := range matches[:shown] {
-				fmt.Fprintf(stderr, "candidate: %s:%d:%d\n", seed.Path, candidate.SelectionRange.Start.Line+1, candidate.SelectionRange.Start.Character+1)
-			}
-			if len(matches) > 1 {
-				fmt.Fprintln(stderr, "ambiguous exact symbol; use --at PATH:LINE:COLUMN to disambiguate")
-			}
-			return 1
-		}
-	}
-	if discoverSeeds {
-		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
-		discoveries, counts, censusErr := censusSelectedDiscoverySources(sources, discoveryCounts,
-			func(sourceFile resolvedSliceSource) error {
-				prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: sourceFile.uri, LanguageID: sourceFile.lang})
-				privateRuntime.retainHandle(prepared.DiagnosticOperation)
-				if prepared.Failure != "" {
-					return fmt.Errorf("document supply failed")
+			stack := append([]lsp.DocumentSymbol(nil), symbols...)
+			matches := []lsp.DocumentSymbol{}
+			for len(stack) > 0 {
+				symbol := stack[len(stack)-1]
+				stack = stack[:len(stack)-1]
+				if symbol.Name == seed.Symbol {
+					matches = append(matches, symbol)
 				}
-				return nil
-			},
-			func(sourceFile resolvedSliceSource) slicer.Discovery {
-				return slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
+				stack = append(stack, symbol.Children...)
+			}
+			sort.Slice(matches, func(i, j int) bool {
+				a, b := matches[i].SelectionRange.Start, matches[j].SelectionRange.Start
+				return a.Line < b.Line || (a.Line == b.Line && a.Character < b.Character)
 			})
-		discoveryCounts = counts
-		fmt.Fprintln(stderr, formatDiscoveryAccounting(discoveryCounts))
-		if censusErr != nil {
-			return fail(censusErr)
+			if len(matches) != 1 {
+				shown := len(matches)
+				if shown > 8 {
+					shown = 8
+				}
+				fmt.Fprintf(stderr, "trace exact symbol %q: total=%d omitted=%d\n", seed.Symbol, len(matches), len(matches)-shown)
+				for _, candidate := range matches[:shown] {
+					fmt.Fprintf(stderr, "candidate: %s:%d:%d\n", seed.Path, candidate.SelectionRange.Start.Line+1, candidate.SelectionRange.Start.Character+1)
+				}
+				if len(matches) > 1 {
+					fmt.Fprintln(stderr, "ambiguous exact symbol; use --at PATH:LINE:COLUMN to disambiguate")
+				}
+				return 1
+			}
 		}
-		seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
-		if discoveryErr != nil {
-			return fail(discoveryErr)
-		}
-		manifest, discoveryErr = seedformat.Translate(seedFile, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
-		if discoveryErr != nil {
-			return fail(discoveryErr)
-		}
-		retainedSeedSpec = canonical
-		requestPolicy, _ = json.Marshal(manifest)
-	}
-	input, _ := json.Marshal(acquisitionops.Input{SessionID: started.SessionID, Generation: started.Generation, SeedManifest: manifest, OutputVersion: outputVersion})
-	finalizeRequestDiagnostics := func(public []byte) {
-		if !requestDiagnosticsRequested {
-			return
-		}
-		handles := privateRuntime.diagnosticHandles()
-		sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, requestlifecycle.MaxRecords)
-		var privateErr error
-		reason := "SOURCE_UNCERTIFIED"
-		if !certified {
-			privateErr = fmt.Errorf("private lifecycle source unavailable")
-		} else {
-			reason = "PROJECTION_REJECTED"
-			privateRaw, projectionErr := requestlifecycle.ProjectRuntime(sourceSet, public, "")
-			privateErr = projectionErr
-			if privateErr == nil {
-				reason = "PUBLICATION_REJECTED"
-				privateErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, func(raw []byte) error {
-					_, verifyErr := requestlifecycle.Verify(raw, public)
-					return verifyErr
+		if discoverSeeds {
+			client := productionDiscoveryClient{runtime: privateRuntime, sessionID: startedSessionID, generation: startedGeneration, timeout: effective.Limits.RequestTimeout}
+			discoveries, counts, censusErr := censusSelectedDiscoverySources(sources, discoveryCounts,
+				func(sourceFile resolvedSliceSource) error {
+					prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: startedSessionID, Generation: startedGeneration, URI: sourceFile.uri, LanguageID: sourceFile.lang})
+					privateRuntime.retainHandle(prepared.DiagnosticOperation)
+					if prepared.Failure != "" {
+						return fmt.Errorf("document supply failed")
+					}
+					return nil
+				},
+				func(sourceFile resolvedSliceSource) slicer.Discovery {
+					return slicer.Discover(ctx, client, sourceFile.uri, slicer.Options{DownDepth: 0, MaxNodes: 0})
 				})
+			discoveryCounts = counts
+			fmt.Fprintln(stderr, formatDiscoveryAccounting(discoveryCounts))
+			if censusErr != nil {
+				return fail(censusErr)
 			}
-		}
-		if privateErr != nil {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable:", reason)
-			if reason == "PUBLICATION_REJECTED" {
-				fmt.Fprintln(stderr, "private diagnostic publication remediation:", privateErr)
+			seedFile, canonical, discoveryErr := canonicalDiscoveredSeeds(c.workspace, sources, discoveries)
+			if discoveryErr != nil {
+				return fail(discoveryErr)
 			}
+			manifest, discoveryErr = seedformat.Translate(seedFile, seedformat.TranslateOptions{Workspace: c.workspace, Limits: defaultDiscoveryLimits(), TopmostSiblings: true})
+			if discoveryErr != nil {
+				return fail(discoveryErr)
+			}
+			retainedSeedSpec = canonical
+			requestPolicy, _ = json.Marshal(manifest)
 		}
-	}
-	result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input, RetainedSeedSpec: retainedSeedSpec})
-	if failed != nil {
-		projectionFailure := outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations"
-		if requestDiagnosticsRequested && projectionFailure {
-			failureDiagnosticPublished := false
-			failureDiagnosticStage := "PUBLIC_ARTIFACT_UNAVAILABLE"
-			var failurePublicationErr error
+		input, _ := json.Marshal(acquisitionops.Input{SessionID: startedSessionID, Generation: startedGeneration, SeedManifest: manifest, OutputVersion: outputVersion})
+		finalizeRequestDiagnostics := func(public []byte) {
+			if !requestDiagnosticsRequested {
+				return
+			}
 			handles := privateRuntime.diagnosticHandles()
-			sourceSet, certified := manager.DiagnosticSnapshotSetFor(started.AttemptID, started.DiagnosticGeneration, handles, projectionfailure.MaxRecords)
-			if certified {
-				privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
-					Operation: mode + "-v3", RequestPolicy: requestPolicy,
-					Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
-				})
-				if projectionErr == nil {
-					failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
-					projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
-					failurePublicationErr = projectionErr
-				} else {
-					failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
-				}
-				failureDiagnosticPublished = projectionErr == nil
-			}
-			if !failureDiagnosticPublished {
-				fmt.Fprintf(stderr, "private request diagnostics unavailable: %s; PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding\n", failureDiagnosticStage)
-				if failurePublicationErr != nil {
-					fmt.Fprintln(stderr, "private diagnostic publication remediation:", failurePublicationErr)
+			sourceSet, certified := manager.DiagnosticSnapshotSetFor(runtime.attemptID, runtime.diagnosticGeneration, handles, requestlifecycle.MaxRecords)
+			var privateErr error
+			reason := "SOURCE_UNCERTIFIED"
+			if !certified {
+				privateErr = fmt.Errorf("private lifecycle source unavailable")
+			} else {
+				reason = "PROJECTION_REJECTED"
+				privateRaw, projectionErr := requestlifecycle.ProjectRuntime(sourceSet, public, "")
+				privateErr = projectionErr
+				if privateErr == nil {
+					reason = "PUBLICATION_REJECTED"
+					privateErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, func(raw []byte) error {
+						_, verifyErr := requestlifecycle.Verify(raw, public)
+						return verifyErr
+					})
 				}
 			}
-		} else if len(result.Artifact) > 0 {
-			finalizeRequestDiagnostics(result.Artifact)
-		} else if requestDiagnosticsRequested {
-			fmt.Fprintln(stderr, "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding")
+			if privateErr != nil {
+				fmt.Fprintln(stderr, "private request diagnostics unavailable:", reason)
+				if reason == "PUBLICATION_REJECTED" {
+					fmt.Fprintln(stderr, "private diagnostic publication remediation:", privateErr)
+				}
+			}
 		}
-		return fail(failed)
-	}
-	data := result.Artifact
-	if c.pretty {
-		var pretty bytes.Buffer
-		if err := json.Indent(&pretty, data, "", "  "); err != nil {
+		result, failed := acquisitionops.NewExecutor(privateRuntime).Execute(ctx, operation.Request{Name: op, Input: input, RetainedSeedSpec: retainedSeedSpec})
+		if failed != nil {
+			projectionFailure := outputVersion == graphprovenance.VersionV5 && failed.Code == "OUTPUT_VALIDATION_FAILED" && failed.Err != nil && failed.Err.Error() == "topmost sibling expansion produced no exact relations"
+			if requestDiagnosticsRequested && projectionFailure {
+				failureDiagnosticPublished := false
+				failureDiagnosticStage := "PUBLIC_ARTIFACT_UNAVAILABLE"
+				var failurePublicationErr error
+				handles := privateRuntime.diagnosticHandles()
+				sourceSet, certified := manager.DiagnosticSnapshotSetFor(runtime.attemptID, runtime.diagnosticGeneration, handles, projectionfailure.MaxRecords)
+				if certified {
+					privateRaw, projectionErr := projectionfailure.Project(sourceSet, projectionfailure.Request{
+						Operation: mode + "-v3", RequestPolicy: requestPolicy,
+						Stage: "GRAPH_PROVENANCE_V5_PROJECTION", Code: failed.Code, MismatchReason: "NO_EXACT_TOPMOST_SIBLING_RELATIONS",
+					})
+					if projectionErr == nil {
+						failureDiagnosticStage = "PRIVATE_PUBLICATION_REJECTED"
+						projectionErr = manageddiagnostic.PublishHardened(requestDiagnosticRoot, requestDiagnosticSelector, privateRaw, projectionfailure.Validate)
+						failurePublicationErr = projectionErr
+					} else {
+						failureDiagnosticStage = "PRIVATE_PROJECTION_REJECTED"
+					}
+					failureDiagnosticPublished = projectionErr == nil
+				}
+				if !failureDiagnosticPublished {
+					fmt.Fprintf(stderr, "private request diagnostics unavailable: %s; PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding\n", failureDiagnosticStage)
+					if failurePublicationErr != nil {
+						fmt.Fprintln(stderr, "private diagnostic publication remediation:", failurePublicationErr)
+					}
+				}
+			} else if len(result.Artifact) > 0 {
+				finalizeRequestDiagnostics(result.Artifact)
+			} else if requestDiagnosticsRequested {
+				fmt.Fprintln(stderr, "private request diagnostics unavailable: PUBLIC_ARTIFACT_UNAVAILABLE; lifecycle diagnostics require successful public artifact bytes for integrity binding")
+			}
+			return fail(failed)
+		}
+		data := result.Artifact
+		if c.pretty {
+			var pretty bytes.Buffer
+			if err := json.Indent(&pretty, data, "", "  "); err != nil {
+				return fail(err)
+			}
+			data = append(pretty.Bytes(), '\n')
+		}
+		if c.output != "" {
+			admit := admitAcquisitionV2
+			if version == "v3" {
+				admit = admitAcquisitionV3
+			}
+			if outputVersion == graphprovenance.VersionV5 {
+				admit = admitAcquisitionV5
+			}
+			err = publishValidatedBundle(c.output, data, admit)
+		} else {
+			_, err = stdout.Write(data)
+		}
+		if err != nil {
 			return fail(err)
 		}
-		data = append(pretty.Bytes(), '\n')
-	}
-	if c.output != "" {
-		admit := admitAcquisitionV2
-		if version == "v3" {
-			admit = admitAcquisitionV3
+		if grouped {
+			presentation, groupErr := programcpresentation.Handle(programcpresentation.Request{Input: result.Artifact, Seed: communitySeed, PageRankTopK: pageRankTopK, HubTopK: hubTopK})
+			if groupErr != nil {
+				return fail(fmt.Errorf("grouping computation: %w", groupErr))
+			}
+			if groupErr = programcpresentation.Text(stdout, presentation); groupErr != nil {
+				return fail(fmt.Errorf("presentation publication: %w", groupErr))
+			}
 		}
-		if outputVersion == graphprovenance.VersionV5 {
-			admit = admitAcquisitionV5
-		}
-		err = publishValidatedBundle(c.output, data, admit)
-	} else {
-		_, err = stdout.Write(data)
-	}
-	if err != nil {
-		return fail(err)
-	}
-	if grouped {
-		presentation, groupErr := programcpresentation.Handle(programcpresentation.Request{Input: result.Artifact, Seed: communitySeed, PageRankTopK: pageRankTopK, HubTopK: hubTopK})
-		if groupErr != nil {
-			return fail(fmt.Errorf("grouping computation: %w", groupErr))
-		}
-		if groupErr = programcpresentation.Text(stdout, presentation); groupErr != nil {
-			return fail(fmt.Errorf("presentation publication: %w", groupErr))
-		}
-	}
-	// Private finalization is synchronous but secondary and non-overriding: the
-	// already-emitted public V3 bytes and their status remain authoritative.
-	finalizeRequestDiagnostics(data)
-	return 0 // Every structurally valid acquisition retains partial outcomes.
+		// Private finalization is synchronous but secondary and non-overriding: the
+		// already-emitted public V3 bytes and their status remain authoritative.
+		finalizeRequestDiagnostics(data)
+		return 0 // Every structurally valid acquisition retains partial outcomes.
+	})
 }
 
 func readPrivateSeedInput(rootPath, selector string) ([]byte, error) {

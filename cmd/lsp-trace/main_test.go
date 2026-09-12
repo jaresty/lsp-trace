@@ -486,6 +486,8 @@ func TestRuntimeHelperServer(t *testing.T) {
 				return
 			}
 			writeRuntimeResponse(msg.ID, map[string]any{"capabilities": map[string]any{"callHierarchyProvider": true}})
+		case "textDocument/documentSymbol":
+			writeRuntimeResponse(msg.ID, []any{})
 		case "textDocument/prepareCallHierarchy":
 			time.Sleep(3 * time.Second)
 			writeRuntimeResponse(msg.ID, []any{})
