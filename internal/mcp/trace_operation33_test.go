@@ -46,7 +46,11 @@ func TestTraceOperation33ProfilesSchemaAndExecuteParity(t *testing.T) {
 	if err := validateArguments(tool, valid); err != nil {
 		t.Fatalf("ASSERT_TRACE_DIRECT_SCHEMA_VALID: %v", err)
 	}
-	for _, bad := range []map[string]any{{"session_id": "s", "uri": "file:///w/a.go", "symbol": "A", "positions": []any{map[string]any{"line": 0, "character": 0}}}, {"session_id": "s", "uri": "file:///w/a.go", "positions": []any{}}, {"session_id": "s", "uri": "file:///w/a.go", "symbol": "A", "unknown": true}} {
+	zeroDepth := map[string]any{"session_id": "s", "uri": "file:///w/a.go", "positions": []any{map[string]any{"line": float64(0), "character": float64(1)}}, "down_depth": float64(0), "up_depth": float64(0)}
+	if err := validateArguments(tool, zeroDepth); err != nil {
+		t.Fatalf("ASSERT_TRACE_SCHEMA_ZERO_DEPTH_VALID: %v", err)
+	}
+	for _, bad := range []map[string]any{{"session_id": "s", "uri": "file:///w/a.go", "symbol": "A", "positions": []any{map[string]any{"line": 0, "character": 0}}}, {"session_id": "s", "uri": "file:///w/a.go", "positions": []any{}}, {"session_id": "s", "uri": "file:///w/a.go", "symbol": "A", "unknown": true}, {"session_id": "s", "uri": "file:///w/a.go", "symbol": "A", "down_depth": float64(65)}} {
 		if validateArguments(tool, bad) == nil {
 			t.Fatalf("ASSERT_TRACE_STRICT_TARGET_SCHEMA_REJECTS: %#v", bad)
 		}

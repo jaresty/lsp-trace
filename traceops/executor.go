@@ -14,6 +14,7 @@ import (
 	"lsp-trace/acquisitionops"
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/session"
@@ -110,22 +111,35 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if sf != "" {
 		return fail(string(sf), nil)
 	}
-	_, sf = e.runtime.Metadata(resolvedID, generation)
+	metadata, sf := e.runtime.Metadata(resolvedID, generation)
 	if sf != "" {
 		return fail(string(sf), nil)
+	}
+	if !metadata.CallHierarchySupport {
+		return fail(string(graph.UnsupportedCallHierarchy), nil)
+	}
+	if in.Symbol != "" && !metadata.DocumentSymbolSupport {
+		return fail("UNSUPPORTED_DOCUMENT_SYMBOL", nil)
+	}
+	switch metadata.PositionEncoding {
+	case "utf-8", "utf-16", "utf-32":
+	default:
+		return fail("UNSUPPORTED_POSITION_ENCODING", fmt.Errorf("retained position encoding %q is unsupported", metadata.PositionEncoding))
 	}
 	timeout, requestTimeout := value(in.TimeoutMS, 5000), value(in.RequestTimeoutMS, 1000)
 	ctx, cancel := context.WithTimeout(parent, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	if d, ok := e.runtime.(documentRuntime); ok {
-		doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID})
-		if doc.Failure != "" {
-			return fail(string(doc.Failure), nil)
-		}
-		in.LanguageID = doc.LanguageID
-	}
 	positions := append([]Position(nil), in.Positions...)
+	var prepared *sessionruntime.DocumentResult
 	if in.Symbol != "" {
+		if d, ok := e.runtime.(documentRuntime); ok {
+			doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true})
+			if doc.Failure != "" {
+				return fail(string(doc.Failure), nil)
+			}
+			in.LanguageID = doc.LanguageID
+			prepared = &doc
+		}
 		p, f := resolveSymbol(ctx, e.runtime, resolvedID, generation, in.URI, in.Symbol, requestTimeout)
 		if f != nil {
 			return operation.Result{}, f
@@ -147,7 +161,15 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}
-	return e.acquisition.Execute(ctx, operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore})
+	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore}
+	if prepared != nil {
+		if acquisition, ok := e.acquisition.(interface {
+			ExecuteWithPreparedDocument(context.Context, operation.Request, sessionruntime.DocumentResult) (operation.Result, *operation.Failure)
+		}); ok {
+			return acquisition.ExecuteWithPreparedDocument(ctx, requestOp, *prepared)
+		}
+	}
+	return e.acquisition.Execute(ctx, requestOp)
 }
 
 func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation uint64, uri, name string, requestTimeout int) (Position, *operation.Failure) {
@@ -163,6 +185,10 @@ func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation u
 		s := stack[len(stack)-1]
 		stack = stack[:len(stack)-1]
 		if s.Name == name {
+			if !incomingops.ValidDocumentSymbolTarget(s) {
+				_, f := fail("DOCUMENT_SYMBOL_MALFORMED_RANGE", fmt.Errorf("document symbol %q has invalid ranges", name))
+				return Position{}, f
+			}
 			matches = append(matches, s.SelectionRange.Start)
 		}
 		stack = append(stack, s.Children...)

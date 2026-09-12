@@ -211,7 +211,7 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 		return 0, 0, failure("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", symbolName, len(matches)))
 	}
 	symbol := matches[0]
-	if !validRange(symbol.Range) || !validRange(symbol.SelectionRange) || !rangeContains(symbol.Range, symbol.SelectionRange) {
+	if !ValidDocumentSymbolTarget(symbol) {
 		return 0, 0, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", fmt.Errorf("document symbol %q has invalid ranges", symbolName))
 	}
 	start := symbol.SelectionRange.Start
@@ -328,6 +328,12 @@ func (e *Executor) executeComposition(parent context.Context, raw json.RawMessag
 		return operation.Result{}, failure(operation.FailureInternal, err)
 	}
 	return operation.Result{Artifact: append(encoded, '\n')}, nil
+}
+
+// ValidDocumentSymbolTarget reports whether a document symbol has ordered ranges
+// and a selection range wholly contained by its enclosing range.
+func ValidDocumentSymbolTarget(symbol lsp.DocumentSymbol) bool {
+	return validRange(symbol.Range) && validRange(symbol.SelectionRange) && rangeContains(symbol.Range, symbol.SelectionRange)
 }
 
 func validRange(r lsp.Range) bool {

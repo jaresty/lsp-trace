@@ -122,7 +122,7 @@ For every operation 1–32:
 
 ## Current state and RED boundary
 
-The process default is `default`; it advertises the six currently implemented default operations, omitting only the intentionally absent `lsp_trace_v1_discover`. `advanced` advertises those five plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
+The process default is `default`; it advertises the six currently implemented default operations, omitting only the intentionally absent `lsp_trace_v1_discover`. `advanced` advertises those six plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
 
 The explicit compatibility profiles remain available: `full` advertises all 33 current operations and `compact` advertises its frozen 10-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
 
@@ -134,4 +134,4 @@ All non-opt-in tests are regression guards and MUST remain GREEN. A failure pref
 
 ## Implementation gate for the next step
 
-Adding either future default tool remains blocked until its canonical operation, versioned contracts, and append-only operation number are separately implemented. That later change must make the opt-in future-default guard GREEN without changing the frozen ledger or existing canonical execute branches. Hard removal of a legacy canonical name remains out of scope until a future MCP protocol version and separate migration evidence authorize it.
+Adding the future discover default tool remains blocked until its canonical operation, versioned contracts, and append-only operation number are separately implemented. That later change must make the opt-in future-default guard GREEN without changing the frozen ledger or existing canonical execute branches. Hard removal of a legacy canonical name remains out of scope until a future MCP protocol version and separate migration evidence authorize it.
