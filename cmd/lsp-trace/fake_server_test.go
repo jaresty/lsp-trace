@@ -99,6 +99,25 @@ func TestSubprocessSliceRetainsServerStderrOnOutgoingFailure(t *testing.T) {
 	}
 }
 
+func TestSubprocessSliceDiscoversSourceFileFromDirectory(t *testing.T) {
+	workspace := t.TempDir()
+	controllers := filepath.Join(workspace, "controllers")
+	if err := os.Mkdir(controllers, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(controllers, "main.go"), []byte("package controllers\nfunc leaf() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--from-file", "controllers", "--down-depth", "1", "--up-depth", "0", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var got struct {
+		Nodes []graph.Node `json:"nodes"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); code != 0 || err != nil || len(got.Nodes) == 0 {
+		t.Fatalf("ASSERT_SLICE_FROM_DIRECTORY_DISCOVERS_REGULAR_SOURCE: code=%d nodes=%d decode=%v stderr=%q stdout=%q", code, len(got.Nodes), err, stderr, stdout)
+	}
+}
+
 func TestSubprocessSliceComposesOutgoingFrontierWithIncomingTraversal(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
