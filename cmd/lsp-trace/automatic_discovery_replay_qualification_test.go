@@ -16,12 +16,10 @@ import (
 // retained outputs so it can land independently of discovery filtering and
 // capture-set production.
 //
-// Current RED dependency: automatic discovery retains canonical
-// lsp-trace.seeds.v2 bytes, whose future unified replay input is --seed-file.
-// --seed-manifest remains the legacy acquisition-manifest input. Until the
-// concurrent replay-admission lane adds --seed-file, set
-// LSP_TRACE_QUALIFY_DISCOVERY_REPLAY=1 to observe the fail-closed blocker:
-// "flag provided but not defined: -seed-file".
+// Automatic discovery retains canonical lsp-trace.seeds.v2 bytes, whose
+// unified replay input is --seed-file. --seed-manifest remains the legacy
+// acquisition-manifest input. Discovery and replay must produce the same exact
+// V5 graph while replay must not inherit discovery custody.
 func TestAutomaticDiscoveryRetainedSeedReplayQualification(t *testing.T) {
 	const assertion = "ASSERT_AUTOMATIC_DISCOVERY_EXACT_RETAINED_SEED_REPLAY_EQUIVALENCE"
 	if os.Getenv("LSP_TRACE_QUALIFY_DISCOVERY_REPLAY") != "1" {
@@ -55,8 +53,12 @@ func TestAutomaticDiscoveryRetainedSeedReplayQualification(t *testing.T) {
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("%s: args=%v: %v: stderr=%s", assertion, args, err, stderr.String())
 		}
-		if stderr.Len() != 0 {
-			t.Fatalf("%s: unexpected stderr for args=%v: %s", assertion, args, stderr.String())
+		expectedStderr := ""
+		if len(startArgs) > 0 && startArgs[0] == "--from-file" {
+			expectedStderr = "automatic discovery accounting: files_enumerated=1 files_selected=1 files_excluded=0 files_unsupported=0 files_document_supply_failed=0 files_document_symbol_failed=0 files_processed=1 files_incomplete=0 symbols_enumerated=5 symbols_selected=5 symbols_excluded=0 symbols_unsupported=0 symbols_preparation_failed=0 symbols_prepared=5 symbols_incomplete=0; operational census only; does not claim endpoint or source completeness\n"
+		}
+		if stderr.String() != expectedStderr {
+			t.Fatalf("%s: unexpected stderr for args=%v: got=%q want=%q", assertion, args, stderr.String(), expectedStderr)
 		}
 		return stdout.Bytes(), readQualificationArtifact(t, grouped, output, stdout.Bytes())
 	}
