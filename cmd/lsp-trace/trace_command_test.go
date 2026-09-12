@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/seedformat"
 )
@@ -55,6 +56,35 @@ func TestTraceCanonicalSeedsV2SingleAndMultiTarget(t *testing.T) {
 	}
 	if manifest.Expansion.TopmostSiblings || len(manifest.RequiredTargets) != 1 || *manifest.Root.Locator.Line != 0 || *manifest.RequiredTargets[0].Locator.Line != 1 {
 		t.Fatalf("ASSERT_TRACE_MULTI_TARGET_V5_ONE_BASED_NO_SIBLINGS: %+v", manifest)
+	}
+}
+
+func TestTraceManifestUsesEveryPublicBoundAndSiblingChoice(t *testing.T) {
+	workspace := t.TempDir()
+	cfg, err := parseTrace([]string{"--workspace", workspace, "--server", "server", "--at", "main.go:1:1", "--down-depth", "7", "--up-depth", "6", "--max-nodes", "55", "--timeout", "9s", "--request-timeout", "3s", "--siblings"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, _, err := traceSeeds(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := traceManifest(cfg, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Root.DownDepth == nil || *manifest.Root.DownDepth != 7 || manifest.Root.UpDepth == nil || *manifest.Root.UpDepth != 6 || manifest.Limits.MaxNodes == nil || *manifest.Limits.MaxNodes != 55 || manifest.Limits.TimeoutMS == nil || *manifest.Limits.TimeoutMS != int((9*time.Second).Milliseconds()) || manifest.Limits.RequestTimeoutMS == nil || *manifest.Limits.RequestTimeoutMS != int((3*time.Second).Milliseconds()) || !manifest.Expansion.TopmostSiblings {
+		t.Fatalf("ASSERT_TRACE_ALL_PUBLIC_BOUNDS_REACH_TYPED_MANIFEST: %+v", manifest)
+	}
+}
+
+func TestAcquisitionCLIRejectsTraceInternalTransport(t *testing.T) {
+	for _, flag := range []string{"--trace-seed-spec", "--trace-siblings"} {
+		var stdout, stderr bytes.Buffer
+		code := runAcquisitionVersion("slice", "v3", []string{flag, "value"}, &stdout, &stderr)
+		if code != 1 || !strings.Contains(stderr.String(), "flag provided but not defined") {
+			t.Fatalf("ASSERT_TRACE_INTERNAL_TRANSPORT_NOT_PUBLIC: flag=%s code=%d stdout=%q stderr=%q", flag, code, stdout.String(), stderr.String())
+		}
 	}
 }
 

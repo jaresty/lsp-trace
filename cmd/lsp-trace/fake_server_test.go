@@ -680,6 +680,14 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			}
 			return err
 		}
+		if logPath := os.Getenv("LSP_TRACE_FAKE_METHOD_LOG"); logPath != "" {
+			f, openErr := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			if openErr != nil {
+				return openErr
+			}
+			_, _ = fmt.Fprintln(f, m.Method)
+			_ = f.Close()
+		}
 		switch m.Method {
 		case "initialize":
 			if scenario == "slice-stderr-exit-initialize" {
@@ -703,7 +711,16 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			err = writeFake(out, m.ID, map[string]any{"capabilities": capabilities}, nil)
 		case "initialized", "textDocument/didOpen":
 		case "textDocument/documentSymbol":
-			if scenario == "slice-symbol" || scenario == "slice-multi-file" {
+			if scenario == "slice-trace-ambiguous" || scenario == "slice-trace-missing" {
+				rows := []map[string]any{}
+				if scenario == "slice-trace-ambiguous" {
+					for line := 9; line >= 0; line-- {
+						r := fakeRange{Start: fakePosition{Line: uint32(line), Character: uint32(line % 3)}, End: fakePosition{Line: uint32(line), Character: uint32(line%3 + 5)}}
+						rows = append(rows, map[string]any{"name": "duplicate", "kind": 12, "range": r, "selectionRange": r})
+					}
+				}
+				err = writeFake(out, m.ID, rows, nil)
+			} else if scenario == "slice-symbol" || scenario == "slice-multi-file" {
 				var p struct {
 					TextDocument struct {
 						URI string `json:"uri"`

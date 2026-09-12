@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -116,23 +115,17 @@ func runTrace(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	_, raw, err := traceSeeds(c)
+	seeds, _, err := traceSeeds(c)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	dir, err := os.MkdirTemp("", "lsp-trace-trace-")
+	manifest, err := traceManifest(c, seeds)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	defer os.RemoveAll(dir)
-	manifestPath := filepath.Join(dir, "seeds.json")
-	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
-		fmt.Fprintln(stderr, err)
-		return 1
-	}
-	forward := []string{"--workspace", c.workspace, "--server", c.command, "--trace-seed-spec", manifestPath, "--output-version", "lsp-trace.graph-provenance.v5"}
+	forward := []string{"--workspace", c.workspace, "--server", c.command, "--output-version", "lsp-trace.graph-provenance.v5"}
 	for _, arg := range c.args {
 		forward = append(forward, "--server-arg", arg)
 	}
@@ -148,10 +141,7 @@ func runTrace(args []string, stdout, stderr io.Writer) int {
 	if c.pretty {
 		forward = append(forward, "--pretty")
 	}
-	if c.siblings {
-		forward = append(forward, "--trace-siblings")
-	}
-	return runAcquisitionVersion("slice", "v3", forward, stdout, stderr)
+	return runTraceAcquisition("slice", "v3", forward, stdout, stderr, traceAcquisitionInput{manifest: manifest, seeds: seeds})
 }
 
 func traceLimits(c traceConfig) acquisitionops.Limits {

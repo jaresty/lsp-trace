@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,6 +19,7 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/operation"
@@ -189,7 +191,20 @@ func (r *privateAcquisitionRuntime) SeedCustodyProvenance(sessionID string, gene
 	return seedbinding.CallerAssertedLocal, true
 }
 
+type traceAcquisitionInput struct {
+	manifest acquisitionops.Manifest
+	seeds    seedformat.File
+}
+
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil)
+}
+
+func runTraceAcquisition(mode, version string, args []string, stdout, stderr io.Writer, trace traceAcquisitionInput) int {
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, &trace)
+}
+
+func runAcquisitionVersionInternal(mode, version string, args []string, stdout, stderr io.Writer, trace *traceAcquisitionInput) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
 	fs := flag.NewFlagSet(mode+" v2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -247,8 +262,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	discoverSeeds := len(c.fromFiles) > 0
 	replaySeeds := len(seedFiles) > 0
+	traceSeeds := trace != nil
 	inputModes := 0
-	for _, active := range []bool{manifestPath != "", discoverSeeds, replaySeeds} {
+	for _, active := range []bool{manifestPath != "", discoverSeeds, replaySeeds, traceSeeds} {
 		if active {
 			inputModes++
 		}
@@ -258,6 +274,9 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	if replaySeeds && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5) {
 		return fail(fmt.Errorf("--seed-file replay requires slice --production-v5"))
+	}
+	if traceSeeds && (mode != "slice" || version != "v3" || outputVersion != graphprovenance.VersionV5) {
+		return fail(fmt.Errorf("internal trace acquisition requires slice v3 Graph Provenance V5"))
 	}
 	if !discoverSeeds && (len(c.includes) > 0 || len(c.excludes) > 0) {
 		return fail(fmt.Errorf("--include and --exclude require automatic discovery with --from-file"))
@@ -290,6 +309,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 		}
 	}
 	var manifest acquisitionops.Manifest
+	var traceSeedFile seedformat.File
 	var requestPolicy []byte
 	var retainedSeedSpec []byte
 	var sources []resolvedSliceSource
@@ -332,6 +352,10 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 			return fail(fmt.Errorf("invalid --seed-file replay: %w", err))
 		}
 		requestPolicy, _ = json.Marshal(manifest)
+	} else if traceSeeds {
+		manifest = trace.manifest
+		traceSeedFile = trace.seeds
+		requestPolicy, _ = json.Marshal(manifest)
 	} else {
 		// Bounded regular-file input: no FIFO or unbounded ReadAll, no MCP path analogue.
 		manifestRoot, openErr := os.OpenRoot(filepath.Dir(manifestPath))
@@ -352,7 +376,7 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	if manifest.Expansion.TopmostSiblings && outputVersion != graphprovenance.VersionV5 {
 		return fail(fmt.Errorf("expansion.topmost_siblings requires explicit graph-provenance v5 output"))
 	}
-	if outputVersion != "" && (outputVersion != graphprovenance.VersionV5 || version != "v3" || !manifest.Expansion.TopmostSiblings) {
+	if outputVersion != "" && (outputVersion != graphprovenance.VersionV5 || version != "v3" || (!manifest.Expansion.TopmostSiblings && !traceSeeds)) {
 		return fail(fmt.Errorf("graph-provenance v5 output requires acquisition-version v3 and expansion.topmost_siblings=true"))
 	}
 	effective, err := manifest.Request(op)
@@ -468,6 +492,48 @@ func runAcquisitionVersion(mode, version string, args []string, stdout, stderr i
 	}
 	privateRuntime := &privateAcquisitionRuntime{manager: manager}
 	privateRuntime.retainHandle(ready.DiagnosticOperation)
+	if traceSeeds && len(traceSeedFile.Seeds) == 1 && traceSeedFile.Seeds[0].Type == seedformat.SymbolType {
+		seed := traceSeedFile.Seeds[0].Symbol
+		locator := manifest.Root.Locator
+		prepared := manager.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: started.SessionID, Generation: started.Generation, URI: locator.URI, LanguageID: c.languageID})
+		privateRuntime.retainHandle(prepared.DiagnosticOperation)
+		if prepared.Failure != "" {
+			return fail(fmt.Errorf("trace symbol document supply: %s", prepared.Failure))
+		}
+		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
+		var symbols []lsp.DocumentSymbol
+		if err := client.call(ctx, "textDocument/documentSymbol", lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: locator.URI}}, &symbols); err != nil {
+			return fail(fmt.Errorf("trace exact symbol lookup: %w", err))
+		}
+		stack := append([]lsp.DocumentSymbol(nil), symbols...)
+		matches := []lsp.DocumentSymbol{}
+		for len(stack) > 0 {
+			symbol := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			if symbol.Name == seed.Symbol {
+				matches = append(matches, symbol)
+			}
+			stack = append(stack, symbol.Children...)
+		}
+		sort.Slice(matches, func(i, j int) bool {
+			a, b := matches[i].SelectionRange.Start, matches[j].SelectionRange.Start
+			return a.Line < b.Line || (a.Line == b.Line && a.Character < b.Character)
+		})
+		if len(matches) != 1 {
+			shown := len(matches)
+			if shown > 8 {
+				shown = 8
+			}
+			fmt.Fprintf(stderr, "trace exact symbol %q: total=%d omitted=%d\n", seed.Symbol, len(matches), len(matches)-shown)
+			for _, candidate := range matches[:shown] {
+				fmt.Fprintf(stderr, "candidate: %s:%d:%d\n", seed.Path, candidate.SelectionRange.Start.Line+1, candidate.SelectionRange.Start.Character+1)
+			}
+			if len(matches) > 1 {
+				fmt.Fprintln(stderr, "ambiguous exact symbol; use --at PATH:LINE:COLUMN to disambiguate")
+			}
+			return 1
+		}
+	}
 	if discoverSeeds {
 		client := productionDiscoveryClient{runtime: privateRuntime, sessionID: started.SessionID, generation: started.Generation, timeout: effective.Limits.RequestTimeout}
 		discoveries, counts, censusErr := censusSelectedDiscoverySources(sources, discoveryCounts,
