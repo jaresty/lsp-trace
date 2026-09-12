@@ -109,12 +109,13 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 		callRequest(1, "lsp_trace_v3_slice", map[string]any{"session_id": "fixture", "generation": 1, "seed_manifest": manifest, "output_version": graphprovenance.VersionV5}),
 	})
 	call = decodeProcessCall(t, responses[0])
-	if call.env["operation_status"] != "FAILED" || call.env["code"] != "OUTPUT_VALIDATION_FAILED" {
-		t.Fatalf("ASSERT_ORDINARY_MCP_V5_CANNOT_PROMOTE_RUNTIME_CUSTODY: envelope=%v", call.env)
+	mcpArtifact = inlineArtifactBytes(t, call.env)
+	if call.env["operation_status"] != "SUCCEEDED" || !bytes.Equal(cliStdout.Bytes(), mcpArtifact) {
+		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: envelope=%v equal=%v stderr=%s", call.env, bytes.Equal(cliStdout.Bytes(), mcpArtifact), cliStderr.String())
 	}
 	var v5 graphprovenance.EvidenceV5
-	if err := json.Unmarshal(cliStdout.Bytes(), &v5); err != nil || v5.SeedSpec != nil {
-		t.Fatalf("ASSERT_TRUSTED_LEGACY_CLI_V5_NO_RETAINED_SEED_SPEC: err=%v seed=%v stderr=%s", err, v5.SeedSpec, cliStderr.String())
+	if err := json.Unmarshal(mcpArtifact, &v5); err != nil {
+		t.Fatal(err)
 	}
 	native, err := base64.StdEncoding.DecodeString(v5.GraphV5)
 	if err != nil {
@@ -124,5 +125,5 @@ func TestFR23V3RealProcessCLIAndMCPByteParityGenerationOne(t *testing.T) {
 	if err != nil || len(decoded.SiblingCandidates) == 0 || len(decoded.Edges) != 0 {
 		t.Fatalf("ASSERT_MANAGED_V5_REAL_PROCESS_NONEMPTY_SIBLINGS_NO_CALLS_INFERENCE: siblings=%d edges=%d err=%v", len(decoded.SiblingCandidates), len(decoded.Edges), err)
 	}
-	t.Logf("PASS ASSERT_TRUSTED_LEGACY_CLI_V5_AND_ORDINARY_MCP_FAIL_CLOSED: bytes=%d siblings=%d", cliStdout.Len(), len(decoded.SiblingCandidates))
+	t.Logf("PASS ASSERT_MANAGED_V5_REAL_PROCESS_CLI_MCP_EXACT_BYTES: bytes=%d siblings=%d", len(mcpArtifact), len(decoded.SiblingCandidates))
 }

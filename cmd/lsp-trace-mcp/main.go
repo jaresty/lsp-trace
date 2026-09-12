@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"lsp-trace/acquisitionops"
 	"lsp-trace/incomingops"
+	"lsp-trace/internal/acquisitionengine"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/custodyevidence"
 	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/managedprocess"
@@ -263,11 +264,36 @@ func composeHostSelectorRuntime(server *mcp.Server, manager *sessionruntime.Mana
 	return selected
 }
 
+type legacyManifestExecutor struct {
+	runtime acquisitionorchestration.Runtime
+}
+
+func (e legacyManifestExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	input, _, err := acquisitionengine.CanonicalInput(request.Input)
+	if err != nil {
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: err}
+	}
+	if resolver, ok := e.runtime.(interface {
+		ResolveSessionSelector(string, uint64) (string, uint64, session.Failure)
+	}); ok {
+		var resolveFailure session.Failure
+		input.SessionID, input.Generation, resolveFailure = resolver.ResolveSessionSelector(input.SessionID, input.Generation)
+		if resolveFailure != "" {
+			return operation.Result{}, &operation.Failure{Code: string(resolveFailure)}
+		}
+	}
+	request.Input, err = json.Marshal(input)
+	if err != nil {
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: err}
+	}
+	return acquisitionorchestration.ExecuteLegacyManifest(ctx, e.runtime, request)
+}
+
 func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRuntime) {
 	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.New(selected))
 	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
 	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
-	server.Executors[mcp.AcquisitionV2ExecutorFamily] = acquisitionops.NewExecutor(selected)
+	server.Executors[mcp.AcquisitionV2ExecutorFamily] = legacyManifestExecutor{runtime: selected}
 }
 
 func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
@@ -405,7 +431,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.LifecycleExecutorFamily:     lifecycleops.NewExecutor(lifecycleops.New(manager)),
 			mcp.IncomingExecutorFamily:      incomingops.NewExecutor(manager),
 			mcp.SliceExecutorFamily:         sliceops.NewExecutor(manager),
-			mcp.AcquisitionV2ExecutorFamily: acquisitionops.NewExecutor(manager),
+			mcp.AcquisitionV2ExecutorFamily: legacyManifestExecutor{runtime: manager},
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

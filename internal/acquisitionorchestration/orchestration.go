@@ -32,8 +32,10 @@ type routePolicy struct {
 func policyForRoute(route string) (routePolicy, bool) {
 	switch route {
 	case RouteExplicitTrace:
-		return routePolicy{callerLocal: true, retainSeedSpec: true, prepareSource: true}, true
-	case RouteSeedFile, RouteAutomaticFile:
+		return routePolicy{callerLocal: true, prepareSource: true}, true
+	case RouteSeedFile:
+		return routePolicy{callerLocal: true}, true
+	case RouteAutomaticFile:
 		return routePolicy{callerLocal: true, retainSeedSpec: true}, true
 	case RouteLegacyManifest:
 		return routePolicy{}, true
@@ -111,7 +113,7 @@ func executeCallerSeeds(ctx context.Context, runtime Runtime, op operation.Reque
 }
 
 // ExecuteExplicitTrace preserves caller-local custody and source supply for MCP
-// trace and the CLI trace facade.
+// trace and the CLI trace facade without retaining replayable seed bytes.
 func ExecuteExplicitTrace(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
 	return executeCallerSeeds(ctx, runtime, op, RouteExplicitTrace, seedSpec)
 }
@@ -143,7 +145,7 @@ func ExecuteExplicitTracePrepared(ctx context.Context, runtime Runtime, op opera
 	return acquisitionengine.ExecuteAuthorized(ctx, runtime, op, RouteExplicitTrace, authority, &capability, binding)
 }
 
-// ExecuteSeedFile preserves canonical caller-provided Seeds V2 in V5.
+// ExecuteSeedFile preserves caller-local custody without retaining replayed seed bytes.
 func ExecuteSeedFile(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
 	return executeCallerSeeds(ctx, runtime, op, RouteSeedFile, seedSpec)
 }

@@ -79,6 +79,18 @@ func TestSeedAuthorityRejectsMutationForgeryAndReplay(t *testing.T) {
 	}
 }
 
+func TestSeedAuthorityCarriesValidatedBytesWithoutRetainingThem(t *testing.T) {
+	binding, seed := testBinding(t)
+	authority, err := MintSeedAuthority(binding, seed, seedbinding.CallerAssertedLocal, false, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := ConsumeSeedAuthority(authority, binding)
+	if err != nil || grant.RetainSeedSpec || !bytes.Equal(grant.SeedSpec, seed) {
+		t.Fatalf("ASSERT_NON_RETAINING_AUTHORITY_CARRIES_VALIDATED_EXECUTION_BYTES: grant=%+v err=%v", grant, err)
+	}
+}
+
 func TestSeedAuthorityConcurrentReplayAdmitsExactlyOnce(t *testing.T) {
 	binding, seed := testBinding(t)
 	a := mintTestSeed(t, binding, seed)

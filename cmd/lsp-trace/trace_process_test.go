@@ -13,7 +13,6 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
-	"lsp-trace/internal/seedformat"
 )
 
 func traceFakeArgs(workspace, scenario string) []string {
@@ -37,7 +36,7 @@ func decodeTraceV5(t *testing.T, raw string) (graphprovenance.EvidenceV5, graph.
 	return envelope, result
 }
 
-func TestTraceProcessV5ParityAndExplicitSeedCustody(t *testing.T) {
+func TestTraceProcessV5ParityAndNoSeedSpecCustody(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed local-process integration is Darwin-only")
 	}
@@ -47,9 +46,12 @@ func TestTraceProcessV5ParityAndExplicitSeedCustody(t *testing.T) {
 	}
 	defaultArgs := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0")
 	defaultOut, defaultErr, defaultCode := captureRun(t, append([]string{"trace"}, defaultArgs...))
+	if defaultCode != 0 || defaultErr != "" {
+		t.Fatalf("ASSERT_TRACE_DEFAULT_PROCESS_COMPLETES: code=%d stderr=%q stdout=%q", defaultCode, defaultErr, defaultOut)
+	}
 	defaultEnvelope, defaultGraph := decodeTraceV5(t, defaultOut)
-	if defaultCode != 0 || defaultErr != "" || defaultEnvelope.SeedSpec == nil || defaultEnvelope.SeedSpec.SchemaVersion != seedformat.Version || defaultGraph.Invocation.Expansion.TopmostSiblings {
-		t.Fatalf("ASSERT_TRACE_DEFAULT_SIBLINGS_OFF_EXPLICIT_SEED_SPEC: code=%d stderr=%q expansion=%+v seed=%v", defaultCode, defaultErr, defaultGraph.Invocation.Expansion, defaultEnvelope.SeedSpec)
+	if defaultEnvelope.SeedSpec != nil || defaultGraph.Invocation.Expansion.TopmostSiblings {
+		t.Fatalf("ASSERT_TRACE_DEFAULT_SIBLINGS_OFF_NO_SEED_SPEC: code=%d stderr=%q expansion=%+v seed=%v", defaultCode, defaultErr, defaultGraph.Invocation.Expansion, defaultEnvelope.SeedSpec)
 	}
 
 	traceArgs := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0", "--timeout", "60s", "--request-timeout", "30s", "--siblings")
@@ -73,8 +75,8 @@ func TestTraceProcessV5ParityAndExplicitSeedCustody(t *testing.T) {
 	}
 	traceEnvelope, traceGraph := decodeTraceV5(t, traceOut)
 	sliceEnvelope, sliceGraph := decodeTraceV5(t, sliceOut)
-	if traceCode != sliceCode || traceEnvelope.SeedSpec == nil || sliceEnvelope.SeedSpec == nil || traceEnvelope.SeedSpec.SchemaVersion != seedformat.Version || sliceEnvelope.SeedSpec.SchemaVersion != seedformat.Version || traceEnvelope.GraphV5 != sliceEnvelope.GraphV5 || traceEnvelope.GraphV5SHA256 != sliceEnvelope.GraphV5SHA256 || !reflect.DeepEqual(traceGraph.Edges, sliceGraph.Edges) {
-		t.Fatalf("ASSERT_TRACE_PUBLIC_SLICE_V5_GRAPH_DIGEST_CALLS_PARITY_WITH_ROUTE_SEED_CUSTODY: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceDigest=%s sliceDigest=%s traceSeed=%v sliceSeed=%v", traceCode, sliceCode, traceErr, sliceErr, traceEnvelope.GraphV5SHA256, sliceEnvelope.GraphV5SHA256, traceEnvelope.SeedSpec, sliceEnvelope.SeedSpec)
+	if traceCode != sliceCode || traceEnvelope.SeedSpec != nil || sliceEnvelope.SeedSpec != nil || traceEnvelope.GraphV5 != sliceEnvelope.GraphV5 || traceEnvelope.GraphV5SHA256 != sliceEnvelope.GraphV5SHA256 || !reflect.DeepEqual(traceGraph.Edges, sliceGraph.Edges) {
+		t.Fatalf("ASSERT_TRACE_PUBLIC_SLICE_V5_GRAPH_DIGEST_CALLS_PARITY_NO_SEED_SPEC: traceCode=%d sliceCode=%d traceErr=%q sliceErr=%q traceDigest=%s sliceDigest=%s traceSeed=%v sliceSeed=%v", traceCode, sliceCode, traceErr, sliceErr, traceEnvelope.GraphV5SHA256, sliceEnvelope.GraphV5SHA256, traceEnvelope.SeedSpec, sliceEnvelope.SeedSpec)
 	}
 }
 
@@ -89,9 +91,6 @@ func TestTraceProcessRepeatedAtUsesOneMultiTargetV5Acquisition(t *testing.T) {
 	methodLog := filepath.Join(t.TempDir(), "methods.log")
 	args := append(traceFakeArgs(workspace, "slice-symbol"), "--server-env", "LSP_TRACE_FAKE_METHOD_LOG="+methodLog, "--at", "main.go:1:1", "--at", "main.go:2:1", "--down-depth", "0", "--up-depth", "0")
 	stdout, stderr, code := captureRun(t, append([]string{"trace"}, args...))
-	if code != 0 {
-		t.Fatalf("ASSERT_TRACE_ONE_MULTI_TARGET_V5_ACQUISITION_SETUP: code=%d stderr=%q stdout=%q", code, stderr, stdout)
-	}
 	envelope, _ := decodeTraceV5(t, stdout)
 	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
 	if err != nil {

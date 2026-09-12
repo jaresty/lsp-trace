@@ -7,8 +7,8 @@ func TestFourModeCustodyPoliciesAreDistinctAndClosed(t *testing.T) {
 		route                         string
 		caller, retain, prepareSource bool
 	}{
-		{RouteExplicitTrace, true, true, true},
-		{RouteSeedFile, true, true, false},
+		{RouteExplicitTrace, true, false, true},
+		{RouteSeedFile, true, false, false},
 		{RouteAutomaticFile, true, true, false},
 		{RouteLegacyManifest, false, false, false},
 	}

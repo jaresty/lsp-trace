@@ -110,15 +110,13 @@ func MintSeedAuthority(b Binding, seedSpec []byte, provenance seedbinding.Custod
 	if provenance == seedbinding.VerifiedHost && (!authenticated || hostReceipt == "") {
 		return SeedAuthority{}, fmt.Errorf("verified host custody requires receipt")
 	}
-	if retain {
-		if len(seedSpec) == 0 {
-			return SeedAuthority{}, fmt.Errorf("retained seed bytes required")
-		}
+	if retain && len(seedSpec) == 0 {
+		return SeedAuthority{}, fmt.Errorf("retained seed bytes required")
+	}
+	if len(seedSpec) != 0 {
 		if err := validateSeedSpec(seedSpec, b.Workspace, b.Input, b.Route); err != nil {
 			return SeedAuthority{}, err
 		}
-	} else if len(seedSpec) != 0 {
-		return SeedAuthority{}, fmt.Errorf("non-retained authority cannot carry seed bytes")
 	}
 	use, err := newUseState()
 	if err != nil {
