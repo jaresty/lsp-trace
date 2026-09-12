@@ -1,8 +1,11 @@
 package graphprovenance
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -27,6 +30,28 @@ func v5Fixture(t *testing.T) ([]byte, []byte) {
 		t.Fatal(err)
 	}
 	return raw, native
+}
+
+func TestV5RetainsAndBindsCanonicalSeedSpec(t *testing.T) {
+	_, native := v5Fixture(t)
+	seedSpec := []byte(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"seed","path":"a.go","line":1,"column":1}]}`)
+	raw, err := CaptureV5WithSeedSpec(native, "session", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, seedSpec, &EvidenceV2{SchemaVersion: VersionV2, Policy: PolicyV2, WorkspaceURI: "file:///w", AnalyzedVersion: Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Supplies: []SupplyReceiptV2{}, Captures: []Receipt{}, Bindings: []BindingV2{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence EvidenceV5
+	if err := json.Unmarshal(raw, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	wantDigest := fmt.Sprintf("sha256:%x", sha256.Sum256(seedSpec))
+	if evidence.SeedSpec == nil || !bytes.Equal(evidence.SeedSpec.Bytes, seedSpec) || evidence.SeedSpec.SHA256 != wantDigest {
+		t.Fatalf("ASSERT_V5_RETAINS_EXACT_SEED_SPEC: %#v", evidence.SeedSpec)
+	}
+	evidence.SeedSpec.Bytes[0] ^= 1
+	mutated, _ := json.Marshal(evidence)
+	if _, err := ValidateFor(mutated, Family, "v5"); err == nil {
+		t.Fatal("ASSERT_V5_SEED_SPEC_DIGEST_MUTATION_REJECTED")
+	}
 }
 
 func TestV5ExactNativeCarrierAndMutations(t *testing.T) {
