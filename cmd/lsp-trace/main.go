@@ -106,6 +106,7 @@ const usageText = `usage:
   lsp-trace program-c compose PATH|-
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
+  lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
   lsp-trace slice --graph-provenance --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN | --from-file PATH --symbol NAME)
@@ -262,6 +263,9 @@ func run(args []string) int {
 	}
 	if len(args) > 0 && args[0] == "validate-private-request-diagnostics" {
 		return runPrivateRequestDiagnosticValidation(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "trace" {
+		return runTrace(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "slice" {
 		return runSlice(args[1:])

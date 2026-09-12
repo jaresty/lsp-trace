@@ -88,6 +88,7 @@ This is bounded A3, not normative relations.v1/full FR6 or acceptance.
 
 When a matching managed language-server session is READY, prefer `lsp-trace` for code-relationship questions: who calls an exact callee, what an exact target calls, or what bounded call neighborhood surrounds it. Use textual or symbol discovery first only when the exact target is unknown, use another available source-navigation method when no matching session is READY, and read exact source bodies after structural tracing identifies the relevant nodes. Use revision-control tooling for history rather than call relationships.
 
+- `trace`: navigate from an exact managed symbol (`--file PATH --symbol NAME`) or repeatable one-based positions (`--at PATH:LINE:COLUMN`) with canonical retained Seeds V2 and Graph Provenance V5 output; outgoing and incoming depths default to 2.
 - `incoming`: start from exact callee positions and trace callers upward.
 - `slice`: discover bounded outgoing nodes first, then trace incoming callers from the exact frontier and server-reported leaves.
 - `inspect-hydrated`: retrieve exact retained context for selected returned nodes or relations without reacquiring source.
@@ -95,6 +96,8 @@ When a matching managed language-server session is READY, prefer `lsp-trace` for
 - `filter`: mechanically compare exactly two seeds from an admitted all-seeds inspection.
 - `verify`: audit a publication selector's exact-byte custody and embedded semantic receipt.
 - `validate`: validate graph, inspection, or filter documents against the selected family/version contract.
+
+Use `trace` for the intent-oriented exact-target facade. Symbol mode exhaustively matches the exact managed name and fails on zero or multiple matches without selecting the first; ambiguity reports at most eight candidates plus total and omitted counts and recommends `--at`. Position mode executes every repeated target in one multi-target V5 acquisition. CLI coordinates are one-based. Topmost sibling enrichment is off unless `--siblings` is explicit.
 
 Use `incoming` when the supplied positions are already the callees of interest and only caller expansion is required. Use `slice` when bounded outgoing discovery must first choose the nodes from which incoming traversal begins. Legacy `slice --from-file PATH` is an all-symbol census of server-reported document symbols, not proof that every callable or feature in the file was discovered. Managed `slice --at PATH:LINE:COLUMN` and `slice --from-file PATH --symbol NAME` are exact target selectors. Do not mix those managed forms or omit `--symbol` from the managed file form. Slice requires exactly one start mode; incoming may combine `--seed-file` with repeated `--at` positions.
 
