@@ -21,6 +21,16 @@ func fixturePartition(t *testing.T, graph []byte, seed uint64) []byte {
 	}
 	return b
 }
+func TestAggregateRejectsForeignPartitionWithSameNodeIDs(t *testing.T) {
+	graph := programctestfixture.ValidV5(t)
+	foreignGraph := programctestfixture.DifferentCallsV5(t)
+	foreignPartition := fixturePartition(t, foreignGraph, 19)
+
+	if _, err := Aggregate(graph, foreignPartition); err == nil {
+		t.Fatal("ASSERT_FOREIGN_SAME_NODE_DIFFERENT_CALLS_PARTITION_REJECTED")
+	}
+}
+
 func TestRegisterSchemaMutationAndPartitionRejections(t *testing.T) {
 	graph := programctestfixture.ValidV5(t)
 	p := fixturePartition(t, graph, 19)

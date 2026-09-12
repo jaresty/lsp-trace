@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 
 	"lsp-trace/internal/programc"
@@ -72,6 +73,16 @@ func Aggregate(graphRaw []byte, partitionRaw ...[]byte) (Register, error) {
 		}
 		if dec.Decode(&struct{}{}) != io.EOF {
 			return Register{}, fmt.Errorf("partition must contain one document")
+		}
+		canonical, err := programcpresentation.Handle(programcpresentation.Request{
+			Input: graphRaw, Seed: p.Seed,
+			PageRankTopK: p.Request.PageRankTopK, HubTopK: p.Request.HubTopK,
+		})
+		if err != nil {
+			return Register{}, fmt.Errorf("partition compatibility recomputation: %w", err)
+		}
+		if !reflect.DeepEqual(p, canonical) {
+			return Register{}, fmt.Errorf("partition %q is incompatible with the admitted graph", p.PartitionSHA256)
 		}
 		if seenPartitions[p.PartitionSHA256] {
 			return Register{}, fmt.Errorf("duplicate partition %q", p.PartitionSHA256)
