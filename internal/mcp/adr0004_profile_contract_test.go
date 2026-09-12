@@ -123,28 +123,45 @@ func TestADR0004RegressionGuardProfilePartitionCoversNumbered32(t *testing.T) {
 	}
 }
 
-func TestADR0004IntentionalREDTargetAdvertisementProfiles(t *testing.T) {
+func TestADR0004CurrentAdvertisementProfiles(t *testing.T) {
+	gotDefault := toolNames(NewRegistryWithProfile(false, ToolProfileDefault).Advertised())
+	if !reflect.DeepEqual(gotDefault, adr0004DefaultCurrent) {
+		t.Errorf("default current advertisement\n got: %v\nwant: %v", gotDefault, adr0004DefaultCurrent)
+	}
+
+	advancedTarget := append(append([]string{}, adr0004DefaultCurrent...), adr0004AdvancedOnly...)
+	sort.Strings(advancedTarget)
+	gotAdvanced := toolNames(NewRegistryWithProfile(false, ToolProfileAdvanced).Advertised())
+	if !reflect.DeepEqual(gotAdvanced, advancedTarget) {
+		t.Errorf("advanced current advertisement\n got: %v\nwant: %v", gotAdvanced, advancedTarget)
+	}
+
+	for _, profile := range []ToolProfile{ToolProfileDefault, ToolProfileAdvanced} {
+		r := NewRegistryWithProfile(false, profile)
+		advertised := make(map[string]bool, len(r.Advertised()))
+		for _, tool := range r.Advertised() {
+			advertised[tool.Name] = true
+		}
+		for _, name := range adr0004HiddenLegacy {
+			if advertised[name] {
+				t.Errorf("hidden legacy operation %q advertised by %s", name, profile)
+			}
+			if _, ok := r.ResolveCanonical(name); !ok {
+				t.Errorf("hidden legacy operation %q is no longer canonically dispatchable in %s", name, profile)
+			}
+		}
+	}
+}
+
+func TestADR0004IntentionalREDFutureDefaultAdvertisement(t *testing.T) {
 	if os.Getenv("LSP_TRACE_RUN_ADR0004_RED_GUARDS") != "1" {
-		t.Skip("INTENTIONAL RED: ADR 0004 target profiles require unimplemented lsp_trace_v1_trace/discover and future registry profile behavior")
+		t.Skip("INTENTIONAL RED: ADR 0004 target profiles require unimplemented lsp_trace_v1_trace/discover")
 	}
 
 	defaultTarget := append([]string{"lsp_trace_v1_discover", "lsp_trace_v1_trace"}, adr0004DefaultCurrent...)
 	sort.Strings(defaultTarget)
-	gotDefault := toolNames(NewRegistryWithProfile(false, ToolProfileCompact).Advertised())
+	gotDefault := toolNames(NewRegistryWithProfile(false, ToolProfileDefault).Advertised())
 	if !reflect.DeepEqual(gotDefault, defaultTarget) {
-		t.Errorf("INTENTIONAL RED: default target advertisement\n got: %v\nwant: %v", gotDefault, defaultTarget)
-	}
-
-	advancedTarget := append(append([]string{}, defaultTarget...), adr0004AdvancedOnly...)
-	sort.Strings(advancedTarget)
-	gotAdvanced := toolNames(NewRegistryWithProfile(false, ToolProfileFull).Advertised())
-	if !reflect.DeepEqual(gotAdvanced, advancedTarget) {
-		t.Errorf("INTENTIONAL RED: advanced target advertisement\n got: %v\nwant: %v", gotAdvanced, advancedTarget)
-	}
-
-	for _, name := range adr0004HiddenLegacy {
-		if _, ok := NewRegistry(false).ResolveCanonical(name); !ok {
-			t.Errorf("REGRESSION inside RED guard: hidden legacy operation %q is no longer canonically dispatchable", name)
-		}
+		t.Errorf("INTENTIONAL RED: future default target advertisement\n got: %v\nwant: %v", gotDefault, defaultTarget)
 	}
 }

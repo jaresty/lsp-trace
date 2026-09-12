@@ -72,9 +72,30 @@ type Tool struct {
 type ToolProfile string
 
 const (
+	ToolProfileDefault  ToolProfile = "default"
+	ToolProfileAdvanced ToolProfile = "advanced"
+
+	// Full and compact remain explicit compatibility profiles. New production
+	// configuration should use default or advanced.
 	ToolProfileFull    ToolProfile = "full"
 	ToolProfileCompact ToolProfile = "compact"
 )
+
+var defaultToolNames = map[string]struct{}{
+	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
+	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_verify": {},
+}
+
+var advancedToolNames = map[string]struct{}{
+	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
+	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
+	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
+	"lsp_trace_v1_program_c_instability": {}, "lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_validate": {},
+	"lsp_trace_v1_verify": {}, "lsp_trace_v2_bounded_retained_analysis": {}, "lsp_trace_v2_bounded_retained_metrics": {},
+	"lsp_trace_v2_bounded_retained_ranking": {}, "lsp_trace_v2_export_retained_calls": {}, "lsp_trace_v2_verify": {},
+	"lsp_trace_v2_verify_retained_calls": {},
+}
 
 var compactToolNames = map[string]struct{}{
 	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
@@ -123,7 +144,9 @@ func NewRegistryWithRouting(publicationSupported bool, routing Routing) *Registr
 }
 
 func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing, profile ToolProfile) *Registry {
-	if profile != ToolProfileFull && profile != ToolProfileCompact {
+	switch profile {
+	case ToolProfileDefault, ToolProfileAdvanced, ToolProfileFull, ToolProfileCompact:
+	default:
 		panic(fmt.Sprintf("unknown MCP tool profile %q", profile))
 	}
 	manifest, err := mcpcontract.LoadManifest()
@@ -834,8 +857,19 @@ func (r *Registry) Advertised() []Tool {
 		if tool.Availability != Enabled {
 			continue
 		}
-		if r.toolProfile == ToolProfileCompact {
-			if _, ok := compactToolNames[tool.Name]; !ok {
+		var names map[string]struct{}
+		switch r.toolProfile {
+		case ToolProfileDefault:
+			names = defaultToolNames
+		case ToolProfileAdvanced:
+			names = advancedToolNames
+		case ToolProfileCompact:
+			names = compactToolNames
+		case ToolProfileFull:
+			// Compatibility profile: advertise every enabled canonical tool.
+		}
+		if names != nil {
+			if _, ok := names[tool.Name]; !ok {
 				continue
 			}
 		}

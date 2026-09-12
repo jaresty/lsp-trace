@@ -136,6 +136,53 @@ func TestVersionReportsExplicitBuildIdentity(t *testing.T) {
 	}
 }
 
+func TestDefaultAndAdvancedProcessAdvertisement(t *testing.T) {
+	want := map[string][]string{
+		"default": {
+			"lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_inspect_hydrated",
+			"lsp_trace_v1_program_c_leiden", "lsp_trace_v1_verify",
+		},
+		"advanced": {
+			"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
+			"lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking",
+			"lsp_trace_v1_capabilities", "lsp_trace_v1_custody_execute", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls",
+			"lsp_trace_v1_filter", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_program_c_compose",
+			"lsp_trace_v1_program_c_instability", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate",
+			"lsp_trace_v1_verify", "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics",
+			"lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls",
+		},
+	}
+	for profile, expected := range want {
+		t.Run(profile, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			args := []string(nil)
+			if profile != "default" {
+				args = []string{"--tool-profile", profile}
+			}
+			if code := run(args, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`+"\n"), &stdout, &stderr); code != 0 {
+				t.Fatalf("run: code=%d stderr=%s", code, stderr.String())
+			}
+			var response struct {
+				Result struct {
+					Tools []struct {
+						Name string `json:"name"`
+					} `json:"tools"`
+				} `json:"result"`
+			}
+			if err := json.Unmarshal(bytes.TrimSpace(stdout.Bytes()), &response); err != nil {
+				t.Fatal(err)
+			}
+			got := make([]string, len(response.Result.Tools))
+			for i := range response.Result.Tools {
+				got[i] = response.Result.Tools[i].Name
+			}
+			if strings.Join(got, "\n") != strings.Join(expected, "\n") {
+				t.Fatalf("profile %s tools=%v want=%v", profile, got, expected)
+			}
+		})
+	}
+}
+
 func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	input := strings.Join([]string{

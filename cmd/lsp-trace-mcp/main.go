@@ -75,7 +75,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	artifactStorePath := fs.String("artifact-store", "", "pinned immutable sha256 artifact store for hydration")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
-	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileFull), "MCP advertisement profile: full or compact")
+	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileDefault), "MCP advertisement profile: default, advanced, full, or compact")
 	printBootstrapExample := fs.Bool("print-bootstrap-example", false, "print a safe host-managed process bootstrap template and exit")
 	printVersion := fs.Bool("version", false, "print binary version and build revision")
 	if err := fs.Parse(args); err != nil {
@@ -97,8 +97,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	toolProfile := mcp.ToolProfile(*toolProfileValue)
-	if toolProfile != mcp.ToolProfileFull && toolProfile != mcp.ToolProfileCompact {
-		fmt.Fprintf(stderr, "invalid --tool-profile %q: want full or compact\n", *toolProfileValue)
+	switch toolProfile {
+	case mcp.ToolProfileDefault, mcp.ToolProfileAdvanced, mcp.ToolProfileFull, mcp.ToolProfileCompact:
+	default:
+		fmt.Fprintf(stderr, "invalid --tool-profile %q: want default, advanced, full, or compact\n", *toolProfileValue)
 		return 2
 	}
 	if fs.NArg() != 0 {
@@ -106,7 +108,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *printBootstrapExample {
-		if *enableLiveLSP || *publicationRootPath != "" || *artifactStorePath != "" || *bootstrapConfigPath != "" || *custodyTrustPath != "" || toolProfile != mcp.ToolProfileFull {
+		if *enableLiveLSP || *publicationRootPath != "" || *artifactStorePath != "" || *bootstrapConfigPath != "" || *custodyTrustPath != "" || toolProfile != mcp.ToolProfileDefault {
 			fmt.Fprintln(stderr, "--print-bootstrap-example cannot be combined with operational options")
 			return 2
 		}

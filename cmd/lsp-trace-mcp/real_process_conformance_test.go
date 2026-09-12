@@ -148,10 +148,10 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 		callRequest(3, "lsp_trace_v1_validate", map[string]any{"input": artifact, "schema": map[string]any{"family": "graph", "version": "v3"}}),
 		callRequest(4, "lsp_trace_v1_schema_get", map[string]any{"schema": map[string]any{"family": "graph", "version": "v3"}, "output_selector": "../unsafe.json"}),
 	}
-	responses := runMCPProcess(t, binary, nil, requests)
+	responses := runMCPProcess(t, binary, []string{"--tool-profile", "advanced"}, requests)
 	tools := responses[0]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 32 {
-		t.Fatalf("ASSERT_PRODUCTION_MCP_CURRENT_TOOL_COUNT_32: got=%d", len(tools))
+	if len(tools) != 26 {
+		t.Fatalf("ASSERT_PRODUCTION_MCP_ADVANCED_TOOL_COUNT_26: got=%d", len(tools))
 	}
 	for i, assertion := range []string{"ASSERT_PRODUCTION_MCP_SCHEMA_RETRIEVAL", "ASSERT_PRODUCTION_MCP_SCHEMA_VALIDATION"} {
 		call := decodeProcessCall(t, responses[i+1])

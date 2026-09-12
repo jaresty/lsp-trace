@@ -1,8 +1,8 @@
 # MCP advertisement profile contract
 
-Status: preparation contract for ADR 0004; not yet implemented
+Status: current advertisement contract for ADR 0004
 
-This document fixes the next MCP registry simplification boundary. It does not change the current registry. In particular, it does not add `lsp_trace_v1_trace` or `lsp_trace_v1_discover`, rename a tool, alter a schema, change dispatch, or assign either future tool an operation number.
+This document fixes the MCP registry simplification boundary. The current registry implements profile-filtered advertisement for the operations that exist today. It does not add `lsp_trace_v1_trace` or `lsp_trace_v1_discover`, rename a tool, alter a schema, change dispatch, or assign either future tool an operation number.
 
 ## Terms
 
@@ -121,14 +121,17 @@ For every operation 1–32:
 
 ## Current state and RED boundary
 
-Today `full` advertises all 32 operations and `compact` advertises 10. Neither existing profile is silently redefined by this preparation change. The exact default/advanced advertisement tests are opt-in and intentionally RED under `LSP_TRACE_RUN_ADR0004_RED_GUARDS=1` because:
+The process default is `default`; it advertises the five currently implemented default operations, omitting the intentionally absent `lsp_trace_v1_trace` and `lsp_trace_v1_discover`. `advanced` advertises those five plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
 
-- `lsp_trace_v1_trace` is not implemented;
-- `lsp_trace_v1_discover` is not implemented;
-- default/advanced/hidden-legacy production profile behavior does not yet exist.
+The explicit compatibility profiles remain available: `full` advertises all 32 current operations and `compact` advertises its frozen 10-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
+
+The future exact default advertisement test remains opt-in and intentionally RED under `LSP_TRACE_RUN_ADR0004_RED_GUARDS=1` because:
+
+- `lsp_trace_v1_trace` is not implemented or numbered;
+- `lsp_trace_v1_discover` is not implemented or numbered.
 
 All non-opt-in tests are regression guards and MUST remain GREEN. A failure prefixed `REGRESSION` means current 32-operation compatibility changed. A failure prefixed `INTENTIONAL RED` means a future ADR 0004 advertisement requirement remains unmet; it does not authorize weakening a current compatibility guard.
 
 ## Implementation gate for the next step
 
-A later production change may implement profile advertisement only after separately deciding tool-profile names/configuration and adding trace/discover contracts. That change must make the opt-in target-profile guard GREEN without changing the frozen ledger or canonical execute branches. Hard removal of a legacy canonical name remains out of scope until a future MCP protocol version and separate migration evidence authorize it.
+Adding either future default tool remains blocked until its canonical operation, versioned contracts, and append-only operation number are separately implemented. That later change must make the opt-in future-default guard GREEN without changing the frozen ledger or existing canonical execute branches. Hard removal of a legacy canonical name remains out of scope until a future MCP protocol version and separate migration evidence authorize it.

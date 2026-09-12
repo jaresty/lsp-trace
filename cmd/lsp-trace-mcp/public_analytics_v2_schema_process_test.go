@@ -30,7 +30,7 @@ func TestPublicAnalyticsV2ToolsListRendersThroughInstalledPiAdapter(t *testing.T
 		t.Fatal(err)
 	}
 	mcpBinary := buildMCPBinary(t)
-	response := runMCPProcess(t, mcpBinary, nil, []map[string]any{{
+	response := runMCPProcess(t, mcpBinary, []string{"--tool-profile", "advanced"}, []map[string]any{{
 		"jsonrpc": "2.0", "id": 1, "method": "tools/list",
 	}})[0]
 	result, _ := response["result"].(map[string]any)

@@ -46,7 +46,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 
 	request := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_session_v1_list","arguments":{"detail":"full"}}}` + "\n"
-	cmd := exec.Command(mcpBinary, "--bootstrap-config", configPath)
+	cmd := exec.Command(mcpBinary, "--tool-profile", "advanced", "--bootstrap-config", configPath)
 	cmd.Stdin = strings.NewReader(request)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -84,7 +84,7 @@ func TestProductionBootstrapBlocksStdioUntilHostConfiguredProcessIsReady(t *test
 	if err := json.Unmarshal(lines[0], &response); err != nil {
 		t.Fatalf("%s: invalid tools response: %v stdout=%q", assertion, err, stdout.String())
 	}
-	if len(response.Result.Tools) != 32 {
+	if len(response.Result.Tools) != 26 {
 		t.Fatalf("%s: advertised=%d", assertion, len(response.Result.Tools))
 	}
 	if !bytes.Contains(lines[1], []byte(`"State":"READY"`)) || !bytes.Contains(lines[1], []byte(`"Generation":1`)) {
