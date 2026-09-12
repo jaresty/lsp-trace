@@ -150,8 +150,8 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 	}
 	responses := runMCPProcess(t, binary, nil, requests)
 	tools := responses[0]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 31 {
-		t.Fatalf("ASSERT_PRODUCTION_MCP_CURRENT_TOOL_COUNT_31: got=%d", len(tools))
+	if len(tools) != 32 {
+		t.Fatalf("ASSERT_PRODUCTION_MCP_CURRENT_TOOL_COUNT_32: got=%d", len(tools))
 	}
 	for i, assertion := range []string{"ASSERT_PRODUCTION_MCP_SCHEMA_RETRIEVAL", "ASSERT_PRODUCTION_MCP_SCHEMA_VALIDATION"} {
 		call := decodeProcessCall(t, responses[i+1])
@@ -437,12 +437,12 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 			"execution":            map[string]any{"path": providerPath, "directory": filepath.Dir(providerPath)},
 			"executable_available": true, "conformance_verified": true,
 			"capabilities": map[string]any{"relations": []string{"BINDS_ARGUMENT", "PASSES_CALLBACK", "UPDATES_STATE", "RENDERS_FROM"}, "languages": []string{"glimmer-js"}, "frameworks": []string{"ember"}},
-			"limits":       map[string]any{"request_bytes": 1048576, "response_bytes": 1048576, "protocol_messages": 1, "stderr_bytes": 4096, "wall_time_ms": 30000, "termination_grace_ms": 1000},
+			"limits":       map[string]any{"request_bytes": 1048576, "response_bytes": 1048576, "protocol_messages": 1, "stderr_bytes": 4096, "wall_time_ms": 32000, "termination_grace_ms": 1000},
 		}},
 	}
 	request := map[string]any{
 		"session_id": "external-ember-glint", "generation": 1, "uri": fixtureURI, "line": 0, "character": 8,
-		"max_depth": 2, "max_nodes": 100, "timeout_ms": 30000, "request_timeout_ms": 30000,
+		"max_depth": 2, "max_nodes": 100, "timeout_ms": 32000, "request_timeout_ms": 32000,
 		"relations": []string{"BINDS_ARGUMENT"}, "providers": []string{"ember-glint@1"},
 		"languages": []string{"glimmer-js"}, "frameworks": []string{"ember"},
 		"workspace_revision":       map[string]any{"kind": "git", "commit": commit, "custody": "CALLER_ASSERTED"},

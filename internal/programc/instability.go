@@ -145,6 +145,51 @@ func instabilityHash(domain string, v any) string {
 }
 func rawSHA(raw []byte) string { s := sha256.Sum256(raw); return "sha256:" + hex.EncodeToString(s[:]) }
 
+// ComputeInstabilityV5 constructs the exact three-replay-per-seed A-08 campaign
+// from admitted Graph Provenance V5 bytes. It does not infer semantic labels.
+func ComputeInstabilityV5(input []byte, declaredSeeds []uint64, algorithmVersion, parametersSHA256, resourcePolicySHA256 string) (InstabilityArtifact, error) {
+	seeds := append([]uint64(nil), declaredSeeds...)
+	sort.Slice(seeds, func(i, j int) bool { return seeds[i] < seeds[j] })
+	r := InstabilityRequest{DeclaredSeeds: seeds}
+	for _, seed := range seeds {
+		for replay := 0; replay < 3; replay++ {
+			o, failure := Compute(input, seed)
+			if failure != nil {
+				return InstabilityArtifact{}, failure
+			}
+			if len(r.Runs) == 0 {
+				r.Identity = InstabilityIdentity{AdmittedGraphSHA256: o.Source.InputSHA256, ProjectionSHA256: ProfileDigest, ProjectionPolicyID: ProfileID, AlgorithmName: o.Algorithm, AlgorithmVersion: algorithmVersion, ParametersCanonicalSHA256: parametersSHA256, ResourcePolicySHA256: resourcePolicySHA256}
+			}
+			communityBytes, err := json.Marshal(expectedCommunityWire(o, r.Identity))
+			if err != nil {
+				return InstabilityArtifact{}, err
+			}
+			boundaryRequest := BoundaryRequest{PageRankTopK: 1, HubTopK: 1}
+			boundary, err := ComputeBoundary(o, boundaryRequest)
+			if err != nil {
+				return InstabilityArtifact{}, err
+			}
+			boundaryBytes, err := json.Marshal(boundary)
+			if err != nil {
+				return InstabilityArtifact{}, err
+			}
+			r.Runs = append(r.Runs, InstabilityRun{RunID: fmt.Sprintf("seed-%020d-replay-%d", seed, replay+1), Seed: seed, Status: "COMPLETE", Community: o, CommunityArtifact: communityBytes, BoundaryArtifact: boundaryBytes, BoundaryRequest: boundaryRequest})
+		}
+	}
+	a, err := ComputeInstability(r)
+	if err != nil {
+		return InstabilityArtifact{}, err
+	}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return InstabilityArtifact{}, err
+	}
+	if _, err = schema.ValidateFor(raw, schema.FamilyCommunityInstability, "v1"); err != nil {
+		return InstabilityArtifact{}, err
+	}
+	return a, nil
+}
+
 func ComputeInstability(r InstabilityRequest) (InstabilityArtifact, error) {
 	a := InstabilityArtifact{SchemaVersion: InstabilityVersion, ComparisonIdentity: r.Identity, Outcome: "STABLE", Thresholds: exactInstabilityThresholds, PolicyVersion: InstabilityPolicyVersion, Policy: InstabilityPolicy, PolicySHA256: InstabilityPolicyDigest(), PairwiseComparisons: []InstabilityPair{}, ClaimCeiling: InstabilityClaimCeiling, StructuralClaimCeiling: InstabilityStructuralCeiling}
 	if err := validateInstabilityRequest(r); err != nil {
@@ -269,6 +314,9 @@ func validateAcceptedRun(run InstabilityRun, id InstabilityIdentity) error {
 	}
 	if o.Source.InputSHA256 != id.AdmittedGraphSHA256 || o.Source.SessionID == "" || o.Source.Generation == 0 {
 		return fmt.Errorf("source/session/generation mismatch")
+	}
+	if o.Source.Completeness.SourceGraphComplete != "UNKNOWN" {
+		return fmt.Errorf("source_graph_complete must be UNKNOWN")
 	}
 	if o.Source.Completeness.Truncated || o.Source.DiagnosticsOmittedRecords > 0 || o.Source.DiagnosticsEvictedRecords > 0 {
 		return fmt.Errorf("incomplete source")

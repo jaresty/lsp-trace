@@ -381,6 +381,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 	handlers[operation.CustodyExecute] = executionruntime.NewProductionExecutorWithTrust(trust).Execute
 	handlers[operation.ProgramCLeiden] = operation.ProgramCLeidenHandler
 	handlers[operation.ProgramCCompose] = operation.ProgramCComposeHandler
+	handlers[operation.ProgramCInstability] = operation.ProgramCInstabilityHandler
 	var starter sessionruntime.Starter = sessionruntime.ManagedStarter{}
 	if runtime.GOOS == "darwin" {
 		supervisor, err := managedprocess.NewLocalDarwinSupervisor(managedprocess.Options{StderrLimit: 64 * 1024, GracePeriod: 250 * time.Millisecond})

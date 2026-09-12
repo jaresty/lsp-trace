@@ -32,7 +32,7 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice)
 	}
-	if got := server.Registry.Tools(); len(got) != 31 {
+	if got := server.Registry.Tools(); len(got) != 32 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
 	}
 	_, incomingCollector := any(selected).(incomingops.RelationCollector)
@@ -93,7 +93,7 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 		t.Fatalf("ASSERT_INCOMING_RETAINED_INITIALIZE_EVIDENCE: start=%+v ready=%+v", started, ready)
 	}
 	var stdout bytes.Buffer
-	sliceArgs := `{"session_id":"` + started.SessionID + `","generation":1,"start_mode":"at","uri":"` + uri + `","line":0,"character":0,"down_depth":1,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194304,"timeout_ms":5000,"request_timeout_ms":1000}`
+	sliceArgs := `{"session_id":"` + started.SessionID + `","generation":1,"start_mode":"at","uri":"` + uri + `","line":0,"character":0,"down_depth":1,"up_depth":2,"max_nodes":20,"max_messages":64,"max_bytes":4194324,"timeout_ms":5000,"request_timeout_ms":1000}`
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}` + "\n" +
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_slice","arguments":` + sliceArgs + `}}` + "\n" +
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"lsp_trace_slice","arguments":` + sliceArgs + `}}` + "\n"
@@ -111,7 +111,7 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 31 {
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 32 {
 		t.Fatalf("ASSERT_ALWAYS_LOCAL_THIRTY_ONE_TOOL_ORDER: response=%s err=%v", lines[0], err)
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {

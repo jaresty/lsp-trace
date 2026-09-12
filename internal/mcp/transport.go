@@ -608,6 +608,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 	if tool.Name == mcpcontract.ProgramCComposeTool {
 		env.EnvelopeSchemaID = mcpcontract.ProgramCComposeEnvelopeID(env.EnvelopeSchemaID)
 	}
+	if tool.Name == mcpcontract.ProgramCInstabilityTool {
+		env.EnvelopeSchemaID = mcpcontract.ProgramCInstabilityEnvelopeID(env.EnvelopeSchemaID)
+	}
 	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
 		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
 	}
@@ -860,6 +863,8 @@ func operationName(canonical string) operation.Name {
 		return operation.ProgramCLeiden
 	case mcpcontract.ProgramCComposeTool:
 		return operation.ProgramCCompose
+	case mcpcontract.ProgramCInstabilityTool:
+		return operation.ProgramCInstability
 	case "lsp_trace_v1_inspect":
 		return operation.Inspect
 	case "lsp_trace_v1_filter":

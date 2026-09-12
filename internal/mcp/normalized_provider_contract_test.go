@@ -26,7 +26,7 @@ func TestNormalizedProviderRequestContract(t *testing.T) {
 		extended["relations"] = []any{"CALLS", "BINDS_ARGUMENT", "PASSES_CALLBACK", "INVOKES_TASK", "TRIGGERS_RELOAD", "UPDATES_STATE", "RENDERS_FROM"}
 		extended["adapters"] = "auto"
 		extended["providers"] = []any{"ember-template-relations@1"}
-		extended["workspace_revision"] = map[string]any{"kind": "git", "commit": "326718ae733cb26097bd30246276cecd371a4e79", "custody": "CALLER_ASSERTED"}
+		extended["workspace_revision"] = map[string]any{"kind": "git", "commit": "326718ae733cb26097bd32246276cecd371a4e79", "custody": "CALLER_ASSERTED"}
 		extended["fail_on_unknown_revision"] = true
 		if err := validateArguments(tool, extended); err != nil {
 			t.Fatalf("ASSERT_MCP_NORMALIZED_RELATION_REQUEST_FIELDS: %s: %v", name, err)
@@ -44,8 +44,8 @@ func TestNormalizedProviderRequestContract(t *testing.T) {
 func TestNormalizedProviderCapabilitiesAndPublication(t *testing.T) {
 	registry := NewRegistry(false)
 	tools := registry.Tools()
-	if len(tools) != 31 || len(registry.Advertised()) != 31 {
-		t.Fatalf("ASSERT_MCP_CURRENT31_WITH_HISTORICAL25_PRESERVED: tools=%d advertised=%d", len(tools), len(registry.Advertised()))
+	if len(tools) != 32 || len(registry.Advertised()) != 32 {
+		t.Fatalf("ASSERT_MCP_CURRENT32_WITH_HISTORICAL25_PRESERVED: tools=%d advertised=%d", len(tools), len(registry.Advertised()))
 	}
 	capabilities := registry.Capabilities()
 	relations, ok := capabilities["normalized_relations"].(map[string]any)

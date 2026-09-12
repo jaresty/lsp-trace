@@ -43,10 +43,11 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 		operation.BoundedRetainedRankingV2:  "lsp_trace_v2_bounded_retained_ranking",
 		operation.ProgramCLeiden:            ProgramCLeidenTool,
 		operation.ProgramCCompose:           ProgramCComposeTool,
+		operation.ProgramCInstability:       ProgramCInstabilityTool,
 	}
 	schemaIDs := make(map[operation.Name]string, len(canonical))
 	for name, toolName := range canonical {
-		for _, tool := range WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))).Tools {
+		for _, tool := range WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))).Tools {
 			if tool.Name == toolName {
 				schemaIDs[name] = tool.InputSchemaID
 				break

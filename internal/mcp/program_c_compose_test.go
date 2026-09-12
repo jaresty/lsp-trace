@@ -41,11 +41,11 @@ func composeServer(t testing.TB, profile ToolProfile) *Server {
 	return &Server{Registry: NewRegistryWithProfile(false, profile), Executor: operation.NewOffline(validator, map[operation.Name]operation.Handler{operation.ProgramCCompose: operation.ProgramCComposeHandler})}
 }
 
-func TestProgramCComposeOperation31RegistrySchemasAndCompactProfile(t *testing.T) {
+func TestProgramCComposeOperation32RegistrySchemasAndCompactProfile(t *testing.T) {
 	full, compact := NewRegistryWithProfile(false, ToolProfileFull), NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.Resolve(mcpcontract.ProgramCComposeTool)
-	if !ok || len(full.Tools()) != 31 || len(full.Advertised()) != 31 || len(compact.Tools()) != 31 || len(compact.Advertised()) != 10 {
-		t.Fatalf("ASSERT_PROGRAM_C_COMPOSE_31_FULL_10_COMPACT: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
+	if !ok || len(full.Tools()) != 32 || len(full.Advertised()) != 32 || len(compact.Tools()) != 32 || len(compact.Advertised()) != 10 {
+		t.Fatalf("ASSERT_PROGRAM_C_COMPOSE_32_FULL_10_COMPACT: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.Resolve(mcpcontract.ProgramCComposeTool); !ok {
 		t.Fatal("ASSERT_PROGRAM_C_COMPOSE_COMPACT_HIDDEN_DISPATCHABLE")

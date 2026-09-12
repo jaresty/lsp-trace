@@ -186,6 +186,9 @@ func run(args []string) int {
 	if len(args) > 1 && args[0] == "program-c" && args[1] == "leiden" {
 		return runProgramCLeiden(args[2:], os.Stdin, os.Stdout, os.Stderr)
 	}
+	if len(args) > 1 && args[0] == "program-c" && args[1] == "instability" {
+		return runProgramCInstability(args[2:], os.Stdin, os.Stdout, os.Stderr)
+	}
 	if len(args) > 0 && args[0] == "aggregate-communities" {
 		return runAggregateCommunities(args[1:], os.Stdout, os.Stderr)
 	}
