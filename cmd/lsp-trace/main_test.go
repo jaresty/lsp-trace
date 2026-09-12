@@ -100,7 +100,7 @@ func TestSliceHelpSucceedsOnStdout(t *testing.T) {
 func TestSliceHelpDistinguishesSelectorsAndPublication(t *testing.T) {
 	stdout, stderr, code := captureRun(t, []string{"slice", "--help"})
 	for _, want := range []string{
-		"all-symbol census from one source file (legacy mode)",
+		"repeatable source file or directory",
 		"exact target selector by document symbol",
 		"exact target selector by PATH:LINE:COLUMN",
 		"output destination; caller-provided publication location",

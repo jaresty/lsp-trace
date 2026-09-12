@@ -107,7 +107,7 @@ func TestSubprocessSliceDiscoversAllRepeatedFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--from-file", "b.go", "--from-file", "a.go", "--down-depth", "1", "--up-depth", "0", "--request-timeout", "500ms", "--timeout", "2s"}
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-multi-file", "--from-file", "b.go", "--from-file", "a.go", "--down-depth", "0", "--up-depth", "0", "--request-timeout", "500ms", "--timeout", "2s"}
 	stdout, stderr, code := captureRun(t, args)
 	var got struct {
 		Nodes []graph.Node `json:"nodes"`
@@ -703,7 +703,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 			err = writeFake(out, m.ID, map[string]any{"capabilities": capabilities}, nil)
 		case "initialized", "textDocument/didOpen":
 		case "textDocument/documentSymbol":
-			if scenario == "slice-symbol" {
+			if scenario == "slice-symbol" || scenario == "slice-multi-file" {
 				var p struct {
 					TextDocument struct {
 						URI string `json:"uri"`
@@ -760,7 +760,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				line = 0
 			}
 			prepared := item(name, line)
-			if scenario == "slice-symbol" {
+			if scenario == "slice-symbol" || scenario == "slice-multi-file" {
 				prepared.URI = p.TextDocument.URI
 			}
 			err = writeFake(out, m.ID, []fakeItem{prepared}, nil)

@@ -26,7 +26,7 @@ import (
 
 type sliceConfig struct {
 	workspace, command, fromFile, symbol, seedFile, languageID, output, traceLSP string
-	args, env, ats                                                               stringsFlag
+	args, env, ats, fromFiles                                                    stringsFlag
 	downDepth, upDepth, maxNodes                                                 int
 	timeout, requestTimeout                                                      time.Duration
 	pretty                                                                       bool
@@ -50,7 +50,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 	fs.StringVar(&c.command, "server", "", "language server command")
 	fs.Var(&c.args, "server-arg", "repeatable server argument")
 	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
-	fs.StringVar(&c.fromFile, "from-file", "", "all-symbol census from one source file (legacy mode); with --symbol, identifies one managed exact target")
+	fs.Var(&c.fromFiles, "from-file", "repeatable source file or directory; with --symbol, exactly one file identifies one managed exact target")
 	fs.StringVar(&c.symbol, "symbol", "", "exact target selector by document symbol (managed --from-file only)")
 	fs.Var(&c.ats, "at", "exact target selector by PATH:LINE:COLUMN (repeatable outside managed mode)")
 	fs.StringVar(&c.seedFile, "seed-file", "", "JSON file containing labeled starting positions")
@@ -67,6 +67,9 @@ func parseSlice(args []string) (sliceConfig, error) {
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
+	if len(c.fromFiles) > 0 {
+		c.fromFile = c.fromFiles[0]
+	}
 	if c.graphProvenance {
 		explicit := map[string]bool{}
 		fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
@@ -82,8 +85,8 @@ func parseSlice(args []string) (sliceConfig, error) {
 		if !explicit["request-timeout"] {
 			c.requestTimeout = time.Second
 		}
-		positionTarget := len(c.ats) == 1 && c.fromFile == "" && c.symbol == ""
-		symbolTarget := len(c.ats) == 0 && c.fromFile != "" && c.symbol != ""
+		positionTarget := len(c.ats) == 1 && len(c.fromFiles) == 0 && c.symbol == ""
+		symbolTarget := len(c.ats) == 0 && len(c.fromFiles) == 1 && c.symbol != ""
 		if (!positionTarget && !symbolTarget) || c.seedFile != "" || c.traceLSP != "" {
 			return c, fmt.Errorf("--graph-provenance requires exactly one managed target selector: --at PATH:LINE:COLUMN or --from-file PATH --symbol NAME; --seed-file and --trace-lsp are unsupported")
 		}
@@ -107,7 +110,7 @@ func parseSlice(args []string) (sliceConfig, error) {
 		return c, fmt.Errorf("--workspace and --server are required")
 	}
 	modes := 0
-	if c.fromFile != "" {
+	if len(c.fromFiles) > 0 {
 		modes++
 	}
 	if len(c.ats) > 0 {
@@ -142,26 +145,32 @@ type resolvedSliceSource struct {
 
 func resolveSliceSources(cfg sliceConfig) (string, string, []resolvedSliceSource, error) {
 	var specs []seedSpec
-	if cfg.fromFile != "" {
+	if len(cfg.fromFiles) > 0 {
 		workspace, err := filepath.Abs(cfg.workspace)
 		if err != nil {
 			return "", "", nil, err
 		}
-		resolvedPath, err := filepath.Abs(filepath.Join(workspace, cfg.fromFile))
-		if err != nil {
-			return "", "", nil, err
-		}
-		relativeToWorkspace, err := filepath.Rel(workspace, resolvedPath)
-		if err != nil || relativeToWorkspace == ".." || strings.HasPrefix(relativeToWorkspace, ".."+string(filepath.Separator)) {
-			return "", "", nil, fmt.Errorf("--from-file must remain within workspace")
-		}
-		info, err := os.Lstat(resolvedPath)
-		if err != nil {
-			return "", "", nil, err
-		}
-		paths := []string{cfg.fromFile}
-		if info.IsDir() {
-			paths = nil
+		selected := map[string]bool{}
+		for _, input := range cfg.fromFiles {
+			resolvedPath, err := filepath.Abs(filepath.Join(workspace, input))
+			if err != nil {
+				return "", "", nil, err
+			}
+			relativeToWorkspace, err := filepath.Rel(workspace, resolvedPath)
+			if err != nil || relativeToWorkspace == ".." || strings.HasPrefix(relativeToWorkspace, ".."+string(filepath.Separator)) {
+				return "", "", nil, fmt.Errorf("--from-file must remain within workspace")
+			}
+			info, err := os.Lstat(resolvedPath)
+			if err != nil {
+				return "", "", nil, err
+			}
+			if !info.IsDir() {
+				if !info.Mode().IsRegular() {
+					return "", "", nil, fmt.Errorf("--from-file target is not a regular file")
+				}
+				selected[relativeToWorkspace] = true
+				continue
+			}
 			err = filepath.WalkDir(resolvedPath, func(path string, entry os.DirEntry, walkErr error) error {
 				if walkErr != nil {
 					return walkErr
@@ -182,20 +191,24 @@ func resolveSliceSources(cfg sliceConfig) (string, string, []resolvedSliceSource
 				if !fileInfo.Mode().IsRegular() {
 					return nil
 				}
-				relative, err := filepath.Rel(cfg.workspace, path)
+				relative, err := filepath.Rel(workspace, path)
 				if err != nil {
 					return err
 				}
-				paths = append(paths, relative)
+				selected[relative] = true
 				return nil
 			})
 			if err != nil {
 				return "", "", nil, err
 			}
-			sort.Strings(paths)
-			if len(paths) == 0 {
-				return "", "", nil, fmt.Errorf("--from-file directory contains no regular files")
-			}
+		}
+		paths := make([]string, 0, len(selected))
+		for path := range selected {
+			paths = append(paths, path)
+		}
+		sort.Strings(paths)
+		if len(paths) == 0 {
+			return "", "", nil, fmt.Errorf("--from-file inputs contain no regular files")
 		}
 		specs = make([]seedSpec, len(paths))
 		for i, path := range paths {
@@ -441,8 +454,54 @@ func runSlice(args []string) int {
 		}
 	}
 	var discovery slicer.Discovery
+	startsByURI := map[string][]string{}
 	if cfg.fromFile != "" {
-		discovery = slicer.Discover(ctx, timed, sourceURI, slicer.Options{DownDepth: cfg.downDepth, MaxNodes: cfg.maxNodes})
+		discovery.Complete = true
+		discovery.PreparationCensusComplete = true
+		discovery.TraversalComplete = true
+		layersByDepth := map[int][]string{}
+		for _, source := range sources {
+			maxNodes := cfg.maxNodes
+			if maxNodes > 0 {
+				maxNodes -= len(discovery.Nodes)
+				if maxNodes < 1 {
+					discovery.Complete, discovery.Truncated = false, true
+					break
+				}
+			}
+			part := slicer.Discover(ctx, timed, source.uri, slicer.Options{DownDepth: cfg.downDepth, MaxNodes: maxNodes})
+			startsByURI[source.uri] = append([]string(nil), part.StartNodeIDs...)
+			discovery.Complete = discovery.Complete && part.Complete
+			discovery.PreparationCensusComplete = discovery.PreparationCensusComplete && part.PreparationCensusComplete
+			discovery.TraversalComplete = discovery.TraversalComplete && part.TraversalComplete
+			discovery.Truncated = discovery.Truncated || part.Truncated
+			discovery.PreparationAccounting.DocumentSymbols += part.PreparationAccounting.DocumentSymbols
+			discovery.PreparationAccounting.Attempted += part.PreparationAccounting.Attempted
+			discovery.PreparationAccounting.Prepared += part.PreparationAccounting.Prepared
+			discovery.PreparationAccounting.NotPreparable += part.PreparationAccounting.NotPreparable
+			discovery.PreparationAccounting.Failed += part.PreparationAccounting.Failed
+			discovery.PreparationDispositions = append(discovery.PreparationDispositions, part.PreparationDispositions...)
+			discovery.StartNodeIDs = append(discovery.StartNodeIDs, part.StartNodeIDs...)
+			discovery.FrontierItems = append(discovery.FrontierItems, part.FrontierItems...)
+			discovery.OutgoingTerminalItems = append(discovery.OutgoingTerminalItems, part.OutgoingTerminalItems...)
+			discovery.UpwardStartItems = append(discovery.UpwardStartItems, part.UpwardStartItems...)
+			discovery.Nodes = append(discovery.Nodes, part.Nodes...)
+			discovery.Edges = append(discovery.Edges, part.Edges...)
+			discovery.Diagnostics = append(discovery.Diagnostics, part.Diagnostics...)
+			for _, layer := range part.Layers {
+				layersByDepth[layer.Depth] = append(layersByDepth[layer.Depth], layer.NodeIDs...)
+			}
+		}
+		depths := make([]int, 0, len(layersByDepth))
+		for depth := range layersByDepth {
+			depths = append(depths, depth)
+		}
+		sort.Ints(depths)
+		for _, depth := range depths {
+			ids := layersByDepth[depth]
+			sort.Strings(ids)
+			discovery.Layers = append(discovery.Layers, slicer.Layer{Depth: depth, NodeIDs: ids})
+		}
 	} else {
 		discovery = slicer.DiscoverPrepared(ctx, timed, prepared, slicer.Options{DownDepth: cfg.downDepth, MaxNodes: cfg.maxNodes})
 	}
@@ -534,7 +593,16 @@ func runSlice(args []string) int {
 		LanguageID: languageID, Trace: graph.TraceConfig{Enabled: cfg.traceLSP != "", Path: cfg.traceLSP}, OutputMode: outputMode, OutputPath: cfg.output, Seeds: invocationSeeds,
 	}
 	if cfg.fromFile != "" {
-		seedResults = []graph.SeedResult{{Label: sources[0].spec.Label, Requested: primaryTarget, PreparedTargetIDs: discovery.StartNodeIDs}}
+		seedResults = make([]graph.SeedResult, 0, len(sources))
+		for _, source := range sources {
+			seedResults = append(seedResults, graph.SeedResult{
+				Label: source.spec.Label,
+				Requested: graph.Target{
+					URI: source.uri, Line: source.line, Column: source.column,
+				},
+				PreparedTargetIDs: append([]string(nil), startsByURI[source.uri]...),
+			})
+		}
 	}
 	for i := range seedResults {
 		seed := &seedResults[i]
