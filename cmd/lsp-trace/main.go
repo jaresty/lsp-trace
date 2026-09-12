@@ -457,10 +457,19 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 		return err
 	}
 	defer func() {
+		// Before publication, staging still names the private container we created.
+		// At the publication hook boundary an adversary may move that entry and
+		// substitute another. Relinquishing pathname cleanup ownership at that
+		// boundary is safer than deleting an entry whose identity is no longer
+		// atomically knowable.
 		if staging != "" {
 			_ = root.RemoveAll(staging)
 		}
 	}()
+	const payload = "payload"
+	if err := root.Mkdir(staging+"/"+payload, 0o700); err != nil {
+		return err
+	}
 
 	paths := make([]string, 0, len(files))
 	for relative := range files {
@@ -468,7 +477,7 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 	}
 	sort.Strings(paths)
 	for _, relative := range paths {
-		rootPath := staging + "/" + relative
+		rootPath := staging + "/" + payload + "/" + relative
 		if err := root.MkdirAll(filepath.ToSlash(filepath.Dir(rootPath)), 0o700); err != nil {
 			return err
 		}
@@ -490,16 +499,19 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	stagingHandle, err := root.Open(staging)
+	containerHandle, err := root.Open(staging)
 	if err != nil {
 		return err
 	}
-	defer stagingHandle.Close()
-	if err := publishStagedSkill(parentHandle, stagingHandle, staging, final); err != nil {
+	defer containerHandle.Close()
+	payloadHandle, err := root.Open(staging + "/" + payload)
+	if err != nil {
 		return err
 	}
+	defer payloadHandle.Close()
+	container := staging
 	staging = ""
-	return nil
+	return publishStagedSkill(parentHandle, containerHandle, payloadHandle, container, payload, final)
 }
 
 func validSkillComponent(name string) bool {

@@ -20,11 +20,16 @@ func foundationRoot(t *testing.T) string {
 func assertFoundationDependency(t *testing.T, mod, sum string) {
 	t.Helper()
 	const version = "gonum.org/v1/gonum v0.17.1-0.20260426204603-69ca49f456a7"
+	const xsysVersion = "golang.org/x/sys v0.36.0"
 	checks := map[string]bool{
 		"ASSERT_FOUNDATION_GONUM_EXACT_VERSION": strings.Contains(mod, version),
 		"ASSERT_FOUNDATION_GONUM_MODULE_SUM":    strings.Contains(sum, version+" h1:V43GU8qUQ/EYbEPGzTP0PANTR6RiJgEJdU/vgsFhQiU="),
 		"ASSERT_FOUNDATION_GONUM_GOMOD_SUM":     strings.Contains(sum, version+"/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E="),
 		"ASSERT_FOUNDATION_GONUM_NO_REPLACE":    !strings.Contains(mod, "replace gonum.org/v1/gonum"),
+		"ASSERT_FOUNDATION_X_SYS_EXACT_VERSION": strings.Contains(mod, xsysVersion),
+		"ASSERT_FOUNDATION_X_SYS_MODULE_SUM":    strings.Contains(sum, xsysVersion+" h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k="),
+		"ASSERT_FOUNDATION_X_SYS_GOMOD_SUM":     strings.Contains(sum, xsysVersion+"/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks="),
+		"ASSERT_FOUNDATION_X_SYS_NO_REPLACE":    !strings.Contains(mod, "replace golang.org/x/sys"),
 	}
 	for name, ok := range checks {
 		if !ok {
@@ -41,6 +46,10 @@ func assertFoundationNotices(t *testing.T, license, notices, goreleaser string) 
 		"ASSERT_FOUNDATION_GONUM_BSD_CONDITIONS":       strings.Contains(notices, "Redistributions of source code must retain") || strings.Contains(notices, "Redistributions of source code") || strings.Contains(notices, "Redistribution and use in source and binary forms"),
 		"ASSERT_FOUNDATION_GONUM_NO_ENDORSEMENT":       strings.Contains(notices, "Neither the name of the Gonum project"),
 		"ASSERT_FOUNDATION_GONUM_DISCLAIMER":           strings.Contains(notices, "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\""),
+		"ASSERT_FOUNDATION_X_SYS_HEADING":              strings.Contains(notices, "golang.org/x/sys v0.36.0\n=========================="),
+		"ASSERT_FOUNDATION_X_SYS_COPYRIGHT":            strings.Contains(notices, "golang.org/x/sys v0.36.0\n==========================\n\nCopyright 2009 The Go Authors."),
+		"ASSERT_FOUNDATION_X_SYS_BINARY_NOTICE":        strings.Contains(notices, "Redistributions in binary form must reproduce the above copyright"),
+		"ASSERT_FOUNDATION_X_SYS_DISCLAIMER":           strings.Count(notices, "THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS") >= 3,
 		"ASSERT_FOUNDATION_ARCHIVE_LICENSE":            strings.Contains(goreleaser, "- LICENSE"),
 		"ASSERT_FOUNDATION_ARCHIVE_NOTICES":            strings.Contains(goreleaser, "- THIRD_PARTY_NOTICES"),
 		"ASSERT_FOUNDATION_ARCHIVE_NO_PROVIDER_ASSETS": !strings.Contains(goreleaser, "providers/"),

@@ -451,7 +451,7 @@ func TestMaterializeSkillPublicationRaceNeverReplacesCompetitor(t *testing.T) {
 	originalPublish := publishSkillDirectory
 	t.Cleanup(func() { publishSkillDirectory = originalPublish })
 	var competitorInfo os.FileInfo
-	publishSkillDirectory = func(parentHandle, stagingHandle *os.File, staging, final string) error {
+	publishSkillDirectory = func(parentHandle, containerHandle, payloadHandle *os.File, container, payload, final string) error {
 		competitor := filepath.Join(parent, final)
 		if err := os.Mkdir(competitor, 0o700); err != nil {
 			return err
@@ -461,7 +461,7 @@ func TestMaterializeSkillPublicationRaceNeverReplacesCompetitor(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return originalPublish(parentHandle, stagingHandle, staging, final)
+		return originalPublish(parentHandle, containerHandle, payloadHandle, container, payload, final)
 	}
 
 	err := materializeSkill(destination, map[string][]byte{"SKILL.md": []byte("publisher")})
@@ -472,9 +472,39 @@ func TestMaterializeSkillPublicationRaceNeverReplacesCompetitor(t *testing.T) {
 	if statErr != nil || competitorInfo == nil || !os.SameFile(competitorInfo, finalInfo) {
 		t.Fatalf("ASSERT_SKILL_PUBLICATION_RACE_NEVER_REPLACES: competitor=%v final=%v err=%v", competitorInfo, finalInfo, statErr)
 	}
-	entries, readDirErr := os.ReadDir(parent)
-	if readDirErr != nil || len(entries) != 1 || entries[0].Name() != "skill" {
-		t.Fatalf("ASSERT_SKILL_PUBLICATION_RACE_CLEANS_STAGING: entries=%v err=%v", entries, readDirErr)
+}
+
+func TestMaterializeSkillMovedAndSubstitutedContainerCannotSubstitutePayloadOrDeleteCompetitor(t *testing.T) {
+	parent := t.TempDir()
+	destination := filepath.Join(parent, "skill")
+	moved := filepath.Join(parent, "moved-container")
+	originalPublish := publishSkillDirectory
+	t.Cleanup(func() { publishSkillDirectory = originalPublish })
+	var substitute string
+	publishSkillDirectory = func(parentHandle, containerHandle, payloadHandle *os.File, container, payload, final string) error {
+		if err := os.Rename(filepath.Join(parent, container), moved); err != nil {
+			return err
+		}
+		substitute = filepath.Join(parent, container)
+		if err := os.Mkdir(substitute, 0o700); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(substitute, "competitor"), []byte("keep"), 0o600); err != nil {
+			return err
+		}
+		return originalPublish(parentHandle, containerHandle, payloadHandle, container, payload, final)
+	}
+
+	err := materializeSkill(destination, map[string][]byte{"SKILL.md": []byte("publisher")})
+	if got, readErr := os.ReadFile(filepath.Join(substitute, "competitor")); readErr != nil || string(got) != "keep" {
+		t.Fatalf("ASSERT_SKILL_SUBSTITUTED_CONTAINER_NEVER_DELETED: got=%q err=%v publish=%v", got, readErr, err)
+	}
+	if err == nil {
+		if got, readErr := os.ReadFile(filepath.Join(destination, "SKILL.md")); readErr != nil || string(got) != "publisher" {
+			t.Fatalf("ASSERT_SKILL_PINNED_CONTAINER_PAYLOAD_PUBLISHED: got=%q err=%v", got, readErr)
+		}
+	} else if _, statErr := os.Lstat(destination); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("ASSERT_SKILL_CONTAINER_SUBSTITUTION_FAILS_SAFE: publish=%v final=%v", err, statErr)
 	}
 }
 

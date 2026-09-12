@@ -8,8 +8,8 @@ import (
 
 var publishSkillDirectory = renameDirectoryNoReplace
 
-func publishStagedSkill(parent, stagingHandle *os.File, staging, final string) error {
-	if err := publishSkillDirectory(parent, stagingHandle, staging, final); err != nil {
+func publishStagedSkill(parent, containerHandle, payloadHandle *os.File, container, payload, final string) error {
+	if err := publishSkillDirectory(parent, containerHandle, payloadHandle, container, payload, final); err != nil {
 		if errors.Is(err, os.ErrExist) {
 			return errors.New("skill destination already exists")
 		}

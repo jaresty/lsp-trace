@@ -8,7 +8,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func renameDirectoryNoReplace(parent, _ *os.File, oldName, newName string) error {
-	fd := int(parent.Fd())
-	return unix.RenameatxNp(fd, oldName, fd, newName, unix.RENAME_EXCL)
+func renameDirectoryNoReplace(parent, container, _ *os.File, _, payload, newName string) error {
+	return unix.RenameatxNp(int(container.Fd()), payload, int(parent.Fd()), newName, unix.RENAME_EXCL)
 }

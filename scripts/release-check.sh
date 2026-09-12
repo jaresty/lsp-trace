@@ -103,6 +103,12 @@ assert_contains ASSERT_FOUNDATION_GONUM_NO_ENDORSEMENT THIRD_PARTY_NOTICES 'Neit
 assert_contains ASSERT_FOUNDATION_GONUM_DISCLAIMER THIRD_PARTY_NOTICES 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"'
 assert_contains ASSERT_FOUNDATION_X_TEXT_COPYRIGHT THIRD_PARTY_NOTICES 'Copyright 2009 The Go Authors.'
 assert_contains ASSERT_FOUNDATION_X_TEXT_BINARY_NOTICE THIRD_PARTY_NOTICES 'Redistributions in binary form must reproduce the above copyright'
+assert_contains ASSERT_FOUNDATION_X_SYS_EXACT_VERSION go.mod 'golang.org/x/sys v0.36.0'
+assert_contains ASSERT_FOUNDATION_X_SYS_MODULE_SUM go.sum 'golang.org/x/sys v0.36.0 h1:KVRy2GtZBrk1cBYA7MKu5bEZFxQk4NIDV6RLVcC8o0k='
+assert_contains ASSERT_FOUNDATION_X_SYS_GOMOD_SUM go.sum 'golang.org/x/sys v0.36.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks='
+assert_contains ASSERT_FOUNDATION_X_SYS_NOTICE_HEADING THIRD_PARTY_NOTICES 'golang.org/x/sys v0.36.0'
+assert_contains ASSERT_FOUNDATION_X_SYS_COPYRIGHT THIRD_PARTY_NOTICES 'Copyright 2009 The Go Authors.'
+assert_contains ASSERT_FOUNDATION_X_SYS_BINARY_NOTICE THIRD_PARTY_NOTICES 'Redistributions in binary form must reproduce the above copyright'
 assert_contains ASSERT_FOUNDATION_ARCHIVE_LICENSE .goreleaser.yaml '- LICENSE'
 assert_contains ASSERT_FOUNDATION_ARCHIVE_NOTICES .goreleaser.yaml '- THIRD_PARTY_NOTICES'
 for family in community community-boundary community-instability; do

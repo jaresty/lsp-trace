@@ -16,7 +16,7 @@ type fileRenameInfoEx struct {
 	FileName       [1]uint16
 }
 
-func renameDirectoryNoReplace(parent, staging *os.File, _, newName string) error {
+func renameDirectoryNoReplace(parent, _, payload *os.File, _, _, newName string) error {
 	name, err := windows.UTF16FromString(newName)
 	if err != nil {
 		return err
@@ -31,7 +31,7 @@ func renameDirectoryNoReplace(parent, staging *os.File, _, newName string) error
 	info.FileNameLength = uint32(len(name) * 2)
 	copy(unsafe.Slice(&info.FileName[0], len(name)), name)
 	return windows.SetFileInformationByHandle(
-		windows.Handle(staging.Fd()),
+		windows.Handle(payload.Fd()),
 		windows.FileRenameInfoEx,
 		&buffer[0],
 		uint32(len(buffer)),
