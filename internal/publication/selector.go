@@ -103,6 +103,26 @@ func (r *Root) Path() string {
 	return r.path
 }
 
+// ValidatePrivate verifies privacy against the identity pinned by OpenRoot.
+// It deliberately does not consult r.path: callers retain the opened directory
+// capability even if an attacker later substitutes the pathname.
+func (r *Root) ValidatePrivate() error {
+	if r == nil || r.file == nil || r.info == nil {
+		return errors.New("publication root is closed")
+	}
+	info, err := r.file.Stat()
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(r.info, info) {
+		return errors.New("publication root descriptor identity changed")
+	}
+	if !info.IsDir() || info.Mode().Perm()&0o077 != 0 {
+		return errors.New("publication root must be a private owner-only directory")
+	}
+	return validateRootOwner(info)
+}
+
 // ReadSelector reads one bounded regular file beneath the pinned root without
 // following symlinks or creating selector components.
 func (r *Root) ReadSelector(selector string, limit int64) ([]byte, error) {

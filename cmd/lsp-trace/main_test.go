@@ -243,6 +243,9 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 }
 
 func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
+	if strings.Contains(usageText, "lsp-trace census") {
+		t.Fatalf("ASSERT_USAGE_DOES_NOT_ADVERTISE_UNIMPLEMENTED_CENSUS: %q", usageText)
+	}
 	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds)") || !strings.Contains(usageText, "lsp-trace skill get") {
 		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
 	}

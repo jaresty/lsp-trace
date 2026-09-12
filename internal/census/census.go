@@ -1,56 +1,201 @@
-// Package census defines the pre-start planning boundary for the census command.
+// Package census defines unstable internal planning types for a future census
+// integration. It performs no discovery, acquisition, session, or publication.
 package census
 
 import (
+	"errors"
 	"fmt"
-	"io"
-	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/discoveryfilter"
 	"lsp-trace/internal/publication"
 )
 
-const ResultVersion = "lsp-trace.census-plan.v1"
-
-type OutputFormat string
-
 const (
-	OutputHuman OutputFormat = "human"
-	OutputJSON  OutputFormat = "json"
+	DefaultDownDepth      = 1
+	DefaultUpDepth        = 0
+	DefaultMaxNodes       = 10000
+	DefaultTimeout        = 5 * time.Minute
+	DefaultRequestTimeout = 30 * time.Second
+	BatchPolicyIdentity   = "canonical-seed-v2-bytes+census-ordinal/maximal-63"
 )
 
+type OutputPreference string
+
+const (
+	OutputHuman OutputPreference = "human"
+	OutputJSON  OutputPreference = "json"
+)
+
+type Limits struct {
+	MaxNodes       int
+	Timeout        time.Duration
+	RequestTimeout time.Duration
+}
+
 type Config struct {
-	WorkspaceRoot   string
-	PublicationRoot string
+	SourceRoots     []string
+	Workspace       string
 	Includes        []string
 	Excludes        []string
-	Format          OutputFormat
+	DownDepth       int
+	UpDepth         int
+	Limits          Limits
+	PublicationRoot string
+	Output          OutputPreference
 }
 
-type FileAccounting struct {
-	Enumerated int `json:"enumerated"`
-	Selected   int `json:"selected"`
-	Excluded   int `json:"excluded"`
+func DefaultConfig(workspace string) Config {
+	return Config{
+		SourceRoots: []string{"."},
+		Workspace:   workspace,
+		DownDepth:   DefaultDownDepth,
+		UpDepth:     DefaultUpDepth,
+		Limits:      Limits{MaxNodes: DefaultMaxNodes, Timeout: DefaultTimeout, RequestTimeout: DefaultRequestTimeout},
+		Output:      OutputHuman,
+	}
 }
 
-type SymbolAccounting struct {
-	Enumerated int `json:"enumerated"`
-	Selected   int `json:"selected"`
-	Prepared   int `json:"prepared"`
+// ValidateConfig checks syntax and fixed bounds only. Source and workspace
+// filesystem resolution belongs to the future discovery integration boundary.
+// The publication root is different: it is required and opened now so callers
+// receive a pinned private capability rather than ambient pathname authority.
+func ValidateConfig(cfg Config) (*publication.Root, error) {
+	if cfg.Workspace == "" || filepath.Clean(cfg.Workspace) != cfg.Workspace {
+		return nil, errors.New("workspace must be non-empty and lexically clean")
+	}
+	if len(cfg.SourceRoots) == 0 {
+		return nil, errors.New("at least one source root is required")
+	}
+	for _, source := range cfg.SourceRoots {
+		if err := validateSourceSpelling(source); err != nil {
+			return nil, err
+		}
+	}
+	if err := discoveryfilter.ValidatePatterns(cfg.Includes, cfg.Excludes); err != nil {
+		return nil, err
+	}
+	if cfg.DownDepth < 0 || cfg.UpDepth < 0 {
+		return nil, errors.New("depths must be non-negative")
+	}
+	if cfg.Limits.MaxNodes < 0 || cfg.Limits.Timeout < 0 || cfg.Limits.RequestTimeout <= 0 {
+		return nil, errors.New("invalid census limits")
+	}
+	if cfg.Output != OutputHuman && cfg.Output != OutputJSON {
+		return nil, fmt.Errorf("unsupported census output preference %q", cfg.Output)
+	}
+	root, err := publication.OpenRoot(cfg.PublicationRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err := root.ValidatePrivate(); err != nil {
+		root.Close()
+		return nil, err
+	}
+	return root, nil
+}
+
+func validateSourceSpelling(source string) error {
+	if source == "" || filepath.IsAbs(source) || filepath.Clean(source) != source {
+		return fmt.Errorf("source root %q must be a non-empty clean workspace-relative path", source)
+	}
+	if source != "." && (source == ".." || strings.HasPrefix(source, ".."+string(filepath.Separator))) {
+		return fmt.Errorf("source root %q escapes the workspace", source)
+	}
+	return nil
+}
+
+type FileDisposition string
+
+const (
+	FileSelected             FileDisposition = "selected"
+	FileExcluded             FileDisposition = "excluded"
+	FileForbidden            FileDisposition = "forbidden"
+	FileUnreadable           FileDisposition = "unreadable"
+	FileUnsupported          FileDisposition = "unsupported"
+	FileDocumentSymbolFailed FileDisposition = "document-symbol-failed"
+	FileOmitted              FileDisposition = "omitted"
+	FileIncomplete           FileDisposition = "incomplete"
+)
+
+type SymbolDisposition string
+
+const (
+	SymbolSelected          SymbolDisposition = "selected"
+	SymbolUnsupported       SymbolDisposition = "unsupported"
+	SymbolPreparationFailed SymbolDisposition = "preparation-failed"
+	SymbolNonCallable       SymbolDisposition = "non-callable"
+	SymbolOmitted           SymbolDisposition = "omitted"
+	SymbolIncomplete        SymbolDisposition = "incomplete"
+)
+
+type FileEntry struct {
+	Ordinal     int
+	Disposition FileDisposition
+}
+
+type SymbolEntry struct {
+	Ordinal     int
+	Disposition SymbolDisposition
 }
 
 type Accounting struct {
-	Targets int              `json:"targets"`
-	Batches int              `json:"batches"`
-	Files   FileAccounting   `json:"files"`
-	Symbols SymbolAccounting `json:"symbols"`
+	FileDenominator   int
+	Files             []FileEntry
+	SymbolDenominator int
+	Symbols           []SymbolEntry
 }
 
-type Result struct {
-	Status     string
-	Accounting Accounting
-	Batches    []Batch
+func (a Accounting) Validate() error {
+	if err := validateClosed(a.FileDenominator, len(a.Files), func(i int) (int, bool) {
+		e := a.Files[i]
+		return e.Ordinal, validFileDisposition(e.Disposition)
+	}); err != nil {
+		return fmt.Errorf("file accounting: %w", err)
+	}
+	if err := validateClosed(a.SymbolDenominator, len(a.Symbols), func(i int) (int, bool) {
+		e := a.Symbols[i]
+		return e.Ordinal, validSymbolDisposition(e.Disposition)
+	}); err != nil {
+		return fmt.Errorf("symbol accounting: %w", err)
+	}
+	return nil
+}
+
+func validateClosed(denominator, count int, entry func(int) (int, bool)) error {
+	if denominator < 0 || count != denominator {
+		return errors.New("denominator does not reconcile")
+	}
+	seen := make([]bool, denominator)
+	for i := 0; i < count; i++ {
+		ordinal, valid := entry(i)
+		if !valid || ordinal < 0 || ordinal >= denominator || seen[ordinal] {
+			return errors.New("invalid or duplicate terminal disposition")
+		}
+		seen[ordinal] = true
+	}
+	return nil
+}
+
+func validFileDisposition(d FileDisposition) bool {
+	switch d {
+	case FileSelected, FileExcluded, FileForbidden, FileUnreadable, FileUnsupported, FileDocumentSymbolFailed, FileOmitted, FileIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+func validSymbolDisposition(d SymbolDisposition) bool {
+	switch d {
+	case SymbolSelected, SymbolUnsupported, SymbolPreparationFailed, SymbolNonCallable, SymbolOmitted, SymbolIncomplete:
+		return true
+	default:
+		return false
+	}
 }
 
 type Batch struct {
@@ -58,65 +203,21 @@ type Batch struct {
 	Targets []captureset.Target
 }
 
-// MachineOutput intentionally contains counts and fixed policy values only.
-type MachineOutput struct {
-	SchemaVersion   string     `json:"schema_version"`
-	Status          string     `json:"status"`
-	MaxBatchTargets int        `json:"max_batch_targets"`
-	Accounting      Accounting `json:"accounting"`
+type BatchPlan struct {
+	PolicyIdentity string
+	Batches        []Batch
 }
 
-// HumanOutput intentionally contains no paths, selectors, seeds, or source data.
-type HumanOutput struct {
-	Status          string
-	MaxBatchTargets int
-	TargetCount     int
-	BatchCount      int
-}
-
-// Validate performs all checks and pins the publication root before later integration.
-func Validate(cfg Config) (io.Closer, error) {
-	if cfg.Format != OutputHuman && cfg.Format != OutputJSON {
-		return nil, fmt.Errorf("unsupported census output format %q", cfg.Format)
+func PlanTargets(targets []captureset.Target) (BatchPlan, error) {
+	if err := captureset.ValidatePlanningTargets(targets); err != nil {
+		return BatchPlan{}, err
 	}
-	if err := discoveryfilter.ValidatePatterns(cfg.Includes, cfg.Excludes); err != nil {
-		return nil, err
-	}
-	root, err := publication.OpenRoot(cfg.PublicationRoot)
-	if err != nil {
-		return nil, err
-	}
-	info, err := os.Stat(cfg.PublicationRoot)
-	if err != nil {
-		root.Close()
-		return nil, err
-	}
-	if info.Mode().Perm()&0o077 != 0 {
-		root.Close()
-		return nil, fmt.Errorf("publication root must be private (group/other permissions are forbidden)")
-	}
-	return root, nil
-}
-
-func BatchTargets(targets []captureset.Target) []Batch {
 	ordered := captureset.OrderTargets(targets)
-	plan := captureset.PlanBatches(len(ordered))
-	batches := make([]Batch, len(plan))
-	for i, batch := range plan {
-		batches[i] = Batch{Ordinal: batch.Ordinal, Targets: append([]captureset.Target(nil), ordered[batch.TargetStart:batch.TargetStart+batch.TargetCount]...)}
+	assignments := captureset.PlanBatches(len(ordered))
+	batches := make([]Batch, len(assignments))
+	for i, assignment := range assignments {
+		end := assignment.TargetStart + assignment.TargetCount
+		batches[i] = Batch{Ordinal: assignment.Ordinal, Targets: append([]captureset.Target(nil), ordered[assignment.TargetStart:end]...)}
 	}
-	return batches
-}
-
-func NewReadyResult(targets []captureset.Target) Result {
-	batches := BatchTargets(targets)
-	return Result{Status: "READY", Accounting: Accounting{Targets: len(targets), Batches: len(batches)}, Batches: batches}
-}
-
-func ProjectMachine(result Result) MachineOutput {
-	return MachineOutput{SchemaVersion: ResultVersion, Status: result.Status, MaxBatchTargets: captureset.MaxBatchTargets, Accounting: result.Accounting}
-}
-
-func ProjectHuman(result Result) HumanOutput {
-	return HumanOutput{Status: result.Status, MaxBatchTargets: captureset.MaxBatchTargets, TargetCount: result.Accounting.Targets, BatchCount: result.Accounting.Batches}
+	return BatchPlan{PolicyIdentity: BatchPolicyIdentity, Batches: batches}, nil
 }

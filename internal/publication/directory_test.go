@@ -33,6 +33,33 @@ func TestDirectorySyncResultNotFileSync(t *testing.T) {
 	root.file = nil
 }
 
+func TestPrivateValidationUsesPinnedRootIdentity(t *testing.T) {
+	path := t.TempDir() + "/private"
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := OpenRoot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := os.Rename(path, path+"-opened"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o777); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.ValidatePrivate(); err != nil {
+		t.Fatalf("pathname substitution affected pinned descriptor: %v", err)
+	}
+	if err := os.Chmod(path+"-opened", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := root.ValidatePrivate(); err == nil {
+		t.Fatal("descriptor privacy change was accepted")
+	}
+}
+
 func TestDirectorySyncUsesPinnedRoot(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows directory sync unavailable")

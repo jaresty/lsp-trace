@@ -120,6 +120,37 @@ func OrderTargets(targets []Target) []Target {
 	return ordered
 }
 
+// ValidatePlanningTargets validates the strict target set accepted by census
+// batch planning. Prepare retains its separately versioned duplicate policy.
+func ValidatePlanningTargets(targets []Target) error {
+	if len(targets) < 1 || len(targets) > MaxTargets {
+		return fmt.Errorf("target count outside [1,%d]", MaxTargets)
+	}
+	seenIdentity := make(map[string]struct{}, len(targets))
+	seenDigest := make(map[string]struct{}, len(targets))
+	for i, target := range targets {
+		if err := validateTarget(i, target); err != nil {
+			return err
+		}
+		if _, duplicate := seenIdentity[target.CanonicalSeedV2]; duplicate {
+			return fmt.Errorf("duplicate target identity at index %d", i)
+		}
+		if _, duplicate := seenDigest[target.CanonicalSeedV2SHA256]; duplicate {
+			return fmt.Errorf("duplicate target digest at index %d", i)
+		}
+		seenIdentity[target.CanonicalSeedV2] = struct{}{}
+		seenDigest[target.CanonicalSeedV2SHA256] = struct{}{}
+	}
+	return nil
+}
+
+func validateTarget(index int, target Target) error {
+	if target.CensusOrdinal < 0 || strings.TrimSpace(target.CanonicalSeedV2) == "" || target.CanonicalSeedV2SHA256 != rawDigest([]byte(target.CanonicalSeedV2)) {
+		return fmt.Errorf("target %d mutation", index)
+	}
+	return nil
+}
+
 // PlanBatches returns maximal contiguous batches bounded by MaxBatchTargets.
 func PlanBatches(targetCount int) []Batch {
 	if targetCount <= 0 {
@@ -220,8 +251,8 @@ func validateContent(m Manifest, identity bool) error {
 	}
 	seenTarget := map[string]bool{}
 	for i, t := range m.Targets {
-		if t.CensusOrdinal < 0 || t.CanonicalSeedV2 == "" || t.CanonicalSeedV2SHA256 != rawDigest([]byte(t.CanonicalSeedV2)) {
-			return fmt.Errorf("target %d mutation", i)
+		if err := validateTarget(i, t); err != nil {
+			return err
 		}
 		key := t.CanonicalSeedV2 + "\x00" + fmt.Sprint(t.CensusOrdinal)
 		if seenTarget[key] {
