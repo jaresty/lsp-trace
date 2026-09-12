@@ -14,7 +14,6 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
-	"lsp-trace/internal/programc"
 )
 
 const (
@@ -23,6 +22,8 @@ const (
 	MaxInputs          = 16
 	MaxTotalInputBytes = 256 << 20
 	MaxWorkUnits       = 400_000
+	maxNodes           = 10_000
+	maxOccurrences     = 100_000
 	ClaimCeiling       = "STRUCTURAL_SERVER_REPORTED_CALLS_UNION_ONLY;NO_WHOLE_WORKSPACE_COMPLETENESS;NO_FEATURE_IDENTITY;NO_OWNERSHIP;NO_ARCHITECTURE;NO_RUNTIME_EXECUTION;NO_PRODUCER_AUTHENTICATION;NO_PERMISSION;NO_PRODUCTION_AUTHORITY"
 )
 
@@ -231,7 +232,7 @@ func Compose(inputs []Input) (Result, error) {
 		for _, e := range x.n.Edges {
 			occurrenceCount += len(e.CallSites)
 			work.Occurrences += len(e.CallSites)
-			if occurrenceCount > programc.MaxOccurrences {
+			if occurrenceCount > maxOccurrences {
 				return Result{}, errors.New("occurrence cap exceeded")
 			}
 			if old, ok := edges[e.RelationID]; ok {
@@ -350,10 +351,10 @@ func enforceResourceCaps(inputBytes int, work WorkAccounting) error {
 	if inputBytes > MaxTotalInputBytes {
 		return errors.New("total input byte cap exceeded")
 	}
-	if work.MergedNodes > programc.MaxNodes {
+	if work.MergedNodes > maxNodes {
 		return errors.New("node cap exceeded")
 	}
-	if work.Occurrences > programc.MaxOccurrences {
+	if work.Occurrences > maxOccurrences {
 		return errors.New("occurrence cap exceeded")
 	}
 	if semanticWork(work) > MaxWorkUnits {

@@ -15,6 +15,7 @@ import (
 	lgraph "lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/programcadmission"
 
 	ggraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/community"
@@ -298,6 +299,38 @@ func Compute(input []byte, seed uint64) (Outcome, *Failure) {
 	if failure != nil {
 		return Outcome{}, failure
 	}
+	return computeProjection(p, seed, p.Source, ClaimCeiling)
+}
+
+// ComputeComposite runs the same deterministic partition implementation only
+// from the opaque value produced by programcadmission.Admit.
+func ComputeComposite(a programcadmission.CompositeProjectionAdmission, seed uint64) (Outcome, *Failure) {
+	if !a.Valid() || a.ClaimCeiling() == "" {
+		return Outcome{}, &Failure{Code: CodeInvalidProvenance, Message: "validated composite admission required"}
+	}
+	ids := a.NodeIdentities()
+	p := Projection{NodeIdentities: ids, NodeIDs: make(map[string]int64, len(ids)), PairWeights: make(map[Pair]float64)}
+	for i, id := range ids {
+		if id == "" || (i > 0 && ids[i-1] >= id) {
+			return Outcome{}, &Failure{Code: CodeInvalidCalls, Message: "noncanonical admitted nodes"}
+		}
+		p.NodeIDs[id] = int64(i)
+	}
+	for _, occurrence := range a.Occurrences() {
+		o := Occurrence{Identity: occurrence.Identity, RelationID: occurrence.RelationID, Provider: occurrence.Provider, ProviderVersion: occurrence.ProviderVersion, Language: occurrence.Language, From: occurrence.From, To: occurrence.To, CallSite: occurrence.CallSite, Weight: occurrence.Weight}
+		if o.Identity == "" || o.From < 0 || o.To < 0 || int(o.From) >= len(ids) || int(o.To) >= len(ids) || o.Weight != 1 {
+			return Outcome{}, &Failure{Code: CodeInvalidCalls, Message: "invalid admitted CALLS occurrence"}
+		}
+		p.Occurrences = append(p.Occurrences, o)
+		p.PairWeights[Pair{From: o.From, To: o.To}]++
+	}
+	if failure := enforceCaps(len(ids), len(p.Occurrences)); failure != nil {
+		return Outcome{}, failure
+	}
+	return computeProjection(p, seed, SourceBinding{}, a.ClaimCeiling())
+}
+
+func computeProjection(p Projection, seed uint64, source SourceBinding, claimCeiling string) (Outcome, *Failure) {
 	outcome := "COMPLETE"
 	canonical := make([]Community, 0, len(p.NodeIdentities))
 	seen := make(map[string]bool, len(p.NodeIdentities))
@@ -341,7 +374,7 @@ func Compute(input []byte, seed uint64) (Outcome, *Failure) {
 		}
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: ClaimCeiling, Projection: p, Source: p.Source}, nil
+	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source}, nil
 }
 
 func logicalDigest(c []Community) string {
