@@ -177,9 +177,11 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 	}
 	var matches []lsp.DocumentSymbol
 	var suggestions []lsp.DocumentSymbol
+	totalSymbols := 0
 	var walk func([]lsp.DocumentSymbol)
 	walk = func(items []lsp.DocumentSymbol) {
 		for _, symbol := range items {
+			totalSymbols++
 			if symbol.Name == symbolName {
 				matches = append(matches, symbol)
 			}
@@ -199,7 +201,9 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 				start := symbol.SelectionRange.Start
 				candidates = append(candidates, fmt.Sprintf("%q at line %d, character %d", symbol.Name, start.Line, start.Character))
 			}
-			result.Diagnostics = append(result.Diagnostics, err.Error()+"; available exact document symbols: "+strings.Join(candidates, "; ")+"; use an exact symbol name above or the line/character selector")
+			shown := len(suggestions)
+			omitted := totalSymbols - shown
+			result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("%s; available exact document symbols: %s; showing %d of %d exact document symbols; %d omitted; use an exact symbol name (including omitted symbols) or the line/character selector", err, strings.Join(candidates, "; "), shown, totalSymbols, omitted))
 		}
 		return 0, 0, result
 	}
@@ -340,7 +344,7 @@ func rangeContainsPosition(r lsp.Range, position lsp.Position) bool {
 
 func retryableSymbolPrepareMiss(err error) bool {
 	message, ok := strings.CutPrefix(err.Error(), "json-rpc error 0: ")
-	return ok && (message == "identifier not found" || strings.HasSuffix(message, " is not a function"))
+	return ok && (message == "identifier not found" || message == "column is beyond end of line" || strings.HasSuffix(message, " is not a function"))
 }
 
 func compatiblePreparedMethod(uri string, symbol lsp.DocumentSymbol, item lsp.CallHierarchyItem) bool {

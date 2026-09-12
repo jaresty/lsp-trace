@@ -3,6 +3,7 @@ package incomingops
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -289,10 +290,66 @@ func TestIncomingAbsentSymbolSuggestsExactNamesAndPositions(t *testing.T) {
 		t.Fatalf("%s: failure=%v", assertion, failure)
 	}
 	diagnostic := strings.Join(failure.Diagnostics, "\n")
-	for _, want := range []string{`document symbol "Execute" not found`, `"New" at line 3, character 1`, `"(*Executor).Execute" at line 9, character 18`, `use an exact symbol name above or the line/character selector`} {
+	for _, want := range []string{`document symbol "Execute" not found`, `"New" at line 3, character 1`, `"(*Executor).Execute" at line 9, character 18`, `use an exact symbol name (including omitted symbols) or the line/character selector`} {
 		if !strings.Contains(diagnostic, want) {
 			t.Errorf("%s: diagnostic %q missing %q", assertion, diagnostic, want)
 		}
+	}
+}
+
+func TestIncomingExactSymbolMatchingIsCompleteWhileSuggestionsAreBounded(t *testing.T) {
+	symbols := make([]lsp.DocumentSymbol, 0, maxSymbolSuggestions+1)
+	for i := 0; i < maxSymbolSuggestions; i++ {
+		r := lsp.Range{Start: lsp.Position{Line: uint32(i), Character: 1}, End: lsp.Position{Line: uint32(i), Character: 4}}
+		symbols = append(symbols, lsp.DocumentSymbol{Name: fmt.Sprintf("Earlier%d", i), Kind: 12, Range: r, SelectionRange: r})
+	}
+	targetRange := lsp.Range{Start: lsp.Position{Line: 20, Character: 3}, End: lsp.Position{Line: 20, Character: 9}}
+	symbols = append(symbols, lsp.DocumentSymbol{Name: "Target", Kind: 12, Range: targetRange, SelectionRange: targetRange})
+	symbolRaw, _ := json.Marshal(symbols)
+	item := lsp.CallHierarchyItem{Name: "Target", Kind: 12, URI: "file:///w/a.go", Range: targetRange, SelectionRange: targetRange}
+	itemRaw, _ := json.Marshal([]lsp.CallHierarchyItem{item})
+
+	t.Run("exact match beyond displayed suggestions", func(t *testing.T) {
+		f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{
+			"textDocument/documentSymbol":       {symbolRaw},
+			"textDocument/prepareCallHierarchy": {itemRaw},
+			"callHierarchy/incomingCalls":       {json.RawMessage(`[]`)},
+		}}
+		_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
+		if failure != nil {
+			t.Fatalf("ASSERT_EXACT_SYMBOL_MATCHING_NOT_LIMITED_BY_SUGGESTION_BOUND: %v", failure)
+		}
+	})
+
+	t.Run("bounded diagnostic discloses omitted count", func(t *testing.T) {
+		f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {symbolRaw}}}
+		_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Missing"}`)})
+		diagnostic := ""
+		if failure != nil {
+			diagnostic = strings.Join(failure.Diagnostics, "\n")
+		}
+		if failure == nil || failure.Code != "DOCUMENT_SYMBOL_ABSENT" || !strings.Contains(diagnostic, "showing 8 of 9 exact document symbols; 1 omitted") || strings.Contains(diagnostic, `"Target"`) {
+			t.Fatalf("ASSERT_SYMBOL_SUGGESTION_BOUND_AND_OMISSION_DISCLOSURE: failure=%v diagnostic=%q", failure, diagnostic)
+		}
+	})
+}
+
+func TestIncomingRetriesServerReportedOutOfLineSymbolPosition(t *testing.T) {
+	symbol := `[{"name":"Target","kind":12,"range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}]`
+	item := `{"name":"Target","kind":12,"uri":"file:///w/a.go","range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}},"selectionRange":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}`
+	miss := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "column is beyond end of line"}}
+	f := &fakeRuntime{
+		metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true},
+		results: map[string][]json.RawMessage{
+			"textDocument/documentSymbol":       {json.RawMessage(symbol)},
+			"textDocument/prepareCallHierarchy": {json.RawMessage(`[` + item + `]`)},
+			"callHierarchy/incomingCalls":       {json.RawMessage(`[]`)},
+		},
+		observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {miss}},
+	}
+	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
+	if failure != nil || len(f.requests) < 3 || !strings.Contains(string(f.requests[2].Params), `"line":7,"character":4`) {
+		t.Fatalf("ASSERT_OUT_OF_LINE_SYMBOL_POSITION_RETRY_IS_BOUNDED: failure=%v requests=%v", failure, f.requests)
 	}
 }
 
