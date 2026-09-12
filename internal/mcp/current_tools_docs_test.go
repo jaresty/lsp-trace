@@ -14,7 +14,6 @@ func TestCurrentCanonicalToolDocumentationMatchesRegistry(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join("..", "..", "README.md"),
 		filepath.Join("..", "..", "docs", "retained-calls.md"),
-		filepath.Join("..", "..", "cmd", "lsp-trace", "SKILL.md"),
 	} {
 		raw, err := os.ReadFile(path)
 		if err != nil {

@@ -41,7 +41,7 @@ Paths resolve against the workspace. Labels are unique and match `[A-Za-z][A-Za-
 
 An LLM may start from one symbol and quickly obtain live design or refactoring context from a READY managed LSP session. Graph Provenance and source capture are not prerequisites for this bounded orientation. Route through the available live MCP incoming and slice operations, using exact session and generation identity; future orchestration may compose those existing operations but must not invent a new command.
 
-Treat the transient live graph as suitable for bounded questions about callers and callees, likely impact, centrality, architectural boundaries, and refactor risk. Its claim ceiling remains low: it is not retained, replayable, or source-grounded evidence, and it does not establish runtime behavior, complete source coverage, or feature identity.
+Treat `slice` and `incoming` as bounded orientation over server-reported callers and callees. They do not compute centrality, establish architectural boundaries, or by themselves justify refactor-safety conclusions. Their claim ceiling remains low: it is not retained, replayable, or source-grounded evidence, and it does not establish runtime behavior, complete source coverage, or feature identity. ADR 0006 accepts a separate transient structural-context operation that may compute bounded structural measures; that operation and its syntax are proposed until current binary help or capabilities document implementation.
 
 Escalate optionally to Capture/V5 when the work needs durable review, retained hydration, publication, replay, or stronger source-bearing evidence. That escalation is never the default prerequisite for live structural orientation.
 
@@ -55,7 +55,7 @@ Legacy `slice --from-file PATH` recursively enumerates server-reported document 
 
 Current `trace` is an implemented exact-target facade. Exact symbol mode fails on zero or multiple matches; use `--at` to resolve ambiguity. Repeated positions remain separate target occurrences even when native nodes deduplicate. Topmost sibling enrichment is opt-in.
 
-Future `discover`, richer census, or context interfaces in ADRs remain proposals unless current binary help/capabilities document implementation. Describe desired behavior without inventing syntax.
+The `context` and `census` interfaces accepted in ADR 0006 remain `FUTURE/PROPOSED` until current binary help or capabilities document implementation. Describe their desired behavior without presenting proposed syntax as live. The earlier ADR 0004 name `discover` is superseded by the accepted `census` name.
 
 ## Status and retention
 

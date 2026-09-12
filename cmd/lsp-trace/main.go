@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"embed"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -405,55 +407,63 @@ func embeddedSkillFiles(name string) (map[string][]byte, error) {
 }
 
 func materializeSkill(destination string, files map[string][]byte) (err error) {
-	if destination == "" || destination == "." || filepath.Clean(destination) == string(filepath.Separator) {
+	if destination == "" || destination != filepath.Clean(destination) {
 		return errors.New("unsafe skill destination")
-	}
-	for _, part := range strings.FieldsFunc(destination, func(r rune) bool { return r == '/' || r == '\\' }) {
-		if part == ".." {
-			return errors.New("skill destination traversal is not allowed")
-		}
 	}
 	absolute, err := filepath.Abs(destination)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Lstat(absolute); err == nil {
+	if absolute == filepath.Clean(string(filepath.Separator)) {
+		return errors.New("unsafe skill destination")
+	}
+	parent, final := filepath.Split(absolute)
+	parent = filepath.Clean(parent)
+	if !validSkillComponent(final) {
+		return errors.New("unsafe skill destination basename")
+	}
+	for relative := range files {
+		if !validEmbeddedSkillPath(relative) {
+			return fmt.Errorf("unsafe embedded skill path %q", relative)
+		}
+	}
+
+	root, err := os.OpenRoot(parent)
+	if err != nil {
+		return fmt.Errorf("skill destination parent: %w", err)
+	}
+	defer root.Close()
+	if _, err := root.Lstat(final); err == nil {
 		return errors.New("skill destination already exists")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	parent := filepath.Dir(absolute)
-	info, err := os.Lstat(parent)
+
+	staging, err := createSkillStaging(root, final)
 	if err != nil {
-		return fmt.Errorf("skill destination parent: %w", err)
-	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return errors.New("skill destination parent must be a non-symlink directory")
-	}
-	if err := rejectSymlinkComponents(parent); err != nil {
-		return err
-	}
-	if err := os.Mkdir(absolute, 0o700); err != nil {
 		return err
 	}
 	defer func() {
-		if err != nil {
-			_ = os.RemoveAll(absolute)
+		if staging != "" {
+			_ = root.RemoveAll(staging)
 		}
 	}()
-	for relative, data := range files {
-		if relative == "" || filepath.IsAbs(relative) || strings.Contains(relative, "..") {
-			return errors.New("unsafe embedded skill path")
-		}
-		path := filepath.Join(absolute, filepath.FromSlash(relative))
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+
+	paths := make([]string, 0, len(files))
+	for relative := range files {
+		paths = append(paths, relative)
+	}
+	sort.Strings(paths)
+	for _, relative := range paths {
+		rootPath := staging + "/" + relative
+		if err := root.MkdirAll(filepath.ToSlash(filepath.Dir(rootPath)), 0o700); err != nil {
 			return err
 		}
-		file, openErr := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		file, openErr := root.OpenFile(rootPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if openErr != nil {
 			return openErr
 		}
-		_, writeErr := file.Write(data)
+		_, writeErr := file.Write(files[relative])
 		closeErr := file.Close()
 		if writeErr != nil {
 			return writeErr
@@ -462,26 +472,48 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 			return closeErr
 		}
 	}
+	if _, err := root.Lstat(final); err == nil {
+		return errors.New("skill destination already exists")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err := root.Rename(staging, final); err != nil {
+		return err
+	}
+	staging = ""
 	return nil
 }
 
-func rejectSymlinkComponents(path string) error {
-	volume := filepath.VolumeName(path)
-	current := volume + string(filepath.Separator)
-	for _, part := range strings.Split(strings.TrimPrefix(path, current), string(filepath.Separator)) {
-		if part == "" {
-			continue
-		}
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if err != nil {
-			return err
-		}
-		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-			return errors.New("skill destination path must contain only non-symlink directories")
+func validSkillComponent(name string) bool {
+	return name != "" && name != "." && name != ".." && name == filepath.Base(name) && name == filepath.Clean(name)
+}
+
+func validEmbeddedSkillPath(name string) bool {
+	if name == "" || name == "." || !fs.ValidPath(name) {
+		return false
+	}
+	for _, component := range strings.Split(name, "/") {
+		if component == "" || component == "." || component == ".." || !validSkillComponent(filepath.FromSlash(component)) {
+			return false
 		}
 	}
-	return nil
+	return true
+}
+
+func createSkillStaging(root *os.Root, final string) (string, error) {
+	for range 100 {
+		var random [16]byte
+		if _, err := io.ReadFull(rand.Reader, random[:]); err != nil {
+			return "", err
+		}
+		name := fmt.Sprintf(".%s.tmp-%x", final, random[:])
+		if err := root.Mkdir(name, 0o700); err == nil {
+			return name, nil
+		} else if !errors.Is(err, os.ErrExist) {
+			return "", err
+		}
+	}
+	return "", errors.New("could not create unique skill staging directory")
 }
 
 func parse(args []string) (config, error) {

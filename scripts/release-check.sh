@@ -118,8 +118,8 @@ assert_contains R-INSPECT-DOC README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT 
 assert_contains R-INSPECT-ALL-DOC README.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json'
 assert_contains R-INSPECT-AUTHORITY docs/SEMANTICS.md '`NON_AUTHORITATIVE_DERIVED_VIEW`'
 assert_contains R-INSPECT-DIAGNOSTIC-CORRELATION docs/SEMANTICS.md '`TOOL_DERIVED_NODE_CORRELATION`'
-assert_contains R-SKILL-INSPECT cmd/lsp-trace/SKILL.md '## Inspect retained seeds'
-assert_contains R-SKILL-INSPECT-ALL cmd/lsp-trace/SKILL.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json'
+assert_contains R-SKILL-INSPECT cmd/lsp-trace/references/offline-evidence.md '## Inspect retained evidence'
+assert_contains R-SKILL-INSPECT-ALL cmd/lsp-trace/references/offline-evidence.md 'lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --json'
 assert_contains R-SLICE-DOC README.md 'lsp-trace slice'
 assert_contains R-SLICE-DOWN README.md '`--down-depth` and `--up-depth` count call edges'
 assert_contains R-SLICE-START-MODES README.md 'Choose exactly one starting mode'
@@ -133,23 +133,16 @@ assert_contains R-SLICE-SEED-UNION docs/SEMANTICS.md 'union of successful seed m
 assert_contains R-SLICE-POLICY docs/SCHEMA_POLICY.md 'V3 may include an optional `slice` object'
 assert_contains R-SLICE-SCHEMA internal/schema/schemas/lsp-trace.graph.v3.schema.json '"slice": {"$ref": "#/$defs/slice"}'
 assert_contains R-SLICE-SCHEMA-UPWARD internal/schema/schemas/lsp-trace.graph.v3.schema.json '"upward_start_node_ids"'
-assert_contains R-SKILL-VALIDATE-PRESERVES cmd/lsp-trace/SKILL.md 'Validation does not canonicalize or rewrite input.'
-assert_contains R-SKILL-VALIDATION-LAYERS cmd/lsp-trace/SKILL.md 'V1 and v2 validation is structural; v3 runs structural validation before deeper semantic validation.'
-assert_contains R-SKILL-NO-AUTH cmd/lsp-trace/SKILL.md 'Validation and verification do not authenticate producer identity or prove that a declared process executed.'
-assert_contains R-SKILL-AUTHORITY cmd/lsp-trace/SKILL.md 'Invocation provenance is caller-supplied; normalized identities, digests, and receipts are tool-derived.'
-assert_contains R-SKILL-NO-RAW-CUSTODY cmd/lsp-trace/SKILL.md 'The raw server-stderr stream is not retained as a standalone artifact'
-assert_contains R-SKILL-SLICE-DESCRIPTION cmd/lsp-trace/SKILL.md 'description: Trace and slice server-reported call hierarchies'
+assert_contains R-SKILL-VALIDATE-PRESERVES cmd/lsp-trace/references/offline-evidence.md 'Validation does not canonicalize or rewrite input.'
+assert_contains R-SKILL-VALIDATION-LAYERS cmd/lsp-trace/references/offline-evidence.md 'Historical V1/V2 graph validation is structural; V3 performs structural validation before deeper semantic validation.'
+assert_contains R-SKILL-NO-AUTH cmd/lsp-trace/references/evidence-boundaries.md 'None authenticates hidden inputs or producer identity unless an external contract explicitly does so.'
+assert_contains R-SKILL-AUTHORITY cmd/lsp-trace/references/evidence-boundaries.md 'Caller-supplied: provenance'
 assert_contains R-SKILL-SERVER-TRUST cmd/lsp-trace/SKILL.md 'Use only trusted language-server binaries and workspaces.'
-assert_contains R-SKILL-SERVER-STARTUP cmd/lsp-trace/SKILL.md '`language-server` is a placeholder.'
-assert_contains R-SKILL-SEED-GRAMMAR cmd/lsp-trace/SKILL.md 'Unknown seed-file fields are rejected.'
-assert_contains R-SKILL-PUBLISH-STDOUT-FALLBACK cmd/lsp-trace/SKILL.md 'exit code `1` may carry the complete marshaled graph on stdout'
-assert_contains R-SKILL-FAILED-SEED-STDERR cmd/lsp-trace/SKILL.md "stderr lists each failed seed's label, failure phase, and failure message"
-assert_contains R-SKILL-RANGE-WARNING cmd/lsp-trace/SKILL.md '`SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE` is advisory'
-assert_contains R-SKILL-ARTIFACT-DETERMINISM cmd/lsp-trace/SKILL.md 'With identical invocation inputs and server observations, canonical artifact bytes are deterministic'
-assert_contains R-SKILL-GENERATION-NAME cmd/lsp-trace/SKILL.md 'generation directory basenames are opaque publication coordinates, not content identities'
-assert_contains R-SKILL-SEED-FAILURE-FIELDS cmd/lsp-trace/SKILL.md '`failure.phase` and `failure.message`'
-assert_contains R-SKILL-SLICE-OPTIONS cmd/lsp-trace/SKILL.md 'Slice accepts `--server-arg`, `--server-env`, `--language-id`, `--down-depth`, `--up-depth`, `--max-nodes`, `--timeout`, `--request-timeout`, `--output`, and `--pretty`.'
-assert_contains R-SKILL-TRACE-SENSITIVITY cmd/lsp-trace/SKILL.md '`--trace-lsp PATH` writes an opt-in JSON Lines transcript'
+assert_contains R-SKILL-SERVER-STARTUP cmd/lsp-trace/references/live-tracing.md '`language-server` is a placeholder.'
+assert_contains R-SKILL-SEED-GRAMMAR cmd/lsp-trace/references/live-tracing.md 'Unknown fields fail.'
+assert_contains R-SKILL-PUBLICATION cmd/lsp-trace/references/offline-evidence.md 'Publication is exclusive, owner-only, no-replace beneath a caller-pinned root'
+assert_contains R-SKILL-EXPORT-GRAMMAR cmd/lsp-trace/SKILL.md '`lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION`'
+assert_contains R-SKILL-EXPORT-SAFETY cmd/lsp-trace/SKILL.md 'atomic final rename descriptor-relatively beneath that pinned parent'
 assert_contains R-SLICE-STDERR-RELAY docs/SEMANTICS.md 'captured stderr is relayed before the transport/lifecycle error'
 assert_contains R-SLICE-STDERR-DIAGNOSTIC docs/SEMANTICS.md 'retained and printed as a sensitive `server-stderr` diagnostic'
 assert_contains R-V3-CLOSED-RELATION-KINDS docs/SEMANTICS.md 'Native relation kinds are closed to call relations, dispatch associations, and sibling candidates'
@@ -249,6 +242,7 @@ else
 fi
 
 release_tmp=$(mktemp -d "${TMPDIR:-/tmp}/lsp-trace-release.XXXXXX")
+release_tmp=$(CDPATH= cd -- "$release_tmp" && pwd)
 trap 'rm -rf "$release_tmp"' EXIT HUP INT TERM
 go build -trimpath -o "$release_tmp/lsp-trace" ./cmd/lsp-trace
 if [ ! -s "$release_tmp/lsp-trace" ]; then
@@ -268,15 +262,30 @@ if grep -F 'lsp-trace-provider-ember-glint' .goreleaser.yaml >/dev/null; then
 fi
 printf 'PASS ASSERT_CORE_ARCHIVES_EXCLUDE_PROVIDER_ASSETS: core archives contain only core binaries\n'
 embedded_skill=$($release_tmp/lsp-trace skill get)
+for skill_name in lsp-trace lsp-trace-feature-inventory; do
+  export_path="$release_tmp/export-$skill_name"
+  "$release_tmp/lsp-trace" skill get "$skill_name" "$export_path"
+  if [ ! -s "$export_path/SKILL.md" ]; then
+    printf 'FAIL R-EMBEDDED-SKILL-DIRECTORY: %s export is missing SKILL.md\n' "$skill_name"
+    exit 1
+  fi
+  printf 'PASS R-EMBEDDED-SKILL-DIRECTORY: built binary exported %s transactionally\n' "$skill_name"
+done
 case "$embedded_skill" in
-  *'## Compare two retained seed-evidence sets'*'Shared references do not establish shared feature or workflow identity'*)
-    printf 'PASS R-EMBEDDED-FILTER-CONTRACT: release binary embeds filter-v1 operational guidance\n'
+  *'## Command router'*'lsp-trace-feature-inventory'*)
+    printf 'PASS R-EMBEDDED-SKILL-DISPATCHER: legacy stdout returns the embedded dispatcher\n'
     ;;
   *)
-    printf 'FAIL R-EMBEDDED-FILTER-CONTRACT: release binary skill lacks filter-v1 operational guidance\n'
+    printf 'FAIL R-EMBEDDED-SKILL-DISPATCHER: legacy stdout lacks the embedded dispatcher\n'
     exit 1
     ;;
 esac
+if grep -F 'Shared references do not establish shared feature/workflow identity' "$release_tmp/export-lsp-trace/references/offline-evidence.md" >/dev/null; then
+  printf 'PASS R-EMBEDDED-FILTER-CONTRACT: release binary directory export includes filter-v1 operational guidance\n'
+else
+  printf 'FAIL R-EMBEDDED-FILTER-CONTRACT: release binary directory export lacks filter-v1 operational guidance\n'
+  exit 1
+fi
 for version in v1 v2 v3; do
   "$release_tmp/lsp-trace" schema get --schema "$version" > "$release_tmp/$version.schema.json"
   if cmp -s "$release_tmp/$version.schema.json" "$root/internal/schema/schemas/lsp-trace.graph.$version.schema.json"; then

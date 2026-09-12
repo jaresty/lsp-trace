@@ -5,11 +5,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -280,54 +282,91 @@ func TestSkillDispatcherPreservesGetAndSelectsBothSkills(t *testing.T) {
 	}
 }
 
-func TestSkillExportIsCompleteAndByteExact(t *testing.T) {
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestSkillExportManifestsAndBytesMatchSourceEmbeddedAndExport(t *testing.T) {
+	root := t.TempDir()
 	cases := []struct {
-		name     string
-		expected map[string]string
+		name       string
+		sourceRoot string
+		manifest   []string
 	}{
-		{"lsp-trace", map[string]string{
-			"SKILL.md":                          "SKILL.md",
-			"references/evidence-boundaries.md": "references/evidence-boundaries.md",
-			"references/live-tracing.md":        "references/live-tracing.md",
-			"references/offline-evidence.md":    "references/offline-evidence.md",
-			"references/transport-routing.md":   "references/transport-routing.md",
+		{"lsp-trace", ".", []string{
+			"SKILL.md",
+			"references/evidence-boundaries.md",
+			"references/live-tracing.md",
+			"references/offline-evidence.md",
+			"references/transport-routing.md",
 		}},
-		{"lsp-trace-feature-inventory", map[string]string{
-			"SKILL.md":                                  "../../.pi/skills/lsp-trace-feature-inventory/SKILL.md",
-			"references/preparation-and-grouping.md":    "../../.pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md",
-			"references/adjudication-and-acceptance.md": "../../.pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md",
+		{"lsp-trace-feature-inventory", "../../.pi/skills/lsp-trace-feature-inventory", []string{
+			"SKILL.md",
+			"references/adjudication-and-acceptance.md",
+			"references/preparation-and-grouping.md",
 		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			sort.Strings(tc.manifest)
+			embedded, err := embeddedSkillFiles(tc.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			gotManifest := make([]string, 0, len(embedded))
+			for relative := range embedded {
+				gotManifest = append(gotManifest, relative)
+			}
+			sort.Strings(gotManifest)
+			if !reflect.DeepEqual(gotManifest, tc.manifest) {
+				t.Fatalf("ASSERT_SKILL_EMBEDDED_COMPLETE_SORTED_MANIFEST: got=%v want=%v", gotManifest, tc.manifest)
+			}
+
 			destination := filepath.Join(root, tc.name)
 			var stdout, stderr bytes.Buffer
-			if code := runSkill([]string{"get", tc.name, destination}, &stdout, &stderr); code != 0 || stdout.Len() != 0 || stderr.Len() != 0 {
-				t.Fatalf("ASSERT_SKILL_EXPORT: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			if code := runSkill([]string{"get", tc.name, destination}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != "" {
+				t.Fatalf("ASSERT_SKILL_EXPORT_STDOUT_GRAMMAR: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 			}
-			for relative, source := range tc.expected {
-				want, err := os.ReadFile(source)
+			exportedManifest := fileManifest(t, destination)
+			if !reflect.DeepEqual(exportedManifest, tc.manifest) {
+				t.Fatalf("ASSERT_SKILL_EXPORT_COMPLETE_SORTED_MANIFEST: got=%v want=%v", exportedManifest, tc.manifest)
+			}
+			for _, relative := range tc.manifest {
+				source, err := os.ReadFile(filepath.Join(tc.sourceRoot, filepath.FromSlash(relative)))
 				if err != nil {
 					t.Fatal(err)
 				}
-				got, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(relative)))
-				if err != nil || !bytes.Equal(got, want) {
-					t.Fatalf("ASSERT_SKILL_EXPORT_BYTE_EXACT: file=%s err=%v", relative, err)
+				exported, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(relative)))
+				if err != nil || !bytes.Equal(source, embedded[relative]) || !bytes.Equal(source, exported) {
+					t.Fatalf("ASSERT_SKILL_SOURCE_EMBEDDED_EXPORT_BYTE_PARITY: file=%s err=%v", relative, err)
+				}
+				info, err := os.Stat(filepath.Join(destination, filepath.FromSlash(relative)))
+				if err != nil || info.Mode().Perm()&0o077 != 0 {
+					t.Fatalf("ASSERT_SKILL_EXPORT_PRIVATE_FILE_MODE: file=%s mode=%v err=%v", relative, info.Mode(), err)
 				}
 			}
 		})
 	}
 }
 
-func TestSkillExportRejectsUnsafeDestinations(t *testing.T) {
-	root, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
+func fileManifest(t *testing.T, root string) []string {
+	t.Helper()
+	var paths []string
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, filepath.ToSlash(relative))
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
+	sort.Strings(paths)
+	return paths
+}
+
+func TestSkillExportDestinationValidationAndSymlinkAncestry(t *testing.T) {
+	root := t.TempDir()
 	existing := filepath.Join(root, "existing")
 	if err := os.Mkdir(existing, 0o700); err != nil {
 		t.Fatal(err)
@@ -336,6 +375,17 @@ func TestSkillExportRejectsUnsafeDestinations(t *testing.T) {
 	if err := os.WriteFile(fileParent, []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	for _, destination := range []string{
+		"", ".", "..", string(filepath.Separator),
+		root + string(filepath.Separator) + ".." + string(filepath.Separator) + "escaped",
+		existing, filepath.Join(fileParent, "skill"), filepath.Join(root, "missing", "skill"),
+	} {
+		var stdout, stderr bytes.Buffer
+		if code := runSkill([]string{"get", "lsp-trace", destination}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || stderr.Len() == 0 {
+			t.Fatalf("ASSERT_SKILL_EXPORT_REJECTS_UNSAFE_DESTINATION: destination=%q code=%d stdout=%q stderr=%q", destination, code, stdout.String(), stderr.String())
+		}
+	}
+
 	realParent := filepath.Join(root, "real")
 	if err := os.Mkdir(realParent, 0o700); err != nil {
 		t.Fatal(err)
@@ -344,18 +394,54 @@ func TestSkillExportRejectsUnsafeDestinations(t *testing.T) {
 	if err := os.Symlink(realParent, symlinkParent); err != nil {
 		t.Fatal(err)
 	}
-	for _, destination := range []string{
-		".",
-		root + string(filepath.Separator) + ".." + string(filepath.Separator) + "escaped",
-		existing,
-		filepath.Join(fileParent, "skill"),
-		filepath.Join(symlinkParent, "skill"),
-		filepath.Join(root, "missing", "skill"),
-	} {
-		var stdout, stderr bytes.Buffer
-		if code := runSkill([]string{"get", "lsp-trace", destination}, &stdout, &stderr); code == 0 || stdout.Len() != 0 || stderr.Len() == 0 {
-			t.Fatalf("ASSERT_SKILL_EXPORT_REJECTS_UNSAFE: destination=%q code=%d stdout=%q stderr=%q", destination, code, stdout.String(), stderr.String())
+	var stdout, stderr bytes.Buffer
+	if code := runSkill([]string{"get", "lsp-trace", filepath.Join(symlinkParent, "skill")}, &stdout, &stderr); code != 0 || stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("ASSERT_SKILL_EXPORT_ALLOWS_SYMLINK_ANCESTRY: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestMaterializeSkillRejectsUnsafeEmbeddedPathsExactly(t *testing.T) {
+	for _, relative := range []string{"", ".", "../x", "a/../x", "/x", "a//x", "./x", "a/./x"} {
+		destination := filepath.Join(t.TempDir(), "skill")
+		if err := materializeSkill(destination, map[string][]byte{relative: []byte("x")}); err == nil {
+			t.Fatalf("ASSERT_SKILL_REJECTS_UNSAFE_EMBEDDED_PATH: path=%q", relative)
 		}
+		if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("ASSERT_SKILL_UNSAFE_PATH_LEAVES_NO_FINAL: path=%q err=%v", relative, err)
+		}
+	}
+	if err := materializeSkill(filepath.Join(t.TempDir(), "skill"), map[string][]byte{"guide..md": []byte("ok")}); err != nil {
+		t.Fatalf("ASSERT_SKILL_PATH_VALIDATION_NOT_DOT_SUBSTRING_HEURISTIC: %v", err)
+	}
+}
+
+func TestMaterializeSkillIsTransactionalPrivateAndNoOverwrite(t *testing.T) {
+	parent := t.TempDir()
+	destination := filepath.Join(parent, "skill")
+	if err := materializeSkill(destination, map[string][]byte{"file": []byte("original"), "file/child": []byte("impossible")}); err == nil {
+		t.Fatal("ASSERT_SKILL_TRANSACTION_FAILURE_REQUIRED")
+	}
+	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("ASSERT_SKILL_TRANSACTION_LEAVES_NO_FINAL: %v", err)
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("ASSERT_SKILL_TRANSACTION_CLEANS_ONLY_STAGING: entries=%v err=%v", entries, err)
+	}
+
+	if err := os.Mkdir(destination, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(destination, "marker")
+	if err := os.WriteFile(marker, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := materializeSkill(destination, map[string][]byte{"SKILL.md": []byte("replace")}); err == nil {
+		t.Fatal("ASSERT_SKILL_NO_OVERWRITE_REJECTION_REQUIRED")
+	}
+	got, err := os.ReadFile(marker)
+	if err != nil || string(got) != "keep" {
+		t.Fatalf("ASSERT_SKILL_EXISTING_FINAL_UNCHANGED: got=%q err=%v", got, err)
 	}
 }
 

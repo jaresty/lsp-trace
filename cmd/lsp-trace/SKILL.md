@@ -32,7 +32,7 @@ Prefer a matching READY managed language-server session for code-relationship qu
 - `validate`: validate the selected family/version contract without rewriting input.
 - `export-retained-calls` and bounded retained analytics: offline structural projections over admitted retained CALLS.
 
-Future intent-oriented census or context interfaces described in ADRs are proposals unless the current binary help, capability registry, or README explicitly documents them as implemented. Do not invent finalized syntax.
+ADR 0006 accepts the future intent-oriented names `census` and `context`, but their interfaces and syntax remain `FUTURE/PROPOSED` unless the current binary help, capability registry, or README explicitly documents them as implemented. Do not present accepted design as shipped behavior or invent finalized syntax.
 
 ## Shared evidence boundary
 
@@ -44,4 +44,4 @@ Capture sets preserve exact constituents. They do not infer cross-capture CALLS 
 
 ## Retrieval and authority
 
-`lsp-trace skill get` prints this embedded dispatcher. Detailed references and the separate feature-inventory skill are source-tree resources; current binary retrieval does not list, install, or emit them. Use the current binary's `--help`, `lsp-trace info`, MCP capabilities, embedded schemas, and repository contracts as syntax/schema authority.
+`lsp-trace skill get` preserves the legacy stdout grammar and prints this embedded dispatcher. `lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION` exports the selected complete embedded skill directory and writes nothing to stdout on success. `DESTINATION` must name one new directory inside an existing directory; root, `.`, `..`, unclean traversal, missing or non-directory parents, and existing final entries reject. Legitimate symlinks in the parent ancestry are allowed: the command opens the selected parent once and confines staging, exclusive file creation, cleanup, and atomic final rename descriptor-relatively beneath that pinned parent. Use the current binary's `--help`, `lsp-trace info`, MCP capabilities, embedded schemas, and repository contracts as syntax/schema authority.

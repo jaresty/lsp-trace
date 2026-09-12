@@ -84,6 +84,10 @@ assert_contains DOC-LEIDEN-RECAPTURE .pi/skills/lsp-trace-feature-inventory/refe
 assert_contains DOC-LIVE-ORIENTATION cmd/lsp-trace/references/live-tracing.md 'Graph Provenance and source capture are not prerequisites'
 assert_contains DOC-LIVE-CLAIM-CEILING cmd/lsp-trace/references/live-tracing.md 'it is not retained, replayable, or source-grounded evidence'
 assert_contains DOC-LIVE-OPTIONAL-ESCALATION cmd/lsp-trace/references/live-tracing.md 'That escalation is never the default prerequisite'
+assert_contains DOC-LIVE-NO-CENTRALITY cmd/lsp-trace/references/live-tracing.md 'They do not compute centrality, establish architectural boundaries'
+assert_contains DOC-LIVE-PROPOSED-CONTEXT cmd/lsp-trace/references/live-tracing.md 'The `context` and `census` interfaces accepted in ADR 0006 remain `FUTURE/PROPOSED`'
+assert_contains DOC-SKILL-EXPORT-GRAMMAR cmd/lsp-trace/SKILL.md '`lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION`'
+assert_contains DOC-SKILL-EXPORT-SAFETY cmd/lsp-trace/SKILL.md 'confines staging, exclusive file creation, cleanup, and atomic final rename descriptor-relatively beneath that pinned parent'
 assert_same DOC-FEATURE-EMBEDDED-SKILL .pi/skills/lsp-trace-feature-inventory/SKILL.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/SKILL.md
 assert_same DOC-FEATURE-EMBEDDED-PREP .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md
 assert_same DOC-FEATURE-EMBEDDED-ADJUDICATION .pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md
