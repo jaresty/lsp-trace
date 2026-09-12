@@ -9,6 +9,40 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func openSkillPayloadDirectory(container *os.File, name, _ string) (*os.File, error) {
+	objectName, err := windows.NewNTUnicodeString(name)
+	if err != nil {
+		return nil, err
+	}
+	attributes := &windows.OBJECT_ATTRIBUTES{
+		Length:        uint32(unsafe.Sizeof(windows.OBJECT_ATTRIBUTES{})),
+		RootDirectory: windows.Handle(container.Fd()),
+		ObjectName:    objectName,
+		Attributes:    windows.OBJ_CASE_INSENSITIVE | windows.OBJ_DONT_REPARSE,
+	}
+	var (
+		handle windows.Handle
+		status windows.IO_STATUS_BLOCK
+	)
+	err = windows.NtCreateFile(
+		&handle,
+		windows.DELETE|windows.FILE_READ_ATTRIBUTES|windows.SYNCHRONIZE,
+		attributes,
+		&status,
+		nil,
+		0,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+		windows.FILE_OPEN,
+		windows.FILE_DIRECTORY_FILE|windows.FILE_OPEN_REPARSE_POINT|windows.FILE_SYNCHRONOUS_IO_NONALERT,
+		0,
+		0,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(handle), name), nil
+}
+
 type fileRenameInfoEx struct {
 	Flags          uint32
 	RootDirectory  windows.Handle

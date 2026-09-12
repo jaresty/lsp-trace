@@ -478,21 +478,21 @@ func TestMaterializeSkillMovedAndSubstitutedContainerCannotSubstitutePayloadOrDe
 	parent := t.TempDir()
 	destination := filepath.Join(parent, "skill")
 	moved := filepath.Join(parent, "moved-container")
-	originalPublish := publishSkillDirectory
-	t.Cleanup(func() { publishSkillDirectory = originalPublish })
+	originalHook := afterSkillContainerPinned
+	t.Cleanup(func() { afterSkillContainerPinned = originalHook })
 	var substitute string
-	publishSkillDirectory = func(parentHandle, containerHandle, payloadHandle *os.File, container, payload, final string) error {
+	afterSkillContainerPinned = func(_ *os.File, container string) error {
 		if err := os.Rename(filepath.Join(parent, container), moved); err != nil {
 			return err
 		}
 		substitute = filepath.Join(parent, container)
-		if err := os.Mkdir(substitute, 0o700); err != nil {
+		if err := os.MkdirAll(filepath.Join(substitute, "payload"), 0o700); err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(substitute, "competitor"), []byte("keep"), 0o600); err != nil {
+		if err := os.WriteFile(filepath.Join(substitute, "payload", "SKILL.md"), []byte("competitor"), 0o600); err != nil {
 			return err
 		}
-		return originalPublish(parentHandle, containerHandle, payloadHandle, container, payload, final)
+		return os.WriteFile(filepath.Join(substitute, "competitor"), []byte("keep"), 0o600)
 	}
 
 	err := materializeSkill(destination, map[string][]byte{"SKILL.md": []byte("publisher")})

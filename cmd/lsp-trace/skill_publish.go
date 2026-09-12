@@ -6,7 +6,10 @@ import (
 	"os"
 )
 
-var publishSkillDirectory = renameDirectoryNoReplace
+var (
+	publishSkillDirectory     = renameDirectoryNoReplace
+	afterSkillContainerPinned = func(*os.File, string) error { return nil }
+)
 
 func publishStagedSkill(parent, containerHandle, payloadHandle *os.File, container, payload, final string) error {
 	if err := publishSkillDirectory(parent, containerHandle, payloadHandle, container, payload, final); err != nil {

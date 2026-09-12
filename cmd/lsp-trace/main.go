@@ -504,7 +504,10 @@ func materializeSkill(destination string, files map[string][]byte) (err error) {
 		return err
 	}
 	defer containerHandle.Close()
-	payloadHandle, err := root.Open(staging + "/" + payload)
+	if err := afterSkillContainerPinned(containerHandle, staging); err != nil {
+		return err
+	}
+	payloadHandle, err := openSkillPayloadDirectory(containerHandle, payload, filepath.Join(parent, staging, payload))
 	if err != nil {
 		return err
 	}
