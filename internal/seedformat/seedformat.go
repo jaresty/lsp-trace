@@ -155,6 +155,52 @@ func Decode(raw []byte, workspace string) (File, error) {
 	return out, nil
 }
 
+// EncodeCanonical validates and emits one compact, deterministic JSON encoding.
+// Struct-backed wire values fix member order while preserving seed order.
+func EncodeCanonical(file File, workspace string) ([]byte, error) {
+	if err := Validate(file, workspace); err != nil {
+		return nil, err
+	}
+	wire := fileWire{
+		SchemaVersion:        file.SchemaVersion,
+		CoordinateConvention: file.CoordinateConvention,
+		Defaults:             file.Defaults,
+		Seeds:                make([]json.RawMessage, len(file.Seeds)),
+	}
+	for i, seed := range file.Seeds {
+		raw, err := encodeSeed(seed)
+		if err != nil {
+			return nil, fmt.Errorf("seeds[%d]: %w", i, err)
+		}
+		wire.Seeds[i] = raw
+	}
+	raw, err := json.Marshal(wire)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Decode(raw, workspace); err != nil {
+		return nil, fmt.Errorf("canonical seed encoding is invalid: %w", err)
+	}
+	return raw, nil
+}
+
+func encodeSeed(seed Seed) ([]byte, error) {
+	switch seed.Type {
+	case PositionType:
+		return json.Marshal(positionWire{Type: PositionType, Label: seed.Position.Label, Path: seed.Position.Path, Line: seed.Position.Line, Column: seed.Position.Column})
+	case SymbolType:
+		return json.Marshal(symbolWire{Type: SymbolType, Label: seed.Symbol.Label, Path: seed.Symbol.Path, Symbol: seed.Symbol.Symbol})
+	case SliceType:
+		target, err := encodeSeed(*seed.Target)
+		if err != nil {
+			return nil, err
+		}
+		return json.Marshal(sliceWire{Type: SliceType, Label: seed.Position.Label, Target: target, DownDepth: seed.DownDepth, UpDepth: seed.UpDepth})
+	default:
+		return nil, errors.New("unknown seed type")
+	}
+}
+
 func decodeSeed(raw []byte, nested bool) (Seed, error) {
 	var kind kindWire
 	if err := decodeObject(raw, &kind); err != nil && !strings.Contains(err.Error(), "unknown field") {
