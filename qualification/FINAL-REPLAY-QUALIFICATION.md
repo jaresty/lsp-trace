@@ -22,7 +22,7 @@ Record `FAIL` separately when all prerequisites were present but execution or an
 | artifact inputs | schema ID/version, exact SHA-256, byte length, selector or root-confined input mode, source/custody revision, provider/session/invocation identity |
 | publication inputs | caller-approved temporary qualification root and safe relative selector; never a private evidence root |
 
-All live requests use `timeout_ms=60000` and `request_timeout_ms=60000`. Do not restart a managed session during qualification without reviewing its current status, generation, startup diagnostics, workspace/revision, executable identity, and bootstrap configuration. A restart creates a new generation and invalidates prior exact-generation readiness.
+Live MCP requests use `timeout_ms=60000` and `request_timeout_ms=60000`. CLI acquisition records the exact manifest-owned effective limits; current production discovery and seed replay use `timeout_ms=60000` and `request_timeout_ms=30000` and expose no inline override. Do not restart a managed session during qualification without reviewing its current status, generation, startup diagnostics, workspace/revision, executable identity, and bootstrap configuration. A restart creates a new generation and invalidates prior exact-generation readiness.
 
 ## Before the final build: repository-only checks
 
@@ -44,7 +44,7 @@ For the opt-in fake-LSP discovery/replay mechanism check only:
 LSP_TRACE_QUALIFY_DISCOVERY_REPLAY=1 go test ./cmd/lsp-trace -run '^TestAutomaticDiscoveryRetainedSeedReplayQualification$' -count=1 -v
 ```
 
-A pass is `READY` only for the synthetic mechanism. It is not a representative application/provider result. The proposed `trace`/`discover` commands and production default/advanced/hidden-legacy advertisement behavior remain `NOT_YET_IMPLEMENTED`; current `slice --from-file` discovery, Seeds V2 replay, and current compact/full MCP profiles remain the executable compatibility surfaces.
+A pass is `READY` only for the synthetic mechanism. It is not a representative application/provider result. The `trace` facade is implemented and has public-process V5 parity guards. Production `census` and default/advanced/hidden-legacy MCP advertisement remain `NOT_YET_IMPLEMENTED` until their active implementation lanes are integrated; current `slice --from-file` discovery, Seeds V2 replay, and compact/full MCP profiles remain compatibility surfaces.
 
 Run `./scripts/release-check.sh`, `go test ./...`, `go vet ./...`, and `go build ./...` only at the reviewed release-candidate revision. The release check inspects retained evidence and builds temporary binaries; it does not start external language servers or refresh representative evidence.
 
@@ -91,9 +91,9 @@ Issue live requests only after status is `READY`:
 Automatic discovery, replay, and grouping use the final CLI and an independently reviewed server command or profile:
 
 ```sh
-"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --from-file "$SCOPE" --timeout 60s --request-timeout 60s
-"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --seed-file "$SEEDS_V2" --timeout 60s --request-timeout 60s
-"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --seed-file "$SEEDS_V2" --output "$GRAPH_SELECTOR" --group-by leiden --community-seed 19 --pagerank-top-k 20 --hub-top-k 20 --timeout 60s --request-timeout 60s
+"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --from-file "$SCOPE"
+"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --seed-file "$SEEDS_V2"
+"$LSP_TRACE_BIN" slice --production-v5 --workspace "$WORKSPACE" --server "$SERVER" --language-id "$LANGUAGE_ID" --seed-file "$SEEDS_V2" --output "$GRAPH_SELECTOR" --group-by leiden --community-seed 19 --pagerank-top-k 20 --hub-top-k 20
 ```
 
 Use `program-c compose`, composite admission/Leiden, hydrated inspection, passage verification, and capture-set inspection only with exact inputs reported by the preceding row. Copy the final binary's own `--help` syntax into the run ledger before execution; do not infer flags from a retained older binary.
@@ -106,4 +106,4 @@ A retained zero-node artifact cannot distinguish at least these causes: initiali
 
 ## Run ledger (one record per row)
 
-Record: timestamp; application; command/request digest; binary version/revision/SHA-256; provider executable/version/SHA-256; workspace revision and custody; session ID/generation/state; position encoding; input schema/digest/length/selector; limits (`60000` ms); output schema/digest/length; census; typed outcome; claim ceiling; reviewer; and prerequisite row IDs. Keep private paths and source bytes outside this repository.
+Record: timestamp; application; command/request digest; binary version/revision/SHA-256; provider executable/version/SHA-256; workspace revision and custody; session ID/generation/state; position encoding; input schema/digest/length/selector; exact effective global/request limits; output schema/digest/length; census; typed outcome; claim ceiling; reviewer; and prerequisite row IDs. Keep private paths and source bytes outside this repository.
