@@ -35,7 +35,7 @@ func validateAllSeedAccounting(projection inspectAllProjection) error {
 	return inspection.ValidateAllSeedAccounting(projection)
 }
 
-const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]"
+const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]\n       lsp-trace inspect SELECTOR --hydrated (--publication-root ROOT | --artifact-store ROOT | --private-root ROOT --enable-private-paths) --artifact-schema-id ID --artifact-digest sha256:HEX --artifact-generation g-HEX --artifact-byte-length N [options]"
 
 func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)

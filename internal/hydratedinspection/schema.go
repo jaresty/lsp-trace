@@ -39,12 +39,24 @@ func policySchema(required bool) map[string]any {
 func InputSchema() []byte {
 	p := focusProperties()
 	p["input"] = map[string]any{"type": "string", "minLength": 1, "maxLength": MaxArtifactBytes}
+	digest := map[string]any{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+	generation := map[string]any{"type": "string", "pattern": "^g-[0-9a-f]{64}$"}
+	p["publication_selector"] = object(map[string]any{
+		"selector": map[string]any{"type": "string", "minLength": 1}, "artifact_digest": digest,
+		"artifact_byte_length": integer(1, 192<<20), "artifact_schema_id": map[string]any{"type": "string", "minLength": 1},
+		"publication_mechanism": map[string]any{"const": "atomic_no_replace_with_verified_generation"},
+		"generation":            generation, "verification_selector": map[string]any{"type": "string", "minLength": 1},
+	}, "selector", "artifact_digest", "artifact_byte_length", "artifact_schema_id", "publication_mechanism", "generation", "verification_selector")
+	p["content_addressed_artifact"] = object(map[string]any{
+		"id": digest, "artifact_byte_length": integer(1, 192<<20), "artifact_schema_id": map[string]any{"type": "string", "minLength": 1}, "generation": generation,
+	}, "id", "artifact_byte_length", "artifact_schema_id", "generation")
 	p["sidecars"] = map[string]any{"type": "array", "maxItems": 64, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": MaxArtifactBytes}}
 	p["page"] = map[string]any{"type": "boolean"}
 	p["cursor"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 2048}
-	s := object(p, "input")
+	s := object(p)
 	s["$id"] = InputSchemaID
 	s["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+	s["oneOf"] = []any{map[string]any{"required": []string{"input"}}, map[string]any{"required": []string{"publication_selector"}}, map[string]any{"required": []string{"content_addressed_artifact"}}}
 	s["allOf"] = []any{map[string]any{"if": map[string]any{"required": []string{"cursor"}}, "then": map[string]any{"required": []string{"page"}, "properties": map[string]any{"page": map[string]any{"const": true}}}}}
 	raw, _ := json.Marshal(s)
 	return raw

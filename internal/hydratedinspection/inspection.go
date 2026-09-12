@@ -23,9 +23,28 @@ const MaxRequestBytes = 4 << 20
 const MaxArtifactBytes = 1 << 20
 const MaxResponseBytes = 1 << 20
 
+type PublicationSelector struct {
+	Selector             string `json:"selector"`
+	ArtifactDigest       string `json:"artifact_digest"`
+	ArtifactByteLength   uint64 `json:"artifact_byte_length"`
+	ArtifactSchemaID     string `json:"artifact_schema_id"`
+	PublicationMechanism string `json:"publication_mechanism"`
+	Generation           string `json:"generation"`
+	VerificationSelector string `json:"verification_selector"`
+}
+
+type ContentAddressedArtifact struct {
+	ID                 string `json:"id"`
+	ArtifactByteLength uint64 `json:"artifact_byte_length"`
+	ArtifactSchemaID   string `json:"artifact_schema_id"`
+	Generation         string `json:"generation"`
+}
+
 type Request struct {
-	Input    string   `json:"input"`
-	Sidecars []string `json:"sidecars,omitempty"`
+	Input                    string                    `json:"input,omitempty"`
+	PublicationSelector      *PublicationSelector      `json:"publication_selector,omitempty"`
+	ContentAddressedArtifact *ContentAddressedArtifact `json:"content_addressed_artifact,omitempty"`
+	Sidecars                 []string                  `json:"sidecars,omitempty"`
 	he.FocusRequest
 	Page   bool   `json:"page,omitempty"`
 	Cursor string `json:"cursor,omitempty"`
@@ -73,6 +92,10 @@ func Decode(raw []byte) (Request, error) {
 // Check is input-only, including selection policy, before any artifact admission.
 // The CLI calls it with a placeholder input before reading explicit files.
 func Check(r Request) error { return checkWithArtifactLimit(r, MaxArtifactBytes) }
+
+// CheckAdmitted validates a host-resolved request against the public core cap.
+// It never enlarges the inline schema's one-MiB string limit.
+func CheckAdmitted(r Request) error { return checkWithArtifactLimit(r, r.CorePolicy.MaxInputBytes) }
 
 func checkWithArtifactLimit(r Request, artifactLimit int) error {
 	if err := he.CheckFocusRequest(r.FocusRequest); err != nil {

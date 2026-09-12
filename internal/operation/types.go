@@ -44,6 +44,7 @@ type Request struct {
 	RequestID        string
 	Input            json.RawMessage
 	PublicationRoot  *publication.Root
+	ArtifactStore    *publication.Root
 	RetainedSeedSpec []byte // internal validated canonical lsp-trace.seeds.v2 bytes; never populated directly by MCP JSON
 }
 

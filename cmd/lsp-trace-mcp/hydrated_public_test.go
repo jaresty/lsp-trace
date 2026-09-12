@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	he "lsp-trace/internal/hydratedevidence"
+	"lsp-trace/internal/publication"
 )
 
 const hydratedEdge = "sha256:e16c80b01aa9de78ff896b411d93746a6bfa749c1a80bc7b1c3bd251df81fa4b"
@@ -69,6 +70,31 @@ func TestHydratedPublicOffline(t *testing.T) {
 		decodeProcessCall(t, calls[0])
 		t.Log("PUBLIC_MCP_VALIDATED_FOCUS PASS")
 	})
+}
+
+func TestHydratedMCPVerifiedPublicationSelector(t *testing.T) {
+	raw, err := os.ReadFile("../../internal/hydratedevidence/testdata/focused-fr20.v2.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootPath := t.TempDir()
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published := publication.NewPublisher().PublishVerifiedGeneration(root, raw, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v2.schema.json")
+	root.Close()
+	if published.Failure != nil {
+		t.Fatal(published.Failure)
+	}
+	p := published.Receipt
+	source := map[string]any{"selector": p.VerificationSelector, "artifact_digest": p.Digest, "artifact_byte_length": p.ByteLength, "artifact_schema_id": p.ArtifactSchemaID, "publication_mechanism": p.PublicationMechanism, "generation": p.Generation, "verification_selector": p.VerificationSelector}
+	mcp := buildMCPBinary(t)
+	calls := runMCPProcess(t, mcp, []string{"--publication-root", rootPath}, []map[string]any{callRequest(1, "lsp_trace_v1_inspect_hydrated", map[string]any{"publication_selector": source, "node_ids": []string{"unknown"}})})
+	result := decodeProcessCall(t, calls[0])
+	if result.env["isError"] != false {
+		t.Fatalf("ASSERT_HYDRATED_MCP_VERIFIED_SELECTOR: %v", calls[0])
+	}
 }
 
 func assertPublicFocus(t *testing.T, input, raw []byte) {
