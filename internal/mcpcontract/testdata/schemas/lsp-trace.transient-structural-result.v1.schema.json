@@ -7,16 +7,17 @@
     "opaqueEdgeID": {"type": "string", "pattern": "^te_[0-9a-f]{32}$"},
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "count": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "omissionReasons": {"type": "object", "additionalProperties": false, "required": ["DEPTH_BOUND", "NODE_BOUND", "REQUEST_BOUND", "TIMEOUT", "CANCELLATION", "UNSUPPORTED_RESPONSE", "MALFORMED_RESPONSE", "DEDUPLICATION"], "properties": {"DEPTH_BOUND": {"$ref": "#/$defs/count"}, "NODE_BOUND": {"$ref": "#/$defs/count"}, "REQUEST_BOUND": {"$ref": "#/$defs/count"}, "TIMEOUT": {"$ref": "#/$defs/count"}, "CANCELLATION": {"$ref": "#/$defs/count"}, "UNSUPPORTED_RESPONSE": {"$ref": "#/$defs/count"}, "MALFORMED_RESPONSE": {"$ref": "#/$defs/count"}, "DEDUPLICATION": {"$ref": "#/$defs/count"}}},
     "accounting": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["request_attempted", "request_succeeded", "request_failed", "request_cancelled", "prepared_attempted", "prepared_returned", "prepared_empty", "prepared_failed", "node_observed", "node_admitted", "node_rejected", "node_omitted", "occurrence_observed", "occurrence_admitted", "occurrence_rejected", "occurrence_omitted", "frontier_observed", "frontier_expanded", "frontier_unexpanded", "deduplicated_nodes", "deduplicated_occurrences", "truncated"],
+      "$comment": "JSON Schema closes names and nonnegative ranges only. It does NOT establish cross-field arithmetic or one-reason-per-omission. FUTURE/PROPOSED registration MUST invoke semantic-validation requirements v1.",
+      "type": "object", "additionalProperties": false,
+      "required": ["request_attempted", "request_succeeded", "request_failed", "request_cancelled", "request_omission_reasons", "prepared_attempted", "prepared_returned", "prepared_empty", "prepared_failed", "node_observed", "node_admitted", "node_rejected", "node_omitted", "node_omission_reasons", "occurrence_observed", "occurrence_admitted", "occurrence_rejected", "occurrence_omitted", "occurrence_omission_reasons", "frontier_observed", "frontier_expanded", "frontier_unexpanded", "frontier_omission_reasons", "deduplicated_nodes", "deduplicated_occurrences", "truncated"],
       "properties": {
-        "request_attempted": {"$ref": "#/$defs/count"}, "request_succeeded": {"$ref": "#/$defs/count"}, "request_failed": {"$ref": "#/$defs/count"}, "request_cancelled": {"$ref": "#/$defs/count"},
+        "request_attempted": {"$ref": "#/$defs/count"}, "request_succeeded": {"$ref": "#/$defs/count"}, "request_failed": {"$ref": "#/$defs/count"}, "request_cancelled": {"$ref": "#/$defs/count"}, "request_omission_reasons": {"$ref": "#/$defs/omissionReasons"},
         "prepared_attempted": {"$ref": "#/$defs/count"}, "prepared_returned": {"$ref": "#/$defs/count"}, "prepared_empty": {"$ref": "#/$defs/count"}, "prepared_failed": {"$ref": "#/$defs/count"},
-        "node_observed": {"$ref": "#/$defs/count"}, "node_admitted": {"$ref": "#/$defs/count"}, "node_rejected": {"$ref": "#/$defs/count"}, "node_omitted": {"$ref": "#/$defs/count"},
-        "occurrence_observed": {"$ref": "#/$defs/count"}, "occurrence_admitted": {"$ref": "#/$defs/count"}, "occurrence_rejected": {"$ref": "#/$defs/count"}, "occurrence_omitted": {"$ref": "#/$defs/count"},
-        "frontier_observed": {"$ref": "#/$defs/count"}, "frontier_expanded": {"$ref": "#/$defs/count"}, "frontier_unexpanded": {"$ref": "#/$defs/count"},
+        "node_observed": {"$ref": "#/$defs/count"}, "node_admitted": {"$ref": "#/$defs/count"}, "node_rejected": {"$ref": "#/$defs/count"}, "node_omitted": {"$ref": "#/$defs/count"}, "node_omission_reasons": {"$ref": "#/$defs/omissionReasons"},
+        "occurrence_observed": {"$ref": "#/$defs/count"}, "occurrence_admitted": {"$ref": "#/$defs/count"}, "occurrence_rejected": {"$ref": "#/$defs/count"}, "occurrence_omitted": {"$ref": "#/$defs/count"}, "occurrence_omission_reasons": {"$ref": "#/$defs/omissionReasons"},
+        "frontier_observed": {"$ref": "#/$defs/count"}, "frontier_expanded": {"$ref": "#/$defs/count"}, "frontier_unexpanded": {"$ref": "#/$defs/count"}, "frontier_omission_reasons": {"$ref": "#/$defs/omissionReasons"},
         "deduplicated_nodes": {"$ref": "#/$defs/count"}, "deduplicated_occurrences": {"$ref": "#/$defs/count"}, "truncated": {"const": false}
       }
     },
@@ -50,23 +51,23 @@
     "target_node_id": {"$ref": "#/$defs/opaqueNodeID"},
     "position_encoding": {"enum": ["utf-8", "utf-16", "utf-32"]},
     "traversal_policy": {
-      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_digest", "down_depth", "up_depth", "max_nodes"],
-      "properties": {"policy_id": {"const": "transient-calls-traversal.v1"}, "policy_digest": {"const": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}, "down_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "up_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000}}
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_status", "policy_digest", "down_depth", "up_depth", "max_nodes"],
+      "properties": {"policy_id": {"const": "transient-calls-traversal.v1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "down_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "up_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000}}
     },
     "resource_policy": {
-      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_digest", "timeout_ms", "request_timeout_ms"],
-      "properties": {"policy_id": {"const": "transient-structural-resources.v1"}, "policy_digest": {"const": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}, "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}}
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_status", "policy_digest", "timeout_ms", "request_timeout_ms"],
+      "properties": {"policy_id": {"const": "transient-structural-resources.v1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}}
     },
     "analysis_policy": {
-      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_digest"],
-      "properties": {"policy_id": {"enum": ["transient-neighborhood.v1", "transient-impact.v1"]}, "policy_version": {"const": "1"}, "policy_digest": {"$ref": "#/$defs/digest"}}
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_status", "policy_digest"],
+      "properties": {"policy_id": {"enum": ["transient-neighborhood.v1", "transient-impact.v1"]}, "policy_version": {"const": "1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}}
     },
     "graph_digest": {"$ref": "#/$defs/digest"},
     "accounting": {"$ref": "#/$defs/accounting"},
     "analysis": {
       "oneOf": [
         {"type": "object", "additionalProperties": false, "required": ["kind", "root_node_id", "nodes", "edges", "incoming_count", "outgoing_count", "frontier_count"], "properties": {"kind": {"const": "NEIGHBORHOOD"}, "root_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "nodes": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/node"}}, "edges": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/edge"}}, "incoming_count": {"$ref": "#/$defs/count"}, "outgoing_count": {"$ref": "#/$defs/count"}, "frontier_count": {"$ref": "#/$defs/count"}}},
-        {"type": "object", "additionalProperties": false, "required": ["kind", "root_node_id", "direction", "depth", "reachable_node_ids", "witness_edge_ids"], "properties": {"kind": {"const": "IMPACT"}, "root_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "direction": {"enum": ["INCOMING", "OUTGOING"]}, "depth": {"type": "integer", "minimum": 1, "maximum": 64}, "reachable_node_ids": {"type": "array", "maxItems": 10000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueNodeID"}}, "witness_edge_ids": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueEdgeID"}}}}
+        {"type": "object", "additionalProperties": false, "required": ["kind", "root_node_id", "direction", "depth", "nodes", "edges", "reachable_node_ids", "witness_edge_ids"], "properties": {"kind": {"const": "IMPACT"}, "root_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "direction": {"enum": ["INCOMING", "OUTGOING"]}, "depth": {"type": "integer", "minimum": 1, "maximum": 64}, "nodes": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/node"}}, "edges": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/edge"}}, "reachable_node_ids": {"type": "array", "maxItems": 10000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueNodeID"}}, "witness_edge_ids": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueEdgeID"}}}}
       ]
     }
   }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ const (
 	futureResultID  = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-result.v1.schema.json"
 	futureSuccessID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v1.schema.json"
 	futureFailureID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v1.schema.json"
+	futureRequestID = "sc_0123456789abcdef0123456789abcdef"
 )
 
 func compileFutureStructuralSchemas(t *testing.T) map[string]*jsonschema.Schema {
@@ -73,7 +75,10 @@ func validFutureInput() map[string]any {
 }
 
 func validAccounting() map[string]any {
-	return map[string]any{"request_attempted": 1, "request_succeeded": 1, "request_failed": 0, "request_cancelled": 0, "prepared_attempted": 1, "prepared_returned": 1, "prepared_empty": 0, "prepared_failed": 0, "node_observed": 1, "node_admitted": 1, "node_rejected": 0, "node_omitted": 0, "occurrence_observed": 0, "occurrence_admitted": 0, "occurrence_rejected": 0, "occurrence_omitted": 0, "frontier_observed": 1, "frontier_expanded": 1, "frontier_unexpanded": 0, "deduplicated_nodes": 0, "deduplicated_occurrences": 0, "truncated": false}
+	zeroReasons := func() map[string]any {
+		return map[string]any{"DEPTH_BOUND": 0, "NODE_BOUND": 0, "REQUEST_BOUND": 0, "TIMEOUT": 0, "CANCELLATION": 0, "UNSUPPORTED_RESPONSE": 0, "MALFORMED_RESPONSE": 0, "DEDUPLICATION": 0}
+	}
+	return map[string]any{"request_attempted": 1, "request_succeeded": 1, "request_failed": 0, "request_cancelled": 0, "request_omission_reasons": zeroReasons(), "prepared_attempted": 1, "prepared_returned": 1, "prepared_empty": 0, "prepared_failed": 0, "node_observed": 1, "node_admitted": 1, "node_rejected": 0, "node_omitted": 0, "node_omission_reasons": zeroReasons(), "occurrence_observed": 1, "occurrence_admitted": 1, "occurrence_rejected": 0, "occurrence_omitted": 0, "occurrence_omission_reasons": zeroReasons(), "frontier_observed": 1, "frontier_expanded": 1, "frontier_unexpanded": 0, "frontier_omission_reasons": zeroReasons(), "deduplicated_nodes": 0, "deduplicated_occurrences": 0, "truncated": false}
 }
 
 func validFutureResult() map[string]any {
@@ -82,10 +87,10 @@ func validFutureResult() map[string]any {
 		"source_graph_complete": "UNKNOWN", "retained": false, "replayable": false, "publication_eligible": false, "hydration_eligible": false,
 		"claim_ceiling":        "Under the named managed session generation, exact target, server responses, traversal bounds, and analysis policy, this bounded server-reported call graph has the reported structural properties.",
 		"canonical_session_id": "ts_0123456789abcdef0123456789abcdef", "generation": 1, "target_node_id": "tn_0123456789abcdef0123456789abcdef", "position_encoding": "utf-16",
-		"traversal_policy": map[string]any{"policy_id": "transient-calls-traversal.v1", "policy_digest": "sha256:" + strings.Repeat("1", 64), "down_depth": 2, "up_depth": 2, "max_nodes": 100},
-		"resource_policy":  map[string]any{"policy_id": "transient-structural-resources.v1", "policy_digest": "sha256:" + strings.Repeat("2", 64), "timeout_ms": 5000, "request_timeout_ms": 1000},
-		"analysis_policy":  map[string]any{"policy_id": "transient-neighborhood.v1", "policy_version": "1", "policy_digest": "sha256:" + strings.Repeat("3", 64)}, "graph_digest": "sha256:" + strings.Repeat("4", 64), "accounting": validAccounting(),
-		"analysis": map[string]any{"kind": "NEIGHBORHOOD", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{}, "incoming_count": 0, "outgoing_count": 0, "frontier_count": 0},
+		"traversal_policy": map[string]any{"policy_id": "transient-calls-traversal.v1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:7f83b1657ff1fc53b92dc18148a1d65dfa13514f2d57f5c99be729f39d33d1d4", "down_depth": 2, "up_depth": 2, "max_nodes": 100},
+		"resource_policy":  map[string]any{"policy_id": "transient-structural-resources.v1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:dffd6021bb2bd7931a72e10e3d9f33a259a128365e98922db75a5920cb4ddc6d", "timeout_ms": 5000, "request_timeout_ms": 1000},
+		"analysis_policy":  map[string]any{"policy_id": "transient-neighborhood.v1", "policy_version": "1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"}, "graph_digest": "sha256:" + strings.Repeat("4", 64), "accounting": validAccounting(),
+		"analysis": map[string]any{"kind": "NEIGHBORHOOD", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "incoming_count": 1, "outgoing_count": 1, "frontier_count": 0},
 	}
 }
 
@@ -111,11 +116,11 @@ func TestFutureStructuralContextSchemasCompileAndAcceptClosedControls(t *testing
 	validateFuture(t, s[futureResultID], result, true)
 	impactResult := cloneMap(t, result)
 	impactResult["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
-	impactResult["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "direction": "INCOMING", "depth": 2, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
+	impactResult["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "direction": "INCOMING", "depth": 2, "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
 	validateFuture(t, s[futureResultID], impactResult, true)
-	success := map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": "r1", "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": result}
+	success := map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": result}
 	validateFuture(t, s[futureSuccessID], success, true)
-	failure := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": "r1", "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "TRAVERSAL", "state": "PARTIAL", "error": map[string]any{"code": "PARTIAL"}}
+	failure := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "TRAVERSAL", "state": "PARTIAL", "error": map[string]any{"code": "PARTIAL"}}
 	validateFuture(t, s[futureFailureID], failure, true)
 }
 
@@ -165,12 +170,12 @@ func TestFutureStructuralPhaseStateMatrixAndEnvelopeExclusivity(t *testing.T) {
 			allowed[state] = true
 		}
 		for _, state := range allStates {
-			v := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": "r1", "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": phase, "state": state, "error": map[string]any{"code": state}}
+			v := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": phase, "state": state, "error": map[string]any{"code": state}}
 			validateFuture(t, s[futureFailureID], v, allowed[state])
 		}
 	}
 	result := validFutureResult()
-	success := map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": "r1", "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": result}
+	success := map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": result}
 	for _, field := range []string{"error", "phase", "state"} {
 		v := cloneMap(t, success)
 		v[field] = map[string]any{}
@@ -179,12 +184,107 @@ func TestFutureStructuralPhaseStateMatrixAndEnvelopeExclusivity(t *testing.T) {
 	mismatchedSuccess := cloneMap(t, success)
 	mismatchedSuccess["outcome"] = "EMPTY"
 	validateFuture(t, s[futureSuccessID], mismatchedSuccess, false)
-	failure := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": "r1", "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "PREFLIGHT", "state": "UNSUPPORTED", "error": map[string]any{"code": "UNSUPPORTED"}}
+	failure := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "PREFLIGHT", "state": "UNSUPPORTED", "error": map[string]any{"code": "UNSUPPORTED"}}
 	mismatchedError := cloneMap(t, failure)
 	mismatchedError["error"].(map[string]any)["code"] = "TIMEOUT"
 	validateFuture(t, s[futureFailureID], mismatchedError, false)
 	failure["result"] = result
 	validateFuture(t, s[futureFailureID], failure, false)
+}
+
+func TestFutureStructuralSchemaAcceptsRelationalCounterexamplesSemanticV1Rejects(t *testing.T) {
+	schema := compileFutureStructuralSchemas(t)[futureResultID]
+	cases := map[string]func(map[string]any){
+		"root_target": func(v map[string]any) {
+			v["analysis"].(map[string]any)["root_node_id"] = "tn_ffffffffffffffffffffffffffffffff"
+		},
+		"empty_iff_calls":     func(v map[string]any) { v["state"] = "EMPTY" },
+		"node_arithmetic":     func(v map[string]any) { v["accounting"].(map[string]any)["node_observed"] = 2 },
+		"prepared_arithmetic": func(v map[string]any) { v["accounting"].(map[string]any)["prepared_attempted"] = 2 },
+		"request_reason_partition": func(v map[string]any) {
+			v["accounting"].(map[string]any)["request_omission_reasons"].(map[string]any)["TIMEOUT"] = 1
+		},
+		"one_reason_per_omission": func(v map[string]any) {
+			a := v["accounting"].(map[string]any)
+			a["node_observed"] = 2
+			a["node_omitted"] = 1
+			a["node_omission_reasons"].(map[string]any)["NODE_BOUND"] = 0
+		},
+		"opaque_membership": func(v map[string]any) {
+			v["analysis"].(map[string]any)["edges"].([]any)[0].(map[string]any)["callee_node_id"] = "tn_ffffffffffffffffffffffffffffffff"
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			v := cloneMap(t, validFutureResult())
+			mutate(v)
+			validateFuture(t, schema, v, true) // relational counterexample is intentionally schema-valid
+			if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), v); err == nil {
+				t.Fatal("semantic-v1 accepted relational counterexample")
+			}
+		})
+	}
+	t.Run("impact_directional_depth", func(t *testing.T) {
+		v := cloneMap(t, validFutureResult())
+		v["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+		v["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": v["target_node_id"], "direction": "INCOMING", "depth": 3, "nodes": []any{map[string]any{"node_id": v["target_node_id"]}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": v["target_node_id"], "callee_node_id": v["target_node_id"]}}, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
+		validateFuture(t, schema, v, true)
+		if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), v); err == nil {
+			t.Fatal("semantic-v1 accepted impact depth beyond up_depth")
+		}
+	})
+	if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), validFutureResult()); err != nil {
+		t.Fatalf("semantic-v1 rejected valid fixture: %v", err)
+	}
+}
+
+func TestFutureStructuralCorrelationIDIsHostGeneratedAndOpaque(t *testing.T) {
+	pattern := regexp.MustCompile(`^sc_[0-9a-f]{32}$`)
+	first, err := NewFutureStructuralCorrelationID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewFutureStructuralCorrelationID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !pattern.MatchString(first) || !pattern.MatchString(second) {
+		t.Fatalf("invalid correlation IDs: %q %q", first, second)
+	}
+	if first == second {
+		t.Fatal("fresh host correlation IDs collided")
+	}
+	// Envelope constructors must carry one host ID into either terminal shape.
+	successID, errorID := first, first
+	if successID != errorID {
+		t.Fatal("success/error correlation IDs differ")
+	}
+}
+
+func TestFutureStructuralReviewBlockers(t *testing.T) {
+	s := compileFutureStructuralSchemas(t)
+	for _, bad := range []string{"/Users/alice/work.go", `C:\\Users\\alice\\work.go`, "file:///private/work.go", "../private/work.go", "%2FUsers%2Falice%2Fwork.go", "sc_0123"} {
+		for _, schemaID := range []string{futureSuccessID, futureFailureID} {
+			var envelope map[string]any
+			if schemaID == futureSuccessID {
+				envelope = map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": bad, "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": validFutureResult()}
+			} else {
+				envelope = map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": bad, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "PREFLIGHT", "state": "UNSUPPORTED", "error": map[string]any{"code": "UNSUPPORTED"}}
+			}
+			validateFuture(t, s[schemaID], envelope, false)
+		}
+	}
+	result := validFutureResult()
+	for _, name := range []string{"traversal_policy", "resource_policy", "analysis_policy"} {
+		if result[name].(map[string]any)["policy_status"] != "PROVISIONAL_NONCERTIFIED" {
+			t.Fatalf("%s lacks PROVISIONAL_NONCERTIFIED policy_status", name)
+		}
+	}
+	for _, name := range []string{"node_omission_reasons", "occurrence_omission_reasons", "frontier_omission_reasons", "request_omission_reasons"} {
+		if _, ok := result["accounting"].(map[string]any)[name]; !ok {
+			t.Fatalf("accounting lacks %s", name)
+		}
+	}
 }
 
 func TestFutureStructuralContractsRemainUnregistered(t *testing.T) {

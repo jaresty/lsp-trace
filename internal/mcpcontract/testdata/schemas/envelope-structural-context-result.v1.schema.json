@@ -13,7 +13,7 @@
     "envelope_version": {"const": "1"},
     "envelope_schema_id": {"const": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v1.schema.json"},
     "tool": {"const": "lsp_trace_v1_structural_context"},
-    "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "request_id": {"type": "string", "pattern": "^sc_[0-9a-f]{32}$", "$comment": "Host-generated opaque correlation ID. Callers MUST NOT supply or derive it from paths, URIs, targets, or request content; paired success/error construction for one request MUST reuse it."},
     "outcome": {"enum": ["COMPLETE", "EMPTY"]},
     "operation_status": {"const": "SUCCEEDED"},
     "isError": {"const": false},
