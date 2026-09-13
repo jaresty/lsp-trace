@@ -3,10 +3,12 @@ package mcpcontract
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
@@ -297,6 +299,7 @@ func TestFutureStructuralSemanticValidatorRejectsAdversarialInMemoryValues(t *te
 		},
 		"oversized_session": func(i map[string]any, _ map[string]any) { i["session_id"] = strings.Repeat("s", 257) },
 		"oversized_symbol":  func(i map[string]any, _ map[string]any) { i["symbol"] = strings.Repeat("s", 1025) },
+		"invalid_utf8":      func(i map[string]any, _ map[string]any) { i["symbol"] = string([]byte{0xff}) },
 		"wrong_depth_type":  func(i map[string]any, _ map[string]any) { i["down_depth"] = 1.0 },
 		"depth_bound":       func(i map[string]any, _ map[string]any) { i["down_depth"] = 65 },
 		"resource_bound":    func(i map[string]any, _ map[string]any) { i["timeout_ms"] = 60001 },
@@ -328,6 +331,136 @@ func TestFutureStructuralSemanticValidatorRejectsAdversarialInMemoryValues(t *te
 			}
 		})
 	}
+}
+
+func TestFutureStructuralSemanticValidatorMatchesSchemaURIAndUnicodeBounds(t *testing.T) {
+	schema := compileFutureStructuralSchemas(t)[futureInputID]
+	for _, uri := range []string{"not-a-uri", "../relative.go"} {
+		t.Run("bad_uri_"+strings.NewReplacer(":", "_", "/", "_").Replace(uri), func(t *testing.T) {
+			i := validFutureInput()
+			i["uri"] = uri
+			validateFuture(t, schema, i, false)
+			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err == nil {
+				t.Fatalf("semantic-v1 accepted schema-invalid URI %q", uri)
+			}
+		})
+	}
+	for _, uri := range []string{"file:///%zz", "http://exa mple.com"} {
+		t.Run("malformed_uri", func(t *testing.T) {
+			i := validFutureInput()
+			i["uri"] = uri
+			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err == nil {
+				t.Fatalf("semantic-v1 accepted malformed URI %q", uri)
+			}
+		})
+	}
+	for _, uri := range []string{"file:///workspace/main.go", "urn:example:animal:ferret:nose", "https://example.com/a%20b"} {
+		t.Run("valid_uri", func(t *testing.T) {
+			i := validFutureInput()
+			i["uri"] = uri
+			validateFuture(t, schema, i, true)
+			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err != nil {
+				t.Fatalf("semantic-v1 rejected schema-valid URI %q: %v", uri, err)
+			}
+		})
+	}
+	for name, boundary := range map[string]struct {
+		field                string
+		validCount, badCount int
+	}{
+		"session_200_multibyte": {"session_id", 200, 257},
+		"session_max_multibyte": {"session_id", 256, 257},
+		"symbol_max_multibyte":  {"symbol", 1024, 1025},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				count int
+				valid bool
+			}{{boundary.validCount, true}, {boundary.badCount, false}} {
+				i := validFutureInput()
+				i[boundary.field] = strings.Repeat("界", tc.count)
+				validateFuture(t, schema, i, tc.valid)
+				err := ValidateFutureStructuralSemanticsV1(i, validFutureResult())
+				if (err == nil) != tc.valid {
+					t.Fatalf("%s code points=%d: got %v, valid=%v", boundary.field, tc.count, err, tc.valid)
+				}
+			}
+		})
+	}
+}
+
+func TestFutureStructuralSemanticValidatorRejectsBothPolicyKindMismatches(t *testing.T) {
+	for _, tc := range []struct{ policyID, kind string }{
+		{"transient-impact.v1", "NEIGHBORHOOD"},
+		{"transient-neighborhood.v1", "IMPACT"},
+	} {
+		t.Run(tc.policyID+"_"+tc.kind, func(t *testing.T) {
+			i, r := validFutureInput(), validFutureResult()
+			r["analysis_policy"].(map[string]any)["policy_id"] = tc.policyID
+			if tc.kind == "IMPACT" {
+				i["analysis"] = map[string]any{"kind": "IMPACT", "direction": "OUTGOING", "depth": 1}
+				r["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": r["target_node_id"], "direction": "OUTGOING", "depth": 1, "nodes": []any{map[string]any{"node_id": r["target_node_id"]}}, "edges": []any{}, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
+				r["state"] = "EMPTY"
+			}
+			if err := ValidateFutureStructuralSemanticsV1(i, r); err == nil {
+				t.Fatal("semantic-v1 accepted policy-kind mismatch")
+			}
+		})
+	}
+}
+
+func TestFutureStructuralSemanticValidatorBoundsObjectShapesBeforeTraversal(t *testing.T) {
+	oversized := func(base map[string]any, count int) map[string]any {
+		for n := 0; n < count; n++ {
+			base[fmt.Sprintf("unknown_%d", n)] = n
+		}
+		return base
+	}
+	for name, mutate := range map[string]func(map[string]any, map[string]any){
+		"top_input":       func(i, _ map[string]any) { oversized(i, 1000) },
+		"top_result":      func(_, r map[string]any) { oversized(r, 1000) },
+		"input_analysis":  func(i, _ map[string]any) { oversized(i["analysis"].(map[string]any), 1000) },
+		"result_analysis": func(_, r map[string]any) { oversized(r["analysis"].(map[string]any), 1000) },
+		"analysis_policy": func(_, r map[string]any) { oversized(r["analysis_policy"].(map[string]any), 1000) },
+		"accounting":      func(_, r map[string]any) { oversized(r["accounting"].(map[string]any), 1000) },
+		"reason_map": func(_, r map[string]any) {
+			oversized(r["accounting"].(map[string]any)["node_omission_reasons"].(map[string]any), 1000)
+		},
+		"node": func(_, r map[string]any) {
+			oversized(r["analysis"].(map[string]any)["nodes"].([]any)[0].(map[string]any), 1000)
+		},
+		"edge": func(_, r map[string]any) {
+			oversized(r["analysis"].(map[string]any)["edges"].([]any)[0].(map[string]any), 1000)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			i, r := validFutureInput(), validFutureResult()
+			mutate(i, r)
+			if err := ValidateFutureStructuralSemanticsV1(i, r); err != errFutureShape {
+				t.Fatalf("got %v, want shape sentinel", err)
+			}
+		})
+	}
+}
+
+func TestFutureStructuralSemanticValidatorRepeatedConcurrentCalls(t *testing.T) {
+	i, r := validFutureInput(), validFutureResult()
+	i["uri"] = "not-a-uri"
+	const workers, calls = 16, 100
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for worker := 0; worker < workers; worker++ {
+		go func() {
+			defer wg.Done()
+			for call := 0; call < calls; call++ {
+				if err := ValidateFutureStructuralSemanticsV1(i, r); err == nil {
+					t.Errorf("call %d accepted malformed URI", call)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestFutureStructuralSemanticValidatorRejectsDuplicateImpactSets(t *testing.T) {

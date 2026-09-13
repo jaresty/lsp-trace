@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"regexp"
+	"unicode/utf8"
 )
 
 const (
@@ -171,8 +173,9 @@ func validateFutureInput(v map[string]any) error {
 	if _, err := uintField(v, "generation", 1, futureMaxCount); err != nil {
 		return err
 	}
-	if _, err := stringField(v, "uri", 1, math.MaxInt32, nil); err != nil {
-		return err
+	uri, err := stringField(v, "uri", 1, math.MaxInt32, nil)
+	if err != nil || !validAbsoluteURI(uri) {
+		return errFutureValue
 	}
 	_, hasSymbol := v["symbol"]
 	_, hasLine := v["line"]
@@ -270,14 +273,26 @@ func validateFutureResultHeader(v map[string]any) error {
 	if _, err := stringField(v, "graph_digest", 71, 71, regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)); err != nil {
 		return err
 	}
-	if err := validatePolicy(v, "traversal_policy", "transient-calls-traversal.v1", []bound{{"down_depth", 0, 64}, {"up_depth", 0, 64}, {"max_nodes", 1, 10000}}, false); err != nil {
+	if _, err := validatePolicy(v, "traversal_policy", "transient-calls-traversal.v1", []bound{{"down_depth", 0, 64}, {"up_depth", 0, 64}, {"max_nodes", 1, 10000}}, false); err != nil {
 		return err
 	}
-	if err := validatePolicy(v, "resource_policy", "transient-structural-resources.v1", []bound{{"timeout_ms", 1, 60000}, {"request_timeout_ms", 1, 60000}}, false); err != nil {
+	if _, err := validatePolicy(v, "resource_policy", "transient-structural-resources.v1", []bound{{"timeout_ms", 1, 60000}, {"request_timeout_ms", 1, 60000}}, false); err != nil {
 		return err
 	}
-	if err := validatePolicy(v, "analysis_policy", "", nil, true); err != nil {
+	policyID, err := validatePolicy(v, "analysis_policy", "", nil, true)
+	if err != nil {
 		return err
+	}
+	analysis, err := objectField(v, "analysis")
+	if err != nil {
+		return err
+	}
+	kind, err := enumField(analysis, "kind", "NEIGHBORHOOD", "IMPACT")
+	if err != nil {
+		return err
+	}
+	if (policyID == "transient-neighborhood.v1") != (kind == "NEIGHBORHOOD") {
+		return errFutureValue
 	}
 	return nil
 }
@@ -287,10 +302,10 @@ type bound struct {
 	min, max uint64
 }
 
-func validatePolicy(parent map[string]any, key, policyID string, bounds []bound, analysis bool) error {
+func validatePolicy(parent map[string]any, key, policyID string, bounds []bound, analysis bool) (string, error) {
 	p, err := objectField(parent, key)
 	if err != nil {
-		return err
+		return "", err
 	}
 	keys := []string{"policy_id", "policy_status", "policy_digest"}
 	if analysis {
@@ -301,34 +316,34 @@ func validatePolicy(parent map[string]any, key, policyID string, bounds []bound,
 		}
 	}
 	if !closed(p, keys...) {
-		return errFutureShape
+		return "", errFutureShape
 	}
 	id, ok := p["policy_id"].(string)
 	if !ok {
-		return errFutureValue
+		return "", errFutureValue
 	}
 	if analysis {
 		if id != "transient-neighborhood.v1" && id != "transient-impact.v1" {
-			return errFutureValue
+			return "", errFutureValue
 		}
 		if p["policy_version"] != "1" {
-			return errFutureValue
+			return "", errFutureValue
 		}
 	} else if id != policyID {
-		return errFutureValue
+		return "", errFutureValue
 	}
 	if p["policy_status"] != "PROVISIONAL_NONCERTIFIED" {
-		return errFutureValue
+		return "", errFutureValue
 	}
 	if _, err := stringField(p, "policy_digest", 71, 71, regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)); err != nil {
-		return err
+		return "", err
 	}
 	for _, b := range bounds {
 		if _, err := uintField(p, b.key, b.min, b.max); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	return id, nil
 }
 
 func validateFutureAccounting(a map[string]any) error {
@@ -444,7 +459,7 @@ func validateReferenceArray(parent map[string]any, key string, max int, pattern 
 	return nil
 }
 func closed(v map[string]any, keys ...string) bool {
-	return len(v) == len(keys) && required(v, keys...)
+	return v != nil && len(v) == len(keys) && required(v, keys...)
 }
 func required(v map[string]any, keys ...string) bool {
 	if v == nil {
@@ -458,7 +473,7 @@ func required(v map[string]any, keys ...string) bool {
 	return true
 }
 func allowed(v map[string]any, keys ...string) bool {
-	if v == nil {
+	if v == nil || len(v) > len(keys) {
 		return false
 	}
 	set := make(map[string]struct{}, len(keys))
@@ -500,10 +515,35 @@ func stringField(v map[string]any, key string, min, max int, pattern *regexp.Reg
 		return "", errFutureShape
 	}
 	s, ok := raw.(string)
-	if !ok || len(s) < min || len(s) > max || (pattern != nil && !pattern.MatchString(s)) {
+	if !ok {
+		return "", errFutureValue
+	}
+	count, withinMax := boundedRuneCount(s, max)
+	if !withinMax || count < min || (pattern != nil && !pattern.MatchString(s)) {
 		return "", errFutureValue
 	}
 	return s, nil
+}
+
+func boundedRuneCount(s string, max int) (int, bool) {
+	count := 0
+	for len(s) > 0 {
+		if count == max {
+			return count, false
+		}
+		r, size := utf8.DecodeRuneInString(s)
+		if r == utf8.RuneError && size == 1 {
+			return count, false
+		}
+		s = s[size:]
+		count++
+	}
+	return count, true
+}
+
+func validAbsoluteURI(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && u.IsAbs()
 }
 func enumField(v map[string]any, key string, allowed ...string) (string, error) {
 	s, err := stringField(v, key, 1, 128, nil)
