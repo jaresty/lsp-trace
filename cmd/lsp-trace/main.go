@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -114,13 +116,8 @@ const usageText = `usage:
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
   lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...)
-  lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --at PATH:LINE:COLUMN
-  lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH | --at PATH:LINE:COLUMN... | --seed-file PATH) --down-depth N --up-depth N
-  lsp-trace slice --graph-provenance --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN | --from-file PATH --symbol NAME)
-  lsp-trace slice --production-v5 --workspace PATH --server COMMAND (--seed-manifest PATH | --from-file PATH... [--include PATTERN...] [--exclude PATTERN...] | --seed-file PATH...)  # seed-manifest is legacy; discovery alone retains canonical lsp-trace.seeds.v2 custody in V5
-  lsp-trace incoming --production-v5 --workspace PATH --server COMMAND --seed-manifest PATH
-  lsp-trace slice --production-v5 --output GRAPH_SELECTOR --group-by leiden --community-seed N --pagerank-top-k N --hub-top-k N ...  # publishes graph separately; stdout is grouped text
-  lsp-trace slice|incoming --acquisition-version v2|v3 --workspace PATH --server COMMAND --seed-manifest PATH  # DEPRECATED producer; migrate new production to Graph Provenance V5
+  lsp-trace advanced  # specialist and administrative operations
+  lsp-trace legacy    # compatibility commands and migration guidance
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
   lsp-trace render SELECTOR_OR_ARTIFACT [--format summary|tree|mermaid] [--detail compact|full]
   lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]
@@ -179,6 +176,67 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
+	clean, machine, machineErr := extractMachineMode(args)
+	legacy, isLegacy := legacyCLI{}, false
+	if len(clean) > 0 {
+		legacy, isLegacy = legacyOperation(clean[0], clean[1:])
+	}
+	help := len(clean) > 1 && (clean[1] == "--help" || clean[1] == "-h")
+	if !isLegacy || help {
+		if machineErr != nil {
+			fmt.Fprintln(os.Stderr, machineErr)
+			return 1
+		}
+		return runCore(clean)
+	}
+	if !machine {
+		writeLegacyWarning(os.Stderr, legacy, false)
+		if machineErr != nil {
+			fmt.Fprintln(os.Stderr, machineErr)
+			return 1
+		}
+		return runCore(clean)
+	}
+	writeLegacyWarning(os.Stderr, legacy, true)
+	if machineErr != nil {
+		writeMachineInvocationError(os.Stderr, legacy)
+		return 1
+	}
+	code, _ := captureProcessStderr(func() int { return runCore(clean) })
+	if code != 0 {
+		writeMachineInvocationError(os.Stderr, legacy)
+	}
+	return code
+}
+
+func captureProcessStderr(fn func() int) (int, string) {
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		return fn(), ""
+	}
+	os.Stderr = w
+	var captured bytes.Buffer
+	var drained sync.WaitGroup
+	drained.Add(1)
+	go func() { defer drained.Done(); _, _ = captured.ReadFrom(r) }()
+	code := fn()
+	_ = w.Close()
+	os.Stderr = old
+	drained.Wait()
+	_ = r.Close()
+	return code, captured.String()
+}
+
+func runCore(args []string) int {
+	if len(args) == 1 && args[0] == "advanced" {
+		fmt.Fprintln(os.Stdout, "advanced operations: program-c, aggregate-communities, render, filter, export-retained-calls, bounded-retained-analysis, bounded-retained-metrics, bounded-retained-ranking, custody, execute, provider, schema, validate")
+		return 0
+	}
+	if len(args) == 1 && args[0] == "legacy" {
+		fmt.Fprintln(os.Stdout, "legacy compatibility operations: slice, incoming\nreplacement status: trace AVAILABLE for exact targets; census and context FUTURE/PROPOSED\nsee docs/cli-migration-diagnostics.md")
+		return 0
+	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
 		fmt.Fprintln(os.Stdout, usageText)
 		return 0
@@ -284,6 +342,9 @@ func run(args []string) int {
 	}
 	cfg, err := parse(args[1:])
 	if err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -554,6 +615,12 @@ func parse(args []string) (config, error) {
 	var profiles profileFlags
 	fs := flag.NewFlagSet("incoming", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			fs.SetOutput(os.Stdout)
+			break
+		}
+	}
 	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
 	fs.StringVar(&profiles.ConfigPath, "config", "", "profile config path (replaces default discovery)")
 	fs.StringVar(&profiles.Name, "profile", "", "named server profile")

@@ -147,15 +147,20 @@ func TestProductionV5BuiltProcessExactEquivalence(t *testing.T) {
 		run := func(args []string) []byte {
 			cmd := exec.Command(cli, args...)
 			cmd.Env = append(os.Environ(), "LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL=hierarchical")
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: %v: %s", mode, err, out)
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: %v: %s", mode, err, stderr.Bytes())
 			}
+			if strings.Count(stderr.String(), "warning: "+mode+" is deprecated; migrate to trace") != 1 {
+				t.Fatalf("ASSERT_LEGACY_WARNING_ONCE[%s]: %q", mode, stderr.String())
+			}
+			out := stdout.Bytes()
 			var envelope graphprovenance.EvidenceV5
 			if decodeErr := json.Unmarshal(out, &envelope); decodeErr != nil || envelope.SeedSpec != nil {
 				t.Fatalf("ASSERT_LEGACY_SEED_MANIFEST_HAS_NO_RETAINED_SEED_SPEC[%s]: decode=%v seed=%v", mode, decodeErr, envelope.SeedSpec)
 			}
-			return out
+			return append([]byte(nil), out...)
 		}
 		if explicit, alias := run(canonical), run(shorthand); !bytes.Equal(explicit, alias) {
 			t.Fatalf("ASSERT_PRODUCTION_V5_PROCESS_EQUIVALENCE[%s]: canonical=%d shorthand=%d", mode, len(explicit), len(alias))

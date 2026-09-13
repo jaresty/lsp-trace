@@ -24,7 +24,7 @@ import (
 func TestTopLevelHelpSucceedsOnStdout(t *testing.T) {
 	for _, arg := range []string{"--help", "-h"} {
 		stdout, stderr, code := captureRun(t, []string{arg})
-		if code != 0 || stderr != "" || !strings.Contains(stdout, "usage:\n") || !strings.Contains(stdout, "lsp-trace incoming") {
+		if code != 0 || stderr != "" || !strings.Contains(stdout, "usage:\n") || !strings.Contains(stdout, "lsp-trace trace") {
 			t.Fatalf("ASSERT_TOP_LEVEL_HELP_SUCCESS: arg=%s code=%d stdout=%q stderr=%q", arg, code, stdout, stderr)
 		}
 	}
@@ -244,12 +244,15 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 	}
 }
 
-func TestUsageAdvertisesIncomingAndEmbeddedSkill(t *testing.T) {
+func TestUsageHidesLegacyAndAdvertisesEmbeddedSkill(t *testing.T) {
 	if strings.Contains(usageText, "lsp-trace census") {
 		t.Fatalf("ASSERT_USAGE_DOES_NOT_ADVERTISE_UNIMPLEMENTED_CENSUS: %q", usageText)
 	}
-	if !strings.Contains(usageText, "lsp-trace incoming") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds)") || !strings.Contains(usageText, "lsp-trace skill get") {
-		t.Fatalf("ASSERT_USAGE_ADVERTISES_ALL_COMMANDS: %q", usageText)
+	if strings.Contains(usageText, "lsp-trace incoming ") || strings.Contains(usageText, "lsp-trace slice ") {
+		t.Fatalf("ASSERT_USAGE_HIDES_LEGACY_ACQUISITION: %q", usageText)
+	}
+	if !strings.Contains(usageText, "lsp-trace trace") || !strings.Contains(usageText, "lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds)") || !strings.Contains(usageText, "lsp-trace skill get") {
+		t.Fatalf("ASSERT_USAGE_ADVERTISES_PRIMARY_COMMANDS: %q", usageText)
 	}
 	for _, want := range []string{
 		"target selector identifies a symbol or position",
@@ -584,7 +587,7 @@ func TestParseRejectsDuplicateServerEnvNames(t *testing.T) {
 	for _, declarations := range [][]string{{"TOKEN=one", "TOKEN=one"}, {"TOKEN=one", "TOKEN=two"}} {
 		args := append(validArgs(t.TempDir()), "--server-env", declarations[0], "--server-env", declarations[1])
 		stdout, stderr, code := captureRun(t, append([]string{"incoming"}, args...))
-		if code != 1 || stdout != "" || strings.TrimSpace(stderr) != `duplicate --server-env name "TOKEN"` {
+		if code != 1 || stdout != "" || strings.Count(stderr, "warning: incoming is deprecated; migrate to trace") != 1 || !strings.HasSuffix(strings.TrimSpace(stderr), `duplicate --server-env name "TOKEN"`) {
 			t.Fatalf("ASSERT_DUPLICATE_SERVER_ENV_PARSE_REJECTION: declarations=%v code=%d stdout=%q stderr=%q", declarations, code, stdout, stderr)
 		}
 	}
