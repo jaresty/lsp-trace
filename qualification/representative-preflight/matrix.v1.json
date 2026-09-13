@@ -1,0 +1,54 @@
+{
+  "schema_version": "lsp-trace.representative-qualification-preparation.v1",
+  "coordinate_convention": "zero-based-session",
+  "source_graph_complete": "UNKNOWN",
+  "evidence_semantics": {
+    "calls": "SERVER_REPORTED_CALL_HIERARCHY_ONLY",
+    "claim_ceiling": "No feature, architecture, runtime-execution, whole-source-completeness, or product-failure claim."
+  },
+  "platform": {
+    "goos": ["darwin", "linux", "windows"],
+    "required_tools": ["git", "go", "node", "python3"],
+    "live_execution": "NOT_RUN"
+  },
+  "applications": [
+    {
+      "id": "go-repository-fixture",
+      "language": "go",
+      "provider": {"identity": "gopls", "version": "0.23.0"},
+      "fixture": {"kind": "REPOSITORY_LOCAL", "id": "qualification/representative-preflight/fixtures/go"},
+      "prerequisites": ["provider-executable", "managed-session-ready", "exact-generation", "call-hierarchy-capability"],
+      "default_outcome": "NOT_RUN"
+    },
+    {
+      "id": "school-surveys",
+      "language": "csharp",
+      "provider": {"identity": "csharp-ls", "version": "0.27.0.0"},
+      "fixture": {"kind": "OUT_OF_BAND_PRIVATE", "id": "school-surveys-operator-supplied"},
+      "prerequisites": ["darwin-or-supported-host", "dotnet-sdk", "project-dependencies-restored", "provider-executable", "workspace-revision-supplied", "managed-session-ready", "exact-generation", "call-hierarchy-capability"],
+      "default_outcome": "NOT_RUN"
+    },
+    {
+      "id": "javascript-ember",
+      "language": "javascript",
+      "framework": "ember",
+      "provider": {"identity": "ember-glint", "version": "1.0.3"},
+      "fixture": {"kind": "OUT_OF_BAND_PRIVATE", "id": "ember-operator-supplied"},
+      "prerequisites": ["node-runtime", "project-dependencies-present", "provider-executable", "provider-declaration", "workspace-revision-supplied", "managed-session-ready", "exact-generation"],
+      "default_outcome": "NOT_RUN",
+      "claim_condition": "REQUIRED_ONLY_WHEN_JAVASCRIPT_EMBER_SUPPORT_IS_CLAIMED"
+    }
+  ],
+  "operations": [
+    {
+      "number": 33,
+      "name": "trace",
+      "exposure": "FUTURE",
+      "unexposed_outcome": "SKIPPED",
+      "exposed_outcome": "GATED_NOT_RUN",
+      "assertions": ["exact-provider-version", "exact-session-generation", "exact-workspace-revision-custody", "zero-based-session-coordinates", "CALLS-server-reported-only", "source-graph-complete-UNKNOWN", "no-feature-or-architecture-claims", "deterministic-admitted-artifact-parity"]
+    },
+    {"number": 34, "name": "census", "exposure": "FUTURE", "unexposed_outcome": "SKIPPED", "exposed_outcome": "GATED_NOT_RUN", "assertions": ["closed-disposition-accounting", "incomplete-fails-closed", "no-source-completeness-overclaim"]},
+    {"number": 35, "name": "context", "exposure": "FUTURE", "unexposed_outcome": "SKIPPED", "exposed_outcome": "GATED_NOT_RUN", "assertions": ["exact-input-identity", "bounded-output", "no-custody-upgrade", "no-feature-or-architecture-claims"]}
+  ]
+}

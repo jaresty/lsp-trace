@@ -28,6 +28,10 @@ Live MCP requests use `timeout_ms=60000` and `request_timeout_ms=60000`. CLI acq
 
 These checks can establish implementation and fixture readiness only.
 
+Run `python3 scripts/prepare-representative-qualification.py` for a deterministic JSON preparation report. Its tracked matrix pins gopls `0.23.0`, csharp-ls `0.27.0.0`, and ember-glint `1.0.3`; checks the repository-local Go fixture; and reports School Surveys and Ember fixtures as out-of-band without serializing supplied paths. `UNAVAILABLE` identifies a missing provider or application dependency, while `NOT_RUN` identifies a missing session or a live run deliberately not attempted. Neither outcome is a product failure or qualification result. The preparer never starts a provider, accesses application source, creates a receipt, or upgrades any row to `READY`.
+
+The preparation matrix reserves operation 33 for `trace` and records its exact future assertion set. Because the production full profile currently exposes 32 operations, operation 33 is `SKIPPED`; operations 34 (`census`) and 35 (`context`) are likewise `SKIPPED`. Once an operation is exposed, preparation changes only to `GATED_NOT_RUN`; a separate reviewed live qualification must satisfy its assertions.
+
 ```sh
 git diff --check
 ./scripts/check-docs.sh
