@@ -52,24 +52,44 @@ func legacyOperation(name string, args []string) (legacyCLI, bool) {
 	}
 }
 
-func extractMachineMode(args []string) (clean []string, machine, duplicate bool) {
+type machineFlagState uint8
+
+const (
+	machineFlagOK machineFlagState = iota
+	machineFlagDuplicate
+	machineFlagInvalid
+)
+
+func extractMachineMode(args []string) (clean []string, machine bool, state machineFlagState) {
 	if len(args) == 0 {
-		return args, false, false
+		return args, false, machineFlagOK
 	}
-	// --machine is a diagnostic-mode flag only in the unambiguous global
-	// position immediately after a legacy command. Once command arguments
-	// begin, every token belongs to the command FlagSet (for example,
-	// --server-arg --machine) and is preserved byte-for-byte.
-	i := 1
-	for i < len(args) && args[i] == "--machine" {
-		if machine {
-			duplicate = true
+	// Machine mode has one global grammar immediately after a legacy command:
+	// --machine and --machine=true enable it; --machine=false disables it.
+	// Scanning stops at the first other token, after which every byte belongs to
+	// the command FlagSet (notably the value in --server-arg --machine).
+	i, seen := 1, false
+	for i < len(args) {
+		arg := args[i]
+		if arg != "--machine" && !strings.HasPrefix(arg, "--machine=") {
+			break
 		}
-		machine = true
+		value := true
+		switch arg {
+		case "--machine", "--machine=true":
+		case "--machine=false":
+			value = false
+		default:
+			return append([]string{args[0]}, args[i+1:]...), machine, machineFlagInvalid
+		}
+		if seen {
+			return append([]string{args[0]}, args[i+1:]...), machine || value, machineFlagDuplicate
+		}
+		seen, machine = true, value
 		i++
 	}
 	clean = append([]string{args[0]}, args[i:]...)
-	return clean, machine, duplicate
+	return clean, machine, machineFlagOK
 }
 
 func writeCLIDiagnostic(w io.Writer, d cliDiagnostic) {

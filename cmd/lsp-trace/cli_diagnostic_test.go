@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -151,12 +152,88 @@ func TestVersionedLegacyWarningsFollowAcquisitionSyntaxValidation(t *testing.T) 
 }
 
 func TestDuplicateMachineIsOneStrictJSONLSyntaxErrorIncludingHelp(t *testing.T) {
-	for _, args := range [][]string{{"slice", "--machine", "--machine"}, {"incoming", "--machine", "--machine", "--help"}} {
+	for _, args := range [][]string{{"slice", "--machine", "--machine"}, {"incoming", "--machine=true", "--machine", "--help"}, {"slice", "--machine=false", "--machine=true"}} {
 		stdout, stderr, code := captureRun(t, args)
 		events, err := decodeMachineDiagnostics(stderr)
 		if code != 1 || stdout != "" || err != nil || len(events) != 1 || events[0].Code != cliCodeInvocationError || events[0].Severity != "error" {
 			t.Fatalf("ASSERT_DUPLICATE_MACHINE_STRICT: args=%v code=%d stdout=%q stderr=%q events=%+v err=%v", args, code, stdout, stderr, events, err)
 		}
+	}
+}
+
+func TestLeadingMachineBooleanGrammar(t *testing.T) {
+	workspace := t.TempDir()
+	base := []string{"incoming", "--workspace", workspace, "--server", "missing", "--at", "main.go:1:1"}
+	for _, flag := range []string{"--machine", "--machine=true"} {
+		args := append([]string{base[0], flag}, base[1:]...)
+		_, stderr, code := captureRun(t, args)
+		events, err := decodeMachineDiagnostics(stderr)
+		if code == 0 || err != nil || len(events) != 2 || events[0].Code != cliCodeLegacyOperation || events[1].Code != cliCodeInvocationError {
+			t.Fatalf("ASSERT_MACHINE_TRUE_GRAMMAR: args=%v code=%d stderr=%q events=%+v err=%v", args, code, stderr, events, err)
+		}
+	}
+	args := append([]string{base[0], "--machine=false"}, base[1:]...)
+	_, stderr, code := captureRun(t, args)
+	if code == 0 || strings.Count(stderr, "warning: incoming is deprecated") != 1 || strings.Contains(stderr, cliDiagnosticVersion) {
+		t.Fatalf("ASSERT_MACHINE_FALSE_GRAMMAR: code=%d stderr=%q", code, stderr)
+	}
+	for _, invalid := range []string{"--machine=", "--machine=yes", "--machine=TRUE"} {
+		args := append([]string{base[0], invalid}, base[1:]...)
+		_, stderr, code := captureRun(t, args)
+		if code != 1 || stderr != "invalid --machine boolean value\n" {
+			t.Fatalf("ASSERT_MACHINE_INVALID_CLOSED: args=%v code=%d stderr=%q", args, code, stderr)
+		}
+	}
+	_, stderr, code = captureRun(t, []string{"incoming", "--machine=true", "--machine=yes"})
+	events, err := decodeMachineDiagnostics(stderr)
+	if code != 1 || err != nil || len(events) != 1 || events[0].Code != cliCodeInvocationError {
+		t.Fatalf("ASSERT_MACHINE_INVALID_RETAINS_TRUE_INTENT: code=%d stderr=%q events=%+v err=%v", code, stderr, events, err)
+	}
+	_, stderr, code = captureRun(t, []string{"incoming", "--machine=false", "--machine=false"})
+	if code != 1 || stderr != "duplicate --machine\n" {
+		t.Fatalf("ASSERT_MACHINE_FALSE_DUPLICATE_HUMAN: code=%d stderr=%q", code, stderr)
+	}
+}
+
+func TestMachineNonLeadingAndServerArgumentArePreserved(t *testing.T) {
+	for _, args := range [][]string{
+		{"incoming", "positional", "--machine"},
+		{"incoming", "--workspace", t.TempDir(), "--machine"},
+		{"incoming", "--workspace", t.TempDir(), "--server", "missing", "--server-arg", "--machine", "--at", "main.go:1:1"},
+		{"incoming", "--workspace", t.TempDir(), "--server", "missing", "--server-arg=--machine", "--at", "main.go:1:1"},
+	} {
+		clean, machine, state := extractMachineMode(args)
+		if machine || state != machineFlagOK || !slices.Equal(clean, args) {
+			t.Fatalf("ASSERT_MACHINE_NOT_CONSUMED: args=%v clean=%v machine=%v state=%v", args, clean, machine, state)
+		}
+	}
+}
+
+func TestIncomingV1SyntaxParseDoesNotReadProfileOrSeedFiles(t *testing.T) {
+	workspace := t.TempDir()
+	missingConfig := filepath.Join(workspace, "missing.toml")
+	missingSeeds := filepath.Join(workspace, "missing.json")
+	args := []string{"--workspace", workspace, "--config", missingConfig, "--profile", "test", "--seed-file", missingSeeds}
+	parsed, err := parseIncomingSyntax(args)
+	if err != nil {
+		t.Fatalf("ASSERT_V1_SYNTAX_SIDE_EFFECT_FREE: %v", err)
+	}
+	args[1] = "mutated-after-syntax"
+	if parsed.config.workspace != workspace {
+		t.Fatalf("ASSERT_V1_AUTHORITATIVE_PARSE_REUSED: got=%q want=%q", parsed.config.workspace, workspace)
+	}
+	if _, err := finishIncomingParse(parsed); err == nil || !strings.Contains(err.Error(), "read config") {
+		t.Fatalf("ASSERT_V1_RUNTIME_FILE_VALIDATION_AFTER_SYNTAX: %v", err)
+	}
+}
+
+func TestIncomingV1FileValidationOccursAfterWarning(t *testing.T) {
+	workspace := t.TempDir()
+	missingConfig := filepath.Join(workspace, "missing.toml")
+	args := []string{"incoming", "--workspace", workspace, "--config", missingConfig, "--profile", "test", "--seed-file", filepath.Join(workspace, "missing.json")}
+	_, stderr, code := captureRun(t, args)
+	if code != 1 || !strings.HasPrefix(stderr, "warning: incoming is deprecated;") || !strings.Contains(stderr, "read config") {
+		t.Fatalf("ASSERT_V1_FILE_ERROR_AFTER_WARNING: code=%d stderr=%q", code, stderr)
 	}
 }
 

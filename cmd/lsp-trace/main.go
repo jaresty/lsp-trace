@@ -178,7 +178,7 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
-	clean, machine, duplicateMachine := extractMachineMode(args)
+	clean, machine, machineState := extractMachineMode(args)
 	legacy, isLegacy := legacyCLI{}, false
 	if len(clean) > 0 {
 		legacy, isLegacy = legacyOperation(clean[0], clean[1:])
@@ -186,15 +186,21 @@ func run(args []string) int {
 	if !isLegacy {
 		return runCore(args)
 	}
-	if duplicateMachine {
-		writeMachineInvocationError(os.Stderr, legacy)
+	if machineState != machineFlagOK {
+		if machine {
+			writeMachineInvocationError(os.Stderr, legacy)
+		} else if machineState == machineFlagDuplicate {
+			fmt.Fprintln(os.Stderr, "duplicate --machine")
+		} else {
+			fmt.Fprintln(os.Stderr, "invalid --machine boolean value")
+		}
 		return 1
 	}
 	help := len(clean) > 1 && (clean[1] == "--help" || clean[1] == "-h")
 	if help {
 		return runCore(clean)
 	}
-	valid, validationCode := validateLegacyInvocation(clean)
+	validation, valid, validationCode := validateLegacyInvocation(clean)
 	if !valid {
 		if machine {
 			writeMachineInvocationError(os.Stderr, legacy)
@@ -204,19 +210,27 @@ func run(args []string) int {
 	}
 	writeLegacyWarning(os.Stderr, legacy, machine)
 	if !machine {
-		return runCore(clean)
+		return runCorePrepared(clean, validation)
 	}
-	code, _ := captureProcessStderr(func() int { return runCore(clean) })
+	code, _ := captureProcessStderr(func() int { return runCorePrepared(clean, validation) })
 	if code != 0 {
 		writeMachineInvocationError(os.Stderr, legacy)
 	}
 	return code
 }
 
-func validateLegacyInvocation(args []string) (bool, int) {
+type legacyInvocation struct {
+	args               []string
+	acquisitionVersion string
+	acquisitionArgs    []string
+	incoming           *incomingSyntax
+}
+
+func validateLegacyInvocation(args []string) (*legacyInvocation, bool, int) {
 	if len(args) == 0 {
-		return false, 1
+		return nil, false, 1
 	}
+	validation := &legacyInvocation{}
 	var code int
 	code, _ = captureProcessStderr(func() int {
 		version, rest, err := acquisitionVersion(args[1:])
@@ -227,22 +241,26 @@ func validateLegacyInvocation(args []string) (bool, int) {
 		// same parser and argument-only preflight used by execution, stopping
 		// before warnings, filesystem access, or runtime dispatch.
 		if version == "v2" || version == "v3" {
+			validation.args = append([]string(nil), args...)
+			validation.acquisitionVersion = version
+			validation.acquisitionArgs = append([]string(nil), rest...)
 			return validateAcquisitionVersion(args[0], version, rest)
 		}
 		if version == "v1" {
 			args = append([]string{args[0]}, rest...)
 		}
+		validation.args = append([]string(nil), args...)
 		if args[0] == "slice" {
 			_, err = parseSlice(args[1:])
 		} else {
-			_, err = parse(args[1:])
+			validation.incoming, err = parseIncomingSyntax(args[1:])
 		}
 		if err != nil {
 			return 1
 		}
 		return 0
 	})
-	return code == 0, code
+	return validation, code == 0, code
 }
 
 func captureProcessStderr(fn func() int) (int, string) {
@@ -265,6 +283,10 @@ func captureProcessStderr(fn func() int) (int, string) {
 }
 
 func runCore(args []string) int {
+	return runCorePrepared(args, nil)
+}
+
+func runCorePrepared(args []string, validation *legacyInvocation) int {
 	if len(args) == 1 && args[0] == "advanced" {
 		fmt.Fprintln(os.Stdout, "advanced operations: program-c, aggregate-communities, render, filter, export-retained-calls, bounded-retained-analysis, bounded-retained-metrics, bounded-retained-ranking, custody, execute, provider, schema, validate")
 		return 0
@@ -296,7 +318,12 @@ func runCore(args []string) int {
 	if len(args) > 0 && args[0] == "aggregate-communities" {
 		return runAggregateCommunities(args[1:], os.Stdout, os.Stderr)
 	}
-	if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
+	if validation != nil {
+		args = validation.args
+		if validation.acquisitionVersion != "" {
+			return runAcquisitionVersion(args[0], validation.acquisitionVersion, validation.acquisitionArgs, os.Stdout, os.Stderr)
+		}
+	} else if len(args) > 0 && (args[0] == "slice" || args[0] == "incoming") {
 		version, rest, err := acquisitionVersion(args[1:])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -376,7 +403,13 @@ func runCore(args []string) int {
 		fmt.Fprintln(os.Stderr, usageText)
 		return 1
 	}
-	cfg, err := parse(args[1:])
+	var cfg config
+	var err error
+	if validation != nil && validation.incoming != nil {
+		cfg, err = finishIncomingParse(validation.incoming)
+	} else {
+		cfg, err = parse(args[1:])
+	}
 	if err != nil {
 		if err == flag.ErrHelp {
 			return 0
@@ -646,7 +679,21 @@ func createSkillStaging(root *os.Root, final string) (string, error) {
 	return "", errors.New("could not create unique skill staging directory")
 }
 
+type incomingSyntax struct {
+	config   config
+	profiles profileFlags
+	explicit cliServerFields
+}
+
 func parse(args []string) (config, error) {
+	parsed, err := parseIncomingSyntax(args)
+	if err != nil {
+		return config{}, err
+	}
+	return finishIncomingParse(parsed)
+}
+
+func parseIncomingSyntax(args []string) (*incomingSyntax, error) {
 	var c config
 	var profiles profileFlags
 	fs := flag.NewFlagSet("incoming", flag.ContinueOnError)
@@ -686,18 +733,51 @@ func parse(args []string) (config, error) {
 	fs.StringVar(&c.provenanceTimestamp, "provenance-timestamp", "", "caller-supplied timestamp")
 	fs.StringVar(&c.provenanceToolVersion, "provenance-tool-version", "", "caller-supplied lsp-trace version")
 	if err := fs.Parse(args); err != nil {
-		return c, err
+		return nil, err
 	}
 	if fs.NArg() != 0 {
-		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+		return nil, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if profiles.ConfigPath != "" && profiles.Name == "" {
-		return c, errors.New("--config requires --profile")
+		return nil, errors.New("--config requires --profile")
 	}
 	if c.workspace == "" {
-		return c, errors.New("--workspace and --server are required")
+		return nil, errors.New("--workspace and --server are required")
 	}
-	if err := applyIncomingProfile(&c, profiles, explicitServerFields(fs)); err != nil {
+	if c.maxDepth < 0 || c.maxNodes < 0 || c.timeout < 0 || c.requestTimeout < 0 {
+		return nil, errors.New("limits and timeouts must be non-negative")
+	}
+	if c.requestTimeout == 0 {
+		return nil, errors.New("--request-timeout must be greater than zero")
+	}
+	if c.schema != "v1" && c.schema != "v2" && c.schema != "v3" {
+		return nil, errors.New("--schema must be v1, v2, or v3")
+	}
+	if c.concurrency != 1 {
+		return nil, errors.New("--concurrency must be 1 in the sequential MVP")
+	}
+	switch c.logLevel {
+	case "error", "warn", "info", "debug":
+	default:
+		return nil, fmt.Errorf("invalid --log-level %q: want error, warn, info, or debug", c.logLevel)
+	}
+	if err := validateIncomingEnvironment(c.env); err != nil {
+		return nil, err
+	}
+	if c.seedFile == "" && len(c.ats) == 0 {
+		return nil, errors.New("at least one seed is required via --at or --seed-file")
+	}
+	for i, at := range c.ats {
+		if _, _, _, err := parseAt(at); err != nil {
+			return nil, fmt.Errorf("seed %q: %w", fmt.Sprintf("seed-%d", i+1), err)
+		}
+	}
+	return &incomingSyntax{config: c, profiles: profiles, explicit: explicitServerFields(fs)}, nil
+}
+
+func finishIncomingParse(parsed *incomingSyntax) (config, error) {
+	c := parsed.config
+	if err := applyIncomingProfile(&c, parsed.profiles, parsed.explicit); err != nil {
 		return c, err
 	}
 	if c.command == "" {
@@ -706,35 +786,25 @@ func parse(args []string) (config, error) {
 	if err := loadSeeds(&c); err != nil {
 		return c, err
 	}
-	if c.maxDepth < 0 || c.maxNodes < 0 || c.timeout < 0 || c.requestTimeout < 0 {
-		return c, errors.New("limits and timeouts must be non-negative")
+	if err := validateIncomingEnvironment(c.env); err != nil {
+		return c, err
 	}
-	if c.requestTimeout == 0 {
-		return c, errors.New("--request-timeout must be greater than zero")
-	}
-	if c.schema != "v1" && c.schema != "v2" && c.schema != "v3" {
-		return c, errors.New("--schema must be v1, v2, or v3")
-	}
-	if c.concurrency != 1 {
-		return c, errors.New("--concurrency must be 1 in the sequential MVP")
-	}
-	switch c.logLevel {
-	case "error", "warn", "info", "debug":
-	default:
-		return c, fmt.Errorf("invalid --log-level %q: want error, warn, info, or debug", c.logLevel)
-	}
-	environmentNames := make(map[string]struct{}, len(c.env))
-	for _, e := range c.env {
+	return c, nil
+}
+
+func validateIncomingEnvironment(environment []string) error {
+	environmentNames := make(map[string]struct{}, len(environment))
+	for _, e := range environment {
 		k, _, ok := strings.Cut(e, "=")
 		if !ok || k == "" {
-			return c, fmt.Errorf("invalid --server-env %q", e)
+			return fmt.Errorf("invalid --server-env %q", e)
 		}
 		if _, duplicate := environmentNames[k]; duplicate {
-			return c, fmt.Errorf("duplicate --server-env name %q", k)
+			return fmt.Errorf("duplicate --server-env name %q", k)
 		}
 		environmentNames[k] = struct{}{}
 	}
-	return c, nil
+	return nil
 }
 
 func loadSeeds(c *config) error {
