@@ -29,13 +29,15 @@ import (
 )
 
 type parityMatrixProcess struct {
-	in      *io.PipeReader
-	stdin   *io.PipeWriter
-	out     *io.PipeWriter
-	stdout  *io.PipeReader
-	uri     string
-	mu      sync.Mutex
-	methods []string
+	in            *io.PipeReader
+	stdin         *io.PipeWriter
+	out           *io.PipeWriter
+	stdout        *io.PipeReader
+	uri           string
+	mu            sync.Mutex
+	methods       []string
+	teardownCalls int
+	closeCalls    int
 }
 
 func newParityMatrixProcess(uri string) *parityMatrixProcess {
@@ -90,27 +92,35 @@ func (p *parityMatrixProcess) items() json.RawMessage {
 func (p *parityMatrixProcess) Stdin() io.WriteCloser { return p.stdin }
 func (p *parityMatrixProcess) Stdout() io.ReadCloser { return p.stdout }
 func (p *parityMatrixProcess) Teardown(context.Context) managedprocess.TeardownObservation {
+	p.mu.Lock()
+	p.teardownCalls++
+	p.mu.Unlock()
 	_ = p.stdin.Close()
 	_ = p.in.Close()
 	_ = p.out.Close()
 	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
 }
 func (p *parityMatrixProcess) Close() managedprocess.ResourceObservation {
+	p.mu.Lock()
+	p.closeCalls++
+	p.mu.Unlock()
 	_ = p.stdout.Close()
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
 }
-func (p *parityMatrixProcess) observedMethods() []string {
+func (p *parityMatrixProcess) observations() ([]string, int, int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return append([]string(nil), p.methods...)
+	return append([]string(nil), p.methods...), p.teardownCalls, p.closeCalls
 }
 
 type parityMatrixStarter struct {
 	uri     string
 	process *parityMatrixProcess
+	starts  int
 }
 
 func (s *parityMatrixStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	s.starts++
 	s.process = newParityMatrixProcess(s.uri)
 	return s.process, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
@@ -138,6 +148,9 @@ type parityMatrixObservation struct {
 	executorCalls    int
 	acquisitionCalls int
 	methods          []string
+	starts           int
+	teardownCalls    int
+	closeCalls       int
 	publishedCount   int
 	publishedBytes   []byte
 }
@@ -177,9 +190,34 @@ func parityMatrixV5(t *testing.T, incomplete, truncated bool) []byte {
 	return raw
 }
 
+func parityMatrixEmptyV5(t *testing.T) []byte {
+	t.Helper()
+	result := graph.Result{
+		SchemaVersion: graph.SchemaVersionV5,
+		Nodes:         []graph.Node{},
+		Targets:       []string{},
+		Invocation: graph.Invocation{
+			Target:     graph.Target{URI: "file:///fixture/code.go", Line: 0, Column: 0},
+			Server:     graph.ServerInvocation{Command: "parity-matrix-empty"},
+			Provenance: graph.InvocationProvenance{InvocationID: "parity-matrix-empty", SourceRevision: graph.Unknown, ServerVersion: "fixture@1"},
+		},
+		Summary: graph.Summary{},
+	}
+	native, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := graphprovenance.CaptureV5(native, "fixture-session-empty", 1, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, &graphprovenance.EvidenceV2{SchemaVersion: graphprovenance.VersionV2, Policy: graphprovenance.PolicyV2, WorkspaceURI: "file:///fixture", AnalyzedVersion: graphprovenance.Unverified, DependencyCompleteness: "UNKNOWN_INCOMPLETE", Supplies: []graphprovenance.SupplyReceiptV2{}, Captures: []graphprovenance.Receipt{}, Bindings: []graphprovenance.BindingV2{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
 func parityMatrixCases() []parityMatrixCase {
 	valid := func(t *testing.T) []byte { return parityMatrixV5(t, false, false) }
 	return []parityMatrixCase{
+		{name: "successful-empty", artifact: parityMatrixEmptyV5, wantStatus: "SUCCEEDED", wantOutcome: "COMPLETE"},
 		{name: "output-selector-publication-success", artifact: valid, selector: "trace.json", wantStatus: "SUCCEEDED", wantOutcome: "COMPLETE", wantPublishedCount: 4, wantPublished: true},
 		{name: "selector-unsafe", artifact: valid, selector: "../escape.json", wantStatus: "FAILED", wantOutcome: "DOMAIN_ERROR", wantCode: "OUTPUT_SELECTOR_UNSAFE", wantDiagnostic: "output selector is unsafe", wantError: true},
 		{name: "selector-conflict", artifact: valid, selector: "occupied.json", occupySelector: true, wantStatus: "FAILED", wantOutcome: "PUBLICATION_ERROR", wantCode: "PUBLICATION_FAILED", wantError: true},
@@ -275,6 +313,7 @@ func runParityMatrixRoute(t *testing.T, tc parityMatrixCase, gateway bool) parit
 		t.Fatalf("ASSERT_TRACE_PARITY_MATRIX_DELEGATED_JSON: %v: %q", err, delegated)
 	}
 	after := parityMatrixPublishedFiles(t, rootPath)
+	methods, teardownCalls, closeCalls := starter.process.observations()
 	published := []byte(nil)
 	if tc.wantPublished {
 		published, err = os.ReadFile(filepath.Join(rootPath, tc.selector))
@@ -282,7 +321,7 @@ func runParityMatrixRoute(t *testing.T, tc parityMatrixCase, gateway bool) parit
 			t.Fatal(err)
 		}
 	}
-	return parityMatrixObservation{delegated: delegated, status: env["operation_status"], outcome: env["outcome"], diagnostics: env["diagnostics"], isError: env["isError"], executorCalls: executor.calls, acquisitionCalls: acquisition.calls, methods: starter.process.observedMethods(), publishedCount: len(after) - len(before), publishedBytes: published}
+	return parityMatrixObservation{delegated: delegated, status: env["operation_status"], outcome: env["outcome"], diagnostics: env["diagnostics"], isError: env["isError"], executorCalls: executor.calls, acquisitionCalls: acquisition.calls, methods: methods, starts: starter.starts, teardownCalls: teardownCalls, closeCalls: closeCalls, publishedCount: len(after) - len(before), publishedBytes: published}
 }
 
 func parityMatrixPublishedFiles(t *testing.T, root string) []string {
@@ -305,7 +344,7 @@ func parityMatrixPublishedFiles(t *testing.T, root string) []string {
 
 func TestOperation33RealRegistryGatewayParityMatrix(t *testing.T) {
 	cases := parityMatrixCases()
-	wantNames := []string{"legal-incomplete", "legal-truncated", "malformed-v5", "output-selector-publication-success", "publication-failure", "selector-conflict", "selector-unsafe"}
+	wantNames := []string{"legal-incomplete", "legal-truncated", "malformed-v5", "output-selector-publication-success", "publication-failure", "selector-conflict", "selector-unsafe", "successful-empty"}
 	gotNames := make([]string, len(cases))
 	for i := range cases {
 		gotNames[i] = cases[i].name
@@ -343,6 +382,9 @@ func TestOperation33RealRegistryGatewayParityMatrix(t *testing.T) {
 				}
 				if got.executorCalls != 1 || got.acquisitionCalls != 1 {
 					t.Fatalf("ASSERT_OPERATION33_PARITY_INVOCATION_COUNT_%s: executor=%d acquisition=%d", route, got.executorCalls, got.acquisitionCalls)
+				}
+				if got.starts != 1 || got.teardownCalls != 0 || got.closeCalls != 0 {
+					t.Fatalf("ASSERT_OPERATION33_PARITY_LIFECYCLE_SIDE_EFFECTS_%s: starts=%d teardown=%d close=%d", route, got.starts, got.teardownCalls, got.closeCalls)
 				}
 				wantMethods := []string{"initialize", "initialized", "textDocument/didOpen"}
 				if !reflect.DeepEqual(got.methods, wantMethods) {
