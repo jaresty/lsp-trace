@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"lsp-trace/internal/publication"
@@ -101,11 +102,14 @@ func Redact(m Manifest) (Manifest, error) {
 }
 
 type PublicationReceipt struct {
-	Selector       string `json:"selector"`
-	Disclosure     string `json:"disclosure"`
-	ArtifactSHA256 string `json:"artifact_sha256"`
-	ByteLength     uint64 `json:"byte_length"`
-	Mechanism      string `json:"mechanism"`
+	Selector         string `json:"selector"`
+	Disclosure       string `json:"disclosure"`
+	ArtifactSHA256   string `json:"artifact_sha256"`
+	ByteLength       uint64 `json:"byte_length"`
+	Mechanism        string `json:"mechanism"`
+	NamespaceAtomic  bool   `json:"namespace_atomic,omitempty"`
+	CrashDurability  string `json:"crash_durability,omitempty"`
+	ConstituentCount int    `json:"constituent_count,omitempty"`
 }
 
 type PublicationResult struct {
@@ -121,6 +125,89 @@ type Publisher struct {
 
 func NewPublisher(root *publication.Root) *Publisher {
 	return &Publisher{root: root, publisher: publication.NewPublisher()}
+}
+
+// PublishCaptureSet is the all-or-nothing private publication primitive. The
+// supplied byte strings may be in any order; each must be exactly admitted and
+// must bijectively match manifest.Constituents before staging begins.
+func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority ExactBytesAuthority) PublicationResult {
+	manifestRaw, err := EncodeCanonical(m)
+	if err != nil || m.Disclosure != "PRIVATE" {
+		if err == nil {
+			err = errors.New("only private capture sets may be published")
+		}
+		return PublicationResult{Err: err}
+	}
+	if len(exactV5) != len(m.Constituents) {
+		return PublicationResult{Err: errors.New("constituent byte cardinality mismatch")}
+	}
+	bySelector := make(map[string][]byte, len(exactV5))
+	for _, raw := range exactV5 {
+		c, admitErr := authority.Constituent(raw)
+		if admitErr != nil {
+			return PublicationResult{Err: admitErr}
+		}
+		if _, duplicate := bySelector[c.ImmutableSelector]; duplicate {
+			return PublicationResult{Err: errors.New("duplicate constituent bytes")}
+		}
+		bySelector[c.ImmutableSelector] = append([]byte(nil), raw...)
+	}
+	files := make([]publication.GenerationFile, 0, len(m.Constituents)+1)
+	files = append(files, publication.GenerationFile{Name: "manifest.json", Bytes: manifestRaw})
+	for _, c := range m.Constituents {
+		raw, ok := bySelector[c.ImmutableSelector]
+		if !ok {
+			return PublicationResult{Err: errors.New("manifest constituent association mismatch")}
+		}
+		if verifyErr := authority.VerifyConstituent(c, raw); verifyErr != nil {
+			return PublicationResult{Err: verifyErr}
+		}
+		files = append(files, publication.GenerationFile{Name: constituentFileName(c), Bytes: raw})
+	}
+	generationSelector := strings.TrimSuffix(CaptureSetPublicationSelector(m), "/manifest.json")
+	receipt, err := publication.PublishGeneration(publication.GenerationRequest{Root: p.root, FinalSelector: generationSelector, Files: files})
+	if err != nil {
+		code := publication.CodePublicationFailed
+		if errors.Is(err, os.ErrExist) {
+			code = publication.CodeTargetExists
+		}
+		return PublicationResult{Code: code, Err: err}
+	}
+	sum := sha256.Sum256(manifestRaw)
+	return PublicationResult{Receipt: &PublicationReceipt{
+		Selector: CaptureSetPublicationSelector(m), Disclosure: "PRIVATE",
+		ArtifactSHA256: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(manifestRaw)),
+		Mechanism: receipt.Mechanism, NamespaceAtomic: receipt.NamespaceAtomic,
+		CrashDurability: receipt.CrashDurability, ConstituentCount: len(m.Constituents),
+	}}
+}
+
+func constituentFileName(c Constituent) string {
+	return "constituents/" + strings.TrimPrefix(c.SHA256, "sha256:") + ".json"
+}
+
+// ResolveConstituent resolves bytes only through an already committed final
+// capture-set selector and verifies that the requested constituent is associated.
+func (p *Publisher) ResolveConstituent(finalSelector, immutableSelector string) ([]byte, error) {
+	m, err := p.Verify(finalSelector)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range m.Constituents {
+		if c.ImmutableSelector != immutableSelector {
+			continue
+		}
+		generation := strings.TrimSuffix(finalSelector, "/manifest.json")
+		raw, readErr := p.root.ReadSelector(generation+"/"+constituentFileName(c), int64(c.ByteLength)+1)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if len(raw) != c.ByteLength || rawDigest(raw) != c.SHA256 {
+			return nil, errors.New("constituent exact bytes mismatch")
+		}
+		return raw, nil
+	}
+	return nil, errors.New("constituent is not associated with capture set")
 }
 
 func (p *Publisher) Publish(m Manifest) PublicationResult {
