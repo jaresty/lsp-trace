@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"testing"
 
@@ -40,7 +39,7 @@ func transactionalFixture(t *testing.T) (Manifest, [][]byte, ExactBytesAuthority
 	return m, raw, a
 }
 
-func TestPublishCaptureSetAtomicGenerationAndPrivateResolution(t *testing.T) {
+func TestPublishCaptureSetAtomicBundleAndPrivateResolution(t *testing.T) {
 	m, raw, authority := transactionalFixture(t)
 	dir := t.TempDir()
 	if err := os.Chmod(dir, 0o700); err != nil {
@@ -56,7 +55,7 @@ func TestPublishCaptureSetAtomicGenerationAndPrivateResolution(t *testing.T) {
 	if result.Err != nil {
 		t.Fatal(result.Err)
 	}
-	if !result.Receipt.NamespaceAtomic || result.Receipt.Mechanism != publication.DirectoryGenerationMechanism || result.Receipt.ConstituentCount != len(raw) {
+	if !result.Receipt.NamespaceAtomic || result.Receipt.Mechanism != publication.BoundFileMechanism || result.Receipt.ConstituentCount != len(raw) {
 		t.Fatalf("receipt: %+v", result.Receipt)
 	}
 	if result.Receipt.CrashDurability != "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE" && runtime.GOOS != "windows" {
@@ -71,9 +70,8 @@ func TestPublishCaptureSetAtomicGenerationAndPrivateResolution(t *testing.T) {
 			t.Fatal("resolved constituent mismatch")
 		}
 	}
-	generation := strings.TrimSuffix(result.Receipt.Selector, "/manifest.json")
-	if info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(generation))); err != nil || info.Mode().Perm() != 0o700 {
-		t.Fatalf("generation mode: %v %v", info, err)
+	if info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(result.Receipt.Selector))); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+		t.Fatalf("bundle mode: %v %v", info, err)
 	}
 }
 
@@ -118,18 +116,5 @@ func TestPublishCaptureSetFinalCompetitorHasOneWinner(t *testing.T) {
 	}
 	if success != 1 || exists != 1 {
 		t.Fatalf("success=%d exists=%d", success, exists)
-	}
-}
-
-func TestPublishGenerationRejectsUnsafeNames(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
-	root, _ := publication.OpenRoot(dir)
-	defer root.Close()
-	for _, name := range []string{"../escape", "/absolute", "a/../b", ""} {
-		_, err := publication.PublishGeneration(publication.GenerationRequest{Root: root, FinalSelector: "final-" + hex.EncodeToString([]byte(name)), Files: []publication.GenerationFile{{Name: name, Bytes: []byte("x")}}})
-		if err == nil {
-			t.Fatalf("accepted %q", name)
-		}
 	}
 }

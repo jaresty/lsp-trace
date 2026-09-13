@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
-	"sync"
 	"testing"
 
 	"lsp-trace/internal/publication"
@@ -78,15 +77,15 @@ func TestCaptureSetRemainsOutsidePublicSchemaRegistry(t *testing.T) {
 }
 
 func TestValidatePublicationSelectorRejectsMalformedBeforeVerification(t *testing.T) {
-	valid := CaptureSetSelectorPrefix + strings.Repeat("a", 64) + "/manifest.json"
+	valid := CaptureSetSelectorPrefix + strings.Repeat("a", 64) + ".bundle"
 	if err := ValidatePublicationSelector(valid); err != nil {
 		t.Fatalf("ASSERT_CANONICAL_CAPTURE_SET_SELECTOR: %v", err)
 	}
 	for _, selector := range []string{
 		"../" + valid,
-		CaptureSetSelectorPrefix + strings.Repeat("A", 64) + "/manifest.json",
-		CaptureSetSelectorPrefix + strings.Repeat("a", 63) + "/manifest.json",
-		CaptureSetSelectorPrefix + strings.Repeat("z", 64) + "/manifest.json",
+		CaptureSetSelectorPrefix + strings.Repeat("A", 64) + ".bundle",
+		CaptureSetSelectorPrefix + strings.Repeat("a", 63) + ".bundle",
+		CaptureSetSelectorPrefix + strings.Repeat("z", 64) + ".bundle",
 	} {
 		if err := ValidatePublicationSelector(selector); err == nil {
 			t.Fatalf("ASSERT_MALFORMED_CAPTURE_SET_SELECTOR_REJECTED: %q", selector)
@@ -94,7 +93,7 @@ func TestValidatePublicationSelectorRejectsMalformedBeforeVerification(t *testin
 	}
 }
 
-func TestPublishPrivateRaceSafeAndVerifiable(t *testing.T) {
+func TestManifestOnlyPrivatePublicationRejected(t *testing.T) {
 	ts, cs, f, s := fixture(64)
 	m, _ := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")
 	root, err := publication.OpenRoot(t.TempDir())
@@ -102,36 +101,7 @@ func TestPublishPrivateRaceSafeAndVerifiable(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	pub := NewPublisher(root)
-	var wg sync.WaitGroup
-	results := make(chan PublicationResult, 2)
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() { defer wg.Done(); results <- pub.Publish(m) }()
-	}
-	wg.Wait()
-	close(results)
-	var successes, exists int
-	var receipt PublicationReceipt
-	for result := range results {
-		if result.Err == nil {
-			successes++
-			receipt = *result.Receipt
-		} else if result.Code == publication.CodeTargetExists {
-			exists++
-		}
-	}
-	if successes != 1 || exists != 1 {
-		t.Fatalf("ASSERT_RACE_SAFE_CREATE: success=%d exists=%d", successes, exists)
-	}
-	if receipt.Disclosure != "PRIVATE" || receipt.Selector != CaptureSetPublicationSelector(m) {
-		t.Fatalf("ASSERT_PRIVATE_RECEIPT: %+v", receipt)
-	}
-	got, err := pub.Verify(receipt.Selector)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.LogicalDigest != m.LogicalDigest || got.Authority != 0 || got.SourceGraphComplete != "UNKNOWN" || got.NativeSingleCaptureCustody || len(got.CrossCaptureCalls) != 0 || got.LeidenAdmissible {
-		t.Fatal("ASSERT_PUBLICATION_VERIFY_CEILING")
+	if result := NewPublisher(root).Publish(m); result.Err == nil {
+		t.Fatal("ASSERT_MANIFEST_ONLY_PUBLICATION_REJECTED")
 	}
 }

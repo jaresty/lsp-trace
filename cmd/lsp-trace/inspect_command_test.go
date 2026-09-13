@@ -351,19 +351,35 @@ func captureSetFixture(t *testing.T) (string, string, captureset.Manifest) {
 	seed := "private-seed-material"
 	sum := sha256.Sum256([]byte(seed))
 	targets := []captureset.Target{{CensusOrdinal: 0, CanonicalSeedV2: seed, CanonicalSeedV2SHA256: "sha256:" + hex.EncodeToString(sum[:])}}
-	constituents := []captureset.Constituent{{ImmutableSelector: "graph-provenance-v5/sha256/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", SchemaID: captureset.NativeV5SchemaID, SHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", ByteLength: 7, NativeV5Identity: "private-native-identity"}}
+	exact := [][]byte{[]byte(`{"schema_version":"lsp-trace.graph-provenance.v5","private":"fixture"}`)}
+	authority := captureset.ExactBytesAuthority{AdmitGraphProvenanceV5: func(raw []byte) (string, error) {
+		s := sha256.Sum256(raw)
+		return "private-native-identity:" + hex.EncodeToString(s[:]), nil
+	}}
+	constituent, err := authority.Constituent(exact[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	constituents := []captureset.Constituent{constituent}
 	files := captureset.Ledger{Denominator: 2, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private/file/a", Disposition: "CAPTURED"}, {Ordinal: 1, Identity: "private/file/b", Disposition: "SKIPPED"}}}
 	symbols := captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "private-symbol", Disposition: "CAPTURED"}}}
 	manifest, err := captureset.Prepare(targets, constituents, files, symbols, "census.v1", "retain.v1")
 	if err != nil {
 		t.Fatal(err)
 	}
+	manifest, err = captureset.AssociateBatches(manifest, constituents)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rootPath := t.TempDir()
+	if err := os.Chmod(rootPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	root, err := publication.OpenRoot(rootPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result := captureset.NewPublisher(root).Publish(manifest)
+	result := captureset.NewPublisher(root).PublishCaptureSet(manifest, exact, authority)
 	if closeErr := root.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
@@ -382,7 +398,7 @@ func TestInspectPrivateCaptureSetRequiresExplicitSafeRootAndCanonicalSelector(t 
 	for _, tc := range []struct{ name, selector, root string }{
 		{name: "relative root", selector: selector, root: "."},
 		{name: "root traversal", selector: selector, root: root + string(filepath.Separator) + ".."},
-		{name: "selector traversal", selector: "capture-sets/v1/sha256/../manifest.json", root: root},
+		{name: "selector traversal", selector: "capture-sets/v1/sha256/../x.bundle", root: root},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stdout, stderr, code := captureRun(t, []string{"inspect", tc.selector, "--private-capture-set-root", tc.root, "--json"})

@@ -57,7 +57,7 @@ func (a ExactBytesAuthority) VerifyConstituent(c Constituent, raw []byte) error 
 // publication namespace. It is a selector beneath a pinned publication.Root,
 // never an ambient filesystem path.
 func CaptureSetPublicationSelector(m Manifest) string {
-	return CaptureSetSelectorPrefix + strings.TrimPrefix(m.LogicalDigest, "sha256:") + "/manifest.json"
+	return CaptureSetSelectorPrefix + strings.TrimPrefix(m.LogicalDigest, "sha256:") + ".bundle"
 }
 
 // Redact applies the complete v1 field policy. It redacts resource identities,
@@ -119,12 +119,11 @@ type PublicationResult struct {
 }
 
 type Publisher struct {
-	root      *publication.Root
-	publisher *publication.Publisher
+	root *publication.Root
 }
 
 func NewPublisher(root *publication.Root) *Publisher {
-	return &Publisher{root: root, publisher: publication.NewPublisher()}
+	return &Publisher{root: root}
 }
 
 // PublishCaptureSet is the all-or-nothing private publication primitive. The
@@ -152,8 +151,6 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 		}
 		bySelector[c.ImmutableSelector] = append([]byte(nil), raw...)
 	}
-	files := make([]publication.GenerationFile, 0, len(m.Constituents)+1)
-	files = append(files, publication.GenerationFile{Name: "manifest.json", Bytes: manifestRaw})
 	for _, c := range m.Constituents {
 		raw, ok := bySelector[c.ImmutableSelector]
 		if !ok {
@@ -162,10 +159,23 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 		if verifyErr := authority.VerifyConstituent(c, raw); verifyErr != nil {
 			return PublicationResult{Err: verifyErr}
 		}
-		files = append(files, publication.GenerationFile{Name: constituentFileName(c), Bytes: raw})
 	}
-	generationSelector := strings.TrimSuffix(CaptureSetPublicationSelector(m), "/manifest.json")
-	receipt, err := publication.PublishGeneration(publication.GenerationRequest{Root: p.root, FinalSelector: generationSelector, Files: files})
+	bundleRaw, err := encodePrivateBundle(m, manifestRaw, bySelector)
+	if err != nil {
+		return PublicationResult{Err: err}
+	}
+	selector := CaptureSetPublicationSelector(m)
+	receipt, err := publication.PublishBoundFile(p.root, selector, bundleRaw, func(committed []byte) error {
+		decoded, verifyErr := decodePrivateBundle(committed, authority)
+		if verifyErr != nil {
+			return verifyErr
+		}
+		reencoded, verifyErr := encodePrivateBundle(decoded.Manifest, decoded.ManifestRaw, decoded.BySelector)
+		if verifyErr != nil || !bytes.Equal(reencoded, committed) {
+			return errors.New("committed bundle is not canonical")
+		}
+		return nil
+	})
 	if err != nil {
 		code := publication.CodePublicationFailed
 		if errors.Is(err, os.ErrExist) {
@@ -173,17 +183,12 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 		}
 		return PublicationResult{Code: code, Err: err}
 	}
-	sum := sha256.Sum256(manifestRaw)
 	return PublicationResult{Receipt: &PublicationReceipt{
-		Selector: CaptureSetPublicationSelector(m), Disclosure: "PRIVATE",
-		ArtifactSHA256: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(manifestRaw)),
+		Selector: selector, Disclosure: "PRIVATE",
+		ArtifactSHA256: receipt.Digest, ByteLength: receipt.ByteLength,
 		Mechanism: receipt.Mechanism, NamespaceAtomic: receipt.NamespaceAtomic,
 		CrashDurability: receipt.CrashDurability, ConstituentCount: len(m.Constituents),
 	}}
-}
-
-func constituentFileName(c Constituent) string {
-	return "constituents/" + strings.TrimPrefix(c.SHA256, "sha256:") + ".json"
 }
 
 // ResolveConstituent resolves bytes only through an already committed final
@@ -197,37 +202,32 @@ func (p *Publisher) ResolveConstituent(finalSelector, immutableSelector string) 
 		if c.ImmutableSelector != immutableSelector {
 			continue
 		}
-		generation := strings.TrimSuffix(finalSelector, "/manifest.json")
-		raw, readErr := p.root.ReadSelector(generation+"/"+constituentFileName(c), int64(c.ByteLength)+1)
+		raw, readErr := publication.ReadBoundFile(p.root, finalSelector, MaxBundleBytes)
 		if readErr != nil {
 			return nil, readErr
 		}
-		if len(raw) != c.ByteLength || rawDigest(raw) != c.SHA256 {
-			return nil, errors.New("constituent exact bytes mismatch")
+		bundle, decodeErr := decodePrivateBundle(raw, ExactBytesAuthority{})
+		if decodeErr != nil {
+			return nil, decodeErr
 		}
-		return raw, nil
+		constituentRaw, ok := bundle.BySelector[c.ImmutableSelector]
+		if !ok {
+			return nil, errors.New("constituent is not associated with capture set")
+		}
+		return append([]byte(nil), constituentRaw...), nil
 	}
 	return nil, errors.New("constituent is not associated with capture set")
 }
 
 func (p *Publisher) Publish(m Manifest) PublicationResult {
-	raw, err := EncodeCanonical(m)
-	if err != nil {
-		return PublicationResult{Err: err}
-	}
-	selector := CaptureSetPublicationSelector(m)
-	result := p.publisher.Publish(publication.Request{Root: p.root, Selector: selector, Bytes: raw, ArtifactSchemaID: Version})
-	if err := result.Err(); err != nil {
-		return PublicationResult{Code: result.Failure.Code, Err: err}
-	}
-	return PublicationResult{Receipt: &PublicationReceipt{Selector: selector, Disclosure: "PRIVATE", ArtifactSHA256: result.Receipt.Digest, ByteLength: result.Receipt.ByteLength, Mechanism: result.Receipt.PublicationMechanism}}
+	return PublicationResult{Err: errors.New("private capture-set publication requires exact V5 constituent bytes")}
 }
 
 func ValidatePublicationSelector(selector string) error {
-	if !strings.HasPrefix(selector, CaptureSetSelectorPrefix) || !strings.HasSuffix(selector, "/manifest.json") {
+	if !strings.HasPrefix(selector, CaptureSetSelectorPrefix) || !strings.HasSuffix(selector, ".bundle") {
 		return errors.New("non-canonical capture-set selector")
 	}
-	digest := strings.TrimSuffix(strings.TrimPrefix(selector, CaptureSetSelectorPrefix), "/manifest.json")
+	digest := strings.TrimSuffix(strings.TrimPrefix(selector, CaptureSetSelectorPrefix), ".bundle")
 	if len(digest) != 64 || strings.ToLower(digest) != digest {
 		return errors.New("non-canonical capture-set selector")
 	}
@@ -241,20 +241,16 @@ func (p *Publisher) Verify(selector string) (Manifest, error) {
 	if err := ValidatePublicationSelector(selector); err != nil {
 		return Manifest{}, err
 	}
-	raw, err := p.root.ReadSelector(selector, 32<<20)
+	raw, err := publication.ReadBoundFile(p.root, selector, MaxBundleBytes)
 	if err != nil {
 		return Manifest{}, err
 	}
-	m, err := Decode(raw)
+	bundle, err := decodePrivateBundle(raw, ExactBytesAuthority{})
 	if err != nil {
 		return Manifest{}, err
 	}
-	if CaptureSetPublicationSelector(m) != selector {
+	if CaptureSetPublicationSelector(bundle.Manifest) != selector {
 		return Manifest{}, errors.New("capture-set selector identity mismatch")
 	}
-	canonical, _ := EncodeCanonical(m)
-	if !bytes.Equal(raw, canonical) {
-		return Manifest{}, errors.New("capture-set exact bytes mismatch")
-	}
-	return m, nil
+	return bundle.Manifest, nil
 }
