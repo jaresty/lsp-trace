@@ -1,12 +1,16 @@
 # CLI migration diagnostics
 
-Status: current compatibility-window contract
+Status: Proposed ADR
 
-Primary help hides the historical `slice` and `incoming` acquisition commands. They remain callable so existing scripts and artifact production retain their stdout bytes and exit codes. `lsp-trace legacy` in primary help is a documentation pointer, not a new command implementation.
+This proposal adds diagnostics to the compatibility window; it does not approve command removal or replacement parity. No removal release is scheduled. Every event therefore carries `removal_release: "UNSCHEDULED"`.
 
-A non-help legacy invocation emits exactly one human warning on stderr after the command token selects a legacy operation. `slice` points to the available exact-target `trace` facade. `incoming` points to `trace` conditionally: callers must retain legacy dispatch when selectors, bounds, identity, accounting, bytes, or custody would differ.
+The lifecycle remains at Add → Warn. Hide is not complete because census/context parity is absent, so primary help continues to show the historical `slice` and `incoming` acquisition commands. They remain callable and retain legacy dispatch. Broad specialist-help cleanup is deferred until this ADR is accepted and every affected lane has full parity; this proposal does not partially reshape those help surfaces.
 
-Passing `--machine` after a legacy command changes diagnostics only. Stderr becomes JSON Lines with one object per line and the closed schema `lsp-trace.cli-diagnostic.v1`:
+A valid non-help legacy invocation emits exactly one human warning on stderr after its complete syntax, flag values, arity, and required command inputs have been validated. Invalid flags, invalid values, invalid arity, missing required inputs, and help emit no deprecation warning. `slice` points to the available exact-target `trace` facade. `incoming` points to `trace` conditionally: callers must retain legacy dispatch when selectors, bounds, identity, accounting, bytes, or custody would differ.
+
+Machine mode has one unambiguous global placement: immediately after the legacy command, for example `lsp-trace slice --machine ...`. Once command arguments begin, all tokens belong to the command FlagSet. Thus values such as `--server-arg --machine`, repeated `--server-env`, `--flag=value`, and any command-supported `--` grammar remain untouched. Duplicate explicit global `--machine` flags retain machine intent and produce one syntax-error JSONL event, including when combined with help.
+
+In machine mode stderr is JSON Lines with one object per line and the closed schema `lsp-trace.cli-diagnostic.v1`:
 
 - `schema_version`
 - `code`
@@ -14,7 +18,8 @@ Passing `--machine` after a legacy command changes diagnostics only. Stderr beco
 - `operation`
 - `replacement`
 - `replacement_status`
+- `removal_release`
 
-Stable codes currently are `CLI_LEGACY_OPERATION` and `CLI_INVOCATION_ERROR`. The closed event intentionally carries no arbitrary error text, filesystem path, source content, server stderr, environment value, or secret. Parse, validation, and domain failures retain their existing exit code and stdout bytes and add the generic structured error event after the single deprecation event.
+Every field is required and nonempty; unknown fields are rejected by strict consumers. Stable codes are `CLI_LEGACY_OPERATION` and `CLI_INVOCATION_ERROR`. The closed event structurally cannot carry arbitrary error text, filesystem paths, source content, server stderr, environment values, or secrets. Valid invocations preserve existing stdout bytes and exit codes. Machine syntax failures emit only the generic structured error event rather than human parser text.
 
-`census` and `context` remain `FUTURE/PROPOSED`; this diagnostic layer does not implement them. Command-specific structured failure details are deferred until each command has a reviewed, privacy-safe code taxonomy. Until then machine mode reports the stable generic invocation-error code rather than guessing or exposing raw diagnostics.
+`census` and `context` are unavailable proposals, not actionable migration commands. A file-census-shaped `slice` diagnostic uses `FUTURE/PROPOSED_UNAVAILABLE`; this layer does not implement or route either proposed replacement. Legacy dispatch remains authoritative. Command-specific structured failure details are deferred until each command has a reviewed, privacy-safe code taxonomy.

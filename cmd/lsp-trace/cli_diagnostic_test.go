@@ -3,113 +3,144 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func machineDiagnosticLines(raw string) bool {
-	for _, line := range strings.Split(strings.TrimSuffix(raw, "\n"), "\n") {
-		if line == "" {
-			continue
-		}
-		var event cliDiagnostic
-		if json.Unmarshal([]byte(line), &event) != nil || event.SchemaVersion != cliDiagnosticVersion {
-			return false
-		}
+func decodeMachineDiagnostics(raw string) ([]cliDiagnostic, error) {
+	if raw == "" || !strings.HasSuffix(raw, "\n") {
+		return nil, fmt.Errorf("diagnostics must be nonempty newline-terminated JSONL")
 	}
-	return true
+	lines := strings.Split(strings.TrimSuffix(raw, "\n"), "\n")
+	events := make([]cliDiagnostic, 0, len(lines))
+	for _, line := range lines {
+		if line == "" {
+			return nil, fmt.Errorf("empty JSONL record")
+		}
+		dec := json.NewDecoder(strings.NewReader(line))
+		dec.DisallowUnknownFields()
+		var event cliDiagnostic
+		if err := dec.Decode(&event); err != nil {
+			return nil, err
+		}
+		if event.SchemaVersion == "" || event.Code == "" || event.Severity == "" || event.Operation == "" || event.Replacement == "" || event.Status == "" || event.RemovalRelease == "" {
+			return nil, fmt.Errorf("empty required field")
+		}
+		if event.SchemaVersion != cliDiagnosticVersion || event.RemovalRelease != cliRemovalRelease {
+			return nil, fmt.Errorf("unexpected version or removal release")
+		}
+		events = append(events, event)
+	}
+	return events, nil
 }
 
-func TestPrimaryHelpHidesLegacyAcquisitionCommands(t *testing.T) {
+func TestPrimaryHelpKeepsLegacyAcquisitionCommandsVisible(t *testing.T) {
 	stdout, stderr, code := captureRun(t, []string{"--help"})
 	if code != 0 || stderr != "" {
 		t.Fatalf("ASSERT_PRIMARY_HELP_STREAMS: code=%d stderr=%q", code, stderr)
 	}
-	for _, hidden := range []string{"lsp-trace slice ", "lsp-trace incoming "} {
-		if strings.Contains(stdout, hidden) {
-			t.Fatalf("ASSERT_PRIMARY_HELP_HIDES_LEGACY: found=%q help=%q", hidden, stdout)
-		}
-	}
-	for _, visible := range []string{"lsp-trace trace ", "lsp-trace advanced", "lsp-trace legacy"} {
+	for _, visible := range []string{"lsp-trace slice ", "lsp-trace incoming ", "lsp-trace trace "} {
 		if !strings.Contains(stdout, visible) {
-			t.Fatalf("ASSERT_PRIMARY_HELP_VISIBLE_LANES: missing=%q help=%q", visible, stdout)
+			t.Fatalf("ASSERT_PRIMARY_HELP_LEGACY_VISIBLE: missing=%q help=%q", visible, stdout)
 		}
 	}
 }
 
-func TestHelpLanePointersAreCallableAndDoNotClaimFutureCommands(t *testing.T) {
-	advanced, advancedErr, advancedCode := captureRun(t, []string{"advanced"})
+func TestHelpLanePointersDescribeProposalsAsUnavailable(t *testing.T) {
 	legacy, legacyErr, legacyCode := captureRun(t, []string{"legacy"})
-	if advancedCode != 0 || legacyCode != 0 || advancedErr != "" || legacyErr != "" || !strings.Contains(advanced, "advanced operations:") || !strings.Contains(legacy, "slice, incoming") || !strings.Contains(legacy, "census and context FUTURE/PROPOSED") {
-		t.Fatalf("ASSERT_HELP_LANES_CALLABLE: advanced=(%d,%q,%q) legacy=(%d,%q,%q)", advancedCode, advanced, advancedErr, legacyCode, legacy, legacyErr)
+	if legacyCode != 0 || legacyErr != "" || !strings.Contains(legacy, "census and context are unavailable proposals") {
+		t.Fatalf("ASSERT_PROPOSED_NOT_ACTIONABLE: code=%d stdout=%q stderr=%q", legacyCode, legacy, legacyErr)
 	}
 }
 
-func TestLegacyHelpDoesNotWarn(t *testing.T) {
-	for _, operation := range []string{"slice", "incoming"} {
-		stdout, stderr, code := captureRun(t, []string{operation, "--help"})
-		if code != 0 || stderr != "" || stdout == "" {
-			t.Fatalf("ASSERT_HELP_IS_NOT_INVOCATION: op=%s code=%d stdout=%q stderr=%q", operation, code, stdout, stderr)
+func TestLegacyHelpAndInvalidSyntaxDoNotWarn(t *testing.T) {
+	for _, args := range [][]string{{"slice", "--help"}, {"incoming", "--help"}, {"slice", "--unknown"}, {"incoming", "--schema", "v9"}, {"slice"}} {
+		_, stderr, _ := captureRun(t, args)
+		if strings.Contains(stderr, "deprecated") || strings.Contains(stderr, cliCodeLegacyOperation) {
+			t.Fatalf("ASSERT_INVALID_OR_HELP_NO_DEPRECATION: args=%v stderr=%q", args, stderr)
 		}
 	}
 }
 
-func TestLegacyHumanWarningExactlyOnceAfterOperationSelection(t *testing.T) {
-	stdout, stderr, code := captureRun(t, []string{"slice"})
+func TestLegacyHumanWarningExactlyOnceAfterValidatedInvocation(t *testing.T) {
+	workspace := t.TempDir()
+	stdout, stderr, code := captureRun(t, []string{"slice", "--workspace", workspace, "--server", "missing", "--at", "main.go:1:1"})
 	if code != 1 || stdout != "" || strings.Count(stderr, "warning: slice is deprecated; migrate to trace") != 1 {
 		t.Fatalf("ASSERT_LEGACY_WARNING_ONCE: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 
-func TestLegacyMachineDiagnosticsGoldenClosedAndPrivate(t *testing.T) {
-	secret := filepath.Join(t.TempDir(), "SECRET_SOURCE_TOKEN")
-	stdout, stderr, code := captureRun(t, []string{"slice", "--machine", "--workspace", secret})
-	if code != 1 || stdout != "" || !machineDiagnosticLines(stderr) {
-		t.Fatalf("ASSERT_MACHINE_DIAGNOSTIC_JSONL: code=%d stdout=%q stderr=%q", code, stdout, stderr)
-	}
-	const golden = "{\"schema_version\":\"lsp-trace.cli-diagnostic.v1\",\"code\":\"CLI_LEGACY_OPERATION\",\"severity\":\"warning\",\"operation\":\"slice\",\"replacement\":\"trace\",\"replacement_status\":\"AVAILABLE\"}\n{\"schema_version\":\"lsp-trace.cli-diagnostic.v1\",\"code\":\"CLI_INVOCATION_ERROR\",\"severity\":\"error\",\"operation\":\"slice\",\"replacement\":\"trace\",\"replacement_status\":\"AVAILABLE\"}\n"
-	if stderr != golden || strings.Contains(stderr, secret) || strings.Contains(stderr, "SECRET_SOURCE_TOKEN") {
-		t.Fatalf("ASSERT_MACHINE_DIAGNOSTIC_GOLDEN_PRIVATE: stderr=%q", stderr)
-	}
-	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 6 {
-			t.Fatalf("ASSERT_MACHINE_DIAGNOSTIC_CLOSED_SIX_FIELDS: fields=%v err=%v", fields, err)
+func TestDuplicateMachineIsOneStrictJSONLSyntaxErrorIncludingHelp(t *testing.T) {
+	for _, args := range [][]string{{"slice", "--machine", "--machine"}, {"incoming", "--machine", "--machine", "--help"}} {
+		stdout, stderr, code := captureRun(t, args)
+		events, err := decodeMachineDiagnostics(stderr)
+		if code != 1 || stdout != "" || err != nil || len(events) != 1 || events[0].Code != cliCodeInvocationError || events[0].Severity != "error" {
+			t.Fatalf("ASSERT_DUPLICATE_MACHINE_STRICT: args=%v code=%d stdout=%q stderr=%q events=%+v err=%v", args, code, stdout, stderr, events, err)
 		}
 	}
 }
 
-func TestLegacyFileCensusReplacementRemainsProposed(t *testing.T) {
-	stdout, stderr, code := captureRun(t, []string{"slice", "--machine", "--from-file", "src"})
-	if code != 1 || stdout != "" || !strings.Contains(stderr, `"replacement":"census"`) || !strings.Contains(stderr, `"replacement_status":"FUTURE/PROPOSED"`) {
-		t.Fatalf("ASSERT_CENSUS_REPLACEMENT_NOT_CLAIMED_IMPLEMENTED: code=%d stdout=%q stderr=%q", code, stdout, stderr)
-	}
-}
-
-func TestLegacyMachineDiagnosticMutationDetection(t *testing.T) {
-	valid := `{"schema_version":"lsp-trace.cli-diagnostic.v1","code":"CLI_LEGACY_OPERATION","severity":"warning","operation":"slice","replacement":"trace","replacement_status":"AVAILABLE"}\n`
-	for name, mutated := range map[string]string{
-		"version":  strings.Replace(valid, cliDiagnosticVersion, "v0", 1),
-		"not-json": "warning: deprecated\n",
-	} {
-		if machineDiagnosticLines(mutated) {
-			t.Fatalf("ASSERT_MACHINE_DIAGNOSTIC_MUTATION_%s", name)
-		}
-	}
-}
-
-func TestMachineModePreservesLegacyStdoutBytesAndExitCode(t *testing.T) {
+func TestMachineFlagValuePassThroughAndParity(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	base := []string{"incoming", "--workspace", workspace, "--server", "missing-server", "--at", "main.go:1:1"}
-	humanOut, _, humanCode := captureRun(t, base)
-	machineArgs := append(append([]string{}, base...), "--machine")
-	machineOut, machineErr, machineCode := captureRun(t, machineArgs)
-	if humanCode != machineCode || !bytes.Equal([]byte(humanOut), []byte(machineOut)) || !machineDiagnosticLines(machineErr) {
-		t.Fatalf("ASSERT_MACHINE_STDOUT_BYTE_PARITY: humanCode=%d machineCode=%d human=%q machine=%q stderr=%q", humanCode, machineCode, humanOut, machineOut, machineErr)
+	cases := [][]string{
+		{"incoming", "--workspace", workspace, "--server", "missing", "--server-arg", "--machine", "--at", "main.go:1:1"},
+		{"incoming", "--workspace=" + workspace, "--server=missing", "--server-env=A=1", "--server-env", "B=2", "--at=main.go:1:1"},
+	}
+	for _, base := range cases {
+		humanOut, _, humanCode := captureRun(t, base)
+		machine := append([]string{base[0], "--machine"}, base[1:]...)
+		machineOut, machineErr, machineCode := captureRun(t, machine)
+		if humanCode != machineCode || !bytes.Equal([]byte(humanOut), []byte(machineOut)) {
+			t.Fatalf("ASSERT_MACHINE_STDOUT_EXIT_PARITY: base=%v human=(%d,%q) machine=(%d,%q)", base, humanCode, humanOut, machineCode, machineOut)
+		}
+		events, err := decodeMachineDiagnostics(machineErr)
+		if err != nil || len(events) == 0 {
+			t.Fatalf("ASSERT_MACHINE_JSONL: %q %v", machineErr, err)
+		}
+	}
+}
+
+func TestLegacyMachineDiagnosticGoldenClosedPrivateAndRemovalUnscheduled(t *testing.T) {
+	secret := filepath.Join(t.TempDir(), "SECRET_SOURCE_TOKEN")
+	_, stderr, _ := captureRun(t, []string{"slice", "--machine", "--workspace", secret, "--server", "missing", "--at", "main.go:1:1"})
+	events, err := decodeMachineDiagnostics(stderr)
+	if err != nil || len(events) != 2 || strings.Contains(stderr, secret) {
+		t.Fatalf("ASSERT_MACHINE_PRIVATE_CLOSED: stderr=%q events=%+v err=%v", stderr, events, err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(stderr), "\n") {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(line), &fields); err != nil || len(fields) != 7 {
+			t.Fatalf("ASSERT_CLOSED_SEVEN_FIELDS: fields=%v err=%v", fields, err)
+		}
+	}
+}
+
+func TestMachineDiagnosticParserRejectsEmptyUnknownAndMutations(t *testing.T) {
+	valid := "{\"schema_version\":\"lsp-trace.cli-diagnostic.v1\",\"code\":\"CLI_LEGACY_OPERATION\",\"severity\":\"warning\",\"operation\":\"slice\",\"replacement\":\"trace\",\"replacement_status\":\"AVAILABLE\",\"removal_release\":\"UNSCHEDULED\"}\n"
+	if events, err := decodeMachineDiagnostics(valid); err != nil || len(events) != 1 {
+		t.Fatalf("valid fixture: %v %+v", err, events)
+	}
+	for name, mutated := range map[string]string{
+		"empty": "", "unknown": strings.Replace(valid, "{", "{\"extra\":\"x\",", 1),
+		"empty-required": strings.Replace(valid, "\"slice\"", "\"\"", 1), "version": strings.Replace(valid, cliDiagnosticVersion, "v0", 1),
+		"not-json": "warning: deprecated\n", "literal-backslash-n": strings.TrimSuffix(valid, "\n") + `\n`,
+	} {
+		if _, err := decodeMachineDiagnostics(mutated); err == nil {
+			t.Fatalf("ASSERT_MACHINE_MUTATION_%s", name)
+		}
+	}
+}
+
+func TestLegacyFileCensusReplacementExplicitlyUnavailableProposed(t *testing.T) {
+	workspace := t.TempDir()
+	_, stderr, _ := captureRun(t, []string{"slice", "--machine", "--from-file", "src", "--workspace", workspace, "--server", "missing"})
+	if !strings.Contains(stderr, `"replacement":"census"`) || !strings.Contains(stderr, `"replacement_status":"FUTURE/PROPOSED_UNAVAILABLE"`) {
+		t.Fatalf("ASSERT_CENSUS_UNAVAILABLE_PROPOSAL: %q", stderr)
 	}
 }

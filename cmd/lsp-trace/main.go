@@ -116,6 +116,8 @@ const usageText = `usage:
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
   lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...)
+  lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
+  lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace advanced  # specialist and administrative operations
   lsp-trace legacy    # compatibility commands and migration guidance
   lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]
@@ -176,37 +178,71 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
-	clean, machine, machineErr := extractMachineMode(args)
+	clean, machine, duplicateMachine := extractMachineMode(args)
 	legacy, isLegacy := legacyCLI{}, false
 	if len(clean) > 0 {
 		legacy, isLegacy = legacyOperation(clean[0], clean[1:])
 	}
-	help := len(clean) > 1 && (clean[1] == "--help" || clean[1] == "-h")
-	if !isLegacy || help {
-		if machineErr != nil {
-			fmt.Fprintln(os.Stderr, machineErr)
-			return 1
-		}
-		return runCore(clean)
+	if !isLegacy {
+		return runCore(args)
 	}
-	if !machine {
-		writeLegacyWarning(os.Stderr, legacy, false)
-		if machineErr != nil {
-			fmt.Fprintln(os.Stderr, machineErr)
-			return 1
-		}
-		return runCore(clean)
-	}
-	writeLegacyWarning(os.Stderr, legacy, true)
-	if machineErr != nil {
+	if duplicateMachine {
 		writeMachineInvocationError(os.Stderr, legacy)
 		return 1
+	}
+	help := len(clean) > 1 && (clean[1] == "--help" || clean[1] == "-h")
+	if help {
+		return runCore(clean)
+	}
+	valid, validationCode := validateLegacyInvocation(clean)
+	if !valid {
+		if machine {
+			writeMachineInvocationError(os.Stderr, legacy)
+			return validationCode
+		}
+		return runCore(clean)
+	}
+	writeLegacyWarning(os.Stderr, legacy, machine)
+	if !machine {
+		return runCore(clean)
 	}
 	code, _ := captureProcessStderr(func() int { return runCore(clean) })
 	if code != 0 {
 		writeMachineInvocationError(os.Stderr, legacy)
 	}
 	return code
+}
+
+func validateLegacyInvocation(args []string) (bool, int) {
+	if len(args) == 0 {
+		return false, 1
+	}
+	var code int
+	code, _ = captureProcessStderr(func() int {
+		version, rest, err := acquisitionVersion(args[1:])
+		if err != nil {
+			return 1
+		}
+		// Versioned acquisition owns a separate FlagSet. Its no-effect syntax
+		// validation is performed by the same implementation before dispatch;
+		// v1 uses the legacy parsers directly here.
+		if version == "v2" || version == "v3" {
+			return 0
+		}
+		if version == "v1" {
+			args = append([]string{args[0]}, rest...)
+		}
+		if args[0] == "slice" {
+			_, err = parseSlice(args[1:])
+		} else {
+			_, err = parse(args[1:])
+		}
+		if err != nil {
+			return 1
+		}
+		return 0
+	})
+	return code == 0, code
 }
 
 func captureProcessStderr(fn func() int) (int, string) {
@@ -234,7 +270,7 @@ func runCore(args []string) int {
 		return 0
 	}
 	if len(args) == 1 && args[0] == "legacy" {
-		fmt.Fprintln(os.Stdout, "legacy compatibility operations: slice, incoming\nreplacement status: trace AVAILABLE for exact targets; census and context FUTURE/PROPOSED\nsee docs/cli-migration-diagnostics.md")
+		fmt.Fprintln(os.Stdout, "legacy compatibility operations: slice, incoming\nreplacement status: trace AVAILABLE for exact targets; census and context are unavailable proposals, not migration commands\nsee docs/cli-migration-diagnostics.md")
 		return 0
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {

@@ -7,7 +7,10 @@ import (
 	"strings"
 )
 
-const cliDiagnosticVersion = "lsp-trace.cli-diagnostic.v1"
+const (
+	cliDiagnosticVersion = "lsp-trace.cli-diagnostic.v1"
+	cliRemovalRelease    = "UNSCHEDULED"
+)
 
 const (
 	cliCodeLegacyOperation = "CLI_LEGACY_OPERATION"
@@ -15,12 +18,13 @@ const (
 )
 
 type cliDiagnostic struct {
-	SchemaVersion string `json:"schema_version"`
-	Code          string `json:"code"`
-	Severity      string `json:"severity"`
-	Operation     string `json:"operation"`
-	Replacement   string `json:"replacement"`
-	Status        string `json:"replacement_status"`
+	SchemaVersion  string `json:"schema_version"`
+	Code           string `json:"code"`
+	Severity       string `json:"severity"`
+	Operation      string `json:"operation"`
+	Replacement    string `json:"replacement"`
+	Status         string `json:"replacement_status"`
+	RemovalRelease string `json:"removal_release"`
 }
 
 type legacyCLI struct {
@@ -38,7 +42,7 @@ func legacyOperation(name string, args []string) (legacyCLI, bool) {
 			exactSymbol = exactSymbol || arg == "--symbol" || strings.HasPrefix(arg, "--symbol=")
 		}
 		if fileCensus && !exactSymbol {
-			return legacyCLI{Operation: name, Replacement: "census", Status: "FUTURE/PROPOSED"}, true
+			return legacyCLI{Operation: name, Replacement: "census", Status: "FUTURE/PROPOSED_UNAVAILABLE"}, true
 		}
 		return legacyCLI{Operation: name, Replacement: "trace", Status: "AVAILABLE"}, true
 	case "incoming":
@@ -48,24 +52,24 @@ func legacyOperation(name string, args []string) (legacyCLI, bool) {
 	}
 }
 
-func extractMachineMode(args []string) ([]string, bool, error) {
+func extractMachineMode(args []string) (clean []string, machine, duplicate bool) {
 	if len(args) == 0 {
-		return args, false, nil
+		return args, false, false
 	}
-	out := make([]string, 0, len(args))
-	out = append(out, args[0])
-	machine := false
-	for _, arg := range args[1:] {
-		if arg != "--machine" {
-			out = append(out, arg)
-			continue
-		}
+	// --machine is a diagnostic-mode flag only in the unambiguous global
+	// position immediately after a legacy command. Once command arguments
+	// begin, every token belongs to the command FlagSet (for example,
+	// --server-arg --machine) and is preserved byte-for-byte.
+	i := 1
+	for i < len(args) && args[i] == "--machine" {
 		if machine {
-			return nil, false, fmt.Errorf("duplicate --machine")
+			duplicate = true
 		}
 		machine = true
+		i++
 	}
-	return out, machine, nil
+	clean = append([]string{args[0]}, args[i:]...)
+	return clean, machine, duplicate
 }
 
 func writeCLIDiagnostic(w io.Writer, d cliDiagnostic) {
@@ -80,7 +84,7 @@ func writeCLIDiagnostic(w io.Writer, d cliDiagnostic) {
 
 func writeLegacyWarning(w io.Writer, legacy legacyCLI, machine bool) {
 	if machine {
-		writeCLIDiagnostic(w, cliDiagnostic{SchemaVersion: cliDiagnosticVersion, Code: cliCodeLegacyOperation, Severity: "warning", Operation: legacy.Operation, Replacement: legacy.Replacement, Status: legacy.Status})
+		writeCLIDiagnostic(w, cliDiagnostic{SchemaVersion: cliDiagnosticVersion, Code: cliCodeLegacyOperation, Severity: "warning", Operation: legacy.Operation, Replacement: legacy.Replacement, Status: legacy.Status, RemovalRelease: cliRemovalRelease})
 		return
 	}
 	qualifier := ""
@@ -91,5 +95,5 @@ func writeLegacyWarning(w io.Writer, legacy legacyCLI, machine bool) {
 }
 
 func writeMachineInvocationError(w io.Writer, legacy legacyCLI) {
-	writeCLIDiagnostic(w, cliDiagnostic{SchemaVersion: cliDiagnosticVersion, Code: cliCodeInvocationError, Severity: "error", Operation: legacy.Operation, Replacement: legacy.Replacement, Status: legacy.Status})
+	writeCLIDiagnostic(w, cliDiagnostic{SchemaVersion: cliDiagnosticVersion, Code: cliCodeInvocationError, Severity: "error", Operation: legacy.Operation, Replacement: legacy.Replacement, Status: legacy.Status, RemovalRelease: cliRemovalRelease})
 }
