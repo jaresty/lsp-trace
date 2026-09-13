@@ -28,9 +28,11 @@ Live MCP requests use `timeout_ms=60000` and `request_timeout_ms=60000`. CLI acq
 
 These checks can establish implementation and fixture readiness only.
 
-Run `python3 scripts/prepare-representative-qualification.py` for a deterministic JSON preparation report. Its tracked matrix pins gopls `0.23.0`, csharp-ls `0.27.0.0`, and ember-glint `1.0.3`; checks the repository-local Go fixture; and reports School Surveys and Ember fixtures as out-of-band without serializing supplied paths. `UNAVAILABLE` identifies a missing provider or application dependency, while `NOT_RUN` identifies a missing session or a live run deliberately not attempted. Neither outcome is a product failure or qualification result. The preparer never starts a provider, accesses application source, creates a receipt, or upgrades any row to `READY`.
+Run `python3 scripts/prepare-representative-qualification.py` for a deterministic JSON preparation report. The tracked matrix records required provider versions as requirements, not observations. Executable presence is reported separately, and its version remains `VERSION_UNVERIFIED`; no provider is invoked. For Ember, package version `1.0.3` is distinct from semantic protocol identity `ember-glint@1`. Environment flags are only `OPERATOR_ASSERTED` prerequisites and can produce only `SESSION_UNVERIFIED`, never `READY`. Exact version and `READY` claims remain deferred to a reviewed live qualification with retained evidence.
 
-The preparation matrix reserves operation 33 for `trace` and records its exact future assertion set. Because the production full profile currently exposes 32 operations, operation 33 is `SKIPPED`; operations 34 (`census`) and 35 (`context`) are likewise `SKIPPED`. Once an operation is exposed, preparation changes only to `GATED_NOT_RUN`; a separate reviewed live qualification must satisfy its assertions.
+The report distinguishes repository source state from installed production state. Source operation 33 (`trace`) is `INTEGRATED`; source operations 34 (`census`) and 35 (`context`) are `NOT_IMPLEMENTED`. With no installed-state evidence, every installed state remains `UNKNOWN`. An optional `--installed-state` closed JSON evidence file may record binary revision/custody and installed operation states. The retained operator assertion for installed revision `7a6a2698f0ebf584eca7d348d9972534dc6e08f2` is supplied explicitly with `python3 scripts/prepare-representative-qualification.py --installed-state qualification/representative-preflight/installed-state.7a6a.v1.json`; it reports operation 33 as `UNAVAILABLE_OLD_BUILD`. Source state never supplies or upgrades installed state.
+
+The preparer validates the matrix before reporting and exits 2 with a deterministic `preflight error:` diagnostic for malformed, unknown, duplicate, or semantically invalid input. `--output` accepts only a fresh safe basename in an existing directory, rejects symlinks and existing paths, and publishes atomically without replacement at mode `0600`. The preparer never starts a provider, accesses application source, creates a receipt, or upgrades any row to `READY`; `qualification_performed:false`, `receipt_created:false`, and `source_graph_complete:"UNKNOWN"` remain fixed.
 
 ```sh
 git diff --check
@@ -38,6 +40,7 @@ git diff --check
 go test ./cmd/lsp-trace -run 'TestAutomaticDiscoveryRetainedSeedReplayQualification|TestDiscovery|TestGroupedSlice|TestVerifyPassage' -count=1
 go test ./internal/programc ./internal/programcadmission ./internal/programccompose ./internal/captureset ./internal/hydratedevidence ./internal/hydratedinspection ./internal/passageverification -count=1
 go test ./internal/mcpcontract ./internal/mcp ./cmd/lsp-trace-mcp -run 'TestToolProfilesPreserveFullAndCompactAdvertisement|TestCompactToolProfileProcessAdvertisementAndHiddenDispatch|ProgramC|CaptureSet|Hydrat|Passage|Legacy|Alias' -count=1
+python3 scripts/test-representative-qualification-preflight.py
 python3 scripts/test-program-c-profiles.py
 ./scripts/qualify-compatibility-release.sh
 ```

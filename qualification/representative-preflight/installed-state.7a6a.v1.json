@@ -1,0 +1,12 @@
+{
+  "schema_version": "lsp-trace.installed-state-evidence.v1",
+  "custody": "OPERATOR_ASSERTED",
+  "binary": {
+    "revision": "7a6a2698f0ebf584eca7d348d9972534dc6e08f2"
+  },
+  "operations": [
+    {"number": 33, "state": "UNAVAILABLE_OLD_BUILD"},
+    {"number": 34, "state": "UNKNOWN"},
+    {"number": 35, "state": "UNKNOWN"}
+  ]
+}

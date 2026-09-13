@@ -156,6 +156,13 @@ assert_contains DOC-MCP-TRAVERSAL-COMPACT README.md '"detail":"compact","output_
 assert_contains DOC-MCP-LIFECYCLE-SUCCESS README.md 'Successful lifecycle guidance is categorical and comes only from the returned `result`'
 assert_contains DOC-SKILL-TRAVERSAL-COMPACT cmd/lsp-trace/references/offline-evidence.md 'Compact traversal requires both `detail: "compact"` and `output_selector`;'
 assert_contains DOC-ADR-THIRTEEN docs/adr/0003-always-local-stage2.md 'Unsupported platforms keep the same thirteen-tool discovery contract.'
+assert_contains DOC-REPRESENTATIVE-MATRIX qualification/representative-preflight/matrix.v1.json '"source_state": "INTEGRATED"'
+assert_contains DOC-REPRESENTATIVE-INSTALLED-EVIDENCE qualification/representative-preflight/installed-state.7a6a.v1.json '"custody": "OPERATOR_ASSERTED"'
+assert_contains DOC-REPRESENTATIVE-SOURCE-INSTALLED qualification/FINAL-REPLAY-QUALIFICATION.md 'The report distinguishes repository source state from installed production state.'
+assert_contains DOC-REPRESENTATIVE-VERSION qualification/FINAL-REPLAY-QUALIFICATION.md 'Executable presence is reported separately, and its version remains `VERSION_UNVERIFIED`'
+assert_contains DOC-REPRESENTATIVE-SESSION qualification/FINAL-REPLAY-QUALIFICATION.md 'Environment flags are only `OPERATOR_ASSERTED` prerequisites'
+assert_contains DOC-REPRESENTATIVE-EMBER qualification/FINAL-REPLAY-QUALIFICATION.md 'package version `1.0.3` is distinct from semantic protocol identity `ember-glint@1`'
+assert_contains DOC-REPRESENTATIVE-SAFE-OUTPUT qualification/FINAL-REPLAY-QUALIFICATION.md 'publishes atomically without replacement at mode `0600`'
 
 if [ "$failed" -ne 0 ]; then
   exit 1
