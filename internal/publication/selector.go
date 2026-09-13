@@ -275,6 +275,14 @@ func (t *target) close() {
 }
 
 func safeTarget(root *Root, selector string) (*target, error) {
+	return safeTargetWithPathPolicy(root, selector, true)
+}
+
+func capabilityTarget(root *Root, selector string) (*target, error) {
+	return safeTargetWithPathPolicy(root, selector, false)
+}
+
+func safeTargetWithPathPolicy(root *Root, selector string, requirePathIdentity bool) (*target, error) {
 	if root == nil || root.file == nil || root.handle == nil || selector == "" || strings.IndexByte(selector, 0) >= 0 || filepath.IsAbs(selector) || !filepath.IsLocal(selector) {
 		return nil, errors.New("unsafe selector")
 	}
@@ -287,9 +295,11 @@ func safeTarget(root *Root, selector string) (*target, error) {
 			return nil, errors.New("unsafe selector component")
 		}
 	}
-	currentPathInfo, err := os.Lstat(root.path)
-	if err != nil || !os.SameFile(root.info, currentPathInfo) {
-		return nil, errors.New("root identity changed")
+	if requirePathIdentity {
+		currentPathInfo, err := os.Lstat(root.path)
+		if err != nil || !os.SameFile(root.info, currentPathInfo) {
+			return nil, errors.New("root identity changed")
+		}
 	}
 	handleInfo, err := root.handle.Stat(".")
 	if err != nil || !os.SameFile(root.info, handleInfo) {

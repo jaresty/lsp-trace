@@ -16,6 +16,13 @@ import (
 
 const DirectoryGenerationMechanism = "atomic_no_replace_directory_generation"
 
+// Package-private transaction hooks are nil outside deterministic tests.
+var (
+	testHookGenerationRootValidated func()
+	testHookGenerationStageOpened   func()
+	testHookGenerationBeforeCommit  func()
+)
+
 // GenerationFile is one exact regular file in a private staged generation.
 // Name is slash-separated and relative to the generation directory.
 type GenerationFile struct {
@@ -40,7 +47,9 @@ type GenerationReceipt struct {
 
 // PublishGeneration stages, syncs, and rereads a complete private directory,
 // then makes it visible with one descriptor-relative atomic no-replace rename.
-// Errors after that rename are not returned: the namespace transaction committed.
+// Root validation pins a capability, not a pathname lease: later renaming or
+// replacing any pathname ancestor neither redirects nor invalidates publication.
+// Errors after the final rename are not returned: the namespace transaction committed.
 func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 	if req.Root == nil || len(req.Files) == 0 {
 		return nil, errors.New("invalid generation request")
@@ -48,7 +57,10 @@ func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 	if err := req.Root.ValidatePrivate(); err != nil {
 		return nil, err
 	}
-	t, err := safeTarget(req.Root, req.FinalSelector)
+	if testHookGenerationRootValidated != nil {
+		testHookGenerationRootValidated()
+	}
+	t, err := capabilityTarget(req.Root, req.FinalSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -87,19 +99,35 @@ func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 		return nil, err
 	}
 	committed := false
+	var stageRoot *os.Root
+	var stagedInfo os.FileInfo
 	defer func() {
 		if !committed {
-			_ = t.parent.RemoveAll(stage)
+			removeBoundStage(t.parent, stage, stageRoot, stagedInfo)
+		}
+		if stageRoot != nil {
+			_ = stageRoot.Close()
 		}
 	}()
 	if err := t.parent.Mkdir(stage, 0o700); err != nil {
 		return nil, err
 	}
-	stageRoot, err := t.parent.OpenRoot(stage)
+	createdInfo, err := t.parent.Lstat(stage)
+	if err != nil || !createdInfo.IsDir() || createdInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("created staging directory identity unavailable")
+	}
+	stageRoot, err = t.parent.OpenRoot(stage)
 	if err != nil {
 		return nil, err
 	}
-	defer stageRoot.Close()
+	openedInfo, err := stageRoot.Stat(".")
+	if err != nil || !os.SameFile(createdInfo, openedInfo) {
+		return nil, errors.New("created staging directory identity changed")
+	}
+	stagedInfo = openedInfo
+	if testHookGenerationStageOpened != nil {
+		testHookGenerationStageOpened()
+	}
 	for _, f := range files {
 		if err := writeGenerationFile(stageRoot, f); err != nil {
 			return nil, err
@@ -111,7 +139,7 @@ func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 	if err := syncGenerationDirectories(stageRoot, files); err != nil {
 		return nil, err
 	}
-	stageDir, err := t.parent.Open(stage)
+	stageDir, err := stageRoot.Open(".")
 	if err != nil {
 		return nil, err
 	}
@@ -122,8 +150,19 @@ func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 	if err = stageDir.Close(); err != nil {
 		return nil, err
 	}
+	stagedInfo, err = stageRoot.Stat(".")
+	if err != nil {
+		return nil, err
+	}
 	parentDir, err := t.parent.Open(".")
 	if err != nil {
+		return nil, err
+	}
+	if testHookGenerationBeforeCommit != nil {
+		testHookGenerationBeforeCommit()
+	}
+	if err := validateBoundStage(t.parent, stage, stageRoot, stagedInfo); err != nil {
+		_ = parentDir.Close()
 		return nil, err
 	}
 	if err = renameNoReplace(int(parentDir.Fd()), stage, t.name); err != nil {
@@ -143,6 +182,33 @@ func PublishGeneration(req GenerationRequest) (*GenerationReceipt, error) {
 	}
 	_ = parentDir.Close()
 	return &GenerationReceipt{FinalSelector: req.FinalSelector, Mechanism: DirectoryGenerationMechanism, NamespaceAtomic: true, CrashDurability: durability}, nil
+}
+
+func validateBoundStage(parent *os.Root, name string, stage *os.Root, expected os.FileInfo) error {
+	if parent == nil || stage == nil || expected == nil {
+		return errors.New("staging directory is unavailable")
+	}
+	named, err := parent.Lstat(name)
+	if err != nil {
+		return errors.New("staging directory entry changed")
+	}
+	bound, err := stage.Stat(".")
+	if err != nil || !os.SameFile(named, bound) || !os.SameFile(expected, bound) {
+		return errors.New("staging directory identity changed")
+	}
+	if !named.IsDir() || named.Mode()&os.ModeSymlink != 0 || named.Mode().Perm() != 0o700 || nlink(named) != nlink(bound) || nlink(bound) != nlink(expected) {
+		return errors.New("staging directory metadata changed")
+	}
+	if err := validateRootOwner(named); err != nil {
+		return errors.New("staging directory ownership changed")
+	}
+	return nil
+}
+
+func removeBoundStage(parent *os.Root, name string, stage *os.Root, expected os.FileInfo) {
+	if validateBoundStage(parent, name, stage, expected) == nil {
+		_ = parent.RemoveAll(name)
+	}
 }
 
 func validateGenerationName(name string) error {
