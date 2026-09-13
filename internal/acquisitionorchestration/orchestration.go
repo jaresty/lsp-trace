@@ -156,10 +156,26 @@ func ExecuteAutomaticFile(ctx context.Context, runtime Runtime, op operation.Req
 	return executeCallerSeeds(ctx, runtime, op, RouteAutomaticFile, seedSpec)
 }
 
-// ExecuteCensusBatch is the private product-created authority route for one
-// batch in an already initialized session. It has no lifecycle or publication.
-func ExecuteCensusBatch(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
-	return executeCallerSeeds(ctx, runtime, op, RouteCensusBatch, seedSpec)
+// censusBatchCapability is an opaque, single-runtime authority minted only by
+// trusted acquisition orchestration. Callers cannot name, construct, or alter one.
+type censusBatchCapability struct{ runtime Runtime }
+
+// NewCensusBatchCapability binds census execution to the concrete managed
+// runtime selected by orchestration. It grants no lifecycle or publication.
+func NewCensusBatchCapability(runtime Runtime) *censusBatchCapability {
+	if runtime == nil {
+		return nil
+	}
+	return &censusBatchCapability{runtime: runtime}
+}
+
+// ExecuteCensusBatch spends only an orchestration-minted opaque capability.
+// Arbitrary callbacks and caller-implemented sessions are not accepted.
+func ExecuteCensusBatch(ctx context.Context, capability *censusBatchCapability, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
+	if capability == nil || capability.runtime == nil {
+		return failure(operation.FailureInternal, fmt.Errorf("census batch capability required"))
+	}
+	return executeCallerSeeds(ctx, capability.runtime, op, RouteCensusBatch, seedSpec)
 }
 
 // ExecuteLegacyManifest preserves the runtime's established seed-binding custody

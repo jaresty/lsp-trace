@@ -145,6 +145,7 @@ type Projection struct {
 	Constituents  []Constituent
 	Manifest      captureset.Manifest
 	ManifestBytes []byte
+	Workspace     string
 }
 type Publisher interface {
 	Publish(context.Context, PublicationCapability) error
@@ -226,7 +227,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 		for j, t := range b.Targets {
 			pt[j] = prepared[t.CensusOrdinal]
 		}
-		seedBytes, err := combineSeeds(pt)
+		seedBytes, err := combineSeeds(pt, d.Workspace)
 		if err != nil {
 			return Assembly{}, fmt.Errorf("batch %d seeds: %w", i, err)
 		}
@@ -259,7 +260,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 	if err != nil {
 		return Assembly{}, fmt.Errorf("manifest encoding: %w", err)
 	}
-	p := Projection{s, cid, batches, cs, m, raw}
+	p := Projection{Session: s, CensusID: cid, Batches: batches, Constituents: cs, Manifest: m, ManifestBytes: raw, Workspace: d.Workspace}
 	if err = validateProjection(p); err != nil {
 		return Assembly{}, fmt.Errorf("assembly accounting: %w", err)
 	}
@@ -437,22 +438,20 @@ func platformPathEqual(goos, a, b string) bool {
 	}
 	return a == b
 }
-func combineSeeds(ts []PreparedTarget) ([]byte, error) {
-	var all []json.RawMessage
+func combineSeeds(ts []PreparedTarget, workspace string) ([]byte, error) {
+	all := make([]seedformat.Seed, 0, len(ts))
 	for _, t := range ts {
-		var f struct {
-			Seeds []json.RawMessage `json:"seeds"`
-		}
-		if err := json.Unmarshal(t.CanonicalSeedV2, &f); err != nil || len(f.Seeds) != 1 {
+		f, err := seedformat.Decode(t.CanonicalSeedV2, workspace)
+		if err != nil || len(f.Seeds) != 1 {
 			return nil, errors.New("one canonical seed required per target")
+		}
+		canonical, err := seedformat.EncodeCanonical(f, workspace)
+		if err != nil || !bytes.Equal(canonical, t.CanonicalSeedV2) {
+			return nil, errors.New("canonical target seed required")
 		}
 		all = append(all, f.Seeds[0])
 	}
-	return json.Marshal(struct {
-		SchemaVersion string            `json:"schema_version"`
-		Coordinate    string            `json:"coordinate_convention"`
-		Seeds         []json.RawMessage `json:"seeds"`
-	}{"lsp-trace.seeds.v2", "one-based", all})
+	return seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: all}, workspace)
 }
 func admit(raw []byte, b BatchRequest) (captureset.Constituent, error) {
 	if len(raw) == 0 {
@@ -493,7 +492,7 @@ func validateProjection(p Projection) error {
 			return errors.New("batch assignment mutation")
 		}
 		wantID := stableID("batch", []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(mts[x.TargetStart:x.TargetStart+x.TargetCount]))))
-		seeds, _ := combineSeeds(b.Targets)
+		seeds, _ := combineSeeds(b.Targets, p.Workspace)
 		if b.BatchID != wantID || !bytes.Equal(b.CanonicalSeedsV2, seeds) {
 			return errors.New("batch identity or seeds mutation")
 		}
