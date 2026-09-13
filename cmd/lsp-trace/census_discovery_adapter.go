@@ -30,45 +30,30 @@ type initializedCensusDiscoverySession interface {
 	PrepareDocument(context.Context, sessionruntime.DocumentRequest) sessionruntime.DocumentResult
 }
 
+const (
+	censusMaxDiscoveredEntries = 100000
+	censusMaxEnumerationWork   = 200000
+	censusMaxSourcePathBytes   = 4096
+	censusMaxSourceDepth       = 64
+)
+
 type censusWorkspaceEnumerator struct {
 	workspace string
 	roots     []string
+	filters   censusacquisition.Filters
+	maxFiles  int
 }
 
 func (e censusWorkspaceEnumerator) Enumerate(ctx context.Context) ([]censusacquisition.SourceFile, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	roots, err := expandCensusSourceRoots(e.workspace, e.roots)
-	if err != nil {
-		return nil, err
-	}
+	roots := append([]string(nil), e.roots...)
+	sort.Slice(roots, func(i, j int) bool { return filepath.ToSlash(roots[i]) < filepath.ToSlash(roots[j]) })
 	if len(roots) == 0 {
 		return []censusacquisition.SourceFile{}, nil
 	}
-	return censusacquisition.EnumerateWorkspace(e.workspace, roots, source.LanguageID)
-}
-
-// source.Discover deliberately rejects an ambiguous dot input. At the parsed
-// census boundary dot means all immediate workspace members; expanding it here
-// preserves the shared enumerator's safety contract and deterministic order.
-func expandCensusSourceRoots(workspace string, roots []string) ([]string, error) {
-	out := make([]string, 0, len(roots))
-	for _, root := range roots {
-		if filepath.Clean(root) != "." {
-			out = append(out, root)
-			continue
-		}
-		entries, err := os.ReadDir(workspace)
-		if err != nil {
-			return nil, err
-		}
-		for _, entry := range entries {
-			out = append(out, entry.Name())
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return filepath.ToSlash(out[i]) < filepath.ToSlash(out[j]) })
-	return append([]string(nil), out...), nil
+	return censusacquisition.EnumerateWorkspaceContext(ctx, e.workspace, roots, source.LanguageID, e.filters, source.Limits{
+		MaxEntries: censusMaxDiscoveredEntries, MaxAccepted: e.maxFiles,
+		MaxWork: censusMaxEnumerationWork, MaxPathBytes: censusMaxSourcePathBytes, MaxDepth: censusMaxSourceDepth,
+	})
 }
 
 type censusRuntimeDocumentSupplier struct {
@@ -126,7 +111,11 @@ func newCensusDiscoveryAdapter(options censusCLIOptions, session initializedCens
 			Includes: append([]string(nil), options.Includes...),
 			Excludes: append([]string(nil), options.Excludes...),
 		},
-		Files:    censusWorkspaceEnumerator{workspace: workspace, roots: roots},
+		Files: censusWorkspaceEnumerator{
+			workspace: workspace, roots: roots,
+			filters:  censusacquisition.Filters{Includes: append([]string(nil), options.Includes...), Excludes: append([]string(nil), options.Excludes...)},
+			maxFiles: options.MaxNodes,
+		},
 		Supplier: censusRuntimeDocumentSupplier{runtime: session},
 		Client:   client,
 		Limits: censusacquisition.DiscoveryLimits{

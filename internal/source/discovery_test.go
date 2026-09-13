@@ -1,7 +1,9 @@
 package source
 
 import (
+	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -108,6 +110,99 @@ func TestDiscoverRejectsAmbiguousInputsAndNeedsNoGit(t *testing.T) {
 	records, err := Discover(Request{Base: base, Inputs: []string{"plain.go"}})
 	if err != nil || len(records) != 1 || records[0].Inclusion != Included {
 		t.Fatalf("ASSERT_NO_GIT_REQUIRED: records=%+v err=%v", records, err)
+	}
+}
+
+func TestDiscoverContextBoundsCancellationAndOverlap(t *testing.T) {
+	base := t.TempDir()
+	for _, name := range []string{"a/1.go", "a/2.go", "a/deep/3.go"} {
+		path := filepath.Join(base, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("midwalk cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		calls := 0
+		walk := func(root string, fn fs.WalkDirFunc) error {
+			return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+				calls++
+				if calls == 2 {
+					cancel()
+				}
+				return fn(path, entry, err)
+			})
+		}
+		_, err := discoverContext(ctx, Request{Base: base, Inputs: []string{"a"}}, Limits{MaxEntries: 100, MaxWork: 100, MaxPathBytes: 4096, MaxDepth: 16}, walk)
+		if !errors.Is(err, context.Canceled) || calls != 2 {
+			t.Fatalf("ASSERT_DISCOVER_MIDWALK_CANCEL: calls=%d err=%v", calls, err)
+		}
+	})
+
+	for name, limits := range map[string]Limits{
+		"entries": {MaxEntries: 2, MaxWork: 100, MaxPathBytes: 4096, MaxDepth: 16},
+		"work":    {MaxEntries: 100, MaxWork: 2, MaxPathBytes: 4096, MaxDepth: 16},
+		"path":    {MaxEntries: 100, MaxWork: 100, MaxPathBytes: 1, MaxDepth: 16},
+		"depth":   {MaxEntries: 100, MaxWork: 100, MaxPathBytes: 4096, MaxDepth: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			walk := func(root string, fn fs.WalkDirFunc) error {
+				return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error { calls++; return fn(path, entry, err) })
+			}
+			_, err := discoverContext(context.Background(), Request{Base: base, Inputs: []string{"a"}}, limits, walk)
+			if !errors.Is(err, ErrDiscoveryLimit) {
+				t.Fatalf("ASSERT_DISCOVER_%s_LIMIT: calls=%d err=%v", strings.ToUpper(name), calls, err)
+			}
+			if name == "work" && calls != limits.MaxWork+1 {
+				t.Fatalf("ASSERT_DISCOVER_WORK_EARLY_STOP: calls=%d", calls)
+			}
+			if name == "path" && strings.Contains(err.Error(), base) {
+				t.Fatalf("ASSERT_DISCOVER_PATH_LIMIT_PRIVACY: %v", err)
+			}
+		})
+	}
+
+	t.Run("ancestor swap", func(t *testing.T) {
+		outside := t.TempDir()
+		if err := os.WriteFile(filepath.Join(outside, "escape.go"), []byte("escape"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		root := filepath.Join(base, "swap")
+		if err := os.Mkdir(root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		walk := func(_ string, fn fs.WalkDirFunc) error {
+			entry, err := os.ReadDir(outside)
+			if err != nil {
+				return err
+			}
+			if err := os.Rename(root, root+"-old"); err != nil {
+				return err
+			}
+			if err := os.Symlink(outside, root); err != nil {
+				return err
+			}
+			return fn(filepath.Join(root, "escape.go"), entry[0], nil)
+		}
+		_, err := discoverContext(context.Background(), Request{Base: base, Inputs: []string{"swap"}}, Limits{MaxEntries: 100, MaxWork: 100, MaxPathBytes: 4096, MaxDepth: 16}, walk)
+		if !errors.Is(err, ErrUnsafeSource) || strings.Contains(err.Error(), outside) {
+			t.Fatalf("ASSERT_DISCOVER_ANCESTOR_SWAP: %v", err)
+		}
+	})
+
+	limits := Limits{MaxEntries: 100, MaxWork: 100, MaxPathBytes: 4096, MaxDepth: 16}
+	forward, err := DiscoverContext(context.Background(), Request{Base: base, Inputs: []string{"a", "a/1.go"}}, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reverse, err := DiscoverContext(context.Background(), Request{Base: base, Inputs: []string{"a/1.go", "a"}}, limits)
+	if err != nil || !reflect.DeepEqual(forward, reverse) {
+		t.Fatalf("ASSERT_DISCOVER_OVERLAP_ORDER: forward=%+v reverse=%+v err=%v", forward, reverse, err)
 	}
 }
 
