@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-result.v1.schema.json",
+  "title": "FUTURE/PROPOSED operation 35 transient structural result; unregistered until operation 34 lands",
+  "$defs": {
+    "opaqueNodeID": {"type": "string", "pattern": "^tn_[0-9a-f]{32}$"},
+    "opaqueEdgeID": {"type": "string", "pattern": "^te_[0-9a-f]{32}$"},
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 9223372036854775807},
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["request_attempted", "request_succeeded", "request_failed", "request_cancelled", "prepared_attempted", "prepared_returned", "prepared_empty", "prepared_failed", "node_observed", "node_admitted", "node_rejected", "node_omitted", "occurrence_observed", "occurrence_admitted", "occurrence_rejected", "occurrence_omitted", "frontier_observed", "frontier_expanded", "frontier_unexpanded", "deduplicated_nodes", "deduplicated_occurrences", "truncated"],
+      "properties": {
+        "request_attempted": {"$ref": "#/$defs/count"}, "request_succeeded": {"$ref": "#/$defs/count"}, "request_failed": {"$ref": "#/$defs/count"}, "request_cancelled": {"$ref": "#/$defs/count"},
+        "prepared_attempted": {"$ref": "#/$defs/count"}, "prepared_returned": {"$ref": "#/$defs/count"}, "prepared_empty": {"$ref": "#/$defs/count"}, "prepared_failed": {"$ref": "#/$defs/count"},
+        "node_observed": {"$ref": "#/$defs/count"}, "node_admitted": {"$ref": "#/$defs/count"}, "node_rejected": {"$ref": "#/$defs/count"}, "node_omitted": {"$ref": "#/$defs/count"},
+        "occurrence_observed": {"$ref": "#/$defs/count"}, "occurrence_admitted": {"$ref": "#/$defs/count"}, "occurrence_rejected": {"$ref": "#/$defs/count"}, "occurrence_omitted": {"$ref": "#/$defs/count"},
+        "frontier_observed": {"$ref": "#/$defs/count"}, "frontier_expanded": {"$ref": "#/$defs/count"}, "frontier_unexpanded": {"$ref": "#/$defs/count"},
+        "deduplicated_nodes": {"$ref": "#/$defs/count"}, "deduplicated_occurrences": {"$ref": "#/$defs/count"}, "truncated": {"const": false}
+      }
+    },
+    "node": {
+      "type": "object", "additionalProperties": false, "required": ["node_id"],
+      "properties": {"node_id": {"$ref": "#/$defs/opaqueNodeID"}}
+    },
+    "edge": {
+      "type": "object", "additionalProperties": false, "required": ["edge_id", "caller_node_id", "callee_node_id"],
+      "properties": {"edge_id": {"$ref": "#/$defs/opaqueEdgeID"}, "caller_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "callee_node_id": {"$ref": "#/$defs/opaqueNodeID"}}
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "oneOf": [
+    {"properties": {"analysis_policy": {"properties": {"policy_id": {"const": "transient-neighborhood.v1"}}}, "analysis": {"properties": {"kind": {"const": "NEIGHBORHOOD"}}}}},
+    {"properties": {"analysis_policy": {"properties": {"policy_id": {"const": "transient-impact.v1"}}}, "analysis": {"properties": {"kind": {"const": "IMPACT"}}}}}
+  ],
+  "required": ["schema_version", "phase", "state", "evidence_class", "authority", "source_graph_complete", "retained", "replayable", "publication_eligible", "hydration_eligible", "claim_ceiling", "canonical_session_id", "generation", "target_node_id", "position_encoding", "traversal_policy", "resource_policy", "analysis_policy", "graph_digest", "accounting", "analysis"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.transient-structural-result.v1"},
+    "phase": {"const": "DELIVERY_CHECK"},
+    "state": {"enum": ["COMPLETE", "EMPTY"]},
+    "evidence_class": {"const": "TRANSIENT_LIVE"},
+    "authority": {"const": 0},
+    "source_graph_complete": {"const": "UNKNOWN"},
+    "retained": {"const": false}, "replayable": {"const": false}, "publication_eligible": {"const": false}, "hydration_eligible": {"const": false},
+    "claim_ceiling": {"const": "Under the named managed session generation, exact target, server responses, traversal bounds, and analysis policy, this bounded server-reported call graph has the reported structural properties."},
+    "canonical_session_id": {"type": "string", "pattern": "^ts_[0-9a-f]{32}$"},
+    "generation": {"type": "integer", "minimum": 1},
+    "target_node_id": {"$ref": "#/$defs/opaqueNodeID"},
+    "position_encoding": {"enum": ["utf-8", "utf-16", "utf-32"]},
+    "traversal_policy": {
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_digest", "down_depth", "up_depth", "max_nodes"],
+      "properties": {"policy_id": {"const": "transient-calls-traversal.v1"}, "policy_digest": {"const": "sha256:1111111111111111111111111111111111111111111111111111111111111111"}, "down_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "up_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000}}
+    },
+    "resource_policy": {
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_digest", "timeout_ms", "request_timeout_ms"],
+      "properties": {"policy_id": {"const": "transient-structural-resources.v1"}, "policy_digest": {"const": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}, "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}}
+    },
+    "analysis_policy": {
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_digest"],
+      "properties": {"policy_id": {"enum": ["transient-neighborhood.v1", "transient-impact.v1"]}, "policy_version": {"const": "1"}, "policy_digest": {"$ref": "#/$defs/digest"}}
+    },
+    "graph_digest": {"$ref": "#/$defs/digest"},
+    "accounting": {"$ref": "#/$defs/accounting"},
+    "analysis": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "root_node_id", "nodes", "edges", "incoming_count", "outgoing_count", "frontier_count"], "properties": {"kind": {"const": "NEIGHBORHOOD"}, "root_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "nodes": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/node"}}, "edges": {"type": "array", "maxItems": 100000, "items": {"$ref": "#/$defs/edge"}}, "incoming_count": {"$ref": "#/$defs/count"}, "outgoing_count": {"$ref": "#/$defs/count"}, "frontier_count": {"$ref": "#/$defs/count"}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "root_node_id", "direction", "depth", "reachable_node_ids", "witness_edge_ids"], "properties": {"kind": {"const": "IMPACT"}, "root_node_id": {"$ref": "#/$defs/opaqueNodeID"}, "direction": {"enum": ["INCOMING", "OUTGOING"]}, "depth": {"type": "integer", "minimum": 1, "maximum": 64}, "reachable_node_ids": {"type": "array", "maxItems": 10000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueNodeID"}}, "witness_edge_ids": {"type": "array", "maxItems": 100000, "uniqueItems": true, "items": {"$ref": "#/$defs/opaqueEdgeID"}}}}
+      ]
+    }
+  }
+}

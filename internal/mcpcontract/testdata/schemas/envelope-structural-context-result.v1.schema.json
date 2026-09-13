@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v1.schema.json",
+  "title": "FUTURE/PROPOSED operation 35 non-artifact success envelope; unregistered until operation 34 lands",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["envelope_version", "envelope_schema_id", "tool", "request_id", "outcome", "operation_status", "isError", "result"],
+  "oneOf": [
+    {"properties": {"outcome": {"const": "COMPLETE"}, "result": {"allOf": [{"$ref": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-result.v1.schema.json"}, {"properties": {"state": {"const": "COMPLETE"}}}]}}},
+    {"properties": {"outcome": {"const": "EMPTY"}, "result": {"allOf": [{"$ref": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-result.v1.schema.json"}, {"properties": {"state": {"const": "EMPTY"}}}]}}}
+  ],
+  "properties": {
+    "envelope_version": {"const": "1"},
+    "envelope_schema_id": {"const": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v1.schema.json"},
+    "tool": {"const": "lsp_trace_v1_structural_context"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "outcome": {"enum": ["COMPLETE", "EMPTY"]},
+    "operation_status": {"const": "SUCCEEDED"},
+    "isError": {"const": false},
+    "result": {"$ref": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-result.v1.schema.json"}
+  }
+}

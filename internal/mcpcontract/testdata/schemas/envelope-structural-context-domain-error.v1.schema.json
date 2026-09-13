@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v1.schema.json",
+  "title": "FUTURE/PROPOSED operation 35 domain-error envelope; unregistered until operation 34 lands",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["envelope_version", "envelope_schema_id", "tool", "request_id", "outcome", "operation_status", "isError", "phase", "state", "error"],
+  "properties": {
+    "envelope_version": {"const": "1"},
+    "envelope_schema_id": {"const": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v1.schema.json"},
+    "tool": {"const": "lsp_trace_v1_structural_context"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "outcome": {"const": "DOMAIN_ERROR"},
+    "operation_status": {"const": "FAILED"},
+    "isError": {"const": true},
+    "phase": {"enum": ["PREFLIGHT", "TRAVERSAL", "ADMISSION", "ANALYSIS", "DELIVERY_CHECK"]},
+    "state": {"enum": ["UNSUPPORTED", "AMBIGUOUS_TARGET", "TARGET_NOT_FOUND", "PARTIAL", "TRUNCATED", "RESOURCE_LIMIT", "TIMEOUT", "CANCELLED", "GENERATION_CHANGED", "INVALID_SERVER_RESPONSE", "ANALYSIS_FAILED"]},
+    "error": {
+      "type": "object", "additionalProperties": false, "required": ["code"],
+      "properties": {"code": {"enum": ["UNSUPPORTED", "AMBIGUOUS_TARGET", "TARGET_NOT_FOUND", "PARTIAL", "TRUNCATED", "RESOURCE_LIMIT", "TIMEOUT", "CANCELLED", "GENERATION_CHANGED", "INVALID_SERVER_RESPONSE", "ANALYSIS_FAILED"]}}
+    }
+  },
+  "allOf": [
+    {"oneOf": [
+      {"properties": {"phase": {"const": "PREFLIGHT"}, "state": {"enum": ["UNSUPPORTED", "AMBIGUOUS_TARGET", "TARGET_NOT_FOUND", "RESOURCE_LIMIT", "TIMEOUT", "CANCELLED", "GENERATION_CHANGED", "INVALID_SERVER_RESPONSE"]}}},
+      {"properties": {"phase": {"const": "TRAVERSAL"}, "state": {"enum": ["PARTIAL", "TRUNCATED", "RESOURCE_LIMIT", "TIMEOUT", "CANCELLED", "GENERATION_CHANGED", "INVALID_SERVER_RESPONSE"]}}},
+      {"properties": {"phase": {"const": "ADMISSION"}, "state": {"enum": ["RESOURCE_LIMIT", "CANCELLED", "GENERATION_CHANGED", "INVALID_SERVER_RESPONSE"]}}},
+      {"properties": {"phase": {"const": "ANALYSIS"}, "state": {"enum": ["RESOURCE_LIMIT", "TIMEOUT", "CANCELLED", "GENERATION_CHANGED", "ANALYSIS_FAILED"]}}},
+      {"properties": {"phase": {"const": "DELIVERY_CHECK"}, "state": {"enum": ["CANCELLED", "GENERATION_CHANGED"]}}}
+    ]},
+    {"oneOf": [
+      {"properties": {"state": {"const": "UNSUPPORTED"}, "error": {"properties": {"code": {"const": "UNSUPPORTED"}}}}},
+      {"properties": {"state": {"const": "AMBIGUOUS_TARGET"}, "error": {"properties": {"code": {"const": "AMBIGUOUS_TARGET"}}}}},
+      {"properties": {"state": {"const": "TARGET_NOT_FOUND"}, "error": {"properties": {"code": {"const": "TARGET_NOT_FOUND"}}}}},
+      {"properties": {"state": {"const": "PARTIAL"}, "error": {"properties": {"code": {"const": "PARTIAL"}}}}},
+      {"properties": {"state": {"const": "TRUNCATED"}, "error": {"properties": {"code": {"const": "TRUNCATED"}}}}},
+      {"properties": {"state": {"const": "RESOURCE_LIMIT"}, "error": {"properties": {"code": {"const": "RESOURCE_LIMIT"}}}}},
+      {"properties": {"state": {"const": "TIMEOUT"}, "error": {"properties": {"code": {"const": "TIMEOUT"}}}}},
+      {"properties": {"state": {"const": "CANCELLED"}, "error": {"properties": {"code": {"const": "CANCELLED"}}}}},
+      {"properties": {"state": {"const": "GENERATION_CHANGED"}, "error": {"properties": {"code": {"const": "GENERATION_CHANGED"}}}}},
+      {"properties": {"state": {"const": "INVALID_SERVER_RESPONSE"}, "error": {"properties": {"code": {"const": "INVALID_SERVER_RESPONSE"}}}}},
+      {"properties": {"state": {"const": "ANALYSIS_FAILED"}, "error": {"properties": {"code": {"const": "ANALYSIS_FAILED"}}}}}
+    ]}
+  ]
+}
