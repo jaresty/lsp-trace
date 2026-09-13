@@ -19,6 +19,7 @@ const (
 	RouteSeedFile       = "canonical-seed-file"
 	RouteLegacyManifest = "legacy-seed-manifest"
 	RouteAutomaticFile  = "automatic-from-file"
+	RouteCensusBatch    = "private-census-batch"
 )
 
 type Runtime = acquisitionengine.Runtime
@@ -35,7 +36,7 @@ func policyForRoute(route string) (routePolicy, bool) {
 		return routePolicy{callerLocal: true, prepareSource: true}, true
 	case RouteSeedFile:
 		return routePolicy{callerLocal: true}, true
-	case RouteAutomaticFile:
+	case RouteAutomaticFile, RouteCensusBatch:
 		return routePolicy{callerLocal: true, retainSeedSpec: true}, true
 	case RouteLegacyManifest:
 		return routePolicy{}, true
@@ -153,6 +154,12 @@ func ExecuteSeedFile(ctx context.Context, runtime Runtime, op operation.Request,
 // ExecuteAutomaticFile preserves generated canonical Seeds V2 in V5.
 func ExecuteAutomaticFile(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
 	return executeCallerSeeds(ctx, runtime, op, RouteAutomaticFile, seedSpec)
+}
+
+// ExecuteCensusBatch is the private product-created authority route for one
+// batch in an already initialized session. It has no lifecycle or publication.
+func ExecuteCensusBatch(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
+	return executeCallerSeeds(ctx, runtime, op, RouteCensusBatch, seedSpec)
 }
 
 // ExecuteLegacyManifest preserves the runtime's established seed-binding custody

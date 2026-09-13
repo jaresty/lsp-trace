@@ -2,7 +2,7 @@ package acquisitionorchestration
 
 import "testing"
 
-func TestFourModeCustodyPoliciesAreDistinctAndClosed(t *testing.T) {
+func TestCustodyPoliciesAreDistinctAndClosed(t *testing.T) {
 	cases := []struct {
 		route                         string
 		caller, retain, prepareSource bool
@@ -10,6 +10,7 @@ func TestFourModeCustodyPoliciesAreDistinctAndClosed(t *testing.T) {
 		{RouteExplicitTrace, true, false, true},
 		{RouteSeedFile, true, false, false},
 		{RouteAutomaticFile, true, true, false},
+		{RouteCensusBatch, true, true, false},
 		{RouteLegacyManifest, false, false, false},
 	}
 	seen := map[string]bool{}
