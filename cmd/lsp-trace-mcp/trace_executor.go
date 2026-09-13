@@ -1,6 +1,4 @@
-// Package traceops implements the intent-oriented MCP trace facade by adapting
-// exact targets to the existing managed Graph Provenance V5 acquisition.
-package traceops
+package main
 
 import (
 	"bytes"
@@ -25,9 +23,9 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const Operation operation.Name = "trace"
+const traceOperation operation.Name = "trace"
 
-type Runtime interface {
+type traceRuntime interface {
 	acquisitionorchestration.Runtime
 }
 
@@ -55,13 +53,13 @@ type input struct {
 	TopmostSiblings  bool    `json:"topmost_siblings,omitempty"`
 }
 
-type Executor struct {
-	runtime     Runtime
+type traceExecutor struct {
+	runtime     traceRuntime
 	acquisition any // test-only injection; production uses internal orchestration
 }
 
-func NewExecutor(r Runtime) *Executor {
-	return &Executor{runtime: r}
+func newTraceExecutor(r *hostSelectorRuntime) *traceExecutor {
+	return &traceExecutor{runtime: r}
 }
 
 func decode(raw []byte, dst any) error {
@@ -91,8 +89,8 @@ func fail(code string, err error, diagnostics ...string) (operation.Result, *ope
 	return operation.Result{}, &operation.Failure{Code: code, Err: err, Diagnostics: diagnostics}
 }
 
-func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
-	if e == nil || e.runtime == nil || op.Name != Operation {
+func (e *traceExecutor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
+	if e == nil || e.runtime == nil || op.Name != traceOperation {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var in input
@@ -179,7 +177,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	return acquisitionorchestration.ExecuteExplicitTrace(ctx, e.runtime, requestOp, seedSpec)
 }
 
-func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, positions []Position) ([]byte, string, error) {
+func explicitSeedSpec(runtime traceRuntime, id string, generation uint64, in input, positions []Position) ([]byte, string, error) {
 	workspace := ""
 	for _, record := range runtime.Records() {
 		if record.SessionID == id && record.Generation == generation {
@@ -213,7 +211,7 @@ func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, p
 	return encoded, workspace, err
 }
 
-func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation uint64, uri, name string, requestTimeout int) (Position, *operation.Failure) {
+func resolveSymbol(ctx context.Context, runtime traceRuntime, id string, generation uint64, uri, name string, requestTimeout int) (Position, *operation.Failure) {
 	client := incomingops.NewSessionClient(runtime, id, generation, time.Duration(requestTimeout)*time.Millisecond)
 	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
 	if err != nil {

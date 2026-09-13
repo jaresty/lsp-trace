@@ -51,6 +51,9 @@ func main() {}
 		"prepared-mint":       `package main; import "lsp-trace/sessionruntime"; var _ = sessionruntime.PrepareDocumentForOperation; func main(){}`,
 		"prepared-capability": `package main; import "lsp-trace/sessionruntime"; var _ sessionruntime.PreparedDocumentCapability; func main(){}`,
 		"authority-internal":  `package main; import _ "lsp-trace/internal/acquisitionauthority"; func main(){}`,
+		"trace-runtime":       `package main; import "lsp-trace/traceops"; var _ traceops.Runtime; func main(){}`,
+		"trace-constructor":   `package main; import "lsp-trace/traceops"; var _ = traceops.NewExecutor; func main(){}`,
+		"trace-executor":      `package main; import "lsp-trace/traceops"; var _ *traceops.Executor; func main(){}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := build(source); err == nil {

@@ -9,7 +9,7 @@ import (
 // It grants no provider adapter ownership or wildcard root evidence exception.
 func ownsFR20FR21Path(path string) bool {
 	// Match package boundaries, never all internal/, docs/, schema/ or cmd/.
-	for _, prefix := range []string{"acquisitionops/", "traceops/", "internal/acquisition/", "internal/acquisitionauthority/", "internal/acquisitionengine/", "internal/acquisitionorchestration/", "internal/hydratedevidence/", "internal/hydratedinspection/"} {
+	for _, prefix := range []string{"acquisitionops/", "internal/acquisition/", "internal/acquisitionauthority/", "internal/acquisitionengine/", "internal/acquisitionorchestration/", "internal/hydratedevidence/", "internal/hydratedinspection/"} {
 		if strings.HasPrefix(path, prefix) {
 			return true
 		}
@@ -22,7 +22,7 @@ func ownsFR20FR21Path(path string) bool {
 		"docs/fr20-public-acquisition.md", "docs/hydrated-evidence.md",
 		"cmd/lsp-trace/acquisition_v2.go", "cmd/lsp-trace/acquisition_v2_test.go", "cmd/lsp-trace/automatic_discovery_replay_qualification_test.go", "cmd/lsp-trace/discovery_filter.go", "cmd/lsp-trace/slice_source_test.go", "cmd/lsp-trace/publication.go", "cmd/lsp-trace/trace_process_test.go",
 		"sessionruntime/prepared_capability.go", "sessionruntime/prepared_capability_test.go", "internal/integratedconformance/trace_custody_boundary_test.go",
-		"cmd/lsp-trace-mcp/fr20_graph_test.go", "cmd/lsp-trace-mcp/fr20_legacy_test.go", "cmd/lsp-trace-mcp/fr20_native_test.go", "cmd/lsp-trace-mcp/fr20_public_test.go", "cmd/lsp-trace-mcp/fr20_hydration_test.go", "cmd/lsp-trace-mcp/fr23_v3_process_parity_test.go",
+		"cmd/lsp-trace-mcp/trace_executor.go", "cmd/lsp-trace-mcp/trace_executor_test.go", "cmd/lsp-trace-mcp/fr20_graph_test.go", "cmd/lsp-trace-mcp/fr20_legacy_test.go", "cmd/lsp-trace-mcp/fr20_native_test.go", "cmd/lsp-trace-mcp/fr20_public_test.go", "cmd/lsp-trace-mcp/fr20_hydration_test.go", "cmd/lsp-trace-mcp/fr23_v3_process_parity_test.go",
 		"cmd/lsp-trace-mcp/testdata/fr20-server/main.go",
 		"internal/mcp/acquisition_v2_numbers_test.go", "internal/mcp/acquisition_v2_test.go", "internal/mcp/bounded_analysis.go",
 		"internal/operation/verify_v2.go",
@@ -35,7 +35,7 @@ func ownsFR20FR21Path(path string) bool {
 func TestFR20FR21OwnershipRegistration(t *testing.T) {
 	for _, path := range []string{
 		"focused-final-tests.log", "focused-mutation.log", "focused-red.log", "focused-hydration.claim.md", "focused-vet.log",
-		"acquisitionops/executor.go", "acquisitionops/executor_test.go", "traceops/executor.go", "traceops/executor_test.go",
+		"acquisitionops/executor.go", "acquisitionops/executor_test.go", "cmd/lsp-trace-mcp/trace_executor.go", "cmd/lsp-trace-mcp/trace_executor_test.go",
 		"internal/acquisitionauthority/authority.go", "internal/acquisitionengine/executor.go", "internal/acquisitionorchestration/orchestration.go",
 		"sessionruntime/prepared_capability.go", "internal/integratedconformance/trace_custody_boundary_test.go",
 		"internal/acquisition/coordinator.go",

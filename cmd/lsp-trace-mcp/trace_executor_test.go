@@ -1,4 +1,4 @@
-package traceops
+package main
 
 import (
 	"context"
@@ -102,8 +102,8 @@ func TestExactSymbolAmbiguityFailsBeforeAcquisitionWithBoundedDeterministicCandi
 		r.symbols = append(r.symbols, symbol("Same", i, i))
 	}
 	a := &fakeAcquirer{}
-	e := &Executor{runtime: r, acquisition: a}
-	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Same"}`)})
+	e := &traceExecutor{runtime: r, acquisition: a}
+	_, f := e.Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Same"}`)})
 	if f == nil || f.Code != "DOCUMENT_SYMBOL_AMBIGUOUS" || len(a.requests) != 0 || len(r.methods) != 1 || r.methods[0] != "textDocument/documentSymbol" || len(f.Diagnostics) != 1 || !strings.Contains(f.Diagnostics[0], "total=10 omitted=2") || !strings.Contains(f.Diagnostics[0], "line=1,character=1") || !strings.Contains(f.Diagnostics[0], "use line/character") {
 		t.Fatalf("ASSERT_TRACE_EXACT_AMBIGUITY_PREPARE_FREE_BOUNDED: failure=%+v methods=%v requests=%d", f, r.methods, len(a.requests))
 	}
@@ -120,7 +120,7 @@ func TestV5SourceSupplySurvivesPositionAndSymbolModes(t *testing.T) {
 				r.symbols = []lsp.DocumentSymbol{symbol("Target", 1, 2)}
 			}
 			a := &supplyAcquirer{runtime: r}
-			result, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
+			result, failure := (&traceExecutor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
 			if failure != nil || !strings.Contains(string(result.Artifact), `"source_supply":"LSP_SUPPLIED"`) || len(r.preparations) != 1 || !r.preparations[0].CaptureSupply || !a.symbol || a.position {
 				t.Fatalf("ASSERT_TRACE_%s_V5_FIRST_PREPARATION_SUPPLIES_SOURCE: failure=%v artifact=%s preparations=%+v position=%t symbol=%t", strings.ToUpper(tc.name), failure, result.Artifact, r.preparations, a.position, a.symbol)
 			}
@@ -141,7 +141,7 @@ func TestTraceRejectsMalformedExactSymbolRanges(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{symbols: []lsp.DocumentSymbol{{Name: "Target", Kind: 12, Range: tc.rangeValue, SelectionRange: tc.selection}}}
 			a := &fakeAcquirer{}
-			_, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
+			_, failure := (&traceExecutor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Target"}`)})
 			if failure == nil || failure.Code != "DOCUMENT_SYMBOL_MALFORMED_RANGE" || len(a.requests) != 0 {
 				t.Fatalf("ASSERT_TRACE_EXACT_SYMBOL_MALFORMED_RANGE_REJECTED: failure=%v requests=%d", failure, len(a.requests))
 			}
@@ -161,7 +161,7 @@ func TestTraceMetadataRejectsBeforeDocumentOrLSPActivity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{metadata: tc.metadata}
 			a := &fakeAcquirer{}
-			_, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.input + `}`)})
+			_, failure := (&traceExecutor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.input + `}`)})
 			if failure == nil || failure.Code != tc.want || len(r.preparations) != 0 || len(r.methods) != 0 || len(a.requests) != 0 {
 				t.Fatalf("ASSERT_TRACE_METADATA_REJECTS_BEFORE_ACTIVITY: failure=%v preparations=%d methods=%v acquisitions=%d", failure, len(r.preparations), r.methods, len(a.requests))
 			}
@@ -172,8 +172,8 @@ func TestTraceMetadataRejectsBeforeDocumentOrLSPActivity(t *testing.T) {
 func TestPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *testing.T) {
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
-	e := &Executor{runtime: r, acquisition: a}
-	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":1,"character":2}`)})
+	e := &traceExecutor{runtime: r, acquisition: a}
+	_, f := e.Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":1,"character":2}`)})
 	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 {
 		t.Fatalf("ASSERT_TRACE_POSITION_ONE_NATIVE_EXPLICIT_CUSTODY: failure=%v requests=%+v", f, a.requests)
 	}
@@ -194,9 +194,9 @@ func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeate
 	for _, tc := range []struct{ name, target string }{{"position", `"line":1,"character":2`}, {"symbol", `"symbol":"Target"`}} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{symbols: []lsp.DocumentSymbol{symbol("Target", 1, 2)}}
-			e := NewExecutor(r)
+			e := &traceExecutor{runtime: r}
 			for run := 0; run < 2; run++ {
-				result, failure := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
+				result, failure := e.Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go",` + tc.target + `}`)})
 				if failure != nil {
 					t.Fatalf("ASSERT_REAL_TRACE_ACQUISITION_V5_ADMITTED_%s_RUN_%d: %v", tc.name, run, failure)
 				}
@@ -215,7 +215,7 @@ func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeate
 func TestTraceExplicitZeroDepthIsPreserved(t *testing.T) {
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
-	_, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"down_depth":0,"up_depth":0}`)})
+	_, failure := (&traceExecutor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: traceOperation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"down_depth":0,"up_depth":0}`)})
 	if failure != nil || len(a.requests) != 1 {
 		t.Fatalf("ASSERT_TRACE_ZERO_DEPTH_PRESERVED: failure=%v requests=%d", failure, len(a.requests))
 	}

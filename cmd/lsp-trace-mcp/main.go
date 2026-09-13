@@ -30,7 +30,6 @@ import (
 	"lsp-trace/lifecycleops"
 	"lsp-trace/sessionruntime"
 	"lsp-trace/sliceops"
-	"lsp-trace/traceops"
 )
 
 var (
@@ -295,7 +294,7 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
 	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
 	server.Executors[mcp.AcquisitionV2ExecutorFamily] = legacyManifestExecutor{runtime: selected}
-	server.Executors[mcp.TraceExecutorFamily] = traceops.NewExecutor(selected)
+	server.Executors[mcp.TraceExecutorFamily] = newTraceExecutor(selected)
 }
 
 func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
@@ -434,7 +433,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.IncomingExecutorFamily:      incomingops.NewExecutor(manager),
 			mcp.SliceExecutorFamily:         sliceops.NewExecutor(manager),
 			mcp.AcquisitionV2ExecutorFamily: legacyManifestExecutor{runtime: manager},
-			mcp.TraceExecutorFamily:         traceops.NewExecutor(manager),
+			mcp.TraceExecutorFamily:         newTraceExecutor(newHostSelectorRuntime(manager, nil)),
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil
