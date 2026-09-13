@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Emit a deterministic, source-free representative qualification preflight report."""
 import argparse
+import errno
 import json
 import os
+import secrets
 import shutil
 import stat
 import sys
-import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -166,28 +167,139 @@ def build_report(matrix_path=DEFAULT_MATRIX, installed_path=None):
         "source_graph_complete": matrix["source_graph_complete"], "qualification_performed": False, "receipt_created": False,
     }
 
-def safe_publish(path, encoded):
-    target = Path(path)
-    if target.name in {"", ".", ".."} or target.name != str(target) and any(part == ".." for part in target.parts): fail("unsafe output: traversal is not allowed")
-    if target.name.startswith("."): fail("unsafe output: basename must not start with dot")
-    parent = target.parent
-    if not parent.exists() or not parent.is_dir(): fail("unsafe output: parent must be an existing directory")
-    if parent.is_symlink(): fail("unsafe output: symlink parent rejected")
-    if target.is_symlink(): fail("unsafe output: symlink target rejected")
-    if target.exists(): fail("unsafe output: target already exists")
-    fd, temporary = tempfile.mkstemp(prefix=".representative-preflight-", dir=parent)
+def _publication_primitives():
+    required_flags = ("O_DIRECTORY", "O_NOFOLLOW")
+    if any(not hasattr(os, name) for name in required_flags):
+        fail("unsafe output: required no-follow directory primitives unavailable")
+    if any(function not in os.supports_dir_fd for function in (os.open, os.stat, os.link, os.unlink)):
+        fail("unsafe output: required descriptor-relative primitives unavailable")
+    if os.link not in os.supports_follow_symlinks:
+        fail("unsafe output: required no-follow link primitive unavailable")
+
+
+def _same_identity(left, right):
+    return (left.st_dev, left.st_ino, stat.S_IFMT(left.st_mode)) == (right.st_dev, right.st_ino, stat.S_IFMT(right.st_mode))
+
+
+def _open_parent_chain(target):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    anchor = target.anchor or "."
+    components = target.parent.parts[1:] if target.is_absolute() else target.parent.parts
+    descriptors = []
+    identities = []
     try:
-        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(encoded); handle.flush(); os.fsync(handle.fileno())
-        try:
-            os.link(temporary, target, follow_symlinks=False)
-        except FileExistsError:
-            fail("unsafe output: target already exists")
-        os.unlink(temporary)
+        root_fd = os.open(anchor, flags)
+        descriptors.append(root_fd)
+        identities.append(os.fstat(root_fd))
+        current_fd = root_fd
+        for component in components:
+            if component in {"", ".", ".."}:
+                fail("unsafe output: traversal is not allowed")
+            try:
+                current_fd = os.open(component, flags, dir_fd=current_fd)
+            except OSError:
+                fail(f"unsafe output: parent component rejected: {component}")
+            descriptors.append(current_fd)
+            identities.append(os.fstat(current_fd))
+        return descriptors, identities, components
+    except Exception:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+        raise
+
+
+def _verify_parent_chain(root_fd, components, identities):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    verification = []
+    current_fd = root_fd
+    try:
+        if not _same_identity(os.fstat(root_fd), identities[0]):
+            fail("unsafe output: parent identity changed")
+        for index, component in enumerate(components, 1):
+            try:
+                current_fd = os.open(component, flags, dir_fd=current_fd)
+            except OSError:
+                fail("unsafe output: parent identity changed")
+            verification.append(current_fd)
+            if not _same_identity(os.fstat(current_fd), identities[index]):
+                fail("unsafe output: parent identity changed")
     finally:
-        try: os.unlink(temporary)
-        except FileNotFoundError: pass
+        for descriptor in reversed(verification):
+            os.close(descriptor)
+
+
+def safe_publish(path, encoded, _test_hook=None):
+    _publication_primitives()
+    raw_target = os.fspath(path)
+    target = Path(raw_target)
+    raw_parts = raw_target.split(os.sep)
+    if target.name in {"", ".", ".."}:
+        fail("unsafe output: basename is required")
+    if any(part == ".." for part in raw_parts):
+        fail("unsafe output: traversal is not allowed")
+    if os.sep in target.name or (os.altsep and os.altsep in target.name):
+        fail("unsafe output: basename is invalid")
+    if target.name.startswith("."):
+        fail("unsafe output: basename must not start with dot")
+
+    descriptors, identities, components = _open_parent_chain(target)
+    parent_fd = descriptors[-1]
+    temporary = None
+    file_fd = None
+    try:
+        if _test_hook:
+            _test_hook("parents_pinned")
+        _verify_parent_chain(descriptors[0], components, identities)
+
+        create_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        if hasattr(os, "O_CLOEXEC"):
+            create_flags |= os.O_CLOEXEC
+        for _ in range(128):
+            candidate = ".representative-preflight-" + secrets.token_hex(16)
+            try:
+                file_fd = os.open(candidate, create_flags, 0o600, dir_fd=parent_fd)
+                temporary = candidate
+                break
+            except FileExistsError:
+                continue
+            except OSError as exc:
+                fail(f"unsafe output: temporary creation failed ({exc.__class__.__name__})")
+        if file_fd is None:
+            fail("unsafe output: temporary name exhaustion")
+        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+            fail("unsafe output: temporary file is not regular")
+        payload = encoded.encode("utf-8")
+        offset = 0
+        while offset < len(payload):
+            offset += os.write(file_fd, payload[offset:])
+        os.fsync(file_fd)
+        os.close(file_fd)
+        file_fd = None
+
+        if _test_hook:
+            _test_hook("before_publish")
+        try:
+            os.link(temporary, target.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST:
+                fail("unsafe output: target already exists")
+            fail(f"unsafe output: publication failed ({exc.__class__.__name__})")
+        os.unlink(temporary, dir_fd=parent_fd)
+        temporary = None
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+        if temporary is not None:
+            try:
+                os.unlink(temporary, dir_fd=parent_fd)
+            except FileNotFoundError:
+                pass
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
 
 def main():
     parser = argparse.ArgumentParser()

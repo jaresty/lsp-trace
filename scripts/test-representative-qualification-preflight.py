@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import importlib.util
 import json
 import os
 import subprocess
@@ -9,6 +10,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/prepare-representative-qualification.py"
 MATRIX = ROOT / "qualification/representative-preflight/matrix.v1.json"
 OLD_REVISION = "7a6a2698f0ebf584eca7d348d9972534dc6e08f2"
+SPEC = importlib.util.spec_from_file_location("representative_qualification", SCRIPT)
+PREPARER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(PREPARER)
 
 def require(condition, assertion, detail=""):
     if not condition: raise AssertionError(f"{assertion}: {detail}")
@@ -48,7 +52,7 @@ require(base["qualification_performed"] is False and base["receipt_created"] is 
 require("feature" in base["evidence_semantics"]["claim_ceiling"].lower(), "ASSERT_CLAIM_CEILING")
 
 with tempfile.TemporaryDirectory(prefix="private-qualification-") as tmp:
-    tmp_path = Path(tmp); secret = tmp_path / "do-not-report-provider"
+    tmp_path = Path(tmp).resolve(); secret = tmp_path / "do-not-report-provider"
     secret.write_text("#!/bin/sh\necho 999.999.999\n", encoding="utf-8"); os.chmod(secret, 0o700)
     present_raw, present = run(extra={"CSHARP_LS_BIN": str(secret)})
     school = by_id(present, "school-surveys")
@@ -76,13 +80,40 @@ with tempfile.TemporaryDirectory(prefix="private-qualification-") as tmp:
     require(result.returncode == 0 and output.is_file() and (output.stat().st_mode & 0o777) == 0o600, "ASSERT_PRIVATE_ATOMIC_OUTPUT")
     existing = invoke(("--output", output)); require(existing.returncode == 2 and "target already exists" in existing.stderr, "ASSERT_OUTPUT_EXISTING_REJECTED")
     link = tmp_path / "link.json"; link.symlink_to(output)
-    symlink = invoke(("--output", link)); require(symlink.returncode == 2 and "symlink" in symlink.stderr, "ASSERT_OUTPUT_SYMLINK_REJECTED")
+    symlink = invoke(("--output", link)); require(symlink.returncode == 2 and "target already exists" in symlink.stderr and link.is_symlink(), "ASSERT_OUTPUT_SYMLINK_REJECTED")
     parent_link = tmp_path / "parent-link"; parent_link.symlink_to(tmp_path, target_is_directory=True)
-    parent_symlink = invoke(("--output", parent_link/"report.json")); require(parent_symlink.returncode == 2 and "symlink parent" in parent_symlink.stderr, "ASSERT_OUTPUT_SYMLINK_PARENT_REJECTED")
-    missing = invoke(("--output", tmp_path/"missing"/"report.json")); require(missing.returncode == 2 and "parent" in missing.stderr, "ASSERT_OUTPUT_MISSING_PARENT_REJECTED")
+    parent_symlink = invoke(("--output", parent_link/"report.json")); require(parent_symlink.returncode == 2 and "parent component" in parent_symlink.stderr, "ASSERT_OUTPUT_SYMLINK_PARENT_REJECTED")
+    real = tmp_path / "real"; (real / "child").mkdir(parents=True)
+    early_link = tmp_path / "early-link"; early_link.symlink_to(real, target_is_directory=True)
+    early_symlink = invoke(("--output", early_link/"child"/"report.json")); require(early_symlink.returncode == 2 and "parent component" in early_symlink.stderr, "ASSERT_OUTPUT_EARLY_ANCESTOR_SYMLINK_REJECTED")
+    missing = invoke(("--output", tmp_path/"missing"/"report.json")); require(missing.returncode == 2 and "parent component" in missing.stderr, "ASSERT_OUTPUT_MISSING_PARENT_REJECTED")
     traversal = invoke(("--output", tmp_path/".."/"escape.json")); require(traversal.returncode == 2 and "traversal" in traversal.stderr, "ASSERT_OUTPUT_TRAVERSAL_REJECTED")
     hidden = invoke(("--output", tmp_path/".secret")); require(hidden.returncode == 2 and "basename" in hidden.stderr, "ASSERT_OUTPUT_UNSAFE_BASENAME_REJECTED")
-    require(all("Traceback" not in r.stderr for r in (existing, symlink, parent_symlink, missing, traversal, hidden)), "ASSERT_OUTPUT_NO_TRACEBACK")
+    root = invoke(("--output", Path("/"))); require(root.returncode == 2 and "basename" in root.stderr, "ASSERT_OUTPUT_ROOT_REJECTED")
+
+    race_parent = tmp_path / "race-parent"; (race_parent / "child").mkdir(parents=True)
+    moved_parent = tmp_path / "race-parent-moved"
+    def swap_ancestor(stage):
+        if stage == "parents_pinned":
+            race_parent.rename(moved_parent); (race_parent / "child").mkdir(parents=True)
+    try:
+        PREPARER.safe_publish(race_parent / "child" / "report.json", "{}\n", _test_hook=swap_ancestor)
+        race_rejected = False
+    except PREPARER.PreflightError as exc:
+        race_rejected = "parent identity changed" in str(exc)
+    require(race_rejected and not (race_parent / "child" / "report.json").exists() and not (moved_parent / "child" / "report.json").exists(), "ASSERT_OUTPUT_ANCESTOR_SWAP_REJECTED")
+
+    competitor = tmp_path / "competitor.json"
+    def create_competitor(stage):
+        if stage == "before_publish": competitor.write_text("competitor\n", encoding="utf-8")
+    try:
+        PREPARER.safe_publish(competitor, "report\n", _test_hook=create_competitor)
+        competitor_rejected = False
+    except PREPARER.PreflightError as exc:
+        competitor_rejected = "target already exists" in str(exc)
+    require(competitor_rejected and competitor.read_text(encoding="utf-8") == "competitor\n", "ASSERT_OUTPUT_COMPETITOR_RACE_PRESERVED")
+    require(not list(tmp_path.rglob(".representative-preflight-*")), "ASSERT_OUTPUT_TEMP_CLEANUP")
+    require(all("Traceback" not in r.stderr for r in (existing, symlink, parent_symlink, early_symlink, missing, traversal, hidden, root)), "ASSERT_OUTPUT_NO_TRACEBACK")
 
 invalid_matrix(lambda m: m.update({"unknown": 1}), "ASSERT_MATRIX_UNKNOWN")
 invalid_matrix(lambda m: m["operations"].append({"number":999}), "ASSERT_MATRIX_OP999")
