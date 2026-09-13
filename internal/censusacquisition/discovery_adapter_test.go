@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
+	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/lsp"
 )
@@ -53,9 +57,9 @@ func sym(name string, kind int, line, char uint32, children ...lsp.DocumentSymbo
 	p := lsp.Position{Line: line, Character: char}
 	return lsp.DocumentSymbol{Name: name, Kind: kind, Range: lsp.Range{Start: p, End: p}, SelectionRange: lsp.Range{Start: p, End: lsp.Position{Line: line, Character: char + 9}}, Children: children}
 }
-func item(name, uri string, line, char uint32) lsp.CallHierarchyItem {
+func item(name, uri string, kind int, line, char uint32) lsp.CallHierarchyItem {
 	p := lsp.Position{Line: line, Character: char}
-	return lsp.CallHierarchyItem{Name: name, Kind: 12, URI: uri, Range: lsp.Range{Start: p, End: p}, SelectionRange: lsp.Range{Start: p, End: p}}
+	return lsp.CallHierarchyItem{Name: name, Kind: kind, URI: uri, Range: lsp.Range{Start: p, End: p}, SelectionRange: lsp.Range{Start: p, End: p}}
 }
 
 func TestDiscoveryAdapterDeterministicFlattenSeedsAndImmutableInputs(t *testing.T) {
@@ -66,7 +70,7 @@ func TestDiscoveryAdapterDeterministicFlattenSeedsAndImmutableInputs(t *testing.
 	zsym := sym("Zed", 9, 1, 3)
 	files := StaticFiles{z, a}
 	original := append(StaticFiles(nil), files...)
-	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{a.URI: {root}, z.URI: {zsym}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{child.SelectionRange.Start: {item("Child", a.URI, 4, 7)}, root.SelectionRange.Start: {item("Root", a.URI, 8, 2)}, zsym.SelectionRange.Start: {item("Zed", z.URI, 1, 3)}}}
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{a.URI: {root}, z.URI: {zsym}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{child.SelectionRange.Start: {item("Child", a.URI, 6, 4, 7)}, root.SelectionRange.Start: {item("Root", a.URI, 12, 8, 2)}, zsym.SelectionRange.Start: {item("Zed", z.URI, 9, 1, 3)}}}
 	supplier := &fakeSupplier{errors: map[string]error{}}
 	adapter := DiscoveryAdapter{Workspace: workspace, Files: files, Supplier: supplier, Client: client}
 	got, err := adapter.Discover(context.Background(), SessionIdentity{"ready", 2})
@@ -90,8 +94,8 @@ func TestDiscoveryAdapterDeterministicFlattenSeedsAndImmutableInputs(t *testing.
 		t.Fatal("ASSERT_SELECTED_PREPARED_TARGET_BIJECTION")
 	}
 	for i, target := range got.Targets {
-		if target.CensusOrdinal != i || target.SelectionRange.End != (lsp.Position{}) {
-			t.Fatalf("ASSERT_SELECTION_START_ONLY[%d]: %+v", i, target)
+		if target.CensusOrdinal != i || target.SymbolIdentity == "" || !validRange(target.SelectionRange) {
+			t.Fatalf("ASSERT_PREPARED_IDENTITY_RETAINED[%d]: %+v", i, target)
 		}
 		var seed struct {
 			Coordinate string `json:"coordinate_convention"`
@@ -117,7 +121,7 @@ func TestDiscoveryAdapterExclusionsWinBeforeIncludes(t *testing.T) {
 	workspace := t.TempDir()
 	keep, drop := testSource(workspace, "src/keep.go"), testSource(workspace, "src/drop.go")
 	s := sym("Keep", 12, 0, 0)
-	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{keep.URI: {s}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{s.SelectionRange.Start: {item("Keep", keep.URI, 0, 0)}}}
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{keep.URI: {s}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{s.SelectionRange.Start: {item("Keep", keep.URI, 12, 0, 0)}}}
 	supplier := &fakeSupplier{errors: map[string]error{}}
 	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{drop, keep}, Supplier: supplier, Client: client, Filters: Filters{Includes: []string{"src/**"}, Excludes: []string{"**/drop.go"}}}).Discover(context.Background(), SessionIdentity{"s", 1})
 	if err != nil || !got.Complete {
@@ -197,7 +201,7 @@ func TestDiscoveryAdapterUnsupportedPreparationMalformedAndBounds(t *testing.T) 
 	}
 
 	client.callSupported = true
-	client.prepare[symbols[0].SelectionRange.Start] = []lsp.CallHierarchyItem{item("one", f.URI, 0, 0), item("two", f.URI, 0, 0)}
+	client.prepare[symbols[0].SelectionRange.Start] = []lsp.CallHierarchyItem{item("one", f.URI, 12, 0, 0), item("two", f.URI, 12, 0, 0)}
 	client.prepare[symbols[1].SelectionRange.Start] = []lsp.CallHierarchyItem{{Name: "outside", Kind: 12, URI: "file:///outside.go"}}
 	got, err = (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
 	if err != nil {
@@ -235,4 +239,66 @@ func TestStaticFilesReturnsIndependentSlice(t *testing.T) {
 		t.Fatal("ASSERT_ENUMERATOR_IMMUTABLE")
 	}
 	sort.Slice(got, func(i, j int) bool { return false })
+}
+
+func TestDiscoverToCoreRunAcquiresNestedSameFileTargets(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "same.go")
+	child, root := sym("Child", 6, 2, 1), sym("Root", 12, 1, 1)
+	root.Children = []lsp.DocumentSymbol{child}
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{f.URI: {root}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{
+		root.SelectionRange.Start:  {item("Root", f.URI, root.Kind, 1, 1)},
+		child.SelectionRange.Start: {item("Child", f.URI, child.Kind, 2, 1)},
+	}}
+	adapter := DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}
+	acquired := 0
+	assembly, err := (Core{Discoverer: adapter, Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+		acquired += len(b.Targets)
+		return AcquiredV5{Session: b.Session, Raw: v5(t, b)}, nil
+	})}).Run(context.Background(), SessionIdentity{"s", 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := assembly.Inspect()
+	if err != nil || acquired != 2 || len(p.Manifest.Targets) != 2 {
+		t.Fatalf("ASSERT_DISCOVER_CORE_SAME_FILE_MULTI_TARGET_ACQUIRED: acquired=%d targets=%d err=%v", acquired, len(p.Manifest.Targets), err)
+	}
+}
+
+func TestDiscoveryAdapterTerminalResponseIncompleteBounds(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "bounded.go")
+	wide := make([]lsp.DocumentSymbol, captureset.MaxTargets+1)
+	for i := range wide {
+		wide[i] = sym(fmt.Sprintf("S%d", i), 12, uint32(i), 0)
+	}
+	deep := sym("leaf", 12, 0, 0)
+	for i := 0; i < defaultMaxSymbolDepth; i++ {
+		deep = sym(fmt.Sprintf("D%d", i), 12, 0, 0, deep)
+	}
+	long := sym(strings.Repeat("x", defaultMaxStringBytes+1), 12, 0, 0)
+	for name, symbols := range map[string][]lsp.DocumentSymbol{"wide": wide, "deep": {deep}, "long": {long}} {
+		t.Run(name, func(t *testing.T) {
+			client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{f.URI: symbols}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{}}
+			got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+			if err != nil || got.Complete || len(client.prepareRequests) != 0 || got.Accounting.SymbolDenominator != 0 || got.Accounting.Files[0].Disposition != census.FileIncomplete {
+				t.Fatalf("ASSERT_OVERSIZED_RESPONSE_TERMINAL_INCOMPLETE: %+v err=%v prepares=%d", got.Accounting, err, len(client.prepareRequests))
+			}
+		})
+	}
+}
+
+func TestDiscoveryAdapterMaxUintAndPrepareSubstitutionIncomplete(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "mismatch.go")
+	max := sym("Max", 12, math.MaxUint32, 0)
+	selected := sym("Selected", 12, 1, 1)
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{f.URI: {max, selected}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{
+		max.SelectionRange.Start:      {item("Max", f.URI, max.Kind, math.MaxUint32, 0)},
+		selected.SelectionRange.Start: {item("Substitute", f.URI, selected.Kind, 1, 1)},
+	}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil || got.Complete || len(got.Targets) != 0 || got.Accounting.SymbolDenominator != 2 {
+		t.Fatalf("ASSERT_MAX_UINT_AND_PREPARE_SUBSTITUTION_INCOMPLETE: %+v err=%v", got, err)
+	}
 }

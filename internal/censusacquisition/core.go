@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/seedformat"
 )
 
 const (
@@ -67,6 +69,10 @@ type PreparedTarget struct {
 	CanonicalSeedV2 []byte
 	URI             string
 	SelectionRange  lsp.Range
+	Name            string
+	Kind            int
+	Range           lsp.Range
+	SymbolIdentity  string
 }
 
 func (t PreparedTarget) Position() lsp.Position { return t.SelectionRange.Start }
@@ -197,11 +203,11 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 	if !d.Complete {
 		return Assembly{}, errors.New("discovery accounting incomplete")
 	}
-	if err = d.Accounting.Validate(); err != nil {
-		return Assembly{}, fmt.Errorf("discovery accounting: %w", err)
-	}
 	if err = validateDiscovery(d); err != nil {
 		return Assembly{}, err
+	}
+	if err = d.Accounting.Validate(); err != nil {
+		return Assembly{}, fmt.Errorf("discovery accounting: %w", err)
 	}
 	targets, prepared, err := canonicalTargets(d)
 	if err != nil {
@@ -263,6 +269,9 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 }
 
 func validateDiscovery(d Discovery) error {
+	if d.Accounting.FileDenominator < 0 || d.Accounting.FileDenominator > captureset.MaxResources || d.Accounting.SymbolDenominator < 0 || d.Accounting.SymbolDenominator > captureset.MaxTargets || len(d.Targets) > captureset.MaxTargets {
+		return errors.New("discovery bounds exceeded")
+	}
 	if d.FileLedger.Denominator != d.Accounting.FileDenominator || d.SymbolLedger.Denominator != d.Accounting.SymbolDenominator || len(d.FileLedger.Entries) != d.FileLedger.Denominator || len(d.SymbolLedger.Entries) != d.SymbolLedger.Denominator {
 		return errors.New("ledger accounting mismatch")
 	}
@@ -311,10 +320,14 @@ func validateDiscovery(d Discovery) error {
 	return nil
 }
 func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget, error) {
+	if len(d.Targets) > captureset.MaxTargets {
+		return nil, nil, errors.New("target bound exceeded")
+	}
 	out := make([]captureset.Target, len(d.Targets))
 	by := map[int]PreparedTarget{}
 	seedIdentities := make(map[string]struct{}, len(d.Targets))
-	targetURIs := make(map[string]struct{}, len(d.Targets))
+	seedCoordinates := make(map[string]struct{}, len(d.Targets))
+	targetIdentities := make(map[string]struct{}, len(d.Targets))
 	accounting := make(map[int]census.SymbolDisposition, len(d.Accounting.Symbols))
 	ledger := make(map[int]string, len(d.SymbolLedger.Entries))
 	for _, e := range d.Accounting.Symbols {
@@ -333,34 +346,55 @@ func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget,
 		if _, ok := seedIdentities[string(t.CanonicalSeedV2)]; ok {
 			return nil, nil, errors.New("duplicate target identity")
 		}
-		if _, ok := targetURIs[t.URI]; ok {
-			return nil, nil, errors.New("duplicate target URI")
+		relative, identityErr := canonicalWorkspaceRelativePath(d.Workspace, t.URI)
+		expectedIdentity := fmt.Sprintf("%s#%d:%d:%d:%s:%d", relative, t.SelectionRange.Start.Line, t.SelectionRange.Start.Character, t.Kind, t.Name, t.CensusOrdinal)
+		if identityErr != nil || t.SymbolIdentity == "" || t.SymbolIdentity != expectedIdentity || t.SymbolIdentity != ledgerIdentity(d.SymbolLedger, t.CensusOrdinal) {
+			return nil, nil, errors.New("prepared target identity mismatch")
+		}
+		if _, ok := targetIdentities[t.SymbolIdentity]; ok {
+			return nil, nil, errors.New("duplicate target identity")
 		}
 		if err := reconcileSeed(t, d.Workspace); err != nil {
 			return nil, nil, err
 		}
+		coordinate := fmt.Sprintf("%s\x00%d\x00%d", t.URI, t.Position().Line, t.Position().Character)
+		if _, ok := seedCoordinates[coordinate]; ok {
+			return nil, nil, errors.New("duplicate exact seed coordinates")
+		}
 		seedIdentities[string(t.CanonicalSeedV2)] = struct{}{}
-		targetURIs[t.URI] = struct{}{}
+		seedCoordinates[coordinate] = struct{}{}
+		targetIdentities[t.SymbolIdentity] = struct{}{}
 		by[t.CensusOrdinal] = cloneTarget(t)
 		out[i] = captureset.Target{CensusOrdinal: t.CensusOrdinal, CanonicalSeedV2: string(t.CanonicalSeedV2), CanonicalSeedV2SHA256: rawDigest(t.CanonicalSeedV2)}
 	}
 	out = captureset.OrderTargets(out)
 	return out, by, nil
 }
+func ledgerIdentity(ledger captureset.Ledger, ordinal int) string {
+	for _, entry := range ledger.Entries {
+		if entry.Ordinal == ordinal {
+			return entry.Identity
+		}
+	}
+	return ""
+}
+
 func reconcileSeed(t PreparedTarget, workspace string) error {
-	var f struct {
-		SchemaVersion string `json:"schema_version"`
-		Seeds         []struct {
-			Type, Path   string
-			Line, Column uint32
-		} `json:"seeds"`
+	if t.Position().Line == math.MaxUint32 || t.Position().Character == math.MaxUint32 {
+		return errors.New("canonical seed coordinate overflow")
 	}
-	if json.Unmarshal(t.CanonicalSeedV2, &f) != nil || f.SchemaVersion != "lsp-trace.seeds.v2" || len(f.Seeds) != 1 || f.Seeds[0].Type != "position" || f.Seeds[0].Line != t.Position().Line+1 || f.Seeds[0].Column != t.Position().Character+1 {
-		return errors.New("canonical seed URI/selection start mismatch")
+	f, err := seedformat.Decode(t.CanonicalSeedV2, workspace)
+	if err != nil || len(f.Seeds) != 1 || f.Seeds[0].Type != seedformat.PositionType || f.Seeds[0].Position == nil {
+		return errors.New("invalid canonical seed bytes")
 	}
-	relative, err := canonicalWorkspaceRelativePath(workspace, t.URI)
-	if err != nil || !platformPathEqual(runtime.GOOS, relative, f.Seeds[0].Path) {
-		return errors.New("canonical seed URI/selection start mismatch")
+	canonical, err := seedformat.EncodeCanonical(f, workspace)
+	if err != nil || !bytes.Equal(canonical, t.CanonicalSeedV2) {
+		return errors.New("noncanonical seed bytes")
+	}
+	seed := f.Seeds[0].Position
+	relative, pathErr := canonicalWorkspaceRelativePath(workspace, t.URI)
+	if pathErr != nil || !platformPathEqual(runtime.GOOS, relative, seed.Path) || seed.Line != uint64(t.Position().Line)+1 || seed.Column != uint64(t.Position().Character)+1 || seed.Label != fmt.Sprintf("census-%06d", t.CensusOrdinal) {
+		return errors.New("canonical seed target reconciliation mismatch")
 	}
 	return nil
 }

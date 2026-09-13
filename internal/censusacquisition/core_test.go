@@ -12,6 +12,7 @@ import (
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/seedformat"
 	"net/url"
 	"path/filepath"
 	"reflect"
@@ -33,17 +34,22 @@ func (f acquirerFunc) AcquireV5(c context.Context, b BatchRequest) (AcquiredV5, 
 	return f(c, b)
 }
 func seed(i int) []byte {
-	return []byte(fmt.Sprintf(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"s-%03d","path":"f%03d.go","line":%d,"column":%d}]}`, i, i, i+11, i+4))
+	raw, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", i), Path: fmt.Sprintf("f%03d.go", i), Line: uint64(i + 11), Column: uint64(i + 4)}}}}, "/w")
+	if err != nil {
+		panic(err)
+	}
+	return raw
 }
 func target(i int) PreparedTarget {
-	return PreparedTarget{i, seed(i), fmt.Sprintf("file:///w/f%03d.go", i), lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}}
+	name := fmt.Sprintf("Target%d", i)
+	return PreparedTarget{CensusOrdinal: i, CanonicalSeedV2: seed(i), URI: fmt.Sprintf("file:///w/f%03d.go", i), SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}, Name: name, Kind: 12, SymbolIdentity: fmt.Sprintf("f%03d.go#%d:%d:%d:%s:%d", i, i+10, i+3, 12, name, i)}
 }
 func discovery(n int) Discovery {
 	d := Discovery{Session: SessionIdentity{"s", 7}, Workspace: "/w", Complete: true}
 	for i := 0; i < n; i++ {
 		d.Targets = append(d.Targets, target(i))
 		d.Accounting.Symbols = append(d.Accounting.Symbols, census.SymbolEntry{Ordinal: i, Disposition: census.SymbolSelected})
-		d.SymbolLedger.Entries = append(d.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: i, Identity: fmt.Sprint(i), Disposition: "prepared"})
+		d.SymbolLedger.Entries = append(d.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: i, Identity: d.Targets[i].SymbolIdentity, Disposition: "prepared"})
 	}
 	d.Accounting.SymbolDenominator = n
 	d.SymbolLedger.Denominator = n
@@ -84,7 +90,11 @@ func projection(t *testing.T, a Assembly) Projection {
 	return p
 }
 func seedPath(path string) []byte {
-	return []byte(fmt.Sprintf(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"s","path":%q,"line":1,"column":1}]}`, path))
+	raw, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: "census-000000", Path: filepath.ToSlash(path), Line: 1, Column: 1}}}}, "/")
+	if err != nil {
+		panic(err)
+	}
+	return raw
 }
 
 func TestReconcileSeedUsesExactCanonicalWorkspaceIdentity(t *testing.T) {
@@ -181,6 +191,43 @@ func TestInvalidCompleteSymbolLedgerHasNoAcquisitionSideEffects(t *testing.T) {
 				t.Fatalf("ASSERT_INVALID_LEDGER_ZERO_ACQUIRER_CALLS: err=%v calls=%d", err, calls)
 			}
 		})
+	}
+}
+
+func TestCoreRejectsOversizedDiscoveryBeforeAcquisition(t *testing.T) {
+	d := Discovery{Session: SessionIdentity{"s", 7}, Workspace: "/w", Complete: true}
+	d.Accounting.SymbolDenominator = captureset.MaxTargets + 1
+	d.SymbolLedger.Denominator = captureset.MaxTargets + 1
+	calls := 0
+	_, err := (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
+	if err == nil || calls != 0 || !strings.Contains(err.Error(), "discovery bounds exceeded") {
+		t.Fatalf("ASSERT_CORE_BOUNDS_BEFORE_ITERATION: err=%v calls=%d", err, calls)
+	}
+}
+
+func TestCanonicalTargetsRejectDuplicateExactCoordinatesAndNoncanonicalBytes(t *testing.T) {
+	d := discovery(2)
+	d.Targets[1].URI = d.Targets[0].URI
+	d.Targets[1].SelectionRange = d.Targets[0].SelectionRange
+	d.Targets[1].SymbolIdentity = "f000.go#10:3:12:Target1:1"
+	d.SymbolLedger.Entries[1].Identity = d.Targets[1].SymbolIdentity
+	raw, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: "census-000001", Path: "f000.go", Line: 11, Column: 4}}}}, "/w")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.Targets[1].CanonicalSeedV2 = raw
+	calls := 0
+	_, err = (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
+	if err == nil || calls != 0 || !strings.Contains(err.Error(), "duplicate exact seed coordinates") {
+		t.Fatalf("ASSERT_DISCOVERY_DUPLICATE_TARGET_REJECTED: err=%v calls=%d", err, calls)
+	}
+
+	d = discovery(1)
+	d.Targets[0].CanonicalSeedV2 = append(append([]byte(nil), d.Targets[0].CanonicalSeedV2...), ' ')
+	d.Complete = true
+	_, err = (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { calls++; return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
+	if err == nil || !strings.Contains(err.Error(), "noncanonical seed bytes") {
+		t.Fatalf("ASSERT_COMPLETE_REQUIRES_STRICT_CANONICAL_RECONCILIATION: %v", err)
 	}
 }
 

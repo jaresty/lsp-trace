@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"path"
 	"path/filepath"
@@ -52,9 +53,17 @@ type DiscoveryClient interface {
 // DiscoveryLimits bound work without changing the denominator. Zero means no
 // additional bound; members beyond a positive bound are retained as incomplete.
 type DiscoveryLimits struct {
-	MaxFiles   int
-	MaxSymbols int
+	MaxFiles       int
+	MaxSymbols     int
+	MaxDepth       int
+	MaxStringBytes int
 }
+
+const (
+	defaultMaxSymbolNodes = captureset.MaxTargets
+	defaultMaxSymbolDepth = 64
+	defaultMaxStringBytes = 1 << 20
+)
 
 // DiscoveryAdapter performs only private census discovery in one existing
 // session. Inputs are copied before use and are never mutated.
@@ -78,7 +87,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	if a.Files == nil || a.Supplier == nil || a.Client == nil {
 		return out, errors.New("file enumerator, document supplier, and initialized client required")
 	}
-	if a.Limits.MaxFiles < 0 || a.Limits.MaxSymbols < 0 {
+	if a.Limits.MaxFiles < 0 || a.Limits.MaxSymbols < 0 || a.Limits.MaxDepth < 0 || a.Limits.MaxStringBytes < 0 {
 		return out, errors.New("discovery limits must be non-negative")
 	}
 	includes := append([]string(nil), a.Filters.Includes...)
@@ -143,7 +152,21 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			complete = false
 			continue
 		}
-		flat := flattenDocumentSymbols(symbols)
+		maxNodes := defaultMaxSymbolNodes
+		maxDepth := defaultMaxSymbolDepth
+		if a.Limits.MaxDepth > 0 {
+			maxDepth = a.Limits.MaxDepth
+		}
+		maxStrings := defaultMaxStringBytes
+		if a.Limits.MaxStringBytes > 0 {
+			maxStrings = a.Limits.MaxStringBytes
+		}
+		flat, bounded := flattenDocumentSymbols(symbols, maxNodes, maxDepth, maxStrings)
+		if !bounded {
+			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
+			complete = false
+			continue
+		}
 		sort.SliceStable(flat, func(i, j int) bool { return documentSymbolKey(flat[i]) < documentSymbolKey(flat[j]) })
 		fileComplete := true
 		for _, symbol := range flat {
@@ -151,7 +174,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			symbolOrdinal++
 			identity := symbolIdentity(file, symbol, ordinal)
 			disposition := census.SymbolIncomplete
-			if ctx.Err() != nil || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
+			if ctx.Err() != nil || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
 				fileComplete, complete = false, false
 			} else if !callableSymbolKind(symbol.Kind) {
 				disposition = census.SymbolNonCallable
@@ -168,14 +191,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				case len(items) == 0:
 					disposition = census.SymbolPrepareMissing
 					fileComplete, complete = false, false
-				case len(items) != 1 || !validPreparedItem(items[0], file.URI):
+				case len(items) != 1 || !preparedItemMatches(items[0], file.URI, symbol):
 					disposition = census.SymbolIncomplete
 					fileComplete, complete = false, false
 				default:
 					seed, seedErr := canonicalPositionSeed(a.Workspace, file.Path, ordinal, symbol.SelectionRange.Start)
 					if seedErr == nil {
 						disposition = census.SymbolSelected
-						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, SelectionRange: lsp.Range{Start: symbol.SelectionRange.Start}})
+						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
 					} else {
 						disposition = census.SymbolIncomplete
 						fileComplete, complete = false, false
@@ -200,7 +223,10 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	if ctx.Err() != nil {
 		complete = false
 	}
-	out.Complete = complete && len(out.Targets) > 0 && out.Accounting.Validate() == nil && validateDiscovery(out) == nil
+	accountingErr := out.Accounting.Validate()
+	discoveryErr := validateDiscovery(out)
+	_, _, canonicalErr := canonicalTargets(out)
+	out.Complete = complete && len(out.Targets) > 0 && accountingErr == nil && discoveryErr == nil && canonicalErr == nil
 	return cloneDiscovery(out), nil
 }
 
@@ -286,26 +312,50 @@ func matchSegments(patterns, candidates []string) bool {
 	return ok && matchSegments(patterns[1:], candidates[1:])
 }
 
-func flattenDocumentSymbols(in []lsp.DocumentSymbol) []lsp.DocumentSymbol {
+func flattenDocumentSymbols(in []lsp.DocumentSymbol, maxNodes, maxDepth, maxStringBytes int) ([]lsp.DocumentSymbol, bool) {
+	type frame struct {
+		symbols []lsp.DocumentSymbol
+		depth   int
+	}
+	if len(in) > maxNodes {
+		return nil, false
+	}
+	stack := []frame{{symbols: in, depth: 1}}
 	out := make([]lsp.DocumentSymbol, 0, len(in))
-	var visit func([]lsp.DocumentSymbol)
-	visit = func(symbols []lsp.DocumentSymbol) {
-		for _, symbol := range symbols {
-			children := append([]lsp.DocumentSymbol(nil), symbol.Children...)
-			symbol.Children = nil
-			out = append(out, symbol)
-			visit(children)
+	stringsSeen := 0
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		f := stack[last]
+		stack = stack[:last]
+		if f.depth > maxDepth || len(f.symbols) > maxNodes-len(out) {
+			return nil, false
+		}
+		for i := len(f.symbols) - 1; i >= 0; i-- {
+			s := f.symbols[i]
+			if len(s.Name) > maxStringBytes-stringsSeen {
+				return nil, false
+			}
+			stringsSeen += len(s.Name)
+			if len(s.Detail) > maxStringBytes-stringsSeen || len(out) >= maxNodes {
+				return nil, false
+			}
+			stringsSeen += len(s.Detail)
+			children := s.Children
+			s.Children = nil
+			out = append(out, s)
+			if len(children) > 0 {
+				stack = append(stack, frame{symbols: children, depth: f.depth + 1})
+			}
 		}
 	}
-	visit(in)
-	return out
+	return out, true
 }
 func documentSymbolKey(s lsp.DocumentSymbol) string {
 	return fmt.Sprintf("%010d:%010d:%05d:%s:%s", s.SelectionRange.Start.Line, s.SelectionRange.Start.Character, s.Kind, s.Name, s.Detail)
 }
 func callableSymbolKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
-func validPreparedItem(item lsp.CallHierarchyItem, sourceURI string) bool {
-	return item.URI == sourceURI && item.Name != "" && validRange(item.Range) && validRange(item.SelectionRange)
+func preparedItemMatches(item lsp.CallHierarchyItem, sourceURI string, symbol lsp.DocumentSymbol) bool {
+	return item.URI == sourceURI && item.Name == symbol.Name && item.Kind == symbol.Kind && item.Range == symbol.Range && item.SelectionRange.Start == symbol.SelectionRange.Start && validRange(item.Range) && validRange(item.SelectionRange)
 }
 func validRange(r lsp.Range) bool {
 	return r.Start.Line < r.End.Line || (r.Start.Line == r.End.Line && r.Start.Character <= r.End.Character)
@@ -314,6 +364,9 @@ func symbolIdentity(file SourceFile, symbol lsp.DocumentSymbol, ordinal int) str
 	return fmt.Sprintf("%s#%d:%d:%d:%s:%d", file.Path, symbol.SelectionRange.Start.Line, symbol.SelectionRange.Start.Character, symbol.Kind, symbol.Name, ordinal)
 }
 func canonicalPositionSeed(workspace, filePath string, ordinal int, position lsp.Position) ([]byte, error) {
+	if position.Line == math.MaxUint32 || position.Character == math.MaxUint32 {
+		return nil, errors.New("zero-based coordinate cannot convert to canonical one-based uint32")
+	}
 	return seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", ordinal), Path: filePath, Line: uint64(position.Line) + 1, Column: uint64(position.Character) + 1}}}}, workspace)
 }
 func cloneDiscovery(d Discovery) Discovery {
