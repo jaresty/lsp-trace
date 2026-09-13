@@ -247,7 +247,7 @@ func validateDiscovery(d Discovery) error {
 		}
 		wantDisposition := string(acc[e.Ordinal])
 		if acc[e.Ordinal] == census.SymbolSelected {
-			wantDisposition = "prepared"
+			wantDisposition = SymbolPrepared
 		}
 		if e.Disposition != wantDisposition {
 			return errors.New("malformed symbol ledger disposition")
@@ -258,7 +258,7 @@ func validateDiscovery(d Discovery) error {
 	eligible := 0
 	for i := 0; i < d.Accounting.SymbolDenominator; i++ {
 		want := acc[i] == census.SymbolSelected
-		if want != (led[i] == "prepared") {
+		if want != (led[i] == SymbolPrepared) {
 			return errors.New("symbol disposition ledgers disagree")
 		}
 		if want {
@@ -288,7 +288,7 @@ func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget,
 		ledger[e.Ordinal] = e.Disposition
 	}
 	for i, t := range d.Targets {
-		if t.CensusOrdinal < 0 || t.CensusOrdinal >= d.Accounting.SymbolDenominator || accounting[t.CensusOrdinal] != census.SymbolSelected || ledger[t.CensusOrdinal] != "prepared" || len(t.CanonicalSeedV2) == 0 || t.URI == "" {
+		if t.CensusOrdinal < 0 || t.CensusOrdinal >= d.Accounting.SymbolDenominator || accounting[t.CensusOrdinal] != census.SymbolSelected || ledger[t.CensusOrdinal] != SymbolPrepared || len(t.CanonicalSeedV2) == 0 || t.URI == "" {
 			return nil, nil, fmt.Errorf("ineligible prepared target %d", i)
 		}
 		if _, ok := by[t.CensusOrdinal]; ok {

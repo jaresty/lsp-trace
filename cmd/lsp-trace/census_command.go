@@ -47,7 +47,7 @@ type censusCLIResult struct {
 
 type censusCLIFileAccounting struct {
 	Denominator          int `json:"denominator"`
-	Selected             int `json:"selected"`
+	Processed            int `json:"processed"`
 	Excluded             int `json:"excluded"`
 	Forbidden            int `json:"forbidden"`
 	Unreadable           int `json:"unreadable"`
@@ -59,7 +59,7 @@ type censusCLIFileAccounting struct {
 
 type censusCLISymbolAccounting struct {
 	Denominator       int `json:"denominator"`
-	Selected          int `json:"selected"`
+	Prepared          int `json:"prepared"`
 	Unsupported       int `json:"unsupported"`
 	PreparationFailed int `json:"preparation_failed"`
 	PrepareMissing    int `json:"prepare_missing"`
@@ -111,12 +111,12 @@ func validateCensusCLIResult(r censusCLIResult) error {
 		return errors.New("invalid census target or batch accounting")
 	}
 	f := r.FileAccounting
-	fileCounts := []int{f.Selected, f.Excluded, f.Forbidden, f.Unreadable, f.Unsupported, f.DocumentSymbolFailed, f.Omitted, f.Incomplete}
+	fileCounts := []int{f.Processed, f.Excluded, f.Forbidden, f.Unreadable, f.Unsupported, f.DocumentSymbolFailed, f.Omitted, f.Incomplete}
 	if f.Denominator < 0 || hasNegativeCensusCount(fileCounts) || sumCensusCounts(fileCounts) != f.Denominator {
 		return errors.New("file accounting does not reconcile")
 	}
 	s := r.SymbolAccounting
-	symbolCounts := []int{s.Selected, s.Unsupported, s.PreparationFailed, s.PrepareMissing, s.NonCallable, s.Omitted, s.Incomplete}
+	symbolCounts := []int{s.Prepared, s.Unsupported, s.PreparationFailed, s.PrepareMissing, s.NonCallable, s.Omitted, s.Incomplete}
 	if s.Denominator < 0 || hasNegativeCensusCount(symbolCounts) || sumCensusCounts(symbolCounts) != s.Denominator {
 		return errors.New("symbol accounting does not reconcile")
 	}
@@ -158,21 +158,21 @@ func projectCensusFileAccounting(l captureset.Ledger) (a censusCLIFileAccounting
 	a.Denominator = l.Denominator
 	for _, e := range l.Entries {
 		switch e.Disposition {
-		case "selected":
-			a.Selected++
-		case "excluded":
+		case censusacquisition.FileProcessed:
+			a.Processed++
+		case string(census.FileExcluded):
 			a.Excluded++
-		case "forbidden":
+		case string(census.FileForbidden):
 			a.Forbidden++
-		case "unreadable":
+		case string(census.FileUnreadable):
 			a.Unreadable++
-		case "unsupported":
+		case string(census.FileUnsupported):
 			a.Unsupported++
-		case "document-symbol-failed":
+		case string(census.FileDocumentSymbolFailed):
 			a.DocumentSymbolFailed++
-		case "omitted":
+		case string(census.FileOmitted):
 			a.Omitted++
-		case "incomplete":
+		case string(census.FileIncomplete):
 			a.Incomplete++
 		}
 	}
@@ -182,19 +182,19 @@ func projectCensusSymbolAccounting(l captureset.Ledger) (a censusCLISymbolAccoun
 	a.Denominator = l.Denominator
 	for _, e := range l.Entries {
 		switch e.Disposition {
-		case "selected":
-			a.Selected++
-		case "unsupported":
+		case censusacquisition.SymbolPrepared:
+			a.Prepared++
+		case string(census.SymbolUnsupported):
 			a.Unsupported++
-		case "preparation-failed":
+		case string(census.SymbolPreparationFailed):
 			a.PreparationFailed++
-		case "prepare-missing":
+		case string(census.SymbolPrepareMissing):
 			a.PrepareMissing++
-		case "non-callable":
+		case string(census.SymbolNonCallable):
 			a.NonCallable++
-		case "omitted":
+		case string(census.SymbolOmitted):
 			a.Omitted++
-		case "incomplete":
+		case string(census.SymbolIncomplete):
 			a.Incomplete++
 		}
 	}
@@ -353,14 +353,11 @@ func validateCensusCLIOptions(o censusCLIOptions) error {
 	if o.Workspace == "" || len(o.Sources) == 0 || o.PublicationRoot == "" {
 		return errors.New("workspace, source, and publication root are required")
 	}
-	if (o.Server == "") == (o.Profile == "") {
-		return errors.New("exactly one of server or profile is required")
+	if o.Server == "" && o.Profile == "" {
+		return errors.New("server or profile is required")
 	}
 	if o.ConfigPath != "" && o.Profile == "" {
 		return errors.New("config requires profile")
-	}
-	if o.Server == "" && len(o.ServerArgs) > 0 {
-		return errors.New("server arguments require server")
 	}
 	if o.DownDepth < 0 || o.UpDepth < 0 || o.MaxNodes < 1 || o.MaxNodes > 10000 || o.Timeout <= 0 || o.RequestTimeout <= 0 || o.RequestTimeout > o.Timeout {
 		return errors.New("invalid census bounds")

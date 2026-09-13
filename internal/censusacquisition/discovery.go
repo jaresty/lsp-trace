@@ -60,6 +60,11 @@ type DiscoveryLimits struct {
 }
 
 const (
+	// FileProcessed and SymbolPrepared are the successful terminal vocabulary
+	// written to capture-set ledgers. Other terminals retain census disposition values.
+	FileProcessed  = "processed"
+	SymbolPrepared = "prepared"
+
 	defaultMaxSymbolNodes = captureset.MaxTargets
 	defaultMaxSymbolDepth = 64
 	defaultMaxStringBytes = 1 << 20
@@ -208,7 +213,7 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			out.Accounting.Symbols = append(out.Accounting.Symbols, census.SymbolEntry{Ordinal: ordinal, Disposition: disposition})
 			ledgerDisposition := string(disposition)
 			if disposition == census.SymbolSelected {
-				ledgerDisposition = "prepared"
+				ledgerDisposition = SymbolPrepared
 			}
 			out.SymbolLedger.Entries = append(out.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: ordinal, Identity: identity, Disposition: ledgerDisposition})
 		}
@@ -234,7 +239,7 @@ func appendFile(out *Discovery, ordinal int, identity string, disposition census
 	out.Accounting.Files = append(out.Accounting.Files, census.FileEntry{Ordinal: ordinal, Disposition: disposition})
 	ledgerDisposition := string(disposition)
 	if disposition == census.FileSelected {
-		ledgerDisposition = "processed"
+		ledgerDisposition = FileProcessed
 	}
 	out.FileLedger.Entries = append(out.FileLedger.Entries, captureset.LedgerEntry{Ordinal: ordinal, Identity: identity, Disposition: ledgerDisposition})
 }
