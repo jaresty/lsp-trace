@@ -73,6 +73,83 @@ func TestLegacyHumanWarningExactlyOnceAfterValidatedInvocation(t *testing.T) {
 	}
 }
 
+func TestVersionedLegacyWarningsFollowAcquisitionSyntaxValidation(t *testing.T) {
+	for _, mode := range []string{"slice", "incoming"} {
+		for _, version := range []string{"v2", "v3"} {
+			t.Run(mode+"-"+version, func(t *testing.T) {
+				base := []string{mode, "--acquisition-version", version}
+				invalid := [][]string{
+					append(append([]string{}, base...), "--unknown"),
+					{mode, "--acquisition-version"},
+					append(append([]string{}, base...), "--group-by", "invalid"),
+					append(append([]string{}, base...), "positional"),
+				}
+				for _, args := range invalid {
+					stdout, stderr, code := captureRun(t, args)
+					if code != 1 || strings.Contains(stderr, cliCodeLegacyOperation) || strings.Contains(strings.ToLower(stderr), "deprecated") {
+						t.Fatalf("ASSERT_VERSIONED_INVALID_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
+					}
+					machine := append([]string{mode, "--machine"}, args[1:]...)
+					machineOut, machineErr, machineCode := captureRun(t, machine)
+					events, err := decodeMachineDiagnostics(machineErr)
+					if machineCode != code || machineOut != stdout || err != nil || len(events) != 1 || events[0].Code != cliCodeInvocationError {
+						t.Fatalf("ASSERT_VERSIONED_VALIDATION_MATCHES_DISPATCH: args=%v human=(%d,%q,%q) machine=(%d,%q,%q) events=%+v err=%v", args, code, stdout, stderr, machineCode, machineOut, machineErr, events, err)
+					}
+				}
+
+				help := append(append([]string{}, base...), "--help")
+				stdout, stderr, code := captureRun(t, help)
+				if code != 1 || strings.Contains(stderr, cliCodeLegacyOperation) || strings.Contains(strings.ToLower(stderr), "deprecated") {
+					t.Fatalf("ASSERT_VERSIONED_HELP_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q", help, code, stdout, stderr)
+				}
+				machineHelp := append([]string{mode, "--machine"}, help[1:]...)
+				machineOut, machineErr, machineCode := captureRun(t, machineHelp)
+				helpEvents, helpErr := decodeMachineDiagnostics(machineErr)
+				if machineCode != code || machineOut != stdout || helpErr != nil || len(helpEvents) != 1 || helpEvents[0].Code != cliCodeInvocationError {
+					t.Fatalf("ASSERT_VERSIONED_HELP_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q events=%+v err=%v", machineHelp, machineCode, machineOut, machineErr, helpEvents, helpErr)
+				}
+
+				workspace := t.TempDir()
+				marker := filepath.Join(workspace, "provider-started")
+				validateArgs := []string{"--workspace", workspace, "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch " + marker, "--seed-manifest", filepath.Join(workspace, "missing.json")}
+				if validationCode := validateAcquisitionVersion(mode, version, validateArgs); validationCode != 0 {
+					t.Fatalf("ASSERT_VERSIONED_VALIDATION_PRESTART: version=%s mode=%s code=%d", version, mode, validationCode)
+				}
+				if _, err := os.Stat(marker); !os.IsNotExist(err) {
+					t.Fatalf("ASSERT_VERSIONED_VALIDATION_PRESTART: version=%s mode=%s provider marker err=%v", version, mode, err)
+				}
+
+				valid := append(append([]string{}, base...), "--workspace", t.TempDir(), "--server", "missing", "--seed-manifest", "missing.json")
+				stdout, stderr, code = captureRun(t, valid)
+				if code != 1 || stdout != "" || strings.Count(stderr, "warning: "+mode+" is deprecated; migrate to trace") != 1 {
+					t.Fatalf("ASSERT_VERSIONED_VALID_WARNING_ONCE: args=%v code=%d stdout=%q stderr=%q", valid, code, stdout, stderr)
+				}
+				machine := append([]string{mode, "--machine"}, valid[1:]...)
+				machineOut, machineErr, machineCode = captureRun(t, machine)
+				events, err := decodeMachineDiagnostics(machineErr)
+				legacyCount := 0
+				for _, event := range events {
+					if event.Code == cliCodeLegacyOperation {
+						legacyCount++
+						if mode == "incoming" && event.Status != "CONDITIONAL" {
+							t.Fatalf("ASSERT_INCOMING_REPLACEMENT_CONDITIONAL: event=%+v", event)
+						}
+					}
+				}
+				if machineCode != code || machineOut != stdout || err != nil || legacyCount != 1 {
+					t.Fatalf("ASSERT_VERSIONED_VALID_WARNING_ONCE: args=%v code=%d stdout=%q stderr=%q events=%+v err=%v", machine, machineCode, machineOut, machineErr, events, err)
+				}
+
+				passThrough := append(append([]string{}, base...), "--workspace", t.TempDir(), "--server", "missing", "--server-arg", "--machine", "--seed-manifest", "missing.json")
+				_, passErr, passCode := captureRun(t, passThrough)
+				if passCode != 1 || strings.Count(passErr, "warning: "+mode+" is deprecated; migrate to trace") != 1 {
+					t.Fatalf("ASSERT_VERSIONED_SERVER_ARG_MACHINE_PASSTHROUGH: args=%v code=%d stderr=%q", passThrough, passCode, passErr)
+				}
+			})
+		}
+	}
+}
+
 func TestDuplicateMachineIsOneStrictJSONLSyntaxErrorIncludingHelp(t *testing.T) {
 	for _, args := range [][]string{{"slice", "--machine", "--machine"}, {"incoming", "--machine", "--machine", "--help"}} {
 		stdout, stderr, code := captureRun(t, args)

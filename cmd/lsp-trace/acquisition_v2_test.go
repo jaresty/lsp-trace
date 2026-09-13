@@ -29,7 +29,7 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-func TestDeprecatedAcquisitionVersionsWarnOnlyOnStderr(t *testing.T) {
+func TestInvalidAcquisitionVersionsDoNotWarn(t *testing.T) {
 	for _, version := range []string{"v2", "v3"} {
 		var stdout, stderr strings.Builder
 		code := runAcquisitionVersion("slice", version, nil, &stdout, &stderr)
@@ -39,9 +39,8 @@ func TestDeprecatedAcquisitionVersionsWarnOnlyOnStderr(t *testing.T) {
 		if stdout.Len() != 0 {
 			t.Fatalf("ASSERT_DEPRECATION_NOTICE_NOT_JSON_STDOUT[%s]: %q", version, stdout.String())
 		}
-		want := "DEPRECATED: Graph Provenance " + strings.ToUpper(version) + " production is deprecated; migrate new production to source-qualified Graph Provenance V5."
-		if !strings.Contains(stderr.String(), want) {
-			t.Fatalf("ASSERT_DEPRECATED_ACQUISITION_V5_MIGRATION[%s]: stderr=%q", version, stderr.String())
+		if strings.Contains(stderr.String(), "DEPRECATED") {
+			t.Fatalf("ASSERT_INVALID_ACQUISITION_NO_DEPRECATION[%s]: stderr=%q", version, stderr.String())
 		}
 	}
 }

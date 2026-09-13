@@ -223,11 +223,11 @@ func validateLegacyInvocation(args []string) (bool, int) {
 		if err != nil {
 			return 1
 		}
-		// Versioned acquisition owns a separate FlagSet. Its no-effect syntax
-		// validation is performed by the same implementation before dispatch;
-		// v1 uses the legacy parsers directly here.
+		// Versioned acquisition owns a separate FlagSet. Validate through the
+		// same parser and argument-only preflight used by execution, stopping
+		// before warnings, filesystem access, or runtime dispatch.
 		if version == "v2" || version == "v3" {
-			return 0
+			return validateAcquisitionVersion(args[0], version, rest)
 		}
 		if version == "v1" {
 			args = append([]string{args[0]}, rest...)

@@ -291,14 +291,18 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 }
 
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
-	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil)
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil, false)
+}
+
+func validateAcquisitionVersion(mode, version string, args []string) int {
+	return runAcquisitionVersionInternal(mode, version, args, io.Discard, io.Discard, nil, true)
 }
 
 func runTraceAcquisition(mode, version string, args []string, stdout, stderr io.Writer, trace traceAcquisitionInput) int {
-	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, &trace)
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, &trace, false)
 }
 
-func runAcquisitionVersionInternal(mode, version string, args []string, stdout, stderr io.Writer, trace *traceAcquisitionInput) int {
+func runAcquisitionVersionInternal(mode, version string, args []string, stdout, stderr io.Writer, trace *traceAcquisitionInput, validateOnly bool) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
 	fs := flag.NewFlagSet(mode+" v2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -341,9 +345,6 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 	}
 	explicit := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
-	if outputVersion != graphprovenance.VersionV5 {
-		fmt.Fprintf(stderr, "DEPRECATED: Graph Provenance %s production is deprecated; migrate new production to source-qualified Graph Provenance V5. Historical readers, replay, and validation remain supported.\n", strings.ToUpper(version))
-	}
 	grouped := groupBy != "" && groupBy != "none"
 	if groupBy != "" && groupBy != "none" && groupBy != "leiden" {
 		return fail(fmt.Errorf("unsupported --group-by %q", groupBy))
@@ -391,6 +392,12 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 	bindingRequested := bindingRoot != "" || bindingSelector != ""
 	if bindingRequested && (version != "v3" || bindingRoot == "" || bindingSelector == "") {
 		return fail(fmt.Errorf("private seed binding requires v3 and one rooted selector pair"))
+	}
+	if validateOnly {
+		return 0
+	}
+	if outputVersion != graphprovenance.VersionV5 {
+		fmt.Fprintf(stderr, "DEPRECATED: Graph Provenance %s production is deprecated; migrate new production to source-qualified Graph Provenance V5. Historical readers, replay, and validation remain supported.\n", strings.ToUpper(version))
 	}
 	op := acquisitionops.Slice
 	if mode == "incoming" {
