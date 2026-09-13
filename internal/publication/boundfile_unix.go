@@ -15,6 +15,30 @@ import (
 
 var errExactFDUnsupported = errors.New("exact-fd publication primitive unsupported")
 
+func syncBoundDirectory(fd int) error {
+	err := unix.Fsync(fd)
+	if testHookBoundFileDirectorySync != nil {
+		err = errors.Join(err, testHookBoundFileDirectorySync())
+	}
+	return err
+}
+
+func closeBoundSource(f *os.File) error {
+	err := f.Close()
+	if testHookBoundFileSourceClose != nil {
+		err = errors.Join(err, testHookBoundFileSourceClose())
+	}
+	return err
+}
+
+func closeBoundRootFD(fd int) error {
+	err := unix.Close(fd)
+	if testHookBoundFileRootClose != nil {
+		err = errors.Join(err, testHookBoundFileRootClose())
+	}
+	return err
+}
+
 func boundParentFD(root *Root, selector string) (int, string, error) {
 	parts, err := selectorPathParts(runtime.GOOS, selector)
 	if err != nil {

@@ -2,6 +2,7 @@ package publication
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -12,9 +13,13 @@ func resetBoundFileHooks(t *testing.T) {
 	t.Helper()
 	oldAfterVerify, oldBeforePublish := testHookBoundFileAfterVerify, testHookBoundFileBeforePublish
 	oldAfterPublish, oldUnsupported := testHookBoundFileAfterPublish, testForceUnsupportedPrimitive
+	oldDirectorySync := testHookBoundFileDirectorySync
+	oldSourceClose, oldFinalClose, oldRootClose := testHookBoundFileSourceClose, testHookBoundFileFinalClose, testHookBoundFileRootClose
 	t.Cleanup(func() {
 		testHookBoundFileAfterVerify, testHookBoundFileBeforePublish = oldAfterVerify, oldBeforePublish
 		testHookBoundFileAfterPublish, testForceUnsupportedPrimitive = oldAfterPublish, oldUnsupported
+		testHookBoundFileDirectorySync = oldDirectorySync
+		testHookBoundFileSourceClose, testHookBoundFileFinalClose, testHookBoundFileRootClose = oldSourceClose, oldFinalClose, oldRootClose
 	})
 }
 
@@ -111,6 +116,93 @@ func TestBoundFilePostcommitVerificationReturnsCommittedReceipt(t *testing.T) {
 	}
 	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil })
 	if err != nil || receipt == nil || receipt.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
+	}
+}
+
+func TestBoundFilePostcommitStatusMatrix(t *testing.T) {
+	tests := []struct {
+		name, directory, close, verification string
+		configure                            func()
+	}{
+		{name: "complete", directory: "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE", close: "COMMITTED_CLOSE_COMPLETE", verification: "VERIFIED", configure: func() {}},
+		{name: "directory", directory: "COMMITTED_DIRECTORY_SYNC_FAILED", close: "COMMITTED_CLOSE_COMPLETE", verification: "VERIFIED", configure: func() {
+			testHookBoundFileDirectorySync = func() error { return errors.New("synthetic directory sync failure") }
+		}},
+		{name: "source-close", directory: "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE", close: "COMMITTED_CLOSE_FAILED", verification: "VERIFIED", configure: func() {
+			testHookBoundFileSourceClose = func() error { return errors.New("synthetic source close failure") }
+		}},
+		{name: "final-close-and-verification", directory: "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE", close: "COMMITTED_CLOSE_FAILED", verification: "COMMITTED_VERIFICATION_FAILED", configure: func() {
+			testHookBoundFileFinalClose = func() error { return errors.New("synthetic final close failure") }
+		}},
+		{name: "root-close", directory: "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE", close: "COMMITTED_CLOSE_FAILED", verification: "VERIFIED", configure: func() {
+			testHookBoundFileRootClose = func() error { return errors.New("synthetic root close failure") }
+		}},
+		{name: "all-degraded", directory: "COMMITTED_DIRECTORY_SYNC_FAILED", close: "COMMITTED_CLOSE_FAILED", verification: "COMMITTED_VERIFICATION_FAILED", configure: func() {
+			testHookBoundFileDirectorySync = func() error { return errors.New("synthetic directory sync failure") }
+			testHookBoundFileSourceClose = func() error { return errors.New("synthetic source close failure") }
+			testHookBoundFileFinalClose = func() error { return errors.New("synthetic final close failure") }
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resetBoundFileHooks(t)
+			_, root := boundRoot(t)
+			tc.configure()
+			before := openFDCount()
+			for i := 0; i < 20; i++ {
+				verifyCalls := 0
+				verify := func([]byte) error {
+					verifyCalls++
+					if tc.verification == "COMMITTED_VERIFICATION_FAILED" && verifyCalls > 1 {
+						return errors.New("synthetic postcommit verification failure")
+					}
+					return nil
+				}
+				selector := fmt.Sprintf("capture-%02d.bundle", i)
+				receipt, err := PublishBoundFile(root, selector, []byte("verified"), verify)
+				if err != nil || receipt == nil || receipt.FinalSelector != selector {
+					t.Fatalf("iteration %d committed result: receipt=%+v err=%v", i, receipt, err)
+				}
+				if receipt.DirectorySyncStatus != tc.directory || receipt.CloseStatus != tc.close || receipt.VerificationStatus != tc.verification {
+					t.Fatalf("iteration %d directory=%q want=%q close=%q want=%q verification=%q want=%q", i, receipt.DirectorySyncStatus, tc.directory, receipt.CloseStatus, tc.close, receipt.VerificationStatus, tc.verification)
+				}
+			}
+			if after := openFDCount(); before >= 0 && after != before {
+				t.Fatalf("descriptor count changed after repetitions: before=%d after=%d", before, after)
+			}
+		})
+	}
+}
+
+func TestPostcommitStatusClassifiersAreClosed(t *testing.T) {
+	synthetic := errors.New("synthetic")
+	if got := postcommitDirectorySyncStatus(false, nil); got != DirectorySyncNotAttemptedPostCommit {
+		t.Fatalf("unattempted directory sync=%q", got)
+	}
+	if got := postcommitDirectorySyncStatus(true, nil); got != DirectorySyncComplete {
+		t.Fatalf("complete directory sync=%q", got)
+	}
+	if got := postcommitDirectorySyncStatus(true, synthetic); got != DirectorySyncFailed {
+		t.Fatalf("failed directory sync=%q", got)
+	}
+	if got := postcommitCloseStatus(false, nil); got != CloseNotAttempted {
+		t.Fatalf("unattempted close=%q", got)
+	}
+	if got := postcommitCloseStatus(true, nil); got != CloseComplete {
+		t.Fatalf("complete close=%q", got)
+	}
+	if got := postcommitCloseStatus(true, synthetic); got != CloseFailed {
+		t.Fatalf("failed close=%q", got)
+	}
+}
+
+func TestBoundFilePrecommitCloseFailureRemainsError(t *testing.T) {
+	resetBoundFileHooks(t)
+	_, root := boundRoot(t)
+	testHookBoundFileSourceClose = func() error { return errors.New("synthetic source close failure") }
+	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("bad"), func([]byte) error { return errors.New("reject before commit") })
+	if err == nil || receipt != nil {
 		t.Fatalf("receipt=%+v err=%v", receipt, err)
 	}
 }

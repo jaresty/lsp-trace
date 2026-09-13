@@ -11,6 +11,6 @@ var errExactFDUnsupported = errors.New("exact-fd publication primitive unsupport
 
 func validPublishedMetadata(rootInfo, finalInfo os.FileInfo) bool { return false }
 
-func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error) (bool, string, error) {
-	return false, "", errExactFDUnsupported
+func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error) (bool, string, string, error) {
+	return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errExactFDUnsupported
 }

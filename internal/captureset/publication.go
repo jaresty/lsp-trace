@@ -119,15 +119,17 @@ func Redact(m Manifest) (Manifest, error) {
 }
 
 type PublicationReceipt struct {
-	Selector           string `json:"selector"`
-	Disclosure         string `json:"disclosure"`
-	ArtifactSHA256     string `json:"artifact_sha256"`
-	ByteLength         uint64 `json:"byte_length"`
-	Mechanism          string `json:"mechanism"`
-	NamespaceAtomic    bool   `json:"namespace_atomic,omitempty"`
-	CrashDurability    string `json:"crash_durability,omitempty"`
-	ConstituentCount   int    `json:"constituent_count,omitempty"`
-	VerificationStatus string `json:"verification_status"`
+	Selector            string `json:"selector"`
+	Disclosure          string `json:"disclosure"`
+	ArtifactSHA256      string `json:"artifact_sha256"`
+	ByteLength          uint64 `json:"byte_length"`
+	Mechanism           string `json:"mechanism"`
+	NamespaceAtomic     bool   `json:"namespace_atomic,omitempty"`
+	CrashDurability     string `json:"crash_durability,omitempty"`
+	DirectorySyncStatus string `json:"directory_sync_status"`
+	CloseStatus         string `json:"close_status"`
+	ConstituentCount    int    `json:"constituent_count,omitempty"`
+	VerificationStatus  string `json:"verification_status"`
 }
 
 type PublicationResult struct {
@@ -205,7 +207,8 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 		Selector: selector, Disclosure: "PRIVATE",
 		ArtifactSHA256: receipt.Digest, ByteLength: receipt.ByteLength,
 		Mechanism: receipt.Mechanism, NamespaceAtomic: receipt.NamespaceAtomic,
-		CrashDurability: receipt.CrashDurability, ConstituentCount: len(m.Constituents),
+		CrashDurability: receipt.CrashDurability, DirectorySyncStatus: receipt.DirectorySyncStatus,
+		CloseStatus: receipt.CloseStatus, ConstituentCount: len(m.Constituents),
 		VerificationStatus: receipt.VerificationStatus,
 	}}
 }

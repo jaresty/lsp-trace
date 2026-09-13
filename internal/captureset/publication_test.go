@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -73,6 +74,22 @@ func TestRedactAppliesExactPolicyAndDistinctIdentity(t *testing.T) {
 func TestCaptureSetRemainsOutsidePublicSchemaRegistry(t *testing.T) {
 	if _, ok := publicschema.RegisteredFamilies()["capture-set"]; ok {
 		t.Fatal("ASSERT_CAPTURE_SET_NOT_PUBLICLY_REGISTERED")
+	}
+}
+
+func TestPrivatePublicationReceiptExactStatusFields(t *testing.T) {
+	raw, err := json.Marshal(PublicationReceipt{
+		Selector: "capture.bundle", Disclosure: "PRIVATE", ArtifactSHA256: "sha256:x",
+		ByteLength: 1, Mechanism: publication.BoundFileMechanism, NamespaceAtomic: true,
+		CrashDurability: publication.DirectorySyncFailed, DirectorySyncStatus: publication.DirectorySyncFailed,
+		CloseStatus: publication.CloseFailed, ConstituentCount: 2, VerificationStatus: "COMMITTED_VERIFICATION_FAILED",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `{"selector":"capture.bundle","disclosure":"PRIVATE","artifact_sha256":"sha256:x","byte_length":1,"mechanism":"exact_fd_atomic_no_replace","namespace_atomic":true,"crash_durability":"COMMITTED_DIRECTORY_SYNC_FAILED","directory_sync_status":"COMMITTED_DIRECTORY_SYNC_FAILED","close_status":"COMMITTED_CLOSE_FAILED","constituent_count":2,"verification_status":"COMMITTED_VERIFICATION_FAILED"}`
+	if string(raw) != want {
+		t.Fatalf("ASSERT_EXACT_PRIVATE_RECEIPT: %s", raw)
 	}
 }
 

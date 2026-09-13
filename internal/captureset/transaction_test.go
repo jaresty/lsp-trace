@@ -59,8 +59,8 @@ func TestPublishCaptureSetAtomicBundleAndPrivateResolution(t *testing.T) {
 	if !result.Receipt.NamespaceAtomic || result.Receipt.Mechanism != publication.BoundFileMechanism || result.Receipt.ConstituentCount != len(raw) {
 		t.Fatalf("receipt: %+v", result.Receipt)
 	}
-	if result.Receipt.CrashDurability != "FINAL_DIRECTORY_SYNCED_NO_CRASH_GUARANTEE" && runtime.GOOS != "windows" {
-		t.Fatalf("durability: %+v", result.Receipt)
+	if runtime.GOOS != "windows" && (result.Receipt.CrashDurability != publication.DirectorySyncComplete || result.Receipt.DirectorySyncStatus != publication.DirectorySyncComplete || result.Receipt.CloseStatus != publication.CloseComplete) {
+		t.Fatalf("postcommit status: %+v", result.Receipt)
 	}
 	for _, c := range m.Constituents {
 		got, err := pub.ResolveConstituent(result.Receipt.Selector, c.ImmutableSelector, authority)
