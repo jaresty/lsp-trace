@@ -2,36 +2,43 @@ package publication
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 )
 
-func withBoundFileHooks(t *testing.T) {
-	oldVerified, oldActivate := testHookBoundFileAfterVerify, testHookBoundFileBeforeActivate
-	oldWrite, oldSync, oldClose, oldRemove := boundFileWriteAll, boundFileSync, boundFileClose, boundFileRemove
+func resetBoundFileHooks(t *testing.T) {
+	t.Helper()
+	oldAfterVerify, oldBeforePublish := testHookBoundFileAfterVerify, testHookBoundFileBeforePublish
+	oldAfterPublish, oldUnsupported := testHookBoundFileAfterPublish, testForceUnsupportedPrimitive
 	t.Cleanup(func() {
-		testHookBoundFileAfterVerify, testHookBoundFileBeforeActivate = oldVerified, oldActivate
-		boundFileWriteAll, boundFileSync, boundFileClose, boundFileRemove = oldWrite, oldSync, oldClose, oldRemove
+		testHookBoundFileAfterVerify, testHookBoundFileBeforePublish = oldAfterVerify, oldBeforePublish
+		testHookBoundFileAfterPublish, testForceUnsupportedPrimitive = oldAfterPublish, oldUnsupported
 	})
 }
 
-func TestBoundFilePathReplacementAfterVerificationCannotCommitDifferentBytes(t *testing.T) {
-	withBoundFileHooks(t)
+func boundRoot(t *testing.T) (string, *Root) {
+	t.Helper()
 	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	root, err := OpenRoot(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer root.Close()
-	testHookBoundFileAfterVerify = func(_ *os.Root, name string) {
-		if err := os.Rename(filepath.Join(dir, name), filepath.Join(dir, name+".moved")); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("competitor"), 0o600); err != nil {
+	t.Cleanup(func() { root.Close() })
+	return dir, root
+}
+
+func TestBoundFileExactFDPublicationIgnoresSourcePathForgery(t *testing.T) {
+	resetBoundFileHooks(t)
+	dir, root := boundRoot(t)
+	testHookBoundFileAfterVerify = func() {
+		// There is no source pathname to replace. A forged legacy-style sibling
+		// cannot influence the retained source descriptor.
+		if err := os.WriteFile(filepath.Join(dir, ".lsp-trace-bundle-forgery"), []byte("forged"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -41,158 +48,85 @@ func TestBoundFilePathReplacementAfterVerificationCannotCommitDifferentBytes(t *
 		}
 		return nil
 	})
-	if err == nil || receipt != nil {
-		t.Fatalf("replacement committed: receipt=%+v err=%v", receipt, err)
+	if err != nil || receipt == nil || receipt.VerificationStatus != "VERIFIED" {
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
 	}
-	if got, readErr := os.ReadFile(filepath.Join(dir, "capture.bundle")); readErr != nil || string(got) != "competitor" {
-		t.Fatalf("competitor changed: %q %v", got, readErr)
-	}
-	if _, readErr := ReadBoundFile(root, "capture.bundle", 1024); readErr == nil {
-		t.Fatal("inactive replacement resolved")
+	got, err := ReadBoundFile(root, "capture.bundle", 1024)
+	if err != nil || string(got) != "verified" {
+		t.Fatalf("published=%q err=%v", got, err)
 	}
 }
 
-func TestBoundFileFsyncAndCleanupFailuresNeverActivate(t *testing.T) {
-	for _, tc := range []struct {
-		name      string
-		configure func()
-	}{
-		{name: "zero-write", configure: func() { boundFileWriteAll = func(io.Writer, []byte) error { return io.ErrShortWrite } }},
-		{name: "fsync", configure: func() { boundFileSync = func(*os.File) error { return errors.New("fsync failure") } }},
-		{name: "cleanup", configure: func() { boundFileRemove = func(*os.Root, string) error { return errors.New("cleanup failure") } }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			withBoundFileHooks(t)
-			dir := t.TempDir()
-			_ = os.Chmod(dir, 0o700)
-			root, err := OpenRoot(dir)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer root.Close()
-			tc.configure()
-			verify := func([]byte) error { return nil }
-			if tc.name == "cleanup" {
-				verify = func([]byte) error { return errors.New("verification failure") }
-			}
-			if receipt, err := PublishBoundFile(root, "capture.bundle", []byte("exact"), verify); err == nil || receipt != nil {
-				t.Fatalf("fault committed: %+v %v", receipt, err)
-			}
-			if _, err := ReadBoundFile(root, "capture.bundle", 1024); err == nil {
-				t.Fatal("precommit fault resolved")
-			}
-			if _, err := os.Lstat(filepath.Join(dir, "capture.bundle.active")); !os.IsNotExist(err) {
-				t.Fatalf("activation visible: %v", err)
-			}
-		})
+func TestBoundFileNoPrecommitSelector(t *testing.T) {
+	resetBoundFileHooks(t)
+	dir, root := boundRoot(t)
+	testHookBoundFileAfterVerify = func() {
+		if _, err := os.Lstat(filepath.Join(dir, "capture.bundle")); !os.IsNotExist(err) {
+			t.Fatalf("precommit selector visible: %v", err)
+		}
 	}
-}
-
-func TestBoundFilePostcommitCloseFailureCannotReverseSuccess(t *testing.T) {
-	withBoundFileHooks(t)
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
-	root, err := OpenRoot(dir)
-	if err != nil {
+	if _, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	defer root.Close()
-	boundFileClose = func(f *os.File) error { _ = f.Close(); return errors.New("close failure") }
-	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("exact"), func([]byte) error { return nil })
-	if err != nil || receipt == nil {
-		t.Fatalf("postcommit close reversed success: %+v %v", receipt, err)
-	}
-	if got, err := ReadBoundFile(root, "capture.bundle", 1024); err != nil || string(got) != "exact" {
-		t.Fatalf("committed bytes unavailable: %q %v", got, err)
-	}
 }
 
-func TestBoundFileLateActivationCompetitorPreserved(t *testing.T) {
-	withBoundFileHooks(t)
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
-	root, err := OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	testHookBoundFileBeforeActivate = func(parent *os.Root, name string) {
-		if err := parent.Symlink("competitor", name+".active"); err != nil {
+func TestBoundFileFinalCompetitorPreserved(t *testing.T) {
+	resetBoundFileHooks(t)
+	dir, root := boundRoot(t)
+	testHookBoundFileBeforePublish = func() {
+		if err := os.WriteFile(filepath.Join(dir, "capture.bundle"), []byte("competitor"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("exact"), func([]byte) error { return nil })
+	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil })
 	if !errors.Is(err, os.ErrExist) || receipt != nil {
-		t.Fatalf("late competitor: %+v %v", receipt, err)
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
 	}
-	if target, err := os.Readlink(filepath.Join(dir, "capture.bundle.active")); err != nil || target != "competitor" {
-		t.Fatalf("competitor changed: %q %v", target, err)
-	}
-}
-
-func TestBoundFileVerificationFailureCleansReservedNameAndFD(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
-	root, err := OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	before := openFDCount()
-	for i := 0; i < 20; i++ {
-		name := filepath.Base(filepath.Join(".", "bad-"+string(rune('a'+i))+".bundle"))
-		if receipt, err := PublishBoundFile(root, name, []byte("bad"), func([]byte) error { return errors.New("reject") }); err == nil || receipt != nil {
-			t.Fatalf("iteration %d committed", i)
-		}
-		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
-			t.Fatalf("iteration %d leaked reserved name: %v", i, err)
-		}
-	}
-	if after := openFDCount(); before >= 0 && after != before {
-		t.Fatalf("descriptor count changed: before=%d after=%d", before, after)
+	got, readErr := os.ReadFile(filepath.Join(dir, "capture.bundle"))
+	if readErr != nil || string(got) != "competitor" {
+		t.Fatalf("competitor=%q err=%v", got, readErr)
 	}
 }
 
-func TestBoundFileUsesPinnedRootAfterPathReplacement(t *testing.T) {
-	base := t.TempDir()
-	original := filepath.Join(base, "root")
-	moved := filepath.Join(base, "moved")
-	if err := os.Mkdir(original, 0o700); err != nil {
-		t.Fatal(err)
+func TestBoundFileUnsupportedPrimitiveLeavesNoSelector(t *testing.T) {
+	resetBoundFileHooks(t)
+	dir, root := boundRoot(t)
+	testForceUnsupportedPrimitive = true
+	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil })
+	if !errors.Is(err, errExactFDUnsupported) || receipt != nil {
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
 	}
-	root, err := OpenRoot(original)
-	if err != nil {
-		t.Fatal(err)
+	if _, statErr := os.Lstat(filepath.Join(dir, "capture.bundle")); !os.IsNotExist(statErr) {
+		t.Fatalf("selector visible: %v", statErr)
 	}
-	defer root.Close()
-	withBoundFileHooks(t)
-	testHookBoundFileBeforeActivate = func(_ *os.Root, _ string) {
-		if err := os.Rename(original, moved); err != nil {
+}
+
+func TestBoundFilePostcommitVerificationReturnsCommittedReceipt(t *testing.T) {
+	resetBoundFileHooks(t)
+	dir, root := boundRoot(t)
+	testHookBoundFileAfterPublish = func() {
+		if err := os.WriteFile(filepath.Join(dir, "capture.bundle"), []byte("corrupt"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Mkdir(original, 0o700); err != nil {
-			t.Fatal(err)
-		}
 	}
-	if _, err := PublishBoundFile(root, "capture.bundle", []byte("exact"), func([]byte) error { return nil }); err != nil {
+	receipt, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil })
+	if err != nil || receipt == nil || receipt.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
+		t.Fatalf("receipt=%+v err=%v", receipt, err)
+	}
+}
+
+func TestBoundFilePublishesNoSidecar(t *testing.T) {
+	dir, root := boundRoot(t)
+	if _, err := PublishBoundFile(root, "capture.bundle", []byte("verified"), func([]byte) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(filepath.Join(moved, "capture.bundle.active")); err != nil {
-		t.Fatalf("pinned root not activated: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(original, "capture.bundle")); !os.IsNotExist(err) {
-		t.Fatalf("replacement root received publication: %v", err)
+	if _, err := os.Lstat(filepath.Join(dir, "capture.bundle.active")); !os.IsNotExist(err) {
+		t.Fatalf("sidecar exists: %v", err)
 	}
 }
 
 func TestBoundFileConcurrentPublicationHasOneWinner(t *testing.T) {
-	dir := t.TempDir()
-	_ = os.Chmod(dir, 0o700)
-	root, err := OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
+	_, root := boundRoot(t)
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	for i := 0; i < 2; i++ {
@@ -216,7 +150,18 @@ func TestBoundFileConcurrentPublicationHasOneWinner(t *testing.T) {
 	if success != 1 || exists != 1 {
 		t.Fatalf("success=%d exists=%d", success, exists)
 	}
-	if got, err := ReadBoundFile(root, "capture.bundle", 1024); err != nil || string(got) != "exact" {
-		t.Fatalf("read=%q err=%v", got, err)
+}
+
+func TestBoundFileFailureFDStable(t *testing.T) {
+	_, root := boundRoot(t)
+	before := openFDCount()
+	for i := 0; i < 20; i++ {
+		name := "bad-" + string(rune('a'+i)) + ".bundle"
+		if receipt, err := PublishBoundFile(root, name, []byte("bad"), func([]byte) error { return errors.New("reject") }); err == nil || receipt != nil {
+			t.Fatalf("iteration %d committed", i)
+		}
+	}
+	if after := openFDCount(); before >= 0 && after != before {
+		t.Fatalf("descriptor count changed: before=%d after=%d", before, after)
 	}
 }

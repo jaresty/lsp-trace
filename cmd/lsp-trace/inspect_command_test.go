@@ -16,6 +16,7 @@ import (
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/capturesetinspection"
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/programctestfixture"
 	"lsp-trace/internal/publication"
 )
 
@@ -351,11 +352,8 @@ func captureSetFixture(t *testing.T) (string, string, captureset.Manifest) {
 	seed := "private-seed-material"
 	sum := sha256.Sum256([]byte(seed))
 	targets := []captureset.Target{{CensusOrdinal: 0, CanonicalSeedV2: seed, CanonicalSeedV2SHA256: "sha256:" + hex.EncodeToString(sum[:])}}
-	exact := [][]byte{[]byte(`{"schema_version":"lsp-trace.graph-provenance.v5","private":"fixture"}`)}
-	authority := captureset.ExactBytesAuthority{AdmitGraphProvenanceV5: func(raw []byte) (string, error) {
-		s := sha256.Sum256(raw)
-		return "private-native-identity:" + hex.EncodeToString(s[:]), nil
-	}}
+	exact := [][]byte{programctestfixture.ValidV5(t)}
+	authority := captureset.NativeV5Authority()
 	constituent, err := authority.Constituent(exact[0])
 	if err != nil {
 		t.Fatal(err)

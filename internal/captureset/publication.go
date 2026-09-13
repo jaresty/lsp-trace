@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/publication"
 )
 
@@ -24,6 +25,22 @@ const (
 // admitted bytes.
 type ExactBytesAuthority struct {
 	AdmitGraphProvenanceV5 func([]byte) (string, error)
+}
+
+// NativeV5Authority performs the repository's full native V5 structural and
+// semantic admission and derives identity from those exact admitted bytes.
+func NativeV5Authority() ExactBytesAuthority {
+	return ExactBytesAuthority{AdmitGraphProvenanceV5: func(raw []byte) (string, error) {
+		version, err := graphprovenance.ValidateFor(raw, graphprovenance.Family, "v5")
+		if err != nil || version != graphprovenance.VersionV5 {
+			if err == nil {
+				err = errors.New("not native Graph Provenance V5")
+			}
+			return "", err
+		}
+		sum := sha256.Sum256(raw)
+		return graphprovenance.VersionV5 + "/sha256/" + hex.EncodeToString(sum[:]), nil
+	}}
 }
 
 func (a ExactBytesAuthority) Constituent(raw []byte) (Constituent, error) {
@@ -102,14 +119,15 @@ func Redact(m Manifest) (Manifest, error) {
 }
 
 type PublicationReceipt struct {
-	Selector         string `json:"selector"`
-	Disclosure       string `json:"disclosure"`
-	ArtifactSHA256   string `json:"artifact_sha256"`
-	ByteLength       uint64 `json:"byte_length"`
-	Mechanism        string `json:"mechanism"`
-	NamespaceAtomic  bool   `json:"namespace_atomic,omitempty"`
-	CrashDurability  string `json:"crash_durability,omitempty"`
-	ConstituentCount int    `json:"constituent_count,omitempty"`
+	Selector           string `json:"selector"`
+	Disclosure         string `json:"disclosure"`
+	ArtifactSHA256     string `json:"artifact_sha256"`
+	ByteLength         uint64 `json:"byte_length"`
+	Mechanism          string `json:"mechanism"`
+	NamespaceAtomic    bool   `json:"namespace_atomic,omitempty"`
+	CrashDurability    string `json:"crash_durability,omitempty"`
+	ConstituentCount   int    `json:"constituent_count,omitempty"`
+	VerificationStatus string `json:"verification_status"`
 }
 
 type PublicationResult struct {
@@ -188,13 +206,14 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 		ArtifactSHA256: receipt.Digest, ByteLength: receipt.ByteLength,
 		Mechanism: receipt.Mechanism, NamespaceAtomic: receipt.NamespaceAtomic,
 		CrashDurability: receipt.CrashDurability, ConstituentCount: len(m.Constituents),
+		VerificationStatus: receipt.VerificationStatus,
 	}}
 }
 
 // ResolveConstituent resolves bytes only through an already committed final
 // capture-set selector and verifies that the requested constituent is associated.
-func (p *Publisher) ResolveConstituent(finalSelector, immutableSelector string) ([]byte, error) {
-	m, err := p.Verify(finalSelector)
+func (p *Publisher) ResolveConstituent(finalSelector, immutableSelector string, authority ExactBytesAuthority) ([]byte, error) {
+	m, err := p.Verify(finalSelector, authority)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +225,7 @@ func (p *Publisher) ResolveConstituent(finalSelector, immutableSelector string) 
 		if readErr != nil {
 			return nil, readErr
 		}
-		bundle, decodeErr := decodePrivateBundle(raw, ExactBytesAuthority{})
+		bundle, decodeErr := decodePrivateBundle(raw, authority)
 		if decodeErr != nil {
 			return nil, decodeErr
 		}
@@ -237,7 +256,7 @@ func ValidatePublicationSelector(selector string) error {
 	return nil
 }
 
-func (p *Publisher) Verify(selector string) (Manifest, error) {
+func (p *Publisher) Verify(selector string, authority ExactBytesAuthority) (Manifest, error) {
 	if err := ValidatePublicationSelector(selector); err != nil {
 		return Manifest{}, err
 	}
@@ -245,7 +264,7 @@ func (p *Publisher) Verify(selector string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	bundle, err := decodePrivateBundle(raw, ExactBytesAuthority{})
+	bundle, err := decodePrivateBundle(raw, authority)
 	if err != nil {
 		return Manifest{}, err
 	}

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 )
 
 const (
@@ -57,6 +56,9 @@ func encodePrivateBundle(m Manifest, manifestRaw []byte, bySelector map[string][
 }
 
 func decodePrivateBundle(raw []byte, authority ExactBytesAuthority) (privateBundle, error) {
+	if authority.AdmitGraphProvenanceV5 == nil {
+		return privateBundle{}, errors.New("native V5 admission required for bundle resolution")
+	}
 	if len(raw) > MaxBundleBytes {
 		return privateBundle{}, errors.New("bundle byte size outside bounds")
 	}
@@ -124,12 +126,8 @@ func decodePrivateBundle(raw []byte, authority ExactBytesAuthority) (privateBund
 			return privateBundle{}, errors.New("duplicate bundle native identity")
 		}
 		byNativeID[c.NativeV5Identity] = true
-		if authority.AdmitGraphProvenanceV5 != nil {
-			if err := authority.VerifyConstituent(c, constituentRaw); err != nil {
-				return privateBundle{}, fmt.Errorf("bundle constituent admission: %w", err)
-			}
-		} else if c.SchemaID != NativeV5SchemaID || c.ByteLength != len(constituentRaw) || c.SHA256 != rawDigest(constituentRaw) || c.ImmutableSelector != ConstituentSelectorPrefix+strings.TrimPrefix(c.SHA256, "sha256:") || c.NativeV5Identity == "" {
-			return privateBundle{}, errors.New("bundle constituent metadata mismatch")
+		if err := authority.VerifyConstituent(c, constituentRaw); err != nil {
+			return privateBundle{}, fmt.Errorf("bundle constituent admission: %w", err)
 		}
 		bySelector[selector] = constituentRaw
 	}

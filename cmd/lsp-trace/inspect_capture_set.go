@@ -22,7 +22,7 @@ func runInspectCaptureSet(selector, rootPath string, jsonOutput bool, stdout, st
 		return 1
 	}
 	defer root.Close()
-	manifest, err := captureset.NewPublisher(root).Verify(selector)
+	manifest, err := captureset.NewPublisher(root).Verify(selector, captureset.NativeV5Authority())
 	if err != nil {
 		fmt.Fprintf(stderr, "inspect capture-set: %v\n", err)
 		return 1

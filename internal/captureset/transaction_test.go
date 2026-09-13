@@ -3,6 +3,7 @@ package captureset
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -62,7 +63,7 @@ func TestPublishCaptureSetAtomicBundleAndPrivateResolution(t *testing.T) {
 		t.Fatalf("durability: %+v", result.Receipt)
 	}
 	for _, c := range m.Constituents {
-		got, err := pub.ResolveConstituent(result.Receipt.Selector, c.ImmutableSelector)
+		got, err := pub.ResolveConstituent(result.Receipt.Selector, c.ImmutableSelector, authority)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -72,6 +73,70 @@ func TestPublishCaptureSetAtomicBundleAndPrivateResolution(t *testing.T) {
 	}
 	if info, err := os.Stat(filepath.Join(dir, filepath.FromSlash(result.Receipt.Selector))); err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
 		t.Fatalf("bundle mode: %v %v", info, err)
+	}
+}
+
+func TestResolveCaptureSetRequiresIndependentNativeAdmission(t *testing.T) {
+	m, raw, authority := transactionalFixture(t)
+	dir := t.TempDir()
+	_ = os.Chmod(dir, 0o700)
+	root, _ := publication.OpenRoot(dir)
+	defer root.Close()
+	pub := NewPublisher(root)
+	result := pub.PublishCaptureSet(m, raw, authority)
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	if _, err := pub.Verify(result.Receipt.Selector, ExactBytesAuthority{}); err == nil {
+		t.Fatal("self-consistent bundle resolved without native V5 admission")
+	}
+	calls := 0
+	counting := ExactBytesAuthority{AdmitGraphProvenanceV5: func(b []byte) (string, error) {
+		calls++
+		return authority.AdmitGraphProvenanceV5(b)
+	}}
+	if _, err := pub.Verify(result.Receipt.Selector, counting); err != nil {
+		t.Fatal(err)
+	}
+	if calls != len(m.Constituents) {
+		t.Fatalf("native admissions=%d want=%d", calls, len(m.Constituents))
+	}
+}
+
+func TestResolveCaptureSetRejectsInvalidSelfConsistentConstituent(t *testing.T) {
+	m, raw, authority := transactionalFixture(t)
+	dir := t.TempDir()
+	_ = os.Chmod(dir, 0o700)
+	root, _ := publication.OpenRoot(dir)
+	defer root.Close()
+	pub := NewPublisher(root)
+	result := pub.PublishCaptureSet(m, raw, authority)
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	rejecting := ExactBytesAuthority{AdmitGraphProvenanceV5: func([]byte) (string, error) { return "", errors.New("native admission rejected") }}
+	if _, err := pub.Verify(result.Receipt.Selector, rejecting); err == nil {
+		t.Fatal("invalid self-consistent bundle gained custody")
+	}
+}
+
+func TestResolveCaptureSetRejectsPostcommitCorruption(t *testing.T) {
+	m, raw, authority := transactionalFixture(t)
+	dir := t.TempDir()
+	_ = os.Chmod(dir, 0o700)
+	root, _ := publication.OpenRoot(dir)
+	defer root.Close()
+	pub := NewPublisher(root)
+	result := pub.PublishCaptureSet(m, raw, authority)
+	if result.Err != nil {
+		t.Fatal(result.Err)
+	}
+	path := filepath.Join(dir, filepath.FromSlash(result.Receipt.Selector))
+	if err := os.WriteFile(path, []byte("corrupt"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pub.Verify(result.Receipt.Selector, authority); err == nil {
+		t.Fatal("corrupt committed bundle resolved")
 	}
 }
 
