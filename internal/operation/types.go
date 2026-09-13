@@ -46,6 +46,9 @@ type Request struct {
 	Input           json.RawMessage
 	PublicationRoot *publication.Root
 	ArtifactStore   *publication.Root
+	// RetainedSeedSpec is an internal transport-neutral handoff used only by
+	// trusted CLI census orchestration; MCP input cannot populate it.
+	RetainedSeedSpec []byte
 }
 
 // Result is the transport-independent operation result. Artifact contains the

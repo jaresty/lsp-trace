@@ -68,10 +68,9 @@ func traceInputSchema() map[string]any {
 		}
 		return m
 	}
-	position := map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{"line": integer(0, 4294967295), "character": integer(0, 4294967295)}, "required": []any{"line", "character"}}
-	props := map[string]any{"session_id": text(), "generation": integer(1, ^uint64(0)), "uri": text("uri"), "symbol": text(), "positions": map[string]any{"type": "array", "minItems": 1, "maxItems": 64, "items": position}, "language_id": text(), "down_depth": integer(0, 64), "up_depth": integer(0, 64), "max_nodes": integer(1, 10000), "timeout_ms": integer(1, 60000), "request_timeout_ms": integer(1, 60000), "topmost_siblings": map[string]any{"type": "boolean"}, "detail": map[string]any{"type": "string", "enum": []any{"compact", "full"}}, "output_selector": text()}
+	props := map[string]any{"session_id": text(), "generation": integer(1, ^uint64(0)), "uri": text("uri"), "symbol": text(), "line": integer(0, 4294967295), "character": integer(0, 4294967295), "language_id": text(), "down_depth": integer(0, 64), "up_depth": integer(0, 64), "max_nodes": integer(1, 10000), "timeout_ms": integer(1, 60000), "request_timeout_ms": integer(1, 60000), "topmost_siblings": map[string]any{"type": "boolean"}, "detail": map[string]any{"type": "string", "enum": []any{"compact", "full"}}, "output_selector": text()}
 	base := map[string]any{"type": "object", "additionalProperties": false, "properties": props, "required": []any{"session_id", "uri"}}
-	base["oneOf"] = []any{map[string]any{"required": []any{"symbol"}, "not": map[string]any{"required": []any{"positions"}}}, map[string]any{"required": []any{"positions"}, "not": map[string]any{"required": []any{"symbol"}}}}
+	base["oneOf"] = []any{map[string]any{"required": []any{"symbol"}, "not": map[string]any{"anyOf": []any{map[string]any{"required": []any{"line"}}, map[string]any{"required": []any{"character"}}}}}, map[string]any{"required": []any{"line", "character"}, "not": map[string]any{"required": []any{"symbol"}}}}
 	base["$schema"] = "https://json-schema.org/draft/2020-12/schema"
 	base["$id"] = TraceInputID
 	return base

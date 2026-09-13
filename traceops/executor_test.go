@@ -64,7 +64,7 @@ func (f *fakeAcquirer) Execute(_ context.Context, r operation.Request) (operatio
 	f.requests = append(f.requests, r)
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)}, nil
 }
-func (f *fakeAcquirer) ExecuteExplicitTrace(_ context.Context, r operation.Request, _ acquisitionops.ExplicitTraceAdmission, _ sessionruntime.PreparedDocumentCapability, _ sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure) {
+func (f *fakeAcquirer) ExecuteExplicitTrace(_ context.Context, r operation.Request, _ []byte, _ string, _ sessionruntime.DocumentResult) (operation.Result, *operation.Failure) {
 	f.requests = append(f.requests, r)
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5"}`)}, nil
 }
@@ -83,11 +83,10 @@ func (a *supplyAcquirer) Execute(_ context.Context, _ operation.Request) (operat
 	}
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","source_supply":"LSP_SUPPLIED"}`)}, nil
 }
-func (a *supplyAcquirer) ExecuteExplicitTrace(_ context.Context, _ operation.Request, _ acquisitionops.ExplicitTraceAdmission, capability sessionruntime.PreparedDocumentCapability, binding sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure) {
+func (a *supplyAcquirer) ExecuteExplicitTrace(_ context.Context, _ operation.Request, _ []byte, _ string, doc sessionruntime.DocumentResult) (operation.Result, *operation.Failure) {
 	a.symbol = true
-	doc, err := sessionruntime.ConsumePreparedDocumentCapability(capability, binding)
-	if err != nil || doc.Supply == nil {
-		return operation.Result{}, &operation.Failure{Code: "MISSING_SOURCE_SUPPLY", Err: err}
+	if doc.Supply == nil {
+		return operation.Result{}, &operation.Failure{Code: "MISSING_SOURCE_SUPPLY"}
 	}
 	return operation.Result{Artifact: []byte(`{"schema_version":"lsp-trace.graph-provenance.v5","source_supply":"LSP_SUPPLIED"}`)}, nil
 }
@@ -105,7 +104,7 @@ func TestExactSymbolAmbiguityFailsBeforeAcquisitionWithBoundedDeterministicCandi
 	a := &fakeAcquirer{}
 	e := &Executor{runtime: r, acquisition: a}
 	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Same"}`)})
-	if f == nil || f.Code != "DOCUMENT_SYMBOL_AMBIGUOUS" || len(a.requests) != 0 || len(r.methods) != 1 || r.methods[0] != "textDocument/documentSymbol" || len(f.Diagnostics) != 1 || !strings.Contains(f.Diagnostics[0], "total=10 omitted=2") || !strings.Contains(f.Diagnostics[0], "line=1,character=1") || !strings.Contains(f.Diagnostics[0], "use positions") {
+	if f == nil || f.Code != "DOCUMENT_SYMBOL_AMBIGUOUS" || len(a.requests) != 0 || len(r.methods) != 1 || r.methods[0] != "textDocument/documentSymbol" || len(f.Diagnostics) != 1 || !strings.Contains(f.Diagnostics[0], "total=10 omitted=2") || !strings.Contains(f.Diagnostics[0], "line=1,character=1") || !strings.Contains(f.Diagnostics[0], "use line/character") {
 		t.Fatalf("ASSERT_TRACE_EXACT_AMBIGUITY_PREPARE_FREE_BOUNDED: failure=%+v methods=%v requests=%d", f, r.methods, len(a.requests))
 	}
 }
@@ -114,7 +113,7 @@ func TestV5SourceSupplySurvivesPositionAndSymbolModes(t *testing.T) {
 	for _, tc := range []struct {
 		name, target string
 		symbol       bool
-	}{{"position", `"positions":[{"line":1,"character":2}]`, false}, {"symbol", `"symbol":"Target"`, true}} {
+	}{{"position", `"line":1,"character":2`, false}, {"symbol", `"symbol":"Target"`, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{}
 			if tc.symbol {
@@ -155,9 +154,9 @@ func TestTraceMetadataRejectsBeforeDocumentOrLSPActivity(t *testing.T) {
 		name, input, want string
 		metadata          sessionruntime.SessionMetadata
 	}{
-		{"call hierarchy", `"positions":[{"line":0,"character":0}]`, "UNSUPPORTED_CALL_HIERARCHY", sessionruntime.SessionMetadata{PositionEncoding: "utf-16"}},
+		{"call hierarchy", `"line":0,"character":0`, "UNSUPPORTED_CALL_HIERARCHY", sessionruntime.SessionMetadata{PositionEncoding: "utf-16"}},
 		{"document symbol", `"symbol":"Target"`, "UNSUPPORTED_DOCUMENT_SYMBOL", sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}},
-		{"encoding", `"positions":[{"line":0,"character":0}]`, "UNSUPPORTED_POSITION_ENCODING", sessionruntime.SessionMetadata{PositionEncoding: "guess", CallHierarchySupport: true}},
+		{"encoding", `"line":0,"character":0`, "UNSUPPORTED_POSITION_ENCODING", sessionruntime.SessionMetadata{PositionEncoding: "guess", CallHierarchySupport: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{metadata: tc.metadata}
@@ -170,19 +169,19 @@ func TestTraceMetadataRejectsBeforeDocumentOrLSPActivity(t *testing.T) {
 	}
 }
 
-func TestMultiPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *testing.T) {
+func TestPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *testing.T) {
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
 	e := &Executor{runtime: r, acquisition: a}
-	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","positions":[{"line":1,"character":2},{"line":3,"character":4}]}`)})
+	_, f := e.Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":1,"character":2}`)})
 	if f != nil || len(a.requests) != 1 || a.requests[0].Name != acquisitionops.SliceV3 {
-		t.Fatalf("ASSERT_TRACE_MULTI_POSITION_ONE_NATIVE_EXPLICIT_CUSTODY: failure=%v requests=%+v", f, a.requests)
+		t.Fatalf("ASSERT_TRACE_POSITION_ONE_NATIVE_EXPLICIT_CUSTODY: failure=%v requests=%+v", f, a.requests)
 	}
 	var in acquisitionops.Input
 	if err := json.Unmarshal(a.requests[0].Input, &in); err != nil {
 		t.Fatal(err)
 	}
-	if in.OutputVersion != "lsp-trace.graph-provenance.v5" || len(in.SeedManifest.RequiredTargets) != 1 || in.SeedManifest.Root.DownDepth != nil || in.SeedManifest.Root.UpDepth != nil || in.SeedManifest.Expansion.TopmostSiblings {
+	if in.OutputVersion != "lsp-trace.graph-provenance.v5" || len(in.SeedManifest.RequiredTargets) != 0 || in.SeedManifest.Root.DownDepth != nil || in.SeedManifest.Root.UpDepth != nil || in.SeedManifest.Expansion.TopmostSiblings {
 		t.Fatalf("ASSERT_TRACE_DEFAULT_DEPTH2_ZERO_SIBLINGS: %+v", in)
 	}
 	req, err := in.SeedManifest.Request(acquisitionops.SliceV3)
@@ -192,7 +191,7 @@ func TestMultiPositionUsesOneNativeAcquisitionWithCanonicalExplicitCustody(t *te
 }
 
 func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeated(t *testing.T) {
-	for _, tc := range []struct{ name, target string }{{"position", `"positions":[{"line":1,"character":2}]`}, {"symbol", `"symbol":"Target"`}} {
+	for _, tc := range []struct{ name, target string }{{"position", `"line":1,"character":2`}, {"symbol", `"symbol":"Target"`}} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := &fakeRuntime{symbols: []lsp.DocumentSymbol{symbol("Target", 1, 2)}}
 			e := NewExecutor(r)
@@ -205,8 +204,8 @@ func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeate
 					t.Fatalf("ASSERT_REAL_TRACE_ACQUISITION_V5_SCHEMA_%s_RUN_%d: %v", tc.name, run, err)
 				}
 				var evidence graphprovenance.EvidenceV5
-				if err := json.Unmarshal(result.Artifact, &evidence); err != nil || evidence.SeedSpec == nil || strings.Contains(string(evidence.SeedSpec.Bytes), "discover") {
-					t.Fatalf("ASSERT_REAL_TRACE_EXPLICIT_SEED_CUSTODY_%s_RUN_%d: err=%v evidence=%+v", tc.name, run, err, evidence.SeedSpec)
+				if err := json.Unmarshal(result.Artifact, &evidence); err != nil || evidence.SeedSpec != nil {
+					t.Fatalf("ASSERT_REAL_TRACE_NO_GENERATED_SEED_SPEC_%s_RUN_%d: err=%v evidence=%+v", tc.name, run, err, evidence.SeedSpec)
 				}
 			}
 		})
@@ -216,7 +215,7 @@ func TestRealTraceToRealAcquisitionProducesAdmittedV5ForPositionAndSymbolRepeate
 func TestTraceExplicitZeroDepthIsPreserved(t *testing.T) {
 	r := &fakeRuntime{}
 	a := &fakeAcquirer{}
-	_, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","positions":[{"line":0,"character":0}],"down_depth":0,"up_depth":0}`)})
+	_, failure := (&Executor{runtime: r, acquisition: a}).Execute(context.Background(), operation.Request{Name: Operation, Input: []byte(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"down_depth":0,"up_depth":0}`)})
 	if failure != nil || len(a.requests) != 1 {
 		t.Fatalf("ASSERT_TRACE_ZERO_DEPTH_PRESERVED: failure=%v requests=%d", failure, len(a.requests))
 	}

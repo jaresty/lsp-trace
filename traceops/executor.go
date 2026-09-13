@@ -16,22 +16,19 @@ import (
 	"lsp-trace/acquisitionops"
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/seedformat"
-	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/sessionruntime"
 )
 
 const Operation operation.Name = "trace"
-const maxPositions = 64
 
 type Runtime interface {
-	Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure)
-	RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult
-	Records() []sessionruntime.Record
+	acquisitionorchestration.Runtime
 }
 
 type documentRuntime interface {
@@ -43,30 +40,28 @@ type Position struct {
 	Character uint32 `json:"character"`
 }
 type input struct {
-	SessionID        string     `json:"session_id"`
-	Generation       uint64     `json:"generation,omitempty"`
-	URI              string     `json:"uri"`
-	Symbol           string     `json:"symbol,omitempty"`
-	Positions        []Position `json:"positions,omitempty"`
-	LanguageID       string     `json:"language_id,omitempty"`
-	DownDepth        *int       `json:"down_depth,omitempty"`
-	UpDepth          *int       `json:"up_depth,omitempty"`
-	MaxNodes         *int       `json:"max_nodes,omitempty"`
-	TimeoutMS        *int       `json:"timeout_ms,omitempty"`
-	RequestTimeoutMS *int       `json:"request_timeout_ms,omitempty"`
-	TopmostSiblings  bool       `json:"topmost_siblings,omitempty"`
+	SessionID        string  `json:"session_id"`
+	Generation       uint64  `json:"generation,omitempty"`
+	URI              string  `json:"uri"`
+	Symbol           string  `json:"symbol,omitempty"`
+	Line             *uint32 `json:"line,omitempty"`
+	Character        *uint32 `json:"character,omitempty"`
+	LanguageID       string  `json:"language_id,omitempty"`
+	DownDepth        *int    `json:"down_depth,omitempty"`
+	UpDepth          *int    `json:"up_depth,omitempty"`
+	MaxNodes         *int    `json:"max_nodes,omitempty"`
+	TimeoutMS        *int    `json:"timeout_ms,omitempty"`
+	RequestTimeoutMS *int    `json:"request_timeout_ms,omitempty"`
+	TopmostSiblings  bool    `json:"topmost_siblings,omitempty"`
 }
 
-type acquirer interface {
-	Execute(context.Context, operation.Request) (operation.Result, *operation.Failure)
-}
 type Executor struct {
 	runtime     Runtime
-	acquisition acquirer
+	acquisition any // test-only injection; production uses internal orchestration
 }
 
 func NewExecutor(r Runtime) *Executor {
-	return &Executor{runtime: r, acquisition: acquisitionops.NewExecutor(r)}
+	return &Executor{runtime: r}
 }
 
 func decode(raw []byte, dst any) error {
@@ -104,11 +99,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err := decode(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	if (in.Symbol == "") == (len(in.Positions) == 0) {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("exactly one target mode is required: symbol or positions"))
-	}
-	if len(in.Positions) > maxPositions {
-		return fail(operation.FailureInvalidInput, fmt.Errorf("positions must contain at most %d entries", maxPositions))
+	positionSelected := in.Line != nil && in.Character != nil
+	if (in.Line == nil) != (in.Character == nil) || (in.Symbol == "") == !positionSelected {
+		return fail(operation.FailureInvalidInput, fmt.Errorf("exactly one target mode is required: symbol or line/character"))
 	}
 	resolvedID, generation, sf := incomingops.ResolveSession(e.runtime, in.SessionID, in.Generation)
 	if sf != "" {
@@ -132,20 +125,21 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	timeout, requestTimeout := value(in.TimeoutMS, 5000), value(in.RequestTimeoutMS, 1000)
 	ctx, cancel := context.WithTimeout(parent, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
-	positions := append([]Position(nil), in.Positions...)
-	var preparedCapability sessionruntime.PreparedDocumentCapability
-	var preparedBinding sessionruntime.PreparedOperationBinding
-	prepared := false
+	positions := []Position{}
+	if positionSelected {
+		positions = append(positions, Position{Line: *in.Line, Character: *in.Character})
+	}
+	var preparedDocument *sessionruntime.DocumentResult
 	if d, ok := e.runtime.(documentRuntime); ok {
-		doc, capability, prepareErr := sessionruntime.PrepareDocumentForOperation(ctx, d, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true}, op.RequestID)
+		doc := d.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: resolvedID, Generation: generation, URI: in.URI, LanguageID: in.LanguageID, CaptureSupply: true})
 		if doc.Failure != "" {
 			return fail(string(doc.Failure), nil)
 		}
-		if prepareErr != nil {
-			return fail("DOCUMENT_SUPPLY_UNAVAILABLE", prepareErr)
+		if doc.Supply == nil {
+			return fail("DOCUMENT_SUPPLY_UNAVAILABLE", fmt.Errorf("prepared document supply unavailable"))
 		}
 		in.LanguageID = doc.LanguageID
-		preparedCapability, preparedBinding, prepared = capability, capability.Binding(), true
+		preparedDocument = &doc
 	}
 	if in.Symbol != "" {
 		p, f := resolveSymbol(ctx, e.runtime, resolvedID, generation, in.URI, in.Symbol, requestTimeout)
@@ -173,19 +167,16 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	admission, err := acquisitionops.NewExplicitTraceAdmission(seedSpec, workspace, op.RequestID, request)
-	if err != nil {
-		return fail(operation.FailureInvalidInput, err)
-	}
 	requestOp := operation.Request{Name: acquisitionops.SliceV3, RequestID: op.RequestID, Input: raw, PublicationRoot: op.PublicationRoot, ArtifactStore: op.ArtifactStore}
-	if prepared {
-		if acquisition, ok := e.acquisition.(interface {
-			ExecuteExplicitTrace(context.Context, operation.Request, acquisitionops.ExplicitTraceAdmission, sessionruntime.PreparedDocumentCapability, sessionruntime.PreparedOperationBinding) (operation.Result, *operation.Failure)
-		}); ok {
-			return acquisition.ExecuteExplicitTrace(ctx, requestOp, admission, preparedCapability, preparedBinding)
-		}
+	if injected, ok := e.acquisition.(interface {
+		ExecuteExplicitTrace(context.Context, operation.Request, []byte, string, sessionruntime.DocumentResult) (operation.Result, *operation.Failure)
+	}); ok && preparedDocument != nil {
+		return injected.ExecuteExplicitTrace(ctx, requestOp, seedSpec, workspace, *preparedDocument)
 	}
-	return fail(operation.FailureInternal, fmt.Errorf("explicit trace acquisition unavailable"))
+	if preparedDocument != nil {
+		return acquisitionorchestration.ExecuteExplicitTracePrepared(ctx, e.runtime, requestOp, seedSpec, *preparedDocument)
+	}
+	return acquisitionorchestration.ExecuteExplicitTrace(ctx, e.runtime, requestOp, seedSpec)
 }
 
 func explicitSeedSpec(runtime Runtime, id string, generation uint64, in input, positions []Position) ([]byte, string, error) {
@@ -250,7 +241,7 @@ func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation u
 		return matches[i].Character < matches[j].Character
 	})
 	if len(matches) == 0 {
-		_, f := fail("DOCUMENT_SYMBOL_ABSENT", fmt.Errorf("document symbol %q matched 0 symbols", name), "use an exact symbol name or positions")
+		_, f := fail("DOCUMENT_SYMBOL_ABSENT", fmt.Errorf("document symbol %q matched 0 symbols", name), "use an exact symbol name or line/character")
 		return Position{}, f
 	}
 	if len(matches) > 1 {
@@ -262,7 +253,7 @@ func resolveSymbol(ctx context.Context, runtime Runtime, id string, generation u
 		for i := 0; i < shown; i++ {
 			candidates[i] = fmt.Sprintf("line=%d,character=%d", matches[i].Line, matches[i].Character)
 		}
-		_, f := fail("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", name, len(matches)), fmt.Sprintf("total=%d omitted=%d candidates=%v; use positions", len(matches), len(matches)-shown, candidates))
+		_, f := fail("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", name, len(matches)), fmt.Sprintf("total=%d omitted=%d candidates=%v; use line/character", len(matches), len(matches)-shown, candidates))
 		return Position{}, f
 	}
 	return Position{Line: matches[0].Line, Character: matches[0].Character}, nil

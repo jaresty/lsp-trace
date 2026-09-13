@@ -21,7 +21,7 @@ Use only trusted language-server binaries and workspaces. They run with the deve
 
 Prefer a matching READY managed language-server session for code-relationship questions. Discover the exact target textually only when it is not yet known; after structural tracing, read source bodies for semantic interpretation.
 
-- `trace`: use for one exact managed symbol or repeated exact positions; current implemented CLI syntax is documented in `--help` and the repository README.
+- `trace`: use for one exact managed symbol or repeated exact CLI positions; current implemented CLI syntax is documented in `--help` and the repository README. MCP operation `lsp_trace_v1_trace` accepts one exact symbol or one zero-based `line`/`character` position against a host-managed READY session; it is advertised by default, advanced, and full profiles, hidden but callable in compact.
 - `census`: use for accountable source-symbol enumeration and deterministic batched acquisition in one session/generation. Use only the syntax printed by `lsp-trace census --help`; default depths are down/up `1`/`0`, exclusions win, and publication returns a private capture-set bundle selector.
 - `incoming`: start from exact callee positions and trace callers upward.
 - `slice`: discover bounded outgoing nodes, then trace incoming callers from the exact frontier and genuine server-reported empty outgoing leaves.
