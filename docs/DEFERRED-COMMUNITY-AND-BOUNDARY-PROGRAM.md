@@ -99,7 +99,7 @@ Even when true, this rule permits a new implementation decision; it does not its
 
 A boundary proposal must bind every value to an exact admitted graph digest, projection digest, projection policy, community artifact digest, algorithm/version, parameters, seed, and resource policy. It must account for all admitted relation occurrences and distinguish unavailable, incomplete, and empty outcomes. Representative paths and hub crossings remain witnesses under the projection, not semantic explanations.
 
-An instability proposal must compare repeated seeded runs without treating numeric labels as stable identities. It must define deterministic community matching, unmatched-community handling, variation metrics, denominator accounting, thresholds, seed inventory, failed/incomplete runs, and whether the result blocks publication. A stable result within the tested seeds is not a universal stability claim.
+An instability proposal must compare repeated seeded runs without treating numeric labels as stable identities. It must define deterministic community matching, unmatched-community handling, variation metrics, denominator accounting, thresholds, seed inventory, failed/incomplete runs, and whether the result blocks publication. Jaccard measures structural member-set overlap and may nominate comparisons; it does not establish feature, service, ownership, or semantic-boundary identity. A stable result within the tested seeds is not a universal stability claim.
 
 ## Falsifiable decision assertions
 
