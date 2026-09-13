@@ -127,6 +127,7 @@ const (
 	SymbolSelected          SymbolDisposition = "selected"
 	SymbolUnsupported       SymbolDisposition = "unsupported"
 	SymbolPreparationFailed SymbolDisposition = "preparation-failed"
+	SymbolPrepareMissing    SymbolDisposition = "prepare-missing"
 	SymbolNonCallable       SymbolDisposition = "non-callable"
 	SymbolOmitted           SymbolDisposition = "omitted"
 	SymbolIncomplete        SymbolDisposition = "incomplete"
@@ -191,7 +192,7 @@ func validFileDisposition(d FileDisposition) bool {
 
 func validSymbolDisposition(d SymbolDisposition) bool {
 	switch d {
-	case SymbolSelected, SymbolUnsupported, SymbolPreparationFailed, SymbolNonCallable, SymbolOmitted, SymbolIncomplete:
+	case SymbolSelected, SymbolUnsupported, SymbolPreparationFailed, SymbolPrepareMissing, SymbolNonCallable, SymbolOmitted, SymbolIncomplete:
 		return true
 	default:
 		return false
