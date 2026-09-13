@@ -100,14 +100,13 @@ func TestVersionedLegacyWarningsFollowAcquisitionSyntaxValidation(t *testing.T) 
 
 				help := append(append([]string{}, base...), "--help")
 				stdout, stderr, code := captureRun(t, help)
-				if code != 1 || strings.Contains(stderr, cliCodeLegacyOperation) || strings.Contains(strings.ToLower(stderr), "deprecated") {
+				if code != 0 || stderr != "" || strings.Count(stdout, "Usage of "+mode) != 1 {
 					t.Fatalf("ASSERT_VERSIONED_HELP_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q", help, code, stdout, stderr)
 				}
 				machineHelp := append([]string{mode, "--machine"}, help[1:]...)
 				machineOut, machineErr, machineCode := captureRun(t, machineHelp)
-				helpEvents, helpErr := decodeMachineDiagnostics(machineErr)
-				if machineCode != code || machineOut != stdout || helpErr != nil || len(helpEvents) != 1 || helpEvents[0].Code != cliCodeInvocationError {
-					t.Fatalf("ASSERT_VERSIONED_HELP_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q events=%+v err=%v", machineHelp, machineCode, machineOut, machineErr, helpEvents, helpErr)
+				if machineCode != code || machineOut != stdout || machineErr != "" {
+					t.Fatalf("ASSERT_VERSIONED_HELP_NO_LEGACY_WARNING: args=%v code=%d stdout=%q stderr=%q", machineHelp, machineCode, machineOut, machineErr)
 				}
 
 				workspace := t.TempDir()
@@ -147,6 +146,76 @@ func TestVersionedLegacyWarningsFollowAcquisitionSyntaxValidation(t *testing.T) 
 					t.Fatalf("ASSERT_VERSIONED_SERVER_ARG_MACHINE_PASSTHROUGH: args=%v code=%d stderr=%q", passThrough, passCode, passErr)
 				}
 			})
+		}
+	}
+}
+
+func TestLegacyHelpIsTerminalAfterAuthoritativeValidation(t *testing.T) {
+	for _, mode := range []string{"slice", "incoming"} {
+		for _, version := range []string{"v1", "v2", "v3"} {
+			for _, machineFlag := range []string{"", "--machine", "--machine=false"} {
+				name := strings.Join([]string{mode, version, strings.TrimPrefix(machineFlag, "--")}, "-")
+				t.Run(name, func(t *testing.T) {
+					workspace := t.TempDir()
+					marker := filepath.Join(workspace, "provider-started")
+					args := []string{mode}
+					if machineFlag != "" {
+						args = append(args, machineFlag)
+					}
+					if version == "v1" {
+						args = append(args, "--acquisition-version", version, "--workspace", workspace, "--config", filepath.Join(workspace, "missing.toml"), "--profile", "missing", "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch "+marker)
+						args = append(args, "--seed-file", filepath.Join(workspace, "missing-seeds.json"))
+					} else {
+						args = append(args, "--acquisition-version", version, "--workspace", workspace, "--config", filepath.Join(workspace, "missing.toml"), "--profile", "missing", "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch "+marker, "--seed-manifest", filepath.Join(workspace, "missing-manifest.json"))
+					}
+					args = append(args, "--help")
+					stdout, stderr, code := captureRun(t, args)
+					if code != 0 || stderr != "" || strings.Count(stdout, "Usage of "+mode) != 1 || strings.Contains(stdout, cliDiagnosticVersion) {
+						t.Fatalf("ASSERT_LEGACY_HELP_TERMINAL: args=%v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
+					}
+					if _, err := os.Stat(marker); !os.IsNotExist(err) {
+						t.Fatalf("ASSERT_LEGACY_HELP_NO_PROVIDER: args=%v err=%v", args, err)
+					}
+				})
+			}
+		}
+	}
+
+	for _, mode := range []string{"slice", "incoming"} {
+		for _, machineFlag := range []string{"", "--machine", "--machine=false"} {
+			args := []string{mode}
+			if machineFlag != "" {
+				args = append(args, machineFlag)
+			}
+			args = append(args, "--help")
+			stdout, stderr, code := captureRun(t, args)
+			if code != 0 || stderr != "" || strings.Count(stdout, "Usage of "+mode) != 1 {
+				t.Fatalf("ASSERT_LEADING_LEGACY_HELP: args=%v code=%d stdout=%q stderr=%q", args, code, stdout, stderr)
+			}
+		}
+	}
+
+	malformed := []struct {
+		args    []string
+		machine bool
+	}{
+		{[]string{"slice", "--workspace", "x", "--unknown", "--help"}, false},
+		{[]string{"incoming", "--acquisition-version", "v2", "--workspace", "x", "--unknown", "--help"}, false},
+		{[]string{"slice", "--machine", "--acquisition-version", "v3", "--workspace", "x", "--unknown", "--help"}, true},
+		{[]string{"incoming", "--machine=false", "--workspace", "x", "positional", "--help"}, false},
+	}
+	for _, tc := range malformed {
+		stdout, stderr, code := captureRun(t, tc.args)
+		if code == 0 || strings.Contains(strings.ToLower(stderr), "deprecated") || strings.Contains(stderr, cliCodeLegacyOperation) {
+			t.Fatalf("ASSERT_MALFORMED_HELP_AUTHORITATIVE: args=%v code=%d stdout=%q stderr=%q", tc.args, code, stdout, stderr)
+		}
+		if tc.machine {
+			events, err := decodeMachineDiagnostics(stderr)
+			if stdout != "" || err != nil || len(events) != 1 || events[0].Code != cliCodeInvocationError {
+				t.Fatalf("ASSERT_MALFORMED_HELP_MACHINE_STREAM: args=%v stdout=%q stderr=%q events=%+v err=%v", tc.args, stdout, stderr, events, err)
+			}
+		} else if stdout == "" && stderr == "" {
+			t.Fatalf("ASSERT_MALFORMED_HELP_HUMAN_STREAM: args=%v stdout=%q stderr=%q", tc.args, stdout, stderr)
 		}
 	}
 }

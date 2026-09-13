@@ -208,6 +208,10 @@ func run(args []string) int {
 		}
 		return runCore(clean)
 	}
+	if validation.help {
+		_, _ = io.WriteString(os.Stdout, validation.helpOutput)
+		return 0
+	}
 	writeLegacyWarning(os.Stderr, legacy, machine)
 	if !machine {
 		return runCorePrepared(clean, validation)
@@ -224,6 +228,8 @@ type legacyInvocation struct {
 	acquisitionVersion string
 	acquisitionArgs    []string
 	incoming           *incomingSyntax
+	help               bool
+	helpOutput         string
 }
 
 func validateLegacyInvocation(args []string) (*legacyInvocation, bool, int) {
@@ -232,7 +238,7 @@ func validateLegacyInvocation(args []string) (*legacyInvocation, bool, int) {
 	}
 	validation := &legacyInvocation{}
 	var code int
-	code, _ = captureProcessStderr(func() int {
+	code, validation.helpOutput, _ = captureProcessOutput(func() int {
 		version, rest, err := acquisitionVersion(args[1:])
 		if err != nil {
 			return 1
@@ -244,7 +250,9 @@ func validateLegacyInvocation(args []string) (*legacyInvocation, bool, int) {
 			validation.args = append([]string(nil), args...)
 			validation.acquisitionVersion = version
 			validation.acquisitionArgs = append([]string(nil), rest...)
-			return validateAcquisitionVersion(args[0], version, rest)
+			code, help := validateAcquisitionVersionPlan(args[0], version, rest)
+			validation.help = help
+			return code
 		}
 		if version == "v1" {
 			args = append([]string{args[0]}, rest...)
@@ -256,11 +264,46 @@ func validateLegacyInvocation(args []string) (*legacyInvocation, bool, int) {
 			validation.incoming, err = parseIncomingSyntax(args[1:])
 		}
 		if err != nil {
+			validation.help = errors.Is(err, flag.ErrHelp)
 			return 1
 		}
 		return 0
 	})
+	if validation.help {
+		return validation, true, 0
+	}
 	return validation, code == 0, code
+}
+
+func captureProcessOutput(fn func() int) (int, string, string) {
+	oldOut, oldErr := os.Stdout, os.Stderr
+	outR, outW, outErr := os.Pipe()
+	errR, errW, errErr := os.Pipe()
+	if outErr != nil || errErr != nil {
+		if outErr == nil {
+			_ = outR.Close()
+			_ = outW.Close()
+		}
+		if errErr == nil {
+			_ = errR.Close()
+			_ = errW.Close()
+		}
+		return fn(), "", ""
+	}
+	os.Stdout, os.Stderr = outW, errW
+	var stdout, stderr bytes.Buffer
+	var drained sync.WaitGroup
+	drained.Add(2)
+	go func() { defer drained.Done(); _, _ = stdout.ReadFrom(outR) }()
+	go func() { defer drained.Done(); _, _ = stderr.ReadFrom(errR) }()
+	code := fn()
+	_ = outW.Close()
+	_ = errW.Close()
+	os.Stdout, os.Stderr = oldOut, oldErr
+	drained.Wait()
+	_ = outR.Close()
+	_ = errR.Close()
+	return code, stdout.String(), stderr.String()
 }
 
 func captureProcessStderr(fn func() int) (int, string) {

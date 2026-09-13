@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -291,21 +292,34 @@ func runInitializedAcquisitionSession(cfg initializedAcquisitionRunnerConfig, ca
 }
 
 func runAcquisitionVersion(mode, version string, args []string, stdout, stderr io.Writer) int {
-	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil, false)
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, nil, false, nil)
 }
 
 func validateAcquisitionVersion(mode, version string, args []string) int {
-	return runAcquisitionVersionInternal(mode, version, args, io.Discard, io.Discard, nil, true)
+	code, _ := validateAcquisitionVersionPlan(mode, version, args)
+	return code
+}
+
+func validateAcquisitionVersionPlan(mode, version string, args []string) (int, bool) {
+	var help bool
+	code := runAcquisitionVersionInternal(mode, version, args, io.Discard, io.Discard, nil, true, &help)
+	return code, help
 }
 
 func runTraceAcquisition(mode, version string, args []string, stdout, stderr io.Writer, trace traceAcquisitionInput) int {
-	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, &trace, false)
+	return runAcquisitionVersionInternal(mode, version, args, stdout, stderr, &trace, false, nil)
 }
 
-func runAcquisitionVersionInternal(mode, version string, args []string, stdout, stderr io.Writer, trace *traceAcquisitionInput, validateOnly bool) int {
+func runAcquisitionVersionInternal(mode, version string, args []string, stdout, stderr io.Writer, trace *traceAcquisitionInput, validateOnly bool, help *bool) int {
 	fail := func(err error) int { fmt.Fprintln(stderr, err); return 1 }
 	fs := flag.NewFlagSet(mode+" v2", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	for _, arg := range args {
+		if arg == "--help" || arg == "-h" {
+			fs.SetOutput(os.Stdout)
+			break
+		}
+	}
 	var c sliceConfig
 	var profile profileFlags
 	var manifestPath, outputVersion, groupBy string
@@ -341,6 +355,9 @@ func runAcquisitionVersionInternal(mode, version string, args []string, stdout, 
 	fs.StringVar(&requestDiagnosticSelector, "private-request-diagnostic-selector", "", "safe relative private request diagnostic selector (v3 only)")
 	fs.BoolVar(&c.pretty, "pretty", false, "indent outer JSON without changing embedded graph bytes")
 	if err := fs.Parse(args); err != nil {
+		if help != nil {
+			*help = errors.Is(err, flag.ErrHelp)
+		}
 		return 1
 	}
 	explicit := map[string]bool{}
