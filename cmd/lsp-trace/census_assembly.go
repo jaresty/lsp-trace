@@ -129,6 +129,10 @@ func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAc
 	acquirer := newInitializedCensusBatchAcquirer(runtime, limits)
 	projection, err := (censusacquisition.Core{Discoverer: discoverer, Acquirer: acquirer}).Run(ctx, acquirer.session.identity())
 	if err != nil {
+		var batchFailure interface{ BatchOrdinal() int }
+		if errors.As(err, &batchFailure) && batchFailure.BatchOrdinal() > 0 {
+			return censusAssembly{}, &censusBatchAcquisitionFailure{ordinal: batchFailure.BatchOrdinal(), Err: err}
+		}
 		return censusAssembly{}, err
 	}
 	projection, canonical, err := cloneCensusProjection(projection)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/url"
@@ -176,6 +177,10 @@ func TestCensusCLIDiagnosticClosedMatrix(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		repeated, err := marshalCensusCLIDiagnostic(d)
+		if err != nil || !bytes.Equal(raw, repeated) {
+			t.Fatalf("ASSERT_DETERMINISTIC_DIAGNOSTIC_BYTES first=%q repeated=%q err=%v", raw, repeated, err)
+		}
 		if !strings.HasSuffix(string(raw), "\n") {
 			t.Fatal("not jsonl")
 		}
@@ -183,10 +188,21 @@ func TestCensusCLIDiagnosticClosedMatrix(t *testing.T) {
 			t.Fatalf("diagnostic=%s", raw)
 		}
 	}
-	n := 3
-	if _, err := buildCensusCLIDiagnostic(censusStageAcquisition, &n); err != nil {
-		t.Fatal(err)
+	for _, n := range []int{1, 2, 3} {
+		d, err := buildCensusCLIDiagnostic(censusStageAcquisition, &n)
+		if err != nil {
+			t.Fatal(err)
+		}
+		first, err := marshalCensusCLIDiagnostic(d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := marshalCensusCLIDiagnostic(d)
+		if err != nil || !bytes.Equal(first, second) {
+			t.Fatalf("ASSERT_DETERMINISTIC_BATCH_DIAGNOSTIC ordinal=%d", n)
+		}
 	}
+	n := 3
 	if _, err := buildCensusCLIDiagnostic(censusStageDiscovery, &n); err == nil {
 		t.Fatal("ordinal accepted outside acquisition")
 	}

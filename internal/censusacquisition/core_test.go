@@ -93,6 +93,53 @@ func seedPath(path string) []byte {
 	return raw
 }
 
+func TestCoreBatchFailurePreservesExactOneBasedOrdinal(t *testing.T) {
+	for _, tc := range []struct {
+		targets, failOrdinal, want int
+	}{{1, 0, 1}, {64, 1, 2}, {127, 2, 3}} {
+		t.Run(fmt.Sprintf("targets-%d", tc.targets), func(t *testing.T) {
+			cause := errors.New("late acquisition")
+			_, err := (Core{
+				Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return discovery(tc.targets), nil }),
+				Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+					if b.Ordinal == tc.failOrdinal {
+						return AcquiredV5{}, fmt.Errorf("wrapped: %w", cause)
+					}
+					return AcquiredV5{Session: b.Session, Raw: v5(t, b)}, nil
+				}),
+			}).Run(context.Background(), SessionIdentity{"s", 7})
+			var failure interface{ BatchOrdinal() int }
+			if !errors.As(err, &failure) || failure.BatchOrdinal() != tc.want {
+				t.Fatalf("ASSERT_ONE_BASED_BATCH_FAILURE got=%v want=%d err=%v", failure, tc.want, err)
+			}
+			if !errors.Is(err, cause) {
+				t.Fatal("ASSERT_BATCH_FAILURE_WRAPPING")
+			}
+		})
+	}
+}
+
+func TestCorePreBatchAndDiscoveryFailuresHaveNoOrdinal(t *testing.T) {
+	for _, err := range []error{
+		errors.New("unknown"),
+		func() error {
+			_, err := (Core{}).Run(context.Background(), SessionIdentity{"s", 7})
+			return err
+		}(),
+		func() error {
+			_, err := (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) {
+				return Discovery{}, errors.New("discovery")
+			}), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, nil })}).Run(context.Background(), SessionIdentity{"s", 7})
+			return err
+		}(),
+	} {
+		var failure interface{ BatchOrdinal() int }
+		if errors.As(err, &failure) {
+			t.Fatalf("ASSERT_PRE_BATCH_NO_ORDINAL err=%v", err)
+		}
+	}
+}
+
 func TestReconcileSeedUsesExactCanonicalWorkspaceIdentity(t *testing.T) {
 	workspace := t.TempDir()
 	uri := func(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }

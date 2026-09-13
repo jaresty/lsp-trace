@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"sync/atomic"
 	"testing"
 
 	"lsp-trace/acquisitionops"
@@ -233,6 +235,54 @@ func TestRunCensusCoreCancellationDriftAndPublicationOutcomes(t *testing.T) {
 				t.Fatal("ASSERT_PRECOMMIT_ZERO_PUBLISH")
 			}
 		})
+	}
+}
+
+func TestRunCensusCoreCancellationAfterCapabilityNeverPublishes(t *testing.T) {
+	projection := censusPublicationProjection(t, 1)
+	for iteration := 0; iteration < 100; iteration++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		var publishes atomic.Int64
+		deps := censusCoreDependencies{
+			runSession: func(_ initializedAcquisitionRunnerConfig, cb func(context.Context, *initializedAcquisitionRuntime) int) int {
+				return cb(ctx, &initializedAcquisitionRuntime{sessionID: "publication-session", generation: 7})
+			},
+			discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
+				return discoveryFromProjection(projection), nil
+			},
+			acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits) (censusAssembly, error) {
+				c := censusPublicationCapabilityFor(t, projection)
+				return censusAssembly{state: c.state, token: c.token}, nil
+			},
+			capability: func(a censusAssembly) (censusPublicationCapability, error) {
+				capability, err := a.publicationCapability()
+				cancel()
+				return capability, err
+			},
+			publish: func(context.Context, censusPublicationCapability, string) censusPublicationOutcome {
+				publishes.Add(1)
+				return censusPublicationOutcome{}
+			},
+		}
+		got := runCensusCore(censusCLIOptions{}, censusCoreConfig{}, deps)
+		if got.Result != nil || got.Diagnostic == nil || got.Diagnostic.Stage != censusStageAcquisition || got.Diagnostic.Code != censusCodeAcquisitionFailed || publishes.Load() != 0 {
+			t.Fatalf("ASSERT_POST_CAPABILITY_CANCELLATION_PRECOMMIT iteration=%d outcome=%+v publishes=%d", iteration, got, publishes.Load())
+		}
+	}
+}
+
+func TestCensusBatchOrdinalTypedWrappedAndUnknown(t *testing.T) {
+	for _, ordinal := range []int{1, 2, 3} {
+		err := fmt.Errorf("outer: %w", &censusBatchAcquisitionFailure{ordinal: ordinal, Err: errors.New("private")})
+		got := censusBatchOrdinal(err)
+		if got == nil || *got != ordinal {
+			t.Fatalf("ASSERT_EXACT_WRAPPED_BATCH_ORDINAL got=%v want=%d", got, ordinal)
+		}
+	}
+	for _, err := range []error{nil, errors.New("acquire batch 2: private"), fmt.Errorf("wrapped unknown: %w", errors.New("batch 3"))} {
+		if got := censusBatchOrdinal(err); got != nil {
+			t.Fatalf("ASSERT_UNKNOWN_ERROR_HAS_NO_ORDINAL got=%d err=%v", *got, err)
+		}
 	}
 }
 

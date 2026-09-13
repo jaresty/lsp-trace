@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/censusacquisition"
@@ -80,6 +81,9 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		if err != nil {
 			return fail(censusStageAssembly, nil)
 		}
+		if err := ctx.Err(); err != nil {
+			return fail(censusStageAcquisition, nil)
+		}
 		outcome = deps.publish(ctx, capability, options.PublicationRoot)
 		if outcome.Result == nil {
 			if outcome.Diagnostic == nil {
@@ -99,6 +103,39 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 	return outcome
 }
 
+type censusBatchAcquisitionFailure struct {
+	ordinal int
+	Err     error
+}
+
+func (f *censusBatchAcquisitionFailure) Error() string {
+	if f == nil || f.Err == nil {
+		return "census batch acquisition failed"
+	}
+	return f.Err.Error()
+}
+
+func (f *censusBatchAcquisitionFailure) Unwrap() error {
+	if f == nil {
+		return nil
+	}
+	return f.Err
+}
+
+func (f *censusBatchAcquisitionFailure) BatchOrdinal() int {
+	if f == nil {
+		return 0
+	}
+	return f.ordinal
+}
+
 // censusBatchOrdinal intentionally recognizes only the private typed batch
 // failure boundary; raw error text is never parsed or projected.
-func censusBatchOrdinal(error) *int { return nil }
+func censusBatchOrdinal(err error) *int {
+	var failure *censusBatchAcquisitionFailure
+	if !errors.As(err, &failure) || failure.BatchOrdinal() < 1 {
+		return nil
+	}
+	ordinal := failure.BatchOrdinal()
+	return &ordinal
+}

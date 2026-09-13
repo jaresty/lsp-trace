@@ -137,6 +137,19 @@ type Core struct {
 	Acquirer   Acquirer
 }
 
+type batchAcquisitionFailure struct {
+	ordinal int
+	err     error
+}
+
+func (f *batchAcquisitionFailure) Error() string     { return f.err.Error() }
+func (f *batchAcquisitionFailure) Unwrap() error     { return f.err }
+func (f *batchAcquisitionFailure) BatchOrdinal() int { return f.ordinal }
+
+func failBatch(ordinal int, err error) error {
+	return &batchAcquisitionFailure{ordinal: ordinal + 1, err: err}
+}
+
 // Run performs authority-neutral discovery, batch acquisition, and exact
 // validation. Its result is data, not a completion or publication capability.
 func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
@@ -181,20 +194,20 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		}
 		seedBytes, err := combineSeeds(pt, d.Workspace)
 		if err != nil {
-			return Projection{}, fmt.Errorf("batch %d seeds: %w", i, err)
+			return Projection{}, failBatch(i, fmt.Errorf("batch %d seeds: %w", i, err))
 		}
 		bid := stableID("batch", []byte(fmt.Sprintf("%s\x00%d\x00%s", cid, i, joinTargetBytes(b.Targets))))
 		req := BatchRequest{s, cid, bid, i, census.DefaultDownDepth, census.DefaultUpDepth, pt, seedBytes}
 		got, e := c.Acquirer.AcquireV5(ctx, req)
 		if e != nil {
-			return Projection{}, fmt.Errorf("acquire batch %d: %w", i, e)
+			return Projection{}, failBatch(i, fmt.Errorf("acquire batch %d: %w", i, e))
 		}
 		if got.Session != s {
-			return Projection{}, fmt.Errorf("session identity drift during batch %d", i)
+			return Projection{}, failBatch(i, fmt.Errorf("session identity drift during batch %d", i))
 		}
 		identity, e := admit(got.Raw, req)
 		if e != nil {
-			return Projection{}, fmt.Errorf("batch %d V5 admission: %w", i, e)
+			return Projection{}, failBatch(i, fmt.Errorf("batch %d V5 admission: %w", i, e))
 		}
 		batches[i] = req
 		meta[i] = identity
