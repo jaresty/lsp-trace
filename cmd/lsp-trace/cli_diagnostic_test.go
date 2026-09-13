@@ -50,10 +50,10 @@ func TestPrimaryHelpKeepsLegacyAcquisitionCommandsVisible(t *testing.T) {
 	}
 }
 
-func TestHelpLanePointersDescribeProposalsAsUnavailable(t *testing.T) {
+func TestHelpLanePointersDescribeReplacementStatus(t *testing.T) {
 	legacy, legacyErr, legacyCode := captureRun(t, []string{"legacy"})
-	if legacyCode != 0 || legacyErr != "" || !strings.Contains(legacy, "census and context are unavailable proposals") {
-		t.Fatalf("ASSERT_PROPOSED_NOT_ACTIONABLE: code=%d stdout=%q stderr=%q", legacyCode, legacy, legacyErr)
+	if legacyCode != 0 || legacyErr != "" || !strings.Contains(legacy, "census AVAILABLE") || !strings.Contains(legacy, "context FUTURE/PROPOSED") || !strings.Contains(legacy, "removal UNSCHEDULED") {
+		t.Fatalf("ASSERT_REPLACEMENT_STATUS: code=%d stdout=%q stderr=%q", legacyCode, legacy, legacyErr)
 	}
 }
 
@@ -360,10 +360,10 @@ func TestMachineDiagnosticParserRejectsEmptyUnknownAndMutations(t *testing.T) {
 	}
 }
 
-func TestLegacyFileCensusReplacementExplicitlyUnavailableProposed(t *testing.T) {
+func TestLegacyFileCensusReplacementAvailable(t *testing.T) {
 	workspace := t.TempDir()
 	_, stderr, _ := captureRun(t, []string{"slice", "--machine", "--from-file", "src", "--workspace", workspace, "--server", "missing"})
-	if !strings.Contains(stderr, `"replacement":"census"`) || !strings.Contains(stderr, `"replacement_status":"FUTURE/PROPOSED_UNAVAILABLE"`) {
-		t.Fatalf("ASSERT_CENSUS_UNAVAILABLE_PROPOSAL: %q", stderr)
+	if !strings.Contains(stderr, `"replacement":"census"`) || !strings.Contains(stderr, `"replacement_status":"AVAILABLE"`) || !strings.Contains(stderr, `"removal_release":"UNSCHEDULED"`) {
+		t.Fatalf("ASSERT_CENSUS_AVAILABLE: %q", stderr)
 	}
 }

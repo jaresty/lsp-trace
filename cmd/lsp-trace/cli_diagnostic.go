@@ -42,7 +42,7 @@ func legacyOperation(name string, args []string) (legacyCLI, bool) {
 			exactSymbol = exactSymbol || arg == "--symbol" || strings.HasPrefix(arg, "--symbol=")
 		}
 		if fileCensus && !exactSymbol {
-			return legacyCLI{Operation: name, Replacement: "census", Status: "FUTURE/PROPOSED_UNAVAILABLE"}, true
+			return legacyCLI{Operation: name, Replacement: "census", Status: "AVAILABLE"}, true
 		}
 		return legacyCLI{Operation: name, Replacement: "trace", Status: "AVAILABLE"}, true
 	case "incoming":

@@ -116,6 +116,7 @@ const usageText = `usage:
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
   lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...)
+  lsp-trace census --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--machine]
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace advanced  # specialist and administrative operations
@@ -178,6 +179,9 @@ func main() {
 	os.Exit(code)
 }
 func run(args []string) int {
+	if len(args) > 0 && args[0] == "census" {
+		return runCensus(args[1:], os.Stdout, os.Stderr)
+	}
 	clean, machine, machineState := extractMachineMode(args)
 	legacy, isLegacy := legacyCLI{}, false
 	if len(clean) > 0 {
@@ -335,7 +339,7 @@ func runCorePrepared(args []string, validation *legacyInvocation) int {
 		return 0
 	}
 	if len(args) == 1 && args[0] == "legacy" {
-		fmt.Fprintln(os.Stdout, "legacy compatibility operations: slice, incoming\nreplacement status: trace AVAILABLE for exact targets; census and context are unavailable proposals, not migration commands\nsee docs/cli-migration-diagnostics.md")
+		fmt.Fprintln(os.Stdout, "legacy compatibility operations: slice, incoming (callable; removal UNSCHEDULED)\nreplacement status: trace AVAILABLE for exact targets; census AVAILABLE for file census; context FUTURE/PROPOSED\nsee docs/cli-migration-diagnostics.md")
 		return 0
 	}
 	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
@@ -438,6 +442,9 @@ func runCorePrepared(args []string, validation *legacyInvocation) int {
 	}
 	if len(args) > 0 && args[0] == "trace" {
 		return runTrace(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "census" {
+		return runCensus(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "slice" {
 		return runSlice(args[1:])

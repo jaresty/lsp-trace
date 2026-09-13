@@ -245,8 +245,8 @@ func TestParseAcceptsTopmostSiblingsOptIn(t *testing.T) {
 }
 
 func TestUsageKeepsLegacyVisibleAndAdvertisesEmbeddedSkill(t *testing.T) {
-	if strings.Contains(usageText, "lsp-trace census") {
-		t.Fatalf("ASSERT_USAGE_DOES_NOT_ADVERTISE_UNIMPLEMENTED_CENSUS: %q", usageText)
+	if strings.Count(usageText, "lsp-trace census") != 1 {
+		t.Fatalf("ASSERT_USAGE_ADVERTISES_CENSUS_ONCE: %q", usageText)
 	}
 	if !strings.Contains(usageText, "lsp-trace incoming ") || !strings.Contains(usageText, "lsp-trace slice ") {
 		t.Fatalf("ASSERT_USAGE_KEEPS_LEGACY_VISIBLE_UNTIL_PARITY: %q", usageText)

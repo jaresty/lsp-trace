@@ -303,13 +303,14 @@ func (s *censusStringFlags) Set(v string) error { *s = append(*s, v); return nil
 // performs no filesystem, environment, profile, session, or publication work.
 func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	clean, machine, state := extractMachineMode(args)
+	o := censusCLIOptions{Machine: machine}
 	if state != machineFlagOK {
-		return censusCLIOptions{}, errors.New("invalid leading --machine grammar")
+		return o, errors.New("invalid leading --machine grammar")
 	}
 	if len(clean) > 0 && clean[0] == "census" {
 		clean = clean[1:]
 	}
-	o := censusCLIOptions{Sources: []string{"."}, DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxNodes: census.DefaultMaxNodes, Timeout: census.DefaultTimeout, RequestTimeout: census.DefaultRequestTimeout, Machine: machine}
+	o = censusCLIOptions{Sources: []string{"."}, DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxNodes: census.DefaultMaxNodes, Timeout: census.DefaultTimeout, RequestTimeout: census.DefaultRequestTimeout, Machine: machine}
 	fs := flag.NewFlagSet("census", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var src, inc, exc, serverArgs censusStringFlags
@@ -332,17 +333,17 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 			o.Help = true
 			return o, nil
 		}
-		return censusCLIOptions{}, errors.New("invalid census syntax")
+		return o, errors.New("invalid census syntax")
 	}
 	if len(src) > 0 {
 		o.Sources = []string(src)
 	}
 	o.Includes, o.Excludes, o.ServerArgs = []string(inc), []string(exc), []string(serverArgs)
 	if fs.NArg() != 0 {
-		return censusCLIOptions{}, errors.New("census accepts no positional arguments")
+		return o, errors.New("census accepts no positional arguments")
 	}
 	if err := validateCensusCLIOptions(o); err != nil {
-		return censusCLIOptions{}, err
+		return o, err
 	}
 	return o, nil
 }
