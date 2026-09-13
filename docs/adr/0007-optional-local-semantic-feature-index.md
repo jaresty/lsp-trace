@@ -102,9 +102,25 @@ The frozen lineage schema must define the finite `inventory_state_delta` values 
 
 The protocol must version these exact uppercase, mutually exclusive per-operation enums; adding or removing a state requires a protocol version change.
 
-**Describe and Embed member outcome v1:**
+**Describe operation outcome v1:**
+
+`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Describe member outcome v1:**
 
 `COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
+
+**Embed operation outcome v1:**
+
+`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Embed member outcome v1:**
+
+`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
+
+**Index-build operation outcome v1:**
+
+`COMPLETE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
 
 **Index-build member outcome v1:**
 
@@ -147,7 +163,7 @@ group_index_members =
   grouped + unmatched + filtered_by_policy + duplicate_member + invalid_member
 ```
 
-Duplicate inputs and members remain in the denominator and reference the retained canonical member. `COMPLETE` means the applicable equation balances exactly and cannot omit a denominator member. Search `COMPLETE` additionally requires one closed query record and complete result-member accounting. Group `COMPLETE` requires complete group-member accounting, including every unmatched member.
+Duplicate inputs and members remain in the denominator and reference the retained canonical member. A Describe or Embed whole-operation outcome is `COMPLETE` if and only if `describe_or_embed_admitted` balances and every admitted member has one terminal member outcome. An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances and every admitted member has one terminal member outcome. Any non-`COMPLETE` Describe, Embed, or Index-build whole-operation outcome still carries the complete admitted denominator, the evaluated-member count, and exactly one terminal outcome for each member whose evaluation began; it cannot imply completeness. Search `COMPLETE` additionally requires one closed query record and complete result-member accounting. Group `COMPLETE` requires complete group-member accounting, including every unmatched member. No operation may report `COMPLETE` while omitting a denominator member.
 
 ## Required provenance and replay levels
 
