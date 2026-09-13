@@ -8,7 +8,12 @@
   "properties": {
     "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
     "generation": {"type": "integer", "minimum": 1},
-    "uri": {"type": "string", "format": "uri", "pattern": "^[A-Za-z][A-Za-z0-9+.-]*:"},
+    "uri": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^([A-Za-z][A-Za-z0-9+.-]*://|[A-Za-z][A-Za-z0-9+.-]*:[^/\\x00-\\x20\\x7f%])[^\\x00-\\x20\\x7f%]*(%[0-9A-Fa-f]{2}[^\\x00-\\x20\\x7f%]*)*$"
+    },
     "symbol": {"type": "string", "minLength": 1, "maxLength": 1024},
     "line": {"type": "integer", "minimum": 0, "maximum": 4294967295},
     "character": {"type": "integer", "minimum": 0, "maximum": 4294967295},

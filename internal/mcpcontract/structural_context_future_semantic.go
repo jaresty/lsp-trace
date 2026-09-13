@@ -6,15 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net/url"
 	"regexp"
 	"unicode/utf8"
 )
 
 const (
-	futureMaxCount = uint64(math.MaxInt64)
-	futureMaxNodes = 10000
-	futureMaxEdges = 100000
+	futureMaxCount         = uint64(math.MaxInt64)
+	futureMaxNodes         = 10000
+	futureMaxEdges         = 100000
+	futureMaxURICodePoints = 4096
 )
 
 var (
@@ -26,6 +26,10 @@ var (
 	errFutureState      = errors.New("semantic-v1: invalid state relation")
 	futureNodeIDPattern = regexp.MustCompile(`^tn_[0-9a-f]{32}$`)
 	futureEdgeIDPattern = regexp.MustCompile(`^te_[0-9a-f]{32}$`)
+	// Keep this expression byte-for-byte equivalent to the operation-35 input
+	// schema pattern. It intentionally defines a conservative URI subset rather
+	// than delegating to a parser whose acceptance JSON Schema cannot mirror.
+	futureAbsoluteURIPattern = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9+.-]*://|[A-Za-z][A-Za-z0-9+.-]*:[^/\x00-\x20\x7f%])[^\x00-\x20\x7f%]*(%[0-9A-Fa-f]{2}[^\x00-\x20\x7f%]*)*$`)
 )
 
 // NewFutureStructuralCorrelationID returns a host-generated opaque operation-35
@@ -173,8 +177,8 @@ func validateFutureInput(v map[string]any) error {
 	if _, err := uintField(v, "generation", 1, futureMaxCount); err != nil {
 		return err
 	}
-	uri, err := stringField(v, "uri", 1, math.MaxInt32, nil)
-	if err != nil || !validAbsoluteURI(uri) {
+	uri, err := stringField(v, "uri", 1, futureMaxURICodePoints, nil)
+	if err != nil || !futureAbsoluteURIPattern.MatchString(uri) {
 		return errFutureValue
 	}
 	_, hasSymbol := v["symbol"]
@@ -445,7 +449,11 @@ func validateReferenceArray(parent map[string]any, key string, max int, pattern 
 	seen := make(map[string]struct{}, len(values))
 	for _, raw := range values {
 		id, ok := raw.(string)
-		if !ok || id == "" || !pattern.MatchString(id) {
+		if !ok {
+			return errFutureValue
+		}
+		count, withinMax := boundedRuneCount(id, 35)
+		if !withinMax || count != 35 || !pattern.MatchString(id) {
 			return errFutureValue
 		}
 		if _, ok := seen[id]; ok {
@@ -541,10 +549,6 @@ func boundedRuneCount(s string, max int) (int, bool) {
 	return count, true
 }
 
-func validAbsoluteURI(s string) bool {
-	u, err := url.Parse(s)
-	return err == nil && u.IsAbs()
-}
 func enumField(v map[string]any, key string, allowed ...string) (string, error) {
 	s, err := stringField(v, key, 1, 128, nil)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -335,7 +336,35 @@ func TestFutureStructuralSemanticValidatorRejectsAdversarialInMemoryValues(t *te
 
 func TestFutureStructuralSemanticValidatorMatchesSchemaURIAndUnicodeBounds(t *testing.T) {
 	schema := compileFutureStructuralSchemas(t)[futureInputID]
-	for _, uri := range []string{"not-a-uri", "../relative.go"} {
+	raw, err := os.ReadFile(filepath.Join("testdata", "schemas", "input-structural-context.v1.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schemaDocument map[string]any
+	if err := json.Unmarshal(raw, &schemaDocument); err != nil {
+		t.Fatal(err)
+	}
+	properties := schemaDocument["properties"].(map[string]any)
+	uriSchema := properties["uri"].(map[string]any)
+	if got := uriSchema["pattern"]; got != futureAbsoluteURIPattern.String() {
+		t.Fatalf("schema/semantic URI pattern drift: schema=%q semantic=%q", got, futureAbsoluteURIPattern.String())
+	}
+	if _, present := uriSchema["format"]; present {
+		t.Fatal("draft URI subset must not add divergent format validation")
+	}
+	for _, uri := range []string{
+		"file:///workspace/main.go", "https://example.com/a%20b", "custom:界/path",
+	} {
+		t.Run("valid_uri_"+strings.NewReplacer(":", "_", "/", "_").Replace(uri), func(t *testing.T) {
+			i := validFutureInput()
+			i["uri"] = uri
+			validateFuture(t, schema, i, true)
+			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err != nil {
+				t.Fatalf("semantic-v1 rejected schema-valid URI %q: %v", uri, err)
+			}
+		})
+	}
+	for _, uri := range []string{"not-a-uri", "../relative.go", "/bare/path", "C:/windows/path", "http://exa mple.com", "custom:\tvalue", "custom:\u007f", "file:///%", "file:///%0", "file:///%zz", "file:///%2G"} {
 		t.Run("bad_uri_"+strings.NewReplacer(":", "_", "/", "_").Replace(uri), func(t *testing.T) {
 			i := validFutureInput()
 			i["uri"] = uri
@@ -345,24 +374,31 @@ func TestFutureStructuralSemanticValidatorMatchesSchemaURIAndUnicodeBounds(t *te
 			}
 		})
 	}
-	for _, uri := range []string{"file:///%zz", "http://exa mple.com"} {
-		t.Run("malformed_uri", func(t *testing.T) {
+	for name, tc := range map[string]struct {
+		uri   string
+		valid bool
+	}{
+		"exact_max_ascii":   {"custom:" + strings.Repeat("a", futureMaxURICodePoints-7), true},
+		"exact_max_unicode": {"custom:" + strings.Repeat("界", futureMaxURICodePoints-7), true},
+		"over_max_ascii":    {"custom:" + strings.Repeat("a", futureMaxURICodePoints-6), false},
+		"over_max_unicode":  {"custom:" + strings.Repeat("界", futureMaxURICodePoints-6), false},
+	} {
+		t.Run(name, func(t *testing.T) {
 			i := validFutureInput()
-			i["uri"] = uri
-			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err == nil {
-				t.Fatalf("semantic-v1 accepted malformed URI %q", uri)
+			i["uri"] = tc.uri
+			validateFuture(t, schema, i, tc.valid)
+			err := ValidateFutureStructuralSemanticsV1(i, validFutureResult())
+			if (err == nil) != tc.valid {
+				t.Fatalf("semantic/schema URI disagreement: semantic=%v valid=%v", err, tc.valid)
 			}
 		})
 	}
-	for _, uri := range []string{"file:///workspace/main.go", "urn:example:animal:ferret:nose", "https://example.com/a%20b"} {
-		t.Run("valid_uri", func(t *testing.T) {
-			i := validFutureInput()
-			i["uri"] = uri
-			validateFuture(t, schema, i, true)
-			if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err != nil {
-				t.Fatalf("semantic-v1 rejected schema-valid URI %q: %v", uri, err)
-			}
-		})
+	// JSON has only Unicode scalar strings: encoding/json replaces invalid Go UTF-8
+	// before schema evaluation. Standalone semantics must reject the original value.
+	i := validFutureInput()
+	i["uri"] = "custom:" + string([]byte{0xff})
+	if err := ValidateFutureStructuralSemanticsV1(i, validFutureResult()); err == nil {
+		t.Fatal("semantic-v1 accepted invalid UTF-8 URI")
 	}
 	for name, boundary := range map[string]struct {
 		field                string
@@ -384,6 +420,29 @@ func TestFutureStructuralSemanticValidatorMatchesSchemaURIAndUnicodeBounds(t *te
 				if (err == nil) != tc.valid {
 					t.Fatalf("%s code points=%d: got %v, valid=%v", boundary.field, tc.count, err, tc.valid)
 				}
+			}
+		})
+	}
+}
+
+func TestFutureStructuralSemanticValidatorRejectsInvalidOrOversizedReferenceBeforePattern(t *testing.T) {
+	for name, id := range map[string]string{
+		"invalid_utf8": "tn_" + string([]byte{0xff}) + strings.Repeat("0", 31),
+		"over_limit":   "tn_" + strings.Repeat("0", 1<<20),
+	} {
+		t.Run(name, func(t *testing.T) {
+			i, r := validFutureInput(), validFutureResult()
+			i["analysis"] = map[string]any{"kind": "IMPACT", "direction": "OUTGOING", "depth": 1}
+			r["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+			a := r["analysis"].(map[string]any)
+			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
+			delete(a, "incoming_count")
+			delete(a, "outgoing_count")
+			delete(a, "frontier_count")
+			a["reachable_node_ids"] = []any{id}
+			a["witness_edge_ids"] = []any{}
+			if err := ValidateFutureStructuralSemanticsV1(i, r); err != errFutureValue {
+				t.Fatalf("got %v, want value sentinel", err)
 			}
 		})
 	}
