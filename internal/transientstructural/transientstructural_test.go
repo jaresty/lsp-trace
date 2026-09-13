@@ -154,14 +154,23 @@ func TestProjectionRejectsCollisionAndNodeOverflow(t *testing.T) {
 
 func TestPolicyDigestGraphDigestAndClaimPrivacy(t *testing.T) {
 	wantPolicy := PolicyBinding{
-		LifecycleID: lifecyclePolicyID, LifecycleVersion: "1", LifecycleSHA256: "sha256:32ed63dc53c474b3e7baf1e2c1ef73f9daefd52f6b885d1267002d75f71314c8",
-		PrivacyID: privacyPolicyID, PrivacyVersion: "1", PrivacySHA256: "sha256:bcb3e20fd7f3bd0220cb05292eccb7a6c5be9ecc489f0495bc4b57f6d6436c7a",
-		IdentityID: identityPolicyID, IdentityVersion: "1", IdentitySHA256: "sha256:4b4a580bee09274db2de1dc3f1972fcbae012a2f6146bc472ddd97ac82f8ed8f",
-		AnalysisID: analysisPolicyID, AnalysisVersion: "1", AnalysisSHA256: "sha256:24ac85888bd951c8c77f05c69c7f1bd82abfe2b406c613def6c22ee76ee44819",
+		LifecycleID: "lsp-trace.transient-structural-lifecycle", LifecycleVersion: "1", LifecycleSHA256: "sha256:5229736442c03655b9e7e86055b120c3f2988a8de3f46663bfe0a34799bf722c",
+		PrivacyID: "lsp-trace.transient-structural-privacy", PrivacyVersion: "1", PrivacySHA256: "sha256:bcb3e20fd7f3bd0220cb05292eccb7a6c5be9ecc489f0495bc4b57f6d6436c7a",
+		IdentityID: "lsp-trace.transient-structural-identity", IdentityVersion: "1", IdentitySHA256: "sha256:6ed192ba653818c22e7c0526145aa221fd3ca3613a6afbcb5cd36df421be84f0",
+		AnalysisID: "lsp-trace.transient-structural-analysis", AnalysisVersion: "1", AnalysisSHA256: "sha256:24ac85888bd951c8c77f05c69c7f1bd82abfe2b406c613def6c22ee76ee44819",
 	}
-	if frozenPolicy != wantPolicy || frozenPolicy.LifecycleSHA256 != digestDocument(lifecyclePolicyDocument) || frozenPolicy.PrivacySHA256 != digestDocument(privacyPolicyDocument) ||
-		frozenPolicy.IdentitySHA256 != digestDocument(identityPolicyDocument) || frozenPolicy.AnalysisSHA256 != digestDocument(analysisPolicyDocument) {
-		t.Fatalf("ASSERT_FROZEN_POLICY_DIGESTS: got=%+v", frozenPolicy)
+	policy := frozenPolicyBinding()
+	if policy != wantPolicy || policy.LifecycleSHA256 != digestDocument(lifecyclePolicyDocument) || policy.PrivacySHA256 != digestDocument(privacyPolicyDocument) ||
+		policy.IdentitySHA256 != digestDocument(identityPolicyDocument) || policy.AnalysisSHA256 != digestDocument(analysisPolicyDocument) {
+		t.Fatalf("ASSERT_FROZEN_POLICY_IDS_VERSIONS_DIGESTS: got=%+v", policy)
+	}
+	mutated := policy
+	mutated.LifecycleID = "mutated"
+	if frozenPolicyBinding() != wantPolicy {
+		t.Fatal("ASSERT_FROZEN_POLICY_PRIVATE_VALUE_COPY")
+	}
+	if resultSchemaVersion != "lsp-trace.transient-structural-result.v1" || evidenceClassTransientLive != "TRANSIENT_LIVE" || sourceGraphCompleteUnknown != "UNKNOWN" {
+		t.Fatal("ASSERT_FROZEN_RESULT_SCHEMA_AND_CONSTANTS")
 	}
 	root := testNode("secret", 1)
 	projection, err := project("canonical-session", 7,
@@ -169,27 +178,28 @@ func TestPolicyDigestGraphDigestAndClaimPrivacy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first := graphDigest(projection, frozenPolicy, testBounds())
-	second := graphDigest(projection, frozenPolicy, testBounds())
+	first := graphDigest(projection, policy, testBounds())
+	second := graphDigest(projection, policy, testBounds())
 	changed := testBounds()
 	changed.DownDepth++
-	if first != second || first == graphDigest(projection, frozenPolicy, changed) || !strings.HasPrefix(first, "sha256:") {
+	if first != second || first == graphDigest(projection, policy, changed) || !strings.HasPrefix(first, "sha256:") {
 		t.Fatalf("ASSERT_BOUND_DIGEST: %q %q", first, second)
 	}
-	result := Result{Phase: PhaseDelivery, State: StateComplete, Qualification: Qualification{SessionID: "canonical-session", Generation: 7, PositionEncoding: "utf-16"}, TargetID: projection.targetID,
-		GraphDigest: first, Policy: frozenPolicy, Bounds: testBounds(), Accounting: projection.accounting,
-		Analysis: analyze(AnalysisRequest{Kind: AnalysisNeighborhood}, projection, testBounds()), Claims: ClaimBoundary{Transient: true, ClaimCeiling: claimCeiling}}
+	result := Result{SchemaVersion: resultSchemaVersion, EvidenceClass: evidenceClassTransientLive, SourceGraphComplete: sourceGraphCompleteUnknown, ClaimCeiling: claimCeiling,
+		Phase: PhaseDeliveryCheck, State: StateComplete, Qualification: Qualification{SessionID: "canonical-session", Generation: 7, PositionEncoding: "utf-16"}, TargetID: projection.targetID,
+		GraphDigest: first, Policy: policy, Bounds: testBounds(), Accounting: projection.accounting,
+		Analysis: analyze(AnalysisRequest{Kind: AnalysisNeighborhood}, projection, testBounds())}
 	raw, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
 		t.Fatal(marshalErr)
 	}
-	for _, forbidden := range []string{"file:///", "private", "secret", `\"uri\"`, `\"name\"`, `\"detail\"`, `\"range\"`, "call_site", "source"} {
+	for _, forbidden := range []string{"file:///", "private", "secret", `\"uri\"`, `\"name\"`, `\"detail\"`, `\"range\"`, "call_site", "source_snippet", "source_body"} {
 		if strings.Contains(strings.ToLower(string(raw)), strings.ToLower(forbidden)) {
 			t.Fatalf("ASSERT_PRIVACY_CEILING: contains %q: %s", forbidden, raw)
 		}
 	}
-	if !result.Claims.Transient || result.Claims.Retained || result.Claims.Replayable || result.Claims.Authoritative {
-		t.Fatalf("ASSERT_NON_RETAINED_NON_REPLAYABLE_NON_AUTHORITATIVE: %+v", result.Claims)
+	if result.EvidenceClass != evidenceClassTransientLive || result.Authority != 0 || result.SourceGraphComplete != sourceGraphCompleteUnknown || result.Retained || result.Replayable || result.PublicationEligible || result.HydrationEligible {
+		t.Fatalf("ASSERT_TRANSIENT_POLICY_CONSTANTS: %+v", result)
 	}
 }
 
@@ -247,17 +257,17 @@ func TestFailedAcquisitionAccountsObservedWithoutAdmission(t *testing.T) {
 }
 
 func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
-	legal := map[Phase]map[TerminalState]bool{
-		PhasePreflight:      {StateUnsupported: true, StateInvalidServerResponse: true, StateTimeout: true, StateCancelled: true, StateGenerationChanged: true, StateResourceLimit: true},
-		PhaseAcquisition:    {StateUnsupported: true, StateInvalidServerResponse: true, StateTimeout: true, StateCancelled: true, StateGenerationChanged: true, StateResourceLimit: true},
-		PhaseReconciliation: {StateInvalidServerResponse: true, StateTimeout: true, StateCancelled: true, StateGenerationChanged: true, StateResourceLimit: true},
-		PhaseAnalysis:       {StateInvalidServerResponse: true, StateTimeout: true, StateCancelled: true, StateGenerationChanged: true, StateResourceLimit: true},
-		PhaseDelivery:       {StateComplete: true, StateTimeout: true, StateCancelled: true, StateGenerationChanged: true, StateResourceLimit: true},
+	legal := map[Phase][]TerminalState{
+		PhasePreflight:     {StateUnsupported, StateAmbiguousTarget, StateTargetNotFound, StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged, StateInvalidServerResponse},
+		PhaseTraversal:     {StatePartial, StateTruncated, StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged, StateInvalidServerResponse},
+		PhaseAdmission:     {StateResourceLimit, StateCancelled, StateGenerationChanged, StateInvalidServerResponse},
+		PhaseAnalysis:      {StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged, StateAnalysisFailed},
+		PhaseDeliveryCheck: {StateComplete, StateEmpty, StateCancelled, StateGenerationChanged},
 	}
 	for phase, states := range legal {
-		for state := range states {
-			if phase != PhaseDelivery && state == StateComplete {
-				t.Fatalf("ASSERT_COMPLETE_DELIVERY_ONLY: %s", phase)
+		for _, state := range states {
+			if !legalTerminalPair(phase, state) {
+				t.Fatalf("ASSERT_ADR0006_LEGAL_PAIR_REJECTED: %s/%s", phase, state)
 			}
 		}
 	}

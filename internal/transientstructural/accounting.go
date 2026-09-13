@@ -94,9 +94,9 @@ func omissionForFailure(failure session.Failure) OmissionReason {
 	case session.RequestTimeout, session.InitializationTimeout:
 		return OmissionTimeout
 	case session.StaleGeneration:
-		return OmissionGenerationChange
+		return OmissionCancellation
 	case session.ResourceExhausted:
-		return OmissionRequestLimit
+		return OmissionRequestBound
 	default:
 		return OmissionInvalidResponse
 	}
@@ -115,9 +115,9 @@ func terminalForSessionFailure(failure session.Failure) TerminalState {
 		return StateGenerationChanged
 	case session.RequestTimeout, session.InitializationTimeout:
 		return StateTimeout
-	case session.RequestCancelled:
+	case session.RequestCancelled, session.LifecycleConflict:
 		return StateCancelled
-	case session.ResourceExhausted, session.LifecycleConflict:
+	case session.ResourceExhausted:
 		return StateResourceLimit
 	case session.SessionNotFound:
 		return StateInvalidServerResponse

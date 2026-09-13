@@ -19,17 +19,20 @@ import (
 )
 
 type structuralWire struct {
-	in     *io.PipeReader
-	stdin  *io.PipeWriter
-	out    *io.PipeWriter
-	stdout *io.PipeReader
-	uri    string
+	in        *io.PipeReader
+	stdin     *io.PipeWriter
+	out       *io.PipeWriter
+	stdout    *io.PipeReader
+	uri       string
+	mu        sync.Mutex
+	methods   []string
+	responses map[string]json.RawMessage
 }
 
-func newStructuralWire(uri string) *structuralWire {
+func newStructuralWire(uri string, responses map[string]json.RawMessage) *structuralWire {
 	in, stdin := io.Pipe()
 	stdout, out := io.Pipe()
-	wire := &structuralWire{in: in, stdin: stdin, out: out, stdout: stdout, uri: uri}
+	wire := &structuralWire{in: in, stdin: stdin, out: out, stdout: stdout, uri: uri, responses: responses}
 	go wire.serve()
 	return wire
 }
@@ -42,6 +45,10 @@ func (w *structuralWire) serve() {
 		if err != nil {
 			return
 		}
+		w.mu.Lock()
+		w.methods = append(w.methods, message.Method)
+		override, overridden := w.responses[message.Method]
+		w.mu.Unlock()
 		result := json.RawMessage(`[]`)
 		switch message.Method {
 		case "initialize":
@@ -78,6 +85,9 @@ func (w *structuralWire) serve() {
 		case "exit":
 			return
 		}
+		if overridden {
+			result = append(json.RawMessage(nil), override...)
+		}
 		if len(message.ID) != 0 {
 			if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: result}); err != nil {
 				return
@@ -104,6 +114,16 @@ func (w *structuralWire) positionRange(line, start, end int) map[string]any {
 
 func (w *structuralWire) Stdin() io.WriteCloser { return w.stdin }
 func (w *structuralWire) Stdout() io.ReadCloser { return w.stdout }
+func (w *structuralWire) resetMethods() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.methods = nil
+}
+func (w *structuralWire) observedMethods() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.methods...)
+}
 func (w *structuralWire) Teardown(context.Context) managedprocess.TeardownObservation {
 	_ = w.stdin.Close()
 	_ = w.in.Close()
@@ -116,13 +136,14 @@ func (w *structuralWire) Close() managedprocess.ResourceObservation {
 }
 
 type structuralStarter struct {
-	uri      string
-	mu       sync.Mutex
-	children []*structuralWire
+	uri       string
+	responses map[string]json.RawMessage
+	mu        sync.Mutex
+	children  []*structuralWire
 }
 
 func (s *structuralStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
-	child := newStructuralWire(s.uri)
+	child := newStructuralWire(s.uri, s.responses)
 	s.mu.Lock()
 	s.children = append(s.children, child)
 	s.mu.Unlock()
@@ -130,6 +151,12 @@ func (s *structuralStarter) Start(context.Context, managedprocess.Spec) (session
 }
 
 func structuralManager(t *testing.T) (*sessionruntime.Manager, sessionruntime.StartResult, string) {
+	t.Helper()
+	manager, started, uri, _ := structuralManagerWithResponses(t, nil)
+	return manager, started, uri
+}
+
+func structuralManagerWithResponses(t *testing.T, build func(string) map[string]json.RawMessage) (*sessionruntime.Manager, sessionruntime.StartResult, string, *structuralStarter) {
 	t.Helper()
 	workspace := t.TempDir()
 	path := filepath.Join(workspace, "code.go")
@@ -141,9 +168,14 @@ func structuralManager(t *testing.T) (*sessionruntime.Manager, sessionruntime.St
 	if err != nil {
 		t.Fatal(err)
 	}
+	var responses map[string]json.RawMessage
+	if build != nil {
+		responses = build(uri)
+	}
+	starter := &structuralStarter{uri: uri, responses: responses}
 	manager, err := sessionruntime.New(sessionruntime.Config{
 		Limits:  sessionruntime.Limits{MaxSessions: 1, MaxRequests: 4, MaxChildren: 2, MaxCancels: 4, MaxTombstones: 8, MaxObservations: 64, MaxOperations: 8},
-		Starter: &structuralStarter{uri: uri},
+		Starter: starter,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -154,13 +186,21 @@ func structuralManager(t *testing.T) (*sessionruntime.Manager, sessionruntime.St
 	if !ok || ready.State != sessionruntime.ReadinessReady {
 		t.Fatalf("readiness failed: %+v", ready)
 	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if methods := starter.children[0].observedMethods(); len(methods) != 0 && methods[len(methods)-1] == "initialized" {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	starter.children[0].resetMethods()
 	t.Cleanup(func() {
 		_ = manager.Stop(context.Background(), started.SessionID, "transient-test-cleanup")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		_ = manager.Shutdown(ctx)
 	})
-	return manager, started, uri
+	return manager, started, uri, starter
 }
 
 func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
@@ -174,7 +214,7 @@ func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
 	if failure != nil {
 		t.Fatalf("ASSERT_CONCRETE_MANAGER_COMPLETE: %+v", failure)
 	}
-	if result.State != StateComplete || result.Phase != PhaseDelivery || result.Qualification.SessionID != started.SessionID || result.Qualification.Generation != started.Generation || result.Qualification.PositionEncoding != "utf-16" {
+	if result.State != StateComplete || result.Phase != PhaseDeliveryCheck || result.Qualification.SessionID != started.SessionID || result.Qualification.Generation != started.Generation || result.Qualification.PositionEncoding != "utf-16" {
 		t.Fatalf("ASSERT_EXACT_QUALIFIED_DELIVERY: %+v", result)
 	}
 	if len(result.Analysis.Nodes) != 3 || len(result.Analysis.Occurrences) != 2 || result.Accounting.Requests.Attempted != 3 || result.Accounting.Requests.Succeeded != 3 || result.Accounting.Preparation != (PreparationAccounting{Attempted: 1, Returned: 1}) || result.Accounting.Frontier != (FrontierAccounting{Observed: 2, Expanded: 2}) {
@@ -183,7 +223,7 @@ func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
 	if !reconciles(result.Accounting) || hasNonDuplicateOmission(result.Accounting) {
 		t.Fatalf("ASSERT_COMPLETE_RECONCILED: %+v", result.Accounting)
 	}
-	if !result.Claims.Transient || result.Claims.Retained || result.Claims.Replayable || result.Claims.Authoritative || result.GraphDigest == "" || result.TargetID == "" {
+	if result.SchemaVersion != resultSchemaVersion || result.EvidenceClass != evidenceClassTransientLive || result.Authority != 0 || result.SourceGraphComplete != sourceGraphCompleteUnknown || result.Retained || result.Replayable || result.PublicationEligible || result.HydrationEligible || result.ClaimCeiling != claimCeiling || result.GraphDigest == "" || result.TargetID == "" {
 		t.Fatalf("ASSERT_TRANSIENT_CLAIM_BOUNDARY: %+v", result)
 	}
 }
@@ -196,8 +236,8 @@ func TestExecuteZeroDepthPerformsNoCallTraversal(t *testing.T) {
 		UpDepth: 0, DownDepth: 0, MaxNodes: 1, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192,
 		Analysis: AnalysisRequest{Kind: AnalysisNeighborhood},
 	})
-	if failure != nil || result.State != StateComplete {
-		t.Fatalf("ASSERT_ZERO_DEPTH_COMPLETE: result=%+v failure=%+v", result, failure)
+	if failure != nil || result.State != StateEmpty || result.Phase != PhaseDeliveryCheck {
+		t.Fatalf("ASSERT_ZERO_CALLS_EMPTY_AFTER_DELIVERY: result=%+v failure=%+v", result, failure)
 	}
 	if result.Accounting.Requests != (RequestAccounting{Attempted: 1, Succeeded: 1}) || result.Accounting.Frontier != (FrontierAccounting{}) || len(result.Analysis.Nodes) != 1 || len(result.Analysis.Occurrences) != 0 {
 		t.Fatalf("ASSERT_ZERO_DEPTH_NO_CALL_REQUESTS: %+v", result)
@@ -236,5 +276,147 @@ func TestExecuteFailsClosedForStaleGenerationAndUnsupportedAnalysis(t *testing.T
 	unsupported.Analysis.Kind = "PAGERANK"
 	if result, failure := Execute(context.Background(), manager, unsupported); failure == nil || failure.Phase != PhasePreflight || failure.State != StateInvalidServerResponse || !reflect.DeepEqual(result, Result{}) {
 		t.Fatalf("ASSERT_ANALYSIS_SCOPE_ZERO_RESULT: result=%+v failure=%+v", result, failure)
+	}
+}
+
+func baseWireRequest(started sessionruntime.StartResult, uri string) Request {
+	line, character := uint32(1), uint32(5)
+	return Request{SessionID: started.SessionID, Generation: started.Generation, LanguageID: "go", Target: Target{URI: uri, Line: &line, Character: &character},
+		UpDepth: 1, DownDepth: 1, MaxNodes: 8, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192, Analysis: AnalysisRequest{Kind: AnalysisNeighborhood}}
+}
+
+func TestExecuteCapabilityAndEncodingPreflightFailures(t *testing.T) {
+	cases := []struct {
+		name       string
+		initialize string
+	}{
+		{"capability", `{"capabilities":{"callHierarchyProvider":false,"documentSymbolProvider":true,"positionEncoding":"utf-16"}}`},
+		{"encoding", `{"capabilities":{"callHierarchyProvider":true,"documentSymbolProvider":true,"positionEncoding":"utf-7"}}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+				return map[string]json.RawMessage{"initialize": json.RawMessage(tc.initialize)}
+			})
+			result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+			if failure == nil || failure.Phase != PhasePreflight || failure.State != StateUnsupported || !reflect.DeepEqual(result, Result{}) {
+				t.Fatalf("ASSERT_CAPABILITY_ENCODING_PREFLIGHT_ZERO_RESULT: result=%+v failure=%+v", result, failure)
+			}
+			if methods := starter.children[0].observedMethods(); len(methods) != 0 {
+				t.Fatalf("ASSERT_PREFLIGHT_BEFORE_TRAVERSAL: %v", methods)
+			}
+		})
+	}
+}
+
+func TestExecuteTargetZeroAndMultipleMapExactly(t *testing.T) {
+	positionRange := func(line int) map[string]any {
+		return map[string]any{"start": map[string]int{"line": line, "character": 0}, "end": map[string]int{"line": line, "character": 1}}
+	}
+	for _, tc := range []struct {
+		name  string
+		count int
+		want  TerminalState
+	}{{"zero", 0, StateTargetNotFound}, {"multiple", 2, StateAmbiguousTarget}} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+				var symbols []any
+				for i := 0; i < tc.count; i++ {
+					symbols = append(symbols, map[string]any{"name": "F", "kind": 12, "range": positionRange(i + 1), "selectionRange": positionRange(i + 1)})
+				}
+				raw, _ := json.Marshal(symbols)
+				return map[string]json.RawMessage{"textDocument/documentSymbol": raw}
+			})
+			request := baseWireRequest(started, uri)
+			request.Target.Symbol, request.Target.Line, request.Target.Character = "F", nil, nil
+			result, failure := Execute(context.Background(), manager, request)
+			if failure == nil || failure.Phase != PhasePreflight || failure.State != tc.want || !reflect.DeepEqual(result, Result{}) {
+				t.Fatalf("ASSERT_TARGET_CARDINALITY_EXACT_ZERO_RESULT: result=%+v failure=%+v", result, failure)
+			}
+			if methods := starter.children[0].observedMethods(); !reflect.DeepEqual(methods, []string{"textDocument/didOpen", "textDocument/documentSymbol"}) {
+				t.Fatalf("ASSERT_TARGET_FAILURE_WIRE_SEQUENCE: %v", methods)
+			}
+		})
+	}
+}
+
+func TestExecuteExactWireSequence(t *testing.T) {
+	manager, started, uri, starter := structuralManagerWithResponses(t, nil)
+	result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+	if failure != nil || result.State != StateComplete {
+		t.Fatalf("ASSERT_WIRE_SEQUENCE_FIXTURE_COMPLETE: result=%+v failure=%+v", result, failure)
+	}
+	want := []string{"textDocument/didOpen", "textDocument/prepareCallHierarchy", "callHierarchy/outgoingCalls", "callHierarchy/incomingCalls"}
+	if methods := starter.children[0].observedMethods(); !reflect.DeepEqual(methods, want) {
+		t.Fatalf("ASSERT_EXACT_ALLOWED_WIRE_METHOD_SEQUENCE: got=%v want=%v", methods, want)
+	}
+}
+
+func TestExecuteManagedWireSelfCallDedupAndMultipleSites(t *testing.T) {
+	manager, started, uri, _ := structuralManagerWithResponses(t, func(uri string) map[string]json.RawMessage {
+		positionRange := func(line, start, end int) map[string]any {
+			return map[string]any{"start": map[string]int{"line": line, "character": start}, "end": map[string]int{"line": line, "character": end}}
+		}
+		item := map[string]any{"name": "F", "kind": 12, "uri": uri, "range": positionRange(1, 0, 12), "selectionRange": positionRange(1, 5, 6)}
+		sites := []any{positionRange(1, 7, 8), positionRange(1, 9, 10)}
+		outgoing, _ := json.Marshal([]any{map[string]any{"to": item, "fromRanges": sites}})
+		incoming, _ := json.Marshal([]any{map[string]any{"from": item, "fromRanges": sites}})
+		return map[string]json.RawMessage{"callHierarchy/outgoingCalls": outgoing, "callHierarchy/incomingCalls": incoming}
+	})
+	result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+	if failure != nil || len(result.Analysis.Occurrences) != 2 {
+		t.Fatalf("ASSERT_MANAGED_WIRE_SELF_CALL_MULTI_SITE_DEDUP: result=%+v failure=%+v", result, failure)
+	}
+	if result.Accounting.Occurrences != (AdmissionAccounting{Observed: 4, Admitted: 2, Omitted: 2}) || !hasOmission(result.Accounting, OmissionDuplicate) {
+		t.Fatalf("ASSERT_MANAGED_WIRE_DEDUP_OMISSION_ACCOUNTING: %+v", result.Accounting)
+	}
+}
+
+func TestExecuteStopRestartAndGenerationChangeAtEveryPhase(t *testing.T) {
+	phases := []Phase{PhasePreflight, PhaseTraversal, PhaseAdmission, PhaseAnalysis, PhaseDeliveryCheck}
+	for _, phase := range phases {
+		for _, lifecycle := range []string{"stop", "restart"} {
+			t.Run(string(phase)+"/"+lifecycle, func(t *testing.T) {
+				manager, started, uri := structuralManager(t)
+				called := false
+				hooks := executionHooks{afterPhase: func(observed Phase) {
+					if called || observed != phase {
+						return
+					}
+					called = true
+					if lifecycle == "stop" {
+						accepted := manager.Stop(context.Background(), started.SessionID, "phase-hook-stop")
+						if accepted.Failure != "" {
+							t.Fatalf("ASSERT_STOP_HOOK_ACCEPTED: %+v", accepted)
+						}
+						return
+					}
+					accepted := manager.Restart(context.Background(), started.SessionID, "phase-hook-restart")
+					if accepted.Failure != "" || accepted.IntentID == "" {
+						t.Fatalf("ASSERT_RESTART_HOOK_ACCEPTED: %+v", accepted)
+					}
+					deadline := time.Now().Add(time.Second)
+					for time.Now().Before(deadline) {
+						operation, ok := manager.Operation(accepted.IntentID)
+						if ok && operation.State == sessionruntime.OperationComplete {
+							return
+						}
+						if ok && operation.State == sessionruntime.OperationFailed {
+							t.Fatalf("ASSERT_RESTART_HOOK_COMPLETES: %+v", operation)
+						}
+						time.Sleep(time.Millisecond)
+					}
+					t.Fatal("ASSERT_RESTART_HOOK_COMPLETES: timeout")
+				}}
+				result, failure := execute(context.Background(), manager, baseWireRequest(started, uri), hooks)
+				want := StateCancelled
+				if lifecycle == "restart" {
+					want = StateGenerationChanged
+				}
+				if !called || failure == nil || failure.Phase != phase || failure.State != want || !reflect.DeepEqual(result, Result{}) {
+					t.Fatalf("ASSERT_LIFECYCLE_EACH_PHASE_ZERO_RESULT: called=%v result=%+v failure=%+v want=%s/%s", called, result, failure, phase, want)
+				}
+			})
+		}
 	}
 }

@@ -30,6 +30,16 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 	}
 	rawNodes := append(append([]graph.Node(nil), down.nodes...), up.nodes...)
 	accounting.Nodes.Observed = len(rawNodes)
+	downDepths := directedDepths(down.root, down.edges, bounds.DownDepth, false)
+	upDepths := directedDepths(up.root, up.edges, bounds.UpDepth, true)
+	reachable := make(map[string]bool, len(downDepths)+len(upDepths))
+	for rawID := range downDepths {
+		reachable[rawID] = true
+	}
+	for rawID := range upDepths {
+		reachable[rawID] = true
+	}
+
 	byID := make(map[string]graph.Node, len(rawNodes))
 	duplicateNodes := 0
 	for _, node := range rawNodes {
@@ -47,38 +57,45 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 		}
 		byID[node.ID] = node
 	}
-	accounting.Nodes.Omitted = duplicateNodes
-	accounting.Nodes.Admitted = len(byID)
 	if duplicateNodes > 0 {
+		accounting.Nodes.Omitted += duplicateNodes
 		addOmission(&accounting, OmissionDuplicate, duplicateNodes)
 	}
-	if accounting.Nodes.Rejected != 0 || byID[down.root].ID == "" {
-		return admittedProjection{accounting: accounting}, errors.New("invalid node response")
+	unreachableNodes := 0
+	for rawID := range byID {
+		if !reachable[rawID] {
+			delete(byID, rawID)
+			unreachableNodes++
+		}
+	}
+	if unreachableNodes > 0 {
+		accounting.Nodes.Omitted += unreachableNodes
+		addOmission(&accounting, OmissionInvalidResponse, unreachableNodes)
+	}
+	accounting.Nodes.Admitted = len(byID)
+
+	salt := identitySalt(sessionID, generation)
+	opaque := make(map[string]string, len(byID))
+	nodeFacts := make([]NodeFact, 0, len(byID))
+	for rawID := range byID {
+		opaque[rawID] = opaqueID("lsp-trace/transient-structural/node/v1", salt, rawID)
+	}
+	for rawID := range byID {
+		nodeFacts = append(nodeFacts, NodeFact{ID: opaque[rawID], Witnesses: nodeWitnesses(rawID, down.root, downDepths, upDepths)})
+	}
+	sort.Slice(nodeFacts, func(i, j int) bool { return nodeFacts[i].ID < nodeFacts[j].ID })
+	partial := admittedProjection{targetID: opaque[down.root], nodes: nodeFacts, accounting: accounting}
+	if accounting.Nodes.Rejected != 0 || byID[down.root].ID == "" || unreachableNodes != 0 {
+		return partial, errors.New("invalid node response")
 	}
 	if len(byID) > bounds.MaxNodes {
 		over := len(byID) - bounds.MaxNodes
 		accounting.Nodes.Admitted -= over
 		accounting.Nodes.Omitted += over
 		addOmission(&accounting, OmissionNodeBound, over)
-		return admittedProjection{accounting: accounting}, errors.New("node bound exceeded")
+		partial.accounting = accounting
+		return partial, errors.New("node bound exceeded")
 	}
-
-	salt := identitySalt(sessionID, generation)
-	opaque := make(map[string]string, len(byID))
-	for rawID := range byID {
-		opaque[rawID] = opaqueID("lsp-trace/transient-structural/node/v1", salt, rawID)
-	}
-	downDepths := directedDepths(down.root, down.edges, bounds.DownDepth, false)
-	upDepths := directedDepths(up.root, up.edges, bounds.UpDepth, true)
-	nodeFacts := make([]NodeFact, 0, len(byID))
-	for rawID := range byID {
-		witnesses := nodeWitnesses(rawID, down.root, downDepths, upDepths)
-		if len(witnesses) == 0 {
-			continue
-		}
-		nodeFacts = append(nodeFacts, NodeFact{ID: opaque[rawID], Witnesses: witnesses})
-	}
-	sort.Slice(nodeFacts, func(i, j int) bool { return nodeFacts[i].ID < nodeFacts[j].ID })
 
 	type occurrence struct {
 		fact OccurrenceFact
@@ -91,7 +108,7 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 			if len(calls) == 0 {
 				calls = []graph.Range{{}}
 			}
-			for index, site := range calls {
+			for _, site := range calls {
 				accounting.Occurrences.Observed++
 				from, to := edge.CallerNodeID, edge.CalleeNodeID
 				walkFrom, walkTo := from, to
@@ -113,13 +130,9 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 					accounting.Occurrences.Rejected++
 					continue
 				}
-				rawKeyBytes, _ := json.Marshal(struct {
-					Relation string      `json:"relation"`
-					Index    int         `json:"index"`
-					Site     graph.Range `json:"site"`
-				}{edge.RelationID, index, site})
+				rawKeyBytes, _ := json.Marshal(site)
 				rawKey := string(rawKeyBytes)
-				key := edge.CallerNodeID + "\x00" + edge.CalleeNodeID + "\x00" + rawKey
+				key := "CALLS\x00SERVER_REPORTED\x00" + edge.CallerNodeID + "\x00" + edge.CalleeNodeID + "\x00" + rawKey
 				witness := Witness{Direction: direction, Depth: fromDepth + 1}
 				if existing, found := occurrences[key]; found {
 					existing.fact.Witnesses = appendWitness(existing.fact.Witnesses, witness)

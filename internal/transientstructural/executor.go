@@ -14,9 +14,26 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+// executionHooks is an unexported test seam for inducing lifecycle transitions
+// at exact phase boundaries. Production callers can only use Execute, which
+// always supplies the zero value and therefore cannot observe execution state.
+type executionHooks struct {
+	afterPhase func(Phase)
+}
+
+func (h executionHooks) after(phase Phase) {
+	if h.afterPhase != nil {
+		h.afterPhase(phase)
+	}
+}
+
 // Execute is the sole production entry point for transient structural analysis.
 // It reads one exact managed session generation and returns no retained artifact.
 func Execute(parent context.Context, runtime *sessionruntime.Manager, request Request) (Result, *DomainFailure) {
+	return execute(parent, runtime, request, executionHooks{})
+}
+
+func execute(parent context.Context, runtime *sessionruntime.Manager, request Request, hooks executionHooks) (Result, *DomainFailure) {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -44,6 +61,10 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	if !supportedEncoding(metadata.PositionEncoding) {
 		return Result{}, fail(PhasePreflight, StateUnsupported, Accounting{})
 	}
+	hooks.after(PhasePreflight)
+	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
+		return Result{}, fail(PhasePreflight, state, Accounting{})
+	}
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(request.TimeoutMS)*time.Millisecond)
 	defer cancel()
@@ -52,10 +73,10 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		LanguageID: request.LanguageID, CaptureSupply: false,
 	})
 	if document.Failure != "" {
-		return Result{}, fail(PhaseAcquisition, terminalForSessionFailure(document.Failure), Accounting{})
+		return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
 	}
 	if err := ctx.Err(); err != nil {
-		return Result{}, fail(PhaseAcquisition, terminalForContext(ctx), Accounting{})
+		return Result{}, fail(PhaseTraversal, terminalForContext(ctx), Accounting{})
 	}
 
 	counted := &countingRuntime{manager: runtime}
@@ -64,7 +85,8 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		incomingops.WireLimits{MaxMessages: request.MaxMessages, MaxBytes: request.MaxBytes})
 	line, character, targetFailure := incomingops.ResolveTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
 	if targetFailure != nil {
-		return Result{}, fail(PhaseAcquisition, acquisitionState(ctx, counted.snapshot(), runtime, sessionID, request.Generation), counted.snapshot())
+		accounting := counted.snapshot()
+		return Result{}, fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
 	}
 
 	items, prepareErr := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{
@@ -72,15 +94,15 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	})
 	if prepareErr != nil {
 		accounting := counted.snapshot()
-		return Result{}, fail(PhaseAcquisition, acquisitionState(ctx, accounting, runtime, sessionID, request.Generation), accounting)
+		return Result{}, fail(PhaseTraversal, traversalState(ctx, accounting, runtime, sessionID, request.Generation), accounting)
 	}
 	if len(items) == 0 {
 		accounting := counted.snapshot()
-		return Result{}, fail(PhaseAcquisition, StateInvalidServerResponse, accounting)
+		return Result{}, fail(PhasePreflight, StateTargetNotFound, accounting)
 	}
 	if len(items) != 1 {
 		accounting := counted.snapshot()
-		return Result{}, fail(PhaseAcquisition, StateInvalidServerResponse, accounting)
+		return Result{}, fail(PhasePreflight, StateAmbiguousTarget, accounting)
 	}
 	root := graphNode(items[0]).ID
 
@@ -97,22 +119,21 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	if err := ctx.Err(); err != nil {
 		state := terminalForContext(ctx)
 		accounting = accountUnadmitted(accounting, rawNodes, rawEdges, omissionForTerminal(state))
-		return Result{}, fail(PhaseAcquisition, state, accounting)
+		return Result{}, fail(PhaseTraversal, state, accounting)
 	}
 	upComplete := incomingCompleteWithinRequestedDepth(up)
 	if !down.Complete || !down.TraversalComplete || !upComplete {
-		state := acquisitionState(ctx, accounting, runtime, sessionID, request.Generation)
+		state := traversalState(ctx, accounting, runtime, sessionID, request.Generation)
 		if down.Truncated || (up.Summary.Truncated && !onlyRequestedDepthBoundary(up)) {
-			state = StateResourceLimit
-			addOmission(&accounting, OmissionNodeBound, 1)
+			state = StateTruncated
 		}
 		accounting = accountUnadmitted(accounting, rawNodes, rawEdges, omissionForTerminal(state))
-		return Result{}, fail(PhaseAcquisition, state, accounting)
+		return Result{}, fail(PhaseTraversal, state, accounting)
 	}
 
+	hooks.after(PhaseTraversal)
 	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
-		addOmission(&accounting, omissionForTerminal(state), 1)
-		return Result{}, fail(PhaseReconciliation, state, accounting)
+		return Result{}, fail(PhaseTraversal, state, accounting)
 	}
 	bounds := bindBounds(request)
 	projection, projectionErr := project(sessionID, request.Generation,
@@ -123,35 +144,42 @@ func Execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		if hasOmission(projection.accounting, OmissionNodeBound) {
 			state = StateResourceLimit
 		}
-		return Result{}, fail(PhaseReconciliation, state, projection.accounting)
+		return Result{}, fail(PhaseAdmission, state, projection.accounting)
 	}
 	accounting = projection.accounting
 	if !reconciles(accounting) || accounting.Frontier.Unexpanded != 0 || hasNonDuplicateOmission(accounting) {
-		return Result{}, fail(PhaseReconciliation, StateInvalidServerResponse, accounting)
+		return Result{}, fail(PhaseAdmission, StateInvalidServerResponse, accounting)
+	}
+	hooks.after(PhaseAdmission)
+	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
+		return Result{}, fail(PhaseAdmission, state, accounting)
 	}
 
-	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
-		addOmission(&accounting, omissionForTerminal(state), 1)
-		return Result{}, fail(PhaseAnalysis, state, accounting)
-	}
 	analysis := analyze(request.Analysis, projection, bounds)
+	hooks.after(PhaseAnalysis)
 	if err := ctx.Err(); err != nil {
 		return Result{}, fail(PhaseAnalysis, terminalForContext(ctx), accounting)
 	}
-
 	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
-		addOmission(&accounting, omissionForTerminal(state), 1)
-		return Result{}, fail(PhaseDelivery, state, accounting)
+		return Result{}, fail(PhaseAnalysis, state, accounting)
 	}
-	if err := ctx.Err(); err != nil {
-		return Result{}, fail(PhaseDelivery, terminalForContext(ctx), accounting)
+
+	hooks.after(PhaseDeliveryCheck)
+	if state := metadataRecheck(runtime, sessionID, request.Generation, metadata); state != "" {
+		return Result{}, fail(PhaseDeliveryCheck, state, accounting)
 	}
+	state = StateComplete
+	if accounting.Occurrences.Admitted == 0 {
+		state = StateEmpty
+	}
+	policy := frozenPolicyBinding()
 	return Result{
-		Phase: PhaseDelivery, State: StateComplete,
+		SchemaVersion: resultSchemaVersion, EvidenceClass: evidenceClassTransientLive, Authority: 0, SourceGraphComplete: sourceGraphCompleteUnknown,
+		Retained: false, Replayable: false, PublicationEligible: false, HydrationEligible: false, ClaimCeiling: claimCeiling,
+		Phase: PhaseDeliveryCheck, State: state,
 		Qualification: Qualification{SessionID: sessionID, Generation: request.Generation, PositionEncoding: metadata.PositionEncoding},
-		TargetID:      rootOpaque(projection), GraphDigest: graphDigest(projection, frozenPolicy, bounds), Policy: frozenPolicy, Bounds: bounds,
+		TargetID:      rootOpaque(projection), GraphDigest: graphDigest(projection, policy, bounds), Policy: policy, Bounds: bounds,
 		Accounting: accounting, Analysis: analysis,
-		Claims: ClaimBoundary{Transient: true, Retained: false, Replayable: false, Authoritative: false, ClaimCeiling: claimCeiling},
 	}, nil
 }
 
@@ -268,12 +296,34 @@ func metadataRecheck(runtime *sessionruntime.Manager, sessionID string, generati
 	return ""
 }
 
-func acquisitionState(ctx context.Context, accounting Accounting, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
+func targetResolutionState(ctx context.Context, code string, accounting Accounting, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
+	switch code {
+	case "DOCUMENT_SYMBOL_ABSENT":
+		return StateTargetNotFound
+	case "DOCUMENT_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_PREPARE_MISMATCH":
+		return StateAmbiguousTarget
+	case "DOCUMENT_SYMBOL_UNSUPPORTED":
+		return StateUnsupported
+	default:
+		state := traversalState(ctx, accounting, runtime, sessionID, generation)
+		switch state {
+		case StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged:
+			return state
+		default:
+			return StateInvalidServerResponse
+		}
+	}
+}
+
+func traversalState(ctx context.Context, accounting Accounting, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
 	if ctx.Err() != nil {
 		return terminalForContext(ctx)
 	}
 	if _, failure := runtime.Metadata(sessionID, generation); failure != "" {
 		return terminalForSessionFailure(failure)
+	}
+	if accounting.Requests.Succeeded > 0 && (accounting.Requests.Failed > 0 || accounting.Requests.Cancelled > 0) {
+		return StatePartial
 	}
 	for _, omission := range accounting.Omissions {
 		switch omission.Reason {
@@ -281,9 +331,7 @@ func acquisitionState(ctx context.Context, accounting Accounting, runtime *sessi
 			return StateTimeout
 		case OmissionCancellation:
 			return StateCancelled
-		case OmissionGenerationChange:
-			return StateGenerationChanged
-		case OmissionRequestLimit, OmissionResponseLimit, OmissionNodeBound:
+		case OmissionRequestBound, OmissionNodeBound:
 			return StateResourceLimit
 		}
 	}
@@ -294,12 +342,12 @@ func omissionForTerminal(state TerminalState) OmissionReason {
 	switch state {
 	case StateTimeout:
 		return OmissionTimeout
-	case StateCancelled:
+	case StateCancelled, StateGenerationChanged:
 		return OmissionCancellation
-	case StateGenerationChanged:
-		return OmissionGenerationChange
 	case StateResourceLimit:
-		return OmissionRequestLimit
+		return OmissionRequestBound
+	case StateTruncated:
+		return OmissionNodeBound
 	case StateUnsupported:
 		return OmissionUnsupported
 	default:
@@ -336,6 +384,26 @@ func graphNode(item lsp.CallHierarchyItem) graph.Node {
 
 func rootOpaque(projection admittedProjection) string { return projection.targetID }
 
+func legalTerminalPair(phase Phase, state TerminalState) bool {
+	switch phase {
+	case PhasePreflight:
+		return state == StateUnsupported || state == StateAmbiguousTarget || state == StateTargetNotFound || state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse
+	case PhaseTraversal:
+		return state == StatePartial || state == StateTruncated || state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse
+	case PhaseAdmission:
+		return state == StateResourceLimit || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse
+	case PhaseAnalysis:
+		return state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateAnalysisFailed
+	case PhaseDeliveryCheck:
+		return state == StateComplete || state == StateEmpty || state == StateCancelled || state == StateGenerationChanged
+	default:
+		return false
+	}
+}
+
 func fail(phase Phase, state TerminalState, accounting Accounting) *DomainFailure {
+	if state == StateComplete || state == StateEmpty || !legalTerminalPair(phase, state) {
+		panic("illegal transient structural phase/state pair")
+	}
 	return &DomainFailure{Phase: phase, State: state, Accounting: accounting}
 }

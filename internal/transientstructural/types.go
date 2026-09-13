@@ -11,23 +11,29 @@ import (
 type Phase string
 
 const (
-	PhasePreflight      Phase = "PREFLIGHT"
-	PhaseAcquisition    Phase = "ACQUISITION"
-	PhaseReconciliation Phase = "RECONCILIATION"
-	PhaseAnalysis       Phase = "ANALYSIS"
-	PhaseDelivery       Phase = "DELIVERY"
+	PhasePreflight     Phase = "PREFLIGHT"
+	PhaseTraversal     Phase = "TRAVERSAL"
+	PhaseAdmission     Phase = "ADMISSION"
+	PhaseAnalysis      Phase = "ANALYSIS"
+	PhaseDeliveryCheck Phase = "DELIVERY_CHECK"
 )
 
 type TerminalState string
 
 const (
 	StateComplete              TerminalState = "COMPLETE"
+	StateEmpty                 TerminalState = "EMPTY"
 	StateUnsupported           TerminalState = "UNSUPPORTED"
-	StateInvalidServerResponse TerminalState = "INVALID_SERVER_RESPONSE"
+	StateAmbiguousTarget       TerminalState = "AMBIGUOUS_TARGET"
+	StateTargetNotFound        TerminalState = "TARGET_NOT_FOUND"
+	StatePartial               TerminalState = "PARTIAL"
+	StateTruncated             TerminalState = "TRUNCATED"
+	StateResourceLimit         TerminalState = "RESOURCE_LIMIT"
 	StateTimeout               TerminalState = "TIMEOUT"
 	StateCancelled             TerminalState = "CANCELLED"
 	StateGenerationChanged     TerminalState = "GENERATION_CHANGED"
-	StateResourceLimit         TerminalState = "RESOURCE_LIMIT"
+	StateInvalidServerResponse TerminalState = "INVALID_SERVER_RESPONSE"
+	StateAnalysisFailed        TerminalState = "ANALYSIS_FAILED"
 )
 
 type AnalysisKind string
@@ -48,16 +54,14 @@ const (
 type OmissionReason string
 
 const (
-	OmissionDepthBound       OmissionReason = "DEPTH_BOUND"
-	OmissionNodeBound        OmissionReason = "NODE_BOUND"
-	OmissionRequestLimit     OmissionReason = "REQUEST_LIMIT"
-	OmissionResponseLimit    OmissionReason = "RESPONSE_LIMIT"
-	OmissionTimeout          OmissionReason = "TIMEOUT"
-	OmissionCancellation     OmissionReason = "CANCELLATION"
-	OmissionUnsupported      OmissionReason = "UNSUPPORTED"
-	OmissionInvalidResponse  OmissionReason = "INVALID_RESPONSE"
-	OmissionGenerationChange OmissionReason = "GENERATION_CHANGE"
-	OmissionDuplicate        OmissionReason = "DUPLICATE"
+	OmissionDepthBound      OmissionReason = "DEPTH_BOUND"
+	OmissionNodeBound       OmissionReason = "NODE_BOUND"
+	OmissionRequestBound    OmissionReason = "REQUEST_BOUND"
+	OmissionTimeout         OmissionReason = "TIMEOUT"
+	OmissionCancellation    OmissionReason = "CANCELLATION"
+	OmissionUnsupported     OmissionReason = "UNSUPPORTED_RESPONSE"
+	OmissionInvalidResponse OmissionReason = "MALFORMED_RESPONSE"
+	OmissionDuplicate       OmissionReason = "DEDUPLICATION"
 )
 
 type Target struct {
@@ -175,25 +179,25 @@ type Qualification struct {
 	PositionEncoding string `json:"position_encoding"`
 }
 
-type ClaimBoundary struct {
-	Transient     bool   `json:"transient"`
-	Retained      bool   `json:"retained"`
-	Replayable    bool   `json:"replayable"`
-	Authoritative bool   `json:"authoritative"`
-	ClaimCeiling  string `json:"claim_ceiling"`
-}
-
 type Result struct {
-	Phase         Phase          `json:"phase"`
-	State         TerminalState  `json:"state"`
-	Qualification Qualification  `json:"qualification"`
-	TargetID      string         `json:"target_id"`
-	GraphDigest   string         `json:"graph_digest"`
-	Policy        PolicyBinding  `json:"policy"`
-	Bounds        BoundsBinding  `json:"bounds"`
-	Accounting    Accounting     `json:"accounting"`
-	Analysis      AnalysisResult `json:"analysis"`
-	Claims        ClaimBoundary  `json:"claims"`
+	SchemaVersion       string         `json:"schema_version"`
+	EvidenceClass       string         `json:"evidence_class"`
+	Authority           int            `json:"authority"`
+	SourceGraphComplete string         `json:"source_graph_complete"`
+	Retained            bool           `json:"retained"`
+	Replayable          bool           `json:"replayable"`
+	PublicationEligible bool           `json:"publication_eligible"`
+	HydrationEligible   bool           `json:"hydration_eligible"`
+	ClaimCeiling        string         `json:"claim_ceiling"`
+	Phase               Phase          `json:"phase"`
+	State               TerminalState  `json:"state"`
+	Qualification       Qualification  `json:"qualification"`
+	TargetID            string         `json:"target_id"`
+	GraphDigest         string         `json:"graph_digest"`
+	Policy              PolicyBinding  `json:"policy"`
+	Bounds              BoundsBinding  `json:"bounds"`
+	Accounting          Accounting     `json:"accounting"`
+	Analysis            AnalysisResult `json:"analysis"`
 }
 
 type BoundsBinding struct {
