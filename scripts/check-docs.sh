@@ -8,7 +8,7 @@ assert_contains() {
   id=$1
   path=$2
   text=$3
-  if [ -f "$root/$path" ] && grep -F "$text" "$root/$path" >/dev/null; then
+  if [ -f "$root/$path" ] && grep -F -- "$text" "$root/$path" >/dev/null; then
     printf 'PASS %s: %s contains %s\n' "$id" "$path" "$text"
   else
     printf 'FAIL %s: %s must contain %s\n' "$id" "$path" "$text"
@@ -32,7 +32,7 @@ assert_not_contains() {
   id=$1
   path=$2
   text=$3
-  if [ -f "$root/$path" ] && ! grep -F "$text" "$root/$path" >/dev/null; then
+  if [ -f "$root/$path" ] && ! grep -F -- "$text" "$root/$path" >/dev/null; then
     printf 'PASS %s: %s excludes stale %s\n' "$id" "$path" "$text"
   else
     printf 'FAIL %s: %s must exclude stale %s\n' "$id" "$path" "$text"
@@ -121,6 +121,11 @@ assert_contains DOC-EMBEDDED-LSP-CENSUS cmd/lsp-trace/SKILL.md '`census`: use fo
 assert_contains DOC-README README.md '## Inspect retained seeds'
 assert_contains DOC-SEMANTICS docs/SEMANTICS.md '## Seed inspection operational contract'
 assert_contains DOC-ADR docs/adr/0001-technical-evidence-packet-projections.md '# ADR 0001: Add versioned all-seed inspection projections'
+assert_contains DOC-SEMANTIC-ADR-HEADING docs/adr/0007-optional-local-semantic-feature-index.md '# ADR 0007: Pilot an optional local semantic index for feature inventory'
+assert_contains DOC-SEMANTIC-ADR-PROPOSED docs/adr/0007-optional-local-semantic-feature-index.md '- **Status:** Proposed'
+assert_contains DOC-SEMANTIC-ADR-NO-AUTHORIZATION docs/adr/0007-optional-local-semantic-feature-index.md 'This Proposed ADR does not authorize implementation or shipment.'
+assert_contains DOC-SEMANTIC-ADR-NO-OP-REGISTRATION docs/adr/0007-optional-local-semantic-feature-index.md 'This ADR does not register or renumber operations 33–35'
+assert_contains DOC-SEMANTIC-ADR-YZMA-NOT-INTEGRATED docs/adr/0007-optional-local-semantic-feature-index.md 'Yzma is not integrated into `lsp-trace`, its CLI, or `lsp-trace-mcp`.'
 assert_contains DOC-FILTER-ADR docs/adr/0002-deterministic-seed-evidence-filtering.md '# ADR 0002: Add deterministic pairwise seed-evidence comparison'
 assert_contains DOC-FILTER-README README.md '## Compare retained seed evidence'
 assert_contains DOC-FILTER-SEMANTICS docs/SEMANTICS.md '## Pairwise seed-evidence filter operational contract'
