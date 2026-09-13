@@ -28,4 +28,4 @@ CALLS remains server-reported only. Capture sets preserve constituents without i
 5. Request stakeholder correction for product/domain meaning. Record corrections as revisions with predecessors and finite inventory-state deltas; never rewrite native evidence.
 6. Accept an inventory only under an explicit external authority and acceptance contract. Otherwise stop as provisional, unresolved, externally adjudicated, accepted-boundary, or bounded-review-dry as applicable.
 
-Do not invent future census or context command syntax. If discussing a proposed interface, label it `FUTURE/PROPOSED` and describe behavior rather than pretending the command exists.
+The documented CLI `census` command may be used for accountable source-symbol enumeration and batched acquisition; use only syntax printed by current executable help. Its structural output cannot accept feature identity or upgrade authority, completeness, custody, cross-capture CALLS, or Leiden admission. `context` remains `FUTURE/PROPOSED`; describe its proposed behavior without inventing syntax or pretending it exists.

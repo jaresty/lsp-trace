@@ -47,11 +47,13 @@ Where ADR 0004 uses the earlier public name `discover`, the settled name is `cen
 
 ## Current capability and proposed work
 
-The repository already has bounded live `slice` and `incoming` traversal. Their ordinary modes do not capture source supplies. They emit acquisition-oriented Graph V3 data containing absolute URIs and other fields unsuitable for the new public result, and their MCP generation field is optional.
+The accepted design above distinguishes exact-target `trace`, accountable `census`, and transient `context`. Current implementation status is narrower: the CLI ships `trace` and `census`, while operation 34 remains unregistered and `context`/operation 35 remain `FUTURE/PROPOSED`. The shipped census uses one exact session/generation, closed exclusions-first accounting, deterministic batches of at most 63, and a private capture-set selector; it does not add analysis or authorize direct Leiden.
+
+The repository also retains bounded live `slice` and `incoming` traversal. Their ordinary modes do not capture source supplies. They emit acquisition-oriented Graph V3 data containing absolute URIs and other fields unsuitable for the proposed context result, and their MCP generation field is optional.
 
 Program C currently admits exact V5 or opaque durable composites. Its public result and claim ceiling are V5-oriented. There is no transient Program C admission, transient result family, privacy projection, or combined live-analysis executor today.
 
-Therefore this ADR specifies new work. Existing Graph V3 bytes and existing Program C result artifacts are not the transient result contract.
+Therefore the context portions of this ADR still specify proposed work. Existing Graph V3 bytes, census capture sets, and existing Program C result artifacts are not the transient result contract.
 
 ## Operation numbering and rollout
 

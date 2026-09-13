@@ -54,6 +54,25 @@ go run ./cmd/lsp-trace incoming \
 
 Line and column values are one-based. Graph JSON is written to stdout (or `--output`), while diagnostics are written to stderr. Exit code `0` means complete traversal, `2` means a structured but incomplete traversal, `1` means invocation or unrecoverable server failure, and `130` means interruption.
 
+### Accountable source-symbol census
+
+Use `census` for accountable source-symbol enumeration and batched acquisition; use `trace` for one exact symbol or repeated exact positions. The executable syntax is:
+
+```text
+lsp-trace census --workspace PATH \
+  (--server COMMAND | --profile NAME [--config PATH]) \
+  --publication-root ABSOLUTE_PATH \
+  [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] \
+  [--server-arg VALUE...] [--down-depth N] [--up-depth N] \
+  [--max-nodes N] [--timeout DURATION] [--request-timeout DURATION] [--machine]
+```
+
+The default source is `.`, `down-depth` is `1`, and `up-depth` is `0`. Sources are workspace-relative. Includes select candidates, exclusions always win, and the closed file and symbol ledgers account every enumerated item exactly once. One command owns one initialized session and exact generation. Prepared targets are deterministically ordered and partitioned into non-empty native Graph Provenance V5 batches of at most 63; the command publishes one private atomic capture-set bundle selector beneath the required private publication root. Precommit failure or generation drift publishes nothing. Machine mode writes one strict `lsp-trace.census-result.v1` JSON line to stdout on success and closed `lsp-trace.census-diagnostic.v1` JSONL diagnostics on failure.
+
+The public result is deliberately bounded: `authority` is `0`, `source_graph_complete` is `UNKNOWN`, `native_aggregate_custody` is false, `cross_capture_calls` is empty, and `leiden_admissible` is false. A capture set preserves constituent custody but supplies no native aggregate custody, infers no cross-capture `CALLS`, and cannot be passed directly to Leiden. If publication committed but verification, directory sync, close, or result projection later degrades, the committed outcome is `SUCCEEDED_DEGRADED` and non-retryable; do not publish a competing retry.
+
+Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`. `context` remains `FUTURE/PROPOSED`.
+
 ### Coordinate conventions
 
 CLI `--at PATH:LINE:COLUMN` positions are one-based. MCP `line` and `character` inputs, LSP requests and responses, and retained graph ranges are zero-based. Columns and LSP characters count code units in the managed session's negotiated position encoding: `utf-8` counts bytes, `utf-16` counts UTF-16 code units, and `utf-32` counts Unicode code points. They are not visual columns; tabs, combining characters, and wide glyphs do not each imply one unit.

@@ -28,6 +28,18 @@ assert_same() {
   fi
 }
 
+assert_not_contains() {
+  id=$1
+  path=$2
+  text=$3
+  if [ -f "$root/$path" ] && ! grep -F "$text" "$root/$path" >/dev/null; then
+    printf 'PASS %s: %s excludes stale %s\n' "$id" "$path" "$text"
+  else
+    printf 'FAIL %s: %s must exclude stale %s\n' "$id" "$path" "$text"
+    failed=1
+  fi
+}
+
 assert_heading_order() {
   id=$1
   path=$2
@@ -76,7 +88,8 @@ assert_contains DOC-CAPTURE-SET-BOUNDARY cmd/lsp-trace/references/evidence-bound
 assert_contains DOC-UNKNOWN-BOUNDARY cmd/lsp-trace/references/evidence-boundaries.md '`source_graph_complete` remains `UNKNOWN`.'
 assert_contains DOC-MECHANICAL-NO-ACCEPT .pi/skills/lsp-trace-feature-inventory/SKILL.md 'Mechanical preparation cannot accept feature identity.'
 assert_contains DOC-COMMUNITY-INSTABILITY .pi/skills/lsp-trace-feature-inventory/SKILL.md 'communities, centrality, instability'
-assert_contains DOC-FUTURE-SYNTAX .pi/skills/lsp-trace-feature-inventory/SKILL.md 'label it `FUTURE/PROPOSED`'
+assert_contains DOC-CENSUS-AVAILABLE-FEATURE-SKILL .pi/skills/lsp-trace-feature-inventory/SKILL.md 'The documented CLI `census` command may be used'
+assert_contains DOC-CONTEXT-PROPOSED-FEATURE-SKILL .pi/skills/lsp-trace-feature-inventory/SKILL.md '`context` remains `FUTURE/PROPOSED`'
 assert_contains DOC-LEIDEN-HEADLINE .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'a community is a structurally notable set worth examining, never a feature'
 assert_contains DOC-LEIDEN-INDEPENDENT-CENSUS .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'independent entry-point census'
 assert_contains DOC-LEIDEN-INSTABILITY .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'A-08 instability campaigns'
@@ -85,7 +98,17 @@ assert_contains DOC-LIVE-ORIENTATION cmd/lsp-trace/references/live-tracing.md 'G
 assert_contains DOC-LIVE-CLAIM-CEILING cmd/lsp-trace/references/live-tracing.md 'it is not retained, replayable, or source-grounded evidence'
 assert_contains DOC-LIVE-OPTIONAL-ESCALATION cmd/lsp-trace/references/live-tracing.md 'That escalation is never the default prerequisite'
 assert_contains DOC-LIVE-NO-CENTRALITY cmd/lsp-trace/references/live-tracing.md 'They do not compute centrality, establish architectural boundaries'
-assert_contains DOC-LIVE-PROPOSED-CONTEXT cmd/lsp-trace/references/live-tracing.md 'The `context` and `census` interfaces accepted in ADR 0006 remain `FUTURE/PROPOSED`'
+assert_contains DOC-LIVE-CENSUS-AVAILABLE cmd/lsp-trace/references/live-tracing.md 'Current CLI `census` is AVAILABLE'
+assert_contains DOC-LIVE-PROPOSED-CONTEXT cmd/lsp-trace/references/live-tracing.md 'The `context` interface accepted in ADR 0006 remains `FUTURE/PROPOSED`'
+assert_contains DOC-README-CENSUS-AVAILABLE README.md '### Accountable source-symbol census'
+assert_contains DOC-README-CENSUS-AUTHORITY README.md '`authority` is `0`, `source_graph_complete` is `UNKNOWN`'
+assert_contains DOC-README-CONTEXT-PROPOSED README.md '`context` remains `FUTURE/PROPOSED`'
+assert_contains DOC-README-LEGACY-UNSCHEDULED README.md 'Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`.'
+assert_contains DOC-MIGRATION-CENSUS-AVAILABLE docs/cli-migration-diagnostics.md 'The CLI `census` replacement is now AVAILABLE'
+assert_contains DOC-MIGRATION-CONTEXT-PROPOSED docs/cli-migration-diagnostics.md '`context` remains `FUTURE/PROPOSED`'
+assert_contains DOC-MIGRATION-LEGACY-UNSCHEDULED docs/cli-migration-diagnostics.md 'removal remains `UNSCHEDULED`'
+assert_not_contains DOC-NO-STALE-CENSUS-CONTEXT-MIGRATION docs/cli-migration-diagnostics.md '`census` and `context` are unavailable proposals'
+assert_not_contains DOC-NO-STALE-CENSUS-CONTEXT-LIVE cmd/lsp-trace/references/live-tracing.md 'The `context` and `census` interfaces accepted in ADR 0006 remain `FUTURE/PROPOSED`'
 assert_contains DOC-SKILL-EXPORT-GRAMMAR cmd/lsp-trace/SKILL.md '`lsp-trace skill get (lsp-trace|lsp-trace-feature-inventory) DESTINATION`'
 assert_contains DOC-SKILL-EXPORT-SAFETY cmd/lsp-trace/SKILL.md 'atomic no-replace final rename descriptor-relatively beneath it'
 assert_contains DOC-SKILL-EXPORT-VISIBILITY cmd/lsp-trace/SKILL.md 'atomic for namespace visibility'
@@ -93,6 +116,7 @@ assert_contains DOC-SKILL-EXPORT-NO-DURABILITY cmd/lsp-trace/SKILL.md 'does not 
 assert_same DOC-FEATURE-EMBEDDED-SKILL .pi/skills/lsp-trace-feature-inventory/SKILL.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/SKILL.md
 assert_same DOC-FEATURE-EMBEDDED-PREP .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md
 assert_same DOC-FEATURE-EMBEDDED-ADJUDICATION .pi/skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md cmd/lsp-trace/embedded-skills/lsp-trace-feature-inventory/references/adjudication-and-acceptance.md
+assert_contains DOC-EMBEDDED-LSP-CENSUS cmd/lsp-trace/SKILL.md '`census`: use for accountable source-symbol enumeration'
 
 assert_contains DOC-README README.md '## Inspect retained seeds'
 assert_contains DOC-SEMANTICS docs/SEMANTICS.md '## Seed inspection operational contract'

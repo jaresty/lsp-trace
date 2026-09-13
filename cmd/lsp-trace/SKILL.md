@@ -21,7 +21,8 @@ Use only trusted language-server binaries and workspaces. They run with the deve
 
 Prefer a matching READY managed language-server session for code-relationship questions. Discover the exact target textually only when it is not yet known; after structural tracing, read source bodies for semantic interpretation.
 
-- `trace`: intent-oriented exact managed symbol or repeated exact-position facade; current implemented CLI syntax is documented in `--help` and the repository README.
+- `trace`: use for one exact managed symbol or repeated exact positions; current implemented CLI syntax is documented in `--help` and the repository README.
+- `census`: use for accountable source-symbol enumeration and deterministic batched acquisition in one session/generation. Use only the syntax printed by `lsp-trace census --help`; default depths are down/up `1`/`0`, exclusions win, and publication returns a private capture-set bundle selector.
 - `incoming`: start from exact callee positions and trace callers upward.
 - `slice`: discover bounded outgoing nodes, then trace incoming callers from the exact frontier and genuine server-reported empty outgoing leaves.
 - Legacy `slice --from-file PATH`: server-reported document-symbol census. It is not complete callable, source, or feature coverage.
@@ -32,7 +33,7 @@ Prefer a matching READY managed language-server session for code-relationship qu
 - `validate`: validate the selected family/version contract without rewriting input.
 - `export-retained-calls` and bounded retained analytics: offline structural projections over admitted retained CALLS.
 
-ADR 0006 accepts the future intent-oriented names `census` and `context`, but their interfaces and syntax remain `FUTURE/PROPOSED` unless the current binary help, capability registry, or README explicitly documents them as implemented. Do not present accepted design as shipped behavior or invent finalized syntax.
+The CLI `census` interface is AVAILABLE and documented by current binary help and the repository README. Its machine result is closed and non-authoritative: authority `0`, source-graph completeness `UNKNOWN`, no native aggregate custody, no cross-capture `CALLS`, and no direct Leiden admission. Precommit failure publishes nothing; committed degradation is non-retryable. ADR 0006's `context` interface remains `FUTURE/PROPOSED`; do not present that accepted design as shipped behavior or invent syntax.
 
 ## Shared evidence boundary
 
