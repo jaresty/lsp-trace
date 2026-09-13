@@ -8,7 +8,9 @@ import (
 	"sync"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/publication"
 )
 
 // censusAssembly and censusPublicationCapability are package-main authority.
@@ -32,6 +34,92 @@ type censusPublicationCapability struct {
 
 type censusPublisher interface {
 	publishCensus(context.Context, censusPublicationCapability) error
+}
+
+type censusPublisherFunc func(context.Context, censusPublicationCapability) error
+
+func (f censusPublisherFunc) publishCensus(ctx context.Context, capability censusPublicationCapability) error {
+	return f(ctx, capability)
+}
+
+type censusPublicationOutcome struct {
+	Result     *censusCLIResult
+	Diagnostic *censusCLIDiagnostic
+}
+
+type censusCaptureSetPublisher interface {
+	PublishCaptureSet(captureset.Manifest, [][]byte, captureset.ExactBytesAuthority) captureset.PublicationResult
+	Verify(string, captureset.ExactBytesAuthority) (captureset.Manifest, error)
+	ResolveConstituent(string, string, captureset.ExactBytesAuthority) ([]byte, error)
+}
+
+var openCensusPublicationRoot = publication.OpenRoot
+var newCensusCaptureSetPublisher = func(root *publication.Root) censusCaptureSetPublisher {
+	return captureset.NewPublisher(root)
+}
+
+func publishCensusCaptureSet(ctx context.Context, capability censusPublicationCapability, rootPath string) censusPublicationOutcome {
+	var outcome censusPublicationOutcome
+	err := publishCensus(ctx, capability, censusPublisherFunc(func(context.Context, censusPublicationCapability) error {
+		projection, _, cloneErr := cloneCensusProjection(capability.state.projection)
+		if cloneErr != nil {
+			return cloneErr
+		}
+		root, openErr := openCensusPublicationRoot(rootPath)
+		if openErr != nil {
+			return openErr
+		}
+		defer root.Close()
+		publisher := newCensusCaptureSetPublisher(root)
+		exact := make([][]byte, len(projection.Constituents))
+		for i := range projection.Constituents {
+			exact[i] = append([]byte(nil), projection.Constituents[i].Raw...)
+		}
+		authority := captureset.NativeV5Authority()
+		published := publisher.PublishCaptureSet(projection.Manifest, exact, authority)
+		if published.Err != nil || published.Receipt == nil {
+			return errors.New("capture-set publication failed")
+		}
+		verificationStatus := published.Receipt.VerificationStatus
+		verified, verifyErr := publisher.Verify(published.Receipt.Selector, authority)
+		if verifyErr == nil {
+			for _, constituent := range verified.Constituents {
+				if _, resolveErr := publisher.ResolveConstituent(published.Receipt.Selector, constituent.ImmutableSelector, authority); resolveErr != nil {
+					verifyErr = resolveErr
+					break
+				}
+			}
+		}
+		if verifyErr != nil {
+			verificationStatus = "COMMITTED_VERIFICATION_FAILED"
+		}
+		receipt := publication.BoundFileReceipt{
+			FinalSelector: published.Receipt.Selector, Digest: published.Receipt.ArtifactSHA256,
+			ByteLength: published.Receipt.ByteLength, Mechanism: published.Receipt.Mechanism,
+			NamespaceAtomic: published.Receipt.NamespaceAtomic, CrashDurability: published.Receipt.CrashDurability,
+			DirectorySyncStatus: published.Receipt.DirectorySyncStatus, CloseStatus: published.Receipt.CloseStatus,
+			VerificationStatus: verificationStatus,
+		}
+		result, resultErr := buildCensusCLIResult(projection, receipt)
+		if resultErr != nil {
+			// Publication has committed; projection failure is degradation, never retryable failure.
+			diagnostic, _ := buildCensusCLIDiagnostic(censusStageCommitted, nil)
+			outcome.Diagnostic = &diagnostic
+			return nil
+		}
+		outcome.Result = &result
+		if verificationStatus != "VERIFIED" || receipt.DirectorySyncStatus == publication.DirectorySyncFailed || receipt.CloseStatus == publication.CloseFailed {
+			diagnostic, _ := buildCensusCLIDiagnostic(censusStageCommitted, nil)
+			outcome.Diagnostic = &diagnostic
+		}
+		return nil
+	}))
+	if err != nil {
+		diagnostic, _ := buildCensusCLIDiagnostic(censusStagePublication, nil)
+		outcome.Result = nil
+		outcome.Diagnostic = &diagnostic
+	}
+	return outcome
 }
 
 func runInitializedCensusAcquisition(ctx context.Context, runtime *initializedAcquisitionRuntime, discoverer censusacquisition.Discoverer, limits acquisitionops.Limits) (censusAssembly, error) {
