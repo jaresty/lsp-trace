@@ -15,7 +15,8 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
-const censusUsage = "usage: lsp-trace census --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--timeout DURATION] [--request-timeout DURATION] [--machine]"
+const censusInvocationUsage = "lsp-trace census --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--server-arg VALUE...] [--down-depth N] [--up-depth N] [--max-nodes N] [--timeout DURATION] [--request-timeout DURATION] [--machine]"
+const censusUsage = "usage: " + censusInvocationUsage
 
 type censusRunnerDependencies struct {
 	openRoot   func(string) (*publication.Root, error)

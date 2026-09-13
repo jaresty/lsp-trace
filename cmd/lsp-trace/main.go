@@ -116,7 +116,7 @@ const usageText = `usage:
   lsp-trace program-c leiden --seed N --pagerank-top-k N --hub-top-k N [--format text|json] [--output SELECTOR] [--emit-community-register PATH] PATH|-
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
   lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...)
-  lsp-trace census --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) --publication-root ABSOLUTE_PATH [--source PATH...] [--include PATTERN...] [--exclude PATTERN...] [--machine]
+  ` + censusInvocationUsage + `
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace advanced  # specialist and administrative operations

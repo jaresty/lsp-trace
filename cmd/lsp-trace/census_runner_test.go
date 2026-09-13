@@ -8,42 +8,89 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/publication"
 )
 
-func TestRunCensusHelpAndMalformedClosedStreams(t *testing.T) {
-	var stdout, stderr bytes.Buffer
-	called := false
-	deps := productionCensusRunnerDependencies()
-	deps.openRoot = func(string) (*publication.Root, error) { called = true; return nil, errors.New("called") }
-	if code := runCensusWithDependencies([]string{"--help"}, &stdout, &stderr, deps); code != 0 || stderr.Len() != 0 || strings.Count(stdout.String(), censusUsage) != 1 || called {
-		t.Fatalf("ASSERT_CENSUS_HELP_PURE code=%d stdout=%q stderr=%q called=%t", code, stdout.String(), stderr.String(), called)
-	}
+func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
 	for _, tc := range []struct {
-		args    []string
-		machine bool
+		name     string
+		args     []string
+		wantCode int
+		wantHelp bool
+		machine  bool
 	}{
-		{[]string{"positional"}, false},
-		{[]string{"--machine", "positional"}, true},
-		{[]string{"--machine", "--machine=true"}, true},
+		{name: "long", args: []string{"--help"}, wantHelp: true},
+		{name: "short", args: []string{"-h"}, wantHelp: true},
+		{name: "leading-machine-long", args: []string{"--machine", "--help"}, wantHelp: true, machine: true},
+		{name: "leading-machine-short", args: []string{"--machine", "-h"}, wantHelp: true, machine: true},
+		{name: "help-after-valid-option", args: []string{"--workspace", "ignored", "--help"}, wantHelp: true},
+		{name: "help-before-valid-option", args: []string{"--help", "--workspace", "ignored"}, wantHelp: true},
+		{name: "help-before-positional", args: []string{"--help", "positional"}, wantCode: 1},
+		{name: "short-help-before-positional", args: []string{"-h", "positional"}, wantCode: 1},
+		{name: "help-before-machine", args: []string{"--help", "--machine"}, wantCode: 1},
+		{name: "help-after-machine-server-arg", args: []string{"--server-arg", "--machine", "--help"}, wantHelp: true},
+		{name: "help-after-double-dash-server-arg", args: []string{"--server-arg", "--", "--help"}, wantHelp: true},
+		{name: "help-before-machine-server-arg", args: []string{"--help", "--server-arg", "--machine"}, wantHelp: true},
+		{name: "help-before-double-dash-server-arg", args: []string{"--help", "--server-arg", "--"}, wantHelp: true},
+		{name: "duplicate-leading-machine-help", args: []string{"--machine", "--machine=true", "--help"}, wantCode: 1, machine: true},
+		{name: "invalid-leading-machine-help", args: []string{"--machine=maybe", "--help"}, wantCode: 1},
 	} {
-		stdout.Reset()
-		stderr.Reset()
-		code := runCensusWithDependencies(tc.args, &stdout, &stderr, deps)
-		if code == 0 || stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 || called {
-			t.Fatalf("ASSERT_CENSUS_MALFORMED_CLOSED args=%v code=%d stdout=%q stderr=%q", tc.args, code, stdout.String(), stderr.String())
-		}
-		if tc.machine {
-			var d censusCLIDiagnostic
-			if err := json.Unmarshal(stderr.Bytes(), &d); err != nil || d.Stage != censusStageSyntax {
-				t.Fatalf("ASSERT_CENSUS_MACHINE_SYNTAX_JSONL args=%v diagnostic=%+v err=%v", tc.args, d, err)
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			called := false
+			deps := productionCensusRunnerDependencies()
+			deps.openRoot = func(string) (*publication.Root, error) { called = true; return nil, errors.New("called") }
+			code := runCensusWithDependencies(tc.args, &stdout, &stderr, deps)
+			if code != tc.wantCode || called {
+				t.Fatalf("ASSERT_CENSUS_HELP_VALIDATED_NO_SIDE_EFFECT args=%v code=%d want=%d called=%t stdout=%q stderr=%q", tc.args, code, tc.wantCode, called, stdout.String(), stderr.String())
 			}
-		} else if strings.HasPrefix(stderr.String(), "{") {
-			t.Fatal("ASSERT_CENSUS_HUMAN_ERROR")
+			if tc.wantHelp {
+				if stderr.Len() != 0 || strings.Count(stdout.String(), censusUsage) != 1 {
+					t.Fatalf("ASSERT_CENSUS_HELP_ONCE args=%v stdout=%q stderr=%q", tc.args, stdout.String(), stderr.String())
+				}
+				return
+			}
+			if stdout.Len() != 0 || strings.Count(stderr.String(), "\n") != 1 {
+				t.Fatalf("ASSERT_CENSUS_HELP_INVALID_CLOSED args=%v stdout=%q stderr=%q", tc.args, stdout.String(), stderr.String())
+			}
+			if tc.machine {
+				var d censusCLIDiagnostic
+				if err := json.Unmarshal(stderr.Bytes(), &d); err != nil || d.Stage != censusStageSyntax {
+					t.Fatalf("ASSERT_CENSUS_MACHINE_SYNTAX_JSONL args=%v diagnostic=%+v err=%v", tc.args, d, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCensusHelpSurfacesHaveExactSupportedFlagParity(t *testing.T) {
+	want := []string{"--config", "--down-depth", "--exclude", "--include", "--machine", "--max-nodes", "--profile", "--publication-root", "--request-timeout", "--server", "--server-arg", "--source", "--timeout", "--up-depth", "--workspace"}
+	flags := func(text string) []string {
+		t.Helper()
+		seen := map[string]bool{}
+		for _, field := range strings.Fields(text) {
+			field = strings.Trim(field, "[]()")
+			field = strings.TrimSuffix(field, "...")
+			if strings.HasPrefix(field, "--") {
+				seen[field] = true
+			}
 		}
+		got := make([]string, 0, len(seen))
+		for flag := range seen {
+			got = append(got, flag)
+		}
+		slices.Sort(got)
+		return got
+	}
+	if got := flags(censusUsage); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ASSERT_CENSUS_COMMAND_HELP_SUPPORTED_FLAGS got=%v want=%v", got, want)
+	}
+	if got := flags(usageText[strings.Index(usageText, "lsp-trace census "):strings.Index(usageText, "\n  lsp-trace slice")]); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ASSERT_CENSUS_TOP_LEVEL_HELP_SUPPORTED_FLAGS got=%v want=%v", got, want)
 	}
 }
 

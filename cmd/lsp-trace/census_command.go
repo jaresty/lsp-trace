@@ -328,11 +328,9 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.IntVar(&o.MaxNodes, "max-nodes", o.MaxNodes, "")
 	fs.DurationVar(&o.Timeout, "timeout", o.Timeout, "")
 	fs.DurationVar(&o.RequestTimeout, "request-timeout", o.RequestTimeout, "")
+	fs.BoolVar(&o.Help, "help", false, "show census help")
+	fs.BoolVar(&o.Help, "h", false, "show census help")
 	if err := fs.Parse(clean); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			o.Help = true
-			return o, nil
-		}
 		return o, errors.New("invalid census syntax")
 	}
 	if len(src) > 0 {
