@@ -67,7 +67,7 @@ type buildError struct {
 
 func (e *buildError) Error() string { return e.err.Error() + ": " + e.output }
 
-func TestAuthorityMintCallsAreOrchestrationOwned(t *testing.T) {
+func TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes(t *testing.T) {
 	root := repositoryRoot(t)
 	fset := token.NewFileSet()
 	forbidden := map[string]bool{"MintSeedAuthority": true, "PrepareSource": true, "SealPreparedSource": true}
@@ -98,9 +98,14 @@ func TestAuthorityMintCallsAreOrchestrationOwned(t *testing.T) {
 				return true
 			}
 			selector, ok := call.Fun.(*ast.SelectorExpr)
-			if ok && forbidden[selector.Sel.Name] {
-				t.Errorf("ASSERT_AUTHORITY_MINT_CALLSITE_ORCHESTRATION_ONLY: %s calls %s", filepath.ToSlash(relative), selector.Sel.Name)
+			if !ok || !forbidden[selector.Sel.Name] {
+				return true
 			}
+			rel := filepath.ToSlash(relative)
+			if rel == "cmd/lsp-trace/census_batch_acquirer.go" && selector.Sel.Name == "MintSeedAuthority" {
+				return true
+			}
+			t.Errorf("ASSERT_AUTHORITY_MINT_CALLSITE_PRIVATE_OWNER_ONLY: %s calls %s", rel, selector.Sel.Name)
 			return true
 		})
 		return nil

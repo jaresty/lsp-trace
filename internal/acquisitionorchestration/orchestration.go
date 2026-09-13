@@ -19,7 +19,6 @@ const (
 	RouteSeedFile       = "canonical-seed-file"
 	RouteLegacyManifest = "legacy-seed-manifest"
 	RouteAutomaticFile  = "automatic-from-file"
-	RouteCensusBatch    = "private-census-batch"
 )
 
 type Runtime = acquisitionengine.Runtime
@@ -36,7 +35,7 @@ func policyForRoute(route string) (routePolicy, bool) {
 		return routePolicy{callerLocal: true, prepareSource: true}, true
 	case RouteSeedFile:
 		return routePolicy{callerLocal: true}, true
-	case RouteAutomaticFile, RouteCensusBatch:
+	case RouteAutomaticFile:
 		return routePolicy{callerLocal: true, retainSeedSpec: true}, true
 	case RouteLegacyManifest:
 		return routePolicy{}, true
@@ -154,28 +153,6 @@ func ExecuteSeedFile(ctx context.Context, runtime Runtime, op operation.Request,
 // ExecuteAutomaticFile preserves generated canonical Seeds V2 in V5.
 func ExecuteAutomaticFile(ctx context.Context, runtime Runtime, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
 	return executeCallerSeeds(ctx, runtime, op, RouteAutomaticFile, seedSpec)
-}
-
-// censusBatchCapability is an opaque, single-runtime authority minted only by
-// trusted acquisition orchestration. Callers cannot name, construct, or alter one.
-type censusBatchCapability struct{ runtime Runtime }
-
-// NewCensusBatchCapability binds census execution to the concrete managed
-// runtime selected by orchestration. It grants no lifecycle or publication.
-func NewCensusBatchCapability(runtime Runtime) *censusBatchCapability {
-	if runtime == nil {
-		return nil
-	}
-	return &censusBatchCapability{runtime: runtime}
-}
-
-// ExecuteCensusBatch spends only an orchestration-minted opaque capability.
-// Arbitrary callbacks and caller-implemented sessions are not accepted.
-func ExecuteCensusBatch(ctx context.Context, capability *censusBatchCapability, op operation.Request, seedSpec []byte) (operation.Result, *operation.Failure) {
-	if capability == nil || capability.runtime == nil {
-		return failure(operation.FailureInternal, fmt.Errorf("census batch capability required"))
-	}
-	return executeCallerSeeds(ctx, capability.runtime, op, RouteCensusBatch, seedSpec)
 }
 
 // ExecuteLegacyManifest preserves the runtime's established seed-binding custody

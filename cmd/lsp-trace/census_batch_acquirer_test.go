@@ -1,4 +1,4 @@
-package censusacquisition
+package main
 
 import (
 	"bytes"
@@ -12,10 +12,13 @@ import (
 	"testing"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/seedformat"
 )
 
 type fakeBatchSession struct {
@@ -25,8 +28,8 @@ type fakeBatchSession struct {
 	respond    func(context.Context, operation.Request) (operation.Result, *operation.Failure)
 }
 
-func (s *fakeBatchSession) identity() SessionIdentity {
-	return SessionIdentity{SessionID: s.id, Generation: s.generation}
+func (s *fakeBatchSession) identity() censusacquisition.SessionIdentity {
+	return censusacquisition.SessionIdentity{SessionID: s.id, Generation: s.generation}
 }
 func (s *fakeBatchSession) workspace() (string, error) { return "/w", nil }
 func (s *fakeBatchSession) execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
@@ -94,16 +97,25 @@ func successfulBatchResponse(t *testing.T, request operation.Request, complete, 
 	return operation.Result{Artifact: raw}
 }
 
-func batchRequest(n, ordinal int) BatchRequest {
-	targets := make([]PreparedTarget, n)
-	for i := range targets {
-		targets[i] = target(ordinal*63 + i)
-	}
-	seeds, err := combineSeeds(targets, "/w")
+func censusBatchTestTarget(i int) censusacquisition.PreparedTarget {
+	seed, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", i), Path: fmt.Sprintf("f%03d.go", i), Line: uint64(i + 11), Column: uint64(i + 4)}}}}, "/w")
 	if err != nil {
 		panic(err)
 	}
-	return BatchRequest{Session: SessionIdentity{"s", 7}, CensusID: "c", BatchID: fmt.Sprintf("b%d", ordinal), Ordinal: ordinal, DownDepth: 1, UpDepth: 0, Targets: targets, CanonicalSeedsV2: seeds}
+	name := fmt.Sprintf("Target%d", i)
+	return censusacquisition.PreparedTarget{CensusOrdinal: i, CanonicalSeedV2: seed, URI: fmt.Sprintf("file:///w/f%03d.go", i), SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}, Name: name, Kind: 12, SymbolIdentity: fmt.Sprintf("f%03d.go#%d:%d:%d:%s:%d", i, i+10, i+3, 12, name, i)}
+}
+
+func batchRequest(n, ordinal int) censusacquisition.BatchRequest {
+	targets := make([]censusacquisition.PreparedTarget, n)
+	for i := range targets {
+		targets[i] = censusBatchTestTarget(ordinal*63 + i)
+	}
+	seeds, err := censusacquisition.CombineCanonicalSeeds(targets, "/w")
+	if err != nil {
+		panic(err)
+	}
+	return censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 7}, CensusID: "c", BatchID: fmt.Sprintf("b%d", ordinal), Ordinal: ordinal, DownDepth: 1, UpDepth: 0, Targets: targets, CanonicalSeedsV2: seeds}
 }
 
 func TestBatchAdapterExactRequestIdentityAndImmutability(t *testing.T) {
@@ -113,10 +125,10 @@ func TestBatchAdapterExactRequestIdentityAndImmutability(t *testing.T) {
 			s.respond = func(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
 				return successfulBatchResponse(t, request, true, false), nil
 			}
-			a := newBatchAdapter(s, acquisitionops.Limits{})
+			a := newCensusBatchAcquirer(s, acquisitionops.Limits{})
 			req := batchRequest(n, 0)
 			originalSeeds := bytes.Clone(req.CanonicalSeedsV2)
-			got, failure := a.AcquireBatch(context.Background(), req)
+			got, failure := a.acquireBatch(context.Background(), req)
 			if failure != nil {
 				t.Fatal(failure)
 			}
@@ -145,13 +157,13 @@ func TestBatchAdapterExactRequestIdentityAndImmutability(t *testing.T) {
 func TestBatchAdapterRejectsBoundsCancellationDriftAndIncomplete(t *testing.T) {
 	cases := []struct {
 		name                string
-		mutate              func(*fakeBatchSession, *BatchRequest)
+		mutate              func(*fakeBatchSession, *censusacquisition.BatchRequest)
 		complete, truncated bool
 	}{
-		{"zero", func(_ *fakeBatchSession, r *BatchRequest) { r.Targets = nil }, true, false},
-		{"over63", func(_ *fakeBatchSession, r *BatchRequest) { *r = batchRequest(64, 0) }, true, false},
-		{"drift-before", func(s *fakeBatchSession, _ *BatchRequest) { s.generation++ }, true, false},
-		{"drift-after", func(s *fakeBatchSession, _ *BatchRequest) {
+		{"zero", func(_ *fakeBatchSession, r *censusacquisition.BatchRequest) { r.Targets = nil }, true, false},
+		{"over63", func(_ *fakeBatchSession, r *censusacquisition.BatchRequest) { *r = batchRequest(64, 0) }, true, false},
+		{"drift-before", func(s *fakeBatchSession, _ *censusacquisition.BatchRequest) { s.generation++ }, true, false},
+		{"drift-after", func(s *fakeBatchSession, _ *censusacquisition.BatchRequest) {
 			old := s.respond
 			s.respond = func(c context.Context, r operation.Request) (operation.Result, *operation.Failure) {
 				out, f := old(c, r)
@@ -159,8 +171,8 @@ func TestBatchAdapterRejectsBoundsCancellationDriftAndIncomplete(t *testing.T) {
 				return out, f
 			}
 		}, true, false},
-		{"partial", func(_ *fakeBatchSession, _ *BatchRequest) {}, false, false},
-		{"truncated", func(_ *fakeBatchSession, _ *BatchRequest) {}, true, true},
+		{"partial", func(_ *fakeBatchSession, _ *censusacquisition.BatchRequest) {}, false, false},
+		{"truncated", func(_ *fakeBatchSession, _ *censusacquisition.BatchRequest) {}, true, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -170,7 +182,7 @@ func TestBatchAdapterRejectsBoundsCancellationDriftAndIncomplete(t *testing.T) {
 			}
 			r := batchRequest(1, 0)
 			tc.mutate(s, &r)
-			_, failure := newBatchAdapter(s, acquisitionops.Limits{}).AcquireBatch(context.Background(), r)
+			_, failure := newCensusBatchAcquirer(s, acquisitionops.Limits{}).acquireBatch(context.Background(), r)
 			if failure == nil {
 				t.Fatal("ASSERT_TYPED_BATCH_FAILURE")
 			}
@@ -183,22 +195,24 @@ func TestBatchAdapterRejectsBoundsCancellationDriftAndIncomplete(t *testing.T) {
 		t.Fatal("executed cancelled batch")
 		return operation.Result{}, nil
 	}}
-	if _, failure := newBatchAdapter(s, acquisitionops.Limits{}).AcquireBatch(ctx, batchRequest(1, 0)); failure == nil {
+	if _, failure := newCensusBatchAcquirer(s, acquisitionops.Limits{}).acquireBatch(ctx, batchRequest(1, 0)); failure == nil {
 		t.Fatal("ASSERT_CANCEL_FAILURE")
 	}
 }
 
 func TestBatchAdapterRejectsSeedSubstitutionReorderAndDuplicates(t *testing.T) {
 	base := batchRequest(2, 0)
-	cases := map[string]func(*BatchRequest){
-		"reordered-targets":     func(r *BatchRequest) { r.Targets[0], r.Targets[1] = r.Targets[1], r.Targets[0] },
-		"unrelated-valid-seeds": func(r *BatchRequest) { r.CanonicalSeedsV2 = batchRequest(2, 1).CanonicalSeedsV2 },
-		"duplicate-ordinal":     func(r *BatchRequest) { r.Targets[1].CensusOrdinal = r.Targets[0].CensusOrdinal },
-		"duplicate-identity":    func(r *BatchRequest) { r.Targets[1].SymbolIdentity = r.Targets[0].SymbolIdentity },
-		"duplicate-coordinate": func(r *BatchRequest) {
+	cases := map[string]func(*censusacquisition.BatchRequest){
+		"reordered-targets":     func(r *censusacquisition.BatchRequest) { r.Targets[0], r.Targets[1] = r.Targets[1], r.Targets[0] },
+		"unrelated-valid-seeds": func(r *censusacquisition.BatchRequest) { r.CanonicalSeedsV2 = batchRequest(2, 1).CanonicalSeedsV2 },
+		"duplicate-ordinal":     func(r *censusacquisition.BatchRequest) { r.Targets[1].CensusOrdinal = r.Targets[0].CensusOrdinal },
+		"duplicate-identity":    func(r *censusacquisition.BatchRequest) { r.Targets[1].SymbolIdentity = r.Targets[0].SymbolIdentity },
+		"duplicate-coordinate": func(r *censusacquisition.BatchRequest) {
 			r.Targets[1].URI, r.Targets[1].SelectionRange = r.Targets[0].URI, r.Targets[0].SelectionRange
 		},
-		"duplicate-canonical": func(r *BatchRequest) { r.Targets[1].CanonicalSeedV2 = bytes.Clone(r.Targets[0].CanonicalSeedV2) },
+		"duplicate-canonical": func(r *censusacquisition.BatchRequest) {
+			r.Targets[1].CanonicalSeedV2 = bytes.Clone(r.Targets[0].CanonicalSeedV2)
+		},
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -208,7 +222,7 @@ func TestBatchAdapterRejectsSeedSubstitutionReorderAndDuplicates(t *testing.T) {
 				t.Fatal("invalid seeds reached runtime")
 				return operation.Result{}, nil
 			}}
-			if _, f := newBatchAdapter(s, acquisitionops.Limits{}).AcquireBatch(context.Background(), r); f == nil || f.Code != BatchFailureInvalidInput {
+			if _, f := newCensusBatchAcquirer(s, acquisitionops.Limits{}).acquireBatch(context.Background(), r); f == nil || f.Code != censusBatchFailureInvalidInput {
 				t.Fatalf("ASSERT_BATCH_SEED_RECONCILIATION: %v", f)
 			}
 		})
@@ -221,9 +235,9 @@ func TestBatchAdapterCancellationDuringNativeAdmission(t *testing.T) {
 	s.respond = func(_ context.Context, r operation.Request) (operation.Result, *operation.Failure) {
 		return successfulBatchResponse(t, r, true, false), nil
 	}
-	a := newBatchAdapter(s, acquisitionops.Limits{})
+	a := newCensusBatchAcquirer(s, acquisitionops.Limits{})
 	a.beforeNativeAdmission = cancel
-	if got, f := a.AcquireBatch(ctx, batchRequest(1, 0)); f == nil || f.Code != BatchFailureCancelled || len(got.Raw) != 0 {
+	if got, f := a.acquireBatch(ctx, batchRequest(1, 0)); f == nil || f.Code != censusBatchFailureCancelled || len(got.Raw) != 0 {
 		t.Fatalf("ASSERT_CANCEL_DURING_NATIVE_ADMISSION: result=%+v failure=%v", got, f)
 	}
 }
@@ -238,11 +252,11 @@ func TestBatchAdapterLateBatchFailureDoesNotMintResult(t *testing.T) {
 		}
 		return successfulBatchResponse(t, r, true, false), nil
 	}
-	a := newBatchAdapter(s, acquisitionops.Limits{})
-	if _, f := a.AcquireBatch(context.Background(), batchRequest(63, 0)); f != nil {
+	a := newCensusBatchAcquirer(s, acquisitionops.Limits{})
+	if _, f := a.acquireBatch(context.Background(), batchRequest(63, 0)); f != nil {
 		t.Fatal(f)
 	}
-	if got, f := a.AcquireBatch(context.Background(), batchRequest(1, 1)); f == nil || f.Code != BatchFailureAcquisition || len(got.Raw) != 0 {
+	if got, f := a.acquireBatch(context.Background(), batchRequest(1, 1)); f == nil || f.Code != censusBatchFailureAcquisition || len(got.Raw) != 0 {
 		t.Fatalf("ASSERT_LATE_BATCH_FAILURE_FAILS_CLOSED: result=%+v failure=%v", got, f)
 	}
 }
@@ -258,10 +272,10 @@ func TestBatchAdapterDeterministicMultipleBatches(t *testing.T) {
 			s.respond = func(ctx context.Context, r operation.Request) (operation.Result, *operation.Failure) {
 				return successfulBatchResponse(t, r, true, false), nil
 			}
-			a := newBatchAdapter(s, acquisitionops.Limits{})
+			a := newCensusBatchAcquirer(s, acquisitionops.Limits{})
 			var first [][]byte
 			for ordinal, n := range plans {
-				got, f := a.AcquireBatch(context.Background(), batchRequest(n, ordinal))
+				got, f := a.acquireBatch(context.Background(), batchRequest(n, ordinal))
 				if f != nil {
 					t.Fatal(f)
 				}
@@ -272,7 +286,7 @@ func TestBatchAdapterDeterministicMultipleBatches(t *testing.T) {
 			}
 			s.requests = nil
 			for ordinal, n := range plans {
-				got, f := a.AcquireBatch(context.Background(), batchRequest(n, ordinal))
+				got, f := a.acquireBatch(context.Background(), batchRequest(n, ordinal))
 				if f != nil || !bytes.Equal(got.Raw, first[ordinal]) {
 					t.Fatal("ASSERT_DETERMINISTIC_REPLAY", f)
 				}
