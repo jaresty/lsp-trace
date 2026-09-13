@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-result.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["envelope_version", "envelope_schema_id", "tool", "request_id", "outcome", "operation_status", "isError", "result"],
+  "properties": {
+    "envelope_version": {"const": "1"},
+    "envelope_schema_id": {"const": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-result.v1.schema.json"},
+    "tool": {"const": "lsp_trace_v1_census"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "outcome": {"enum": ["COMPLETE", "COMMITTED_DEGRADED"]},
+    "operation_status": {"const": "SUCCEEDED"},
+    "isError": {"const": false},
+    "result": {
+      "oneOf": [
+        {"$ref": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-result.v1.schema.json"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schema_version", "status", "stage", "code", "retry"],
+          "properties": {
+            "schema_version": {"const": "lsp-trace.census-diagnostic.v1"},
+            "status": {"const": "SUCCEEDED_DEGRADED"},
+            "stage": {"const": "committed-degradation"},
+            "code": {"const": "COMMITTED_DEGRADED"},
+            "retry": {"const": false}
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {"if": {"properties": {"outcome": {"const": "COMPLETE"}}}, "then": {"properties": {"result": {"$ref": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-result.v1.schema.json"}}}},
+    {"if": {"properties": {"outcome": {"const": "COMMITTED_DEGRADED"}}}, "then": {"properties": {"result": {"properties": {"status": {"const": "SUCCEEDED_DEGRADED"}}}}}}
+  ]
+}

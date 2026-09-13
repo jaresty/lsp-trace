@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-domain-error.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["envelope_version", "envelope_schema_id", "tool", "request_id", "outcome", "operation_status", "isError", "error"],
+  "properties": {
+    "envelope_version": {"const": "1"},
+    "envelope_schema_id": {"const": "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-domain-error.v1.schema.json"},
+    "tool": {"const": "lsp_trace_v1_census"},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "outcome": {"const": "DOMAIN_ERROR"},
+    "operation_status": {"const": "FAILED"},
+    "isError": {"const": true},
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "status", "stage", "code", "retry"],
+      "properties": {
+        "schema_version": {"const": "lsp-trace.census-diagnostic.v1"},
+        "status": {"const": "FAILED"},
+        "stage": {"enum": ["syntax", "config", "discovery", "acquisition", "assembly", "publication"]},
+        "code": {"enum": ["INVALID_SYNTAX", "INVALID_CONFIG", "DISCOVERY_FAILED", "ACQUISITION_FAILED", "ASSEMBLY_FAILED", "PUBLICATION_FAILED"]},
+        "batch_ordinal": {"type": "integer", "minimum": 1, "maximum": 159},
+        "retry": {"const": true}
+      },
+      "allOf": [
+        {"if": {"required": ["batch_ordinal"]}, "then": {"properties": {"stage": {"const": "acquisition"}, "code": {"const": "ACQUISITION_FAILED"}}}},
+        {"oneOf": [
+          {"properties": {"stage": {"const": "syntax"}, "code": {"const": "INVALID_SYNTAX"}}},
+          {"properties": {"stage": {"const": "config"}, "code": {"const": "INVALID_CONFIG"}}},
+          {"properties": {"stage": {"const": "discovery"}, "code": {"const": "DISCOVERY_FAILED"}}},
+          {"properties": {"stage": {"const": "acquisition"}, "code": {"const": "ACQUISITION_FAILED"}}},
+          {"properties": {"stage": {"const": "assembly"}, "code": {"const": "ASSEMBLY_FAILED"}}},
+          {"properties": {"stage": {"const": "publication"}, "code": {"const": "PUBLICATION_FAILED"}}}
+        ]}
+      ]
+    }
+  }
+}
