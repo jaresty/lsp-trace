@@ -121,6 +121,27 @@ func TestReconcileSeedUsesExactCanonicalWorkspaceIdentity(t *testing.T) {
 	}
 }
 
+func TestPlatformPathEqualUsesCanonicalSeedsV2Separators(t *testing.T) {
+	cases := []struct {
+		name, goos, left, right string
+		want                    bool
+		assertion               string
+	}{
+		{"windows-nested-spaces-unicode", "windows", "Dir/space é/file.go", `dir\SPACE É\FILE.GO`, true, "ASSERT_PLATFORM_PATH_EQUAL_WINDOWS_CANONICAL_SLASH"},
+		{"windows-mixed-separators", "windows", `Dir\nested/file.go`, `dir/nested\FILE.GO`, true, "ASSERT_PLATFORM_PATH_EQUAL_WINDOWS_CANONICAL_SLASH"},
+		{"windows-traversal-alias", "windows", "dir/file.go", `dir\nested\..\file.go`, false, "ASSERT_PLATFORM_PATH_EQUAL_REJECTS_TRAVERSAL_ALIAS"},
+		{"unix-case-sensitive", "linux", "Dir/space é/file.go", "dir/space é/file.go", false, "ASSERT_PLATFORM_PATH_EQUAL_NONWINDOWS_LEXICAL"},
+		{"unix-backslash-not-separator", "linux", "dir/file.go", `dir\file.go`, false, "ASSERT_PLATFORM_PATH_EQUAL_NONWINDOWS_LEXICAL"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := platformPathEqual(tc.goos, tc.left, tc.right); got != tc.want {
+				t.Fatalf("%s: got %v want %v", tc.assertion, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestInvalidCompleteSymbolLedgerHasNoAcquisitionSideEffects(t *testing.T) {
 	mutations := map[string]func(*Discovery){
 		"duplicate-accounting-ordinal": func(d *Discovery) { d.Accounting.Symbols[1].Ordinal = 0 },

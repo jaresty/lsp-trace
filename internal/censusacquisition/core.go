@@ -359,7 +359,7 @@ func reconcileSeed(t PreparedTarget, workspace string) error {
 		return errors.New("canonical seed URI/selection start mismatch")
 	}
 	relative, err := canonicalWorkspaceRelativePath(workspace, t.URI)
-	if err != nil || !platformPathEqual(relative, f.Seeds[0].Path) {
+	if err != nil || !platformPathEqual(runtime.GOOS, relative, f.Seeds[0].Path) {
 		return errors.New("canonical seed URI/selection start mismatch")
 	}
 	return nil
@@ -395,8 +395,10 @@ func canonicalWorkspaceRelativePath(workspace, rawURI string) (string, error) {
 	return relative, nil
 }
 
-func platformPathEqual(a, b string) bool {
-	if runtime.GOOS == "windows" {
+func platformPathEqual(goos, a, b string) bool {
+	if goos == "windows" {
+		a = strings.ReplaceAll(a, `\`, "/")
+		b = strings.ReplaceAll(b, `\`, "/")
 		return strings.EqualFold(a, b)
 	}
 	return a == b
