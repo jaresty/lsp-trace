@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisition"
@@ -124,20 +123,6 @@ type Constituent struct {
 	Identity captureset.Constituent
 }
 
-type assemblyState struct {
-	projection Projection
-	token      [32]byte
-	mu         sync.Mutex
-	published  bool
-}
-type Assembly struct {
-	state *assemblyState
-	token [32]byte
-}
-type PublicationCapability struct {
-	state *assemblyState
-	token [32]byte
-}
 type Projection struct {
 	Session       SessionIdentity
 	CensusID      string
@@ -147,76 +132,43 @@ type Projection struct {
 	ManifestBytes []byte
 	Workspace     string
 }
-type Publisher interface {
-	Publish(context.Context, PublicationCapability) error
-}
-
-func (a Assembly) Inspect() (Projection, error) {
-	if !a.valid() {
-		return Projection{}, errors.New("invalid assembly capability")
-	}
-	return cloneProjection(a.state.projection), nil
-}
-func (a Assembly) PublicationCapability() (PublicationCapability, error) {
-	if !a.valid() {
-		return PublicationCapability{}, errors.New("invalid assembly capability")
-	}
-	return PublicationCapability{a.state, a.token}, nil
-}
-func (a Assembly) valid() bool {
-	return a.state != nil && a.token == a.state.token && a.token != [32]byte{}
-}
-func Publish(ctx context.Context, c PublicationCapability, p Publisher) error {
-	if p == nil || c.state == nil || c.token != c.state.token || c.token == [32]byte{} {
-		return errors.New("invalid publication capability")
-	}
-	c.state.mu.Lock()
-	defer c.state.mu.Unlock()
-	if c.state.published {
-		return errors.New("publication capability replay")
-	}
-	if err := validateProjection(c.state.projection); err != nil {
-		return err
-	}
-	c.state.published = true
-	return p.Publish(ctx, c)
-}
-
 type Core struct {
 	Discoverer Discoverer
 	Acquirer   Acquirer
 }
 
-func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
+// Run performs authority-neutral discovery, batch acquisition, and exact
+// validation. Its result is data, not a completion or publication capability.
+func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if err := s.Validate(); err != nil {
-		return Assembly{}, err
+		return Projection{}, err
 	}
 	if c.Discoverer == nil || c.Acquirer == nil {
-		return Assembly{}, errors.New("discoverer and acquirer required")
+		return Projection{}, errors.New("discoverer and acquirer required")
 	}
 	d, err := c.Discoverer.Discover(ctx, s)
 	if err != nil {
-		return Assembly{}, fmt.Errorf("discovery: %w", err)
+		return Projection{}, fmt.Errorf("discovery: %w", err)
 	}
 	if d.Session != s {
-		return Assembly{}, errors.New("session identity drift during discovery")
+		return Projection{}, errors.New("session identity drift during discovery")
 	}
 	if !d.Complete {
-		return Assembly{}, errors.New("discovery accounting incomplete")
+		return Projection{}, errors.New("discovery accounting incomplete")
 	}
 	if err = validateDiscovery(d); err != nil {
-		return Assembly{}, err
+		return Projection{}, err
 	}
 	if err = d.Accounting.Validate(); err != nil {
-		return Assembly{}, fmt.Errorf("discovery accounting: %w", err)
+		return Projection{}, fmt.Errorf("discovery accounting: %w", err)
 	}
 	targets, prepared, err := canonicalTargets(d)
 	if err != nil {
-		return Assembly{}, err
+		return Projection{}, err
 	}
 	plan, err := census.PlanTargets(targets)
 	if err != nil {
-		return Assembly{}, err
+		return Projection{}, err
 	}
 	cid := stableID("census", joinTargetBytes(targets))
 	batches := make([]BatchRequest, len(plan.Batches))
@@ -229,20 +181,20 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 		}
 		seedBytes, err := combineSeeds(pt, d.Workspace)
 		if err != nil {
-			return Assembly{}, fmt.Errorf("batch %d seeds: %w", i, err)
+			return Projection{}, fmt.Errorf("batch %d seeds: %w", i, err)
 		}
 		bid := stableID("batch", []byte(fmt.Sprintf("%s\x00%d\x00%s", cid, i, joinTargetBytes(b.Targets))))
 		req := BatchRequest{s, cid, bid, i, census.DefaultDownDepth, census.DefaultUpDepth, pt, seedBytes}
 		got, e := c.Acquirer.AcquireV5(ctx, req)
 		if e != nil {
-			return Assembly{}, fmt.Errorf("acquire batch %d: %w", i, e)
+			return Projection{}, fmt.Errorf("acquire batch %d: %w", i, e)
 		}
 		if got.Session != s {
-			return Assembly{}, fmt.Errorf("session identity drift during batch %d", i)
+			return Projection{}, fmt.Errorf("session identity drift during batch %d", i)
 		}
 		identity, e := admit(got.Raw, req)
 		if e != nil {
-			return Assembly{}, fmt.Errorf("batch %d V5 admission: %w", i, e)
+			return Projection{}, fmt.Errorf("batch %d V5 admission: %w", i, e)
 		}
 		batches[i] = req
 		meta[i] = identity
@@ -250,23 +202,21 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Assembly, error) {
 	}
 	m, err := captureset.Prepare(targets, meta, d.FileLedger, d.SymbolLedger, CensusPolicy, DuplicatePolicy)
 	if err != nil {
-		return Assembly{}, fmt.Errorf("manifest preparation: %w", err)
+		return Projection{}, fmt.Errorf("manifest preparation: %w", err)
 	}
 	m, err = captureset.AssociateBatches(m, meta)
 	if err != nil {
-		return Assembly{}, fmt.Errorf("manifest association: %w", err)
+		return Projection{}, fmt.Errorf("manifest association: %w", err)
 	}
 	raw, err := captureset.EncodeCanonical(m)
 	if err != nil {
-		return Assembly{}, fmt.Errorf("manifest encoding: %w", err)
+		return Projection{}, fmt.Errorf("manifest encoding: %w", err)
 	}
 	p := Projection{Session: s, CensusID: cid, Batches: batches, Constituents: cs, Manifest: m, ManifestBytes: raw, Workspace: d.Workspace}
 	if err = validateProjection(p); err != nil {
-		return Assembly{}, fmt.Errorf("assembly accounting: %w", err)
+		return Projection{}, fmt.Errorf("projection accounting: %w", err)
 	}
-	token := sha256.Sum256(append([]byte("capability\x00"), raw...))
-	st := &assemblyState{projection: cloneProjection(p), token: token}
-	return Assembly{st, token}, nil
+	return cloneProjection(p), nil
 }
 
 func validateDiscovery(d Discovery) error {

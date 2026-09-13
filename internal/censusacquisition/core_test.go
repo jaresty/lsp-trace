@@ -71,7 +71,7 @@ func v5(t *testing.T, b BatchRequest) []byte {
 	}
 	return raw
 }
-func run(t *testing.T, d Discovery, mut func(*[]byte, BatchRequest)) (Assembly, error) {
+func run(t *testing.T, d Discovery, mut func(*[]byte, BatchRequest)) (Projection, error) {
 	t.Helper()
 	return (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }), Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
 		r := v5(t, b)
@@ -81,13 +81,9 @@ func run(t *testing.T, d Discovery, mut func(*[]byte, BatchRequest)) (Assembly, 
 		return AcquiredV5{b.Session, r}, nil
 	})}).Run(context.Background(), SessionIdentity{"s", 7})
 }
-func projection(t *testing.T, a Assembly) Projection {
+func projection(t *testing.T, p Projection) Projection {
 	t.Helper()
-	p, e := a.Inspect()
-	if e != nil {
-		t.Fatal(e)
-	}
-	return p
+	return cloneProjection(p)
 }
 func seedPath(path string) []byte {
 	raw, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: "census-000000", Path: filepath.ToSlash(path), Line: 1, Column: 1}}}}, "/")
@@ -291,46 +287,20 @@ func TestExactV5AdmissionRejectsMutations(t *testing.T) {
 		}
 	}
 }
-func TestOpaqueCapabilityZeroReplayAndPublicationAtomicity(t *testing.T) {
-	if _, e := (Assembly{}).Inspect(); e == nil {
-		t.Fatal("zero assembly")
-	}
-	if e := Publish(context.Background(), PublicationCapability{}, publisherFunc(func(context.Context, PublicationCapability) error { return nil })); e == nil {
-		t.Fatal("zero capability")
-	}
-	a, e := run(t, discovery(1), nil)
-	if e != nil {
-		t.Fatal(e)
-	}
-	c, e := a.PublicationCapability()
-	if e != nil {
-		t.Fatal(e)
-	}
-	calls := 0
-	p := publisherFunc(func(context.Context, PublicationCapability) error { calls++; return nil })
-	if e = Publish(context.Background(), c, p); e != nil || calls != 1 {
-		t.Fatal(e, calls)
-	}
-	if e = Publish(context.Background(), c, p); e == nil || calls != 1 {
-		t.Fatal("replay")
-	}
+func TestCoreDoesNotReturnPartialProjectionAfterLateBatchFailure(t *testing.T) {
 	late := discovery(64)
-	acq := 0
-	_, e = (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return late, nil }), Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
-		acq++
-		if acq == 2 {
+	acquired := 0
+	projection, err := (Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return late, nil }), Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+		acquired++
+		if acquired == 2 {
 			return AcquiredV5{}, errors.New("late")
 		}
 		return AcquiredV5{b.Session, v5(t, b)}, nil
 	})}).Run(context.Background(), SessionIdentity{"s", 7})
-	if e == nil || calls != 1 {
-		t.Fatal("failure published")
+	if err == nil || projection.CensusID != "" {
+		t.Fatal("partial projection returned after failure")
 	}
 }
-
-type publisherFunc func(context.Context, PublicationCapability) error
-
-func (f publisherFunc) Publish(c context.Context, p PublicationCapability) error { return f(c, p) }
 func TestManifestAssociationAndRecomputedMutations(t *testing.T) {
 	a, e := run(t, discovery(64), nil)
 	if e != nil {

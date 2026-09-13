@@ -40,7 +40,7 @@ func parseProductionPackage(t *testing.T, dir string) []*ast.File {
 	return files
 }
 
-func TestNoExportedInternalCensusAuthorityConstructorOrSpender(t *testing.T) {
+func TestExternalPackageHasNoCensusAssemblyMintingPath(t *testing.T) {
 	root := repositoryRoot(t)
 	for _, rel := range []string{"internal/acquisitionorchestration", "internal/censusacquisition"} {
 		for _, file := range parseProductionPackage(t, filepath.Join(root, rel)) {
@@ -50,15 +50,22 @@ func TestNoExportedInternalCensusAuthorityConstructorOrSpender(t *testing.T) {
 					if !ast.IsExported(d.Name.Name) {
 						continue
 					}
+					if fieldListContainsAny(d.Type.Results, "Assembly", "PublicationCapability") {
+						t.Fatalf("ASSERT_NO_EXPORTED_ARBITRARY_INPUT_TO_CENSUS_AUTHORITY: %s exports %s", rel, d.Name.Name)
+					}
 					if strings.Contains(strings.ToLower(d.Name.Name), "census") && (strings.Contains(d.Name.Name, "Capability") || strings.HasPrefix(d.Name.Name, "Execute") || strings.HasPrefix(d.Name.Name, "Acquire") || strings.HasPrefix(d.Name.Name, "New")) {
 						t.Fatalf("ASSERT_NO_EXPORTED_INTERNAL_CENSUS_AUTHORITY: %s exports %s", rel, d.Name.Name)
 					}
-					if fieldListContainsIdent(d.Type.Params, "Runtime") && (fieldListContainsIdent(d.Type.Results, "BatchResult") || fieldListContainsIdent(d.Type.Results, "AcquiredV5")) {
-						t.Fatalf("ASSERT_NO_ARBITRARY_RUNTIME_TO_CENSUS_RESULT: %s exports %s", rel, d.Name.Name)
+					if fieldListContainsAny(d.Type.Params, "Runtime", "Acquirer", "AcquiredV5", "RawMessage") && fieldListContainsAny(d.Type.Results, "BatchResult", "AcquiredV5", "Assembly", "PublicationCapability") {
+						t.Fatalf("ASSERT_NO_ARBITRARY_INPUT_TO_CENSUS_AUTHORITY: %s exports %s", rel, d.Name.Name)
 					}
 				case *ast.GenDecl:
 					for _, spec := range d.Specs {
-						if named, ok := spec.(*ast.TypeSpec); ok && ast.IsExported(named.Name.Name) && (named.Name.Name == "BatchAdapter" || named.Name.Name == "BatchResult") {
+						named, ok := spec.(*ast.TypeSpec)
+						if !ok || !ast.IsExported(named.Name.Name) {
+							continue
+						}
+						if named.Name.Name == "BatchAdapter" || named.Name.Name == "BatchResult" || named.Name.Name == "Assembly" || named.Name.Name == "PublicationCapability" {
 							t.Fatalf("ASSERT_NO_EXPORTED_INTERNAL_CENSUS_AUTHORITY: %s exports %s", rel, named.Name.Name)
 						}
 					}
@@ -71,13 +78,22 @@ func TestNoExportedInternalCensusAuthorityConstructorOrSpender(t *testing.T) {
 func TestPackageMainOwnsConcreteUnexportedCensusAcquirer(t *testing.T) {
 	root := repositoryRoot(t)
 	files := parseProductionPackage(t, filepath.Join(root, "cmd/lsp-trace"))
-	var acquirer, constructor, spender bool
+	var acquirer, constructor, spender, assembly, publicationCapability, orchestrator bool
 	for _, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch n := node.(type) {
 			case *ast.TypeSpec:
+				if ast.IsExported(n.Name.Name) && (strings.Contains(n.Name.Name, "Assembly") || strings.Contains(n.Name.Name, "PublicationCapability")) {
+					t.Fatalf("ASSERT_NO_EXPORTED_PACKAGE_MAIN_CENSUS_AUTHORITY: %s", n.Name.Name)
+				}
 				if n.Name.Name == "censusBatchAcquirer" && !ast.IsExported(n.Name.Name) {
 					acquirer = true
+				}
+				if n.Name.Name == "censusAssembly" && !ast.IsExported(n.Name.Name) {
+					assembly = true
+				}
+				if n.Name.Name == "censusPublicationCapability" && !ast.IsExported(n.Name.Name) {
+					publicationCapability = true
 				}
 			case *ast.FuncDecl:
 				if n.Name.Name == "newInitializedCensusBatchAcquirer" && !ast.IsExported(n.Name.Name) {
@@ -86,13 +102,25 @@ func TestPackageMainOwnsConcreteUnexportedCensusAcquirer(t *testing.T) {
 				if n.Name.Name == "executeInitializedCensusBatch" && !ast.IsExported(n.Name.Name) {
 					spender = firstParameterAfterContextIsPointerTo(n, "initializedAcquisitionRuntime")
 				}
+				if n.Name.Name == "runInitializedCensusAcquisition" && !ast.IsExported(n.Name.Name) {
+					orchestrator = firstParameterAfterContextIsPointerTo(n, "initializedAcquisitionRuntime") && fieldListContainsIdent(n.Type.Results, "censusAssembly")
+				}
 			}
 			return true
 		})
 	}
-	if !acquirer || !constructor || !spender {
-		t.Fatalf("ASSERT_PACKAGE_MAIN_PRIVATE_CONCRETE_CENSUS_AUTHORITY: acquirer=%v constructor=%v spender=%v", acquirer, constructor, spender)
+	if !acquirer || !constructor || !spender || !assembly || !publicationCapability || !orchestrator {
+		t.Fatalf("ASSERT_PACKAGE_MAIN_PRIVATE_CONCRETE_CENSUS_AUTHORITY: acquirer=%v constructor=%v spender=%v assembly=%v publication=%v orchestrator=%v", acquirer, constructor, spender, assembly, publicationCapability, orchestrator)
 	}
+}
+
+func fieldListContainsAny(fields *ast.FieldList, names ...string) bool {
+	for _, name := range names {
+		if fieldListContainsIdent(fields, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func fieldListContainsIdent(fields *ast.FieldList, name string) bool {

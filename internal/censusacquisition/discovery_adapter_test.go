@@ -252,16 +252,15 @@ func TestDiscoverToCoreRunAcquiresNestedSameFileTargets(t *testing.T) {
 	}}
 	adapter := DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}
 	acquired := 0
-	assembly, err := (Core{Discoverer: adapter, Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+	projection, err := (Core{Discoverer: adapter, Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
 		acquired += len(b.Targets)
 		return AcquiredV5{Session: b.Session, Raw: v5(t, b)}, nil
 	})}).Run(context.Background(), SessionIdentity{"s", 7})
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := assembly.Inspect()
-	if err != nil || acquired != 2 || len(p.Manifest.Targets) != 2 {
-		t.Fatalf("ASSERT_DISCOVER_CORE_SAME_FILE_MULTI_TARGET_ACQUIRED: acquired=%d targets=%d err=%v", acquired, len(p.Manifest.Targets), err)
+	if acquired != 2 || len(projection.Manifest.Targets) != 2 {
+		t.Fatalf("ASSERT_DISCOVER_CORE_SAME_FILE_MULTI_TARGET_ACQUIRED: acquired=%d targets=%d", acquired, len(projection.Manifest.Targets))
 	}
 }
 
