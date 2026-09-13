@@ -12,8 +12,12 @@ import (
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
+	"net/url"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -35,7 +39,7 @@ func target(i int) PreparedTarget {
 	return PreparedTarget{i, seed(i), fmt.Sprintf("file:///w/f%03d.go", i), lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}}
 }
 func discovery(n int) Discovery {
-	d := Discovery{Session: SessionIdentity{"s", 7}, Complete: true}
+	d := Discovery{Session: SessionIdentity{"s", 7}, Workspace: "/w", Complete: true}
 	for i := 0; i < n; i++ {
 		d.Targets = append(d.Targets, target(i))
 		d.Accounting.Symbols = append(d.Accounting.Symbols, census.SymbolEntry{Ordinal: i, Disposition: census.SymbolSelected})
@@ -79,6 +83,86 @@ func projection(t *testing.T, a Assembly) Projection {
 	}
 	return p
 }
+func seedPath(path string) []byte {
+	return []byte(fmt.Sprintf(`{"schema_version":"lsp-trace.seeds.v2","coordinate_convention":"one-based","seeds":[{"type":"position","label":"s","path":%q,"line":1,"column":1}]}`, path))
+}
+
+func TestReconcileSeedUsesExactCanonicalWorkspaceIdentity(t *testing.T) {
+	workspace := t.TempDir()
+	uri := func(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }
+	targetFor := func(rawURI, seedRelative string) PreparedTarget {
+		return PreparedTarget{CanonicalSeedV2: seedPath(seedRelative), URI: rawURI}
+	}
+	validRelative := filepath.Join("dir", "space é.go")
+	validPath := filepath.Join(workspace, validRelative)
+	cases := []struct {
+		name, workspace, uri, seedPath string
+		wantOK                         bool
+	}{
+		{"spaces-unicode", workspace, uri(validPath), validRelative, true},
+		{"suffix-collision", workspace, uri(filepath.Join(filepath.Dir(workspace), "other", filepath.Base(workspace), "same.go")), "same.go", false},
+		{"dot-dot", workspace, (&url.URL{Scheme: "file", Path: filepath.ToSlash(workspace) + "/dir/../same.go"}).String(), "same.go", false},
+		{"encoded-separator", workspace, strings.Replace(uri(filepath.Join(workspace, "dir", "same.go")), "/dir/same.go", "/dir%2Fsame.go", 1), filepath.Join("dir", "same.go"), false},
+		{"encoded-dot", workspace, strings.Replace(uri(filepath.Join(workspace, "same.go")), "/same.go", "/%2e/same.go", 1), "same.go", false},
+		{"malformed-escape", workspace, "file:///bad%zz.go", "bad.go", false},
+		{"query", workspace, uri(filepath.Join(workspace, "same.go")) + "?x=1", "same.go", false},
+		{"fragment", workspace, uri(filepath.Join(workspace, "same.go")) + "#x", "same.go", false},
+		{"authority", workspace, "file://host" + filepath.ToSlash(filepath.Join(workspace, "same.go")), "same.go", false},
+		{"outside-workspace", workspace, uri(filepath.Join(filepath.Dir(workspace), "same.go")), "same.go", false},
+		{"case-variant", workspace, uri(filepath.Join(workspace, "Case.go")), "case.go", runtime.GOOS == "windows"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := reconcileSeed(targetFor(tc.uri, tc.seedPath), tc.workspace)
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("ASSERT_EXACT_CANONICAL_URI_IDENTITY: err=%v", err)
+			}
+		})
+	}
+}
+
+func TestInvalidCompleteSymbolLedgerHasNoAcquisitionSideEffects(t *testing.T) {
+	mutations := map[string]func(*Discovery){
+		"duplicate-accounting-ordinal": func(d *Discovery) { d.Accounting.Symbols[1].Ordinal = 0 },
+		"out-of-range-accounting":      func(d *Discovery) { d.Accounting.Symbols[1].Ordinal = 2 },
+		"malformed-accounting":         func(d *Discovery) { d.Accounting.Symbols[1].Disposition = "bogus" },
+		"duplicate-ledger-ordinal":     func(d *Discovery) { d.SymbolLedger.Entries[1].Ordinal = 0 },
+		"out-of-range-ledger":          func(d *Discovery) { d.SymbolLedger.Entries[1].Ordinal = 2 },
+		"duplicate-ledger-identity":    func(d *Discovery) { d.SymbolLedger.Entries[1].Identity = d.SymbolLedger.Entries[0].Identity },
+		"malformed-ledger-disposition": func(d *Discovery) {
+			d.Accounting.Symbols[1].Disposition = census.SymbolUnsupported
+			d.SymbolLedger.Entries[1].Disposition = "bogus"
+			d.Targets = d.Targets[:1]
+		},
+		"duplicate-target-identity": func(d *Discovery) {
+			d.Targets[1] = cloneTarget(d.Targets[0])
+			d.Targets[1].CensusOrdinal = 1
+		},
+		"duplicate-target-uri": func(d *Discovery) {
+			d.Targets[1].URI = d.Targets[0].URI
+			d.Targets[1].CanonicalSeedV2 = seedPath("f000.go")
+			d.Targets[1].SelectionRange = lsp.Range{}
+		},
+	}
+	for name, mutate := range mutations {
+		t.Run(name, func(t *testing.T) {
+			d := discovery(2)
+			mutate(&d)
+			calls := 0
+			_, err := (Core{
+				Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }),
+				Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) {
+					calls++
+					return AcquiredV5{}, nil
+				}),
+			}).Run(context.Background(), SessionIdentity{"s", 7})
+			if err == nil || calls != 0 {
+				t.Fatalf("ASSERT_INVALID_LEDGER_ZERO_ACQUIRER_CALLS: err=%v calls=%d", err, calls)
+			}
+		})
+	}
+}
+
 func TestBijectionRejectsLedgerAndTargetGaps(t *testing.T) {
 	for _, m := range []func(*Discovery){func(d *Discovery) { d.Targets = d.Targets[:1] }, func(d *Discovery) { d.SymbolLedger.Entries[1].Disposition = "failed" }, func(d *Discovery) { d.Accounting.Symbols[1].Disposition = census.SymbolUnsupported }, func(d *Discovery) { d.Targets[1].CensusOrdinal = 99 }, func(d *Discovery) { d.Targets[1].SelectionRange.Start.Line++ }} {
 		d := discovery(2)

@@ -195,6 +195,7 @@ func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger
 // AssociateBatches binds each target batch to its exact admitted constituent,
 // independent of canonical constituent sorting, and recomputes manifest identity.
 func AssociateBatches(m Manifest, batchConstituents []Constituent) (Manifest, error) {
+	m = cloneManifest(m)
 	if len(batchConstituents) != len(m.Batches) {
 		return Manifest{}, errors.New("batch constituent cardinality mismatch")
 	}
@@ -367,8 +368,28 @@ func setIdentity(m *Manifest) {
 	m.LogicalDigest = digest(identityDomain, b)
 	m.ImmutableSelector = "capture-set:" + strings.TrimPrefix(m.LogicalDigest, "sha256:")
 }
-func cloneLedger(l Ledger) Ledger { l.Entries = append([]LedgerEntry(nil), l.Entries...); return l }
-func rawDigest(b []byte) string   { s := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(s[:]) }
+func cloneManifest(m Manifest) Manifest {
+	m.CrossCaptureCalls = cloneSlice(m.CrossCaptureCalls)
+	m.FileLedger = cloneLedger(m.FileLedger)
+	m.SymbolLedger = cloneLedger(m.SymbolLedger)
+	m.Targets = cloneSlice(m.Targets)
+	m.Constituents = cloneSlice(m.Constituents)
+	m.Batches = cloneSlice(m.Batches)
+	return m
+}
+func cloneLedger(l Ledger) Ledger {
+	l.Entries = cloneSlice(l.Entries)
+	return l
+}
+func cloneSlice[T any](in []T) []T {
+	if in == nil {
+		return nil
+	}
+	out := make([]T, len(in))
+	copy(out, in)
+	return out
+}
+func rawDigest(b []byte) string { s := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(s[:]) }
 func digest(domain string, b []byte) string {
 	return rawDigest(append(append([]byte(domain), 0), b...))
 }

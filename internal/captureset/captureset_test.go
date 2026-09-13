@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -123,6 +125,44 @@ func TestRejectMissingDuplicateReorderedForeignAndBounds(t *testing.T) {
 		t.Fatal("ASSERT_RESOURCE_BOUND")
 	}
 }
+func TestAssociateBatchesNeverMutatesInput(t *testing.T) {
+	ts, cs, f, s := fixture(130)
+	base, err := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeJSON, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before Manifest
+	if err := json.Unmarshal(beforeJSON, &before); err != nil {
+		t.Fatal(err)
+	}
+
+	associated, err := AssociateBatches(base, cs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reflect.DeepEqual(associated.Batches, before.Batches) {
+		t.Fatal("ASSERT_SUCCESS_ASSOCIATION_EXERCISED")
+	}
+	afterJSON, _ := json.Marshal(base)
+	if !reflect.DeepEqual(base, before) || !bytes.Equal(afterJSON, beforeJSON) {
+		t.Fatal("ASSERT_SUCCESS_INPUT_UNCHANGED")
+	}
+
+	bad := append([]Constituent(nil), cs...)
+	bad[1] = Constituent{}
+	if _, err := AssociateBatches(base, bad); err == nil {
+		t.Fatal("ASSERT_LATE_ASSOCIATION_FAILURE")
+	}
+	afterJSON, _ = json.Marshal(base)
+	if !reflect.DeepEqual(base, before) || !bytes.Equal(afterJSON, beforeJSON) {
+		t.Fatal("ASSERT_FAILURE_INPUT_UNCHANGED")
+	}
+}
+
 func TestRedactionHasDistinctIdentity(t *testing.T) {
 	ts, cs, f, s := fixture(64)
 	m, _ := Prepare(ts, cs, f, s, "census.v1", "retain-exact.v1")

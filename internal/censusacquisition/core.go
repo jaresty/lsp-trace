@@ -10,6 +10,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -69,6 +73,7 @@ func (t PreparedTarget) Position() lsp.Position { return t.SelectionRange.Start 
 
 type Discovery struct {
 	Session                  SessionIdentity
+	Workspace                string
 	Accounting               census.Accounting
 	FileLedger, SymbolLedger captureset.Ledger
 	Targets                  []PreparedTarget
@@ -266,11 +271,29 @@ func validateDiscovery(d Discovery) error {
 		acc[e.Ordinal] = e.Disposition
 	}
 	led := map[int]string{}
+	identities := map[string]struct{}{}
 	for _, e := range d.SymbolLedger.Entries {
 		if e.Ordinal < 0 || e.Ordinal >= d.SymbolLedger.Denominator {
 			return errors.New("symbol ledger ordinal out of bounds")
 		}
+		if _, exists := led[e.Ordinal]; exists {
+			return errors.New("duplicate symbol ledger ordinal")
+		}
+		if e.Identity == "" || strings.TrimSpace(e.Identity) != e.Identity {
+			return errors.New("malformed symbol ledger identity")
+		}
+		if _, exists := identities[e.Identity]; exists {
+			return errors.New("duplicate symbol ledger identity")
+		}
+		wantDisposition := string(acc[e.Ordinal])
+		if acc[e.Ordinal] == census.SymbolSelected {
+			wantDisposition = "prepared"
+		}
+		if e.Disposition != wantDisposition {
+			return errors.New("malformed symbol ledger disposition")
+		}
 		led[e.Ordinal] = e.Disposition
+		identities[e.Identity] = struct{}{}
 	}
 	eligible := 0
 	for i := 0; i < d.Accounting.SymbolDenominator; i++ {
@@ -290,6 +313,8 @@ func validateDiscovery(d Discovery) error {
 func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget, error) {
 	out := make([]captureset.Target, len(d.Targets))
 	by := map[int]PreparedTarget{}
+	seedIdentities := make(map[string]struct{}, len(d.Targets))
+	targetURIs := make(map[string]struct{}, len(d.Targets))
 	accounting := make(map[int]census.SymbolDisposition, len(d.Accounting.Symbols))
 	ledger := make(map[int]string, len(d.SymbolLedger.Entries))
 	for _, e := range d.Accounting.Symbols {
@@ -305,16 +330,24 @@ func canonicalTargets(d Discovery) ([]captureset.Target, map[int]PreparedTarget,
 		if _, ok := by[t.CensusOrdinal]; ok {
 			return nil, nil, errors.New("duplicate target ordinal")
 		}
-		if err := reconcileSeed(t); err != nil {
+		if _, ok := seedIdentities[string(t.CanonicalSeedV2)]; ok {
+			return nil, nil, errors.New("duplicate target identity")
+		}
+		if _, ok := targetURIs[t.URI]; ok {
+			return nil, nil, errors.New("duplicate target URI")
+		}
+		if err := reconcileSeed(t, d.Workspace); err != nil {
 			return nil, nil, err
 		}
+		seedIdentities[string(t.CanonicalSeedV2)] = struct{}{}
+		targetURIs[t.URI] = struct{}{}
 		by[t.CensusOrdinal] = cloneTarget(t)
 		out[i] = captureset.Target{CensusOrdinal: t.CensusOrdinal, CanonicalSeedV2: string(t.CanonicalSeedV2), CanonicalSeedV2SHA256: rawDigest(t.CanonicalSeedV2)}
 	}
 	out = captureset.OrderTargets(out)
 	return out, by, nil
 }
-func reconcileSeed(t PreparedTarget) error {
+func reconcileSeed(t PreparedTarget, workspace string) error {
 	var f struct {
 		SchemaVersion string `json:"schema_version"`
 		Seeds         []struct {
@@ -322,10 +355,51 @@ func reconcileSeed(t PreparedTarget) error {
 			Line, Column uint32
 		} `json:"seeds"`
 	}
-	if json.Unmarshal(t.CanonicalSeedV2, &f) != nil || f.SchemaVersion != "lsp-trace.seeds.v2" || len(f.Seeds) != 1 || f.Seeds[0].Type != "position" || f.Seeds[0].Line != t.Position().Line+1 || f.Seeds[0].Column != t.Position().Character+1 || !strings.HasSuffix(strings.TrimPrefix(t.URI, "file://"), f.Seeds[0].Path) {
+	if json.Unmarshal(t.CanonicalSeedV2, &f) != nil || f.SchemaVersion != "lsp-trace.seeds.v2" || len(f.Seeds) != 1 || f.Seeds[0].Type != "position" || f.Seeds[0].Line != t.Position().Line+1 || f.Seeds[0].Column != t.Position().Character+1 {
+		return errors.New("canonical seed URI/selection start mismatch")
+	}
+	relative, err := canonicalWorkspaceRelativePath(workspace, t.URI)
+	if err != nil || !platformPathEqual(relative, f.Seeds[0].Path) {
 		return errors.New("canonical seed URI/selection start mismatch")
 	}
 	return nil
+}
+
+func canonicalWorkspaceRelativePath(workspace, rawURI string) (string, error) {
+	if workspace == "" || !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace {
+		return "", errors.New("canonical absolute workspace required")
+	}
+	u, err := url.Parse(rawURI)
+	if err != nil || u.Scheme != "file" || u.Opaque != "" || u.User != nil || u.Host != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return "", errors.New("strict local file URI required")
+	}
+	canonicalURI := (&url.URL{Scheme: "file", Path: u.Path}).String()
+	if rawURI != canonicalURI {
+		return "", errors.New("noncanonical file URI")
+	}
+	targetPath := filepath.FromSlash(u.Path)
+	if runtime.GOOS == "windows" && len(targetPath) >= 3 && targetPath[0] == filepath.Separator && targetPath[2] == ':' {
+		targetPath = targetPath[1:]
+	}
+	if !filepath.IsAbs(targetPath) || filepath.Clean(targetPath) != targetPath {
+		return "", errors.New("canonical absolute target required")
+	}
+	relative, err := filepath.Rel(workspace, targetPath)
+	if err != nil || filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("target outside workspace")
+	}
+	relative = filepath.ToSlash(relative)
+	if relative == "." || relative == "" || path.IsAbs(relative) || path.Clean(relative) != relative || relative == ".." || strings.HasPrefix(relative, "../") {
+		return "", errors.New("noncanonical workspace-relative target")
+	}
+	return relative, nil
+}
+
+func platformPathEqual(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 func combineSeeds(ts []PreparedTarget) ([]byte, error) {
 	var all []json.RawMessage
