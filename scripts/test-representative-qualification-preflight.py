@@ -39,6 +39,38 @@ def invalid_matrix(mutator, expected):
         require(first.stderr == second.stderr and first.stderr.startswith("preflight error: invalid matrix:"), expected+"_DIAGNOSTIC")
         require("Traceback" not in first.stderr and not first.stdout, expected+"_CONTROLLED")
 
+class FaultOps:
+    def __init__(self, method, *, fail_at=1, fail_count=1, zero_write=False):
+        self.method = method
+        self.fail_at = fail_at
+        self.fail_count = fail_count
+        self.zero_write = zero_write
+        self.calls = 0
+
+    def __getattr__(self, name):
+        original = getattr(os, name)
+        if name != self.method:
+            return original
+        def injected(*args, **kwargs):
+            self.calls += 1
+            if self.zero_write and self.calls == self.fail_at:
+                return 0
+            if self.fail_at <= self.calls < self.fail_at + self.fail_count:
+                if name == "close":
+                    original(*args, **kwargs)
+                raise OSError(5, "private injected detail")
+            return original(*args, **kwargs)
+        return injected
+
+def injected_failure(parent, method, *, fail_at=1, fail_count=1, zero_write=False, basename=None):
+    target = parent / (basename or f"{method}.json")
+    try:
+        PREPARER.safe_publish(target, "report\n", _ops=FaultOps(method, fail_at=fail_at, fail_count=fail_count, zero_write=zero_write))
+        error = None
+    except PREPARER.PreflightError as exc:
+        error = str(exc)
+    return target, error
+
 raw1, base = run(); raw2, _ = run()
 require(raw1 == raw2, "ASSERT_PREFLIGHT_DETERMINISTIC_BYTES")
 require(base["installed_state_evidence"] == {"observed": False, "custody": "UNKNOWN"}, "ASSERT_INSTALLED_ABSENT_UNKNOWN")
@@ -76,8 +108,23 @@ with tempfile.TemporaryDirectory(prefix="private-qualification-") as tmp:
     mismatch = invoke(("--installed-state", evidence))
     require(mismatch.returncode == 2 and "binary.revision" in mismatch.stderr, "ASSERT_INSTALLED_REVISION_UNPARSEABLE")
 
+    empty_output = invoke(("--output", ""))
+    require(empty_output.returncode == 2 and not empty_output.stdout, "ASSERT_OUTPUT_EMPTY_REJECTED")
+    require(empty_output.stderr == "preflight error: unsafe output: basename is required\n", "ASSERT_OUTPUT_EMPTY_DETERMINISTIC")
+
     output = tmp_path / "report.json"; result = invoke(("--output", output))
     require(result.returncode == 0 and output.is_file() and (output.stat().st_mode & 0o777) == 0o600, "ASSERT_PRIVATE_ATOMIC_OUTPUT")
+    with tempfile.TemporaryDirectory(prefix="relative-output-", dir=ROOT) as relative_tmp:
+        relative_path = Path(relative_tmp) / "résumé-安全.json"
+        relative = invoke(("--output", relative_path.relative_to(ROOT)))
+        require(relative.returncode == 0 and relative_path.is_file(), "ASSERT_OUTPUT_RELATIVE_UNICODE_BASENAME")
+    umask_dir = tmp_path / "umask"; umask_dir.mkdir()
+    old_umask = os.umask(0o0777)
+    try:
+        restrictive = invoke(("--output", umask_dir / "report.json"))
+    finally:
+        os.umask(old_umask)
+    require(restrictive.returncode == 0 and (umask_dir / "report.json").stat().st_mode & 0o777 == 0, "ASSERT_OUTPUT_RESTRICTIVE_UMASK")
     existing = invoke(("--output", output)); require(existing.returncode == 2 and "target already exists" in existing.stderr, "ASSERT_OUTPUT_EXISTING_REJECTED")
     link = tmp_path / "link.json"; link.symlink_to(output)
     symlink = invoke(("--output", link)); require(symlink.returncode == 2 and "target already exists" in symlink.stderr and link.is_symlink(), "ASSERT_OUTPUT_SYMLINK_REJECTED")
@@ -112,8 +159,30 @@ with tempfile.TemporaryDirectory(prefix="private-qualification-") as tmp:
     except PREPARER.PreflightError as exc:
         competitor_rejected = "target already exists" in str(exc)
     require(competitor_rejected and competitor.read_text(encoding="utf-8") == "competitor\n", "ASSERT_OUTPUT_COMPETITOR_RACE_PRESERVED")
-    require(not list(tmp_path.rglob(".representative-preflight-*")), "ASSERT_OUTPUT_TEMP_CLEANUP")
-    require(all("Traceback" not in r.stderr for r in (existing, symlink, parent_symlink, early_symlink, missing, traversal, hidden, root)), "ASSERT_OUTPUT_NO_TRACEBACK")
+
+    for method in ("open", "fstat", "write", "fsync", "link", "close"):
+        target, message = injected_failure(tmp_path, method, basename=f"injected-{method}.json")
+        require(message is not None and "private injected detail" not in message and str(tmp_path) not in message, "ASSERT_OUTPUT_"+method.upper()+"_CONTROLLED")
+        require(not target.exists(), "ASSERT_OUTPUT_"+method.upper()+"_NO_FINAL")
+    zero_target, zero_message = injected_failure(tmp_path, "write", zero_write=True, basename="zero-write.json")
+    require(zero_message == "unsafe output: write made no progress" and not zero_target.exists(), "ASSERT_OUTPUT_ZERO_WRITE_CONTROLLED")
+
+    committed_target, committed_message = injected_failure(tmp_path, "unlink", fail_at=1, fail_count=2, basename="committed.json")
+    require(committed_target.read_text(encoding="utf-8") == "report\n", "ASSERT_OUTPUT_UNLINK_FAILURE_FINAL_PRESERVED")
+    require(committed_message == "unsafe output: publication committed; temporary cleanup incomplete", "ASSERT_OUTPUT_UNLINK_FAILURE_SAFE_ORPHAN")
+    require(str(tmp_path) not in committed_message and ".representative-preflight-" not in committed_message and "rollback" not in committed_message, "ASSERT_OUTPUT_UNLINK_FAILURE_PRIVATE")
+
+    before_fds = len(os.listdir("/dev/fd"))
+    for method in ("fsync", "close"):
+        for index in range(16):
+            _, repeated_message = injected_failure(tmp_path, method, basename=f"repeat-{method}-{index}.json")
+            require(repeated_message is not None, "ASSERT_OUTPUT_REPEATED_FAILURE_CONTROLLED")
+    require(len(os.listdir("/dev/fd")) <= before_fds + 1, "ASSERT_OUTPUT_REPEATED_FAILURE_FD_STABLE")
+
+    orphans = list(tmp_path.rglob(".representative-preflight-*"))
+    require(len(orphans) == 1 and orphans[0].is_file(), "ASSERT_OUTPUT_TEMP_CLEANUP_OR_SAFE_ORPHAN")
+    require(output.is_file() and competitor.read_text(encoding="utf-8") == "competitor\n", "ASSERT_OUTPUT_NO_COMPETITOR_OR_FINAL_DELETION")
+    require(all("Traceback" not in r.stderr for r in (empty_output, existing, symlink, parent_symlink, early_symlink, missing, traversal, hidden, root)), "ASSERT_OUTPUT_NO_TRACEBACK")
 
 invalid_matrix(lambda m: m.update({"unknown": 1}), "ASSERT_MATRIX_UNKNOWN")
 invalid_matrix(lambda m: m["operations"].append({"number":999}), "ASSERT_MATRIX_OP999")

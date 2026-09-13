@@ -181,7 +181,29 @@ def _same_identity(left, right):
     return (left.st_dev, left.st_ino, stat.S_IFMT(left.st_mode)) == (right.st_dev, right.st_ino, stat.S_IFMT(right.st_mode))
 
 
-def _open_parent_chain(target):
+def _close_descriptors(ops, descriptors):
+    failed = False
+    for descriptor in reversed(descriptors):
+        try:
+            ops.close(descriptor)
+        except OSError:
+            failed = True
+    return failed
+
+
+def _unlink_owned_temp(ops, parent_fd, temporary):
+    for _ in range(2):
+        try:
+            ops.unlink(temporary, dir_fd=parent_fd)
+            return True
+        except FileNotFoundError:
+            return True
+        except OSError:
+            continue
+    return False
+
+
+def _open_parent_chain(target, ops):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
@@ -190,50 +212,61 @@ def _open_parent_chain(target):
     descriptors = []
     identities = []
     try:
-        root_fd = os.open(anchor, flags)
+        root_fd = ops.open(anchor, flags)
         descriptors.append(root_fd)
-        identities.append(os.fstat(root_fd))
+        identities.append(ops.fstat(root_fd))
         current_fd = root_fd
         for component in components:
             if component in {"", ".", ".."}:
                 fail("unsafe output: traversal is not allowed")
             try:
-                current_fd = os.open(component, flags, dir_fd=current_fd)
+                current_fd = ops.open(component, flags, dir_fd=current_fd)
             except OSError:
-                fail(f"unsafe output: parent component rejected: {component}")
+                fail("unsafe output: parent component rejected")
             descriptors.append(current_fd)
-            identities.append(os.fstat(current_fd))
+            identities.append(ops.fstat(current_fd))
         return descriptors, identities, components
-    except Exception:
-        for descriptor in reversed(descriptors):
-            os.close(descriptor)
+    except PreflightError:
+        close_failed = _close_descriptors(ops, descriptors)
+        if close_failed:
+            fail("unsafe output: descriptor cleanup failed")
         raise
+    except OSError:
+        _close_descriptors(ops, descriptors)
+        fail("unsafe output: parent access failed")
 
 
-def _verify_parent_chain(root_fd, components, identities):
+def _verify_parent_chain(root_fd, components, identities, ops):
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     verification = []
     current_fd = root_fd
+    failure = None
     try:
-        if not _same_identity(os.fstat(root_fd), identities[0]):
+        if not _same_identity(ops.fstat(root_fd), identities[0]):
             fail("unsafe output: parent identity changed")
         for index, component in enumerate(components, 1):
             try:
-                current_fd = os.open(component, flags, dir_fd=current_fd)
+                current_fd = ops.open(component, flags, dir_fd=current_fd)
             except OSError:
                 fail("unsafe output: parent identity changed")
             verification.append(current_fd)
-            if not _same_identity(os.fstat(current_fd), identities[index]):
+            if not _same_identity(ops.fstat(current_fd), identities[index]):
                 fail("unsafe output: parent identity changed")
-    finally:
-        for descriptor in reversed(verification):
-            os.close(descriptor)
+    except PreflightError as exc:
+        failure = exc
+    except OSError:
+        failure = PreflightError("unsafe output: parent verification failed")
+    if _close_descriptors(ops, verification):
+        failure = PreflightError("unsafe output: descriptor cleanup failed")
+    if failure is not None:
+        raise failure
 
 
-def safe_publish(path, encoded, _test_hook=None):
+def safe_publish(path, encoded, _test_hook=None, _ops=None):
     _publication_primitives()
+    ops = _ops or os
     raw_target = os.fspath(path)
     target = Path(raw_target)
     raw_parts = raw_target.split(os.sep)
@@ -246,14 +279,17 @@ def safe_publish(path, encoded, _test_hook=None):
     if target.name.startswith("."):
         fail("unsafe output: basename must not start with dot")
 
-    descriptors, identities, components = _open_parent_chain(target)
-    parent_fd = descriptors[-1]
+    descriptors = []
     temporary = None
     file_fd = None
+    committed = False
+    failure = None
     try:
+        descriptors, identities, components = _open_parent_chain(target, ops)
+        parent_fd = descriptors[-1]
         if _test_hook:
             _test_hook("parents_pinned")
-        _verify_parent_chain(descriptors[0], components, identities)
+        _verify_parent_chain(descriptors[0], components, identities, ops)
 
         create_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
         if hasattr(os, "O_CLOEXEC"):
@@ -261,45 +297,65 @@ def safe_publish(path, encoded, _test_hook=None):
         for _ in range(128):
             candidate = ".representative-preflight-" + secrets.token_hex(16)
             try:
-                file_fd = os.open(candidate, create_flags, 0o600, dir_fd=parent_fd)
+                file_fd = ops.open(candidate, create_flags, 0o600, dir_fd=parent_fd)
                 temporary = candidate
                 break
             except FileExistsError:
                 continue
-            except OSError as exc:
-                fail(f"unsafe output: temporary creation failed ({exc.__class__.__name__})")
+            except OSError:
+                fail("unsafe output: temporary creation failed")
         if file_fd is None:
             fail("unsafe output: temporary name exhaustion")
-        if not stat.S_ISREG(os.fstat(file_fd).st_mode):
+        if not stat.S_ISREG(ops.fstat(file_fd).st_mode):
             fail("unsafe output: temporary file is not regular")
         payload = encoded.encode("utf-8")
         offset = 0
         while offset < len(payload):
-            offset += os.write(file_fd, payload[offset:])
-        os.fsync(file_fd)
-        os.close(file_fd)
+            written = ops.write(file_fd, payload[offset:])
+            if written == 0:
+                fail("unsafe output: write made no progress")
+            offset += written
+        ops.fsync(file_fd)
+        descriptor = file_fd
         file_fd = None
+        try:
+            ops.close(descriptor)
+        except OSError:
+            fail("unsafe output: file close failed")
 
         if _test_hook:
             _test_hook("before_publish")
         try:
-            os.link(temporary, target.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
+            ops.link(temporary, target.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd, follow_symlinks=False)
         except OSError as exc:
             if exc.errno == errno.EEXIST:
                 fail("unsafe output: target already exists")
-            fail(f"unsafe output: publication failed ({exc.__class__.__name__})")
-        os.unlink(temporary, dir_fd=parent_fd)
+            fail("unsafe output: publication failed")
+        committed = True
+        if not _unlink_owned_temp(ops, parent_fd, temporary):
+            temporary = None
+            fail("unsafe output: publication committed; temporary cleanup incomplete")
         temporary = None
-    finally:
-        if file_fd is not None:
-            os.close(file_fd)
-        if temporary is not None:
-            try:
-                os.unlink(temporary, dir_fd=parent_fd)
-            except FileNotFoundError:
-                pass
-        for descriptor in reversed(descriptors):
-            os.close(descriptor)
+    except PreflightError as exc:
+        failure = exc
+    except (OSError, ValueError):
+        failure = PreflightError("unsafe output: publication operation failed")
+
+    if file_fd is not None:
+        descriptor = file_fd
+        file_fd = None
+        try:
+            ops.close(descriptor)
+        except OSError:
+            failure = PreflightError("unsafe output: file cleanup failed")
+    if temporary is not None:
+        if not _unlink_owned_temp(ops, descriptors[-1], temporary):
+            failure = PreflightError("unsafe output: publication committed; temporary cleanup incomplete" if committed else "unsafe output: temporary cleanup incomplete")
+        temporary = None
+    if _close_descriptors(ops, descriptors):
+        failure = PreflightError("unsafe output: descriptor cleanup failed")
+    if failure is not None:
+        raise failure
 
 def main():
     parser = argparse.ArgumentParser()
@@ -309,10 +365,13 @@ def main():
     args = parser.parse_args()
     try:
         encoded = json.dumps(build_report(args.matrix, args.installed_state), sort_keys=True, separators=(",", ":")) + "\n"
-        if args.output: safe_publish(args.output, encoded)
+        if args.output is not None: safe_publish(args.output, encoded)
         else: print(encoded, end="")
     except PreflightError as exc:
         print(f"preflight error: {exc}", file=sys.stderr)
+        return 2
+    except (OSError, ValueError):
+        print("preflight error: publication operation failed", file=sys.stderr)
         return 2
     return 0
 
