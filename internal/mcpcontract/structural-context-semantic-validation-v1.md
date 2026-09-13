@@ -8,7 +8,9 @@ Operation 35 (`lsp_trace_v1_structural_context`) remains unregistered and unadve
 
 The draft schemas enforce closed object shapes, discriminators, enums, constants, scalar ranges, opaque identifier syntax, and COMPLETE/EMPTY-only success envelopes. JSON Schema 2020-12 does **not** establish the cross-field relations below. Schema acceptance must never be described as semantic closure.
 
-`ValidateFutureStructuralSemanticsV1` is the current internal pure reference validator. It is deliberately not wired into MCP registration or transport.
+`ValidateFutureStructuralSemanticsV1` is the current internal pure reference validator. It is deliberately not wired into MCP registration or transport. It accepts direct in-memory `map[string]any` values without assuming prior schema validation and fails closed on missing or unknown fields, nil or wrong-typed objects and entries, non-integer numeric representations, duplicate identifiers, out-of-range values, oversized collections, and checked-arithmetic overflow.
+
+Validation precedence is fixed: input closed shape and scalar bounds; result closed shape, constants, and policy bounds; analysis shape, identifier uniqueness, endpoint/reference membership, and directional depth; accounting closed shape, exact reason maps, and checked equations; then the COMPLETE/EMPTY relation. Failures use fixed `semantic-v1` error categories and do not include caller-supplied values.
 
 ## Mandatory relations
 

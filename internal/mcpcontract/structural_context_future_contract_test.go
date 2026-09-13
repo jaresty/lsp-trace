@@ -3,6 +3,7 @@ package mcpcontract
 import (
 	"bytes"
 	"encoding/json"
+	"math"
 	"os"
 	"regexp"
 	"strings"
@@ -235,6 +236,123 @@ func TestFutureStructuralSchemaAcceptsRelationalCounterexamplesSemanticV1Rejects
 	})
 	if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), validFutureResult()); err != nil {
 		t.Fatalf("semantic-v1 rejected valid fixture: %v", err)
+	}
+}
+
+func TestFutureStructuralSemanticValidatorRejectsAdversarialInMemoryValues(t *testing.T) {
+	for name, input := range map[string][2]map[string]any{"nil_input": {nil, validFutureResult()}, "nil_result": {validFutureInput(), nil}} {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() != nil {
+					t.Fatal("validator panicked")
+				}
+			}()
+			if err := ValidateFutureStructuralSemanticsV1(input[0], input[1]); err != errFutureShape {
+				t.Fatalf("got %v, want shape sentinel", err)
+			}
+		})
+	}
+	cases := map[string]func(map[string]any, map[string]any){
+		"nil_node":   func(_ map[string]any, r map[string]any) { r["analysis"].(map[string]any)["nodes"] = []any{nil} },
+		"wrong_node": func(_ map[string]any, r map[string]any) { r["analysis"].(map[string]any)["nodes"] = []any{"node"} },
+		"nil_edge":   func(_ map[string]any, r map[string]any) { r["analysis"].(map[string]any)["edges"] = []any{nil} },
+		"wrong_edge": func(_ map[string]any, r map[string]any) { r["analysis"].(map[string]any)["edges"] = []any{false} },
+		"duplicate_node": func(_ map[string]any, r map[string]any) {
+			a := r["analysis"].(map[string]any)
+			a["nodes"] = append(a["nodes"].([]any), a["nodes"].([]any)[0])
+		},
+		"duplicate_edge": func(_ map[string]any, r map[string]any) {
+			a := r["analysis"].(map[string]any)
+			a["edges"] = append(a["edges"].([]any), a["edges"].([]any)[0])
+		},
+		"empty_node_id": func(_ map[string]any, r map[string]any) {
+			r["analysis"].(map[string]any)["nodes"].([]any)[0].(map[string]any)["node_id"] = ""
+		},
+		"unknown_node_key": func(_ map[string]any, r map[string]any) {
+			r["analysis"].(map[string]any)["nodes"].([]any)[0].(map[string]any)["private"] = true
+		},
+		"missing_edge_id": func(_ map[string]any, r map[string]any) {
+			delete(r["analysis"].(map[string]any)["edges"].([]any)[0].(map[string]any), "edge_id")
+		},
+		"float_count": func(_ map[string]any, r map[string]any) {
+			r["accounting"].(map[string]any)["node_observed"] = float64(1)
+		},
+		"bool_count":   func(_ map[string]any, r map[string]any) { r["accounting"].(map[string]any)["node_observed"] = true },
+		"string_count": func(_ map[string]any, r map[string]any) { r["accounting"].(map[string]any)["node_observed"] = "1" },
+		"negative_count": func(_ map[string]any, r map[string]any) {
+			r["accounting"].(map[string]any)["node_observed"] = int64(-1)
+		},
+		"uint_overflow": func(_ map[string]any, r map[string]any) {
+			r["accounting"].(map[string]any)["node_observed"] = uint64(math.MaxUint64)
+		},
+		"sum_overflow": func(_ map[string]any, r map[string]any) {
+			a := r["accounting"].(map[string]any)
+			a["node_observed"], a["node_admitted"], a["node_rejected"] = int64(math.MaxInt64), int64(math.MaxInt64), int64(math.MaxInt64)
+		},
+		"too_many_nodes": func(_ map[string]any, r map[string]any) {
+			r["analysis"].(map[string]any)["nodes"] = make([]any, futureMaxNodes+1)
+		},
+		"too_many_edges": func(_ map[string]any, r map[string]any) {
+			r["analysis"].(map[string]any)["edges"] = make([]any, futureMaxEdges+1)
+		},
+		"oversized_session": func(i map[string]any, _ map[string]any) { i["session_id"] = strings.Repeat("s", 257) },
+		"oversized_symbol":  func(i map[string]any, _ map[string]any) { i["symbol"] = strings.Repeat("s", 1025) },
+		"wrong_depth_type":  func(i map[string]any, _ map[string]any) { i["down_depth"] = 1.0 },
+		"depth_bound":       func(i map[string]any, _ map[string]any) { i["down_depth"] = 65 },
+		"resource_bound":    func(i map[string]any, _ map[string]any) { i["timeout_ms"] = 60001 },
+		"missing_input":     func(i map[string]any, _ map[string]any) { delete(i, "generation") },
+		"unknown_input":     func(i map[string]any, _ map[string]any) { i["private"] = "secret" },
+		"unknown_reason": func(_ map[string]any, r map[string]any) {
+			r["accounting"].(map[string]any)["node_omission_reasons"].(map[string]any)["OTHER"] = 0
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			i, r := validFutureInput(), validFutureResult()
+			mutate(i, r)
+			for call := 0; call < 3; call++ {
+				func() {
+					defer func() {
+						if recovered := recover(); recovered != nil {
+							t.Fatalf("validator panicked")
+						}
+					}()
+					err := ValidateFutureStructuralSemanticsV1(i, r)
+					if err == nil {
+						t.Fatal("adversarial value accepted")
+					}
+					if !strings.HasPrefix(err.Error(), "semantic-v1:") || strings.Contains(err.Error(), "secret") {
+						t.Fatalf("unstable or value-echoing error: %v", err)
+					}
+				}()
+			}
+		})
+	}
+}
+
+func TestFutureStructuralSemanticValidatorRejectsDuplicateImpactSets(t *testing.T) {
+	for _, key := range []string{"reachable_node_ids", "witness_edge_ids"} {
+		t.Run(key, func(t *testing.T) {
+			i, r := validFutureInput(), validFutureResult()
+			i["analysis"] = map[string]any{"kind": "IMPACT", "direction": "OUTGOING", "depth": 1}
+			r["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+			a := r["analysis"].(map[string]any)
+			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
+			delete(a, "incoming_count")
+			delete(a, "outgoing_count")
+			delete(a, "frontier_count")
+			if key == "reachable_node_ids" {
+				a[key] = []any{r["target_node_id"], r["target_node_id"]}
+				a["witness_edge_ids"] = []any{}
+			} else {
+				id := a["edges"].([]any)[0].(map[string]any)["edge_id"]
+				a[key] = []any{id, id}
+				a["reachable_node_ids"] = []any{}
+			}
+			if err := ValidateFutureStructuralSemanticsV1(i, r); err != errFutureDuplicate {
+				t.Fatalf("got %v, want duplicate sentinel", err)
+			}
+		})
 	}
 }
 
