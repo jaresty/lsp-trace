@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -28,15 +30,15 @@ type parityProcess struct {
 	out     *io.PipeWriter
 	stdout  *io.PipeReader
 	uri     string
-	empty   bool
+	hang    bool
 	mu      sync.Mutex
 	methods []string
 }
 
-func newParityProcess(uri string, empty bool) *parityProcess {
+func newParityProcess(uri string, hang bool) *parityProcess {
 	in, stdin := io.Pipe()
 	stdout, out := io.Pipe()
-	p := &parityProcess{in: in, stdin: stdin, out: out, stdout: stdout, uri: uri, empty: empty}
+	p := &parityProcess{in: in, stdin: stdin, out: out, stdout: stdout, uri: uri, hang: hang}
 	go p.serve()
 	return p
 }
@@ -52,20 +54,21 @@ func (p *parityProcess) serve() {
 		p.mu.Lock()
 		p.methods = append(p.methods, msg.Method)
 		p.mu.Unlock()
+		if p.hang && (msg.Method == "textDocument/prepareCallHierarchy" || msg.Method == "callHierarchy/outgoingCalls") {
+			continue
+		}
 		result := json.RawMessage(`[]`)
 		switch msg.Method {
 		case "initialize":
 			result = json.RawMessage(`{"capabilities":{"callHierarchyProvider":true,"documentSymbolProvider":true,"positionEncoding":"utf-16"}}`)
-		case "initialized", "textDocument/didOpen", "textDocument/didChange":
+		case "initialized", "textDocument/didOpen", "textDocument/didChange", "$/cancelRequest":
 			continue
 		case "textDocument/prepareCallHierarchy":
 			result = p.items()
 		case "callHierarchy/outgoingCalls":
-			if !p.empty {
-				var items []any
-				_ = json.Unmarshal(p.items(), &items)
-				result, _ = json.Marshal([]any{map[string]any{"to": items[0], "fromRanges": []any{map[string]any{"start": map[string]int{"line": 1, "character": 2}, "end": map[string]int{"line": 1, "character": 3}}}}})
-			}
+			var items []any
+			_ = json.Unmarshal(p.items(), &items)
+			result, _ = json.Marshal([]any{map[string]any{"to": items[0], "fromRanges": []any{map[string]any{"start": map[string]int{"line": 1, "character": 2}, "end": map[string]int{"line": 1, "character": 3}}}}})
 		case "callHierarchy/incomingCalls":
 			result = json.RawMessage(`[]`)
 		case "shutdown":
@@ -88,6 +91,11 @@ func (p *parityProcess) items() json.RawMessage {
 	raw, _ := json.Marshal([]any{item})
 	return raw
 }
+func (p *parityProcess) Methods() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string{}, p.methods...)
+}
 func (p *parityProcess) Stdin() io.WriteCloser { return p.stdin }
 func (p *parityProcess) Stdout() io.ReadCloser { return p.stdout }
 func (p *parityProcess) Teardown(context.Context) managedprocess.TeardownObservation {
@@ -102,12 +110,14 @@ func (p *parityProcess) Close() managedprocess.ResourceObservation {
 }
 
 type parityStarter struct {
-	uri   string
-	empty bool
+	uri     string
+	hang    bool
+	process *parityProcess
 }
 
-func (s parityStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
-	return newParityProcess(s.uri, s.empty), managedprocess.StartObservation{Kind: managedprocess.StartStarted}
+func (s *parityStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	s.process = newParityProcess(s.uri, s.hang)
+	return s.process, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
 
 type countingTraceExecutor struct {
@@ -121,43 +131,93 @@ func (e *countingTraceExecutor) Execute(ctx context.Context, r operation.Request
 }
 
 type parityObservation struct {
-	delegated string
-	outcome   any
-	isError   any
-	calls     int
-	methods   int
+	delegated             string
+	outcome, status, code string
+	diagnostics           []string
+	isError               bool
+	calls                 int
+	methods               []string
+	lifecycle             []string
 }
 
-func runRealTraceTransport(t *testing.T, gateway, empty bool) parityObservation {
+type parityCase struct {
+	name                              string
+	alias                             bool
+	ready                             bool
+	omitGeneration                    bool
+	stale                             bool
+	finalDrift                        bool
+	hang                              bool
+	cancel                            bool
+	requestTimeout                    int
+	wantOutcome, wantStatus, wantCode string
+	wantError                         bool
+	wantMethods                       []string
+	wantLifecycle                     []string
+	wantDiagnostics                   []string
+}
+
+var operation33ParityDimensions = []string{"delegated-envelope-bytes", "outcome", "operation-status", "code", "diagnostics", "isError", "executor-calls", "lsp-methods", "lifecycle-state-failure"}
+
+var operation33ParityCases = []parityCase{
+	{name: "alias-resolution", alias: true, ready: true, wantOutcome: "COMPLETE", wantStatus: "SUCCEEDED", wantMethods: []string{"initialize", "initialized", "textDocument/didOpen", "textDocument/prepareCallHierarchy", "callHierarchy/outgoingCalls"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:", "document:READY:", "request:READY:", "response:READY:", "request:READY:", "response:READY:"}},
+	{name: "non-ready-session", alias: true, omitGeneration: true, wantOutcome: "DOMAIN_ERROR", wantStatus: "FAILED", wantCode: "SESSION_NOT_READY", wantError: true, wantMethods: []string{}, wantLifecycle: []string{"startup:INITIALIZING:"}},
+	{name: "missing-generation", ready: true, omitGeneration: true, wantOutcome: "COMPLETE", wantStatus: "SUCCEEDED", wantMethods: []string{"initialize", "initialized", "textDocument/didOpen", "textDocument/prepareCallHierarchy", "callHierarchy/outgoingCalls"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:", "document:READY:", "request:READY:", "response:READY:", "request:READY:", "response:READY:"}},
+	{name: "stale-generation", ready: true, stale: true, wantOutcome: "DOMAIN_ERROR", wantStatus: "FAILED", wantCode: "STALE_GENERATION", wantError: true, wantMethods: []string{"initialize", "initialized"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:"}},
+	{name: "final-ready-drift", ready: true, finalDrift: true, wantOutcome: "DOMAIN_ERROR", wantStatus: "FAILED", wantCode: "LIFECYCLE_CONFLICT", wantError: true, wantMethods: []string{"initialize", "initialized"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:", "crash:CRASHED:SESSION_CRASHED"}},
+	{name: "request-timeout", ready: true, hang: true, requestTimeout: 5, wantOutcome: "PARTIAL", wantStatus: "PARTIAL", wantMethods: []string{"initialize", "initialized", "textDocument/didOpen", "textDocument/prepareCallHierarchy", "$/cancelRequest"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:", "document:READY:", "request:READY:", "cancel:READY:REQUEST_CANCELLED", "response:POISONED:REQUEST_TIMEOUT"}},
+	{name: "caller-cancellation", ready: true, cancel: true, wantOutcome: "DOMAIN_ERROR", wantStatus: "FAILED", wantCode: "REQUEST_CANCELLED", wantError: true, wantMethods: []string{"initialize", "initialized"}, wantLifecycle: []string{"startup:INITIALIZING:", "readiness:READY:"}},
+}
+
+func runOperation33ParityRoute(t *testing.T, workspace string, tc parityCase, gateway bool) parityObservation {
 	t.Helper()
-	workspace := t.TempDir()
 	path := filepath.Join(workspace, "code.go")
-	if err := os.WriteFile(path, []byte("package p\nfunc F() {}\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	uri := (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
 	profile, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "trace-parity", Workspace: workspace, Profile: "fixture", EnvironmentReference: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 8, MaxChildren: 2, MaxCancels: 8, MaxTombstones: 8, MaxObservations: 128, MaxOperations: 8}, Starter: parityStarter{uri: uri, empty: empty}})
+	starter := &parityStarter{uri: uri, hang: tc.hang}
+	var manager *sessionruntime.Manager
+	var started sessionruntime.StartResult
+	config := sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 8, MaxChildren: 2, MaxCancels: 8, MaxTombstones: 8, MaxObservations: 128, MaxOperations: 8}, Starter: starter}
+	if tc.finalDrift {
+		config.DocumentFinalHook = func() { manager.ObserveCrash(started.SessionID, started.Generation) }
+	}
+	manager, err = sessionruntime.New(config)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
-	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(profile), BootstrapAlias: "trace-parity", LanguageID: "go"})
-	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
-	ready, ok := manager.WaitReadiness(context.Background(), pending.ID)
-	if !ok || ready.State != sessionruntime.ReadinessReady {
-		t.Fatalf("ASSERT_TRACE_PARITY_READY: %+v", ready)
+	started = manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(profile), BootstrapAlias: "trace-parity", LanguageID: "go"})
+	if tc.ready {
+		pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+		ready, ok := manager.WaitReadiness(context.Background(), pending.ID)
+		if !ok || ready.State != sessionruntime.ReadinessReady {
+			t.Fatalf("ASSERT_TRACE_PARITY_READY: %+v", ready)
+		}
 	}
-	exec := &countingTraceExecutor{delegate: &traceExecutor{runtime: manager}}
+	runtime := newHostSelectorRuntime(manager, []bootstrapSession{{Alias: "trace-alias", SessionID: started.SessionID}})
+	exec := &countingTraceExecutor{delegate: &traceExecutor{runtime: runtime}}
 	server := &mcp.Server{Registry: mcp.NewRegistryWithProfile(false, mcp.ToolProfileFull), Executors: map[mcp.ExecutorFamily]mcp.Executor{mcp.TraceExecutorFamily: exec}}
-	depth := float64(1)
-	if empty {
-		depth = 0
+	id := started.SessionID
+	if tc.alias {
+		id = "trace-alias"
 	}
-	args := map[string]any{"session_id": started.SessionID, "generation": started.Generation, "uri": uri, "line": float64(1), "character": float64(5), "down_depth": depth, "up_depth": float64(0)}
+	generation := started.Generation
+	if tc.omitGeneration {
+		generation = 0
+	}
+	if tc.stale {
+		generation++
+	}
+	args := map[string]any{"session_id": id, "uri": uri, "line": float64(1), "character": float64(5), "down_depth": float64(2), "up_depth": float64(2)}
+	if generation != 0 {
+		args["generation"] = generation
+	}
+	if tc.requestTimeout != 0 {
+		args["request_timeout_ms"] = tc.requestTimeout
+	}
 	name := mcpcontract.TraceTool
 	if gateway {
 		name = "lsp_trace_v1_execute"
@@ -165,8 +225,14 @@ func runRealTraceTransport(t *testing.T, gateway, empty bool) parityObservation 
 	}
 	params, _ := json.Marshal(map[string]any{"name": name, "arguments": args})
 	request := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":` + string(params) + `}` + "\n"
+	ctx := context.Background()
+	if tc.cancel {
+		canceled, cancel := context.WithCancel(ctx)
+		cancel()
+		ctx = canceled
+	}
 	var out bytes.Buffer
-	if err := server.Serve(strings.NewReader(request), &out); err != nil {
+	if err := server.ServeContext(ctx, strings.NewReader(request), &out); err != nil {
 		t.Fatal(err)
 	}
 	var wire struct {
@@ -181,34 +247,85 @@ func runRealTraceTransport(t *testing.T, gateway, empty bool) parityObservation 
 	if wire.Error != nil {
 		t.Fatalf("ASSERT_TRACE_PARITY_RPC_SUCCESS: %v", wire.Error)
 	}
-	var structured map[string]any
-	if err := json.Unmarshal(wire.Result.Structured, &structured); err != nil {
+	delegated := string(wire.Result.Structured)
+	if gateway {
+		var outer map[string]any
+		if err := json.Unmarshal(wire.Result.Structured, &outer); err != nil {
+			t.Fatal(err)
+		}
+		delegated, _ = outer["delegated_envelope"].(string)
+	}
+	var env struct {
+		Outcome         string   `json:"outcome"`
+		OperationStatus string   `json:"operation_status"`
+		Code            string   `json:"code"`
+		Diagnostics     []string `json:"diagnostics"`
+		IsError         bool     `json:"isError"`
+	}
+	if err := json.Unmarshal([]byte(delegated), &env); err != nil {
 		t.Fatal(err)
 	}
-	delegated := string(wire.Result.Structured)
-	outcome, isError := structured["outcome"], structured["isError"]
-	if gateway {
-		delegated, _ = structured["delegated_envelope"].(string)
-		outcome, isError = structured["delegated_outcome"], structured["delegated_is_error"]
+	methods := []string{}
+	if starter.process != nil {
+		methods = starter.process.Methods()
 	}
-	return parityObservation{delegated: delegated, outcome: outcome, isError: isError, calls: exec.calls}
+	lifecycle := []string{}
+	for _, observation := range manager.Observations() {
+		lifecycle = append(lifecycle, fmt.Sprintf("%s:%s:%s", observation.Kind, observation.State, observation.Failure))
+	}
+	return parityObservation{delegated: delegated, outcome: env.Outcome, status: env.OperationStatus, code: env.Code, diagnostics: env.Diagnostics, isError: env.IsError, calls: exec.calls, methods: methods, lifecycle: lifecycle}
 }
 
-func TestOperation33RealRegistryTransportDirectCanonicalParity(t *testing.T) {
-	for _, empty := range []bool{false, true} {
-		name := "complete"
-		if empty {
-			name = "successful-empty"
-		}
-		t.Run(name, func(t *testing.T) {
-			direct := runRealTraceTransport(t, false, empty)
-			canonical := runRealTraceTransport(t, true, empty)
-			if direct.delegated != canonical.delegated || direct.outcome != canonical.outcome || direct.isError != canonical.isError {
-				t.Fatalf("ASSERT_OPERATION33_REAL_TRANSPORT_BYTE_PARITY: direct=%+v canonical=%+v", direct, canonical)
+func TestOperation33RealRegistryGatewayParity(t *testing.T) {
+	for _, tc := range operation33ParityCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			if err := os.WriteFile(filepath.Join(workspace, "code.go"), []byte("package p\nfunc F() {}\n"), 0o600); err != nil {
+				t.Fatal(err)
 			}
-			if direct.calls != 1 || canonical.calls != 1 {
-				t.Fatalf("ASSERT_OPERATION33_ONE_EXECUTION_PER_ROUTE: direct=%d canonical=%d", direct.calls, canonical.calls)
+			direct := runOperation33ParityRoute(t, workspace, tc, false)
+			canonical := runOperation33ParityRoute(t, workspace, tc, true)
+			if direct.delegated != canonical.delegated {
+				t.Fatalf("ASSERT_OPERATION33_DELEGATED_ENVELOPE_BYTES: direct=%s canonical=%s", direct.delegated, canonical.delegated)
+			}
+			for route, got := range map[string]parityObservation{"direct": direct, "canonical": canonical} {
+				if got.outcome != tc.wantOutcome || got.status != tc.wantStatus || got.code != tc.wantCode || got.isError != tc.wantError {
+					t.Errorf("ASSERT_OPERATION33_ENVELOPE_DIMENSIONS_%s: got=%+v", route, got)
+				}
+				if got.calls != 1 {
+					t.Errorf("ASSERT_OPERATION33_EXECUTOR_ONCE_%s: %d", route, got.calls)
+				}
+				if !reflect.DeepEqual(got.methods, tc.wantMethods) {
+					t.Errorf("ASSERT_OPERATION33_LSP_SIDE_EFFECTS_%s: got=%v want=%v", route, got.methods, tc.wantMethods)
+				}
+				if !reflect.DeepEqual(got.lifecycle, tc.wantLifecycle) {
+					t.Errorf("ASSERT_OPERATION33_LIFECYCLE_SIDE_EFFECTS_%s: got=%v want=%v", route, got.lifecycle, tc.wantLifecycle)
+				}
+				if !reflect.DeepEqual(got.diagnostics, tc.wantDiagnostics) {
+					t.Errorf("ASSERT_OPERATION33_DIAGNOSTICS_%s: got=%v want=%v", route, got.diagnostics, tc.wantDiagnostics)
+				}
 			}
 		})
+	}
+}
+
+func TestOperation33ParityTableCoverage(t *testing.T) {
+	want := []string{"alias-resolution", "non-ready-session", "missing-generation", "stale-generation", "final-ready-drift", "request-timeout", "caller-cancellation"}
+	wantDimensions := []string{"delegated-envelope-bytes", "outcome", "operation-status", "code", "diagnostics", "isError", "executor-calls", "lsp-methods", "lifecycle-state-failure"}
+	if !reflect.DeepEqual(operation33ParityDimensions, wantDimensions) {
+		t.Fatalf("ASSERT_OPERATION33_PARITY_DIMENSION_COVERAGE: got=%v want=%v", operation33ParityDimensions, wantDimensions)
+	}
+	if len(operation33ParityCases) != len(want) {
+		t.Fatalf("ASSERT_OPERATION33_PARITY_ROW_COUNT: got=%d want=%d", len(operation33ParityCases), len(want))
+	}
+	for i, name := range want {
+		tc := operation33ParityCases[i]
+		if tc.name != name {
+			t.Fatalf("ASSERT_OPERATION33_PARITY_ROW_%d: got=%q want=%q", i, tc.name, name)
+		}
+		if tc.wantOutcome == "" || tc.wantStatus == "" || tc.wantMethods == nil || tc.wantLifecycle == nil {
+			t.Fatalf("ASSERT_OPERATION33_PARITY_DIMENSIONS_%s: %+v", name, tc)
+		}
 	}
 }

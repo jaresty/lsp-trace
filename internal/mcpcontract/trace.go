@@ -52,6 +52,7 @@ func traceSchema(name string) ([]byte, bool, error) {
 	p["tool"] = map[string]any{"const": TraceTool}
 	if _, ok := p["artifact_schema_id"]; ok {
 		p["artifact_schema_id"] = map[string]any{"const": GraphProvenanceV5ArtifactID}
+		p["custody_receipt"] = map[string]any{"type": "object"}
 	}
 	raw, err = json.Marshal(s)
 	return raw, true, err

@@ -129,6 +129,9 @@ type Config struct {
 	// Diagnostics is an optional internal-only exact-generation store.
 	Diagnostics           *manageddiagnostic.Store
 	SeedRevisionAuthority seedbinding.RevisionAuthority
+	// DocumentFinalHook is an optional deterministic test hook invoked after
+	// source preparation and before the final READY/generation check.
+	DocumentFinalHook func()
 	// Unexported seams keep deterministic fixtures inside this package; callers
 	// cannot provide bytes that appear directly in a production attempt ID.
 	startupAttemptEntropy func(uint64) []byte
@@ -334,6 +337,9 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		return result
 	}
 
+	if m.documentFinalHook != nil {
+		m.documentFinalHook()
+	}
 	m.mu.Lock()
 	r = m.sessions[req.SessionID]
 	if r == nil || r.record.Generation != req.Generation {
@@ -844,6 +850,7 @@ type Manager struct {
 	closed                bool
 	diagnostics           *manageddiagnostic.Store
 	seedRevisionAuthority seedbinding.RevisionAuthority
+	documentFinalHook     func()
 	startupAttemptNonce   [16]byte
 	startupAttemptEntropy func(uint64) []byte
 	startupAttemptSeq     uint64
@@ -884,7 +891,7 @@ func New(c Config) (*Manager, error) {
 	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
 		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
