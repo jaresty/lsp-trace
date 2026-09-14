@@ -89,6 +89,7 @@ type envelope struct {
 	Code                    string               `json:"code,omitempty"`
 	Diagnostics             []string             `json:"diagnostics,omitempty"`
 	Result                  any                  `json:"result,omitempty"`
+	Error                   any                  `json:"error,omitempty"`
 	Content                 *string              `json:"content,omitempty"`
 	PublicationReceipt      *publication.Receipt `json:"publication_receipt,omitempty"`
 	ArtifactSchemaID        string               `json:"artifact_schema_id,omitempty"`
@@ -352,7 +353,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	if tool.ExecutorFamily == CensusExecutorFamily {
 		var projected envelope
-		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &projected) != nil || projected.Tool != mcpcontract.CensusTool || projected.RequestID != requestID || mcpcontract.ValidateEnvelopeExclusive(opResult.Artifact) != nil {
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &projected) != nil || projected.Tool != mcpcontract.CensusTool || projected.RequestID != requestID || mcpcontract.ValidateFutureCensusEnvelopeExclusive(opResult.Artifact) != nil {
 			return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"census executor returned an invalid projected envelope"}))
 		}
 		return bindEnvelope(base, tool, projected)
@@ -711,6 +712,9 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 	}
 	if env.Content != nil && env.PublicationReceipt != nil {
 		return fmt.Errorf("inline content and publication receipt are mutually exclusive for %s", tool.Name)
+	}
+	if tool.ExecutorFamily == CensusExecutorFamily {
+		return mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw)
 	}
 	return mcpcontract.ValidateEnvelopeExclusive(raw)
 }
