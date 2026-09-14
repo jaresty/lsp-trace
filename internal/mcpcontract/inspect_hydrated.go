@@ -68,5 +68,5 @@ func readPublicContractSchema(name string) ([]byte, error) {
 		}
 		return json.Marshal(s)
 	}
-	return readContractSchema(name)
+	return readNeutralContractSchema(name)
 }

@@ -42,6 +42,17 @@ func newPrivateCensusMCPBinding(runtime censusMCPRunner) *privateCensusMCPBindin
 	return &privateCensusMCPBinding{runtime: runtime}
 }
 
+func (b *privateCensusMCPBinding) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	if request.Name != operation.Census {
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: errors.New("census operation name mismatch")}
+	}
+	result, err := b.call(ctx, request)
+	if err != nil {
+		return operation.Result{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: err}
+	}
+	return operation.Result{Artifact: append([]byte(nil), result.Structured...)}, nil
+}
+
 func (b *privateCensusMCPBinding) callDirect(ctx context.Context, request operation.Request) (privateCensusMCPResult, error) {
 	return b.call(ctx, request)
 }

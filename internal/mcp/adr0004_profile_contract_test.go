@@ -45,10 +45,12 @@ var adr0004OperationNumbers = []string{
 	"lsp_trace_v1_program_c_compose",         // 31
 	"lsp_trace_v1_program_c_instability",     // 32
 	"lsp_trace_v1_trace",                     // 33
+	"lsp_trace_v1_census",                    // 34
 }
 
 var adr0004DefaultCurrent = []string{
 	"lsp_trace_v1_capabilities",
+	"lsp_trace_v1_census",
 	"lsp_trace_v1_execute",
 	"lsp_trace_v1_inspect_hydrated",
 	"lsp_trace_v1_program_c_leiden",
@@ -71,16 +73,16 @@ var adr0004HiddenLegacy = []string{
 	"lsp_trace_v3_incoming", "lsp_trace_v3_slice",
 }
 
-func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical32AndAppends33(t *testing.T) {
+func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *testing.T) {
 	r := NewRegistry(false)
-	if len(adr0004OperationNumbers) != 33 {
-		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 33", len(adr0004OperationNumbers))
+	if len(adr0004OperationNumbers) != 34 {
+		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 34", len(adr0004OperationNumbers))
 	}
 	if adr0004OperationNumbers[30] != "lsp_trace_v1_program_c_compose" || adr0004OperationNumbers[31] != "lsp_trace_v1_program_c_instability" {
 		t.Fatalf("REGRESSION: historical operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
 	}
-	if adr0004OperationNumbers[32] != "lsp_trace_v1_trace" {
-		t.Fatalf("REGRESSION: operation 33 is %q, want trace", adr0004OperationNumbers[32])
+	if adr0004OperationNumbers[32] != "lsp_trace_v1_trace" || adr0004OperationNumbers[33] != "lsp_trace_v1_census" {
+		t.Fatalf("REGRESSION: operations 33/34 are %q/%q, want trace/census", adr0004OperationNumbers[32], adr0004OperationNumbers[33])
 	}
 
 	got := toolNames(r.Tools())
@@ -108,8 +110,8 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical32AndAppends33(t *
 		operation := properties["operation"].(map[string]any)["const"].(string)
 		seen[operation] = true
 	}
-	if len(seen) != 32 {
-		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 32", len(seen))
+	if len(seen) != 33 {
+		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 33", len(seen))
 	}
 	for _, name := range adr0004OperationNumbers {
 		if name != "lsp_trace_v1_execute" && !seen[name] {
@@ -118,7 +120,7 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical32AndAppends33(t *
 	}
 }
 
-func TestADR0004RegressionGuardProfilePartitionCoversNumbered33(t *testing.T) {
+func TestADR0004RegressionGuardProfilePartitionCoversNumbered34(t *testing.T) {
 	classified := append(append(append([]string{}, adr0004DefaultCurrent...), adr0004AdvancedOnly...), adr0004HiddenLegacy...)
 	sort.Strings(classified)
 	want := append([]string(nil), adr0004OperationNumbers...)

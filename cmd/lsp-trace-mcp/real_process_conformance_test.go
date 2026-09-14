@@ -150,8 +150,8 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 	}
 	responses := runMCPProcess(t, binary, []string{"--tool-profile", "advanced"}, requests)
 	tools := responses[0]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 27 {
-		t.Fatalf("ASSERT_PRODUCTION_MCP_ADVANCED_TOOL_COUNT_27: got=%d", len(tools))
+	if len(tools) != 28 {
+		t.Fatalf("ASSERT_PRODUCTION_MCP_ADVANCED_TOOL_COUNT_28: got=%d", len(tools))
 	}
 	for i, assertion := range []string{"ASSERT_PRODUCTION_MCP_SCHEMA_RETRIEVAL", "ASSERT_PRODUCTION_MCP_SCHEMA_VALIDATION"} {
 		call := decodeProcessCall(t, responses[i+1])
@@ -478,7 +478,7 @@ func TestProductionMCPExternalEmberGlintProvider(t *testing.T) {
 		t.Fatalf("%s: exact graph-v4 shape: %+v", assertion, result)
 	}
 	relation := result.Relations[0]
-	if relation.Kind != graph.RelationBindsArgument || relation.From != "path:this.itemCount" || relation.To != "argument:Widget:@value" || relation.EvidenceClass != graph.EvidenceSourceAdapter || relation.Adapter == nil || relation.Adapter.Name != "lsp-trace-observation-adapter" || relation.Adapter.Version != "1" || len(relation.Anchors) != 1 || relation.Anchors[0].URI != fixtureURI || relation.Anchors[0].Range.Start.Line != 0 || relation.Anchors[0].Range.Start.Character != 8 || relation.Anchors[0].Range.End.Line != 0 || relation.Anchors[0].Range.End.Character != 33 || relation.Anchors[0].Revision != commit || relation.Anchors[0].Blob == "" || relation.Anchors[0].Revision == relation.Anchors[0].Blob || len(relation.ContributingObservationIDs) != 1 {
+	if relation.Kind != graph.RelationBindsArgument || relation.From != "path:this.itemCount" || relation.To != "argument:Widget:@value" || relation.EvidenceClass != graph.EvidenceSourceAdapter || relation.Adapter == nil || relation.Adapter.Name != "lsp-trace-observation-adapter" || relation.Adapter.Version != "1" || len(relation.Anchors) != 1 || relation.Anchors[0].URI != fixtureURI || relation.Anchors[0].Range.Start.Line != 0 || relation.Anchors[0].Range.Start.Character != 8 || relation.Anchors[0].Range.End.Line != 0 || relation.Anchors[0].Range.End.Character != 34 || relation.Anchors[0].Revision != commit || relation.Anchors[0].Blob == "" || relation.Anchors[0].Revision == relation.Anchors[0].Blob || len(relation.ContributingObservationIDs) != 1 {
 		t.Fatalf("%s: exact relation/adapter/anchor/contributor provenance: %+v", assertion, relation)
 	}
 	var providerIdentity, adapterIdentity struct {

@@ -23,6 +23,15 @@ func (f *privateCensusRunnerFixture) run(_ context.Context, request operation.Re
 	return f.completion
 }
 
+func TestCensusMCPBindingRejectsMismatchedOperationBeforeDecodeRuntime(t *testing.T) {
+	fixture := &privateCensusRunnerFixture{}
+	binding := newPrivateCensusMCPBinding(fixture)
+	_, failure := binding.Execute(context.Background(), operation.Request{Name: operation.Verify, RequestID: "r", Input: []byte(`{}`)})
+	if failure == nil || failure.Code != operation.FailureInvalidInput || len(fixture.calls) != 0 {
+		t.Fatalf("ASSERT_CENSUS_NAME_MISMATCH_REJECTED_BEFORE_DECODE_RUNTIME: failure=%v calls=%d", failure, len(fixture.calls))
+	}
+}
+
 func privateCensusSuccessFixture() censusresult.Result {
 	return censusresult.Result{
 		SchemaVersion: censusresult.SchemaVersion, Status: "SUCCEEDED", CensusID: "census", CaptureSetID: "sha256:" + strings.Repeat("a", 64),

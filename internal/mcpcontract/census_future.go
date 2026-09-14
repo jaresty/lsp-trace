@@ -16,12 +16,50 @@ import (
 )
 
 const (
-	FutureCensusTool          = "lsp_trace_v1_census"
-	FutureCensusInputID       = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-census.v1.schema.json"
-	FutureCensusResultID      = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-result.v1.schema.json"
-	FutureCensusSuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-result.v1.schema.json"
-	FutureCensusDomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-domain-error.v1.schema.json"
+	CensusTool          = "lsp_trace_v1_census"
+	CensusInputID       = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-census.v1.schema.json"
+	CensusResultID      = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-result.v1.schema.json"
+	CensusSuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-result.v1.schema.json"
+	CensusDomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-domain-error.v1.schema.json"
+
+	FutureCensusTool          = CensusTool
+	FutureCensusInputID       = CensusInputID
+	FutureCensusResultID      = CensusResultID
+	FutureCensusSuccessID     = CensusSuccessID
+	FutureCensusDomainErrorID = CensusDomainErrorID
 )
+
+func WithCensus(m *Manifest) *Manifest {
+	c := *m
+	c.Schemas = append([]SchemaRegistration{}, m.Schemas...)
+	c.Tools = append([]ToolContract{}, m.Tools...)
+	c.Schemas = append(c.Schemas,
+		SchemaRegistration{ID: CensusInputID, Family: "input-census.v1", Layer: "input", Path: "schemas/input-census.v1.schema.json"},
+		SchemaRegistration{ID: CensusResultID, Family: "census-result.v1", Layer: "artifact", Path: "schemas/lsp-trace.census-result.v1.schema.json"},
+		SchemaRegistration{ID: CensusSuccessID, Family: "envelope-census-result.v1", Layer: "envelope", Path: "schemas/envelope-census-result.v1.schema.json"},
+		SchemaRegistration{ID: CensusDomainErrorID, Family: "envelope-census-domain-error.v1", Layer: "envelope", Path: "schemas/envelope-census-domain-error.v1.schema.json"},
+	)
+	c.Tools = append(c.Tools, ToolContract{Name: CensusTool, Aliases: []string{}, InputSchemaID: CensusInputID, EnvelopeSchemaIDs: []string{CensusSuccessID, CensusDomainErrorID}, ArtifactSchemaIDs: []string{CensusResultID}, Advertised: true, Availability: "ENABLED"})
+	return &c
+}
+
+func censusSchema(name string) ([]byte, bool, error) {
+	if !strings.HasPrefix(name, "testdata/schemas/") {
+		return nil, false, nil
+	}
+	idByPath := map[string]string{
+		"testdata/schemas/input-census.v1.schema.json":                 CensusInputID,
+		"testdata/schemas/lsp-trace.census-result.v1.schema.json":      CensusResultID,
+		"testdata/schemas/envelope-census-result.v1.schema.json":       CensusSuccessID,
+		"testdata/schemas/envelope-census-domain-error.v1.schema.json": CensusDomainErrorID,
+	}
+	id, ok := idByPath[name]
+	if !ok {
+		return nil, false, nil
+	}
+	raw, err := FutureCensusSchemaJSON(id)
+	return raw, true, err
+}
 
 //go:embed testdata/schemas/input-census.v1.schema.json testdata/schemas/lsp-trace.census-result.v1.schema.json testdata/schemas/envelope-census-result.v1.schema.json testdata/schemas/envelope-census-domain-error.v1.schema.json
 var futureCensusFiles embed.FS

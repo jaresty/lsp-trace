@@ -28,6 +28,7 @@ const (
 	ProgramCLeiden        Name = "program_c_leiden"
 	ProgramCCompose       Name = "program_c_compose"
 	ProgramCInstability   Name = "program_c_instability"
+	Census                Name = "census"
 )
 
 var ErrNotImplemented = errors.New("operation not implemented")
