@@ -11,13 +11,11 @@ import (
 	"fmt"
 
 	"lsp-trace/acquisitionops"
-	"lsp-trace/internal/acquisitionauthority"
-	"lsp-trace/internal/acquisitionengine"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/operation"
-	"lsp-trace/internal/seedbinding"
 )
 
 const (
@@ -63,7 +61,7 @@ func (f *censusBatchFailure) Unwrap() error {
 type censusBatchSession interface {
 	identity() censusacquisition.SessionIdentity
 	workspace() (string, error)
-	execute(context.Context, operation.Request) (operation.Result, *operation.Failure)
+	execute(context.Context, acquisitionorchestration.PlannedBatchRequest) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
 }
 
 type censusBatchAcquirer struct {
@@ -117,46 +115,11 @@ func (s *initializedCensusBatchSession) workspace() (string, error) {
 	}
 	return workspace, nil
 }
-func (s *initializedCensusBatchSession) execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
-	if s == nil || s.runtime == nil {
-		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: errors.New("initialized census runtime unavailable")}
+func (s *initializedCensusBatchSession) execute(ctx context.Context, request acquisitionorchestration.PlannedBatchRequest) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+	if s == nil || s.runtime == nil || s.runtime.privateAcquisitionRuntime == nil {
+		return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: operation.FailureInternal, Err: errors.New("initialized census runtime unavailable")}
 	}
-	return executeInitializedCensusBatch(ctx, s.runtime, request)
-}
-
-func executeInitializedCensusBatch(ctx context.Context, runtime *initializedAcquisitionRuntime, request operation.Request) (operation.Result, *operation.Failure) {
-	fail := func(code string, err error) (operation.Result, *operation.Failure) {
-		return operation.Result{}, &operation.Failure{Code: code, Err: err}
-	}
-	if runtime == nil || runtime.privateAcquisitionRuntime == nil {
-		return fail(operation.FailureInternal, errors.New("initialized census runtime required"))
-	}
-	input, canonical, err := acquisitionengine.CanonicalInput(request.Input)
-	if err != nil {
-		return fail(operation.FailureInvalidInput, err)
-	}
-	request.Input = canonical
-	if input.SessionID != runtime.SessionID() || input.Generation != runtime.Generation() {
-		return fail(operation.FailureInvalidInput, errors.New("census session identity drift"))
-	}
-	workspace := ""
-	for _, record := range runtime.Records() {
-		if record.SessionID == input.SessionID && record.Generation == input.Generation {
-			if workspace != "" {
-				return fail(operation.FailureInvalidInput, errors.New("ambiguous host workspace"))
-			}
-			workspace = record.Profile.Workspace().String()
-		}
-	}
-	if workspace == "" {
-		return fail(operation.FailureInvalidInput, errors.New("host workspace unavailable"))
-	}
-	binding := acquisitionauthority.Binding{Operation: request.Name, Route: "private-census-batch", RequestID: request.RequestID, Workspace: workspace, SessionID: input.SessionID, Generation: input.Generation, Input: canonical}
-	authority, err := acquisitionauthority.MintSeedAuthority(binding, request.RetainedSeedSpec, seedbinding.CallerAssertedLocal, false, "", true)
-	if err != nil {
-		return fail(operation.FailureInvalidInput, err)
-	}
-	return acquisitionengine.ExecuteAuthorized(ctx, runtime.privateAcquisitionRuntime, request, "private-census-batch", authority, nil, binding)
+	return acquisitionorchestration.ExecutePlannedBatch(ctx, s.runtime.privateAcquisitionRuntime, request)
 }
 
 func batchFail(code string, err error) (censusBatchResult, *censusBatchFailure) {
@@ -208,21 +171,17 @@ func (a *censusBatchAcquirer) acquireBatch(ctx context.Context, request censusac
 		return censusBatchResult{}, f
 	}
 	manifest := request.AcquisitionManifest(a.limits)
-	input, err := json.Marshal(acquisitionops.Input{SessionID: request.Session.SessionID, Generation: request.Session.Generation, SeedManifest: manifest, OutputVersion: graphprovenance.VersionV5})
-	if err != nil {
-		return batchFail(censusBatchFailureInvalidInput, err)
-	}
 	if f := cancelled(ctx); f != nil {
 		return censusBatchResult{}, f
 	}
-	result, failed := a.session.execute(ctx, operation.Request{Name: acquisitionops.SliceV3, RequestID: fmt.Sprintf("census:%s:%06d:%s", request.CensusID, request.Ordinal, request.BatchID), Input: input, RetainedSeedSpec: bytes.Clone(request.CanonicalSeedsV2)})
+	result, failed := a.session.execute(ctx, acquisitionorchestration.PlannedBatchRequest{SessionID: request.Session.SessionID, Generation: request.Session.Generation, RequestID: fmt.Sprintf("census:%s:%06d:%s", request.CensusID, request.Ordinal, request.BatchID), Manifest: manifest, CanonicalSeedsV2: bytes.Clone(request.CanonicalSeedsV2)})
 	if failed != nil {
 		return batchFail(censusBatchFailureAcquisition, operation.NormalizeFailure(failed))
 	}
 	if f := cancelled(ctx); f != nil {
 		return censusBatchResult{}, f
 	}
-	if err := admitCompleteBatch(ctx, result.Artifact, request, a.beforeNativeAdmission); err != nil {
+	if err := admitCompleteBatch(ctx, result.RawV5, request, a.beforeNativeAdmission); err != nil {
 		if f := cancelled(ctx); f != nil {
 			return censusBatchResult{}, f
 		}
@@ -237,7 +196,7 @@ func (a *censusBatchAcquirer) acquireBatch(ctx context.Context, request censusac
 	if f := cancelled(ctx); f != nil {
 		return censusBatchResult{}, f
 	}
-	return censusBatchResult{Session: request.Session, CensusID: request.CensusID, BatchID: request.BatchID, Ordinal: request.Ordinal, CanonicalSeedsV2SHA256: rawDigest(request.CanonicalSeedsV2), Raw: bytes.Clone(result.Artifact)}, nil
+	return censusBatchResult{Session: request.Session, CensusID: request.CensusID, BatchID: request.BatchID, Ordinal: request.Ordinal, CanonicalSeedsV2SHA256: rawDigest(request.CanonicalSeedsV2), Raw: bytes.Clone(result.RawV5)}, nil
 }
 
 func rawDigest(raw []byte) string {

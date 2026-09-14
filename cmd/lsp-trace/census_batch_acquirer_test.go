@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
@@ -32,9 +33,18 @@ func (s *fakeBatchSession) identity() censusacquisition.SessionIdentity {
 	return censusacquisition.SessionIdentity{SessionID: s.id, Generation: s.generation}
 }
 func (s *fakeBatchSession) workspace() (string, error) { return "/w", nil }
-func (s *fakeBatchSession) execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
-	s.requests = append(s.requests, cloneOperationRequest(request))
-	return s.respond(ctx, request)
+func (s *fakeBatchSession) execute(ctx context.Context, request acquisitionorchestration.PlannedBatchRequest) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+	input, err := json.Marshal(acquisitionops.Input{SessionID: request.SessionID, Generation: request.Generation, SeedManifest: request.Manifest, OutputVersion: graphprovenance.VersionV5})
+	if err != nil {
+		return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: operation.FailureInvalidInput, Err: err}
+	}
+	op := operation.Request{Name: acquisitionops.SliceV3, RequestID: request.RequestID, Input: input, RetainedSeedSpec: bytes.Clone(request.CanonicalSeedsV2)}
+	s.requests = append(s.requests, cloneOperationRequest(op))
+	result, failure := s.respond(ctx, op)
+	if failure != nil {
+		return acquisitionorchestration.PlannedBatchResult{}, failure
+	}
+	return acquisitionorchestration.PlannedBatchResult{SessionID: request.SessionID, Generation: request.Generation, RawV5: bytes.Clone(result.Artifact)}, nil
 }
 
 func cloneOperationRequest(in operation.Request) operation.Request {

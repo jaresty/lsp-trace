@@ -8,6 +8,8 @@ import (
 	"sort"
 	"time"
 
+	"lsp-trace/internal/acquisitionengine"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
@@ -77,6 +79,13 @@ type censusRuntime struct {
 
 func newCensusRuntime(runtime *hostSelectorRuntime) *censusRuntime {
 	return &censusRuntime{runtime: runtime, admit: newCensusExecutor(runtime).execute}
+}
+
+func executeCensusPlannedBatch(ctx context.Context, runtime *hostSelectorRuntime, admitted censusAdmittedSession, requestID string, manifest acquisitionengine.Manifest, canonicalSeedsV2 []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+	if runtime == nil || runtime.Manager == nil {
+		return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: operation.FailureInternal, Err: errors.New("managed runtime required")}
+	}
+	return acquisitionorchestration.ExecutePlannedBatch(ctx, runtime.Manager, acquisitionorchestration.PlannedBatchRequest{SessionID: admitted.sessionID, Generation: admitted.generation, RequestID: requestID, Manifest: manifest, CanonicalSeedsV2: append([]byte(nil), canonicalSeedsV2...)})
 }
 
 func (r *censusRuntime) execute(parent context.Context, request operation.Request) (censusRuntimeResult, *censusRuntimeFailure) {

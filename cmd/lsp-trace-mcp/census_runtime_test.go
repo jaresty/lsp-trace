@@ -10,11 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/internal/acquisition"
+	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/seedformat"
 	"lsp-trace/internal/source"
 )
 
@@ -201,6 +204,34 @@ func TestCensusRuntimeDeadlineCancellationAndConstructionSurface(t *testing.T) {
 	afterStarts, afterMethods, afterTeardown, afterClose := starter.snapshot()
 	if failure == nil || failure.stage != censusStageAcquisition || beforeStarts != afterStarts || !reflect.DeepEqual(beforeMethods, afterMethods) || beforeTeardown != afterTeardown || beforeClose != afterClose {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_CANCELLED_NOT_COMPLETE_NO_LIFECYCLE: failure=%+v methods=%v/%v", failure, beforeMethods, afterMethods)
+	}
+}
+
+func TestPlannedBatchUsesAdmittedHostManagerWithoutLifecycleDelta(t *testing.T) {
+	workspace := t.TempDir()
+	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	admitted, failure := newCensusExecutor(runtime).execute(context.Background(), runtimeRaw(t, "project", started.Generation, nil))
+	if failure != nil {
+		t.Fatalf("ASSERT_PLANNED_BATCH_MCP_ADMITTED: %+v", failure)
+	}
+	zero, coordinate := 0, uint32(0)
+	uri, err := source.FileURI(filepath.Join(workspace, "a.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeds, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Defaults: seedformat.Defaults{DownDepth: &zero, UpDepth: &zero}, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: "root", Path: "a.go", Line: 1, Column: 1}}}}, workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := acquisitionengine.Manifest{SchemaVersion: acquisitionengine.ManifestVersion, CoordinateConvention: "zero-based-session", Root: acquisitionengine.Target{ID: "root", Locator: acquisition.Locator{URI: uri, Line: &coordinate, Character: &coordinate}, DownDepth: &zero, UpDepth: &zero}, RequiredTargets: []acquisitionengine.Target{}}
+	beforeStarts, beforeMethods, beforeTeardown, beforeClose := starter.snapshot()
+	result, operationFailure := executeCensusPlannedBatch(context.Background(), runtime, admitted, "census:c:000000:b", manifest, seeds)
+	afterStarts, afterMethods, afterTeardown, afterClose := starter.snapshot()
+	if operationFailure != nil || len(result.RawV5) == 0 || result.SessionID != started.SessionID || result.Generation != started.Generation {
+		t.Fatalf("ASSERT_PLANNED_BATCH_MCP_RAW_V5: result=%+v failure=%+v", result, operationFailure)
+	}
+	if beforeStarts != afterStarts || beforeTeardown != afterTeardown || beforeClose != afterClose || len(beforeMethods) != len(afterMethods) {
+		t.Fatalf("ASSERT_PLANNED_BATCH_MCP_NO_LIFECYCLE_DELTA: methods=%v/%v lifecycle=%d/%d %d/%d %d/%d", beforeMethods, afterMethods, beforeStarts, afterStarts, beforeTeardown, afterTeardown, beforeClose, afterClose)
 	}
 }
 

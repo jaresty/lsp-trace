@@ -50,6 +50,9 @@ func TestExternalPackageHasNoCensusAssemblyMintingPath(t *testing.T) {
 					if !ast.IsExported(d.Name.Name) {
 						continue
 					}
+					if d.Name.Name == "ExecutePlannedBatch" && (fieldListContainsAny(d.Type.Params, "Binding", "SeedAuthority", "CustodyMode", "Workspace", "PublicationRoot", "ArtifactStore", "Callback") || fieldListContainsAny(d.Type.Results, "Assembly", "PublicationCapability", "Projection", "SeedAuthority")) {
+						t.Fatalf("ASSERT_NO_EXPORTED_ARBITRARY_INPUT_TO_CENSUS_AUTHORITY: %s exports %s", rel, d.Name.Name)
+					}
 					if fieldListContainsAny(d.Type.Results, "Assembly", "PublicationCapability") {
 						t.Fatalf("ASSERT_NO_EXPORTED_ARBITRARY_INPUT_TO_CENSUS_AUTHORITY: %s exports %s", rel, d.Name.Name)
 					}
@@ -78,7 +81,7 @@ func TestExternalPackageHasNoCensusAssemblyMintingPath(t *testing.T) {
 func TestPackageMainOwnsConcreteUnexportedCensusAcquirer(t *testing.T) {
 	root := repositoryRoot(t)
 	files := parseProductionPackage(t, filepath.Join(root, "cmd/lsp-trace"))
-	var acquirer, constructor, spender, assembly, publicationCapability, orchestrator bool
+	var acquirer, constructor, assembly, publicationCapability, orchestrator bool
 	for _, file := range files {
 		ast.Inspect(file, func(node ast.Node) bool {
 			switch n := node.(type) {
@@ -99,9 +102,6 @@ func TestPackageMainOwnsConcreteUnexportedCensusAcquirer(t *testing.T) {
 				if n.Name.Name == "newInitializedCensusBatchAcquirer" && !ast.IsExported(n.Name.Name) {
 					constructor = firstParameterIsPointerTo(n, "initializedAcquisitionRuntime")
 				}
-				if n.Name.Name == "executeInitializedCensusBatch" && !ast.IsExported(n.Name.Name) {
-					spender = firstParameterAfterContextIsPointerTo(n, "initializedAcquisitionRuntime")
-				}
 				if n.Name.Name == "runInitializedCensusAcquisition" && !ast.IsExported(n.Name.Name) {
 					orchestrator = firstParameterAfterContextIsPointerTo(n, "initializedAcquisitionRuntime") && fieldListContainsIdent(n.Type.Results, "censusAssembly")
 				}
@@ -109,8 +109,20 @@ func TestPackageMainOwnsConcreteUnexportedCensusAcquirer(t *testing.T) {
 			return true
 		})
 	}
-	if !acquirer || !constructor || !spender || !assembly || !publicationCapability || !orchestrator {
-		t.Fatalf("ASSERT_PACKAGE_MAIN_PRIVATE_CONCRETE_CENSUS_AUTHORITY: acquirer=%v constructor=%v spender=%v assembly=%v publication=%v orchestrator=%v", acquirer, constructor, spender, assembly, publicationCapability, orchestrator)
+	if !acquirer || !constructor || !assembly || !publicationCapability || !orchestrator {
+		t.Fatalf("ASSERT_PACKAGE_MAIN_PRIVATE_CONCRETE_CENSUS_AUTHORITY: acquirer=%v constructor=%v assembly=%v publication=%v orchestrator=%v", acquirer, constructor, assembly, publicationCapability, orchestrator)
+	}
+	found := false
+	for _, file := range parseProductionPackage(t, filepath.Join(root, "internal/acquisitionorchestration")) {
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if ok && fn.Name.Name == "ExecutePlannedBatch" && ast.IsExported(fn.Name.Name) {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("ASSERT_SHARED_FIXED_POLICY_PLANNED_BATCH_EXECUTOR")
 	}
 }
 
