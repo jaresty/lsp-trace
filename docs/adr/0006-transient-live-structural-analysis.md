@@ -55,6 +55,14 @@ Program C currently admits exact V5 or opaque durable composites. Its public res
 
 Therefore the context portions of this ADR still specify proposed work. Existing Graph V3 bytes, census capture sets, and existing Program C result artifacts are not the transient result contract.
 
+## Clarification adopted 2026-09-14: canonical transient session identity
+
+This clarification is subsequent to the accepted decision and does not change this ADR's Accepted status. After manager admission succeeds, the manager generates the canonical logical-session identity from exactly 16 bytes obtained from `crypto/rand` and encodes it as `ts_` followed by exactly 32 lowercase hexadecimal digits. The token is stable for that logical session across generations and every use pairs it with the exact generation; the token alone never selects a generation.
+
+The token and its collision index are process-local and nonpersistent. The manager retries a collision against every token in its live or tombstoned token index. Entropy failure prevents creation of any observable session. After final session removal the token is unavailable for lookup, even though a tombstoned index entry may remain for collision prevention during the process lifetime.
+
+A caller cannot supply or select this token and it is not an authentication or authorization credential. Host-configured aliases, canonical token identity, and custody or authority claims are separate concerns. This clarification specifies the identity contract only: session-runtime token generation is not implemented by this increment, and operation 35 remains unregistered, unadvertised, and `FUTURE/PROPOSED`.
+
 ## Operation numbering and rollout
 
 MCP numbering is append-only:
@@ -152,7 +160,11 @@ The initial traversal fields are:
 - `up_depth`: integer `0..64`;
 - `max_nodes`: integer `1..10000`;
 - `timeout_ms`: integer `1..60000`;
-- `request_timeout_ms`: integer `1..60000`.
+- `request_timeout_ms`: integer `1..60000` and no greater than `timeout_ms`;
+- `max_messages`: integer `1..4096`;
+- `max_bytes`: integer `1..16777216`.
+
+The future decoder must make omitted-value behavior explicit before registration. The currently intended defaults are `max_messages: 64` and `max_bytes: 4194304`; this draft schema still requires callers to provide both values and does not itself implement decoder defaults.
 
 The request is CALLS-only. It exposes no relation, adapter, or normalized-provider selector in version 1.
 

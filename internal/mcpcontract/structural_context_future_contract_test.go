@@ -75,7 +75,7 @@ func validateFuture(t *testing.T, schema *jsonschema.Schema, value any, wantVali
 }
 
 func validFutureInput() map[string]any {
-	return map[string]any{"session_id": "session-alias", "generation": 1, "uri": "file:///workspace/main.go", "symbol": "Run", "down_depth": 2, "up_depth": 2, "max_nodes": 100, "timeout_ms": 5000, "request_timeout_ms": 1000, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
+	return map[string]any{"session_id": "session-alias", "generation": 1, "uri": "file:///workspace/main.go", "symbol": "Run", "down_depth": 2, "up_depth": 2, "max_nodes": 100, "timeout_ms": 5000, "request_timeout_ms": 1000, "max_messages": futureDefaultMaxMessages, "max_bytes": futureDefaultMaxBytes, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
 }
 
 func validAccounting() map[string]any {
@@ -91,9 +91,9 @@ func validFutureResult() map[string]any {
 		"source_graph_complete": "UNKNOWN", "retained": false, "replayable": false, "publication_eligible": false, "hydration_eligible": false,
 		"claim_ceiling":        "Under the named managed session generation, exact target, server responses, traversal bounds, and analysis policy, this bounded server-reported call graph has the reported structural properties.",
 		"canonical_session_id": "ts_0123456789abcdef0123456789abcdef", "generation": 1, "target_node_id": "tn_0123456789abcdef0123456789abcdef", "position_encoding": "utf-16",
-		"traversal_policy": map[string]any{"policy_id": "transient-calls-traversal.v1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:7f83b1657ff1fc53b92dc18148a1d65dfa13514f2d57f5c99be729f39d33d1d4", "down_depth": 2, "up_depth": 2, "max_nodes": 100},
-		"resource_policy":  map[string]any{"policy_id": "transient-structural-resources.v1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:dffd6021bb2bd7931a72e10e3d9f33a259a128365e98922db75a5920cb4ddc6d", "timeout_ms": 5000, "request_timeout_ms": 1000},
-		"analysis_policy":  map[string]any{"policy_id": "transient-neighborhood.v1", "policy_version": "1", "policy_status": "PROVISIONAL_NONCERTIFIED", "policy_digest": "sha256:4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"}, "graph_digest": "sha256:" + strings.Repeat("4", 64), "accounting": validAccounting(),
+		"traversal_policy": map[string]any{"policy_id": futureTraversalPolicyID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureTraversalPolicyDigest, "down_depth": 2, "up_depth": 2, "max_nodes": 100},
+		"resource_policy":  map[string]any{"policy_id": futureResourcePolicyID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureResourcePolicyDigest, "timeout_ms": 5000, "request_timeout_ms": 1000, "max_messages": futureDefaultMaxMessages, "max_bytes": futureDefaultMaxBytes},
+		"analysis_policy":  map[string]any{"policy_id": futureNeighborhoodID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureNeighborhoodPolicyDigest}, "graph_digest": "sha256:" + strings.Repeat("4", 64), "accounting": validAccounting(),
 		"analysis": map[string]any{"kind": "NEIGHBORHOOD", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "incoming_count": 1, "outgoing_count": 1, "frontier_count": 0},
 	}
 }
@@ -119,7 +119,8 @@ func TestFutureStructuralContextSchemasCompileAndAcceptClosedControls(t *testing
 	result := validFutureResult()
 	validateFuture(t, s[futureResultID], result, true)
 	impactResult := cloneMap(t, result)
-	impactResult["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+	impactResult["analysis_policy"].(map[string]any)["policy_id"] = futureImpactID
+	impactResult["analysis_policy"].(map[string]any)["policy_digest"] = futureImpactPolicyDigest
 	impactResult["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "direction": "INCOMING", "depth": 2, "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
 	validateFuture(t, s[futureResultID], impactResult, true)
 	success := map[string]any{"envelope_version": "1", "envelope_schema_id": futureSuccessID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "COMPLETE", "operation_status": "SUCCEEDED", "isError": false, "result": result}
@@ -133,7 +134,7 @@ func TestFutureStructuralInputRejectsEveryForbiddenSurfaceAndBadBounds(t *testin
 	for _, field := range []string{"output_selector", "graph_provenance", "workspace_revision", "custody", "capture", "capture_supply", "source_snapshot", "source_supply", "publication", "artifact", "artifact_selector", "retained_input", "hydration", "include_bodies", "private_root", "path", "providers", "relations", "adapters", "metadata"} {
 		t.Run(field, func(t *testing.T) { v := validFutureInput(); v[field] = true; validateFuture(t, s, v, false) })
 	}
-	for _, field := range []string{"generation", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms"} {
+	for _, field := range []string{"generation", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes"} {
 		t.Run("missing_"+field, func(t *testing.T) { v := validFutureInput(); delete(v, field); validateFuture(t, s, v, false) })
 	}
 	for name, mutate := range map[string]func(map[string]any){
@@ -230,7 +231,8 @@ func TestFutureStructuralSchemaAcceptsRelationalCounterexamplesSemanticV1Rejects
 	}
 	t.Run("impact_directional_depth", func(t *testing.T) {
 		v := cloneMap(t, validFutureResult())
-		v["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+		v["analysis_policy"].(map[string]any)["policy_id"] = futureImpactID
+		v["analysis_policy"].(map[string]any)["policy_digest"] = futureImpactPolicyDigest
 		v["analysis"] = map[string]any{"kind": "IMPACT", "root_node_id": v["target_node_id"], "direction": "INCOMING", "depth": 3, "nodes": []any{map[string]any{"node_id": v["target_node_id"]}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": v["target_node_id"], "callee_node_id": v["target_node_id"]}}, "reachable_node_ids": []any{}, "witness_edge_ids": []any{}}
 		validateFuture(t, schema, v, true)
 		if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), v); err == nil {
@@ -433,7 +435,8 @@ func TestFutureStructuralSemanticValidatorRejectsInvalidOrOversizedReferenceBefo
 		t.Run(name, func(t *testing.T) {
 			i, r := validFutureInput(), validFutureResult()
 			i["analysis"] = map[string]any{"kind": "IMPACT", "direction": "OUTGOING", "depth": 1}
-			r["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+			r["analysis_policy"].(map[string]any)["policy_id"] = futureImpactID
+			r["analysis_policy"].(map[string]any)["policy_digest"] = futureImpactPolicyDigest
 			a := r["analysis"].(map[string]any)
 			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
 			delete(a, "incoming_count")
@@ -527,7 +530,8 @@ func TestFutureStructuralSemanticValidatorRejectsDuplicateImpactSets(t *testing.
 		t.Run(key, func(t *testing.T) {
 			i, r := validFutureInput(), validFutureResult()
 			i["analysis"] = map[string]any{"kind": "IMPACT", "direction": "OUTGOING", "depth": 1}
-			r["analysis_policy"].(map[string]any)["policy_id"] = "transient-impact.v1"
+			r["analysis_policy"].(map[string]any)["policy_id"] = futureImpactID
+			r["analysis_policy"].(map[string]any)["policy_digest"] = futureImpactPolicyDigest
 			a := r["analysis"].(map[string]any)
 			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
 			delete(a, "incoming_count")

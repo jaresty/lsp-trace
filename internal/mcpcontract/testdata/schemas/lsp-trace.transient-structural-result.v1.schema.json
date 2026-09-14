@@ -51,12 +51,12 @@
     "target_node_id": {"$ref": "#/$defs/opaqueNodeID"},
     "position_encoding": {"enum": ["utf-8", "utf-16", "utf-32"]},
     "traversal_policy": {
-      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_status", "policy_digest", "down_depth", "up_depth", "max_nodes"],
-      "properties": {"policy_id": {"const": "transient-calls-traversal.v1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "down_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "up_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000}}
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_status", "policy_digest", "down_depth", "up_depth", "max_nodes"],
+      "properties": {"policy_id": {"const": "transient-calls-traversal.v1"}, "policy_version": {"const": "1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "down_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "up_depth": {"type": "integer", "minimum": 0, "maximum": 64}, "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000}}
     },
     "resource_policy": {
-      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_status", "policy_digest", "timeout_ms", "request_timeout_ms"],
-      "properties": {"policy_id": {"const": "transient-structural-resources.v1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}}
+      "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_status", "policy_digest", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes"],
+      "properties": {"policy_id": {"const": "transient-structural-resources.v1"}, "policy_version": {"const": "1"}, "policy_status": {"const": "PROVISIONAL_NONCERTIFIED"}, "policy_digest": {"$ref": "#/$defs/digest"}, "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000}, "max_messages": {"type": "integer", "minimum": 1, "maximum": 4096}, "max_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}}
     },
     "analysis_policy": {
       "type": "object", "additionalProperties": false, "required": ["policy_id", "policy_version", "policy_status", "policy_digest"],

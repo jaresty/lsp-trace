@@ -55,6 +55,17 @@ func ValidateFutureStructuralSemanticsV1(input, result map[string]any) error {
 	if err := validateFutureResultHeader(result); err != nil {
 		return err
 	}
+	for policyKey, fields := range map[string][]string{
+		"traversal_policy": {"down_depth", "up_depth", "max_nodes"},
+		"resource_policy":  {"timeout_ms", "request_timeout_ms", "max_messages", "max_bytes"},
+	} {
+		policy, _ := objectField(result, policyKey)
+		for _, field := range fields {
+			if policy[field] != input[field] {
+				return errFutureValue
+			}
+		}
+	}
 	analysis, _ := objectField(result, "analysis")
 	nodes, err := arrayField(analysis, "nodes", futureMaxNodes)
 	if err != nil {
@@ -168,7 +179,7 @@ func ValidateFutureStructuralSemanticsV1(input, result map[string]any) error {
 }
 
 func validateFutureInput(v map[string]any) error {
-	if v == nil || !allowed(v, "session_id", "generation", "uri", "symbol", "line", "character", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "analysis") || !required(v, "session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "analysis") {
+	if v == nil || !allowed(v, "session_id", "generation", "uri", "symbol", "line", "character", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes", "analysis") || !required(v, "session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes", "analysis") {
 		return errFutureShape
 	}
 	if _, err := stringField(v, "session_id", 1, 256, nil); err != nil {
@@ -211,6 +222,17 @@ func validateFutureInput(v map[string]any) error {
 		if _, err := uintField(v, k, 1, 60000); err != nil {
 			return err
 		}
+	}
+	timeout, _ := uintField(v, "timeout_ms", 1, 60000)
+	requestTimeout, _ := uintField(v, "request_timeout_ms", 1, 60000)
+	if requestTimeout > timeout {
+		return errFutureValue
+	}
+	if _, err := uintField(v, "max_messages", 1, futureMaxMessages); err != nil {
+		return err
+	}
+	if _, err := uintField(v, "max_bytes", 1, futureMaxBytes); err != nil {
+		return err
 	}
 	a, err := objectField(v, "analysis")
 	if err != nil {
@@ -277,13 +299,13 @@ func validateFutureResultHeader(v map[string]any) error {
 	if _, err := stringField(v, "graph_digest", 71, 71, regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)); err != nil {
 		return err
 	}
-	if _, err := validatePolicy(v, "traversal_policy", "transient-calls-traversal.v1", []bound{{"down_depth", 0, 64}, {"up_depth", 0, 64}, {"max_nodes", 1, 10000}}, false); err != nil {
+	if _, err := validatePolicy(v, "traversal_policy", futureTraversalPolicyID, futureTraversalPolicyDigest, []bound{{"down_depth", 0, 64}, {"up_depth", 0, 64}, {"max_nodes", 1, 10000}}, false); err != nil {
 		return err
 	}
-	if _, err := validatePolicy(v, "resource_policy", "transient-structural-resources.v1", []bound{{"timeout_ms", 1, 60000}, {"request_timeout_ms", 1, 60000}}, false); err != nil {
+	if _, err := validatePolicy(v, "resource_policy", futureResourcePolicyID, futureResourcePolicyDigest, []bound{{"timeout_ms", 1, 60000}, {"request_timeout_ms", 1, 60000}, {"max_messages", 1, futureMaxMessages}, {"max_bytes", 1, futureMaxBytes}}, false); err != nil {
 		return err
 	}
-	policyID, err := validatePolicy(v, "analysis_policy", "", nil, true)
+	policyID, err := validatePolicy(v, "analysis_policy", "", "", nil, true)
 	if err != nil {
 		return err
 	}
@@ -295,7 +317,7 @@ func validateFutureResultHeader(v map[string]any) error {
 	if err != nil {
 		return err
 	}
-	if (policyID == "transient-neighborhood.v1") != (kind == "NEIGHBORHOOD") {
+	if (policyID == futureNeighborhoodID) != (kind == "NEIGHBORHOOD") {
 		return errFutureValue
 	}
 	return nil
@@ -306,15 +328,13 @@ type bound struct {
 	min, max uint64
 }
 
-func validatePolicy(parent map[string]any, key, policyID string, bounds []bound, analysis bool) (string, error) {
+func validatePolicy(parent map[string]any, key, policyID, policyDigest string, bounds []bound, analysis bool) (string, error) {
 	p, err := objectField(parent, key)
 	if err != nil {
 		return "", err
 	}
-	keys := []string{"policy_id", "policy_status", "policy_digest"}
-	if analysis {
-		keys = append(keys, "policy_version")
-	} else {
+	keys := []string{"policy_id", "policy_version", "policy_status", "policy_digest"}
+	if !analysis {
 		for _, b := range bounds {
 			keys = append(keys, b.key)
 		}
@@ -327,20 +347,25 @@ func validatePolicy(parent map[string]any, key, policyID string, bounds []bound,
 		return "", errFutureValue
 	}
 	if analysis {
-		if id != "transient-neighborhood.v1" && id != "transient-impact.v1" {
+		if id != futureNeighborhoodID && id != futureImpactID {
 			return "", errFutureValue
 		}
-		if p["policy_version"] != "1" {
+		if p["policy_version"] != futureAnalysisVersion {
 			return "", errFutureValue
+		}
+		if id == futureNeighborhoodID {
+			policyDigest = futureNeighborhoodPolicyDigest
+		} else {
+			policyDigest = futureImpactPolicyDigest
 		}
 	} else if id != policyID {
 		return "", errFutureValue
 	}
-	if p["policy_status"] != "PROVISIONAL_NONCERTIFIED" {
+	if p["policy_version"] != futureAnalysisVersion {
 		return "", errFutureValue
 	}
-	if _, err := stringField(p, "policy_digest", 71, 71, regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)); err != nil {
-		return "", err
+	if p["policy_status"] != futurePolicyStatus || p["policy_digest"] != policyDigest {
+		return "", errFutureValue
 	}
 	for _, b := range bounds {
 		if _, err := uintField(p, b.key, b.min, b.max); err != nil {

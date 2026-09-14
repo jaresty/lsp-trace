@@ -4,7 +4,7 @@
   "title": "FUTURE/PROPOSED operation 35 structural-context input; unregistered until operation 34 lands",
   "type": "object",
   "additionalProperties": false,
-  "required": ["session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "analysis"],
+  "required": ["session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes", "analysis"],
   "properties": {
     "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
     "generation": {"type": "integer", "minimum": 1},
@@ -22,6 +22,8 @@
     "max_nodes": {"type": "integer", "minimum": 1, "maximum": 10000},
     "timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000},
     "request_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 60000},
+    "max_messages": {"type": "integer", "minimum": 1, "maximum": 4096},
+    "max_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
     "analysis": {
       "oneOf": [
         {

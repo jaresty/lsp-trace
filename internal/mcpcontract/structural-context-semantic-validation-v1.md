@@ -20,20 +20,22 @@ For input `i` and result `r`, a conforming v1 runtime validator MUST reject unle
 
 1. `r.analysis.root_node_id == r.target_node_id`.
 2. `r.state == EMPTY` iff the admitted `CALLS` edge count is zero; otherwise state is `COMPLETE`.
-3. For `IMPACT`, `analysis.depth <= i.up_depth` when direction is `INCOMING`, and `analysis.depth <= i.down_depth` when direction is `OUTGOING`.
-4. Every opaque node or edge reference in edges, reachable-node lists, and witness-edge lists belongs to the corresponding admitted node or edge set in the result.
-5. Accounting equations hold:
+3. `i.request_timeout_ms <= i.timeout_ms`; `max_messages` is within `1..4096`; and `max_bytes` is within `1..16777216`.
+4. Result traversal-policy values equal input `down_depth`, `up_depth`, and `max_nodes`; result resource-policy values equal input `timeout_ms`, `request_timeout_ms`, `max_messages`, and `max_bytes`.
+5. For `IMPACT`, `analysis.depth <= i.up_depth` when direction is `INCOMING`, and `analysis.depth <= i.down_depth` when direction is `OUTGOING`.
+6. Every opaque node or edge reference in edges, reachable-node lists, and witness-edge lists belongs to the corresponding admitted node or edge set in the result.
+7. Accounting equations hold:
    - `node_observed = node_admitted + node_rejected + node_omitted`
    - `occurrence_observed = occurrence_admitted + occurrence_rejected + occurrence_omitted`
    - `frontier_observed = frontier_expanded + frontier_unexpanded`
    - `request_attempted = request_succeeded + request_failed + request_cancelled`
    - `prepared_attempted = prepared_returned + prepared_empty + prepared_failed`
-6. Each omitted node or occurrence and each unexpanded frontier item is assigned exactly one reason. Failed or cancelled requests are likewise partitioned by request omission reason. Every closed reason-count object uses exactly `DEPTH_BOUND`, `NODE_BOUND`, `REQUEST_BOUND`, `TIMEOUT`, `CANCELLATION`, `UNSUPPORTED_RESPONSE`, `MALFORMED_RESPONSE`, and `DEDUPLICATION`; its sum equals the corresponding omitted/unexpanded count (or failed-plus-cancelled request count). Counts are aggregate partitions; producers MUST NOT double-count one omission under multiple reasons.
-7. A host creates each correlation ID from fresh randomness in `sc_[0-9a-f]{32}` format. It MUST NOT derive the ID from caller content, symbols, paths, URIs, or encoded forms. Success and domain-error construction for one request MUST reuse the same ID.
+8. Each omitted node or occurrence and each unexpanded frontier item is assigned exactly one reason. Failed or cancelled requests are likewise partitioned by request omission reason. Every closed reason-count object uses exactly `DEPTH_BOUND`, `NODE_BOUND`, `REQUEST_BOUND`, `TIMEOUT`, `CANCELLATION`, `UNSUPPORTED_RESPONSE`, `MALFORMED_RESPONSE`, and `DEDUPLICATION`; its sum equals the corresponding omitted/unexpanded count (or failed-plus-cancelled request count). Counts are aggregate partitions; producers MUST NOT double-count one omission under multiple reasons.
+9. A host creates each correlation ID from fresh randomness in `sc_[0-9a-f]{32}` format. It MUST NOT derive the ID from caller content, symbols, paths, URIs, or encoded forms. Success and domain-error construction for one request MUST reuse the same ID.
 
 ## Policy qualification
 
-All draft traversal, resource, and analysis policy records have `policy_status: PROVISIONAL_NONCERTIFIED`. Their digest fields prove only syntactic digest shape and are not fixed certified kernel digests. A result cannot claim kernel qualification, publication eligibility, hydration eligibility, replayability, retention, or authority. Registration requires committed canonical policy documents plus an explicit certification/qualification decision, or an equally explicit continued noncertified qualification.
+All draft traversal, resource, and analysis policy records have `policy_status: PROVISIONAL_NONCERTIFIED`. The internal contract owns four exact compact ASCII JSON byte documents for traversal, resources, neighborhood, and impact and requires their exact SHA-256 digests; arbitrary well-shaped digest values are rejected. This exact provisional identity does not certify a kernel, manager, runtime, transport, or operation. A result cannot claim kernel qualification, publication eligibility, hydration eligibility, replayability, retention, or authority. The pure map validator checks only token syntax for `canonical_session_id`; it cannot establish live manager provenance. Registration requires a separate explicit certification/qualification and runtime decision.
 
 ## Required tests before registration
 
