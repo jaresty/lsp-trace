@@ -17,9 +17,11 @@ type censusFailureCode string
 const (
 	censusStageConfig      censusFailureStage = "config"
 	censusStageAcquisition censusFailureStage = "acquisition"
+	censusStageDiscovery   censusFailureStage = "discovery"
 
 	censusCodeInvalidConfig     censusFailureCode = "INVALID_CONFIG"
 	censusCodeAcquisitionFailed censusFailureCode = "ACQUISITION_FAILED"
+	censusCodeDiscoveryFailed   censusFailureCode = "DISCOVERY_FAILED"
 )
 
 type censusAdmissionFailure struct {
@@ -32,6 +34,7 @@ type censusAdmittedSession struct {
 	generation       uint64
 	workspace        string
 	positionEncoding string
+	options          censusRuntimeConfig
 }
 
 type censusExecutor struct {
@@ -99,6 +102,7 @@ func (e *censusExecutor) execute(ctx context.Context, raw []byte) (censusAdmitte
 		generation:       match.Generation,
 		workspace:        workspace,
 		positionEncoding: metadata.PositionEncoding,
+		options:          cloneCensusRuntimeConfig(censusRuntimeConfigFromDecoded(request)),
 	}, nil
 }
 
@@ -117,4 +121,8 @@ func censusConfigFailure() *censusAdmissionFailure {
 
 func censusAcquisitionFailure() *censusAdmissionFailure {
 	return &censusAdmissionFailure{stage: censusStageAcquisition, code: censusCodeAcquisitionFailed}
+}
+
+func censusDiscoveryFailure() *censusAdmissionFailure {
+	return &censusAdmissionFailure{stage: censusStageDiscovery, code: censusCodeDiscoveryFailed}
 }

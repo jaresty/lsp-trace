@@ -25,6 +25,7 @@ type censusTestProcess struct {
 	out         *io.PipeWriter
 	stdout      *io.PipeReader
 	metadata    string
+	results     map[string]json.RawMessage
 	initialized chan struct{}
 
 	mu            sync.Mutex
@@ -33,10 +34,10 @@ type censusTestProcess struct {
 	closeCalls    int
 }
 
-func newCensusTestProcess(metadata string) *censusTestProcess {
+func newCensusTestProcess(metadata string, results map[string]json.RawMessage) *censusTestProcess {
 	in, stdin := io.Pipe()
 	stdout, out := io.Pipe()
-	p := &censusTestProcess{in: in, stdin: stdin, out: out, stdout: stdout, metadata: metadata, initialized: make(chan struct{})}
+	p := &censusTestProcess{in: in, stdin: stdin, out: out, stdout: stdout, metadata: metadata, results: results, initialized: make(chan struct{})}
 	go p.serve()
 	return p
 }
@@ -62,6 +63,8 @@ func (p *censusTestProcess) serve() {
 		result := json.RawMessage(`null`)
 		if message.Method == "initialize" {
 			result = json.RawMessage(p.metadata)
+		} else if configured := p.results[message.Method]; configured != nil {
+			result = append(json.RawMessage(nil), configured...)
 		}
 		if len(message.ID) != 0 {
 			if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: result}); err != nil {
@@ -97,6 +100,7 @@ func (p *censusTestProcess) snapshot() ([]string, int, int) {
 
 type censusTestStarter struct {
 	metadata string
+	results  map[string]json.RawMessage
 
 	mu      sync.Mutex
 	starts  int
@@ -107,7 +111,7 @@ func (s *censusTestStarter) Start(context.Context, managedprocess.Spec) (session
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.starts++
-	s.process = newCensusTestProcess(s.metadata)
+	s.process = newCensusTestProcess(s.metadata, s.results)
 	return s.process, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
 func (s *censusTestStarter) snapshot() (int, []string, int, int) {
@@ -126,6 +130,7 @@ type censusRuntimeOptions struct {
 	documentSymbolSupport bool
 	callHierarchySupport  bool
 	positionEncoding      string
+	results               map[string]json.RawMessage
 }
 
 func censusRuntimeFixture(t *testing.T, options censusRuntimeOptions) (*hostSelectorRuntime, *censusTestStarter, sessionruntime.StartResult) {
@@ -148,7 +153,7 @@ func censusRuntimeFixture(t *testing.T, options censusRuntimeOptions) (*hostSele
 	if err != nil {
 		t.Fatal(err)
 	}
-	starter := &censusTestStarter{metadata: string(metadata)}
+	starter := &censusTestStarter{metadata: string(metadata), results: options.results}
 	manager, err := sessionruntime.New(sessionruntime.Config{
 		Limits:  sessionruntime.Limits{MaxSessions: 2, MaxRequests: 8, MaxChildren: 2, MaxCancels: 8, MaxTombstones: 8, MaxObservations: 128, MaxOperations: 8},
 		Starter: starter,
