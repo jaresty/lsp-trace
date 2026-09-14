@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"lsp-trace/internal/strictjson"
 )
 
 const (
@@ -43,107 +45,42 @@ func FutureCensusSchemaJSON(schemaID string) ([]byte, error) {
 	return append([]byte(nil), raw...), err
 }
 
-// WithFutureCensus returns a separately testable FUTURE/UNREGISTERED contract view.
-// Current manifest, registry, dispatcher, profiles and capabilities do not call it.
-func WithFutureCensus(base *Manifest) *Manifest {
-	out := *base
-	out.Schemas = append([]SchemaRegistration{}, base.Schemas...)
-	out.Tools = append([]ToolContract{}, base.Tools...)
-	out.Schemas = append(out.Schemas,
-		SchemaRegistration{ID: FutureCensusInputID, Family: "https://jaresty.github.io/lsp-trace/mcp/input/census/v1", Layer: "input", Path: "schemas/input-census.v1.schema.json"},
-		SchemaRegistration{ID: FutureCensusResultID, Family: "https://jaresty.github.io/lsp-trace/census-result/v1", Layer: "artifact", Path: "schemas/lsp-trace.census-result.v1.schema.json"},
-		SchemaRegistration{ID: FutureCensusSuccessID, Family: "https://jaresty.github.io/lsp-trace/mcp/envelope/census-result/v1", Layer: "envelope", Path: "schemas/envelope-census-result.v1.schema.json"},
-		SchemaRegistration{ID: FutureCensusDomainErrorID, Family: "https://jaresty.github.io/lsp-trace/mcp/envelope/census-domain-error/v1", Layer: "envelope", Path: "schemas/envelope-census-domain-error.v1.schema.json"},
-	)
-	out.Tools = append(out.Tools, ToolContract{Name: FutureCensusTool, Aliases: []string{"lsp_trace_census"}, InputSchemaID: FutureCensusInputID, EnvelopeSchemaIDs: []string{FutureCensusSuccessID, FutureCensusDomainErrorID}, ArtifactSchemaIDs: []string{FutureCensusResultID}, Advertised: false, Availability: "NOT_IMPLEMENTED"})
-	return &out
-}
-
 // DecodeFutureCensusRequestV1 applies strict JSON precedence before semantics.
 func DecodeFutureCensusRequestV1(raw []byte) (map[string]any, error) {
-	if err := rejectFutureCensusDuplicateMembers(raw); err != nil {
-		return nil, err
+	// strictjson first validates one complete JSON value, so malformed input can
+	// never be reclassified as a duplicate-member error.
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		if strings.Contains(err.Error(), "duplicate JSON member") {
+			return nil, errFutureCensusDuplicate
+		}
+		return nil, errFutureCensusShape
 	}
 	var value map[string]any
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.UseNumber()
-	dec.DisallowUnknownFields()
 	if err := dec.Decode(&value); err != nil || value == nil {
-		return nil, errFutureCensusShape
-	}
-	if dec.Decode(new(any)) == nil {
 		return nil, errFutureCensusShape
 	}
 	if err := ValidateFutureCensusRequestV1(value); err != nil {
 		return nil, err
 	}
+	// These are bounded MCP transport defaults, not CLI invocation timeout
+	// parity. Result semantic-field parity does not imply timeout parity.
+	if _, ok := value["timeout_ms"]; !ok {
+		value["timeout_ms"] = uint64(60000)
+	}
+	if _, ok := value["request_timeout_ms"]; !ok {
+		value["request_timeout_ms"] = uint64(30000)
+	}
 	return value, nil
-}
-
-func rejectFutureCensusDuplicateMembers(raw []byte) error {
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	var walk func() error
-	walk = func() error {
-		tok, err := dec.Token()
-		if err != nil {
-			return errFutureCensusShape
-		}
-		delim, ok := tok.(json.Delim)
-		if !ok {
-			return nil
-		}
-		switch delim {
-		case '{':
-			seen := map[string]bool{}
-			for dec.More() {
-				keyToken, err := dec.Token()
-				if err != nil {
-					return errFutureCensusShape
-				}
-				key, ok := keyToken.(string)
-				if !ok {
-					return errFutureCensusShape
-				}
-				if seen[key] {
-					return errFutureCensusDuplicate
-				}
-				seen[key] = true
-				if err := walk(); err != nil {
-					return err
-				}
-			}
-			if end, err := dec.Token(); err != nil || end != json.Delim('}') {
-				return errFutureCensusShape
-			}
-		case '[':
-			for dec.More() {
-				if err := walk(); err != nil {
-					return err
-				}
-			}
-			if end, err := dec.Token(); err != nil || end != json.Delim(']') {
-				return errFutureCensusShape
-			}
-		default:
-			return errFutureCensusShape
-		}
-		return nil
-	}
-	if err := walk(); err != nil {
-		return err
-	}
-	if _, err := dec.Token(); err == nil {
-		return errFutureCensusShape
-	}
-	return nil
 }
 
 func ValidateFutureCensusRequestV1(v map[string]any) error {
 	if v == nil || !allowed(v, "session_id", "generation", "sources", "includes", "excludes", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms") || !required(v, "session_id", "generation", "sources") {
 		return errFutureCensusShape
 	}
-	if _, err := stringField(v, "session_id", 1, 256, nil); err != nil {
-		return err
+	if s, err := stringField(v, "session_id", 1, 1024, nil); err != nil || strings.TrimSpace(s) == "" {
+		return errFutureCensusValue
 	}
 	if _, err := censusUint(v, "generation", 1, futureMaxCount, true, 0); err != nil {
 		return err
@@ -159,13 +96,13 @@ func ValidateFutureCensusRequestV1(v map[string]any) error {
 	for _, b := range []struct {
 		k             string
 		min, max, def uint64
-	}{{"down_depth", 0, 64, 1}, {"up_depth", 0, 64, 0}, {"max_nodes", 1, 10000, 10000}, {"timeout_ms", 1, 60000, 60000}, {"request_timeout_ms", 1, 60000, 60000}} {
+	}{{"down_depth", 0, 64, 1}, {"up_depth", 0, 64, 0}, {"max_nodes", 1, 10000, 10000}, {"timeout_ms", 1, 60000, 60000}, {"request_timeout_ms", 1, 60000, 30000}} {
 		if _, err := censusUint(v, b.k, b.min, b.max, false, b.def); err != nil {
 			return err
 		}
 	}
 	t, _ := censusUint(v, "timeout_ms", 1, 60000, false, 60000)
-	rt, _ := censusUint(v, "request_timeout_ms", 1, 60000, false, t)
+	rt, _ := censusUint(v, "request_timeout_ms", 1, 60000, false, 30000)
 	if rt > t {
 		return errFutureCensusValue
 	}
@@ -181,13 +118,16 @@ func validateCensusStrings(v map[string]any, key string, requiredField, roots bo
 		return nil
 	}
 	items, ok := raw.([]any)
-	if !ok || items == nil || requiredField && len(items) == 0 {
+	if !ok || items == nil || len(items) > 10000 || requiredField && len(items) == 0 {
 		return errFutureCensusShape
 	}
 	seen := map[string]bool{}
 	for _, item := range items {
 		s, ok := item.(string)
-		if !ok || s == "" || !futureCensusPattern.MatchString(s) {
+		if !ok {
+			return errFutureCensusValue
+		}
+		if _, err := stringField(map[string]any{"value": s}, "value", 1, 1024, futureCensusPattern); err != nil {
 			return errFutureCensusValue
 		}
 		n := path.Clean(s)
@@ -241,8 +181,9 @@ func ValidateFutureCensusResultV1(v map[string]any) error {
 		}
 	}
 	for _, k := range []string{"census_id", "capture_set_id", "session_id"} {
-		if _, e := stringField(v, k, 1, 256, nil); e != nil {
-			return e
+		s, e := stringField(v, k, 1, 1024, nil)
+		if e != nil || strings.TrimSpace(s) == "" {
+			return errFutureCensusValue
 		}
 	}
 	authority, err := censusUint(v, "authority", 0, 0, true, 0)

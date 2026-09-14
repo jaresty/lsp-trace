@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -91,7 +90,18 @@ func TestFutureCensusStrictParserPrecedenceAndRequestSemantics(t *testing.T) {
 		t.Fatalf("standalone map semantics rejected integer input: %v", e)
 	}
 	if _, e := DecodeFutureCensusRequestV1([]byte(`{"unknown":1,"unknown":2}`)); !errors.Is(e, errFutureCensusDuplicate) {
-		t.Fatalf("duplicate must precede unknown/type semantics: %v", e)
+		t.Fatalf("complete duplicate must precede unknown/type semantics: %v", e)
+	}
+	for name, raw := range map[string]string{
+		"top_level_incomplete": `{"session_id":"s","generation":1,"sources":["."],"x":1,"x":`,
+		"nested_incomplete":    `{"session_id":"s","generation":1,"sources":["."],"nested":{"x":1,"x":2`,
+	} {
+		t.Run("parse_invalid_before_duplicate_"+name, func(t *testing.T) {
+			_, e := DecodeFutureCensusRequestV1([]byte(raw))
+			if !errors.Is(e, errFutureCensusShape) || errors.Is(e, errFutureCensusDuplicate) {
+				t.Fatalf("ASSERT_CENSUS_COMPLETE_VALIDITY_BEFORE_DUPLICATE: got %v", e)
+			}
+		})
 	}
 	for name, raw := range map[string]string{"nil": "null", "type": "[]", "unknown": `{"session_id":"s","generation":1,"sources":["."],"output_selector":"x"}`, "trailing": valid + ` {}`, "duplicate": `{"session_id":"s","generation":1,"sources":["."],"sources":["a"]}`} {
 		t.Run(name, func(t *testing.T) {
@@ -108,12 +118,49 @@ func TestFutureCensusStrictParserPrecedenceAndRequestSemantics(t *testing.T) {
 			}
 		})
 	}
-	for name, raw := range map[string]string{"absolute": `{"session_id":"s","generation":1,"sources":["/x"]}`, "backslash": `{"session_id":"s","generation":1,"sources":["a\\b"]}`, "unclean": `{"session_id":"s","generation":1,"sources":["a/./b"]}`, "traversal": `{"session_id":"s","generation":1,"sources":["../a"]}`, "duplicate": `{"session_id":"s","generation":1,"sources":["a","a"]}`, "bad_pattern": `{"session_id":"s","generation":1,"sources":["."],"includes":["["]}`, "timeout_order": `{"session_id":"s","generation":1,"sources":["."],"timeout_ms":1,"request_timeout_ms":2}`, "depth": `{"session_id":"s","generation":1,"sources":["."],"down_depth":65}`, "nodes": `{"session_id":"s","generation":1,"sources":["."],"max_nodes":0}`} {
+	for name, raw := range map[string]string{"absolute": `{"session_id":"s","generation":1,"sources":["/x"]}`, "backslash": `{"session_id":"s","generation":1,"sources":["a\\b"]}`, "unclean": `{"session_id":"s","generation":1,"sources":["a/./b"]}`, "traversal": `{"session_id":"s","generation":1,"sources":["../a"]}`, "duplicate": `{"session_id":"s","generation":1,"sources":["a","a"]}`, "bad_pattern": `{"session_id":"s","generation":1,"sources":["."],"includes":["["]}`, "blank_session": `{"session_id":" \t ","generation":1,"sources":["."]}`, "timeout_order": `{"session_id":"s","generation":1,"sources":["."],"timeout_ms":1,"request_timeout_ms":2}`, "depth": `{"session_id":"s","generation":1,"sources":["."],"down_depth":65}`, "nodes": `{"session_id":"s","generation":1,"sources":["."],"max_nodes":0}`} {
 		t.Run(name, func(t *testing.T) {
 			if _, e := DecodeFutureCensusRequestV1([]byte(raw)); e == nil {
 				t.Fatal("accepted")
 			}
 		})
+	}
+	for _, n := range []int{1024, 1025} {
+		v := map[string]any{"session_id": strings.Repeat("s", n), "generation": uint64(1), "sources": []any{"."}}
+		e := ValidateFutureCensusRequestV1(v)
+		if (e == nil) != (n == 1024) {
+			t.Fatalf("ASSERT_CENSUS_SESSION_ID_LIMIT_%d: %v", n, e)
+		}
+	}
+	decoded, e := DecodeFutureCensusRequestV1([]byte(valid))
+	if e != nil || decoded["timeout_ms"] != uint64(60000) || decoded["request_timeout_ms"] != uint64(30000) {
+		t.Fatalf("ASSERT_CENSUS_MCP_TIMEOUT_DEFAULTS: decoded=%v err=%v", decoded, e)
+	}
+	for _, key := range []string{"sources", "includes", "excludes"} {
+		t.Run("limits_"+key, func(t *testing.T) {
+			items := make([]any, 10000)
+			for i := range items {
+				items[i] = "p" + strings.Repeat("a", i%1000) + string(rune(0x1000+i))
+			}
+			v := map[string]any{"session_id": "s", "generation": uint64(1), "sources": []any{"."}}
+			v[key] = items
+			if e := ValidateFutureCensusRequestV1(v); e != nil {
+				t.Fatalf("ASSERT_CENSUS_ARRAY_LIMIT_10000: %v", e)
+			}
+			v[key] = append(items, "overflow")
+			if e := ValidateFutureCensusRequestV1(v); e == nil {
+				t.Fatal("ASSERT_CENSUS_ARRAY_LIMIT_10001: accepted")
+			}
+		})
+		v := map[string]any{"session_id": "s", "generation": uint64(1), "sources": []any{"."}}
+		v[key] = []any{strings.Repeat("a", 1024)}
+		if e := ValidateFutureCensusRequestV1(v); e != nil {
+			t.Fatalf("ASSERT_CENSUS_STRING_LIMIT_1024[%s]: %v", key, e)
+		}
+		v[key] = []any{strings.Repeat("a", 1025)}
+		if e := ValidateFutureCensusRequestV1(v); e == nil {
+			t.Fatalf("ASSERT_CENSUS_STRING_LIMIT_1025[%s]: accepted", key)
+		}
 	}
 }
 
@@ -139,7 +186,17 @@ func TestFutureCensusResultParityCeilingsAndEnvelopes(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("field parity got=%v", got)
 	}
-	for name, mutate := range map[string]func(map[string]any){"authority": func(v map[string]any) { v["authority"] = json.Number("1") }, "calls": func(v map[string]any) { v["cross_capture_calls"] = []any{"x"} }, "leiden": func(v map[string]any) { v["leiden_admissible"] = true }, "accounting": func(v map[string]any) { v["file_accounting"].(map[string]any)["processed"] = json.Number("2") }, "ceiling": func(v map[string]any) { v["target_count"] = json.Number("10001") }, "private": func(v map[string]any) { v["publication"].(map[string]any)["path"] = "/private" }} {
+	for _, key := range []string{"census_id", "capture_set_id", "session_id"} {
+		for _, n := range []int{1024, 1025} {
+			v := decodeMap(t, validFutureCensusResultJSON)
+			v[key] = strings.Repeat("x", n)
+			e := ValidateFutureCensusResultV1(v)
+			if (e == nil) != (n == 1024) {
+				t.Fatalf("ASSERT_CENSUS_RESULT_ID_LIMIT_%s_%d: %v", key, n, e)
+			}
+		}
+	}
+	for name, mutate := range map[string]func(map[string]any){"authority": func(v map[string]any) { v["authority"] = json.Number("1") }, "calls": func(v map[string]any) { v["cross_capture_calls"] = []any{"x"} }, "leiden": func(v map[string]any) { v["leiden_admissible"] = true }, "accounting": func(v map[string]any) { v["file_accounting"].(map[string]any)["processed"] = json.Number("2") }, "ceiling": func(v map[string]any) { v["target_count"] = json.Number("10001") }, "blank_census_id": func(v map[string]any) { v["census_id"] = " \t " }, "blank_capture_set_id": func(v map[string]any) { v["capture_set_id"] = " \t " }, "blank_session_id": func(v map[string]any) { v["session_id"] = " \t " }, "private": func(v map[string]any) { v["publication"].(map[string]any)["path"] = "/private" }} {
 		t.Run(name, func(t *testing.T) {
 			v := decodeMap(t, validFutureCensusResultJSON)
 			mutate(v)
@@ -155,29 +212,23 @@ func TestFutureCensusResultParityCeilingsAndEnvelopes(t *testing.T) {
 	domain := `{"envelope_version":"1","envelope_schema_id":"` + FutureCensusDomainErrorID + `","tool":"lsp_trace_v1_census","request_id":"r","outcome":"DOMAIN_ERROR","operation_status":"FAILED","isError":true,"error":{"schema_version":"lsp-trace.census-diagnostic.v1","status":"FAILED","stage":"acquisition","code":"ACQUISITION_FAILED","batch_ordinal":1,"retry":true}}`
 	schemaAccepts(t, s[FutureCensusDomainErrorID], []byte(domain), true)
 }
-func TestFutureCensusManifestIsSeparateAndCurrentManifestUnchanged(t *testing.T) {
+func TestFutureCensusSchemasAreDirectAndHistoricalManifestUnchanged(t *testing.T) {
+	futureCensusSchemas(t)
 	base, e := LoadManifest()
 	if e != nil {
 		t.Fatal(e)
 	}
-	before, _ := json.Marshal(base)
-	future := WithFutureCensus(base)
-	after, _ := json.Marshal(base)
-	if !bytes.Equal(before, after) {
-		t.Fatal("future constructor mutated historical manifest")
-	}
-	if len(future.Tools) != len(base.Tools)+1 {
-		t.Fatal("future constructor cardinality")
+	if e := ValidateManifest(base); e != nil {
+		t.Fatalf("historical manifest no longer validates: %v", e)
 	}
 	for _, tool := range base.Tools {
 		if tool.Name == FutureCensusTool || tool.Name == "lsp_trace_v1_structural_context" {
-			t.Fatalf("future operation registered: %s", tool.Name)
+			t.Fatalf("operation 34/35 future contract registered: %s", tool.Name)
 		}
 	}
 	if len(base.Tools) != 13 {
-		t.Fatalf("historical manifest tool records changed: %d", len(base.Tools))
+		t.Fatalf("historical stage-1 manifest changed: %d", len(base.Tools))
 	}
-	if reflect.DeepEqual(base, future) {
-		t.Fatal("future constructor made no extension")
-	}
+	// The canonical MCP registry remains guarded at exactly 33 operations by
+	// cmd/lsp-trace-mcp TestRegistrySurface; future schemas carry no authority.
 }
