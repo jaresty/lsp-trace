@@ -297,6 +297,8 @@ Typed admission, identity, lineage, terminal accounting, privacy/deletion, suppl
 
 ## Follow-up
 
+The documentation-only [ADR 0007 prerequisite bundle scaffold](../pilot/adr0007/README.md) indexes the draft gates, artifact inventory, ownership matrix, evaluation plan, protocol outline, and threat model. Its `PREREQUISITES_DRAFT` / `PILOT_DISABLED` state grants no execution authority.
+
 Before pilot execution:
 
 1. Draft and approve the digest-referenced evaluation plan with every required numeric threshold and acquisition-mode case.
