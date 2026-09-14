@@ -18,10 +18,12 @@ const (
 	censusStageConfig      censusFailureStage = "config"
 	censusStageAcquisition censusFailureStage = "acquisition"
 	censusStageDiscovery   censusFailureStage = "discovery"
+	censusStagePublication censusFailureStage = "publication"
 
 	censusCodeInvalidConfig     censusFailureCode = "INVALID_CONFIG"
 	censusCodeAcquisitionFailed censusFailureCode = "ACQUISITION_FAILED"
 	censusCodeDiscoveryFailed   censusFailureCode = "DISCOVERY_FAILED"
+	censusCodePublicationFailed censusFailureCode = "PUBLICATION_FAILED"
 )
 
 type censusAdmissionFailure struct {
@@ -125,4 +127,8 @@ func censusAcquisitionFailure() *censusAdmissionFailure {
 
 func censusDiscoveryFailure() *censusAdmissionFailure {
 	return &censusAdmissionFailure{stage: censusStageDiscovery, code: censusCodeDiscoveryFailed}
+}
+
+func censusPublicationFailure() *censusAdmissionFailure {
+	return &censusAdmissionFailure{stage: censusStagePublication, code: censusCodePublicationFailed}
 }

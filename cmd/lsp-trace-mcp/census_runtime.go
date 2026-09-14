@@ -148,6 +148,13 @@ func effectiveCensusDeadline(parent context.Context, configured time.Time) time.
 	return configured
 }
 
+func censusRuntimeAcquisitionLimits(options censusRuntimeConfig) acquisitionops.Limits {
+	maxNodes, maxRequests, maxEvidenceBytes, maxPathWork := int(options.maxNodes), 1000, 4<<20, 100000
+	timeoutMS, requestTimeoutMS := int(options.timeoutMS), int(options.requestTimeoutMS)
+	maxResponseBytes, maxMessages := 4<<20, 64
+	return acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
+}
+
 func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure) {
 	if r == nil || r.runtime == nil || r.runtime.Manager == nil || result.admitted.sessionID == "" || result.admitted.generation == 0 || result.deadline.IsZero() {
 		return censusacquisition.Projection{}, censusConfigFailure()
@@ -155,10 +162,7 @@ func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResu
 	options := cloneCensusRuntimeConfig(result.options)
 	ctx, cancel := context.WithDeadline(parent, result.deadline)
 	defer cancel()
-	maxNodes, maxRequests, maxEvidenceBytes, maxPathWork := int(options.maxNodes), 1000, 4<<20, 100000
-	timeoutMS, requestTimeoutMS := int(options.timeoutMS), int(options.requestTimeoutMS)
-	maxResponseBytes, maxMessages := 4<<20, 64
-	limits := acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
+	limits := censusRuntimeAcquisitionLimits(options)
 	core := censusacquisition.Core{
 		Discoverer: fixedCensusRuntimeDiscovery{discovery: result.discovery},
 		Acquirer:   censusRuntimeBatchAcquirer{runtime: r.runtime, admitted: result.admitted, limits: limits},

@@ -109,6 +109,9 @@ func TestCensusCLIResultClosedDeterministicPrivateProjection(t *testing.T) {
 	if r.Authority != 0 || r.SourceGraphComplete != "UNKNOWN" || r.NativeAggregateCustody || r.CrossCaptureCalls == nil || len(r.CrossCaptureCalls) != 0 || r.LeidenAdmissible {
 		t.Fatal("ASSERT_CENSUS_FIXED_CEILING")
 	}
+	if r.Publication.DirectorySyncStatus != "COMPLETE" || r.Publication.CloseStatus != "COMPLETE" || strings.Contains(string(a), publication.DirectorySyncComplete) || strings.Contains(string(a), publication.CloseComplete) {
+		t.Fatalf("ASSERT_CENSUS_PUBLICATION_STATUS_NORMALIZED: publication=%+v raw=%s", r.Publication, a)
+	}
 }
 func sortStrings(v []string) {
 	for i := range v {

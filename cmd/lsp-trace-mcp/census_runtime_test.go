@@ -237,6 +237,13 @@ func TestPlannedBatchUsesAdmittedHostManagerWithoutLifecycleDelta(t *testing.T) 
 	}
 }
 
+func TestCensusRuntimeAcquisitionLimitsAreFixed(t *testing.T) {
+	limits := censusRuntimeAcquisitionLimits(censusRuntimeConfig{maxNodes: 321, timeoutMS: 987, requestTimeoutMS: 654})
+	if limits.MaxNodes == nil || *limits.MaxNodes != 321 || limits.MaxRequests == nil || *limits.MaxRequests != 1000 || limits.MaxEvidenceBytes == nil || *limits.MaxEvidenceBytes != 4<<20 || limits.MaxPathWork == nil || *limits.MaxPathWork != 100000 || limits.TimeoutMS == nil || *limits.TimeoutMS != 987 || limits.RequestTimeoutMS == nil || *limits.RequestTimeoutMS != 654 || limits.MaxResponseBytes == nil || *limits.MaxResponseBytes != 4<<20 || limits.MaxMessages == nil || *limits.MaxMessages != 64 {
+		t.Fatalf("ASSERT_MCP_CENSUS_FIXED_ACQUISITION_LIMITS: %+v", limits)
+	}
+}
+
 func TestEffectiveCensusDeadlineNeverExtendsParent(t *testing.T) {
 	configured := time.Now().Add(time.Hour)
 	parentDeadline := time.Now().Add(time.Minute)

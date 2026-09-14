@@ -1,289 +1,56 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
-	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
-	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/publication"
 )
 
+type censusCLIResult = censusresult.Result
+type censusCLIFileAccounting = censusresult.FileAccounting
+type censusCLISymbolAccounting = censusresult.SymbolAccounting
+type censusCLIPublicationReceipt = censusresult.PublicationReceipt
+type censusFailureStage = censusresult.Stage
+type censusFailureCode = censusresult.Code
+type censusCLIDiagnostic = censusresult.Diagnostic
+
 const (
-	censusResultSchemaVersion     = "lsp-trace.census-result.v1"
-	censusDiagnosticSchemaVersion = "lsp-trace.census-diagnostic.v1"
+	censusResultSchemaVersion     = censusresult.SchemaVersion
+	censusDiagnosticSchemaVersion = censusresult.DiagnosticSchemaVersion
+	censusStageSyntax             = censusresult.StageSyntax
+	censusStageConfig             = censusresult.StageConfig
+	censusStageDiscovery          = censusresult.StageDiscovery
+	censusStageAcquisition        = censusresult.StageAcquisition
+	censusStageAssembly           = censusresult.StageAssembly
+	censusStagePublication        = censusresult.StagePublication
+	censusStageCommitted          = censusresult.StageCommitted
+	censusCodeInvalidSyntax       = censusresult.CodeInvalidSyntax
+	censusCodeInvalidConfig       = censusresult.CodeInvalidConfig
+	censusCodeDiscoveryFailed     = censusresult.CodeDiscoveryFailed
+	censusCodeAcquisitionFailed   = censusresult.CodeAcquisitionFailed
+	censusCodeAssemblyFailed      = censusresult.CodeAssemblyFailed
+	censusCodePublicationFailed   = censusresult.CodePublicationFailed
+	censusCodeCommittedDegraded   = censusresult.CodeCommittedDegraded
 )
-
-// censusCLIResult is the closed public projection of an already verified and
-// published census. It deliberately has no source, provider, path, stderr, or
-// native graph byte fields.
-type censusCLIResult struct {
-	SchemaVersion          string                      `json:"schema_version"`
-	Status                 string                      `json:"status"`
-	CensusID               string                      `json:"census_id"`
-	CaptureSetID           string                      `json:"capture_set_id"`
-	SessionID              string                      `json:"session_id"`
-	Generation             uint64                      `json:"generation"`
-	TargetCount            int                         `json:"target_count"`
-	BatchCount             int                         `json:"batch_count"`
-	FileAccounting         censusCLIFileAccounting     `json:"file_accounting"`
-	SymbolAccounting       censusCLISymbolAccounting   `json:"symbol_accounting"`
-	Authority              int                         `json:"authority"`
-	SourceGraphComplete    string                      `json:"source_graph_complete"`
-	NativeAggregateCustody bool                        `json:"native_aggregate_custody"`
-	CrossCaptureCalls      []string                    `json:"cross_capture_calls"`
-	LeidenAdmissible       bool                        `json:"leiden_admissible"`
-	Publication            censusCLIPublicationReceipt `json:"publication"`
-}
-
-type censusCLIFileAccounting struct {
-	Denominator          int `json:"denominator"`
-	Processed            int `json:"processed"`
-	Excluded             int `json:"excluded"`
-	Forbidden            int `json:"forbidden"`
-	Unreadable           int `json:"unreadable"`
-	Unsupported          int `json:"unsupported"`
-	DocumentSymbolFailed int `json:"document_symbol_failed"`
-	Omitted              int `json:"omitted"`
-	Incomplete           int `json:"incomplete"`
-}
-
-type censusCLISymbolAccounting struct {
-	Denominator       int `json:"denominator"`
-	Prepared          int `json:"prepared"`
-	Unsupported       int `json:"unsupported"`
-	PreparationFailed int `json:"preparation_failed"`
-	PrepareMissing    int `json:"prepare_missing"`
-	NonCallable       int `json:"non_callable"`
-	Omitted           int `json:"omitted"`
-	Incomplete        int `json:"incomplete"`
-}
-
-type censusCLIPublicationReceipt struct {
-	Selector            string `json:"selector"`
-	Digest              string `json:"digest"`
-	ByteLength          uint64 `json:"byte_length"`
-	VerificationStatus  string `json:"verification_status"`
-	DirectorySyncStatus string `json:"directory_sync_status"`
-	CloseStatus         string `json:"close_status"`
-}
 
 func buildCensusCLIResult(p censusacquisition.Projection, receipt publication.BoundFileReceipt) (censusCLIResult, error) {
-	m := p.Manifest
-	if err := validateCensusLedger(m.FileLedger); err != nil {
-		return censusCLIResult{}, fmt.Errorf("file accounting: %w", err)
-	}
-	if err := validateCensusLedger(m.SymbolLedger); err != nil {
-		return censusCLIResult{}, fmt.Errorf("symbol accounting: %w", err)
-	}
-	r := censusCLIResult{
-		SchemaVersion: censusResultSchemaVersion, Status: "SUCCEEDED",
-		CensusID: p.CensusID, CaptureSetID: m.LogicalDigest,
-		SessionID: p.Session.SessionID, Generation: p.Session.Generation,
-		TargetCount: len(m.Targets), BatchCount: len(m.Batches),
-		FileAccounting: projectCensusFileAccounting(m.FileLedger), SymbolAccounting: projectCensusSymbolAccounting(m.SymbolLedger),
-		Authority: 0, SourceGraphComplete: "UNKNOWN", NativeAggregateCustody: false,
-		CrossCaptureCalls: []string{}, LeidenAdmissible: false,
-		Publication: censusCLIPublicationReceipt{Selector: receipt.FinalSelector, Digest: receipt.Digest, ByteLength: receipt.ByteLength, VerificationStatus: receipt.VerificationStatus, DirectorySyncStatus: receipt.DirectorySyncStatus, CloseStatus: receipt.CloseStatus},
-	}
-	if err := validateCensusCLIResult(r); err != nil {
-		return censusCLIResult{}, err
-	}
-	return r, nil
+	return censusresult.Build(p, censusresult.PublicationEvidence{Selector: receipt.FinalSelector, Digest: receipt.Digest, ByteLength: receipt.ByteLength, VerificationStatus: receipt.VerificationStatus, DirectorySyncStatus: receipt.DirectorySyncStatus, CloseStatus: receipt.CloseStatus})
 }
-
-var sha256Digest = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-
-func validateCensusCLIResult(r censusCLIResult) error {
-	if r.SchemaVersion != censusResultSchemaVersion || r.Status != "SUCCEEDED" || strings.TrimSpace(r.CensusID) == "" || strings.TrimSpace(r.CaptureSetID) == "" || strings.TrimSpace(r.SessionID) == "" || r.Generation == 0 {
-		return errors.New("invalid census result identity")
-	}
-	if r.TargetCount < 1 || r.BatchCount < 1 || r.BatchCount != (r.TargetCount+62)/63 {
-		return errors.New("invalid census target or batch accounting")
-	}
-	f := r.FileAccounting
-	fileCounts := []int{f.Processed, f.Excluded, f.Forbidden, f.Unreadable, f.Unsupported, f.DocumentSymbolFailed, f.Omitted, f.Incomplete}
-	if f.Denominator < 0 || hasNegativeCensusCount(fileCounts) || sumCensusCounts(fileCounts) != f.Denominator {
-		return errors.New("file accounting does not reconcile")
-	}
-	s := r.SymbolAccounting
-	symbolCounts := []int{s.Prepared, s.Unsupported, s.PreparationFailed, s.PrepareMissing, s.NonCallable, s.Omitted, s.Incomplete}
-	if s.Denominator < 0 || hasNegativeCensusCount(symbolCounts) || sumCensusCounts(symbolCounts) != s.Denominator {
-		return errors.New("symbol accounting does not reconcile")
-	}
-	if r.Authority != 0 || r.SourceGraphComplete != "UNKNOWN" || r.NativeAggregateCustody || r.CrossCaptureCalls == nil || len(r.CrossCaptureCalls) != 0 || r.LeidenAdmissible {
-		return errors.New("invalid census authority ceiling")
-	}
-	p := r.Publication
-	if !safeCensusSelector(p.Selector) || !sha256Digest.MatchString(p.Digest) || p.ByteLength == 0 {
-		return errors.New("invalid census publication identity")
-	}
-	if p.VerificationStatus != "VERIFIED" && p.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
-		return errors.New("invalid census verification status")
-	}
-	if p.DirectorySyncStatus != publication.DirectorySyncComplete && p.DirectorySyncStatus != publication.DirectorySyncFailed && p.DirectorySyncStatus != publication.DirectorySyncNotAttemptedPostCommit {
-		return errors.New("invalid census directory sync status")
-	}
-	if p.CloseStatus != publication.CloseComplete && p.CloseStatus != publication.CloseFailed {
-		return errors.New("invalid census close status")
-	}
-	return nil
-}
-
-func hasNegativeCensusCount(counts []int) bool {
-	for _, count := range counts {
-		if count < 0 {
-			return true
-		}
-	}
-	return false
-}
-func sumCensusCounts(counts []int) (total int) {
-	for _, count := range counts {
-		total += count
-	}
-	return total
-}
-
-func projectCensusFileAccounting(l captureset.Ledger) (a censusCLIFileAccounting) {
-	a.Denominator = l.Denominator
-	for _, e := range l.Entries {
-		switch e.Disposition {
-		case censusacquisition.FileProcessed:
-			a.Processed++
-		case string(census.FileExcluded):
-			a.Excluded++
-		case string(census.FileForbidden):
-			a.Forbidden++
-		case string(census.FileUnreadable):
-			a.Unreadable++
-		case string(census.FileUnsupported):
-			a.Unsupported++
-		case string(census.FileDocumentSymbolFailed):
-			a.DocumentSymbolFailed++
-		case string(census.FileOmitted):
-			a.Omitted++
-		case string(census.FileIncomplete):
-			a.Incomplete++
-		}
-	}
-	return
-}
-func projectCensusSymbolAccounting(l captureset.Ledger) (a censusCLISymbolAccounting) {
-	a.Denominator = l.Denominator
-	for _, e := range l.Entries {
-		switch e.Disposition {
-		case censusacquisition.SymbolPrepared:
-			a.Prepared++
-		case string(census.SymbolUnsupported):
-			a.Unsupported++
-		case string(census.SymbolPreparationFailed):
-			a.PreparationFailed++
-		case string(census.SymbolPrepareMissing):
-			a.PrepareMissing++
-		case string(census.SymbolNonCallable):
-			a.NonCallable++
-		case string(census.SymbolOmitted):
-			a.Omitted++
-		case string(census.SymbolIncomplete):
-			a.Incomplete++
-		}
-	}
-	return
-}
-
-func validateCensusLedger(l captureset.Ledger) error {
-	if l.Denominator < 0 || len(l.Entries) != l.Denominator {
-		return errors.New("denominator does not reconcile")
-	}
-	seen := make([]bool, l.Denominator)
-	for _, e := range l.Entries {
-		if e.Ordinal < 0 || e.Ordinal >= l.Denominator || seen[e.Ordinal] || e.Disposition == "" {
-			return errors.New("invalid terminal disposition")
-		}
-		seen[e.Ordinal] = true
-	}
-	return nil
-}
-
-func safeCensusSelector(s string) bool {
-	return s != "" && !filepath.IsAbs(s) && filepath.IsLocal(s) && path.Clean(s) == s && !strings.ContainsRune(s, 0) && !strings.Contains(s, `\`)
-}
-
-func marshalCensusCLIResult(r censusCLIResult) ([]byte, error) {
-	if err := validateCensusCLIResult(r); err != nil {
-		return nil, err
-	}
-	b, err := json.Marshal(r)
-	if err != nil {
-		return nil, err
-	}
-	return append(b, '\n'), nil
-}
-
-type censusFailureStage string
-type censusFailureCode string
-
-const (
-	censusStageSyntax           censusFailureStage = "syntax"
-	censusStageConfig           censusFailureStage = "config"
-	censusStageDiscovery        censusFailureStage = "discovery"
-	censusStageAcquisition      censusFailureStage = "acquisition"
-	censusStageAssembly         censusFailureStage = "assembly"
-	censusStagePublication      censusFailureStage = "publication"
-	censusStageCommitted        censusFailureStage = "committed-degradation"
-	censusCodeInvalidSyntax     censusFailureCode  = "INVALID_SYNTAX"
-	censusCodeInvalidConfig     censusFailureCode  = "INVALID_CONFIG"
-	censusCodeDiscoveryFailed   censusFailureCode  = "DISCOVERY_FAILED"
-	censusCodeAcquisitionFailed censusFailureCode  = "ACQUISITION_FAILED"
-	censusCodeAssemblyFailed    censusFailureCode  = "ASSEMBLY_FAILED"
-	censusCodePublicationFailed censusFailureCode  = "PUBLICATION_FAILED"
-	censusCodeCommittedDegraded censusFailureCode  = "COMMITTED_DEGRADED"
-)
-
-type censusCLIDiagnostic struct {
-	SchemaVersion string             `json:"schema_version"`
-	Status        string             `json:"status"`
-	Stage         censusFailureStage `json:"stage"`
-	Code          censusFailureCode  `json:"code"`
-	BatchOrdinal  *int               `json:"batch_ordinal,omitempty"`
-	Retry         bool               `json:"retry"`
-}
-
+func validateCensusCLIResult(r censusCLIResult) error          { return censusresult.Validate(r) }
+func marshalCensusCLIResult(r censusCLIResult) ([]byte, error) { return censusresult.Marshal(r) }
 func buildCensusCLIDiagnostic(stage censusFailureStage, batchOrdinal *int) (censusCLIDiagnostic, error) {
-	codes := map[censusFailureStage]censusFailureCode{censusStageSyntax: censusCodeInvalidSyntax, censusStageConfig: censusCodeInvalidConfig, censusStageDiscovery: censusCodeDiscoveryFailed, censusStageAcquisition: censusCodeAcquisitionFailed, censusStageAssembly: censusCodeAssemblyFailed, censusStagePublication: censusCodePublicationFailed, censusStageCommitted: censusCodeCommittedDegraded}
-	code, ok := codes[stage]
-	if !ok || batchOrdinal != nil && (*batchOrdinal < 0 || stage != censusStageAcquisition) {
-		return censusCLIDiagnostic{}, errors.New("invalid census diagnostic")
-	}
-	d := censusCLIDiagnostic{SchemaVersion: censusDiagnosticSchemaVersion, Status: "FAILED", Stage: stage, Code: code, BatchOrdinal: batchOrdinal, Retry: stage != censusStageCommitted}
-	if stage == censusStageCommitted {
-		d.Status = "SUCCEEDED_DEGRADED"
-	}
-	return d, nil
+	return censusresult.NewDiagnostic(stage, batchOrdinal)
 }
 func marshalCensusCLIDiagnostic(d censusCLIDiagnostic) ([]byte, error) {
-	expected, err := buildCensusCLIDiagnostic(d.Stage, d.BatchOrdinal)
-	if err != nil || d.SchemaVersion != expected.SchemaVersion || d.Status != expected.Status || d.Stage != expected.Stage || d.Code != expected.Code || d.Retry != expected.Retry {
-		if err == nil {
-			err = errors.New("invalid census diagnostic")
-		}
-		return nil, err
-	}
-	b, err := json.Marshal(d)
-	if err != nil {
-		return nil, err
-	}
-	return append(b, '\n'), nil
+	return censusresult.MarshalDiagnostic(d)
 }
 
 type censusCLIOptions struct {
