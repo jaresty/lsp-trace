@@ -10,7 +10,7 @@ This directory is a documentation-only scaffold. It does not freeze or approve a
 
 Canonical draft schemas, if later authored, belong under `docs/pilot/adr0007/schemas/`. No approved artifacts exist in this scaffold. Later approved immutable bytes belong under `qualification/adr0007/approved/` only after every gate is independently satisfied and recorded, and the approved bundle must bind every component by digest.
 
-The prerequisite architecture direction is a separate backend-neutral, network-denied subprocess behind a JSON/NDJSON boundary. It must never enter the core process, public registry, core `go.mod`, CLI, or MCP surface. Backend-specific types never cross the protocol boundary. Yzma remains an unfrozen, replaceable candidate backend, not an authority; process isolation itself confers no authority.
+The prerequisite architecture direction is a separate backend-neutral, network-denied subprocess behind a serialization-neutral boundary. Complete-JSON versus NDJSON framing remains an unresolved G1 freeze decision; neither term names a frozen wire contract here. It must never enter the core process, public registry, core `go.mod`, CLI, or MCP surface. Backend-specific types never cross the protocol boundary. Yzma remains an unfrozen, replaceable candidate backend, not an authority; process isolation itself confers no authority.
 
 ## Bundle index
 

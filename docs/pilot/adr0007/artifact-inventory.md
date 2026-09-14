@@ -6,7 +6,7 @@ Status: `PREREQUISITES_DRAFT`; pilot: `PILOT_DISABLED`. Every raw and derived ar
 
 - submitted source bytes; canonicalized representations; selectors; admission attempts and rejections;
 - structural evidence and provenance references;
-- backend-neutral protocol frames, session/request/response identities, state transitions, cancellations, shutdowns and accounting closures;
+- backend-neutral protocol artifacts, interaction identities, lifecycle/control evidence and accounting closures, using only vocabulary and representations later frozen by G1;
 - prompts, system instructions, templates, grammars, sampling and seeds;
 - descriptions, embeddings, indexes, queries, rankings, groups, rationales, work-context packets and caches, all generated with `authority=0` and `accepted=false`;
 - correction, supersession, invalidation, tombstone, rebuild and deletion receipts;

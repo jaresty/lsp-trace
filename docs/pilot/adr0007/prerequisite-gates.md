@@ -6,7 +6,7 @@ All gates are conjunctive and fail closed. Each eventual gate record must contai
 
 | Gate | Required frozen evidence | Blocking condition |
 |---|---|---|
-| G1 Protocol | Versioned backend-neutral schemas, framing/state machine, accepted enums and denominator equations by immutable reference, conformance vectors | Any ambiguity, backend-specific type, schema drift, invalid transition, or unbalanced accounting |
+| G1 Protocol | Later-frozen versioned backend-neutral schemas, framing, negotiation, operation/control vocabulary, lifecycle rules, accepted accounting lists and equations by immutable reference, and conformance vectors | Any ambiguity, backend-specific type, schema drift, invalid lifecycle event, or unbalanced accounting |
 | G2 Admission/lineage | Typed corpora, TARGET/NEIGHBORHOOD/CENSUS, identity, correction, invalidation | Mutable identity or unaccounted admission |
 | G3 Artifact governance | Exhaustive class inventory and privacy/access/encryption/retention/deletion/backups policy | Unclassified artifact or missing disposition |
 | G4 Supply chain | Complete wrapper/runtime/model tuple; builder/archive/extracted hashes; Go/native SBOM and license closure; Mach-O, `otool`, `codesign`, quarantine and ABI evidence; GGUF provenance; vulnerability/revocation decisions | Mutable retrieval, download enabled, missing pin, unresolved license, incompatible ABI/model, quarantine, or revocation |
@@ -19,7 +19,7 @@ Pilot enablement requires a later explicit enablement record referencing one exa
 
 ## Unresolved freeze decisions
 
-G1 remains blocked until later decisions freeze protocol/schema versions; JSON versus NDJSON transport scope; the final LF/line-ending rule; canonical JSON and digest algorithms; state transitions; correlation, ordering, field, duplicate and unknown-field policy; limits; cancellation/shutdown/retry semantics; accepted-list references; corpus/item schema details; identity/cache encoding; lifecycle dispositions; backend capability negotiation; and conformance vectors.
+G1 remains blocked until later decisions freeze protocol/schema versions; framing as complete JSON values versus NDJSON records; the negotiation mechanism; operation and control vocabulary; state transitions; cancellation representation and races; the final LF/line-ending rule; canonicalization and digest algorithms; correlation, ordering, field, duplicate and unknown-field policy; limits; shutdown/retry semantics; accepted-list references; corpus/item schema details; identity/cache encoding; lifecycle dispositions; backend capability negotiation; and conformance vectors. Until then, descriptive capability terms confer no wire identity and may change at freeze.
 
 G4–G6 remain blocked until later decisions freeze the complete acquired supply-chain tuple, model choice, metric definitions, calibrated numeric thresholds, resource limits, environment and alternate-backend contract. The [Yzma candidate supply-chain dossier](supply-chain-candidate.md) is a checklist and candidate observation only, not gate evidence or a decision.
 

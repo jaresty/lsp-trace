@@ -68,7 +68,7 @@ Every item is required evidence for a later gate decision; an unchecked or passi
 ### Offline, containment and failure behavior
 
 - [ ] Start from empty external caches with network denied; prove build or installation preparation used only separately admitted frozen inputs.
-- [ ] With network denied, prove worker startup, `HELLO`, every request, cancellation, retry, failure, restart and shutdown performs no DNS, connect, listen, fetch, update or download.
+- [ ] With network denied, prove worker startup, negotiation, every operation and control interaction, retry, failure, restart and termination performs no DNS, connect, listen, fetch, update or download; all labels and lifecycle details remain subject to the G1 freeze.
 - [ ] Prove no fallback to a different model, runtime, backend, remote service, tool, source reread or filesystem traversal occurs when an artifact is absent or invalid.
 - [ ] Apply CPU, memory, wall-time, process/thread, file-descriptor, output and disk limits to the worker and descendants; verify forced termination and cleanup.
 - [ ] Verify cooperative and forced cancellation close accounting, kill descendants when required, bound output, remove or disposition temporary data, and do not resurrect revoked or deleted inputs.
