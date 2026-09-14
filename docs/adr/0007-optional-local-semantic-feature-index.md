@@ -1,7 +1,8 @@
 # ADR 0007: Pilot an optional local engineering-context index
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-13
+- **Accepted:** 2026-09-14
 
 ## Context
 
@@ -11,7 +12,7 @@ Revision-bound structural evidence can enumerate source symbols and preserve ser
 
 Yzma is a possible inference backend because it exposes local in-process `llama.cpp` inference, including constrained-generation and embedding APIs. Its installer verifies downloaded native-library files against release-published SHA-256 digests, and tagged releases identify compatible `llama.cpp` versions. Model verification, exact model and runtime artifact pinning, network prohibition, and process isolation are requirements imposed by this pilot wrapper, not guarantees supplied by Yzma.
 
-This decision is independent of canonical structural MCP operations 33–35. This ADR does not register or renumber operations 33–35, must not delay or alter them, and must not become part of `lsp-trace-mcp`. Yzma is not integrated into `lsp-trace`, its CLI, or `lsp-trace-mcp`. This Proposed ADR does not authorize implementation or shipment.
+This decision is independent of canonical structural MCP operations 33–35. This ADR does not register or renumber operations 33–35, must not delay or alter them, and must not become part of `lsp-trace-mcp`. Yzma is not integrated into `lsp-trace`, its CLI, or `lsp-trace-mcp`. Acceptance authorizes prerequisite work and, only after every frozen gate in this ADR is satisfied, implementation and execution of the isolated pilot. It does not authorize shipment, a public CLI or MCP surface, registry changes, or integration into core binaries.
 
 ## Decision
 
@@ -226,7 +227,7 @@ Thresholds are fixed before test execution. Promotion beyond an isolated rejecte
 
 Feature-inventory evaluation is an optional subtype and retains its independent semantic adjudication, unsupported-claim, false-merge, stakeholder-correction, and acceptance gates. It is not required for exact engineering retrieval use and cannot weaken the core quantitative gates.
 
-Passing evaluation does not authorize implementation, shipment, registry changes, a CLI command, or an MCP surface. Those require a separate accepted ADR and implementation authorization.
+Passing evaluation does not authorize shipment, registry changes, a public CLI command, an MCP surface, or integration into core binaries. Those require a separate accepted ADR and implementation authorization.
 
 ## Stop and rejection criteria
 
@@ -285,7 +286,7 @@ Retained as required baselines and as the final outcome if semantic methods do n
 
 ## Unresolved questions
 
-Only implementation-neutral choices may remain unresolved while this ADR is Proposed:
+The following implementation choices remain unresolved after acceptance and must be closed by the frozen prerequisites before pilot execution:
 
 1. Which public or synthetic typed corpora should be proposed for the frozen evaluation plan?
 2. Which model and quantization should be submitted for source, license, redistribution, vulnerability, and resource review?
@@ -296,11 +297,11 @@ Typed admission, identity, lineage, terminal accounting, privacy/deletion, suppl
 
 ## Follow-up
 
-Before any pilot execution or implementation authorization:
+Before pilot execution:
 
 1. Draft and approve the digest-referenced evaluation plan with every required numeric threshold and acquisition-mode case.
 2. Draft and approve typed admission, identity, lineage, terminal-state, provenance, privacy/deletion, and supply-chain schemas and policies.
 3. Assign and record all required owners.
-4. Review this Proposed ADR and immutable prerequisites, then explicitly accept, revise, or reject it.
+4. Verify that every immutable prerequisite is frozen and referenced by digest before enabling inference or indexing.
 
-Until those steps occur, there is no implementation authorization, no shipment authorization, no operation registration or renumbering, no public CLI or MCP design, and no Yzma integration.
+Until those prerequisite steps occur, there is no pilot execution authorization and no Yzma integration. This acceptance never grants shipment authorization, operation registration or renumbering, a public CLI or MCP surface, or integration into core binaries.
