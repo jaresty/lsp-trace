@@ -156,6 +156,43 @@ func TestNeighborhoodAndImpactClosedSemantics(t *testing.T) {
 	}
 }
 
+func TestImpactDepthIsIndependentOfEdgeOrder(t *testing.T) {
+	const managerID = "ts_0123456789abcdef0123456789abcdef"
+	root, _ := NodeID(managerID, 1, "root")
+	middle, _ := NodeID(managerID, 1, "middle")
+	far, _ := NodeID(managerID, 1, "far")
+	nearEdge, _ := EdgeID(managerID, 1, root, middle)
+	farEdge, _ := EdgeID(managerID, 1, middle, far)
+	i := ImpactResult{
+		RootNodeID: root, Direction: Outgoing, Depth: 1,
+		Nodes:            []Node{{ID: root}, {ID: middle}, {ID: far}},
+		Edges:            []Edge{{ID: nearEdge, CallerNodeID: root, CalleeNodeID: middle}, {ID: farEdge, CallerNodeID: middle, CalleeNodeID: far}},
+		ReachableNodeIDs: []string{middle, far}, WitnessEdgeIDs: []string{nearEdge, farEdge},
+	}
+	if err := i.Validate(1, 1); err == nil {
+		t.Fatal("edge order traversed beyond requested depth")
+	}
+}
+
+func TestGraphDigestBindsTopology(t *testing.T) {
+	const managerID = "ts_0123456789abcdef0123456789abcdef"
+	root, _ := NodeID(managerID, 1, "root")
+	a, _ := NodeID(managerID, 1, "a")
+	b, _ := NodeID(managerID, 1, "b")
+	edge, _ := EdgeID(managerID, 1, "edge")
+	q := validRequest()
+	accounting := validAccounting()
+	first := NewResult(managerID, 1, root, "utf-16", q, accounting, NeighborhoodResult{RootNodeID: root, Nodes: []Node{{ID: root}, {ID: a}, {ID: b}}, Edges: []Edge{{ID: edge, CallerNodeID: root, CalleeNodeID: a}}, OutgoingCount: 1})
+	second := NewResult(managerID, 1, root, "utf-16", q, accounting, NeighborhoodResult{RootNodeID: root, Nodes: []Node{{ID: root}, {ID: a}, {ID: b}}, Edges: []Edge{{ID: edge, CallerNodeID: root, CalleeNodeID: b}}, OutgoingCount: 1})
+	if first.GraphDigest == second.GraphDigest {
+		t.Fatal("graph digest did not bind edge endpoints")
+	}
+	first.Analysis = second.Analysis
+	if err := first.Validate(); err == nil {
+		t.Fatal("topology mutation accepted under stale graph digest")
+	}
+}
+
 func TestResultFixedSemanticsAndPrivacyShape(t *testing.T) {
 	const managerID = "ts_0123456789abcdef0123456789abcdef"
 	root, _ := NodeID(managerID, 1, "file:///secret.go", "Hidden")

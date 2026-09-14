@@ -275,23 +275,24 @@ func (i ImpactResult) Validate(up, down uint64) error {
 		return err
 	}
 	reachable := map[string]bool{i.RootNodeID: true}
+	frontier := map[string]bool{i.RootNodeID: true}
 	witness := map[string]bool{}
-	for d := uint64(0); d < i.Depth; d++ {
-		changed := false
+	for d := uint64(0); d < i.Depth && len(frontier) > 0; d++ {
+		next := map[string]bool{}
 		for _, e := range edges {
 			from, to := e.CallerNodeID, e.CalleeNodeID
 			if i.Direction == Incoming {
 				from, to = to, from
 			}
-			if reachable[from] && !reachable[to] {
-				reachable[to] = true
+			if frontier[from] && !reachable[to] {
+				next[to] = true
 				witness[e.ID] = true
-				changed = true
 			}
 		}
-		if !changed {
-			break
+		for id := range next {
+			reachable[id] = true
 		}
+		frontier = next
 	}
 	if err := exactSet(i.ReachableNodeIDs, reachable, i.RootNodeID); err != nil {
 		return err
@@ -414,27 +415,35 @@ func NewResult(managerID string, generation uint64, target, encoding string, q R
 			state = Complete
 		}
 	}
-	ids := []string{}
+	digest := ""
 	switch x := analysis.(type) {
 	case NeighborhoodResult:
-		for _, n := range x.Nodes {
-			ids = append(ids, n.ID)
-		}
-		for _, e := range x.Edges {
-			ids = append(ids, e.ID)
-		}
+		digest = graphDigest(x.Nodes, x.Edges)
 	case ImpactResult:
-		for _, n := range x.Nodes {
-			ids = append(ids, n.ID)
-		}
-		for _, e := range x.Edges {
-			ids = append(ids, e.ID)
-		}
+		digest = graphDigest(x.Nodes, x.Edges)
 	}
-	sort.Strings(ids)
-	g := sha256.Sum256([]byte(fmt.Sprint(ids)))
-	return Result{"lsp-trace.transient-structural-result.v1", "DELIVERY_CHECK", state, "TRANSIENT_LIVE", 0, Unknown, false, false, false, false, false, Calls, claimCeiling, managerID, generation, target, encoding, tp, rp, policy(apID), "sha256:" + hex.EncodeToString(g[:]), a, analysis, q}
+	return Result{"lsp-trace.transient-structural-result.v1", "DELIVERY_CHECK", state, "TRANSIENT_LIVE", 0, Unknown, false, false, false, false, false, Calls, claimCeiling, managerID, generation, target, encoding, tp, rp, policy(apID), digest, a, analysis, q}
 }
+
+func graphDigest(nodes []Node, edges []Edge) string {
+	records := graphDigestRecords(nodes, edges)
+	sort.Strings(records)
+	encoded, _ := json.Marshal(records)
+	g := sha256.Sum256(encoded)
+	return "sha256:" + hex.EncodeToString(g[:])
+}
+
+func graphDigestRecords(nodes []Node, edges []Edge) []string {
+	records := make([]string, 0, len(nodes)+len(edges))
+	for _, n := range nodes {
+		records = append(records, "node\x00"+n.ID)
+	}
+	for _, e := range edges {
+		records = append(records, "edge\x00"+e.ID+"\x00"+e.CallerNodeID+"\x00"+e.CalleeNodeID)
+	}
+	return records
+}
+
 func (r Result) Validate() error {
 	q, err := NormalizeRequest(r.request)
 	if err != nil {
@@ -457,6 +466,7 @@ func (r Result) Validate() error {
 		return err
 	}
 	var edgeCount int
+	var expectedGraphDigest string
 	switch x := r.Analysis.(type) {
 	case NeighborhoodResult:
 		if r.AnalysisPolicy.PolicyID != "transient-neighborhood.v1" || x.RootNodeID != r.TargetNodeID {
@@ -466,6 +476,7 @@ func (r Result) Validate() error {
 			return err
 		}
 		edgeCount = len(x.Edges)
+		expectedGraphDigest = graphDigest(x.Nodes, x.Edges)
 	case ImpactResult:
 		if r.AnalysisPolicy.PolicyID != "transient-impact.v1" || x.RootNodeID != r.TargetNodeID {
 			return ErrInvalid
@@ -474,6 +485,7 @@ func (r Result) Validate() error {
 			return err
 		}
 		edgeCount = len(x.Edges)
+		expectedGraphDigest = graphDigest(x.Nodes, x.Edges)
 	default:
 		return ErrInvalid
 	}
@@ -481,7 +493,7 @@ func (r Result) Validate() error {
 	if edgeCount > 0 {
 		want = Complete
 	}
-	if r.State != want {
+	if r.State != want || r.GraphDigest != expectedGraphDigest {
 		return ErrInvalid
 	}
 	return nil
