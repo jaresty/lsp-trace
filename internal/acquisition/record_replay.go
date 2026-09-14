@@ -41,6 +41,34 @@ func (c *replayContext) cancel(reason string) {
 
 type replaySupplier struct{ Client }
 
+type normalizedDocumentSymbol struct {
+	Name           string                     `json:"name"`
+	Detail         string                     `json:"detail,omitempty"`
+	Kind           int                        `json:"kind"`
+	Range          lsp.Range                  `json:"range"`
+	SelectionRange lsp.Range                  `json:"selectionRange"`
+	Children       []normalizedDocumentSymbol `json:"children,omitempty"`
+	Flat           bool                       `json:"flat,omitempty"`
+	ContainerName  string                     `json:"containerName,omitempty"`
+}
+
+func replayDocumentSymbols(symbols []normalizedDocumentSymbol) []lsp.DocumentSymbol {
+	out := make([]lsp.DocumentSymbol, len(symbols))
+	for i, symbol := range symbols {
+		out[i] = lsp.DocumentSymbol{
+			Name:           symbol.Name,
+			Detail:         symbol.Detail,
+			Kind:           symbol.Kind,
+			Range:          symbol.Range,
+			SelectionRange: symbol.SelectionRange,
+			Children:       replayDocumentSymbols(symbol.Children),
+			Flat:           symbol.Flat,
+			ContainerName:  symbol.ContainerName,
+		}
+	}
+	return out
+}
+
 func (replaySupplier) PrepareDocument(context.Context, AcquisitionContext, Locator) (Supply, error) {
 	return Supply{}, errors.New("replay must not call a supplier")
 }
@@ -194,7 +222,7 @@ func (p *recordReplay) invoke(c *runner, target, method, id string, params any) 
 			case "source/prepareDocument":
 				dst = &Supply{}
 			case "textDocument/documentSymbol":
-				dst = &[]lsp.DocumentSymbol{}
+				dst = &[]normalizedDocumentSymbol{}
 			case "textDocument/prepareCallHierarchy":
 				dst = &[]lsp.CallHierarchyItem{}
 			case "callHierarchy/outgoingCalls":
@@ -212,8 +240,8 @@ func (p *recordReplay) invoke(c *runner, target, method, id string, params any) 
 			switch v := dst.(type) {
 			case *Supply:
 				value = *v
-			case *[]lsp.DocumentSymbol:
-				value = *v
+			case *[]normalizedDocumentSymbol:
+				value = replayDocumentSymbols(*v)
 			case *[]lsp.CallHierarchyItem:
 				value = *v
 			case *[]lsp.CallHierarchyOutgoingCall:

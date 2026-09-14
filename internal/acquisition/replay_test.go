@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/lsp"
@@ -33,6 +34,39 @@ func TestFailedQueryCacheReplay(t *testing.T) {
 		}
 	}
 }
+func TestNormalizedFlatDocumentSymbolReplayCanonicality(t *testing.T) {
+	a := item("a", 0)
+	a.SelectionRange = a.Range
+	f := fixture()
+	f.add(a)
+	f.symbols[a.URI] = []lsp.DocumentSymbol{{Name: a.Name, Kind: a.Kind, Range: a.Range, SelectionRange: a.Range, Flat: true, ContainerName: "package example"}}
+	r := request(a)
+	r.Root.Locator = Locator{URI: a.URI, Symbol: a.Name}
+
+	got, err := Acquire(context.Background(), f, r)
+	if err != nil {
+		t.Fatalf("ASSERT_CANONICAL_NORMALIZED_FLAT_CAPTURE_ACCEPTED: %v", err)
+	}
+
+	noncanonical := got
+	noncanonical.Requests = append([]RequestRecord(nil), got.Requests...)
+	for i := range noncanonical.Requests {
+		if noncanonical.Requests[i].Method != "textDocument/documentSymbol" {
+			continue
+		}
+		noncanonical.Requests[i].Response = append([]byte(" "), noncanonical.Requests[i].Response...)
+		noncanonical.Requests[i].EvidenceBytes++
+		noncanonical.Usage.EvidenceBytes++
+		for j := i + 1; j < len(noncanonical.Requests); j++ {
+			noncanonical.Requests[j].Before.EvidenceBytes++
+		}
+		break
+	}
+	if err := validateRecordReplay(noncanonical); err == nil || !strings.Contains(err.Error(), "noncanonical normalized capture") {
+		t.Fatalf("ASSERT_NONCANONICAL_NORMALIZED_FLAT_CAPTURE_REJECTED: %v", err)
+	}
+}
+
 func TestOpaqueMalformedEvidenceFailsRatherThanEmpty(t *testing.T) {
 	f := fixture()
 	a := item("a", 0)
