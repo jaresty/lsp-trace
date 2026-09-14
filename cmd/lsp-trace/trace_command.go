@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -48,38 +47,16 @@ func (f *traceFormat) Set(value string) error {
 
 func parseTrace(args []string) (traceConfig, error) {
 	var c traceConfig
-	fs := flag.NewFlagSet("trace", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	for _, arg := range args {
-		if arg == "--help" || arg == "-h" {
-			fs.SetOutput(os.Stdout)
-			break
-		}
-	}
-	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
-	fs.StringVar(&c.profiles.ConfigPath, "config", "", "profile config path")
-	fs.StringVar(&c.profiles.Name, "profile", "", "named server profile")
-	fs.StringVar(&c.command, "server", "", "language server command")
-	fs.Var(&c.args, "server-arg", "repeatable server argument")
-	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
-	fs.StringVar(&c.file, "file", "", "source file containing the exact managed symbol")
-	fs.StringVar(&c.symbol, "symbol", "", "exhaustive exact managed-symbol name within --file")
-	fs.Var(&c.ats, "at", "repeatable exact target PATH:LINE:COLUMN (one-based)")
-	fs.StringVar(&c.languageID, "language-id", "", "document language id")
-	fs.IntVar(&c.downDepth, "down-depth", 2, "outgoing discovery depth")
-	fs.IntVar(&c.upDepth, "up-depth", 2, "incoming traversal depth")
-	fs.IntVar(&c.maxNodes, "max-nodes", 100, "maximum graph nodes")
-	fs.DurationVar(&c.timeout, "timeout", 5*time.Second, "global timeout")
-	fs.DurationVar(&c.requestTimeout, "request-timeout", time.Second, "request timeout")
-	fs.StringVar(&c.output, "output", "", "output destination")
-	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
-	fs.BoolVar(&c.siblings, "siblings", false, "include exact topmost sibling enrichment")
-	fs.Var(&c.format, "format", "output format: json or tree (default json)")
-	if err := fs.Parse(args); err != nil {
+	fs := traceFlagSet(&c, io.Discard)
+	parseArgs, help := traceHelpOptions(args)
+	if err := fs.Parse(parseArgs); err != nil {
 		return c, err
 	}
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if help {
+		return c, flag.ErrHelp
 	}
 	if c.format.String() == "tree" && (c.pretty || c.output != "") {
 		return c, errors.New("--format tree conflicts with JSON-only --pretty and --output")
@@ -115,6 +92,74 @@ func parseTrace(args []string) (traceConfig, error) {
 	return c, nil
 }
 
+func traceHelpOptions(args []string) ([]string, bool) {
+	valueFlags := map[string]bool{
+		"workspace": true, "config": true, "profile": true, "server": true,
+		"server-arg": true, "server-env": true, "file": true, "symbol": true,
+		"at": true, "language-id": true, "down-depth": true, "up-depth": true,
+		"max-nodes": true, "timeout": true, "request-timeout": true, "output": true,
+		"format": true,
+	}
+	clean := make([]string, 0, len(args))
+	help, consumeValue, options := false, false, true
+	for _, arg := range args {
+		if consumeValue {
+			clean = append(clean, arg)
+			consumeValue = false
+			continue
+		}
+		if options && (arg == "--help" || arg == "-h") {
+			help = true
+			continue
+		}
+		clean = append(clean, arg)
+		if !options {
+			continue
+		}
+		if arg == "--" {
+			options = false
+			continue
+		}
+		name := strings.TrimLeft(arg, "-")
+		if before, _, found := strings.Cut(name, "="); found {
+			name = before
+		} else if valueFlags[name] {
+			consumeValue = true
+		}
+	}
+	return clean, help
+}
+
+func traceFlagSet(c *traceConfig, output io.Writer) *flag.FlagSet {
+	fs := flag.NewFlagSet("trace", flag.ContinueOnError)
+	fs.SetOutput(output)
+	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
+	fs.StringVar(&c.profiles.ConfigPath, "config", "", "profile config path")
+	fs.StringVar(&c.profiles.Name, "profile", "", "named server profile")
+	fs.StringVar(&c.command, "server", "", "language server command")
+	fs.Var(&c.args, "server-arg", "repeatable server argument")
+	fs.Var(&c.env, "server-env", "repeatable KEY=VALUE")
+	fs.StringVar(&c.file, "file", "", "source file containing the exact managed symbol")
+	fs.StringVar(&c.symbol, "symbol", "", "exhaustive exact managed-symbol name within --file")
+	fs.Var(&c.ats, "at", "repeatable exact target PATH:LINE:COLUMN (one-based)")
+	fs.StringVar(&c.languageID, "language-id", "", "document language id")
+	fs.IntVar(&c.downDepth, "down-depth", 2, "outgoing discovery depth")
+	fs.IntVar(&c.upDepth, "up-depth", 2, "incoming traversal depth")
+	fs.IntVar(&c.maxNodes, "max-nodes", 100, "maximum graph nodes")
+	fs.DurationVar(&c.timeout, "timeout", 5*time.Second, "global timeout")
+	fs.DurationVar(&c.requestTimeout, "request-timeout", time.Second, "request timeout")
+	fs.StringVar(&c.output, "output", "", "output destination")
+	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
+	fs.BoolVar(&c.siblings, "siblings", false, "include exact topmost sibling enrichment")
+	fs.Var(&c.format, "format", "output format: json or tree (default json)")
+	return fs
+}
+
+func writeTraceHelp(stdout io.Writer) {
+	var c traceConfig
+	traceFlagSet(&c, stdout).PrintDefaults()
+}
+
 func traceSeeds(c traceConfig) (seedformat.File, []byte, error) {
 	file := seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Defaults: seedformat.Defaults{DownDepth: &c.downDepth, UpDepth: &c.upDepth}}
 	if c.symbol != "" {
@@ -140,6 +185,7 @@ func runTrace(args []string, stdout, stderr io.Writer) int {
 	c, err := parseTrace(args)
 	if err != nil {
 		if err == flag.ErrHelp {
+			writeTraceHelp(stdout)
 			return 0
 		}
 		fmt.Fprintln(stderr, err)

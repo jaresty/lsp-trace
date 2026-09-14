@@ -216,7 +216,8 @@ func TestTraceHelpFullStreamAdmissionContract(t *testing.T) {
 	}{
 		{"unknown-then-help", append(append([]string{}, base...), "--unknown", "--help")},
 		{"positional-then-help", append(append([]string{}, base...), "stray", "--help")},
-		{"missing-format-then-help", append(append([]string{}, base...), "--format", "--help")},
+		{"help-then-missing-format", append(append([]string{}, base...), "--help", "--format")},
+		{"help-as-invalid-format-value", append(append([]string{}, base...), "--format", "--help")},
 		{"invalid-format-then-help", append(append([]string{}, base...), "--format", "yaml", "--help")},
 		{"duplicate-format-then-help", append(append([]string{}, base...), "--format", "json", "--format", "tree", "--help")},
 	}
