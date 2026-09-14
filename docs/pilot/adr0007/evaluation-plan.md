@@ -1,6 +1,6 @@
 # Evaluation plan scaffold
 
-Status: `PREREQUISITES_DRAFT`; test data remains locked; pilot remains disabled.
+Status: `PREREQUISITES_DRAFT`; pilot: `PILOT_DISABLED`; test data remains locked.
 
 ## F0–F8 freeze sequence
 

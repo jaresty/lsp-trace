@@ -1,6 +1,6 @@
 # Ownership and approvals
 
-Status: `PREREQUISITES_DRAFT`. Names are deliberately blank; no owner is assigned by this scaffold.
+Status: `PREREQUISITES_DRAFT`; pilot: `PILOT_DISABLED`. Names are deliberately blank; no owner is assigned by this scaffold.
 
 Every required cell must later contain a named accountable human identity, authority basis, scope, decision, date, and referenced artifact digest. Team names and processes may be consulted or responsible, but cannot replace the accountable identity.
 
