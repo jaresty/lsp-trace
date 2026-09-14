@@ -201,17 +201,25 @@ func TestCensusOperation34RealProcessQualification(t *testing.T) {
 		}},
 	})
 	args := map[string]any{
-		"session_id": "census-34", "generation": 1, "sources": []any{"."},
+		"session_id": "census-34", "generation": 1, "sources": []any{"main.go"},
 		"down_depth": 0, "up_depth": 0, "max_nodes": 20,
 		"timeout_ms": 60000, "request_timeout_ms": 30000,
 	}
+	gatewayArgs := map[string]any{}
+	for key, value := range args {
+		gatewayArgs[key] = value
+	}
+	gatewayArgs["down_depth"] = 1
 	listRequest := map[string]any{"jsonrpc": "2.0", "id": 34, "method": "tools/list", "params": map[string]any{}}
 
 	publicationRoot := t.TempDir()
+	if err := os.Chmod(publicationRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	responses := runMCPProcess(t, binary, []string{"--tool-profile", "full", "--bootstrap-config", bootstrap, "--publication-root", publicationRoot}, []map[string]any{
 		listRequest,
 		callRequest(3401, mcpcontract.CensusTool, args),
-		callRequest(3402, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": args}}),
+		callRequest(3402, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": gatewayArgs}}),
 	})
 	tools := processToolNames(t, responses[0])
 	if len(tools) != 34 || tools[8] != mcpcontract.CensusTool || containsString(tools, "lsp_trace_v1_structural_context") {
@@ -237,47 +245,40 @@ func TestCensusOperation34RealProcessQualification(t *testing.T) {
 		if err != nil || mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw) != nil {
 			t.Fatalf("ASSERT_CENSUS34_%s_EXACT_SCHEMA: err=%v envelope=%s", name, err, raw)
 		}
-		switch envelope["outcome"] {
-		case "COMPLETE":
-			completeCount++
-			result, _ := envelope["result"].(map[string]any)
-			if result["authority"] != float64(0) || result["source_graph_complete"] != "UNKNOWN" {
-				t.Fatalf("ASSERT_CENSUS34_%s_AUTHORITY_COMPLETENESS: %v", name, result)
-			}
-			publicationEvidence, _ := result["publication"].(map[string]any)
-			selector, _ := publicationEvidence["selector"].(string)
-			if selector == "" || publicationEvidence["verification_status"] != "VERIFIED" {
-				t.Fatalf("ASSERT_CENSUS34_%s_EXACT_VERIFIED_DESCRIPTOR: %v", name, publicationEvidence)
-			}
-			if _, duplicate := selectors[selector]; duplicate {
-				t.Fatalf("ASSERT_CENSUS34_ONE_IMMUTABLE_PUBLICATION_PER_SUCCESS: duplicate=%q", selector)
-			}
-			selectors[selector] = struct{}{}
-			published, err := os.ReadFile(filepath.Join(publicationRoot, filepath.FromSlash(selector)))
-			digest := sha256.Sum256(published)
-			if err != nil || len(published) != int(publicationEvidence["byte_length"].(float64)) || "sha256:"+hex.EncodeToString(digest[:]) != publicationEvidence["digest"] {
-				t.Fatalf("ASSERT_CENSUS34_%s_DESCRIPTOR_BYTES: err=%v descriptor=%v", name, err, publicationEvidence)
-			}
-		case "DOMAIN_ERROR":
-			if envelope["operation_status"] != "FAILED" || envelope["isError"] != true {
-				t.Fatalf("ASSERT_CENSUS34_%s_HONEST_DOMAIN_ERROR: %v", name, envelope)
-			}
-			diagnostic, _ := envelope["error"].(map[string]any)
-			if diagnostic["stage"] == "" || diagnostic["code"] == "" {
-				t.Fatalf("ASSERT_CENSUS34_%s_ROOT_CAUSE_DIAGNOSTIC: %v", name, diagnostic)
-			}
-		default:
-			t.Fatalf("ASSERT_CENSUS34_%s_REAL_OUTCOME: %v", name, envelope)
+		if envelope["outcome"] != "COMPLETE" || envelope["operation_status"] != "SUCCEEDED" || envelope["isError"] != false {
+			t.Fatalf("ASSERT_CENSUS34_%s_REAL_COMPLETE: %v", name, envelope)
+		}
+		completeCount++
+		result, _ := envelope["result"].(map[string]any)
+		if result["authority"] != float64(0) || result["source_graph_complete"] != "UNKNOWN" {
+			t.Fatalf("ASSERT_CENSUS34_%s_AUTHORITY_COMPLETENESS: %v", name, result)
+		}
+		publicationEvidence, _ := result["publication"].(map[string]any)
+		selector, _ := publicationEvidence["selector"].(string)
+		if selector == "" || publicationEvidence["verification_status"] != "VERIFIED" {
+			t.Fatalf("ASSERT_CENSUS34_%s_EXACT_VERIFIED_DESCRIPTOR: %v", name, publicationEvidence)
+		}
+		if _, duplicate := selectors[selector]; duplicate {
+			t.Fatalf("ASSERT_CENSUS34_ONE_IMMUTABLE_PUBLICATION_PER_SUCCESS: duplicate=%q", selector)
+		}
+		selectors[selector] = struct{}{}
+		published, err := os.ReadFile(filepath.Join(publicationRoot, filepath.FromSlash(selector)))
+		digest := sha256.Sum256(published)
+		if err != nil || len(published) != int(publicationEvidence["byte_length"].(float64)) || "sha256:"+hex.EncodeToString(digest[:]) != publicationEvidence["digest"] {
+			t.Fatalf("ASSERT_CENSUS34_%s_DESCRIPTOR_BYTES: err=%v descriptor=%v", name, err, publicationEvidence)
 		}
 		if raw := string(raw); strings.Contains(raw, workspace) || strings.Contains(raw, publicationRoot) || strings.Contains(raw, gopls) {
 			t.Fatalf("ASSERT_CENSUS34_%s_PRIVACY: %s", name, raw)
 		}
 	}
-	if completeCount != len(selectors) {
+	if completeCount != 2 || len(selectors) != 2 {
 		t.Fatalf("ASSERT_CENSUS34_EXACTLY_ONE_PUBLICATION_PER_COMPLETE: complete=%d selectors=%d", completeCount, len(selectors))
 	}
 
 	compactRoot := t.TempDir()
+	if err := os.Chmod(compactRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
 	compact := runMCPProcess(t, binary, []string{"--tool-profile", "compact", "--bootstrap-config", bootstrap, "--publication-root", compactRoot}, []map[string]any{
 		listRequest,
 		callRequest(3501, mcpcontract.CensusTool, map[string]any{"session_id": "census-34", "generation": 999, "sources": []any{"."}}),
