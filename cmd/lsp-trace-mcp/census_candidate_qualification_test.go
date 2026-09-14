@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/captureset"
+	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
@@ -82,10 +83,9 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 	if len(sessions) != 1 {
 		t.Fatalf("ASSERT_CANDIDATE34_FRESH_MANAGED_SESSION: sessions=%+v", sessions)
 	}
-	for _, name := range []string{"lsp_trace_v1_structural_context"} {
-		if _, registered := server.Registry.Resolve(name); registered {
-			t.Fatalf("ASSERT_CANDIDATE34_34_35_UNREGISTERED: %s", name)
-		}
+	contextTool, registered := server.Registry.Resolve("lsp_trace_v1_structural_context")
+	if !registered || contextTool.ExecutorFamily != mcp.StructuralContextExecutorFamily || server.Executors[mcp.StructuralContextExecutorFamily] == nil {
+		t.Fatalf("ASSERT_CANDIDATE35_STRUCTURAL_CONTEXT_REGISTERED_AND_BOUND: tool=%+v registered=%t", contextTool, registered)
 	}
 
 	binding := newPrivateCensusMCPBinding(newCensusRuntime(newHostSelectorRuntime(manager, sessions)))
