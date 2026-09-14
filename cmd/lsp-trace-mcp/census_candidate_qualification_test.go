@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -166,4 +168,155 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 	}
 
 	t.Log("PASS ASSERT_CANDIDATE34_PRE_REGISTRATION_GATE; residual=" + candidate34TransportResidual)
+}
+
+func TestCensusOperation34RealProcessQualification(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("candidate qualification requires the production LocalDarwinSupervisor")
+	}
+	binary := buildMCPBinary(t)
+	gopls, err := exec.LookPath("gopls")
+	if err != nil || !filepath.IsAbs(gopls) {
+		t.Fatalf("ASSERT_CENSUS34_REAL_PROCESS_GOPLS_REQUIRED: path=%q err=%v", gopls, err)
+	}
+	version, err := exec.Command(gopls, "version").CombinedOutput()
+	if err != nil || !strings.Contains(string(version), "v0.23.0") {
+		t.Fatalf("ASSERT_CENSUS34_EXACT_GOPLS_VERSION: err=%v version=%q", err, version)
+	}
+	workspace := t.TempDir()
+	for name, body := range map[string]string{
+		"go.mod":  "module example.com/census34qualification\n\ngo 1.22\n",
+		"main.go": "package fixture\n\nfunc Target() {}\nfunc Caller() { Target() }\n",
+	} {
+		if err := os.WriteFile(filepath.Join(workspace, name), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bootstrap := writeBootstrapJSON(t, map[string]any{
+		"version": 1,
+		"processes": []any{map[string]any{
+			"alias": "census-34", "language_id": "go",
+			"profile":   map[string]any{"trust_domain": "census-34-qualification", "workspace": workspace, "profile": "gopls", "environment_reference": "qualification"},
+			"execution": map[string]any{"path": gopls, "directory": workspace},
+		}},
+	})
+	args := map[string]any{
+		"session_id": "census-34", "generation": 1, "sources": []any{"."},
+		"down_depth": 0, "up_depth": 0, "max_nodes": 20,
+		"timeout_ms": 60000, "request_timeout_ms": 30000,
+	}
+	listRequest := map[string]any{"jsonrpc": "2.0", "id": 34, "method": "tools/list", "params": map[string]any{}}
+
+	publicationRoot := t.TempDir()
+	responses := runMCPProcess(t, binary, []string{"--tool-profile", "full", "--bootstrap-config", bootstrap, "--publication-root", publicationRoot}, []map[string]any{
+		listRequest,
+		callRequest(3401, mcpcontract.CensusTool, args),
+		callRequest(3402, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": args}}),
+	})
+	tools := processToolNames(t, responses[0])
+	if len(tools) != 34 || tools[8] != mcpcontract.CensusTool || containsString(tools, "lsp_trace_v1_structural_context") {
+		t.Fatalf("ASSERT_CENSUS34_FULL_LIST_EXACT_POSITION_AND_35_ABSENT: count=%d tools=%v", len(tools), tools)
+	}
+	direct := decodeProcessCall(t, responses[1])
+	gateway := decodeProcessCall(t, responses[2])
+	if direct.env["request_id"] != "offline-1" || gateway.env["request_id"] != "offline-3" {
+		t.Fatalf("ASSERT_CENSUS34_DISTINCT_DIRECT_OUTER_IDS: direct=%v outer=%v", direct.env["request_id"], gateway.env["request_id"])
+	}
+	delegated, ok := gateway.env["delegated_envelope"].(string)
+	if !ok || !strings.Contains(delegated, `"request_id":"offline-2"`) || strings.Contains(delegated, `"request_id":"offline-3"`) || mcpcontract.ValidateEnvelopeExclusive([]byte(delegated)) != nil {
+		t.Fatalf("ASSERT_CENSUS34_DISTINCT_DELEGATED_ID_AND_SCHEMA: %q", delegated)
+	}
+	var delegatedEnvelope map[string]any
+	if err := json.Unmarshal([]byte(delegated), &delegatedEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	completeCount := 0
+	selectors := map[string]struct{}{}
+	for name, envelope := range map[string]map[string]any{"direct": direct.env, "delegated": delegatedEnvelope} {
+		raw, err := json.Marshal(envelope)
+		if err != nil || mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw) != nil {
+			t.Fatalf("ASSERT_CENSUS34_%s_EXACT_SCHEMA: err=%v envelope=%s", name, err, raw)
+		}
+		switch envelope["outcome"] {
+		case "COMPLETE":
+			completeCount++
+			result, _ := envelope["result"].(map[string]any)
+			if result["authority"] != float64(0) || result["source_graph_complete"] != "UNKNOWN" {
+				t.Fatalf("ASSERT_CENSUS34_%s_AUTHORITY_COMPLETENESS: %v", name, result)
+			}
+			publicationEvidence, _ := result["publication"].(map[string]any)
+			selector, _ := publicationEvidence["selector"].(string)
+			if selector == "" || publicationEvidence["verification_status"] != "VERIFIED" {
+				t.Fatalf("ASSERT_CENSUS34_%s_EXACT_VERIFIED_DESCRIPTOR: %v", name, publicationEvidence)
+			}
+			if _, duplicate := selectors[selector]; duplicate {
+				t.Fatalf("ASSERT_CENSUS34_ONE_IMMUTABLE_PUBLICATION_PER_SUCCESS: duplicate=%q", selector)
+			}
+			selectors[selector] = struct{}{}
+			published, err := os.ReadFile(filepath.Join(publicationRoot, filepath.FromSlash(selector)))
+			digest := sha256.Sum256(published)
+			if err != nil || len(published) != int(publicationEvidence["byte_length"].(float64)) || "sha256:"+hex.EncodeToString(digest[:]) != publicationEvidence["digest"] {
+				t.Fatalf("ASSERT_CENSUS34_%s_DESCRIPTOR_BYTES: err=%v descriptor=%v", name, err, publicationEvidence)
+			}
+		case "DOMAIN_ERROR":
+			if envelope["operation_status"] != "FAILED" || envelope["isError"] != true {
+				t.Fatalf("ASSERT_CENSUS34_%s_HONEST_DOMAIN_ERROR: %v", name, envelope)
+			}
+			diagnostic, _ := envelope["error"].(map[string]any)
+			if diagnostic["stage"] == "" || diagnostic["code"] == "" {
+				t.Fatalf("ASSERT_CENSUS34_%s_ROOT_CAUSE_DIAGNOSTIC: %v", name, diagnostic)
+			}
+		default:
+			t.Fatalf("ASSERT_CENSUS34_%s_REAL_OUTCOME: %v", name, envelope)
+		}
+		if raw := string(raw); strings.Contains(raw, workspace) || strings.Contains(raw, publicationRoot) || strings.Contains(raw, gopls) {
+			t.Fatalf("ASSERT_CENSUS34_%s_PRIVACY: %s", name, raw)
+		}
+	}
+	if completeCount != len(selectors) {
+		t.Fatalf("ASSERT_CENSUS34_EXACTLY_ONE_PUBLICATION_PER_COMPLETE: complete=%d selectors=%d", completeCount, len(selectors))
+	}
+
+	compactRoot := t.TempDir()
+	compact := runMCPProcess(t, binary, []string{"--tool-profile", "compact", "--bootstrap-config", bootstrap, "--publication-root", compactRoot}, []map[string]any{
+		listRequest,
+		callRequest(3501, mcpcontract.CensusTool, map[string]any{"session_id": "census-34", "generation": 999, "sources": []any{"."}}),
+		callRequest(3502, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": map[string]any{"session_id": "census-34", "generation": 999, "sources": []any{"."}}}}),
+	})
+	if names := processToolNames(t, compact[0]); containsString(names, mcpcontract.CensusTool) {
+		t.Fatalf("ASSERT_CENSUS34_COMPACT_HIDDEN: %v", names)
+	}
+	compactDirect := decodeProcessCall(t, compact[1])
+	compactGateway := decodeProcessCall(t, compact[2])
+	if compactDirect.env["tool"] != mcpcontract.CensusTool || strings.Contains(string(mustJSON(t, compactGateway.env)), "unknown canonical tool") {
+		t.Fatalf("ASSERT_CENSUS34_COMPACT_CANONICALLY_CALLABLE: direct=%v gateway=%v", compactDirect.env, compactGateway.env)
+	}
+	t.Logf("PASS ASSERT_CENSUS34_REAL_PROCESS_QUALIFIED outcome=%v/%v diagnostic=%v/%v complete_publications=%d", direct.env["outcome"], delegatedEnvelope["outcome"], direct.env["error"], delegatedEnvelope["error"], completeCount)
+}
+
+func processToolNames(t *testing.T, response map[string]any) []string {
+	t.Helper()
+	result, ok := response["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("ASSERT_CENSUS34_TOOLS_LIST_RESULT: %v", response)
+	}
+	raw, ok := result["tools"].([]any)
+	if !ok {
+		t.Fatalf("ASSERT_CENSUS34_TOOLS_LIST_SHAPE: %v", result)
+	}
+	names := make([]string, len(raw))
+	for i, item := range raw {
+		tool, _ := item.(map[string]any)
+		names[i], _ = tool["name"].(string)
+	}
+	return names
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
