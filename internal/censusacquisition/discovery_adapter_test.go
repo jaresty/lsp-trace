@@ -173,6 +173,39 @@ func TestDiscoveryAdapterExclusionsWinBeforeIncludes(t *testing.T) {
 	}
 }
 
+func TestDiscoveryAdapterAccountedPreparationOmissionsRemainComplete(t *testing.T) {
+	workspace := t.TempDir()
+	f := testSource(workspace, "mixed.go")
+	prepared := sym("Prepared", 12, 0, 0)
+	missing := sym("Missing", 12, 1, 0)
+	failed := sym("Failed", 6, 2, 0)
+	client := &fakeDiscoveryClient{
+		documentSupported: true,
+		callSupported:     true,
+		symbols:           map[string][]lsp.DocumentSymbol{f.URI: {prepared, missing, failed}},
+		prepare:           map[lsp.Position][]lsp.CallHierarchyItem{prepared.SelectionRange.Start: {item("Prepared", f.URI, 12, 0, 0)}},
+		prepareErrors:     map[lsp.Position]error{failed.SelectionRange.Start: errors.New("provider cannot prepare")},
+	}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{f}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"s", 1})
+	if err != nil || !got.Complete {
+		t.Fatalf("ASSERT_ACCOUNTED_PREPARATION_OMISSIONS_COMPLETE: complete=%v err=%v", got.Complete, err)
+	}
+	if len(got.Targets) != 1 || got.Targets[0].Name != "Prepared" || got.Accounting.SymbolDenominator != 3 || got.SymbolLedger.Denominator != 3 {
+		t.Fatalf("ASSERT_PREPARATION_OMISSIONS_NO_TARGET_FABRICATION: targets=%+v accounting=%+v ledger=%+v", got.Targets, got.Accounting, got.SymbolLedger)
+	}
+	want := []census.SymbolDisposition{census.SymbolSelected, census.SymbolPrepareMissing, census.SymbolPreparationFailed}
+	var have []census.SymbolDisposition
+	for _, entry := range got.Accounting.Symbols {
+		have = append(have, entry.Disposition)
+	}
+	if !reflect.DeepEqual(have, want) || got.Accounting.Files[0].Disposition != census.FileSelected {
+		t.Fatalf("ASSERT_PREPARATION_OMISSIONS_CLOSED_ACCOUNTING: symbols=%v files=%+v", have, got.Accounting.Files)
+	}
+	if err := got.Accounting.Validate(); err != nil {
+		t.Fatalf("ASSERT_PREPARATION_OMISSIONS_ACCOUNTING_VALID: %v", err)
+	}
+}
+
 func TestDiscoveryAdapterExplicitFailureDispositionsAndIncomplete(t *testing.T) {
 	workspace := t.TempDir()
 	names := []string{"bad-symbols.go", "missing.go", "noncallable.go", "prepare-error.go", "supply.go", "unsupported.go"}
@@ -201,7 +234,7 @@ func TestDiscoveryAdapterExplicitFailureDispositionsAndIncomplete(t *testing.T) 
 	for _, e := range got.Accounting.Files {
 		fileStatuses[e.Disposition] = true
 	}
-	for _, want := range []census.FileDisposition{census.FileDocumentSymbolFailed, census.FileUnreadable, census.FileUnsupported, census.FileIncomplete} {
+	for _, want := range []census.FileDisposition{census.FileDocumentSymbolFailed, census.FileUnreadable, census.FileUnsupported} {
 		if !fileStatuses[want] {
 			t.Fatalf("ASSERT_FILE_FAILURE_ACCOUNTED[%s]: %+v", want, got.Accounting.Files)
 		}

@@ -191,10 +191,8 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				switch {
 				case prepareErr != nil:
 					disposition = census.SymbolPreparationFailed
-					fileComplete, complete = false, false
 				case len(items) == 0:
 					disposition = census.SymbolPrepareMissing
-					fileComplete, complete = false, false
 				case len(items) != 1 || !preparedItemMatches(items[0], file.URI, symbol):
 					disposition = census.SymbolIncomplete
 					fileComplete, complete = false, false
