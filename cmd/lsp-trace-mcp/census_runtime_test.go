@@ -10,8 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisition"
 	"lsp-trace/internal/acquisitionengine"
+	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/censusacquisition"
 	"lsp-trace/internal/lsp"
@@ -232,6 +234,64 @@ func TestPlannedBatchUsesAdmittedHostManagerWithoutLifecycleDelta(t *testing.T) 
 	}
 	if beforeStarts != afterStarts || beforeTeardown != afterTeardown || beforeClose != afterClose || len(beforeMethods) != len(afterMethods) {
 		t.Fatalf("ASSERT_PLANNED_BATCH_MCP_NO_LIFECYCLE_DELTA: methods=%v/%v lifecycle=%d/%d %d/%d %d/%d", beforeMethods, afterMethods, beforeStarts, afterStarts, beforeTeardown, afterTeardown, beforeClose, afterClose)
+	}
+}
+
+func TestEffectiveCensusDeadlineNeverExtendsParent(t *testing.T) {
+	configured := time.Now().Add(time.Hour)
+	parentDeadline := time.Now().Add(time.Minute)
+	parent, cancel := context.WithDeadline(context.Background(), parentDeadline)
+	defer cancel()
+	if got := effectiveCensusDeadline(parent, configured); !got.Equal(parentDeadline) {
+		t.Fatalf("ASSERT_MCP_CENSUS_EFFECTIVE_PARENT_DEADLINE: got=%v want=%v", got, parentDeadline)
+	}
+	if got := effectiveCensusDeadline(context.Background(), configured); !got.Equal(configured) {
+		t.Fatalf("ASSERT_MCP_CENSUS_CONFIGURED_DEADLINE: got=%v want=%v", got, configured)
+	}
+}
+
+func TestCensusRuntimeBatchAcquirerDeterministicRequestAndReceipt(t *testing.T) {
+	line, character := uint32(4), uint32(2)
+	down, up := 3, 1
+	request := censusacquisition.BatchRequest{
+		Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 7}, CensusID: "c", BatchID: "b", Ordinal: 2,
+		DownDepth: down, UpDepth: up, CanonicalSeedsV2: []byte("seeds"),
+		Targets: []censusacquisition.PreparedTarget{{CensusOrdinal: 0, URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{Line: line, Character: character}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#4:2:12:Target:0"}},
+	}
+	maxNodes := 10
+	acquirer := censusRuntimeBatchAcquirer{
+		admitted: censusAdmittedSession{sessionID: "s", generation: 7}, limits: acquisitionops.Limits{MaxNodes: &maxNodes},
+		execute: func(_ context.Context, _ *hostSelectorRuntime, _ censusAdmittedSession, requestID string, manifest acquisitionengine.Manifest, seeds []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+			if requestID != "census:c:000002:b" || *manifest.Root.DownDepth != down || *manifest.Root.UpDepth != up || string(seeds) != "seeds" {
+				t.Fatalf("ASSERT_MCP_CENSUS_BATCH_EXACT_REQUEST: id=%s manifest=%+v seeds=%q", requestID, manifest, seeds)
+			}
+			seeds[0] = 'X'
+			return acquisitionorchestration.PlannedBatchResult{SessionID: "s", Generation: 7, RawV5: []byte("raw"), BoundedTraversalComplete: true}, nil
+		},
+	}
+	got, err := acquirer.AcquireV5(context.Background(), request)
+	if err != nil || got.Session != request.Session || string(got.Raw) != "raw" || string(request.CanonicalSeedsV2) != "seeds" {
+		t.Fatalf("ASSERT_MCP_CENSUS_BATCH_RESULT_AND_COPY: got=%+v err=%v seeds=%q", got, err, request.CanonicalSeedsV2)
+	}
+	acquirer.execute = func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+		return acquisitionorchestration.PlannedBatchResult{SessionID: "s", Generation: 7, RawV5: []byte("raw")}, nil
+	}
+	if _, err := acquirer.AcquireV5(context.Background(), request); err == nil {
+		t.Fatal("ASSERT_MCP_CENSUS_BATCH_FALSE_RECEIPT_REJECTED")
+	}
+}
+
+func TestCensusRuntimeAcquireRejectsIncompleteDiscoveryBeforeBatch(t *testing.T) {
+	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+	result := censusRuntimeResult{
+		admitted:  censusAdmittedSession{sessionID: started.SessionID, generation: started.Generation},
+		options:   censusRuntimeConfig{downDepth: 1, maxNodes: 10, timeoutMS: 1000, requestTimeoutMS: 500},
+		discovery: censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: started.SessionID, Generation: started.Generation}, Complete: false},
+		deadline:  time.Now().Add(time.Second),
+	}
+	projection, failure := newCensusRuntime(runtime).acquire(context.Background(), result)
+	if failure == nil || failure.stage != censusStageAcquisition || len(projection.Constituents) != 0 {
+		t.Fatalf("ASSERT_MCP_CENSUS_INCOMPLETE_DISCOVERY_NO_PROJECTION: projection=%+v failure=%+v", projection, failure)
 	}
 }
 

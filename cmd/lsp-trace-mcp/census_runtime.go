@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"time"
 
+	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/acquisitionorchestration"
 	"lsp-trace/internal/censusacquisition"
@@ -68,6 +70,35 @@ type censusRuntimeResult struct {
 	admitted  censusAdmittedSession
 	options   censusRuntimeConfig
 	discovery censusacquisition.Discovery
+	deadline  time.Time
+}
+
+type fixedCensusRuntimeDiscovery struct{ discovery censusacquisition.Discovery }
+
+func (d fixedCensusRuntimeDiscovery) Discover(context.Context, censusacquisition.SessionIdentity) (censusacquisition.Discovery, error) {
+	return d.discovery, nil
+}
+
+type censusRuntimeBatchAcquirer struct {
+	runtime  *hostSelectorRuntime
+	admitted censusAdmittedSession
+	limits   acquisitionops.Limits
+	execute  func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure)
+}
+
+func (a censusRuntimeBatchAcquirer) AcquireV5(ctx context.Context, request censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
+	execute := a.execute
+	if execute == nil {
+		execute = executeCensusPlannedBatch
+	}
+	result, failure := execute(ctx, a.runtime, a.admitted, fmt.Sprintf("census:%s:%06d:%s", request.CensusID, request.Ordinal, request.BatchID), request.AcquisitionManifest(a.limits), append([]byte(nil), request.CanonicalSeedsV2...))
+	if failure != nil {
+		return censusacquisition.AcquiredV5{}, operation.NormalizeFailure(failure)
+	}
+	if !result.BoundedTraversalComplete || result.SessionID != request.Session.SessionID || result.Generation != request.Session.Generation {
+		return censusacquisition.AcquiredV5{}, errors.New("census batch execution incomplete or identity drifted")
+	}
+	return censusacquisition.AcquiredV5{Session: request.Session, Raw: append([]byte(nil), result.RawV5...)}, nil
 }
 
 type censusRuntimeFailure = censusAdmissionFailure
@@ -100,13 +131,44 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 		return censusRuntimeResult{}, censusConfigFailure()
 	}
 	options := cloneCensusRuntimeConfig(admitted.options)
-	ctx, cancel := context.WithTimeout(parent, time.Duration(options.timeoutMS)*time.Millisecond)
+	deadline := effectiveCensusDeadline(parent, time.Now().Add(time.Duration(options.timeoutMS)*time.Millisecond))
+	ctx, cancel := context.WithDeadline(parent, deadline)
 	defer cancel()
 	discovery, err := censusRuntimeDiscover(ctx, r.runtime.Manager, admitted, options)
 	if err != nil {
 		return censusRuntimeResult{}, censusDiscoveryFailure()
 	}
-	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery}, nil
+	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil
+}
+
+func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {
+	if deadline, ok := parent.Deadline(); ok && deadline.Before(configured) {
+		return deadline
+	}
+	return configured
+}
+
+func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure) {
+	if r == nil || r.runtime == nil || r.runtime.Manager == nil || result.admitted.sessionID == "" || result.admitted.generation == 0 || result.deadline.IsZero() {
+		return censusacquisition.Projection{}, censusConfigFailure()
+	}
+	options := cloneCensusRuntimeConfig(result.options)
+	ctx, cancel := context.WithDeadline(parent, result.deadline)
+	defer cancel()
+	maxNodes, maxRequests, maxEvidenceBytes, maxPathWork := int(options.maxNodes), 1000, 4<<20, 100000
+	timeoutMS, requestTimeoutMS := int(options.timeoutMS), int(options.requestTimeoutMS)
+	maxResponseBytes, maxMessages := 4<<20, 64
+	limits := acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
+	core := censusacquisition.Core{
+		Discoverer: fixedCensusRuntimeDiscovery{discovery: result.discovery},
+		Acquirer:   censusRuntimeBatchAcquirer{runtime: r.runtime, admitted: result.admitted, limits: limits},
+		Planning:   &censusacquisition.PlanningConfig{DownDepth: int(options.downDepth), UpDepth: int(options.upDepth)},
+	}
+	projection, err := core.Run(ctx, censusacquisition.SessionIdentity{SessionID: result.admitted.sessionID, Generation: result.admitted.generation})
+	if err != nil {
+		return censusacquisition.Projection{}, censusAcquisitionFailure()
+	}
+	return projection, nil
 }
 
 type censusRuntimeEnumerator struct {
