@@ -30,6 +30,7 @@ For input `i` and result `r`, a conforming v1 runtime validator MUST reject unle
    - `frontier_observed = frontier_expanded + frontier_unexpanded`
    - `request_attempted = request_succeeded + request_failed + request_cancelled`
    - `prepared_attempted = prepared_returned + prepared_empty + prepared_failed`
+   `Accounting.Frontier` is expansion-request accounting: `frontier_observed` counts requested expansions, partitioned into expanded and unexpanded requests. It is not boundary-node evidence and does not count graph nodes at a traversal boundary.
 8. Each omitted node or occurrence and each unexpanded frontier item is assigned exactly one reason. Failed or cancelled requests are likewise partitioned by request omission reason. Every closed reason-count object uses exactly `DEPTH_BOUND`, `NODE_BOUND`, `REQUEST_BOUND`, `TIMEOUT`, `CANCELLATION`, `UNSUPPORTED_RESPONSE`, `MALFORMED_RESPONSE`, and `DEDUPLICATION`; its sum equals the corresponding omitted/unexpanded count (or failed-plus-cancelled request count). Counts are aggregate partitions; producers MUST NOT double-count one omission under multiple reasons.
 9. A host creates each correlation ID from fresh randomness in `sc_[0-9a-f]{32}` format. It MUST NOT derive the ID from caller content, symbols, paths, URIs, or encoded forms. Success and domain-error construction for one request MUST reuse the same ID.
 

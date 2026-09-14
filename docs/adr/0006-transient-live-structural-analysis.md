@@ -170,7 +170,7 @@ The request is CALLS-only. It exposes no relation, adapter, or normalized-provid
 
 The `analysis` field is a strict discriminated union. Version 1 has no implicit analysis defaults:
 
-- `{"kind":"NEIGHBORHOOD"}` returns the admitted target, node, edge, direction, and frontier counts plus opaque node/edge witnesses;
+- `{"kind":"NEIGHBORHOOD"}` returns the admitted target, node, edge, and direction counts plus opaque node/edge witnesses;
 - `{"kind":"IMPACT"}` returns directed reachability from the admitted target within the already bounded projection; it does not expand traversal;
 - `{"kind":"CENTRALITY","pagerank_top_k":N,"hub_top_k":N}` where each `N` is `1..10000`;
 - `{"kind":"COMMUNITIES","seed":N,"pagerank_top_k":P,"hub_top_k":H}` where the seed is an unsigned 64-bit integer represented without JSON-number rounding and `P` and `H` are `1..10000`;
@@ -297,6 +297,8 @@ node_observed = node_admitted + node_rejected + node_omitted
 occurrence_observed = occurrence_admitted + occurrence_rejected + occurrence_omitted
 frontier_observed = frontier_expanded + frontier_unexpanded
 ```
+
+`Accounting.Frontier` records expansion requests: `frontier_observed` counts requested expansions, partitioned into expanded and unexpanded requests. It is not boundary-node evidence and does not report the number of graph nodes at a traversal boundary.
 
 Each omitted count has exactly one declared reason: depth bound, node bound, request bound, timeout, cancellation, unsupported response, malformed response, or deduplication. Deduplication retains both pre-deduplication and admitted denominators. `COMPLETE` and `EMPTY` require zero failed, cancelled, rejected, and non-deduplication-omitted counts, no unexpanded frontier within the requested depths, and no truncation flag. Any violation terminates as the matching domain error, with `PARTIAL` used only when at least one valid observation and at least one failed observation coexist.
 
