@@ -124,14 +124,59 @@ Acceptance remains an explicit external action by an independently identified au
 
 ## Closed terminal states and denominator accounting
 
-The closed protocol versions finite, uppercase, mutually exclusive operation/member outcome enums. Adding or removing a state requires a protocol version change. At minimum it preserves terminal distinctions for success, abstention, invalid input/query/member, unavailable or mismatched model/index, context/resource limits, invalid output, policy filtering/mismatch, duplicate input/member, unmatched group member, cancellation, timeout, backend failure, and below-threshold search members.
+The closed protocol versions these exact finite, uppercase, mutually exclusive operation/member outcome enums. Adding or removing a state requires a protocol version change.
 
-For Describe, Embed/index, Search, and Group, whole-operation outcome is separate from member outcomes. A failure before member evaluation records zero evaluated members and the complete admitted/index denominator; it does not manufacture member outcomes. Once evaluation of a member begins, that member receives exactly one terminal member outcome even if the operation later fails.
+**Describe operation outcome v1:**
 
-The normative equations include:
+`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Describe member outcome v1:**
+
+`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
+
+**Embed operation outcome v1:**
+
+`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Embed member outcome v1:**
+
+`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
+
+**Index-build operation outcome v1:**
+
+`COMPLETE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Index-build member outcome v1:**
+
+`INCLUDED | INVALID_INPUT | EMBEDDING_UNAVAILABLE | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
+
+**Search operation outcome v1:**
+
+`COMPLETE | INVALID_QUERY | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Search result-member outcome v1:**
+
+`RETURNED | BELOW_THRESHOLD | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`
+
+**Group operation outcome v1:**
+
+`COMPLETE | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
+
+**Group member outcome v1:**
+
+`GROUPED | UNMATCHED | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`
+
+For Describe, Embed, Index-build, Search, and Group, whole-operation outcome is separate from member outcomes. A failure before member evaluation records zero evaluated members and the complete admitted/index denominator; it does not manufacture member outcomes. Once evaluation of a member begins, that member receives exactly one terminal member outcome even if the operation later fails.
+
+The following equations are normative and map every member outcome in the corresponding v1 enum exactly once:
 
 ```text
-describe_or_embed_admitted =
+describe_admitted =
+  complete + abstained + invalid_input + model_unavailable + context_limit +
+  output_invalid + timeout + cancelled + resource_limit + backend_failure +
+  policy_mismatch + duplicate_input
+
+embed_admitted =
   complete + abstained + invalid_input + model_unavailable + context_limit +
   output_invalid + timeout + cancelled + resource_limit + backend_failure +
   policy_mismatch + duplicate_input
@@ -147,13 +192,13 @@ group_index_members =
   grouped + unmatched + filtered_by_policy + duplicate_member + invalid_member
 ```
 
-Duplicate members remain in the denominator and reference the canonical member. A Describe or Embed whole-operation outcome is `COMPLETE` if and only if its admission equation balances and every admitted member has one terminal member outcome. An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances and every admitted member has one terminal member outcome.
+Duplicate inputs and members remain in the denominator and reference the canonical member. A Describe whole-operation outcome is `COMPLETE` if and only if `describe_admitted` balances and every admitted member has exactly one terminal member outcome. An Embed whole-operation outcome is `COMPLETE` if and only if `embed_admitted` balances and every admitted member has exactly one terminal member outcome. An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances and every admitted member has exactly one terminal member outcome.
 
 **Search is `COMPLETE` if and only if one closed query record exists, the `search_index_members` denominator equation balances, and every index member has exactly one terminal search-member outcome.**
 
 **Group is `COMPLETE` if and only if the `group_index_members` denominator equation balances and every index member has exactly one terminal group-member outcome, including `UNMATCHED`.**
 
-A non-`COMPLETE` Search or Group retains the complete index denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation, complete coverage, or absence. The same non-`COMPLETE` accounting rule applies to Describe and Embed/index with their admitted denominator. No operation reports `COMPLETE` while omitting a denominator member.
+A non-`COMPLETE` Search or Group retains the complete index denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation, complete coverage, or absence. A non-`COMPLETE` Describe, Embed, or Index-build retains the complete admitted denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation or completeness. No operation reports `COMPLETE` while omitting a denominator member.
 
 ## Required provenance and replay
 

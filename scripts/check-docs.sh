@@ -64,6 +64,37 @@ assert_heading_order() {
   printf 'PASS %s: %s has stable task-first top-level heading order\n' "$id" "$path"
 }
 
+assert_following_nonempty_line_equals() {
+  id=$1
+  path=$2
+  heading=$3
+  expected=$4
+  actual=$(awk -v heading="$heading" '
+    $0 == heading { headings++; seeking=1; next }
+    seeking && NF { print; seeking=0 }
+    END { if (headings != 1) exit 1 }
+  ' "$root/$path" || true)
+  if [ "$actual" = "$expected" ]; then
+    printf 'PASS %s: %s binds %s to its exact exhaustive set\n' "$id" "$path" "$heading"
+  else
+    printf 'FAIL %s: %s must bind %s to exactly %s\n' "$id" "$path" "$heading" "$expected"
+    failed=1
+  fi
+}
+
+assert_exactly_one_line() {
+  id=$1
+  path=$2
+  text=$3
+  count=$(grep -F -x -c -- "$text" "$root/$path" || true)
+  if [ "$count" -eq 1 ]; then
+    printf 'PASS %s: %s contains exactly one %s\n' "$id" "$path" "$text"
+  else
+    printf 'FAIL %s: %s must contain exactly one %s (found %s)\n' "$id" "$path" "$text" "$count"
+    failed=1
+  fi
+}
+
 assert_heading_order DOC-SKILL-TASK-FIRST cmd/lsp-trace/SKILL.md \
   '## Route the task' \
   '## Command router' \
@@ -135,8 +166,18 @@ assert_contains DOC-SEMANTIC-ADR-PARTIAL-NO-COMPLETE docs/adr/0007-optional-loca
 assert_contains DOC-SEMANTIC-ADR-DESCRIBE-INDEPENDENT docs/adr/0007-optional-local-semantic-feature-index.md 'Describe is independent of corpus size and acquisition mode.'
 assert_contains DOC-SEMANTIC-ADR-CACHE-EXACT docs/adr/0007-optional-local-semantic-feature-index.md 'A cache hit is permitted only for exact identity equality'
 assert_contains DOC-SEMANTIC-ADR-CROSS-CORPUS-AUTHORITY docs/adr/0007-optional-local-semantic-feature-index.md 'Similarity, rank, or grouping never equalizes authority'
-assert_contains DOC-SEMANTIC-ADR-SEARCH-IFF docs/adr/0007-optional-local-semantic-feature-index.md 'Search is `COMPLETE` if and only if one closed query record exists, the `search_index_members` denominator equation balances, and every index member has exactly one terminal search-member outcome.'
-assert_contains DOC-SEMANTIC-ADR-GROUP-IFF docs/adr/0007-optional-local-semantic-feature-index.md 'Group is `COMPLETE` if and only if the `group_index_members` denominator equation balances and every index member has exactly one terminal group-member outcome, including `UNMATCHED`.'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-DESCRIBE-OP-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Describe operation outcome v1:**' '`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-DESCRIBE-MEMBER-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Describe member outcome v1:**' '`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-EMBED-OP-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Embed operation outcome v1:**' '`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-EMBED-MEMBER-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Embed member outcome v1:**' '`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-INDEX-BUILD-OP-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Index-build operation outcome v1:**' '`COMPLETE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-INDEX-BUILD-MEMBER-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Index-build member outcome v1:**' '`INCLUDED | INVALID_INPUT | EMBEDDING_UNAVAILABLE | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-SEARCH-OP-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Search operation outcome v1:**' '`COMPLETE | INVALID_QUERY | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-SEARCH-MEMBER-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Search result-member outcome v1:**' '`RETURNED | BELOW_THRESHOLD | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-GROUP-OP-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Group operation outcome v1:**' '`COMPLETE | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`'
+assert_following_nonempty_line_equals DOC-SEMANTIC-ADR-GROUP-MEMBER-V1 docs/adr/0007-optional-local-semantic-feature-index.md '**Group member outcome v1:**' '`GROUPED | UNMATCHED | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`'
+assert_exactly_one_line DOC-SEMANTIC-ADR-SEARCH-IFF docs/adr/0007-optional-local-semantic-feature-index.md '**Search is `COMPLETE` if and only if one closed query record exists, the `search_index_members` denominator equation balances, and every index member has exactly one terminal search-member outcome.**'
+assert_exactly_one_line DOC-SEMANTIC-ADR-GROUP-IFF docs/adr/0007-optional-local-semantic-feature-index.md '**Group is `COMPLETE` if and only if the `group_index_members` denominator equation balances and every index member has exactly one terminal group-member outcome, including `UNMATCHED`.**'
 assert_contains DOC-SEMANTIC-ADR-NONCOMPLETE-ACCOUNTING docs/adr/0007-optional-local-semantic-feature-index.md 'A non-`COMPLETE` Search or Group retains the complete index denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation, complete coverage, or absence.'
 assert_contains DOC-SEMANTIC-ADR-CONTEXT-DELTA docs/adr/0007-optional-local-semantic-feature-index.md 'the core engineering-context protocol uses neutral `context_state_delta`.'
 assert_contains DOC-SEMANTIC-ADR-NO-AUTHORIZATION docs/adr/0007-optional-local-semantic-feature-index.md 'This Proposed ADR does not authorize implementation or shipment.'
