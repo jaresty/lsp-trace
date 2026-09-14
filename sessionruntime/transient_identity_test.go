@@ -11,19 +11,26 @@ import (
 	"sync"
 	"testing"
 
+	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/session"
 )
 
 type identityReader struct {
-	mu   sync.Mutex
-	data [][]byte
-	err  error
+	mu     sync.Mutex
+	data   [][]byte
+	err    error
+	reads  int
+	onRead func()
 }
 
 func (r *identityReader) Read(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.reads++
+	if r.onRead != nil {
+		r.onRead()
+	}
 	if len(r.data) == 0 {
 		if r.err != nil {
 			return 0, r.err
@@ -57,6 +64,107 @@ func identityManager(t *testing.T, max int, reader io.Reader, children ...Child)
 }
 
 func tokenBytes(v byte) []byte { return bytes.Repeat([]byte{v}, 16) }
+
+func TestTransientIdentityAdmissionPrecedesEntropy(t *testing.T) {
+	r := &identityReader{data: [][]byte{tokenBytes(1)}}
+	m := identityManager(t, 1, r, referenceChild{})
+	profile := identityProfile(t, "/admission-before-entropy")
+	id := profile.SessionKey().String()
+	r.onRead = func() {
+		status := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: 1, Operation: session.LifecycleStatus})
+		if status.Failure != "" || status.State != session.Initializing {
+			t.Fatalf("ASSERT_TRANSIENT_IDENTITY_ADMITTED_BEFORE_ENTROPY: %+v", status)
+		}
+	}
+	started := m.Start(context.Background(), StartRequest{Profile: profile})
+	if started.Failure != "" || r.reads != 1 {
+		t.Fatalf("ASSERT_TRANSIENT_IDENTITY_ADMISSION_THEN_ONE_READ: result=%+v reads=%d", started, r.reads)
+	}
+}
+
+func TestTransientIdentityFailedAdmissionConsumesNoEntropyOrIdentityTombstone(t *testing.T) {
+	r := &identityReader{data: [][]byte{tokenBytes(2)}}
+	m := identityManager(t, 1, r, referenceChild{})
+	if admission := m.algebra.Admit("occupied", 0); admission.Kind != session.AdmissionFree {
+		t.Fatalf("fixture admission: %+v", admission)
+	}
+	before := len(m.transientIdentities)
+	got := m.Start(context.Background(), StartRequest{Profile: identityProfile(t, "/blocked")})
+	if got.Failure != session.ResourceExhausted || r.reads != 0 || len(m.transientIdentities) != before {
+		t.Fatalf("ASSERT_TRANSIENT_IDENTITY_FAILED_ADMISSION_ZERO_ENTROPY_AND_INDEX: result=%+v reads=%d before=%d after=%d", got, r.reads, before, len(m.transientIdentities))
+	}
+}
+
+type identityCleanupChild struct {
+	teardown managedprocess.TeardownObservation
+	close    managedprocess.ResourceObservation
+}
+
+func (c identityCleanupChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	return c.teardown
+}
+func (c identityCleanupChild) Close() managedprocess.ResourceObservation { return c.close }
+
+func confirmedIdentityCleanupChild() identityCleanupChild {
+	return identityCleanupChild{
+		teardown: managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: managedprocess.DeathExited, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}},
+		close:    managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed},
+	}
+}
+
+func TestTransientIdentityFailureCleanupAccounting(t *testing.T) {
+	confirmed := confirmedIdentityCleanupChild()
+	cleanupCases := []struct {
+		name           string
+		child          identityCleanupChild
+		clean          bool
+		cleanupFailure session.Failure
+	}{
+		{"confirmed", confirmed, true, ""},
+		{"teardown", identityCleanupChild{close: confirmed.close}, false, session.SessionReapIncomplete},
+		{"close", identityCleanupChild{teardown: confirmed.teardown}, false, session.SessionPoisoned},
+		{"both", identityCleanupChild{}, false, session.SessionPoisoned},
+	}
+	for _, source := range []string{"entropy", "collision"} {
+		for _, cleanup := range cleanupCases {
+			t.Run(source+"/"+cleanup.name, func(t *testing.T) {
+				var reader *identityReader
+				want := session.Failure("TRANSIENT_IDENTITY_UNAVAILABLE")
+				if source == "entropy" {
+					reader = &identityReader{err: errors.New("entropy unavailable")}
+				} else {
+					data := make([][]byte, transientIdentityAttempts)
+					for i := range data {
+						data[i] = tokenBytes(7)
+					}
+					reader = &identityReader{data: data}
+					want = session.ResourceExhausted
+				}
+				m := identityManager(t, 1, reader, cleanup.child)
+				if source == "collision" {
+					m.transientIdentities["ts_"+string(bytes.Repeat([]byte("07"), 16))] = struct{}{}
+				}
+				got := m.Start(context.Background(), StartRequest{Profile: identityProfile(t, "/"+source+"-"+cleanup.name)})
+				if got.Failure != want || got.transientFailure.Identity != want || got.transientFailure.Cleanup != cleanup.cleanupFailure {
+					t.Fatalf("ASSERT_TRANSIENT_IDENTITY_FAILURE_PRECEDENCE_AND_PRIVATE_DIAGNOSTICS: got=%+v want_identity=%q want_cleanup=%q", got, want, cleanup.cleanupFailure)
+				}
+				records, census := m.Records(), m.Census()
+				if cleanup.clean {
+					if len(records) != 0 || census.Sessions != 0 || census.Children != 0 {
+						t.Fatalf("ASSERT_TRANSIENT_IDENTITY_CONFIRMED_CLEANUP_ABSENT: records=%+v census=%+v", records, census)
+					}
+					return
+				}
+				if len(records) != 1 || records[0].State != session.Poisoned || census.Sessions != 1 || census.Children != 1 {
+					t.Fatalf("ASSERT_TRANSIENT_IDENTITY_UNCONFIRMED_CLEANUP_QUERYABLE: records=%+v census=%+v", records, census)
+				}
+				if token, failure := m.TransientSessionIdentity(got.SessionID, 1); token != "" || failure != session.SessionPoisoned {
+					t.Fatalf("ASSERT_TRANSIENT_IDENTITY_POISONED_HAS_NO_USABLE_TOKEN: token=%q failure=%q", token, failure)
+				}
+			})
+		}
+	}
+}
 
 func TestTransientIdentityFormatUniqueExactLookupAndSelectorClosure(t *testing.T) {
 	r := &identityReader{data: [][]byte{tokenBytes(1), tokenBytes(2)}}

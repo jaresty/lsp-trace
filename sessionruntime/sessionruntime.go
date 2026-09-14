@@ -159,6 +159,12 @@ type StartResult struct {
 	State                session.State
 	Failure              session.Failure
 	Start                managedprocess.StartObservation
+	transientFailure     transientIdentityStartFailure
+}
+
+type transientIdentityStartFailure struct {
+	Identity session.Failure
+	Cleanup  session.Failure
 }
 type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations, Operations, Workers int }
 type Observation struct {
@@ -974,20 +980,13 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		_ = child.Close()
 		return StartResult{SessionID: id, Failure: session.LifecycleConflict, Start: observed}
 	}
-	transientIdentity, identityFailure := m.newTransientIdentityLocked()
-	if identityFailure != "" {
-		_ = child.Teardown(context.Background())
-		_ = child.Close()
-		return StartResult{SessionID: id, Failure: identityFailure, Start: observed}
-	}
 	m.algebra.RegisterLifecycle(id, 1, session.Initializing, false)
 	if admission := m.algebra.Admit(id, 0); admission.Kind != session.AdmissionFree {
-		delete(m.transientIdentities, transientIdentity)
 		_ = child.Teardown(context.Background())
 		_ = child.Close()
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
 	}
-	r := Record{SessionID: id, Profile: req.Profile, Routing: RoutingMetadata{
+	record := Record{SessionID: id, Profile: req.Profile, Routing: RoutingMetadata{
 		Alias: req.BootstrapAlias, WorkspaceRoot: req.Profile.Workspace().String(), LanguageID: req.LanguageID,
 		ServerProfile: req.Profile.ProfileName(), RelationProviders: append([]string(nil), req.RelationProviders...),
 	}, Generation: 1, State: session.Initializing, Started: time.Now()}
@@ -996,13 +995,51 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		copy := *req.SeedBinding
 		retainedBinding = &copy
 	}
-	diagnosticGeneration := m.newDiagnosticGeneration(attemptID, id, 1)
-	m.sessions[id] = &runtimeSession{record: r, transientIdentity: transientIdentity, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
+	r := &runtimeSession{record: record, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
+	transientIdentity, identityFailure := m.newTransientIdentityLocked()
+	if identityFailure != "" {
+		return m.failTransientIdentityStartLocked(id, r, identityFailure, observed)
+	}
+	// Token installation is the final identity boundary before this session becomes
+	// observable through the runtime map, diagnostics, or startup observation.
+	r.transientIdentity = transientIdentity
+	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, id, 1)
+	m.sessions[id] = r
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
 }
 
 const transientIdentityAttempts = 8
+
+func (m *Manager) failTransientIdentityStartLocked(id string, r *runtimeSession, identityFailure session.Failure, observed managedprocess.StartObservation) StartResult {
+	result := StartResult{SessionID: id, Failure: identityFailure, Start: observed, transientFailure: transientIdentityStartFailure{Identity: identityFailure}}
+	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: 1, Operation: session.LifecycleStop, CallerID: "sessionruntime-transient-identity", ChildRisk: true})
+	teardown := r.process.Teardown(context.Background())
+	resources := r.process.Close()
+	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	cleanup := session.LifecycleResult{Failure: session.LifecycleConflict}
+	if intent.Failure == "" && intent.IntentID != "" {
+		cleanup = m.algebra.CompleteLifecycleObserved(id, intent.IntentID, session.LifecycleCompletion{
+			ShutdownComplete: true, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed,
+			TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death,
+			StderrDrainComplete: true, Reaped: death, InitializationPending: true,
+		})
+	} else if intent.Failure != "" {
+		cleanup.Failure = intent.Failure
+	}
+	if cleanup.Failure == "" && death && resources.Kind == managedprocess.ResourcesClosed && m.algebra.ReleaseStopped(id, 1) {
+		return result
+	}
+	result.transientFailure.Cleanup = cleanup.Failure
+	if result.transientFailure.Cleanup == "" {
+		result.transientFailure.Cleanup = session.SessionReapIncomplete
+	}
+	r.record.State = session.Poisoned
+	m.sessions[id] = r
+	m.observe(id, 1, "startup-failed", session.Poisoned, result.transientFailure.Cleanup)
+	result.Generation, result.State = 1, session.Poisoned
+	return result
+}
 
 func (m *Manager) newTransientIdentityLocked() (string, session.Failure) {
 	for attempt := 0; attempt < transientIdentityAttempts; attempt++ {
@@ -1031,6 +1068,9 @@ func (m *Manager) TransientSessionIdentity(id string, generation uint64) (string
 	}
 	if r.record.Generation != generation {
 		return "", session.StaleGeneration
+	}
+	if r.transientIdentity == "" || r.record.State == session.Poisoned {
+		return "", session.SessionPoisoned
 	}
 	return r.transientIdentity, ""
 }
