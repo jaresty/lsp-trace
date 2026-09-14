@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
@@ -117,6 +118,87 @@ func TestPrivateCensusMCPBindingRejectsInvalidRequestID(t *testing.T) {
 		if _, err := projectPrivateCensusMCP(requestID, completion); err == nil {
 			t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_ID_ENVELOPE_BOUND: length=%d", len(requestID))
 		}
+	}
+}
+
+func TestPrivateCensusMCPInvocationScopedRequestIDs(t *testing.T) {
+	fixture := &privateCensusRunnerFixture{completion: censusCompletion{Result: ptrCensusResult(privateCensusSuccessFixture())}}
+	binding := newPrivateCensusMCPBinding(fixture)
+	calls := []struct {
+		requestID string
+		invoke    func(context.Context, operation.Request) (privateCensusMCPResult, error)
+	}{
+		{requestID: "outer-direct-34", invoke: binding.callDirect},
+		{requestID: "outer-canonical-34", invoke: binding.callCanonical},
+	}
+	for _, call := range calls {
+		request := operation.Request{Name: "census", RequestID: call.requestID, Input: []byte(`{"session_id":"s","generation":1,"sources":["."]}`)}
+		got, err := call.invoke(context.Background(), request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var envelope censusMCPEnvelope
+		if err := json.Unmarshal(got.Structured, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.RequestID != call.requestID {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_INVOCATION_REQUEST_ID: envelope=%q request=%q", envelope.RequestID, call.requestID)
+		}
+		if !bytes.Equal(got.Text, got.Structured) || got.IsError {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_INVOCATION_BYTES: %+v", got)
+		}
+	}
+	if len(fixture.calls) != len(calls) || fixture.calls[0].RequestID != calls[0].requestID || fixture.calls[1].RequestID != calls[1].requestID || fixture.calls[0].RequestID == fixture.calls[1].RequestID {
+		t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_IDS_ARE_PER_INVOCATION: calls=%+v", fixture.calls)
+	}
+}
+
+func TestPrivateCensusMCPTerminalPublicationParity(t *testing.T) {
+	cases := []struct {
+		name          string
+		mutateReceipt func(*captureset.PublicationReceipt)
+		wantOutcome   string
+	}{
+		{name: "complete", wantOutcome: "COMPLETE"},
+		{name: "committed-degraded", mutateReceipt: func(receipt *captureset.PublicationReceipt) { receipt.CloseStatus = "COMMITTED_CLOSE_FAILED" }, wantOutcome: "COMMITTED_DEGRADED"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			projection, receipt := validMCPCompletionProjection(), validMCPCompletionReceipt()
+			if tc.mutateReceipt != nil {
+				tc.mutateReceipt(&receipt)
+			}
+			publications := 0
+			publisher := completionPublisher(receipt, func() { publications++ })
+			verifier := &censusVerifierStub{manifest: captureset.Manifest{Constituents: []captureset.Constituent{{ImmutableSelector: "graphs/v5/a.json"}}}}
+			completion := completeCensusProjectionWith(context.Background(), projection, publisher, verifier)
+			got, err := projectPrivateCensusMCP("outer-34", completion)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if publications != 1 {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_ZERO_DUPLICATE_PUBLICATION: publications=%d", publications)
+			}
+			if err := mcpcontract.ValidateFutureCensusEnvelopeExclusive(got.Structured); err != nil {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_TERMINAL_SCHEMA_EXCLUSIVE: %v", err)
+			}
+			var envelope map[string]any
+			if err := json.Unmarshal(got.Structured, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			_, hasResult := envelope["result"]
+			_, hasError := envelope["error"]
+			if envelope["outcome"] != tc.wantOutcome || envelope["envelope_schema_id"] != mcpcontract.FutureCensusSuccessID || !hasResult || hasError || !bytes.Equal(got.Text, got.Structured) {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_TERMINAL_PARITY: envelope=%v text=%q structured=%q", envelope, got.Text, got.Structured)
+			}
+			if tc.wantOutcome == "COMPLETE" {
+				if authority := envelope["result"].(map[string]any)["authority"].(float64); authority > 0 {
+					t.Fatalf("ASSERT_PRIVATE_CENSUS_AUTHORITY_CEILING: authority=%v ceiling=0", authority)
+				}
+			} else if diagnostic := completion.Diagnostic; diagnostic == nil || diagnostic.Stage != censusresult.StageCommitted {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_COMMITTED_DIAGNOSTIC: %+v", completion)
+			}
+		})
 	}
 }
 
