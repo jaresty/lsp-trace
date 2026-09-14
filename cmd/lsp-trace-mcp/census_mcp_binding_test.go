@@ -108,8 +108,14 @@ func TestPrivateCensusMCPBindingRejectsCallerOutputSelector(t *testing.T) {
 func TestPrivateCensusMCPBindingRejectsInvalidRequestID(t *testing.T) {
 	completion := censusCompletion{Result: ptrCensusResult(privateCensusSuccessFixture())}
 	for _, requestID := range []string{"", strings.Repeat("r", 257)} {
+		fixture := &privateCensusRunnerFixture{completion: completion}
+		binding := newPrivateCensusMCPBinding(fixture)
+		request := operation.Request{RequestID: requestID, Input: []byte(`{"session_id":"s","generation":1,"sources":["."]}`)}
+		if _, err := binding.callDirect(context.Background(), request); err == nil || len(fixture.calls) != 0 {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_ID_PREFLIGHT_BOUND: length=%d err=%v calls=%+v", len(requestID), err, fixture.calls)
+		}
 		if _, err := projectPrivateCensusMCP(requestID, completion); err == nil {
-			t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_ID_BOUND: length=%d", len(requestID))
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_ID_ENVELOPE_BOUND: length=%d", len(requestID))
 		}
 	}
 }

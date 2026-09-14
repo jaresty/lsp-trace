@@ -51,7 +51,7 @@ func (b *privateCensusMCPBinding) callCanonical(ctx context.Context, request ope
 }
 
 func (b *privateCensusMCPBinding) call(ctx context.Context, request operation.Request) (privateCensusMCPResult, error) {
-	if b == nil || b.runtime == nil || request.RequestID == "" {
+	if b == nil || b.runtime == nil || request.RequestID == "" || len(request.RequestID) > 256 {
 		return privateCensusMCPResult{}, errors.New("private census MCP binding unavailable")
 	}
 	decoded, err := mcpcontract.DecodeFutureCensusRequestV1(request.Input)
