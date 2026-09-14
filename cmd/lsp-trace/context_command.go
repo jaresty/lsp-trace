@@ -222,15 +222,30 @@ func firstNonempty(a, b string) string {
 }
 
 func normalizeContextResult(in transientstructural.Result, q transientstructural.Request, transientID string) (transientstructuralresult.Result, error) {
+	nodeIDs := make(map[string]string, len(in.Analysis.Nodes))
 	nodes := make([]transientstructuralresult.Node, len(in.Analysis.Nodes))
 	for i, n := range in.Analysis.Nodes {
-		nodes[i] = transientstructuralresult.Node{ID: "tn_" + n.ID[:32]}
+		id, err := transientstructuralresult.NodeID(transientID, q.Generation, n.ID)
+		if err != nil {
+			return transientstructuralresult.Result{}, errors.New("context normalization failed")
+		}
+		nodeIDs[n.ID] = id
+		nodes[i] = transientstructuralresult.Node{ID: id}
+	}
+	target, ok := nodeIDs[in.TargetID]
+	if !ok {
+		return transientstructuralresult.Result{}, errors.New("context normalization failed")
 	}
 	edges := make([]transientstructuralresult.Edge, len(in.Analysis.Occurrences))
 	for i, e := range in.Analysis.Occurrences {
-		edges[i] = transientstructuralresult.Edge{ID: "te_" + e.ID[:32], CallerNodeID: "tn_" + e.CallerID[:32], CalleeNodeID: "tn_" + e.CalleeID[:32]}
+		caller, callerOK := nodeIDs[e.CallerID]
+		callee, calleeOK := nodeIDs[e.CalleeID]
+		id, err := transientstructuralresult.EdgeID(transientID, q.Generation, e.ID, caller, callee)
+		if err != nil || !callerOK || !calleeOK {
+			return transientstructuralresult.Result{}, errors.New("context normalization failed")
+		}
+		edges[i] = transientstructuralresult.Edge{ID: id, CallerNodeID: caller, CalleeNodeID: callee}
 	}
-	target := "tn_" + in.TargetID[:32]
 	var incoming, outgoing uint64
 	for _, edge := range edges {
 		if edge.CalleeNodeID == target {
@@ -262,6 +277,9 @@ func normalizeContextResult(in transientstructural.Result, q transientstructural
 		FrontierObserved: uint64(in.Accounting.Frontier.Observed), FrontierExpanded: uint64(in.Accounting.Frontier.Expanded), FrontierUnexpanded: uint64(in.Accounting.Frontier.Unexpanded),
 		RequestOmissionReasons: transientstructuralresult.EmptyReasonMap(), NodeOmissionReasons: transientstructuralresult.EmptyReasonMap(), OccurrenceOmissionReasons: transientstructuralresult.EmptyReasonMap(), FrontierOmissionReasons: transientstructuralresult.EmptyReasonMap(),
 	}
+	if a.RequestFailed != 0 || a.RequestCancelled != 0 {
+		return transientstructuralresult.Result{}, errors.New("context normalization failed")
+	}
 	if a.NodeOmitted > 0 {
 		a.NodeOmissionReasons[transientstructuralresult.Deduplication] = a.NodeOmitted
 		a.DeduplicatedNodes = a.NodeOmitted
@@ -270,10 +288,30 @@ func normalizeContextResult(in transientstructural.Result, q transientstructural
 		a.OccurrenceOmissionReasons[transientstructuralresult.Deduplication] = a.OccurrenceOmitted
 		a.DeduplicatedOccurrences = a.OccurrenceOmitted
 	}
+	for _, omission := range in.Accounting.Omissions {
+		reason := transientstructuralresult.OmissionReason(omission.Reason)
+		if omission.Count < 0 {
+			return transientstructuralresult.Result{}, errors.New("context normalization failed")
+		}
+		count := uint64(omission.Count)
+		if reason == transientstructuralresult.Deduplication {
+			deduplicated := a.NodeOmitted + a.OccurrenceOmitted
+			if count < deduplicated {
+				return transientstructuralresult.Result{}, errors.New("context normalization failed")
+			}
+			count -= deduplicated
+		}
+		if count > 0 {
+			if _, known := a.FrontierOmissionReasons[reason]; !known {
+				return transientstructuralresult.Result{}, errors.New("context normalization failed")
+			}
+			a.FrontierOmissionReasons[reason] += count
+		}
+	}
 	nq := transientstructuralresult.Request{Generation: q.Generation, DownDepth: uint64(q.DownDepth), UpDepth: uint64(q.UpDepth), MaxNodes: uint64(q.MaxNodes), TimeoutMS: uint64(q.TimeoutMS), RequestTimeoutMS: uint64(q.RequestTimeoutMS), MaxMessages: uint64(q.MaxMessages), MaxBytes: uint64(q.MaxBytes), Analysis: transientstructuralresult.AnalysisRequest{Kind: string(q.Analysis.Kind), Direction: string(q.Analysis.Direction), Depth: uint64(q.Analysis.MaxDepth)}}
 	out := transientstructuralresult.NewResult(transientID, q.Generation, target, in.Qualification.PositionEncoding, nq, a, analysis)
 	if err := out.Validate(); err != nil {
-		return transientstructuralresult.Result{}, fmt.Errorf("%w: session=%q encoding=%q target=%q nodes=%d edges=%d state=%q", err, in.Qualification.SessionID, in.Qualification.PositionEncoding, target, len(nodes), len(edges), in.State)
+		return transientstructuralresult.Result{}, errors.New("context normalization failed")
 	}
 	return out, nil
 }
