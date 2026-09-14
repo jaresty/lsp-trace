@@ -2,37 +2,26 @@ package presentation
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
-	"lsp-trace/internal/schema"
 )
 
 const traceV5PresentationMarker = "lsp-trace presentation only — derived view; not authoritative evidence"
 
 // TraceV5Options controls presentation of retained target-centered graph output.
 type TraceV5Options struct {
-	// Targets identifies nodes by exact node ID or by node name. A bare name may
-	// match multiple nodes and fail with an explicit ambiguity error.
-	// To disambiguate a name, provide "name@uri:line:column" using one-based
-	// selection coordinates.
-	Targets []string
-
-	// ExpandTestNodes controls whether test-only files are shown by default.
-	// By default test nodes are omitted and counted as collapsed.
-	ExpandTestNodes bool
-	// ExpandExternalNodes controls whether nodes outside the traced workspace are
-	// shown by default. By default external and outside-workspace nodes are omitted
-	// and counted as collapsed.
+	// Targets may only select exact node IDs already retained as authoritative
+	// targets. Names, locators, and arbitrary retained nodes are rejected.
+	Targets             []string
+	ExpandTestNodes     bool
 	ExpandExternalNodes bool
 }
 
@@ -45,69 +34,56 @@ const (
 )
 
 type traceV5TargetRelation struct {
-	peer graph.Node
-	edge graph.Edge
+	peer   graph.Node
+	caller graph.Node
+	edge   graph.Edge
 }
 
-type traceV5Summary struct {
-	NodeCount           int    `json:"node_count"`
-	EdgeCount           int    `json:"edge_count"`
-	TerminalCount       int    `json:"terminal_count"`
-	CycleCount          int    `json:"cycle_count"`
-	TraversalComplete   bool   `json:"traversal_complete"`
-	SourceGraphComplete string `json:"source_graph_complete"`
-	CompletenessScope   string `json:"completeness_scope"`
-	Truncated           bool   `json:"truncated"`
-}
+type traceNodeClass struct{ test, external bool }
 
 // RenderTraceV5 renders a deterministic, target-centered view over graph-v5
-// evidence embedded in a valid graph-provenance-v5 envelope.
+// evidence embedded in a canonically admitted graph-provenance-v5 envelope.
 func RenderTraceV5(data []byte, opts TraceV5Options) (string, error) {
 	if _, err := graphprovenance.ValidateFor(data, graphprovenance.Family, "v5"); err != nil {
 		return "", fmt.Errorf("provenance envelope: %w", err)
 	}
-
 	var env graphprovenance.EvidenceV5
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.DisallowUnknownFields()
-	if err := d.Decode(&env); err != nil {
+	if err := json.Unmarshal(data, &env); err != nil {
 		return "", fmt.Errorf("decode provenance envelope: %w", err)
 	}
 	native, err := base64.StdEncoding.DecodeString(env.GraphV5)
 	if err != nil {
 		return "", fmt.Errorf("decode embedded graph_v5: %w", err)
 	}
-	if expected, got := env.GraphV5SHA256, fmt.Sprintf("sha256:%x", sha256.Sum256(native)); expected != got {
-		return "", fmt.Errorf("embedded graph_v5 digest mismatch")
-	}
-	if _, err := schema.ValidateStructure(native, schema.FamilyGraph, graph.SchemaVersionV5); err != nil {
-		return "", fmt.Errorf("validate embedded graph_v5: %w", err)
-	}
-
-	type traceV5Graph struct {
-		Invocation struct {
-			WorkspaceURI string `json:"workspace_uri"`
-		} `json:"invocation"`
-		Targets []string       `json:"targets"`
-		Nodes   []graph.Node   `json:"nodes"`
-		Edges   []graph.Edge   `json:"edges"`
-		Summary traceV5Summary `json:"summary"`
-	}
-	var g traceV5Graph
-	d = json.NewDecoder(bytes.NewReader(native))
-	if err := d.Decode(&g); err != nil {
+	g, err := graph.DecodeNativeV3(native)
+	if err != nil {
 		return "", fmt.Errorf("decode embedded graph_v5: %w", err)
 	}
 
-	nodes := map[string]graph.Node{}
+	// Seed memberships are already covered by canonical V5 admission. They are
+	// decoded only to recover PREPARED_TARGET endpoints when the graph target list
+	// is empty; all displayed graph context comes from the canonical decoder.
+	var membershipCarrier struct {
+		SeedMemberships []graph.SeedMembership `json:"seed_memberships"`
+	}
+	if err := json.Unmarshal(native, &membershipCarrier); err != nil {
+		return "", fmt.Errorf("decode embedded target memberships: %w", err)
+	}
+
+	nodes := make(map[string]graph.Node, len(g.Nodes))
 	for _, n := range g.Nodes {
-		if _, ok := nodes[n.ID]; ok {
+		if _, exists := nodes[n.ID]; exists {
 			return "", fmt.Errorf("embedded graph has duplicate node %q", n.ID)
 		}
 		nodes[n.ID] = n
 	}
-
-	targetIDs, err := resolveTraceTargets(opts.Targets, g.Targets, nodes)
+	authoritative := append([]string(nil), g.Targets...)
+	for _, m := range membershipCarrier.SeedMemberships {
+		if m.EvidenceKind == "PREPARED_TARGET" {
+			authoritative = append(authoritative, m.EndpointID)
+		}
+	}
+	targetIDs, err := resolveTraceTargets(opts.Targets, authoritative, nodes)
 	if err != nil {
 		return "", err
 	}
@@ -123,27 +99,11 @@ func RenderTraceV5(data []byte, opts TraceV5Options) (string, error) {
 		if !calleeOK {
 			return "", fmt.Errorf("embedded graph has unknown callee node %q", e.CalleeNodeID)
 		}
-		incoming[e.CalleeNodeID] = append(incoming[e.CalleeNodeID], traceV5TargetRelation{peer: caller, edge: e})
-		outgoing[e.CallerNodeID] = append(outgoing[e.CallerNodeID], traceV5TargetRelation{peer: callee, edge: e})
+		incoming[e.CalleeNodeID] = append(incoming[e.CalleeNodeID], traceV5TargetRelation{peer: caller, caller: caller, edge: e})
+		outgoing[e.CallerNodeID] = append(outgoing[e.CallerNodeID], traceV5TargetRelation{peer: callee, caller: caller, edge: e})
 	}
 
-	sort.Slice(targetIDs, func(i, j int) bool {
-		a, b := nodes[targetIDs[i]], nodes[targetIDs[j]]
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		if a.URI != b.URI {
-			return a.URI < b.URI
-		}
-		if a.SelectionRange.Start != b.SelectionRange.Start {
-			if a.SelectionRange.Start.Line != b.SelectionRange.Start.Line {
-				return a.SelectionRange.Start.Line < b.SelectionRange.Start.Line
-			}
-			return a.SelectionRange.Start.Character < b.SelectionRange.Start.Character
-		}
-		return targetIDs[i] < targetIDs[j]
-	})
-
+	sort.Slice(targetIDs, func(i, j int) bool { return lessTraceNode(nodes[targetIDs[i]], nodes[targetIDs[j]]) })
 	nameCounts := map[string]int{}
 	for _, id := range targetIDs {
 		nameCounts[nodes[id].Name]++
@@ -151,15 +111,18 @@ func RenderTraceV5(data []byte, opts TraceV5Options) (string, error) {
 
 	var out strings.Builder
 	fmt.Fprintln(&out, traceV5PresentationMarker)
-	fmt.Fprintf(&out, "status: %s\n", traceV5StatusFromSummary(g.Summary))
+	fmt.Fprintf(&out, "status: %s\n", traceV5StatusFromGraph(g))
 	fmt.Fprintf(&out, "nodes: %d\nedges: %d\nterminals: %d\ncycles: %d\n", g.Summary.NodeCount, g.Summary.EdgeCount, g.Summary.TerminalCount, g.Summary.CycleCount)
-	fmt.Fprintf(&out, "traversal_complete: %t\ntruncated: %t\n", g.Summary.TraversalComplete, g.Summary.Truncated)
-	if g.Summary.SourceGraphComplete != "" {
-		fmt.Fprintf(&out, "source_graph_complete: %s\n", g.Summary.SourceGraphComplete)
-	}
-	if g.Summary.CompletenessScope != "" {
-		fmt.Fprintf(&out, "completeness_scope: %s\n", g.Summary.CompletenessScope)
-	}
+	fmt.Fprintf(&out, "traversal_complete: %t\ntruncated: %t\n", g.Summary.Complete, g.Summary.Truncated)
+	fmt.Fprintf(&out, "source_graph_complete: %s\n", valueOrUnknown(graph.Unknown))
+	fmt.Fprintf(&out, "completeness_scope: %s\n", valueOrUnknown(graph.CompletenessScope))
+	fmt.Fprintf(&out, "dependency_completeness: %s\n", valueOrUnknown(env.DependencyCompleteness))
+	fmt.Fprintf(&out, "analyzed_version: %s\n", valueOrUnknown(env.AnalyzedVersion))
+	fmt.Fprintf(&out, "source_policy: %s\n", valueOrUnknown(env.SourcePolicy))
+	fmt.Fprintln(&out, "COMPLETE means bounded traversal complete only; it never means workspace or source complete")
+	formatBoundaries(&out, "terminals", g.Terminals)
+	formatBoundaries(&out, "frontier", g.Frontier)
+	formatDiagnostics(&out, g.Diagnostics)
 	if len(targetIDs) == 0 {
 		fmt.Fprintln(&out, "targets: none")
 		return out.String(), nil
@@ -174,231 +137,181 @@ func RenderTraceV5(data []byte, opts TraceV5Options) (string, error) {
 		}
 		fmt.Fprintf(&out, "\nTARGET %s (%s)\n", targetName, id)
 		fmt.Fprintf(&out, "  %s @ %s\n", n.Name, formatNodeLocation(g.Invocation.WorkspaceURI, n))
-		formatTraceRelations(&out, g.Invocation.WorkspaceURI, "direct incoming", incoming[id], targetName, opts)
-		formatTraceRelations(&out, g.Invocation.WorkspaceURI, "direct outgoing", outgoing[id], targetName, opts)
+		formatTraceRelations(&out, g.Invocation.WorkspaceURI, "direct incoming", incoming[id], opts)
+		formatTraceRelations(&out, g.Invocation.WorkspaceURI, "direct outgoing", outgoing[id], opts)
 	}
-
 	return out.String(), nil
 }
 
-func traceV5StatusFromSummary(summary traceV5Summary) traceV5Status {
-	if summary.NodeCount == 0 {
-		return traceStatusEmpty
+func valueOrUnknown(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return graph.Unknown
 	}
-	if !summary.TraversalComplete || summary.Truncated {
+	return s
+}
+
+func traceV5StatusFromGraph(g graph.Result) traceV5Status {
+	if incompleteTrace(g) {
 		return traceStatusPartial
+	}
+	if len(g.Nodes) == 0 {
+		return traceStatusEmpty
 	}
 	return traceStatusComplete
 }
 
-func resolveTraceTargets(requested, fallback []string, nodes map[string]graph.Node) ([]string, error) {
+func incompleteTrace(g graph.Result) bool {
+	if !g.Summary.Complete || g.Summary.Truncated || len(g.Frontier) > 0 {
+		return true
+	}
+	for _, b := range g.Terminals {
+		switch b.Reason {
+		case graph.NoIncomingCalls, graph.ServerReportedNoIncoming, graph.PrepareReturnedNoItem, graph.IncomingReturnedNull, graph.ExternalURI:
+		default:
+			return true
+		}
+	}
+	for _, d := range g.Diagnostics {
+		if d.Category == graph.UnresolvedCall {
+			return true
+		}
+		switch d.Phase {
+		case "invocation", "source", "trace", "spawn", "initialize", "prepare", "didOpen", "open", "shutdown":
+			return true
+		}
+	}
+	return false
+}
+
+func resolveTraceTargets(requested, authoritative []string, nodes map[string]graph.Node) ([]string, error) {
+	auth := map[string]struct{}{}
+	for _, id := range authoritative {
+		if _, ok := nodes[id]; !ok {
+			return nil, fmt.Errorf("authoritative target references unknown node %q", id)
+		}
+		auth[id] = struct{}{}
+	}
 	specs := requested
 	if len(specs) == 0 {
-		specs = fallback
+		specs = authoritative
 	}
-	if len(specs) == 0 {
-		return nil, nil
-	}
-	nameIndex := map[string][]string{}
-	for id, node := range nodes {
-		nameIndex[node.Name] = append(nameIndex[node.Name], id)
-	}
-	for _, ids := range nameIndex {
-		sort.Strings(ids)
-	}
-
 	selected := make([]string, 0, len(specs))
 	seen := map[string]struct{}{}
-	for _, spec := range specs {
-		spec = strings.TrimSpace(spec)
-		if spec == "" {
-			return nil, fmt.Errorf("empty target spec")
+	for _, id := range specs {
+		if strings.TrimSpace(id) != id || id == "" {
+			return nil, fmt.Errorf("target must be an exact authoritative node ID: %q", id)
 		}
-		if _, ok := nodes[spec]; ok {
-			if _, ok := seen[spec]; !ok {
-				selected = append(selected, spec)
-				seen[spec] = struct{}{}
-			}
-			continue
+		if _, ok := auth[id]; !ok {
+			return nil, fmt.Errorf("target is not an authoritative retained target: %q", id)
 		}
-		parsed, err := parseTargetSelector(spec)
-		if err != nil {
-			return nil, err
-		}
-		cands := append([]string(nil), nameIndex[parsed.Name]...)
-		if len(cands) == 0 {
-			return nil, fmt.Errorf("target not found: %q", spec)
-		}
-		if parsed.URI != "" {
-			filtered := make([]string, 0, len(cands))
-			for _, id := range cands {
-				n := nodes[id]
-				if n.URI == parsed.URI && (!parsed.HasLineCol || (int(n.SelectionRange.Start.Line)+1 == parsed.Line && int(n.SelectionRange.Start.Character)+1 == parsed.Character)) {
-					filtered = append(filtered, id)
-				}
-			}
-			cands = filtered
-		}
-		if len(cands) == 0 {
-			return nil, fmt.Errorf("target not found: %q", spec)
-		}
-		if len(cands) > 1 && !parsed.HasLineCol && parsed.URI == "" {
-			return nil, fmt.Errorf("ambiguous target %q; specify disambiguating @uri:line:column", spec)
-		}
-		if len(cands) > 1 {
-			parts := make([]string, 0, len(cands))
-			for _, id := range cands {
-				n := nodes[id]
-				parts = append(parts, fmt.Sprintf("%s (%s)", n.URI, formatSelectionStart(n)))
-			}
-			sort.Strings(parts)
-			return nil, fmt.Errorf("ambiguous target %q: %s", spec, strings.Join(parts, ", "))
-		}
-		id := cands[0]
 		if _, ok := seen[id]; !ok {
-			selected = append(selected, id)
 			seen[id] = struct{}{}
+			selected = append(selected, id)
 		}
-	}
-	if len(selected) == 0 {
-		return nil, fmt.Errorf("no matching targets")
 	}
 	return selected, nil
 }
 
-type traceTargetSpec struct {
-	Name       string
-	URI        string
-	Line       int
-	Character  int
-	HasLineCol bool
-}
-
-func parseTargetSelector(spec string) (traceTargetSpec, error) {
-	selector := traceTargetSpec{Name: spec}
-	at := strings.Index(spec, "@")
-	if at < 0 {
-		return selector, nil
+func lessTraceNode(a, b graph.Node) bool {
+	if a.Name != b.Name {
+		return a.Name < b.Name
 	}
-	name := strings.TrimSpace(spec[:at])
-	locator := spec[at+1:]
-	if name == "" || locator == "" {
-		return traceTargetSpec{}, fmt.Errorf("invalid target specifier %q", spec)
+	if a.URI != b.URI {
+		return a.URI < b.URI
 	}
-	lineIdx := strings.LastIndex(locator, ":")
-	if lineIdx < 0 || lineIdx == len(locator)-1 {
-		return traceTargetSpec{}, fmt.Errorf("invalid target specifier %q", spec)
+	if a.SelectionRange.Start.Line != b.SelectionRange.Start.Line {
+		return a.SelectionRange.Start.Line < b.SelectionRange.Start.Line
 	}
-	colIdx := strings.LastIndex(locator[:lineIdx], ":")
-	if colIdx < 0 || colIdx >= len(locator)-2 {
-		return traceTargetSpec{}, fmt.Errorf("invalid target specifier %q", spec)
+	if a.SelectionRange.Start.Character != b.SelectionRange.Start.Character {
+		return a.SelectionRange.Start.Character < b.SelectionRange.Start.Character
 	}
-	lineText := locator[colIdx+1 : lineIdx]
-	charText := locator[lineIdx+1:]
-	line, err := strconv.Atoi(lineText)
-	if err != nil || line < 1 {
-		return traceTargetSpec{}, fmt.Errorf("invalid target specifier %q", spec)
-	}
-	char, err := strconv.Atoi(charText)
-	if err != nil || char < 1 {
-		return traceTargetSpec{}, fmt.Errorf("invalid target specifier %q", spec)
-	}
-	selector = traceTargetSpec{Name: name, URI: locator[:colIdx], Line: line, Character: char, HasLineCol: true}
-	return selector, nil
+	return a.ID < b.ID
 }
 
 func formatSelectionStart(n graph.Node) string {
 	return fmt.Sprintf("%d:%d", n.SelectionRange.Start.Line+1, n.SelectionRange.Start.Character+1)
 }
-
 func formatNodeLocation(workspaceURI string, n graph.Node) string {
 	if n.URI == "" {
 		return ""
 	}
-	if offset := formatSelectionStart(n); offset != "" {
-		return fmt.Sprintf("%s:%s", displayURI(n.URI, workspaceURI), offset)
-	}
-	return n.URI
+	return fmt.Sprintf("%s:%s", displayURI(n.URI, workspaceURI), formatSelectionStart(n))
 }
-
 func formatRange(r graph.Range) string {
 	return fmt.Sprintf("%d:%d-%d:%d", r.Start.Line+1, r.Start.Character+1, r.End.Line+1, r.End.Character+1)
 }
 
-func formatTraceRelations(out *strings.Builder, workspace string, heading string, relations []traceV5TargetRelation, _ string, opts TraceV5Options) {
+func lessTraceRange(a, b graph.Range) bool {
+	if a.Start.Line != b.Start.Line {
+		return a.Start.Line < b.Start.Line
+	}
+	if a.Start.Character != b.Start.Character {
+		return a.Start.Character < b.Start.Character
+	}
+	if a.End.Line != b.End.Line {
+		return a.End.Line < b.End.Line
+	}
+	return a.End.Character < b.End.Character
+}
+
+func formatTraceRelations(out *strings.Builder, workspace, heading string, relations []traceV5TargetRelation, opts TraceV5Options) {
 	visible := make([]traceV5TargetRelation, 0, len(relations))
-	omittedTest := 0
-	omittedExternal := 0
-	omittedTotal := 0
+	collapsedPeers := map[string]traceNodeClass{}
+	collapsedRelations, testPeers, externalPeers := 0, map[string]struct{}{}, map[string]struct{}{}
 	for _, rel := range relations {
-		if shouldCollapseNode(rel.peer, workspace, opts) {
-			omittedTotal++
-			if isTestNode(rel.peer) {
-				omittedTest++
-			}
-			if isOutsideWorkspaceNode(rel.peer.URI, workspace) {
-				omittedExternal++
-			}
+		class := classifyTraceNode(rel.peer, workspace)
+		collapse := (class.external && !opts.ExpandExternalNodes) || (class.test && !opts.ExpandTestNodes)
+		if !collapse {
+			visible = append(visible, rel)
 			continue
 		}
-		visible = append(visible, rel)
+		collapsedRelations++
+		collapsedPeers[rel.peer.ID] = class
+		if class.external {
+			externalPeers[rel.peer.ID] = struct{}{}
+		} else if class.test {
+			testPeers[rel.peer.ID] = struct{}{}
+		}
 	}
 	fmt.Fprintf(out, "  %s: %d\n", heading, len(relations))
 	sort.Slice(visible, func(i, j int) bool {
-		a, b := visible[i].peer, visible[j].peer
-		if a.Name != b.Name {
-			return a.Name < b.Name
-		}
-		if a.URI != b.URI {
-			return a.URI < b.URI
-		}
-		if a.SelectionRange.Start != b.SelectionRange.Start {
-			if a.SelectionRange.Start.Line != b.SelectionRange.Start.Line {
-				return a.SelectionRange.Start.Line < b.SelectionRange.Start.Line
-			}
-			return a.SelectionRange.Start.Character < b.SelectionRange.Start.Character
-		}
-		if visible[i].edge.RelationID != visible[j].edge.RelationID {
-			return visible[i].edge.RelationID < visible[j].edge.RelationID
-		}
-		if len(visible[i].edge.CallSites) == 0 {
-			return false
-		}
-		if len(visible[j].edge.CallSites) == 0 {
+		if lessTraceNode(visible[i].peer, visible[j].peer) {
 			return true
 		}
-		return formatRange(visible[i].edge.CallSites[0]) < formatRange(visible[j].edge.CallSites[0])
+		if lessTraceNode(visible[j].peer, visible[i].peer) {
+			return false
+		}
+		return visible[i].edge.RelationID < visible[j].edge.RelationID
 	})
 	if len(visible) == 0 {
 		fmt.Fprintln(out, "    none")
-	} else {
-		for _, rel := range visible {
-			fmt.Fprintf(out, "    %s@%s\n", rel.peer.Name, formatNodeLocation(workspace, rel.peer))
-			for _, callSite := range rel.edge.CallSites {
-				fmt.Fprintf(out, "      call-site: %s\n", formatRange(callSite))
-			}
+	}
+	for _, rel := range visible {
+		fmt.Fprintf(out, "    %s@%s\n", rel.peer.Name, formatNodeLocation(workspace, rel.peer))
+		sites := append([]graph.Range(nil), rel.edge.CallSites...)
+		sort.Slice(sites, func(i, j int) bool { return lessTraceRange(sites[i], sites[j]) })
+		callerURI := displayURI(rel.caller.URI, workspace)
+		for _, site := range sites {
+			fmt.Fprintf(out, "      call-site: %s:%s\n", callerURI, formatRange(site))
 		}
 	}
-	if omittedTotal > 0 {
-		parts := make([]string, 0, 2)
-		if omittedTest > 0 {
-			parts = append(parts, fmt.Sprintf("%d test", omittedTest))
+	if collapsedRelations > 0 {
+		fmt.Fprintf(out, "    collapsed peer nodes: %d\n", len(collapsedPeers))
+		fmt.Fprintf(out, "    collapsed direct relations: %d\n", collapsedRelations)
+		if len(testPeers) > 0 {
+			fmt.Fprintf(out, "    test peer nodes: %d\n", len(testPeers))
 		}
-		if omittedExternal > 0 {
-			parts = append(parts, fmt.Sprintf("%d external/outside-workspace", omittedExternal))
+		if len(externalPeers) > 0 {
+			fmt.Fprintf(out, "    external/outside-workspace peer nodes: %d\n", len(externalPeers))
 		}
-		fmt.Fprintf(out, "    omitted collapsed nodes (%s): %d\n", strings.Join(parts, ", "), omittedTotal)
 	}
 }
 
-func shouldCollapseNode(node graph.Node, workspace string, opts TraceV5Options) bool {
-	if isTestNode(node) && !opts.ExpandTestNodes {
-		return true
+func classifyTraceNode(node graph.Node, workspace string) traceNodeClass {
+	if isOutsideWorkspaceNode(node.URI, workspace) {
+		return traceNodeClass{external: true}
 	}
-	if isOutsideWorkspaceNode(node.URI, workspace) && !opts.ExpandExternalNodes {
-		return true
-	}
-	return false
+	return traceNodeClass{test: isTestNode(node)}
 }
 
 func isTestNode(node graph.Node) bool {
@@ -406,35 +319,64 @@ func isTestNode(node graph.Node) bool {
 	if err != nil {
 		return false
 	}
-	base := path.Base(u.Path)
-	return strings.HasSuffix(base, "_test.go")
+	clean := path.Clean(u.Path)
+	for _, segment := range strings.Split(strings.Trim(clean, "/"), "/") {
+		if strings.EqualFold(segment, "test") || strings.EqualFold(segment, "tests") {
+			return true
+		}
+	}
+	base := strings.ToLower(path.Base(clean))
+	// Closed presentation-only heuristic: test/tests path segments, Go _test.go,
+	// and language-neutral .test. / .spec. filename infixes.
+	return strings.HasSuffix(base, "_test.go") || strings.Contains(base, ".test.") || strings.Contains(base, ".spec.")
 }
 
 func isOutsideWorkspaceNode(nodeURI, workspaceURI string) bool {
 	n, err := url.Parse(nodeURI)
-	if err != nil {
-		return true
-	}
-	if n.Scheme != "file" {
-		return true
-	}
-	if n.Host != "" {
-		return true
-	}
-	if n.Path == "" {
+	if err != nil || n.Scheme != "file" || n.Host != "" || n.Path == "" {
 		return true
 	}
 	w, err := url.Parse(workspaceURI)
-	if err != nil || w.Path == "" || w.Scheme == "" {
+	if err != nil || w.Scheme != "file" || w.Host != "" || w.Path == "" {
 		return true
 	}
-	if w.Scheme != "file" || w.Host != "" {
-		return true
+	nodePath, workspacePath := path.Clean(n.Path), path.Clean(w.Path)
+	return nodePath != workspacePath && !strings.HasPrefix(nodePath, workspacePath+"/")
+}
+
+func formatBoundaries(out *strings.Builder, heading string, boundaries []graph.Boundary) {
+	items := append([]graph.Boundary(nil), boundaries...)
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].NodeID != items[j].NodeID {
+			return items[i].NodeID < items[j].NodeID
+		}
+		if items[i].Reason != items[j].Reason {
+			return items[i].Reason < items[j].Reason
+		}
+		return items[i].Message < items[j].Message
+	})
+	fmt.Fprintf(out, "%s: %d\n", heading, len(items))
+	for _, b := range items {
+		fmt.Fprintf(out, "  node=%s reason=%s", b.NodeID, b.Reason)
+		if b.Message != "" {
+			fmt.Fprintf(out, " message=%q", b.Message)
+		}
+		if b.Provenance != "" {
+			fmt.Fprintf(out, " provenance=%s", b.Provenance)
+		}
+		fmt.Fprintln(out)
 	}
-	nodePath := path.Clean(n.Path)
-	workspacePath := path.Clean(w.Path)
-	if nodePath == workspacePath {
-		return false
+}
+
+func formatDiagnostics(out *strings.Builder, diagnostics []graph.Diagnostic) {
+	items := append([]graph.Diagnostic(nil), diagnostics...)
+	sort.Slice(items, func(i, j int) bool {
+		a, _ := json.Marshal(items[i])
+		b, _ := json.Marshal(items[j])
+		return bytes.Compare(a, b) < 0
+	})
+	fmt.Fprintf(out, "graph diagnostics: %d\n", len(items))
+	for _, d := range items {
+		fmt.Fprintf(out, "  phase=%s method=%s node=%s category=%s message=%q\n", d.Phase, d.Method, d.NodeID, d.Category, d.Message)
 	}
-	return !(strings.HasPrefix(nodePath, workspacePath+"/") && nodePath != workspacePath)
 }
