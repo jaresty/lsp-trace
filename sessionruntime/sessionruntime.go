@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -134,8 +135,9 @@ type Config struct {
 	DocumentFinalHook func()
 	// Unexported seams keep deterministic fixtures inside this package; callers
 	// cannot provide bytes that appear directly in a production attempt ID.
-	startupAttemptEntropy func(uint64) []byte
-	startupAttemptRandom  io.Reader
+	startupAttemptEntropy   func(uint64) []byte
+	startupAttemptRandom    io.Reader
+	transientIdentityRandom io.Reader
 }
 type StartRequest struct {
 	Profile           runtimeprofile.Profile
@@ -808,6 +810,7 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 
 type runtimeSession struct {
 	record                 Record
+	transientIdentity      string
 	attemptID              manageddiagnostic.StartupAttemptID
 	process                Child
 	retired                *ownedTransport // joined exact-child retirement, never a replacement lookup
@@ -830,34 +833,36 @@ type runtimeSession struct {
 }
 
 type Manager struct {
-	mu                    sync.Mutex
-	limits                Limits
-	wire                  lspwire.Limits
-	starter               Starter
-	algebra               *session.Manager
-	sessions              map[string]*runtimeSession
-	operations            map[string]OperationSnapshot
-	operationIDs          []string
-	readiness             map[string]*readinessOperation
-	readinessIDs          map[string]string
-	observations          []Observation
-	sequence              uint64
-	readinessSeq          uint64
-	readinessTimeout      time.Duration
-	now                   func() time.Time
-	workers               int
-	workerDone            chan struct{}
-	closed                bool
-	diagnostics           *manageddiagnostic.Store
-	seedRevisionAuthority seedbinding.RevisionAuthority
-	documentFinalHook     func()
-	startupAttemptNonce   [16]byte
-	startupAttemptEntropy func(uint64) []byte
-	startupAttemptSeq     uint64
-	diagnosticSequence    uint64
-	diagnosticEvictions   uint64
-	diagnosticOperations  map[DiagnosticOperationHandle]diagnosticOperation
-	diagnosticOrder       []DiagnosticOperationHandle
+	mu                      sync.Mutex
+	limits                  Limits
+	wire                    lspwire.Limits
+	starter                 Starter
+	algebra                 *session.Manager
+	sessions                map[string]*runtimeSession
+	operations              map[string]OperationSnapshot
+	operationIDs            []string
+	readiness               map[string]*readinessOperation
+	readinessIDs            map[string]string
+	observations            []Observation
+	sequence                uint64
+	readinessSeq            uint64
+	readinessTimeout        time.Duration
+	now                     func() time.Time
+	workers                 int
+	workerDone              chan struct{}
+	closed                  bool
+	diagnostics             *manageddiagnostic.Store
+	seedRevisionAuthority   seedbinding.RevisionAuthority
+	documentFinalHook       func()
+	startupAttemptNonce     [16]byte
+	startupAttemptEntropy   func(uint64) []byte
+	startupAttemptSeq       uint64
+	transientIdentityRandom io.Reader
+	transientIdentities     map[string]struct{}
+	diagnosticSequence      uint64
+	diagnosticEvictions     uint64
+	diagnosticOperations    map[DiagnosticOperationHandle]diagnosticOperation
+	diagnosticOrder         []DiagnosticOperationHandle
 }
 
 func New(c Config) (*Manager, error) {
@@ -887,11 +892,15 @@ func New(c Config) (*Manager, error) {
 	if random == nil {
 		random = rand.Reader
 	}
+	transientRandom := c.transientIdentityRandom
+	if transientRandom == nil {
+		transientRandom = rand.Reader
+	}
 	var managerNonce [16]byte
 	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
 		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
 }
 
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
@@ -965,8 +974,15 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		_ = child.Close()
 		return StartResult{SessionID: id, Failure: session.LifecycleConflict, Start: observed}
 	}
+	transientIdentity, identityFailure := m.newTransientIdentityLocked()
+	if identityFailure != "" {
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		return StartResult{SessionID: id, Failure: identityFailure, Start: observed}
+	}
 	m.algebra.RegisterLifecycle(id, 1, session.Initializing, false)
 	if admission := m.algebra.Admit(id, 0); admission.Kind != session.AdmissionFree {
+		delete(m.transientIdentities, transientIdentity)
 		_ = child.Teardown(context.Background())
 		_ = child.Close()
 		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
@@ -981,9 +997,42 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		retainedBinding = &copy
 	}
 	diagnosticGeneration := m.newDiagnosticGeneration(attemptID, id, 1)
-	m.sessions[id] = &runtimeSession{record: r, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
+	m.sessions[id] = &runtimeSession{record: r, transientIdentity: transientIdentity, attemptID: attemptID, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity, diagnosticGeneration: diagnosticGeneration}
 	m.observe(id, 1, "startup", session.Initializing, "")
 	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
+}
+
+const transientIdentityAttempts = 8
+
+func (m *Manager) newTransientIdentityLocked() (string, session.Failure) {
+	for attempt := 0; attempt < transientIdentityAttempts; attempt++ {
+		var raw [16]byte
+		if _, err := io.ReadFull(m.transientIdentityRandom, raw[:]); err != nil {
+			return "", session.Failure("TRANSIENT_IDENTITY_UNAVAILABLE")
+		}
+		token := "ts_" + hex.EncodeToString(raw[:])
+		if _, exists := m.transientIdentities[token]; exists {
+			continue
+		}
+		m.transientIdentities[token] = struct{}{}
+		return token, ""
+	}
+	return "", session.ResourceExhausted
+}
+
+// TransientSessionIdentity returns the process-local canonical identity only
+// for an exact live internal session ID and generation. It is identity, not authority.
+func (m *Manager) TransientSessionIdentity(id string, generation uint64) (string, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return "", session.SessionNotFound
+	}
+	if r.record.Generation != generation {
+		return "", session.StaleGeneration
+	}
+	return r.transientIdentity, ""
 }
 
 func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint64, deadline time.Time) ReadinessSnapshot {

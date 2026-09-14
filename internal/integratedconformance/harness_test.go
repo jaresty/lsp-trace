@@ -679,7 +679,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				continue
 			}
 			path := strings.TrimSpace(line[2:])
-			owned := ownsFR20FR21Path(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
+			owned := ownsFR20FR21Path(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
 				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" ||
 				path == "cmd/fake-lsp/main.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" || path == "lifecycleops/lifecycleops.go" || path == "lifecycleops/lifecycleops_test.go" ||
 				path == "README.md" || path == "GRAPH-V5-MANAGED-REPAIR.md" || path == "docs/PROVIDERS.md" || path == "docs/RELEASING.md" || path == "docs/cli-migration-diagnostics.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" || path == "docs/adr/0006-transient-live-structural-analysis.md" || path == "docs/adr/0007-optional-local-semantic-feature-index.md" || strings.HasPrefix(path, "docs/pilot/adr0007/") ||
