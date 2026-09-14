@@ -132,9 +132,18 @@ type Projection struct {
 	ManifestBytes []byte
 	Workspace     string
 }
+
+// PlanningConfig is authority-neutral input fixed before batch identities are
+// minted. A nil configuration preserves the legacy depth defaults.
+type PlanningConfig struct {
+	DownDepth int
+	UpDepth   int
+}
+
 type Core struct {
 	Discoverer Discoverer
 	Acquirer   Acquirer
+	Planning   *PlanningConfig
 }
 
 type batchAcquisitionFailure struct {
@@ -154,6 +163,10 @@ func failBatch(ordinal int, err error) error {
 // validation. Its result is data, not a completion or publication capability.
 func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if err := s.Validate(); err != nil {
+		return Projection{}, err
+	}
+	planning, err := resolvePlanning(c.Planning)
+	if err != nil {
 		return Projection{}, err
 	}
 	if c.Discoverer == nil || c.Acquirer == nil {
@@ -183,22 +196,29 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if err != nil {
 		return Projection{}, err
 	}
-	cid := stableID("census", joinTargetBytes(targets))
+	cid := stableID("census", planningIdentity(joinTargetBytes(targets), planning))
 	batches := make([]BatchRequest, len(plan.Batches))
-	cs := make([]Constituent, len(batches))
-	meta := make([]captureset.Constituent, len(batches))
 	for i, b := range plan.Batches {
 		pt := make([]PreparedTarget, len(b.Targets))
 		for j, t := range b.Targets {
-			pt[j] = prepared[t.CensusOrdinal]
+			pt[j] = cloneTarget(prepared[t.CensusOrdinal])
 		}
 		seedBytes, err := combineSeeds(pt, d.Workspace)
 		if err != nil {
 			return Projection{}, failBatch(i, fmt.Errorf("batch %d seeds: %w", i, err))
 		}
-		bid := stableID("batch", []byte(fmt.Sprintf("%s\x00%d\x00%s", cid, i, joinTargetBytes(b.Targets))))
-		req := BatchRequest{s, cid, bid, i, census.DefaultDownDepth, census.DefaultUpDepth, pt, seedBytes}
-		got, e := c.Acquirer.AcquireV5(ctx, req)
+		batchIdentity := []byte(fmt.Sprintf("%s\x00%d\x00%s", cid, i, joinTargetBytes(b.Targets)))
+		bid := stableID("batch", planningIdentity(batchIdentity, planning))
+		batches[i] = BatchRequest{s, cid, bid, i, planning.DownDepth, planning.UpDepth, pt, seedBytes}
+		if err := ValidateBatchSeeds(batches[i], d.Workspace); err != nil {
+			return Projection{}, failBatch(i, fmt.Errorf("batch %d planning: %w", i, err))
+		}
+	}
+	cs := make([]Constituent, len(batches))
+	meta := make([]captureset.Constituent, len(batches))
+	for i := range batches {
+		req := batches[i]
+		got, e := c.Acquirer.AcquireV5(ctx, cloneBatchRequest(req))
 		if e != nil {
 			return Projection{}, failBatch(i, fmt.Errorf("acquire batch %d: %w", i, e))
 		}
@@ -209,9 +229,8 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		if e != nil {
 			return Projection{}, failBatch(i, fmt.Errorf("batch %d V5 admission: %w", i, e))
 		}
-		batches[i] = req
 		meta[i] = identity
-		cs[i] = Constituent{bid, i, append([]byte(nil), got.Raw...), identity}
+		cs[i] = Constituent{req.BatchID, i, append([]byte(nil), got.Raw...), identity}
 	}
 	m, err := captureset.Prepare(targets, meta, d.FileLedger, d.SymbolLedger, CensusPolicy, DuplicatePolicy)
 	if err != nil {
@@ -435,6 +454,13 @@ func validateProjection(p Projection) error {
 	if err := p.Session.Validate(); err != nil {
 		return err
 	}
+	if len(p.Batches) == 0 {
+		return errors.New("planned batches required")
+	}
+	planning, err := resolvePlanning(&PlanningConfig{DownDepth: p.Batches[0].DownDepth, UpDepth: p.Batches[0].UpDepth})
+	if err != nil {
+		return err
+	}
 	var mts []captureset.Target
 	for _, b := range p.Batches {
 		for _, t := range b.Targets {
@@ -442,7 +468,7 @@ func validateProjection(p Projection) error {
 		}
 	}
 	mts = captureset.OrderTargets(mts)
-	if p.CensusID != stableID("census", joinTargetBytes(mts)) {
+	if p.CensusID != stableID("census", planningIdentity(joinTargetBytes(mts), planning)) {
 		return errors.New("census ID mutation")
 	}
 	plans := captureset.PlanBatches(len(mts))
@@ -451,10 +477,11 @@ func validateProjection(p Projection) error {
 	}
 	for i, x := range plans {
 		b := p.Batches[i]
-		if b.Ordinal != i || b.Session != p.Session || b.CensusID != p.CensusID || b.DownDepth != 1 || b.UpDepth != 0 || len(b.Targets) != x.TargetCount {
+		if b.Ordinal != i || b.Session != p.Session || b.CensusID != p.CensusID || b.DownDepth != planning.DownDepth || b.UpDepth != planning.UpDepth || len(b.Targets) != x.TargetCount {
 			return errors.New("batch assignment mutation")
 		}
-		wantID := stableID("batch", []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(mts[x.TargetStart:x.TargetStart+x.TargetCount]))))
+		batchIdentity := []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(mts[x.TargetStart:x.TargetStart+x.TargetCount])))
+		wantID := stableID("batch", planningIdentity(batchIdentity, planning))
 		seeds, _ := combineSeeds(b.Targets, p.Workspace)
 		if b.BatchID != wantID || !bytes.Equal(b.CanonicalSeedsV2, seeds) {
 			return errors.New("batch identity or seeds mutation")
@@ -495,6 +522,14 @@ func cloneTarget(t PreparedTarget) PreparedTarget {
 	t.CanonicalSeedV2 = append([]byte(nil), t.CanonicalSeedV2...)
 	return t
 }
+func cloneBatchRequest(b BatchRequest) BatchRequest {
+	b.Targets = append([]PreparedTarget(nil), b.Targets...)
+	for i := range b.Targets {
+		b.Targets[i] = cloneTarget(b.Targets[i])
+	}
+	b.CanonicalSeedsV2 = append([]byte(nil), b.CanonicalSeedsV2...)
+	return b
+}
 func cloneProjection(p Projection) Projection {
 	q := p
 	q.ManifestBytes = append([]byte(nil), p.ManifestBytes...)
@@ -514,6 +549,25 @@ func cloneProjection(p Projection) Projection {
 	_ = json.Unmarshal(raw, &q.Manifest)
 	return q
 }
+func resolvePlanning(config *PlanningConfig) (PlanningConfig, error) {
+	if config == nil {
+		return PlanningConfig{DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth}, nil
+	}
+	planning := *config
+	if planning.DownDepth < 0 || planning.DownDepth > 64 || planning.UpDepth < 0 || planning.UpDepth > 64 {
+		return PlanningConfig{}, errors.New("planning depths must each be within [0,64]")
+	}
+	return planning, nil
+}
+
+func planningIdentity(base []byte, planning PlanningConfig) []byte {
+	out := append([]byte(nil), base...)
+	if planning.DownDepth == census.DefaultDownDepth && planning.UpDepth == census.DefaultUpDepth {
+		return out
+	}
+	return append(out, []byte(fmt.Sprintf("\x00depths:%d:%d", planning.DownDepth, planning.UpDepth))...)
+}
+
 func joinTargetBytes(ts []captureset.Target) []byte {
 	var b bytes.Buffer
 	for _, t := range ts {

@@ -377,3 +377,167 @@ func TestExactSelectionRangeStartInManifest(t *testing.T) {
 		t.Fatal("wrong start")
 	}
 }
+
+func TestPlanningDepthBoundsAndPropagation(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		down, up int
+		wantOK   bool
+	}{
+		{"zero", 0, 0, true}, {"maximum", 64, 64, true},
+		{"negative-down", -1, 0, false}, {"excess-down", 65, 0, false},
+		{"negative-up", 1, -1, false}, {"excess-up", 1, 65, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			core := Core{
+				Planning:   &PlanningConfig{DownDepth: tc.down, UpDepth: tc.up},
+				Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return discovery(64), nil }),
+				Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+					calls++
+					if b.DownDepth != tc.down || b.UpDepth != tc.up {
+						t.Fatalf("depths not propagated: %+v", b)
+					}
+					manifest := b.AcquisitionManifest(acquisitionops.Limits{})
+					for _, target := range append([]acquisitionops.Target{manifest.Root}, manifest.RequiredTargets...) {
+						if target.DownDepth == nil || *target.DownDepth != tc.down || target.UpDepth == nil || *target.UpDepth != tc.up {
+							t.Fatalf("manifest depths not propagated: %+v", target)
+						}
+					}
+					return AcquiredV5{Session: b.Session, Raw: v5(t, b)}, nil
+				}),
+			}
+			_, err := core.Run(context.Background(), SessionIdentity{"s", 7})
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("wantOK=%v err=%v", tc.wantOK, err)
+			}
+			if !tc.wantOK && calls != 0 {
+				t.Fatalf("invalid planning acquired %d batches", calls)
+			}
+		})
+	}
+}
+
+func TestPlanningDefaultsRemainIdentityCompatible(t *testing.T) {
+	legacy, err := run(t, discovery(64), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	explicit, err := runWithPlanning(t, discovery(64), &PlanningConfig{DownDepth: 1, UpDepth: 0}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.CensusID != explicit.CensusID || !reflect.DeepEqual(legacy.ManifestBytes, explicit.ManifestBytes) {
+		t.Fatal("default planning changed canonical identity")
+	}
+	for i := range legacy.Batches {
+		if legacy.Batches[i].BatchID != explicit.Batches[i].BatchID || legacy.Batches[i].DownDepth != 1 || legacy.Batches[i].UpDepth != 0 {
+			t.Fatal("default batch identity changed")
+		}
+	}
+}
+
+func TestDepthAwarePlanCountsRangesAndDeterministicReorder(t *testing.T) {
+	for _, count := range []int{1, 62, 63, 64, 126, 10000} {
+		t.Run(fmt.Sprintf("count-%d", count), func(t *testing.T) {
+			d := discovery(count)
+			first, err := runWithPlanning(t, d, &PlanningConfig{DownDepth: 2, UpDepth: 3}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sort.Slice(d.Targets, func(i, j int) bool { return i > j })
+			second, err := runWithPlanning(t, d, &PlanningConfig{DownDepth: 2, UpDepth: 3}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first.CensusID != second.CensusID || !reflect.DeepEqual(first.ManifestBytes, second.ManifestBytes) {
+				t.Fatal("reorder changed plan identity")
+			}
+			next := 0
+			for ordinal, batch := range first.Batches {
+				if batch.Ordinal != ordinal || len(batch.Targets) < 1 || len(batch.Targets) > 63 {
+					t.Fatalf("invalid batch %d size %d", ordinal, len(batch.Targets))
+				}
+				for _, target := range batch.Targets {
+					if target.CensusOrdinal != next {
+						t.Fatalf("noncontiguous range: got %d want %d", target.CensusOrdinal, next)
+					}
+					next++
+				}
+			}
+			if next != count {
+				t.Fatalf("planned %d targets want %d", next, count)
+			}
+		})
+	}
+}
+
+func TestDuplicatePlanningInputsAreRejectedBeforeAcquisition(t *testing.T) {
+	cases := map[string]func(*Discovery){
+		"target": func(d *Discovery) {
+			d.Targets[1].SymbolIdentity = d.Targets[0].SymbolIdentity
+			d.SymbolLedger.Entries[1].Identity = d.Targets[0].SymbolIdentity
+		},
+		"coordinate": func(d *Discovery) {
+			d.Targets[1].URI = d.Targets[0].URI
+			d.Targets[1].SelectionRange = d.Targets[0].SelectionRange
+		},
+		"ordinal": func(d *Discovery) { d.Targets[1].CensusOrdinal = d.Targets[0].CensusOrdinal },
+		"seed": func(d *Discovery) {
+			d.Targets[1].CanonicalSeedV2 = append([]byte(nil), d.Targets[0].CanonicalSeedV2...)
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			d := discovery(2)
+			mutate(&d)
+			calls := 0
+			_, err := (Core{
+				Planning:   &PlanningConfig{DownDepth: 2, UpDepth: 3},
+				Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }),
+				Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) {
+					calls++
+					return AcquiredV5{}, nil
+				}),
+			}).Run(context.Background(), SessionIdentity{"s", 7})
+			if err == nil || calls != 0 {
+				t.Fatalf("duplicate %s reached acquisition: err=%v calls=%d", name, err, calls)
+			}
+		})
+	}
+}
+
+func TestAllBatchesArePlannedAndIsolatedBeforeAcquisition(t *testing.T) {
+	var firstID string
+	projection, err := runWithPlanning(t, discovery(64), &PlanningConfig{DownDepth: 2, UpDepth: 3}, func(b *BatchRequest) {
+		if b.Ordinal == 0 {
+			firstID = b.BatchID
+			b.BatchID = "mutated"
+			b.Ordinal = 99
+			b.DownDepth = 64
+			b.Targets[0].CensusOrdinal = 99
+			b.CanonicalSeedsV2[0] ^= 1
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.Batches[0].BatchID != firstID || projection.Batches[0].Ordinal != 0 || projection.Batches[0].DownDepth != 2 || projection.Batches[0].Targets[0].CensusOrdinal != 0 {
+		t.Fatal("acquirer mutated planned batch")
+	}
+}
+
+func runWithPlanning(t *testing.T, d Discovery, planning *PlanningConfig, observe func(*BatchRequest)) (Projection, error) {
+	t.Helper()
+	return (Core{
+		Planning:   planning,
+		Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return d, nil }),
+		Acquirer: acquirerFunc(func(_ context.Context, b BatchRequest) (AcquiredV5, error) {
+			original := cloneBatchRequest(b)
+			if observe != nil {
+				observe(&b)
+			}
+			return AcquiredV5{Session: original.Session, Raw: v5(t, original)}, nil
+		}),
+	}).Run(context.Background(), SessionIdentity{"s", 7})
+}
