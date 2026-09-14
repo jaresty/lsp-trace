@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"strings"
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/session"
@@ -78,7 +80,7 @@ func (e *censusExecutor) execute(ctx context.Context, raw []byte) (censusAdmitte
 		return censusAdmittedSession{}, censusAcquisitionFailure()
 	}
 	workspace := match.Profile.Workspace().String()
-	if workspace == "" || workspace != match.Routing.WorkspaceRoot {
+	if strings.TrimSpace(workspace) == "" || !filepath.IsAbs(workspace) || filepath.Clean(workspace) != workspace || workspace != match.Routing.WorkspaceRoot {
 		return censusAdmittedSession{}, censusConfigFailure()
 	}
 

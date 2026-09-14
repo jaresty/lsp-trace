@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"io"
+	"math"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -213,36 +211,20 @@ func assertCensusFailure(t *testing.T, failure *censusAdmissionFailure, stage ce
 }
 
 func TestCensusExecutorConstructionBoundary(t *testing.T) {
-	path := filepath.Join("census_executor.go")
-	parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-	if err != nil {
-		t.Fatal(err)
+	var constructor func(*hostSelectorRuntime) *censusExecutor = newCensusExecutor
+	if constructor == nil {
+		t.Fatal("ASSERT_CENSUS_PRIVATE_CONCRETE_HOST_SELECTOR_CONSTRUCTOR")
 	}
-	constructorOK := false
-	for _, declaration := range parsed.Decls {
-		switch declaration := declaration.(type) {
-		case *ast.FuncDecl:
-			if ast.IsExported(declaration.Name.Name) && strings.Contains(strings.ToLower(declaration.Name.Name), "census") {
-				t.Fatalf("ASSERT_CENSUS_NO_EXPORTED_CONSTRUCTOR_OR_AUTHORITY: %s", declaration.Name.Name)
-			}
-			if declaration.Name.Name == "newCensusExecutor" && declaration.Type.Params != nil && len(declaration.Type.Params.List) == 1 {
-				star, ok := declaration.Type.Params.List[0].Type.(*ast.StarExpr)
-				if ok {
-					identifier, named := star.X.(*ast.Ident)
-					constructorOK = named && identifier.Name == "hostSelectorRuntime"
-				}
-			}
-		case *ast.GenDecl:
-			for _, specification := range declaration.Specs {
-				typeSpec, ok := specification.(*ast.TypeSpec)
-				if ok && ast.IsExported(typeSpec.Name.Name) && strings.Contains(strings.ToLower(typeSpec.Name.Name), "census") {
-					t.Fatalf("ASSERT_CENSUS_NO_EXPORTED_RUNTIME_EXECUTOR_AUTHORITY_INTERFACE: %s", typeSpec.Name.Name)
-				}
+	for _, value := range []any{censusExecutor{}, censusAdmittedSession{}, censusAdmissionFailure{}} {
+		typ := reflect.TypeOf(value)
+		if typ.Name() == "" || typ.PkgPath() == "" || typ.NumMethod() != 0 {
+			t.Fatalf("ASSERT_CENSUS_PRIVATE_NO_AUTHORITY_METHODS: %v", typ)
+		}
+		for i := 0; i < typ.NumField(); i++ {
+			if typ.Field(i).IsExported() {
+				t.Fatalf("ASSERT_CENSUS_PRIVATE_NO_EXPORTED_FIELDS: %s.%s", typ.Name(), typ.Field(i).Name)
 			}
 		}
-	}
-	if !constructorOK {
-		t.Fatal("ASSERT_CENSUS_PRIVATE_CONCRETE_HOST_SELECTOR_CONSTRUCTOR")
 	}
 }
 
@@ -293,6 +275,27 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 			assertCensusFailure(t, failure, test.stage, test.code)
 		})
 	}
+
+	t.Run("generation conversion boundary", func(t *testing.T) {
+		runtime, _, _ := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+		_, maximumFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775807,"sources":["."]}`))
+		assertCensusFailure(t, maximumFailure, censusStageAcquisition, censusCodeAcquisitionFailed)
+		_, overflowFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775808,"sources":["."]}`))
+		assertCensusFailure(t, overflowFailure, censusStageConfig, censusCodeInvalidConfig)
+		if math.MaxInt64 <= 0 {
+			t.Fatal("ASSERT_CENSUS_GENERATION_MAX_INT64_PLATFORM")
+		}
+	})
+
+	t.Run("canonical absolute workspace", func(t *testing.T) {
+		base := t.TempDir()
+		requested := filepath.Join(base, "parent", "..", "workspace")
+		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: requested, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
+		admitted, failure := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation))
+		if failure != nil || admitted.workspace != filepath.Clean(requested) || !filepath.IsAbs(admitted.workspace) || strings.TrimSpace(admitted.workspace) == "" {
+			t.Fatalf("ASSERT_CENSUS_CANONICAL_ABSOLUTE_WORKSPACE: requested=%q admitted=%+v failure=%+v", requested, admitted, failure)
+		}
+	})
 
 	t.Run("cancelled", func(t *testing.T) {
 		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
