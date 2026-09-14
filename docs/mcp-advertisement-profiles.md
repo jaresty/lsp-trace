@@ -110,10 +110,12 @@ Operation numbers are append-only compatibility identities, not lexical display 
 | 31 | `lsp_trace_v1_program_c_compose` | advanced |
 | 32 | `lsp_trace_v1_program_c_instability` | advanced |
 | 33 | `lsp_trace_v1_trace` | default |
+| 34 | `lsp_trace_v1_census` | default |
+| 35 | `lsp_trace_v1_structural_context` | default (hidden but callable in compact) |
 
-Operations 31 and 32 MUST remain composition and A-08 instability respectively. New operations MUST be appended after 32; profile work MUST NOT fill, move, reuse, or reinterpret an existing number.
+Operations 31–35 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operation 35.
 
-For every operation 1–32:
+For every operation 1–35:
 
 1. exact canonical resolution remains available;
 2. `lsp_trace_v1_execute` retains one schema branch for that canonical name (except execute itself, which is not recursively branched);

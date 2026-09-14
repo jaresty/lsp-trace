@@ -151,7 +151,7 @@ func TestFutureStructuralInputRejectsEveryForbiddenSurfaceAndBadBounds(t *testin
 	for _, field := range []string{"output_selector", "graph_provenance", "workspace_revision", "custody", "capture", "capture_supply", "source_snapshot", "source_supply", "publication", "artifact", "artifact_selector", "retained_input", "hydration", "include_bodies", "private_root", "path", "providers", "relations", "adapters", "metadata"} {
 		t.Run(field, func(t *testing.T) { v := validFutureInput(); v[field] = true; validateFuture(t, s, v, false) })
 	}
-	for _, field := range []string{"generation", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes"} {
+	for _, field := range []string{"generation", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms"} {
 		t.Run("missing_"+field, func(t *testing.T) { v := validFutureInput(); delete(v, field); validateFuture(t, s, v, false) })
 	}
 	for name, mutate := range map[string]func(map[string]any){
@@ -616,15 +616,14 @@ func TestFutureStructuralReviewBlockers(t *testing.T) {
 	}
 }
 
-func TestFutureStructuralContractsRemainUnregistered(t *testing.T) {
+func TestStructuralContractsRemainAdditiveToHistoricalManifest(t *testing.T) {
 	manifest, err := LoadManifest()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range manifest.Tools {
-		if tool.Name == "lsp_trace_v1_structural_context" {
-			t.Fatal("FUTURE operation 35 must remain unregistered until operation 34 lands")
-		}
+	registered := WithStructuralContext(manifest)
+	if len(registered.Tools) != len(manifest.Tools)+1 || registered.Tools[len(registered.Tools)-1].Name != StructuralContextTool {
+		t.Fatal("operation 35 must append exactly one canonical tool")
 	}
 	if len(manifest.Tools) != 13 {
 		t.Fatalf("public capability contract count changed: %d", len(manifest.Tools))

@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-09-12
 
-Implementation note: this historical proposal used the provisional name `discover`. The current CLI ships the settled `census` command for accountable enumeration and ships `trace` for exact targets. This does not retroactively accept every grammar, MCP, help-layout, or migration decision proposed below; operation 34 remains unregistered and `context` remains `FUTURE/PROPOSED`.
+Implementation note: this historical proposal used the provisional name `discover`. The current CLI ships the settled `census` command for accountable enumeration and ships `trace` for exact targets. This does not retroactively accept every grammar, MCP, help-layout, or migration decision proposed below; operations 34 (`census`) and 35 (`lsp_trace_v1_structural_context`) are registered; the qualified `context --machine` CLI shares operation 35's transient result projection.
 
 ## Context
 

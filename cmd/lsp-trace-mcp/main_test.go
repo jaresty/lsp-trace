@@ -32,7 +32,7 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice)
 	}
-	if got := server.Registry.Tools(); len(got) != 34 {
+	if got := server.Registry.Tools(); len(got) != 35 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
 	}
 	_, incomingCollector := any(selected).(incomingops.RelationCollector)
@@ -140,14 +140,14 @@ func TestDefaultAndAdvancedProcessAdvertisement(t *testing.T) {
 	want := map[string][]string{
 		"default": {
 			"lsp_trace_v1_capabilities", "lsp_trace_v1_census", "lsp_trace_v1_execute", "lsp_trace_v1_inspect_hydrated",
-			"lsp_trace_v1_program_c_leiden", "lsp_trace_v1_trace", "lsp_trace_v1_verify",
+			"lsp_trace_v1_program_c_leiden", "lsp_trace_v1_structural_context", "lsp_trace_v1_trace", "lsp_trace_v1_verify",
 		},
 		"advanced": {
 			"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
 			"lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking",
 			"lsp_trace_v1_capabilities", "lsp_trace_v1_census", "lsp_trace_v1_custody_execute", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls",
 			"lsp_trace_v1_filter", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_program_c_compose",
-			"lsp_trace_v1_program_c_instability", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_trace", "lsp_trace_v1_validate",
+			"lsp_trace_v1_program_c_instability", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_structural_context", "lsp_trace_v1_trace", "lsp_trace_v1_validate",
 			"lsp_trace_v1_verify", "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics",
 			"lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls",
 		},

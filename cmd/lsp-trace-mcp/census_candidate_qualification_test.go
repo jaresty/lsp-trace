@@ -222,8 +222,8 @@ func TestCensusOperation34RealProcessQualification(t *testing.T) {
 		callRequest(3402, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.CensusTool, "arguments": gatewayArgs}}),
 	})
 	tools := processToolNames(t, responses[0])
-	if len(tools) != 34 || tools[8] != mcpcontract.CensusTool || containsString(tools, "lsp_trace_v1_structural_context") {
-		t.Fatalf("ASSERT_CENSUS34_FULL_LIST_EXACT_POSITION_AND_35_ABSENT: count=%d tools=%v", len(tools), tools)
+	if len(tools) != 35 || tools[8] != mcpcontract.CensusTool || !containsString(tools, mcpcontract.StructuralContextTool) {
+		t.Fatalf("ASSERT_CENSUS34_FULL_LIST_PRESERVED_WITH_35_APPEND: count=%d tools=%v", len(tools), tools)
 	}
 	direct := decodeProcessCall(t, responses[1])
 	gateway := decodeProcessCall(t, responses[2])

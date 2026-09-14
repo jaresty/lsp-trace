@@ -47,7 +47,7 @@ Where ADR 0004 uses the earlier public name `discover`, the settled name is `cen
 
 ## Current capability and proposed work
 
-The accepted design above distinguishes exact-target `trace`, accountable `census`, and transient `context`. Current implementation status is narrower: the CLI ships `trace` and `census`, while operation 34 remains unregistered and `context`/operation 35 remain `FUTURE/PROPOSED`. The shipped census uses one exact session/generation, closed exclusions-first accounting, deterministic batches of at most 63, and a private capture-set selector; it does not add analysis or authorize direct Leiden.
+The accepted design above distinguishes exact-target `trace`, accountable `census`, and transient `context`. The CLI ships `trace`, `census`, and qualified `context --machine`; MCP operations 34 and 35 are registered, and operation 35 shares the CLI's `internal/transientstructuralresult` projection. The shipped census uses one exact session/generation, closed exclusions-first accounting, deterministic batches of at most 63, and a private capture-set selector; it does not add analysis or authorize direct Leiden.
 
 The repository also retains bounded live `slice` and `incoming` traversal. Their ordinary modes do not capture source supplies. They emit acquisition-oriented Graph V3 data containing absolute URIs and other fields unsuitable for the proposed context result, and their MCP generation field is optional.
 

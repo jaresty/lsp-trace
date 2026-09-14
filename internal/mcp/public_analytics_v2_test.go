@@ -57,8 +57,8 @@ func TestPublicAnalyticsV2WiringRED(t *testing.T) {
 	const assertion = "ASSERT_PUBLIC_ANALYTICS_V2_WIRING"
 	r := NewRegistry(false)
 	tools := r.Tools()
-	if len(tools) != 34 {
-		t.Fatalf("%s: tool count=%d want=34", assertion, len(tools))
+	if len(tools) != 35 {
+		t.Fatalf("%s: tool count=%d want=35", assertion, len(tools))
 	}
 	want := []string{
 		"lsp_trace_v2_bounded_retained_analysis",

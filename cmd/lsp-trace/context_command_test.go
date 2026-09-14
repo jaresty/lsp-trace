@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"lsp-trace/internal/mcp"
-
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/transientstructural"
 	"lsp-trace/internal/transientstructuralresult"
 )
@@ -59,10 +59,8 @@ func TestContextMachinePrivateProcessQualification(t *testing.T) {
 	if len(mcp.NewRegistry(false).Tools()) != before {
 		t.Fatal("ASSERT_CONTEXT_REGISTRY_CARDINALITY_UNCHANGED")
 	}
-	for _, tool := range mcp.NewRegistry(false).Tools() {
-		if strings.Contains(tool.Name, "structural_context") {
-			t.Fatal("ASSERT_CONTEXT_OPERATION_35_ABSENT")
-		}
+	if _, found := mcp.NewRegistry(false).ResolveCanonical(mcpcontract.StructuralContextTool); !found {
+		t.Fatal("ASSERT_CONTEXT_OPERATION_35_REGISTERED")
 	}
 }
 

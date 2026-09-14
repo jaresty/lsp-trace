@@ -72,6 +72,11 @@ type response struct {
 	Error   *rpcError `json:"error,omitempty"`
 }
 
+func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
+	id, _ := mcpcontract.NewFutureStructuralCorrelationID()
+	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralContextDomainErrorID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
+}
+
 type callParams struct {
 	Name      string          `json:"name"`
 	Arguments map[string]any  `json:"arguments"`
@@ -90,6 +95,8 @@ type envelope struct {
 	Diagnostics             []string             `json:"diagnostics,omitempty"`
 	Result                  any                  `json:"result,omitempty"`
 	Error                   any                  `json:"error,omitempty"`
+	Phase                   string               `json:"phase,omitempty"`
+	State                   string               `json:"state,omitempty"`
 	Content                 *string              `json:"content,omitempty"`
 	PublicationReceipt      *publication.Receipt `json:"publication_receipt,omitempty"`
 	ArtifactSchemaID        string               `json:"artifact_schema_id,omitempty"`
@@ -325,6 +332,25 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
+		if tool.ExecutorFamily == StructuralContextExecutorFamily {
+			state := failure.Code
+			phase := "TRAVERSAL"
+			switch state {
+			case "SESSION_NOT_FOUND", "SESSION_NOT_READY", "STALE_GENERATION", operation.FailureInvalidInput:
+				phase, state = "PREFLIGHT", "TARGET_NOT_FOUND"
+			case "REQUEST_TIMEOUT":
+				phase, state = "TRAVERSAL", "TIMEOUT"
+			case "REQUEST_CANCELLED", "CANCELLED":
+				phase, state = "TRAVERSAL", "CANCELLED"
+			case "RESOURCE_EXHAUSTED":
+				phase, state = "TRAVERSAL", "RESOURCE_LIMIT"
+			case "INVALID_SERVER_RESPONSE":
+				phase = "TRAVERSAL"
+			default:
+				state = "INVALID_SERVER_RESPONSE"
+			}
+			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, phase, state))
+		}
 		if tool.ExecutorFamily == CensusExecutorFamily {
 			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "config", "INVALID_CONFIG"))
 		}
@@ -353,6 +379,18 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			}
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+	}
+	if tool.ExecutorFamily == StructuralContextExecutorFamily {
+		var result map[string]any
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(mcpcontract.StructuralContextResultID, opResult.Artifact) != nil {
+			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
+		}
+		correlationID, err := mcpcontract.NewFutureStructuralCorrelationID()
+		if err != nil {
+			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
+		}
+		state, _ := result["state"].(string)
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralContextSuccessID, Tool: tool.Name, RequestID: correlationID, Outcome: state, OperationStatus: "SUCCEEDED", IsError: false, Result: result})
 	}
 	if tool.ExecutorFamily == CensusExecutorFamily {
 		var projected envelope
@@ -719,6 +757,9 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 	if tool.ExecutorFamily == CensusExecutorFamily {
 		return mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw)
 	}
+	if tool.ExecutorFamily == StructuralContextExecutorFamily {
+		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
+	}
 	return mcpcontract.ValidateEnvelopeExclusive(raw)
 }
 
@@ -962,6 +1003,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("trace")
 	case mcpcontract.CensusTool:
 		return operation.Census
+	case mcpcontract.StructuralContextTool:
+		return operation.Name("structural_context")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

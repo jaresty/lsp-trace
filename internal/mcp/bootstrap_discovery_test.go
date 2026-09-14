@@ -32,7 +32,7 @@ func TestCapabilitiesDescribeHostProvisionedBootstrapBoundary(t *testing.T) {
 		if profile == ToolProfileCompact {
 			wantAdvertised = 10
 		}
-		if len(registry.Advertised()) != wantAdvertised || len(registry.Tools()) != 34 {
+		if len(registry.Advertised()) != wantAdvertised || len(registry.Tools()) != 35 {
 			t.Fatalf("ASSERT_BOOTSTRAP_GUIDANCE_PROFILE_NEUTRAL[%s]: advertised=%d dispatchable=%d", profile, len(registry.Advertised()), len(registry.Tools()))
 		}
 	}

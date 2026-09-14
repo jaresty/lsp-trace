@@ -200,7 +200,7 @@ func runContext(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "transient identity:", identityFailure)
 		return 1
 	}
-	normalized, err := normalizeContextResult(result, request, transientID)
+	normalized, err := transientstructuralresult.Project(result, request, transientID)
 	if err != nil {
 		fmt.Fprintln(stderr, "context normalization:", err)
 		return 1

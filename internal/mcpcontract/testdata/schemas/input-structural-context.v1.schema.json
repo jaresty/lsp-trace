@@ -1,10 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context.v1.schema.json",
-  "title": "FUTURE/PROPOSED operation 35 structural-context input; unregistered until operation 34 lands",
+  "title": "Operation 35 structural-context input",
   "type": "object",
   "additionalProperties": false,
-  "required": ["session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "max_messages", "max_bytes", "analysis"],
+  "required": ["session_id", "generation", "uri", "down_depth", "up_depth", "max_nodes", "timeout_ms", "request_timeout_ms", "analysis"],
   "properties": {
     "session_id": {"type": "string", "minLength": 1, "maxLength": 256},
     "generation": {"type": "integer", "minimum": 1},
