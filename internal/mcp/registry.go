@@ -40,6 +40,7 @@ const (
 	SliceExecutorFamily         ExecutorFamily = "slice"
 	AcquisitionV2ExecutorFamily ExecutorFamily = "acquisition-v2"
 	TraceExecutorFamily         ExecutorFamily = "trace"
+	CensusExecutorFamily        ExecutorFamily = "census"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -83,12 +84,14 @@ const (
 )
 
 var defaultToolNames = map[string]struct{}{
+	mcpcontract.CensusTool:      {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
 	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_verify": {},
 }
 
 var advancedToolNames = map[string]struct{}{
-	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	mcpcontract.CensusTool: {},
+	"lsp_session_v1_list":  {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
 	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
@@ -154,8 +157,9 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))))
+	manifest = mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))
 	descriptions := map[string]string{
+		mcpcontract.CensusTool:                   "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
 		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
 		mcpcontract.ProgramCComposeTool:          "Deterministically compose compatible Graph Provenance V5 captures while preserving exact constituent bytes and identities; no cross-capture CALLS inference, native-capture custody, or Leiden admission",
@@ -213,6 +217,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = SliceExecutorFamily
 		} else if contract.Name == mcpcontract.TraceTool {
 			executorFamily = TraceExecutorFamily
+		} else if contract.Name == mcpcontract.CensusTool {
+			executorFamily = CensusExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
@@ -292,6 +298,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			}
 		}
 		tools[i].OutputFamiliesVersions = registeredOutputFamilies(tools[i].ArtifactSchemaIDs, registeredFamilies)
+		requireOperationSpecificDescription(tools[i])
 		tools[i].Description = completeToolDescription(tools[i])
 	}
 	for i := range tools {
@@ -357,6 +364,12 @@ func withoutPublicationEnvelopes(ids []string) []string {
 		}
 	}
 	return out
+}
+
+func requireOperationSpecificDescription(tool Tool) {
+	if tool.Availability == Enabled && strings.TrimSpace(tool.Description) == "" {
+		panic(fmt.Sprintf("enabled MCP tool %q has no operation-specific description", tool.Name))
+	}
 }
 
 func completeToolDescription(tool Tool) string {

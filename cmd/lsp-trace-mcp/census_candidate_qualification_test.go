@@ -29,6 +29,9 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("candidate qualification requires the production LocalDarwinSupervisor")
 	}
+	if _, failure := newPrivateCensusMCPBinding(nil).Execute(context.Background(), operation.Request{Name: operation.Verify}); failure == nil || failure.Code != operation.FailureInvalidInput {
+		t.Fatalf("ASSERT_CANDIDATE34_OPERATION_NAME_PRE_RUNTIME: failure=%+v", failure)
+	}
 	candidateBinary := buildMCPBinary(t)
 	if !filepath.IsAbs(candidateBinary) {
 		t.Fatalf("ASSERT_CANDIDATE34_PRODUCTION_BINARY_BUILT: %q", candidateBinary)
@@ -77,7 +80,7 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 	if len(sessions) != 1 {
 		t.Fatalf("ASSERT_CANDIDATE34_FRESH_MANAGED_SESSION: sessions=%+v", sessions)
 	}
-	for _, name := range []string{mcpcontract.FutureCensusTool, "lsp_trace_v1_structural_context"} {
+	for _, name := range []string{"lsp_trace_v1_structural_context"} {
 		if _, registered := server.Registry.Resolve(name); registered {
 			t.Fatalf("ASSERT_CANDIDATE34_34_35_UNREGISTERED: %s", name)
 		}
@@ -90,7 +93,7 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 		"max_nodes": 10, "timeout_ms": 2000, "request_timeout_ms": 1000,
 	})
 	realProcess, err := binding.callDirect(context.Background(), operation.Request{
-		Name: mcpcontract.FutureCensusTool, RequestID: "candidate-real-gopls-34", Input: input, PublicationRoot: root,
+		Name: operation.Census, RequestID: "candidate-real-gopls-34", Input: input, PublicationRoot: root,
 	})
 	if err != nil {
 		t.Fatal(err)

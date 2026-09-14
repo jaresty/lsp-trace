@@ -62,6 +62,15 @@ func WithAcquisitionV3(m *Manifest) *Manifest {
 	return &copy
 }
 
+// readNeutralContractSchema dispatches operation-specific schema ownership
+// without making one operation's contract responsible for another's schemas.
+func readNeutralContractSchema(name string) ([]byte, error) {
+	if raw, ok, err := censusSchema(name); ok {
+		return raw, err
+	}
+	return readContractSchema(name)
+}
+
 // readContractSchema adds immutable v2 resources without broadening historical
 // schemas. The envelope shape is inherited, but identity and tool enums are new.
 func readContractSchema(name string) ([]byte, error) {

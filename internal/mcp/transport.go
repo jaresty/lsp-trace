@@ -350,6 +350,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
+	if tool.ExecutorFamily == CensusExecutorFamily {
+		var projected envelope
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &projected) != nil || projected.Tool != mcpcontract.CensusTool || projected.RequestID != requestID || mcpcontract.ValidateEnvelopeExclusive(opResult.Artifact) != nil {
+			return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"census executor returned an invalid projected envelope"}))
+		}
+		return bindEnvelope(base, tool, projected)
+	}
 	if tool.ExecutorFamily == LifecycleExecutorFamily {
 		return bindLifecycleEnvelope(base, tool, envelope{
 			EnvelopeVersion: "1", EnvelopeSchemaID: resultEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
@@ -935,6 +942,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("slice")
 	case mcpcontract.TraceTool:
 		return operation.Name("trace")
+	case mcpcontract.CensusTool:
+		return operation.Census
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

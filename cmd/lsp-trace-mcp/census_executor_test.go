@@ -14,6 +14,7 @@ import (
 
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/mcp"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/sessionruntime"
@@ -353,19 +354,17 @@ func TestCensusExecutorFailuresAreTypedAndPrivacySafe(t *testing.T) {
 	}
 }
 
-func TestCensusExecutorRemainsUnregistered(t *testing.T) {
-	server, manager, err := newServerRuntime(false)
+func TestCensusExecutorRegisteredAsOperation34Only(t *testing.T) {
+	server, _, err := newServerRuntime(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	beforeExecutors := len(server.Executors)
-	_ = newCensusExecutor(newHostSelectorRuntime(manager, nil))
-	if len(server.Registry.Tools()) != 33 || len(server.Executors) != beforeExecutors {
-		t.Fatalf("ASSERT_CENSUS_REGISTRY_EXACT33_UNCHANGED: tools=%d executors=%d/%d", len(server.Registry.Tools()), beforeExecutors, len(server.Executors))
+	tool, found := server.Registry.ResolveCanonical(mcpcontract.CensusTool)
+	_, executorFound := server.Executors[mcp.CensusExecutorFamily]
+	if !found || tool.ExecutorFamily != mcp.CensusExecutorFamily || !executorFound || len(server.Registry.Tools()) != 34 {
+		t.Fatalf("ASSERT_CENSUS_OPERATION34_REGISTERED: found=%t tool=%+v executor=%t tools=%d", found, tool, executorFound, len(server.Registry.Tools()))
 	}
-	for _, name := range []string{mcpcontract.FutureCensusTool, "lsp_trace_v1_structural_context"} {
-		if _, found := server.Registry.Resolve(name); found {
-			t.Fatalf("ASSERT_CENSUS_OPERATION34_35_ABSENT: %s", name)
-		}
+	if _, found := server.Registry.Resolve("lsp_trace_v1_structural_context"); found {
+		t.Fatal("ASSERT_CENSUS_OPERATION35_ABSENT")
 	}
 }

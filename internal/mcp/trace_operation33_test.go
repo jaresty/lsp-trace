@@ -135,8 +135,8 @@ func TestTraceOperation33ProfilesSchemaAndExecuteParity(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.ResolveCanonical(mcpcontract.TraceTool)
-	if !ok || len(full.Tools()) != 33 || len(full.Advertised()) != 33 || len(compact.Tools()) != 33 || len(compact.Advertised()) != 10 {
-		t.Fatalf("ASSERT_TRACE_OPERATION_33_APPEND_ONLY: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
+	if !ok || len(full.Tools()) != 34 || len(full.Advertised()) != 34 || len(compact.Tools()) != 34 || len(compact.Advertised()) != 10 {
+		t.Fatalf("ASSERT_TRACE_OPERATION_33_STABLE_AFTER_CENSUS_34: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if tool.InputSchemaID != mcpcontract.TraceInputID || tool.ExecutorFamily != TraceExecutorFamily || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.GraphProvenanceV5ArtifactID {
 		t.Fatalf("ASSERT_TRACE_V1_SCHEMA_GRAPH_V5_INDEPENDENCE: %+v", tool)
