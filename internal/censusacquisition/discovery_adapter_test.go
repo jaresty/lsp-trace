@@ -173,6 +173,25 @@ func TestDiscoveryAdapterExclusionsWinBeforeIncludes(t *testing.T) {
 	}
 }
 
+func TestPreparedItemNameMatchesExactAndGoplsMethodNormalization(t *testing.T) {
+	for _, tc := range []struct {
+		item, symbol string
+		want         bool
+	}{
+		{"Function", "Function", true},
+		{"Discover", "(fixedCensusRuntimeDiscovery).Discover", true},
+		{"Other", "(fixedCensusRuntimeDiscovery).Discover", false},
+		{"Discover", "().Discover", false},
+		{"Discover", "fixedCensusRuntimeDiscovery.Discover", false},
+		{"Discover", "(receiver).Discover.Extra", false},
+		{"Discover", "(receiver).Other).Discover", false},
+	} {
+		if got := preparedItemNameMatches(tc.item, tc.symbol); got != tc.want {
+			t.Fatalf("ASSERT_PREPARED_ITEM_NAME_CORRESPONDENCE[%q,%q]: got=%v want=%v", tc.item, tc.symbol, got, tc.want)
+		}
+	}
+}
+
 func TestDiscoveryAdapterAccountedPreparationOmissionsRemainComplete(t *testing.T) {
 	workspace := t.TempDir()
 	f := testSource(workspace, "mixed.go")

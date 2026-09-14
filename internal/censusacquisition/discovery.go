@@ -357,7 +357,18 @@ func documentSymbolKey(s lsp.DocumentSymbol) string {
 }
 func callableSymbolKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
 func preparedItemMatches(item lsp.CallHierarchyItem, sourceURI string, symbol lsp.DocumentSymbol) bool {
-	return item.URI == sourceURI && item.Name == symbol.Name && callableSymbolKind(item.Kind) && callableSymbolKind(symbol.Kind) && item.SelectionRange.Start == symbol.SelectionRange.Start && validRange(item.Range) && validRange(item.SelectionRange) && rangeContains(symbol.Range, item.Range)
+	return item.URI == sourceURI && preparedItemNameMatches(item.Name, symbol.Name) && callableSymbolKind(item.Kind) && callableSymbolKind(symbol.Kind) && item.SelectionRange.Start == symbol.SelectionRange.Start && validRange(item.Range) && validRange(item.SelectionRange) && rangeContains(symbol.Range, item.Range)
+}
+
+func preparedItemNameMatches(itemName, symbolName string) bool {
+	if itemName == symbolName {
+		return true
+	}
+	if itemName == "" || !strings.HasPrefix(symbolName, "(") {
+		return false
+	}
+	boundary := strings.Index(symbolName, ").")
+	return boundary > 1 && boundary+2 < len(symbolName) && symbolName[boundary+2:] == itemName && !strings.Contains(symbolName[boundary+2:], ").")
 }
 func rangeContains(outer, inner lsp.Range) bool {
 	beforeOrEqual := func(a, b lsp.Position) bool {
