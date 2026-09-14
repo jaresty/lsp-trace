@@ -84,7 +84,7 @@ The default source is `.`, `down-depth` is `1`, and `up-depth` is `0`. Sources a
 
 The public result is deliberately bounded: `authority` is `0`, `source_graph_complete` is `UNKNOWN`, `native_aggregate_custody` is false, `cross_capture_calls` is empty, and `leiden_admissible` is false. A capture set preserves constituent custody but supplies no native aggregate custody, infers no cross-capture `CALLS`, and cannot be passed directly to Leiden. If publication committed but verification, directory sync, close, or result projection later degrades, the committed outcome is `SUCCEEDED_DEGRADED` and non-retryable; do not publish a competing retry.
 
-Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`. `context` remains `FUTURE/PROPOSED`.
+Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`. `context` is AVAILABLE for bounded transient live structural analysis; it remains authority-zero, non-retained, non-replayable, non-publishable, and source-graph completeness remains `UNKNOWN`.
 
 ### Coordinate conventions
 

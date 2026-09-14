@@ -61,7 +61,7 @@ This clarification is subsequent to the accepted decision and does not change th
 
 The token and its collision index are process-local and nonpersistent. The manager retries a collision against every token in its live or tombstoned token index. Entropy failure prevents creation of any observable session. After final session removal the token is unavailable for lookup, even though a tombstoned index entry may remain for collision prevention during the process lifetime.
 
-A caller cannot supply or select this token and it is not an authentication or authorization credential. Host-configured aliases, canonical token identity, and custody or authority claims are separate concerns. This clarification specifies the identity contract only: session-runtime token generation is not implemented by this increment, and operation 35 remains unregistered, unadvertised, and `FUTURE/PROPOSED`.
+A caller cannot supply or select this token and it is not an authentication or authorization credential. Host-configured aliases, canonical token identity, and custody or authority claims are separate concerns. This clarification originally specified the identity contract before implementation. The accepted contract is now implemented: operation 35 is registered, advertised by the full profile, hidden-but-callable in compact, and available through the CLI and shared MCP projection.
 
 ## Operation numbering and rollout
 
