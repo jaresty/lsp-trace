@@ -13,6 +13,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphprovenance"
+	"lsp-trace/internal/presentation"
 )
 
 func traceFakeArgs(workspace, scenario string) []string {
@@ -111,6 +112,77 @@ func TestTraceProcessRepeatedAtUsesOneMultiTargetV5Acquisition(t *testing.T) {
 	}
 	if code != 0 || len(nativeShape.Seeds) != 2 || methodCount(methods, "textDocument/prepareCallHierarchy") != 2 || methodCount(methods, "initialize") != 1 {
 		t.Fatalf("ASSERT_TRACE_ONE_MULTI_TARGET_V5_ACQUISITION: code=%d stderr=%q seeds=%d methods=%q", code, stderr, len(nativeShape.Seeds), methods)
+	}
+}
+
+func TestTraceProcessFormatJSONParityAndTreePresentation(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("managed local-process integration is Darwin-only")
+	}
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\nfunc start() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base := append(traceFakeArgs(workspace, "slice-symbol"), "--at", "main.go:1:1", "--down-depth", "0", "--up-depth", "0")
+	bareOut, bareErr, bareCode := captureRun(t, append([]string{"trace"}, base...))
+	jsonOut, jsonErr, jsonCode := captureRun(t, append(append([]string{"trace"}, base...), "--format", "json"))
+	if bareCode != 0 || jsonCode != 0 || bareErr != "" || jsonErr != "" || bareOut != jsonOut {
+		t.Fatalf("ASSERT_TRACE_BARE_EXPLICIT_JSON_BYTE_PARITY: bare=(%d,%q) json=(%d,%q) equal=%v", bareCode, bareErr, jsonCode, jsonErr, bareOut == jsonOut)
+	}
+	expected, err := presentation.RenderTraceV5([]byte(bareOut), presentation.TraceV5Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	methodLog := filepath.Join(t.TempDir(), "methods.log")
+	treeArgs := append(append([]string{}, base...), "--server-env", "LSP_TRACE_FAKE_METHOD_LOG="+methodLog, "--format", "tree")
+	treeOut, treeErr, treeCode := captureRun(t, append([]string{"trace"}, treeArgs...))
+	methods, readErr := os.ReadFile(methodLog)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if treeCode != 0 || treeErr != "" || treeOut != expected || !strings.Contains(treeOut, "status: PARTIAL\nnodes: 0") || !strings.Contains(treeOut, "targets: none") || methodCount(methods, "initialize") != 1 || methodCount(methods, "textDocument/prepareCallHierarchy") != 1 {
+		t.Fatalf("ASSERT_TRACE_TREE_ACCEPTED_RENDERER_PARTIAL_ZERO_NODE_ONE_ACQUISITION: code=%d stderr=%q tree=%q expected=%q methods=%q", treeCode, treeErr, treeOut, expected, methods)
+	}
+}
+
+func TestTraceFormatSyntaxAndConflictsRejectBeforeServerLaunch(t *testing.T) {
+	workspace := t.TempDir()
+	marker := filepath.Join(workspace, "server-started")
+	base := []string{"trace", "--workspace", workspace, "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch " + marker, "--at", "main.go:1:1"}
+	for _, suffix := range [][]string{{"--format"}, {"--format", "yaml"}, {"--format", "json", "--format", "tree"}, {"--format", "tree", "--pretty"}, {"--format", "tree", "--output", filepath.Join(workspace, "out.json")}} {
+		stdout, stderr, code := captureRun(t, append(append([]string{}, base...), suffix...))
+		if code != 1 || stdout != "" || stderr == "" {
+			t.Fatalf("ASSERT_TRACE_FORMAT_INVALID_PRESTART: suffix=%v code=%d stdout=%q stderr=%q", suffix, code, stdout, stderr)
+		}
+		if _, err := os.Stat(marker); !os.IsNotExist(err) {
+			t.Fatalf("ASSERT_TRACE_FORMAT_INVALID_DID_NOT_LAUNCH_SERVER: suffix=%v stat=%v", suffix, err)
+		}
+	}
+}
+
+func TestTraceTreeAcquisitionFailurePreservesDiagnosticAndExit(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	base := []string{"trace", "--workspace", workspace, "--server", filepath.Join(workspace, "missing-server"), "--at", "main.go:1:1"}
+	bareOut, bareErr, bareCode := captureRun(t, base)
+	treeOut, treeErr, treeCode := captureRun(t, append(append([]string{}, base...), "--format", "tree"))
+	if bareCode == 0 || treeCode != bareCode || bareErr == "" || treeErr != bareErr || bareOut != "" || treeOut != "" {
+		t.Fatalf("ASSERT_TRACE_TREE_ACQUISITION_FAILURE_PARITY: bare=(%d,%q,%q) tree=(%d,%q,%q)", bareCode, bareOut, bareErr, treeCode, treeOut, treeErr)
+	}
+}
+
+func TestTraceFormatParserPreservesServerArgumentValueAndHelp(t *testing.T) {
+	workspace := t.TempDir()
+	args := []string{"--workspace", workspace, "--server", "server", "--server-arg", "--format", "--at", "main.go:1:1", "--format", "tree"}
+	cfg, err := parseTrace(args)
+	if err != nil || !reflect.DeepEqual([]string(cfg.args), []string{"--format"}) {
+		t.Fatalf("ASSERT_TRACE_FORMAT_SERVER_ARG_NOT_CONSUMED: cfg=%+v err=%v", cfg, err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"trace", "--help", "--format", "tree"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "-format value") {
+		t.Fatalf("ASSERT_TRACE_FORMAT_HELP_SIDE_EFFECT_FREE: code=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 }
 

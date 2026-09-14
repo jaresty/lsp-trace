@@ -54,6 +54,19 @@ go run ./cmd/lsp-trace incoming \
 
 Line and column values are one-based. Graph JSON is written to stdout (or `--output`), while diagnostics are written to stderr. Exit code `0` means complete traversal, `2` means a structured but incomplete traversal, `1` means invocation or unrecoverable server failure, and `130` means interruption.
 
+### Exact-target trace presentation
+
+Use `trace` for one exact managed symbol or repeated exact positions:
+
+```text
+lsp-trace trace --workspace PATH \
+  (--server COMMAND | --profile NAME [--config PATH]) \
+  (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...) \
+  [--format json|tree]
+```
+
+The default `json` format, including a bare invocation with no `--format`, writes the canonical Graph Provenance V5 bytes exactly as before. `--format tree` renders a deterministic presentation-only view from those already-acquired V5 bytes; it does not reread source, inspect Git or `PATH`, issue extra LSP requests, or change retained evidence. The tree preserves `PARTIAL`, bounded-zero, `UNKNOWN`, diagnostics, and other completeness limits and is not authoritative evidence. Tree output is written only after acquisition and renderer admission succeed. `--format tree` conflicts with the JSON-only `--pretty` and `--output` controls. Unknown, missing, or repeated format values are invocation errors before server start. Values passed through `--server-arg`, including `--format`, remain server arguments.
+
 ### Accountable source-symbol census
 
 Use `census` for accountable source-symbol enumeration and batched acquisition; use `trace` for one exact symbol or repeated exact positions. The executable syntax is:

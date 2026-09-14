@@ -78,6 +78,13 @@ func TestTraceManifestUsesEveryPublicBoundAndSiblingChoice(t *testing.T) {
 	}
 }
 
+func TestTraceTreeRendererAdmissionFailureHasNoPartialStdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := writeTraceTree([]byte(`{"schema_version":"not-v5"}`), &stdout, &stderr); code != 1 || stdout.Len() != 0 || stderr.String() != "trace tree rendering failed: provenance envelope: unsupported schema version \"not-v5\" for family \"graph-provenance\"\n" {
+		t.Fatalf("ASSERT_TRACE_TREE_RENDERER_ADMISSION_ATOMIC: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestAcquisitionCLIRejectsTraceInternalTransport(t *testing.T) {
 	for _, flag := range []string{"--trace-seed-spec", "--trace-siblings"} {
 		var stdout, stderr bytes.Buffer

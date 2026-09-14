@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/presentation"
 	"lsp-trace/internal/seedformat"
 )
 
@@ -18,6 +20,30 @@ type traceConfig struct {
 	file     string
 	profiles profileFlags
 	siblings bool
+	format   traceFormat
+}
+
+type traceFormat struct {
+	value string
+	set   bool
+}
+
+func (f *traceFormat) String() string {
+	if f.value == "" {
+		return "json"
+	}
+	return f.value
+}
+
+func (f *traceFormat) Set(value string) error {
+	if f.set {
+		return errors.New("--format may be specified only once")
+	}
+	if value != "json" && value != "tree" {
+		return fmt.Errorf("invalid --format %q (want json or tree)", value)
+	}
+	f.value, f.set = value, true
+	return nil
 }
 
 func parseTrace(args []string) (traceConfig, error) {
@@ -48,11 +74,15 @@ func parseTrace(args []string) (traceConfig, error) {
 	fs.StringVar(&c.output, "output", "", "output destination")
 	fs.BoolVar(&c.pretty, "pretty", false, "pretty JSON")
 	fs.BoolVar(&c.siblings, "siblings", false, "include exact topmost sibling enrichment")
+	fs.Var(&c.format, "format", "output format: json or tree (default json)")
 	if err := fs.Parse(args); err != nil {
 		return c, err
 	}
 	if fs.NArg() != 0 {
 		return c, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if c.format.String() == "tree" && (c.pretty || c.output != "") {
+		return c, errors.New("--format tree conflicts with JSON-only --pretty and --output")
 	}
 	if c.profiles.ConfigPath != "" && c.profiles.Name == "" {
 		return c, errors.New("--config requires --profile")
@@ -141,7 +171,28 @@ func runTrace(args []string, stdout, stderr io.Writer) int {
 	if c.pretty {
 		forward = append(forward, "--pretty")
 	}
-	return runTraceAcquisition("slice", "v3", forward, stdout, stderr, traceAcquisitionInput{manifest: manifest, seeds: seeds})
+	if c.format.String() == "json" {
+		return runTraceAcquisition("slice", "v3", forward, stdout, stderr, traceAcquisitionInput{manifest: manifest, seeds: seeds})
+	}
+	var acquired bytes.Buffer
+	code := runTraceAcquisition("slice", "v3", forward, &acquired, stderr, traceAcquisitionInput{manifest: manifest, seeds: seeds})
+	if code != 0 {
+		return code
+	}
+	return writeTraceTree(acquired.Bytes(), stdout, stderr)
+}
+
+func writeTraceTree(acquired []byte, stdout, stderr io.Writer) int {
+	tree, err := presentation.RenderTraceV5(acquired, presentation.TraceV5Options{})
+	if err != nil {
+		fmt.Fprintf(stderr, "trace tree rendering failed: %v\n", err)
+		return 1
+	}
+	if _, err := io.WriteString(stdout, tree); err != nil {
+		fmt.Fprintf(stderr, "trace tree output failed: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func traceLimits(c traceConfig) acquisitionops.Limits {
