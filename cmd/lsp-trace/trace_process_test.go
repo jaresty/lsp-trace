@@ -186,6 +186,66 @@ func TestTraceFormatParserPreservesServerArgumentValueAndHelp(t *testing.T) {
 	}
 }
 
+func TestTraceHelpFullStreamAdmissionContract(t *testing.T) {
+	workspace := t.TempDir()
+	marker := filepath.Join(workspace, "server-started")
+	base := []string{"--workspace", workspace, "--server", "/bin/sh", "--server-arg", "-c", "--server-arg", "touch " + marker, "--at", "main.go:1:1"}
+	valid := []struct {
+		name string
+		args []string
+	}{
+		{"help-first", append([]string{"--help"}, base...)},
+		{"help-middle", append(append([]string{}, base[:4]...), append([]string{"-h"}, base[4:]...)...)},
+		{"help-last", append(append([]string{}, base...), "--help")},
+	}
+	for _, tc := range valid {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := captureRun(t, append([]string{"trace"}, tc.args...))
+			if code != 0 || stderr != "" || !strings.Contains(stdout, "-format value") {
+				t.Fatalf("ASSERT_TRACE_HELP_VALID_FULL_STREAM: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("ASSERT_TRACE_HELP_VALID_NO_LAUNCH: stat=%v", err)
+			}
+		})
+	}
+
+	invalid := []struct {
+		name string
+		args []string
+	}{
+		{"unknown-then-help", append(append([]string{}, base...), "--unknown", "--help")},
+		{"positional-then-help", append(append([]string{}, base...), "stray", "--help")},
+		{"missing-format-then-help", append(append([]string{}, base...), "--format", "--help")},
+		{"invalid-format-then-help", append(append([]string{}, base...), "--format", "yaml", "--help")},
+		{"duplicate-format-then-help", append(append([]string{}, base...), "--format", "json", "--format", "tree", "--help")},
+	}
+	for _, tc := range invalid {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := captureRun(t, append([]string{"trace"}, tc.args...))
+			if code != 1 || stdout != "" || stderr == "" {
+				t.Fatalf("ASSERT_TRACE_HELP_MALFORMED_EMPTY_STDOUT: code=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatalf("ASSERT_TRACE_HELP_MALFORMED_NO_LAUNCH: stat=%v", err)
+			}
+		})
+	}
+}
+
+func TestTraceHelpTokensAreOpaqueServerArguments(t *testing.T) {
+	workspace := t.TempDir()
+	for _, value := range []string{"--help", "-h", "--format", "--"} {
+		t.Run(value, func(t *testing.T) {
+			args := []string{"--workspace", workspace, "--server", "server", "--server-arg", value, "--at", "main.go:1:1"}
+			cfg, err := parseTrace(args)
+			if err != nil || !reflect.DeepEqual([]string(cfg.args), []string{value}) {
+				t.Fatalf("ASSERT_TRACE_SERVER_ARG_OPAQUE: value=%q cfg=%+v err=%v", value, cfg, err)
+			}
+		})
+	}
+}
+
 func TestTraceProcessExactSymbolFailuresBeforePrepare(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("managed local-process integration is Darwin-only")
