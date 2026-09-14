@@ -1,6 +1,7 @@
 package mcpcontract
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"strings"
 
 	"lsp-trace/internal/strictjson"
+
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const (
@@ -43,6 +46,54 @@ func FutureCensusSchemaJSON(schemaID string) ([]byte, error) {
 	}
 	raw, err := futureCensusFiles.ReadFile(name)
 	return append([]byte(nil), raw...), err
+}
+
+// ValidateFutureCensusEnvelopeExclusive validates an unregistered census
+// envelope against the closed future schema set without granting registration
+// or dispatch authority.
+func ValidateFutureCensusEnvelopeExclusive(data []byte) error {
+	if err := strictjson.RejectDuplicates(data); err != nil {
+		return errFutureCensusShape
+	}
+	var value map[string]any
+	if err := json.Unmarshal(data, &value); err != nil || value == nil {
+		return errFutureCensusShape
+	}
+	named, _ := value["envelope_schema_id"].(string)
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft2020)
+	ids := []string{FutureCensusResultID, FutureCensusSuccessID, FutureCensusDomainErrorID}
+	for _, id := range ids {
+		raw, err := FutureCensusSchemaJSON(id)
+		if err != nil {
+			return err
+		}
+		doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+		if err != nil {
+			return err
+		}
+		if err := compiler.AddResource(id, doc); err != nil {
+			return err
+		}
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return errFutureCensusShape
+	}
+	matches := make([]string, 0, 1)
+	for _, id := range []string{FutureCensusSuccessID, FutureCensusDomainErrorID} {
+		compiled, err := compiler.Compile(id)
+		if err != nil {
+			return err
+		}
+		if compiled.Validate(doc) == nil {
+			matches = append(matches, id)
+		}
+	}
+	if len(matches) != 1 || matches[0] != named {
+		return errFutureCensusShape
+	}
+	return nil
 }
 
 // DecodeFutureCensusRequestV1 applies strict JSON precedence before semantics.

@@ -66,7 +66,7 @@ func (b *privateCensusMCPBinding) call(ctx context.Context, request operation.Re
 }
 
 func projectPrivateCensusMCP(requestID string, completion censusCompletion) (privateCensusMCPResult, error) {
-	if requestID == "" || (completion.Result == nil) == (completion.Diagnostic == nil) {
+	if requestID == "" || len(requestID) > 256 || (completion.Result == nil) == (completion.Diagnostic == nil) {
 		return privateCensusMCPResult{}, errors.New("invalid private census completion")
 	}
 	env := censusMCPEnvelope{
@@ -98,7 +98,7 @@ func projectPrivateCensusMCP(requestID string, completion censusCompletion) (pri
 		}
 	}
 	raw, err := json.Marshal(env)
-	if err != nil {
+	if err != nil || mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw) != nil {
 		return privateCensusMCPResult{}, errors.New("invalid private census envelope")
 	}
 	return privateCensusMCPResult{Text: append([]byte(nil), raw...), Structured: append([]byte(nil), raw...), IsError: env.IsError}, nil

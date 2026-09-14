@@ -67,6 +67,9 @@ func TestPrivateCensusMCPBindingDirectCanonicalParity(t *testing.T) {
 			if !bytes.Equal(direct.Text, direct.Structured) || !bytes.Equal(canonical.Text, canonical.Structured) || !bytes.Equal(direct.Structured, canonical.Structured) {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_TEXT_STRUCTURED_DIRECT_CANONICAL_BYTES: direct=%q/%q canonical=%q/%q", direct.Text, direct.Structured, canonical.Text, canonical.Structured)
 			}
+			if err := mcpcontract.ValidateFutureCensusEnvelopeExclusive(direct.Structured); err != nil {
+				t.Fatalf("ASSERT_PRIVATE_CENSUS_SCHEMA_EXCLUSIVE_VALIDATION: %v", err)
+			}
 			if len(fixture.calls) != 2 || fixture.calls[0].RequestID != "request-34" || fixture.calls[1].RequestID != "request-34" {
 				t.Fatalf("ASSERT_PRIVATE_CENSUS_RUNTIME_RUN_AND_REQUEST_ID: calls=%+v", fixture.calls)
 			}
@@ -99,6 +102,15 @@ func TestPrivateCensusMCPBindingRejectsCallerOutputSelector(t *testing.T) {
 	request := operation.Request{RequestID: "request-34", Input: []byte(`{"session_id":"s","generation":1,"sources":["."],"output_selector":"private.json"}`)}
 	if _, err := binding.callDirect(context.Background(), request); err == nil || len(fixture.calls) != 0 {
 		t.Fatalf("ASSERT_PRIVATE_CENSUS_CALLER_OUTPUT_SELECTOR_REJECTED: err=%v calls=%+v", err, fixture.calls)
+	}
+}
+
+func TestPrivateCensusMCPBindingRejectsInvalidRequestID(t *testing.T) {
+	completion := censusCompletion{Result: ptrCensusResult(privateCensusSuccessFixture())}
+	for _, requestID := range []string{"", strings.Repeat("r", 257)} {
+		if _, err := projectPrivateCensusMCP(requestID, completion); err == nil {
+			t.Fatalf("ASSERT_PRIVATE_CENSUS_REQUEST_ID_BOUND: length=%d", len(requestID))
+		}
 	}
 }
 
