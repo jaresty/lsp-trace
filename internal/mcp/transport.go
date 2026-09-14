@@ -325,6 +325,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
+		if tool.ExecutorFamily == CensusExecutorFamily {
+			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "config", "INVALID_CONFIG"))
+		}
 		code, diagnostics := normalizeDomainFailure(failure)
 		if tool.ExecutorFamily == LifecycleExecutorFamily {
 			code = failure.Code
@@ -354,7 +357,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	if tool.ExecutorFamily == CensusExecutorFamily {
 		var projected envelope
 		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &projected) != nil || projected.Tool != mcpcontract.CensusTool || projected.RequestID != requestID || mcpcontract.ValidateFutureCensusEnvelopeExclusive(opResult.Artifact) != nil {
-			return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"census executor returned an invalid projected envelope"}))
+			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "assembly", "ASSEMBLY_FAILED"))
 		}
 		return bindEnvelope(base, tool, projected)
 	}
@@ -728,6 +731,14 @@ func containsSchemaID(ids []string, wanted string) bool {
 	return false
 }
 
+func censusDomainErrorEnvelope(tool, requestID, stage, code string) envelope {
+	return envelope{
+		EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.CensusDomainErrorID, Tool: tool, RequestID: requestID,
+		Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true,
+		Error: map[string]any{"schema_version": "lsp-trace.census-diagnostic.v1", "status": "FAILED", "stage": stage, "code": code, "retry": true},
+	}
+}
+
 func domainErrorEnvelope(tool, requestID, code string, diagnostics []string) envelope {
 	return envelope{
 		EnvelopeVersion: "1", EnvelopeSchemaID: domainFailureSchemaID(tool), Tool: tool, RequestID: requestID,
@@ -760,6 +771,9 @@ func publicationFailureSchemaID(tool string) string {
 func domainFailureSchemaID(tool string) string {
 	if tool == mcpcontract.CustodyExecuteTool {
 		return executionDomainErrorEnvelopeSchemaID
+	}
+	if tool == mcpcontract.CensusTool {
+		return mcpcontract.CensusDomainErrorID
 	}
 	return domainEnvelopeSchemaID
 }

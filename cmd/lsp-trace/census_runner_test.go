@@ -32,7 +32,7 @@ func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
 		{name: "help-before-valid-option", args: []string{"--help", "--workspace", "ignored"}, wantHelp: true},
 		{name: "help-before-positional", args: []string{"--help", "positional"}, wantCode: 1},
 		{name: "short-help-before-positional", args: []string{"-h", "positional"}, wantCode: 1},
-		{name: "help-before-machine", args: []string{"--help", "--machine"}, wantCode: 1},
+		{name: "help-before-machine", args: []string{"--help", "--machine"}, wantHelp: true, machine: true},
 		{name: "help-after-machine-server-arg", args: []string{"--server-arg", "--machine", "--help"}, wantHelp: true},
 		{name: "help-after-double-dash-server-arg", args: []string{"--server-arg", "--", "--help"}, wantHelp: true},
 		{name: "help-before-machine-server-arg", args: []string{"--help", "--server-arg", "--machine"}, wantHelp: true},

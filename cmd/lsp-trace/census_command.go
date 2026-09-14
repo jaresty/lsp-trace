@@ -69,15 +69,12 @@ func (s *censusStringFlags) Set(v string) error { *s = append(*s, v); return nil
 // parseCensusCLIOptions parses only syntax and closed preflight constraints. It
 // performs no filesystem, environment, profile, session, or publication work.
 func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
-	clean, machine, state := extractMachineMode(args)
-	o := censusCLIOptions{Machine: machine}
-	if state != machineFlagOK {
-		return o, errors.New("invalid leading --machine grammar")
-	}
+	clean := args
 	if len(clean) > 0 && clean[0] == "census" {
 		clean = clean[1:]
 	}
-	o = censusCLIOptions{Sources: []string{"."}, DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxNodes: census.DefaultMaxNodes, Timeout: census.DefaultTimeout, RequestTimeout: census.DefaultRequestTimeout, Machine: machine}
+	machineCount := censusMachineFlagCount(clean)
+	o := censusCLIOptions{Sources: []string{"."}, DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxNodes: census.DefaultMaxNodes, Timeout: census.DefaultTimeout, RequestTimeout: census.DefaultRequestTimeout}
 	fs := flag.NewFlagSet("census", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var src, inc, exc, serverArgs censusStringFlags
@@ -95,10 +92,14 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	fs.IntVar(&o.MaxNodes, "max-nodes", o.MaxNodes, "")
 	fs.DurationVar(&o.Timeout, "timeout", o.Timeout, "")
 	fs.DurationVar(&o.RequestTimeout, "request-timeout", o.RequestTimeout, "")
+	fs.BoolVar(&o.Machine, "machine", false, "emit machine-readable JSON")
 	fs.BoolVar(&o.Help, "help", false, "show census help")
 	fs.BoolVar(&o.Help, "h", false, "show census help")
 	if err := fs.Parse(clean); err != nil {
 		return o, errors.New("invalid census syntax")
+	}
+	if machineCount > 1 {
+		return o, errors.New("duplicate machine flag")
 	}
 	if len(src) > 0 {
 		o.Sources = []string(src)
@@ -112,6 +113,20 @@ func parseCensusCLIOptions(args []string) (censusCLIOptions, error) {
 	}
 	return o, nil
 }
+func censusMachineFlagCount(args []string) int {
+	count := 0
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--server-arg" {
+			i++
+			continue
+		}
+		if args[i] == "--machine" || strings.HasPrefix(args[i], "--machine=") {
+			count++
+		}
+	}
+	return count
+}
+
 func validateCensusCLIOptions(o censusCLIOptions) error {
 	if o.Help {
 		return nil
@@ -130,7 +145,7 @@ func validateCensusCLIOptions(o censusCLIOptions) error {
 	}
 	for _, s := range o.Sources {
 		if s == "" || filepath.IsAbs(s) || !filepath.IsLocal(s) || filepath.Clean(s) != s {
-			return errors.New("invalid source")
+			return errors.New("source must be a canonical workspace-relative path")
 		}
 	}
 	return nil

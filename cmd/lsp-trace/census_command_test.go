@@ -250,6 +250,15 @@ func TestParseCensusCLIOptionsPureDefaultsMachineAndPreflight(t *testing.T) {
 	if err != nil || o.DownDepth != census.DefaultDownDepth || o.UpDepth != census.DefaultUpDepth || !o.Machine {
 		t.Fatalf("options=%+v err=%v", o, err)
 	}
+	for _, args := range [][]string{
+		append(append(append([]string{}, base...), "--server", "gopls"), "--machine"),
+		append(append(append([]string{}, base[:3]...), append([]string{"--machine"}, base[3:]...)...), "--server", "gopls"),
+	} {
+		got, err := parseCensusCLIOptions(args)
+		if err != nil || !got.Machine {
+			t.Fatalf("ASSERT_CENSUS_MACHINE_FLAG_CONVENTIONAL_PLACEMENT: args=%v options=%+v err=%v", args, got, err)
+		}
+	}
 	afterWD, _ := os.Getwd()
 	if beforeWD != afterWD || !reflect.DeepEqual(beforeEnv, os.Environ()) {
 		t.Fatal("ASSERT_CENSUS_PARSE_SIDE_EFFECT")

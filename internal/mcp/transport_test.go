@@ -596,6 +596,21 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 	}
 }
 
+func TestCensusDomainFailuresUseCensusEnvelopeSchema(t *testing.T) {
+	if got := domainFailureSchemaID(mcpcontract.CensusTool); got != mcpcontract.CensusDomainErrorID {
+		t.Fatalf("ASSERT_CENSUS_DOMAIN_FAILURE_SCHEMA: got=%q want=%q", got, mcpcontract.CensusDomainErrorID)
+	}
+	env := censusDomainErrorEnvelope(mcpcontract.CensusTool, "r", "config", "INVALID_CONFIG")
+	raw, err := json.Marshal(env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool := Tool{Name: mcpcontract.CensusTool, ExecutorFamily: CensusExecutorFamily, EnvelopeSchemaIDs: []string{mcpcontract.CensusSuccessID, mcpcontract.CensusDomainErrorID}}
+	if err := validateEmittedEnvelope(tool, env, raw); err != nil {
+		t.Fatalf("ASSERT_CENSUS_TYPED_DOMAIN_FAILURE_VALIDATES: %v", err)
+	}
+}
+
 func TestToolsCallAcceptsRequestMetadata(t *testing.T) {
 	const assertion = "tools/call accepts standard MCP request metadata without changing tool arguments"
 	t.Log("ASSERTION: " + assertion)
