@@ -26,6 +26,8 @@ import (
 	"lsp-trace/internal/seedformat"
 )
 
+var ErrDiscoveryIncomplete = errors.New("discovery accounting incomplete")
+
 const (
 	CensusPolicy    = "closed-file-document-symbol-preparation-v1"
 	DuplicatePolicy = "reject-canonical-seed-v2-identity-and-census-ordinal-v1"
@@ -177,7 +179,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		return Projection{}, errors.New("session identity drift during discovery")
 	}
 	if !d.Complete {
-		return Projection{}, errors.New("discovery accounting incomplete")
+		return Projection{}, ErrDiscoveryIncomplete
 	}
 	if err = validateDiscovery(d); err != nil {
 		return Projection{}, err

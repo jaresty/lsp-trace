@@ -169,6 +169,9 @@ func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResu
 		Planning:   &censusacquisition.PlanningConfig{DownDepth: int(options.downDepth), UpDepth: int(options.upDepth)},
 	}
 	projection, err := core.Run(ctx, censusacquisition.SessionIdentity{SessionID: result.admitted.sessionID, Generation: result.admitted.generation})
+	if errors.Is(err, censusacquisition.ErrDiscoveryIncomplete) {
+		return censusacquisition.Projection{}, censusDiscoveryFailure()
+	}
 	if err != nil {
 		return censusacquisition.Projection{}, censusAcquisitionFailure()
 	}

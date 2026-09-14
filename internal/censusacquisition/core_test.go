@@ -119,6 +119,21 @@ func TestCoreBatchFailurePreservesExactOneBasedOrdinal(t *testing.T) {
 	}
 }
 
+func TestCoreIncompleteDiscoveryReturnsStableSentinel(t *testing.T) {
+	_, err := (Core{
+		Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) {
+			return Discovery{Session: SessionIdentity{"s", 7}, Complete: false}, nil
+		}),
+		Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) {
+			t.Fatal("ASSERT_INCOMPLETE_DISCOVERY_ZERO_ACQUISITION")
+			return AcquiredV5{}, nil
+		}),
+	}).Run(context.Background(), SessionIdentity{"s", 7})
+	if !errors.Is(err, ErrDiscoveryIncomplete) {
+		t.Fatalf("ASSERT_INCOMPLETE_DISCOVERY_STABLE_SENTINEL: %v", err)
+	}
+}
+
 func TestCorePreBatchAndDiscoveryFailuresHaveNoOrdinal(t *testing.T) {
 	for _, err := range []error{
 		errors.New("unknown"),

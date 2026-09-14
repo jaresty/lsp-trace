@@ -297,8 +297,8 @@ func TestCensusRuntimeAcquireRejectsIncompleteDiscoveryBeforeBatch(t *testing.T)
 		deadline:  time.Now().Add(time.Second),
 	}
 	projection, failure := newCensusRuntime(runtime).acquire(context.Background(), result)
-	if failure == nil || failure.stage != censusStageAcquisition || len(projection.Constituents) != 0 {
-		t.Fatalf("ASSERT_MCP_CENSUS_INCOMPLETE_DISCOVERY_NO_PROJECTION: projection=%+v failure=%+v", projection, failure)
+	if failure == nil || failure.stage != censusStageDiscovery || failure.code != censusCodeDiscoveryFailed || len(projection.Constituents) != 0 {
+		t.Fatalf("ASSERT_MCP_CENSUS_INCOMPLETE_DISCOVERY_CLASSIFIED_NO_PROJECTION: projection=%+v failure=%+v", projection, failure)
 	}
 }
 
