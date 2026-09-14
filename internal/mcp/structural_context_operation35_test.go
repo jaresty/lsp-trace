@@ -66,7 +66,7 @@ func TestStructuralContextOperation35RegistrationProfilesAndSchema(t *testing.T)
 func TestStructuralContextOperation35DirectGatewayParity(t *testing.T) {
 	reasons := transientstructuralresult.EmptyReasonMap()
 	accounting := transientstructuralresult.Accounting{RequestAttempted: 1, RequestSucceeded: 1, PreparedAttempted: 1, PreparedReturned: 1, NodeObserved: 1, NodeAdmitted: 1, FrontierObserved: 1, FrontierExpanded: 1, RequestOmissionReasons: reasons, NodeOmissionReasons: transientstructuralresult.EmptyReasonMap(), OccurrenceOmissionReasons: transientstructuralresult.EmptyReasonMap(), FrontierOmissionReasons: transientstructuralresult.EmptyReasonMap()}
-	q := transientstructuralresult.Request{Generation: 1, DownDepth: 2, UpDepth: 2, MaxNodes: 100, TimeoutMS: 5000, RequestTimeoutMS: 1000, MaxMessages: 64, MaxBytes: 4194304, Analysis: transientstructuralresult.AnalysisRequest{Kind: transientstructuralresult.Neighborhood}}
+	q := transientstructuralresult.Request{Generation: 1, DownDepth: 2, UpDepth: 0, MaxNodes: 100, TimeoutMS: 5000, RequestTimeoutMS: 1000, MaxMessages: 64, MaxBytes: 4194304, Analysis: transientstructuralresult.AnalysisRequest{Kind: transientstructuralresult.Neighborhood}}
 	node, _ := transientstructuralresult.NodeID("ts_0123456789abcdef0123456789abcdef", 1, "A")
 	result := transientstructuralresult.NewResult("ts_0123456789abcdef0123456789abcdef", 1, node, "utf-16", q, accounting, transientstructuralresult.NeighborhoodResult{RootNodeID: node, Nodes: []transientstructuralresult.Node{{ID: node}}, Edges: []transientstructuralresult.Edge{}})
 	artifact, _ := json.Marshal(result)

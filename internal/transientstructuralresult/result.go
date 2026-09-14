@@ -359,6 +359,22 @@ type Policy struct {
 	MaxMessages      uint64 `json:"max_messages,omitempty"`
 	MaxBytes         uint64 `json:"max_bytes,omitempty"`
 }
+
+func (p Policy) MarshalJSON() ([]byte, error) {
+	fields := map[string]any{
+		"policy_id": p.PolicyID, "policy_version": p.PolicyVersion,
+		"policy_status": p.PolicyStatus, "policy_digest": p.PolicyDigest,
+	}
+	switch p.PolicyID {
+	case "transient-calls-traversal.v1":
+		fields["down_depth"], fields["up_depth"], fields["max_nodes"] = p.DownDepth, p.UpDepth, p.MaxNodes
+	case "transient-structural-resources.v1":
+		fields["timeout_ms"], fields["request_timeout_ms"] = p.TimeoutMS, p.RequestTimeoutMS
+		fields["max_messages"], fields["max_bytes"] = p.MaxMessages, p.MaxBytes
+	}
+	return json.Marshal(fields)
+}
+
 type Result struct {
 	SchemaVersion       string     `json:"schema_version"`
 	Phase               string     `json:"phase"`
