@@ -1,42 +1,115 @@
-# ADR 0007: Pilot an optional local semantic index for feature inventory
+# ADR 0007: Pilot an optional local engineering-context index
 
 - **Status:** Proposed
 - **Date:** 2026-09-13
 
 ## Context
 
-Revision-bound structural evidence can enumerate source symbols, preserve server-reported `CALLS`, and nominate structurally notable candidate sets. It cannot efficiently answer semantic retrieval questions such as “which packets appear related to enrollment reporting?” Structural communities, lexical overlap, generated descriptions, embeddings, and model confidence also cannot establish feature identity, ownership, production use, or stakeholder acceptance.
+Engineering work repeatedly needs bounded semantic retrieval while a design or change is still in progress: the governing decision for one symbol, related tests and prior failures for one range, analogues for one proposal, or unresolved assumptions around one requirement. Requiring a repository or source census before answering one exact-item question makes that support unavailable at the point of use.
 
-Yzma is a possible inference backend because it exposes local in-process `llama.cpp` inference, including constrained-generation and embedding APIs. Its installer verifies downloaded native-library files against release-published SHA-256 digests, and tagged releases identify compatible `llama.cpp` versions. Model verification, exact model and runtime artifact pinning, network prohibition, and process isolation are requirements imposed by this pilot wrapper, not guarantees supplied by Yzma. Yzma is not itself a feature-inventory, correction-lineage, custody, or acceptance system.
+Revision-bound structural evidence can enumerate source symbols and preserve server-reported `CALLS`. Accepted ADRs and requirements can state governing decisions. Working proposals, tasks, and generated summaries can preserve useful current context. These sources have different authority. Lexical overlap, embeddings, generated descriptions, structural adjacency, communities, and model confidence cannot equalize them or establish design correctness, ownership, production use, completion, or feature identity.
+
+Yzma is a possible inference backend because it exposes local in-process `llama.cpp` inference, including constrained-generation and embedding APIs. Its installer verifies downloaded native-library files against release-published SHA-256 digests, and tagged releases identify compatible `llama.cpp` versions. Model verification, exact model and runtime artifact pinning, network prohibition, and process isolation are requirements imposed by this pilot wrapper, not guarantees supplied by Yzma.
 
 This decision is independent of canonical structural MCP operations 33–35. This ADR does not register or renumber operations 33–35, must not delay or alter them, and must not become part of `lsp-trace-mcp`. Yzma is not integrated into `lsp-trace`, its CLI, or `lsp-trace-mcp`. This Proposed ADR does not authorize implementation or shipment.
 
 ## Decision
 
-Propose a network-denied offline worker/process, behind a closed versioned JSON protocol, for a bounded semantic-index pilot. The worker may use Yzma as one replaceable inference backend. It is not an approved daemon, shipped service, CLI surface, or MCP service.
+Propose an optional, network-denied, local offline engineering-context index behind a closed, versioned protocol. It is usable continuously during design and engineering over exactly admitted material. Feature inventory is one downstream workflow, not the primary product.
 
-Do not add Yzma to the `lsp-trace` module, `lsp-trace` CLI, `lsp-trace-mcp`, reusable feature-inventory workflow, release archives, installers, or restart paths. Do not require Go, Yzma, or Bar to consume the workflow.
+The worker may use Yzma as one replaceable inference backend. It is not an approved daemon, shipped service, CLI surface, MCP service, autonomous engineering agent, or repository crawler. Public CLI, MCP, operation, and schema names are deferred. No public surface is designed by this ADR.
 
-Process separation is an operational containment choice for dependency, resource, upgrade, lifecycle, and failure isolation; it is not evidence of semantic independence. Item-independent generation and independent adjudication are distinct protocol relationships tested separately. A standalone MCP remains out of scope unless a later ADR demonstrates a multi-consumer need, lifecycle ownership, privacy review, authentication and access policy, and compatibility burden that an offline protocol cannot satisfy.
+Do not add Yzma to the `lsp-trace` module, `lsp-trace` CLI, `lsp-trace-mcp`, reusable feature-inventory workflow, release archives, installers, or restart paths. Do not require Go, Yzma, or Bar to consume the protocol.
 
-The pilot cannot execute until the evaluation plan, admission schema, lineage schema, terminal-state enums, privacy policy, supply-chain policy, and ownership assignments required below are frozen and referenced by immutable digest from this ADR or an approved successor.
+Process separation contains dependency, resource, upgrade, lifecycle, and failure risk; it is not evidence of semantic independence. Item-independent generation and independent adjudication remain separate relationships. The pilot cannot execute until its evaluation plan, typed admission and lineage schemas, terminal-state enums, privacy and deletion policy, supply-chain policy, and ownership assignments are frozen and referenced by immutable digest.
 
-## Scope
+## Strictly typed corpora
 
-The proposed pilot has four conceptual operations. Their public names and schemas are deferred.
+Every admission belongs to exactly one corpus and one finite item type within that corpus:
 
-1. **Describe** — generate a bounded item-independent description for one admitted packet, or close it with one terminal outcome.
-2. **Embed** — embed one admitted representation under one frozen policy, or close it with one terminal outcome.
-3. **Search** — account for one query and rank admitted packet identities within one exact index identity.
-4. **Nominate groups** — emit reversible candidate groups, explicit unmatched members, and rationale references from one exact index and policy.
+1. **Revision-bound code and structural evidence** — source files, symbol or range representations, tests, and retained structural evidence bound to an exact repository/source revision and evidence digest.
+2. **Accepted decision and requirement evidence** — accepted ADRs, requirements, policies, and stakeholder decisions whose source authority and acceptance metadata are preserved without reinterpretation.
+3. **Working context** — proposals, tasks, review notes, unresolved assumptions, and generated summaries. Working or generated status must remain explicit.
 
-An item-independent description receives exactly one admitted packet representation plus frozen system instructions. It receives no corpus statistics, neighboring packets, search results, candidate groups, stakeholder labels, prior descriptions, or persistent conversational or model state. Corpus-level context begins only after the immutable per-item description record is closed. Item independence does not by itself satisfy independent semantic adjudication, which requires a separately defined review relationship and authority boundary rather than a particular person, process, or tool.
+Every admission and result exposes:
 
-Search and grouping may use corpus-level indexes only after all included item records are closed. They must not rewrite item evidence, descriptions, or prior judgments.
+- corpus and finite item type;
+- immutable source identity and exact passage, range, symbol, file, or document selector;
+- source revision and/or content digest plus exact byte length and canonicalization policy;
+- source acceptance state and source authority classification;
+- supersession links and an explicit current, superseded, unresolved, or unknown currentness state;
+- complete provenance and derivation references.
 
-## Authority and acceptance ceiling
+Cross-corpus search and similarity preserve these distinctions in every returned member. Similarity, rank, or grouping never equalizes authority, upgrades acceptance, resolves supersession, or converts working context into accepted decision evidence. Accepted source ADRs and requirements retain their own source authority metadata. A generated description, embedding, summary, ranking, or projection always has `authority=0` and `accepted=false`; it cannot modify or inherit the source's authority or acceptance.
 
-Every description, representation, embedding, index, search result, and nomination record has:
+## Acquisition modes and coverage
+
+Every operation records exactly one acquisition mode and its coverage statement:
+
+1. **TARGET** — admit one exact symbol, range, file, document, or passage. TARGET has no census prerequisite. One admitted target may immediately be described, embedded, and indexed.
+2. **NEIGHBORHOOD** — begin from explicit targets and perform only a declared, bounded structural or provenance expansion. The record identifies expansion rules, bounds, admitted members, exclusions, failures, and an accountable admitted denominator.
+3. **CENSUS** — enumerate a declared closed repository or source scope and account for every member of that closed scope.
+
+A result reports its exact acquisition mode, scope, denominator, evaluated count, terminal counts, revision policy, and coverage state. `TARGET` means exact one-item coverage, not repository coverage. `NEIGHBORHOOD` means only its recorded bounded expansion. `CENSUS` means only its declared closed scope. Partial indexes and bounded zero results never imply absence outside the admitted index, completeness of a repository/source, or completeness of an engineering domain.
+
+## Operations and item-independent Describe
+
+The proposed protocol has four conceptual operation families. Their public names and schemas are deferred:
+
+1. **Describe** — generate a bounded item-independent description for one admitted item, or close it with one terminal outcome.
+2. **Embed and index** — embed one admitted representation and append it to one exact index product under frozen policies, or close it with one terminal outcome.
+3. **Search** — close one query record and account for every member of one exact admitted index while ranking eligible members.
+4. **Nominate groups** — emit reversible candidate groups, explicit unmatched members, and rationale references from one exact admitted index and policy.
+
+Describe is independent of corpus size and acquisition mode. It receives exactly one admitted item representation plus frozen system instructions. It receives no corpus statistics, neighboring items, search results, groups, stakeholder labels, prior descriptions, or persistent conversational/model state. TARGET can therefore immediately describe, embed, and index one item. Corpus search and grouping operate over whatever exact admitted index exists and expose that index's acquisition mode and coverage; they do not wait for or imply census.
+
+Search and grouping never rewrite admissions, item evidence, descriptions, source authority, source acceptance, or prior judgments.
+
+## Practical engineering use and capability ceiling
+
+The index may retrieve governing decisions and requirements, related symbols and tests, prior failures, analogues, unresolved assumptions, and relevant working context. It may emit bounded work-context packets, candidate change sites, and review targets with exact provenance and coverage.
+
+These products may guide, rank, and navigate human-authorized engineering work. They cannot decide:
+
+- design correctness or architectural fitness;
+- edit or execution authorization;
+- safety, security, privacy, or operational acceptability;
+- ownership or production use;
+- feature identity or stakeholder acceptance;
+- whether work is complete.
+
+Execution remains external and separately authorized. The worker must not edit files, execute code, select or invoke tools, traverse a repository, resolve arbitrary paths, fetch external context, or retrieve beyond exactly admitted material. It receives only caller-admitted bytes and declared relationships.
+
+## Immutable admission, identity, cache, and invalidation
+
+Every accepted or rejected admission attempt creates an immutable append-only record containing an admission ID, corpus/type, exact submitted-byte SHA-256 and length, schema/media identity, canonicalization policy, source selector and identity, source revision/digest, authority and acceptance metadata, performed verification, and terminal disposition. Digest and length establish byte integrity only; they do not establish producer authentication, source truth, execution, completeness, custody, ownership, or feature identity.
+
+Every derived record and index product has an identity computed from immutable references to:
+
+```text
+record_identity = digest(
+  admission identities and ordered dependency identities,
+  representation digest,
+  prompt/system/template/grammar digests,
+  model/tokenizer/chat-template digests,
+  policy digests,
+  runtime/backend/native-library/environment digests
+)
+```
+
+Records are immutable and append-only. A cache hit is permitted only for exact identity equality; approximate, partial, model-family, prompt-family, or policy-family matches are cache misses. A changed admission, source revision, representation, prompt, model, policy, runtime, dependency, correction, deletion, or revocation creates a new record and invalidates or rebuilds every affected index, search, ranking, group, and work-context product. Prior records remain replayable and visibly superseded.
+
+Multiple source and repository revisions may coexist. Every query pins exact revision/index identities or states a frozen, digest-identified selection policy such as current accepted source revision. Results disclose the selected policy and all resolved identities; they never silently mix revisions.
+
+## Normative correction lineage
+
+Every record carries immutable predecessor and `supersedes` references; correction-event ID, actor identity, actor authority classification, and reason; a finite versioned `context_state_delta` enum; affected admission, record, dependency, and index identities; and downstream invalidation/rebuild dispositions.
+
+An inventory-specific downstream workflow may define an additional `inventory_state_delta` subtype, but the core engineering-context protocol uses neutral `context_state_delta`. Every correction appends a record. No correction mutates or erases predecessor history, structural evidence, source authority, or source acceptance.
+
+## Authority and independent adjudication
+
+Every generated semantic product carries:
 
 ```json
 {
@@ -45,106 +118,17 @@ Every description, representation, embedding, index, search result, and nominati
 }
 ```
 
-These records may nominate, retrieve, compare, or challenge candidates. They may not:
+Generated products may nominate, retrieve, compare, or challenge candidates. They may not establish semantic truth, accepted design, feature identity, ownership, service boundaries, runtime behavior, production use, source authority, or acceptance. They may not manufacture `CALLS`, suppress terminal outcomes, or overwrite evidence or lineage.
 
-- establish, merge, or accept feature identities;
-- change stakeholder acceptance state;
-- infer ownership, service boundaries, runtime behavior, production use, or architecture;
-- manufacture `CALLS` or alter structural evidence;
-- suppress unmatched, abstained, invalid, failed, cancelled, duplicate, or truncated outcomes;
-- overwrite evidence, descriptions, corrections, or lineage.
-
-Stakeholder acceptance remains a separate explicit external action. Neither successful evaluation nor approval of this ADR grants implementation or shipment authority.
-
-## Admission and custody boundary
-
-An operation accepts only an immutable admission record. The record exists for accepted and rejected admission attempts and contains:
-
-- immutable admission ID and protocol/index namespace;
-- SHA-256 of the exact submitted bytes and exact byte length;
-- schema identity, media type, and canonicalization policy, including whether the digest covers original or canonical bytes;
-- caller-supplied identity and an explicit classification of the caller’s authority to assert it;
-- admission method, performed verification, and closed verification disposition;
-- rejection reason when admission fails.
-
-Digest and length matching establish only byte integrity under the declared canonicalization. They do not establish producer authentication, source truth, execution, completeness, caller identity, custody beyond the recorded admission method, or feature identity. Every derived output references the immutable admission ID; repeating a packet digest is insufficient.
-
-The worker must not traverse a repository, resolve arbitrary paths, fetch external context, invoke model-selected tools, or retrieve outside the admitted index.
-
-## Sensitive-data and deletion policy
-
-All raw and derived artifacts are potentially source-sensitive, including packet representations, descriptions, embeddings, indexes, queries, scores, rankings, grouping rationales, logs, caches, temporary files, deletion records, and backups.
-
-Before execution, a frozen pilot policy must assign owners and define storage location, encryption at rest and in transit where applicable, access control, and retention periods for every artifact class. It must define deletion by admission ID and require:
-
-- invalidation and rebuild of affected indexes, search products, and groups;
-- cleanup of caches and temporary files;
-- explicit treatment of backups and snapshots;
-- tombstones that prevent a deleted admission from reappearing through stale indexes;
-- a closed deletion receipt enumerating `DELETED`, `REBUILT`, `UNAVAILABLE`, and `EXTERNALLY_RETAINED` artifacts.
-
-The receipt must identify owners and reasons for anything unavailable or externally retained. The pilot makes no secure-erasure claim unless the storage layer independently demonstrates it.
-
-## Normative correction lineage
-
-Every description, representation, embedding, index, search result, and nomination record must carry:
-
-- immutable record ID and revision;
-- predecessor and `supersedes` references;
-- correction-event ID, actor identity, actor authority classification, and reason;
-- a finite versioned `inventory_state_delta` enum;
-- affected admission, packet, record, and index identities;
-- downstream invalidation and rebuild dispositions for descriptions, embeddings, indexes, rankings, search results, and groups.
-
-The frozen lineage schema must define the finite `inventory_state_delta` values before execution. Every correction appends a new record. Prior records remain replayable, visibly superseded, and excluded from current indexes according to the recorded invalidation disposition. No correction may mutate or erase predecessor history.
+Acceptance remains an explicit external action by an independently identified authority. Independent adjudication must use a separately defined review relationship and authority boundary; a different process or person alone does not establish independence. Evaluation success and ADR approval grant neither implementation nor shipment authority.
 
 ## Closed terminal states and denominator accounting
 
-The protocol must version these exact uppercase, mutually exclusive per-operation enums; adding or removing a state requires a protocol version change.
+The closed protocol versions finite, uppercase, mutually exclusive operation/member outcome enums. Adding or removing a state requires a protocol version change. At minimum it preserves terminal distinctions for success, abstention, invalid input/query/member, unavailable or mismatched model/index, context/resource limits, invalid output, policy filtering/mismatch, duplicate input/member, unmatched group member, cancellation, timeout, backend failure, and below-threshold search members.
 
-**Describe operation outcome v1:**
+For Describe, Embed/index, Search, and Group, whole-operation outcome is separate from member outcomes. A failure before member evaluation records zero evaluated members and the complete admitted/index denominator; it does not manufacture member outcomes. Once evaluation of a member begins, that member receives exactly one terminal member outcome even if the operation later fails.
 
-`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
-
-**Describe member outcome v1:**
-
-`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
-
-**Embed operation outcome v1:**
-
-`COMPLETE | MODEL_UNAVAILABLE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
-
-**Embed member outcome v1:**
-
-`COMPLETE | ABSTAINED | INVALID_INPUT | MODEL_UNAVAILABLE | CONTEXT_LIMIT | OUTPUT_INVALID | TIMEOUT | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
-
-**Index-build operation outcome v1:**
-
-`COMPLETE | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
-
-**Index-build member outcome v1:**
-
-`INCLUDED | INVALID_INPUT | EMBEDDING_UNAVAILABLE | CANCELLED | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH | DUPLICATE_INPUT`
-
-**Search operation outcome v1:**
-
-`COMPLETE | INVALID_QUERY | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
-
-**Search result-member outcome v1:**
-
-`RETURNED | BELOW_THRESHOLD | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`
-
-**Group operation outcome v1:**
-
-`COMPLETE | INDEX_UNAVAILABLE | INDEX_MISMATCH | CANCELLED | TIMEOUT | RESOURCE_LIMIT | BACKEND_FAILURE | POLICY_MISMATCH`
-
-**Group member outcome v1:**
-
-`GROUPED | UNMATCHED | FILTERED_BY_POLICY | DUPLICATE_MEMBER | INVALID_MEMBER`
-
-For each operation, whole-operation outcome is separate from member outcomes. A whole-operation failure before member evaluation records zero evaluated members and the complete admitted denominator; it may not manufacture member outcomes. Once member evaluation starts, every denominator member receives exactly one member outcome even when the whole operation later closes as `CANCELLED`, `TIMEOUT`, `RESOURCE_LIMIT`, or `BACKEND_FAILURE`.
-
-The following equations are normative:
+The normative equations include:
 
 ```text
 describe_or_embed_admitted =
@@ -163,153 +147,115 @@ group_index_members =
   grouped + unmatched + filtered_by_policy + duplicate_member + invalid_member
 ```
 
-Duplicate inputs and members remain in the denominator and reference the retained canonical member. A Describe or Embed whole-operation outcome is `COMPLETE` if and only if `describe_or_embed_admitted` balances and every admitted member has one terminal member outcome. An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances and every admitted member has one terminal member outcome. Any non-`COMPLETE` Describe, Embed, or Index-build whole-operation outcome still carries the complete admitted denominator, the evaluated-member count, and exactly one terminal outcome for each member whose evaluation began; it cannot imply completeness. Search `COMPLETE` additionally requires one closed query record and complete result-member accounting. Group `COMPLETE` requires complete group-member accounting, including every unmatched member. No operation may report `COMPLETE` while omitting a denominator member.
+Duplicate members remain in the denominator and reference the canonical member. A Describe or Embed whole-operation outcome is `COMPLETE` if and only if its admission equation balances and every admitted member has one terminal member outcome. An Index-build whole-operation outcome is `COMPLETE` if and only if `index_build_admitted` balances and every admitted member has one terminal member outcome.
 
-## Required provenance and replay levels
+**Search is `COMPLETE` if and only if one closed query record exists, the `search_index_members` denominator equation balances, and every index member has exactly one terminal search-member outcome.**
 
-Every result binds:
+**Group is `COMPLETE` if and only if the `group_index_members` denominator equation balances and every index member has exactly one terminal group-member outcome, including `UNMATCHED`.**
 
-- admission IDs, record IDs, correction-lineage IDs, and exact protocol/index namespace;
-- protocol, operation-enum, lineage, and output-schema versions;
-- canonical input and output bytes or immutable selectors, their digests, byte lengths, schema identities, media types, and canonicalization policies;
-- worker executable digest and every loaded native-library digest;
-- backend, Yzma when used, and exact `llama.cpp` identities and revisions;
-- OS, architecture, accelerator, driver, hardware/backend, threads, context window, and resource limits;
-- exact model source URI and revision, model artifact digest, model-card digest, quantization, tokenizer digest, and chat-template digest;
-- complete license text/source digest, redistribution classification, and recorded license-review decision;
-- dependency/SBOM identity and vulnerability-review disposition;
-- prompt, frozen system-instruction, template, grammar, sampling-policy, and seed digests;
-- inference-affecting environment-variable names and values, with secrets represented by stable secret-reference digests rather than disclosed plaintext;
-- index identity, embedding policy, distance metric, search policy, grouping policy, and all policy digests;
-- whole-operation and member terminal outcomes with balanced denominator accounting.
+A non-`COMPLETE` Search or Group retains the complete index denominator, evaluated-member count, and exactly one terminal member outcome for each member whose evaluation began; it cannot imply complete evaluation, complete coverage, or absence. The same non-`COMPLETE` accounting rule applies to Describe and Embed/index with their admitted denominator. No operation reports `COMPLETE` while omitting a denominator member.
 
-Replay claims use one of four explicit levels:
+## Required provenance and replay
 
-1. **Byte replay** — canonical output bytes and digest are identical.
-2. **Schema replay** — output validates against the same schema and has equivalent canonical semantic fields, while bytes may differ.
-3. **Description replay** — a frozen evaluation rule records description equivalence within predeclared tolerances; it is not byte replay.
-4. **Rank/group replay** — rankings and groups satisfy predeclared overlap, order-distance, and membership tolerances.
+Every result binds admission, record, correction-lineage, dependency, protocol, schema, terminal-enum, and exact index identities; canonical input/output bytes or immutable selectors and digests; executable and native-library digests; backend and exact `llama.cpp` identity when used; OS, architecture, accelerator, driver, threads, context, and resource limits; exact model source/revision/artifact, model-card, tokenizer, quantization, and chat-template digests; license, redistribution, SBOM, vulnerability-review, and dependency identities; prompt/system/template/grammar/sampling/seed digests; inference-affecting environment names and stable secret-reference digests; policies, metrics, thresholds, modes, coverage, denominators, and terminal outcomes.
 
-A fixed seed does not imply byte replay across model versions, hardware, drivers, thread settings, platforms, or backends. Cross-backend executions are always distinct evidence records.
+Replay claims remain explicitly typed as byte replay, schema replay, description-equivalence replay under frozen tolerances, or rank/group replay under frozen overlap/order/membership tolerances. A fixed seed does not imply byte replay across model, runtime, hardware, driver, thread, platform, or backend changes. Cross-backend executions are distinct records.
+
+## Sensitive data, privacy, and deletion
+
+All raw and derived artifacts are potentially source-sensitive, including representations, descriptions, embeddings, indexes, queries, rankings, work-context packets, group rationales, logs, caches, temporary files, deletion records, and backups.
+
+Before execution, frozen policy assigns owners and defines storage, encryption where applicable, access control, and retention for every artifact class. Deletion by admission ID invalidates and rebuilds affected products, cleans caches and temporary files, explicitly treats backups/snapshots, records tombstones preventing stale reappearance, and closes a receipt enumerating `DELETED`, `REBUILT`, `UNAVAILABLE`, and `EXTERNALLY_RETAINED` artifacts with owners and reasons. No secure-erasure claim is made without independent storage-layer evidence.
 
 ## Supply-chain and runtime controls
 
-Before admission, indexing, or inference, an operator must stage model and runtime artifacts from approved sources and verify exact digests. The worker runs with network access denied and with runtime/model automatic download disabled. No inference request, admission step, index build, or retry may download or update an artifact.
+Before admission, indexing, or inference, an operator stages model/runtime artifacts from approved sources and verifies exact digests. The worker runs network-denied with automatic download disabled. No request, build, or retry downloads or updates an artifact.
 
-The frozen supply-chain policy must record source and license/redistribution review, SBOM, vulnerability and update owners, signature verification where signatures are available, quarantine and review before replacement, and an explicit revocation procedure. Revocation invalidates every dependent admission-independent description, embedding, index, search result, and group through correction lineage and requires rebuild or closed rejection. Missing, quarantined, revoked, or unverifiable artifacts must fail only the optional semantic capability and cannot affect structural operations.
+Frozen policy records source, license/redistribution review, SBOM, vulnerability/update owners, signatures where available, quarantine before replacement, and revocation. Revocation invalidates every dependent generated product and requires rebuild or closed rejection. Missing, quarantined, revoked, or unverifiable artifacts fail only the optional semantic capability and cannot affect structural operations.
 
-## Frozen evaluation plan prerequisite
+## Frozen evaluation plan and promotion gates
 
-The pilot cannot execute until an approved evaluation plan is frozen and referenced by exact digest. The plan must specify:
+Engineering retrieval evaluation must cover TARGET one-item cases, bounded NEIGHBORHOOD cases, and closed CENSUS cases without treating one mode as another. Before execution, a digest-pinned plan freezes corpus composition and typed inclusion/exclusion criteria; sample sizes and train/calibration/test splits; leakage controls; independent relevance, work-context, candidate-site, review-target, and grouping labels; structural-only, lexical, and random/null baselines; exact `k`; Recall@k, nDCG, unsupported-claim rate, candidate-site and review-target precision/recall, grouping precision/recall, false-merge rate, missing/invalid/abstention/failure rates, reviewer efficiency, latency, memory, context, and index-size metrics; minimum effects and uncertainty treatment; replay tolerances; resource budgets; and automatic stops.
 
-- corpus size, minimum sample size, and inclusion/exclusion criteria;
-- independently reviewed relevance and grouping labels;
-- train, calibration, and test splits plus leakage controls;
-- prohibition on policy, prompt, model, threshold, or representation tuning against the test corpus;
-- structural-only, lexical, and random/null baselines;
-- exact `k` values and definitions for Recall@k, nDCG, grouping precision/recall, unsupported-claim rate, false-merge rate, missing/invalid/abstention rate, and reviewer efficiency;
-- minimum effect sizes and uncertainty/confidence treatment for every promotion comparison;
-- maximum unsupported-claim and false-merge rates;
-- byte, schema, description, rank, and group replay tolerances;
-- latency, peak-memory, index-size, context, and total-resource budgets;
-- maximum missing, invalid, abstention, cancellation, and backend-failure rates;
-- reviewer-efficiency collection method and minimum improvement;
-- automatic stop thresholds and the minimum sample required before promotion or rejection.
+Thresholds are fixed before test execution. Promotion beyond an isolated rejected-or-completed experiment requires balanced terminal accounting for every applicable denominator; no authority or acceptance violation; engineering retrieval exceeding every required baseline by the frozen effect/uncertainty threshold; candidate change-site, review-target, work-context, and optional grouping quality meeting their thresholds; replay tolerances; disclosed cross-backend variation; complete provenance/admission/lineage/privacy/deletion/supply-chain schemas; optional-only degradation; and accepted ownership for privacy, retention, deletion, vulnerability, licensing, resources, evaluation, and acceptance.
 
-All numeric thresholds must be fixed before test execution. Failure retains an immutable closed `REJECTED_PILOT` record with the plan digest, completed denominators, results, and stop reason. It must not trigger tuning on the test corpus.
+Feature-inventory evaluation is an optional subtype and retains its independent semantic adjudication, unsupported-claim, false-merge, stakeholder-correction, and acceptance gates. It is not required for exact engineering retrieval use and cannot weaken the core quantitative gates.
 
-## Promotion gates
-
-Promotion beyond an isolated rejected-or-completed experiment requires every predeclared threshold in the frozen evaluation plan and all of the following:
-
-- every admitted item and applicable index member is terminally accounted for;
-- outputs never assert accepted feature identity or exceed `authority=0`;
-- semantic search exceeds every required baseline by the minimum effect and uncertainty threshold;
-- candidate grouping meets reviewer-efficiency and false-merge thresholds;
-- every replay level claimed meets its exact tolerance;
-- cross-backend variation is measured and disclosed as distinct records;
-- provenance, admission, lineage, privacy, deletion, supply-chain, and terminal schemas are complete;
-- missing or revoked artifacts degrade only the optional semantic capability;
-- all privacy, retention, deletion, vulnerability, license, resource, and acceptance owners have accepted responsibility.
-
-Passing the pilot does not authorize implementation, shipment, registry changes, a CLI command, or an MCP surface. Any such change requires a separate accepted ADR and its own implementation authorization.
+Passing evaluation does not authorize implementation, shipment, registry changes, a CLI command, or an MCP surface. Those require a separate accepted ADR and implementation authorization.
 
 ## Stop and rejection criteria
 
-Stop and close the pilot as `REJECTED_PILOT` when any frozen automatic stop threshold is crossed, or when:
+Stop and append an immutable `REJECTED_PILOT` record when a frozen threshold is crossed; an equation or terminal outcome fails to balance; mode or coverage is misstated; an index implies absence/completeness beyond admitted scope; generated output asserts authority, acceptance, correctness, authorization, safety, ownership, production use, completion, or feature identity; test data is used for tuning; privacy/deletion/lineage/provenance/license/supply-chain records are incomplete; stale/revoked dependencies remain active; unapproved retention, network access, automatic download, model-selected tools, traversal, or external retrieval occurs; or retrieval, candidate-site, review-target, grouping, replay, resource, failure-rate, or reviewer-efficiency gates fail.
 
-- a denominator member disappears or `COMPLETE` fails to balance;
-- generated output asserts feature identity, authority, acceptance, ownership, production use, or architecture;
-- the held-out test corpus is used for tuning;
-- privacy, deletion, lineage, provenance, license, or supply-chain records are incomplete;
-- a revoked or mismatched artifact remains represented in an active index;
-- unapproved raw-source retention, network access, automatic download, tools, or external retrieval occurs;
-- context, cancellation, model, backend, or resource failures exceed the frozen rate;
-- semantic retrieval or grouping misses any required baseline, effect, uncertainty, unsupported-claim, false-merge, replay, resource, or reviewer-efficiency threshold.
-
-Rejection preserves the immutable plan, records, denominators, and reason. It grants no permission to weaken thresholds post hoc.
+Rejection preserves the immutable plan, records, denominators, outcomes, and reason. It grants no permission to weaken thresholds post hoc.
 
 ## Consequences
 
 ### Positive
 
-- A bounded path to evaluate local semantic retrieval without hosted source disclosure.
-- Item-independent descriptions may improve search snippets and reviewer navigation.
-- Embeddings may nominate relationships missed by structural or lexical methods.
-- The backend remains replaceable, and structural authority and stakeholder acceptance remain unchanged.
+- Exact one-item context is available without census while preserving honest coverage.
+- Governing decisions, related code/tests/failures, analogues, assumptions, candidate sites, and review targets can be retrieved during active design and engineering.
+- Typed corpora preserve source authority across cross-corpus similarity.
+- Incremental exact-identity caching permits revisions to coexist without mutable records.
+- Feature inventory remains available as a separately adjudicated downstream workflow.
+- Local processing avoids hosted source disclosure, while backend replacement and structural authority remain unchanged.
 
 ### Negative
 
-- Native runtime, model licensing, supply-chain, SBOM, vulnerability, and revocation obligations.
-- Sensitive derived-data storage, encryption, retention, deletion, backup, and tombstone obligations.
-- Append-only lineage and exact denominator accounting increase protocol complexity.
-- Generated descriptions can hallucinate and distort downstream retrieval.
-- Replay may vary across hardware and backend configurations.
-- A future MCP surface would add lifecycle, privacy, authentication, compatibility, and support commitments.
+- Native runtime, licensing, supply-chain, SBOM, vulnerability, revocation, privacy, and deletion obligations remain substantial.
+- Append-only lineage, dependency invalidation, revision policy, and exact denominator accounting increase protocol complexity.
+- Partial indexes demand persistent coverage qualification and cannot answer global absence questions.
+- Generated context can hallucinate, mis-rank, or distract and therefore requires external judgment.
+- Replay can vary across hardware and backend configurations.
 
 ## Alternatives considered
 
+### Require census before semantic use
+
+Rejected. It prevents exact one-item assistance during normal design and engineering and incorrectly couples useful local context to repository-wide coverage.
+
+### Treat all indexed material as one authority class
+
+Rejected. Similarity cannot transform working or generated context into accepted decisions or revision-bound evidence.
+
 ### Add Yzma directly to `lsp-trace` or `lsp-trace-mcp`
 
-Rejected. It would couple optional model ABI, memory, artifact acquisition, and upgrade cadence to the structural evidence product before semantic value is established.
+Rejected. It couples optional model ABI, memory, artifact acquisition, and upgrade cadence to the structural evidence product before value is established.
 
-### Run a standalone semantic MCP now
+### Run a standalone semantic MCP or design a public CLI now
 
-Rejected. No multi-consumer, lifecycle, privacy, authentication, access, or compatibility need has been demonstrated. A network-denied offline worker is the maximum proposed containment boundary.
+Rejected. No public naming, multi-consumer lifecycle, privacy, authentication, access, compatibility, or support contract is approved. The closed offline protocol remains the maximum proposed boundary.
 
-### Use descriptions without structural summaries
+### Use embeddings or groups as feature identity or design correctness
 
-Retained only as an evaluation arm. Description generation may erase discriminating structural facts.
+Rejected. Similarity and grouping are navigation and nomination aids, not authority or acceptance evidence.
 
-### Use embeddings as feature identity
-
-Rejected. Vector proximity is a nomination and ranking metric, not identity or acceptance evidence.
-
-### Use a hosted inference API
+### Use hosted inference
 
 Rejected because it changes source-disclosure, retention, availability, and custody assumptions.
 
-### Keep only lexical and structural search
+### Keep only lexical and structural retrieval
 
-Retained as required baselines and as the final outcome if semantic methods do not meet every frozen gate.
+Retained as required baselines and as the final outcome if semantic methods do not pass every frozen gate.
 
 ## Unresolved questions
 
 Only implementation-neutral choices may remain unresolved while this ADR is Proposed:
 
-1. Which public or synthetic corpus should be proposed for the frozen evaluation plan?
+1. Which public or synthetic typed corpora should be proposed for the frozen evaluation plan?
 2. Which model and quantization should be submitted for source, license, redistribution, vulnerability, and resource review?
 3. Which accountable people should own privacy, deletion, supply chain, licensing, evaluation, and acceptance?
+4. Which finite public names should a later authorized protocol or product use?
 
-Correction lineage, terminal accounting, privacy/deletion policy, supply-chain controls, and evaluation thresholds are not unresolved; their frozen schemas and policies are execution prerequisites.
+Typed admission, identity, lineage, terminal accounting, privacy/deletion, supply chain, and evaluation thresholds are not optional; frozen schemas and policies are execution prerequisites.
 
 ## Follow-up
 
 Before any pilot execution or implementation authorization:
 
-1. Draft and approve the digest-referenced evaluation plan with every required numeric threshold.
-2. Draft and approve the admission, lineage, terminal-state, provenance, privacy/deletion, and supply-chain schemas and policies.
+1. Draft and approve the digest-referenced evaluation plan with every required numeric threshold and acquisition-mode case.
+2. Draft and approve typed admission, identity, lineage, terminal-state, provenance, privacy/deletion, and supply-chain schemas and policies.
 3. Assign and record all required owners.
-4. Review this Proposed ADR and its immutable prerequisites, then explicitly accept, revise, or reject it.
+4. Review this Proposed ADR and immutable prerequisites, then explicitly accept, revise, or reject it.
 
-Until those steps occur, there is no implementation authorization, no shipment authorization, no operation registration or renumbering, and no Yzma integration.
+Until those steps occur, there is no implementation authorization, no shipment authorization, no operation registration or renumbering, no public CLI or MCP design, and no Yzma integration.
