@@ -1,0 +1,50 @@
+=== RUN   TestCensusExecutorConstructionBoundary
+--- PASS: TestCensusExecutorConstructionBoundary (0.00s)
+=== RUN   TestCensusExecutorExactAliasGenerationSuccess
+    census_executor_test.go:248: ASSERT_CENSUS_EXACT_ALIAS_GENERATION_ADMITTED: admitted={sessionID: generation:0 workspace: positionEncoding:} failure=&{stage:acquisition code:ACQUISITION_FAILED}
+--- FAIL: TestCensusExecutorExactAliasGenerationSuccess (0.00s)
+=== RUN   TestCensusExecutorAdmissionMatrix
+=== RUN   TestCensusExecutorAdmissionMatrix/strict_decode
+=== RUN   TestCensusExecutorAdmissionMatrix/strict_decode/unknown
+    census_executor_test.go:262: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/strict_decode/duplicate
+    census_executor_test.go:262: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/strict_decode/missing
+    census_executor_test.go:262: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/stale_generation
+=== RUN   TestCensusExecutorAdmissionMatrix/missing_alias
+=== RUN   TestCensusExecutorAdmissionMatrix/non_ready
+=== RUN   TestCensusExecutorAdmissionMatrix/crashed
+=== RUN   TestCensusExecutorAdmissionMatrix/blank_workspace
+    census_executor_test.go:287: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/document_symbols_unsupported
+    census_executor_test.go:287: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/call_hierarchy_unsupported
+    census_executor_test.go:287: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/encoding_unsupported
+    census_executor_test.go:287: ASSERT_CENSUS_TYPED_FAILURE: got=&{stage:acquisition code:ACQUISITION_FAILED} want=config/INVALID_CONFIG
+=== RUN   TestCensusExecutorAdmissionMatrix/cancelled
+--- FAIL: TestCensusExecutorAdmissionMatrix (0.00s)
+    --- FAIL: TestCensusExecutorAdmissionMatrix/strict_decode (0.00s)
+        --- FAIL: TestCensusExecutorAdmissionMatrix/strict_decode/unknown (0.00s)
+        --- FAIL: TestCensusExecutorAdmissionMatrix/strict_decode/duplicate (0.00s)
+        --- FAIL: TestCensusExecutorAdmissionMatrix/strict_decode/missing (0.00s)
+    --- PASS: TestCensusExecutorAdmissionMatrix/stale_generation (0.00s)
+    --- PASS: TestCensusExecutorAdmissionMatrix/missing_alias (0.00s)
+    --- PASS: TestCensusExecutorAdmissionMatrix/non_ready (0.00s)
+    --- PASS: TestCensusExecutorAdmissionMatrix/crashed (0.00s)
+    --- FAIL: TestCensusExecutorAdmissionMatrix/blank_workspace (0.00s)
+    --- FAIL: TestCensusExecutorAdmissionMatrix/document_symbols_unsupported (0.00s)
+    --- FAIL: TestCensusExecutorAdmissionMatrix/call_hierarchy_unsupported (0.00s)
+    --- FAIL: TestCensusExecutorAdmissionMatrix/encoding_unsupported (0.00s)
+    --- PASS: TestCensusExecutorAdmissionMatrix/cancelled (0.00s)
+=== RUN   TestCensusExecutorHasNoRuntimeSideEffects
+    census_executor_test.go:305: ASSERT_CENSUS_SIDE_EFFECT_FIXTURE_ADMITTED: &{stage:acquisition code:ACQUISITION_FAILED}
+--- FAIL: TestCensusExecutorHasNoRuntimeSideEffects (0.00s)
+=== RUN   TestCensusExecutorFailuresAreTypedAndPrivacySafe
+--- PASS: TestCensusExecutorFailuresAreTypedAndPrivacySafe (0.00s)
+=== RUN   TestCensusExecutorRemainsUnregistered
+--- PASS: TestCensusExecutorRemainsUnregistered (0.01s)
+FAIL
+FAIL	lsp-trace/cmd/lsp-trace-mcp	0.291s
+FAIL
