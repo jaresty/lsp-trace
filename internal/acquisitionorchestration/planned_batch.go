@@ -25,9 +25,10 @@ type PlannedBatchRequest struct {
 }
 
 type PlannedBatchResult struct {
-	SessionID  string
-	Generation uint64
-	RawV5      []byte
+	SessionID                string
+	Generation               uint64
+	RawV5                    []byte
+	BoundedTraversalComplete bool
 }
 
 func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBatchRequest) (PlannedBatchResult, *operation.Failure) {
@@ -77,5 +78,17 @@ func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBa
 	if failure != nil {
 		return PlannedBatchResult{}, failure
 	}
-	return PlannedBatchResult{SessionID: request.SessionID, Generation: request.Generation, RawV5: bytes.Clone(result.Artifact)}, nil
+	complete, err := boundedTraversalReceipt(result)
+	if err != nil {
+		return fail(operation.FailureInternal, err)
+	}
+	return PlannedBatchResult{SessionID: request.SessionID, Generation: request.Generation, RawV5: bytes.Clone(result.Artifact), BoundedTraversalComplete: complete}, nil
+}
+
+func boundedTraversalReceipt(result operation.Result) (bool, error) {
+	status, ok := result.Value.(acquisitionengine.BoundedTraversalStatus)
+	if !ok {
+		return false, fmt.Errorf("bounded traversal status unavailable")
+	}
+	return status.Complete, nil
 }

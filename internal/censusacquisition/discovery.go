@@ -183,7 +183,6 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				fileComplete, complete = false, false
 			} else if !callableSymbolKind(symbol.Kind) {
 				disposition = census.SymbolNonCallable
-				fileComplete, complete = false, false
 			} else if !a.Client.SupportsCallHierarchy() {
 				disposition = census.SymbolUnsupported
 				fileComplete, complete = false, false
@@ -360,7 +359,13 @@ func documentSymbolKey(s lsp.DocumentSymbol) string {
 }
 func callableSymbolKind(kind int) bool { return kind == 6 || kind == 9 || kind == 12 }
 func preparedItemMatches(item lsp.CallHierarchyItem, sourceURI string, symbol lsp.DocumentSymbol) bool {
-	return item.URI == sourceURI && item.Name == symbol.Name && item.Kind == symbol.Kind && item.Range == symbol.Range && item.SelectionRange.Start == symbol.SelectionRange.Start && validRange(item.Range) && validRange(item.SelectionRange)
+	return item.URI == sourceURI && item.Name == symbol.Name && callableSymbolKind(item.Kind) && callableSymbolKind(symbol.Kind) && item.SelectionRange.Start == symbol.SelectionRange.Start && validRange(item.Range) && validRange(item.SelectionRange) && rangeContains(symbol.Range, item.Range)
+}
+func rangeContains(outer, inner lsp.Range) bool {
+	beforeOrEqual := func(a, b lsp.Position) bool {
+		return a.Line < b.Line || (a.Line == b.Line && a.Character <= b.Character)
+	}
+	return validRange(outer) && validRange(inner) && beforeOrEqual(outer.Start, inner.Start) && beforeOrEqual(inner.End, outer.End)
 }
 func validRange(r lsp.Range) bool {
 	return r.Start.Line < r.End.Line || (r.Start.Line == r.End.Line && r.Start.Character <= r.End.Character)

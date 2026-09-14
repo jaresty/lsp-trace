@@ -505,6 +505,9 @@ func TestReadinessInitializeCarriesConfiguredWorkspace(t *testing.T) {
 	if !bytes.Contains(params, []byte(`"rootUri":"`+workspaceURI+`"`)) || !bytes.Contains(params, []byte(`"workspaceFolders":[{"uri":"`+workspaceURI+`"`)) {
 		t.Fatalf("%s: params=%s", assertion, params)
 	}
+	if !bytes.Contains(params, []byte(`"documentSymbol":{"hierarchicalDocumentSymbolSupport":true}`)) {
+		t.Fatalf("ASSERT_READINESS_HIERARCHICAL_DOCUMENT_SYMBOL_CLIENT_CAPABILITY: params=%s", params)
+	}
 }
 
 func TestReadinessCallHierarchyCapabilityModes(t *testing.T) {

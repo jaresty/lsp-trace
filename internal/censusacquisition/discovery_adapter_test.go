@@ -62,6 +62,44 @@ func item(name, uri string, kind int, line, char uint32) lsp.CallHierarchyItem {
 	return lsp.CallHierarchyItem{Name: name, Kind: kind, URI: uri, Range: lsp.Range{Start: p, End: p}, SelectionRange: lsp.Range{Start: p, End: p}}
 }
 
+func TestDiscoveryAcceptsPreparedIdentifierRangeWithinDeclaration(t *testing.T) {
+	workspace := t.TempDir()
+	file := testSource(workspace, "a.go")
+	selection := lsp.Range{Start: lsp.Position{Line: 3, Character: 5}, End: lsp.Position{Line: 3, Character: 8}}
+	declaration := lsp.Range{Start: lsp.Position{Line: 3}, End: lsp.Position{Line: 7, Character: 1}}
+	symbol := lsp.DocumentSymbol{Name: "Run", Kind: 12, Range: declaration, SelectionRange: selection}
+	prepared := lsp.CallHierarchyItem{Name: "Run", Kind: 12, URI: file.URI, Range: selection, SelectionRange: selection}
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{file.URI: {symbol}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{selection.Start: {prepared}}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"ready", 2})
+	if err != nil || !got.Complete || len(got.Targets) != 1 || got.Accounting.Symbols[0].Disposition != census.SymbolSelected {
+		t.Fatalf("ASSERT_PREPARED_IDENTIFIER_RANGE_WITHIN_DECLARATION: got=%+v err=%v", got, err)
+	}
+}
+
+func TestDiscoveryAcceptsCallableMethodFunctionKindVariation(t *testing.T) {
+	workspace := t.TempDir()
+	file := testSource(workspace, "a.go")
+	symbol := sym("Run", 6, 3, 5)
+	prepared := item("Run", file.URI, 12, 3, 5)
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{file.URI: {symbol}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{symbol.SelectionRange.Start: {prepared}}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"ready", 2})
+	if err != nil || !got.Complete || len(got.Targets) != 1 {
+		t.Fatalf("ASSERT_CALLABLE_KIND_VARIATION_CORRESPONDS: got=%+v err=%v", got, err)
+	}
+}
+
+func TestDiscoveryNonCallableIsAccountedExclusionNotIncompleteness(t *testing.T) {
+	workspace := t.TempDir()
+	file := testSource(workspace, "a.go")
+	callable := sym("Run", 12, 3, 5)
+	nonCallable := sym("Runtime", 5, 1, 5)
+	client := &fakeDiscoveryClient{documentSupported: true, callSupported: true, symbols: map[string][]lsp.DocumentSymbol{file.URI: {nonCallable, callable}}, prepare: map[lsp.Position][]lsp.CallHierarchyItem{callable.SelectionRange.Start: {item("Run", file.URI, 12, 3, 5)}}}
+	got, err := (DiscoveryAdapter{Workspace: workspace, Files: StaticFiles{file}, Supplier: &fakeSupplier{errors: map[string]error{}}, Client: client}).Discover(context.Background(), SessionIdentity{"ready", 2})
+	if err != nil || !got.Complete || len(got.Targets) != 1 || got.Accounting.Files[0].Disposition != census.FileSelected {
+		t.Fatalf("ASSERT_NON_CALLABLE_ACCOUNTED_EXCLUSION_COMPLETE: got=%+v err=%v", got, err)
+	}
+}
+
 func TestDiscoveryAdapterDeterministicFlattenSeedsAndImmutableInputs(t *testing.T) {
 	workspace := t.TempDir()
 	a, z := testSource(workspace, "a.go"), testSource(workspace, "z.go")

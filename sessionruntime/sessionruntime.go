@@ -1134,7 +1134,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 	id := strconv.FormatUint(key.ID, 10)
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
 	workspaceURI := (&url.URL{Scheme: "file", Path: workspace}).String()
-	params, _ := json.Marshal(struct {
+	initializeParams := struct {
 		ProcessID        any    `json:"processId"`
 		RootURI          string `json:"rootUri"`
 		WorkspaceFolders []struct {
@@ -1146,12 +1146,17 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 				CallHierarchy struct {
 					DynamicRegistration bool `json:"dynamicRegistration"`
 				} `json:"callHierarchy"`
+				DocumentSymbol struct {
+					HierarchicalDocumentSymbolSupport bool `json:"hierarchicalDocumentSymbolSupport"`
+				} `json:"documentSymbol"`
 			} `json:"textDocument"`
 		} `json:"capabilities"`
 	}{ProcessID: nil, RootURI: workspaceURI, WorkspaceFolders: []struct {
 		URI  string `json:"uri"`
 		Name string `json:"name"`
-	}{{URI: workspaceURI, Name: "workspace"}}})
+	}{{URI: workspaceURI, Name: "workspace"}}}
+	initializeParams.Capabilities.TextDocument.DocumentSymbol.HierarchicalDocumentSymbolSupport = true
+	params, _ := json.Marshal(initializeParams)
 	initializeMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}
 	initializeBody, _ := json.Marshal(initializeMessage)
 	m.recordReadinessEvent(opID, diagnosticEventWriteAttempt, int64(len(initializeBody)), false)

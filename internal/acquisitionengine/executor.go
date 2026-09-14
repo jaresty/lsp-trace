@@ -52,6 +52,13 @@ type CustodyReceipt struct {
 	HostReceiptID string                  `json:"host_receipt_id,omitempty"`
 }
 
+// BoundedTraversalStatus is an internal execution receipt. Complete means the
+// requested bounded frontier was observed without failed requests or resource
+// truncation; it does not claim source-graph or repository completeness.
+type BoundedTraversalStatus struct {
+	Complete bool
+}
+
 func NewExecutor(r Runtime) *Executor { return &Executor{runtime: r} }
 
 // ExecuteOrdinary cannot receive seed bytes or custody authority.
@@ -483,6 +490,9 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 		}
 	}
 	opResult := operation.Result{Artifact: raw}
+	if route == "private-census-batch" {
+		opResult.Value = BoundedTraversalStatus{Complete: boundedTraversalComplete(result)}
+	}
 	if custodyReceipt != nil {
 		opResult.CustodyReceipt = custodyReceipt
 	}
@@ -505,6 +515,36 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 		return fail("PRESENTATION_PUBLICATION_FAILED", err)
 	}
 	return operation.Result{Artifact: encoded, LogicalDigest: presentation.PartitionSHA256, CustodyReceipt: custodyReceipt}, nil
+}
+
+func boundedTraversalComplete(result acquisition.Result) bool {
+	if result.Graph.Summary.Truncated {
+		return false
+	}
+	allowed := func(status acquisition.ExpansionStatus) bool {
+		return status == acquisition.SuccessEmpty || status == acquisition.SuccessNonempty || status == acquisition.Frontier || status == acquisition.ExpansionNotApplicable
+	}
+	for _, record := range result.Requests {
+		if record.Outcome != "SUCCESS" {
+			return false
+		}
+	}
+	for _, target := range result.Targets {
+		if target.Resolution.Status != acquisition.Resolved || target.Admission != acquisition.Admitted {
+			return false
+		}
+		for _, direction := range []acquisition.DirectionResult{target.Outgoing, target.Incoming} {
+			if !allowed(direction.Status) && (direction.Status != acquisition.Partial || len(direction.Expansions) == 0) {
+				return false
+			}
+			for _, expansion := range direction.Expansions {
+				if !allowed(expansion.Status) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 func validatePreparedDocument(sessionID string, generation uint64, locator acquisition.Locator, prepared sessionruntime.DocumentResult) error {

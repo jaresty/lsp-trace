@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/publication"
 )
@@ -116,6 +117,9 @@ func TestRunCensusProfileCLIOverridesAndOutcomeStreams(t *testing.T) {
 		if cfg.runner.start.Process.Path != "/bin/echo" || !reflect.DeepEqual(cfg.runner.start.Process.Args, []string{"--machine"}) || cfg.runner.start.LanguageID != "go" || options.Workspace != workspace {
 			t.Fatalf("ASSERT_CENSUS_PROFILE_OVERRIDE_TRANSFER process=%+v language=%q workspace=%q", cfg.runner.start.Process, cfg.runner.start.LanguageID, options.Workspace)
 		}
+		if cfg.runner.timeout != 10*time.Minute || cfg.limits.TimeoutMS == nil || *cfg.limits.TimeoutMS != 60000 || cfg.limits.RequestTimeoutMS == nil || *cfg.limits.RequestTimeoutMS != 30000 {
+			t.Fatalf("ASSERT_CENSUS_OUTER_AND_BATCH_TIMEOUTS_SEPARATE: runner=%s limits=%+v", cfg.runner.timeout, cfg.limits)
+		}
 		p := validCensusProjection()
 		r, err := buildCensusCLIResult(p, validCensusReceipt())
 		if err != nil {
@@ -124,7 +128,7 @@ func TestRunCensusProfileCLIOverridesAndOutcomeStreams(t *testing.T) {
 		d := mustDiagnostic(t, censusStageCommitted)
 		return censusPublicationOutcome{Result: &r, Diagnostic: d}
 	}
-	args := []string{"--machine", "--workspace", workspace, "--source", ".", "--publication-root", root, "--profile", "test", "--config", config, "--server", "cli-server", "--server-arg", "--machine"}
+	args := []string{"--machine", "--workspace", workspace, "--source", ".", "--publication-root", root, "--profile", "test", "--config", config, "--server", "cli-server", "--server-arg", "--machine", "--timeout", "10m", "--request-timeout", "30s"}
 	var stdout, stderr bytes.Buffer
 	if code := runCensusWithDependencies(args, &stdout, &stderr, deps); code != 0 || coreCalls != 1 || stderr.Len() != 0 || strings.Count(stdout.String(), "\n") != 1 {
 		t.Fatalf("ASSERT_CENSUS_COMMITTED_DEGRADATION_SUCCESS code=%d calls=%d stdout=%q stderr=%q", code, coreCalls, stdout.String(), stderr.String())

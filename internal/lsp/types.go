@@ -53,6 +53,33 @@ type DocumentSymbol struct {
 	ContainerName  string           `json:"containerName,omitempty"`
 }
 
+// UnmarshalJSON normalizes the two legal textDocument/documentSymbol result
+// shapes. SymbolInformation has only a location range, so that range is also
+// the best available selection range; Flat records that no distinct name range
+// was supplied by the server.
+func (s *DocumentSymbol) UnmarshalJSON(data []byte) error {
+	type documentSymbol DocumentSymbol
+	var wire struct {
+		documentSymbol
+		Location *struct {
+			URI   string `json:"uri"`
+			Range Range  `json:"range"`
+		} `json:"location"`
+	}
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	*s = DocumentSymbol(wire.documentSymbol)
+	if wire.Location != nil {
+		s.Range = wire.Location.Range
+		s.SelectionRange = wire.Location.Range
+		s.Flat = true
+	} else {
+		s.Flat = false
+	}
+	return nil
+}
+
 type DocumentSymbolParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 }

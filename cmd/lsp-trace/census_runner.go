@@ -112,6 +112,9 @@ func runCensusWithDependencies(args []string, stdout, stderr io.Writer, deps cen
 	maxRequests, maxEvidenceBytes, maxPathWork := 1000, 4<<20, 100000
 	maxResponseBytes, maxMessages := 4<<20, 64
 	timeoutMS, requestTimeoutMS := int(options.Timeout.Milliseconds()), int(options.RequestTimeout.Milliseconds())
+	if timeoutMS > 60000 {
+		timeoutMS = 60000
+	}
 	limits := acquisitionops.Limits{MaxNodes: &options.MaxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
 	outcome := deps.runCore(options, censusCoreConfig{runner: initializedAcquisitionRunnerConfig{manager: manager, start: sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(selected), LanguageID: profile.LanguageID, Process: managedprocess.Spec{Path: command, Args: serverArgs, Dir: workspace, Env: append(os.Environ(), profile.Environment...)}}, timeout: options.Timeout, requestTimeout: options.RequestTimeout, stderr: io.Discard}, limits: limits, callHierarchy: true}, productionCensusCoreDependencies())
 	return writeCensusOutcome(stdout, stderr, options.Machine, outcome)

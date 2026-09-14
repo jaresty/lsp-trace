@@ -23,10 +23,11 @@ import (
 )
 
 type fakeBatchSession struct {
-	id         string
-	generation uint64
-	requests   []operation.Request
-	respond    func(context.Context, operation.Request) (operation.Result, *operation.Failure)
+	id                       string
+	generation               uint64
+	requests                 []operation.Request
+	boundedTraversalComplete *bool
+	respond                  func(context.Context, operation.Request) (operation.Result, *operation.Failure)
 }
 
 func (s *fakeBatchSession) identity() censusacquisition.SessionIdentity {
@@ -44,7 +45,11 @@ func (s *fakeBatchSession) execute(ctx context.Context, request acquisitionorche
 	if failure != nil {
 		return acquisitionorchestration.PlannedBatchResult{}, failure
 	}
-	return acquisitionorchestration.PlannedBatchResult{SessionID: request.SessionID, Generation: request.Generation, RawV5: bytes.Clone(result.Artifact)}, nil
+	complete := true
+	if s.boundedTraversalComplete != nil {
+		complete = *s.boundedTraversalComplete
+	}
+	return acquisitionorchestration.PlannedBatchResult{SessionID: request.SessionID, Generation: request.Generation, RawV5: bytes.Clone(result.Artifact), BoundedTraversalComplete: complete}, nil
 }
 
 func cloneOperationRequest(in operation.Request) operation.Request {
@@ -182,6 +187,10 @@ func TestBatchAdapterRejectsBoundsCancellationDriftAndIncomplete(t *testing.T) {
 			}
 		}, true, false},
 		{"partial", func(_ *fakeBatchSession, _ *censusacquisition.BatchRequest) {}, false, false},
+		{"receipt-partial", func(s *fakeBatchSession, _ *censusacquisition.BatchRequest) {
+			complete := false
+			s.boundedTraversalComplete = &complete
+		}, true, false},
 		{"truncated", func(_ *fakeBatchSession, _ *censusacquisition.BatchRequest) {}, true, true},
 	}
 	for _, tc := range cases {

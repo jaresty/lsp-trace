@@ -181,7 +181,7 @@ func (a *censusBatchAcquirer) acquireBatch(ctx context.Context, request censusac
 	if f := cancelled(ctx); f != nil {
 		return censusBatchResult{}, f
 	}
-	if err := admitCompleteBatch(ctx, result.RawV5, request, a.beforeNativeAdmission); err != nil {
+	if err := admitCompleteBatch(ctx, result.RawV5, result.BoundedTraversalComplete, request, a.beforeNativeAdmission); err != nil {
 		if f := cancelled(ctx); f != nil {
 			return censusBatchResult{}, f
 		}
@@ -218,7 +218,7 @@ func cloneBatchRequest(in censusacquisition.BatchRequest) censusacquisition.Batc
 	return in
 }
 
-func admitCompleteBatch(ctx context.Context, raw []byte, request censusacquisition.BatchRequest, beforeNative func()) error {
+func admitCompleteBatch(ctx context.Context, raw []byte, boundedTraversalComplete bool, request censusacquisition.BatchRequest, beforeNative func()) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -258,8 +258,8 @@ func admitCompleteBatch(ctx context.Context, raw []byte, request censusacquisiti
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if !result.Summary.Complete || result.Summary.Truncated {
-		return errors.New("incomplete or truncated traversal")
+	if !boundedTraversalComplete {
+		return errors.New("incomplete bounded traversal")
 	}
 	if len(result.Seeds) != len(request.Targets) {
 		return errors.New("seed result cardinality mismatch")

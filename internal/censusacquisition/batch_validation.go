@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"lsp-trace/internal/census"
 	"lsp-trace/internal/seedformat"
 )
 
@@ -33,16 +34,17 @@ func ValidateBatchSeeds(request BatchRequest, workspace string) error {
 	if err != nil || !bytes.Equal(canonical, request.CanonicalSeedsV2) {
 		return errors.New("provided Seeds V2 is not canonical")
 	}
-	recomputed, err := combineSeeds(request.Targets, workspace)
+	recomputed, err := combineSeedsForPlanning(request.Targets, workspace, PlanningConfig{DownDepth: request.DownDepth, UpDepth: request.UpDepth})
 	if err != nil || !bytes.Equal(recomputed, request.CanonicalSeedsV2) {
 		return errors.New("provided Seeds V2 does not exactly match ordered targets")
 	}
 	return nil
 }
 
-// CombineCanonicalSeeds is a pure canonicalization helper for package-main tests.
+// CombineCanonicalSeeds is a pure canonicalization helper for package-main
+// tests using the census default traversal depths.
 func CombineCanonicalSeeds(targets []PreparedTarget, workspace string) ([]byte, error) {
-	return combineSeeds(targets, workspace)
+	return combineSeedsForPlanning(targets, workspace, PlanningConfig{DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth})
 }
 
 // ValidateBatchArtifact is a pure closed validation step. Successful validation

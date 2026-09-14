@@ -100,10 +100,7 @@ func (b BatchRequest) AcquisitionManifest(limits acquisitionops.Limits) acquisit
 	for i, t := range b.Targets {
 		line, ch := t.Position().Line, t.Position().Character
 		down, up := b.DownDepth, b.UpDepth
-		id := fmt.Sprintf("target-%06d", t.CensusOrdinal)
-		if i == 0 {
-			id = "root"
-		}
+		id := batchTargetID(i, t)
 		ts[i] = acquisitionops.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch}, DownDepth: &down, UpDepth: &up}
 	}
 	return acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: append([]acquisitionops.Target(nil), ts[1:]...), Limits: limits}
@@ -203,7 +200,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		for j, t := range b.Targets {
 			pt[j] = cloneTarget(prepared[t.CensusOrdinal])
 		}
-		seedBytes, err := combineSeeds(pt, d.Workspace)
+		seedBytes, err := combineSeedsForPlanning(pt, d.Workspace, planning)
 		if err != nil {
 			return Projection{}, failBatch(i, fmt.Errorf("batch %d seeds: %w", i, err))
 		}
@@ -420,9 +417,22 @@ func platformPathEqual(goos, a, b string) bool {
 	}
 	return a == b
 }
+func batchTargetID(index int, target PreparedTarget) string {
+	if index == 0 {
+		return "root"
+	}
+	return fmt.Sprintf("target-%06d", target.CensusOrdinal)
+}
 func combineSeeds(ts []PreparedTarget, workspace string) ([]byte, error) {
+	return combineSeedsFile(ts, workspace, seedformat.Defaults{}, false)
+}
+func combineSeedsForPlanning(ts []PreparedTarget, workspace string, planning PlanningConfig) ([]byte, error) {
+	down, up := planning.DownDepth, planning.UpDepth
+	return combineSeedsFile(ts, workspace, seedformat.Defaults{DownDepth: &down, UpDepth: &up}, true)
+}
+func combineSeedsFile(ts []PreparedTarget, workspace string, defaults seedformat.Defaults, bindBatchLabels bool) ([]byte, error) {
 	all := make([]seedformat.Seed, 0, len(ts))
-	for _, t := range ts {
+	for i, t := range ts {
 		f, err := seedformat.Decode(t.CanonicalSeedV2, workspace)
 		if err != nil || len(f.Seeds) != 1 {
 			return nil, errors.New("one canonical seed required per target")
@@ -431,9 +441,21 @@ func combineSeeds(ts []PreparedTarget, workspace string) ([]byte, error) {
 		if err != nil || !bytes.Equal(canonical, t.CanonicalSeedV2) {
 			return nil, errors.New("canonical target seed required")
 		}
-		all = append(all, f.Seeds[0])
+		seed := f.Seeds[0]
+		if bindBatchLabels {
+			label := batchTargetID(i, t)
+			switch seed.Type {
+			case seedformat.PositionType:
+				seed.Position.Label = label
+			case seedformat.SymbolType:
+				seed.Symbol.Label = label
+			default:
+				return nil, errors.New("census target seed type must be position or symbol")
+			}
+		}
+		all = append(all, seed)
 	}
-	return seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: all}, workspace)
+	return seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Defaults: defaults, Seeds: all}, workspace)
 }
 func admit(raw []byte, b BatchRequest) (captureset.Constituent, error) {
 	if len(raw) == 0 {
@@ -482,7 +504,7 @@ func validateProjection(p Projection) error {
 		}
 		batchIdentity := []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(mts[x.TargetStart:x.TargetStart+x.TargetCount])))
 		wantID := stableID("batch", planningIdentity(batchIdentity, planning))
-		seeds, _ := combineSeeds(b.Targets, p.Workspace)
+		seeds, _ := combineSeedsForPlanning(b.Targets, p.Workspace, planning)
 		if b.BatchID != wantID || !bytes.Equal(b.CanonicalSeedsV2, seeds) {
 			return errors.New("batch identity or seeds mutation")
 		}
