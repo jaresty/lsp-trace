@@ -94,7 +94,7 @@ func validFutureResult() map[string]any {
 		"traversal_policy": map[string]any{"policy_id": futureTraversalPolicyID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureTraversalPolicyDigest, "down_depth": 2, "up_depth": 2, "max_nodes": 100},
 		"resource_policy":  map[string]any{"policy_id": futureResourcePolicyID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureResourcePolicyDigest, "timeout_ms": 5000, "request_timeout_ms": 1000, "max_messages": futureDefaultMaxMessages, "max_bytes": futureDefaultMaxBytes},
 		"analysis_policy":  map[string]any{"policy_id": futureNeighborhoodID, "policy_version": futureAnalysisVersion, "policy_status": futurePolicyStatus, "policy_digest": futureNeighborhoodPolicyDigest}, "graph_digest": "sha256:" + strings.Repeat("4", 64), "accounting": validAccounting(),
-		"analysis": map[string]any{"kind": "NEIGHBORHOOD", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "incoming_count": 1, "outgoing_count": 1, "frontier_count": 0},
+		"analysis": map[string]any{"kind": "NEIGHBORHOOD", "root_node_id": "tn_0123456789abcdef0123456789abcdef", "nodes": []any{map[string]any{"node_id": "tn_0123456789abcdef0123456789abcdef"}}, "edges": []any{map[string]any{"edge_id": "te_0123456789abcdef0123456789abcdef", "caller_node_id": "tn_0123456789abcdef0123456789abcdef", "callee_node_id": "tn_0123456789abcdef0123456789abcdef"}}, "incoming_count": 1, "outgoing_count": 1},
 	}
 }
 
@@ -127,6 +127,23 @@ func TestFutureStructuralContextSchemasCompileAndAcceptClosedControls(t *testing
 	validateFuture(t, s[futureSuccessID], success, true)
 	failure := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": "TRAVERSAL", "state": "PARTIAL", "error": map[string]any{"code": "PARTIAL"}}
 	validateFuture(t, s[futureFailureID], failure, true)
+}
+
+func TestFutureStructuralNeighborhoodOmitsFrontierCount(t *testing.T) {
+	result := validFutureResult()
+	validateFuture(t, compileFutureStructuralSchemas(t)[futureResultID], result, true)
+	if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), result); err != nil {
+		t.Fatalf("valid NEIGHBORHOOD without frontier_count rejected: %v", err)
+	}
+}
+
+func TestFutureStructuralNeighborhoodRejectsFrontierCountAsUnknown(t *testing.T) {
+	result := validFutureResult()
+	result["analysis"].(map[string]any)["frontier_count"] = 0
+	validateFuture(t, compileFutureStructuralSchemas(t)[futureResultID], result, false)
+	if err := ValidateFutureStructuralSemanticsV1(validFutureInput(), result); err != errFutureShape {
+		t.Fatalf("frontier_count got %v, want unknown-field shape sentinel", err)
+	}
 }
 
 func TestFutureStructuralInputRejectsEveryForbiddenSurfaceAndBadBounds(t *testing.T) {
@@ -441,7 +458,6 @@ func TestFutureStructuralSemanticValidatorRejectsInvalidOrOversizedReferenceBefo
 			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
 			delete(a, "incoming_count")
 			delete(a, "outgoing_count")
-			delete(a, "frontier_count")
 			a["reachable_node_ids"] = []any{id}
 			a["witness_edge_ids"] = []any{}
 			if err := ValidateFutureStructuralSemanticsV1(i, r); err != errFutureValue {
@@ -536,7 +552,6 @@ func TestFutureStructuralSemanticValidatorRejectsDuplicateImpactSets(t *testing.
 			a["kind"], a["direction"], a["depth"] = "IMPACT", "OUTGOING", 1
 			delete(a, "incoming_count")
 			delete(a, "outgoing_count")
-			delete(a, "frontier_count")
 			if key == "reachable_node_ids" {
 				a[key] = []any{r["target_node_id"], r["target_node_id"]}
 				a["witness_edge_ids"] = []any{}

@@ -127,10 +127,10 @@ func ValidateFutureStructuralSemanticsV1(input, result map[string]any) error {
 	kind, _ := stringField(analysis, "kind", 1, 32, nil)
 	switch kind {
 	case "NEIGHBORHOOD":
-		if !closed(analysis, "kind", "root_node_id", "nodes", "edges", "incoming_count", "outgoing_count", "frontier_count") {
+		if !closed(analysis, "kind", "root_node_id", "nodes", "edges", "incoming_count", "outgoing_count") {
 			return errFutureShape
 		}
-		for _, k := range []string{"incoming_count", "outgoing_count", "frontier_count"} {
+		for _, k := range []string{"incoming_count", "outgoing_count"} {
 			if _, err := uintField(analysis, k, 0, futureMaxCount); err != nil {
 				return err
 			}
