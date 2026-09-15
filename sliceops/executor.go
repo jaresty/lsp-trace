@@ -91,6 +91,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if runtimeFailure != "" {
 		return operation.Result{}, fail(string(runtimeFailure), nil)
 	}
+	if err := incomingops.ValidateDocumentURI(incomingops.SessionWorkspace(e.runtime, in.SessionID, in.Generation), in.URI); err != nil {
+		return operation.Result{}, fail(operation.FailureInvalidInput, err)
+	}
 	if in.GraphProvenance && (in.Relations != nil || len(in.Adapters) > 0 || len(in.Providers) > 0 || len(in.Languages) > 0 || len(in.Frameworks) > 0 || len(in.WorkspaceRevision) > 0 || in.FailOnUnknownRevision) {
 		return operation.Result{}, fail("GRAPH_PROVENANCE_UNSUPPORTED_COMBINATION", nil)
 	}

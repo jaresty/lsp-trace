@@ -147,9 +147,13 @@ func TestSemanticTraversalDescriptionsRouteAndExplainInvocation(t *testing.T) {
 		"lsp_trace_v1_incoming": {
 			"directly observes exact caller relationships",
 			"Textual occurrences do not establish calls",
+			"exact document URI",
+			"workspace-root URI is invalid",
 		},
 		"lsp_trace_v1_slice": {
 			"directly observes caller and callee dependency neighborhoods",
+			"exact document URI",
+			"workspace-root URI is invalid",
 		},
 	}
 	for name, phrases := range checks {

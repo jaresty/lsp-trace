@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -97,6 +98,9 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if runtimeFailure != "" {
 		return operation.Result{}, failure(string(runtimeFailure), nil)
 	}
+	if err := ValidateDocumentURI(SessionWorkspace(e.runtime, input.SessionID, input.Generation), input.URI); err != nil {
+		return operation.Result{}, failure(operation.FailureInvalidInput, err)
+	}
 	if input.Relations != nil {
 		return e.executeComposition(parent, op.Input, input, metadata)
 	}
@@ -133,6 +137,28 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return operation.Result{}, failure(operation.FailureInternal, err)
 	}
 	return operation.Result{Artifact: append(artifact, '\n')}, nil
+}
+
+// SessionWorkspace returns the retained workspace identity for one exact session generation.
+func SessionWorkspace(runtime Runtime, id string, generation uint64) string {
+	for _, record := range runtime.Records() {
+		if record.SessionID == id && record.Generation == generation {
+			return record.Profile.Workspace().String()
+		}
+	}
+	return ""
+}
+
+// ValidateDocumentURI rejects the selected workspace root where a document URI is required.
+func ValidateDocumentURI(workspace, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "file" || workspace == "" {
+		return nil
+	}
+	if filepath.Clean(u.Path) == filepath.Clean(workspace) {
+		return errors.New("uri must identify an exact document; workspace-root URI is invalid")
+	}
+	return nil
 }
 
 // ResolveSession preserves explicit generations and infers only one current READY generation.
