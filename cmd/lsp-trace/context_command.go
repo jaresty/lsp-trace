@@ -191,7 +191,12 @@ func runContext(args []string, stdout, stderr io.Writer) int {
 	}
 	result, failure := transientstructural.Execute(ctx, manager, request)
 	if failure != nil {
-		raw, _ := json.Marshal(failure)
+		raw, _ := json.Marshal(struct {
+			Phase      transientstructural.Phase                 `json:"phase"`
+			State      transientstructural.TerminalState         `json:"state"`
+			Accounting transientstructural.Accounting            `json:"accounting"`
+			Diagnostic *transientstructural.TruncationDiagnostic `json:"diagnostic,omitempty"`
+		}{failure.Phase, failure.State, failure.Accounting, transientstructural.DiagnoseTruncation(request, failure)})
 		fmt.Fprintln(stderr, string(raw))
 		return 2
 	}

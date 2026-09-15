@@ -193,6 +193,9 @@ func TestFutureStructuralPhaseStateMatrixAndEnvelopeExclusivity(t *testing.T) {
 		}
 		for _, state := range allStates {
 			v := map[string]any{"envelope_version": "1", "envelope_schema_id": futureFailureID, "tool": "lsp_trace_v1_structural_context", "request_id": futureRequestID, "outcome": "DOMAIN_ERROR", "operation_status": "FAILED", "isError": true, "phase": phase, "state": state, "error": map[string]any{"code": state}}
+			if state == "TRUNCATED" {
+				v["diagnostic"] = map[string]any{"reason": "NODE_BOUND", "node_limit": 100, "nodes_observed": 101, "nodes_admitted": 100, "frontier_unexpanded": 1, "suggestions": []any{"NARROW_OUTGOING_IMPACT", "RESOLVE_TARGET_ONLY", "RAISE_MAX_NODES"}}
+			}
 			validateFuture(t, s[futureFailureID], v, allowed[state])
 		}
 	}

@@ -81,6 +81,14 @@ func TestStructuralContextOperation35PreservesTypedDomainFailures(t *testing.T) 
 				if call.StructuredContent.Phase != string(phase) || call.StructuredContent.State != string(state) {
 					t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_PRESERVES_TYPED_DOMAIN_FAILURE: %+v", call.StructuredContent)
 				}
+				if state == transientstructural.StateTruncated {
+					raw, _ := json.Marshal(call.StructuredContent)
+					var projected map[string]any
+					_ = json.Unmarshal(raw, &projected)
+					if projected["diagnostic"] == nil {
+						t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TRUNCATION_ACTIONABLE: %s", raw)
+					}
+				}
 			})
 		}
 	}

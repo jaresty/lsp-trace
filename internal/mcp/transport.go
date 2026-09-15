@@ -78,6 +78,13 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralContextDomainErrorID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
 
+func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
+	env := structuralContextDomainErrorEnvelope(tool, string(domain.Phase), string(domain.State))
+	limit, _ := args["max_nodes"].(float64)
+	env.Diagnostic = transientstructural.DiagnoseTruncation(transientstructural.Request{MaxNodes: int(limit)}, domain)
+	return env
+}
+
 type callParams struct {
 	Name      string          `json:"name"`
 	Arguments map[string]any  `json:"arguments"`
@@ -96,6 +103,7 @@ type envelope struct {
 	Diagnostics             []string             `json:"diagnostics,omitempty"`
 	Result                  any                  `json:"result,omitempty"`
 	Error                   any                  `json:"error,omitempty"`
+	Diagnostic              any                  `json:"diagnostic,omitempty"`
 	Phase                   string               `json:"phase,omitempty"`
 	State                   string               `json:"state,omitempty"`
 	Content                 *string              `json:"content,omitempty"`
@@ -336,6 +344,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if tool.ExecutorFamily == StructuralContextExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
+				if domain.State == transientstructural.StateTruncated {
+					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
+				}
 				return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, string(domain.Phase), string(domain.State)))
 			}
 			state := failure.Code
