@@ -52,6 +52,10 @@ type SelectorRuntime interface {
 	ResolveSessionSelector(string, uint64) (string, uint64, session.Failure)
 }
 
+type DeriveRuntime interface {
+	DeriveWorkspace(context.Context, sessionruntime.DeriveWorkspaceRequest) sessionruntime.DeriveWorkspaceResult
+}
+
 type Service struct{ runtime Runtime }
 
 type SessionResolution struct {
@@ -87,6 +91,18 @@ type OperationSnapshot struct {
 }
 
 func New(runtime Runtime) *Service { return &Service{runtime: runtime} }
+
+func (s *Service) DeriveWorkspace(ctx context.Context, id string, generation uint64, workspaceURI string) (sessionruntime.DeriveWorkspaceResult, Failure) {
+	runtime, ok := s.runtime.(DeriveRuntime)
+	if !ok {
+		return sessionruntime.DeriveWorkspaceResult{}, FailureInternal
+	}
+	result := runtime.DeriveWorkspace(ctx, sessionruntime.DeriveWorkspaceRequest{SessionID: id, Generation: generation, WorkspaceURI: workspaceURI})
+	if result.Failure != "" {
+		return sessionruntime.DeriveWorkspaceResult{}, mapFailure(result.Failure)
+	}
+	return result, FailureNone
+}
 
 func (s *Service) List() ListSnapshot {
 	records := append([]sessionruntime.Record(nil), s.runtime.Records()...)
@@ -220,6 +236,8 @@ func mapFailure(failure session.Failure) Failure {
 		return FailureReapIncomplete
 	case session.LifecycleConflict:
 		return FailureLifecycleConflict
+	case session.Failure("SESSION_NOT_READY"):
+		return FailureSessionNotReady
 	default:
 		return FailureInternal
 	}

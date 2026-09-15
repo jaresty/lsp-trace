@@ -53,6 +53,7 @@ var adr0004OperationNumbers = []string{
 	"lsp_trace_v1_context_symbol_churn",         // 39
 	"lsp_trace_v1_context_symbol_churn_capture", // 40
 	"lsp_trace_v1_structural_context_symbol",    // 41
+	"lsp_session_v1_derive_workspace",           // 42
 }
 
 var adr0004DefaultCurrent = []string{
@@ -73,7 +74,7 @@ var adr0004DefaultCurrent = []string{
 }
 
 var adr0004AdvancedOnly = []string{
-	"lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
+	"lsp_session_v1_derive_workspace", "lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
 	"lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking",
 	"lsp_trace_v1_custody_execute", "lsp_trace_v1_export_retained_calls", "lsp_trace_v1_filter", "lsp_trace_v1_inspect",
 	"lsp_trace_v1_program_c_compose", "lsp_trace_v1_program_c_instability", "lsp_trace_v1_schema_get", "lsp_trace_v1_validate",
@@ -89,8 +90,8 @@ var adr0004HiddenLegacy = []string{
 
 func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *testing.T) {
 	r := NewRegistry(false)
-	if len(adr0004OperationNumbers) != 41 {
-		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 41", len(adr0004OperationNumbers))
+	if len(adr0004OperationNumbers) != 42 {
+		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 42", len(adr0004OperationNumbers))
 	}
 	if adr0004OperationNumbers[30] != "lsp_trace_v1_program_c_compose" || adr0004OperationNumbers[31] != "lsp_trace_v1_program_c_instability" {
 		t.Fatalf("REGRESSION: historical operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
@@ -124,8 +125,8 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *
 		operation := properties["operation"].(map[string]any)["const"].(string)
 		seen[operation] = true
 	}
-	if len(seen) != 40 {
-		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 40", len(seen))
+	if len(seen) != 41 {
+		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 41", len(seen))
 	}
 	for _, name := range adr0004OperationNumbers {
 		if name != "lsp_trace_v1_execute" && !seen[name] {

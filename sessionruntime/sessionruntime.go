@@ -4,17 +4,21 @@
 package sessionruntime
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -134,6 +138,8 @@ type Config struct {
 	// DocumentFinalHook is an optional deterministic test hook invoked after
 	// source preparation and before the final READY/generation check.
 	DocumentFinalHook func()
+	// GitWorktreeList is an internal test seam; production runs bounded git worktree list --porcelain.
+	GitWorktreeList func(context.Context, string) ([]byte, error)
 	// Unexported seams keep deterministic fixtures inside this package; callers
 	// cannot provide bytes that appear directly in a production attempt ID.
 	startupAttemptEntropy   func(uint64) []byte
@@ -150,6 +156,19 @@ type StartRequest struct {
 	RelationProviders []string
 	Deadline          time.Time
 }
+type DeriveWorkspaceRequest struct {
+	SessionID    string
+	Generation   uint64
+	WorkspaceURI string
+}
+type DeriveWorkspaceResult struct {
+	SessionID    string          `json:"session_id"`
+	Generation   uint64          `json:"generation"`
+	State        session.State   `json:"state"`
+	WorkspaceURI string          `json:"workspace_uri"`
+	Failure      session.Failure `json:"-"`
+}
+
 type StartResult struct {
 	AttemptID            manageddiagnostic.StartupAttemptID
 	PublicDetail         string
@@ -861,6 +880,7 @@ type Manager struct {
 	diagnostics             *manageddiagnostic.Store
 	seedRevisionAuthority   seedbinding.RevisionAuthority
 	documentFinalHook       func()
+	gitWorktreeList         func(context.Context, string) ([]byte, error)
 	startupAttemptNonce     [16]byte
 	startupAttemptEntropy   func(uint64) []byte
 	startupAttemptSeq       uint64
@@ -907,7 +927,148 @@ func New(c Config) (*Manager, error) {
 	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
 		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
+	gitList := c.GitWorktreeList
+	if gitList == nil {
+		gitList = boundedGitWorktreeList
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
+}
+
+const maxGitWorktreeBytes = 1 << 20
+
+func boundedGitWorktreeList(ctx context.Context, parent string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", parent, "worktree", "list", "--porcelain")
+	var out bytes.Buffer
+	cmd.Stdout = &limitedWriter{w: &out, remaining: maxGitWorktreeBytes}
+	cmd.Stderr = &limitedWriter{w: io.Discard, remaining: 64 << 10}
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+type limitedWriter struct {
+	w         io.Writer
+	remaining int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if len(p) > w.remaining {
+		return 0, fmt.Errorf("bounded command output exceeded")
+	}
+	n, err := w.w.Write(p)
+	w.remaining -= n
+	return n, err
+}
+
+func parseWorktreeList(raw []byte) ([]string, error) {
+	if len(raw) == 0 || len(raw) > maxGitWorktreeBytes || raw[len(raw)-1] != '\n' {
+		return nil, fmt.Errorf("malformed or truncated git worktree output")
+	}
+	blocks := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n\n")
+	paths := make([]string, 0, len(blocks))
+	seen := map[string]bool{}
+	for _, block := range blocks {
+		lines := strings.Split(block, "\n")
+		if len(lines) < 2 || !strings.HasPrefix(lines[0], "worktree ") {
+			return nil, fmt.Errorf("malformed git worktree record")
+		}
+		p := strings.TrimPrefix(lines[0], "worktree ")
+		if p == "" || !filepath.IsAbs(p) || filepath.Clean(p) != p || seen[p] {
+			return nil, fmt.Errorf("ambiguous git worktree identity")
+		}
+		seen[p] = true
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
+func canonicalLocalWorkspaceURI(raw string) (string, string, error) {
+	u, err := url.ParseRequestURI(raw)
+	if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", "", fmt.Errorf("workspace_uri must be a local file URI")
+	}
+	p := filepath.Clean(u.Path)
+	canonical := (&url.URL{Scheme: "file", Path: p}).String()
+	if !filepath.IsAbs(p) || raw != canonical {
+		return "", "", fmt.Errorf("workspace_uri is not canonical")
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil || resolved != p {
+		return "", "", fmt.Errorf("workspace identity is unavailable or symlinked")
+	}
+	return p, canonical, nil
+}
+
+// DeriveWorkspace synchronously derives a READY sibling session from private parent authority.
+func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceRequest) DeriveWorkspaceResult {
+	m.mu.Lock()
+	parent := m.sessions[req.SessionID]
+	if parent == nil {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.SessionNotFound}
+	}
+	if parent.record.Generation != req.Generation {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.StaleGeneration}
+	}
+	if parent.record.State != session.Ready || parent.protocolOwned {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.Failure("SESSION_NOT_READY")}
+	}
+	parentWorkspace := parent.record.Profile.Workspace().String()
+	if parent.spec.Dir != parentWorkspace {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
+	}
+	template := StartRequest{Profile: parent.record.Profile, Process: managedprocess.Spec{Path: parent.spec.Path, Args: append([]string(nil), parent.spec.Args...), Dir: parent.spec.Dir, Env: append([]string(nil), parent.spec.Env...)}, LanguageID: parent.languageID, RelationProviders: append([]string(nil), parent.record.Routing.RelationProviders...), ProviderIdentity: parent.providerIdentity}
+	m.mu.Unlock()
+
+	target, canonicalURI, err := canonicalLocalWorkspaceURI(req.WorkspaceURI)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI")}
+	}
+	raw, err := m.gitWorktreeList(ctx, parentWorkspace)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_QUERY_FAILED")}
+	}
+	paths, err := parseWorktreeList(raw)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_INVALID")}
+	}
+	parentSeen, targetCount := false, 0
+	for _, p := range paths {
+		parentSeen = parentSeen || p == parentWorkspace
+		if p == target {
+			targetCount++
+		}
+	}
+	if !parentSeen || targetCount != 1 || target == parentWorkspace {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+	}
+	m.mu.Lock()
+	current := m.sessions[req.SessionID]
+	ready := current == parent && current.record.Generation == req.Generation && current.record.State == session.Ready && !current.protocolOwned
+	m.mu.Unlock()
+	if !ready {
+		return DeriveWorkspaceResult{Failure: session.LifecycleConflict}
+	}
+	profile, err := template.Profile.WithWorkspace(target)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
+	}
+	template.Profile, template.Process.Dir = profile, target
+	started := m.Start(ctx, template)
+	if started.Failure != "" {
+		return DeriveWorkspaceResult{Failure: started.Failure}
+	}
+	pending := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Time{})
+	readyResult, found := m.WaitReadiness(ctx, pending.ID)
+	if !found || readyResult.State != ReadinessReady || readyResult.Failure != "" {
+		_ = m.Stop(context.Background(), started.SessionID, "derive-readiness-cleanup")
+		return DeriveWorkspaceResult{Failure: session.InitializationFailure}
+	}
+	return DeriveWorkspaceResult{SessionID: started.SessionID, Generation: started.Generation, State: session.Ready, WorkspaceURI: canonicalURI}
 }
 
 // WorkspaceRoot returns the validated root for one exact live session generation.

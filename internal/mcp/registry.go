@@ -193,7 +193,7 @@ var advancedToolNames = map[string]struct{}{
 	mcpcontract.ContextChurnTool:              {},
 	mcpcontract.ContextSymbolChurnTool:        {},
 	mcpcontract.ContextSymbolChurnCaptureTool: {},
-	"lsp_session_v1_list":                     {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	"lsp_session_v1_derive_workspace":         {}, "lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
 	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
@@ -204,7 +204,7 @@ var advancedToolNames = map[string]struct{}{
 }
 
 var compactToolNames = map[string]struct{}{
-	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	"lsp_session_v1_derive_workspace": {}, "lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_incoming": {},
 	"lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_slice": {},
 	mcpcontract.StructuralContextSymbolTool: {},
@@ -261,7 +261,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
 	manifest = mcpcontract.WithContextSymbolChurnCapture(mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))))))
-	manifest = mcpcontract.WithStructuralContextSymbol(manifest)
+	manifest = mcpcontract.WithDeriveWorkspace(mcpcontract.WithStructuralContextSymbol(manifest))
 	descriptions := map[string]string{
 		mcpcontract.ContextChurnTool:              "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
 		mcpcontract.ContextSymbolChurnTool:        "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
@@ -523,6 +523,8 @@ func completeToolDescription(tool Tool) string {
 
 func lifecycleDescription(name string) string {
 	switch name {
+	case "lsp_session_v1_derive_workspace":
+		return "Derive a READY managed language-server session for one exact registered Git worktree by privately inheriting a READY parent launch template"
 	case "lsp_session_v1_list":
 		return "Discover host-provisioned local language-server sessions and exact generations"
 	case "lsp_session_v1_status":
@@ -602,6 +604,11 @@ func lifecycleInputSchema(name string) map[string]any {
 			"generation": map[string]any{"type": "integer", "minimum": 1},
 		}
 		required = []any{"session_id"}
+		if name == "lsp_session_v1_derive_workspace" {
+			properties["workspace_uri"] = map[string]any{"type": "string", "minLength": 1, "format": "uri"}
+			required = []any{"session_id", "generation", "workspace_uri"}
+			return map[string]any{"type": "object", "additionalProperties": false, "properties": properties, "required": required}
+		}
 		if name == "lsp_session_v1_status" {
 			properties["detail"] = map[string]any{"type": "string", "enum": []any{"compact", "full"}}
 		}

@@ -17,7 +17,7 @@ func TestStructuralContextSymbolOperation41RegistryContract(t *testing.T) {
 	if !aliasOK || alias.Name != structuralContextSymbolTool {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_OPERATION41_REGISTERED_HIDDEN_ALIAS: alias missing")
 	}
-	if len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 11 {
+	if len(full.Tools()) != 42 || len(full.Advertised()) != 42 || len(compact.Tools()) != 42 || len(compact.Advertised()) != 12 {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_COUNTS_AND_GATEWAY_BRANCH: full=%d/%d compact=%d/%d", len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	compactTool, compactOK := compact.ResolveCanonical(structuralContextSymbolTool)

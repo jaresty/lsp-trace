@@ -48,11 +48,12 @@ type EnvironmentReference struct{ value string }
 // Profile is immutable and comparable. It contains identity only: no command,
 // environment value, credential, capability, or permission can cross this API.
 type Profile struct {
-	trustDomain string
-	workspace   Workspace
-	environment EnvironmentReference
-	profileName string
-	key         sessionkey.Key
+	trustDomain   string
+	workspace     Workspace
+	environment   EnvironmentReference
+	profileName   string
+	optionsDigest string
+	key           sessionkey.Key
 }
 
 func Validate(selector Selector) (ValidatedSelector, error) {
@@ -95,7 +96,7 @@ func Resolve(selector ValidatedSelector) Profile {
 	})
 	return Profile{
 		trustDomain: selector.trustDomain, workspace: workspace,
-		environment: environment, profileName: selector.profile, key: key,
+		environment: environment, profileName: selector.profile, optionsDigest: selector.optionsDigest, key: key,
 	}
 }
 
@@ -105,6 +106,17 @@ func (profile Profile) ProfileName() string               { return profile.profi
 func (profile Profile) SessionKey() sessionkey.Key        { return profile.key }
 func (workspace Workspace) String() string                { return workspace.value }
 func (reference EnvironmentReference) String() string     { return reference.value }
+
+// WithWorkspace preserves the private profile identity while replacing only its workspace.
+func (profile Profile) WithWorkspace(workspace string) (Profile, error) {
+	canonical, err := canonicalWorkspace(workspace)
+	if err != nil {
+		return Profile{}, err
+	}
+	profile.workspace = Workspace{value: canonical}
+	profile.key = sessionkey.Derive(sessionkey.Material{TrustDomain: profile.trustDomain, Workspace: canonical, Profile: profile.profileName, EnvironmentReference: profile.environment.value, OptionsDigest: profile.optionsDigest})
+	return profile, nil
+}
 
 func canonicalRequired(name, value string) (string, error) {
 	if !utf8.ValidString(value) {

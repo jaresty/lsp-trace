@@ -467,7 +467,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		code, diagnostics := normalizeDomainFailure(failure)
 		if tool.ExecutorFamily == LifecycleExecutorFamily {
 			code = failure.Code
-			return bindLifecycleEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+			env := domainErrorEnvelope(tool.Name, requestID, code, diagnostics)
+			if tool.Name == mcpcontract.DeriveWorkspaceTool {
+				env.EnvelopeSchemaID = mcpcontract.DeriveWorkspaceDomainErrorID
+			}
+			return bindLifecycleEnvelope(base, tool, env)
 		}
 		if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily {
 			code = failure.Code
@@ -547,8 +551,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, projected)
 	}
 	if tool.ExecutorFamily == LifecycleExecutorFamily {
+		schemaID := resultEnvelopeSchemaID
+		if tool.Name == mcpcontract.DeriveWorkspaceTool {
+			schemaID = mcpcontract.DeriveWorkspaceSuccessID
+		}
 		return bindLifecycleEnvelope(base, tool, envelope{
-			EnvelopeVersion: "1", EnvelopeSchemaID: resultEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+			EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID,
 			Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", Result: opResult.Value,
 		})
 	}
@@ -1174,6 +1182,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("context_symbol_churn_capture")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
+	case mcpcontract.DeriveWorkspaceTool:
+		return operation.Name("session_derive_workspace")
 	case "lsp_session_v1_list":
 		return operation.Name("session_list")
 	case "lsp_session_v1_status":

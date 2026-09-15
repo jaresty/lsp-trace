@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	OperationDerive  operation.Name = "session_derive_workspace"
 	OperationList    operation.Name = "session_list"
 	OperationStatus  operation.Name = "session_status"
 	OperationStop    operation.Name = "session_stop"
@@ -101,6 +102,23 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 		return operation.Result{}, lifecycleFailure(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	switch request.Name {
+	case OperationDerive:
+		var input struct {
+			SessionID    string `json:"session_id"`
+			Generation   uint64 `json:"generation"`
+			WorkspaceURI string `json:"workspace_uri"`
+		}
+		if err := decodeClosed(request.Input, &input); err != nil || input.SessionID == "" || input.Generation == 0 || input.WorkspaceURI == "" {
+			if err == nil {
+				err = fmt.Errorf("session_id, generation, and workspace_uri are required")
+			}
+			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, err)
+		}
+		result, failure := e.service.DeriveWorkspace(ctx, input.SessionID, input.Generation, input.WorkspaceURI)
+		if failure != FailureNone {
+			return operation.Result{}, lifecycleFailure(string(failure), errors.New(string(failure)))
+		}
+		return operation.Result{Value: result}, nil
 	case OperationList:
 		var input struct {
 			URI    string `json:"uri,omitempty"`

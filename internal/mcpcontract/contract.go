@@ -18,6 +18,7 @@ import (
 //go:embed testdata/schemas/input-capabilities.v1.schema.json testdata/schemas/input-schema-get.v1.schema.json testdata/schemas/input-validate.v1.schema.json testdata/schemas/input-verify.v1.schema.json testdata/schemas/input-inspect.v1.schema.json testdata/schemas/input-filter.v1.schema.json testdata/schemas/input-incoming.v1.schema.json testdata/schemas/input-slice.v1.schema.json testdata/schemas/input-execute.v1.schema.json testdata/schemas/input-reserved.v1.schema.json
 //go:embed testdata/schemas/envelope-result.v1.schema.json testdata/schemas/envelope-artifact.v1.schema.json testdata/schemas/envelope-publication.v1.schema.json testdata/schemas/envelope-compact-publication.v1.schema.json testdata/schemas/envelope-publication-error.v1.schema.json testdata/schemas/envelope-domain-error.v1.schema.json testdata/schemas/envelope-not-implemented.v1.schema.json testdata/schemas/envelope-execute-artifact.v1.schema.json testdata/schemas/envelope-execute-publication.v1.schema.json testdata/schemas/envelope-execute-publication-error.v1.schema.json testdata/schemas/envelope-execute-domain-error.v1.schema.json testdata/schemas/envelope-execute-gateway.v1.schema.json
 //go:embed testdata/schemas/input-export-retained-calls.v1.schema.json testdata/schemas/input-export-retained-relations.v1.schema.json testdata/schemas/envelope-retained-calls-*.schema.json
+//go:embed testdata/operation42schemas/*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-analysis.v1.schema.json testdata/schemas/envelope-bounded-analysis-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-metrics.v1.schema.json testdata/schemas/envelope-bounded-metrics-*.schema.json
 //go:embed testdata/schemas/input-bounded-retained-ranking.v1.schema.json testdata/schemas/envelope-bounded-ranking-*.schema.json
@@ -151,7 +152,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	manifest = WithStructuralContextSymbol(manifest)
+	manifest = WithDeriveWorkspace(WithStructuralContextSymbol(manifest))
 	for _, registration := range WithContextSymbolChurnCapture(WithContextSymbolChurn(WithContextChurn(WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))))))))))).Schemas {
 		if registration.ID != schemaID {
 			continue
@@ -174,7 +175,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 		return err
 	}
 	manifest = WithContextSymbolChurnCapture(WithContextSymbolChurn(WithContextChurn(WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))))))))))))
-	manifest = WithStructuralContextSymbol(manifest)
+	manifest = WithDeriveWorkspace(WithStructuralContextSymbol(manifest))
 	compiled, err := compileSchema(manifest, schemaID)
 	if err != nil {
 		return err

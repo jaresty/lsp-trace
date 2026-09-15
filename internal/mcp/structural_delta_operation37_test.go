@@ -16,7 +16,7 @@ func TestStructuralDeltaOperation37AppendOnlyContract(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	_, ok := full.ResolveCanonical(mcpcontract.StructuralDeltaTool)
-	if !ok || len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 11 {
+	if !ok || len(full.Tools()) != 42 || len(full.Advertised()) != 42 || len(compact.Tools()) != 42 || len(compact.Advertised()) != 12 {
 		t.Fatalf("ASSERT_STRUCTURAL_DELTA_OPERATION37_APPEND_ONLY: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.ResolveCanonical(mcpcontract.StructuralDeltaTool); !ok {

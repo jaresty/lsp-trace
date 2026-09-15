@@ -13,6 +13,7 @@ type compactConformanceCase struct {
 
 func compactConformanceCases() []compactConformanceCase {
 	return []compactConformanceCase{
+		{"lsp_session_v1_derive_workspace", map[string]any{"session_id": "missing", "generation": 1, "workspace_uri": "file:///missing"}},
 		{"lsp_session_v1_list", map[string]any{}},
 		{"lsp_session_v1_restart", map[string]any{"session_id": "missing", "caller_id": "test"}},
 		{"lsp_session_v1_status", map[string]any{"session_id": "missing"}},
@@ -29,11 +30,11 @@ func compactConformanceCases() []compactConformanceCase {
 
 func TestCompactDirectToolGeneratedMinimalConformance(t *testing.T) {
 	cases := compactConformanceCases()
-	if len(cases) != 11 {
+	if len(cases) != 12 {
 		t.Fatalf("ASSERT_COMPACT_CASE_DECLARATIONS_EXACT: %d", len(cases))
 	}
 	r := NewRegistryWithProfile(false, ToolProfileCompact)
-	if len(r.Advertised()) != 11 || len(r.tools) != 41 {
+	if len(r.Advertised()) != 12 || len(r.tools) != 42 {
 		t.Fatalf("ASSERT_REGISTRY_COUNTS: advertised=%d operations=%d", len(r.Advertised()), len(r.tools))
 	}
 	for _, tc := range cases {
