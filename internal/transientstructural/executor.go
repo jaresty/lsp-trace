@@ -267,8 +267,13 @@ func incomingCompleteWithinRequestedDepth(result graph.Result) bool {
 }
 
 func onlyRequestedDepthBoundary(result graph.Result) bool {
-	if !result.Summary.Truncated || len(result.Frontier) == 0 || len(result.Diagnostics) != 0 {
+	if !result.Summary.Truncated || len(result.Frontier) == 0 {
 		return false
+	}
+	for _, diagnostic := range result.Diagnostics {
+		if diagnostic.Phase != "traverse" || diagnostic.Method != "callHierarchy/incomingCalls" || diagnostic.Message != "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE" {
+			return false
+		}
 	}
 	for _, boundary := range result.Frontier {
 		if boundary.Reason != graph.MaxDepth {

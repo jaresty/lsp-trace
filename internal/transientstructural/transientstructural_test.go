@@ -256,6 +256,21 @@ func TestFailedAcquisitionAccountsObservedWithoutAdmission(t *testing.T) {
 	}
 }
 
+func TestRequestedDepthBoundaryAllowsNonFatalCallSiteWarnings(t *testing.T) {
+	result := graph.Result{
+		Summary:     graph.Summary{Complete: false, Truncated: true},
+		Frontier:    []graph.Boundary{{NodeID: "caller", Reason: graph.MaxDepth}},
+		Diagnostics: []graph.Diagnostic{{Phase: "traverse", Method: "callHierarchy/incomingCalls", NodeID: "caller", Message: "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE"}},
+	}
+	if !onlyRequestedDepthBoundary(result) {
+		t.Fatal("ASSERT_WARNING_ONLY_REQUESTED_DEPTH_BOUNDARY_COMPLETE")
+	}
+	result.Terminals = []graph.Boundary{{NodeID: "caller", Reason: graph.InvalidServerResponse}}
+	if onlyRequestedDepthBoundary(result) {
+		t.Fatal("ASSERT_NON_DEPTH_TERMINAL_STILL_REJECTED")
+	}
+}
+
 func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 	legal := map[Phase][]TerminalState{
 		PhasePreflight:     {StateUnsupported, StateAmbiguousTarget, StateTargetNotFound, StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged, StateInvalidServerResponse},
