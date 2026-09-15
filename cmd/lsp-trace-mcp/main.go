@@ -442,6 +442,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.StructuralContextExecutorFamily:   newStructuralContextExecutor(selected),
 			mcp.StructuralContextV2ExecutorFamily: newStructuralContextExecutor(selected),
 			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
+			mcp.ContextChurnExecutorFamily:        contextChurnExecutor{},
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

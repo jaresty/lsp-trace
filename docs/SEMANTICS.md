@@ -14,6 +14,8 @@ The output schema identity is `lsp-trace.vcs-churn-sidecar.v1`. Its `graph_artif
 
 `history_scope_complete=COMPLETE` means only that the requested paths were successfully evaluated over the resolved Git revision interval. It does not make the source graph, repository history, rename lineage, or symbol attribution complete. The sidecar keeps `authority=0` and `source_graph_complete=UNKNOWN`. It cannot add or modify graph nodes, relationships, call sites, coupling, centrality, or server-reported `CALLS`; consumers may use churn to prioritize navigation but not to infer defects, ownership, feature identity, runtime behavior, or architectural boundaries.
 
+MCP operation `lsp_trace_v1_context_churn` carries the exact V2 artifact as bounded JSON text rather than a decoded object, preserving the byte identity committed by `graph_artifact_digest`. Its closed input also contains the absolute Git top-level, two revision expressions, and an optional `timeout_ms` bounded to 1–60,000. Direct invocation and `lsp_trace_v1_execute` use one executor and envelope contract. The operation offers no publication, custody, hydration, retained-input, provider, environment, command, or output-selector controls; Git output remains capped internally at 16 MiB, rename inference remains disabled, and failures produce no partial sidecar.
+
 ## Named server profile resolution
 
 Profiles are opt-in: only an explicit `--profile NAME` selects one, for both `incoming` and `slice`. `language_ids`, file extensions, and seed paths never select a profile. With no profile, config discovery is skipped and legacy command flags behave unchanged.

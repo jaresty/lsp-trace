@@ -86,6 +86,10 @@ func structuralDeltaDomainErrorEnvelope(requestID, phase, state, message string)
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralDeltaDomainErrorID, Tool: mcpcontract.StructuralDeltaTool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
 }
 
+func contextChurnDomainErrorEnvelope(requestID, phase, state, message string) envelope {
+	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ContextChurnDomainErrorID, Tool: mcpcontract.ContextChurnTool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
+}
+
 func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
 	env := structuralContextDomainErrorEnvelope(tool, string(domain.Phase), string(domain.State))
 	limit, _ := args["max_nodes"].(float64)
@@ -349,6 +353,21 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
+		if tool.ExecutorFamily == ContextChurnExecutorFamily {
+			phase, state := "HISTORY", "GIT_FAILED"
+			if failure.Code == operation.FailureInvalidInput {
+				phase, state = "DECODE", "INVALID_INPUT"
+			} else if failure.Code == "TIMEOUT" {
+				state = "TIMEOUT"
+			} else if failure.Code == "RESOURCE_LIMIT" {
+				state = "RESOURCE_LIMIT"
+			}
+			message := state
+			if failure.Err != nil {
+				message = failure.Err.Error()
+			}
+			return bindEnvelope(base, tool, contextChurnDomainErrorEnvelope(requestID, phase, state, message))
+		}
 		if tool.ExecutorFamily == StructuralDeltaExecutorFamily {
 			phase := "COMPARE"
 			if failure.Code == "INVALID_INPUT" {
@@ -410,6 +429,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			}
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
+	}
+	if tool.ExecutorFamily == ContextChurnExecutorFamily {
+		var result map[string]any
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextChurnResultID, opResult.Artifact) != nil {
+			return bindEnvelope(base, tool, contextChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
+		}
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ContextChurnSuccessID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result})
 	}
 	if tool.ExecutorFamily == StructuralDeltaExecutorFamily {
 		var result map[string]any
@@ -804,6 +830,8 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
 	case EnvelopePolicyStructuralContextV2:
 		return mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw)
+	case EnvelopePolicyContextChurn:
+		return mcpcontract.ValidateContextChurnEnvelopeExclusive(raw)
 	default:
 		return mcpcontract.ValidateEnvelopeExclusive(raw)
 	}
@@ -1055,6 +1083,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("structural_context_v2")
 	case mcpcontract.StructuralDeltaTool:
 		return operation.Name("structural_delta")
+	case mcpcontract.ContextChurnTool:
+		return operation.Name("context_churn")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

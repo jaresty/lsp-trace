@@ -30,6 +30,9 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 	return &c
 }
 func readPublicContractSchema(name string) ([]byte, error) {
+	if raw, ok, err := contextChurnSchema(name); ok {
+		return raw, err
+	}
 	if raw, ok, err := structuralDeltaSchema(name); ok {
 		return raw, err
 	}

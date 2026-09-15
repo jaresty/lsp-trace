@@ -203,7 +203,7 @@ func TestCompactResponsePublishesFullArtifactWithUsabilityMetadata(t *testing.T)
 	if compact["progress"] != "completed" {
 		t.Fatalf("%s: %v", progress, compact)
 	}
-	if got := len(server.Registry.Advertised()); got != 37 {
+	if got := len(server.Registry.Advertised()); got != 38 {
 		t.Fatalf("%s: got %d", cardinality, got)
 	}
 }
@@ -213,7 +213,7 @@ func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
 		compat      = "ASSERT_TRAVERSAL_DEFAULT_FULL_BACKWARD_COMPATIBLE"
 		custody     = "ASSERT_TRAVERSAL_COMPACT_PUBLISHES_EXACT_FULL_BYTES"
 		summary     = "ASSERT_TRAVERSAL_COMPACT_RETURNS_RECEIPT_AND_SUMMARY"
-		cardinality = "ASSERT_TRAVERSAL_COMPACT_PRESERVES_THIRTY_SEVEN_TOOLS"
+		cardinality = "ASSERT_TRAVERSAL_COMPACT_PRESERVES_THIRTY_EIGHT_TOOLS"
 	)
 	for _, assertion := range []string{compat, custody, summary, cardinality} {
 		t.Log("ASSERTION: " + assertion)
@@ -261,7 +261,7 @@ func TestTraversalCompactResponsePublishesFullArtifact(t *testing.T) {
 			if err != nil || !bytes.Equal(published, artifact) {
 				t.Fatalf("%s: bytes=%q err=%v", custody, published, err)
 			}
-			if got := len(server.Registry.Advertised()); got != 37 {
+			if got := len(server.Registry.Advertised()); got != 38 {
 				t.Fatalf("%s: got %d", cardinality, got)
 			}
 		})
@@ -305,7 +305,7 @@ func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *tes
 		fullAssertion        = "ASSERT_REAL_TRAVERSAL_FULL_ENVELOPE_EXCLUSIVE"
 		failureAssertion     = "ASSERT_REAL_TRAVERSAL_FAILURE_DIAGNOSTIC_ENVELOPE_EXCLUSIVE"
 		compactAssertion     = "ASSERT_REAL_TRAVERSAL_COMPACT_IMMUTABLE_PUBLICATION"
-		cardinalityAssertion = "ASSERT_REAL_TRAVERSAL_CURRENT37_PRESERVES_HISTORICAL_TOOLS"
+		cardinalityAssertion = "ASSERT_REAL_TRAVERSAL_CURRENT38_PRESERVES_HISTORICAL_TOOLS"
 	)
 	for _, assertion := range []string{fullAssertion, failureAssertion, compactAssertion, cardinalityAssertion} {
 		t.Log("ASSERTION: " + assertion)
@@ -345,7 +345,7 @@ func TestRealTraversalEnvelopesValidateAcrossSuccessFailureAndPublication(t *tes
 	if err := mcpcontract.ValidateEnvelopeExclusive(raw); err != nil {
 		t.Fatalf("%s: %v envelope=%s", failureAssertion, err, raw)
 	}
-	if got := len(registry.Advertised()); got != 37 {
+	if got := len(registry.Advertised()); got != 38 {
 		t.Fatalf("%s: got %d", cardinalityAssertion, got)
 	}
 }
@@ -484,7 +484,7 @@ func TestServerShutdownCancelsInFlightExecutor(t *testing.T) {
 }
 
 func TestCapabilitiesDispatch(t *testing.T) {
-	const capabilityAssertion = "capabilities returns immutable metadata for all 37 current canonical tools"
+	const capabilityAssertion = "capabilities returns immutable metadata for all 38 current canonical tools"
 	t.Log("ASSERTION: " + capabilityAssertion)
 	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_capabilities","arguments":{}}}` + "\n"
 	got := runMessages(t, input)
@@ -492,7 +492,7 @@ func TestCapabilitiesDispatch(t *testing.T) {
 	capEnvelope := capCall["structuredContent"].(map[string]any)
 	capResult := capEnvelope["result"].(map[string]any)
 	tools := capResult["tools"].([]any)
-	if len(tools) != 37 {
+	if len(tools) != 38 {
 		t.Errorf("%s: got %d tools", capabilityAssertion, len(tools))
 	}
 	for _, raw := range tools {
@@ -604,6 +604,7 @@ func TestRegistryAssignsSpecializedEnvelopePolicies(t *testing.T) {
 		mcpcontract.StructuralContextTool:    EnvelopePolicyStructuralContext,
 		mcpcontract.StructuralContextV2Tool:  EnvelopePolicyStructuralContextV2,
 		mcpcontract.StructuralDeltaTool:      EnvelopePolicyStructuralDelta,
+		mcpcontract.ContextChurnTool:         EnvelopePolicyContextChurn,
 		"lsp_trace_v2_verify_retained_calls": EnvelopePolicyVerifyRetainedCallsV2,
 	}
 	for name, want := range checks {
@@ -758,7 +759,7 @@ func TestSchemaGetRetrievesAncillaryFullAndCompact(t *testing.T) {
 
 func TestTransportContract(t *testing.T) {
 	const transportAssertion = "stdio JSON-RPC emits one response per request with no alternate transport"
-	const listAssertion = "tools/list advertises the 37 current canonical names"
+	const listAssertion = "tools/list advertises the 38 current canonical names"
 	const bindingAssertion = "tools/call binds one canonical operation envelope in structuredContent and one equal text content item"
 	const unknownAssertion = "unknown tool calls use native MCP unknown-tool errors without an operation envelope"
 	for _, a := range []string{transportAssertion, listAssertion, bindingAssertion, unknownAssertion} {
@@ -777,7 +778,7 @@ func TestTransportContract(t *testing.T) {
 	}
 	result, _ := got[1]["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 37 {
+	if len(tools) != 38 {
 		t.Errorf("%s: got %d tools", listAssertion, len(tools))
 	}
 	call, _ := got[2]["result"].(map[string]any)

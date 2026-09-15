@@ -28,11 +28,11 @@ func TestCapabilitiesDescribeHostProvisionedBootstrapBoundary(t *testing.T) {
 		if !reflect.DeepEqual(provisioning["discovery_sequence"], wantSequence) {
 			t.Fatalf("ASSERT_BOOTSTRAP_CAPABILITIES_SEQUENCE[%s]: %#v", profile, provisioning["discovery_sequence"])
 		}
-		wantAdvertised := 37
+		wantAdvertised := 38
 		if profile == ToolProfileCompact {
 			wantAdvertised = 10
 		}
-		if len(registry.Advertised()) != wantAdvertised || len(registry.Tools()) != 37 {
+		if len(registry.Advertised()) != wantAdvertised || len(registry.Tools()) != 38 {
 			t.Fatalf("ASSERT_BOOTSTRAP_GUIDANCE_PROFILE_NEUTRAL[%s]: advertised=%d dispatchable=%d", profile, len(registry.Advertised()), len(registry.Tools()))
 		}
 	}
