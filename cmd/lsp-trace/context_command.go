@@ -25,6 +25,7 @@ import (
 
 type contextConfig struct {
 	workspace, server, profile, configPath, languageID, at, file, symbol string
+	outputVersion                                                        string
 	serverArgs, serverEnv                                                stringsFlag
 	machine                                                              bool
 	line, character                                                      uint32
@@ -35,12 +36,13 @@ type contextConfig struct {
 }
 
 func parseContext(args []string) (contextConfig, error) {
-	c := contextConfig{upDepth: 2, downDepth: 2, maxNodes: 100, maxMessages: int(transientstructuralresult.DefaultMaxMessages), maxBytes: int64(transientstructuralresult.DefaultMaxBytes), timeout: 5 * time.Second, requestTimeout: time.Second, analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisNeighborhood}}
+	c := contextConfig{outputVersion: "v1", upDepth: 2, downDepth: 2, maxNodes: 100, maxMessages: int(transientstructuralresult.DefaultMaxMessages), maxBytes: int64(transientstructuralresult.DefaultMaxBytes), timeout: 5 * time.Second, requestTimeout: time.Second, analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisNeighborhood}}
 	var analysis, direction string
 	var analysisDepth int
 	fs := flag.NewFlagSet("context", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.BoolVar(&c.machine, "machine", false, "emit closed machine JSON")
+	fs.StringVar(&c.outputVersion, "output-version", c.outputVersion, "result contract: v1 or v2")
 	fs.StringVar(&c.workspace, "workspace", "", "workspace path")
 	fs.StringVar(&c.server, "server", "", "language server command")
 	fs.StringVar(&c.profile, "profile", "", "named server profile")
@@ -105,6 +107,12 @@ func parseContext(args []string) (contextConfig, error) {
 		}
 	default:
 		return c, errors.New("invalid analysis")
+	}
+	if c.outputVersion != "v1" && c.outputVersion != "v2" {
+		return c, errors.New("invalid output version")
+	}
+	if c.outputVersion == "v2" && c.analysis.Kind != transientstructural.AnalysisNeighborhood {
+		return c, errors.New("context output v2 currently requires neighborhood analysis")
 	}
 	q := transientstructuralresult.Request{Generation: 1, DownDepth: uint64(c.downDepth), UpDepth: uint64(c.upDepth), MaxNodes: uint64(c.maxNodes), TimeoutMS: uint64(c.timeout.Milliseconds()), RequestTimeoutMS: uint64(c.requestTimeout.Milliseconds()), MaxMessages: uint64(c.maxMessages), MaxBytes: uint64(c.maxBytes), Analysis: transientstructuralresult.AnalysisRequest{Kind: string(c.analysis.Kind), Direction: string(c.analysis.Direction), Depth: uint64(c.analysis.MaxDepth)}}
 	if _, err := transientstructuralresult.NormalizeRequest(q); err != nil {
@@ -205,7 +213,12 @@ func runContext(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "transient identity:", identityFailure)
 		return 1
 	}
-	normalized, err := transientstructuralresult.Project(result, request, transientID)
+	var normalized any
+	if c.outputVersion == "v2" {
+		normalized, err = transientstructuralresult.ProjectV2(result, request, transientID, workspace)
+	} else {
+		normalized, err = transientstructuralresult.Project(result, request, transientID)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, "context normalization:", err)
 		return 1

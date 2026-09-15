@@ -29,6 +29,23 @@ func TestParseContextMachineContract(t *testing.T) {
 	}
 }
 
+func TestParseContextOutputVersionContract(t *testing.T) {
+	base := []string{"--machine", "--workspace", ".", "--server", "gopls", "--at", "main.go:1:1"}
+	if _, err := parseContext(base); err != nil {
+		t.Fatalf("ASSERT_CONTEXT_DEFAULT_OUTPUT_V1: %v", err)
+	}
+	if _, err := parseContext(append(append([]string{}, base...), "--output-version", "v2")); err != nil {
+		t.Fatalf("ASSERT_CONTEXT_EXPLICIT_OUTPUT_V2: %v", err)
+	}
+	if _, err := parseContext(append(append([]string{}, base...), "--output-version", "v3")); err == nil {
+		t.Fatal("ASSERT_CONTEXT_UNKNOWN_OUTPUT_VERSION_REJECTED")
+	}
+	impact := append(append([]string{}, base...), "--output-version", "v2", "--analysis", "impact", "--direction", "outgoing", "--analysis-depth", "1")
+	if _, err := parseContext(impact); err == nil {
+		t.Fatal("ASSERT_CONTEXT_V2_IMPACT_REJECTED_UNTIL_CONTRACTED")
+	}
+}
+
 func TestParseContextRejectsPrivateContractViolations(t *testing.T) {
 	base := []string{"--machine", "--workspace", ".", "--server", "gopls", "--at", "main.go:1:1"}
 	for _, extra := range [][]string{{"--max-messages", "4097"}, {"--max-bytes", "16777217"}, {"--timeout", "1s", "--request-timeout", "2s"}, {"--analysis", "impact"}, {"--output-selector", "x"}} {

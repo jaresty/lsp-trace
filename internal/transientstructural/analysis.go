@@ -41,7 +41,7 @@ func matchingWitnesses(witnesses []Witness, direction Direction, maxDepth int) [
 func cloneNodeFacts(in []NodeFact) []NodeFact {
 	out := make([]NodeFact, len(in))
 	for i := range in {
-		out[i] = NodeFact{ID: in[i].ID, Witnesses: append([]Witness(nil), in[i].Witnesses...)}
+		out[i] = NodeFact{ID: in[i].ID, Witnesses: append([]Witness(nil), in[i].Witnesses...), Name: in[i].Name, Kind: in[i].Kind, URI: in[i].URI, Range: in[i].Range}
 	}
 	return out
 }
@@ -49,7 +49,7 @@ func cloneNodeFacts(in []NodeFact) []NodeFact {
 func cloneOccurrenceFacts(in []OccurrenceFact) []OccurrenceFact {
 	out := make([]OccurrenceFact, len(in))
 	for i := range in {
-		out[i] = OccurrenceFact{ID: in[i].ID, CallerID: in[i].CallerID, CalleeID: in[i].CalleeID, Witnesses: append([]Witness(nil), in[i].Witnesses...)}
+		out[i] = OccurrenceFact{ID: in[i].ID, CallerID: in[i].CallerID, CalleeID: in[i].CalleeID, Witnesses: append([]Witness(nil), in[i].Witnesses...), URI: in[i].URI, Range: in[i].Range}
 	}
 	return out
 }

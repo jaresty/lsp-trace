@@ -36,12 +36,62 @@ func TestProjectV2FakeServerLiveShape(t *testing.T) {
 	}
 	var value map[string]any
 	_ = json.Unmarshal(raw, &value)
+	if value["analytics_scope"] != "BOUNDED_LOCAL" || value["coupling"] == nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_SHARED_COUPLING_PRESENT: %s", raw)
+	}
 	value["source_body"] = "package src"
 	bad, _ := json.Marshal(value)
 	if mcpcontract.ValidateJSON(mcpcontract.StructuralContextV2ResultID, bad) == nil {
 		t.Fatal("ASSERT_STRUCTURAL_CONTEXT_V2_SOURCE_BODY_REJECTED")
 	}
 }
+func TestProjectV2OmitsAndAccountsExternalDependencies(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, "main.go")
+	outside := filepath.Join(t.TempDir(), "stdlib.go")
+	for _, p := range []string{inside, outside} {
+		if err := os.WriteFile(p, []byte("package p"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{
+		Nodes:       []transientstructural.NodeFact{{ID: "root", Name: "main", Kind: 12, URI: fileURI(inside)}, {ID: "external", Name: "Println", Kind: 12, URI: fileURI(outside)}},
+		Occurrences: []transientstructural.OccurrenceFact{{CallerID: "root", CalleeID: "external", URI: fileURI(inside)}},
+	}}
+	got, err := ProjectV2(in, transientstructural.Request{Generation: 1}, "ts_0123456789abcdef0123456789abcdef", root)
+	if err != nil {
+		t.Fatalf("ASSERT_V2_EXTERNAL_DEPENDENCIES_FILTERED_NOT_FATAL: %v", err)
+	}
+	raw, _ := json.Marshal(got)
+	var value map[string]any
+	_ = json.Unmarshal(raw, &value)
+	if len(got.Nodes) != 1 || len(got.Calls) != 0 || value["external_nodes_omitted"] != float64(1) || value["external_calls_omitted"] != float64(1) {
+		t.Fatalf("ASSERT_V2_EXTERNAL_DEPENDENCIES_ACCOUNTED: %s", raw)
+	}
+}
+
+func TestProjectV2RejectsURIComponentsOutsideFileIdentity(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(root, "a.go")
+	if err := os.WriteFile(file, []byte("package a"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for name, raw := range map[string]string{
+		"query":    fileURI(file) + "?token=secret",
+		"fragment": fileURI(file) + "#symbol",
+		"userinfo": "file://user@" + file,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := relativeURI(root, raw); err == nil {
+				t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_URI_COMPONENT_REJECTED_%s", name)
+			}
+		})
+	}
+}
+
 func TestProjectV2RejectsAbsoluteAndEscapingPaths(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "x.go")

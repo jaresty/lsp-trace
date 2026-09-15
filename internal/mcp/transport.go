@@ -75,7 +75,11 @@ type response struct {
 
 func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	id, _ := mcpcontract.NewFutureStructuralCorrelationID()
-	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralContextDomainErrorID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
+	schemaID := mcpcontract.StructuralContextDomainErrorID
+	if tool == mcpcontract.StructuralContextV2Tool {
+		schemaID = mcpcontract.StructuralContextV2DomainErrorID
+	}
+	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
 
 func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
