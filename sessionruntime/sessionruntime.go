@@ -934,7 +934,11 @@ func New(c Config) (*Manager, error) {
 	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
 }
 
-const maxGitWorktreeBytes = 1 << 20
+const (
+	maxGitWorktreeBytes   = 1 << 20
+	maxGitWorktreeRecords = 1024
+	maxGitWorktreeTime    = 5 * time.Second
+)
 
 func boundedGitWorktreeList(ctx context.Context, parent string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "git", "-C", parent, "worktree", "list", "--porcelain")
@@ -966,6 +970,9 @@ func parseWorktreeList(raw []byte) ([]string, error) {
 		return nil, fmt.Errorf("malformed or truncated git worktree output")
 	}
 	blocks := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n\n")
+	if len(blocks) > maxGitWorktreeRecords {
+		return nil, fmt.Errorf("git worktree record limit exceeded")
+	}
 	paths := make([]string, 0, len(blocks))
 	seen := map[string]bool{}
 	for _, block := range blocks {
@@ -1028,7 +1035,9 @@ func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceReques
 	if err != nil {
 		return DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI")}
 	}
-	raw, err := m.gitWorktreeList(ctx, parentWorkspace)
+	gitCtx, cancelGit := context.WithTimeout(ctx, maxGitWorktreeTime)
+	raw, err := m.gitWorktreeList(gitCtx, parentWorkspace)
+	cancelGit()
 	if err != nil {
 		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_QUERY_FAILED")}
 	}
@@ -1065,10 +1074,35 @@ func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceReques
 	pending := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Time{})
 	readyResult, found := m.WaitReadiness(ctx, pending.ID)
 	if !found || readyResult.State != ReadinessReady || readyResult.Failure != "" {
-		_ = m.Stop(context.Background(), started.SessionID, "derive-readiness-cleanup")
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), maxGitWorktreeTime)
+		cleanup := m.Stop(cleanupCtx, started.SessionID, "derive-readiness-cleanup")
+		cleaned := cleanup.Failure == "" && cleanup.IntentID != "" && m.waitLifecycleTerminal(cleanupCtx, cleanup.IntentID)
+		cancelCleanup()
+		if !cleaned {
+			return DeriveWorkspaceResult{Failure: session.SessionReapIncomplete}
+		}
 		return DeriveWorkspaceResult{Failure: session.InitializationFailure}
 	}
 	return DeriveWorkspaceResult{SessionID: started.SessionID, Generation: started.Generation, State: session.Ready, WorkspaceURI: canonicalURI}
+}
+
+func (m *Manager) waitLifecycleTerminal(ctx context.Context, id string) bool {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		operation, ok := m.Operation(id)
+		if !ok {
+			return false
+		}
+		if operation.State != OperationPending {
+			return operation.State == OperationComplete
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
 }
 
 // WorkspaceRoot returns the validated root for one exact live session generation.
@@ -1428,7 +1462,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		// join the reader so every shutdown read observation precedes the terminal.
 		preExit := readinessChildExited(child)
 		teardown := child.Teardown(context.Background())
-		_ = child.Close()
+		resources := child.Close()
 		late := <-response
 		if late.err != nil {
 			m.recordReadinessEvent(opID, diagnosticEventLate, 0, false)
@@ -1443,7 +1477,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		if failure == session.InitializationTimeout {
 			terminal = manageddiagnostic.TerminalDeadlineExceeded
 		}
-		m.finishAbortedReadinessDiagnostic(opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended", preExit, teardown)
+		m.finishAbortedReadinessDiagnostic(opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended", preExit, child, teardown, resources)
 	}
 }
 
@@ -1470,11 +1504,11 @@ func readinessChildExited(child Child) bool {
 func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string) {
 	preExit := readinessChildExited(child)
 	teardown := child.Teardown(context.Background())
-	_ = child.Close()
-	m.finishAbortedReadinessDiagnostic(id, failure, phase, substep, terminal, reason, preExit, teardown)
+	resources := child.Close()
+	m.finishAbortedReadinessDiagnostic(id, failure, phase, substep, terminal, reason, preExit, child, teardown, resources)
 }
 
-func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string, preExit bool, teardown managedprocess.TeardownObservation) {
+func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string, preExit bool, child Child, teardown managedprocess.TeardownObservation, resources managedprocess.ResourceObservation) {
 	m.mu.Lock()
 	op := m.readiness[id]
 	var sid string
@@ -1486,6 +1520,7 @@ func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Fa
 	sequence := m.sequence
 	m.mu.Unlock()
 	m.terminalReadinessEvent(id, diagnosticEventTerminalFailure)
+	m.retainReadinessRetirement(id, child, teardown, resources)
 	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
 	if m.diagnostics != nil && sid != "" {
 		exit := manageddiagnostic.ProcessExit{Status: manageddiagnostic.Unavailable}
@@ -1499,9 +1534,22 @@ func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Fa
 }
 
 func (m *Manager) abortReadiness(child Child, id string, failure session.Failure) {
-	_ = child.Teardown(context.Background())
-	_ = child.Close()
+	teardown := child.Teardown(context.Background())
+	resources := child.Close()
+	m.retainReadinessRetirement(id, child, teardown, resources)
 	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
+}
+
+func (m *Manager) retainReadinessRetirement(id string, child Child, teardown managedprocess.TeardownObservation, resources managedprocess.ResourceObservation) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op := m.readiness[id]
+	if op == nil {
+		return
+	}
+	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
+		r.retired = &ownedTransport{child: child, teardown: teardown, resources: resources}
+	}
 }
 
 func (m *Manager) recordReadinessEvent(id string, code uint16, count int64, flag bool) {

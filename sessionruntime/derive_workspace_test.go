@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
@@ -17,6 +19,12 @@ import (
 type deriveStarter struct {
 	calls int
 	specs []managedprocess.Spec
+}
+
+type deriveChildStarter struct{ child Child }
+
+func (s deriveChildStarter) Start(context.Context, managedprocess.Spec) (Child, managedprocess.StartObservation) {
+	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
 
 func (s *deriveStarter) Start(_ context.Context, spec managedprocess.Spec) (Child, managedprocess.StartObservation) {
@@ -75,6 +83,32 @@ func TestParseWorktreeListRejectsAmbiguousOrMalformedRecords(t *testing.T) {
 	}
 }
 
+func TestDeriveWorkspaceAppliesOwnedGitDeadline(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_GIT_QUERY_HAS_OWNED_DEADLINE"
+	parent, target := stableTempDir(t), stableTempDir(t)
+	deadlineSeen := false
+	m := newDeriveTestManager(t, &deriveStarter{}, parent, func(ctx context.Context, _ string) ([]byte, error) {
+		deadline, ok := ctx.Deadline()
+		deadlineSeen = ok && time.Until(deadline) > 0 && time.Until(deadline) <= 5*time.Second
+		return nil, context.DeadlineExceeded
+	})
+	got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: (&url.URL{Scheme: "file", Path: target}).String()})
+	if got.Failure != session.Failure("GIT_WORKTREE_QUERY_FAILED") || !deadlineSeen {
+		t.Fatalf("%s: result=%+v deadline_seen=%v", assertion, got, deadlineSeen)
+	}
+}
+
+func TestParseWorktreeListRejectsRecordLimit(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_GIT_PORCELAIN_RECORD_LIMIT"
+	var raw strings.Builder
+	for i := 0; i < 1025; i++ {
+		fmt.Fprintf(&raw, "worktree /repo/w%d\nHEAD %d\n\n", i, i)
+	}
+	if _, err := parseWorktreeList([]byte(raw.String())); err == nil {
+		t.Fatal(assertion)
+	}
+}
+
 func TestDeriveWorkspaceInheritsExactPrivateProcessSpecAndConfinesTarget(t *testing.T) {
 	const assertion = "ASSERT_DERIVE_EXACT_PRIVATE_PARENT_LAUNCH_INHERITANCE"
 	parent, target := stableTempDir(t), stableTempDir(t)
@@ -88,6 +122,22 @@ func TestDeriveWorkspaceInheritsExactPrivateProcessSpecAndConfinesTarget(t *test
 	want.Dir = target
 	if got.Failure == "" || starter.calls != 1 || !reflect.DeepEqual(starter.specs[0], want) {
 		t.Fatalf("%s: result=%+v calls=%d spec=%+v want=%+v", assertion, got, starter.calls, starter.specs, want)
+	}
+}
+
+func TestDeriveWorkspaceFailedReadinessReleasesDerivedSession(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_FAILED_READINESS_CLEANUP"
+	parent, target := stableTempDir(t), stableTempDir(t)
+	m := newDeriveTestManager(t, deriveChildStarter{child: newReadinessChild("error")}, parent, func(context.Context, string) ([]byte, error) {
+		return []byte(fmt.Sprintf("worktree %s\nHEAD a\n\nworktree %s\nHEAD b\n", parent, target)), nil
+	})
+	got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: (&url.URL{Scheme: "file", Path: target}).String()})
+	if got.Failure != session.InitializationFailure {
+		t.Fatalf("%s: result=%+v", assertion, got)
+	}
+	records := m.Records()
+	if len(records) != 1 || records[0].SessionID != "parent" {
+		t.Fatalf("%s: records=%+v", assertion, records)
 	}
 }
 
