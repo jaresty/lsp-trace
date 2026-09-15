@@ -18,6 +18,16 @@ func Project(in transientstructural.Result, q transientstructural.Request, trans
 		nodes[i] = Node{ID: id}
 	}
 	target, ok := nodeIDs[in.TargetID]
+	if !ok && in.Analysis.Kind == transientstructural.AnalysisImpact {
+		var e error
+		target, e = NodeID(transientID, q.Generation, in.TargetID)
+		if e != nil {
+			return Result{}, ErrInvalid
+		}
+		nodeIDs[in.TargetID] = target
+		nodes = append([]Node{{ID: target}}, nodes...)
+		ok = true
+	}
 	if !ok {
 		return Result{}, ErrInvalid
 	}
