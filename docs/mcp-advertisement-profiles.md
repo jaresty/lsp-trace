@@ -128,7 +128,7 @@ For every operation 1–37:
 
 The process default is `default`; it advertises the six currently implemented default operations, omitting only the intentionally absent `lsp_trace_v1_discover`. `advanced` advertises those six plus the 21 advanced-only current operations. Both sets are lexical and exact. The six hidden-legacy operations are omitted from both listings but remain canonically dispatchable with unchanged contracts.
 
-The explicit compatibility profiles remain available: `full` advertises all 33 current operations and `compact` advertises its frozen 10-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
+The explicit compatibility profiles remain available: `full` advertises all 41 current operations and `compact` advertises its curated 11-tool surface. They are not the production default and do not change registry membership or dispatch semantics.
 
 The future exact default advertisement test remains opt-in and intentionally RED under `LSP_TRACE_RUN_ADR0004_RED_GUARDS=1` because:
 

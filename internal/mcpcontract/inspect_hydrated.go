@@ -30,6 +30,9 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 	return &c
 }
 func readPublicContractSchema(name string) ([]byte, error) {
+	if raw, ok, err := structuralContextSymbolSchema(name); ok {
+		return raw, err
+	}
 	if raw, ok, err := contextSymbolChurnCaptureSchema(name); ok {
 		return raw, err
 	}

@@ -61,11 +61,12 @@ const (
 )
 
 type SessionMetadata struct {
-	PositionEncoding      string
-	CallHierarchySupport  bool
-	DocumentSymbolSupport bool
-	ProviderName          string
-	ProviderVersion       string
+	PositionEncoding       string
+	CallHierarchySupport   bool
+	DocumentSymbolSupport  bool
+	WorkspaceSymbolSupport bool
+	ProviderName           string
+	ProviderVersion        string
 }
 
 type ReadinessSnapshot struct {
@@ -1153,6 +1154,11 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			Name string `json:"name"`
 		} `json:"workspaceFolders"`
 		Capabilities struct {
+			Workspace struct {
+				Symbol struct {
+					DynamicRegistration bool `json:"dynamicRegistration"`
+				} `json:"symbol"`
+			} `json:"workspace"`
 			TextDocument struct {
 				CallHierarchy struct {
 					DynamicRegistration bool `json:"dynamicRegistration"`
@@ -1167,6 +1173,7 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 		Name string `json:"name"`
 	}{{URI: workspaceURI, Name: "workspace"}}}
 	initializeParams.Capabilities.TextDocument.DocumentSymbol.HierarchicalDocumentSymbolSupport = true
+	initializeParams.Capabilities.Workspace.Symbol.DynamicRegistration = false
 	params, _ := json.Marshal(initializeParams)
 	initializeMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}
 	initializeBody, _ := json.Marshal(initializeMessage)
@@ -1207,9 +1214,10 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 					Version string `json:"version"`
 				} `json:"serverInfo"`
 				Capabilities struct {
-					PositionEncoding       string          `json:"positionEncoding"`
-					CallHierarchyProvider  json.RawMessage `json:"callHierarchyProvider"`
-					DocumentSymbolProvider json.RawMessage `json:"documentSymbolProvider"`
+					PositionEncoding        string          `json:"positionEncoding"`
+					CallHierarchyProvider   json.RawMessage `json:"callHierarchyProvider"`
+					DocumentSymbolProvider  json.RawMessage `json:"documentSymbolProvider"`
+					WorkspaceSymbolProvider json.RawMessage `json:"workspaceSymbolProvider"`
 				} `json:"capabilities"`
 			}
 			if err := json.Unmarshal(message.Result, &initialized); err != nil {
@@ -1225,6 +1233,8 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
 			documentSymbols := initialized.Capabilities.DocumentSymbolProvider
 			metadata.DocumentSymbolSupport = string(documentSymbols) == "true" || (len(documentSymbols) > 0 && string(documentSymbols) != "false" && string(documentSymbols) != "null")
+			workspaceSymbols := initialized.Capabilities.WorkspaceSymbolProvider
+			metadata.WorkspaceSymbolSupport = string(workspaceSymbols) == "true" || (len(workspaceSymbols) > 0 && string(workspaceSymbols) != "false" && string(workspaceSymbols) != "null")
 			response <- readinessResult{metadata: metadata}
 			return
 		}

@@ -30,6 +30,7 @@ import (
 	"lsp-trace/lifecycleops"
 	"lsp-trace/sessionruntime"
 	"lsp-trace/sliceops"
+	"lsp-trace/structuralcontextsymbolops"
 )
 
 var (
@@ -441,20 +442,22 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 		return nil, nil, err
 	}
 	selected := newHostSelectorRuntime(manager, nil)
+	structural := newStructuralContextExecutor(selected)
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
-			mcp.LifecycleExecutorFamily:           lifecycleops.NewExecutor(lifecycleops.New(manager)),
-			mcp.IncomingExecutorFamily:            incomingops.NewExecutor(manager),
-			mcp.SliceExecutorFamily:               sliceops.NewExecutor(manager),
-			mcp.AcquisitionV2ExecutorFamily:       legacyManifestExecutor{runtime: manager},
-			mcp.TraceExecutorFamily:               newTraceExecutor(selected),
-			mcp.CensusExecutorFamily:              newPrivateCensusMCPBinding(newCensusRuntime(selected)),
-			mcp.StructuralContextExecutorFamily:   newStructuralContextExecutor(selected),
-			mcp.StructuralContextV2ExecutorFamily: newStructuralContextExecutor(selected),
-			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
-			mcp.ContextChurnExecutorFamily:        contextChurnExecutor{},
-			mcp.ContextSymbolChurnExecutorFamily:  &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
+			mcp.LifecycleExecutorFamily:               lifecycleops.NewExecutor(lifecycleops.New(manager)),
+			mcp.IncomingExecutorFamily:                incomingops.NewExecutor(manager),
+			mcp.SliceExecutorFamily:                   sliceops.NewExecutor(manager),
+			mcp.AcquisitionV2ExecutorFamily:           legacyManifestExecutor{runtime: manager},
+			mcp.TraceExecutorFamily:                   newTraceExecutor(selected),
+			mcp.CensusExecutorFamily:                  newPrivateCensusMCPBinding(newCensusRuntime(selected)),
+			mcp.StructuralContextExecutorFamily:       structural,
+			mcp.StructuralContextSymbolExecutorFamily: structuralcontextsymbolops.NewExecutor(selected, structural),
+			mcp.StructuralContextV2ExecutorFamily:     structural,
+			mcp.StructuralDeltaExecutorFamily:         structuralDeltaExecutor{},
+			mcp.ContextChurnExecutorFamily:            contextChurnExecutor{},
+			mcp.ContextSymbolChurnExecutorFamily:      &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
 			mcp.ContextSymbolChurnCaptureExecutorFamily: newContextSymbolChurnCaptureExecutor(
 				newStructuralContextExecutor(selected),
 				&contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},

@@ -26,8 +26,8 @@ func TestSliceSelectorSchemaRendersThroughInstalledPiAdapter(t *testing.T) {
 	response := runMCPProcess(t, buildMCPBinary(t), []string{"--tool-profile", "compact"}, []map[string]any{{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}})[0]
 	result, _ := response["result"].(map[string]any)
 	tools, _ := result["tools"].([]any)
-	if len(tools) != 10 {
-		t.Fatalf("ASSERT_SLICE_SELECTOR_COMPACT_TEN: tools=%d", len(tools))
+	if len(tools) != 11 {
+		t.Fatalf("ASSERT_SLICE_SELECTOR_COMPACT_ELEVEN: tools=%d", len(tools))
 	}
 	var inputSchema any
 	for _, raw := range tools {

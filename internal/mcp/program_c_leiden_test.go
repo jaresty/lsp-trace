@@ -34,8 +34,8 @@ func TestProgramCLeidenRegistrySchemasProfilesAndRequiredTopK(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.Resolve(mcpcontract.ProgramCLeidenTool)
-	if !ok || len(full.Tools()) != 40 || len(full.Advertised()) != 40 || len(compact.Tools()) != 40 || len(compact.Advertised()) != 10 {
-		t.Fatalf("ASSERT_PROGRAM_C_LEIDEN_32_FULL_10_COMPACT: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
+	if !ok || len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 11 {
+		t.Fatalf("ASSERT_PROGRAM_C_LEIDEN_32_FULL_11_COMPACT: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.Resolve(mcpcontract.ProgramCLeidenTool); !ok {
 		t.Fatal("ASSERT_PROGRAM_C_LEIDEN_COMPACT_HIDDEN_DISPATCHABLE")

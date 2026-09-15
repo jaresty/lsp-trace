@@ -479,6 +479,18 @@ func NewSessionClientWithWireLimits(runtime Runtime, sessionID string, generatio
 	return &SessionClient{runtime: runtime, sessionID: sessionID, generation: generation, requestTimeout: requestTimeout, wireLimits: limits}
 }
 
+func (c *SessionClient) WorkspaceSymbols(ctx context.Context, params lsp.WorkspaceSymbolParams) ([]lsp.WorkspaceSymbol, error) {
+	var symbols []lsp.WorkspaceSymbol
+	wasNull, err := c.call(ctx, "workspace/symbol", params, &symbols)
+	if err != nil {
+		return nil, err
+	}
+	if wasNull {
+		return nil, nil
+	}
+	return symbols, nil
+}
+
 func (c *SessionClient) PrepareCallHierarchy(ctx context.Context, params lsp.PrepareCallHierarchyParams) ([]lsp.CallHierarchyItem, error) {
 	var items []lsp.CallHierarchyItem
 	wasNull, err := c.call(ctx, "textDocument/prepareCallHierarchy", params, &items)

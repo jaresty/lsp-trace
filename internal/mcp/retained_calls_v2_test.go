@@ -36,7 +36,7 @@ func TestRetainedCallsV2VerifyRegistrationAndCurrentCount(t *testing.T) {
 	if tool.Availability != Enabled || tool.ExecutorFamily != OfflineExecutorFamily || len(tool.Aliases) != 0 {
 		t.Fatalf("%s: tool=%+v", registered, tool)
 	}
-	if got := len(r.Advertised()); got != 40 {
+	if got := len(r.Advertised()); got != 41 {
 		t.Fatalf("%s: got %d", cardinality, got)
 	}
 	if tool.InputSchemaID != mcpcontract.VerifyRetainedCallsV2InputID || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.RetainedCallsV2ArtifactID {

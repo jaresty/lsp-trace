@@ -79,6 +79,8 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	schemaID := mcpcontract.StructuralContextDomainErrorID
 	if tool == mcpcontract.StructuralContextV2Tool {
 		schemaID = mcpcontract.StructuralContextV2DomainErrorID
+	} else if tool == mcpcontract.StructuralContextSymbolTool {
+		schemaID = mcpcontract.StructuralContextSymbolDomainErrorID
 	}
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
@@ -431,7 +433,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			}
 			return bindEnvelope(base, tool, structuralDeltaDomainErrorEnvelope(requestID, phase, failure.Code, failure.Err.Error()))
 		}
-		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
 				if domain.State == transientstructural.StateTruncated {
@@ -452,6 +454,8 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				phase, state = "TRAVERSAL", "RESOURCE_LIMIT"
 			case "INVALID_SERVER_RESPONSE":
 				phase = "TRAVERSAL"
+			case "WORKSPACE_SYMBOL_ABSENT", "WORKSPACE_SYMBOL_AMBIGUOUS", "WORKSPACE_SYMBOL_MALFORMED", "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE":
+				phase = "PREFLIGHT"
 			default:
 				state = "INVALID_SERVER_RESPONSE"
 			}
@@ -512,10 +516,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralDeltaSuccessID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result})
 	}
-	if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+	if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 		var result map[string]any
 		resultID := mcpcontract.StructuralContextResultID
 		successID := mcpcontract.StructuralContextSuccessID
+		if tool.ExecutorFamily == StructuralContextSymbolExecutorFamily {
+			successID = mcpcontract.StructuralContextSymbolSuccessID
+		}
 		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextV2SuccessID
 		}
@@ -896,6 +903,8 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 		return mcpcontract.ValidateStructuralDeltaEnvelopeExclusive(raw)
 	case EnvelopePolicyStructuralContext:
 		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
+	case EnvelopePolicyStructuralContextSymbol:
+		return mcpcontract.ValidateStructuralContextSymbolEnvelopeExclusive(raw)
 	case EnvelopePolicyStructuralContextV2:
 		return mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw)
 	case EnvelopePolicyContextChurn:
@@ -1151,6 +1160,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Census
 	case mcpcontract.StructuralContextTool:
 		return operation.Name("structural_context")
+	case mcpcontract.StructuralContextSymbolTool:
+		return operation.Name("structural_context_symbol")
 	case mcpcontract.StructuralContextV2Tool:
 		return operation.Name("structural_context_v2")
 	case mcpcontract.StructuralDeltaTool:

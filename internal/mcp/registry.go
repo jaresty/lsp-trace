@@ -42,6 +42,7 @@ const (
 	TraceExecutorFamily                     ExecutorFamily = "trace"
 	CensusExecutorFamily                    ExecutorFamily = "census"
 	StructuralContextExecutorFamily         ExecutorFamily = "structural-context"
+	StructuralContextSymbolExecutorFamily   ExecutorFamily = "structural-context-symbol"
 	StructuralContextV2ExecutorFamily       ExecutorFamily = "structural-context-v2"
 	StructuralDeltaExecutorFamily           ExecutorFamily = "structural-delta"
 	ContextChurnExecutorFamily              ExecutorFamily = "context-churn"
@@ -81,6 +82,7 @@ const (
 	EnvelopePolicyCensus                    EnvelopePolicy = "census"
 	EnvelopePolicyStructuralDelta           EnvelopePolicy = "structural-delta"
 	EnvelopePolicyStructuralContext         EnvelopePolicy = "structural-context"
+	EnvelopePolicyStructuralContextSymbol   EnvelopePolicy = "structural-context-symbol"
 	EnvelopePolicyStructuralContextV2       EnvelopePolicy = "structural-context-v2"
 	EnvelopePolicyContextChurn              EnvelopePolicy = "context-churn"
 	EnvelopePolicyContextSymbolChurn        EnvelopePolicy = "context-symbol-churn"
@@ -147,6 +149,8 @@ func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
 		return EnvelopePolicyContextSymbolChurnCapture
 	case StructuralContextExecutorFamily:
 		return EnvelopePolicyStructuralContext
+	case StructuralContextSymbolExecutorFamily:
+		return EnvelopePolicyStructuralContextSymbol
 	case StructuralContextV2ExecutorFamily:
 		return EnvelopePolicyStructuralContextV2
 	default:
@@ -170,6 +174,7 @@ const (
 var defaultToolNames = map[string]struct{}{
 	mcpcontract.CensusTool:                    {},
 	mcpcontract.StructuralContextTool:         {},
+	mcpcontract.StructuralContextSymbolTool:   {},
 	mcpcontract.StructuralContextV2Tool:       {},
 	mcpcontract.StructuralDeltaTool:           {},
 	mcpcontract.ContextChurnTool:              {},
@@ -182,6 +187,7 @@ var defaultToolNames = map[string]struct{}{
 var advancedToolNames = map[string]struct{}{
 	mcpcontract.CensusTool:                    {},
 	mcpcontract.StructuralContextTool:         {},
+	mcpcontract.StructuralContextSymbolTool:   {},
 	mcpcontract.StructuralContextV2Tool:       {},
 	mcpcontract.StructuralDeltaTool:           {},
 	mcpcontract.ContextChurnTool:              {},
@@ -201,6 +207,7 @@ var compactToolNames = map[string]struct{}{
 	"lsp_session_v1_list": {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_incoming": {},
 	"lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_schema_get": {}, "lsp_trace_v1_slice": {},
+	mcpcontract.StructuralContextSymbolTool: {},
 }
 
 type Registry struct {
@@ -254,6 +261,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
 	manifest = mcpcontract.WithContextSymbolChurnCapture(mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))))))
+	manifest = mcpcontract.WithStructuralContextSymbol(manifest)
 	descriptions := map[string]string{
 		mcpcontract.ContextChurnTool:              "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
 		mcpcontract.ContextSymbolChurnTool:        "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
@@ -261,6 +269,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		mcpcontract.StructuralDeltaTool:           "Compare exactly two bounded local transient structural V2 results; authority remains zero and no repository equivalence is claimed",
 		mcpcontract.StructuralContextV2Tool:       "Inspect a bounded transient live CALLS-only neighborhood with root-confined workspace-relative symbol and call-site locators; authority remains zero and source_graph_complete remains UNKNOWN",
 		mcpcontract.StructuralContextTool:         "Inspect a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
+		mcpcontract.StructuralContextSymbolTool:   "Resolve one exact server-reported workspace symbol as locator-only control flow, then delegate to bounded transient structural context; workspace symbol evidence never manufactures CALLS",
 		mcpcontract.CensusTool:                    "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
 		mcpcontract.HydratedTool:                  "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
 		mcpcontract.ProgramCLeidenTool:            "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
@@ -323,6 +332,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = CensusExecutorFamily
 		} else if contract.Name == mcpcontract.StructuralContextTool {
 			executorFamily = StructuralContextExecutorFamily
+		} else if contract.Name == mcpcontract.StructuralContextSymbolTool {
+			executorFamily = StructuralContextSymbolExecutorFamily
 		} else if contract.Name == mcpcontract.StructuralContextV2Tool {
 			executorFamily = StructuralContextV2ExecutorFamily
 		} else if contract.Name == mcpcontract.StructuralDeltaTool {

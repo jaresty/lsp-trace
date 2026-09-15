@@ -84,6 +84,24 @@ type DocumentSymbolParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
 }
 
+type WorkspaceSymbolParams struct {
+	Query string `json:"query"`
+}
+
+type Location struct {
+	URI   string `json:"uri"`
+	Range *Range `json:"range,omitempty"`
+}
+
+type WorkspaceSymbol struct {
+	Name          string          `json:"name"`
+	Kind          int             `json:"kind"`
+	Tags          []int           `json:"tags,omitempty"`
+	Location      Location        `json:"location"`
+	ContainerName string          `json:"containerName,omitempty"`
+	Data          json.RawMessage `json:"data,omitempty"`
+}
+
 type PrepareCallHierarchyParams = TextDocumentPositionParams
 type PrepareTypeHierarchyParams = TextDocumentPositionParams
 
@@ -138,7 +156,8 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	CallHierarchyProvider  json.RawMessage `json:"callHierarchyProvider,omitempty"`
-	TypeHierarchyProvider  json.RawMessage `json:"typeHierarchyProvider,omitempty"`
-	DocumentSymbolProvider json.RawMessage `json:"documentSymbolProvider,omitempty"`
+	CallHierarchyProvider   json.RawMessage `json:"callHierarchyProvider,omitempty"`
+	TypeHierarchyProvider   json.RawMessage `json:"typeHierarchyProvider,omitempty"`
+	DocumentSymbolProvider  json.RawMessage `json:"documentSymbolProvider,omitempty"`
+	WorkspaceSymbolProvider json.RawMessage `json:"workspaceSymbolProvider,omitempty"`
 }

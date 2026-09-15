@@ -19,8 +19,8 @@ func TestProgramCInstabilityCanonicalHiddenCompactSurface(t *testing.T) {
 	if !ok || tool.Name != programCInstabilityTool {
 		t.Fatalf("ASSERT_A08_CANONICAL_MCP_REGISTERED: ok=%t tool=%+v", ok, tool)
 	}
-	if _, ok := compact.Resolve(programCInstabilityTool); !ok || len(compact.Advertised()) != 10 {
-		t.Fatalf("ASSERT_A08_HIDDEN_COMPACT_DISPATCHABLE_EXACT_10: resolved=%t advertised=%d", ok, len(compact.Advertised()))
+	if _, ok := compact.Resolve(programCInstabilityTool); !ok || len(compact.Advertised()) != 11 {
+		t.Fatalf("ASSERT_A08_HIDDEN_COMPACT_DISPATCHABLE_EXACT_11: resolved=%t advertised=%d", ok, len(compact.Advertised()))
 	}
 }
 

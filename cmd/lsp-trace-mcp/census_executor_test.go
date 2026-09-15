@@ -361,7 +361,7 @@ func TestCensusExecutorRegisteredAsOperation34Only(t *testing.T) {
 	}
 	tool, found := server.Registry.ResolveCanonical(mcpcontract.CensusTool)
 	_, executorFound := server.Executors[mcp.CensusExecutorFamily]
-	if !found || tool.ExecutorFamily != mcp.CensusExecutorFamily || !executorFound || len(server.Registry.Tools()) != 40 {
+	if !found || tool.ExecutorFamily != mcp.CensusExecutorFamily || !executorFound || len(server.Registry.Tools()) != 41 {
 		t.Fatalf("ASSERT_CENSUS_OPERATION34_REGISTERED: found=%t tool=%+v executor=%t tools=%d", found, tool, executorFound, len(server.Registry.Tools()))
 	}
 	if tool35, found := server.Registry.Resolve(mcpcontract.StructuralContextTool); !found || tool35.ExecutorFamily != mcp.StructuralContextExecutorFamily {
