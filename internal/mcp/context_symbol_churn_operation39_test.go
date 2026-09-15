@@ -9,6 +9,7 @@ import (
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/vcssymbolsidecar"
 )
 
 type unavailableSymbolChurnExecutor struct{ calls []operation.Request }
@@ -36,6 +37,13 @@ func TestContextSymbolChurnOperation39AppendOnlyContract(t *testing.T) {
 		if candidate.Name == tool {
 			t.Fatal("ASSERT_CONTEXT_SYMBOL_CHURN_COMPACT_HIDDEN")
 		}
+	}
+}
+
+func TestContextSymbolChurnSummaryBalances(t *testing.T) {
+	summary := contextSymbolChurnSummary(vcssymbolsidecar.Result{LineCount: 578, AttributedLineCount: 511, AmbiguousLineCount: 1, UnmatchedLineCount: 66, OldAcquisition: []vcssymbolsidecar.FileOutcome{{Status: "COMPLETE"}, {Status: "FAILED"}}, NewAcquisition: []vcssymbolsidecar.FileOutcome{{Status: "EMPTY"}, {Status: "COMPLETE"}}})
+	if summary["attribution_basis_points"] != 8840 || summary["line_count"] != 578 || summary["file_outcomes"].(map[string]int)["complete"] != 2 || summary["file_outcomes"].(map[string]int)["empty"] != 1 || summary["file_outcomes"].(map[string]int)["failed"] != 1 {
+		t.Fatalf("ASSERT_SYMBOL_CHURN_COMPACT_SUMMARY_BALANCES: %+v", summary)
 	}
 }
 

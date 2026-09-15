@@ -61,7 +61,16 @@ func (e *contextSymbolChurnExecutor) Execute(parent context.Context, op operatio
 	}
 	profile, ok := e.profiles[in.Profile]
 	if !ok {
-		return operation.Result{}, &operation.Failure{Code: "PROFILE_UNAVAILABLE", Err: errors.New("historical LSP profile unavailable")}
+		names := make([]string, 0, len(e.profiles))
+		for name := range e.profiles {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		message := "historical LSP profile unavailable"
+		if len(names) > 0 {
+			message += "; available profiles: " + strings.Join(names, ", ")
+		}
+		return operation.Result{}, &operation.Failure{Code: "PROFILE_UNAVAILABLE", Err: errors.New(message)}
 	}
 	raw := []byte(in.Input)
 	artifact, err := tsr.DecodeV2Artifact(raw)

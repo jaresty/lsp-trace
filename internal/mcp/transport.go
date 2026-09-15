@@ -22,6 +22,7 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/internal/transientstructural"
+	"lsp-trace/internal/vcssymbolsidecar"
 )
 
 const (
@@ -92,6 +93,27 @@ func contextChurnDomainErrorEnvelope(requestID, phase, state, message string) en
 
 func contextSymbolChurnDomainErrorEnvelope(requestID, phase, state, message string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ContextSymbolChurnDomainErrorID, Tool: mcpcontract.ContextSymbolChurnTool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
+}
+
+func contextSymbolChurnSummary(result vcssymbolsidecar.Result) map[string]any {
+	files := map[string]int{"complete": 0, "empty": 0, "failed": 0}
+	for _, rows := range [][]vcssymbolsidecar.FileOutcome{result.OldAcquisition, result.NewAcquisition} {
+		for _, row := range rows {
+			switch row.Status {
+			case "COMPLETE":
+				files["complete"]++
+			case "EMPTY":
+				files["empty"]++
+			case "FAILED":
+				files["failed"]++
+			}
+		}
+	}
+	basisPoints := 0
+	if result.LineCount > 0 {
+		basisPoints = result.AttributedLineCount * 10000 / result.LineCount
+	}
+	return map[string]any{"line_count": result.LineCount, "attributed_line_count": result.AttributedLineCount, "ambiguous_line_count": result.AmbiguousLineCount, "unmatched_line_count": result.UnmatchedLineCount, "attribution_basis_points": basisPoints, "file_outcomes": files}
 }
 
 func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
@@ -453,10 +475,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily {
 		var result map[string]any
-		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) != nil {
+		var typed vcssymbolsidecar.Result
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || json.Unmarshal(opResult.Artifact, &typed) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) != nil {
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 		}
-		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ContextSymbolChurnSuccessID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result})
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "2", EnvelopeSchemaID: mcpcontract.ContextSymbolChurnSuccessV2ID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
 	}
 	if tool.ExecutorFamily == ContextChurnExecutorFamily {
 		var result map[string]any
