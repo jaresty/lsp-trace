@@ -194,6 +194,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 		selected := newHostSelectorRuntime(manager, bootstrapSessions)
+		symbolChurn, profileErr := newContextSymbolChurnExecutor(*config)
+		if profileErr != nil {
+			fmt.Fprintln(stderr, profileErr)
+			return 1
+		}
+		server.Executors[mcp.ContextSymbolChurnExecutorFamily] = symbolChurn
 		if len(config.Providers) == 0 {
 			composeHostSelectorExecutors(server, selected)
 		} else {
@@ -443,6 +449,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.StructuralContextV2ExecutorFamily: newStructuralContextExecutor(selected),
 			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
 			mcp.ContextChurnExecutorFamily:        contextChurnExecutor{},
+			mcp.ContextSymbolChurnExecutorFamily:  &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

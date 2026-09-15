@@ -119,6 +119,7 @@ const usageText = `usage:
   lsp-trace context --machine --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN) [--analysis neighborhood | --analysis impact --direction incoming|outgoing --analysis-depth N]
   lsp-trace context-delta --before FILE --after FILE --machine
   lsp-trace context-churn --input FILE --workspace PATH --from REVISION --to REVISION --machine
+  lsp-trace context-churn-symbols --input FILE --workspace PATH --from REVISION --to REVISION --server ABSOLUTE_PATH [--server-arg VALUE...] --language-id ID --machine
   ` + censusInvocationUsage + `
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
@@ -138,9 +139,9 @@ const usageText = `usage:
   lsp-trace custody SELECTOR
   lsp-trace execute --request-id ID --input PATH|-
   lsp-trace provider conformance --executable ABSOLUTE_PATH --input PATH|- [--arg VALUE...]
-  lsp-trace schema get --family graph|inspect|filter|passage-verification --version VERSION
+  lsp-trace schema get --family graph|inspect|filter|passage-verification|vcs-symbol-churn-sidecar --version VERSION
   lsp-trace schema get --schema v1|v2|v3
-  lsp-trace validate --family graph|inspect|filter|passage-verification --version VERSION PATH|-
+  lsp-trace validate --family graph|inspect|filter|passage-verification|vcs-symbol-churn-sidecar --version VERSION PATH|-
   lsp-trace validate [--schema v1|v2|v3] PATH|-
   lsp-trace validate-private-request-diagnostics PRIVATE_PATH [PUBLIC_V3_PATH]
   lsp-trace skill get
@@ -454,6 +455,9 @@ func runCorePrepared(args []string, validation *legacyInvocation) int {
 	}
 	if len(args) > 0 && args[0] == "context-churn" {
 		return runContextChurn(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "context-churn-symbols" {
+		return runContextChurnSymbols(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "census" {
 		return runCensus(args[1:], os.Stdout, os.Stderr)

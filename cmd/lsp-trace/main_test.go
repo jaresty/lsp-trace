@@ -64,7 +64,7 @@ func TestInfoIsDeterministicBoundedAndPrivate(t *testing.T) {
 	if got.Version == "" || got.BuildRevision == "" {
 		t.Fatalf("ASSERT_INFO_BUILD_IDENTITY_BOUNDED: %#v", got)
 	}
-	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 38 || got.DispatchableCount != 38 || got.InlineByteLimit != 1048576 {
+	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 39 || got.DispatchableCount != 39 || got.InlineByteLimit != 1048576 {
 		t.Fatalf("ASSERT_INFO_REGISTRY_AUTHORITY: %#v", got)
 	}
 	if !reflect.DeepEqual(got.Schemas["graph"], []string{"v1", "v2", "v3", "v4", "v5"}) || len(got.Schemas) < 10 {
@@ -121,8 +121,8 @@ func TestTopLevelUsageAdvertisesFilterAndSchemaFamilies(t *testing.T) {
 	}
 	for _, want := range []string{
 		"lsp-trace filter INSPECTION --compare-seeds LABEL --compare-seeds LABEL [--json]",
-		"lsp-trace schema get --family graph|inspect|filter|passage-verification --version VERSION",
-		"lsp-trace validate --family graph|inspect|filter|passage-verification --version VERSION PATH|-",
+		"lsp-trace schema get --family graph|inspect|filter|passage-verification|vcs-symbol-churn-sidecar --version VERSION",
+		"lsp-trace validate --family graph|inspect|filter|passage-verification|vcs-symbol-churn-sidecar --version VERSION PATH|-",
 		"lsp-trace execute --request-id ID --input PATH|-",
 	} {
 		if !strings.Contains(stderr, want) {

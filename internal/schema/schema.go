@@ -38,6 +38,7 @@ const (
 	FamilyCommunityPresentation      = "community-presentation"
 	FamilyTechnicalCommunityRegister = "technical-community-register"
 	FamilyPassageVerification        = "passage-verification"
+	FamilyVCSSymbolChurn             = "vcs-symbol-churn-sidecar"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -68,6 +69,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyCommunityPresentation:      {"v1": "lsp-trace.community-presentation.v1"},
 	FamilyTechnicalCommunityRegister: {"v1": "lsp-trace.technical-community-register.v1"},
 	FamilyPassageVerification:        {"v1": "lsp-trace.passage-verification.v1"},
+	FamilyVCSSymbolChurn:             {"v2": "lsp-trace.vcs-symbol-churn-sidecar.v2"},
 }
 
 var versionFields = map[string]string{
@@ -96,6 +98,7 @@ var versionFields = map[string]string{
 	FamilyCommunityPresentation:      "schema_version",
 	FamilyTechnicalCommunityRegister: "schema_version",
 	FamilyPassageVerification:        "schema_version",
+	FamilyVCSSymbolChurn:             "schema_version",
 }
 
 // RegisteredFamilies returns a detached, lexically ordered snapshot of the

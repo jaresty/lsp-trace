@@ -45,6 +45,7 @@ const (
 	StructuralContextV2ExecutorFamily ExecutorFamily = "structural-context-v2"
 	StructuralDeltaExecutorFamily     ExecutorFamily = "structural-delta"
 	ContextChurnExecutorFamily        ExecutorFamily = "context-churn"
+	ContextSymbolChurnExecutorFamily  ExecutorFamily = "context-symbol-churn"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -81,6 +82,7 @@ const (
 	EnvelopePolicyStructuralContext     EnvelopePolicy = "structural-context"
 	EnvelopePolicyStructuralContextV2   EnvelopePolicy = "structural-context-v2"
 	EnvelopePolicyContextChurn          EnvelopePolicy = "context-churn"
+	EnvelopePolicyContextSymbolChurn    EnvelopePolicy = "context-symbol-churn"
 )
 
 type Tool struct {
@@ -137,6 +139,8 @@ func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
 		return EnvelopePolicyStructuralDelta
 	case ContextChurnExecutorFamily:
 		return EnvelopePolicyContextChurn
+	case ContextSymbolChurnExecutorFamily:
+		return EnvelopePolicyContextSymbolChurn
 	case StructuralContextExecutorFamily:
 		return EnvelopePolicyStructuralContext
 	case StructuralContextV2ExecutorFamily:
@@ -165,6 +169,7 @@ var defaultToolNames = map[string]struct{}{
 	mcpcontract.StructuralContextV2Tool: {},
 	mcpcontract.StructuralDeltaTool:     {},
 	mcpcontract.ContextChurnTool:        {},
+	mcpcontract.ContextSymbolChurnTool:  {},
 	"lsp_trace_v1_capabilities":         {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
 	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_verify": {},
 }
@@ -175,6 +180,7 @@ var advancedToolNames = map[string]struct{}{
 	mcpcontract.StructuralContextV2Tool: {},
 	mcpcontract.StructuralDeltaTool:     {},
 	mcpcontract.ContextChurnTool:        {},
+	mcpcontract.ContextSymbolChurnTool:  {},
 	"lsp_session_v1_list":               {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
@@ -241,9 +247,10 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))))
+	manifest = mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))))))))))
 	descriptions := map[string]string{
 		mcpcontract.ContextChurnTool:             "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
+		mcpcontract.ContextSymbolChurnTool:       "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
 		mcpcontract.StructuralDeltaTool:          "Compare exactly two bounded local transient structural V2 results; authority remains zero and no repository equivalence is claimed",
 		mcpcontract.StructuralContextV2Tool:      "Inspect a bounded transient live CALLS-only neighborhood with root-confined workspace-relative symbol and call-site locators; authority remains zero and source_graph_complete remains UNKNOWN",
 		mcpcontract.StructuralContextTool:        "Inspect a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
@@ -315,6 +322,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = StructuralDeltaExecutorFamily
 		} else if contract.Name == mcpcontract.ContextChurnTool {
 			executorFamily = ContextChurnExecutorFamily
+		} else if contract.Name == mcpcontract.ContextSymbolChurnTool {
+			executorFamily = ContextSymbolChurnExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}

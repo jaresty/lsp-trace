@@ -150,7 +150,7 @@ func TestProductionMCPPublishedConformance(t *testing.T) {
 	}
 	responses := runMCPProcess(t, binary, []string{"--tool-profile", "advanced"}, requests)
 	tools := responses[0]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 32 {
+	if len(tools) != 33 {
 		t.Fatalf("ASSERT_PRODUCTION_MCP_ADVANCED_TOOL_COUNT_32: got=%d", len(tools))
 	}
 	for i, assertion := range []string{"ASSERT_PRODUCTION_MCP_SCHEMA_RETRIEVAL", "ASSERT_PRODUCTION_MCP_SCHEMA_VALIDATION"} {

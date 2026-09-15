@@ -14,6 +14,16 @@ The output schema identity is `lsp-trace.vcs-churn-sidecar.v1`. Its `graph_artif
 
 `history_scope_complete=COMPLETE` means only that the requested paths were successfully evaluated over the resolved Git revision interval. It does not make the source graph, repository history, rename lineage, or symbol attribution complete. The sidecar keeps `authority=0` and `source_graph_complete=UNKNOWN`. It cannot add or modify graph nodes, relationships, call sites, coupling, centrality, or server-reported `CALLS`; consumers may use churn to prioritize navigation but not to infer defects, ownership, feature identity, runtime behavior, or architectural boundaries.
 
+## Historical symbol churn V2 operational contract
+
+`context-churn-symbols` consumes the exact bytes of one admitted Structural Context V2 artifact and binds them by SHA-256. Its file denominator is the artifact's deduplicated workspace-relative node paths, bounded to 128. Git resolves both caller expressions to exact commits and emits zero-context old/new changed-line observations with rename inference disabled.
+
+Each exact revision is materialized in a disposable detached worktree. One caller-selected, absolute language-server executable is initialized per revision; files are opened and queried with standard `textDocument/documentSymbol`. Every requested file receives exactly one terminal acquisition status: `COMPLETE`, `EMPTY`, or `FAILED`. A failed file contributes no symbols and does not disappear from the ledger.
+
+For each changed-line observation, the unique narrowest enclosing server-returned range yields `ATTRIBUTED`; equal-span candidates yield `AMBIGUOUS`; no candidate yields `UNMATCHED`. These outcomes balance `line_count`. Old and new inventories remain distinct, and `cross_revision_identity=NOT_EVALUATED`: equal names, kinds, paths, or ranges do not establish continuity, moves, renames, splits, or merges.
+
+The V2 artifact remains `authority=0` with `source_graph_complete=UNKNOWN`. Git history and document symbols are navigation evidence only. They cannot manufacture `CALLS`, graph edges, ownership, defects, feature identity, semantic instability, runtime behavior, or architecture. V2 is CLI-only; MCP operation 38 and the V1 `FILE_PATH_ONLY` artifact remain unchanged.
+
 MCP operation `lsp_trace_v1_context_churn` carries the exact V2 artifact as bounded JSON text rather than a decoded object, preserving the byte identity committed by `graph_artifact_digest`. Its closed input also contains the absolute Git top-level, two revision expressions, and an optional `timeout_ms` bounded to 1–60,000. Direct invocation and `lsp_trace_v1_execute` use one executor and envelope contract. The operation offers no publication, custody, hydration, retained-input, provider, environment, command, or output-selector controls; Git output remains capped internally at 16 MiB, rename inference remains disabled, and failures produce no partial sidecar.
 
 ## Named server profile resolution
