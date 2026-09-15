@@ -44,7 +44,7 @@ func composeServer(t testing.TB, profile ToolProfile) *Server {
 func TestProgramCComposeOperation32RegistrySchemasAndCompactProfile(t *testing.T) {
 	full, compact := NewRegistryWithProfile(false, ToolProfileFull), NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.Resolve(mcpcontract.ProgramCComposeTool)
-	if !ok || len(full.Tools()) != 39 || len(full.Advertised()) != 39 || len(compact.Tools()) != 39 || len(compact.Advertised()) != 10 {
+	if !ok || len(full.Tools()) != 40 || len(full.Advertised()) != 40 || len(compact.Tools()) != 40 || len(compact.Advertised()) != 10 {
 		t.Fatalf("ASSERT_PROGRAM_C_COMPOSE_32_FULL_10_COMPACT: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.Resolve(mcpcontract.ProgramCComposeTool); !ok {

@@ -57,7 +57,7 @@ func TestPublicAnalyticsV2WiringRED(t *testing.T) {
 	const assertion = "ASSERT_PUBLIC_ANALYTICS_V2_WIRING"
 	r := NewRegistry(false)
 	tools := r.Tools()
-	if len(tools) != 39 {
+	if len(tools) != 40 {
 		t.Fatalf("%s: tool count=%d want=35", assertion, len(tools))
 	}
 	want := []string{

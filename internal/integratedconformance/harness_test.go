@@ -746,14 +746,14 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		t.Log("PASS " + assertion)
 	})
 
-	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY_NINE", func(t *testing.T) {
-		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_THIRTY_NINE"
+	t.Run("ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY", func(t *testing.T) {
+		const assertion = "ASSERT_CURRENT_REGISTRY_ADVERTISES_FORTY"
 		tools := mcp.NewRegistry(true).Advertised()
 		if rejectPerturbation(t, assertion, true) {
 			tools = tools[:len(tools)-1]
 		}
-		if got := len(tools); got != 39 {
-			t.Fatalf("%s: advertised=%d want=39", assertion, got)
+		if got := len(tools); got != 40 {
+			t.Fatalf("%s: advertised=%d want=40", assertion, got)
 		}
 		t.Log("PASS " + assertion)
 	})
@@ -784,7 +784,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				t.Fatalf("%s: historical tool missing from current registry: %s", assertion, tool.Name)
 			}
 		}
-		if len(historical) != 12 || len(current) != 39 || currentOnly == 0 {
+		if len(historical) != 12 || len(current) != 40 || currentOnly == 0 {
 			t.Fatalf("%s: historical=%d current=%d current_only=%d", assertion, len(historical), len(current), currentOnly)
 		}
 		t.Log("PASS " + assertion)

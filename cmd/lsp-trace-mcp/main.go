@@ -304,6 +304,11 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(newCensusRuntime(selected))
 	server.Executors[mcp.StructuralContextExecutorFamily] = newStructuralContextExecutor(selected)
 	server.Executors[mcp.StructuralContextV2ExecutorFamily] = server.Executors[mcp.StructuralContextExecutorFamily]
+	structural, structuralOK := server.Executors[mcp.StructuralContextV2ExecutorFamily].(*structuralContextExecutor)
+	churn, churnOK := server.Executors[mcp.ContextSymbolChurnExecutorFamily].(*contextSymbolChurnExecutor)
+	if structuralOK && churnOK {
+		server.Executors[mcp.ContextSymbolChurnCaptureExecutorFamily] = newContextSymbolChurnCaptureExecutor(structural, churn)
+	}
 }
 
 func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
@@ -450,6 +455,10 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
 			mcp.ContextChurnExecutorFamily:        contextChurnExecutor{},
 			mcp.ContextSymbolChurnExecutorFamily:  &contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
+			mcp.ContextSymbolChurnCaptureExecutorFamily: newContextSymbolChurnCaptureExecutor(
+				newStructuralContextExecutor(selected),
+				&contextSymbolChurnExecutor{profiles: map[string]historicalLSPProfile{}},
+			),
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

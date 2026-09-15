@@ -12,45 +12,46 @@ import (
 // whose public presentation is lexical. Operation 31 is composition and 32 is
 // A-08 instability; insertions and renumbering are compatibility breaks.
 var adr0004OperationNumbers = []string{
-	"lsp_trace_v1_capabilities",              // 1
-	"lsp_trace_v1_schema_get",                // 2
-	"lsp_trace_v1_validate",                  // 3
-	"lsp_trace_v1_verify",                    // 4
-	"lsp_trace_v1_inspect",                   // 5
-	"lsp_trace_v1_filter",                    // 6
-	"lsp_trace_v1_execute",                   // 7
-	"lsp_session_v1_list",                    // 8
-	"lsp_session_v1_status",                  // 9
-	"lsp_session_v1_restart",                 // 10
-	"lsp_session_v1_stop",                    // 11
-	"lsp_trace_v1_incoming",                  // 12
-	"lsp_trace_v1_slice",                     // 13
-	"lsp_trace_v1_export_retained_calls",     // 14
-	"lsp_trace_v1_bounded_retained_analysis", // 15
-	"lsp_trace_v1_bounded_retained_metrics",  // 16
-	"lsp_trace_v1_bounded_retained_ranking",  // 17
-	"lsp_trace_v1_inspect_hydrated",          // 18
-	"lsp_trace_v2_export_retained_calls",     // 19
-	"lsp_trace_v2_verify_retained_calls",     // 20
-	"lsp_trace_v2_slice",                     // 21
-	"lsp_trace_v2_incoming",                  // 22
-	"lsp_trace_v2_verify",                    // 23
-	"lsp_trace_v3_slice",                     // 24
-	"lsp_trace_v3_incoming",                  // 25
-	"lsp_trace_v2_bounded_retained_analysis", // 26
-	"lsp_trace_v2_bounded_retained_metrics",  // 27
-	"lsp_trace_v2_bounded_retained_ranking",  // 28
-	"lsp_trace_v1_custody_execute",           // 29
-	"lsp_trace_v1_program_c_leiden",          // 30
-	"lsp_trace_v1_program_c_compose",         // 31
-	"lsp_trace_v1_program_c_instability",     // 32
-	"lsp_trace_v1_trace",                     // 33
-	"lsp_trace_v1_census",                    // 34
-	"lsp_trace_v1_structural_context",        // 35
-	"lsp_trace_v2_structural_context",        // 36
-	"lsp_trace_v1_structural_delta",          // 37
-	"lsp_trace_v1_context_churn",             // 38
-	"lsp_trace_v1_context_symbol_churn",      // 39
+	"lsp_trace_v1_capabilities",                 // 1
+	"lsp_trace_v1_schema_get",                   // 2
+	"lsp_trace_v1_validate",                     // 3
+	"lsp_trace_v1_verify",                       // 4
+	"lsp_trace_v1_inspect",                      // 5
+	"lsp_trace_v1_filter",                       // 6
+	"lsp_trace_v1_execute",                      // 7
+	"lsp_session_v1_list",                       // 8
+	"lsp_session_v1_status",                     // 9
+	"lsp_session_v1_restart",                    // 10
+	"lsp_session_v1_stop",                       // 11
+	"lsp_trace_v1_incoming",                     // 12
+	"lsp_trace_v1_slice",                        // 13
+	"lsp_trace_v1_export_retained_calls",        // 14
+	"lsp_trace_v1_bounded_retained_analysis",    // 15
+	"lsp_trace_v1_bounded_retained_metrics",     // 16
+	"lsp_trace_v1_bounded_retained_ranking",     // 17
+	"lsp_trace_v1_inspect_hydrated",             // 18
+	"lsp_trace_v2_export_retained_calls",        // 19
+	"lsp_trace_v2_verify_retained_calls",        // 20
+	"lsp_trace_v2_slice",                        // 21
+	"lsp_trace_v2_incoming",                     // 22
+	"lsp_trace_v2_verify",                       // 23
+	"lsp_trace_v3_slice",                        // 24
+	"lsp_trace_v3_incoming",                     // 25
+	"lsp_trace_v2_bounded_retained_analysis",    // 26
+	"lsp_trace_v2_bounded_retained_metrics",     // 27
+	"lsp_trace_v2_bounded_retained_ranking",     // 28
+	"lsp_trace_v1_custody_execute",              // 29
+	"lsp_trace_v1_program_c_leiden",             // 30
+	"lsp_trace_v1_program_c_compose",            // 31
+	"lsp_trace_v1_program_c_instability",        // 32
+	"lsp_trace_v1_trace",                        // 33
+	"lsp_trace_v1_census",                       // 34
+	"lsp_trace_v1_structural_context",           // 35
+	"lsp_trace_v2_structural_context",           // 36
+	"lsp_trace_v1_structural_delta",             // 37
+	"lsp_trace_v1_context_churn",                // 38
+	"lsp_trace_v1_context_symbol_churn",         // 39
+	"lsp_trace_v1_context_symbol_churn_capture", // 40
 }
 
 var adr0004DefaultCurrent = []string{
@@ -58,6 +59,7 @@ var adr0004DefaultCurrent = []string{
 	"lsp_trace_v1_census",
 	"lsp_trace_v1_context_churn",
 	"lsp_trace_v1_context_symbol_churn",
+	"lsp_trace_v1_context_symbol_churn_capture",
 	"lsp_trace_v1_execute",
 	"lsp_trace_v1_inspect_hydrated",
 	"lsp_trace_v1_program_c_leiden",
@@ -85,8 +87,8 @@ var adr0004HiddenLegacy = []string{
 
 func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *testing.T) {
 	r := NewRegistry(false)
-	if len(adr0004OperationNumbers) != 39 {
-		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 39", len(adr0004OperationNumbers))
+	if len(adr0004OperationNumbers) != 40 {
+		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 40", len(adr0004OperationNumbers))
 	}
 	if adr0004OperationNumbers[30] != "lsp_trace_v1_program_c_compose" || adr0004OperationNumbers[31] != "lsp_trace_v1_program_c_instability" {
 		t.Fatalf("REGRESSION: historical operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
@@ -120,8 +122,8 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *
 		operation := properties["operation"].(map[string]any)["const"].(string)
 		seen[operation] = true
 	}
-	if len(seen) != 38 {
-		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 38", len(seen))
+	if len(seen) != 39 {
+		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 39", len(seen))
 	}
 	for _, name := range adr0004OperationNumbers {
 		if name != "lsp_trace_v1_execute" && !seen[name] {

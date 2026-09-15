@@ -92,7 +92,11 @@ func contextChurnDomainErrorEnvelope(requestID, phase, state, message string) en
 }
 
 func contextSymbolChurnDomainErrorEnvelope(requestID, phase, state, message string) envelope {
-	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.ContextSymbolChurnDomainErrorID, Tool: mcpcontract.ContextSymbolChurnTool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
+	return contextSymbolChurnDomainErrorEnvelopeFor(mcpcontract.ContextSymbolChurnTool, mcpcontract.ContextSymbolChurnDomainErrorID, requestID, phase, state, message)
+}
+
+func contextSymbolChurnDomainErrorEnvelopeFor(tool, schemaID, requestID, phase, state, message string) envelope {
+	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
 }
 
 func contextSymbolChurnSummary(result vcssymbolsidecar.Result) map[string]any {
@@ -379,7 +383,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
-		if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily {
+		if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 			state, phase := failure.Code, "ACQUISITION"
 			switch state {
 			case operation.FailureInvalidInput:
@@ -387,12 +391,21 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			case "PROFILE_UNAVAILABLE":
 				phase = "PROFILE"
 			case "TIMEOUT", "RESOURCE_LIMIT", "ACQUISITION_FAILED":
+			case "STRUCTURAL_ACQUISITION_FAILED":
+				phase = "STRUCTURAL_ACQUISITION"
+			case "WORKSPACE_UNAVAILABLE":
+				phase = "WORKSPACE"
+			case "SYMBOL_CHURN_ACQUISITION_FAILED":
+				phase = "SYMBOL_CHURN_ACQUISITION"
 			default:
 				state = "ACQUISITION_FAILED"
 			}
 			message := state
 			if failure.Err != nil {
 				message = failure.Err.Error()
+			}
+			if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+				return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelopeFor(tool.Name, mcpcontract.ContextSymbolChurnCaptureDomainErrorID, requestID, phase, state, message))
 			}
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, phase, state, message))
 		}
@@ -473,13 +486,17 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
-	if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily {
+	if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 		var result map[string]any
 		var typed vcssymbolsidecar.Result
 		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || json.Unmarshal(opResult.Artifact, &typed) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) != nil {
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 		}
-		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "2", EnvelopeSchemaID: mcpcontract.ContextSymbolChurnSuccessV2ID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
+		schemaID := mcpcontract.ContextSymbolChurnSuccessV2ID
+		if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+			schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessID
+		}
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "2", EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
 	}
 	if tool.ExecutorFamily == ContextChurnExecutorFamily {
 		var result map[string]any
@@ -885,6 +902,8 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 		return mcpcontract.ValidateContextChurnEnvelopeExclusive(raw)
 	case EnvelopePolicyContextSymbolChurn:
 		return mcpcontract.ValidateContextSymbolChurnEnvelopeExclusive(raw)
+	case EnvelopePolicyContextSymbolChurnCapture:
+		return mcpcontract.ValidateContextSymbolChurnCaptureEnvelopeExclusive(raw)
 	default:
 		return mcpcontract.ValidateEnvelopeExclusive(raw)
 	}
@@ -1140,6 +1159,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("context_churn")
 	case mcpcontract.ContextSymbolChurnTool:
 		return operation.Name("context_symbol_churn")
+	case mcpcontract.ContextSymbolChurnCaptureTool:
+		return operation.Name("context_symbol_churn_capture")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

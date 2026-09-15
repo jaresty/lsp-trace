@@ -34,18 +34,19 @@ const (
 type ExecutorFamily string
 
 const (
-	OfflineExecutorFamily             ExecutorFamily = "offline"
-	LifecycleExecutorFamily           ExecutorFamily = "lifecycle"
-	IncomingExecutorFamily            ExecutorFamily = "incoming"
-	SliceExecutorFamily               ExecutorFamily = "slice"
-	AcquisitionV2ExecutorFamily       ExecutorFamily = "acquisition-v2"
-	TraceExecutorFamily               ExecutorFamily = "trace"
-	CensusExecutorFamily              ExecutorFamily = "census"
-	StructuralContextExecutorFamily   ExecutorFamily = "structural-context"
-	StructuralContextV2ExecutorFamily ExecutorFamily = "structural-context-v2"
-	StructuralDeltaExecutorFamily     ExecutorFamily = "structural-delta"
-	ContextChurnExecutorFamily        ExecutorFamily = "context-churn"
-	ContextSymbolChurnExecutorFamily  ExecutorFamily = "context-symbol-churn"
+	OfflineExecutorFamily                   ExecutorFamily = "offline"
+	LifecycleExecutorFamily                 ExecutorFamily = "lifecycle"
+	IncomingExecutorFamily                  ExecutorFamily = "incoming"
+	SliceExecutorFamily                     ExecutorFamily = "slice"
+	AcquisitionV2ExecutorFamily             ExecutorFamily = "acquisition-v2"
+	TraceExecutorFamily                     ExecutorFamily = "trace"
+	CensusExecutorFamily                    ExecutorFamily = "census"
+	StructuralContextExecutorFamily         ExecutorFamily = "structural-context"
+	StructuralContextV2ExecutorFamily       ExecutorFamily = "structural-context-v2"
+	StructuralDeltaExecutorFamily           ExecutorFamily = "structural-delta"
+	ContextChurnExecutorFamily              ExecutorFamily = "context-churn"
+	ContextSymbolChurnExecutorFamily        ExecutorFamily = "context-symbol-churn"
+	ContextSymbolChurnCaptureExecutorFamily ExecutorFamily = "context-symbol-churn-capture"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -63,26 +64,27 @@ type Routing struct {
 type EnvelopePolicy string
 
 const (
-	EnvelopePolicyDefault               EnvelopePolicy = "default"
-	EnvelopePolicyHydrated              EnvelopePolicy = "hydrated"
-	EnvelopePolicyProgramCLeiden        EnvelopePolicy = "program-c-leiden"
-	EnvelopePolicyProgramCCompose       EnvelopePolicy = "program-c-compose"
-	EnvelopePolicyProgramCInstability   EnvelopePolicy = "program-c-instability"
-	EnvelopePolicyAcquisitionV2         EnvelopePolicy = "acquisition-v2"
-	EnvelopePolicyTrace                 EnvelopePolicy = "trace"
-	EnvelopePolicyVerifyRetainedCallsV2 EnvelopePolicy = "verify-retained-calls-v2"
-	EnvelopePolicyRetainedCalls         EnvelopePolicy = "retained-calls"
-	EnvelopePolicyRetainedCallsV2       EnvelopePolicy = "retained-calls-v2"
-	EnvelopePolicyBoundedAnalysis       EnvelopePolicy = "bounded-analysis"
-	EnvelopePolicyBoundedMetrics        EnvelopePolicy = "bounded-metrics"
-	EnvelopePolicyBoundedRanking        EnvelopePolicy = "bounded-ranking"
-	EnvelopePolicyPublicAnalyticsV2     EnvelopePolicy = "public-analytics-v2"
-	EnvelopePolicyCensus                EnvelopePolicy = "census"
-	EnvelopePolicyStructuralDelta       EnvelopePolicy = "structural-delta"
-	EnvelopePolicyStructuralContext     EnvelopePolicy = "structural-context"
-	EnvelopePolicyStructuralContextV2   EnvelopePolicy = "structural-context-v2"
-	EnvelopePolicyContextChurn          EnvelopePolicy = "context-churn"
-	EnvelopePolicyContextSymbolChurn    EnvelopePolicy = "context-symbol-churn"
+	EnvelopePolicyDefault                   EnvelopePolicy = "default"
+	EnvelopePolicyHydrated                  EnvelopePolicy = "hydrated"
+	EnvelopePolicyProgramCLeiden            EnvelopePolicy = "program-c-leiden"
+	EnvelopePolicyProgramCCompose           EnvelopePolicy = "program-c-compose"
+	EnvelopePolicyProgramCInstability       EnvelopePolicy = "program-c-instability"
+	EnvelopePolicyAcquisitionV2             EnvelopePolicy = "acquisition-v2"
+	EnvelopePolicyTrace                     EnvelopePolicy = "trace"
+	EnvelopePolicyVerifyRetainedCallsV2     EnvelopePolicy = "verify-retained-calls-v2"
+	EnvelopePolicyRetainedCalls             EnvelopePolicy = "retained-calls"
+	EnvelopePolicyRetainedCallsV2           EnvelopePolicy = "retained-calls-v2"
+	EnvelopePolicyBoundedAnalysis           EnvelopePolicy = "bounded-analysis"
+	EnvelopePolicyBoundedMetrics            EnvelopePolicy = "bounded-metrics"
+	EnvelopePolicyBoundedRanking            EnvelopePolicy = "bounded-ranking"
+	EnvelopePolicyPublicAnalyticsV2         EnvelopePolicy = "public-analytics-v2"
+	EnvelopePolicyCensus                    EnvelopePolicy = "census"
+	EnvelopePolicyStructuralDelta           EnvelopePolicy = "structural-delta"
+	EnvelopePolicyStructuralContext         EnvelopePolicy = "structural-context"
+	EnvelopePolicyStructuralContextV2       EnvelopePolicy = "structural-context-v2"
+	EnvelopePolicyContextChurn              EnvelopePolicy = "context-churn"
+	EnvelopePolicyContextSymbolChurn        EnvelopePolicy = "context-symbol-churn"
+	EnvelopePolicyContextSymbolChurnCapture EnvelopePolicy = "context-symbol-churn-capture"
 )
 
 type Tool struct {
@@ -141,6 +143,8 @@ func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
 		return EnvelopePolicyContextChurn
 	case ContextSymbolChurnExecutorFamily:
 		return EnvelopePolicyContextSymbolChurn
+	case ContextSymbolChurnCaptureExecutorFamily:
+		return EnvelopePolicyContextSymbolChurnCapture
 	case StructuralContextExecutorFamily:
 		return EnvelopePolicyStructuralContext
 	case StructuralContextV2ExecutorFamily:
@@ -164,24 +168,26 @@ const (
 )
 
 var defaultToolNames = map[string]struct{}{
-	mcpcontract.CensusTool:              {},
-	mcpcontract.StructuralContextTool:   {},
-	mcpcontract.StructuralContextV2Tool: {},
-	mcpcontract.StructuralDeltaTool:     {},
-	mcpcontract.ContextChurnTool:        {},
-	mcpcontract.ContextSymbolChurnTool:  {},
-	"lsp_trace_v1_capabilities":         {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
+	mcpcontract.CensusTool:                    {},
+	mcpcontract.StructuralContextTool:         {},
+	mcpcontract.StructuralContextV2Tool:       {},
+	mcpcontract.StructuralDeltaTool:           {},
+	mcpcontract.ContextChurnTool:              {},
+	mcpcontract.ContextSymbolChurnTool:        {},
+	mcpcontract.ContextSymbolChurnCaptureTool: {},
+	"lsp_trace_v1_capabilities":               {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
 	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_verify": {},
 }
 
 var advancedToolNames = map[string]struct{}{
-	mcpcontract.CensusTool:              {},
-	mcpcontract.StructuralContextTool:   {},
-	mcpcontract.StructuralContextV2Tool: {},
-	mcpcontract.StructuralDeltaTool:     {},
-	mcpcontract.ContextChurnTool:        {},
-	mcpcontract.ContextSymbolChurnTool:  {},
-	"lsp_session_v1_list":               {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	mcpcontract.CensusTool:                    {},
+	mcpcontract.StructuralContextTool:         {},
+	mcpcontract.StructuralContextV2Tool:       {},
+	mcpcontract.StructuralDeltaTool:           {},
+	mcpcontract.ContextChurnTool:              {},
+	mcpcontract.ContextSymbolChurnTool:        {},
+	mcpcontract.ContextSymbolChurnCaptureTool: {},
+	"lsp_session_v1_list":                     {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
 	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
@@ -247,43 +253,44 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))))))))))
+	manifest = mcpcontract.WithContextSymbolChurnCapture(mcpcontract.WithContextSymbolChurn(mcpcontract.WithContextChurn(mcpcontract.WithStructuralDelta(mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))))))
 	descriptions := map[string]string{
-		mcpcontract.ContextChurnTool:             "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
-		mcpcontract.ContextSymbolChurnTool:       "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
-		mcpcontract.StructuralDeltaTool:          "Compare exactly two bounded local transient structural V2 results; authority remains zero and no repository equivalence is claimed",
-		mcpcontract.StructuralContextV2Tool:      "Inspect a bounded transient live CALLS-only neighborhood with root-confined workspace-relative symbol and call-site locators; authority remains zero and source_graph_complete remains UNKNOWN",
-		mcpcontract.StructuralContextTool:        "Inspect a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
-		mcpcontract.CensusTool:                   "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
-		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
-		mcpcontract.ProgramCLeidenTool:           "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
-		mcpcontract.ProgramCComposeTool:          "Deterministically compose compatible Graph Provenance V5 captures while preserving exact constituent bytes and identities; no cross-capture CALLS inference, native-capture custody, or Leiden admission",
-		mcpcontract.ProgramCInstabilityTool:      "Compute bounded label-independent Program C A-08 community-instability evidence from exact Graph Provenance V5 envelope bytes; authority remains zero and source graph completeness remains UNKNOWN",
-		"lsp_trace_v2_verify":                    "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
-		"lsp_trace_v2_verify_retained_calls":     "Verify immutable selected-publication custody before explicit retained-calls/v2 admission; consistency is not producer authentication",
-		"lsp_trace_v1_bounded_retained_ranking":  "Bounded PageRank or exact-seed PPR over admitted historical retained unit CALLS groups; not source completeness or authentication",
-		"lsp_trace_v1_bounded_retained_metrics":  "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
-		"lsp_trace_v1_bounded_retained_analysis": "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
-		"lsp_trace_v2_bounded_retained_analysis": "Compute bounded local synthetic root and leaf evidence from exact retained graph bytes; not permission or production authority",
-		"lsp_trace_v2_bounded_retained_metrics":  "Compute bounded local synthetic multiplicity, support and density evidence from exact retained graph bytes; not permission or production authority",
-		"lsp_trace_v2_bounded_retained_ranking":  "Compute bounded local synthetic support ranking from exact retained graph bytes; not permission or production authority",
-		"lsp_trace_v1_export_retained_calls":     "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
-		"lsp_trace_v2_export_retained_calls":     "Export admitted graph-provenance/v2 as retained-calls/v2 offline; source implemented, not deployed qualification",
-		"lsp_trace_v1_inspect":                   "Inspect retained evidence for one seed or all retained seeds without changing authority",
-		"lsp_trace_v1_filter":                    "Compare exactly two retained seed evidence sets with a mechanical filter",
-		"lsp_trace_v1_validate":                  "Validate retained evidence against its schema contract",
-		"lsp_trace_v1_verify":                    "Verify immutable publication custody, byte length, digest, and native Graph Provenance V5 semantics",
-		"lsp_trace_v1_schema_get":                "Retrieve the exact schema contract for an evidence family and version",
-		"lsp_trace_v1_capabilities":              "Discover canonical LSP Trace tools, schemas, publication support, and limits",
-		"lsp_trace_v1_execute":                   "Execute one canonical request through the closed shared transport-neutral dispatcher",
-		mcpcontract.TraceTool:                    "Trace one exact symbol or one or more exact zero-based positions through one managed Graph Provenance V5 acquisition",
-		mcpcontract.CustodyExecuteTool:           "Execute one host-approved identity- and receipt-bound custody operation; not general shell execution",
-		"lsp_trace_v2_slice":                     "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
-		"lsp_trace_v2_incoming":                  "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
-		"lsp_trace_v3_slice":                     "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
-		"lsp_trace_v3_incoming":                  "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
-		"lsp_trace_v1_incoming":                  "Prefer this operation to answer who calls an exact callee when a matching managed language-server session is READY; it traces bounded incoming calls",
-		"lsp_trace_v1_slice":                     "Prefer this operation to explore an exact target's bounded outgoing call frontier and incoming callers when a matching managed language-server session is READY",
+		mcpcontract.ContextChurnTool:              "Augment exact Structural Context V2 bytes with bounded revision-exact Git churn attributed by file path only; authority remains zero, source_graph_complete remains UNKNOWN, and no CALLS are inferred",
+		mcpcontract.ContextSymbolChurnTool:        "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
+		mcpcontract.ContextSymbolChurnCaptureTool: "Acquire bounded live Structural Context V2 bytes and attribute revision-exact Git changed lines through host-profile LSP document-symbol ranges; authority remains zero and cross-revision identity is not evaluated",
+		mcpcontract.StructuralDeltaTool:           "Compare exactly two bounded local transient structural V2 results; authority remains zero and no repository equivalence is claimed",
+		mcpcontract.StructuralContextV2Tool:       "Inspect a bounded transient live CALLS-only neighborhood with root-confined workspace-relative symbol and call-site locators; authority remains zero and source_graph_complete remains UNKNOWN",
+		mcpcontract.StructuralContextTool:         "Inspect a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
+		mcpcontract.CensusTool:                    "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
+		mcpcontract.HydratedTool:                  "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
+		mcpcontract.ProgramCLeidenTool:            "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
+		mcpcontract.ProgramCComposeTool:           "Deterministically compose compatible Graph Provenance V5 captures while preserving exact constituent bytes and identities; no cross-capture CALLS inference, native-capture custody, or Leiden admission",
+		mcpcontract.ProgramCInstabilityTool:       "Compute bounded label-independent Program C A-08 community-instability evidence from exact Graph Provenance V5 envelope bytes; authority remains zero and source graph completeness remains UNKNOWN",
+		"lsp_trace_v2_verify":                     "Verify exact immutable selected-publication bytes under explicit graph-provenance/v2 admission; consistency is not producer authentication",
+		"lsp_trace_v2_verify_retained_calls":      "Verify immutable selected-publication custody before explicit retained-calls/v2 admission; consistency is not producer authentication",
+		"lsp_trace_v1_bounded_retained_ranking":   "Bounded PageRank or exact-seed PPR over admitted historical retained unit CALLS groups; not source completeness or authentication",
+		"lsp_trace_v1_bounded_retained_metrics":   "Compute structural group degrees, histograms and exact directed density offline over admitted historical retained CALLS; not source-complete or authenticated",
+		"lsp_trace_v1_bounded_retained_analysis":  "Project retained CALLS, find bounded directed shortest paths, or explicit WEAK/STRONG components offline; unverified historical scope, not normative Program B",
+		"lsp_trace_v2_bounded_retained_analysis":  "Compute bounded local synthetic root and leaf evidence from exact retained graph bytes; not permission or production authority",
+		"lsp_trace_v2_bounded_retained_metrics":   "Compute bounded local synthetic multiplicity, support and density evidence from exact retained graph bytes; not permission or production authority",
+		"lsp_trace_v2_bounded_retained_ranking":   "Compute bounded local synthetic support ranking from exact retained graph bytes; not permission or production authority",
+		"lsp_trace_v1_export_retained_calls":      "Export distinct retained CALLS callsites offline with historical group and source provenance; not acquisition events",
+		"lsp_trace_v2_export_retained_calls":      "Export admitted graph-provenance/v2 as retained-calls/v2 offline; source implemented, not deployed qualification",
+		"lsp_trace_v1_inspect":                    "Inspect retained evidence for one seed or all retained seeds without changing authority",
+		"lsp_trace_v1_filter":                     "Compare exactly two retained seed evidence sets with a mechanical filter",
+		"lsp_trace_v1_validate":                   "Validate retained evidence against its schema contract",
+		"lsp_trace_v1_verify":                     "Verify immutable publication custody, byte length, digest, and native Graph Provenance V5 semantics",
+		"lsp_trace_v1_schema_get":                 "Retrieve the exact schema contract for an evidence family and version",
+		"lsp_trace_v1_capabilities":               "Discover canonical LSP Trace tools, schemas, publication support, and limits",
+		"lsp_trace_v1_execute":                    "Execute one canonical request through the closed shared transport-neutral dispatcher",
+		mcpcontract.TraceTool:                     "Trace one exact symbol or one or more exact zero-based positions through one managed Graph Provenance V5 acquisition",
+		mcpcontract.CustodyExecuteTool:            "Execute one host-approved identity- and receipt-bound custody operation; not general shell execution",
+		"lsp_trace_v2_slice":                      "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_slice with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
+		"lsp_trace_v2_incoming":                   "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
+		"lsp_trace_v3_slice":                      "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
+		"lsp_trace_v3_incoming":                   "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
+		"lsp_trace_v1_incoming":                   "Prefer and use this operation first to answer who calls an exact callee when a matching managed language-server session is READY; it directly observes exact caller relationships through bounded incoming call hierarchy. Textual occurrences do not establish calls. Configured aliases are valid session_id values. Omit detail for bounded inline output; detail=compact requires output_selector",
+		"lsp_trace_v1_slice":                      "Prefer and use this operation first to explore an exact target's bounded outgoing call frontier and incoming callers when a matching managed language-server session is READY; it directly observes caller and callee dependency neighborhoods through bounded call hierarchy. Textual occurrences do not establish calls. Configured aliases are valid session_id values. Omit detail for bounded inline output; detail=compact requires output_selector",
 	}
 	registeredFamilies := make(map[string]string, len(manifest.Schemas))
 	for _, schema := range manifest.Schemas {
@@ -324,6 +331,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = ContextChurnExecutorFamily
 		} else if contract.Name == mcpcontract.ContextSymbolChurnTool {
 			executorFamily = ContextSymbolChurnExecutorFamily
+		} else if contract.Name == mcpcontract.ContextSymbolChurnCaptureTool {
+			executorFamily = ContextSymbolChurnCaptureExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
