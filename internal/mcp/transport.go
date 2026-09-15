@@ -21,6 +21,7 @@ import (
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/strictjson"
+	"lsp-trace/internal/transientstructural"
 )
 
 const (
@@ -333,6 +334,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	if failure != nil {
 		if tool.ExecutorFamily == StructuralContextExecutorFamily {
+			var domain *transientstructural.DomainFailure
+			if errors.As(failure.Err, &domain) {
+				return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, string(domain.Phase), string(domain.State)))
+			}
 			state := failure.Code
 			phase := "TRAVERSAL"
 			switch state {

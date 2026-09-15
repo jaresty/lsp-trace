@@ -9,6 +9,7 @@ import (
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/transientstructural"
 	"lsp-trace/internal/transientstructuralresult"
 )
 
@@ -60,6 +61,38 @@ func TestStructuralContextOperation35RegistrationProfilesAndSchema(t *testing.T)
 	invalid := (&Server{Registry: full}).callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextTool, bad))
 	if invalid.Error == nil || invalid.Error.Code != -32602 {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TIMEOUT_RELATION: %+v", invalid)
+	}
+}
+
+func TestStructuralContextOperation35PreservesTypedDomainFailures(t *testing.T) {
+	legal := map[transientstructural.Phase][]transientstructural.TerminalState{
+		transientstructural.PhasePreflight: {transientstructural.StateUnsupported, transientstructural.StateAmbiguousTarget, transientstructural.StateTargetNotFound, transientstructural.StateResourceLimit, transientstructural.StateTimeout, transientstructural.StateCancelled, transientstructural.StateGenerationChanged, transientstructural.StateInvalidServerResponse},
+		transientstructural.PhaseTraversal: {transientstructural.StatePartial, transientstructural.StateTruncated, transientstructural.StateResourceLimit, transientstructural.StateTimeout, transientstructural.StateCancelled, transientstructural.StateGenerationChanged, transientstructural.StateInvalidServerResponse},
+		transientstructural.PhaseAdmission: {transientstructural.StateResourceLimit, transientstructural.StateCancelled, transientstructural.StateGenerationChanged, transientstructural.StateInvalidServerResponse},
+		transientstructural.PhaseAnalysis:  {transientstructural.StateResourceLimit, transientstructural.StateTimeout, transientstructural.StateCancelled, transientstructural.StateGenerationChanged, transientstructural.StateAnalysisFailed},
+	}
+	for phase, states := range legal {
+		for _, state := range states {
+			t.Run(string(phase)+"/"+string(state), func(t *testing.T) {
+				executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(state), Err: &transientstructural.DomainFailure{Phase: phase, State: state}}}
+				server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextExecutorFamily: executor}}
+				response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextTool, structuralContextArgs()))
+				call := response.Result.(callResult)
+				if call.StructuredContent.Phase != string(phase) || call.StructuredContent.State != string(state) {
+					t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_PRESERVES_TYPED_DOMAIN_FAILURE: %+v", call.StructuredContent)
+				}
+			})
+		}
+	}
+}
+
+func TestStructuralContextOperation35UnknownUntypedFailureFailsClosed(t *testing.T) {
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "UNKNOWN_FUTURE_CODE"}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextExecutorFamily: executor}}
+	response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextTool, structuralContextArgs()))
+	call := response.Result.(callResult)
+	if call.StructuredContent.Phase != "TRAVERSAL" || call.StructuredContent.State != "INVALID_SERVER_RESPONSE" {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_UNKNOWN_FAILURE_FAILS_CLOSED: %+v", call.StructuredContent)
 	}
 }
 
