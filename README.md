@@ -86,6 +86,16 @@ The public result is deliberately bounded: `authority` is `0`, `source_graph_com
 
 Legacy `slice` and `incoming` remain visible and callable; removal is `UNSCHEDULED`. `context` is AVAILABLE for bounded transient live structural analysis; it remains authority-zero, non-retained, non-replayable, non-publishable, and source-graph completeness remains `UNKNOWN`.
 
+### Git churn sidecar
+
+`context-churn` augments one exact Structural Context V2 artifact with file-level Git churn over an explicit revision range:
+
+```sh
+lsp-trace context-churn --input context-v2.json --workspace /absolute/repository/root --from BASE --to HEAD --machine
+```
+
+The command resolves both revisions to exact commit identities, disables rename inference, and reports commit counts, added/deleted lines, binary changes, and the most recent changing revision for every admitted graph node. The join is explicitly `FILE_PATH_ONLY`: symbols sharing a file receive the same file metric. The result binds the exact input bytes by SHA-256, accounts every node including zero-churn nodes, keeps `authority=0` and `source_graph_complete=UNKNOWN`, and never adds, removes, or reinterprets graph nodes or server-reported `CALLS`. Churn nominates navigation hotspots; it does not prove defects, ownership, semantic instability, or repository completeness.
+
 ### Coordinate conventions
 
 CLI `--at PATH:LINE:COLUMN` positions are one-based. MCP `line` and `character` inputs, LSP requests and responses, and retained graph ranges are zero-based. Columns and LSP characters count code units in the managed session's negotiated position encoding: `utf-8` counts bytes, `utf-16` counts UTF-16 code units, and `utf-32` counts Unicode code points. They are not visual columns; tabs, combining characters, and wide glyphs do not each imply one unit.

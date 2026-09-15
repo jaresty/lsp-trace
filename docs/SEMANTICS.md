@@ -6,6 +6,14 @@ Completeness is bounded by server capability and responses plus visible depth, n
 
 The qualification fixtures include `StaticButNotExecuted`, whose call is behind a branch normal fixture execution does not take. A server may still report that edge, demonstrating the distinction between static evidence and observed execution.
 
+## Git churn sidecar operational contract
+
+`context-churn` accepts one already-admitted `lsp-trace.transient-structural-result.v2` artifact and a Git workspace equal to its resolved repository top-level. It resolves an explicit exclusive `from` revision and inclusive `to` revision to exact commit identities and queries only the artifact's deduplicated workspace-relative paths. Rename inference is disabled.
+
+The output schema identity is `lsp-trace.vcs-churn-sidecar.v1`. Its `graph_artifact_digest` is the SHA-256 digest of the exact admitted V2 bytes. `attribution=FILE_PATH_ONLY` means every symbol in one file receives the same metric; declaration ranges and names do not claim historical symbol continuity. Every admitted node has exactly one row, and `node_count = changed_node_count + zero_churn_node_count`.
+
+`history_scope_complete=COMPLETE` means only that the requested paths were successfully evaluated over the resolved Git revision interval. It does not make the source graph, repository history, rename lineage, or symbol attribution complete. The sidecar keeps `authority=0` and `source_graph_complete=UNKNOWN`. It cannot add or modify graph nodes, relationships, call sites, coupling, centrality, or server-reported `CALLS`; consumers may use churn to prioritize navigation but not to infer defects, ownership, feature identity, runtime behavior, or architectural boundaries.
+
 ## Named server profile resolution
 
 Profiles are opt-in: only an explicit `--profile NAME` selects one, for both `incoming` and `slice`. `language_ids`, file extensions, and seed paths never select a profile. With no profile, config discovery is skipped and legacy command flags behave unchanged.
