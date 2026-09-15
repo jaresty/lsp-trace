@@ -39,12 +39,13 @@ func runContextDelta(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, e)
 		return 1
 	}
-	var bv, av tsr.LocatorResultV2
-	if e = strictDecodeDeltaFile(b, &bv); e != nil {
+	bv, e := tsr.DecodeV2Artifact(b)
+	if e != nil {
 		fmt.Fprintln(stderr, "before:", e)
 		return 2
 	}
-	if e = strictDecodeDeltaFile(a, &av); e != nil {
+	av, e := tsr.DecodeV2Artifact(a)
+	if e != nil {
 		fmt.Fprintln(stderr, "after:", e)
 		return 2
 	}
@@ -86,21 +87,4 @@ func readContextDeltaFile(name string) ([]byte, error) {
 		return nil, errors.New("context-delta input exceeds bounded file size")
 	}
 	return io.ReadAll(io.LimitReader(f, contextDeltaMaxFileBytes+1))
-}
-func strictDecodeDeltaFile(raw []byte, out any) error {
-	input := append([]byte(`{"before":`), raw...)
-	input = append(input, []byte(`,"after":`)...)
-	input = append(input, raw...)
-	input = append(input, '}')
-	in, e := transientstructuraldelta.Decode(input)
-	if e != nil {
-		return e
-	}
-	switch p := out.(type) {
-	case *tsr.LocatorResultV2:
-		*p = in.Before
-	default:
-		return errors.New("invalid decoder target")
-	}
-	return nil
 }

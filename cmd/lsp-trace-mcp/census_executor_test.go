@@ -284,9 +284,9 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 
 	t.Run("generation conversion boundary", func(t *testing.T) {
 		runtime, _, _ := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
-		_, maximumFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775807,"sources":["."]}`))
+		_, maximumFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372037854775807,"sources":["."]}`))
 		assertCensusFailure(t, maximumFailure, censusStageAcquisition, censusCodeAcquisitionFailed)
-		_, overflowFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775808,"sources":["."]}`))
+		_, overflowFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372037854775808,"sources":["."]}`))
 		assertCensusFailure(t, overflowFailure, censusStageConfig, censusCodeInvalidConfig)
 		if math.MaxInt64 <= 0 {
 			t.Fatal("ASSERT_CENSUS_GENERATION_MAX_INT64_PLATFORM")
@@ -361,7 +361,7 @@ func TestCensusExecutorRegisteredAsOperation34Only(t *testing.T) {
 	}
 	tool, found := server.Registry.ResolveCanonical(mcpcontract.CensusTool)
 	_, executorFound := server.Executors[mcp.CensusExecutorFamily]
-	if !found || tool.ExecutorFamily != mcp.CensusExecutorFamily || !executorFound || len(server.Registry.Tools()) != 36 {
+	if !found || tool.ExecutorFamily != mcp.CensusExecutorFamily || !executorFound || len(server.Registry.Tools()) != 37 {
 		t.Fatalf("ASSERT_CENSUS_OPERATION34_REGISTERED: found=%t tool=%+v executor=%t tools=%d", found, tool, executorFound, len(server.Registry.Tools()))
 	}
 	if tool35, found := server.Registry.Resolve(mcpcontract.StructuralContextTool); !found || tool35.ExecutorFamily != mcp.StructuralContextExecutorFamily {

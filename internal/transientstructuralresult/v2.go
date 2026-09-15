@@ -1,15 +1,20 @@
 package transientstructuralresult
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"net/url"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/graphkernel"
+	"lsp-trace/internal/strictjson"
 	"lsp-trace/internal/transientstructural"
 )
 
@@ -171,22 +176,70 @@ func ProjectV2(in transientstructural.Result, q transientstructural.Request, tra
 	return result, nil
 }
 
+func DecodeV2Artifact(raw []byte) (LocatorResultV2, error) {
+	if len(raw) == 0 || len(raw) > 1048576 || strictjson.RejectDuplicates(raw) != nil {
+		return LocatorResultV2{}, errors.New("V2 artifact must be strict bounded JSON")
+	}
+	var r LocatorResultV2
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(&r); err != nil {
+		return LocatorResultV2{}, err
+	}
+	if err := d.Decode(&struct{}{}); err != io.EOF {
+		return LocatorResultV2{}, errors.New("trailing JSON")
+	}
+	if err := ValidateV2(r); err != nil {
+		return LocatorResultV2{}, err
+	}
+	return r, nil
+}
+
 func ValidateV2(r LocatorResultV2) error {
+	if r.SchemaVersion != "lsp-trace.transient-structural-result.v2" {
+		return errors.New("invalid V2 schema version")
+	}
+	if r.Authority != 0 || r.SourceGraphComplete != "UNKNOWN" || r.AnalyticsScope != "BOUNDED_LOCAL" {
+		return errors.New("invalid V2 qualification")
+	}
+	if r.WeakProjection != graphkernel.WeakProjectionPolicy || r.PageRankDamping != graphkernel.PageRankDamping || r.AnalyticsTolerance != graphkernel.AnalyticsTolerance {
+		return errors.New("invalid V2 analytics policy")
+	}
+	if r.ExternalNodesOmitted < 0 || r.ExternalCallsOmitted < 0 {
+		return errors.New("negative omission count")
+	}
+	if r.PositionEncoding != "utf-8" && r.PositionEncoding != "utf-16" && r.PositionEncoding != "utf-32" {
+		return errors.New("invalid position encoding")
+	}
+	if len(r.Nodes) < 1 || len(r.Nodes) > 10000 || len(r.Calls) > 100000 {
+		return errors.New("invalid graph bounds")
+	}
 	ids := make(map[string]bool, len(r.Nodes))
 	for _, n := range r.Nodes {
-		if ids[n.ID] {
-			return errors.New("duplicate node")
+		if !validV2NodeID(n.ID) || ids[n.ID] || strings.TrimSpace(n.Name) == "" || !validV2Path(n.Path) || !validV2Range(n.DeclarationRange) {
+			return errors.New("invalid or duplicate node")
 		}
 		ids[n.ID] = true
 	}
-	if !ids[r.TargetID] || r.Authority != 0 || r.SourceGraphComplete != "UNKNOWN" || r.AnalyticsScope != "BOUNDED_LOCAL" {
-		return errors.New("invalid analytics ceiling")
+	if !ids[r.TargetID] {
+		return errors.New("target absent")
+	}
+	for _, c := range r.Calls {
+		if !ids[c.CallerID] || !ids[c.CalleeID] || !validV2Path(c.Path) || !validV2Range(c.CallSiteRange) {
+			return errors.New("invalid call")
+		}
 	}
 	seen := make(map[string]bool, len(ids))
+	previousComponent := ""
 	for _, c := range r.StrongComponents {
-		if len(c.Nodes) == 0 {
-			return errors.New("empty component")
+		if len(c.Nodes) == 0 || !sort.StringsAreSorted(c.Nodes) {
+			return errors.New("invalid component ordering")
 		}
+		componentKey := strings.Join(c.Nodes, "\x00")
+		if previousComponent != "" && previousComponent >= componentKey {
+			return errors.New("invalid component ordering")
+		}
+		previousComponent = componentKey
 		for _, id := range c.Nodes {
 			if !ids[id] || seen[id] {
 				return errors.New("component membership mismatch")
@@ -198,21 +251,55 @@ func ValidateV2(r LocatorResultV2) error {
 		return errors.New("analytics node coverage mismatch")
 	}
 	for i, id := range sortedIDs(ids) {
-		if r.Coupling[i].NodeID != id || r.PageRank[i].NodeID != id || r.HITS[i].NodeID != id || !finiteNumber(r.Coupling[i].Instability) || !finiteNumber(r.PageRank[i].Score) || !finiteNumber(r.HITS[i].Hub) || !finiteNumber(r.HITS[i].Authority) {
-			return errors.New("analytics ordering or number invalid")
+		c, p, h := r.Coupling[i], r.PageRank[i], r.HITS[i]
+		wantInstability := 0.0
+		if c.Ca < 0 || c.Ce < 0 {
+			return errors.New("negative coupling")
+		}
+		if c.Ca+c.Ce > 0 {
+			wantInstability = float64(c.Ce) / float64(c.Ca+c.Ce)
+		}
+		if c.NodeID != id || p.NodeID != id || h.NodeID != id || !finiteNumber(c.Instability) || math.Abs(c.Instability-wantInstability) > r.AnalyticsTolerance || !finiteNumber(p.Score) || p.Score < 0 || !finiteNumber(h.Hub) || h.Hub < 0 || !finiteNumber(h.Authority) || h.Authority < 0 {
+			return errors.New("analytics ordering, formula, or number invalid")
 		}
 	}
+	lastBridge := ""
 	for _, b := range r.WeakBridges {
-		if !ids[b.NodeA] || !ids[b.NodeB] || b.NodeA >= b.NodeB {
-			return errors.New("invalid weak bridge reference")
+		key := b.NodeA + "\x00" + b.NodeB
+		if !ids[b.NodeA] || !ids[b.NodeB] || b.NodeA >= b.NodeB || (lastBridge != "" && lastBridge >= key) {
+			return errors.New("invalid weak bridge reference or ordering")
 		}
+		lastBridge = key
 	}
+	if !sort.StringsAreSorted(r.ArticulationPoints) {
+		return errors.New("invalid articulation ordering")
+	}
+	last := ""
 	for _, id := range r.ArticulationPoints {
-		if !ids[id] {
+		if !ids[id] || id == last {
 			return errors.New("invalid articulation reference")
 		}
+		last = id
 	}
 	return nil
+}
+
+func validV2NodeID(id string) bool {
+	if len(id) != 35 || !strings.HasPrefix(id, "tn_") {
+		return false
+	}
+	for _, c := range id[3:] {
+		if !strings.ContainsRune("0123456789abcdef", c) {
+			return false
+		}
+	}
+	return true
+}
+func validV2Path(p string) bool {
+	return p != "" && len(p) < 4096 && !path.IsAbs(p) && !strings.Contains(p, "\\") && path.Clean(p) == p && p != "." && p != ".." && !strings.HasPrefix(p, "../")
+}
+func validV2Range(r graph.Range) bool {
+	return r.Start.Line < r.End.Line || (r.Start.Line == r.End.Line && r.Start.Character <= r.End.Character)
 }
 func sortedIDs(ids map[string]bool) []string {
 	out := make([]string, 0, len(ids))

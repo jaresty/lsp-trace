@@ -131,9 +131,6 @@ func Decode(raw []byte) (Input, error) {
 	return in, nil
 }
 func Compare(in Input) (Result, error) {
-	if in.Before.PositionEncoding != in.After.PositionEncoding {
-		return Result{}, &DomainError{CodePositionEncodingMismatch, "position encodings differ"}
-	}
 	bm, bi, err := index(in.Before)
 	if err != nil {
 		return Result{}, err
@@ -141,6 +138,15 @@ func Compare(in Input) (Result, error) {
 	am, ai, err := index(in.After)
 	if err != nil {
 		return Result{}, err
+	}
+	if err := tsr.ValidateV2(in.Before); err != nil {
+		return Result{}, &DomainError{CodeInvalidInput, "before: " + err.Error()}
+	}
+	if err := tsr.ValidateV2(in.After); err != nil {
+		return Result{}, &DomainError{CodeInvalidInput, "after: " + err.Error()}
+	}
+	if in.Before.PositionEncoding != in.After.PositionEncoding {
+		return Result{}, &DomainError{CodePositionEncodingMismatch, "position encodings differ"}
 	}
 	if err := validateRelations(in.Before, bi); err != nil {
 		return Result{}, err
@@ -255,6 +261,9 @@ func index(r tsr.LocatorResultV2) (map[SymbolKey]string, map[string]SymbolKey, e
 		}
 		if _, ok := m[k]; ok {
 			return nil, nil, &DomainError{CodeAmbiguousSymbolKey, fmt.Sprintf("duplicate canonical symbol key: %v", k)}
+		}
+		if _, ok := ids[n.ID]; ok {
+			return nil, nil, &DomainError{CodeInvalidInput, "duplicate node ID"}
 		}
 		m[k] = n.ID
 		ids[n.ID] = k

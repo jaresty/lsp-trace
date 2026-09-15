@@ -10,8 +10,8 @@ import (
 
 func TestFR23PublicV3Contract(t *testing.T) {
 	r := NewRegistry(false)
-	if got := len(r.Advertised()); got != 36 {
-		t.Fatalf("ASSERT_FR23_V3_CURRENT_REGISTRY_COUNT: got %d want 36", got)
+	if got := len(r.Advertised()); got != 37 {
+		t.Fatalf("ASSERT_FR23_V3_CURRENT_REGISTRY_COUNT: got %d want 37", got)
 	}
 	for _, name := range []string{"lsp_trace_v3_slice", "lsp_trace_v3_incoming"} {
 		tool, ok := r.Resolve(name)

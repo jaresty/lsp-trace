@@ -1,1 +1,29 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-delta.v1.schema.json","$defs":{"symbol":{"type":"object","additionalProperties":false,"required":["path","kind","name"],"properties":{"path":{"type":"string","minLength":1,"pattern":"^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},"kind":{"type":"integer"},"name":{"type":"string","minLength":1}}}},"type":"object","additionalProperties":false,"required":["schema_version","qualification","added_symbols","removed_symbols","matched_symbols","calls","analytics","added_weak_bridges","removed_weak_bridges","affected_callers"],"properties":{"schema_version":{"const":"lsp-trace.transient-structural-delta.v1"},"qualification":{"type":"object"},"added_symbols":{"type":"array","items":{"$ref":"#/$defs/symbol"}},"removed_symbols":{"type":"array","items":{"$ref":"#/$defs/symbol"}},"matched_symbols":{"type":"array","items":{"$ref":"#/$defs/symbol"}},"calls":{"type":"object"},"analytics":{"type":"array"},"added_weak_bridges":{"type":"array"},"removed_weak_bridges":{"type":"array"},"affected_callers":{"type":"array","items":{"$ref":"#/$defs/symbol"}}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.transient-structural-delta.v1.schema.json",
+  "$defs": {
+    "symbol": {"type":"object","additionalProperties":false,"required":["path","kind","name"],"properties":{"path":{"type":"string","minLength":1,"maxLength":4095,"pattern":"^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},"kind":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"pattern":".*\\S.*"}}},
+    "call": {"type":"object","additionalProperties":false,"required":["caller","callee","path"],"properties":{"caller":{"$ref":"#/$defs/symbol"},"callee":{"$ref":"#/$defs/symbol"},"path":{"type":"string","minLength":1,"maxLength":4095,"pattern":"^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}}},
+    "callCount": {"type":"object","additionalProperties":false,"required":["call","count"],"properties":{"call":{"$ref":"#/$defs/call"},"count":{"type":"integer","minimum":1,"maximum":100000}}},
+    "countChange": {"type":"object","additionalProperties":false,"required":["call","before","after"],"properties":{"call":{"$ref":"#/$defs/call"},"before":{"type":"integer","minimum":1,"maximum":100000},"after":{"type":"integer","minimum":1,"maximum":100000}}},
+    "intTransition": {"type":"object","additionalProperties":false,"required":["before","after"],"properties":{"before":{"type":"integer","minimum":0,"maximum":100000},"after":{"type":"integer","minimum":0,"maximum":100000}}},
+    "numberTransition": {"type":"object","additionalProperties":false,"required":["before","after"],"properties":{"before":{"type":"number","minimum":0},"after":{"type":"number","minimum":0}}},
+    "boolTransition": {"type":"object","additionalProperties":false,"required":["before","after"],"properties":{"before":{"type":"boolean"},"after":{"type":"boolean"}}},
+    "bridge": {"type":"object","additionalProperties":false,"required":["a","b"],"properties":{"a":{"$ref":"#/$defs/symbol"},"b":{"$ref":"#/$defs/symbol"}}},
+    "analytics": {"type":"object","additionalProperties":false,"required":["symbol","ca","ce","instability","cyclic","articulation","pagerank","hits_hub","hits_authority"],"properties":{"symbol":{"$ref":"#/$defs/symbol"},"ca":{"$ref":"#/$defs/intTransition"},"ce":{"$ref":"#/$defs/intTransition"},"instability":{"$ref":"#/$defs/numberTransition"},"cyclic":{"$ref":"#/$defs/boolTransition"},"articulation":{"$ref":"#/$defs/boolTransition"},"pagerank":{"$ref":"#/$defs/numberTransition"},"hits_hub":{"$ref":"#/$defs/numberTransition"},"hits_authority":{"$ref":"#/$defs/numberTransition"}}}
+  },
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","qualification","added_symbols","removed_symbols","matched_symbols","calls","analytics","added_weak_bridges","removed_weak_bridges","affected_callers"],
+  "properties":{
+    "schema_version":{"const":"lsp-trace.transient-structural-delta.v1"},
+    "qualification":{"type":"object","additionalProperties":false,"required":["authority","source_graph_complete","comparison_scope","acquisition_scope_comparable","node_universe_equal","analytics_policies_equal","scope_sensitive"],"properties":{"authority":{"const":0},"source_graph_complete":{"const":"UNKNOWN"},"comparison_scope":{"const":"TWO_BOUNDED_LOCAL_RESULTS"},"acquisition_scope_comparable":{"const":"UNKNOWN"},"node_universe_equal":{"type":"boolean"},"analytics_policies_equal":{"type":"boolean"},"scope_sensitive":{"type":"array","const":["HITS","PAGERANK"]}}},
+    "added_symbols":{"type":"array","maxItems":10000,"uniqueItems":true,"items":{"$ref":"#/$defs/symbol"}},
+    "removed_symbols":{"type":"array","maxItems":10000,"uniqueItems":true,"items":{"$ref":"#/$defs/symbol"}},
+    "matched_symbols":{"type":"array","maxItems":10000,"uniqueItems":true,"items":{"$ref":"#/$defs/symbol"}},
+    "calls":{"type":"object","additionalProperties":false,"required":["added","removed","count_changed"],"properties":{"added":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/callCount"}},"removed":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/callCount"}},"count_changed":{"type":"array","maxItems":100000,"items":{"$ref":"#/$defs/countChange"}}}},
+    "analytics":{"type":"array","maxItems":10000,"items":{"$ref":"#/$defs/analytics"}},
+    "added_weak_bridges":{"type":"array","maxItems":100000,"uniqueItems":true,"items":{"$ref":"#/$defs/bridge"}},
+    "removed_weak_bridges":{"type":"array","maxItems":100000,"uniqueItems":true,"items":{"$ref":"#/$defs/bridge"}},
+    "affected_callers":{"type":"array","maxItems":10000,"uniqueItems":true,"items":{"$ref":"#/$defs/symbol"}}
+  }
+}

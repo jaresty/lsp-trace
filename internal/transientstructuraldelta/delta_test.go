@@ -4,17 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphkernel"
 	tsr "lsp-trace/internal/transientstructuralresult"
 	"testing"
 )
 
 func fixture(id, path, name string) tsr.LocatorResultV2 {
-	return tsr.LocatorResultV2{SchemaVersion: "lsp-trace.transient-structural-result.v2", Authority: 0, SourceGraphComplete: "UNKNOWN", PositionEncoding: "utf-16", TargetID: id, Nodes: []tsr.LocatorNodeV2{{ID: id, Name: name, Kind: 12, Path: path, DeclarationRange: graph.Range{}}}, AnalyticsScope: "BOUNDED_LOCAL", Coupling: []tsr.CouplingV2{{NodeID: id}}, StrongComponents: []tsr.StrongComponentV2{{Nodes: []string{id}}}, WeakProjection: "UNDIRECTED_SIMPLE", PageRankDamping: .85, AnalyticsTolerance: 1e-12, PageRank: []tsr.NodeScoreV2{{NodeID: id, Score: 1}}, HITS: []tsr.HubAuthorityV2{{NodeID: id}}}
+	return tsr.LocatorResultV2{SchemaVersion: "lsp-trace.transient-structural-result.v2", Authority: 0, SourceGraphComplete: "UNKNOWN", PositionEncoding: "utf-16", TargetID: id, Nodes: []tsr.LocatorNodeV2{{ID: id, Name: name, Kind: 12, Path: path, DeclarationRange: graph.Range{}}}, AnalyticsScope: "BOUNDED_LOCAL", Coupling: []tsr.CouplingV2{{NodeID: id}}, StrongComponents: []tsr.StrongComponentV2{{Nodes: []string{id}}}, WeakProjection: graphkernel.WeakProjectionPolicy, PageRankDamping: .85, AnalyticsTolerance: 1e-12, PageRank: []tsr.NodeScoreV2{{NodeID: id, Score: 1}}, HITS: []tsr.HubAuthorityV2{{NodeID: id}}}
 }
 func TestShiftedIDsAndRangesMatch(t *testing.T) {
 	b := fixture("tn_0123456789abcdef0123456789abcdef", "src/a.go", "A")
 	a := fixture("tn_fedcba9876543210fedcba9876543210", "src/a.go", "A")
 	a.Nodes[0].DeclarationRange.Start.Line = 99
+	a.Nodes[0].DeclarationRange.End.Line = 99
 	r, e := Compare(Input{b, a})
 	if e != nil || len(r.MatchedSymbols) != 1 || len(r.AddedSymbols) != 0 || !r.Qualification.NodeUniverseEqual {
 		t.Fatalf("ASSERT_DELTA_CANONICAL_MATCH: r=%+v err=%v", r, e)
@@ -34,6 +36,10 @@ func TestAmbiguityMismatchAndConfinement(t *testing.T) {
 	}
 	a = b
 	a.Nodes = append(a.Nodes, tsr.LocatorNodeV2{ID: "tn_11111111111111111111111111111111", Name: "B", Kind: 12, Path: "src/b.go"})
+	a.Coupling = append(a.Coupling, tsr.CouplingV2{NodeID: a.Nodes[1].ID})
+	a.StrongComponents = append(a.StrongComponents, tsr.StrongComponentV2{Nodes: []string{a.Nodes[1].ID}})
+	a.PageRank = append(a.PageRank, tsr.NodeScoreV2{NodeID: a.Nodes[1].ID})
+	a.HITS = append(a.HITS, tsr.HubAuthorityV2{NodeID: a.Nodes[1].ID})
 	a.TargetID = a.Nodes[1].ID
 	if _, e := Compare(Input{b, a}); code(e) != CodeTargetMismatch {
 		t.Fatalf("ASSERT_DELTA_TARGET: %v", e)

@@ -8,13 +8,14 @@ import (
 	"testing"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphkernel"
 	"lsp-trace/internal/transientstructuraldelta"
 	tsr "lsp-trace/internal/transientstructuralresult"
 )
 
 func TestContextDeltaMachineByteEquivalentToKernel(t *testing.T) {
 	id := "tn_0123456789abcdef0123456789abcdef"
-	v := tsr.LocatorResultV2{SchemaVersion: "lsp-trace.transient-structural-result.v2", Authority: 0, SourceGraphComplete: "UNKNOWN", PositionEncoding: "utf-16", TargetID: id, Nodes: []tsr.LocatorNodeV2{{ID: id, Name: "A", Kind: 12, Path: "src/a.go", DeclarationRange: graph.Range{}}}, AnalyticsScope: "BOUNDED_LOCAL", Coupling: []tsr.CouplingV2{{NodeID: id}}, StrongComponents: []tsr.StrongComponentV2{{Nodes: []string{id}}}, PageRank: []tsr.NodeScoreV2{{NodeID: id, Score: 1}}, HITS: []tsr.HubAuthorityV2{{NodeID: id}}}
+	v := tsr.LocatorResultV2{SchemaVersion: "lsp-trace.transient-structural-result.v2", Authority: 0, SourceGraphComplete: "UNKNOWN", PositionEncoding: "utf-16", TargetID: id, Nodes: []tsr.LocatorNodeV2{{ID: id, Name: "A", Kind: 12, Path: "src/a.go", DeclarationRange: graph.Range{}}}, AnalyticsScope: "BOUNDED_LOCAL", Coupling: []tsr.CouplingV2{{NodeID: id}}, StrongComponents: []tsr.StrongComponentV2{{Nodes: []string{id}}}, WeakProjection: graphkernel.WeakProjectionPolicy, PageRankDamping: graphkernel.PageRankDamping, AnalyticsTolerance: graphkernel.AnalyticsTolerance, PageRank: []tsr.NodeScoreV2{{NodeID: id, Score: 1}}, HITS: []tsr.HubAuthorityV2{{NodeID: id}}}
 	raw, _ := json.Marshal(v)
 	dir := t.TempDir()
 	b := filepath.Join(dir, "before.json")
