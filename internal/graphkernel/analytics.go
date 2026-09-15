@@ -97,7 +97,11 @@ func (g *DirectedWeighted) WeakCritical() ([]WeakBridge, []string) {
 					articulation[u] = true
 				}
 				if low[v] > disc[u] {
-					bridges = append(bridges, WeakBridge{A: g.identities[u], B: g.identities[v]})
+					a, b := g.identities[u], g.identities[v]
+					if a > b {
+						a, b = b, a
+					}
+					bridges = append(bridges, WeakBridge{A: a, B: b})
 				}
 			} else if v != parent[u] && disc[v] < low[u] {
 				low[u] = disc[v]

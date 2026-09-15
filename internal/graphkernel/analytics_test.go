@@ -54,3 +54,12 @@ func TestRankingsCanonicalFiniteAndFrozen(t *testing.T) {
 		}
 	}
 }
+
+func TestWeakBridgeEndpointsCanonicalIndependentOfDFSParent(t *testing.T) {
+	g := mustGraph(t, []string{"a", "b", "c"}, []Arc{{From: "a", To: "c", Weight: 1}, {From: "c", To: "b", Weight: 1}})
+	bridges, _ := g.WeakCritical()
+	want := []WeakBridge{{A: "a", B: "c"}, {A: "b", B: "c"}}
+	if !reflect.DeepEqual(bridges, want) {
+		t.Fatalf("ASSERT_WEAK_BRIDGE_ENDPOINTS_LEXICAL got=%v want=%v", bridges, want)
+	}
+}
