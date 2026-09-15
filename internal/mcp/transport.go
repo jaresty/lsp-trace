@@ -727,45 +727,7 @@ func bindLifecycleEnvelope(base response, _ Tool, env envelope) response {
 }
 
 func bindEnvelope(base response, tool Tool, env envelope) response {
-	if tool.Name == mcpcontract.HydratedTool {
-		env.EnvelopeSchemaID = mcpcontract.HydratedEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == mcpcontract.ProgramCLeidenTool {
-		env.EnvelopeSchemaID = mcpcontract.ProgramCLeidenEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == mcpcontract.ProgramCComposeTool {
-		env.EnvelopeSchemaID = mcpcontract.ProgramCComposeEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == mcpcontract.ProgramCInstabilityTool {
-		env.EnvelopeSchemaID = mcpcontract.ProgramCInstabilityEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.Name == "lsp_trace_v2_verify" {
-		env.EnvelopeSchemaID = mcpcontract.AcquisitionV2EnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.ExecutorFamily == TraceExecutorFamily {
-		env.EnvelopeSchemaID = mcpcontract.TraceEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v2_verify_retained_calls" {
-		env.EnvelopeSchemaID = mcpcontract.VerifyRetainedCallsV2EnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v1_export_retained_calls" {
-		env.EnvelopeSchemaID = mcpcontract.RetainedCallsEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v2_export_retained_calls" {
-		env.EnvelopeSchemaID = mcpcontract.RetainedCallsV2EnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v1_bounded_retained_analysis" {
-		env.EnvelopeSchemaID = mcpcontract.BoundedAnalysisEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v1_bounded_retained_metrics" {
-		env.EnvelopeSchemaID = mcpcontract.BoundedMetricsEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v1_bounded_retained_ranking" {
-		env.EnvelopeSchemaID = mcpcontract.BoundedRankingEnvelopeID(env.EnvelopeSchemaID)
-	}
-	if tool.Name == "lsp_trace_v2_bounded_retained_analysis" || tool.Name == "lsp_trace_v2_bounded_retained_metrics" || tool.Name == "lsp_trace_v2_bounded_retained_ranking" {
-		env.EnvelopeSchemaID = mcpcontract.PublicAnalyticsV2EnvelopeID(env.EnvelopeSchemaID)
-	}
+	env.EnvelopeSchemaID = canonicalEnvelopeSchemaID(tool, env.EnvelopeSchemaID)
 	raw, err := json.Marshal(env)
 	if err == nil {
 		err = validateEmittedEnvelope(tool, env, raw)
@@ -780,6 +742,39 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 
 func supportsV1Verification(artifactID string) bool {
 	return artifactID == mcpcontract.GraphProvenanceV5ArtifactID || artifactID == mcpcontract.GraphV5SourceSnapshotArtifactID
+}
+
+func canonicalEnvelopeSchemaID(tool Tool, id string) string {
+	switch tool.EnvelopePolicy {
+	case EnvelopePolicyHydrated:
+		return mcpcontract.HydratedEnvelopeID(id)
+	case EnvelopePolicyProgramCLeiden:
+		return mcpcontract.ProgramCLeidenEnvelopeID(id)
+	case EnvelopePolicyProgramCCompose:
+		return mcpcontract.ProgramCComposeEnvelopeID(id)
+	case EnvelopePolicyProgramCInstability:
+		return mcpcontract.ProgramCInstabilityEnvelopeID(id)
+	case EnvelopePolicyAcquisitionV2:
+		return mcpcontract.AcquisitionV2EnvelopeID(id)
+	case EnvelopePolicyTrace:
+		return mcpcontract.TraceEnvelopeID(id)
+	case EnvelopePolicyVerifyRetainedCallsV2:
+		return mcpcontract.VerifyRetainedCallsV2EnvelopeID(id)
+	case EnvelopePolicyRetainedCalls:
+		return mcpcontract.RetainedCallsEnvelopeID(id)
+	case EnvelopePolicyRetainedCallsV2:
+		return mcpcontract.RetainedCallsV2EnvelopeID(id)
+	case EnvelopePolicyBoundedAnalysis:
+		return mcpcontract.BoundedAnalysisEnvelopeID(id)
+	case EnvelopePolicyBoundedMetrics:
+		return mcpcontract.BoundedMetricsEnvelopeID(id)
+	case EnvelopePolicyBoundedRanking:
+		return mcpcontract.BoundedRankingEnvelopeID(id)
+	case EnvelopePolicyPublicAnalyticsV2:
+		return mcpcontract.PublicAnalyticsV2EnvelopeID(id)
+	default:
+		return id
+	}
 }
 
 func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
@@ -800,19 +795,18 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 	if env.Content != nil && env.PublicationReceipt != nil {
 		return fmt.Errorf("inline content and publication receipt are mutually exclusive for %s", tool.Name)
 	}
-	if tool.ExecutorFamily == CensusExecutorFamily {
+	switch tool.EnvelopePolicy {
+	case EnvelopePolicyCensus:
 		return mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw)
-	}
-	if tool.ExecutorFamily == StructuralDeltaExecutorFamily {
+	case EnvelopePolicyStructuralDelta:
 		return mcpcontract.ValidateStructuralDeltaEnvelopeExclusive(raw)
-	}
-	if tool.ExecutorFamily == StructuralContextExecutorFamily {
+	case EnvelopePolicyStructuralContext:
 		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
-	}
-	if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+	case EnvelopePolicyStructuralContextV2:
 		return mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw)
+	default:
+		return mcpcontract.ValidateEnvelopeExclusive(raw)
 	}
-	return mcpcontract.ValidateEnvelopeExclusive(raw)
 }
 
 func containsSchemaID(ids []string, wanted string) bool {

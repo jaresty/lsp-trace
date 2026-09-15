@@ -596,6 +596,41 @@ func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 	}
 }
 
+func TestRegistryAssignsSpecializedEnvelopePolicies(t *testing.T) {
+	registry := NewRegistryWithProfile(false, ToolProfileFull)
+	checks := map[string]EnvelopePolicy{
+		mcpcontract.ProgramCLeidenTool:       EnvelopePolicyProgramCLeiden,
+		mcpcontract.CensusTool:               EnvelopePolicyCensus,
+		mcpcontract.StructuralContextTool:    EnvelopePolicyStructuralContext,
+		mcpcontract.StructuralContextV2Tool:  EnvelopePolicyStructuralContextV2,
+		mcpcontract.StructuralDeltaTool:      EnvelopePolicyStructuralDelta,
+		"lsp_trace_v2_verify_retained_calls": EnvelopePolicyVerifyRetainedCallsV2,
+	}
+	for name, want := range checks {
+		tool, ok := registry.Resolve(name)
+		if !ok {
+			t.Fatalf("tool %q missing", name)
+		}
+		if tool.EnvelopePolicy != want {
+			t.Fatalf("tool %q policy: got=%q want=%q", name, tool.EnvelopePolicy, want)
+		}
+	}
+}
+
+func TestEnvelopePolicyCanonicalizesWithoutToolNameDispatch(t *testing.T) {
+	tool := Tool{
+		Name:              "synthetic-program-c-leiden",
+		EnvelopePolicy:    EnvelopePolicyProgramCLeiden,
+		EnvelopeSchemaIDs: []string{mcpcontract.ProgramCLeidenArtifactEnvelopeID, mcpcontract.ProgramCLeidenDomainEnvelopeID},
+	}
+	if got := canonicalEnvelopeSchemaID(tool, artifactEnvelopeSchemaID); got != mcpcontract.ProgramCLeidenArtifactEnvelopeID {
+		t.Fatalf("artifact schema: got=%q want=%q", got, mcpcontract.ProgramCLeidenArtifactEnvelopeID)
+	}
+	if got := canonicalEnvelopeSchemaID(tool, domainEnvelopeSchemaID); got != mcpcontract.ProgramCLeidenDomainEnvelopeID {
+		t.Fatalf("domain schema: got=%q want=%q", got, mcpcontract.ProgramCLeidenDomainEnvelopeID)
+	}
+}
+
 func TestCensusDomainFailuresUseCensusEnvelopeSchema(t *testing.T) {
 	if got := domainFailureSchemaID(mcpcontract.CensusTool); got != mcpcontract.CensusDomainErrorID {
 		t.Fatalf("ASSERT_CENSUS_DOMAIN_FAILURE_SCHEMA: got=%q want=%q", got, mcpcontract.CensusDomainErrorID)

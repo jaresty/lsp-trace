@@ -58,6 +58,29 @@ type Routing struct {
 	ExecutorFamily    func(Tool) ExecutorFamily
 }
 
+type EnvelopePolicy string
+
+const (
+	EnvelopePolicyDefault               EnvelopePolicy = "default"
+	EnvelopePolicyHydrated              EnvelopePolicy = "hydrated"
+	EnvelopePolicyProgramCLeiden        EnvelopePolicy = "program-c-leiden"
+	EnvelopePolicyProgramCCompose       EnvelopePolicy = "program-c-compose"
+	EnvelopePolicyProgramCInstability   EnvelopePolicy = "program-c-instability"
+	EnvelopePolicyAcquisitionV2         EnvelopePolicy = "acquisition-v2"
+	EnvelopePolicyTrace                 EnvelopePolicy = "trace"
+	EnvelopePolicyVerifyRetainedCallsV2 EnvelopePolicy = "verify-retained-calls-v2"
+	EnvelopePolicyRetainedCalls         EnvelopePolicy = "retained-calls"
+	EnvelopePolicyRetainedCallsV2       EnvelopePolicy = "retained-calls-v2"
+	EnvelopePolicyBoundedAnalysis       EnvelopePolicy = "bounded-analysis"
+	EnvelopePolicyBoundedMetrics        EnvelopePolicy = "bounded-metrics"
+	EnvelopePolicyBoundedRanking        EnvelopePolicy = "bounded-ranking"
+	EnvelopePolicyPublicAnalyticsV2     EnvelopePolicy = "public-analytics-v2"
+	EnvelopePolicyCensus                EnvelopePolicy = "census"
+	EnvelopePolicyStructuralDelta       EnvelopePolicy = "structural-delta"
+	EnvelopePolicyStructuralContext     EnvelopePolicy = "structural-context"
+	EnvelopePolicyStructuralContextV2   EnvelopePolicy = "structural-context-v2"
+)
+
 type Tool struct {
 	Name                    string         `json:"name"`
 	Aliases                 []string       `json:"aliases"`
@@ -70,7 +93,53 @@ type Tool struct {
 	InputSchema             map[string]any `json:"-"`
 	PresentationInputSchema map[string]any `json:"-"`
 	ExecutorFamily          ExecutorFamily `json:"-"`
+	EnvelopePolicy          EnvelopePolicy `json:"-"`
 	semanticValidator       SemanticValidator
+}
+
+func envelopePolicy(name string, family ExecutorFamily) EnvelopePolicy {
+	switch name {
+	case mcpcontract.HydratedTool:
+		return EnvelopePolicyHydrated
+	case mcpcontract.ProgramCLeidenTool:
+		return EnvelopePolicyProgramCLeiden
+	case mcpcontract.ProgramCComposeTool:
+		return EnvelopePolicyProgramCCompose
+	case mcpcontract.ProgramCInstabilityTool:
+		return EnvelopePolicyProgramCInstability
+	case "lsp_trace_v2_verify_retained_calls":
+		return EnvelopePolicyVerifyRetainedCallsV2
+	case "lsp_trace_v1_export_retained_calls":
+		return EnvelopePolicyRetainedCalls
+	case "lsp_trace_v2_export_retained_calls":
+		return EnvelopePolicyRetainedCallsV2
+	case "lsp_trace_v1_bounded_retained_analysis":
+		return EnvelopePolicyBoundedAnalysis
+	case "lsp_trace_v1_bounded_retained_metrics":
+		return EnvelopePolicyBoundedMetrics
+	case "lsp_trace_v1_bounded_retained_ranking":
+		return EnvelopePolicyBoundedRanking
+	case "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics", "lsp_trace_v2_bounded_retained_ranking":
+		return EnvelopePolicyPublicAnalyticsV2
+	case "lsp_trace_v2_verify":
+		return EnvelopePolicyAcquisitionV2
+	}
+	switch family {
+	case AcquisitionV2ExecutorFamily:
+		return EnvelopePolicyAcquisitionV2
+	case TraceExecutorFamily:
+		return EnvelopePolicyTrace
+	case CensusExecutorFamily:
+		return EnvelopePolicyCensus
+	case StructuralDeltaExecutorFamily:
+		return EnvelopePolicyStructuralDelta
+	case StructuralContextExecutorFamily:
+		return EnvelopePolicyStructuralContext
+	case StructuralContextV2ExecutorFamily:
+		return EnvelopePolicyStructuralContextV2
+	default:
+		return EnvelopePolicyDefault
+	}
 }
 
 // ToolProfile is the closed, immutable process-lifetime MCP advertisement profile.
@@ -245,7 +314,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			EnvelopeSchemaIDs: envelopeSchemaIDs, ArtifactSchemaIDs: append([]string{}, contract.ArtifactSchemaIDs...),
 			OutputFamiliesVersions: registeredOutputFamilies(contract.ArtifactSchemaIDs, registeredFamilies),
 			Availability:           Availability(contract.Availability), Description: descriptions[contract.Name], InputSchema: inputSchema,
-			ExecutorFamily: executorFamily,
+			ExecutorFamily: executorFamily, EnvelopePolicy: envelopePolicy(contract.Name, executorFamily),
 		})
 	}
 	for i := range tools {
