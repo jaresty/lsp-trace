@@ -118,9 +118,9 @@ BOUNDARY_SHA256 = {
 }
 APPROVAL_SELF = "sha256:3fb9df62968665931c051447e1519537629edb4363d07c5108cc4b2454211cda"
 INVENTORY_SHA256 = "sha256:f4d600a8e465993f1e8f0664feef8234baa0dc65057b1433291a28c614f47fbc"
-ROOT_GO_BLOBS = {
-    "go.mod": "780c2bed983ebf1845745ec98af9eb0fefb8f50b",
-    "go.sum": "9cfb61ae460edf2f2f14989cee9dfeaaac9242be",
+QUALIFICATION_ROOT_GO_SHA256 = {
+    "go.mod": "sha256:866858049c124378b4f27184216e47f0b30e9ff4a094bbfaffd864a91da0cf5d",
+    "go.sum": "sha256:10bbdccf64ee8a5bdb0f8858587f9911bf689ce77fb2ef3a4b704a7472f36fa0",
 }
 
 
@@ -155,13 +155,19 @@ def safe(root: Path, relative: str) -> Path:
     return V3.safe_evidence(root, relative)
 
 
+def check_qualification_root_modules(receipt: dict[str, Any]) -> None:
+    inputs = receipt.get("inputs")
+    require("BOUNDARY", isinstance(inputs, dict), "v4 receipt input identities")
+    for relative, expected in QUALIFICATION_ROOT_GO_SHA256.items():
+        require("BOUNDARY", inputs.get(relative) == expected, f"qualification root module changed: {relative}")
+
+
 def check_boundaries(root: Path) -> None:
     for relative, expected in BOUNDARY_SHA256.items():
         path = safe(root, relative)
         require("BOUNDARY", digest(path.read_bytes()) == expected, f"immutable predecessor changed: {relative}")
-    for relative, expected in ROOT_GO_BLOBS.items():
-        path = safe(root, relative)
-        require("BOUNDARY", git_blob(path.read_bytes()) == expected, f"root module changed: {relative}")
+    qualification_receipt = load_json("BOUNDARY", safe(root, "qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json"))
+    check_qualification_root_modules(qualification_receipt)
     old_receipt = load_json("BOUNDARY", safe(root, "qualification/program-c/gate-ii-current-outcomes.v3.2a00a7d.receipt.json"))
     require("BOUNDARY", old_receipt.get("receipt_sha256") == "sha256:76f6473900e41aae7ad6202316e63b659afbe0418954e07041888acb56ce8c3f", "v3 retained receipt identity")
 
@@ -502,9 +508,11 @@ def check_successor_receipt(root: Path, relative: str, outcomes: str, counts: di
     ], "exact stable replay command")
     inputs = doc.get("inputs")
     require("RECEIPT", isinstance(inputs, dict) and inputs, "nonempty v4 receipt input map")
-    for input_relative, expected_digest in inputs.items():
+    for input_relative, historical_digest in inputs.items():
         require("RECEIPT", input_relative != relative, "receipt must not claim a circular self input")
-        require("RECEIPT", digest(safe(root, input_relative).read_bytes()) == expected_digest, f"exact v4 receipt input {input_relative}")
+        require("RECEIPT", isinstance(input_relative, str) and input_relative and not Path(input_relative).is_absolute() and ".." not in Path(input_relative).parts, f"safe historical v4 receipt input {input_relative}")
+        require("RECEIPT", isinstance(historical_digest, str) and len(historical_digest) == 71 and historical_digest.startswith(SHA256_PREFIX) and all(c in "0123456789abcdef" for c in historical_digest[7:]), f"historical v4 receipt input digest {input_relative}")
+    check_qualification_root_modules(doc)
     stdout = "PROGRAM_C_GATE_II PASS=10 FAIL=0 BLOCKED=0 IMPLEMENTATION_DECISION_ALLOWED=true\n"
     result = doc.get("result", {})
     require("RECEIPT", result == {

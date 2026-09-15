@@ -77,6 +77,14 @@ class GateIIV4Tests(unittest.TestCase):
         self.assertEqual(result.stdout, "PROGRAM_C_GATE_II PASS=10 FAIL=0 BLOCKED=0 IMPLEMENTATION_DECISION_ALLOWED=true\n")
         print("ASSERT_GATE_II_V4_VALID_BASELINE result=PASS")
 
+    def test_qualification_root_module_identity_is_receipt_bound(self) -> None:
+        receipt = read_json(ROOT / RECEIPT)
+        V4.check_qualification_root_modules(receipt)
+        receipt["inputs"]["go.mod"] = "sha256:" + "0" * 64
+        with self.assertRaisesRegex(ValueError, "ASSERT_GATE_II_BOUNDARY"):
+            V4.check_qualification_root_modules(receipt)
+        print("ASSERT_GATE_II_V4_ROOT_MODULE_RECEIPT_BOUND result=PASS")
+
     def approval_mutation(self, name: str, change: Callable[[dict[str, Any]], None]) -> None:
         with tempfile.TemporaryDirectory(prefix="program-c-a03-") as directory:
             fixture = Fixture(Path(directory))
