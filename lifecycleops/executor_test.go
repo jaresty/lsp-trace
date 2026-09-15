@@ -39,6 +39,18 @@ func executeLifecycle(t *testing.T, executor *Executor, name operation.Name, inp
 	return executor.Execute(context.Background(), operation.Request{Name: name, RequestID: "request-1", Input: json.RawMessage(input)})
 }
 
+func TestDeriveWorkspaceFailureHasActionableDiagnostic(t *testing.T) {
+	f := &selectorRuntime{
+		fakeRuntime:  &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+		aliases:      map[string]string{"project": "canonical"},
+		deriveResult: sessionruntime.DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")},
+	}
+	_, failure := executeLifecycle(t, NewExecutor(New(f)), OperationDerive, `{"session_id":"project","generation":7,"workspace_uri":"file:///worktree"}`)
+	if failure == nil || failure.Code != "WORKSPACE_IDENTITY_MISMATCH" || len(failure.Diagnostics) == 0 || !strings.Contains(strings.Join(failure.Diagnostics, " "), "working directory") {
+		t.Fatalf("ASSERT_DERIVE_WORKSPACE_ACTIONABLE_DOMAIN_DIAGNOSTIC: failure=%+v", failure)
+	}
+}
+
 func TestSessionListRoutingContract(t *testing.T) {
 	root := record("root", 4)
 	nested := record("nested", 7)

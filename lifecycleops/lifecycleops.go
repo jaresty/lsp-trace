@@ -97,7 +97,11 @@ func (s *Service) DeriveWorkspace(ctx context.Context, id string, generation uin
 	if !ok {
 		return sessionruntime.DeriveWorkspaceResult{}, FailureInternal
 	}
-	result := runtime.DeriveWorkspace(ctx, sessionruntime.DeriveWorkspaceRequest{SessionID: id, Generation: generation, WorkspaceURI: workspaceURI})
+	parent, failure := s.Status(id, generation)
+	if failure != FailureNone {
+		return sessionruntime.DeriveWorkspaceResult{}, failure
+	}
+	result := runtime.DeriveWorkspace(ctx, sessionruntime.DeriveWorkspaceRequest{SessionID: parent.SessionID, Generation: parent.Generation, WorkspaceURI: workspaceURI})
 	if result.Failure != "" {
 		return sessionruntime.DeriveWorkspaceResult{}, mapFailure(result.Failure)
 	}
@@ -238,6 +242,18 @@ func mapFailure(failure session.Failure) Failure {
 		return FailureLifecycleConflict
 	case session.Failure("SESSION_NOT_READY"):
 		return FailureSessionNotReady
+	case session.Failure("INVALID_WORKSPACE_URI"),
+		session.Failure("GIT_WORKTREE_QUERY_FAILED"),
+		session.Failure("GIT_WORKTREE_INVALID"),
+		session.Failure("WORKTREE_NOT_REGISTERED"),
+		session.Failure("WORKSPACE_IDENTITY_MISMATCH"),
+		session.SpawnFailure,
+		session.PipeSetupFailure,
+		session.InitializationFailure,
+		session.InitializationTimeout,
+		session.RequestCancelled,
+		session.RequestTimeout:
+		return Failure(failure)
 	default:
 		return FailureInternal
 	}

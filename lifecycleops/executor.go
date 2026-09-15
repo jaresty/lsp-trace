@@ -116,7 +116,7 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 		}
 		result, failure := e.service.DeriveWorkspace(ctx, input.SessionID, input.Generation, input.WorkspaceURI)
 		if failure != FailureNone {
-			return operation.Result{}, lifecycleFailure(string(failure), errors.New(string(failure)))
+			return operation.Result{}, deriveWorkspaceFailure(failure)
 		}
 		return operation.Result{Value: result}, nil
 	case OperationList:
@@ -242,6 +242,26 @@ func (e *Executor) actionableFailure(ctx context.Context, input selectorRequest,
 		}
 	}
 	return &operation.Failure{Code: string(failure), Diagnostics: diagnostics}
+}
+
+func deriveWorkspaceFailure(failure Failure) *operation.Failure {
+	diagnostics := map[Failure][]string{
+		"INVALID_WORKSPACE_URI":                {"workspace_uri must be the canonical absolute local file URI of the exact worktree root"},
+		"GIT_WORKTREE_QUERY_FAILED":            {"bounded git worktree discovery failed; verify the parent repository is accessible and retry only after correcting that prerequisite"},
+		"GIT_WORKTREE_INVALID":                 {"git worktree discovery returned malformed, truncated, or over-limit records"},
+		"WORKTREE_NOT_REGISTERED":              {"workspace_uri must identify exactly one distinct worktree registered in the READY parent repository"},
+		"WORKSPACE_IDENTITY_MISMATCH":          {"the READY parent's configured working directory does not exactly equal its workspace; the host must correct that launch configuration before derivation"},
+		FailureSessionNotReady:                 {"the selected parent must remain exactly READY through derivation"},
+		FailureCapacityExhausted:               {"managed-session capacity is exhausted; inspect lifecycle state before retrying"},
+		FailureReapIncomplete:                  {"failed derived-session readiness could not be fully reaped; host inspection is required"},
+		Failure(session.SpawnFailure):          {"the inherited trusted language-server process could not be started for the worktree"},
+		Failure(session.PipeSetupFailure):      {"the inherited language-server transport could not be established for the worktree"},
+		Failure(session.InitializationFailure): {"the inherited language server failed readiness; the derived session was cleaned up"},
+		Failure(session.InitializationTimeout): {"the inherited language server did not become READY within the bounded readiness interval"},
+		Failure(session.RequestCancelled):      {"the caller cancelled derivation; inspect sessions before retrying because accepted lifecycle work may have continued"},
+		Failure(session.RequestTimeout):        {"the caller deadline expired; inspect sessions before retrying because accepted lifecycle work may have continued"},
+	}
+	return &operation.Failure{Code: string(failure), Err: errors.New(string(failure)), Diagnostics: diagnostics[failure]}
 }
 
 func lifecycleFailure(code string, err error) *operation.Failure {

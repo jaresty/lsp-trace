@@ -63,7 +63,14 @@ func (f *fakeRuntime) Restart(_ context.Context, id string, _ string) session.Li
 
 type selectorRuntime struct {
 	*fakeRuntime
-	aliases map[string]string
+	aliases       map[string]string
+	deriveResult  sessionruntime.DeriveWorkspaceResult
+	deriveRequest sessionruntime.DeriveWorkspaceRequest
+}
+
+func (f *selectorRuntime) DeriveWorkspace(_ context.Context, request sessionruntime.DeriveWorkspaceRequest) sessionruntime.DeriveWorkspaceResult {
+	f.deriveRequest = request
+	return f.deriveResult
 }
 
 func (f *selectorRuntime) ResolveSessionSelector(id string, generation uint64) (string, uint64, session.Failure) {
@@ -160,6 +167,29 @@ func TestLifecycleSelectorStatusAliasSemantics(t *testing.T) {
 		t.Fatalf("ASSERT_LIFECYCLE_SELECTOR_CANONICAL_SESSION_REACHES_RUNTIME: got=%+v failure=%q", got, failure)
 	}
 	t.Log("PASS ASSERT_LIFECYCLE_SELECTOR_CANONICAL_SESSION_REACHES_RUNTIME")
+}
+
+func TestDeriveWorkspaceResolvesAliasBeforeRuntime(t *testing.T) {
+	f := &selectorRuntime{
+		fakeRuntime:  &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+		aliases:      map[string]string{"project": "canonical"},
+		deriveResult: sessionruntime.DeriveWorkspaceResult{SessionID: "derived", Generation: 1, State: session.Ready, WorkspaceURI: "file:///worktree"},
+	}
+	result, failure := New(f).DeriveWorkspace(context.Background(), "project", 7, "file:///worktree")
+	if failure != FailureNone || result.SessionID != "derived" || f.deriveRequest.SessionID != "canonical" || f.deriveRequest.Generation != 7 {
+		t.Fatalf("ASSERT_DERIVE_WORKSPACE_ALIAS_NORMALIZED_BEFORE_RUNTIME: result=%+v failure=%q request=%+v", result, failure, f.deriveRequest)
+	}
+}
+
+func TestDeriveWorkspaceFailuresRemainActionable(t *testing.T) {
+	for _, code := range []session.Failure{
+		"INVALID_WORKSPACE_URI", "GIT_WORKTREE_QUERY_FAILED", "GIT_WORKTREE_INVALID", "WORKTREE_NOT_REGISTERED", "WORKSPACE_IDENTITY_MISMATCH",
+		session.SpawnFailure, session.PipeSetupFailure, session.InitializationFailure, session.InitializationTimeout, session.RequestCancelled, session.RequestTimeout,
+	} {
+		if got := mapFailure(code); got == FailureInternal || string(got) != string(code) {
+			t.Errorf("ASSERT_DERIVE_WORKSPACE_FAILURE_PRESERVES_ACTIONABLE_CODE[%s]: got=%q", code, got)
+		}
+	}
 }
 
 func TestLifecycleSelectorStopAndRestartUseCanonicalIdentity(t *testing.T) {
