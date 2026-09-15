@@ -27,10 +27,11 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	beforeLifecycle := server.Executors[mcp.LifecycleExecutorFamily]
 	beforeIncoming := server.Executors[mcp.IncomingExecutorFamily]
 	beforeSlice := server.Executors[mcp.SliceExecutorFamily]
+	beforeStructuralContextSymbol := server.Executors[mcp.StructuralContextSymbolExecutorFamily]
 
 	selected := composeHostSelectorRuntime(server, manager, []bootstrapSession{{Alias: "project", SessionID: "canonical"}})
-	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice {
-		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice)
+	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice || server.Executors[mcp.StructuralContextSymbolExecutorFamily] == beforeStructuralContextSymbol {
+		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v structural_context_symbol_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice, server.Executors[mcp.StructuralContextSymbolExecutorFamily] != beforeStructuralContextSymbol)
 	}
 	if got := server.Registry.Tools(); len(got) != 41 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))

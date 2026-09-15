@@ -303,11 +303,12 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.AcquisitionV2ExecutorFamily] = legacyManifestExecutor{runtime: selected}
 	server.Executors[mcp.TraceExecutorFamily] = newTraceExecutor(selected)
 	server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(newCensusRuntime(selected))
-	server.Executors[mcp.StructuralContextExecutorFamily] = newStructuralContextExecutor(selected)
-	server.Executors[mcp.StructuralContextV2ExecutorFamily] = server.Executors[mcp.StructuralContextExecutorFamily]
-	structural, structuralOK := server.Executors[mcp.StructuralContextV2ExecutorFamily].(*structuralContextExecutor)
+	structural := newStructuralContextExecutor(selected)
+	server.Executors[mcp.StructuralContextExecutorFamily] = structural
+	server.Executors[mcp.StructuralContextV2ExecutorFamily] = structural
+	server.Executors[mcp.StructuralContextSymbolExecutorFamily] = structuralcontextsymbolops.NewExecutor(selected, structural)
 	churn, churnOK := server.Executors[mcp.ContextSymbolChurnExecutorFamily].(*contextSymbolChurnExecutor)
-	if structuralOK && churnOK {
+	if churnOK {
 		server.Executors[mcp.ContextSymbolChurnCaptureExecutorFamily] = newContextSymbolChurnCaptureExecutor(structural, churn)
 	}
 }
