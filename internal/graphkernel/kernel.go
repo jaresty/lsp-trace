@@ -94,6 +94,9 @@ func NewDirectedWeighted(nodeIdentities []string, arcs []Arc) (*DirectedWeighted
 			g.to[to] = append(g.to[to], from)
 		}
 		g.weights[p] += arc.Weight
+		if math.IsInf(g.weights[p], 0) || math.IsNaN(g.weights[p]) {
+			return nil, fmt.Errorf("aggregate arc weight must be finite: %q -> %q", arc.From, arc.To)
+		}
 	}
 	for id := range g.nodes {
 		sort.Slice(g.from[id], func(i, j int) bool { return g.from[id][i] < g.from[id][j] })

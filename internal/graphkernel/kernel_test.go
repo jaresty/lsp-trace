@@ -85,3 +85,13 @@ func assertCoupling(t *testing.T, got, want []RobertMartinCoupling) {
 		t.Fatalf("ASSERT_ROBERT_MARTIN_COUPLING got=%+v want=%+v", got, want)
 	}
 }
+
+func TestKernelRejectsParallelWeightOverflow(t *testing.T) {
+	_, err := NewDirectedWeighted([]string{"a", "b"}, []Arc{
+		{From: "a", To: "b", Weight: 1.7976931348623157e308},
+		{From: "a", To: "b", Weight: 1.7976931348623157e308},
+	})
+	if err == nil {
+		t.Fatal("ASSERT_AGGREGATE_ARC_WEIGHT_FINITE: overflow accepted")
+	}
+}
