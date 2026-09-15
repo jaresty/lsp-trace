@@ -101,7 +101,14 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 	}
 	peak, err := initialTreeRSS(pid)
 	if err != nil {
-		kill()
+		if classified, completed := awaitTerminatedWorker(done, stderr.String()); completed {
+			observation.ElapsedNanos = time.Since(started).Nanoseconds()
+			if classified != nil {
+				return zero, observation, classified
+			}
+		} else {
+			kill()
+		}
 		return zero, observation, failure(CodeMemoryUnsupported, err)
 	}
 	observation.PeakTreeRSSBytes = peak
@@ -140,6 +147,10 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			}
 			rss, e := treeRSS(pid)
 			if e != nil {
+				if classified, completed := awaitTerminatedWorker(done, stderr.String()); completed && classified != nil {
+					observation.ElapsedNanos = time.Since(started).Nanoseconds()
+					return zero, observation, classified
+				}
 				kill()
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
 				return zero, observation, failure(CodeMemoryUnsupported, e)
@@ -161,11 +172,7 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			}
 			if waitErr != nil {
 				_ = syscall.Kill(-pid, syscall.SIGKILL)
-				detail := strings.TrimSpace(stderr.String())
-				if strings.Contains(detail, "panic:") || strings.Contains(detail, "SIGABRT: abort") {
-					return zero, observation, failure(CodePanic, errors.New(detail))
-				}
-				return zero, observation, failure(CodeNonzeroExit, errors.New(detail))
+				return zero, observation, classifyTerminatedWorker(waitErr, stderr.String())
 			}
 			var response workerResponse
 			if err = strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); err != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
@@ -179,6 +186,28 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			return out, observation, reconstructFailure
 		}
 	}
+}
+
+func awaitTerminatedWorker(done <-chan error, stderr string) (*SupervisionFailure, bool) {
+	timer := time.NewTimer(supervisorPoll)
+	defer timer.Stop()
+	select {
+	case waitErr := <-done:
+		return classifyTerminatedWorker(waitErr, stderr), true
+	case <-timer.C:
+		return nil, false
+	}
+}
+
+func classifyTerminatedWorker(waitErr error, stderr string) *SupervisionFailure {
+	if waitErr == nil {
+		return nil
+	}
+	detail := strings.TrimSpace(stderr)
+	if strings.Contains(detail, "panic:") || strings.Contains(detail, "SIGABRT: abort") {
+		return failure(CodePanic, errors.New(detail))
+	}
+	return failure(CodeNonzeroExit, errors.New(detail))
 }
 
 func initialTreeRSS(root int) (int64, error) {

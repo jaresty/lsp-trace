@@ -81,6 +81,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Install pinned gopls for Darwin qualification
+        if: runner.os == 'macOS'
+        run: go install golang.org/x/tools/gopls@v0.23.0
       - run: go test ./...
         if: runner.os != 'Windows'
       - run: go vet ./...
