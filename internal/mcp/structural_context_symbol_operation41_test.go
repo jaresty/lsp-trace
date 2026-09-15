@@ -32,6 +32,10 @@ func TestStructuralContextSymbolOperation41RegistryContract(t *testing.T) {
 	if err := validateArguments(tool, valid); err != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_CLOSED_ANALYSIS_INPUT: valid rejected: %v", err)
 	}
+	minimal := map[string]any{"session_id": "s", "generation": float64(1), "symbol": "Target", "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
+	if err := validateArguments(tool, minimal); err != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_MECHANICAL_BOUNDS_DEFAULT: minimal input rejected: %v", err)
+	}
 	for _, forbidden := range []string{"uri", "line", "character"} {
 		bad := cloneMap(valid)
 		bad[forbidden] = map[string]any{"uri": "file:///w/a.go", "line": float64(0), "character": float64(0)}[forbidden]

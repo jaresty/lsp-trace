@@ -37,6 +37,12 @@ func (d *delegate) Execute(_ context.Context, r operation.Request) (operation.Re
 func input(symbol string) json.RawMessage {
 	return json.RawMessage(`{"session_id":"s","generation":1,"symbol":"` + symbol + `","down_depth":2,"up_depth":2,"max_nodes":100,"timeout_ms":5000,"request_timeout_ms":1000,"analysis":{"kind":"NEIGHBORHOOD"}}`)
 }
+func minimalInput(symbol string) json.RawMessage {
+	return json.RawMessage(`{"session_id":"s","generation":1,"symbol":"` + symbol + `","analysis":{"kind":"NEIGHBORHOOD"}}`)
+}
+func zeroDepthInput(symbol string) json.RawMessage {
+	return json.RawMessage(`{"session_id":"s","generation":1,"symbol":"` + symbol + `","down_depth":0,"up_depth":0,"analysis":{"kind":"NEIGHBORHOOD"}}`)
+}
 
 func TestExactWorkspaceSymbolDelegatesOneConcreteLocator(t *testing.T) {
 	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_ONE_EXACT_LOOKUP_DELEGATES_POSITION"
@@ -48,6 +54,28 @@ func TestExactWorkspaceSymbolDelegatesOneConcreteLocator(t *testing.T) {
 	}
 	if d.calls[0].Name != "structural_context" || !strings.Contains(string(d.calls[0].Input), `"uri":"file:///workspace/a.go"`) || !strings.Contains(string(d.calls[0].Input), `"line":7`) || strings.Contains(string(d.calls[0].Input), `"symbol"`) {
 		t.Fatalf("%s: delegated=%s", assertion, d.calls[0].Input)
+	}
+}
+
+func TestOmittedMechanicalBoundsDelegateCanonicalDefaults(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_MECHANICAL_BOUNDS_DEFAULT"
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}}]`)}
+	d := &delegate{}
+	_, failure := NewExecutor(f, d).Execute(context.Background(), operation.Request{Name: Operation, Input: minimalInput("Target")})
+	if failure != nil || len(d.calls) != 1 {
+		t.Fatalf("%s: failure=%v calls=%v", assertion, failure, d.calls)
+	}
+	got := string(d.calls[0].Input)
+	for _, field := range []string{`"down_depth":2`, `"up_depth":2`, `"max_nodes":100`, `"timeout_ms":5000`, `"request_timeout_ms":1000`, `"max_messages":64`, `"max_bytes":4194304`} {
+		if !strings.Contains(got, field) {
+			t.Fatalf("%s: missing %s in %s", assertion, field, got)
+		}
+	}
+
+	d = &delegate{}
+	_, failure = NewExecutor(f, d).Execute(context.Background(), operation.Request{Name: Operation, Input: zeroDepthInput("Target")})
+	if failure != nil || len(d.calls) != 1 || !strings.Contains(string(d.calls[0].Input), `"down_depth":0`) || !strings.Contains(string(d.calls[0].Input), `"up_depth":0`) {
+		t.Fatalf("%s_EXPLICIT_ZERO_PRESERVED: failure=%v calls=%v", assertion, failure, d.calls)
 	}
 }
 

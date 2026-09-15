@@ -21,6 +21,16 @@ import (
 
 const Operation operation.Name = "structural_context_symbol"
 
+const (
+	defaultDownDepth        = 2
+	defaultUpDepth          = 2
+	defaultMaxNodes         = 100
+	defaultTimeoutMS        = 5000
+	defaultRequestTimeoutMS = 1000
+	defaultMaxMessages      = 64
+	defaultMaxBytes         = 4 << 20
+)
+
 type Delegate interface {
 	Execute(context.Context, operation.Request) (operation.Result, *operation.Failure)
 }
@@ -43,11 +53,11 @@ type request struct {
 	SessionID        string   `json:"session_id"`
 	Generation       uint64   `json:"generation"`
 	Symbol           string   `json:"symbol"`
-	DownDepth        int      `json:"down_depth"`
-	UpDepth          int      `json:"up_depth"`
-	MaxNodes         int      `json:"max_nodes"`
-	TimeoutMS        int64    `json:"timeout_ms"`
-	RequestTimeoutMS int64    `json:"request_timeout_ms"`
+	DownDepth        *int     `json:"down_depth"`
+	UpDepth          *int     `json:"up_depth"`
+	MaxNodes         *int     `json:"max_nodes"`
+	TimeoutMS        *int64   `json:"timeout_ms"`
+	RequestTimeoutMS *int64   `json:"request_timeout_ms"`
 	MaxMessages      int      `json:"max_messages,omitempty"`
 	MaxBytes         int64    `json:"max_bytes,omitempty"`
 	Analysis         analysis `json:"analysis"`
@@ -76,8 +86,28 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err := decodeClosed(op.Input, &in); err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
-	if in.SessionID == "" || in.Generation == 0 || in.Symbol == "" || in.TimeoutMS < 1 || in.RequestTimeoutMS < 1 {
+	if in.SessionID == "" || in.Generation == 0 || in.Symbol == "" {
 		return fail(operation.FailureInvalidInput, errors.New("required symbol request fields are invalid"))
+	}
+	downDepth := defaultDownDepth
+	if in.DownDepth != nil {
+		downDepth = *in.DownDepth
+	}
+	upDepth := defaultUpDepth
+	if in.UpDepth != nil {
+		upDepth = *in.UpDepth
+	}
+	maxNodes := defaultMaxNodes
+	if in.MaxNodes != nil {
+		maxNodes = *in.MaxNodes
+	}
+	timeoutMS := int64(defaultTimeoutMS)
+	if in.TimeoutMS != nil {
+		timeoutMS = *in.TimeoutMS
+	}
+	requestTimeoutMS := int64(defaultRequestTimeoutMS)
+	if in.RequestTimeoutMS != nil {
+		requestTimeoutMS = *in.RequestTimeoutMS
 	}
 	id, generation, sf := incomingops.ResolveSession(e.runtime, in.SessionID, in.Generation)
 	if sf != "" {
@@ -91,15 +121,15 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return fail("UNSUPPORTED", nil)
 	}
 	workspace := workspaceRoot(e.runtime, id, generation)
-	ctx, cancel := context.WithTimeout(parent, time.Duration(in.TimeoutMS)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(parent, time.Duration(timeoutMS)*time.Millisecond)
 	defer cancel()
 	if in.MaxMessages == 0 {
-		in.MaxMessages = 64
+		in.MaxMessages = defaultMaxMessages
 	}
 	if in.MaxBytes == 0 {
-		in.MaxBytes = 4 << 20
+		in.MaxBytes = defaultMaxBytes
 	}
-	client := incomingops.NewSessionClientWithWireLimits(e.runtime, id, generation, time.Duration(in.RequestTimeoutMS)*time.Millisecond, incomingops.WireLimits{MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes})
+	client := incomingops.NewSessionClientWithWireLimits(e.runtime, id, generation, time.Duration(requestTimeoutMS)*time.Millisecond, incomingops.WireLimits{MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes})
 	symbols, err := client.WorkspaceSymbols(ctx, lsp.WorkspaceSymbolParams{Query: in.Symbol})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -131,7 +161,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return fail(code, errors.New("workspace symbol location is not one concrete confined document"))
 	}
 	line, character := location.Range.Start.Line, location.Range.Start.Character
-	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Line: &line, Character: &character, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Analysis: in.Analysis})
+	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Line: &line, Character: &character, DownDepth: downDepth, UpDepth: upDepth, MaxNodes: maxNodes, TimeoutMS: timeoutMS, RequestTimeoutMS: requestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Analysis: in.Analysis})
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}
