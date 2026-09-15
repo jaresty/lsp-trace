@@ -211,6 +211,23 @@ func TestComputeCanonicalizesGonumEmptySlotsWithoutDroppingIsolates(t *testing.T
 	}
 }
 
+func TestProgramCSharedGraphKernelNoDrift(t *testing.T) {
+	a, b, c := node("a", 0), node("b", 1), node("c", 2)
+	edges := []graph.Edge{
+		{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}},
+		{CallerNodeID: b.ID, CalleeNodeID: c.ID, CallSites: []graph.Range{{}}},
+	}
+	out, failure := Compute(validV5(t, []graph.Node{c, a, b}, edges), 19)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	const wantDigest = "sha256:d8ae702930e8ddaa109dec1103fd09196e3a19fe33bb24694e3ac7aad1ec1fd0"
+	if out.LogicalDigest != wantDigest ||
+		out.Algorithm != algorithm || out.ProfileID != ProfileID || out.ProfileDigest != ProfileDigest || out.ClaimCeiling != ClaimCeiling {
+		t.Fatalf("ASSERT_PROGRAM_C_SHARED_KERNEL_NO_DRIFT outcome=%#v", out)
+	}
+}
+
 func TestComputeDeterministicAcrossRepeatAndPermutation(t *testing.T) {
 	a, b, c := node("a", 0), node("b", 1), node("c", 2)
 	edges := []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}, {CallerNodeID: b.ID, CalleeNodeID: c.ID, CallSites: []graph.Range{{}}}}

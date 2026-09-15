@@ -13,14 +13,12 @@ import (
 	"sort"
 
 	lgraph "lsp-trace/internal/graph"
+	"lsp-trace/internal/graphkernel"
 	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/programcadmission"
 
-	ggraph "gonum.org/v1/gonum/graph"
 	"gonum.org/v1/gonum/graph/community"
-	"gonum.org/v1/gonum/graph/iterator"
-	"gonum.org/v1/gonum/graph/simple"
 )
 
 const (
@@ -337,7 +335,10 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, claimCei
 	if len(p.Occurrences) == 0 {
 		outcome = "EMPTY"
 	} else {
-		g := newDirected(p)
+		g, err := projectionGraph(p)
+		if err != nil {
+			return Outcome{}, &Failure{Code: CodeComputation, Message: err.Error()}
+		}
 		var reduced community.ReducedGraph
 		func() {
 			defer func() {
@@ -413,70 +414,17 @@ func compareStrings(a, b []string) int {
 	return 0
 }
 
-type weightedEdge struct {
-	f, t ggraph.Node
-	w    float64
-}
-
-func (e weightedEdge) From() ggraph.Node         { return e.f }
-func (e weightedEdge) To() ggraph.Node           { return e.t }
-func (e weightedEdge) ReversedEdge() ggraph.Edge { return weightedEdge{f: e.t, t: e.f, w: e.w} }
-func (e weightedEdge) Weight() float64           { return e.w }
-
-type directed struct {
-	nodes    map[int64]ggraph.Node
-	from, to map[int64][]int64
-	weights  map[Pair]float64
-}
-
-func newDirected(p Projection) *directed {
-	g := &directed{nodes: make(map[int64]ggraph.Node), from: make(map[int64][]int64), to: make(map[int64][]int64), weights: p.PairWeights}
-	for i := range p.NodeIdentities {
-		g.nodes[int64(i)] = simple.Node(i)
+func projectionGraph(p Projection) (*graphkernel.DirectedWeighted, error) {
+	arcs := make([]graphkernel.Arc, 0, len(p.PairWeights))
+	for pair, weight := range p.PairWeights {
+		if pair.From < 0 || pair.To < 0 || int(pair.From) >= len(p.NodeIdentities) || int(pair.To) >= len(p.NodeIdentities) {
+			return nil, fmt.Errorf("projection arc endpoint missing")
+		}
+		arcs = append(arcs, graphkernel.Arc{
+			From:   p.NodeIdentities[pair.From],
+			To:     p.NodeIdentities[pair.To],
+			Weight: weight,
+		})
 	}
-	for pair := range p.PairWeights {
-		g.from[pair.From] = append(g.from[pair.From], pair.To)
-		g.to[pair.To] = append(g.to[pair.To], pair.From)
-	}
-	for id := range g.nodes {
-		sort.Slice(g.from[id], func(i, j int) bool { return g.from[id][i] < g.from[id][j] })
-		sort.Slice(g.to[id], func(i, j int) bool { return g.to[id][i] < g.to[id][j] })
-	}
-	return g
+	return graphkernel.NewDirectedWeighted(p.NodeIdentities, arcs)
 }
-func (g *directed) Node(id int64) ggraph.Node { return g.nodes[id] }
-func (g *directed) Nodes() ggraph.Nodes {
-	ns := make([]ggraph.Node, 0, len(g.nodes))
-	for _, n := range g.nodes {
-		ns = append(ns, n)
-	}
-	sort.Slice(ns, func(i, j int) bool { return ns[i].ID() < ns[j].ID() })
-	return iterator.NewOrderedNodes(ns)
-}
-func (g *directed) From(id int64) ggraph.Nodes { return g.nodesFor(g.from[id]) }
-func (g *directed) To(id int64) ggraph.Nodes   { return g.nodesFor(g.to[id]) }
-func (g *directed) nodesFor(ids []int64) ggraph.Nodes {
-	if len(ids) == 0 {
-		return ggraph.Empty
-	}
-	ns := make([]ggraph.Node, len(ids))
-	for i, id := range ids {
-		ns[i] = g.nodes[id]
-	}
-	return iterator.NewOrderedNodes(ns)
-}
-func (g *directed) HasEdgeBetween(x, y int64) bool {
-	return g.HasEdgeFromTo(x, y) || g.HasEdgeFromTo(y, x)
-}
-func (g *directed) HasEdgeFromTo(x, y int64) bool { _, ok := g.weights[Pair{x, y}]; return ok }
-func (g *directed) Edge(x, y int64) ggraph.Edge   { return g.WeightedEdge(x, y) }
-func (g *directed) WeightedEdge(x, y int64) ggraph.WeightedEdge {
-	w, ok := g.weights[Pair{x, y}]
-	if !ok {
-		return nil
-	}
-	return weightedEdge{g.nodes[x], g.nodes[y], w}
-}
-func (g *directed) Weight(x, y int64) (float64, bool) { w, ok := g.weights[Pair{x, y}]; return w, ok }
-
-var _ ggraph.WeightedDirected = (*directed)(nil)
