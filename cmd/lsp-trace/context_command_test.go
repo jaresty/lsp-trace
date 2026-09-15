@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,6 +67,12 @@ func TestContextMachinePrivateProcessQualification(t *testing.T) {
 	before := len(mcp.NewRegistry(false).Tools())
 	args := []string{"context", "--machine", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice", "--at", "main.go:1:1", "--down-depth", "1", "--up-depth", "1", "--request-timeout", "500ms", "--timeout", "2s"}
 	stdout, stderr, code := captureRun(t, args)
+	if runtime.GOOS != "darwin" {
+		if code == 0 || stdout != "" || !strings.Contains(stderr, "local Darwin supervision unavailable") {
+			t.Fatalf("ASSERT_CONTEXT_PRIVATE_PROCESS_UNSUPPORTED_FAILS_CLOSED: code=%d stderr=%q stdout=%q", code, stderr, stdout)
+		}
+		return
+	}
 	var got transientstructuralresult.Result
 	if err := json.Unmarshal([]byte(stdout), &got); code != 0 || err != nil {
 		t.Fatalf("ASSERT_CONTEXT_PRIVATE_PROCESS: code=%d decode=%v stderr=%q stdout=%q", code, err, stderr, stdout)

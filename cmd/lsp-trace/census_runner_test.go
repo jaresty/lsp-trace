@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/publication"
+	"lsp-trace/sessionruntime"
 )
 
 func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
@@ -105,6 +106,11 @@ func TestRunCensusProfileCLIOverridesAndOutcomeStreams(t *testing.T) {
 		t.Fatal(err)
 	}
 	deps := productionCensusRunnerDependencies()
+	// This test exercises CLI/profile transfer into the core seam, not the
+	// platform-specific production supervisor. Keep that boundary injectable.
+	deps.newStarter = func() (sessionruntime.Starter, error) {
+		return sessionruntime.ManagedStarter{}, nil
+	}
 	deps.lookPath = func(command string) (string, error) {
 		if command != "cli-server" {
 			t.Fatalf("ASSERT_CENSUS_PROFILE_SERVER_OVERRIDE command=%q", command)
