@@ -112,8 +112,9 @@ Operation numbers are append-only compatibility identities, not lexical display 
 | 33 | `lsp_trace_v1_trace` | default |
 | 34 | `lsp_trace_v1_census` | default |
 | 35 | `lsp_trace_v1_structural_context` | default (hidden but callable in compact) |
+| 36 | `lsp_trace_v2_structural_context` | default (hidden but callable in compact) |
 
-Operations 31–35 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operation 35.
+Operations 31–36 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operations 35 and 36.
 
 For every operation 1–35:
 

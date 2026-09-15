@@ -223,7 +223,7 @@ assert_contains DOC-COORDINATES-ENCODING README.md '`utf-8` counts bytes, `utf-1
 assert_contains DOC-COORDINATES-OWNERSHIP cmd/lsp-trace/references/live-tracing.md 'The server owns the encoding; omission defaults to `utf-16`.'
 assert_contains DOC-MCP-ALWAYS-LOCAL README.md 'local-development-only'
 assert_contains DOC-MCP-COMPACT README.md 'prefer `lsp-trace-mcp --tool-profile compact`'
-assert_contains DOC-MCP-FULL-COMPAT README.md 'compatibility `--tool-profile full` publishes exactly 35 canonical tools'
+assert_contains DOC-MCP-FULL-COMPAT README.md 'compatibility `--tool-profile full` publishes exactly 36 canonical tools'
 assert_contains DOC-MCP-MACHINE-LOCAL README.md 'This file is machine-local and ignored by this repository.'
 assert_contains DOC-MCP-COMPACT-ADDITIVE README.md 'add only `"--tool-profile", "compact"` to the server'
 assert_contains DOC-MCP-ROOT-IGNORED .gitignore '/.mcp.json'

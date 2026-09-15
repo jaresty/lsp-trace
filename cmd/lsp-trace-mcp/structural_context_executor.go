@@ -39,7 +39,7 @@ func newStructuralContextExecutor(r *hostSelectorRuntime) *structuralContextExec
 	return &structuralContextExecutor{runtime: r}
 }
 func (e *structuralContextExecutor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
-	if e == nil || e.runtime == nil || op.Name != structuralContextOperation {
+	if e == nil || e.runtime == nil || (op.Name != structuralContextOperation && op.Name != operation.Name("structural_context_v2")) {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var in structuralContextInput
@@ -67,7 +67,17 @@ func (e *structuralContextExecutor) Execute(parent context.Context, op operation
 	if sf != "" {
 		return fail(string(sf), nil)
 	}
-	projected, err := transientstructuralresult.Project(got, q, managerID)
+	var projected any
+	var err error
+	if op.Name == operation.Name("structural_context_v2") {
+		root, ok := e.runtime.Manager.WorkspaceRoot(id, generation)
+		if !ok {
+			return fail("INVALID_SERVER_RESPONSE", nil)
+		}
+		projected, err = transientstructuralresult.ProjectV2(got, q, managerID, root)
+	} else {
+		projected, err = transientstructuralresult.Project(got, q, managerID)
+	}
 	if err != nil {
 		return fail("INVALID_SERVER_RESPONSE", err)
 	}

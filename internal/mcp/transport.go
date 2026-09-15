@@ -341,7 +341,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
-		if tool.ExecutorFamily == StructuralContextExecutorFamily {
+		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
 				if domain.State == transientstructural.StateTruncated {
@@ -396,9 +396,14 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, domainErrorEnvelope(tool.Name, requestID, code, diagnostics))
 	}
-	if tool.ExecutorFamily == StructuralContextExecutorFamily {
+	if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 		var result map[string]any
-		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(mcpcontract.StructuralContextResultID, opResult.Artifact) != nil {
+		resultID := mcpcontract.StructuralContextResultID
+		successID := mcpcontract.StructuralContextSuccessID
+		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextV2SuccessID
+		}
+		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(resultID, opResult.Artifact) != nil {
 			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
 		}
 		correlationID, err := mcpcontract.NewFutureStructuralCorrelationID()
@@ -406,7 +411,10 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
 		}
 		state, _ := result["state"].(string)
-		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralContextSuccessID, Tool: tool.Name, RequestID: correlationID, Outcome: state, OperationStatus: "SUCCEEDED", IsError: false, Result: result})
+		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+			state = "COMPLETE"
+		}
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: successID, Tool: tool.Name, RequestID: correlationID, Outcome: state, OperationStatus: "SUCCEEDED", IsError: false, Result: result})
 	}
 	if tool.ExecutorFamily == CensusExecutorFamily {
 		var projected envelope
@@ -776,6 +784,9 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 	if tool.ExecutorFamily == StructuralContextExecutorFamily {
 		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
 	}
+	if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+		return mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw)
+	}
 	return mcpcontract.ValidateEnvelopeExclusive(raw)
 }
 
@@ -1021,6 +1032,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Census
 	case mcpcontract.StructuralContextTool:
 		return operation.Name("structural_context")
+	case mcpcontract.StructuralContextV2Tool:
+		return operation.Name("structural_context_v2")
 	case mcpcontract.CustodyExecuteTool:
 		return operation.CustodyExecute
 	case "lsp_session_v1_list":

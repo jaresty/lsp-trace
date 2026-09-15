@@ -81,7 +81,8 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 		opaque[rawID] = opaqueID("lsp-trace/transient-structural/node/v1", salt, rawID)
 	}
 	for rawID := range byID {
-		nodeFacts = append(nodeFacts, NodeFact{ID: opaque[rawID], Witnesses: nodeWitnesses(rawID, down.root, downDepths, upDepths)})
+		node := byID[rawID]
+		nodeFacts = append(nodeFacts, NodeFact{ID: opaque[rawID], Witnesses: nodeWitnesses(rawID, down.root, downDepths, upDepths), Name: node.Name, Kind: node.Kind, URI: node.URI, Range: node.Range})
 	}
 	sort.Slice(nodeFacts, func(i, j int) bool { return nodeFacts[i].ID < nodeFacts[j].ID })
 	partial := admittedProjection{targetID: opaque[down.root], nodes: nodeFacts, accounting: accounting}
@@ -142,7 +143,7 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 					continue
 				}
 				occurrences[key] = occurrence{raw: rawKey, fact: OccurrenceFact{
-					ID: opaqueID("lsp-trace/transient-structural/occurrence/v1", salt, key), CallerID: opaque[from], CalleeID: opaque[to], Witnesses: []Witness{witness},
+					ID: opaqueID("lsp-trace/transient-structural/occurrence/v1", salt, key), CallerID: opaque[from], CalleeID: opaque[to], Witnesses: []Witness{witness}, URI: byID[from].URI, Range: site,
 				}}
 			}
 		}

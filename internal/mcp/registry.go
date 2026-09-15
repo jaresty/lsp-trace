@@ -34,14 +34,15 @@ const (
 type ExecutorFamily string
 
 const (
-	OfflineExecutorFamily           ExecutorFamily = "offline"
-	LifecycleExecutorFamily         ExecutorFamily = "lifecycle"
-	IncomingExecutorFamily          ExecutorFamily = "incoming"
-	SliceExecutorFamily             ExecutorFamily = "slice"
-	AcquisitionV2ExecutorFamily     ExecutorFamily = "acquisition-v2"
-	TraceExecutorFamily             ExecutorFamily = "trace"
-	CensusExecutorFamily            ExecutorFamily = "census"
-	StructuralContextExecutorFamily ExecutorFamily = "structural-context"
+	OfflineExecutorFamily             ExecutorFamily = "offline"
+	LifecycleExecutorFamily           ExecutorFamily = "lifecycle"
+	IncomingExecutorFamily            ExecutorFamily = "incoming"
+	SliceExecutorFamily               ExecutorFamily = "slice"
+	AcquisitionV2ExecutorFamily       ExecutorFamily = "acquisition-v2"
+	TraceExecutorFamily               ExecutorFamily = "trace"
+	CensusExecutorFamily              ExecutorFamily = "census"
+	StructuralContextExecutorFamily   ExecutorFamily = "structural-context"
+	StructuralContextV2ExecutorFamily ExecutorFamily = "structural-context-v2"
 )
 
 // SemanticValidator runs after structural schema validation and before dispatch.
@@ -85,16 +86,18 @@ const (
 )
 
 var defaultToolNames = map[string]struct{}{
-	mcpcontract.CensusTool:            {},
-	mcpcontract.StructuralContextTool: {},
-	"lsp_trace_v1_capabilities":       {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
+	mcpcontract.CensusTool:              {},
+	mcpcontract.StructuralContextTool:   {},
+	mcpcontract.StructuralContextV2Tool: {},
+	"lsp_trace_v1_capabilities":         {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_inspect_hydrated": {},
 	"lsp_trace_v1_program_c_leiden": {}, "lsp_trace_v1_trace": {}, "lsp_trace_v1_verify": {},
 }
 
 var advancedToolNames = map[string]struct{}{
-	mcpcontract.CensusTool:            {},
-	mcpcontract.StructuralContextTool: {},
-	"lsp_session_v1_list":             {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
+	mcpcontract.CensusTool:              {},
+	mcpcontract.StructuralContextTool:   {},
+	mcpcontract.StructuralContextV2Tool: {},
+	"lsp_session_v1_list":               {}, "lsp_session_v1_restart": {}, "lsp_session_v1_status": {}, "lsp_session_v1_stop": {},
 	"lsp_trace_v1_bounded_retained_analysis": {}, "lsp_trace_v1_bounded_retained_metrics": {}, "lsp_trace_v1_bounded_retained_ranking": {},
 	"lsp_trace_v1_capabilities": {}, "lsp_trace_v1_custody_execute": {}, "lsp_trace_v1_execute": {}, "lsp_trace_v1_export_retained_calls": {},
 	"lsp_trace_v1_filter": {}, "lsp_trace_v1_inspect": {}, "lsp_trace_v1_inspect_hydrated": {}, "lsp_trace_v1_program_c_compose": {},
@@ -160,8 +163,9 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	if err != nil {
 		panic("embedded MCP contract is invalid: " + err.Error())
 	}
-	manifest = mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest))))))))))))))
+	manifest = mcpcontract.WithStructuralContextV2(mcpcontract.WithStructuralContext(mcpcontract.WithCensus(mcpcontract.WithTrace(mcpcontract.WithProgramCInstability(mcpcontract.WithProgramCCompose(mcpcontract.WithProgramCLeiden(mcpcontract.WithExecuteGateway(mcpcontract.WithPublicAnalyticsV2(mcpcontract.WithAcquisitionV3(mcpcontract.WithRetainedCallsV2Verifier(mcpcontract.WithRetainedCallsV2Export(mcpcontract.WithHydratedInspection(mcpcontract.WithRetainedRelations(mcpcontract.WithRetainedCalls(manifest)))))))))))))))
 	descriptions := map[string]string{
+		mcpcontract.StructuralContextV2Tool:      "Inspect a bounded transient live CALLS-only neighborhood with root-confined workspace-relative symbol and call-site locators; authority remains zero and source_graph_complete remains UNKNOWN",
 		mcpcontract.StructuralContextTool:        "Inspect a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
 		mcpcontract.CensusTool:                   "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
 		mcpcontract.HydratedTool:                 "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
@@ -225,6 +229,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			executorFamily = CensusExecutorFamily
 		} else if contract.Name == mcpcontract.StructuralContextTool {
 			executorFamily = StructuralContextExecutorFamily
+		} else if contract.Name == mcpcontract.StructuralContextV2Tool {
+			executorFamily = StructuralContextV2ExecutorFamily
 		} else if contract.Name == "lsp_trace_v2_slice" || contract.Name == "lsp_trace_v2_incoming" || contract.Name == "lsp_trace_v3_slice" || contract.Name == "lsp_trace_v3_incoming" {
 			executorFamily = AcquisitionV2ExecutorFamily
 		}
@@ -768,7 +774,7 @@ func operationGuidance(tool Tool, advertised bool) map[string]any {
 		"output_families_versions": append([]string(nil), tool.OutputFamiliesVersions...),
 		"output_schema_source":     "registered artifact schema IDs and versioned families; no schema identity is inferred from a selector",
 	}
-	if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily || tool.ExecutorFamily == StructuralContextExecutorFamily {
+	if tool.ExecutorFamily == IncomingExecutorFamily || tool.ExecutorFamily == SliceExecutorFamily || tool.ExecutorFamily == AcquisitionV2ExecutorFamily || tool.ExecutorFamily == TraceExecutorFamily || tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 		guidance["position_convention"] = "MCP line and character values are zero-based; CLI --at PATH:LINE:COLUMN values are one-based"
 	}
 	if tool.Name == "lsp_trace_v3_slice" || tool.Name == "lsp_trace_v3_incoming" {

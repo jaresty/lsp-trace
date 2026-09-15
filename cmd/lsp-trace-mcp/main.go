@@ -297,6 +297,7 @@ func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRunt
 	server.Executors[mcp.TraceExecutorFamily] = newTraceExecutor(selected)
 	server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(newCensusRuntime(selected))
 	server.Executors[mcp.StructuralContextExecutorFamily] = newStructuralContextExecutor(selected)
+	server.Executors[mcp.StructuralContextV2ExecutorFamily] = server.Executors[mcp.StructuralContextExecutorFamily]
 }
 
 func (r *hostSelectorRuntime) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
@@ -432,13 +433,14 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
-			mcp.LifecycleExecutorFamily:         lifecycleops.NewExecutor(lifecycleops.New(manager)),
-			mcp.IncomingExecutorFamily:          incomingops.NewExecutor(manager),
-			mcp.SliceExecutorFamily:             sliceops.NewExecutor(manager),
-			mcp.AcquisitionV2ExecutorFamily:     legacyManifestExecutor{runtime: manager},
-			mcp.TraceExecutorFamily:             newTraceExecutor(selected),
-			mcp.CensusExecutorFamily:            newPrivateCensusMCPBinding(newCensusRuntime(selected)),
-			mcp.StructuralContextExecutorFamily: newStructuralContextExecutor(selected),
+			mcp.LifecycleExecutorFamily:           lifecycleops.NewExecutor(lifecycleops.New(manager)),
+			mcp.IncomingExecutorFamily:            incomingops.NewExecutor(manager),
+			mcp.SliceExecutorFamily:               sliceops.NewExecutor(manager),
+			mcp.AcquisitionV2ExecutorFamily:       legacyManifestExecutor{runtime: manager},
+			mcp.TraceExecutorFamily:               newTraceExecutor(selected),
+			mcp.CensusExecutorFamily:              newPrivateCensusMCPBinding(newCensusRuntime(selected)),
+			mcp.StructuralContextExecutorFamily:   newStructuralContextExecutor(selected),
+			mcp.StructuralContextV2ExecutorFamily: newStructuralContextExecutor(selected),
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

@@ -44,8 +44,8 @@ func TestNormalizedProviderRequestContract(t *testing.T) {
 func TestNormalizedProviderCapabilitiesAndPublication(t *testing.T) {
 	registry := NewRegistry(false)
 	tools := registry.Tools()
-	if len(tools) != 35 || len(registry.Advertised()) != 35 {
-		t.Fatalf("ASSERT_MCP_CURRENT35_WITH_HISTORICAL25_PRESERVED: tools=%d advertised=%d", len(tools), len(registry.Advertised()))
+	if len(tools) != 36 || len(registry.Advertised()) != 36 {
+		t.Fatalf("ASSERT_MCP_CURRENT36_WITH_HISTORICAL25_PRESERVED: tools=%d advertised=%d", len(tools), len(registry.Advertised()))
 	}
 	capabilities := registry.Capabilities()
 	relations, ok := capabilities["normalized_relations"].(map[string]any)

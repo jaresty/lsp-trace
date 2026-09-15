@@ -909,6 +909,17 @@ func New(c Config) (*Manager, error) {
 	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
 }
 
+// WorkspaceRoot returns the validated root for one exact live session generation.
+func (m *Manager) WorkspaceRoot(sessionID string, generation uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.sessions[sessionID]
+	if !ok || r.record.Generation != generation {
+		return "", false
+	}
+	return r.record.Routing.WorkspaceRoot, true
+}
+
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
 	seedSources := map[string][]byte{}
 	if req.SeedBinding != nil {

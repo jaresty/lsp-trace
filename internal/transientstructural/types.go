@@ -6,6 +6,8 @@ package transientstructural
 
 import (
 	"fmt"
+
+	"lsp-trace/internal/graph"
 )
 
 type Phase string
@@ -98,15 +100,21 @@ type Witness struct {
 }
 
 type NodeFact struct {
-	ID        string    `json:"id"`
-	Witnesses []Witness `json:"witnesses"`
+	ID        string      `json:"id"`
+	Witnesses []Witness   `json:"witnesses"`
+	Name      string      `json:"-"`
+	Kind      int         `json:"-"`
+	URI       string      `json:"-"`
+	Range     graph.Range `json:"-"`
 }
 
 type OccurrenceFact struct {
-	ID        string    `json:"id"`
-	CallerID  string    `json:"caller_id"`
-	CalleeID  string    `json:"callee_id"`
-	Witnesses []Witness `json:"witnesses"`
+	ID        string      `json:"id"`
+	CallerID  string      `json:"caller_id"`
+	CalleeID  string      `json:"callee_id"`
+	Witnesses []Witness   `json:"witnesses"`
+	URI       string      `json:"-"`
+	Range     graph.Range `json:"-"`
 }
 
 type AnalysisResult struct {
