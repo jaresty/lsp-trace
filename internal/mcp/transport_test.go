@@ -418,14 +418,18 @@ func TestStructuralThenSemanticThenExecutorFamily(t *testing.T) {
 }
 
 type cancellationExecutor struct {
-	started chan struct{}
-	release chan struct{}
+	started   chan struct{}
+	cancelled chan struct{}
+	release   chan struct{}
 }
 
 func (e cancellationExecutor) Execute(ctx context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
 	close(e.started)
 	select {
 	case <-ctx.Done():
+		if e.cancelled != nil {
+			close(e.cancelled)
+		}
 		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal, Err: ctx.Err()}
 	case <-e.release:
 		return operation.Result{}, &operation.Failure{Code: operation.FailureInternal}
@@ -436,8 +440,9 @@ func TestRequestContextCancelsInFlightExecutor(t *testing.T) {
 	const assertion = "request cancellation reaches the selected in-flight executor"
 	t.Log("ASSERTION: " + assertion)
 	started := make(chan struct{})
+	cancelled := make(chan struct{})
 	release := make(chan struct{})
-	server := &Server{Registry: NewRegistry(false), Executor: cancellationExecutor{started: started, release: release}}
+	server := &Server{Registry: NewRegistry(false), Executor: cancellationExecutor{started: started, cancelled: cancelled, release: release}}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan response, 1)
 	go func() {
@@ -449,10 +454,15 @@ func TestRequestContextCancelsInFlightExecutor(t *testing.T) {
 	<-started
 	cancel()
 	select {
-	case <-done:
-	case <-time.After(100 * time.Millisecond):
+	case <-cancelled:
+	case <-time.After(time.Second):
 		close(release)
 		t.Fatalf("%s: context cancellation did not reach executor", assertion)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatalf("%s: response did not complete after executor observed cancellation", assertion)
 	}
 }
 

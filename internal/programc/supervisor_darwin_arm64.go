@@ -99,12 +99,32 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			return
 		}
 	}
+	finishWorker := func(waitErr error) (Outcome, *SupervisionFailure) {
+		if stdout.Exceeded() {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			return zero, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
+		}
+		if waitErr != nil {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			return zero, classifyTerminatedWorker(waitErr, stderr.String())
+		}
+		var response workerResponse
+		if decodeErr := strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); decodeErr != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
+			_ = syscall.Kill(-pid, syscall.SIGKILL)
+			return zero, failure(CodeMalformedOutput, errors.New("invalid worker response"))
+		}
+		if response.Failure != nil {
+			return zero, response.Failure
+		}
+		return reconstruct(input, seed, response.Outcome)
+	}
 	peak, err := initialTreeRSS(pid)
 	if err != nil {
-		if classified, completed := awaitTerminatedWorker(done, stderr.String()); completed {
+		if waitErr, completed := awaitTerminatedWorker(done); completed {
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			if classified != nil {
-				return zero, observation, classified
+			if waitErr != nil {
+				out, terminalFailure := finishWorker(waitErr)
+				return out, observation, terminalFailure
 			}
 		} else {
 			kill()
@@ -147,9 +167,10 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			}
 			rss, e := treeRSS(pid)
 			if e != nil {
-				if classified, completed := awaitTerminatedWorker(done, stderr.String()); completed && classified != nil {
+				if waitErr, completed := awaitTerminatedWorker(done); completed {
 					observation.ElapsedNanos = time.Since(started).Nanoseconds()
-					return zero, observation, classified
+					out, terminalFailure := finishWorker(waitErr)
+					return out, observation, terminalFailure
 				}
 				kill()
 				observation.ElapsedNanos = time.Since(started).Nanoseconds()
@@ -166,34 +187,18 @@ func computeSupervised(ctx context.Context, input []byte, seed uint64) (Outcome,
 			}
 		case waitErr := <-done:
 			observation.ElapsedNanos = time.Since(started).Nanoseconds()
-			if stdout.Exceeded() {
-				_ = syscall.Kill(-pid, syscall.SIGKILL)
-				return zero, observation, failure(CodeOutputLimit, errors.New("worker stdout limit exceeded"))
-			}
-			if waitErr != nil {
-				_ = syscall.Kill(-pid, syscall.SIGKILL)
-				return zero, observation, classifyTerminatedWorker(waitErr, stderr.String())
-			}
-			var response workerResponse
-			if err = strictDecode(bytes.NewReader(stdout.Bytes()), supervisorOutputBytes, &response); err != nil || response.Version != workerVersion || (response.Outcome == nil) == (response.Failure == nil) {
-				_ = syscall.Kill(-pid, syscall.SIGKILL)
-				return zero, observation, failure(CodeMalformedOutput, errors.New("invalid worker response"))
-			}
-			if response.Failure != nil {
-				return zero, observation, response.Failure
-			}
-			out, reconstructFailure := reconstruct(input, seed, response.Outcome)
-			return out, observation, reconstructFailure
+			out, terminalFailure := finishWorker(waitErr)
+			return out, observation, terminalFailure
 		}
 	}
 }
 
-func awaitTerminatedWorker(done <-chan error, stderr string) (*SupervisionFailure, bool) {
+func awaitTerminatedWorker(done <-chan error) (error, bool) {
 	timer := time.NewTimer(supervisorPoll)
 	defer timer.Stop()
 	select {
 	case waitErr := <-done:
-		return classifyTerminatedWorker(waitErr, stderr), true
+		return waitErr, true
 	case <-timer.C:
 		return nil, false
 	}

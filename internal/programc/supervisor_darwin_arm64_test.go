@@ -21,9 +21,16 @@ import (
 
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == workerArgument {
-		if os.Getenv("PROGRAMC_TEST_WORKER") != "" {
-			testWorkerMode()
-			return
+		if mode := os.Getenv("PROGRAMC_TEST_WORKER"); mode != "" {
+			if mode == "delayed-private" {
+				// initialTreeRSS has a two-second acquisition bound. Keep this
+				// fixture alive beyond that entire window so the test never
+				// depends on /bin/ps scheduling latency.
+				time.Sleep(3 * time.Second)
+			} else {
+				testWorkerMode()
+				return
+			}
 		}
 		_, code := RunPrivateWorker(os.Args[1:], os.Stdin, os.Stdout, os.Stderr)
 		os.Exit(code)
@@ -83,6 +90,10 @@ func requireCode(t *testing.T, failed *SupervisionFailure, code SupervisionCode)
 
 func TestSupervisedSuccessPreservesExactOutcome(t *testing.T) {
 	withSupervisorDefaults(t)
+	supervisorWall = 10 * time.Second
+	// Keep the worker alive long enough for the mandatory first /bin/ps RSS
+	// observation; successful workers without that observation must fail closed.
+	t.Setenv("PROGRAMC_TEST_WORKER", "delayed-private")
 	a, b := node("a", 0), node("b", 1)
 	input := validV5(t, []graph.Node{a, b}, []graph.Edge{{CallerNodeID: a.ID, CalleeNodeID: b.ID, CallSites: []graph.Range{{}}}})
 	want, baseFailure := Compute(input, 19)
