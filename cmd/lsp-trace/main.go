@@ -117,6 +117,7 @@ const usageText = `usage:
   lsp-trace aggregate-communities --graph PATH --partition PATH [--partition PATH...] [--output PATH]
   lsp-trace trace --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN...) [--format json|tree]
   lsp-trace context --machine --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--file PATH --symbol NAME | --at PATH:LINE:COLUMN) [--analysis neighborhood | --analysis impact --direction incoming|outgoing --analysis-depth N]
+  lsp-trace context-delta --before FILE --after FILE --machine
   ` + censusInvocationUsage + `
   lsp-trace slice --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--from-file PATH... | --at PATH:LINE:COLUMN... | --seed-file PATH)
   lsp-trace incoming --workspace PATH (--server COMMAND | --profile NAME [--config PATH]) (--at PATH:LINE:COLUMN... | --seed-file PATH)
@@ -446,6 +447,9 @@ func runCorePrepared(args []string, validation *legacyInvocation) int {
 	}
 	if len(args) > 0 && args[0] == "context" {
 		return runContext(args[1:], os.Stdout, os.Stderr)
+	}
+	if len(args) > 0 && args[0] == "context-delta" {
+		return runContextDelta(args[1:], os.Stdout, os.Stderr)
 	}
 	if len(args) > 0 && args[0] == "census" {
 		return runCensus(args[1:], os.Stdout, os.Stderr)

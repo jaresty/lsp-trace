@@ -151,7 +151,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, registration := range WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))))))).Schemas {
+	for _, registration := range WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))))))))).Schemas {
 		if registration.ID != schemaID {
 			continue
 		}
@@ -172,7 +172,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	manifest = WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))))))))
+	manifest = WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))))))))
 	compiled, err := compileSchema(manifest, schemaID)
 	if err != nil {
 		return err

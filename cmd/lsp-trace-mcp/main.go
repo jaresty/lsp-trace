@@ -441,6 +441,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 			mcp.CensusExecutorFamily:              newPrivateCensusMCPBinding(newCensusRuntime(selected)),
 			mcp.StructuralContextExecutorFamily:   newStructuralContextExecutor(selected),
 			mcp.StructuralContextV2ExecutorFamily: newStructuralContextExecutor(selected),
+			mcp.StructuralDeltaExecutorFamily:     structuralDeltaExecutor{},
 		},
 		PublicationRoot: publicationRoot, ArtifactStore: artifactStore, Publisher: publication.NewPublisher(),
 	}, manager, nil

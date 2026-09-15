@@ -113,10 +113,11 @@ Operation numbers are append-only compatibility identities, not lexical display 
 | 34 | `lsp_trace_v1_census` | default |
 | 35 | `lsp_trace_v1_structural_context` | default (hidden but callable in compact) |
 | 36 | `lsp_trace_v2_structural_context` | default (hidden but callable in compact) |
+| 37 | `lsp_trace_v1_structural_delta` | default (hidden but callable in compact) |
 
-Operations 31–36 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operations 35 and 36.
+Operations 31–37 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operations 35, 36, and 37.
 
-For every operation 1–35:
+For every operation 1–37:
 
 1. exact canonical resolution remains available;
 2. `lsp_trace_v1_execute` retains one schema branch for that canonical name (except execute itself, which is not recursively branched);
