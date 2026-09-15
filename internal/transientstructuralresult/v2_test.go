@@ -39,12 +39,37 @@ func TestProjectV2FakeServerLiveShape(t *testing.T) {
 	if value["analytics_scope"] != "BOUNDED_LOCAL" || value["coupling"] == nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_SHARED_COUPLING_PRESENT: %s", raw)
 	}
+	for _, field := range []string{"strong_components", "weak_projection", "weak_bridges", "articulation_points", "pagerank", "hits"} {
+		if value[field] == nil {
+			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_ANALYTICS_PRESENT_%s: %s", field, raw)
+		}
+	}
+	if value["pagerank_damping"] != 0.85 || value["analytics_tolerance"] != 1e-12 {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_FROZEN_RANKING_POLICY: %s", raw)
+	}
 	value["source_body"] = "package src"
 	bad, _ := json.Marshal(value)
 	if mcpcontract.ValidateJSON(mcpcontract.StructuralContextV2ResultID, bad) == nil {
 		t.Fatal("ASSERT_STRUCTURAL_CONTEXT_V2_SOURCE_BODY_REJECTED")
 	}
 }
+func TestProjectV2RelationalValidationRejectsForeignAnalyticsNode(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "a.go")
+	if err := os.WriteFile(file, []byte("package a"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	in := transientstructural.Result{TargetID: "a", Qualification: transientstructural.Qualification{PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "a", Name: "A", Kind: 12, URI: fileURI(file)}}}}
+	got, err := ProjectV2(in, transientstructural.Request{Generation: 1}, "ts_0123456789abcdef0123456789abcdef", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.PageRank[0].NodeID = "tn_ffffffffffffffffffffffffffffffff"
+	if ValidateV2(got) == nil {
+		t.Fatal("ASSERT_STRUCTURAL_CONTEXT_V2_RELATIONAL_FOREIGN_NODE_REJECTED")
+	}
+}
+
 func TestProjectV2OmitsAndAccountsExternalDependencies(t *testing.T) {
 	root := t.TempDir()
 	inside := filepath.Join(root, "main.go")

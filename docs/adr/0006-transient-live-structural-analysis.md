@@ -77,6 +77,12 @@ Operation 35 must not be registered before the finalized operation 33 and 34 con
 
 `lsp_trace_v1_structural_context` is the only canonical operation for this behavior. A direct MCP tool and `lsp_trace_v1_execute` dispatch to that same registry entry and transport-neutral implementation.
 
+## V2 bounded-local refactoring analytics
+
+`lsp_trace_v2_structural_context` projects the already-admitted, root-confined locator graph through the shared `internal/graphkernel.DirectedWeighted` substrate. It reports canonical strongly connected components with explicit self-loop-aware cycle membership; weak bridges and articulation points; weighted Gonum PageRank with damping `0.85` and 2-norm tolerance `1e-12`; and Gonum HITS hub and authority scores with the same tolerance. Edgeless graphs report canonical zero HITS scores.
+
+The weak projection policy is `DIRECTED_ARCS_COLLAPSED_TO_SIMPLE_UNDIRECTED_PAIRS; SELF_LOOPS_IGNORED; PARALLEL_AND_ANTIPARALLEL_ARCS_COLLAPSED`: direction and weight do not affect weak-cut membership, and isolates remain vertices. Every analytics result remains `BOUNDED_LOCAL`, with `authority=0` and `source_graph_complete=UNKNOWN`. These mechanics do not establish architecture, refactor safety, ownership, feature identity, or repository completeness. V2 does not add community detection or before/after deltas.
+
 ## Primary transient workflow
 
 ```text
