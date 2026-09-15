@@ -58,10 +58,7 @@ func Project(in transientstructural.Result, q transientstructural.Request, trans
 				reachable = append(reachable, n.ID)
 			}
 		}
-		w := []string{}
-		for _, e := range edges {
-			w = append(w, e.ID)
-		}
+		w := impactWitnessEdgeIDs(target, string(q.Analysis.Direction), uint64(q.Analysis.MaxDepth), edges)
 		analysis = ImpactResult{RootNodeID: target, Direction: string(q.Analysis.Direction), Depth: uint64(q.Analysis.MaxDepth), Nodes: nodes, Edges: edges, ReachableNodeIDs: reachable, WitnessEdgeIDs: w}
 	}
 	a := Accounting{RequestAttempted: uint64(in.Accounting.Requests.Attempted), RequestSucceeded: uint64(in.Accounting.Requests.Succeeded), RequestFailed: uint64(in.Accounting.Requests.Failed), RequestCancelled: uint64(in.Accounting.Requests.Cancelled), PreparedAttempted: uint64(in.Accounting.Preparation.Attempted), PreparedReturned: uint64(in.Accounting.Preparation.Returned), PreparedEmpty: uint64(in.Accounting.Preparation.Empty), PreparedFailed: uint64(in.Accounting.Preparation.Failed), NodeObserved: uint64(in.Accounting.Nodes.Observed), NodeAdmitted: uint64(in.Accounting.Nodes.Admitted), NodeRejected: uint64(in.Accounting.Nodes.Rejected), NodeOmitted: uint64(in.Accounting.Nodes.Omitted), OccurrenceObserved: uint64(in.Accounting.Occurrences.Observed), OccurrenceAdmitted: uint64(in.Accounting.Occurrences.Admitted), OccurrenceRejected: uint64(in.Accounting.Occurrences.Rejected), OccurrenceOmitted: uint64(in.Accounting.Occurrences.Omitted), FrontierObserved: uint64(in.Accounting.Frontier.Observed), FrontierExpanded: uint64(in.Accounting.Frontier.Expanded), FrontierUnexpanded: uint64(in.Accounting.Frontier.Unexpanded), RequestOmissionReasons: EmptyReasonMap(), NodeOmissionReasons: EmptyReasonMap(), OccurrenceOmissionReasons: EmptyReasonMap(), FrontierOmissionReasons: EmptyReasonMap()}
@@ -102,4 +99,28 @@ func Project(in transientstructural.Result, q transientstructural.Request, trans
 		return Result{}, e
 	}
 	return out, nil
+}
+
+func impactWitnessEdgeIDs(root, direction string, depth uint64, edges []Edge) []string {
+	reachable := map[string]bool{root: true}
+	frontier := map[string]bool{root: true}
+	var witness []string
+	for d := uint64(0); d < depth && len(frontier) > 0; d++ {
+		next := map[string]bool{}
+		for _, edge := range edges {
+			from, to := edge.CallerNodeID, edge.CalleeNodeID
+			if direction == Incoming {
+				from, to = to, from
+			}
+			if frontier[from] && !reachable[to] {
+				next[to] = true
+				witness = append(witness, edge.ID)
+			}
+		}
+		for id := range next {
+			reachable[id] = true
+		}
+		frontier = next
+	}
+	return witness
 }
