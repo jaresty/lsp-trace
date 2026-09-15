@@ -63,10 +63,12 @@ type CallCount struct {
 type IntTransition struct {
 	Before int `json:"before"`
 	After  int `json:"after"`
+	Delta  int `json:"delta"`
 }
 type FloatTransition struct {
 	Before float64 `json:"before"`
 	After  float64 `json:"after"`
+	Delta  float64 `json:"delta"`
 }
 type BoolTransition struct {
 	Before bool `json:"before"`
@@ -214,7 +216,7 @@ func Compare(in Input) (Result, error) {
 	for _, k := range r.MatchedSymbols {
 		x, y := ba[k], aa[k]
 		if x != y {
-			r.Analytics = append(r.Analytics, AnalyticsDelta{k, IntTransition{x.ca, y.ca}, IntTransition{x.ce, y.ce}, FloatTransition{x.in, y.in}, BoolTransition{x.cyc, y.cyc}, BoolTransition{x.art, y.art}, FloatTransition{x.pr, y.pr}, FloatTransition{x.hub, y.hub}, FloatTransition{x.auth, y.auth}})
+			r.Analytics = append(r.Analytics, AnalyticsDelta{k, intTransition(x.ca, y.ca), intTransition(x.ce, y.ce), floatTransition(x.in, y.in), BoolTransition{x.cyc, y.cyc}, BoolTransition{x.art, y.art}, floatTransition(x.pr, y.pr), floatTransition(x.hub, y.hub), floatTransition(x.auth, y.auth)})
 		}
 	}
 	bb := bridges(in.Before, bi)
@@ -388,16 +390,110 @@ func sortBridges(x []BridgeKey) {
 		return symLess(x[i].B, x[j].B)
 	})
 }
+func intTransition(before, after int) IntTransition {
+	return IntTransition{Before: before, After: after, Delta: after - before}
+}
+func floatTransition(before, after float64) FloatTransition {
+	return FloatTransition{Before: before, After: after, Delta: after - before}
+}
+
 func Validate(r Result) error {
-	if r.SchemaVersion != SchemaVersion || r.Qualification.Authority != 0 || r.Qualification.SourceGraphComplete != "UNKNOWN" || r.Qualification.ComparisonScope != "TWO_BOUNDED_LOCAL_RESULTS" || r.Qualification.AcquisitionScopeComparable != "UNKNOWN" {
+	q := r.Qualification
+	if r.SchemaVersion != SchemaVersion || q.Authority != 0 || q.SourceGraphComplete != "UNKNOWN" || q.ComparisonScope != "TWO_BOUNDED_LOCAL_RESULTS" || q.AcquisitionScopeComparable != "UNKNOWN" || len(q.ScopeSensitive) != 2 || q.ScopeSensitive[0] != "HITS" || q.ScopeSensitive[1] != "PAGERANK" {
 		return errors.New("invalid qualification")
 	}
-	for _, a := range r.Analytics {
-		for _, v := range []float64{a.Instability.Before, a.Instability.After, a.PageRank.Before, a.PageRank.After, a.HITSHub.Before, a.HITSHub.After, a.HITSAuthority.Before, a.HITSAuthority.After} {
-			if math.IsNaN(v) || math.IsInf(v, 0) {
-				return errors.New("non-finite analytics")
+	universe := make(map[SymbolKey]bool)
+	classes := make(map[SymbolKey]string)
+	for label, symbols := range map[string][]SymbolKey{"added": r.AddedSymbols, "matched": r.MatchedSymbols, "removed": r.RemovedSymbols} {
+		if !canonicalSymbols(symbols) {
+			return errors.New("non-canonical symbol collection")
+		}
+		for _, symbol := range symbols {
+			if prior := classes[symbol]; prior != "" {
+				return errors.New("symbol classes overlap")
 			}
+			classes[symbol], universe[symbol] = label, true
+		}
+	}
+	if q.NodeUniverseEqual != (len(r.AddedSymbols) == 0 && len(r.RemovedSymbols) == 0) {
+		return errors.New("node universe qualification mismatch")
+	}
+	if !validCallCounts(r.Calls.Added, universe) || !validCallCounts(r.Calls.Removed, universe) || !canonicalCountChanges(r.Calls.CountChanged, universe) {
+		return errors.New("invalid call deltas")
+	}
+	analyticsSeen := make(map[SymbolKey]bool)
+	for i, a := range r.Analytics {
+		if classes[a.Symbol] != "matched" || analyticsSeen[a.Symbol] || (i > 0 && !symLess(r.Analytics[i-1].Symbol, a.Symbol)) || !validIntTransition(a.Ca) || !validIntTransition(a.Ce) || !validFloatTransition(a.Instability) || !validFloatTransition(a.PageRank) || !validFloatTransition(a.HITSHub) || !validFloatTransition(a.HITSAuthority) {
+			return errors.New("invalid analytics delta")
+		}
+		analyticsSeen[a.Symbol] = true
+	}
+	if !validBridges(r.AddedWeakBridges, universe) || !validBridges(r.RemovedWeakBridges, universe) {
+		return errors.New("invalid weak bridge deltas")
+	}
+	removedBridges := make(map[BridgeKey]bool, len(r.RemovedWeakBridges))
+	for _, bridge := range r.RemovedWeakBridges {
+		removedBridges[bridge] = true
+	}
+	for _, bridge := range r.AddedWeakBridges {
+		if removedBridges[bridge] {
+			return errors.New("weak bridge deltas overlap")
+		}
+	}
+	if !canonicalSymbols(r.AffectedCallers) {
+		return errors.New("non-canonical affected callers")
+	}
+	for _, caller := range r.AffectedCallers {
+		if !universe[caller] {
+			return errors.New("affected caller absent")
 		}
 	}
 	return nil
+}
+
+func canonicalSymbols(symbols []SymbolKey) bool {
+	for i, symbol := range symbols {
+		if !validPath(symbol.Path) || symbol.Name == "" || (i > 0 && !symLess(symbols[i-1], symbol)) {
+			return false
+		}
+	}
+	return true
+}
+func validCallKey(call CallKey, universe map[SymbolKey]bool) bool {
+	return universe[call.Caller] && universe[call.Callee] && validPath(call.Path)
+}
+func validCallCounts(counts []CallCount, universe map[SymbolKey]bool) bool {
+	for i, item := range counts {
+		if item.Count < 1 || !validCallKey(item.Call, universe) || (i > 0 && !callLess(counts[i-1].Call, item.Call)) {
+			return false
+		}
+	}
+	return true
+}
+func canonicalCountChanges(changes []CountChange, universe map[SymbolKey]bool) bool {
+	for i, item := range changes {
+		if item.Before < 1 || item.After < 1 || item.Before == item.After || !validCallKey(item.Call, universe) || (i > 0 && !callLess(changes[i-1].Call, item.Call)) {
+			return false
+		}
+	}
+	return true
+}
+func validIntTransition(v IntTransition) bool { return v.Delta == v.After-v.Before }
+func validFloatTransition(v FloatTransition) bool {
+	return finiteTransitionNumber(v.Before) && finiteTransitionNumber(v.After) && finiteTransitionNumber(v.Delta) && v.Delta == v.After-v.Before
+}
+func finiteTransitionNumber(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+func validBridges(bridges []BridgeKey, universe map[SymbolKey]bool) bool {
+	for i, bridge := range bridges {
+		if !universe[bridge.A] || !universe[bridge.B] || !symLess(bridge.A, bridge.B) || (i > 0 && !bridgeLess(bridges[i-1], bridge)) {
+			return false
+		}
+	}
+	return true
+}
+func bridgeLess(a, b BridgeKey) bool {
+	if a.A != b.A {
+		return symLess(a.A, b.A)
+	}
+	return symLess(a.B, b.B)
 }

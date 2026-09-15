@@ -71,20 +71,35 @@ func runContextDelta(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 func readContextDeltaFile(name string) ([]byte, error) {
+	before, e := os.Lstat(name)
+	if e != nil {
+		return nil, e
+	}
+	if !before.Mode().IsRegular() || before.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("context-delta inputs must be regular nonsymlink files")
+	}
 	f, e := os.Open(name)
 	if e != nil {
 		return nil, e
 	}
 	defer f.Close()
-	info, e := f.Stat()
+	opened, e := f.Stat()
 	if e != nil {
 		return nil, e
 	}
-	if !info.Mode().IsRegular() {
-		return nil, errors.New("context-delta inputs must be regular files")
+	if !opened.Mode().IsRegular() || !os.SameFile(before, opened) {
+		return nil, errors.New("context-delta input identity changed")
 	}
-	if info.Size() < 1 || info.Size() > contextDeltaMaxFileBytes {
+	if opened.Size() < 1 || opened.Size() > contextDeltaMaxFileBytes {
 		return nil, errors.New("context-delta input exceeds bounded file size")
 	}
-	return io.ReadAll(io.LimitReader(f, contextDeltaMaxFileBytes+1))
+	content, e := io.ReadAll(io.LimitReader(f, contextDeltaMaxFileBytes+1))
+	if e != nil || int64(len(content)) > contextDeltaMaxFileBytes {
+		return nil, errors.New("context-delta input exceeds bounded file size")
+	}
+	after, e := os.Lstat(name)
+	if e != nil || !os.SameFile(opened, after) || after.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("context-delta input identity changed")
+	}
+	return content, nil
 }

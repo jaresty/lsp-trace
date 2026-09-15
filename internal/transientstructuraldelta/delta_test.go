@@ -50,6 +50,23 @@ func TestAmbiguityMismatchAndConfinement(t *testing.T) {
 		t.Fatalf("ASSERT_DELTA_CONFINEMENT: %v", e)
 	}
 }
+func TestResultValidationRejectsNonCanonicalAndInconsistentArtifacts(t *testing.T) {
+	b, a := fixture("tn_00000000000000000000000000000001", "main.go", "main"), fixture("tn_00000000000000000000000000000003", "main.go", "main")
+	a.Coupling[0].Ce = 1
+	a.Coupling[0].Instability = 1
+	r, err := Compare(Input{Before: b, After: a})
+	if err != nil || len(r.Analytics) != 1 {
+		t.Fatalf("ASSERT_DELTA_VALIDATION_FIXTURE: result=%+v err=%v", r, err)
+	}
+	if r.Analytics[0].Ce.Delta != 1 || r.Analytics[0].Instability.Delta != 1 {
+		t.Fatalf("ASSERT_EXPLICIT_METRIC_DELTAS: %+v", r.Analytics[0])
+	}
+	r.AddedSymbols = []SymbolKey{r.MatchedSymbols[0]}
+	if Validate(r) == nil {
+		t.Fatal("ASSERT_DELTA_RESULT_DISJOINT_SYMBOL_SETS")
+	}
+}
+
 func TestCallsAnalyticsQualification(t *testing.T) {
 	b := fixture("tn_0123456789abcdef0123456789abcdef", "src/a.go", "A")
 	b.Nodes = append(b.Nodes, tsr.LocatorNodeV2{ID: "tn_11111111111111111111111111111111", Name: "B", Kind: 12, Path: "src/b.go"})
