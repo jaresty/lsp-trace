@@ -257,6 +257,7 @@ func (s *Server) handleContext(ctx context.Context, req request) response {
 			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
 			"serverInfo":      map[string]any{"name": "lsp-trace-mcp", "version": "1"},
+			"instructions":    automaticWorktreeSessionGuidance,
 		}
 	case "ping":
 		base.Result = map[string]any{}

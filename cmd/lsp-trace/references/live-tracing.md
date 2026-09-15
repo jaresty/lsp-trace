@@ -1,5 +1,13 @@
 # Live tracing and census
 
+## Automatic managed-session prerequisite
+
+Before `incoming`, `slice`, `trace`, `census`, or transient structural-context analysis, call `lsp_session_v1_list`. Reuse an exact-workspace session only when its exact generation is `READY`. If no exact match exists and the target is already an exact registered Git worktree, identify exactly one READY parent session from the same Git worktree registry and call `lsp_session_v1_derive_workspace` with only `session_id`, `generation`, and the target's canonical absolute local `file:` `workspace_uri`. Continue only when the result itself is `READY`; use its returned opaque session identity and generation.
+
+Do not create, move, or remove a worktree as an implicit analysis prerequisite. Do not automatically retry another parent, increase bounds, start an independently configured replacement language server, or infer a session from language, path similarity, source text, or repository proximity. An absent, ambiguous, non-READY, unregistered, or failed derivation is an explicit unmet prerequisite. Direct CLI server launch remains available only when the caller explicitly supplies or selects trusted launch configuration; it is not an automatic fallback from managed-session setup.
+
+This setup grants no additional evidence authority. It only aligns the host-owned launch profile and provider configuration with one registered worktree so subsequent live operations can observe that workspace.
+
 ## Profiles and coordinates
 
 Prefer an explicitly selected named profile:

@@ -125,6 +125,8 @@ assert_contains DOC-LEIDEN-HEADLINE .pi/skills/lsp-trace-feature-inventory/refer
 assert_contains DOC-LEIDEN-INDEPENDENT-CENSUS .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'independent entry-point census'
 assert_contains DOC-LEIDEN-INSTABILITY .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'A-08 instability campaigns'
 assert_contains DOC-LEIDEN-RECAPTURE .pi/skills/lsp-trace-feature-inventory/references/preparation-and-grouping.md 'Recapture only bytes that are missing, mismatched, or unavailable'
+assert_contains DOC-LIVE-AUTOMATIC-DERIVE cmd/lsp-trace/references/live-tracing.md 'call `lsp_session_v1_derive_workspace` with only `session_id`, `generation`, and the target'
+assert_contains DOC-SKILL-AUTOMATIC-DERIVE cmd/lsp-trace/SKILL.md 'Before any live semantic code-relationship task, establish session readiness as a prerequisite.'
 assert_contains DOC-LIVE-ORIENTATION cmd/lsp-trace/references/live-tracing.md 'Graph Provenance and source capture are not prerequisites'
 assert_contains DOC-LIVE-CLAIM-CEILING cmd/lsp-trace/references/live-tracing.md 'it is not retained, replayable, or source-grounded evidence'
 assert_contains DOC-LIVE-OPTIONAL-ESCALATION cmd/lsp-trace/references/live-tracing.md 'That escalation is never the default prerequisite'

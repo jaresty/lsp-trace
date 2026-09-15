@@ -19,7 +19,9 @@ Use only trusted language-server binaries and workspaces. They run with the deve
 
 ## Command router
 
-Prefer a matching READY managed language-server session for code-relationship questions. Discover the exact target textually only when it is not yet known; after structural tracing, read source bodies for semantic interpretation.
+Before any live semantic code-relationship task, establish session readiness as a prerequisite. Call `lsp_session_v1_list` and use an exact-workspace READY session when one exists. If none exists and the target workspace is an exact registered Git worktree, call `lsp_session_v1_derive_workspace` with exactly one READY parent session and its generation; continue only from the returned READY session. Do not start an independently configured replacement language server or silently fall back to textual occurrences. Read [Live tracing and census](references/live-tracing.md) for the fail-closed procedure.
+
+Discover the exact target textually only when it is not yet known; after structural tracing, read source bodies for semantic interpretation.
 
 - `trace`: use for one exact managed symbol or repeated exact CLI positions; current implemented CLI syntax is documented in `--help` and the repository README. Bare trace and `--format json` emit the same canonical Graph Provenance V5 JSON. Use `--format tree` only for a deterministic presentation-only view of the already-acquired V5 bytes; it adds no acquisition, does not mutate evidence, preserves bounded-zero/`PARTIAL`/`UNKNOWN` limits, and conflicts with JSON-only `--pretty` and `--output`. MCP operation `lsp_trace_v1_trace` accepts one exact symbol or one zero-based `line`/`character` position against a host-managed READY session; it is advertised by default, advanced, and full profiles, hidden but callable in compact.
 - `census`: use for accountable source-symbol enumeration and deterministic batched acquisition in one session/generation. Use only the syntax printed by `lsp-trace census --help`; default depths are down/up `1`/`0`, exclusions win, and publication returns a private capture-set bundle selector.

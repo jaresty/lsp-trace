@@ -507,6 +507,8 @@ func requireOperationSpecificDescription(tool Tool) {
 	}
 }
 
+const automaticWorktreeSessionGuidance = "Before live semantic analysis, call lsp_session_v1_list and use an exact-workspace READY session. If none exists and the target is an exact registered Git worktree, call lsp_session_v1_derive_workspace with exactly one READY parent; continue only from its READY result. Do not start an independently configured replacement language server."
+
 func completeToolDescription(tool Tool) string {
 	mode := "offline"
 	if tool.ExecutorFamily != OfflineExecutorFamily {
@@ -518,7 +520,25 @@ func completeToolDescription(tool Tool) string {
 	} else if len(tool.EnvelopeSchemaIDs) != 0 {
 		resultFamily = "MCP result envelope from " + strings.Join(tool.EnvelopeSchemaIDs, ", ")
 	}
-	return fmt.Sprintf("%s. This is a %s operation requiring input matching %s and returning a %s. Results are evidence bounded by the named schemas and do not establish source completeness, runtime execution, producer authentication, permission, or production authority. If this direct tool is hidden by the active advertisement profile, call lsp_trace_v1_execute with its canonical request instead", strings.TrimSuffix(tool.Description, "."), mode, tool.InputSchemaID, resultFamily)
+	description := fmt.Sprintf("%s. This is a %s operation requiring input matching %s and returning a %s. Results are evidence bounded by the named schemas and do not establish source completeness, runtime execution, producer authentication, permission, or production authority. If this direct tool is hidden by the active advertisement profile, call lsp_trace_v1_execute with its canonical request instead", strings.TrimSuffix(tool.Description, "."), mode, tool.InputSchemaID, resultFamily)
+	if routesThroughManagedWorkspaceSession(tool.Name) {
+		description += ". " + automaticWorktreeSessionGuidance
+	}
+	return description
+}
+
+func routesThroughManagedWorkspaceSession(name string) bool {
+	switch name {
+	case mcpcontract.DeriveWorkspaceTool,
+		"lsp_trace_v1_incoming", "lsp_trace_v2_incoming", "lsp_trace_v3_incoming",
+		"lsp_trace_v1_slice", "lsp_trace_v2_slice", "lsp_trace_v3_slice",
+		mcpcontract.TraceTool, mcpcontract.CensusTool,
+		mcpcontract.StructuralContextTool, mcpcontract.StructuralContextV2Tool, mcpcontract.StructuralContextSymbolTool,
+		mcpcontract.ContextSymbolChurnCaptureTool:
+		return true
+	default:
+		return false
+	}
 }
 
 func lifecycleDescription(name string) string {

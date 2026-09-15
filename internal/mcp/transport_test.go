@@ -20,6 +20,21 @@ import (
 	"lsp-trace/internal/schema"
 )
 
+func TestInitializeCarriesAutomaticWorktreeSessionGuidance(t *testing.T) {
+	const assertion = "ASSERT_MCP_INITIALIZE_AUTOMATIC_WORKTREE_SESSION_GUIDANCE"
+	result := (&Server{}).handleContext(context.Background(), request{JSONRPC: "2.0", ID: 1, Method: "initialize"}).Result
+	fields, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("%s: result=%T", assertion, result)
+	}
+	instructions, _ := fields["instructions"].(string)
+	for _, required := range []string{"live semantic", "exact-workspace READY", "lsp_session_v1_derive_workspace", "registered Git worktree", "Do not start"} {
+		if !strings.Contains(instructions, required) {
+			t.Fatalf("%s: instructions missing %q: %q", assertion, required, instructions)
+		}
+	}
+}
+
 type fakeExecutor struct {
 	calls         []operation.Name
 	artifact      []byte

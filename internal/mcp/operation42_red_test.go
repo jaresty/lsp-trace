@@ -1,6 +1,25 @@
 package mcp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestLiveSemanticToolDescriptionsRouteWorktreesThroughDerivation(t *testing.T) {
+	const assertion = "ASSERT_LIVE_SEMANTIC_DESCRIPTIONS_ROUTE_WORKTREE_DERIVATION"
+	r := NewRegistry(false)
+	for _, name := range []string{"lsp_trace_v1_incoming", "lsp_trace_v1_slice", "lsp_trace_v1_structural_context_symbol", "lsp_session_v1_derive_workspace"} {
+		tool, ok := r.ResolveCanonical(name)
+		if !ok {
+			t.Fatalf("%s[%s]: missing", assertion, name)
+		}
+		for _, required := range []string{"exact-workspace READY", "lsp_session_v1_derive_workspace"} {
+			if !strings.Contains(tool.Description, required) {
+				t.Errorf("%s[%s]: description missing %q: %q", assertion, name, required, tool.Description)
+			}
+		}
+	}
+}
 
 func TestOperation42CanonicalLifecycleRegistration(t *testing.T) {
 	const assertion = "ASSERT_OPERATION_42_CANONICAL_LIFECYCLE_REGISTRATION"
