@@ -6,13 +6,22 @@ Use CLI for direct local invocations, files/stdin, schema retrieval, rendering, 
 
 For MCP, call `lsp_trace_v1_capabilities` before relying on operation names, schema IDs, publication support, limits, or hidden-operation routes. The embedded manifest and schemas are authoritative. Canonical operation `lsp_trace_v1_trace` accepts one exact symbol or one zero-based `line`/`character` position against a host-managed READY session; default, advanced, and full advertise it. A compact tool-advertisement profile remains exactly ten tools and hides trace from `tools/list`, but does not change dispatch, behavior, authority, or managed sessions, so trace remains callable directly from a cached registration and through canonical execute. It is unrelated to CLI `--profile NAME`.
 
-Canonical gateway input is:
+Choose the transport explicitly:
 
-```json
-{"request":{"operation":"<canonical operation>","arguments":{}}}
-```
+- **Direct MCP operation**: invoke the operation's MCP tool and pass that operation's arguments directly.
+- **MCP gateway `lsp_trace_v1_execute`**: operation is nested beneath `request`. Copy-ready example:
 
-Operation fields belong in `request.arguments`. For hidden artifact producers, a delegated graph `output_selector` also belongs there; an outer gateway selector publishes the execution artifact instead.
+  ```json
+  {"request":{"operation":"lsp_trace_v2_structural_context","arguments":{...}}}
+  ```
+
+- **CLI `lsp-trace execute`**: accepts production execution requests and is not an MCP dispatcher. Do not pass an MCP operation envelope to it.
+
+For the MCP gateway, operation fields belong in `request.arguments`. MCP wire and server operation names are canonical unqualified names; host adapters may display namespace-qualified names. `request.operation` always uses the canonical unqualified operation name.
+
+Client metadata is a separate boundary from server behavior. If capabilities or the installed revision advertise an operation but the client does not list it or its tool schema rejects it before dispatch, reconnect or refresh MCP metadata before diagnosing the language server. The MCP gateway is a dispatch interface and does not bypass stale client-side schema validation. Distinguish client or adapter schema validation from server dispatch, structural preflight, and traversal typed failures. A gateway retry is not a remedy for stale client metadata.
+
+For hidden artifact producers, a delegated graph `output_selector` belongs in `request.arguments`; an outer gateway selector publishes the execution artifact instead.
 
 ## Managed lifecycle
 

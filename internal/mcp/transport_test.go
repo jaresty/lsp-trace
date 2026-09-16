@@ -28,7 +28,17 @@ func TestInitializeCarriesAutomaticWorktreeSessionGuidance(t *testing.T) {
 		t.Fatalf("%s: result=%T", assertion, result)
 	}
 	instructions, _ := fields["instructions"].(string)
-	for _, required := range []string{"live semantic", "exact-workspace READY", "lsp_session_v1_derive_workspace", "registered Git worktree", "Do not start"} {
+	for _, required := range []string{
+		"live semantic", "exact-workspace READY", "lsp_session_v1_derive_workspace", "registered Git worktree", "Do not start",
+		`{"request":{"operation":"lsp_trace_v2_structural_context","arguments":{...}}}`,
+		"Direct MCP operation", "MCP gateway `lsp_trace_v1_execute`", "CLI `lsp-trace execute`",
+		"operation is nested beneath `request`", "production execution requests", "not an MCP dispatcher",
+		"MCP wire and server operation names are canonical unqualified names", "host adapters may display namespace-qualified names",
+		"`request.operation` always uses the canonical unqualified operation name",
+		"reconnect or refresh MCP metadata before diagnosing the language server",
+		"dispatch interface and does not bypass stale client-side schema validation",
+		"client or adapter schema validation", "server dispatch", "structural preflight", "traversal typed failures",
+	} {
 		if !strings.Contains(instructions, required) {
 			t.Fatalf("%s: instructions missing %q: %q", assertion, required, instructions)
 		}

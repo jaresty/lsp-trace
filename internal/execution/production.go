@@ -20,6 +20,8 @@ import (
 
 const ExecutionSchemaVersion = "lsp-trace.execution.v1"
 
+const mcpDispatchMisrouteDiagnostic = `lsp-trace execute accepts production execution requests and is not an MCP dispatcher; invoke MCP tool lsp_trace_v1_execute with { "request": { "operation": ..., "arguments": ... } }`
+
 type ProductionInput struct {
 	Root        string            `json:"root"`
 	Source      string            `json:"source,omitempty"`
@@ -102,6 +104,9 @@ func decodeProductionInput(raw []byte, out *ProductionInput) error {
 	if err := json.Unmarshal(raw, &members); err != nil {
 		return fmt.Errorf("invalid production execution request: %w", err)
 	}
+	if _, ok := members["operation"]; ok {
+		return errors.New(mcpDispatchMisrouteDiagnostic)
+	}
 	if wrapped, ok := members["request"]; ok {
 		if len(members) != 1 {
 			return errors.New("invalid production execution request wrapper")
@@ -110,6 +115,9 @@ func decodeProductionInput(raw []byte, out *ProductionInput) error {
 		members = nil
 		if err := json.Unmarshal(raw, &members); err != nil {
 			return err
+		}
+		if _, ok := members["operation"]; ok {
+			return errors.New(mcpDispatchMisrouteDiagnostic)
 		}
 	}
 	// Keep legacy supplied-source decoding unchanged; any spelling of the

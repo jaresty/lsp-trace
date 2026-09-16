@@ -285,6 +285,29 @@ func TestSkillDispatcherPreservesGetAndSelectsBothSkills(t *testing.T) {
 	}
 }
 
+func TestEmbeddedSkillExplainsMCPAndCLIExecuteTransportBoundary(t *testing.T) {
+	const assertion = "ASSERT_SKILL_EXECUTE_TRANSPORT_BOUNDARY"
+	files, err := embeddedSkillFiles("lsp-trace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guidance := string(files["references/transport-routing.md"])
+	for _, required := range []string{
+		`{"request":{"operation":"lsp_trace_v2_structural_context","arguments":{...}}}`,
+		"Direct MCP operation", "MCP gateway `lsp_trace_v1_execute`", "CLI `lsp-trace execute`",
+		"operation is nested beneath `request`", "production execution requests", "not an MCP dispatcher",
+		"MCP wire and server operation names are canonical unqualified names", "host adapters may display namespace-qualified names",
+		"`request.operation` always uses the canonical unqualified operation name",
+		"reconnect or refresh MCP metadata before diagnosing the language server",
+		"dispatch interface and does not bypass stale client-side schema validation",
+		"client or adapter schema validation", "server dispatch", "structural preflight", "traversal typed failures",
+	} {
+		if !strings.Contains(guidance, required) {
+			t.Fatalf("%s: missing %q: %q", assertion, required, guidance)
+		}
+	}
+}
+
 func TestEmbeddedSkillRoutesSemanticRelationshipsBeforeText(t *testing.T) {
 	const assertion = "ASSERT_SKILL_SEMANTIC_FIRST_TEXT_NEVER_ESTABLISHES_CALLS"
 	for _, phrase := range []string{
