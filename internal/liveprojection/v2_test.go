@@ -1,12 +1,14 @@
 package liveprojection
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/sourceprojection"
+	"lsp-trace/internal/sourceprojectionv2"
 )
 
 const (
@@ -68,6 +70,38 @@ func TestAssembleV2SchemaDocumentsAccountingAndRanges(t *testing.T) {
 	}
 	if got.Authority != 0 || got.SourceGraphComplete != "UNKNOWN" || got.GraphFactsAdded != 0 || got.CustodyBinding.SessionID != "session" || got.CustodyBinding.Generation != 4 {
 		t.Fatalf("%s: %+v", assertV2Neutral, got)
+	}
+}
+
+func TestAssembleV2LiveAdapterMatchesNeutralAssemblyBytes(t *testing.T) {
+	const assertion = "live adapter remains byte-compatible with neutral assembly"
+	composed, prepared, target, selected := v2Fixture(t)
+	policyID := "sha256:" + strings.Repeat("f", 64)
+	live, err := AssembleV2Bounded(composed, prepared, target, selected, policyID, 1<<20)
+	if err != nil {
+		t.Fatalf("%s: live: %v", assertion, err)
+	}
+	documents := make([]sourceprojectionv2.DocumentSource, 0, len(composed.Resolutions))
+	for _, resolution := range composed.Resolutions {
+		binding := resolution.Binding
+		documents = append(documents, sourceprojectionv2.DocumentSource{
+			URI: binding.URI, DocumentVersion: binding.DocumentVersion, PositionEncoding: binding.PositionEncoding,
+			SourceDigest: binding.SourceDigest, SourceByteLength: binding.SourceByteLength,
+		})
+	}
+	binding := composed.Resolutions[0].Binding
+	neutral, err := sourceprojectionv2.AssembleBounded(sourceprojectionv2.Input{
+		TargetURI: target, SelectedURIs: selected, Documents: documents, Candidates: composed.Candidates,
+		Projection: composed.Projection, DocumentsObserved: prepared.Accounting.Documents.Observed,
+		TotalAcquiredBytes: prepared.Accounting.Bytes.Observed, RequestPolicyID: policyID,
+	}, "LIVE", V2LiveBinding{Custody: "LIVE", SessionID: binding.SessionID, Generation: binding.Generation, PositionEncoding: "utf-16"}, 1<<20)
+	if err != nil {
+		t.Fatalf("%s: neutral: %v", assertion, err)
+	}
+	liveJSON, _ := json.Marshal(live)
+	neutralJSON, _ := json.Marshal(neutral)
+	if !bytes.Equal(liveJSON, neutralJSON) {
+		t.Fatalf("%s:\nlive=%s\nneutral=%s", assertion, liveJSON, neutralJSON)
 	}
 }
 
