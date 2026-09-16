@@ -34,6 +34,15 @@ func TestStructuralContextV2AdvertisementIsSelfContained(t *testing.T) {
 	if !ok || properties["display_range_policy"] == nil || properties["limits"] == nil {
 		t.Fatalf("ASSERT_SELF_CONTAINED_ADVERTISEMENT: projection properties=%#v", properties)
 	}
+	if projection["description"] == "" {
+		t.Fatal("ASSERT_SELF_CONTAINED_ADVERTISEMENT_GUIDANCE: projection description missing")
+	}
+	for _, name := range []string{"mode", "body", "display_range_policy", "limits"} {
+		property, ok := properties[name].(map[string]any)
+		if !ok || property["description"] == "" {
+			t.Fatalf("ASSERT_SELF_CONTAINED_ADVERTISEMENT_GUIDANCE: %s=%#v", name, properties[name])
+		}
+	}
 
 	canonicalAfter, err := mcpcontract.SchemaJSON(mcpcontract.StructuralContextProjectionInputID)
 	if err != nil {

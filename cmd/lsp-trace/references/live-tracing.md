@@ -69,6 +69,52 @@ Treat `slice` and `incoming` as bounded orientation over server-reported callers
 
 Escalate optionally to Capture/V5 when the work needs durable review, retained hydration, publication, replay, or stronger source-bearing evidence. That escalation is never the default prerequisite for live structural orientation.
 
+### Source-bearing structural context
+
+Omit `projection` for relationship-only context. For implementation ownership, source-flow, or seam analysis, request bounded layered source explicitly. A practical starting request is:
+
+```json
+{
+  "session_id": "READY_SESSION_OR_ALIAS",
+  "generation": 1,
+  "uri": "file:///absolute/path/to/file.go",
+  "line": 0,
+  "character": 0,
+  "down_depth": 1,
+  "up_depth": 1,
+  "max_nodes": 80,
+  "timeout_ms": 60000,
+  "request_timeout_ms": 30000,
+  "max_messages": 1024,
+  "max_bytes": 8388608,
+  "analysis": {"kind": "NEIGHBORHOOD"},
+  "projection": {
+    "mode": "PROJECTED",
+    "body": "INCLUDE",
+    "include_relation_occurrences": true,
+    "include_ancillary": false,
+    "display_range_policy": "FULL_DEFINITION",
+    "limits": {
+      "max_objects": 80,
+      "max_ranges": 80,
+      "max_source_bytes": 2097152,
+      "max_work": 10000,
+      "max_response_bytes": 8388608,
+      "max_additional_documents": 20,
+      "max_document_requests": 21,
+      "max_document_bytes": 1048576,
+      "max_total_document_bytes": 8388608,
+      "max_document_messages": 32,
+      "max_document_acquisition_work": 21,
+      "max_display_resolution_work": 21
+    },
+    "privacy_policy_id": "public"
+  }
+}
+```
+
+Use `TARGET` instead of `PROJECTED` when only the selected definition is needed. `PROJECTED` returns exact endpoint and relation evidence ranges together with complete containing definitions resolved through server-reported `textDocument/documentSymbol`. Repeated logical units may share deduplicated emitted spans. These bodies remain request-ephemeral, authority-zero, and non-retainable. Keep the initial depth and object bounds narrow; an oversized projected response is not a reason to increase limits silently.
+
 ## Traversal selection
 
 Use `incoming` when exact supplied positions are callees and only upward caller expansion is needed. Use `slice` when bounded outgoing discovery must choose the nodes from which incoming traversal begins.
