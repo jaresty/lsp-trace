@@ -66,8 +66,7 @@ type delegatedRequest struct {
 	SessionID        string   `json:"session_id"`
 	Generation       uint64   `json:"generation"`
 	URI              string   `json:"uri"`
-	Line             *uint32  `json:"line"`
-	Character        *uint32  `json:"character"`
+	Symbol           string   `json:"symbol"`
 	DownDepth        int      `json:"down_depth"`
 	UpDepth          int      `json:"up_depth"`
 	MaxNodes         int      `json:"max_nodes"`
@@ -160,8 +159,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		}
 		return fail(code, errors.New("workspace symbol location is not one concrete confined document"))
 	}
-	line, character := location.Range.Start.Line, location.Range.Start.Character
-	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Line: &line, Character: &character, DownDepth: downDepth, UpDepth: upDepth, MaxNodes: maxNodes, TimeoutMS: timeoutMS, RequestTimeoutMS: requestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Analysis: in.Analysis})
+	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Symbol: in.Symbol, DownDepth: downDepth, UpDepth: upDepth, MaxNodes: maxNodes, TimeoutMS: timeoutMS, RequestTimeoutMS: requestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Analysis: in.Analysis})
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}

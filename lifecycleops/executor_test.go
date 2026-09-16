@@ -40,15 +40,29 @@ func executeLifecycle(t *testing.T, executor *Executor, name operation.Name, inp
 }
 
 func TestDeriveWorkspaceFailureHasActionableDiagnostic(t *testing.T) {
-	f := &selectorRuntime{
-		fakeRuntime:  &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
-		aliases:      map[string]string{"project": "canonical"},
-		deriveResult: sessionruntime.DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")},
-	}
-	_, failure := executeLifecycle(t, NewExecutor(New(f)), OperationDerive, `{"session_id":"project","generation":7,"workspace_uri":"file:///worktree"}`)
-	if failure == nil || failure.Code != "WORKSPACE_IDENTITY_MISMATCH" || len(failure.Diagnostics) == 0 || !strings.Contains(strings.Join(failure.Diagnostics, " "), "working directory") {
-		t.Fatalf("ASSERT_DERIVE_WORKSPACE_ACTIONABLE_DOMAIN_DIAGNOSTIC: failure=%+v", failure)
-	}
+	t.Run("workspace identity", func(t *testing.T) {
+		f := &selectorRuntime{
+			fakeRuntime:  &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+			aliases:      map[string]string{"project": "canonical"},
+			deriveResult: sessionruntime.DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")},
+		}
+		_, failure := executeLifecycle(t, NewExecutor(New(f)), OperationDerive, `{"session_id":"project","generation":7,"workspace_uri":"file:///worktree"}`)
+		if failure == nil || failure.Code != "WORKSPACE_IDENTITY_MISMATCH" || len(failure.Diagnostics) == 0 || !strings.Contains(strings.Join(failure.Diagnostics, " "), "working directory") {
+			t.Fatalf("ASSERT_DERIVE_WORKSPACE_ACTIONABLE_DOMAIN_DIAGNOSTIC: failure=%+v", failure)
+		}
+	})
+
+	t.Run("canonical retry uri", func(t *testing.T) {
+		f := &selectorRuntime{
+			fakeRuntime:  &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+			aliases:      map[string]string{"project": "canonical"},
+			deriveResult: sessionruntime.DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI"), WorkspaceURI: "file:///private/tmp/worktree"},
+		}
+		_, failure := executeLifecycle(t, NewExecutor(New(f)), OperationDerive, `{"session_id":"project","generation":7,"workspace_uri":"file:///tmp/worktree"}`)
+		if failure == nil || failure.Code != "INVALID_WORKSPACE_URI" || !strings.Contains(strings.Join(failure.Diagnostics, " "), "file:///private/tmp/worktree") {
+			t.Fatalf("ASSERT_DERIVE_WORKSPACE_NONCANONICAL_URI_SUGGESTS_CANONICAL_RETRY: failure=%+v", failure)
+		}
+	})
 }
 
 func TestSessionListRoutingContract(t *testing.T) {

@@ -45,15 +45,16 @@ func zeroDepthInput(symbol string) json.RawMessage {
 }
 
 func TestExactWorkspaceSymbolDelegatesOneConcreteLocator(t *testing.T) {
-	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_ONE_EXACT_LOOKUP_DELEGATES_POSITION"
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_ONE_EXACT_LOOKUP_DELEGATES_SYMBOL_IN_DOCUMENT"
 	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}},{"name":"target","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":1}}}}]`)}
 	d := &delegate{}
 	_, failure := NewExecutor(f, d).Execute(context.Background(), operation.Request{Name: Operation, Input: input("Target")})
 	if failure != nil || len(f.requests) != 1 || f.requests[0].Method != "workspace/symbol" || len(d.calls) != 1 {
 		t.Fatalf("%s: failure=%v requests=%v calls=%v", assertion, failure, f.requests, d.calls)
 	}
-	if d.calls[0].Name != "structural_context" || !strings.Contains(string(d.calls[0].Input), `"uri":"file:///workspace/a.go"`) || !strings.Contains(string(d.calls[0].Input), `"line":7`) || strings.Contains(string(d.calls[0].Input), `"symbol"`) {
-		t.Fatalf("%s: delegated=%s", assertion, d.calls[0].Input)
+	delegated := string(d.calls[0].Input)
+	if d.calls[0].Name != "structural_context" || !strings.Contains(delegated, `"uri":"file:///workspace/a.go"`) || !strings.Contains(delegated, `"symbol":"Target"`) || strings.Contains(delegated, `"line"`) || strings.Contains(delegated, `"character"`) {
+		t.Fatalf("%s: delegated=%s", assertion, delegated)
 	}
 }
 

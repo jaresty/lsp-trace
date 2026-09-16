@@ -13,7 +13,7 @@ func TestLiveSemanticToolDescriptionsRouteWorktreesThroughDerivation(t *testing.
 		if !ok {
 			t.Fatalf("%s[%s]: missing", assertion, name)
 		}
-		for _, required := range []string{"exact-workspace READY", "lsp_session_v1_derive_workspace"} {
+		for _, required := range []string{"exact-workspace READY", "lsp_session_v1_derive_workspace", "canonical absolute local file: URI"} {
 			if !strings.Contains(tool.Description, required) {
 				t.Errorf("%s[%s]: description missing %q: %q", assertion, name, required, tool.Description)
 			}

@@ -70,6 +70,26 @@ func TestCanonicalLocalWorkspaceURIIsStrict(t *testing.T) {
 	}
 }
 
+func TestDeriveWorkspaceRejectsNoncanonicalURIWithCanonicalRetry(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_NONCANONICAL_URI_RETURNS_CANONICAL_RETRY"
+	parent, target := stableTempDir(t), stableTempDir(t)
+	link := filepath.Join(filepath.Dir(target), filepath.Base(target)+"-link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(link) })
+	gitCalls := 0
+	m := newDeriveTestManager(t, &deriveStarter{}, parent, func(context.Context, string) ([]byte, error) {
+		gitCalls++
+		return nil, nil
+	})
+	got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: (&url.URL{Scheme: "file", Path: link}).String()})
+	want := (&url.URL{Scheme: "file", Path: target}).String()
+	if got.Failure != session.Failure("INVALID_WORKSPACE_URI") || got.WorkspaceURI != want || gitCalls != 0 {
+		t.Fatalf("%s: result=%+v want=%q git_calls=%d", assertion, got, want, gitCalls)
+	}
+}
+
 func TestParseWorktreeListRejectsAmbiguousOrMalformedRecords(t *testing.T) {
 	const assertion = "ASSERT_DERIVE_GIT_PORCELAIN_STRICT_CLOSED_PARSER"
 	valid := []byte("worktree /repo/main\nHEAD abc\n\nworktree /repo/other\nHEAD def\n")

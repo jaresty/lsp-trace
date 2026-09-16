@@ -1,10 +1,27 @@
 package mcp
 
 import (
+	"strings"
 	"testing"
 )
 
 const structuralContextSymbolTool = "lsp_trace_v1_structural_context_symbol"
+
+func TestStructuralContextDescriptionsAdvertiseDesignAnalysisIntents(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_DESCRIPTIONS_ROUTE_DESIGN_ANALYSIS"
+	registry := NewRegistry(false)
+	for _, name := range []string{"lsp_trace_v1_structural_context", "lsp_trace_v2_structural_context", structuralContextSymbolTool} {
+		tool, ok := registry.ResolveCanonical(name)
+		if !ok {
+			t.Fatalf("%s[%s]: missing", assertion, name)
+		}
+		for _, required := range []string{"code structure", "architecture", "design dependencies", "impact analysis", "bounded", "CALLS"} {
+			if !strings.Contains(tool.Description, required) {
+				t.Errorf("%s[%s]: missing %q: %q", assertion, name, required, tool.Description)
+			}
+		}
+	}
+}
 
 func TestStructuralContextSymbolOperation41RegistryContract(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)

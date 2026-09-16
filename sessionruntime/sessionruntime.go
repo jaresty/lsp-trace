@@ -990,21 +990,32 @@ func parseWorktreeList(raw []byte) ([]string, error) {
 	return paths, nil
 }
 
+type workspaceURIError struct {
+	reason       string
+	canonicalURI string
+}
+
+func (e *workspaceURIError) Error() string { return e.reason }
+
 func canonicalLocalWorkspaceURI(raw string) (string, string, error) {
 	u, err := url.ParseRequestURI(raw)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
-		return "", "", fmt.Errorf("workspace_uri must be a local file URI")
+		return "", "", &workspaceURIError{reason: "workspace_uri must be a local file URI"}
 	}
 	p := filepath.Clean(u.Path)
-	canonical := (&url.URL{Scheme: "file", Path: p}).String()
-	if !filepath.IsAbs(p) || raw != canonical {
-		return "", "", fmt.Errorf("workspace_uri is not canonical")
+	if !filepath.IsAbs(p) {
+		return "", "", &workspaceURIError{reason: "workspace_uri is not absolute"}
 	}
 	resolved, err := filepath.EvalSymlinks(p)
-	if err != nil || resolved != p {
-		return "", "", fmt.Errorf("workspace identity is unavailable or symlinked")
+	if err != nil {
+		return "", "", &workspaceURIError{reason: "workspace identity is unavailable"}
 	}
-	return p, canonical, nil
+	resolved = filepath.Clean(resolved)
+	canonical := (&url.URL{Scheme: "file", Path: resolved}).String()
+	if raw != canonical || resolved != p {
+		return "", "", &workspaceURIError{reason: "workspace_uri is not canonical", canonicalURI: canonical}
+	}
+	return resolved, canonical, nil
 }
 
 // DeriveWorkspace synchronously derives a READY sibling session from private parent authority.
@@ -1033,7 +1044,12 @@ func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceReques
 
 	target, canonicalURI, err := canonicalLocalWorkspaceURI(req.WorkspaceURI)
 	if err != nil {
-		return DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI")}
+		result := DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI")}
+		var uriErr *workspaceURIError
+		if errors.As(err, &uriErr) {
+			result.WorkspaceURI = uriErr.canonicalURI
+		}
+		return result
 	}
 	gitCtx, cancelGit := context.WithTimeout(ctx, maxGitWorktreeTime)
 	raw, err := m.gitWorktreeList(gitCtx, parentWorkspace)

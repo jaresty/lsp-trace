@@ -116,7 +116,7 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 		}
 		result, failure := e.service.DeriveWorkspace(ctx, input.SessionID, input.Generation, input.WorkspaceURI)
 		if failure != FailureNone {
-			return operation.Result{}, deriveWorkspaceFailure(failure)
+			return operation.Result{}, deriveWorkspaceFailure(failure, result.WorkspaceURI)
 		}
 		return operation.Result{Value: result}, nil
 	case OperationList:
@@ -244,7 +244,7 @@ func (e *Executor) actionableFailure(ctx context.Context, input selectorRequest,
 	return &operation.Failure{Code: string(failure), Diagnostics: diagnostics}
 }
 
-func deriveWorkspaceFailure(failure Failure) *operation.Failure {
+func deriveWorkspaceFailure(failure Failure, canonicalWorkspaceURI string) *operation.Failure {
 	diagnostics := map[Failure][]string{
 		"INVALID_WORKSPACE_URI":                {"workspace_uri must be the canonical absolute local file URI of the exact worktree root"},
 		"GIT_WORKTREE_QUERY_FAILED":            {"bounded git worktree discovery failed; verify the parent repository is accessible and retry only after correcting that prerequisite"},
@@ -261,7 +261,11 @@ func deriveWorkspaceFailure(failure Failure) *operation.Failure {
 		Failure(session.RequestCancelled):      {"the caller cancelled derivation; inspect sessions before retrying because accepted lifecycle work may have continued"},
 		Failure(session.RequestTimeout):        {"the caller deadline expired; inspect sessions before retrying because accepted lifecycle work may have continued"},
 	}
-	return &operation.Failure{Code: string(failure), Err: errors.New(string(failure)), Diagnostics: diagnostics[failure]}
+	detail := append([]string(nil), diagnostics[failure]...)
+	if failure == "INVALID_WORKSPACE_URI" && canonicalWorkspaceURI != "" {
+		detail = append(detail, "retry with canonical workspace_uri "+canonicalWorkspaceURI)
+	}
+	return &operation.Failure{Code: string(failure), Err: errors.New(string(failure)), Diagnostics: detail}
 }
 
 func lifecycleFailure(code string, err error) *operation.Failure {

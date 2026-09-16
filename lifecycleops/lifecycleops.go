@@ -103,7 +103,7 @@ func (s *Service) DeriveWorkspace(ctx context.Context, id string, generation uin
 	}
 	result := runtime.DeriveWorkspace(ctx, sessionruntime.DeriveWorkspaceRequest{SessionID: parent.SessionID, Generation: parent.Generation, WorkspaceURI: workspaceURI})
 	if result.Failure != "" {
-		return sessionruntime.DeriveWorkspaceResult{}, mapFailure(result.Failure)
+		return result, mapFailure(result.Failure)
 	}
 	return result, FailureNone
 }

@@ -19,7 +19,7 @@ Use only trusted language-server binaries and workspaces. They run with the deve
 
 ## Command router
 
-Before any live semantic code-relationship task, establish session readiness as a prerequisite. Call `lsp_session_v1_list` and use an exact-workspace READY session when one exists. If none exists and the target workspace is an exact registered Git worktree, call `lsp_session_v1_derive_workspace` with exactly one READY parent session and its generation; continue only from the returned READY session. Do not start an independently configured replacement language server or silently fall back to textual occurrences. Read [Live tracing and census](references/live-tracing.md) for the fail-closed procedure.
+Before any live semantic code-relationship task, establish session readiness as a prerequisite. Call `lsp_session_v1_list` and use an exact-workspace READY session when one exists. If none exists and the target workspace is an exact registered Git worktree, call `lsp_session_v1_derive_workspace` with exactly one READY parent session, its generation, and the target's canonical absolute local `file:` URI; continue only from the returned READY session. Do not start an independently configured replacement language server or silently fall back to textual occurrences. Read [Live tracing and census](references/live-tracing.md) for the fail-closed procedure.
 
 Discover the exact target textually only when it is not yet known; after structural tracing, read source bodies for semantic interpretation.
 
