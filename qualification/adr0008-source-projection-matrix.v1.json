@@ -1,0 +1,330 @@
+{
+  "schema_version": "lsp-trace.private.adr0007-adr0008-interoperability-qualification-matrix.v1",
+  "sources": [
+    "docs/adr/0007-optional-local-semantic-feature-index.md",
+    "docs/adr/0008-dehydrated-structural-evidence-and-deterministic-source-projection.md"
+  ],
+  "plan_status": "BLOCKED_PENDING_SEMANTIC_MODEL_SELECTION",
+  "execution_status": "NOT_EXECUTED",
+  "tests_pass_claimed": false,
+  "implementation_qualified": false,
+  "selected_semantic_model": null,
+  "candidate_semantic_models": [
+    {
+      "id": "ARTIFACT_FIRST_RETAINED",
+      "description": "Retained V5 and a dehydrated manifest expose exact projected units; the manifest is a retained custody and availability index, not necessarily the owner of projection semantics."
+    },
+    {
+      "id": "QUERY_FIRST_SHARED",
+      "description": "A shared projection request selects exact units and delegates byte resolution to mode-specific retained-object or live-session resolvers."
+    },
+    {
+      "id": "HYBRID_SHARED_ALGEBRA",
+      "description": "Common projection-unit, selection, accounting, privacy, and citation semantics are shared while retained manifests and live requests retain distinct custody identities and resolver contracts."
+    }
+  ],
+  "semantic_design_barrier": {
+    "state": "BLOCKED",
+    "execution": "NOT_EXECUTED",
+    "owner_decision_required": true,
+    "required_comparison_evidence": [
+      "exact TARGET and NEIGHBORHOOD request/result examples for retained-object and live-session custody",
+      "Describe, Embed, and index-build admission examples using the same logical projected unit under each candidate model",
+      "identity and cache-key vectors proving equality only for exact admitted bytes, selector, range, encoding, role, revision or session generation, policy, and dependency identity",
+      "privacy and source-body eligibility matrix for metadata-only, body-opted-in, restricted, withheld, unavailable, and ancillary units",
+      "failure and denominator examples showing TARGET, NEIGHBORHOOD, partial, and CENSUS claims do not broaden coverage",
+      "operation-43 live evidence capable of changing the shared projection-unit contract before model freeze"
+    ],
+    "selection_rule": "No common projection contract, retained manifest ownership claim, semantic-index input binding, or live operation-43 projection contract freezes until the parent selects a model from reviewed comparison evidence.",
+    "non_dependency_rule": "Retained qualification is not a hard semantic prerequisite for learning from bounded operation-43 live projection evidence; custody-specific implementation admission remains independently gated."
+  },
+  "verdicts": ["PASS", "BLOCKED", "FAIL", "NOT_RUN"],
+  "barrier_rule": "A qualification track passes only when every cell in that track has attributable PASS evidence at one reviewed revision. Documentation, BLOCKED, FAIL, NOT_RUN, or mixed-revision evidence never qualifies implementation.",
+  "global_invariants": {
+    "graph_facts_added": 0,
+    "semantic_authority": 0,
+    "semantic_accepted": false,
+    "source_graph_complete": "UNKNOWN",
+    "canonical_operation_count": 43,
+    "compact_advertised_tool_count": 13,
+    "operation_44": "FORBIDDEN",
+    "schema_change_policy": "ADDITIVE_ONLY",
+    "operation_boundaries": {
+      "33": "retained post-acquisition projection only",
+      "36": "location-only transient contract unless a separately qualified additive version is selected",
+      "41": "unchanged immutable compatibility reader",
+      "43": "location-only transient facade unless a separately qualified additive version is selected"
+    }
+  },
+  "dependency_barrier_inputs": {
+    "manifest_track": [
+      "canonical candidate manifest bytes, digest, semantic-validation result, and exact V5 binding",
+      "ordered retained availability inventory with source identity, storage class, qualification, privacy class, availability, role, graph subject, range, encoding, and custody",
+      "schema digest inventory proving additive-only registration",
+      "explicit statement whether the manifest is only a retained custody/availability index or also instantiates selected shared projection semantics"
+    ],
+    "object_store_track": [
+      "pinned-root canonical-selector and exact-byte resolver contracts",
+      "GIT_BLOB, CONTENT_ADDRESS, EMBEDDED_IMMUTABLE, and UNAVAILABLE receipts",
+      "owner-only, no raw root disclosure, atomic no-replace, retention, lease, and GC evidence",
+      "missing, corrupt, withheld, neighbor-byte, shallow-history, rewritten-history, and collected-object outcomes",
+      "byte, object, read-work, response, and page boundary evidence"
+    ],
+    "live_session_track": [
+      "exact managed session ID and generation authority",
+      "exact document URI/version/content identity and position encoding admitted for the request",
+      "proof that live resolution reads only request-admitted documents and performs no retained-object or current-checkout fallback",
+      "separate structural and projection budget/status accounting",
+      "partial graph/frontier and source-unit disposition evidence"
+    ],
+    "adr0007_semantic_track": [
+      "typed admission identity and canonicalization policy",
+      "TARGET/NEIGHBORHOOD/CENSUS coverage and denominator records",
+      "Describe, Embed, and index-build dependency/cache identity formulas",
+      "privacy, retention, deletion, invalidation, and source-body eligibility policies",
+      "authority-zero, accepted-false, no-CALLS, and no-graph-facts claim guards"
+    ]
+  },
+  "tracks": [
+    {
+      "id": "COMMON_PROJECTION",
+      "status": "BLOCKED",
+      "execution_status": "NOT_EXECUTED",
+      "blocked_by": ["semantic_design_barrier"]
+    },
+    {
+      "id": "RETAINED_OBJECT_RESOLVER",
+      "status": "NOT_RUN",
+      "execution_status": "NOT_EXECUTED",
+      "blocked_by": ["manifest and object-store barrier inputs"]
+    },
+    {
+      "id": "LIVE_SESSION_RESOLVER",
+      "status": "NOT_RUN",
+      "execution_status": "NOT_EXECUTED",
+      "blocked_by": ["future additive operation-43/36 decision"]
+    },
+    {
+      "id": "ADR0007_INTEROPERABILITY",
+      "status": "BLOCKED",
+      "execution_status": "NOT_EXECUTED",
+      "blocked_by": ["semantic_design_barrier", "ADR 0007 frozen prerequisite bundle"]
+    },
+    {
+      "id": "COMPATIBILITY",
+      "status": "NOT_RUN",
+      "execution_status": "NOT_EXECUTED",
+      "blocked_by": ["registry and predecessor-byte goldens absent", "additive dispatch version unselected"]
+    }
+  ],
+  "cells": [
+    {
+      "id": "C01",
+      "track": "COMMON_PROJECTION",
+      "requirement": "exact_projected_unit_identity",
+      "pass_evidence": "Every projected unit has exact role, graph subject, logical source identity, exact range, position encoding, source digest/length, custody-mode identity, privacy class, availability, and policy identity; input permutation yields byte-identical canonical output.",
+      "fail_evidence": "Identity omits a field that can change selected bytes or authority context, or ordering depends on input/map order.",
+      "blockers": ["shared unit identity not selected"],
+      "dependencies": ["semantic_design_barrier comparison vectors"]
+    },
+    {
+      "id": "C02",
+      "track": "COMMON_PROJECTION",
+      "requirement": "exact_ranges_encoding_overlap_and_citations",
+      "pass_evidence": "UTF-8/16/32, BOM, CR/LF/CRLF, non-BMP, empty and cross-line vectors preserve whole endpoint and relation ranges; overlap may share emitted spans only while every original selection remains attributable and citeable to its exact node or server-reported CALLS relation.",
+      "fail_evidence": "Range is guessed, repaired, shortened, widened, split, role-swapped, or loses independent citation attribution.",
+      "blockers": ["citation shape unresolved"],
+      "dependencies": ["exact projected unit identity", "range corpus"]
+    },
+    {
+      "id": "C03",
+      "track": "COMMON_PROJECTION",
+      "requirement": "deterministic_selection_accounting_and_limits",
+      "pass_evidence": "Canonical role/subject/source/range/digest order is stable; candidates=selected+omitted; one mutually exclusive reason exists per omission; object/node, range, bytes, work, response, page, and page-count limits admit whole ranges and report exact observed/limit values where safe.",
+      "fail_evidence": "Accounting does not reconcile, zero becomes unlimited, pages reset budgets, a range fragments, a hidden increase/retry occurs, or the wrong resource is reported.",
+      "blockers": ["common limit fields unresolved"],
+      "dependencies": ["independent accounting oracle"]
+    },
+    {
+      "id": "C04",
+      "track": "COMMON_PROJECTION",
+      "requirement": "zero_authority_and_graph_neutrality",
+      "pass_evidence": "Source additions/removals/reordering/text/overlap change only projection data; graph bytes, nodes, relations, support, authority=0, accepted=false, source_graph_complete=UNKNOWN, and graph_facts_added=0 remain invariant.",
+      "fail_evidence": "Source or semantic output creates/repairs/removes CALLS or another graph fact, strengthens authority/completeness, or becomes accepted evidence.",
+      "blockers": ["before/after graph oracle absent"],
+      "dependencies": ["exact structural artifact/result", "semantic claim guard"]
+    },
+    {
+      "id": "C05",
+      "track": "COMMON_PROJECTION",
+      "requirement": "privacy_and_source_body_eligibility",
+      "pass_evidence": "Metadata-only is default; body eligibility requires explicit opt-in plus policy; restricted, withheld, ancillary, unavailable, and unauthorized units remain omitted with discoverable accounting; private roots, arbitrary paths, secrets, commands, environment, and raw errors never leak.",
+      "fail_evidence": "Digest authorizes disclosure, body appears by default, privacy class is lost, COMPLETE_CAPTURE bypasses policy, or private locator data is public.",
+      "blockers": ["privacy classes/body eligibility not selected"],
+      "dependencies": ["host privacy policy", "privacy marker corpus"]
+    },
+    {
+      "id": "C06",
+      "track": "COMMON_PROJECTION",
+      "requirement": "malformed_input_no_repair",
+      "pass_evidence": "Named compiling RED mutations for unknown/duplicate/missing fields, invalid identity/range/encoding/privacy/status/limits and reordered/mixed pages fail at the intended assertion with no repaired output, retry, fallback, broader policy, or implicit continuation.",
+      "fail_evidence": "Mutation passes, fails only in setup/compilation, reaches an unrelated assertion, or is normalized to success.",
+      "blockers": ["assertion-specific RED corpus absent"],
+      "dependencies": ["selected common contract"]
+    },
+    {
+      "id": "R01",
+      "track": "RETAINED_OBJECT_RESOLVER",
+      "requirement": "manifest_exact_v5_availability_binding",
+      "pass_evidence": "A manifest candidate, when used, binds exact admitted V5 schema ID/digest/length/capture identity and exact retained availability entries without owning or strengthening graph semantics; predecessor schema bytes and V2/V3 readers remain unchanged.",
+      "fail_evidence": "Manifest binds another graph, silently upgrades V2/V3, mutates predecessor bytes, or claims general semantic ownership not selected at the barrier.",
+      "blockers": ["manifest bytes/validator absent", "semantic model unselected"],
+      "dependencies": ["manifest_track inputs"]
+    },
+    {
+      "id": "R02",
+      "track": "RETAINED_OBJECT_RESOLVER",
+      "requirement": "git_content_address_dirty_and_non_git_custody",
+      "pass_evidence": "Committed source resolves only exact commit/tree/blob; dirty/non-Git source resolves only retained immutable objects; digest-only dirty source is unavailable; exact length/digest/custody are verified before extraction.",
+      "fail_evidence": "Current checkout, sibling bytes, mutable path, URI, version, digest-only record, or alternate class satisfies retrieval.",
+      "blockers": ["Git pinning or dirty-buffer receipt absent"],
+      "dependencies": ["manifest_track inventory", "object_store_track receipts"]
+    },
+    {
+      "id": "R03",
+      "track": "RETAINED_OBJECT_RESOLVER",
+      "requirement": "no_historical_fallback_missing_corrupt_withheld_gc",
+      "pass_evidence": "Missing/corrupt/withheld/collected/shallow/rewritten objects produce exact terminal outcomes without current-checkout, live-session, provider, network, retry, or resolver fallthrough; graph and manifest remain valid custody metadata.",
+      "fail_evidence": "Fallback or substitution occurs, manifest is rewritten, or unavailable/withheld/corrupt is mislabeled as budget truncation.",
+      "blockers": ["resolver instrumentation or GC policy absent"],
+      "dependencies": ["object_store_track adversarial outcomes"]
+    },
+    {
+      "id": "R04",
+      "track": "RETAINED_OBJECT_RESOLVER",
+      "requirement": "publication_no_replace_and_offline_replay",
+      "pass_evidence": "Owner-only pinned-root publication is atomic no-replace with one race winner; fresh offline replay from exact V5, availability index/manifest, source objects, policy, and limits is byte-identical and stable; missing/mixed/tampered/reordered inputs fail without ambient access.",
+      "fail_evidence": "Caller path controls storage, existing bytes change, loser succeeds, replay differs or uses hidden cache/workspace/session/network.",
+      "blockers": ["publication receipt or replay packet absent"],
+      "dependencies": ["manifest_track bytes", "object_store_track publication evidence"]
+    },
+    {
+      "id": "L01",
+      "track": "LIVE_SESSION_RESOLVER",
+      "requirement": "live_session_generation_custody",
+      "pass_evidence": "Every source unit binds the exact managed session ID/generation and request-admitted document identity/version/bytes/encoding; resolution reads only those admitted live bytes and never retained objects or ambient checkout paths.",
+      "fail_evidence": "Generation drift, document substitution, retained-object fallback, current-checkout read, or post-request changed buffer satisfies the request.",
+      "blockers": ["future additive live contract not selected"],
+      "dependencies": ["live_session_track inputs"]
+    },
+    {
+      "id": "L02",
+      "track": "LIVE_SESSION_RESOLVER",
+      "requirement": "independent_structural_projection_budgets_and_outcomes",
+      "pass_evidence": "Body/range/object/work/page consumption cannot consume structural request/message/node/depth/traversal-byte budgets; each exhausted resource is named; projection status cannot hide or rewrite structural TRUNCATED/RESOURCE_LIMIT and reports partial graph/frontier disposition.",
+      "fail_evidence": "Budgets pool, body opt-in changes structural graph/status/frontier, failures are opaque, or hidden retry/increase occurs.",
+      "blockers": ["separate accounting and frontier semantics unresolved"],
+      "dependencies": ["live_session_track accounting evidence"]
+    },
+    {
+      "id": "L03",
+      "track": "LIVE_SESSION_RESOLVER",
+      "requirement": "operation43_value_can_shape_common_contract",
+      "pass_evidence": "Bounded operation-43 TARGET/snippet trials run before common-contract freeze and record whether live constraints require changes to shared unit identity, selection, citations, privacy, limits, or status semantics; accepted changes are requalified in common and retained tracks.",
+      "fail_evidence": "Common semantics freeze before live evidence, operation-43 evidence is ignored because retained is incomplete, or live semantics silently diverge.",
+      "blockers": ["authorized bounded trial unavailable", "semantic barrier unresolved"],
+      "dependencies": ["semantic_design_barrier", "operation-43 exact-symbol fixtures"]
+    },
+    {
+      "id": "L04",
+      "track": "LIVE_SESSION_RESOLVER",
+      "requirement": "host_parameter_help_and_body_opt_in_neutrality",
+      "pass_evidence": "Host-owned parameter help appears only for request-validation errors, never valid typed domain failures; omitted projection fields preserve legacy bytes; explicit body opt-in changes projection only and never makes transient results retained, replayable, publishable, or hydration-eligible.",
+      "fail_evidence": "Expected parameters decorates a domain failure, omitted fields drift, body opt-in changes structural outcomes, or transient custody is upgraded.",
+      "blockers": ["host rendering fixture absent", "additive request/result identity unapproved"],
+      "dependencies": ["host-owned renderer", "legacy byte fixtures"]
+    },
+    {
+      "id": "I01",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "projection_units_as_typed_semantic_inputs",
+      "pass_evidence": "Exact projected source units can be admitted as finite ADR 0007 item types for TARGET, bounded NEIGHBORHOOD, Describe, Embed, and index-build without implying CENSUS; each admission retains corpus/type, exact bytes or immutable selector, range, role, source identity, custody mode, revision/generation, authority, acceptance, privacy, and derivation.",
+      "fail_evidence": "Admission loses source-unit identity/citation, treats TARGET/NEIGHBORHOOD as CENSUS, or semantic worker retrieves beyond caller-admitted bytes/relationships.",
+      "blockers": ["cross-ADR item type and semantic model unselected"],
+      "dependencies": ["COMMON_PROJECTION C01-C05", "ADR 0007 typed admission proposal"]
+    },
+    {
+      "id": "I02",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "identity_cache_equality_and_invalidation",
+      "pass_evidence": "Cache hit occurs only when projected unit identity, exact bytes/selector, range, encoding, role, custody identity, revision/generation, representation, prompts, model/runtime, policies, and ordered dependencies are exactly equal; any change yields a new immutable record and downstream invalidation/rebuild disposition.",
+      "fail_evidence": "Approximate, digest-only-without-bytes, family-level, cross-revision, cross-generation, cross-custody, or policy-family match hits cache.",
+      "blockers": ["canonical cross-ADR identity formula unselected"],
+      "dependencies": ["semantic_design_barrier identity vectors", "ADR 0007 cache contract"]
+    },
+    {
+      "id": "I03",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "endpoint_relation_citations",
+      "pass_evidence": "Describe/search/group/work-context outputs cite exact projected endpoint declaration or relation call-site units and their immutable admission identities; relation citations remain attached only to admitted server-reported CALLS and endpoint citations never substitute for call sites.",
+      "fail_evidence": "Citation points only to file/name/text, loses range/role/custody, invents CALLS, or treats endpoint and relation ranges as interchangeable.",
+      "blockers": ["citation schema unselected"],
+      "dependencies": ["COMMON_PROJECTION C02", "ADR 0007 provenance references"]
+    },
+    {
+      "id": "I04",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "live_working_context_vs_retained_revision_authority",
+      "pass_evidence": "Live-session units enter explicitly typed working context with generation/currentness; retained V5-bound units enter revision-bound code/structural evidence with exact custody; coexistence preserves distinctions and never silently mixes revisions or upgrades working context to retained authority.",
+      "fail_evidence": "Live bytes inherit retained custody, retained bytes are labeled current live state, revisions/generations mix silently, or similarity equalizes authority.",
+      "blockers": ["cross-corpus admission mapping unselected"],
+      "dependencies": ["RETAINED_OBJECT_RESOLVER custody", "LIVE_SESSION_RESOLVER custody", "ADR 0007 corpus policy"]
+    },
+    {
+      "id": "I05",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "partial_neighborhood_census_claim_ceilings",
+      "pass_evidence": "Every semantic result exposes TARGET/NEIGHBORHOOD/CENSUS mode, exact scope, denominator, evaluated and terminal counts, failures/exclusions, revision policy, and coverage; partial/zero/bounded results make no absence, repository completeness, domain completeness, feature identity, or work-complete claim.",
+      "fail_evidence": "TARGET or NEIGHBORHOOD implies census, non-COMPLETE omits denominator/evaluated state, or zero results imply absence beyond admitted scope.",
+      "blockers": ["cross-ADR denominator mapping unselected"],
+      "dependencies": ["ADR 0007 terminal accounting", "projection omission accounting"]
+    },
+    {
+      "id": "I06",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "semantic_zero_authority_no_graph_facts",
+      "pass_evidence": "Descriptions, embeddings, indexes, searches, groups, and generated context always retain authority=0 and accepted=false; source authority metadata remains separate; outputs cannot add/suppress/repair CALLS, nodes, relations, support, graph facts, structural status, or completeness.",
+      "fail_evidence": "Generated output inherits source authority/acceptance, manufactures CALLS or graph facts, overwrites lineage/evidence, or establishes feature/design correctness.",
+      "blockers": ["semantic output guard absent"],
+      "dependencies": ["COMMON_PROJECTION C04", "ADR 0007 authority guard"]
+    },
+    {
+      "id": "I07",
+      "track": "ADR0007_INTEROPERABILITY",
+      "requirement": "semantic_privacy_body_eligibility_deletion",
+      "pass_evidence": "Only policy-eligible source bodies become semantic representations; metadata-only, restricted, withheld, unavailable, and ancillary cases remain typed; derived descriptions/embeddings/indexes/queries/caches/logs inherit explicit sensitive-data handling; deletion invalidates and accounts for all dependent artifacts without stale reappearance.",
+      "fail_evidence": "Indexing bypasses body opt-in/privacy, withheld bytes are reconstructed, derived artifacts escape retention/deletion policy, or tombstoned data reappears from cache.",
+      "blockers": ["privacy/body/deletion ownership unassigned", "ADR 0007 prerequisite policies not frozen"],
+      "dependencies": ["COMMON_PROJECTION C05", "ADR 0007 privacy/deletion policy"]
+    },
+    {
+      "id": "X01",
+      "track": "COMPATIBILITY",
+      "requirement": "operations_counts_and_additive_schema_only",
+      "pass_evidence": "Registry/capability goldens retain exactly 43 canonical operations, 13 compact tools, no operation 44, additive schema identities only, unchanged predecessor hashes, operation 33 retained-only, operation 41 unchanged, and no ADR 0007 public CLI/MCP/core integration.",
+      "fail_evidence": "Count drift, operation 44, predecessor mutation, source-snapshot reinterpretation, operation-41 flags, operation-33 transient bodies, or ADR 0007 integration into core surfaces occurs.",
+      "blockers": ["registry and predecessor-byte goldens absent"],
+      "dependencies": ["schema digest inventory", "capability inventory"]
+    },
+    {
+      "id": "X02",
+      "track": "COMPATIBILITY",
+      "requirement": "direct_gateway_parity_where_exposed",
+      "pass_evidence": "Equivalent direct inspect-hydrated and canonical execute requests produce byte-identical delegated envelopes, accounting, pages/bodies, and typed failures; any future operation-43/36 direct/gateway exposure independently proves the same parity without host rendering conflation.",
+      "fail_evidence": "Transport changes defaults, numbers, ordering, privacy, body opt-in, cursors, failure codes, or accounting.",
+      "blockers": ["additive dispatch version unselected"],
+      "dependencies": ["shared handler vectors", "host rendering tests"]
+    }
+  ],
+  "claim_ceiling": "This matrix is a documentation-only, BLOCKED and NOT_EXECUTED qualification plan. It does not select a semantic model; claim that implementation exists; claim any test ran or passed; qualify retained or live projection, a manifest, an object store, operation 43/36, or ADR 0007 interoperability; authorize schemas, operations, inference, indexing, shipment, deployment, or production behavior."
+}
