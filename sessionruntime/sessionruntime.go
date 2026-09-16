@@ -1052,8 +1052,8 @@ func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceReques
 		return result
 	}
 	gitCtx, cancelGit := context.WithTimeout(ctx, maxGitWorktreeTime)
+	defer cancelGit()
 	raw, err := m.gitWorktreeList(gitCtx, parentWorkspace)
-	cancelGit()
 	if err != nil {
 		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_QUERY_FAILED")}
 	}
@@ -1068,8 +1068,31 @@ func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceReques
 			targetCount++
 		}
 	}
-	if !parentSeen || targetCount != 1 || target == parentWorkspace {
+	if target == parentWorkspace {
 		return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+	}
+	if targetCount == 0 {
+		targetRaw, targetErr := m.gitWorktreeList(gitCtx, target)
+		if targetErr != nil {
+			return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+		}
+		targetPaths, targetErr := parseWorktreeList(targetRaw)
+		if targetErr != nil {
+			return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_INVALID")}
+		}
+		parentSeen, targetCount = false, 0
+		for _, p := range targetPaths {
+			parentSeen = parentSeen || p == parentWorkspace
+			if p == target {
+				targetCount++
+			}
+		}
+	}
+	if targetCount != 1 {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+	}
+	if !parentSeen {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
 	}
 	m.mu.Lock()
 	current := m.sessions[req.SessionID]
