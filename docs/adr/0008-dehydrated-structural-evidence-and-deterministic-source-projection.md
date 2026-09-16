@@ -285,6 +285,44 @@ Operation-43 request flags or result versions are deferred. They may be consider
 
 Each stage is independently reviewable and does not imply authorization for the next.
 
+## Repository-grounded review: interactive and retained projection
+
+A review of the current production paths supports one projection algebra serving two distinct custody modes, but not one interchangeable evidence class:
+
+- **Transient live bounded projection** is an interactive presentation over one exact managed session generation. Operations 36 and 43 already return workspace-relative paths plus endpoint declaration ranges and relation call-site ranges. Their transient executor prepares the target document with `CaptureSupply: false`; the result remains `authority: 0`, `source_graph_complete: UNKNOWN`, non-retained, non-replayable, publication-ineligible, and hydration-ineligible. An additive projection may read only the exact live document bytes admitted for that request and may add zero graph facts.
+- **Retained V5-bound offline projection** is hydration over immutable bytes bound to an admitted Graph Provenance V5 capture and dehydrated manifest. The existing hydrated-inspection path is offline, path-free after ingress, explicitly body-gated, deterministically ordered, overlap-aware, bounded, and independently validated. Missing retained bytes remain typed and never trigger current-checkout or live-session acquisition.
+
+These modes may share ordering, range extraction, overlap handling, privacy vocabulary, omission reasons, and projection accounting only if their custody and result identities remain explicit. A transient projection cannot become retained evidence, and retained hydration cannot consult the live workspace. Source text remains a zero-authority view over already admitted server-reported `CALLS`; it cannot create, repair, complete, or strengthen graph facts.
+
+### Range and disclosure contract
+
+Location-only output remains the default in both modes. Bodies or snippets require an explicit opt-in plus independent byte, range, object, work, response, and, where applicable, page limits. The projection contract distinguishes:
+
+- endpoint declaration ranges, attached to admitted nodes; and
+- relation call-site ranges, attached to admitted server-reported `CALLS` occurrences.
+
+Neither range kind substitutes for the other. Overlapping selected ranges are processed in canonical order and may share one emitted span only when every original selection remains separately attributable and accounting remains exact. Projection status and accounting are independent of structural status: unavailable, withheld, invalid, or budget-truncated source cannot rewrite structural success or failure. Projection candidates must reconcile as selected plus omitted, with one mutually exclusive reason per omission.
+
+The repository review also exposed a bounded live-tracing usability risk. Valid operation-43-style exact-symbol requests at bounded depth returned typed `TRAVERSAL/TRUNCATED` and `ADMISSION/RESOURCE_LIMIT` outcomes, but the responses did not identify the exhausted resource, report observed-versus-limit accounting, state whether any partial graph or frontier remained available, or name an actionable safe adjustment. The host rendering additionally appended `Expected parameters` after these valid domain failures, making them resemble input-schema errors. Subsequent depth-1 exact-symbol requests succeeded against the same managed session, so this is evidence about bounded-limit diagnostics and usability, not evidence of a dead session or unsupported operation.
+
+Source-projection qualification must treat that risk explicitly. Projection accounting and status remain separate from structural traversal accounting and status. Opting into bodies or snippets must not silently consume structural request, message, node, depth, or traversal-byte budgets, and a projection limit or source failure must not convert structural success into structural failure. Conversely, projection must not hide a structural `TRUNCATED` or `RESOURCE_LIMIT` outcome. Typed failures must identify the exhausted budget, report observed and declared-limit values where safely available, state the disposition of any partial result or frontier, and distinguish actionable bounded adjustments from forbidden hidden retries or budget increases. Parameter-help text must not be appended to valid domain failures; schema guidance is reserved for actual request-validation errors.
+
+Both custody modes require deterministic canonical ordering, whole-range admission, position-encoding-aware extraction, no code-point splitting, explicit privacy classification, and terminal typed outcomes for unavailable or unverifiable bytes. They permit no retry, resolver fallthrough, current-checkout substitution, range repair, encoding guess, hidden budget increase, or implicit continuation. Revision custody is exact and mode-specific: the live session generation qualifies transient reads, while the V5 capture, manifest, and immutable source object qualify retained reads.
+
+### Staged recommendation
+
+The recommended rollout is retained-first and additive:
+
+1. Complete and independently qualify the retained V5 manifest, immutable storage, offline projection, privacy, accounting, and direct/gateway parity stages already listed above.
+2. If interactive source value is still demonstrated after that qualification, evaluate operation 43 first through an additive request/result version. It is the preferred exact-symbol façade, already resolves one source-locating target before delegating to operation 36, and offers the narrowest user-facing place to prove explicit target/snippet opt-in without changing location-only defaults. Omitted projection fields must preserve legacy request and result bytes.
+3. Only after operation 43 qualifies, evaluate the same transient projection contract directly on operation 36 for callers that already possess an exact URI and target. This stage must reuse the qualified projection semantics without routing operation 36 through workspace-symbol lookup.
+4. Keep operation 33 on retained post-acquisition projection. It already captures document supply and produces Graph Provenance V5; source presentation should occur from the resulting retained identity and manifest, not by adding a competing transient body channel to trace acquisition.
+5. Leave operation 41 unchanged as the immutable compatibility reader. It must neither gain source flags nor inherit operation 43's future additive result contract.
+
+This ordering adds no operation 44, preserves exactly 43 canonical and 13 compact-advertised tools, and requires additive schema identities only. It does not authorize any runtime or schema implementation. Every stage still begins with assertion-specific RED evidence and may be rejected if qualification shows privacy, custody, determinism, compatibility, or utility costs outweigh the interactive benefit. Transient qualification must include assertion-specific RED cases proving structural and projection budgets are independently identified and accounted, body opt-in cannot consume structural traversal budgets, partial/frontier disposition is explicit, and valid typed domain failures are not decorated as parameter-validation failures.
+
+The initial-scope decision therefore remains unchanged now: operations 36 and 43 stay location-only and transient source projection remains deferred. This ADR now records the qualified direction and rollout order so a later decision can evaluate interactive projection without conflating it with retained archival hydration or silently treating deferral as rejection.
+
 ## Qualification requirements
 
 Implementation begins with assertion-specific RED tests. At minimum, qualification must establish:
