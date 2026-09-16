@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/mcpcontract"
@@ -87,6 +88,38 @@ func TestContextSymbolChurnCaptureDirectGatewayParity(t *testing.T) {
 	_ = json.Unmarshal(executor.calls[1].Input, &b)
 	if !reflect.DeepEqual(a, b) || executor.calls[0].Name != operation.Name("context_symbol_churn_capture") || executor.calls[1].Name != operation.Name("context_symbol_churn_capture") {
 		t.Fatal("ASSERT_SYMBOL_CHURN_CAPTURE_DIRECT_GATEWAY_PARITY: dispatch inputs differ")
+	}
+}
+
+func TestContextSymbolChurnCaptureDeliveryCheckTypedParity(t *testing.T) {
+	const assertion = "ASSERT_SYMBOL_CHURN_CAPTURE_DELIVERY_CHECK_TYPED_PARITY"
+	executor := &structuralContextRecordingExecutor{artifact: []byte(`{"not":"a churn artifact"}`)}
+	s := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{ContextSymbolChurnCaptureExecutorFamily: executor}}
+	args := map[string]any{"session_id": "project", "generation": 1, "uri": "file:///tmp/repo/a.go", "symbol": "A", "down_depth": 1, "up_depth": 0, "max_nodes": 10, "timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}, "from_revision": "HEAD~1", "to_revision": "HEAD", "profile": "go", "language_id": "go"}
+	responses := []response{
+		s.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.ContextSymbolChurnCaptureTool, args)),
+		s.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.ContextSymbolChurnCaptureTool, "arguments": args}})),
+	}
+	for i, got := range responses {
+		if got.Error != nil {
+			t.Fatalf("%s[%d]: unexpected JSON-RPC error: %+v", assertion, i, got.Error)
+		}
+		wrapped, _ := json.Marshal(got.Result)
+		var decoded struct {
+			StructuredContent json.RawMessage `json:"structuredContent"`
+		}
+		_ = json.Unmarshal(wrapped, &decoded)
+		raw := decoded.StructuredContent
+		if i == 1 {
+			var gateway struct {
+				DelegatedEnvelope string `json:"delegated_envelope"`
+			}
+			_ = json.Unmarshal(raw, &gateway)
+			raw = []byte(gateway.DelegatedEnvelope)
+		}
+		if err := mcpcontract.ValidateContextSymbolChurnCaptureEnvelopeExclusive(raw); err != nil || !strings.Contains(string(raw), `"phase":"DELIVERY_CHECK"`) {
+			t.Fatalf("%s[%d]: envelope=%s validation=%v", assertion, i, raw, err)
+		}
 	}
 }
 

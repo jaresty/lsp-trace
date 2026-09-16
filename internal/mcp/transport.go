@@ -127,7 +127,9 @@ func contextSymbolChurnSummary(result vcssymbolsidecar.Result) map[string]any {
 func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
 	env := structuralContextDomainErrorEnvelope(tool, string(domain.Phase), string(domain.State))
 	limit, _ := args["max_nodes"].(float64)
-	env.Diagnostic = transientstructural.DiagnoseTruncation(transientstructural.Request{MaxNodes: int(limit)}, domain)
+	if tool == mcpcontract.StructuralContextTool || tool == mcpcontract.StructuralContextSymbolTool {
+		env.Diagnostic = transientstructural.DiagnoseTruncation(transientstructural.Request{MaxNodes: int(limit)}, domain)
+	}
 	return env
 }
 
@@ -501,6 +503,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		var result map[string]any
 		var typed vcssymbolsidecar.Result
 		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || json.Unmarshal(opResult.Artifact, &typed) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) != nil {
+			if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+				return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelopeFor(tool.Name, mcpcontract.ContextSymbolChurnCaptureDomainErrorID, requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
+			}
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 		}
 		schemaID := mcpcontract.ContextSymbolChurnSuccessV2ID

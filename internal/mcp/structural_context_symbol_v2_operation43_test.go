@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"lsp-trace/internal/mcpcontract"
+	"lsp-trace/internal/operation"
+	"lsp-trace/internal/transientstructural"
 )
 
 const structuralContextSymbolV2Tool = "lsp_trace_v2_structural_context_symbol"
@@ -35,6 +37,38 @@ func TestStructuralContextSymbolV2DispatchVersionBoundary(t *testing.T) {
 	v2, v2OK := full.ResolveCanonical(structuralContextSymbolV2Tool)
 	if !v1OK || !v2OK || operationName(v1.Name) != "structural_context_symbol" || operationName(v2.Name) != "structural_context_symbol_v2" {
 		t.Fatalf("%s: v1=%+v/%v v2=%+v/%v names=%s/%s", assertion, v1, v1OK, v2, v2OK, operationName(v1.Name), operationName(v2.Name))
+	}
+}
+
+func TestStructuralContextSymbolV2TruncationDirectGatewayParity(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_TRUNCATION_TYPED_PARITY"
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "TRUNCATED", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseTraversal, State: transientstructural.StateTruncated}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextSymbolV2ExecutorFamily: executor}}
+	args := map[string]any{"session_id": "s", "generation": float64(1), "symbol": "A", "max_nodes": float64(1), "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
+	responses := []response{
+		server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, structuralContextSymbolV2Tool, args)),
+		server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": structuralContextSymbolV2Tool, "arguments": args}})),
+	}
+	for i, got := range responses {
+		if got.Error != nil {
+			t.Fatalf("%s[%d]: unexpected JSON-RPC error: %+v", assertion, i, got.Error)
+		}
+		wrapped, _ := json.Marshal(got.Result)
+		var decoded struct {
+			StructuredContent json.RawMessage `json:"structuredContent"`
+		}
+		_ = json.Unmarshal(wrapped, &decoded)
+		raw := decoded.StructuredContent
+		if i == 1 {
+			var gateway struct {
+				DelegatedEnvelope string `json:"delegated_envelope"`
+			}
+			_ = json.Unmarshal(raw, &gateway)
+			raw = []byte(gateway.DelegatedEnvelope)
+		}
+		if err := mcpcontract.ValidateStructuralContextSymbolV2EnvelopeExclusive(raw); err != nil || !strings.Contains(string(raw), `"state":"TRUNCATED"`) || strings.Contains(string(raw), `"diagnostic"`) {
+			t.Fatalf("%s[%d]: envelope=%s validation=%v", assertion, i, raw, err)
+		}
 	}
 }
 
