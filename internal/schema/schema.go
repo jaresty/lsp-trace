@@ -55,7 +55,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyGraphProvenance:            {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v5": "lsp-trace.graph-provenance.v5"},
 	FamilyRetainedCalls:              {"v1": "lsp-trace.retained-calls.v1", "v2": "lsp-trace.retained-calls.v2"},
 	FamilyRetainedRelations:          {"v1": "lsp-trace.retained-relations.v1"},
-	FamilyGraphV5SourceSnapshot:      {"v1": "lsp-trace.graph-v5-source-snapshot.v1"},
+	FamilyGraphV5SourceSnapshot:      {"v1": "lsp-trace.graph-v5-source-snapshot.v1", "v2": "lsp-trace.graph-v5-source-snapshot.v2"},
 	FamilyBoundedAnalysis:            {"v1": "lsp-trace.bounded-retained-analysis.v1"},
 	FamilyBoundedMetrics:             {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 	FamilyBoundedRanking:             {"v1": "lsp-trace.bounded-retained-ranking.v1"},
