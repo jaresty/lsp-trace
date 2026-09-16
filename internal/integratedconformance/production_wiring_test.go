@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,9 +23,8 @@ func TestProductionExecutionTransportParity(t *testing.T) {
 	t.Log("ASSERTION: " + assertion)
 
 	repository := repositoryRoot(t)
-	binDir := t.TempDir()
-	cli := buildProductionBinary(t, repository, filepath.Join(binDir, "lsp-trace"), "./cmd/lsp-trace")
-	mcp := buildProductionBinary(t, repository, filepath.Join(binDir, "lsp-trace-mcp"), "./cmd/lsp-trace-mcp")
+	cli := cachedProductionBinary(t, repository, "./cmd/lsp-trace")
+	mcp := cachedProductionBinary(t, repository, "./cmd/lsp-trace-mcp")
 	publicationRoot := filepath.Join(t.TempDir(), "publication")
 	input := executionruntime.ProductionInput{Root: publicationRoot, Source: "package fixture\nfunc ProductionParity() {}\n"}
 	rawInput, err := json.Marshal(input)
@@ -125,14 +125,13 @@ type productionParityObservation struct {
 	Artifact []byte
 }
 
-func buildProductionBinary(t *testing.T, repository, output, packagePath string) string {
-	t.Helper()
+func buildProductionBinary(repository, output, packagePath string) (string, error) {
 	cmd := exec.Command("go", "build", "-o", output, packagePath)
 	cmd.Dir = repository
 	if combined, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build %s: %v output=%s", packagePath, err, combined)
+		return "", fmt.Errorf("build %s: %w output=%s", packagePath, err, combined)
 	}
-	return output
+	return output, nil
 }
 
 func TestProductionExecutionWiring(t *testing.T) {

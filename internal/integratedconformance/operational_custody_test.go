@@ -27,9 +27,21 @@ type operationalHarness struct {
 
 func newOperationalHarness(t *testing.T) operationalHarness {
 	t.Helper()
+	return newOperationalHarnessWithCache(t, packageProductionBinaries)
+}
+
+func newOperationalHarnessWithCache(t *testing.T, cache *productionBinaryCache) operationalHarness {
+	t.Helper()
 	root := repositoryRoot(t)
-	bin := t.TempDir()
-	return operationalHarness{t: t, cli: buildProductionBinary(t, root, filepath.Join(bin, "cli"), "./cmd/lsp-trace"), mcp: buildProductionBinary(t, root, filepath.Join(bin, "mcp"), "./cmd/lsp-trace-mcp")}
+	cli, err := cache.binary(root, "./cmd/lsp-trace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcp, err := cache.binary(root, "./cmd/lsp-trace-mcp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return operationalHarness{t: t, cli: cli, mcp: mcp}
 }
 func (h operationalHarness) run(mode string, input any, config string, executor operation.Executor) operationalObservation {
 	h.t.Helper()
