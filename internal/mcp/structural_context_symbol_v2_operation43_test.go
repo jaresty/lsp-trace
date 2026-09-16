@@ -65,14 +65,48 @@ func TestStructuralContextSymbolV2DispatchVersionBoundary(t *testing.T) {
 }
 
 func TestStructuralContextSymbolV2TruncationDirectGatewayParity(t *testing.T) {
-	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_TRUNCATION_TYPED_PARITY"
-	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "TRUNCATED", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseTraversal, State: transientstructural.StateTruncated}}}
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_TRUNCATION_ACTIONABLE_TYPED_PARITY"
+	accounting := transientstructural.Accounting{}
+	accounting.Nodes.Observed = 41
+	accounting.Nodes.Admitted = 40
+	accounting.Frontier.Unexpanded = 1
+	accounting.Omissions = []transientstructural.OmissionCount{{Reason: transientstructural.OmissionNodeBound, Count: 1}}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "TRUNCATED", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseTraversal, State: transientstructural.StateTruncated, Accounting: accounting}}}
+	assertStructuralContextSymbolV2BudgetFailure(t, assertion, executor, "TRUNCATED")
+}
+
+func TestStructuralContextSymbolV2AdmissionResourceLimitActionableParity(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_ADMISSION_RESOURCE_LIMIT_ACTIONABLE_PARITY"
+	accounting := transientstructural.Accounting{}
+	accounting.Nodes.Observed = 41
+	accounting.Nodes.Admitted = 40
+	accounting.Frontier.Unexpanded = 1
+	accounting.Omissions = []transientstructural.OmissionCount{{Reason: transientstructural.OmissionNodeBound, Count: 1}}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "RESOURCE_LIMIT", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseAdmission, State: transientstructural.StateResourceLimit, Accounting: accounting}}}
+	assertStructuralContextSymbolV2BudgetFailure(t, assertion, executor, "RESOURCE_LIMIT")
+}
+
+func TestStructuralContextSymbolV2UnknownResourceLimitPreservesOpaqueTypedFailure(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_UNKNOWN_RESOURCE_ACCOUNTING_NOT_FABRICATED"
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "RESOURCE_LIMIT", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseTraversal, State: transientstructural.StateResourceLimit}}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextSymbolV2ExecutorFamily: executor}}
-	args := map[string]any{"session_id": "s", "generation": float64(1), "symbol": "A", "max_nodes": float64(1), "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
+	args := map[string]any{"session_id": "s", "generation": float64(1), "symbol": "A", "max_nodes": float64(40), "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
+	got := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, structuralContextSymbolV2Tool, args))
+	raw, _ := json.Marshal(got.Result)
+	if !strings.Contains(string(raw), mcpcontract.StructuralContextSymbolV2DomainErrorID) || strings.Contains(string(raw), `"diagnostic"`) {
+		t.Fatalf("%s: unknown accounting must remain typed v2 without fabricated diagnostic: %s", assertion, raw)
+	}
+}
+
+func assertStructuralContextSymbolV2BudgetFailure(t *testing.T, assertion string, executor Executor, state string) {
+	t.Helper()
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextSymbolV2ExecutorFamily: executor}}
+	args := map[string]any{"session_id": "s", "generation": float64(1), "symbol": "A", "max_nodes": float64(40), "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}
 	responses := []response{
 		server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, structuralContextSymbolV2Tool, args)),
 		server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": structuralContextSymbolV2Tool, "arguments": args}})),
 	}
+	var directEnvelope map[string]any
 	for i, got := range responses {
 		if got.Error != nil {
 			t.Fatalf("%s[%d]: unexpected JSON-RPC error: %+v", assertion, i, got.Error)
@@ -90,8 +124,33 @@ func TestStructuralContextSymbolV2TruncationDirectGatewayParity(t *testing.T) {
 			_ = json.Unmarshal(raw, &gateway)
 			raw = []byte(gateway.DelegatedEnvelope)
 		}
-		if err := mcpcontract.ValidateStructuralContextSymbolV2EnvelopeExclusive(raw); err != nil || !strings.Contains(string(raw), `"state":"TRUNCATED"`) || strings.Contains(string(raw), `"diagnostic"`) {
+		if err := mcpcontract.ValidateStructuralContextSymbolV2EnvelopeExclusive(raw); err != nil {
 			t.Fatalf("%s[%d]: envelope=%s validation=%v", assertion, i, raw, err)
+		}
+		for _, required := range []string{
+			`"envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v3.schema.json"`,
+			`"state":"` + state + `"`, `"resource":"MAX_NODES"`, `"allowed":40`, `"observed":41`, `"admitted":40`, `"frontier_unexpanded":1`, `"evidence_availability":"NONE"`,
+		} {
+			if !strings.Contains(string(raw), required) {
+				t.Fatalf("%s[%d]: missing %s in %s", assertion, i, required, raw)
+			}
+		}
+		if strings.Contains(string(raw), `"result"`) {
+			t.Fatalf("%s[%d]: domain failure invented partial result: %s", assertion, i, raw)
+		}
+		var normalized map[string]any
+		if err := json.Unmarshal(raw, &normalized); err != nil {
+			t.Fatalf("%s[%d]: decode normalized envelope: %v", assertion, i, err)
+		}
+		delete(normalized, "request_id")
+		if i == 0 {
+			directEnvelope = normalized
+		} else {
+			directNormalized, _ := json.Marshal(directEnvelope)
+			gatewayNormalized, _ := json.Marshal(normalized)
+			if string(gatewayNormalized) != string(directNormalized) {
+				t.Fatalf("%s: direct/gateway mismatch: direct=%s gateway=%s", assertion, directNormalized, gatewayNormalized)
+			}
 		}
 	}
 }

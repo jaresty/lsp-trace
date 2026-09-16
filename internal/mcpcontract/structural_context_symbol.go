@@ -11,13 +11,14 @@ import (
 )
 
 const (
-	StructuralContextSymbolTool            = "lsp_trace_v1_structural_context_symbol"
-	StructuralContextSymbolV2Tool          = "lsp_trace_v2_structural_context_symbol"
-	StructuralContextSymbolInputID         = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context-symbol.v1.schema.json"
-	StructuralContextSymbolSuccessID       = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-result.v1.schema.json"
-	StructuralContextSymbolDomainErrorID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v1.schema.json"
-	StructuralContextSymbolV2SuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-result.v2.schema.json"
-	StructuralContextSymbolV2DomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v2.schema.json"
+	StructuralContextSymbolTool              = "lsp_trace_v1_structural_context_symbol"
+	StructuralContextSymbolV2Tool            = "lsp_trace_v2_structural_context_symbol"
+	StructuralContextSymbolInputID           = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context-symbol.v1.schema.json"
+	StructuralContextSymbolSuccessID         = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-result.v1.schema.json"
+	StructuralContextSymbolDomainErrorID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v1.schema.json"
+	StructuralContextSymbolV2SuccessID       = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-result.v2.schema.json"
+	StructuralContextSymbolV2DomainErrorID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v2.schema.json"
+	StructuralContextSymbolV2DomainErrorV3ID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-symbol-domain-error.v3.schema.json"
 )
 
 func WithStructuralContextSymbol(m *Manifest) *Manifest {
@@ -38,8 +39,9 @@ func WithStructuralContextSymbolV2(m *Manifest) *Manifest {
 	c.Tools = append([]ToolContract{}, m.Tools...)
 	c.Schemas = append(c.Schemas,
 		SchemaRegistration{ID: StructuralContextSymbolV2SuccessID, Family: "envelope-structural-context-symbol-result.v2", Layer: "envelope", Path: "schemas/envelope-structural-context-symbol-result.v2.schema.json"},
-		SchemaRegistration{ID: StructuralContextSymbolV2DomainErrorID, Family: "envelope-structural-context-symbol-domain-error.v2", Layer: "envelope", Path: "schemas/envelope-structural-context-symbol-domain-error.v2.schema.json"})
-	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextSymbolV2Tool, InputSchemaID: StructuralContextSymbolInputID, EnvelopeSchemaIDs: []string{StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID}, ArtifactSchemaIDs: []string{StructuralContextV2ResultID}, Advertised: true, Availability: "ENABLED"})
+		SchemaRegistration{ID: StructuralContextSymbolV2DomainErrorID, Family: "envelope-structural-context-symbol-domain-error.v2", Layer: "envelope", Path: "schemas/envelope-structural-context-symbol-domain-error.v2.schema.json"},
+		SchemaRegistration{ID: StructuralContextSymbolV2DomainErrorV3ID, Family: "envelope-structural-context-symbol-domain-error.v3", Layer: "envelope", Path: "schemas/envelope-structural-context-symbol-domain-error.v3.schema.json"})
+	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextSymbolV2Tool, InputSchemaID: StructuralContextSymbolInputID, EnvelopeSchemaIDs: []string{StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID, StructuralContextSymbolV2DomainErrorV3ID}, ArtifactSchemaIDs: []string{StructuralContextV2ResultID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 
@@ -48,11 +50,12 @@ var structuralContextSymbolFiles embed.FS
 
 func structuralContextSymbolSchema(name string) ([]byte, bool, error) {
 	paths := map[string]string{
-		StructuralContextSymbolInputID:         "testdata/schemas/input-structural-context-symbol.v1.schema.json",
-		StructuralContextSymbolSuccessID:       "testdata/schemas/envelope-structural-context-symbol-result.v1.schema.json",
-		StructuralContextSymbolDomainErrorID:   "testdata/schemas/envelope-structural-context-symbol-domain-error.v1.schema.json",
-		StructuralContextSymbolV2SuccessID:     "testdata/schemas/envelope-structural-context-symbol-result.v2.schema.json",
-		StructuralContextSymbolV2DomainErrorID: "testdata/schemas/envelope-structural-context-symbol-domain-error.v2.schema.json",
+		StructuralContextSymbolInputID:           "testdata/schemas/input-structural-context-symbol.v1.schema.json",
+		StructuralContextSymbolSuccessID:         "testdata/schemas/envelope-structural-context-symbol-result.v1.schema.json",
+		StructuralContextSymbolDomainErrorID:     "testdata/schemas/envelope-structural-context-symbol-domain-error.v1.schema.json",
+		StructuralContextSymbolV2SuccessID:       "testdata/schemas/envelope-structural-context-symbol-result.v2.schema.json",
+		StructuralContextSymbolV2DomainErrorID:   "testdata/schemas/envelope-structural-context-symbol-domain-error.v2.schema.json",
+		StructuralContextSymbolV2DomainErrorV3ID: "testdata/schemas/envelope-structural-context-symbol-domain-error.v3.schema.json",
 	}
 	for id, p := range paths {
 		if name == id || name == p {
@@ -127,7 +130,7 @@ func ValidateStructuralContextSymbolV2EnvelopeExclusive(data []byte) error {
 	named, _ := value["envelope_schema_id"].(string)
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	for _, id := range []string{StructuralContextV2ResultID, StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID} {
+	for _, id := range []string{StructuralContextV2ResultID, StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID, StructuralContextSymbolV2DomainErrorV3ID} {
 		var raw []byte
 		var err error
 		if id == StructuralContextV2ResultID {
@@ -151,7 +154,7 @@ func ValidateStructuralContextSymbolV2EnvelopeExclusive(data []byte) error {
 		return err
 	}
 	matches := 0
-	for _, id := range []string{StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID} {
+	for _, id := range []string{StructuralContextSymbolV2SuccessID, StructuralContextSymbolV2DomainErrorID, StructuralContextSymbolV2DomainErrorV3ID} {
 		schema, err := compiler.Compile(id)
 		if err != nil {
 			return err

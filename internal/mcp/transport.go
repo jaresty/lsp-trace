@@ -174,6 +174,12 @@ func structuralContextTruncationEnvelope(tool string, domain *transientstructura
 	limit, _ := args["max_nodes"].(float64)
 	if tool == mcpcontract.StructuralContextTool || tool == mcpcontract.StructuralContextSymbolTool {
 		env.Diagnostic = transientstructural.DiagnoseTruncation(transientstructural.Request{MaxNodes: int(limit)}, domain)
+	} else if tool == mcpcontract.StructuralContextSymbolV2Tool {
+		if diagnostic := transientstructural.DiagnoseNodeBudget(transientstructural.Request{MaxNodes: int(limit)}, domain); diagnostic != nil {
+			env.EnvelopeVersion = "2"
+			env.EnvelopeSchemaID = mcpcontract.StructuralContextSymbolV2DomainErrorV3ID
+			env.Diagnostic = diagnostic
+		}
 	}
 	return env
 }
@@ -486,7 +492,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
-				if domain.State == transientstructural.StateTruncated {
+				if domain.State == transientstructural.StateTruncated || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
 					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
 				}
 				return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, string(domain.Phase), string(domain.State)))
