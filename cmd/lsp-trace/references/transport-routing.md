@@ -4,7 +4,7 @@
 
 Use CLI for direct local invocations, files/stdin, schema retrieval, rendering, and explicit trusted server launch. Use MCP when a host already provisions a trusted managed session or when registry-described offline tools fit the task.
 
-For MCP, call `lsp_trace_v1_capabilities` before relying on operation names, schema IDs, publication support, limits, or hidden-operation routes. The embedded manifest and schemas are authoritative. Canonical operation `lsp_trace_v1_trace` accepts one exact symbol or one zero-based `line`/`character` position against a host-managed READY session; default, advanced, and full advertise it. A compact tool-advertisement profile remains exactly ten tools and hides trace from `tools/list`, but does not change dispatch, behavior, authority, or managed sessions, so trace remains callable directly from a cached registration and through canonical execute. It is unrelated to CLI `--profile NAME`.
+For MCP, call `lsp_trace_v1_capabilities` before relying on operation names, schema IDs, publication support, limits, or hidden-operation routes. The embedded manifest and schemas are authoritative. Canonical operation `lsp_trace_v1_trace` accepts one exact symbol or one zero-based `line`/`character` position against a host-managed READY session; default, advanced, and full advertise it. A compact tool-advertisement profile currently advertises thirteen tools and hides trace from `tools/list`, but does not change dispatch, behavior, authority, or managed sessions, so trace remains callable directly from a cached registration and through canonical execute. It is unrelated to CLI `--profile NAME`.
 
 Choose the transport explicitly:
 
