@@ -48,14 +48,24 @@ func TestStructuralContextV2TypedDomainFailureUsesV2Envelope(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(transientstructural.StateTargetNotFound), Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound}}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
 	args := structuralContextV2Args()
+	delete(args, "symbol")
+	args["uri"] = "file:///workspace/store.go"
+	args["line"] = 123
+	args["character"] = 5
 	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
 	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
 	if direct.Error != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_direct: rpc error=%v", direct.Error)
 	}
 	directEnvelope := direct.Result.(callResult).StructuredContent
+	directRaw, _ := json.Marshal(directEnvelope)
+	_ = json.Unmarshal(directRaw, &directEnvelope)
 	if directEnvelope.EnvelopeSchemaID != mcpcontract.StructuralContextProjectionDomainErrorID || directEnvelope.Phase != "PREFLIGHT" || directEnvelope.State != "TARGET_NOT_FOUND" {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_direct: %+v", directEnvelope)
+	}
+	wantTarget := map[string]any{"kind": "POSITION", "line": float64(123), "character": float64(5)}
+	if !reflect.DeepEqual(directEnvelope.Target, wantTarget) {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_LOCATOR_direct: got=%v want=%v", directEnvelope.Target, wantTarget)
 	}
 	if gateway.Error != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_gateway: rpc error=%v", gateway.Error)
@@ -64,6 +74,9 @@ func TestStructuralContextV2TypedDomainFailureUsesV2Envelope(t *testing.T) {
 	var delegated envelope
 	if json.Unmarshal([]byte(outer.DelegatedEnvelope), &delegated) != nil || delegated.EnvelopeSchemaID != mcpcontract.StructuralContextProjectionDomainErrorID || delegated.Phase != "PREFLIGHT" || delegated.State != "TARGET_NOT_FOUND" {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_gateway: %+v", outer)
+	}
+	if !reflect.DeepEqual(delegated.Target, wantTarget) {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_LOCATOR_gateway: got=%v want=%v", delegated.Target, wantTarget)
 	}
 }
 

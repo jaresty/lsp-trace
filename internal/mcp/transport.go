@@ -87,6 +87,23 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
 
+func structuralContextDomainErrorWithTarget(tool, phase, state string, args map[string]any) envelope {
+	env := structuralContextDomainErrorEnvelope(tool, phase, state)
+	if tool != mcpcontract.StructuralContextV2Tool {
+		return env
+	}
+	if symbol, ok := args["symbol"].(string); ok {
+		env.Target = map[string]any{"kind": "SYMBOL", "symbol": symbol}
+		return env
+	}
+	line, lineOK := args["line"].(float64)
+	character, characterOK := args["character"].(float64)
+	if lineOK && characterOK {
+		env.Target = map[string]any{"kind": "POSITION", "line": line, "character": character}
+	}
+	return env
+}
+
 func structuralDeltaDomainErrorEnvelope(requestID, phase, state, message string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralDeltaDomainErrorID, Tool: mcpcontract.StructuralDeltaTool, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state, "message": message}}
 }
@@ -203,6 +220,7 @@ type envelope struct {
 	Result                  any                  `json:"result,omitempty"`
 	Error                   any                  `json:"error,omitempty"`
 	Diagnostic              any                  `json:"diagnostic,omitempty"`
+	Target                  any                  `json:"target,omitempty"`
 	Phase                   string               `json:"phase,omitempty"`
 	State                   string               `json:"state,omitempty"`
 	Content                 *string              `json:"content,omitempty"`
@@ -495,7 +513,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				if domain.State == transientstructural.StateTruncated || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
 					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
 				}
-				return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, string(domain.Phase), string(domain.State)))
+				return bindEnvelope(base, tool, structuralContextDomainErrorWithTarget(tool.Name, string(domain.Phase), string(domain.State), operationArguments))
 			}
 			state := failure.Code
 			phase := "TRAVERSAL"
@@ -519,7 +537,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			default:
 				state = "INVALID_SERVER_RESPONSE"
 			}
-			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, phase, state))
+			return bindEnvelope(base, tool, structuralContextDomainErrorWithTarget(tool.Name, phase, state, operationArguments))
 		}
 		if tool.ExecutorFamily == CensusExecutorFamily {
 			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "config", "INVALID_CONFIG"))
