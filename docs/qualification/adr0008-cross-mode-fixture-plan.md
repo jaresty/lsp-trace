@@ -1,39 +1,37 @@
 # ADR 0008 canonical cross-mode fixture plan
 
-Status: **PLANNED — NOT_IMPLEMENTED**
+Status: **FIXTURE_IMPLEMENTED — QUALIFICATION_NOT_EXECUTED**
 
 Governing decision: [`HYBRID_SHARED_ALGEBRA`](../../qualification/adr0008-source-projection-matrix.v1.json)
 
-This document plans the smallest retained/live contract-adjudication fixture for exact-source projection. It does not define final public schema names or bytes, claim any qualification `PASS`, authorize runtime implementation, or qualify retained, live, or semantic behavior.
+This document records the smallest implemented retained/live contract-adjudication fixture for exact-source projection. It does not define final public schema names or bytes, claim any qualification `PASS`, authorize runtime implementation, or qualify retained, live, or semantic behavior.
 
 ## Product boundary
 
-The immediate product target is additive exact-source projection for `lsp_trace_v2_structural_context_symbol`. Semantic Describe, Embed, and indexing are downstream consumers and do not gate this contract.
-
-`lsp_trace_v2_structural_context_symbol` is a locator façade over the exact-target structural/projection core used by `lsp_trace_v2_structural_context`:
+The immediate product target is exact-source projection through one canonical `lsp_trace_v2_structural_context` operation. Its target is an exclusive union of one exact symbol or one exact URI/line/character position. Semantic Describe, Embed, and indexing are downstream consumers and do not gate this contract.
 
 ```text
-symbol façade
+symbol target
   -> exact workspace-symbol lookup
   -> exact URI plus original symbol
-  -> shared structural core
+  -> shared structural/projection core
 
-exact-target request
-  -> exact URI plus target
-  -> shared structural core
+position target
+  -> exact URI plus line and character
+  -> shared structural/projection core
 
-shared structural core
+shared structural/projection core
   -> server-reported graph and occurrences
   -> Select
   -> exactly one retained or live Resolve contract
   -> Assemble
 ```
 
-Façade query text, candidate lists, resolved workspace-symbol ranges, and lookup diagnostics are locator-only. They add no graph facts, cannot manufacture `CALLS`, and do not participate in logical projected-unit identity. Existing location-only requests and results remain compatible. `lsp_trace_v1_structural_context_symbol` remains unchanged, `lsp_trace_v1_trace` remains retained acquisition, and no operation 44 is added.
+Symbol query text, candidate lists, resolved workspace-symbol ranges, and lookup diagnostics are locator-only. They add no graph facts, cannot manufacture `CALLS`, and do not participate in logical projected-unit identity. Omitted projection retains location-only behavior on the new unified contract. Both legacy symbol operations leave product discovery and routing; their immutable predecessor schema bytes remain historical readers. `lsp_trace_v1_trace` remains retained acquisition, and no operation 44 is added.
 
 ## Fixture inventory
 
-A later fixture commit should add one directory:
+The implemented fixture adds one directory:
 
 `internal/sourceprojection/testdata/crossmode-v1/`
 
@@ -114,14 +112,14 @@ Private roots and arbitrary host selectors never appear. Retained and live physi
 
 The fixture provides four requests:
 
-1. symbol-façade TARGET;
-2. exact-target TARGET;
-3. symbol-façade bounded NEIGHBORHOOD;
-4. exact-target bounded NEIGHBORHOOD.
+1. symbol-target TARGET;
+2. position-target TARGET;
+3. symbol-target bounded NEIGHBORHOOD;
+4. position-target bounded NEIGHBORHOOD.
 
-After removal of locator-only records, each symbol/exact pair must produce identical structural facts and logical projected units. Physical identities remain custody-specific.
+After removal of locator-only records, each symbol/position pair must produce identical structural facts and logical projected units. Physical identities remain custody-specific.
 
-Projection omission must preserve the existing location-only contract. Body projection requires an additive request/result schema identity; predecessor schema bytes remain immutable.
+Projection omission must preserve location-only behavior on the unified contract. Body projection requires new immutable request/result schema identities; predecessor schema bytes remain immutable.
 
 ## Variant expectations
 
@@ -147,8 +145,8 @@ The fixture must distinguish these decisions before implementation:
 
 | Decision | Fixture comparison | Planned direction |
 |---|---|---|
-| D1 request versioning | omitted projection vs explicit TARGET | Additive projection member; omission preserves legacy behavior. |
-| D2 result versioning | legacy location result vs body result | New immutable result/envelope schema identity. |
+| D1 request versioning | exclusive symbol/position target plus omitted projection vs explicit TARGET | New immutable unified request schema; omission preserves location-only behavior. |
+| D2 result versioning | unified location result vs body result | New immutable result/envelope schema identity. |
 | D3 logical-unit identity | retained endpoint vs live endpoint | Shared role, graph subject, logical source, range, and encoding; custody excluded. |
 | D4 citation identity | endpoint vs relation occurrence | Distinct endpoint/relation citations; occurrence identity participates. |
 | D5 physical identity | retained vs live with identical bytes | Custody-specific resolver identity participates; identities unequal. |
@@ -168,8 +166,8 @@ A later implementation begins with assertion-specific failures in this order:
 2. `ASSERT_SERVER_ONLY_CALLS_OCCURRENCE_BINDING`
 3. `ASSERT_V5_EXACT_CUSTODY_AND_SOURCE_OBJECT_BINDING`
 4. `ASSERT_LIVE_EXACT_SESSION_DOCUMENT_ADMISSION`
-5. `ASSERT_SYMBOL_FACADE_DELEGATES_SHARED_EXACT_TARGET_CORE`
-6. `ASSERT_LEGACY_OMISSION_BYTES_UNCHANGED`
+5. `ASSERT_UNIFIED_SYMBOL_POSITION_TARGETS_DELEGATE_SHARED_CORE`
+6. `ASSERT_UNIFIED_PROJECTION_OMISSION_PRESERVES_LOCATION_BEHAVIOR`
 7. `ASSERT_BODY_OPT_IN_CHANGES_PROJECTION_ONLY`
 8. `ASSERT_RETAINED_LIVE_PHYSICAL_IDENTITIES_DIFFER`
 9. `ASSERT_ENDPOINT_RELATION_OVERLAP_ATTRIBUTION_EXACT`
@@ -181,17 +179,16 @@ A later implementation begins with assertion-specific failures in this order:
 15. `ASSERT_NO_RETRY_FALLBACK_REPAIR_OR_HIDDEN_LIMIT`
 16. `ASSERT_AUTHORITY_GRAPH_FACTS_COMPLETENESS_INVARIANT`
 17. `ASSERT_PREDECESSOR_SCHEMA_DIGESTS_UNCHANGED`
-18. `ASSERT_43_CANONICAL_13_COMPACT_NO_OPERATION_44`
+18. `ASSERT_41_CANONICAL_12_COMPACT_NO_OPERATION_44`
 
 ## Planned repository scope
 
-A later fixture implementation may add:
+The implemented fixture owns:
 
 - `internal/sourceprojection/testdata/crossmode-v1/`;
-- `internal/sourceprojection/crossmode_fixture_test.go`;
-- façade parity and legacy-omission assertions in `internal/mcp/structural_context_symbol_v2_operation43_test.go`;
-- exact-target parity assertions in `internal/mcp/structural_context_v2_operation36_test.go`;
-- evidence references in `qualification/adr0008-source-projection-matrix.v1.json` without changing a cell to `PASS` before execution qualifies it.
+- `internal/sourceprojection/crossmode_fixture_test.go`.
+
+Future assertion-specific REDs belong in the unified operation-36 schema, registry, direct-MCP, gateway, and CLI tests. Evidence references may be added to `qualification/adr0008-source-projection-matrix.v1.json` without changing a cell to `PASS` before execution qualifies it.
 
 ## Remaining blockers
 

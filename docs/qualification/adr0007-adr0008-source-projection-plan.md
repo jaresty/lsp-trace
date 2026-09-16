@@ -14,9 +14,9 @@ This is a documentation-only qualification plan. It records the owner-selected d
 
 ## Why the barrier exists
 
-ADR 0008 defines exact graph-bound source projection and two materially different custody modes: immutable retained objects bound to Graph Provenance V5, and possible future live-session projection on operations 43 then 36. ADR 0007 defines optional semantic consumers whose admissions, identities, caches, coverage claims, privacy, deletion, and authority ceilings must remain exact.
+ADR 0008 defines exact graph-bound source projection and two materially different custody modes: immutable retained objects bound to Graph Provenance V5, and live-session projection through one unified `lsp_trace_v2_structural_context` operation. ADR 0007 defines optional semantic consumers whose admissions, identities, caches, coverage claims, privacy, deletion, and authority ceilings must remain exact.
 
-The unresolved design question is therefore not merely artifact-first versus query-first API shape. It is which shared projection-unit semantics, if any, should feed ADR 0007 TARGET, NEIGHBORHOOD, Describe, Embed, and index-build while retained and live resolvers preserve distinct custody. The dehydrated manifest may be the retained custody/availability index without owning general projection semantics. Bounded operation-43 live evidence may change the shared unit contract before freeze; retained-first is not a hard semantic dependency.
+The unresolved design question is therefore not artifact-first versus query-first API shape or which symbol-specific façade qualifies first. It is how one shared projection-unit algebra feeds TARGET, NEIGHBORHOOD, Describe, Embed, and index-build while retained and live resolvers preserve distinct custody. The dehydrated manifest may be the retained custody/availability index without owning general projection semantics.
 
 The reviewed comparison considered three models:
 
@@ -35,7 +35,7 @@ Before any wire contract is frozen, build one canonical cross-mode fixture conta
 
 For both custody modes, the fixture must carry `TARGET` and bounded `NEIGHBORHOOD` outputs, proposed semantic-admission and cache preimages, metadata-only/body-eligible/restricted/withheld/unavailable privacy variants, and failure denominators that distinguish selected, omitted, evaluated, terminal, and unevaluated members. Golden vectors must make cross-mode non-equality visible even when the logical unit and source bytes are identical.
 
-This fixture is the input for D1–D12 decisions about canonical bytes, projected-unit and citation preimages, aggregate status precedence, privacy vocabulary, and schema versions. Those decisions remain pending; this plan does not freeze detailed public schemas, identities, status names, precedence, privacy terms, or versions.
+The fixture now supplies owner-reviewed D3–D12 decisions: domain-separated logical/citation/occurrence and custody-specific physical identities; explicit UTF-16 ranges; finite dispositions and omission causes; body-versus-policy privacy separation; whole-range budgets; overlap accounting; successful empty; canonical ordering; and semantic-cache deferral. Fixture hashes remain noncanonical until regenerated from the frozen preimages. D1–D2 remain pending exact unified request/result schema identities and golden bytes.
 
 ## Qualification architecture
 
@@ -65,7 +65,7 @@ Graph and manifest custody metadata remain valid when source becomes unavailable
 
 Future transient qualification remains separate and does not become retained evidence. It binds reads to one exact managed session ID/generation and request-admitted document identity/version/bytes/encoding.
 
-Operation 43 is evaluated first because it is the exact-symbol façade. Its bounded trials may reveal shared identity, citation, privacy, selection, or status requirements before contract freeze. Only after operation 43 qualifies may operation 36 reuse the selected semantics for exact-URI callers; operation 36 must not route through workspace-symbol lookup.
+One canonical `lsp_trace_v2_structural_context` operation accepts exactly one symbol or position target. Symbol targets use workspace-symbol evidence only to locate one exact URI before delegating to the same structural/projection core used by position targets. Locator evidence adds no graph facts and does not enter logical-unit identity.
 
 Live gates require:
 
@@ -91,18 +91,19 @@ Exact projected units are candidate typed admissions, not semantic facts. Qualif
 
 ADR 0007 prerequisite schemas, policies, owners, evaluation thresholds, and execution authority remain separately required. Passing source-projection qualification would not authorize the pilot.
 
-## Compatibility boundaries
+## Product and historical boundaries
 
 The barrier rejects any proposal that:
 
-- changes operations 33, 36, 41, or 43 outside separately qualified additive versions;
-- adds operation 44 or changes the exact 43 canonical / 13 compact counts;
-- mutates predecessor schema bytes or broadens `lsp-trace.graph-v5-source-snapshot.v1`;
-- gives operation 41 source flags, operation 33 a competing transient body channel, or ADR 0007 a core CLI/MCP surface;
+- advertises or routes `lsp_trace_v1_structural_context_symbol` or `lsp_trace_v2_structural_context_symbol` as product operations after consolidation;
+- exposes anything other than an exclusive symbol-or-position target union through `lsp_trace_v2_structural_context`;
+- adds operation 44, deviates from 41 canonical / 12 compact discovery, or omits the unified context operation from compact discovery;
+- mutates predecessor schema bytes, deletes historical readers, or broadens `lsp-trace.graph-v5-source-snapshot.v1`;
+- gives operation 33 a competing transient body channel or ADR 0007 a core CLI/MCP surface;
 - treats hydration, source text, co-presence, names, proximity, embeddings, or model output as graph support;
 - conflates retained-object custody with live-session working context.
 
-Direct inspect-hydrated and canonical execute paths must return byte-identical delegated envelopes and typed failures for any additive retained contract. Any future live direct/gateway exposure requires an independent parity claim; host rendering is tested separately from operation result parity.
+Direct MCP, canonical execute, and CLI context paths must return equivalent delegated projection records and typed failures for the unified live contract. Direct inspect-hydrated and canonical execute paths retain the same requirement for additive retained contracts. Host rendering is tested separately from operation result parity.
 
 ## Evidence and verdict rules
 
@@ -130,7 +131,7 @@ Assertion-specific RED must compile and execute far enough to fail the intended 
 - The semantic model is selected, but the canonical cross-mode fixture and D1–D12 golden vectors have not been executed or reviewed.
 - Common projected-unit and citation wire identities are not frozen.
 - Manifest and object-store tracks have not supplied canonical bytes, validators, immutable-object custody receipts, GC/lease evidence, or adversarial outcomes.
-- No authorized operation-43 live projection trial or host-rendering evidence exists.
+- No authorized unified-context live projection trial or host-rendering evidence exists.
 - ADR 0007 typed admission, identity, privacy/deletion, terminal-accounting, ownership, and evaluation prerequisites remain unexecuted.
 
 Documentation resolves only the model-selection barrier. It resolves none of the execution, fixture, wire-contract, custody-specific qualification, ADR 0007 prerequisite, or implementation blockers.

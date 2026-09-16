@@ -9,7 +9,7 @@
 
 Structural evidence and source presentation serve different purposes. Graph Provenance V5 retains acquisition evidence for custody, verification, replay, and later inspection. An LLM answering a bounded code question usually needs only the exact target, admitted server-reported relations, and a small set of corresponding source ranges. Presenting every source document observed during acquisition can increase privacy exposure, payload size, token pressure, and semantic noise without adding graph authority.
 
-The current transient structural-context path does not itself retain a large source bundle. Operations 36 and 43 return bounded source-locating structural results: workspace-relative paths, declaration ranges, call-site ranges, and bounded analytics. The underlying transient executor uses `CaptureSupply: false`; the result remains non-retained, non-replayable, publication-ineligible, and hydration-ineligible. ADR 0006 requires escalation to create a new durable acquisition identity rather than upgrading transient bytes in place.
+The current transient structural-context path does not itself retain a large source bundle. Historical operations 36 and 43 return bounded source-locating structural results: workspace-relative paths, declaration ranges, call-site ranges, and bounded analytics. The underlying transient executor uses `CaptureSupply: false`; the result remains non-retained, non-replayable, publication-ineligible, and hydration-ineligible. ADR 0006 requires escalation to create a new durable acquisition identity rather than upgrading transient bytes in place.
 
 Graph Provenance V5 remains the authoritative production acquisition contract. V2 and V3 remain historical readers. Existing V5, transient-result, source-snapshot, hydration, and publication schema bytes are immutable and cannot be broadened by reinterpretation.
 
@@ -24,15 +24,16 @@ A digest can verify bytes but cannot reconstruct bytes that were never retained.
 
 Introduce a V5-bound source-availability layer that is separate from graph authority and from LLM presentation.
 
-The initial implementation will:
+The implementation will:
 
-1. leave operations 36 and 43 and their existing input/result bytes unchanged;
-2. define a new immutable `lsp-trace.dehydrated-source-manifest.v1` artifact bound to exact admitted Graph Provenance V5 bytes;
-3. define a new deterministic `lsp-trace.source-projection.v1` result family;
-4. expose projection through additive versions of the existing `lsp_trace_v1_inspect_hydrated` dispatch and canonical execute path;
-5. preserve exactly 43 canonical operations and 13 compact-advertised tools;
-6. add no operation 44;
-7. keep operation-43 source-mode flags deferred until the offline artifact, storage, and hydration contracts are independently qualified.
+1. preserve historical operation and schema bytes as immutable readers without requiring those historical names to remain advertised;
+2. expose one canonical transient product operation, `lsp_trace_v2_structural_context`, with an exclusive target union of either one exact symbol or one exact URI/line/character position;
+3. remove `lsp_trace_v1_structural_context_symbol` and `lsp_trace_v2_structural_context_symbol` from product discovery rather than retain legacy aliases;
+4. target exactly 41 canonical operations and 12 compact-advertised tools, with the unified operation replacing both symbol-only entries in compact discovery;
+5. define a new immutable `lsp-trace.dehydrated-source-manifest.v1` artifact bound to exact admitted Graph Provenance V5 bytes;
+6. define a deterministic source-projection result family shared by retained and live custody modes;
+7. add no operation 44;
+8. preserve operation 33 as retained acquisition and keep semantic Describe, Embed, and indexing outside this implementation.
 
 This ADR does not authorize runtime or schema implementation by itself. Each implementation stage requires assertion-specific RED evidence before production changes.
 
@@ -50,7 +51,7 @@ The dehydrated manifest owns retained custody and availability only. It is not t
 
 Acquisition, projection, and semantic accounting are independent. Structural acquisition status and graph/frontier accounting cannot be rewritten by projection; projection selection, omissions, privacy, availability, and limits cannot be rewritten by semantic processing; semantic Describe, Embed, index, search, or grouping outcomes cannot alter either structural or projection accounting. Every layer retains its own denominator, terminal disposition, identity, and authority ceiling.
 
-This is a design-model selection only. Qualification execution remains `NOT_EXECUTED`; no qualification cell is `PASS`, no implementation is qualified, and no test pass is claimed. D1–D12 remain pending the canonical cross-mode fixture and golden vectors. In particular, the exact canonical bytes, projected-unit and citation preimages, aggregate status precedence, privacy vocabulary, schema identities, and schema versions are not frozen. Existing names and enums below describe the accepted design space and qualification candidates, not final public wire vocabulary.
+Qualification execution remains `NOT_EXECUTED`; no qualification cell is `PASS` and no runtime implementation is qualified. The canonical cross-mode fixture now supports owner adjudication of D3–D12: domain-separated logical-unit, occurrence, citation, and custody-specific physical identities; explicit UTF-16 half-open ranges; finite projection dispositions and omission causes; body-versus-policy privacy separation; whole-range range/byte accounting; overlap accounting; successful-empty semantics; canonical ordering; and semantic-cache deferral. Fixture hash values remain noncanonical until regenerated from the frozen preimages. D1–D2 are revised by the unified operation decision and still require exact request/result schema identities and golden bytes.
 
 ## Current contracts preserved
 
@@ -160,7 +161,7 @@ Resolvers do not fall through from Git to content-addressed storage to live file
 
 Ancillary source is excluded from normal LLM projection unless explicitly requested. Its count, retained-byte total, privacy disposition, availability, and bounded hydration selector remain discoverable.
 
-Operation 43 continues to return its existing transient result during the initial stages. Client policy may recommend `TARGET` for later retained inspection, but the server does not infer a projection mode.
+Historical operation-43 schema bytes remain immutable inputs for historical readers, but the operation is removed from product discovery and routing. `lsp_trace_v2_structural_context` owns both exact-symbol and exact-position targets and does not infer a projection mode; callers select projection explicitly.
 
 ## Deterministic selection and budgets
 
@@ -273,31 +274,34 @@ Complete offline replay requires:
 
 A manifest plus digests is verifiable but not source-replayable. Missing objects cause typed unavailability and never trigger live acquisition.
 
-## Compatibility and operation strategy
+## Product-surface and operation strategy
 
-Existing schema bytes remain registered and valid. New contracts are additive:
+Existing schema bytes remain registered and valid as historical readers. Product discovery is independently consolidated:
+
+- `lsp_trace_v2_structural_context` is the sole canonical transient context operation;
+- its target is an exclusive union of one exact symbol or one exact URI/line/character position;
+- `lsp_trace_v1_structural_context_symbol` and `lsp_trace_v2_structural_context_symbol` are removed from advertised product discovery rather than retained as aliases;
+- full discovery targets 41 canonical operations;
+- compact discovery targets 12 tools by replacing both symbol-only entries with `lsp_trace_v2_structural_context`;
+- no operation 44 is added.
+
+The new immutable contract families remain additive to historical schema bytes:
 
 - `lsp-trace.dehydrated-source-manifest.v1`;
-- `lsp-trace.source-projection.v1`;
-- additive inspect-hydrated input and output versions.
+- a source-projection request/result family shared by retained and live custody;
+- additive inspect-hydrated input and output versions where retained projection remains exposed.
 
-The existing `lsp_trace_v1_inspect_hydrated` operation and `lsp_trace_v1_execute` gateway route the new additive contracts. Direct and gateway paths return identical delegated envelopes and typed failures.
-
-No operation 44 is added. Canonical and compact counts remain exactly 43 and 13.
-
-The existing sibling-oriented `lsp-trace.graph-v5-source-snapshot.v1` bytes and semantics are not broadened. The new manifest is a distinct family.
-
-Operation-43 request flags or result versions are deferred. They may be considered only after the offline manifest, immutable storage, deterministic resolver, projection accounting, privacy behavior, and direct/gateway parity are qualified. Existing omitted-field operation-43 requests must remain byte-identical if such a later extension is proposed.
+The existing `lsp_trace_v1_inspect_hydrated` operation and `lsp_trace_v1_execute` gateway route retained additive contracts. Unified live direct, gateway, and CLI-context paths must return identical delegated projection records and typed failures. The existing sibling-oriented `lsp-trace.graph-v5-source-snapshot.v1` bytes and semantics are not broadened.
 
 ## Migration stages
 
-1. **Semantic model:** retain the selected shared algebra and no-fallback boundaries; freeze exact evidence-role, status, ordering, budget, privacy, identity, and schema wire decisions only after the canonical cross-mode fixture resolves D1–D12.
-2. **Schema families:** add new immutable manifest and projection schemas without changing predecessor bytes.
-3. **Offline core:** extend deterministic hydrated-evidence admission and projection for the new manifest.
-4. **Immutable storage:** qualify Git bindings, private content-addressed objects, dirty-buffer snapshots, retention, and GC behavior.
-5. **MCP dispatch:** add versioned inspect-hydrated and canonical-execute routing while preserving 43/13 counts.
-6. **Presentation:** qualify quiet metadata-only and target/projected LLM-facing policies with explicit omission accounting.
-7. **Optional transient integration:** separately decide whether an additive operation-43 contract provides sufficient value without weakening ADR 0006.
+1. **Product surface:** replace historical symbol-only discovery with one unified context target union; preserve historical schema readers without advertising compatibility aliases.
+2. **Projection algebra:** freeze D3–D12 identities, statuses, ordering, budgets, privacy, overlap, empty-result, and semantic-deferral semantics from the canonical fixture; regenerate fixture hashes from the frozen preimages.
+3. **Schema families:** add new immutable unified-context, manifest, and projection schemas without changing predecessor bytes.
+4. **Shared core:** reuse deterministic hydrated-evidence selection, extraction, overlap, privacy, and accounting beneath custody-specific retained and live resolvers.
+5. **Immutable storage:** qualify Git bindings, private content-addressed objects, dirty-buffer snapshots, retention, and GC behavior.
+6. **Unified transports:** qualify direct MCP, canonical execute gateway, and CLI context routing for the unified V2 operation, targeting 41 canonical / 12 compact discovery.
+7. **Presentation:** qualify quiet metadata-only and target/projected LLM-facing policies with explicit omission accounting.
 
 Each stage is independently reviewable and does not imply authorization for the next.
 
@@ -305,7 +309,7 @@ Each stage is independently reviewable and does not imply authorization for the 
 
 A review of the current production paths supports one projection algebra serving two distinct custody modes, but not one interchangeable evidence class:
 
-- **Transient live bounded projection** is an interactive presentation over one exact managed session generation. Operations 36 and 43 already return workspace-relative paths plus endpoint declaration ranges and relation call-site ranges. Their transient executor prepares the target document with `CaptureSupply: false`; the result remains `authority: 0`, `source_graph_complete: UNKNOWN`, non-retained, non-replayable, publication-ineligible, and hydration-ineligible. An additive projection may read only the exact live document bytes admitted for that request and may add zero graph facts.
+- **Transient live bounded projection** is an interactive presentation over one exact managed session generation. Historical operations 36 and 43 already return workspace-relative paths plus endpoint declaration ranges and relation call-site ranges; the unified product operation retains that structural core while accepting an exclusive symbol-or-position target union. Its transient executor prepares the target document with `CaptureSupply: false`; the result remains `authority: 0`, `source_graph_complete: UNKNOWN`, non-retained, non-replayable, publication-ineligible, and hydration-ineligible. Projection may read only the exact live document bytes admitted for that request and may add zero graph facts.
 - **Retained V5-bound offline projection** is hydration over immutable bytes bound to an admitted Graph Provenance V5 capture and dehydrated manifest. The existing hydrated-inspection path is offline, path-free after ingress, explicitly body-gated, deterministically ordered, overlap-aware, bounded, and independently validated. Missing retained bytes remain typed and never trigger current-checkout or live-session acquisition.
 
 These modes may share ordering, range extraction, overlap handling, privacy vocabulary, omission reasons, and projection accounting only if their custody and result identities remain explicit. A transient projection cannot become retained evidence, and retained hydration cannot consult the live workspace. Source text remains a zero-authority view over already admitted server-reported `CALLS`; it cannot create, repair, complete, or strengthen graph facts.
@@ -319,7 +323,7 @@ Location-only output remains the default in both modes. Bodies or snippets requi
 
 Neither range kind substitutes for the other. Overlapping selected ranges are processed in canonical order and may share one emitted span only when every original selection remains separately attributable and accounting remains exact. Projection status and accounting are independent of structural status: unavailable, withheld, invalid, or budget-truncated source cannot rewrite structural success or failure. Projection candidates must reconcile as selected plus omitted, with one mutually exclusive reason per omission.
 
-The repository review also exposed a bounded live-tracing usability risk. Valid operation-43-style exact-symbol requests at bounded depth returned typed `TRAVERSAL/TRUNCATED` and `ADMISSION/RESOURCE_LIMIT` outcomes, but the responses did not identify the exhausted resource, report observed-versus-limit accounting, state whether any partial graph or frontier remained available, or name an actionable safe adjustment. The host rendering additionally appended `Expected parameters` after these valid domain failures, making them resemble input-schema errors. Subsequent depth-1 exact-symbol requests succeeded against the same managed session, so this is evidence about bounded-limit diagnostics and usability, not evidence of a dead session or unsupported operation.
+The repository review also exposed a bounded live-tracing usability risk. Valid exact-symbol requests at bounded depth returned typed `TRAVERSAL/TRUNCATED` and `ADMISSION/RESOURCE_LIMIT` outcomes, but the responses did not identify the exhausted resource, report observed-versus-limit accounting, state whether any partial graph or frontier remained available, or name an actionable safe adjustment. The host rendering additionally appended `Expected parameters` after these valid domain failures, making them resemble input-schema errors. Subsequent depth-1 requests succeeded against the same managed session, so this is evidence about bounded-limit diagnostics and usability, not evidence of a dead session or unsupported operation.
 
 Source-projection qualification must treat that risk explicitly. Projection accounting and status remain separate from structural traversal accounting and status. Opting into bodies or snippets must not silently consume structural request, message, node, depth, or traversal-byte budgets, and a projection limit or source failure must not convert structural success into structural failure. Conversely, projection must not hide a structural `TRUNCATED` or `RESOURCE_LIMIT` outcome. Typed failures must identify the exhausted budget, report observed and declared-limit values where safely available, state the disposition of any partial result or frontier, and distinguish actionable bounded adjustments from forbidden hidden retries or budget increases. Parameter-help text must not be appended to valid domain failures; schema guidance is reserved for actual request-validation errors.
 
@@ -327,24 +331,23 @@ Both custody modes require deterministic canonical ordering, whole-range admissi
 
 ### Staged recommendation
 
-The rollout remains additive, but retained and live qualification are independent custody tracks under the selected shared algebra; retained qualification is not a semantic prerequisite for learning from bounded live evidence:
+Retained and live qualification are independent custody tracks under the selected shared algebra; retained qualification is not a semantic prerequisite for bounded live projection:
 
-1. Produce the canonical cross-mode fixture before freezing shared wire details, then independently qualify the retained V5 manifest, immutable storage, offline projection, privacy, accounting, and direct/gateway parity stages already listed above.
-2. Keep current operation 43 location-only. Any future interactive source value is evaluated first through a separately qualified additive request/result version. Operation 43 remains the preferred exact-symbol façade because it already resolves one source-locating target before delegating to operation 36 and offers the narrowest place to test explicit target/snippet opt-in without changing location-only defaults. Omitted projection fields must preserve legacy request and result bytes.
-3. Only after operation 43 qualifies, evaluate the same transient projection contract directly on operation 36 for callers that already possess an exact URI and target. This stage must reuse the qualified projection semantics without routing operation 36 through workspace-symbol lookup.
-4. Keep operation 33 on retained post-acquisition projection. It already captures document supply and produces Graph Provenance V5; source presentation should occur from the resulting retained identity and manifest, not by adding a competing transient body channel to trace acquisition.
-5. Leave operation 41 unchanged as the immutable compatibility reader. It must neither gain source flags nor inherit operation 43's future additive result contract.
+1. Use the implemented canonical cross-mode fixture to freeze D3–D12 and regenerate canonical identity and serialization goldens.
+2. Define one unified request/result contract for `lsp_trace_v2_structural_context`, with exactly one symbol or position target and explicit projection options.
+3. Route symbol targets through locator-only workspace-symbol resolution, then delegate the exact URI target to the same structural/projection core used by position targets.
+4. Remove both symbol-specific names from full discovery; replace both compact symbol entries with the unified context operation.
+5. Keep operation 33 on retained post-acquisition projection. Source presentation occurs from the resulting retained identity and manifest, not through a competing transient body channel.
+6. Retain immutable historical schema readers even when their legacy operation names are no longer advertised or routed.
 
-This ordering adds no operation 44, preserves exactly 43 canonical and 13 compact-advertised tools, and requires additive schema identities only. It does not authorize any runtime or schema implementation. Every stage still begins with assertion-specific RED evidence and may be rejected if qualification shows privacy, custody, determinism, compatibility, or utility costs outweigh the interactive benefit. Transient qualification must include assertion-specific RED cases proving structural and projection budgets are independently identified and accounted, body opt-in cannot consume structural traversal budgets, partial/frontier disposition is explicit, and valid typed domain failures are not decorated as parameter-validation failures.
-
-The initial-scope decision therefore remains unchanged now: operations 36 and 43 stay location-only and transient source projection remains deferred. This ADR now records the qualified direction and rollout order so a later decision can evaluate interactive projection without conflating it with retained archival hydration or silently treating deferral as rejection.
+This ordering adds no operation 44, targets exactly 41 canonical and 12 compact-advertised tools, and preserves immutable predecessor schema bytes. It does not itself authorize runtime or schema implementation. Every implementation stage begins with assertion-specific RED evidence. Qualification must prove independent structural/projection budgets, explicit partial/frontier disposition, no parameter-help decoration on valid domain failures, and direct/gateway/CLI parity for the unified operation.
 
 ## Qualification requirements
 
 Implementation begins with assertion-specific RED tests. At minimum, qualification must establish:
 
 1. `ASSERT_DEHYDRATED_SOURCE_NEW_FAMILY_NO_EXISTING_SCHEMA_MUTATION` — predecessor schema hashes remain unchanged and new IDs are additive.
-2. `ASSERT_SOURCE_PROJECTION_PRESERVES_43_FULL_13_COMPACT` — no operation 44 and exact profile counts remain.
+2. `ASSERT_UNIFIED_CONTEXT_41_FULL_12_COMPACT_NO_OPERATION_44` — both symbol-only names are absent, the unified context operation is compact-advertised, and exact profile counts are 41/12.
 3. `ASSERT_ANCILLARY_SOURCE_SUPPORT_CONTRIBUTION_ZERO` — ancillary bindings cannot contribute graph support.
 4. `ASSERT_SOURCE_COPRESENCE_CANNOT_CREATE_CALLS` — adding or changing source objects cannot alter graph facts.
 5. `ASSERT_PROJECTED_SOURCE_CANONICAL_ORDER_AND_EXACT_RANGES` — input permutation produces byte-identical output.
@@ -378,13 +381,13 @@ This is compact and deduplicated but is rejected as the sole storage model becau
 
 This provides exact deferred hydration but duplicates immutable Git storage and introduces retention obligations for every committed file. The hybrid model is preferred.
 
-### Flags directly on current operation 43
+### Preserve separate symbol-only product operations
 
-This is rejected for the initial implementation because operation 43 is a transient locator façade governed by ADR 0006 and closed immutable schemas. It remains a separately reviewed future possibility after offline qualification.
+Rejected because there are no external users requiring compatibility aliases. Locator-only symbol resolution becomes one target arm of the unified context operation; historical schemas may remain readable without remaining advertised.
 
 ### New operation 44
 
-Rejected because fixed operation counts are compatibility constraints and existing inspect-hydrated and canonical-execute dispatch can carry additive versions.
+Rejected because the existing `lsp_trace_v2_structural_context` name owns the unified capability; a new number would recreate the duplication this amendment removes.
 
 ### Broaden the existing source-snapshot schema
 
@@ -414,10 +417,10 @@ Separating graph evidence from source availability makes source collection and d
 
 This ADR does not:
 
-- change operations 36 or 43;
 - add operation 44;
-- change the 43/13 tool counts;
-- modify existing schema bytes;
+- retain either symbol-specific operation as an advertised compatibility alias;
+- reduce compact discovery below 12 tools;
+- modify existing schema bytes or delete historical readers;
 - infer `CALLS` or any other relation from source;
 - make transient results durable or hydration-eligible;
 - claim source-graph completeness;
@@ -433,4 +436,4 @@ This ADR does not:
 - Should source-object leases extend `internal/publication` or live in a dedicated package?
 - Which source privacy classes and redaction projections are stable enough for public registration?
 - What retained-object guarantees are required for historical Git hydration on Linux and macOS?
-- Does a later additive operation-43 projection provide enough value to justify a new contract while preserving byte-identical legacy requests?
+- What exact immutable request/result schema identities should encode the unified symbol-or-position target union and optional projection contract?

@@ -30,17 +30,17 @@
     "selected_model_scope": "Shared logical projected-unit, selection, accounting, privacy, range, and citation semantics compose with and specialize Select -> Resolve -> Assemble. Retained V5 and live session-generation custody keep distinct Resolve contracts, physical projection identities, statuses, admission identities, and cache identities.",
     "manifest_ownership": "CUSTODY_AND_AVAILABILITY_ONLY",
     "identity_rule": "The same logical unit, including identical source bytes, does not imply retained/live projection identity, semantic-admission identity, or cache equality.",
-    "wire_decisions": "D1-D12 remain pending the canonical cross-mode fixture and golden vectors; no public schema, identity preimage, status precedence, privacy vocabulary, or schema version is frozen by model selection.",
+    "wire_decisions": "The implemented canonical cross-mode fixture supports owner adjudication of D3-D12, but fixture hashes remain noncanonical until regenerated from frozen preimages. D1-D2 public unified request/result schema identities and all qualification execution remain pending.",
     "required_comparison_evidence": [
       "exact TARGET and NEIGHBORHOOD request/result examples for retained-object and live-session custody",
       "Describe, Embed, and index-build admission examples using the same logical projected unit under each candidate model",
       "identity and cache-key vectors proving equality only for exact admitted bytes, selector, range, encoding, role, revision or session generation, policy, and dependency identity",
       "privacy and source-body eligibility matrix for metadata-only, body-opted-in, restricted, withheld, unavailable, and ancillary units",
       "failure and denominator examples showing TARGET, NEIGHBORHOOD, partial, and CENSUS claims do not broaden coverage",
-      "operation-43 live evidence capable of changing the shared projection-unit contract before model freeze"
+      "unified-context live evidence capable of changing the shared projection-unit contract before model freeze"
     ],
-    "selection_rule": "HYBRID_SHARED_ALGEBRA is selected as the design model. Qualification remains NOT_EXECUTED, and no common wire contract, retained/live implementation admission, semantic-index cache formula, or operation-43 projection contract freezes until the canonical cross-mode fixture and D1-D12 golden vectors are reviewed.",
-    "non_dependency_rule": "Retained qualification is not a hard semantic prerequisite for learning from bounded operation-43 live projection evidence; custody-specific implementation admission remains independently gated."
+    "selection_rule": "HYBRID_SHARED_ALGEBRA is selected as the design model. Qualification remains NOT_EXECUTED; D3-D12 are owner-adjudicated design inputs, while D1-D2 schema identities, regenerated canonical goldens, and retained/live implementation admission remain pending.",
+    "non_dependency_rule": "Retained qualification is not a hard semantic prerequisite for learning from bounded unified-context live projection evidence; custody-specific implementation admission remains independently gated."
   },
   "verdicts": ["PASS", "BLOCKED", "FAIL", "NOT_RUN"],
   "barrier_rule": "A qualification track passes only when every cell in that track has attributable PASS evidence at one reviewed revision. Documentation, BLOCKED, FAIL, NOT_RUN, or mixed-revision evidence never qualifies implementation.",
@@ -49,15 +49,15 @@
     "semantic_authority": 0,
     "semantic_accepted": false,
     "source_graph_complete": "UNKNOWN",
-    "canonical_operation_count": 43,
-    "compact_advertised_tool_count": 13,
+    "canonical_operation_count": 41,
+    "compact_advertised_tool_count": 12,
     "operation_44": "FORBIDDEN",
     "schema_change_policy": "ADDITIVE_ONLY",
     "operation_boundaries": {
       "33": "retained post-acquisition projection only",
-      "36": "location-only transient contract unless a separately qualified additive version is selected",
-      "41": "unchanged immutable compatibility reader",
-      "43": "location-only transient facade unless a separately qualified additive version is selected"
+      "36": "sole canonical transient context operation with exclusive symbol-or-position target union",
+      "41": "legacy product operation removed; predecessor schema bytes remain immutable historical input",
+      "43": "legacy product operation removed; functionality consolidated into operation 36"
     }
   },
   "dependency_barrier_inputs": {
@@ -106,7 +106,7 @@
       "id": "LIVE_SESSION_RESOLVER",
       "status": "NOT_RUN",
       "execution_status": "NOT_EXECUTED",
-      "blocked_by": ["future additive operation-43/36 decision"]
+      "blocked_by": ["unified operation-36 request/result schemas and RED evidence absent"]
     },
     {
       "id": "ADR0007_INTEROPERABILITY",
@@ -233,20 +233,20 @@
     {
       "id": "L03",
       "track": "LIVE_SESSION_RESOLVER",
-      "requirement": "operation43_value_can_shape_common_contract",
-      "pass_evidence": "Bounded operation-43 TARGET/snippet trials run before common-contract freeze and record whether live constraints require changes to shared unit identity, selection, citations, privacy, limits, or status semantics; accepted changes are requalified in common and retained tracks.",
-      "fail_evidence": "Common semantics freeze before live evidence, operation-43 evidence is ignored because retained is incomplete, or live semantics silently diverge.",
-      "blockers": ["authorized bounded trial unavailable", "semantic barrier unresolved"],
-      "dependencies": ["semantic_design_barrier", "operation-43 exact-symbol fixtures"]
+      "requirement": "unified_context_live_value_can_shape_common_contract",
+      "pass_evidence": "Bounded unified-context symbol/position TARGET and snippet trials record whether live constraints require changes to shared unit identity, selection, citations, privacy, limits, or status semantics; accepted changes are requalified in common and retained tracks.",
+      "fail_evidence": "Common semantics freeze before live evidence, unified-context evidence is ignored because retained is incomplete, or live semantics silently diverge.",
+      "blockers": ["authorized bounded trial unavailable", "unified schema unresolved"],
+      "dependencies": ["semantic_design_barrier", "unified symbol/position fixtures"]
     },
     {
       "id": "L04",
       "track": "LIVE_SESSION_RESOLVER",
       "requirement": "host_parameter_help_and_body_opt_in_neutrality",
-      "pass_evidence": "Host-owned parameter help appears only for request-validation errors, never valid typed domain failures; omitted projection fields preserve legacy bytes; explicit body opt-in changes projection only and never makes transient results retained, replayable, publishable, or hydration-eligible.",
-      "fail_evidence": "Expected parameters decorates a domain failure, omitted fields drift, body opt-in changes structural outcomes, or transient custody is upgraded.",
-      "blockers": ["host rendering fixture absent", "additive request/result identity unapproved"],
-      "dependencies": ["host-owned renderer", "legacy byte fixtures"]
+      "pass_evidence": "Host-owned parameter help appears only for request-validation errors, never valid typed domain failures; omitted projection fields preserve unified location-only behavior; explicit body opt-in changes projection only and never makes transient results retained, replayable, publishable, or hydration-eligible.",
+      "fail_evidence": "Expected parameters decorates a domain failure, omitted fields change unified location-only behavior, body opt-in changes structural outcomes, or transient custody is upgraded.",
+      "blockers": ["host rendering fixture absent", "unified request/result identity unapproved"],
+      "dependencies": ["host-owned renderer", "unified location-only fixture"]
     },
     {
       "id": "I01",
@@ -314,9 +314,9 @@
     {
       "id": "X01",
       "track": "COMPATIBILITY",
-      "requirement": "operations_counts_and_additive_schema_only",
-      "pass_evidence": "Registry/capability goldens retain exactly 43 canonical operations, 13 compact tools, no operation 44, additive schema identities only, unchanged predecessor hashes, operation 33 retained-only, operation 41 unchanged, and no ADR 0007 public CLI/MCP/core integration.",
-      "fail_evidence": "Count drift, operation 44, predecessor mutation, source-snapshot reinterpretation, operation-41 flags, operation-33 transient bodies, or ADR 0007 integration into core surfaces occurs.",
+      "requirement": "unified_operation_counts_and_immutable_predecessors",
+      "pass_evidence": "Registry/capability goldens expose exactly 41 canonical operations and 12 compact tools; advertise only lsp_trace_v2_structural_context for transient context; omit both legacy symbol-operation names; add no operation 44; preserve predecessor schema hashes; keep operation 33 retained-only; and add no ADR 0007 public CLI/MCP/core integration.",
+      "fail_evidence": "Count drift, either legacy symbol operation remains advertised or routed, operation 44 appears, predecessor bytes mutate, source-snapshot semantics change, operation 33 gains transient bodies, or ADR 0007 enters core surfaces.",
       "blockers": ["registry and predecessor-byte goldens absent"],
       "dependencies": ["schema digest inventory", "capability inventory"]
     },
@@ -324,11 +324,11 @@
       "id": "X02",
       "track": "COMPATIBILITY",
       "requirement": "direct_gateway_parity_where_exposed",
-      "pass_evidence": "Equivalent direct inspect-hydrated and canonical execute requests produce byte-identical delegated envelopes, accounting, pages/bodies, and typed failures; any future operation-43/36 direct/gateway exposure independently proves the same parity without host rendering conflation.",
+      "pass_evidence": "Equivalent retained direct inspect-hydrated and canonical execute requests produce byte-identical delegated envelopes, accounting, pages/bodies, and typed failures; unified operation-36 direct MCP, canonical execute, and CLI paths independently prove equivalent projection records and typed failures without host rendering conflation.",
       "fail_evidence": "Transport changes defaults, numbers, ordering, privacy, body opt-in, cursors, failure codes, or accounting.",
       "blockers": ["additive dispatch version unselected"],
       "dependencies": ["shared handler vectors", "host rendering tests"]
     }
   ],
-  "claim_ceiling": "This matrix records a documentation-only design-model selection while qualification remains NOT_EXECUTED. It does not claim that implementation exists; claim any test ran or passed; change any qualification cell to PASS; qualify retained or live projection, a manifest, an object store, operation 43/36, or ADR 0007 interoperability; freeze D1-D12 or public wire vocabulary; or authorize schemas, operations, inference, indexing, shipment, deployment, or production behavior."
+  "claim_ceiling": "This matrix records a documentation-only product-surface and design-model decision while qualification remains NOT_EXECUTED. It does not claim that runtime implementation exists; claim any qualification test ran or passed; change any qualification cell to PASS; qualify retained or live projection, a manifest, an object store, unified operation 36, or ADR 0007 interoperability; freeze D1-D2 schema identities or canonical goldens; or authorize inference, indexing, shipment, deployment, or production behavior."
 }
