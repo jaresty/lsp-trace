@@ -501,18 +501,40 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 		var result map[string]any
+		var header struct {
+			SchemaVersion string `json:"schema_version"`
+		}
+		valid := len(opResult.Artifact) > 0 && json.Unmarshal(opResult.Artifact, &result) == nil && json.Unmarshal(opResult.Artifact, &header) == nil
 		var typed vcssymbolsidecar.Result
-		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || json.Unmarshal(opResult.Artifact, &typed) != nil || mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) != nil {
+		envelopeVersion := "2"
+		schemaID := mcpcontract.ContextSymbolChurnSuccessV2ID
+		if valid {
+			switch header.SchemaVersion {
+			case vcssymbolsidecar.SchemaVersion:
+				valid = json.Unmarshal(opResult.Artifact, &typed) == nil && mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultID, opResult.Artifact) == nil
+				if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+					schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessID
+				}
+			case vcssymbolsidecar.SchemaVersionV3:
+				var typedV3 vcssymbolsidecar.ResultV3
+				valid = json.Unmarshal(opResult.Artifact, &typedV3) == nil && mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultV3ID, opResult.Artifact) == nil && vcssymbolsidecar.ValidateV3(typedV3) == nil
+				typed = typedV3.Result
+				envelopeVersion = "3"
+				schemaID = mcpcontract.ContextSymbolChurnSuccessV3ID
+				if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+					schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessV2ID
+				}
+			default:
+				valid = false
+			}
+		}
+		if !valid {
 			if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 				return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelopeFor(tool.Name, mcpcontract.ContextSymbolChurnCaptureDomainErrorID, requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 			}
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 		}
-		schemaID := mcpcontract.ContextSymbolChurnSuccessV2ID
-		if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
-			schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessID
-		}
-		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "2", EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: envelopeVersion, EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
 	}
 	if tool.ExecutorFamily == ContextChurnExecutorFamily {
 		var result map[string]any

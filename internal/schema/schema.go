@@ -69,7 +69,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyCommunityPresentation:      {"v1": "lsp-trace.community-presentation.v1"},
 	FamilyTechnicalCommunityRegister: {"v1": "lsp-trace.technical-community-register.v1"},
 	FamilyPassageVerification:        {"v1": "lsp-trace.passage-verification.v1"},
-	FamilyVCSSymbolChurn:             {"v2": "lsp-trace.vcs-symbol-churn-sidecar.v2"},
+	FamilyVCSSymbolChurn:             {"v2": "lsp-trace.vcs-symbol-churn-sidecar.v2", "v3": "lsp-trace.vcs-symbol-churn-sidecar.v3"},
 }
 
 var versionFields = map[string]string{

@@ -12,6 +12,7 @@ const (
 	ContextSymbolChurnCaptureTool          = "lsp_trace_v1_context_symbol_churn_capture"
 	ContextSymbolChurnCaptureInputID       = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-context-symbol-churn-capture.v1.schema.json"
 	ContextSymbolChurnCaptureSuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v1.schema.json"
+	ContextSymbolChurnCaptureSuccessV2ID   = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v2.schema.json"
 	ContextSymbolChurnCaptureDomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-domain-error.v1.schema.json"
 )
 
@@ -22,8 +23,9 @@ func WithContextSymbolChurnCapture(m *Manifest) *Manifest {
 	c.Schemas = append(c.Schemas,
 		SchemaRegistration{ID: ContextSymbolChurnCaptureInputID, Family: "input-context-symbol-churn-capture.v1", Layer: "input", Path: "schemas/input-context-symbol-churn-capture.v1.schema.json"},
 		SchemaRegistration{ID: ContextSymbolChurnCaptureSuccessID, Family: "envelope-context-symbol-churn-capture-result.v1", Layer: "envelope", Path: "schemas/envelope-context-symbol-churn-capture-result.v1.schema.json"},
+		SchemaRegistration{ID: ContextSymbolChurnCaptureSuccessV2ID, Family: "envelope-context-symbol-churn-capture-result.v2", Layer: "envelope", Path: "schemas/envelope-context-symbol-churn-capture-result.v2.schema.json"},
 		SchemaRegistration{ID: ContextSymbolChurnCaptureDomainErrorID, Family: "envelope-context-symbol-churn-capture-domain-error.v1", Layer: "envelope", Path: "schemas/envelope-context-symbol-churn-capture-domain-error.v1.schema.json"})
-	c.Tools = append(c.Tools, ToolContract{Name: ContextSymbolChurnCaptureTool, InputSchemaID: ContextSymbolChurnCaptureInputID, EnvelopeSchemaIDs: []string{ContextSymbolChurnCaptureSuccessID, ContextSymbolChurnCaptureDomainErrorID}, ArtifactSchemaIDs: []string{ContextSymbolChurnResultID}, Advertised: true, Availability: "ENABLED"})
+	c.Tools = append(c.Tools, ToolContract{Name: ContextSymbolChurnCaptureTool, InputSchemaID: ContextSymbolChurnCaptureInputID, EnvelopeSchemaIDs: []string{ContextSymbolChurnCaptureSuccessID, ContextSymbolChurnCaptureSuccessV2ID, ContextSymbolChurnCaptureDomainErrorID}, ArtifactSchemaIDs: []string{ContextSymbolChurnResultID, ContextSymbolChurnResultV3ID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 
@@ -31,7 +33,7 @@ func WithContextSymbolChurnCapture(m *Manifest) *Manifest {
 var contextSymbolChurnCaptureFiles embed.FS
 
 func contextSymbolChurnCaptureSchema(name string) ([]byte, bool, error) {
-	paths := map[string]string{ContextSymbolChurnCaptureInputID: "testdata/schemas/input-context-symbol-churn-capture.v1.schema.json", ContextSymbolChurnCaptureSuccessID: "testdata/schemas/envelope-context-symbol-churn-capture-result.v1.schema.json", ContextSymbolChurnCaptureDomainErrorID: "testdata/schemas/envelope-context-symbol-churn-capture-domain-error.v1.schema.json"}
+	paths := map[string]string{ContextSymbolChurnCaptureInputID: "testdata/schemas/input-context-symbol-churn-capture.v1.schema.json", ContextSymbolChurnCaptureSuccessID: "testdata/schemas/envelope-context-symbol-churn-capture-result.v1.schema.json", ContextSymbolChurnCaptureSuccessV2ID: "testdata/schemas/envelope-context-symbol-churn-capture-result.v2.schema.json", ContextSymbolChurnCaptureDomainErrorID: "testdata/schemas/envelope-context-symbol-churn-capture-domain-error.v1.schema.json"}
 	for id, path := range paths {
 		if name == id || name == path {
 			b, err := contextSymbolChurnCaptureFiles.ReadFile(path)
@@ -50,7 +52,7 @@ func ValidateContextSymbolChurnCaptureEnvelopeExclusive(raw []byte) error {
 		return err
 	}
 	id, _ := value["envelope_schema_id"].(string)
-	if id != ContextSymbolChurnCaptureSuccessID && id != ContextSymbolChurnCaptureDomainErrorID {
+	if id != ContextSymbolChurnCaptureSuccessID && id != ContextSymbolChurnCaptureSuccessV2ID && id != ContextSymbolChurnCaptureDomainErrorID {
 		return errors.New("invalid context symbol churn capture envelope schema")
 	}
 	return ValidateJSON(id, raw)

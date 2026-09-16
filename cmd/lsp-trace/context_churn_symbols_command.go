@@ -59,7 +59,7 @@ func runContextChurnSymbols(args []string, stdout, stderr io.Writer) int {
 	sort.Strings(paths)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	result, err := vcssymbolsidecar.BuildV2(ctx, raw, vcssymbolsidecar.BuildRequest{Repository: workspace, FromRevision: from, ToRevision: to, Paths: paths, LanguageID: language}, vcssymbolsidecar.GitDiff{Timeout: timeout}, vcssymbolsidecar.GitWorktreeProvider{Timeout: timeout}, vcssymbolsidecar.LSPProcessProvider{Command: serverPath, Args: serverArgs, RequestTimeout: requestTimeout})
+	result, err := vcssymbolsidecar.BuildV3(ctx, raw, vcssymbolsidecar.BuildRequest{Repository: workspace, FromRevision: from, ToRevision: to, Paths: paths, LanguageID: language}, vcssymbolsidecar.GitDiff{Timeout: timeout}, vcssymbolsidecar.GitWorktreeProvider{Timeout: timeout}, vcssymbolsidecar.LSPProcessProvider{Command: serverPath, Args: serverArgs, RequestTimeout: requestTimeout})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2

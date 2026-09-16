@@ -96,7 +96,7 @@ func (e *contextSymbolChurnExecutor) Execute(parent context.Context, op operatio
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	result, err := vcssymbolsidecar.BuildV2(ctx, raw, vcssymbolsidecar.BuildRequest{Repository: in.Workspace, FromRevision: in.FromRevision, ToRevision: in.ToRevision, Paths: paths, LanguageID: in.LanguageID}, vcssymbolsidecar.GitDiff{Timeout: timeout}, vcssymbolsidecar.GitWorktreeProvider{Timeout: timeout}, vcssymbolsidecar.LSPProcessProvider{Command: profile.command, Args: profile.args, Env: profile.env, RequestTimeout: requestTimeout})
+	result, err := vcssymbolsidecar.BuildV3(ctx, raw, vcssymbolsidecar.BuildRequest{Repository: in.Workspace, FromRevision: in.FromRevision, ToRevision: in.ToRevision, Paths: paths, LanguageID: in.LanguageID}, vcssymbolsidecar.GitDiff{Timeout: timeout}, vcssymbolsidecar.GitWorktreeProvider{Timeout: timeout}, vcssymbolsidecar.LSPProcessProvider{Command: profile.command, Args: profile.args, Env: profile.env, RequestTimeout: requestTimeout})
 	if err != nil {
 		code := "ACQUISITION_FAILED"
 		switch {
