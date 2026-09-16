@@ -1973,7 +1973,7 @@ func (m *Manager) reserveOperation(id string) bool {
 }
 
 func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending *lspwire.Pending, spec managedprocess.Spec, retired *ownedTransport) {
-	shutdownComplete := true
+	shutdown := shutdownObservation{acknowledged: true, exitNotified: true}
 	var teardown managedprocess.TeardownObservation
 	var resources managedprocess.ResourceObservation
 	if retired != nil {
@@ -1982,12 +1982,14 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		teardown, resources = retired.teardown, retired.resources
 	} else {
 		if protocol, ok := child.(wireChild); ok {
-			shutdownComplete = m.gracefulShutdown(protocol, pending, operation.Generation)
+			shutdown = m.gracefulShutdown(protocol, pending, operation.Generation)
 		}
 		teardown = child.Teardown(context.Background())
 		resources = child.Close()
 	}
 	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	cleanExit := teardown.Death.Kind == managedprocess.DeathExited && death
+	shutdownComplete := shutdown.acknowledged && (shutdown.exitNotified || cleanExit)
 	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationPending: true}
 
 	m.mu.Lock()
@@ -2068,12 +2070,17 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	m.mu.Unlock()
 }
 
-func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) bool {
+type shutdownObservation struct {
+	acknowledged bool
+	exitNotified bool
+}
+
+func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) shutdownObservation {
 	key := pending.Begin(generation)
 	id := strconv.FormatUint(key.ID, 10)
 	writer := lspwire.NewWriter(child.Stdin(), m.wire)
 	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
-		return false
+		return shutdownObservation{}
 	}
 	response := make(chan error, 1)
 	go func() {
@@ -2088,12 +2095,12 @@ func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, ge
 	select {
 	case err := <-response:
 		if err != nil {
-			return false
+			return shutdownObservation{}
 		}
 	case <-timer.C:
-		return false
+		return shutdownObservation{}
 	}
-	return writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil
+	return shutdownObservation{acknowledged: true, exitNotified: writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil}
 }
 
 func (m *Manager) finishOperation(operation OperationSnapshot) {

@@ -697,6 +697,65 @@ func TestRuntimeCancellationWritesExactlyOnceToActiveChild(t *testing.T) {
 	}
 }
 
+type acknowledgedShutdownExitChild struct {
+	input     *io.PipeReader
+	stdin     *io.PipeWriter
+	output    *io.PipeWriter
+	stdout    *io.PipeReader
+	deathKind managedprocess.DeathKind
+	teardowns int
+	closes    int
+}
+
+func newAcknowledgedShutdownExitChild(deathKind managedprocess.DeathKind) *acknowledgedShutdownExitChild {
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	child := &acknowledgedShutdownExitChild{input: input, stdin: stdin, output: output, stdout: stdout, deathKind: deathKind}
+	go func() {
+		message, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+		if err != nil || message.Method != "shutdown" {
+			return
+		}
+		_ = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: message.ID, Result: []byte("null")})
+		_ = input.Close()
+		_ = output.Close()
+	}()
+	return child
+}
+
+func (c *acknowledgedShutdownExitChild) Stdin() io.WriteCloser { return c.stdin }
+func (c *acknowledgedShutdownExitChild) Stdout() io.ReadCloser { return c.stdout }
+func (c *acknowledgedShutdownExitChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.teardowns++
+	return managedprocess.TeardownObservation{Death: managedprocess.DeathObservation{Kind: c.deathKind, ExitCode: 0, Reap: managedprocess.ReapObservation{Kind: managedprocess.ReapComplete}}}
+}
+func (c *acknowledgedShutdownExitChild) Close() managedprocess.ResourceObservation {
+	c.closes++
+	_ = c.stdin.Close()
+	_ = c.stdout.Close()
+	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+func TestAcknowledgedShutdownWithObservedCleanExitDoesNotPoison(t *testing.T) {
+	const assertion = "ASSERT_ACKNOWLEDGED_SHUTDOWN_CLEAN_EXIT_NOT_POISONED"
+	for _, tc := range []struct {
+		name      string
+		deathKind managedprocess.DeathKind
+		want      OperationState
+	}{{name: "clean-exit", deathKind: managedprocess.DeathExited, want: OperationComplete}, {name: "signaled", deathKind: managedprocess.DeathSignaled, want: OperationFailed}} {
+		t.Run(tc.name, func(t *testing.T) {
+			child := newAcknowledgedShutdownExitChild(tc.deathKind)
+			m, _ := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 2, MaxObservations: 16}, Starter: oneChildStarter{child}})
+			started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+			accepted := m.Stop(context.Background(), started.SessionID, "caller")
+			terminal := waitOperation(t, m, accepted.IntentID, tc.want)
+			if (tc.want == OperationComplete && terminal.Failure != "") || (tc.want == OperationFailed && terminal.Failure != session.SessionPoisoned) || child.teardowns != 1 || child.closes != 1 || m.Census().Workers != 0 {
+				t.Fatalf("%s[%s]: terminal=%+v teardown=%d close=%d census=%+v", assertion, tc.name, terminal, child.teardowns, child.closes, m.Census())
+			}
+		})
+	}
+}
+
 func TestGracefulShutdownExitOrderAndHonestFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name string
