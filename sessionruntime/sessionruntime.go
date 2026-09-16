@@ -1889,7 +1889,22 @@ func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) 
 			continue
 		}
 		if existing.CallerID == caller {
-			return session.LifecycleResult{State: r.record.State, Generation: existing.Generation, IntentID: existing.ID, Replayed: true}
+			result := session.LifecycleResult{State: r.record.State, Generation: existing.Generation, IntentID: existing.ID, Replayed: true}
+			switch existing.State {
+			case OperationComplete:
+				result.Outcome, result.OperationStatus = session.OutcomeComplete, session.StatusSucceeded
+			case OperationFailed:
+				result.Failure = existing.Failure
+				switch existing.Failure {
+				case session.RequestCancelled:
+					result.Outcome, result.OperationStatus = session.OutcomeCancelled, session.StatusCancelled
+				case session.RequestTimeout:
+					result.Outcome, result.OperationStatus = session.OutcomeTimedOut, session.StatusTimedOut
+				default:
+					result.Outcome, result.OperationStatus = session.OutcomeDomainError, session.StatusFailed
+				}
+			}
+			return result
 		}
 		if existing.State == OperationPending {
 			// Joining an accepted operation consumes no new runtime capacity. Let the

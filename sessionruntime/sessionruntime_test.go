@@ -288,6 +288,12 @@ func TestFailedTerminationRemainsQueryableAndPoisoned(t *testing.T) {
 	if again, ok := m.Operation(accepted.IntentID); !ok || again != failed {
 		t.Fatalf("failed operation not immutable/queryable: found=%v first=%+v again=%+v", ok, failed, again)
 	}
+	beforeReplay := m.Census()
+	replayed := m.Stop(context.Background(), started.SessionID, "caller")
+	afterReplay, ok := m.Operation(accepted.IntentID)
+	if !ok || replayed.IntentID != accepted.IntentID || !replayed.Replayed || replayed.State != session.Poisoned || replayed.Failure != failed.Failure || replayed.Outcome != session.OutcomeDomainError || replayed.OperationStatus != session.StatusFailed || afterReplay != failed || m.Census() != beforeReplay {
+		t.Fatalf("ASSERT_TERMINAL_FAILED_STOP_REPLAY_PRESERVES_RESULT: accepted=%+v failed=%+v replayed=%+v found=%v after=%+v census_before=%+v census_after=%+v", accepted, failed, replayed, ok, afterReplay, beforeReplay, m.Census())
+	}
 }
 
 func TestFailedRestartRetainsCurrentGenerationDocumentState(t *testing.T) {

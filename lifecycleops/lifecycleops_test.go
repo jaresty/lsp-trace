@@ -315,6 +315,68 @@ func (s liveStarter) Start(context.Context, managedprocess.Spec) (sessionruntime
 	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
 }
 
+type failedLiveChild struct {
+	mu            sync.Mutex
+	teardownCalls int
+	closeCalls    int
+}
+
+func (c *failedLiveChild) Teardown(context.Context) managedprocess.TeardownObservation {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.teardownCalls++
+	return managedprocess.TeardownObservation{}
+}
+
+func (c *failedLiveChild) Close() managedprocess.ResourceObservation {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closeCalls++
+	return managedprocess.ResourceObservation{}
+}
+
+func (c *failedLiveChild) calls() (int, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.teardownCalls, c.closeCalls
+}
+
+type failedLiveStarter struct{ child *failedLiveChild }
+
+func (s failedLiveStarter) Start(context.Context, managedprocess.Spec) (sessionruntime.Child, managedprocess.StartObservation) {
+	return s.child, managedprocess.StartObservation{Kind: managedprocess.StartStarted}
+}
+
+func TestTerminalFailedStopReplayNotPending(t *testing.T) {
+	child := &failedLiveChild{}
+	runtime, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 8, MaxOperations: 1}, Starter: failedLiveStarter{child: child}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: "/workspace", Profile: "go", EnvironmentReference: "local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := runtime.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
+	service := New(runtime)
+	accepted := service.Stop(context.Background(), LifecycleRequest{SessionID: started.SessionID, Generation: started.Generation, CallerID: "caller"})
+	var terminal OperationSnapshot
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		terminal, _ = service.OperationStatus(accepted.OperationID)
+		if terminal.State == Failed {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	beforeTeardown, beforeClose := child.calls()
+	replayed := service.Stop(context.Background(), LifecycleRequest{SessionID: started.SessionID, Generation: started.Generation, CallerID: "caller"})
+	after, statusFailure := service.OperationStatus(accepted.OperationID)
+	afterTeardown, afterClose := child.calls()
+	if terminal.State != Failed || terminal.Failure == FailureNone || replayed.OperationID != accepted.OperationID || !replayed.Replayed || replayed.Pending || replayed.State != session.Poisoned || replayed.Failure != terminal.Failure || statusFailure != FailureNone || after != terminal || beforeTeardown != 1 || beforeClose != 1 || afterTeardown != beforeTeardown || afterClose != beforeClose || runtime.Census().Workers != 0 {
+		t.Fatalf("ASSERT_TERMINAL_FAILED_STOP_REPLAY_NOT_PENDING: accepted=%+v terminal=%+v replayed=%+v status_failure=%q after=%+v teardown=%d/%d close=%d/%d census=%+v", accepted, terminal, replayed, statusFailure, after, beforeTeardown, afterTeardown, beforeClose, afterClose, runtime.Census())
+	}
+}
+
 func TestLiveRuntimePendingAndTerminalProjection(t *testing.T) {
 	child := &liveChild{release: make(chan struct{})}
 	runtime, err := sessionruntime.New(sessionruntime.Config{Limits: sessionruntime.Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 1, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 8, MaxOperations: 1}, Starter: liveStarter{child: child}})
