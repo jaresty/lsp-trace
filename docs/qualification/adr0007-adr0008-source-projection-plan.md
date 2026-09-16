@@ -1,14 +1,14 @@
 # ADR 0007 / ADR 0008 source-projection qualification plan
 
-Status: **BLOCKED — semantic model selection required**
+Status: **MODEL_SELECTED — HYBRID_SHARED_ALGEBRA**
 
-Execution: **NOT_EXECUTED**
+Qualification execution: **NOT_EXECUTED**
 
 Machine-checkable matrix: [`qualification/adr0008-source-projection-matrix.v1.json`](../../qualification/adr0008-source-projection-matrix.v1.json)
 
 ## Claim boundary
 
-This is a documentation-only qualification plan. It does not select a semantic model, qualify implementation, report passing tests, authorize schema or runtime work, enable ADR 0007 inference/indexing, or authorize retained or transient projection. Every implementation stage still requires attributable assertion-specific RED evidence and retained GREEN evidence at one reviewed revision.
+This is a documentation-only qualification plan. It records the owner-selected design model but does not qualify implementation, report passing tests, authorize schema or runtime work, enable ADR 0007 inference/indexing, or authorize retained or transient projection. Matrix execution remains `NOT_EXECUTED`, `tests_pass_claimed=false`, and `implementation_qualified=false`; no qualification cell becomes `PASS`. Every implementation stage still requires attributable assertion-specific RED evidence and retained GREEN evidence at one reviewed revision.
 
 ## Why the barrier exists
 
@@ -16,13 +16,24 @@ ADR 0008 defines exact graph-bound source projection and two materially differen
 
 The unresolved design question is therefore not merely artifact-first versus query-first API shape. It is which shared projection-unit semantics, if any, should feed ADR 0007 TARGET, NEIGHBORHOOD, Describe, Embed, and index-build while retained and live resolvers preserve distinct custody. The dehydrated manifest may be the retained custody/availability index without owning general projection semantics. Bounded operation-43 live evidence may change the shared unit contract before freeze; retained-first is not a hard semantic dependency.
 
-The parent must select one reviewed model:
+The reviewed comparison considered three models:
 
-1. **Artifact-first retained:** exact units originate from retained V5 plus a manifest/availability index.
-2. **Query-first shared:** one request algebra selects units and delegates to retained-object or live-session resolvers.
-3. **Hybrid shared algebra:** identity, selection, citation, privacy, ordering, and accounting are shared, while resolver custody and result identities remain mode-specific.
+1. **Artifact-first retained:** exact units originate from retained V5 plus a manifest/availability index. This over-assigns the retained carrier unless projection semantics are separately factored out.
+2. **Query-first shared:** one request algebra selects units and delegates to retained-object or live-session resolvers. This captures shared selection but under-specifies custody-specific physical identity and semantic admission.
+3. **Hybrid shared algebra — selected:** shared logical projected-unit, selection, accounting, privacy, range, and citation semantics compose with and specialize **Select → Resolve → Assemble**. Retained V5 and live session-generation custody keep distinct `Resolve` contracts, physical projection identities, statuses, and ADR 0007 semantic-admission/cache identities.
 
-Until selection, common semantics and ADR 0007 interoperability are `BLOCKED`; all execution remains `NOT_EXECUTED`.
+The manifest owns retained custody and availability only; it does not own projection semantics. The same logical projected unit, and even identical source bytes, do not imply retained/live projection identity, semantic-admission identity, or cache equality. This selection changes the design barrier to `MODEL_SELECTED`; all five qualification tracks and all 23 cells retain their existing verdicts, while execution remains `NOT_EXECUTED`.
+
+## Smallest next artifact
+
+Before any wire contract is frozen, build one canonical cross-mode fixture containing exactly one endpoint and one server-reported `CALLS` relation represented twice:
+
+- under exact retained Graph Provenance V5 custody, including its manifest availability binding and immutable source-object resolution; and
+- under exact live managed-session-generation custody, including request-admitted document identity and bytes.
+
+For both custody modes, the fixture must carry `TARGET` and bounded `NEIGHBORHOOD` outputs, proposed semantic-admission and cache preimages, metadata-only/body-eligible/restricted/withheld/unavailable privacy variants, and failure denominators that distinguish selected, omitted, evaluated, terminal, and unevaluated members. Golden vectors must make cross-mode non-equality visible even when the logical unit and source bytes are identical.
+
+This fixture is the input for D1–D12 decisions about canonical bytes, projected-unit and citation preimages, aggregate status precedence, privacy vocabulary, and schema versions. Those decisions remain pending; this plan does not freeze detailed public schemas, identities, status names, precedence, privacy terms, or versions.
 
 ## Qualification architecture
 
@@ -104,9 +115,9 @@ Assertion-specific RED must compile and execute far enough to fail the intended 
 
 ## Integration barrier procedure
 
-1. Review the semantic-design comparison packet and select one model, or retain `BLOCKED`.
-2. Freeze the common projection-unit contract only after incorporating accepted operation-43 live findings.
-3. Verify manifest and object-store barrier inputs independently; decide explicitly whether the manifest is only a retained availability index.
+1. Preserve the reviewed comparison and `HYBRID_SHARED_ALGEBRA` selection as design input, not qualification evidence.
+2. Produce and review the canonical cross-mode fixture and D1–D12 golden vectors before freezing any common projection-unit wire contract.
+3. Verify manifest and object-store barrier inputs independently; the manifest remains only a retained custody/availability index and does not own projection semantics.
 4. Execute common, retained-object, and live-session tracks independently. Custody-specific PASS cannot be borrowed across modes.
 5. Execute ADR 0007 interoperability only after its own frozen prerequisites exist. Projection PASS is necessary input evidence, not semantic-pilot authorization.
 6. Require every applicable cell to be PASS at one reviewed revision. Any BLOCKED, FAIL, NOT_RUN, mixed revision, count drift, predecessor mutation, or claim-ceiling violation blocks integration.
@@ -114,10 +125,10 @@ Assertion-specific RED must compile and execute far enough to fail the intended 
 
 ## Critical blockers now
 
-- No semantic model has been selected.
-- Common projected-unit and citation identities are not frozen.
+- The semantic model is selected, but the canonical cross-mode fixture and D1–D12 golden vectors have not been executed or reviewed.
+- Common projected-unit and citation wire identities are not frozen.
 - Manifest and object-store tracks have not supplied canonical bytes, validators, immutable-object custody receipts, GC/lease evidence, or adversarial outcomes.
 - No authorized operation-43 live projection trial or host-rendering evidence exists.
 - ADR 0007 typed admission, identity, privacy/deletion, terminal-accounting, ownership, and evaluation prerequisites remain unexecuted.
 
-Documentation resolves none of these blockers.
+Documentation resolves only the model-selection barrier. It resolves none of the execution, fixture, wire-contract, custody-specific qualification, ADR 0007 prerequisite, or implementation blockers.

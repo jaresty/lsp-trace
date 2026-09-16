@@ -4,11 +4,11 @@
     "docs/adr/0007-optional-local-semantic-feature-index.md",
     "docs/adr/0008-dehydrated-structural-evidence-and-deterministic-source-projection.md"
   ],
-  "plan_status": "BLOCKED_PENDING_SEMANTIC_MODEL_SELECTION",
+  "plan_status": "MODEL_SELECTED_QUALIFICATION_NOT_EXECUTED",
   "execution_status": "NOT_EXECUTED",
   "tests_pass_claimed": false,
   "implementation_qualified": false,
-  "selected_semantic_model": null,
+  "selected_semantic_model": "HYBRID_SHARED_ALGEBRA",
   "candidate_semantic_models": [
     {
       "id": "ARTIFACT_FIRST_RETAINED",
@@ -24,9 +24,13 @@
     }
   ],
   "semantic_design_barrier": {
-    "state": "BLOCKED",
+    "state": "MODEL_SELECTED",
     "execution": "NOT_EXECUTED",
-    "owner_decision_required": true,
+    "owner_decision_required": false,
+    "selected_model_scope": "Shared logical projected-unit, selection, accounting, privacy, range, and citation semantics compose with and specialize Select -> Resolve -> Assemble. Retained V5 and live session-generation custody keep distinct Resolve contracts, physical projection identities, statuses, admission identities, and cache identities.",
+    "manifest_ownership": "CUSTODY_AND_AVAILABILITY_ONLY",
+    "identity_rule": "The same logical unit, including identical source bytes, does not imply retained/live projection identity, semantic-admission identity, or cache equality.",
+    "wire_decisions": "D1-D12 remain pending the canonical cross-mode fixture and golden vectors; no public schema, identity preimage, status precedence, privacy vocabulary, or schema version is frozen by model selection.",
     "required_comparison_evidence": [
       "exact TARGET and NEIGHBORHOOD request/result examples for retained-object and live-session custody",
       "Describe, Embed, and index-build admission examples using the same logical projected unit under each candidate model",
@@ -35,7 +39,7 @@
       "failure and denominator examples showing TARGET, NEIGHBORHOOD, partial, and CENSUS claims do not broaden coverage",
       "operation-43 live evidence capable of changing the shared projection-unit contract before model freeze"
     ],
-    "selection_rule": "No common projection contract, retained manifest ownership claim, semantic-index input binding, or live operation-43 projection contract freezes until the parent selects a model from reviewed comparison evidence.",
+    "selection_rule": "HYBRID_SHARED_ALGEBRA is selected as the design model. Qualification remains NOT_EXECUTED, and no common wire contract, retained/live implementation admission, semantic-index cache formula, or operation-43 projection contract freezes until the canonical cross-mode fixture and D1-D12 golden vectors are reviewed.",
     "non_dependency_rule": "Retained qualification is not a hard semantic prerequisite for learning from bounded operation-43 live projection evidence; custody-specific implementation admission remains independently gated."
   },
   "verdicts": ["PASS", "BLOCKED", "FAIL", "NOT_RUN"],
@@ -326,5 +330,5 @@
       "dependencies": ["shared handler vectors", "host rendering tests"]
     }
   ],
-  "claim_ceiling": "This matrix is a documentation-only, BLOCKED and NOT_EXECUTED qualification plan. It does not select a semantic model; claim that implementation exists; claim any test ran or passed; qualify retained or live projection, a manifest, an object store, operation 43/36, or ADR 0007 interoperability; authorize schemas, operations, inference, indexing, shipment, deployment, or production behavior."
+  "claim_ceiling": "This matrix records a documentation-only design-model selection while qualification remains NOT_EXECUTED. It does not claim that implementation exists; claim any test ran or passed; change any qualification cell to PASS; qualify retained or live projection, a manifest, an object store, operation 43/36, or ADR 0007 interoperability; freeze D1-D12 or public wire vocabulary; or authorize schemas, operations, inference, indexing, shipment, deployment, or production behavior."
 }

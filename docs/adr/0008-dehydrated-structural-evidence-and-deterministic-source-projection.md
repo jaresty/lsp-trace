@@ -36,6 +36,22 @@ The initial implementation will:
 
 This ADR does not authorize runtime or schema implementation by itself. Each implementation stage requires assertion-specific RED evidence before production changes.
 
+## Owner selection amendment: hybrid shared algebra
+
+The owner selects **HYBRID_SHARED_ALGEBRA** from the qualification plan's reviewed three-candidate comparison. The selected design composes with and specializes:
+
+```text
+Select(logical request) → Resolve(custody contract) → Assemble(projected records)
+```
+
+The shared algebra owns logical projected-unit, selection, accounting, privacy, range, and citation semantics. `Resolve` is custody-specific: retained projection binds exact admitted Graph Provenance V5, manifest availability, and immutable source objects, while live projection binds one exact managed session generation and request-admitted document bytes. Physical projection identities, statuses, and downstream ADR 0007 admission/cache identities remain custody-specific.
+
+The dehydrated manifest owns retained custody and availability only. It is not the owner of projection semantics. A shared logical unit does not create a shared physical identity: even byte-identical retained and live source selections are not thereby projection-equal, admission-equal, or cache-equal.
+
+Acquisition, projection, and semantic accounting are independent. Structural acquisition status and graph/frontier accounting cannot be rewritten by projection; projection selection, omissions, privacy, availability, and limits cannot be rewritten by semantic processing; semantic Describe, Embed, index, search, or grouping outcomes cannot alter either structural or projection accounting. Every layer retains its own denominator, terminal disposition, identity, and authority ceiling.
+
+This is a design-model selection only. Qualification execution remains `NOT_EXECUTED`; no qualification cell is `PASS`, no implementation is qualified, and no test pass is claimed. D1–D12 remain pending the canonical cross-mode fixture and golden vectors. In particular, the exact canonical bytes, projected-unit and citation preimages, aggregate status precedence, privacy vocabulary, schema identities, and schema versions are not frozen. Existing names and enums below describe the accepted design space and qualification candidates, not final public wire vocabulary.
+
 ## Current contracts preserved
 
 The design preserves these existing boundaries:
@@ -275,7 +291,7 @@ Operation-43 request flags or result versions are deferred. They may be consider
 
 ## Migration stages
 
-1. **Semantic contract:** freeze evidence roles, status algebra, ordering, budgets, privacy classes, and no-fallback rules in this ADR.
+1. **Semantic model:** retain the selected shared algebra and no-fallback boundaries; freeze exact evidence-role, status, ordering, budget, privacy, identity, and schema wire decisions only after the canonical cross-mode fixture resolves D1–D12.
 2. **Schema families:** add new immutable manifest and projection schemas without changing predecessor bytes.
 3. **Offline core:** extend deterministic hydrated-evidence admission and projection for the new manifest.
 4. **Immutable storage:** qualify Git bindings, private content-addressed objects, dirty-buffer snapshots, retention, and GC behavior.
@@ -311,10 +327,10 @@ Both custody modes require deterministic canonical ordering, whole-range admissi
 
 ### Staged recommendation
 
-The recommended rollout is retained-first and additive:
+The rollout remains additive, but retained and live qualification are independent custody tracks under the selected shared algebra; retained qualification is not a semantic prerequisite for learning from bounded live evidence:
 
-1. Complete and independently qualify the retained V5 manifest, immutable storage, offline projection, privacy, accounting, and direct/gateway parity stages already listed above.
-2. If interactive source value is still demonstrated after that qualification, evaluate operation 43 first through an additive request/result version. It is the preferred exact-symbol façade, already resolves one source-locating target before delegating to operation 36, and offers the narrowest user-facing place to prove explicit target/snippet opt-in without changing location-only defaults. Omitted projection fields must preserve legacy request and result bytes.
+1. Produce the canonical cross-mode fixture before freezing shared wire details, then independently qualify the retained V5 manifest, immutable storage, offline projection, privacy, accounting, and direct/gateway parity stages already listed above.
+2. Keep current operation 43 location-only. Any future interactive source value is evaluated first through a separately qualified additive request/result version. Operation 43 remains the preferred exact-symbol façade because it already resolves one source-locating target before delegating to operation 36 and offers the narrowest place to test explicit target/snippet opt-in without changing location-only defaults. Omitted projection fields must preserve legacy request and result bytes.
 3. Only after operation 43 qualifies, evaluate the same transient projection contract directly on operation 36 for callers that already possess an exact URI and target. This stage must reuse the qualified projection semantics without routing operation 36 through workspace-symbol lookup.
 4. Keep operation 33 on retained post-acquisition projection. It already captures document supply and produces Graph Provenance V5; source presentation should occur from the resulting retained identity and manifest, not by adding a competing transient body channel to trace acquisition.
 5. Leave operation 41 unchanged as the immutable compatibility reader. It must neither gain source flags nor inherit operation 43's future additive result contract.

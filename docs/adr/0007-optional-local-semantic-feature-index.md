@@ -53,6 +53,14 @@ Every operation records exactly one acquisition mode and its coverage statement:
 
 A result reports its exact acquisition mode, scope, denominator, evaluated count, terminal counts, revision policy, and coverage state. `TARGET` means exact one-item coverage, not repository coverage. `NEIGHBORHOOD` means only its recorded bounded expansion. `CENSUS` means only its declared closed scope. Partial indexes and bounded zero results never imply absence outside the admitted index, completeness of a repository/source, or completeness of an engineering domain.
 
+### Assembled projection admission boundary
+
+For source-projection inputs governed by ADR 0008, the caller completes **Select → Resolve → Assemble** before ADR 0007 admission. Describe, Embed, and index-build consume only caller-admitted assembled projection records. The semantic worker cannot invoke `Select` or `Resolve`, open a manifest or source-object store, read a live session or workspace, follow a selector, repair a range, substitute bytes, or broaden the admitted relationship set.
+
+The assembled record preserves the exact logical unit, bytes or immutable selector, range, encoding, role, graph subject, custody identity, revision or managed-session generation, privacy and policy identities, and projection disposition required for admission. Retained V5-bound and live session-generation records are identity-distinct even when they represent the same logical unit and contain identical bytes. They are therefore distinct admission and cache inputs; equality requires the exact custody-specific admission identity rather than logical-unit or byte equality alone.
+
+All such admissions and every derived description, embedding, index member, search result, group, and context packet remain `authority: 0` and `accepted: false`. Caller admission permits semantic processing only; it does not transfer graph authority, retained custody, completeness, or acceptance, and it cannot add, suppress, repair, or reinterpret server-reported `CALLS`.
+
 ## Operations and item-independent Describe
 
 The proposed protocol has four conceptual operation families. Their public names and schemas are deferred:
