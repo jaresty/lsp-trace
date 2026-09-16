@@ -1,0 +1,10 @@
+=== RUN   TestSourceObjectIdentityOnlyAPI
+--- PASS: TestSourceObjectIdentityOnlyAPI (0.00s)
+=== RUN   TestSourceObjectContextNeutralIdempotence
+--- PASS: TestSourceObjectContextNeutralIdempotence (0.01s)
+=== RUN   TestSourceObjectStoredFailureClassification
+--- PASS: TestSourceObjectStoredFailureClassification (0.01s)
+=== RUN   TestSourceObjectMaxBytesInt64Boundary
+--- PASS: TestSourceObjectMaxBytesInt64Boundary (0.00s)
+PASS
+ok  	lsp-trace/internal/sourceobject	0.919s

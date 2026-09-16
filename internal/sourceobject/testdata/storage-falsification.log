@@ -1,0 +1,57 @@
+CASE ASSERT_SOURCE_OBJECT_SHA256_IDENTITY_AND_EXACT_ROUND_TRIP EXIT=1
+--- FAIL: TestSourceObjectExactRoundTrip (0.00s)
+    store_test.go:48: ASSERT_SOURCE_OBJECT_SHA256_IDENTITY_AND_EXACT_ROUND_TRIP publish: POLICY
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.847s
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_DUPLICATE_REQUIRES_EXACT_VERIFICATION EXIT=1
+# lsp-trace/internal/sourceobject [lsp-trace/internal/sourceobject.test]
+internal/sourceobject/store.go:113:2: declared and not used: existing
+FAIL	lsp-trace/internal/sourceobject [build failed]
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_CORRUPTION_FAILS_CLOSED EXIT=1
+--- FAIL: TestSourceObjectCorruptAndMissingAreDistinct (0.01s)
+    store_test.go:100: ASSERT_SOURCE_OBJECT_CORRUPTION_FAILS_CLOSED err=MISSING
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.898s
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_MISSING_IS_TYPED EXIT=1
+--- FAIL: TestSourceObjectCorruptAndMissingAreDistinct (0.00s)
+    store_test.go:89: ASSERT_SOURCE_OBJECT_MISSING_IS_TYPED err=POLICY
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.854s
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_CUSTODY_REJECTS_SYMLINK_AND_PATH_INPUT EXIT=1
+--- FAIL: TestSourceObjectRejectsPathIdentityAndSymlink (0.00s)
+    store_test.go:113: ASSERT_SOURCE_OBJECT_CUSTODY_REJECTS_SYMLINK_AND_PATH_INPUT id="../neighbor" err=POLICY
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.860s
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_READ_WRITE_BOUNDS_ARE_EXPLICIT EXIT=1
+--- FAIL: TestSourceObjectBounds (0.00s)
+    store_test.go:137: LIMIT
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.870s
+FAIL
+
+CASE ASSERT_SOURCE_OBJECT_CONCURRENT_IDENTICAL_PUBLICATION_IS_IDEMPOTENT EXIT=1
+--- FAIL: TestSourceObjectConcurrentIdenticalPublication (0.02s)
+    store_test.go:167: ASSERT_SOURCE_OBJECT_CONCURRENT_IDENTICAL_PUBLICATION_IS_IDEMPOTENT err=CONFLICT
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.880s
+FAIL
+
+RESTORED_GREEN EXIT=0
+ok  	lsp-trace/internal/sourceobject	1.527s
+
+CASE ASSERT_SOURCE_OBJECT_DUPLICATE_REQUIRES_EXACT_VERIFICATION_CORRECTED EXIT=1
+--- FAIL: TestSourceObjectDuplicateRequiresExactVerification (0.01s)
+    store_test.go:72: ASSERT_SOURCE_OBJECT_DUPLICATE_REQUIRES_EXACT_VERIFICATION duplicate id={Digest: ByteLength:0} err=CONFLICT
+FAIL
+FAIL	lsp-trace/internal/sourceobject	1.397s
+FAIL

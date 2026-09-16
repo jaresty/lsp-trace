@@ -1,0 +1,15 @@
+=== RUN   TestSourceObjectIdentityOnlyAPI
+    store_test.go:75: ASSERT_SOURCE_OBJECT_IDENTITY_ONLY_API Publish input count=2 want=1 exact bytes only
+--- FAIL: TestSourceObjectIdentityOnlyAPI (0.00s)
+=== RUN   TestSourceObjectContextNeutralIdempotence
+    store_test.go:91: ASSERT_SOURCE_OBJECT_CONTEXT_NEUTRAL_IDEMPOTENCE first={Digest:sha256:fb657e23682cbb7add3ca45fa0b1d8695e2bfcc42b836f0e6a321301a83cef35 ByteLength:16} second={Digest: ByteLength:0} err=CONFLICT
+--- FAIL: TestSourceObjectContextNeutralIdempotence (0.01s)
+=== RUN   TestSourceObjectStoredFailureClassification
+    store_test.go:146: ASSERT_SOURCE_OBJECT_LIMIT_TYPED err=*sourceobject.Error POLICY
+--- FAIL: TestSourceObjectStoredFailureClassification (0.01s)
+=== RUN   TestSourceObjectMaxBytesInt64Boundary
+    store_test.go:193: ASSERT_SOURCE_OBJECT_INT64_ENVELOPE_BOUNDARY first-overflow err=<nil> <nil>
+--- FAIL: TestSourceObjectMaxBytesInt64Boundary (0.00s)
+FAIL
+FAIL	lsp-trace/internal/sourceobject	1.793s
+FAIL

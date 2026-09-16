@@ -10,6 +10,14 @@ import (
 
 const BoundFileMechanism = "exact_fd_atomic_no_replace"
 
+// Verified bound-file readers expose narrow typed boundaries so terminal
+// resolvers can classify custody and size failures without parsing messages.
+// ReadBoundFile intentionally retains its existing behavior.
+var (
+	ErrBoundFilePolicy = errors.New("bound file policy violation")
+	ErrBoundFileLimit  = errors.New("bound file limit exceeded")
+)
+
 var testHookBoundFileAfterVerify func()
 var testHookBoundFileBeforePublish func()
 var testHookBoundFileAfterPublish func()
@@ -181,6 +189,56 @@ func verifyPublishedExact(root *Root, selector string, raw []byte, verify func([
 
 func ReadBoundFile(root *Root, selector string, limit int64) ([]byte, error) {
 	return root.ReadSelector(selector, limit)
+}
+
+// ReadVerifiedBoundFile reads an object previously published by PublishBoundFile
+// while revalidating its private, single-link, owner-only custody metadata.
+func ReadVerifiedBoundFile(root *Root, selector string, limit int64) ([]byte, error) {
+	if root == nil || limit < 1 {
+		return nil, errors.Join(ErrBoundFilePolicy, errors.New("private root and positive bound required"))
+	}
+	if err := root.ValidatePrivate(); err != nil {
+		return nil, errors.Join(ErrBoundFilePolicy, err)
+	}
+	t, err := existingTarget(root, selector)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		return nil, errors.Join(ErrBoundFilePolicy, err)
+	}
+	defer t.close()
+	before, err := t.parent.Lstat(t.name)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() || before.Mode().Perm() != 0o600 || !validPublishedMetadata(root.info, before) {
+		return nil, errors.Join(ErrBoundFilePolicy, errors.New("bound file custody metadata invalid"))
+	}
+	if before.Size() > limit {
+		return nil, errors.Join(ErrBoundFileLimit, errors.New("bound file exceeds configured byte limit"))
+	}
+	f, err := t.parent.Open(t.name)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return nil, errors.Join(ErrBoundFilePolicy, errors.New("bound file identity changed"))
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > limit {
+		return nil, errors.Join(ErrBoundFileLimit, errors.New("bound file byte limit invalid"))
+	}
+	after, err := f.Stat()
+	if err != nil || !os.SameFile(opened, after) || after.Size() != int64(len(raw)) || !validPublishedMetadata(root.info, after) {
+		return nil, errors.Join(ErrBoundFilePolicy, errors.New("bound file identity or custody changed"))
+	}
+	return raw, nil
 }
 
 func equalBytes(a, b []byte) bool {

@@ -1,0 +1,6 @@
+--- FAIL: TestSourceObjectCorruptAndMissingAreDistinct (0.01s)
+    store_test.go:118: ASSERT_SOURCE_OBJECT_CORRUPTION_FAILS_CLOSED metadata tamper err=<nil>
+FAIL
+FAIL	lsp-trace/internal/sourceobject	0.874s
+FAIL
+METADATA_RED_EXIT=1

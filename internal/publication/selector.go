@@ -135,7 +135,10 @@ func (r *Root) ReadSelector(selector string, limit int64) ([]byte, error) {
 	}
 	defer target.close()
 	before, err := target.parent.Lstat(target.name)
-	if err != nil || before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
+	if err != nil {
+		return nil, err
+	}
+	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
 		return nil, errors.New("no-follow regular selector required")
 	}
 	file, err := target.parent.Open(target.name)

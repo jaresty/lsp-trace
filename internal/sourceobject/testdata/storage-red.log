@@ -1,0 +1,15 @@
+# lsp-trace/internal/sourceobject [lsp-trace/internal/sourceobject.test]
+internal/sourceobject/store_test.go:24:51: undefined: Store
+internal/sourceobject/store_test.go:35:16: undefined: New
+internal/sourceobject/store_test.go:45:10: undefined: Metadata
+internal/sourceobject/store_test.go:65:10: undefined: Metadata
+internal/sourceobject/store_test.go:74:34: undefined: Metadata
+internal/sourceobject/store_test.go:74:112: undefined: IsCode
+internal/sourceobject/store_test.go:74:124: undefined: CodeConflict
+internal/sourceobject/store_test.go:77:44: undefined: selector
+internal/sourceobject/store_test.go:80:42: undefined: IsCode
+internal/sourceobject/store_test.go:80:54: undefined: CodeCorrupt
+internal/sourceobject/store_test.go:80:54: too many errors
+FAIL	lsp-trace/internal/sourceobject [build failed]
+FAIL
+RED_EXIT=1

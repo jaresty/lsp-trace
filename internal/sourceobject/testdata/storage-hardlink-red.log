@@ -1,0 +1,6 @@
+--- FAIL: TestSourceObjectRejectsPathIdentityAndSymlink (0.01s)
+    store_test.go:137: ASSERT_SOURCE_OBJECT_CUSTODY_REJECTS_SYMLINK_AND_PATH_INPUT hard-link err=<nil>
+FAIL
+FAIL	lsp-trace/internal/sourceobject	1.835s
+FAIL
+HARDLINK_RED_EXIT=1
