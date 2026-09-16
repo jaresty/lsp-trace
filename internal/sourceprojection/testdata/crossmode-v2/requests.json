@@ -1,0 +1,7 @@
+{
+  "schema": "lsp-trace.fixture.crossmode-v2.requests.v1",
+  "target_uri": "file:///workspace/target.go",
+  "selected_uris": ["file:///workspace/target.go", "file:///workspace/caller.go"],
+  "normal_candidate_order": ["sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sha256:1111111111111111111111111111111111111111111111111111111111111111", "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+  "permuted_candidate_order": ["sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "sha256:1111111111111111111111111111111111111111111111111111111111111111"]
+}

@@ -15,7 +15,10 @@ func analyze(request AnalysisRequest, projection admittedProjection, bounds Boun
 			continue
 		}
 		if witnesses := matchingWitnesses(node.Witnesses, request.Direction, request.MaxDepth); len(witnesses) != 0 {
-			result.Nodes = append(result.Nodes, NodeFact{ID: node.ID, Witnesses: witnesses})
+			result.Nodes = append(result.Nodes, NodeFact{
+				ID: node.ID, Witnesses: witnesses, Name: node.Name, Kind: node.Kind, URI: node.URI,
+				Range: node.Range, ItemRange: node.ItemRange, SelectionRange: node.SelectionRange,
+			})
 		}
 	}
 	for _, occurrence := range projection.occurrences {
@@ -41,7 +44,11 @@ func matchingWitnesses(witnesses []Witness, direction Direction, maxDepth int) [
 func cloneNodeFacts(in []NodeFact) []NodeFact {
 	out := make([]NodeFact, len(in))
 	for i := range in {
-		out[i] = NodeFact{ID: in[i].ID, Witnesses: append([]Witness(nil), in[i].Witnesses...), Name: in[i].Name, Kind: in[i].Kind, URI: in[i].URI, Range: in[i].Range}
+		out[i] = NodeFact{
+			ID: in[i].ID, Witnesses: append([]Witness(nil), in[i].Witnesses...),
+			Name: in[i].Name, Kind: in[i].Kind, URI: in[i].URI,
+			Range: in[i].Range, ItemRange: in[i].ItemRange, SelectionRange: in[i].SelectionRange,
+		}
 	}
 	return out
 }

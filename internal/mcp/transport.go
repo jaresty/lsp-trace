@@ -78,7 +78,7 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	id, _ := mcpcontract.NewFutureStructuralCorrelationID()
 	schemaID := mcpcontract.StructuralContextDomainErrorID
 	if tool == mcpcontract.StructuralContextV2Tool {
-		schemaID = mcpcontract.StructuralContextV2DomainErrorID
+		schemaID = mcpcontract.StructuralContextProjectionDomainErrorID
 	} else if tool == mcpcontract.StructuralContextSymbolTool {
 		schemaID = mcpcontract.StructuralContextSymbolDomainErrorID
 	} else if tool == mcpcontract.StructuralContextSymbolV2Tool {
@@ -510,8 +510,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				phase, state = "TRAVERSAL", "RESOURCE_LIMIT"
 			case "INVALID_SERVER_RESPONSE":
 				phase = "TRAVERSAL"
-			case "WORKSPACE_SYMBOL_ABSENT", "WORKSPACE_SYMBOL_AMBIGUOUS", "WORKSPACE_SYMBOL_MALFORMED", "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE":
-				phase = "PREFLIGHT"
+			case "WORKSPACE_SYMBOL_ABSENT", "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE":
+				phase, state = "PREFLIGHT", "TARGET_NOT_FOUND"
+			case "WORKSPACE_SYMBOL_AMBIGUOUS":
+				phase, state = "PREFLIGHT", "AMBIGUOUS_TARGET"
+			case "WORKSPACE_SYMBOL_MALFORMED":
+				phase, state = "PREFLIGHT", "INVALID_SERVER_RESPONSE"
 			default:
 				state = "INVALID_SERVER_RESPONSE"
 			}
@@ -615,7 +619,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			successID = mcpcontract.StructuralContextSymbolSuccessID
 		}
 		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
-			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextV2SuccessID
+			resultID, successID = mcpcontract.UnifiedStructuralContextResultV2ID, mcpcontract.StructuralContextProjectionSuccessID
 		}
 		if tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily {
 			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextSymbolV2SuccessID

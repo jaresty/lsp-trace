@@ -94,6 +94,24 @@ func TestV2ExactWorkspaceSymbolDelegatesOriginalSymbolWithoutRangeStart(t *testi
 	}
 }
 
+func TestUnifiedV2SymbolBranchUsesCanonicalOperationName(t *testing.T) {
+	const assertion = "ASSERT_UNIFIED_CONTEXT_SYMBOL_BRANCH_DELEGATES_CANONICAL_V2"
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}}]`)}
+	d := &delegate{}
+	projection := `{"mode":"TARGET","body":"OMIT","include_relation_occurrences":false,"include_ancillary":false,"limits":{"max_objects":1,"max_ranges":1,"max_source_bytes":0,"max_work":1,"max_response_bytes":4096},"privacy_policy_id":"public"}`
+	input := json.RawMessage(`{"session_id":"s","generation":1,"symbol":"Target","projection":` + projection + `,"analysis":{"kind":"NEIGHBORHOOD"}}`)
+	_, failure := NewUnifiedV2Executor(f, d).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: input})
+	if failure != nil || len(f.requests) != 1 || len(d.calls) != 1 || d.calls[0].Name != operation.Name("structural_context_v2") {
+		t.Fatalf("%s: failure=%v requests=%v calls=%v", assertion, failure, f.requests, d.calls)
+	}
+	var delegated struct {
+		Projection json.RawMessage `json:"projection"`
+	}
+	if json.Unmarshal(d.calls[0].Input, &delegated) != nil || string(delegated.Projection) != projection {
+		t.Fatalf("%s_PROJECTION_PRESERVED: %s", assertion, d.calls[0].Input)
+	}
+}
+
 func TestWorkspaceSymbolFailuresAreExplicitAndDoNotDelegate(t *testing.T) {
 	cases := []struct{ name, result, code string }{{"absent", `[{"name":"target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_ABSENT"}, {"ambiguous", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}},{"name":"Target","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_AMBIGUOUS"}, {"unresolved", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go"}}]`, "WORKSPACE_SYMBOL_MALFORMED"}, {"root", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}, {"outside", `[{"name":"Target","kind":12,"location":{"uri":"file:///other/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}}
 	for _, tc := range cases {

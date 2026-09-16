@@ -370,7 +370,7 @@ func declaredValuesOfType(t *testing.T, path, wantedType string) []string {
 	return values
 }
 
-func TestLifecycleFailureMappingAndCaptureSupplyFalse(t *testing.T) {
+func TestLifecycleFailureMappingAndRequestScopedCaptureSupply(t *testing.T) {
 	if terminalForSessionFailure(session.LifecycleConflict) != StateCancelled {
 		t.Fatal("ASSERT_LIFECYCLE_CONFLICT_NOT_RESOURCE_LIMIT")
 	}
@@ -382,7 +382,7 @@ func TestLifecycleFailureMappingAndCaptureSupplyFalse(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(raw)
-	if strings.Count(source, "CaptureSupply: false") != 1 || strings.Contains(source, "CaptureSupply: true") {
-		t.Fatal("ASSERT_CAPTURE_SUPPLY_ALWAYS_FALSE")
+	if strings.Count(source, "CaptureSupply: request.CaptureSupply") != 1 || strings.Contains(source, "CaptureSupply: true") {
+		t.Fatal("ASSERT_CAPTURE_SUPPLY_REQUEST_SCOPED")
 	}
 }

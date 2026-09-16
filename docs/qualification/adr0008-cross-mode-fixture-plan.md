@@ -4,7 +4,7 @@ Status: **FIXTURE_IMPLEMENTED — QUALIFICATION_NOT_EXECUTED**
 
 Governing decision: [`HYBRID_SHARED_ALGEBRA`](../../qualification/adr0008-source-projection-matrix.v1.json)
 
-This document records the smallest implemented retained/live contract-adjudication fixture for exact-source projection. It does not define final public schema names or bytes, claim any qualification `PASS`, authorize runtime implementation, or qualify retained, live, or semantic behavior.
+This document records the smallest implemented retained/live contract-adjudication fixture for exact-source projection and the required successor fixture extension for structural display ranges and bounded multi-document live acquisition. The existing `crossmode-v1` files do not yet implement that extension. This document does not claim any qualification `PASS`, authorize runtime implementation, or qualify retained, live, or semantic behavior.
 
 ## Product boundary
 
@@ -22,9 +22,12 @@ position target
 
 shared structural/projection core
   -> server-reported graph and occurrences
-  -> Select
-  -> exactly one retained or live Resolve contract
-  -> Assemble
+  -> Select structural units
+  -> preserve exact evidence and server item ranges
+  -> Select required document URIs
+  -> exactly one retained or live document Resolve contract
+  -> resolve optional structural display ranges from admitted bytes
+  -> Project and Assemble
 ```
 
 Symbol query text, candidate lists, resolved workspace-symbol ranges, and lookup diagnostics are locator-only. They add no graph facts, cannot manufacture `CALLS`, and do not participate in logical projected-unit identity. Omitted projection retains location-only behavior on the new unified contract. Both legacy symbol operations leave product discovery and routing; their immutable predecessor schema bytes remain historical readers. `lsp_trace_v1_trace` remains retained acquisition, and no operation 44 is added.
@@ -46,7 +49,7 @@ The implemented fixture adds one directory:
 | `variants.json` | Body, metadata-only, withheld, unavailable, byte-limit, range-limit, successful-empty, and input-permutation cases. |
 | `expected.json` | Candidate canonical projection records, independent accounting, citations, identities, and semantic-execution-absent placeholders. |
 
-This is one logical fixture over one shared projection engine, not separate retained and live projection implementations.
+This is one logical fixture over one shared projection engine, not separate retained and live projection implementations. A successor `crossmode-v2` extension must add at least three source documents: the target document, one same-document caller declaration, and one cross-document caller declaration. It must include distinct selection, item, call-site, and enclosing-declaration ranges and must not replace or rewrite the V1 fixture.
 
 ## Exact source specimen
 
@@ -98,13 +101,17 @@ The retained representation binds:
 - exact immutable source identity: SHA-256 plus byte length;
 - exactly one retained resolver kind.
 
+The live representation models ephemeral metadata and deterministic expected digests only; fixture source files are synthetic test inputs and do not authorize production retention of live bytes. Production multi-document supplies exist only in memory for one request.
+
 The live representation binds:
 
 - exact managed session ID and generation;
-- exact URI and document version;
-- declared `utf-16` encoding;
-- exact content SHA-256 and byte length;
-- exactly one live resolver kind.
+- a mandatory target document plus a bounded canonical set of additional selected document URIs;
+- exact URI, document version, declared `utf-16` encoding, content SHA-256, and byte length for every acquired supply;
+- target-first then lexicographic document ordering;
+- independent document candidates, selected, acquired, unavailable, withheld, limit-omitted, and byte accounting;
+- exactly one live resolver kind for each selected document and no resolver fallthrough;
+- a terminal assertion that no raw live supply is written to a manifest, source-object store, publication root, cache, log, fixture, or other durable carrier.
 
 Private roots and arbitrary host selectors never appear. Retained and live physical projection identities must differ even though their logical unit and exact source bytes match. Placeholder digest labels are permitted in the planning fixture only when explicitly marked noncanonical; real goldens require the selected canonical preimage.
 
@@ -119,7 +126,7 @@ The fixture provides four requests:
 
 After removal of locator-only records, each symbol/position pair must produce identical structural facts and logical projected units. Physical identities remain custody-specific.
 
-Projection omission must preserve location-only behavior on the unified contract. Body projection requires new immutable request/result schema identities; predecessor schema bytes remain immutable.
+Projection omission must preserve location-only behavior on the unified contract. Body projection with publicly distinct evidence, server-item, and structural-display ranges plus multi-document custody requires successor immutable request/result/unified-result/envelope identities; predecessor schema bytes remain immutable.
 
 ## Variant expectations
 
@@ -157,6 +164,10 @@ The fixture must distinguish these decisions before implementation:
 | D10 empty | successful empty vs unavailable | Valid zero candidates is successful, not unavailable. |
 | D11 canonicalization | normal vs reversed request arrays | Canonical ordering produces byte-identical output. Exact key order awaits goldens. |
 | D12 semantic cache | retained/live semantic placeholders | Defer semantic cache preimages; freeze only cross-custody inequality and absent semantic execution. |
+| D13 evidence/display separation | identifier selection, server item, and enclosing declaration | Citation identity binds exact evidence; display identity additionally binds structural range, provenance, adapter version, and custody. |
+| D14 display provenance | identifier-sized gopls item range vs Go AST declaration range | Server item ranges are preserved but never relabeled as declarations; structural display uses an explicit qualified provenance such as `GO_AST_ENCLOSING_DECLARATION`. |
+| D15 document acquisition | target, same-document caller, cross-document caller, unavailable caller | Document URIs derive only from admitted units; target is first and remaining URIs are lexical; each selected URI has one terminal acquisition disposition. |
+| D16 document budgets | max documents, per-document bytes, total bytes, requests, messages, work | Documents and display ranges are admitted atomically; acquisition, projection, and response limits remain independent and exactly reconciled. |
 
 ## Ordered RED catalogue
 
@@ -180,6 +191,16 @@ A later implementation begins with assertion-specific failures in this order:
 16. `ASSERT_AUTHORITY_GRAPH_FACTS_COMPLETENESS_INVARIANT`
 17. `ASSERT_PREDECESSOR_SCHEMA_DIGESTS_UNCHANGED`
 18. `ASSERT_41_CANONICAL_12_COMPACT_NO_OPERATION_44`
+19. `ASSERT_SELECTION_ITEM_DISPLAY_RANGES_REMAIN_DISTINCT`
+20. `ASSERT_IDENTIFIER_SIZED_SERVER_RANGE_NOT_DECLARATION`
+21. `ASSERT_GO_AST_DISPLAY_RANGE_USES_ADMITTED_BYTES_ONLY`
+22. `ASSERT_LIVE_DOCUMENT_SELECTION_TARGET_FIRST_LEXICAL`
+23. `ASSERT_CROSS_DOCUMENT_CALLER_ACQUIRED_ONCE`
+24. `ASSERT_UNAVAILABLE_CALLER_HAS_NO_FILESYSTEM_OR_RETAINED_FALLBACK`
+25. `ASSERT_DOCUMENT_AND_DISPLAY_BUDGETS_ATOMIC_RECONCILED`
+26. `ASSERT_ADDITIONAL_DOCUMENT_FAILURE_CANNOT_REWRITE_STRUCTURAL_RESULT`
+27. `ASSERT_MULTI_DOCUMENT_DIRECT_GATEWAY_CLI_PARITY`
+28. `ASSERT_LIVE_DOCUMENT_SUPPLIES_EPHEMERAL_NO_DURABLE_WRITE`
 
 ## Planned repository scope
 
@@ -187,6 +208,8 @@ The implemented fixture owns:
 
 - `internal/sourceprojection/testdata/crossmode-v1/`;
 - `internal/sourceprojection/crossmode_fixture_test.go`.
+
+The planned additive extension should use a distinct `crossmode-v2` fixture directory or an equivalently immutable successor identity. It must not alter V1 source bytes or expected vectors.
 
 Future assertion-specific REDs belong in the unified operation-36 schema, registry, direct-MCP, gateway, and CLI tests. Evidence references may be added to `qualification/adr0008-source-projection-matrix.v1.json` without changing a cell to `PASS` before execution qualifies it.
 
@@ -200,4 +223,8 @@ Future assertion-specific REDs belong in the unified operation-36 schema, regist
 6. Assertion-specific RED execution and implementation.
 7. Direct MCP, execute gateway, CLI, and host-rendering qualification.
 8. Independent retained/live qualification evidence.
-9. ADR 0007 admission, privacy, ownership, evaluation, and execution prerequisites; none gate exact-source bodies.
+9. Frozen successor request/result/envelope identities for structural-display policy and multi-document custody.
+10. Qualified language-adapter contract, beginning with Go in-memory parsing over admitted bytes.
+11. Canonical multi-document fixture bytes and D13–D16 goldens.
+12. Real managed-server evidence for same-document and cross-document caller hydration.
+13. ADR 0007 admission, privacy, ownership, evaluation, and execution prerequisites; none gate exact-source bodies.

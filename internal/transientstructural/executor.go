@@ -70,7 +70,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	defer cancel()
 	document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{
 		SessionID: sessionID, Generation: request.Generation, URI: request.Target.URI,
-		LanguageID: request.LanguageID, CaptureSupply: false,
+		LanguageID: request.LanguageID, CaptureSupply: request.CaptureSupply,
 	})
 	if document.Failure != "" {
 		return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
@@ -179,7 +179,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		Phase: PhaseDeliveryCheck, State: state,
 		Qualification: Qualification{SessionID: sessionID, Generation: request.Generation, PositionEncoding: metadata.PositionEncoding},
 		TargetID:      rootOpaque(projection), GraphDigest: graphDigest(projection, policy, bounds), Policy: policy, Bounds: bounds,
-		Accounting: accounting, Analysis: analysis,
+		Accounting: accounting, Analysis: analysis, SourceSupply: document.Supply,
 	}, nil
 }
 

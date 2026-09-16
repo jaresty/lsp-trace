@@ -52,9 +52,7 @@ var adr0004OperationNumbers = []string{
 	"lsp_trace_v1_context_churn",                // 38
 	"lsp_trace_v1_context_symbol_churn",         // 39
 	"lsp_trace_v1_context_symbol_churn_capture", // 40
-	"lsp_trace_v1_structural_context_symbol",    // 41
-	"lsp_session_v1_derive_workspace",           // 42
-	"lsp_trace_v2_structural_context_symbol",    // 43
+	"lsp_session_v1_derive_workspace",           // 42 (operation 41 retired)
 }
 
 var adr0004DefaultCurrent = []string{
@@ -67,12 +65,10 @@ var adr0004DefaultCurrent = []string{
 	"lsp_trace_v1_inspect_hydrated",
 	"lsp_trace_v1_program_c_leiden",
 	"lsp_trace_v1_structural_context",
-	"lsp_trace_v1_structural_context_symbol",
 	"lsp_trace_v1_structural_delta",
 	"lsp_trace_v1_trace",
 	"lsp_trace_v1_verify",
 	"lsp_trace_v2_structural_context",
-	"lsp_trace_v2_structural_context_symbol",
 }
 
 var adr0004AdvancedOnly = []string{
@@ -92,8 +88,8 @@ var adr0004HiddenLegacy = []string{
 
 func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *testing.T) {
 	r := NewRegistry(false)
-	if len(adr0004OperationNumbers) != 43 {
-		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 43", len(adr0004OperationNumbers))
+	if len(adr0004OperationNumbers) != 41 {
+		t.Fatalf("REGRESSION: operation fixture has %d entries, want current 41", len(adr0004OperationNumbers))
 	}
 	if adr0004OperationNumbers[30] != "lsp_trace_v1_program_c_compose" || adr0004OperationNumbers[31] != "lsp_trace_v1_program_c_instability" {
 		t.Fatalf("REGRESSION: historical operations 31/32 changed: %q, %q", adr0004OperationNumbers[30], adr0004OperationNumbers[31])
@@ -127,8 +123,8 @@ func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *
 		operation := properties["operation"].(map[string]any)["const"].(string)
 		seen[operation] = true
 	}
-	if len(seen) != 42 {
-		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 42", len(seen))
+	if len(seen) != 40 {
+		t.Fatalf("REGRESSION: canonical execute has %d operation branches, want 40", len(seen))
 	}
 	for _, name := range adr0004OperationNumbers {
 		if name != "lsp_trace_v1_execute" && !seen[name] {

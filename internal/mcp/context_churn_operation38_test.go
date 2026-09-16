@@ -14,7 +14,7 @@ func TestContextChurnOperation38AppendOnlyContract(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	_, ok := full.ResolveCanonical(mcpcontract.ContextChurnTool)
-	if !ok || len(full.Tools()) != 43 || len(full.Advertised()) != 43 || len(compact.Tools()) != 43 || len(compact.Advertised()) != 13 {
+	if !ok || len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 12 {
 		t.Fatalf("ASSERT_CONTEXT_CHURN_OPERATION38_APPEND_ONLY: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.ResolveCanonical(mcpcontract.ContextChurnTool); !ok {

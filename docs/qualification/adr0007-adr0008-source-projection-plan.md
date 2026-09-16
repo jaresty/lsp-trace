@@ -43,9 +43,9 @@ The fixture now supplies owner-reviewed D3–D12 decisions: domain-separated log
 
 Common qualification is conditional on model selection and covers only semantics that can remain custody-neutral:
 
-- exact unit identity: evidence role, graph subject, logical source, range, encoding, digest/length, custody identity, privacy, availability, and policy;
-- endpoint declaration versus server-reported relation call-site citations;
-- canonical ordering, overlap attribution, whole-range admission, and `candidates = selected + omitted`;
+- exact unit identity: evidence role, graph subject, logical source, exact evidence range, optional server item range, optional structural display range and provenance, encoding, digest/length, custody identity, privacy, availability, and policy;
+- endpoint selection versus server item versus server-reported relation call-site citations, without assuming that a language-server item range contains a full declaration;
+- canonical ordering, overlap attribution, whole-display-range admission, stable evidence citations, and `candidates = selected + omitted`;
 - independent object/node, range, byte, work, response, and page limits;
 - metadata-only defaults, explicit body eligibility, privacy exclusions, and discoverable omissions;
 - malformed input rejection without repair, retry, fallback, hidden budget increase, or implicit continuation;
@@ -63,19 +63,30 @@ Graph and manifest custody metadata remain valid when source becomes unavailable
 
 ### 3. Live-session resolver qualification
 
-Future transient qualification remains separate and does not become retained evidence. It binds reads to one exact managed session ID/generation and request-admitted document identity/version/bytes/encoding.
+Future transient qualification remains separate and does not become retained evidence. Multi-document supplies are live-only, in-memory, and request-ephemeral. It binds reads to one exact managed session ID/generation and an explicit bounded set of request-admitted document identities, versions, bytes, and encodings. The target document is mandatory. Additional caller/callee documents are selected only after structural traversal from already-admitted endpoint and server-reported relation units.
 
 One canonical `lsp_trace_v2_structural_context` operation accepts exactly one symbol or position target. Symbol targets use workspace-symbol evidence only to locate one exact URI before delegating to the same structural/projection core used by position targets. Locator evidence adds no graph facts and does not enter logical-unit identity.
 
 Live gates require:
 
+- target-first, lexicographically ordered additional-document selection that is invariant under traversal input permutation;
+- at-most-once exact managed-session document preparation and in-memory capture for each selected URI;
+- terminal disposal of raw document supplies after response assembly or failure, with no manifest, source-object, publication, cache, log, fixture, or other durable write;
+- independent structural, document-acquisition, syntax-resolution, projection, and complete-response budgets;
+- per-document custody bindings plus document candidates, selected, acquired, unavailable, withheld, limit-omitted, and acquired-byte accounting;
+- typed `DOCUMENT_LIMIT`, `SOURCE_BYTE_LIMIT`, `DOCUMENT_UNAVAILABLE`, `DOCUMENT_VERSION_CHANGED`, and `POLICY_WITHHELD` outcomes;
+- explicit bounded managed-session preparation as the sole authorized way to source each selected live workspace document, with no direct path access by projection/syntax code and no post-failure current-checkout retry, Git, retained-object, network, alternate-session, or resolver fallthrough;
+- structural display ranges resolved only from exact admitted bytes by a qualified deterministic language adapter;
+- exact evidence and call-site ranges remaining separately attributable when display spans expand or overlap;
 - independent structural and projection budgets;
 - exhausted-resource diagnostics with safe observed/limit values;
 - explicit partial graph and frontier disposition;
 - host-owned parameter help only for request-validation failures, never valid domain failures;
 - body/snippet opt-in that changes projection only and cannot rewrite structural facts, status, frontier, authority, completeness, or budgets;
 - omitted fields preserving legacy request/result bytes;
-- no retained, replay, publication, or hydration eligibility for transient output.
+- successor immutable request/result/envelope identities for publicly typed evidence/display ranges and multi-document custody;
+- additional-document or syntax-resolution failure leaving established `CALLS`, structural status, authority, and completeness unchanged;
+- no retained, replay, publication, historical-hydration, semantic-cache, or source-object eligibility for transient output or its raw document supplies.
 
 ### 4. ADR 0007 interoperability qualification
 
@@ -124,14 +135,15 @@ Assertion-specific RED must compile and execute far enough to fail the intended 
 4. Execute common, retained-object, and live-session tracks independently. Custody-specific PASS cannot be borrowed across modes.
 5. Execute ADR 0007 interoperability only after its own frozen prerequisites exist. Projection PASS is necessary input evidence, not semantic-pilot authorization.
 6. Require every applicable cell to be PASS at one reviewed revision. Any BLOCKED, FAIL, NOT_RUN, mixed revision, count drift, predecessor mutation, or claim-ceiling violation blocks integration.
-7. Preserve the matrix and evidence packet as barrier inputs; do not rewrite historical outcomes after model selection.
+7. Add D13–D16 fixture decisions for evidence/display separation, display provenance, bounded document acquisition, and independent document accounting before freezing successor wire bytes.
+8. Preserve the matrix and evidence packet as barrier inputs; do not rewrite historical outcomes after model selection.
 
 ## Critical blockers now
 
 - The semantic model is selected, but the canonical cross-mode fixture and D1–D12 golden vectors have not been executed or reviewed.
 - Common projected-unit and citation wire identities are not frozen.
 - Manifest and object-store tracks have not supplied canonical bytes, validators, immutable-object custody receipts, GC/lease evidence, or adversarial outcomes.
-- No authorized unified-context live projection trial or host-rendering evidence exists.
+- Focused live projection smoke evidence exists for one target document, but no attributable multi-document acquisition, structural-display, caller-body, CLI-parity, or host-rendering qualification evidence exists.
 - ADR 0007 typed admission, identity, privacy/deletion, terminal-accounting, ownership, and evaluation prerequisites remain unexecuted.
 
 Documentation resolves only the model-selection barrier. It resolves none of the execution, fixture, wire-contract, custody-specific qualification, ADR 0007 prerequisite, or implementation blockers.

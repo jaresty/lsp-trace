@@ -1,0 +1,13 @@
+{
+  "schema": "lsp-trace.fixture.crossmode-v2.structural.v1",
+  "authority": 0,
+  "source_graph_complete": "UNKNOWN",
+  "graph_facts_added": 0,
+  "position_encoding": "utf-16",
+  "target_uri": "file:///workspace/target.go",
+  "candidates": [
+    {"id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","role":"ENDPOINT","uri":"file:///workspace/target.go","evidence_range":{"start":{"line":0,"character":1},"end":{"line":0,"character":5}},"item_range":{"start":{"line":0,"character":0},"end":{"line":0,"character":8}},"selection_range":{"start":{"line":0,"character":1},"end":{"line":0,"character":5}},"provenance":"SERVER_REPORTED"},
+    {"id":"sha256:1111111111111111111111111111111111111111111111111111111111111111","role":"RELATION","uri":"file:///workspace/target.go","evidence_range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"provenance":"SERVER_REPORTED"},
+    {"id":"sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","role":"RELATION","uri":"file:///workspace/caller.go","evidence_range":{"start":{"line":0,"character":0},"end":{"line":0,"character":6}},"provenance":"SERVER_REPORTED"}
+  ]
+}

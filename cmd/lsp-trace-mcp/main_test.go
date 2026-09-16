@@ -27,13 +27,19 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 	beforeLifecycle := server.Executors[mcp.LifecycleExecutorFamily]
 	beforeIncoming := server.Executors[mcp.IncomingExecutorFamily]
 	beforeSlice := server.Executors[mcp.SliceExecutorFamily]
-	beforeStructuralContextSymbol := server.Executors[mcp.StructuralContextSymbolExecutorFamily]
+	beforeStructuralContextV2 := server.Executors[mcp.StructuralContextV2ExecutorFamily]
 
 	selected := composeHostSelectorRuntime(server, manager, []bootstrapSession{{Alias: "project", SessionID: "canonical"}})
-	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice || server.Executors[mcp.StructuralContextSymbolExecutorFamily] == beforeStructuralContextSymbol {
-		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v structural_context_symbol_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice, server.Executors[mcp.StructuralContextSymbolExecutorFamily] != beforeStructuralContextSymbol)
+	if selected.aliases["project"] != "canonical" || server.Executors[mcp.LifecycleExecutorFamily] == beforeLifecycle || server.Executors[mcp.IncomingExecutorFamily] == beforeIncoming || server.Executors[mcp.SliceExecutorFamily] == beforeSlice || server.Executors[mcp.StructuralContextV2ExecutorFamily] == beforeStructuralContextV2 {
+		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: aliases=%v lifecycle_replaced=%v incoming_replaced=%v slice_replaced=%v structural_context_v2_replaced=%v", selected.aliases, server.Executors[mcp.LifecycleExecutorFamily] != beforeLifecycle, server.Executors[mcp.IncomingExecutorFamily] != beforeIncoming, server.Executors[mcp.SliceExecutorFamily] != beforeSlice, server.Executors[mcp.StructuralContextV2ExecutorFamily] != beforeStructuralContextV2)
 	}
-	if got := server.Registry.Tools(); len(got) != 43 {
+	if _, found := server.Executors[mcp.StructuralContextSymbolExecutorFamily]; found {
+		t.Fatal("ASSERT_UNIFIED_CONTEXT_LEGACY_EXECUTOR_FAMILY_ABSENT")
+	}
+	if _, found := server.Executors[mcp.StructuralContextSymbolV2ExecutorFamily]; found {
+		t.Fatal("ASSERT_UNIFIED_CONTEXT_LEGACY_V2_EXECUTOR_FAMILY_ABSENT")
+	}
+	if got := server.Registry.Tools(); len(got) != 41 {
 		t.Fatalf("ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE: tool_count=%d", len(got))
 	}
 	_, incomingCollector := any(selected).(incomingops.RelationCollector)
@@ -112,7 +118,7 @@ func TestAlwaysLocalTraversalManagedFakeLSPEndToEnd(t *testing.T) {
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 43 {
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 41 {
 		t.Fatalf("ASSERT_ALWAYS_LOCAL_THIRTY_SEVEN_TOOL_ORDER: response=%s err=%v", lines[0], err)
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {
@@ -141,16 +147,16 @@ func TestDefaultAndAdvancedProcessAdvertisement(t *testing.T) {
 	want := map[string][]string{
 		"default": {
 			"lsp_trace_v1_capabilities", "lsp_trace_v1_census", "lsp_trace_v1_context_churn", "lsp_trace_v1_context_symbol_churn", "lsp_trace_v1_context_symbol_churn_capture", "lsp_trace_v1_execute", "lsp_trace_v1_inspect_hydrated",
-			"lsp_trace_v1_program_c_leiden", "lsp_trace_v1_structural_context", "lsp_trace_v1_structural_context_symbol", "lsp_trace_v1_structural_delta", "lsp_trace_v1_trace", "lsp_trace_v1_verify", "lsp_trace_v2_structural_context", "lsp_trace_v2_structural_context_symbol",
+			"lsp_trace_v1_program_c_leiden", "lsp_trace_v1_structural_context", "lsp_trace_v1_structural_delta", "lsp_trace_v1_trace", "lsp_trace_v1_verify", "lsp_trace_v2_structural_context",
 		},
 		"advanced": {
 			"lsp_session_v1_derive_workspace", "lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
 			"lsp_trace_v1_bounded_retained_analysis", "lsp_trace_v1_bounded_retained_metrics", "lsp_trace_v1_bounded_retained_ranking",
 			"lsp_trace_v1_capabilities", "lsp_trace_v1_census", "lsp_trace_v1_context_churn", "lsp_trace_v1_context_symbol_churn", "lsp_trace_v1_context_symbol_churn_capture", "lsp_trace_v1_custody_execute", "lsp_trace_v1_execute", "lsp_trace_v1_export_retained_calls",
 			"lsp_trace_v1_filter", "lsp_trace_v1_inspect", "lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_program_c_compose",
-			"lsp_trace_v1_program_c_instability", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_structural_context", "lsp_trace_v1_structural_context_symbol", "lsp_trace_v1_structural_delta", "lsp_trace_v1_trace", "lsp_trace_v1_validate",
+			"lsp_trace_v1_program_c_instability", "lsp_trace_v1_program_c_leiden", "lsp_trace_v1_schema_get", "lsp_trace_v1_structural_context", "lsp_trace_v1_structural_delta", "lsp_trace_v1_trace", "lsp_trace_v1_validate",
 			"lsp_trace_v1_verify", "lsp_trace_v2_bounded_retained_analysis", "lsp_trace_v2_bounded_retained_metrics",
-			"lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_structural_context", "lsp_trace_v2_structural_context_symbol", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls",
+			"lsp_trace_v2_bounded_retained_ranking", "lsp_trace_v2_export_retained_calls", "lsp_trace_v2_structural_context", "lsp_trace_v2_verify", "lsp_trace_v2_verify_retained_calls",
 		},
 	}
 	for profile, expected := range want {
@@ -207,7 +213,7 @@ func TestCompactToolProfileProcessAdvertisementAndHiddenDispatch(t *testing.T) {
 			} `json:"tools"`
 		} `json:"result"`
 	}
-	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 13 {
+	if err := json.Unmarshal([]byte(lines[0]), &listed); err != nil || len(listed.Result.Tools) != 12 {
 		t.Fatalf("ASSERT_COMPACT_PROCESS_ADVERTISES_12: err=%v response=%s", err, lines[0])
 	}
 	for i := 1; i < len(listed.Result.Tools); i++ {

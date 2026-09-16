@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/sessionruntime"
 )
 
 type Phase string
@@ -91,6 +92,7 @@ type Request struct {
 	RequestTimeoutMS int64
 	MaxMessages      int
 	MaxBytes         int64
+	CaptureSupply    bool
 	Analysis         AnalysisRequest
 }
 
@@ -100,12 +102,14 @@ type Witness struct {
 }
 
 type NodeFact struct {
-	ID        string      `json:"id"`
-	Witnesses []Witness   `json:"witnesses"`
-	Name      string      `json:"-"`
-	Kind      int         `json:"-"`
-	URI       string      `json:"-"`
-	Range     graph.Range `json:"-"`
+	ID             string      `json:"id"`
+	Witnesses      []Witness   `json:"witnesses"`
+	Name           string      `json:"-"`
+	Kind           int         `json:"-"`
+	URI            string      `json:"-"`
+	Range          graph.Range `json:"-"`
+	ItemRange      graph.Range `json:"-"`
+	SelectionRange graph.Range `json:"-"`
 }
 
 type OccurrenceFact struct {
@@ -188,24 +192,25 @@ type Qualification struct {
 }
 
 type Result struct {
-	SchemaVersion       string         `json:"schema_version"`
-	EvidenceClass       string         `json:"evidence_class"`
-	Authority           int            `json:"authority"`
-	SourceGraphComplete string         `json:"source_graph_complete"`
-	Retained            bool           `json:"retained"`
-	Replayable          bool           `json:"replayable"`
-	PublicationEligible bool           `json:"publication_eligible"`
-	HydrationEligible   bool           `json:"hydration_eligible"`
-	ClaimCeiling        string         `json:"claim_ceiling"`
-	Phase               Phase          `json:"phase"`
-	State               TerminalState  `json:"state"`
-	Qualification       Qualification  `json:"qualification"`
-	TargetID            string         `json:"target_id"`
-	GraphDigest         string         `json:"graph_digest"`
-	Policy              PolicyBinding  `json:"policy"`
-	Bounds              BoundsBinding  `json:"bounds"`
-	Accounting          Accounting     `json:"accounting"`
-	Analysis            AnalysisResult `json:"analysis"`
+	SchemaVersion       string                         `json:"schema_version"`
+	EvidenceClass       string                         `json:"evidence_class"`
+	Authority           int                            `json:"authority"`
+	SourceGraphComplete string                         `json:"source_graph_complete"`
+	Retained            bool                           `json:"retained"`
+	Replayable          bool                           `json:"replayable"`
+	PublicationEligible bool                           `json:"publication_eligible"`
+	HydrationEligible   bool                           `json:"hydration_eligible"`
+	ClaimCeiling        string                         `json:"claim_ceiling"`
+	Phase               Phase                          `json:"phase"`
+	State               TerminalState                  `json:"state"`
+	Qualification       Qualification                  `json:"qualification"`
+	TargetID            string                         `json:"target_id"`
+	GraphDigest         string                         `json:"graph_digest"`
+	Policy              PolicyBinding                  `json:"policy"`
+	Bounds              BoundsBinding                  `json:"bounds"`
+	Accounting          Accounting                     `json:"accounting"`
+	Analysis            AnalysisResult                 `json:"analysis"`
+	SourceSupply        *sessionruntime.DocumentSupply `json:"-"`
 }
 
 type BoundsBinding struct {

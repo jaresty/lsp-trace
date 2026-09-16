@@ -32,8 +32,10 @@ The implementation will:
 4. target exactly 41 canonical operations and 12 compact-advertised tools, with the unified operation replacing both symbol-only entries in compact discovery;
 5. define a new immutable `lsp-trace.dehydrated-source-manifest.v1` artifact bound to exact admitted Graph Provenance V5 bytes;
 6. define a deterministic source-projection result family shared by retained and live custody modes;
-7. add no operation 44;
-8. preserve operation 33 as retained acquisition and keep semantic Describe, Embed, and indexing outside this implementation.
+7. distinguish exact evidence ranges, server item ranges, and provenance-qualified structural display ranges without allowing any source range to establish graph facts;
+8. permit live projection to acquire an explicit, bounded, request-ephemeral set of additional caller/callee document supplies from the same managed session generation when projection policy requests cross-document bodies; these bytes are never retained, published, cached, or converted into source objects;
+9. add no operation 44;
+10. preserve operation 33 as retained acquisition and keep semantic Describe, Embed, and indexing outside this implementation.
 
 This ADR does not authorize runtime or schema implementation by itself. Each implementation stage requires assertion-specific RED evidence before production changes.
 
@@ -45,7 +47,7 @@ The owner selects **HYBRID_SHARED_ALGEBRA** from the qualification plan's review
 Select(logical request) → Resolve(custody contract) → Assemble(projected records)
 ```
 
-The shared algebra owns logical projected-unit, selection, accounting, privacy, range, and citation semantics. `Resolve` is custody-specific: retained projection binds exact admitted Graph Provenance V5, manifest availability, and immutable source objects, while live projection binds one exact managed session generation and request-admitted document bytes. Physical projection identities, statuses, and downstream ADR 0007 admission/cache identities remain custody-specific.
+The shared algebra owns logical projected-unit, selection, accounting, privacy, range, and citation semantics. `Resolve` is custody-specific: retained projection binds exact admitted Graph Provenance V5, manifest availability, and immutable source objects, while live projection binds one exact managed session generation and an explicitly selected, bounded set of request-admitted document supplies. The target document is mandatory; additional documents are separately selected and acquired only for already-admitted projected units. Physical projection identities, statuses, and downstream ADR 0007 admission/cache identities remain custody-specific.
 
 The dehydrated manifest owns retained custody and availability only. It is not the owner of projection semantics. A shared logical unit does not create a shared physical identity: even byte-identical retained and live source selections are not thereby projection-equal, admission-equal, or cache-equal.
 
@@ -221,7 +223,7 @@ A projection result binds:
 - exact graph digest and capture identity;
 - manifest identity;
 - projection mode and policy identity;
-- source entries with role, graph subject, source identity, exact range, position encoding, digest, and optional body;
+- source entries with role, graph subject, source identity, exact evidence range, optional server item range, optional structural display range and provenance, position encoding, digest, document custody binding, and optional body;
 - complete selection and omission accounting;
 - `graph_facts_added: 0`;
 - authority and completeness ceilings inherited without strengthening.
@@ -297,11 +299,13 @@ The existing `lsp_trace_v1_inspect_hydrated` operation and `lsp_trace_v1_execute
 
 1. **Product surface:** replace historical symbol-only discovery with one unified context target union; preserve historical schema readers without advertising compatibility aliases.
 2. **Projection algebra:** freeze D3–D12 identities, statuses, ordering, budgets, privacy, overlap, empty-result, and semantic-deferral semantics from the canonical fixture; regenerate fixture hashes from the frozen preimages.
-3. **Schema families:** add new immutable unified-context, manifest, and projection schemas without changing predecessor bytes.
-4. **Shared core:** reuse deterministic hydrated-evidence selection, extraction, overlap, privacy, and accounting beneath custody-specific retained and live resolvers.
-5. **Immutable storage:** qualify Git bindings, private content-addressed objects, dirty-buffer snapshots, retention, and GC behavior.
-6. **Unified transports:** qualify direct MCP, canonical execute gateway, and CLI context routing for the unified V2 operation, targeting 41 canonical / 12 compact discovery.
-7. **Presentation:** qualify quiet metadata-only and target/projected LLM-facing policies with explicit omission accounting.
+3. **Schema families:** add new immutable unified-context, manifest, and projection schemas without changing predecessor bytes. Structural-display and multi-document acquisition require successor request, source-projection result, unified-result, success-envelope, and domain-error identities.
+4. **Range preservation and syntax resolution:** preserve server selection, item, and call-site ranges independently; resolve optional structural display ranges only from admitted bytes through qualified deterministic adapters.
+5. **Shared core:** reuse deterministic hydrated-evidence selection, extraction, overlap, privacy, and accounting beneath custody-specific retained and live resolvers.
+6. **Bounded ephemeral live document acquisition:** select target-first canonical document sets after traversal, acquire each exact in-memory supply once under independent limits, retain only typed per-document outcomes in the response, and erase references to raw supplies when the request ends.
+7. **Immutable storage:** qualify Git bindings, private content-addressed objects, dirty-buffer snapshots, retention, and GC behavior.
+8. **Unified transports:** qualify direct MCP, canonical execute gateway, and CLI context routing for the unified V2 operation, targeting 41 canonical / 12 compact discovery.
+9. **Presentation:** qualify quiet metadata-only and target/projected LLM-facing policies with explicit omission accounting.
 
 Each stage is independently reviewable and does not imply authorization for the next.
 
@@ -309,7 +313,7 @@ Each stage is independently reviewable and does not imply authorization for the 
 
 A review of the current production paths supports one projection algebra serving two distinct custody modes, but not one interchangeable evidence class:
 
-- **Transient live bounded projection** is an interactive presentation over one exact managed session generation. Historical operations 36 and 43 already return workspace-relative paths plus endpoint declaration ranges and relation call-site ranges; the unified product operation retains that structural core while accepting an exclusive symbol-or-position target union. Its transient executor prepares the target document with `CaptureSupply: false`; the result remains `authority: 0`, `source_graph_complete: UNKNOWN`, non-retained, non-replayable, publication-ineligible, and hydration-ineligible. Projection may read only the exact live document bytes admitted for that request and may add zero graph facts.
+- **Transient live bounded projection** is an interactive presentation over one exact managed session generation. Historical operations 36 and 43 already return workspace-relative paths plus endpoint item ranges and relation call-site ranges; real managed `gopls` evidence demonstrates that those item ranges may be identifier-sized and cannot be assumed to contain full declarations. The unified product operation retains that structural core while accepting an exclusive symbol-or-position target union. The target document is prepared and captured first. When an explicit projection policy requests cross-document structural bodies, the operation may deterministically select and prepare a bounded set of additional documents referenced only by already-admitted server-reported endpoints or relation occurrences. Every document supply remains request-scoped, version-bound, independently accounted, and ephemeral. It is discarded when the request terminates and is never written to retained artifacts, manifests, source-object stores, publication roots, semantic caches, logs, or qualification fixtures. The result remains `authority: 0`, `source_graph_complete: UNKNOWN`, non-replayable, publication-ineligible, and unable to add graph facts.
 - **Retained V5-bound offline projection** is hydration over immutable bytes bound to an admitted Graph Provenance V5 capture and dehydrated manifest. The existing hydrated-inspection path is offline, path-free after ingress, explicitly body-gated, deterministically ordered, overlap-aware, bounded, and independently validated. Missing retained bytes remain typed and never trigger current-checkout or live-session acquisition.
 
 These modes may share ordering, range extraction, overlap handling, privacy vocabulary, omission reasons, and projection accounting only if their custody and result identities remain explicit. A transient projection cannot become retained evidence, and retained hydration cannot consult the live workspace. Source text remains a zero-authority view over already admitted server-reported `CALLS`; it cannot create, repair, complete, or strengthen graph facts.
@@ -318,22 +322,45 @@ These modes may share ordering, range extraction, overlap handling, privacy voca
 
 Location-only output remains the default in both modes. Bodies or snippets require an explicit opt-in plus independent byte, range, object, work, response, and, where applicable, page limits. The projection contract distinguishes:
 
-- endpoint declaration ranges, attached to admitted nodes; and
+- endpoint server item and selection ranges, attached to admitted nodes; and
 - relation call-site ranges, attached to admitted server-reported `CALLS` occurrences.
 
-Neither range kind substitutes for the other. Overlapping selected ranges are processed in canonical order and may share one emitted span only when every original selection remains separately attributable and accounting remains exact. Projection status and accounting are independent of structural status: unavailable, withheld, invalid, or budget-truncated source cannot rewrite structural success or failure. Projection candidates must reconcile as selected plus omitted, with one mutually exclusive reason per omission.
+Neither range kind substitutes for the other. Each projected unit distinguishes:
+
+- an **evidence range**: the exact server-reported selection or call-site range that anchors the citation;
+- an optional **server item range**: the `CallHierarchyItem.range` admitted during traversal, preserved without claiming that it encloses a declaration body; and
+- an optional **structural display range**: a broader range resolved from already-admitted source bytes by a language-qualified deterministic syntax adapter and used only for presentation.
+
+A structural display range must contain or otherwise exactly bind its evidence range under the adapter contract. Its provenance and kind are explicit, for example `GO_AST_ENCLOSING_DECLARATION`; it cannot add, repair, infer, merge, or strengthen nodes or relations. If no qualified adapter or admitted bytes exist, the evidence range remains valid while display expansion receives a typed terminal disposition.
+
+Overlapping selected display ranges are processed in canonical order and may share one emitted span only when every original evidence selection, display selection, and citation remains separately attributable and accounting remains exact. Projection status and accounting are independent of structural status: unavailable, withheld, invalid, or budget-truncated source cannot rewrite structural success or failure. Projection candidates must reconcile as selected plus omitted, with one mutually exclusive reason per omission.
+
+### Bounded multi-document live acquisition
+
+Cross-document live source is available only through an explicit acquisition policy on the unified request. Multi-document document supplies are exclusively a transient live concern. Retained projection never performs this acquisition: it may resolve only immutable source objects already admitted by its existing V5/manifest custody contract, and a live request can neither create nor populate those objects. Structural traversal completes first. The operation then selects document URIs solely from already-admitted endpoint and server-reported relation units. Canonical document ordering is:
+
+1. the target document;
+2. remaining selected document URIs in lexicographic order.
+
+Selection and acquisition are distinct. A document excluded by structural or projection-unit selection is never prepared merely because traversal observed it. Each admitted document is prepared at most once for the exact session generation through an explicit bounded `sessionruntime` live-document operation and captured in memory as a full-text `LSP_SUPPLIED` document supply. That managed preparation may source the selected URI from the exact current workspace solely to synchronize it into the same live session generation; this is the primary authorized live acquisition, not a fallback and not retained evidence. The supply lifetime is bounded to that operation invocation and ends after response assembly or failure. Projection and syntax packages may not open paths directly. After managed preparation fails, no current-checkout retry, Git, retained-object, network, alternate-session, or alternate-resolver path may satisfy the document.
+
+The request declares independent hard limits for additional documents, per-document bytes, total acquired source bytes, document requests, protocol messages, acquisition work, projection work, returned source bytes, and complete response bytes. Each document is admitted atomically; limits never cause partial document custody or a hidden increase. Target-document failure retains the existing structural failure. Additional-document failures are terminal for that document but do not rewrite already established structural facts.
+
+Document accounting exposes candidates, selected, acquired, unavailable, withheld, limit-omitted, total acquired bytes, and one terminal disposition per selected document. Required typed causes include `DOCUMENT_LIMIT`, `SOURCE_BYTE_LIMIT`, `DOCUMENT_UNAVAILABLE`, `DOCUMENT_VERSION_CHANGED`, and `POLICY_WITHHELD`. No retry or implicit continuation is permitted.
+
+Structural display resolution runs only after document admission. For the first qualified adapter, Go declarations are resolved with `go/parser` over the captured in-memory bytes; parsing does not read imports or the filesystem and contributes zero graph authority. Other languages use explicitly qualified adapters or exact-evidence fallback. Relation call-site evidence remains the server-reported `fromRange`; caller declaration display is a separate presentation range.
 
 The repository review also exposed a bounded live-tracing usability risk. Valid exact-symbol requests at bounded depth returned typed `TRAVERSAL/TRUNCATED` and `ADMISSION/RESOURCE_LIMIT` outcomes, but the responses did not identify the exhausted resource, report observed-versus-limit accounting, state whether any partial graph or frontier remained available, or name an actionable safe adjustment. The host rendering additionally appended `Expected parameters` after these valid domain failures, making them resemble input-schema errors. Subsequent depth-1 requests succeeded against the same managed session, so this is evidence about bounded-limit diagnostics and usability, not evidence of a dead session or unsupported operation.
 
 Source-projection qualification must treat that risk explicitly. Projection accounting and status remain separate from structural traversal accounting and status. Opting into bodies or snippets must not silently consume structural request, message, node, depth, or traversal-byte budgets, and a projection limit or source failure must not convert structural success into structural failure. Conversely, projection must not hide a structural `TRUNCATED` or `RESOURCE_LIMIT` outcome. Typed failures must identify the exhausted budget, report observed and declared-limit values where safely available, state the disposition of any partial result or frontier, and distinguish actionable bounded adjustments from forbidden hidden retries or budget increases. Parameter-help text must not be appended to valid domain failures; schema guidance is reserved for actual request-validation errors.
 
-Both custody modes require deterministic canonical ordering, whole-range admission, position-encoding-aware extraction, no code-point splitting, explicit privacy classification, and terminal typed outcomes for unavailable or unverifiable bytes. They permit no retry, resolver fallthrough, current-checkout substitution, range repair, encoding guess, hidden budget increase, or implicit continuation. Revision custody is exact and mode-specific: the live session generation qualifies transient reads, while the V5 capture, manifest, and immutable source object qualify retained reads.
+Both custody modes require deterministic canonical ordering, whole-range admission, position-encoding-aware extraction, no code-point splitting, explicit privacy classification, and terminal typed outcomes for unavailable or unverifiable bytes. Explicit bounded live preparation of a selected workspace document is permitted only through `sessionruntime`; direct path access by projection code and any retry, resolver fallthrough, post-failure current-checkout substitution, range repair, encoding guess, hidden budget increase, or implicit continuation remain prohibited. Revision custody is exact and mode-specific: the live session generation qualifies transient reads, while the V5 capture, manifest, and immutable source object qualify retained reads.
 
 ### Staged recommendation
 
 Retained and live qualification are independent custody tracks under the selected shared algebra; retained qualification is not a semantic prerequisite for bounded live projection:
 
-1. Use the implemented canonical cross-mode fixture to freeze D3–D12 and regenerate canonical identity and serialization goldens.
+1. Preserve the implemented V1 canonical fixture for D3–D12, then add an immutable successor fixture to freeze D13–D16 for evidence/display separation, display provenance, bounded document acquisition, and independent document accounting.
 2. Define one unified request/result contract for `lsp_trace_v2_structural_context`, with exactly one symbol or position target and explicit projection options.
 3. Route symbol targets through locator-only workspace-symbol resolution, then delegate the exact URI target to the same structural/projection core used by position targets.
 4. Remove both symbol-specific names from full discovery; replace both compact symbol entries with the unified context operation.
@@ -364,6 +391,14 @@ Implementation begins with assertion-specific RED tests. At minimum, qualificati
 16. `ASSERT_OFFLINE_REPLAY_REQUIRES_EXACT_V5_MANIFEST_AND_SOURCE_OBJECTS` — missing objects cannot trigger live substitution.
 17. `ASSERT_V2_V3_READERS_UNCHANGED_AND_V5_AUTHORITATIVE` — historical fixtures remain valid and new production manifests bind V5.
 18. `ASSERT_SOURCE_PROJECTION_DIRECT_EXECUTE_EXACT_PARITY` — direct and gateway envelopes and failures are identical.
+19. `ASSERT_EVIDENCE_ITEM_DISPLAY_RANGES_DISTINCT_AND_PROVENANCED` — exact citations remain stable while optional display ranges are independently identified and provenance-qualified.
+20. `ASSERT_GOPLS_ITEM_RANGE_NOT_ASSUMED_DECLARATION_BODY` — identifier-sized server item ranges cannot be relabeled as declaration bodies.
+21. `ASSERT_LIVE_DOCUMENT_SELECTION_TARGET_FIRST_CANONICAL` — selected document acquisition is target-first and permutation-invariant.
+22. `ASSERT_CROSS_DOCUMENT_CALLER_BODY_REQUIRES_EXACT_SUPPLY` — caller bodies require an exact request-admitted supply for that URI.
+23. `ASSERT_MULTI_DOCUMENT_LIMITS_ATOMIC_AND_RECONCILED` — document, per-document byte, total-byte, request, message, work, projection, and response limits remain independent and exactly accounted.
+24. `ASSERT_ADDITIONAL_DOCUMENT_FAILURE_CANNOT_REWRITE_CALLS` — additional-document failures leave server-reported structural facts unchanged.
+25. `ASSERT_SYNTAX_DISPLAY_RESOLUTION_READS_ADMITTED_BYTES_ONLY` — syntax adapters cannot read imports, files, alternate resolvers, or ambient workspace bytes.
+26. `ASSERT_DIRECT_GATEWAY_CLI_MULTI_DOCUMENT_PARITY` — all transports preserve document custody, display ranges, omissions, and typed failures.
 
 Qualification also includes schema mutation fixtures, property/permutation tests, privacy markers, adversarial object-store cases, missing historical Git objects, dirty-buffer fixtures, no-replace publication races, and exact-byte golden vectors. Tests must not repair malformed input or increase limits to reach GREEN.
 
@@ -427,6 +462,7 @@ This ADR does not:
 - authorize arbitrary filesystem reads;
 - require source bodies in ordinary LLM prompts;
 - implement or select a public source-object service;
+- retain, publish, cache, log, or write live multi-document supplies into manifests, source-object stores, qualification artifacts, or any durable carrier;
 - decide the package location of retention leases;
 - authorize automatic fallback, retry, repair, or resumability.
 
@@ -436,4 +472,5 @@ This ADR does not:
 - Should source-object leases extend `internal/publication` or live in a dedicated package?
 - Which source privacy classes and redaction projections are stable enough for public registration?
 - What retained-object guarantees are required for historical Git hydration on Linux and macOS?
-- What exact immutable request/result schema identities should encode the unified symbol-or-position target union and optional projection contract?
+- What exact immutable successor request/result/envelope identities should encode range policy, bounded multi-document acquisition, document accounting, and structural display provenance?
+- Which language adapters beyond the first Go `go/parser` implementation are eligible for qualification, and what exact fallback vocabulary applies when no adapter is available?

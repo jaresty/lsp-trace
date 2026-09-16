@@ -8,7 +8,7 @@ import (
 func TestLiveSemanticToolDescriptionsRouteWorktreesThroughDerivation(t *testing.T) {
 	const assertion = "ASSERT_LIVE_SEMANTIC_DESCRIPTIONS_ROUTE_WORKTREE_DERIVATION"
 	r := NewRegistry(false)
-	for _, name := range []string{"lsp_trace_v1_incoming", "lsp_trace_v1_slice", "lsp_trace_v1_structural_context_symbol", "lsp_session_v1_derive_workspace"} {
+	for _, name := range []string{"lsp_trace_v1_incoming", "lsp_trace_v1_slice", "lsp_trace_v2_structural_context", "lsp_session_v1_derive_workspace"} {
 		tool, ok := r.ResolveCanonical(name)
 		if !ok {
 			t.Fatalf("%s[%s]: missing", assertion, name)
@@ -56,11 +56,11 @@ func TestOperation42ExactClosedInput(t *testing.T) {
 
 func TestOperation42Counts(t *testing.T) {
 	const assertion = "ASSERT_OPERATION_42_COUNTS_AND_NO_ALIAS"
-	if got := len(NewRegistry(false).Tools()); got != 43 {
-		t.Fatalf("%s: canonical=%d want=43", assertion, got)
+	if got := len(NewRegistry(false).Tools()); got != 41 {
+		t.Fatalf("%s: canonical=%d want=41", assertion, got)
 	}
-	if got := len(NewRegistryWithProfile(false, ToolProfileCompact).Advertised()); got != 13 {
-		t.Fatalf("%s: compact=%d want=13", assertion, got)
+	if got := len(NewRegistryWithProfile(false, ToolProfileCompact).Advertised()); got != 12 {
+		t.Fatalf("%s: compact=%d want=12", assertion, got)
 	}
 	if _, ok := NewRegistry(false).Resolve("lsp_session_derive_workspace"); ok {
 		t.Fatalf("%s: unexpected alias resolves", assertion)

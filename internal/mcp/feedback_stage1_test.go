@@ -24,7 +24,7 @@ func compactConformanceCases() []compactConformanceCase {
 		{"lsp_trace_v1_inspect_hydrated", map[string]any{"input": `{}`}},
 		{"lsp_trace_v1_schema_get", map[string]any{"schema": map[string]any{"family": "graph", "version": "v1"}}},
 		{"lsp_trace_v1_slice", map[string]any{"session_id": "missing", "start_mode": "at", "uri": "file:///x.go", "symbol": "X"}},
-		{"lsp_trace_v1_structural_context_symbol", map[string]any{"session_id": "missing", "generation": 1, "symbol": "X", "down_depth": 1, "up_depth": 1, "max_nodes": 10, "timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}},
+		{"lsp_trace_v2_structural_context", map[string]any{"session_id": "missing", "generation": 1, "symbol": "X", "down_depth": 1, "up_depth": 1, "max_nodes": 10, "timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}}},
 	}
 }
 
@@ -34,7 +34,7 @@ func TestCompactDirectToolGeneratedMinimalConformance(t *testing.T) {
 		t.Fatalf("ASSERT_COMPACT_CASE_DECLARATIONS_EXACT: %d", len(cases))
 	}
 	r := NewRegistryWithProfile(false, ToolProfileCompact)
-	if len(r.Advertised()) != 13 || len(r.tools) != 43 {
+	if len(r.Advertised()) != 12 || len(r.tools) != 41 {
 		t.Fatalf("ASSERT_REGISTRY_COUNTS: advertised=%d operations=%d", len(r.Advertised()), len(r.tools))
 	}
 	for _, tc := range cases {

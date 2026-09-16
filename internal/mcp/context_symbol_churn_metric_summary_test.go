@@ -306,7 +306,7 @@ func TestContextSymbolChurnMetricPresentationSchemasAppendOnlyAndPredecessorsImm
 			t.Fatalf("ASSERT_SYMBOL_CHURN_METRIC_SUMMARY_SCHEMAS_REGISTERED_APPEND_ONLY[%s]: ok=%t schemas=%v", toolName, ok, tool.EnvelopeSchemaIDs)
 		}
 	}
-	if len(full.Tools()) != 43 || len(full.Advertised()) != 43 || len(compact.Tools()) != 43 || len(compact.Advertised()) != 13 {
+	if len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 12 {
 		t.Fatalf("ASSERT_SYMBOL_CHURN_METRIC_SUMMARY_TOOL_COUNTS_43_13: full=%d/%d compact=%d/%d", len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	for path, expected := range map[string]string{

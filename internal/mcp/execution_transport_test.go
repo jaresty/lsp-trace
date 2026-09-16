@@ -15,7 +15,7 @@ func TestExecutionToolRegistryDiscoveryAndClosedSchema(t *testing.T) {
 	properties, _ := canonical.InputSchema["properties"].(map[string]any)
 	request, _ := properties["request"].(map[string]any)
 	branches, _ := request["oneOf"].([]any)
-	if !ok || !aliasOK || alias.Name != executionToolName || canonical.Availability != Enabled || canonical.Description == "" || canonical.InputSchema["additionalProperties"] != false || len(branches) != 42 {
+	if !ok || !aliasOK || alias.Name != executionToolName || canonical.Availability != Enabled || canonical.Description == "" || canonical.InputSchema["additionalProperties"] != false || len(branches) != 40 {
 		t.Fatalf("%s: canonical=%+v alias=%+v branches=%d", assertion, canonical, alias, len(branches))
 	}
 	if _, legacy := properties["output_selector"]; legacy {

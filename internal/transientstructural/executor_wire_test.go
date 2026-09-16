@@ -228,6 +228,27 @@ func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
 	}
 }
 
+func TestExecuteRequestScopedDocumentSupply(t *testing.T) {
+	for _, capture := range []bool{false, true} {
+		manager, started, uri := structuralManager(t)
+		req := baseWireRequest(started, uri)
+		req.CaptureSupply = capture
+		result, failure := Execute(context.Background(), manager, req)
+		if failure != nil {
+			t.Fatalf("ASSERT_TRANSIENT_SUPPLY_EXECUTION_%t: %+v", capture, failure)
+		}
+		if !capture {
+			if result.SourceSupply != nil {
+				t.Fatalf("ASSERT_TRANSIENT_SUPPLY_OMITTED: %+v", result.SourceSupply)
+			}
+			continue
+		}
+		if result.SourceSupply == nil || result.SourceSupply.SessionID != started.SessionID || result.SourceSupply.Generation != started.Generation || result.SourceSupply.URI != uri || result.SourceSupply.Classification != "LSP_SUPPLIED" || len(result.SourceSupply.Content) == 0 {
+			t.Fatalf("ASSERT_TRANSIENT_SUPPLY_EXACT_REQUEST: %+v", result.SourceSupply)
+		}
+	}
+}
+
 func TestExecuteZeroDepthPerformsNoCallTraversal(t *testing.T) {
 	manager, started, uri := structuralManager(t)
 	line, character := uint32(1), uint32(5)

@@ -82,7 +82,11 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 	}
 	for rawID := range byID {
 		node := byID[rawID]
-		nodeFacts = append(nodeFacts, NodeFact{ID: opaque[rawID], Witnesses: nodeWitnesses(rawID, down.root, downDepths, upDepths), Name: node.Name, Kind: node.Kind, URI: node.URI, Range: node.Range})
+		nodeFacts = append(nodeFacts, NodeFact{
+			ID: opaque[rawID], Witnesses: nodeWitnesses(rawID, down.root, downDepths, upDepths),
+			Name: node.Name, Kind: node.Kind, URI: node.URI,
+			Range: node.Range, ItemRange: node.Range, SelectionRange: node.SelectionRange,
+		})
 	}
 	sort.Slice(nodeFacts, func(i, j int) bool { return nodeFacts[i].ID < nodeFacts[j].ID })
 	partial := admittedProjection{targetID: opaque[down.root], nodes: nodeFacts, accounting: accounting}

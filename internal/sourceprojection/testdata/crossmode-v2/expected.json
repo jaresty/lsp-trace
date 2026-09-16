@@ -1,0 +1,265 @@
+{
+  "accounting": {
+    "candidates": 2,
+    "evaluated": 2,
+    "logical_selected_bytes": 12,
+    "omitted": 0,
+    "selected": 2,
+    "terminal": 2,
+    "unevaluated": 0,
+    "unique_emitted_bytes": 12
+  },
+  "authority": 0,
+  "citations": [
+    {
+      "citation_id": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "display_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "evidence_range": {
+        "end": {
+          "character": 5,
+          "line": 0
+        },
+        "start": {
+          "character": 1,
+          "line": 0
+        }
+      },
+      "role": "ENDPOINT",
+      "subject_id": "node-target",
+      "unit_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "citation_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "display_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "evidence_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "occurrence_id": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "role": "RELATION",
+      "subject_id": "edge-caller-target",
+      "unit_id": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ],
+  "custody_binding": {
+    "custody": "LIVE",
+    "generation": 4,
+    "position_encoding": "utf-16",
+    "session_id": "session"
+  },
+  "custody_mode": "LIVE",
+  "document_accounting": {
+    "acquired": 2,
+    "candidates": 2,
+    "limit_omitted": 0,
+    "selected": 2,
+    "total_acquired_bytes": 18,
+    "unavailable": 0,
+    "withheld": 0
+  },
+  "document_bindings": [
+    {
+      "document_version": 1,
+      "ordinal": 0,
+      "position_encoding": "utf-16",
+      "role": "TARGET",
+      "source_byte_length": 9,
+      "source_digest": "sha256:2b05f57d6142f6d746f206356233184b9a573c73809a6f12d94e184beb776d35",
+      "status": "ACQUIRED",
+      "uri": "file:///workspace/target.go"
+    },
+    {
+      "document_version": 2,
+      "ordinal": 1,
+      "position_encoding": "utf-16",
+      "role": "ADDITIONAL",
+      "source_byte_length": 9,
+      "source_digest": "sha256:bdab56d3083e785aab435543361bee2c32142096a3ecfade6548ad9e408a1552",
+      "status": "ACQUIRED",
+      "uri": "file:///workspace/caller.go"
+    }
+  ],
+  "document_selection": {
+    "ordering": "TARGET_FIRST_THEN_URI_LEXICOGRAPHIC",
+    "selected_uris": [
+      "file:///workspace/target.go",
+      "file:///workspace/caller.go"
+    ],
+    "target_uri": "file:///workspace/target.go"
+  },
+  "emitted_spans": [
+    {
+      "body": "caller",
+      "byte_length": 6,
+      "logical_source_id": "file:///workspace/caller.go",
+      "range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "source_digest": "sha256:bdab56d3083e785aab435543361bee2c32142096a3ecfade6548ad9e408a1552",
+      "unit_ids": [
+        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ]
+    },
+    {
+      "body": "target",
+      "byte_length": 6,
+      "logical_source_id": "file:///workspace/target.go",
+      "range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "source_digest": "sha256:2b05f57d6142f6d746f206356233184b9a573c73809a6f12d94e184beb776d35",
+      "unit_ids": [
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+    }
+  ],
+  "graph_facts_added": 0,
+  "omissions": [],
+  "physical_projection_id": "sha256:a1322caa448c8e72fa1ed3ab86cb27dcc91ae8f68a3bf80903816dfbe8959567",
+  "privacy_summary": {
+    "body_requested": true,
+    "body_returned": 2,
+    "body_withheld": 0,
+    "policy_id": "public"
+  },
+  "request_policy_id": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "schema_version": "lsp-trace.source-projection.v2",
+  "source_graph_complete": "UNKNOWN",
+  "status": "COMPLETE",
+  "units": [
+    {
+      "body": "target",
+      "body_disposition": "RETURNED",
+      "display_provenance": {
+        "kind": "CALL_HIERARCHY_ITEM",
+        "method": "callHierarchy"
+      },
+      "display_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "evidence_range": {
+        "end": {
+          "character": 5,
+          "line": 0
+        },
+        "start": {
+          "character": 1,
+          "line": 0
+        }
+      },
+      "graph_subject_id": "node-target",
+      "item_range": {
+        "end": {
+          "character": 8,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "logical_source_id": "file:///workspace/target.go",
+      "position_encoding": "utf-16",
+      "privacy_classification": "PUBLIC",
+      "role": "ENDPOINT",
+      "selection_disposition": "SELECTED",
+      "selection_range": {
+        "end": {
+          "character": 5,
+          "line": 0
+        },
+        "start": {
+          "character": 1,
+          "line": 0
+        }
+      },
+      "source_byte_length": 9,
+      "source_digest": "sha256:2b05f57d6142f6d746f206356233184b9a573c73809a6f12d94e184beb776d35",
+      "unit_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "body": "caller",
+      "body_disposition": "RETURNED",
+      "display_provenance": {
+        "kind": "CALL_SITE_OCCURRENCE",
+        "method": "callHierarchy"
+      },
+      "display_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "evidence_range": {
+        "end": {
+          "character": 6,
+          "line": 0
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "graph_subject_id": "edge-caller-target",
+      "logical_source_id": "file:///workspace/caller.go",
+      "occurrence_id": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "position_encoding": "utf-16",
+      "privacy_classification": "PUBLIC",
+      "relation_provenance": "SERVER_REPORTED",
+      "role": "RELATION",
+      "selection_disposition": "SELECTED",
+      "source_byte_length": 9,
+      "source_digest": "sha256:bdab56d3083e785aab435543361bee2c32142096a3ecfade6548ad9e408a1552",
+      "unit_id": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ]
+}

@@ -53,37 +53,46 @@ func NewV2Executor(runtime incomingops.Runtime, delegate Delegate) *Executor {
 	return &Executor{runtime: runtime, delegate: delegate, operation: OperationV2, delegateOperation: operation.Name("structural_context_v2")}
 }
 
+// NewUnifiedV2Executor binds exact-symbol lookup as an internal target-resolution
+// branch of the canonical structural_context_v2 operation. It does not register
+// or route either historical symbol-only product operation.
+func NewUnifiedV2Executor(runtime incomingops.Runtime, delegate Delegate) *Executor {
+	return &Executor{runtime: runtime, delegate: delegate, operation: operation.Name("structural_context_v2"), delegateOperation: operation.Name("structural_context_v2")}
+}
+
 type analysis struct {
 	Kind      string `json:"kind"`
 	Direction string `json:"direction,omitempty"`
 	Depth     int    `json:"depth,omitempty"`
 }
 type request struct {
-	SessionID        string   `json:"session_id"`
-	Generation       uint64   `json:"generation"`
-	Symbol           string   `json:"symbol"`
-	DownDepth        *int     `json:"down_depth"`
-	UpDepth          *int     `json:"up_depth"`
-	MaxNodes         *int     `json:"max_nodes"`
-	TimeoutMS        *int64   `json:"timeout_ms"`
-	RequestTimeoutMS *int64   `json:"request_timeout_ms"`
-	MaxMessages      int      `json:"max_messages,omitempty"`
-	MaxBytes         int64    `json:"max_bytes,omitempty"`
-	Analysis         analysis `json:"analysis"`
+	SessionID        string          `json:"session_id"`
+	Generation       uint64          `json:"generation"`
+	Symbol           string          `json:"symbol"`
+	DownDepth        *int            `json:"down_depth"`
+	UpDepth          *int            `json:"up_depth"`
+	MaxNodes         *int            `json:"max_nodes"`
+	TimeoutMS        *int64          `json:"timeout_ms"`
+	RequestTimeoutMS *int64          `json:"request_timeout_ms"`
+	MaxMessages      int             `json:"max_messages,omitempty"`
+	MaxBytes         int64           `json:"max_bytes,omitempty"`
+	Projection       json.RawMessage `json:"projection,omitempty"`
+	Analysis         analysis        `json:"analysis"`
 }
 type delegatedRequest struct {
-	SessionID        string   `json:"session_id"`
-	Generation       uint64   `json:"generation"`
-	URI              string   `json:"uri"`
-	Symbol           string   `json:"symbol"`
-	DownDepth        int      `json:"down_depth"`
-	UpDepth          int      `json:"up_depth"`
-	MaxNodes         int      `json:"max_nodes"`
-	TimeoutMS        int64    `json:"timeout_ms"`
-	RequestTimeoutMS int64    `json:"request_timeout_ms"`
-	MaxMessages      int      `json:"max_messages,omitempty"`
-	MaxBytes         int64    `json:"max_bytes,omitempty"`
-	Analysis         analysis `json:"analysis"`
+	SessionID        string          `json:"session_id"`
+	Generation       uint64          `json:"generation"`
+	URI              string          `json:"uri"`
+	Symbol           string          `json:"symbol"`
+	DownDepth        int             `json:"down_depth"`
+	UpDepth          int             `json:"up_depth"`
+	MaxNodes         int             `json:"max_nodes"`
+	TimeoutMS        int64           `json:"timeout_ms"`
+	RequestTimeoutMS int64           `json:"request_timeout_ms"`
+	MaxMessages      int             `json:"max_messages,omitempty"`
+	MaxBytes         int64           `json:"max_bytes,omitempty"`
+	Projection       json.RawMessage `json:"projection,omitempty"`
+	Analysis         analysis        `json:"analysis"`
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
@@ -168,7 +177,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		}
 		return fail(code, errors.New("workspace symbol location is not one concrete confined document"))
 	}
-	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Symbol: in.Symbol, DownDepth: downDepth, UpDepth: upDepth, MaxNodes: maxNodes, TimeoutMS: timeoutMS, RequestTimeoutMS: requestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Analysis: in.Analysis})
+	raw, err := json.Marshal(delegatedRequest{SessionID: id, Generation: generation, URI: location.URI, Symbol: in.Symbol, DownDepth: downDepth, UpDepth: upDepth, MaxNodes: maxNodes, TimeoutMS: timeoutMS, RequestTimeoutMS: requestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, Projection: in.Projection, Analysis: in.Analysis})
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}

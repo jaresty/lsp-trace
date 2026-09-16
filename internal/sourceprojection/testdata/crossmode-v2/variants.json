@@ -1,0 +1,14 @@
+{
+  "schema": "lsp-trace.fixture.crossmode-v2.variants.v1",
+  "variants": [
+    {"id":"complete","expected_status":"COMPLETE","document_outcome":"ACQUIRED","projection_outcome":"COMPLETE","response_outcome":"DELIVERED"},
+    {"id":"same-document-caller","expected_status":"COMPLETE","document_outcome":"DEDUPLICATED","projection_outcome":"COMPLETE","response_outcome":"DELIVERED"},
+    {"id":"cross-document-caller","expected_status":"COMPLETE","document_outcome":"ACQUIRED","projection_outcome":"COMPLETE","response_outcome":"DELIVERED"},
+    {"id":"unavailable-source","expected_status":"SOURCE_UNAVAILABLE","document_outcome":"UNAVAILABLE","projection_outcome":"NOT_RUN","response_outcome":"DELIVERED"},
+    {"id":"privacy-withheld","expected_status":"PARTIAL","document_outcome":"WITHHELD","projection_outcome":"PARTIAL","response_outcome":"DELIVERED"},
+    {"id":"document-limit","expected_status":"TRUNCATED","document_outcome":"LIMIT","projection_outcome":"NOT_RUN","response_outcome":"DELIVERED"},
+    {"id":"projection-limit","expected_status":"TRUNCATED","document_outcome":"ACQUIRED","projection_outcome":"LIMIT","response_outcome":"DELIVERED"},
+    {"id":"response-limit","expected_status":"FAILURE","document_outcome":"ACQUIRED","projection_outcome":"COMPLETE","response_outcome":"LIMIT_NO_PARTIAL_RESULT"},
+    {"id":"permuted-input","expected_status":"COMPLETE","document_outcome":"ACQUIRED","projection_outcome":"COMPLETE","response_outcome":"DELIVERED"}
+  ]
+}

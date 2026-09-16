@@ -135,7 +135,7 @@ func TestTraceOperation33ProfilesSchemaAndExecuteParity(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.ResolveCanonical(mcpcontract.TraceTool)
-	if !ok || len(full.Tools()) != 43 || len(full.Advertised()) != 43 || len(compact.Tools()) != 43 || len(compact.Advertised()) != 13 {
+	if !ok || len(full.Tools()) != 41 || len(full.Advertised()) != 41 || len(compact.Tools()) != 41 || len(compact.Advertised()) != 12 {
 		t.Fatalf("ASSERT_TRACE_OPERATION_33_STABLE_AFTER_CENSUS_34: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if tool.InputSchemaID != mcpcontract.TraceInputID || tool.ExecutorFamily != TraceExecutorFamily || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.GraphProvenanceV5ArtifactID {
