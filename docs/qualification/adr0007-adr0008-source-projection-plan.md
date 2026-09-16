@@ -6,6 +6,8 @@ Qualification execution: **NOT_EXECUTED**
 
 Machine-checkable matrix: [`qualification/adr0008-source-projection-matrix.v1.json`](../../qualification/adr0008-source-projection-matrix.v1.json)
 
+Canonical fixture plan: [`docs/qualification/adr0008-cross-mode-fixture-plan.md`](adr0008-cross-mode-fixture-plan.md)
+
 ## Claim boundary
 
 This is a documentation-only qualification plan. It records the owner-selected design model but does not qualify implementation, report passing tests, authorize schema or runtime work, enable ADR 0007 inference/indexing, or authorize retained or transient projection. Matrix execution remains `NOT_EXECUTED`, `tests_pass_claimed=false`, and `implementation_qualified=false`; no qualification cell becomes `PASS`. Every implementation stage still requires attributable assertion-specific RED evidence and retained GREEN evidence at one reviewed revision.
