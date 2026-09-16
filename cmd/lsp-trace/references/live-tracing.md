@@ -45,6 +45,22 @@ lsp-trace incoming \
 
 Paths resolve against the workspace. Labels are unique and match `[A-Za-z][A-Za-z0-9._-]*`. Unknown fields fail. Failed seeds remain represented rather than disappearing. Use each seed's stored result, membership, reached IDs, and native references; never attribute the deduplicated union graph to every seed.
 
+## Multiple exact symbols
+
+A semantic symbol operation accepts one exact symbol per call. For multiple symbols, make one independent semantic call per symbol rather than combining their names into one request:
+
+```text
+results = []
+for each exact_symbol in exact_symbols:
+    envelope = semantic_call(exact_symbol)
+    results.append({symbol: exact_symbol, envelope: envelope})
+return results
+```
+
+Keep each symbol's typed envelope. Do not collapse the results into a successful-only list: absent, ambiguous, `PARTIAL`, `TRUNCATED`, and failed outcomes remain independent and do not disappear because another symbol succeeded. Do not replace this semantic fan-out with combined textual search. Text may locate declarations or tests, but it cannot establish `CALLS`.
+
+When the exact callee URI and position are already known and only callers are needed, use `incoming` for that symbol instead of resolving its document through an exact-symbol operation. Keep that `incoming` result independent under the same per-symbol accounting.
+
 ## Transient structural design orientation
 
 An LLM may start from one symbol and quickly obtain live design or refactoring context from a READY managed LSP session. Graph Provenance and source capture are not prerequisites for this bounded orientation. Route through the available `context`, incoming, or slice operation appropriate to the question, using exact session and generation identity.

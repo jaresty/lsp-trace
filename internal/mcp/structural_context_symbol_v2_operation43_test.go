@@ -13,6 +13,30 @@ import (
 
 const structuralContextSymbolV2Tool = "lsp_trace_v2_structural_context_symbol"
 
+func TestStructuralContextSymbolV2DescriptionRequiresIndependentSemanticFanout(t *testing.T) {
+	registry := NewRegistryWithProfile(false, ToolProfileFull)
+	tool, ok := registry.ResolveCanonical(structuralContextSymbolV2Tool)
+	if !ok {
+		t.Fatal("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_DESCRIPTION_ONE_EXACT_SYMBOL_PER_CALL: operation missing")
+	}
+	for assertion, required := range map[string][]string{
+		"ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_DESCRIPTION_ONE_EXACT_SYMBOL_PER_CALL": {
+			"accepts one exact symbol per call",
+			"multiple symbols require one independent semantic call per symbol",
+		},
+		"ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_DESCRIPTION_TEXT_SEARCH_CANNOT_ESTABLISH_CALLS": {
+			"Do not replace semantic fan-out with combined textual search",
+			"text may locate declarations or tests but cannot establish CALLS",
+		},
+	} {
+		for _, phrase := range required {
+			if !strings.Contains(tool.Description, phrase) {
+				t.Errorf("%s: missing %q in %q", assertion, phrase, tool.Description)
+			}
+		}
+	}
+}
+
 func TestStructuralContextSymbolV2Operation43CountsCompatibility(t *testing.T) {
 	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_OPERATION43_COUNTS_COMPATIBILITY"
 	full := NewRegistryWithProfile(false, ToolProfileFull)

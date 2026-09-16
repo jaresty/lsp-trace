@@ -325,6 +325,41 @@ func TestEmbeddedSkillRoutesSemanticRelationshipsBeforeText(t *testing.T) {
 	}
 }
 
+func TestEmbeddedAndExportedSkillExplainMultipleExactSymbols(t *testing.T) {
+	const assertion = "ASSERT_SKILL_MULTIPLE_EXACT_SYMBOLS_EMBEDDED_EXPORTED"
+	files, err := embeddedSkillFiles("lsp-trace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(t.TempDir(), "exported-skill")
+	var stdout, stderr bytes.Buffer
+	if code := runSkill([]string{"get", "lsp-trace", root}, &stdout, &stderr); code != 0 || stderr.Len() != 0 || stdout.String() != "" {
+		t.Fatalf("%s: export code=%d stdout=%q stderr=%q", assertion, code, stdout.String(), stderr.String())
+	}
+	exported, err := os.ReadFile(filepath.Join(root, "references", "live-tracing.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for surface, guidance := range map[string]string{
+		"embedded": string(files["references/live-tracing.md"]),
+		"exported": string(exported),
+	} {
+		for _, required := range []string{
+			"## Multiple exact symbols",
+			"for each exact_symbol in exact_symbols",
+			"one independent semantic call",
+			"Keep each symbol's typed envelope",
+			"absent, ambiguous, `PARTIAL`, `TRUNCATED`, and failed outcomes remain independent",
+			"cannot establish `CALLS`",
+			"exact callee URI and position are already known and only callers are needed, use `incoming`",
+		} {
+			if !strings.Contains(guidance, required) {
+				t.Errorf("%s[%s]: missing %q", assertion, surface, required)
+			}
+		}
+	}
+}
+
 func TestSkillExportManifestsAndBytesMatchSourceEmbeddedAndExport(t *testing.T) {
 	root := t.TempDir()
 	cases := []struct {
