@@ -1,0 +1,91 @@
+{
+  "canonical": {
+    "normal_order": [
+      "sha256:0b12d315425e26fd50f42a26f1e095334d136325eb0d396fe770c0a962c946a5",
+      "sha256:71faae72ce82116ed317c10ed87170ebc9e3ed1f28aecf3e8fa5b7ae887aa713"
+    ],
+    "permuted_canonical_order": [
+      "sha256:0b12d315425e26fd50f42a26f1e095334d136325eb0d396fe770c0a962c946a5",
+      "sha256:71faae72ce82116ed317c10ed87170ebc9e3ed1f28aecf3e8fa5b7ae887aa713"
+    ],
+    "permuted_input": [
+      "sha256:71faae72ce82116ed317c10ed87170ebc9e3ed1f28aecf3e8fa5b7ae887aa713",
+      "sha256:0b12d315425e26fd50f42a26f1e095334d136325eb0d396fe770c0a962c946a5"
+    ]
+  },
+  "citations": [
+    {
+      "id": "sha256:bf8c0aef557fd0c5447b23d6965e18e61e66d9bfd6e74f50af24d714aa55c6a5",
+      "role": "ENDPOINT",
+      "subject_id": "f23ca4abbe5901149ae5b32355cf6b38189ad239c815d08dc66653d2e093443b",
+      "unit_id": "sha256:71faae72ce82116ed317c10ed87170ebc9e3ed1f28aecf3e8fa5b7ae887aa713"
+    },
+    {
+      "id": "sha256:727ba15521bfc0d41ae6144d40db25a88685ce003f1e444d186941e89934f2e7",
+      "occurrence_id": "sha256:6cd8ab102d0fbcbc756b7a3b887e156663e54cc8c8df3af6c82383b5d39972a1",
+      "role": "RELATION",
+      "subject_id": "sha256:ccd370114c3462ecc53d67eae981dc38547c37c6cae9125957ddefc7b8a3a0e2",
+      "unit_id": "sha256:0b12d315425e26fd50f42a26f1e095334d136325eb0d396fe770c0a962c946a5"
+    }
+  ],
+  "logical_units": [
+    {
+      "graph_subject": "f23ca4abbe5901149ae5b32355cf6b38189ad239c815d08dc66653d2e093443b",
+      "id": "sha256:71faae72ce82116ed317c10ed87170ebc9e3ed1f28aecf3e8fa5b7ae887aa713",
+      "logical_source": "src/source.ts",
+      "position_encoding": "utf-16",
+      "range": {
+        "end": {
+          "character": 0,
+          "line": 3
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      },
+      "role": "ENDPOINT",
+      "selected_bytes": 42
+    },
+    {
+      "graph_subject": "sha256:ccd370114c3462ecc53d67eae981dc38547c37c6cae9125957ddefc7b8a3a0e2",
+      "id": "sha256:0b12d315425e26fd50f42a26f1e095334d136325eb0d396fe770c0a962c946a5",
+      "logical_source": "src/source.ts",
+      "position_encoding": "utf-16",
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 1
+        },
+        "start": {
+          "character": 8,
+          "line": 1
+        }
+      },
+      "role": "RELATION",
+      "selected_bytes": 8
+    }
+  ],
+  "projection": {
+    "emitted_spans": [
+      {
+        "end": {
+          "character": 0,
+          "line": 3
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      }
+    ],
+    "logical_selected_bytes": 50,
+    "unique_emitted_bytes": 42
+  },
+  "schema": "lsp-trace.fixture.expected.v1",
+  "semantic": {
+    "accepted": false,
+    "authority": 0,
+    "executions": 0
+  }
+}

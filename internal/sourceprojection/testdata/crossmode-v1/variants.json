@@ -1,0 +1,81 @@
+{
+  "schema": "lsp-trace.fixture.variants.v1",
+  "variants": [
+    {
+      "candidates": 2,
+      "disposition": "BODY_RETURNED",
+      "id": "body",
+      "logical_selected_bytes": 50,
+      "omitted": 0,
+      "selected": 2,
+      "unique_emitted_bytes": 42,
+      "whole_ranges": true
+    },
+    {
+      "candidates": 2,
+      "disposition": "METADATA_ONLY",
+      "id": "metadata",
+      "logical_selected_bytes": 0,
+      "omitted": 0,
+      "selected": 2,
+      "unique_emitted_bytes": 0,
+      "whole_ranges": true
+    },
+    {
+      "candidates": 2,
+      "disposition": "WITHHELD",
+      "id": "withheld",
+      "logical_selected_bytes": 0,
+      "omission_cause": "POLICY_WITHHELD",
+      "omitted": 2,
+      "selected": 0,
+      "unique_emitted_bytes": 0,
+      "whole_ranges": true
+    },
+    {
+      "candidates": 2,
+      "disposition": "UNAVAILABLE",
+      "id": "unavailable",
+      "logical_selected_bytes": 0,
+      "omission_cause": "SOURCE_UNAVAILABLE",
+      "omitted": 2,
+      "selected": 0,
+      "unique_emitted_bytes": 0,
+      "whole_ranges": true
+    },
+    {
+      "byte_limit": 41,
+      "candidates": 2,
+      "disposition": "LIMITED",
+      "id": "byte-limit",
+      "logical_selected_bytes": 0,
+      "omission_cause": "BYTE_LIMIT",
+      "omitted": 2,
+      "selected": 0,
+      "unique_emitted_bytes": 0,
+      "whole_ranges": true
+    },
+    {
+      "candidates": 2,
+      "disposition": "LIMITED",
+      "id": "range-limit",
+      "logical_selected_bytes": 42,
+      "omission_cause": "RANGE_LIMIT",
+      "omitted": 1,
+      "range_limit": 1,
+      "selected": 1,
+      "unique_emitted_bytes": 42,
+      "whole_ranges": true
+    },
+    {
+      "candidates": 0,
+      "disposition": "SUCCESSFUL_EMPTY",
+      "id": "empty",
+      "logical_selected_bytes": 0,
+      "omitted": 0,
+      "selected": 0,
+      "unique_emitted_bytes": 0,
+      "whole_ranges": true
+    }
+  ]
+}

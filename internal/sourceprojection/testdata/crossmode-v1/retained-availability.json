@@ -1,0 +1,18 @@
+{
+  "artifact_digest": "sha256:61050b78d04a99ab6667921c9ea3f572169c9c023084dcd942c465a4c23233c6",
+  "availability": "AVAILABLE",
+  "capture_id": "fixture-retained-session",
+  "physical_id_preimage": {
+    "custody": "retained",
+    "artifact_digest": "sha256:61050b78d04a99ab6667921c9ea3f572169c9c023084dcd942c465a4c23233c6",
+    "capture_id": "fixture-retained-session",
+    "source_sha256": "sha256:b2f615ccc7e60a8994f75a1e5cae0a73e0e7f34967a71288eabaad7840d121d5",
+    "source_byte_length": 42
+  },
+  "physical_projection_id": "sha256:8a4138e5e44654fab3dc523a6d25ec77778afd102742d83d221e326fb6713bb7",
+  "resolver_count": 1,
+  "resolver_kind": "retained_source_object",
+  "schema": "lsp-trace.fixture.retained-availability.v1",
+  "source_byte_length": 42,
+  "source_sha256": "sha256:b2f615ccc7e60a8994f75a1e5cae0a73e0e7f34967a71288eabaad7840d121d5"
+}

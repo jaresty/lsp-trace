@@ -1,0 +1,55 @@
+{
+  "parity_pairs": [
+    [
+      "symbol-target",
+      "exact-target"
+    ],
+    [
+      "symbol-neighborhood",
+      "exact-neighborhood"
+    ]
+  ],
+  "requests": [
+    {
+      "down_depth": 0,
+      "entry_point": "symbol_facade",
+      "id": "symbol-target",
+      "mode": "TARGET",
+      "projection": "BODY",
+      "symbol": "target",
+      "up_depth": 0
+    },
+    {
+      "character": 9,
+      "down_depth": 0,
+      "entry_point": "exact_target",
+      "id": "exact-target",
+      "line": 0,
+      "mode": "TARGET",
+      "projection": "BODY",
+      "up_depth": 0,
+      "uri": "file:///fixture/src/source.ts"
+    },
+    {
+      "down_depth": 1,
+      "entry_point": "symbol_facade",
+      "id": "symbol-neighborhood",
+      "mode": "NEIGHBORHOOD",
+      "projection": "BODY",
+      "symbol": "target",
+      "up_depth": 1
+    },
+    {
+      "character": 9,
+      "down_depth": 1,
+      "entry_point": "exact_target",
+      "id": "exact-neighborhood",
+      "line": 0,
+      "mode": "NEIGHBORHOOD",
+      "projection": "BODY",
+      "up_depth": 1,
+      "uri": "file:///fixture/src/source.ts"
+    }
+  ],
+  "schema": "lsp-trace.fixture.requests.v1"
+}

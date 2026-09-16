@@ -1,0 +1,22 @@
+{
+  "content_byte_length": 42,
+  "content_sha256": "sha256:b2f615ccc7e60a8994f75a1e5cae0a73e0e7f34967a71288eabaad7840d121d5",
+  "document_version": 7,
+  "generation": 1,
+  "physical_id_preimage": {
+    "custody": "live",
+    "session_id": "fixture-live-session",
+    "generation": 1,
+    "uri": "file:///fixture/src/source.ts",
+    "document_version": 7,
+    "content_sha256": "sha256:b2f615ccc7e60a8994f75a1e5cae0a73e0e7f34967a71288eabaad7840d121d5",
+    "content_byte_length": 42
+  },
+  "physical_projection_id": "sha256:5ad8d5aeb675ed66ff0d6f407a99edcdfbe340c21ee85dbd3caa3ae798273521",
+  "position_encoding": "utf-16",
+  "resolver_count": 1,
+  "resolver_kind": "live_document",
+  "schema": "lsp-trace.fixture.live-admission.v1",
+  "session_id": "fixture-live-session",
+  "uri": "file:///fixture/src/source.ts"
+}

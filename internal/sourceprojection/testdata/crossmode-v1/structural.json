@@ -1,0 +1,50 @@
+{
+  "authority": 0,
+  "graph_facts_added": 0,
+  "logical_source": "src/source.ts",
+  "nodes": [
+    {
+      "id": "f23ca4abbe5901149ae5b32355cf6b38189ad239c815d08dc66653d2e093443b",
+      "name": "target",
+      "range": {
+        "end": {
+          "character": 0,
+          "line": 3
+        },
+        "start": {
+          "character": 0,
+          "line": 0
+        }
+      }
+    }
+  ],
+  "occurrences": [
+    {
+      "id": "sha256:6cd8ab102d0fbcbc756b7a3b887e156663e54cc8c8df3af6c82383b5d39972a1",
+      "range": {
+        "end": {
+          "character": 16,
+          "line": 1
+        },
+        "start": {
+          "character": 8,
+          "line": 1
+        }
+      },
+      "relation_id": "sha256:ccd370114c3462ecc53d67eae981dc38547c37c6cae9125957ddefc7b8a3a0e2"
+    }
+  ],
+  "position_encoding": "utf-16",
+  "relations": [
+    {
+      "callee": "f23ca4abbe5901149ae5b32355cf6b38189ad239c815d08dc66653d2e093443b",
+      "caller": "f23ca4abbe5901149ae5b32355cf6b38189ad239c815d08dc66653d2e093443b",
+      "evidence": "SERVER_REPORTED",
+      "id": "sha256:ccd370114c3462ecc53d67eae981dc38547c37c6cae9125957ddefc7b8a3a0e2",
+      "kind": "CALLS"
+    }
+  ],
+  "schema": "lsp-trace.fixture.structural.v1",
+  "source_graph_complete": "UNKNOWN",
+  "uri": "file:///fixture/src/source.ts"
+}
