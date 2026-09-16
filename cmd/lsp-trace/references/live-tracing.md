@@ -71,7 +71,7 @@ Escalate optionally to Capture/V5 when the work needs durable review, retained h
 
 ### Source-bearing structural context
 
-Omit `projection` for relationship-only context. For implementation ownership, source-flow, or seam analysis, request bounded layered source explicitly. A practical starting request is:
+Omit `projection` for relationship-only context. When the declaration URI is already known, prefer its exact zero-based position; symbol mode expects the exact server-reported symbol name, not a package-qualified identifier. For implementation ownership, source-flow, or seam analysis, request bounded layered source explicitly. A practical starting request is:
 
 ```json
 {
