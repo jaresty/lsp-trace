@@ -69,6 +69,7 @@ func gatewayMatrixCases() []gatewayMatrixCase {
 		{"v2-verify-retained", "lsp_trace_v2_verify_retained_calls", map[string]any{"input": `{}`, "schema": map[string]any{"family": "retained-calls", "version": "v2"}}},
 		{"v3-incoming", "lsp_trace_v3_incoming", map[string]any{"session_id": "s", "generation": 1, "seed_manifest": manifest}},
 		{"v3-slice", "lsp_trace_v3_slice", map[string]any{"session_id": "s", "generation": 1, "seed_manifest": manifest}},
+		{"derive-workspace", "lsp_session_v1_derive_workspace", map[string]any{"session_id": "parent", "generation": 1, "workspace_uri": "file:///workspace-child"}},
 		{"lifecycle", "lsp_session_v1_list", map[string]any{}},
 		{"traversal", "lsp_trace_v1_incoming", map[string]any{"session_id": "s", "uri": "file:///workspace/main.go", "symbol": "Root"}},
 		{"v1-slice", "lsp_trace_v1_slice", map[string]any{"session_id": "s", "start_mode": "at", "uri": "file:///workspace/main.go", "symbol": "Root"}},

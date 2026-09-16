@@ -33,19 +33,52 @@ func (s *deriveStarter) Start(_ context.Context, spec managedprocess.Spec) (Chil
 	return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable}
 }
 
-func TestDeriveWorkspaceRejectsNonReadyBeforeGitOrSpawn(t *testing.T) {
-	const assertion = "ASSERT_DERIVE_PARENT_READY_BEFORE_GIT_OR_SPAWN"
-	starter := &deriveStarter{}
-	gitCalls := 0
-	m, err := New(Config{Limits: Limits{MaxSessions: 2, MaxRequests: 1, MaxChildren: 2, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 8}, Starter: starter, GitWorktreeList: func(context.Context, string) ([]byte, error) { gitCalls++; return nil, nil }})
-	if err != nil {
-		t.Fatal(err)
+func TestDeriveWorkspaceRejectsParentNotExactlyReadyBeforeGitOrSpawn(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_PARENT_EXACTLY_READY_BEFORE_GIT_OR_SPAWN"
+	for _, tc := range []struct {
+		name          string
+		state         session.State
+		protocolOwned bool
+	}{
+		{name: "initializing", state: session.Initializing},
+		{name: "poisoned", state: session.Poisoned},
+		{name: "ready-protocol-owned", state: session.Ready, protocolOwned: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			starter := &deriveStarter{}
+			gitCalls := 0
+			m, err := New(Config{Limits: Limits{MaxSessions: 2, MaxRequests: 1, MaxChildren: 2, MaxCancels: 1, MaxTombstones: 1, MaxObservations: 8}, Starter: starter, GitWorktreeList: func(context.Context, string) ([]byte, error) { gitCalls++; return nil, nil }})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, _ := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "t", Workspace: "/repo/main", Profile: "p", EnvironmentReference: "e"})
+			m.sessions["parent"] = &runtimeSession{record: Record{SessionID: "parent", Generation: 1, State: tc.state, Profile: runtimeprofile.Resolve(p)}, spec: managedprocess.Spec{Path: "/bin/lsp", Dir: "/repo/main"}, protocolOwned: tc.protocolOwned}
+			got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: "file:///repo/other"})
+			if got.Failure != session.Failure("SESSION_NOT_READY") || gitCalls != 0 || starter.calls != 0 {
+				t.Fatalf("%s[%s]: result=%+v git=%d spawn=%d", assertion, tc.name, got, gitCalls, starter.calls)
+			}
+		})
 	}
-	p, _ := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "t", Workspace: "/repo/main", Profile: "p", EnvironmentReference: "e"})
-	m.sessions["parent"] = &runtimeSession{record: Record{SessionID: "parent", Generation: 1, State: session.Initializing, Profile: runtimeprofile.Resolve(p)}, spec: managedprocess.Spec{Path: "/bin/lsp", Dir: "/repo/main"}}
-	got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: "file:///repo/other"})
-	if got.Failure != session.Failure("SESSION_NOT_READY") || gitCalls != 0 || starter.calls != 0 {
-		t.Fatalf("%s: result=%+v git=%d spawn=%d", assertion, got, gitCalls, starter.calls)
+}
+
+func TestDeriveWorkspaceDistinguishesUnregisteredTargetFromWrongRepository(t *testing.T) {
+	parent, target := stableTempDir(t), stableTempDir(t)
+	for _, tc := range []struct {
+		name string
+		git  func() []byte
+		want session.Failure
+	}{
+		{name: "unregistered-target", git: func() []byte { return []byte(fmt.Sprintf("worktree %s\nHEAD a\n", parent)) }, want: session.Failure("WORKTREE_NOT_REGISTERED")},
+		{name: "wrong-repository", git: func() []byte { return []byte(fmt.Sprintf("worktree %s\nHEAD b\n", target)) }, want: session.Failure("WORKSPACE_IDENTITY_MISMATCH")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			starter := &deriveStarter{}
+			m := newDeriveTestManager(t, starter, parent, func(context.Context, string) ([]byte, error) { return tc.git(), nil })
+			got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: (&url.URL{Scheme: "file", Path: target}).String()})
+			if got.Failure != tc.want || got.Failure == session.Failure("INTERNAL") || starter.calls != 0 {
+				t.Fatalf("ASSERT_DERIVE_WORKTREE_IDENTITY_%s: result=%+v want=%q spawn=%d", tc.name, got, tc.want, starter.calls)
+			}
+		})
 	}
 }
 
@@ -145,15 +178,17 @@ func TestDeriveWorkspaceInheritsExactPrivateProcessSpecAndConfinesTarget(t *test
 	}
 }
 
-func TestDeriveWorkspaceFailedReadinessReleasesDerivedSession(t *testing.T) {
-	const assertion = "ASSERT_DERIVE_FAILED_READINESS_CLEANUP"
+func TestDeriveWorkspaceFailedReadinessSynchronouslyReleasesSessionAndProcess(t *testing.T) {
+	const assertion = "ASSERT_DERIVE_FAILED_READINESS_SYNCHRONOUS_CLEANUP"
 	parent, target := stableTempDir(t), stableTempDir(t)
-	m := newDeriveTestManager(t, deriveChildStarter{child: newReadinessChild("error")}, parent, func(context.Context, string) ([]byte, error) {
+	child := newReadinessChild("error")
+	m := newDeriveTestManager(t, deriveChildStarter{child: child}, parent, func(context.Context, string) ([]byte, error) {
 		return []byte(fmt.Sprintf("worktree %s\nHEAD a\n\nworktree %s\nHEAD b\n", parent, target)), nil
 	})
 	got := m.DeriveWorkspace(context.Background(), DeriveWorkspaceRequest{SessionID: "parent", Generation: 1, WorkspaceURI: (&url.URL{Scheme: "file", Path: target}).String()})
-	if got.Failure != session.InitializationFailure {
-		t.Fatalf("%s: result=%+v", assertion, got)
+	teardowns, closes := child.cleanupCounts()
+	if got.Failure != session.InitializationFailure || teardowns != 1 || closes != 1 {
+		t.Fatalf("%s: result=%+v teardown=%d close=%d", assertion, got, teardowns, closes)
 	}
 	records := m.Records()
 	if len(records) != 1 || records[0].SessionID != "parent" {

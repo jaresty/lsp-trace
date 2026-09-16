@@ -39,6 +39,17 @@ func executeLifecycle(t *testing.T, executor *Executor, name operation.Name, inp
 	return executor.Execute(context.Background(), operation.Request{Name: name, RequestID: "request-1", Input: json.RawMessage(input)})
 }
 
+func TestDeriveWorkspaceExecutorRejectsSurplusInputBeforeRuntime(t *testing.T) {
+	f := &selectorRuntime{
+		fakeRuntime: &fakeRuntime{records: []sessionruntime.Record{record("canonical", 7)}},
+		aliases:     map[string]string{"project": "canonical"},
+	}
+	_, failure := executeLifecycle(t, NewExecutor(New(f)), OperationDerive, `{"session_id":"project","generation":7,"workspace_uri":"file:///worktree","caller_id":"surplus"}`)
+	if failure == nil || failure.Code != operation.FailureInvalidInput || f.deriveRequest != (sessionruntime.DeriveWorkspaceRequest{}) {
+		t.Fatalf("ASSERT_DERIVE_WORKSPACE_EXECUTOR_CLOSED_INPUT_BEFORE_RUNTIME: failure=%+v request=%+v", failure, f.deriveRequest)
+	}
+}
+
 func TestDeriveWorkspaceFailureHasActionableDiagnostic(t *testing.T) {
 	t.Run("workspace identity", func(t *testing.T) {
 		f := &selectorRuntime{
