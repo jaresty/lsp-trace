@@ -79,8 +79,8 @@ func TestContextSymbolChurnCaptureOperation40AppendOnlyContract(t *testing.T) {
 func TestContextSymbolChurnV3ContractsAreAppendOnlyOnOperations39And40(t *testing.T) {
 	const (
 		artifactV3 = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.vcs-symbol-churn-sidecar.v3.schema.json"
-		op39V3     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-result.v3.schema.json"
-		op40V2     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v2.schema.json"
+		op39V4     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-result.v4.schema.json"
+		op40V3     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v3.schema.json"
 	)
 	registry := NewRegistryWithProfile(false, ToolProfileFull)
 	for _, tc := range []struct {
@@ -88,8 +88,8 @@ func TestContextSymbolChurnV3ContractsAreAppendOnlyOnOperations39And40(t *testin
 		input    string
 		envelope string
 	}{
-		{mcpcontract.ContextSymbolChurnTool, mcpcontract.ContextSymbolChurnInputID, op39V3},
-		{mcpcontract.ContextSymbolChurnCaptureTool, mcpcontract.ContextSymbolChurnCaptureInputID, op40V2},
+		{mcpcontract.ContextSymbolChurnTool, mcpcontract.ContextSymbolChurnInputID, op39V4},
+		{mcpcontract.ContextSymbolChurnCaptureTool, mcpcontract.ContextSymbolChurnCaptureInputID, op40V3},
 	} {
 		tool, ok := registry.ResolveCanonical(tc.name)
 		joinedArtifacts := strings.Join(tool.ArtifactSchemaIDs, "\n")
@@ -133,8 +133,8 @@ func symbolChurnEnvelopeBytes(t *testing.T, got response, gateway bool) []byte {
 
 func TestContextSymbolChurnV3DirectGatewayAndCaptureEnvelopeParity(t *testing.T) {
 	const (
-		op39V3 = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-result.v3.schema.json"
-		op40V2 = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v2.schema.json"
+		op39V4 = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-result.v4.schema.json"
+		op40V3 = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-context-symbol-churn-capture-result.v3.schema.json"
 	)
 	for _, tc := range []struct {
 		name     string
@@ -142,8 +142,8 @@ func TestContextSymbolChurnV3DirectGatewayAndCaptureEnvelopeParity(t *testing.T)
 		expected string
 		args     map[string]any
 	}{
-		{mcpcontract.ContextSymbolChurnTool, ContextSymbolChurnExecutorFamily, op39V3, map[string]any{"input": "{}", "workspace": "/tmp/repo", "from_revision": "HEAD~1", "to_revision": "HEAD", "profile": "go", "language_id": "go"}},
-		{mcpcontract.ContextSymbolChurnCaptureTool, ContextSymbolChurnCaptureExecutorFamily, op40V2, map[string]any{"session_id": "project", "generation": 1, "uri": "file:///tmp/repo/a.go", "symbol": "A", "down_depth": 1, "up_depth": 0, "max_nodes": 10, "timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}, "from_revision": "HEAD~1", "to_revision": "HEAD", "profile": "go", "language_id": "go"}},
+		{mcpcontract.ContextSymbolChurnTool, ContextSymbolChurnExecutorFamily, op39V4, map[string]any{"input": "{}", "workspace": "/tmp/repo", "from_revision": "HEAD~1", "to_revision": "HEAD", "profile": "go", "language_id": "go"}},
+		{mcpcontract.ContextSymbolChurnCaptureTool, ContextSymbolChurnCaptureExecutorFamily, op40V3, map[string]any{"session_id": "project", "generation": 1, "uri": "file:///tmp/repo/a.go", "symbol": "A", "down_depth": 1, "up_depth": 0, "max_nodes": 10, "timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"}, "from_revision": "HEAD~1", "to_revision": "HEAD", "profile": "go", "language_id": "go"}},
 	} {
 		executor := &successfulSymbolChurnV3Executor{}
 		s := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{tc.family: executor}}

@@ -124,6 +124,51 @@ func contextSymbolChurnSummary(result vcssymbolsidecar.Result) map[string]any {
 	return map[string]any{"line_count": result.LineCount, "attributed_line_count": result.AttributedLineCount, "ambiguous_line_count": result.AmbiguousLineCount, "unmatched_line_count": result.UnmatchedLineCount, "attribution_basis_points": basisPoints, "file_outcomes": files}
 }
 
+func contextSymbolChurnV3Summary(result vcssymbolsidecar.ResultV3) map[string]any {
+	summary := contextSymbolChurnSummary(result.Result)
+	summary["historical_symbol_metrics"] = contextSymbolMetricSummary(result.HistoricalSymbolMetrics)
+	summary["current_symbol_metrics"] = contextSymbolMetricSummary(result.CurrentSymbolMetrics)
+	return summary
+}
+
+func contextSymbolMetricSummary(metrics []vcssymbolsidecar.SymbolMetric) map[string]any {
+	const limit = 10
+	items := append([]vcssymbolsidecar.SymbolMetric{}, metrics...)
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		if a.ChangedLineCount != b.ChangedLineCount {
+			return a.ChangedLineCount > b.ChangedLineCount
+		}
+		if a.ChurnDensityBasisPoints != b.ChurnDensityBasisPoints {
+			return a.ChurnDensityBasisPoints > b.ChurnDensityBasisPoints
+		}
+		if a.Path != b.Path {
+			return a.Path < b.Path
+		}
+		if a.Range.Start.Line != b.Range.Start.Line {
+			return a.Range.Start.Line < b.Range.Start.Line
+		}
+		if a.Range.Start.Character != b.Range.Start.Character {
+			return a.Range.Start.Character < b.Range.Start.Character
+		}
+		if a.Range.End.Line != b.Range.End.Line {
+			return a.Range.End.Line < b.Range.End.Line
+		}
+		if a.Range.End.Character != b.Range.End.Character {
+			return a.Range.End.Character < b.Range.End.Character
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		return a.Kind < b.Kind
+	})
+	total := len(items)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return map[string]any{"total": total, "returned": len(items), "truncated": total > len(items), "items": items}
+}
+
 func structuralContextTruncationEnvelope(tool string, domain *transientstructural.DomainFailure, args map[string]any) envelope {
 	env := structuralContextDomainErrorEnvelope(tool, string(domain.Phase), string(domain.State))
 	limit, _ := args["max_nodes"].(float64)
@@ -506,6 +551,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		valid := len(opResult.Artifact) > 0 && json.Unmarshal(opResult.Artifact, &result) == nil && json.Unmarshal(opResult.Artifact, &header) == nil
 		var typed vcssymbolsidecar.Result
+		var typedV3 *vcssymbolsidecar.ResultV3
 		envelopeVersion := "2"
 		schemaID := mcpcontract.ContextSymbolChurnSuccessV2ID
 		if valid {
@@ -516,13 +562,14 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 					schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessID
 				}
 			case vcssymbolsidecar.SchemaVersionV3:
-				var typedV3 vcssymbolsidecar.ResultV3
-				valid = json.Unmarshal(opResult.Artifact, &typedV3) == nil && mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultV3ID, opResult.Artifact) == nil && vcssymbolsidecar.ValidateV3(typedV3) == nil
-				typed = typedV3.Result
-				envelopeVersion = "3"
-				schemaID = mcpcontract.ContextSymbolChurnSuccessV3ID
+				var resultV3 vcssymbolsidecar.ResultV3
+				valid = json.Unmarshal(opResult.Artifact, &resultV3) == nil && mcpcontract.ValidateJSON(mcpcontract.ContextSymbolChurnResultV3ID, opResult.Artifact) == nil && vcssymbolsidecar.ValidateV3(resultV3) == nil
+				typed = resultV3.Result
+				typedV3 = &resultV3
+				envelopeVersion = "4"
+				schemaID = mcpcontract.ContextSymbolChurnSuccessV4ID
 				if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
-					schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessV2ID
+					schemaID = mcpcontract.ContextSymbolChurnCaptureSuccessV3ID
 				}
 			default:
 				valid = false
@@ -534,7 +581,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			}
 			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, "DELIVERY_CHECK", "CANCELLED", "result validation failed"))
 		}
-		return bindEnvelope(base, tool, envelope{EnvelopeVersion: envelopeVersion, EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: contextSymbolChurnSummary(typed)})
+		summary := contextSymbolChurnSummary(typed)
+		if typedV3 != nil {
+			summary = contextSymbolChurnV3Summary(*typedV3)
+		}
+		return bindEnvelope(base, tool, envelope{EnvelopeVersion: envelopeVersion, EnvelopeSchemaID: schemaID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result, Summary: summary})
 	}
 	if tool.ExecutorFamily == ContextChurnExecutorFamily {
 		var result map[string]any
