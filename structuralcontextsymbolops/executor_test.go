@@ -80,6 +80,20 @@ func TestOmittedMechanicalBoundsDelegateCanonicalDefaults(t *testing.T) {
 	}
 }
 
+func TestV2ExactWorkspaceSymbolDelegatesOriginalSymbolWithoutRangeStart(t *testing.T) {
+	const assertion = "ASSERT_STRUCTURAL_CONTEXT_SYMBOL_V2_ONE_EXACT_LOOKUP_DELEGATES_V2_ORIGINAL_SYMBOL"
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":7,"character":3},"end":{"line":7,"character":9}}}},{"name":"target","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":1}}}}]`)}
+	d := &delegate{}
+	_, failure := NewV2Executor(f, d).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_symbol_v2"), Input: minimalInput("Target")})
+	if failure != nil || len(f.requests) != 1 || f.requests[0].Method != "workspace/symbol" || len(d.calls) != 1 {
+		t.Fatalf("%s: failure=%v requests=%v calls=%v", assertion, failure, f.requests, d.calls)
+	}
+	delegated := string(d.calls[0].Input)
+	if d.calls[0].Name != "structural_context_v2" || !strings.Contains(delegated, `"uri":"file:///workspace/a.go"`) || !strings.Contains(delegated, `"symbol":"Target"`) || strings.Contains(delegated, `"line"`) || strings.Contains(delegated, `"character"`) {
+		t.Fatalf("%s: delegated=%s", assertion, delegated)
+	}
+}
+
 func TestWorkspaceSymbolFailuresAreExplicitAndDoNotDelegate(t *testing.T) {
 	cases := []struct{ name, result, code string }{{"absent", `[{"name":"target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_ABSENT"}, {"ambiguous", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}},{"name":"Target","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_AMBIGUOUS"}, {"unresolved", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go"}}]`, "WORKSPACE_SYMBOL_MALFORMED"}, {"root", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}, {"outside", `[{"name":"Target","kind":12,"location":{"uri":"file:///other/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}}
 	for _, tc := range cases {

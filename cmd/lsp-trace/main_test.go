@@ -64,7 +64,7 @@ func TestInfoIsDeterministicBoundedAndPrivate(t *testing.T) {
 	if got.Version == "" || got.BuildRevision == "" {
 		t.Fatalf("ASSERT_INFO_BUILD_IDENTITY_BOUNDED: %#v", got)
 	}
-	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 42 || got.DispatchableCount != 42 || got.InlineByteLimit != 1048576 {
+	if got.DefaultMCPToolProfile != "full" || got.AdvertisedToolCount != 43 || got.DispatchableCount != 43 || got.InlineByteLimit != 1048576 {
 		t.Fatalf("ASSERT_INFO_REGISTRY_AUTHORITY: %#v", got)
 	}
 	if !reflect.DeepEqual(got.Schemas["graph"], []string{"v1", "v2", "v3", "v4", "v5"}) || len(got.Schemas) < 10 {
@@ -281,6 +281,23 @@ func TestSkillDispatcherPreservesGetAndSelectsBothSkills(t *testing.T) {
 		stderr.Reset()
 		if code := runSkill(args, &stdout, &stderr); code == 0 || stdout.Len() != 0 {
 			t.Fatalf("ASSERT_SKILL_REJECTS_UNSUPPORTED: args=%v code=%d stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
+		}
+	}
+}
+
+func TestEmbeddedSkillRoutesSemanticRelationshipsBeforeText(t *testing.T) {
+	const assertion = "ASSERT_SKILL_SEMANTIC_FIRST_TEXT_NEVER_ESTABLISHES_CALLS"
+	for _, phrase := range []string{
+		"callers, callees, execution paths, call dependency neighborhoods, or incoming/outgoing impact",
+		"prefer bounded semantic structural tools",
+		"Text search is appropriate for lexical facts",
+		"only as a locator fallback when semantic resolution honestly fails",
+		"Textual occurrences never establish CALLS",
+		"lsp_session_v1_list",
+		"lsp_session_v1_derive_workspace",
+	} {
+		if !strings.Contains(embeddedSkill, phrase) {
+			t.Fatalf("%s: missing %q", assertion, phrase)
 		}
 	}
 }

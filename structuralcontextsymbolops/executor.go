@@ -19,7 +19,10 @@ import (
 	"lsp-trace/internal/operation"
 )
 
-const Operation operation.Name = "structural_context_symbol"
+const (
+	Operation   operation.Name = "structural_context_symbol"
+	OperationV2 operation.Name = "structural_context_symbol_v2"
+)
 
 const (
 	defaultDownDepth        = 2
@@ -36,12 +39,18 @@ type Delegate interface {
 }
 
 type Executor struct {
-	runtime  incomingops.Runtime
-	delegate Delegate
+	runtime           incomingops.Runtime
+	delegate          Delegate
+	operation         operation.Name
+	delegateOperation operation.Name
 }
 
 func NewExecutor(runtime incomingops.Runtime, delegate Delegate) *Executor {
-	return &Executor{runtime: runtime, delegate: delegate}
+	return &Executor{runtime: runtime, delegate: delegate, operation: Operation, delegateOperation: operation.Name("structural_context")}
+}
+
+func NewV2Executor(runtime incomingops.Runtime, delegate Delegate) *Executor {
+	return &Executor{runtime: runtime, delegate: delegate, operation: OperationV2, delegateOperation: operation.Name("structural_context_v2")}
 }
 
 type analysis struct {
@@ -78,7 +87,7 @@ type delegatedRequest struct {
 }
 
 func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
-	if e == nil || e.runtime == nil || e.delegate == nil || op.Name != Operation {
+	if e == nil || e.runtime == nil || e.delegate == nil || op.Name != e.operation {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var in request
@@ -163,7 +172,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	if err != nil {
 		return fail(operation.FailureInternal, err)
 	}
-	return e.delegate.Execute(parent, operation.Request{Name: operation.Name("structural_context"), Input: raw})
+	return e.delegate.Execute(parent, operation.Request{Name: e.delegateOperation, Input: raw})
 }
 
 func workspaceRoot(runtime incomingops.Runtime, id string, generation uint64) string {

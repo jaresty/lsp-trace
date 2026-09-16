@@ -56,11 +56,11 @@ func TestOperation42ExactClosedInput(t *testing.T) {
 
 func TestOperation42Counts(t *testing.T) {
 	const assertion = "ASSERT_OPERATION_42_COUNTS_AND_NO_ALIAS"
-	if got := len(NewRegistry(false).Tools()); got != 42 {
-		t.Fatalf("%s: canonical=%d want=42", assertion, got)
+	if got := len(NewRegistry(false).Tools()); got != 43 {
+		t.Fatalf("%s: canonical=%d want=43", assertion, got)
 	}
-	if got := len(NewRegistryWithProfile(false, ToolProfileCompact).Advertised()); got != 12 {
-		t.Fatalf("%s: compact=%d want=12", assertion, got)
+	if got := len(NewRegistryWithProfile(false, ToolProfileCompact).Advertised()); got != 13 {
+		t.Fatalf("%s: compact=%d want=13", assertion, got)
 	}
 	if _, ok := NewRegistry(false).Resolve("lsp_session_derive_workspace"); ok {
 		t.Fatalf("%s: unexpected alias resolves", assertion)

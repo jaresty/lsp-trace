@@ -32,7 +32,7 @@ func TestStructuralContextOperation35RegistrationProfilesAndSchema(t *testing.T)
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.ResolveCanonical(mcpcontract.StructuralContextTool)
-	if !ok || len(full.Tools()) != 42 || len(full.Advertised()) != 42 || len(compact.Tools()) != 42 || len(compact.Advertised()) != 12 {
+	if !ok || len(full.Tools()) != 43 || len(full.Advertised()) != 43 || len(compact.Tools()) != 43 || len(compact.Advertised()) != 13 {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_OPERATION35_CARDINALITY: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if tool.ExecutorFamily != StructuralContextExecutorFamily || tool.InputSchemaID != mcpcontract.StructuralContextInputID || !strings.Contains(tool.Description, "transient live CALLS-only") {

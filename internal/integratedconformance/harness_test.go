@@ -752,8 +752,8 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 		if rejectPerturbation(t, assertion, true) {
 			tools = tools[:len(tools)-1]
 		}
-		if got := len(tools); got != 42 {
-			t.Fatalf("%s: advertised=%d want=42", assertion, got)
+		if got := len(tools); got != 43 {
+			t.Fatalf("%s: advertised=%d want=43", assertion, got)
 		}
 		t.Log("PASS " + assertion)
 	})
@@ -784,7 +784,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 				t.Fatalf("%s: historical tool missing from current registry: %s", assertion, tool.Name)
 			}
 		}
-		if len(historical) != 12 || len(current) != 42 || currentOnly == 0 {
+		if len(historical) != 12 || len(current) != 43 || currentOnly == 0 {
 			t.Fatalf("%s: historical=%d current=%d current_only=%d", assertion, len(historical), len(current), currentOnly)
 		}
 		t.Log("PASS " + assertion)

@@ -15,7 +15,7 @@ func TestStructuralContextV2Operation36Contract(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
 	compact := NewRegistryWithProfile(false, ToolProfileCompact)
 	tool, ok := full.ResolveCanonical(mcpcontract.StructuralContextV2Tool)
-	if !ok || len(full.Tools()) != 42 || len(full.Advertised()) != 42 || len(compact.Tools()) != 42 || len(compact.Advertised()) != 12 {
+	if !ok || len(full.Tools()) != 43 || len(full.Advertised()) != 43 || len(compact.Tools()) != 43 || len(compact.Advertised()) != 13 {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_OPERATION36_APPEND_ONLY: ok=%t full=%d/%d compact=%d/%d", ok, len(full.Tools()), len(full.Advertised()), len(compact.Tools()), len(compact.Advertised()))
 	}
 	if _, ok := compact.ResolveCanonical(mcpcontract.StructuralContextV2Tool); !ok {

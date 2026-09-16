@@ -44,7 +44,7 @@ func TestNormalizedProviderRequestContract(t *testing.T) {
 func TestNormalizedProviderCapabilitiesAndPublication(t *testing.T) {
 	registry := NewRegistry(false)
 	tools := registry.Tools()
-	if len(tools) != 42 || len(registry.Advertised()) != 42 {
+	if len(tools) != 43 || len(registry.Advertised()) != 43 {
 		t.Fatalf("ASSERT_MCP_CURRENT38_WITH_HISTORICAL25_PRESERVED: tools=%d advertised=%d", len(tools), len(registry.Advertised()))
 	}
 	capabilities := registry.Capabilities()

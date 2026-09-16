@@ -34,7 +34,7 @@ func TestCompactDirectToolGeneratedMinimalConformance(t *testing.T) {
 		t.Fatalf("ASSERT_COMPACT_CASE_DECLARATIONS_EXACT: %d", len(cases))
 	}
 	r := NewRegistryWithProfile(false, ToolProfileCompact)
-	if len(r.Advertised()) != 12 || len(r.tools) != 42 {
+	if len(r.Advertised()) != 13 || len(r.tools) != 43 {
 		t.Fatalf("ASSERT_REGISTRY_COUNTS: advertised=%d operations=%d", len(r.Advertised()), len(r.tools))
 	}
 	for _, tc := range cases {

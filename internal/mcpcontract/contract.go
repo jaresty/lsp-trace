@@ -152,7 +152,7 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	manifest = WithDeriveWorkspace(WithStructuralContextSymbol(manifest))
+	manifest = WithStructuralContextSymbolV2(WithDeriveWorkspace(WithStructuralContextSymbol(manifest)))
 	for _, registration := range WithContextSymbolChurnCapture(WithContextSymbolChurn(WithContextChurn(WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest))))))))))))))))))).Schemas {
 		if registration.ID != schemaID {
 			continue
@@ -175,7 +175,7 @@ func ValidateJSON(schemaID string, data []byte) error {
 		return err
 	}
 	manifest = WithContextSymbolChurnCapture(WithContextSymbolChurn(WithContextChurn(WithStructuralDelta(WithStructuralContextV2(WithStructuralContext(WithCensus(WithTrace(WithProgramCInstability(WithProgramCCompose(WithProgramCLeiden(WithExecuteGateway(WithPublicAnalyticsV2(WithAcquisitionV3(WithRetainedCallsV2Verifier(WithRetainedCallsV2Export(WithHydratedInspection(WithRetainedRelations(WithRetainedCalls(manifest)))))))))))))))))))
-	manifest = WithDeriveWorkspace(WithStructuralContextSymbol(manifest))
+	manifest = WithStructuralContextSymbolV2(WithDeriveWorkspace(WithStructuralContextSymbol(manifest)))
 	compiled, err := compileSchema(manifest, schemaID)
 	if err != nil {
 		return err

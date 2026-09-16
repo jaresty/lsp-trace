@@ -81,6 +81,8 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 		schemaID = mcpcontract.StructuralContextV2DomainErrorID
 	} else if tool == mcpcontract.StructuralContextSymbolTool {
 		schemaID = mcpcontract.StructuralContextSymbolDomainErrorID
+	} else if tool == mcpcontract.StructuralContextSymbolV2Tool {
+		schemaID = mcpcontract.StructuralContextSymbolV2DomainErrorID
 	}
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
@@ -434,7 +436,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			}
 			return bindEnvelope(base, tool, structuralDeltaDomainErrorEnvelope(requestID, phase, failure.Code, failure.Err.Error()))
 		}
-		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
 				if domain.State == transientstructural.StateTruncated {
@@ -521,7 +523,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.StructuralDeltaSuccessID, Tool: tool.Name, RequestID: requestID, Outcome: "COMPLETE", OperationStatus: "SUCCEEDED", IsError: false, Result: result})
 	}
-	if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+	if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 		var result map[string]any
 		resultID := mcpcontract.StructuralContextResultID
 		successID := mcpcontract.StructuralContextSuccessID
@@ -531,6 +533,9 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextV2SuccessID
 		}
+		if tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily {
+			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextSymbolV2SuccessID
+		}
 		if len(opResult.Artifact) == 0 || json.Unmarshal(opResult.Artifact, &result) != nil || mcpcontract.ValidateJSON(resultID, opResult.Artifact) != nil {
 			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
 		}
@@ -539,7 +544,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, "DELIVERY_CHECK", "CANCELLED"))
 		}
 		state, _ := result["state"].(string)
-		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily {
 			state = "COMPLETE"
 		}
 		return bindEnvelope(base, tool, envelope{EnvelopeVersion: "1", EnvelopeSchemaID: successID, Tool: tool.Name, RequestID: correlationID, Outcome: state, OperationStatus: "SUCCEEDED", IsError: false, Result: result})
@@ -914,6 +919,8 @@ func validateEmittedEnvelope(tool Tool, env envelope, raw []byte) error {
 		return mcpcontract.ValidateStructuralContextEnvelopeExclusive(raw)
 	case EnvelopePolicyStructuralContextSymbol:
 		return mcpcontract.ValidateStructuralContextSymbolEnvelopeExclusive(raw)
+	case EnvelopePolicyStructuralContextSymbolV2:
+		return mcpcontract.ValidateStructuralContextSymbolV2EnvelopeExclusive(raw)
 	case EnvelopePolicyStructuralContextV2:
 		return mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw)
 	case EnvelopePolicyContextChurn:
@@ -1171,6 +1178,8 @@ func operationName(canonical string) operation.Name {
 		return operation.Name("structural_context")
 	case mcpcontract.StructuralContextSymbolTool:
 		return operation.Name("structural_context_symbol")
+	case mcpcontract.StructuralContextSymbolV2Tool:
+		return operation.Name("structural_context_symbol_v2")
 	case mcpcontract.StructuralContextV2Tool:
 		return operation.Name("structural_context_v2")
 	case mcpcontract.StructuralDeltaTool:

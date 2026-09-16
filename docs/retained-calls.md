@@ -92,7 +92,7 @@ generation selector plus explicit `schema:{family:"retained-calls",version:"v2"}
 it verifies receipt custody before composed retained-calls/v2 admission. It has no
 alias and does not widen `lsp_trace_v1_verify` or graph-provenance `lsp_trace_v2_verify`.
 
-The current runtime has exactly 42 canonical tools, sorted as: `lsp_session_v1_derive_workspace`, `lsp_session_v1_list`,
+The current runtime has exactly 43 canonical tools, sorted as: `lsp_session_v1_derive_workspace`, `lsp_session_v1_list`,
 `lsp_session_v1_restart`, `lsp_session_v1_status`, `lsp_session_v1_stop`,
 `lsp_trace_v1_bounded_retained_analysis`, `lsp_trace_v1_bounded_retained_metrics`,
 `lsp_trace_v1_bounded_retained_ranking`, `lsp_trace_v1_capabilities`, `lsp_trace_v1_census`,
@@ -102,7 +102,7 @@ The current runtime has exactly 42 canonical tools, sorted as: `lsp_session_v1_d
 `lsp_trace_v1_verify`, `lsp_trace_v2_bounded_retained_analysis`,
 `lsp_trace_v2_bounded_retained_metrics`, `lsp_trace_v2_bounded_retained_ranking`,
 `lsp_trace_v2_export_retained_calls`, `lsp_trace_v2_incoming`,
-`lsp_trace_v2_slice`, `lsp_trace_v2_structural_context`, `lsp_trace_v2_verify`, `lsp_trace_v2_verify_retained_calls`,
+`lsp_trace_v2_slice`, `lsp_trace_v2_structural_context`, `lsp_trace_v2_structural_context_symbol`, `lsp_trace_v2_verify`, `lsp_trace_v2_verify_retained_calls`,
 `lsp_trace_v3_incoming`, and `lsp_trace_v3_slice`.
 Historical thirteen-, twenty-, and twenty-five-tool contracts remain historical and unchanged.
 

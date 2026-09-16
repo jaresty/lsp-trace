@@ -11,7 +11,7 @@ var compactCanonicalNames = []string{
 	"lsp_session_v1_derive_workspace", "lsp_session_v1_list", "lsp_session_v1_restart", "lsp_session_v1_status", "lsp_session_v1_stop",
 	"lsp_trace_v1_capabilities", "lsp_trace_v1_execute", "lsp_trace_v1_incoming",
 	"lsp_trace_v1_inspect_hydrated", "lsp_trace_v1_schema_get", "lsp_trace_v1_slice",
-	"lsp_trace_v1_structural_context_symbol",
+	"lsp_trace_v1_structural_context_symbol", "lsp_trace_v2_structural_context_symbol",
 }
 
 func toolNames(tools []Tool) []string {
@@ -26,10 +26,10 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	for name, registry := range map[string]*Registry{
 		"default": NewRegistry(false), "full": NewRegistryWithProfile(false, ToolProfileFull),
 	} {
-		if got := len(registry.Tools()); got != 42 {
+		if got := len(registry.Tools()); got != 43 {
 			t.Fatalf("ASSERT_%s_DISPATCHABLE_32: got %d", name, got)
 		}
-		if got := len(registry.Advertised()); got != 42 {
+		if got := len(registry.Advertised()); got != 43 {
 			t.Fatalf("ASSERT_%s_ADVERTISED_32: got %d", name, got)
 		}
 		assertSliceOutputSelectorAdvertised(t, name, registry)
@@ -38,7 +38,7 @@ func TestToolProfilesPreserveFullAndCompactAdvertisement(t *testing.T) {
 	if got := toolNames(compact.Advertised()); !reflect.DeepEqual(got, compactCanonicalNames) {
 		t.Fatalf("ASSERT_COMPACT_ADVERTISED_EXACT11_LEXICAL: got %v", got)
 	}
-	if got := len(compact.Tools()); got != 42 {
+	if got := len(compact.Tools()); got != 43 {
 		t.Fatalf("ASSERT_COMPACT_DISPATCHABLE_32: got %d", got)
 	}
 	assertSliceOutputSelectorAdvertised(t, "compact", compact)
@@ -129,7 +129,7 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if again["name"] != "lsp_trace_v3_slice" {
 		t.Fatal("ASSERT_OPERATION_DESCRIPTION_SNAPSHOT_IMMUTABLE")
 	}
-	if len(r.Advertised()) != 12 || len(r.Tools()) != 42 {
+	if len(r.Advertised()) != 13 || len(r.Tools()) != 43 {
 		t.Fatal("ASSERT_OPERATION_DESCRIPTION_PRESERVES_PROFILE_COUNTS")
 	}
 }
@@ -149,10 +149,10 @@ func TestCompactCapabilitiesAreExactAndDescriptionsSelfContained(t *testing.T) {
 	if caps["active_tool_profile"] != "compact" || !reflect.DeepEqual(caps["advertised_tool_names"], compactCanonicalNames) {
 		t.Fatalf("ASSERT_CAPABILITY_ACTIVE_AND_ADVERTISED_EXACT: %#v", caps)
 	}
-	if got := caps["dispatchable_tool_names"].([]string); len(got) != 42 {
+	if got := caps["dispatchable_tool_names"].([]string); len(got) != 43 {
 		t.Fatalf("ASSERT_CAPABILITY_DISPATCHABLE_32: %v", got)
 	}
-	if got := caps["tools"].([]Tool); len(got) != 12 {
+	if got := caps["tools"].([]Tool); len(got) != 13 {
 		t.Fatalf("ASSERT_CAPABILITY_TOOLS_MEANS_ADVERTISED: %d", len(got))
 	}
 	discovery, ok := caps["operation_discovery"].(map[string]any)
