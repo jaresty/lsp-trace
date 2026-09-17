@@ -287,8 +287,12 @@ func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 		}
 	}
 	packageType := reflect.TypeOf((*DomainFailure)(nil))
-	if packageType.Elem().NumField() != 3 {
+	if packageType.Elem().NumField() != 4 {
 		t.Fatalf("ASSERT_FAILURE_PRIVACY_SURFACE: %+v", packageType.Elem())
+	}
+	diagnosticType := reflect.TypeOf(TraversalDiagnostic{})
+	if diagnosticType.NumField() != 4 {
+		t.Fatalf("ASSERT_TRAVERSAL_DIAGNOSTIC_CLOSED_PRIVACY_SURFACE: %+v", diagnosticType)
 	}
 	if reflect.TypeOf(Execute).NumIn() != 3 || reflect.TypeOf(Execute).NumOut() != 2 {
 		t.Fatal("ASSERT_SOLE_ENTRY_SIGNATURE")

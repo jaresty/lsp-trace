@@ -94,6 +94,48 @@ func TestStructuralContextOperation35PreservesTypedDomainFailures(t *testing.T) 
 	}
 }
 
+func TestStructuralContextV2TraversalDiagnosticsDirectGatewayParity(t *testing.T) {
+	depthZero, depthOne := 0, 1
+	cases := []struct {
+		name       string
+		diagnostic *transientstructural.TraversalDiagnostic
+		want       map[string]any
+	}{
+		{name: "prepare", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStagePrepare, Method: "textDocument/prepareCallHierarchy"}, want: map[string]any{"stage": "PREPARE", "method": "textDocument/prepareCallHierarchy"}},
+		{name: "outgoing", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: transientstructural.DirectionOutgoing, Depth: &depthOne}, want: map[string]any{"stage": "OUTGOING", "method": "callHierarchy/outgoingCalls", "direction": "OUTGOING", "depth": float64(1)}},
+		{name: "incoming", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStageIncoming, Method: "callHierarchy/incomingCalls", Direction: transientstructural.DirectionIncoming, Depth: &depthZero}, want: map[string]any{"stage": "INCOMING", "method": "callHierarchy/incomingCalls", "direction": "INCOMING", "depth": float64(0)}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "INVALID_SERVER_RESPONSE", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhaseTraversal, State: transientstructural.StateInvalidServerResponse, TraversalDiagnostic: tc.diagnostic}}}
+			server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+			args := structuralContextV2Args()
+			direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+			gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+			if direct.Error != nil || gateway.Error != nil {
+				t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_%s_TRANSPORT: direct=%v gateway=%v", strings.ToUpper(tc.name), direct.Error, gateway.Error)
+			}
+			directEnvelope := direct.Result.(callResult).StructuredContent
+			outer := gateway.Result.(callResult).StructuredContent
+			var gatewayEnvelope envelope
+			if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+				t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_%s_GATEWAY_DECODE: %v", strings.ToUpper(tc.name), err)
+			}
+			for label, env := range map[string]envelope{"direct": directEnvelope, "gateway": gatewayEnvelope} {
+				raw, _ := json.Marshal(env.Diagnostic)
+				var got map[string]any
+				_ = json.Unmarshal(raw, &got)
+				if !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_%s_%s_DIAGNOSTIC: got=%v want=%v", strings.ToUpper(tc.name), strings.ToUpper(label), got, tc.want)
+				}
+				if env.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID {
+					t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_ADDITIVE_V4_%s: %v", strings.ToUpper(label), env.EnvelopeSchemaID)
+				}
+			}
+		})
+	}
+}
+
 func TestStructuralContextOperation35UnknownUntypedFailureFailsClosed(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "UNKNOWN_FUTURE_CODE"}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextExecutorFamily: executor}}

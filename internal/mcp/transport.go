@@ -78,7 +78,7 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	id, _ := mcpcontract.NewFutureStructuralCorrelationID()
 	schemaID := mcpcontract.StructuralContextDomainErrorID
 	if tool == mcpcontract.StructuralContextV2Tool {
-		schemaID = mcpcontract.StructuralContextProjectionDomainErrorID
+		schemaID = mcpcontract.StructuralContextTraversalDomainErrorID
 	} else if tool == mcpcontract.StructuralContextSymbolTool {
 		schemaID = mcpcontract.StructuralContextSymbolDomainErrorID
 	} else if tool == mcpcontract.StructuralContextSymbolV2Tool {
@@ -101,6 +101,24 @@ func structuralContextDomainErrorWithTarget(tool, phase, state string, args map[
 	if lineOK && characterOK {
 		env.Target = map[string]any{"kind": "POSITION", "line": line, "character": character}
 	}
+	return env
+}
+
+func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, args map[string]any) envelope {
+	env := structuralContextDomainErrorWithTarget(tool, string(failure.Phase), string(failure.State), args)
+	if tool != mcpcontract.StructuralContextV2Tool || failure.TraversalDiagnostic == nil {
+		return env
+	}
+	d := failure.TraversalDiagnostic
+	diagnostic := map[string]any{"stage": d.Stage, "method": d.Method}
+	if d.Direction != "" {
+		diagnostic["direction"] = d.Direction
+	}
+	if d.Depth != nil {
+		diagnostic["depth"] = *d.Depth
+	}
+	env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
+	env.Diagnostic = diagnostic
 	return env
 }
 
@@ -513,7 +531,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				if domain.State == transientstructural.StateTruncated || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
 					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
 				}
-				return bindEnvelope(base, tool, structuralContextDomainErrorWithTarget(tool.Name, string(domain.Phase), string(domain.State), operationArguments))
+				return bindEnvelope(base, tool, structuralContextTraversalDomainError(tool.Name, domain, operationArguments))
 			}
 			state := failure.Code
 			phase := "TRAVERSAL"

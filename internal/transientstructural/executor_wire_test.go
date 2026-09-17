@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -226,6 +227,47 @@ func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
 	if result.SchemaVersion != resultSchemaVersion || result.EvidenceClass != evidenceClassTransientLive || result.Authority != 0 || result.SourceGraphComplete != sourceGraphCompleteUnknown || result.Retained || result.Replayable || result.PublicationEligible || result.HydrationEligible || result.ClaimCeiling != claimCeiling || result.GraphDigest == "" || result.TargetID == "" {
 		t.Fatalf("ASSERT_TRANSIENT_CLAIM_BOUNDARY: %+v", result)
 	}
+}
+
+func TestExecuteMalformedTraversalResponsesCarryClosedDiagnostics(t *testing.T) {
+	cases := []struct {
+		name      string
+		method    string
+		stage     TraversalStage
+		direction Direction
+	}{
+		{name: "prepare", method: "textDocument/prepareCallHierarchy", stage: TraversalStagePrepare},
+		{name: "outgoing", method: "callHierarchy/outgoingCalls", stage: TraversalStageOutgoing, direction: DirectionOutgoing},
+		{name: "incoming", method: "callHierarchy/incomingCalls", stage: TraversalStageIncoming, direction: DirectionIncoming},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, started, uri, _ := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+				return map[string]json.RawMessage{tc.method: json.RawMessage(`{}`)}
+			})
+			result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+			if failure == nil || failure.Phase != PhaseTraversal || failure.State != StateInvalidServerResponse || !reflect.DeepEqual(result, Result{}) {
+				t.Fatalf("ASSERT_MALFORMED_%s_TYPED_FAILURE: result=%+v failure=%+v", tc.stage, result, failure)
+			}
+			want := &TraversalDiagnostic{Stage: tc.stage, Method: tc.method, Direction: tc.direction}
+			if !reflect.DeepEqual(failure.TraversalDiagnostic, want) || failure.TraversalDiagnostic.Depth != nil {
+				t.Fatalf("ASSERT_MALFORMED_%s_EXACT_DIAGNOSTIC: got=%+v want=%+v", tc.stage, failure.TraversalDiagnostic, want)
+			}
+			raw, err := json.Marshal(failure)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range []string{"private", uri, "source", "selector", "environment", "provider"} {
+				if forbidden != "" && string(raw) != "" && containsJSONText(raw, forbidden) {
+					t.Fatalf("ASSERT_MALFORMED_%s_PRIVACY: leaked %q in %s", tc.stage, forbidden, raw)
+				}
+			}
+		})
+	}
+}
+
+func containsJSONText(raw []byte, text string) bool {
+	return strings.Contains(string(raw), text)
 }
 
 func TestExecuteRequestScopedDocumentSupply(t *testing.T) {

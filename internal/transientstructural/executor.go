@@ -94,7 +94,11 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	})
 	if prepareErr != nil {
 		accounting := counted.snapshot()
-		return Result{}, fail(PhaseTraversal, traversalState(ctx, accounting, runtime, sessionID, request.Generation), accounting)
+		failure := fail(PhaseTraversal, traversalState(ctx, accounting, runtime, sessionID, request.Generation), accounting)
+		if failure.State == StateInvalidServerResponse {
+			failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStagePrepare, Method: "textDocument/prepareCallHierarchy"}
+		}
+		return Result{}, failure
 	}
 	if len(items) == 0 {
 		accounting := counted.snapshot()
@@ -128,7 +132,15 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 			state = StateTruncated
 		}
 		accounting = accountUnadmitted(accounting, rawNodes, rawEdges, omissionForTerminal(state))
-		return Result{}, fail(PhaseTraversal, state, accounting)
+		failure := fail(PhaseTraversal, state, accounting)
+		if state == StateInvalidServerResponse {
+			if !down.Complete || !down.TraversalComplete {
+				failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: DirectionOutgoing}
+			} else if !upComplete {
+				failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStageIncoming, Method: "callHierarchy/incomingCalls", Direction: DirectionIncoming}
+			}
+		}
+		return Result{}, failure
 	}
 
 	hooks.after(PhaseTraversal)

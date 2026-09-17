@@ -33,6 +33,7 @@ const (
 	UnifiedStructuralContextResultV2ID       = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.unified-structural-context-result.v2.schema.json"
 	StructuralContextProjectionSuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v4.schema.json"
 	StructuralContextProjectionDomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v3.schema.json"
+	StructuralContextTraversalDomainErrorID  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v4.schema.json"
 )
 
 func WithStructuralContextV2(m *Manifest) *Manifest {
@@ -55,8 +56,9 @@ func WithStructuralContextV2(m *Manifest) *Manifest {
 		SchemaRegistration{ID: UnifiedStructuralContextResultV2ID, Family: "unified-structural-context-result.v2", Layer: "artifact", Path: "schemas/lsp-trace.unified-structural-context-result.v2.schema.json"},
 		SchemaRegistration{ID: StructuralContextProjectionSuccessID, Family: "envelope-structural-context-result.v4", Layer: "envelope", Path: "schemas/envelope-structural-context-result.v4.schema.json"},
 		SchemaRegistration{ID: StructuralContextProjectionDomainErrorID, Family: "envelope-structural-context-domain-error.v3", Layer: "envelope", Path: "schemas/envelope-structural-context-domain-error.v3.schema.json"},
+		SchemaRegistration{ID: StructuralContextTraversalDomainErrorID, Family: "envelope-structural-context-domain-error.v4", Layer: "envelope", Path: "schemas/envelope-structural-context-domain-error.v4.schema.json"},
 	)
-	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextV2Tool, InputSchemaID: StructuralContextProjectionInputID, EnvelopeSchemaIDs: []string{StructuralContextProjectionSuccessID, StructuralContextProjectionDomainErrorID}, ArtifactSchemaIDs: []string{UnifiedStructuralContextResultV2ID}, Advertised: true, Availability: "ENABLED"})
+	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextV2Tool, InputSchemaID: StructuralContextProjectionInputID, EnvelopeSchemaIDs: []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}, ArtifactSchemaIDs: []string{UnifiedStructuralContextResultV2ID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 
@@ -74,7 +76,7 @@ func WithStructuralContext(m *Manifest) *Manifest {
 	return &c
 }
 
-//go:embed testdata/schemas/input-structural-context.v1.schema.json testdata/schemas/lsp-trace.transient-structural-result.v1.schema.json testdata/schemas/envelope-structural-context-result.v1.schema.json testdata/schemas/envelope-structural-context-domain-error.v1.schema.json testdata/schemas/input-structural-context.v2.schema.json testdata/schemas/input-structural-context.v3.schema.json testdata/schemas/input-structural-context.v4.schema.json testdata/schemas/source-projection-request.v1.schema.json testdata/schemas/source-projection-request.v2.schema.json testdata/schemas/lsp-trace.transient-structural-result.v2.schema.json testdata/schemas/lsp-trace.source-projection.v1.schema.json testdata/schemas/lsp-trace.source-projection.v2.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v1.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v3.schema.json testdata/schemas/envelope-structural-context-result.v4.schema.json testdata/schemas/envelope-structural-context-domain-error.v2.schema.json testdata/schemas/envelope-structural-context-domain-error.v3.schema.json
+//go:embed testdata/schemas/input-structural-context.v1.schema.json testdata/schemas/lsp-trace.transient-structural-result.v1.schema.json testdata/schemas/envelope-structural-context-result.v1.schema.json testdata/schemas/envelope-structural-context-domain-error.v1.schema.json testdata/schemas/input-structural-context.v2.schema.json testdata/schemas/input-structural-context.v3.schema.json testdata/schemas/input-structural-context.v4.schema.json testdata/schemas/source-projection-request.v1.schema.json testdata/schemas/source-projection-request.v2.schema.json testdata/schemas/lsp-trace.transient-structural-result.v2.schema.json testdata/schemas/lsp-trace.source-projection.v1.schema.json testdata/schemas/lsp-trace.source-projection.v2.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v1.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v3.schema.json testdata/schemas/envelope-structural-context-result.v4.schema.json testdata/schemas/envelope-structural-context-domain-error.v2.schema.json testdata/schemas/envelope-structural-context-domain-error.v3.schema.json testdata/schemas/envelope-structural-context-domain-error.v4.schema.json
 var structuralContextFiles embed.FS
 
 func structuralContextSchemaPaths() map[string]string {
@@ -98,6 +100,7 @@ func structuralContextSchemaPaths() map[string]string {
 		StructuralContextDomainErrorID:           "testdata/schemas/envelope-structural-context-domain-error.v1.schema.json",
 		StructuralContextV2DomainErrorID:         "testdata/schemas/envelope-structural-context-domain-error.v2.schema.json",
 		StructuralContextProjectionDomainErrorID: "testdata/schemas/envelope-structural-context-domain-error.v3.schema.json",
+		StructuralContextTraversalDomainErrorID:  "testdata/schemas/envelope-structural-context-domain-error.v4.schema.json",
 	}
 }
 
@@ -175,7 +178,7 @@ func ValidateStructuralContextV2EnvelopeExclusive(data []byte) error {
 	named, _ := value["envelope_schema_id"].(string)
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	for _, id := range []string{StructuralContextV2ResultID, SourceProjectionResultV2ID, UnifiedStructuralContextResultV2ID, StructuralContextProjectionSuccessID, StructuralContextProjectionDomainErrorID} {
+	for _, id := range []string{StructuralContextV2ResultID, SourceProjectionResultV2ID, UnifiedStructuralContextResultV2ID, StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID} {
 		raw, _ := StructuralContextSchemaJSON(id)
 		doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 		if e != nil {
@@ -190,7 +193,7 @@ func ValidateStructuralContextV2EnvelopeExclusive(data []byte) error {
 		return errFutureShape
 	}
 	matches := []string{}
-	for _, id := range []string{StructuralContextProjectionSuccessID, StructuralContextProjectionDomainErrorID} {
+	for _, id := range []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID} {
 		s, e := compiler.Compile(id)
 		if e != nil {
 			return e

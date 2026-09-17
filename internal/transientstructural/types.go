@@ -226,10 +226,26 @@ type BoundsBinding struct {
 	AnalysisMaxDepth int          `json:"analysis_max_depth"`
 }
 
+type TraversalStage string
+
+const (
+	TraversalStagePrepare  TraversalStage = "PREPARE"
+	TraversalStageOutgoing TraversalStage = "OUTGOING"
+	TraversalStageIncoming TraversalStage = "INCOMING"
+)
+
+type TraversalDiagnostic struct {
+	Stage     TraversalStage `json:"stage"`
+	Method    string         `json:"method"`
+	Direction Direction      `json:"direction,omitempty"`
+	Depth     *int           `json:"depth,omitempty"`
+}
+
 type DomainFailure struct {
-	Phase      Phase         `json:"phase"`
-	State      TerminalState `json:"state"`
-	Accounting Accounting    `json:"accounting"`
+	Phase               Phase                `json:"phase"`
+	State               TerminalState        `json:"state"`
+	Accounting          Accounting           `json:"accounting"`
+	TraversalDiagnostic *TraversalDiagnostic `json:"traversal_diagnostic,omitempty"`
 }
 
 func (f *DomainFailure) Error() string {

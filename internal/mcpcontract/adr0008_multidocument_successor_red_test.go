@@ -131,7 +131,7 @@ func TestADR0008SuccessorReferenceClosureAndOperation36Activation(t *testing.T) 
 	}
 	if tool.InputSchemaID != StructuralContextProjectionInputID ||
 		!reflect.DeepEqual(tool.ArtifactSchemaIDs, []string{UnifiedStructuralContextResultV2ID}) ||
-		!reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextProjectionDomainErrorID}) {
+		!reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}) {
 		t.Fatalf("ASSERT_OPERATION36_V4_V2_ACTIVATED: %+v", tool)
 	}
 	compiler, _, err := registeredCompiler(manifest)
@@ -143,6 +143,7 @@ func TestADR0008SuccessorReferenceClosureAndOperation36Activation(t *testing.T) 
 		UnifiedStructuralContextResultV2ID,
 		StructuralContextProjectionSuccessID,
 		StructuralContextProjectionDomainErrorID,
+		StructuralContextTraversalDomainErrorID,
 	} {
 		if _, err := SchemaJSON(id); err != nil {
 			t.Fatalf("ASSERT_SUCCESSOR_REFERENCE_CLOSURE_WITHOUT_RUNTIME_SWITCH[%s]: %v", id, err)

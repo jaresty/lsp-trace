@@ -44,7 +44,7 @@ func TestStructuralContextV2Operation36Contract(t *testing.T) {
 	}
 }
 
-func TestStructuralContextV2TypedDomainFailureUsesV2Envelope(t *testing.T) {
+func TestStructuralContextV2TypedLocatorFailureUsesV4Envelope(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(transientstructural.StateTargetNotFound), Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound}}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
 	args := structuralContextV2Args()
@@ -60,7 +60,7 @@ func TestStructuralContextV2TypedDomainFailureUsesV2Envelope(t *testing.T) {
 	directEnvelope := direct.Result.(callResult).StructuredContent
 	directRaw, _ := json.Marshal(directEnvelope)
 	_ = json.Unmarshal(directRaw, &directEnvelope)
-	if directEnvelope.EnvelopeSchemaID != mcpcontract.StructuralContextProjectionDomainErrorID || directEnvelope.Phase != "PREFLIGHT" || directEnvelope.State != "TARGET_NOT_FOUND" {
+	if directEnvelope.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || directEnvelope.Phase != "PREFLIGHT" || directEnvelope.State != "TARGET_NOT_FOUND" || directEnvelope.Diagnostic != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_direct: %+v", directEnvelope)
 	}
 	wantTarget := map[string]any{"kind": "POSITION", "line": float64(123), "character": float64(5)}
@@ -72,7 +72,7 @@ func TestStructuralContextV2TypedDomainFailureUsesV2Envelope(t *testing.T) {
 	}
 	outer := gateway.Result.(callResult).StructuredContent
 	var delegated envelope
-	if json.Unmarshal([]byte(outer.DelegatedEnvelope), &delegated) != nil || delegated.EnvelopeSchemaID != mcpcontract.StructuralContextProjectionDomainErrorID || delegated.Phase != "PREFLIGHT" || delegated.State != "TARGET_NOT_FOUND" {
+	if json.Unmarshal([]byte(outer.DelegatedEnvelope), &delegated) != nil || delegated.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || delegated.Phase != "PREFLIGHT" || delegated.State != "TARGET_NOT_FOUND" || delegated.Diagnostic != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_gateway: %+v", outer)
 	}
 	if !reflect.DeepEqual(delegated.Target, wantTarget) {
