@@ -16,6 +16,8 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/retainedinspection"
 	"lsp-trace/internal/retainedoperation"
+	"lsp-trace/internal/retainedprojection"
+	"lsp-trace/internal/sourceobject"
 )
 
 type gatewayMatrixExecutor struct {
@@ -191,6 +193,75 @@ func TestInspectHydratedRetainedV2DirectGatewayEnvelopeParity(t *testing.T) {
 	legacyEnvelope := call(legacy, false).Result.(callResult).StructuredContent
 	if legacyEnvelope.EnvelopeSchemaID != mcpcontract.HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json") {
 		t.Fatalf("ASSERT_INSPECT_HYDRATED_LEGACY_V1_ENVELOPE: %+v", legacyEnvelope)
+	}
+}
+
+type op41ConformanceLookup struct {
+	id    sourceobject.Identity
+	raw   []byte
+	calls int
+}
+
+func (l *op41ConformanceLookup) Get(id sourceobject.Identity) (sourceobject.Object, error) {
+	l.calls++
+	return sourceobject.Object{Identity: l.id, Bytes: append([]byte(nil), l.raw...)}, nil
+}
+
+type op41ConformanceExecutor struct{ handler operation.Handler }
+
+func (e op41ConformanceExecutor) Execute(ctx context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	return e.handler(ctx, request)
+}
+
+func TestOperation41RealFixtureDirectGatewayExactParity(t *testing.T) {
+	dir := "../sourceprojection/testdata/crossmode-v2"
+	read := func(name string) []byte {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	var args map[string]any
+	if err := json.Unmarshal(read("retained-request.json"), &args); err != nil {
+		t.Fatal(err)
+	}
+	var meta struct {
+		Identity sourceobject.Identity `json:"identity"`
+	}
+	if err := json.Unmarshal(read("source-object.json"), &meta); err != nil {
+		t.Fatal(err)
+	}
+	server := func() (*Server, *op41ConformanceLookup) {
+		lookup := &op41ConformanceLookup{id: meta.Identity, raw: read("source-object.bin")}
+		executor := op41ConformanceExecutor{handler: retainedoperation.NewInspectHydratedHandler(retainedprojection.Lookup(lookup))}
+		s := matrixServer(NewRegistry(false), nil)
+		s.Executor = executor
+		s.Executors[OfflineExecutorFamily] = executor
+		return s, lookup
+	}
+	directServer, directLookup := server()
+	direct := directMatrixCall(directServer, mcpcontract.HydratedTool, args)
+	if direct.Error != nil {
+		t.Fatal(direct.Error)
+	}
+	directEnvelope := direct.Result.(callResult).StructuredContent
+	expected := string(read("retained-expected.json"))
+	if directEnvelope.Content == nil || *directEnvelope.Content != expected || directEnvelope.ArtifactSchemaID != retainedinspection.SourceProjectionSchemaID {
+		t.Fatalf("ASSERT_OP41_DIRECT_EXACT_CONTENT: %+v", directEnvelope)
+	}
+	gatewayServer, gatewayLookup := server()
+	wrapped := gatewayServer.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.HydratedTool, "arguments": args}}))
+	if wrapped.Error != nil {
+		t.Fatal(wrapped.Error)
+	}
+	outer := wrapped.Result.(callResult).StructuredContent
+	directBytes, _ := json.Marshal(directEnvelope)
+	if outer.DelegatedEnvelope != string(directBytes) || outer.DelegatedOutcome != "COMPLETE" || outer.DelegatedIsError == nil || *outer.DelegatedIsError {
+		t.Fatalf("ASSERT_OP41_GATEWAY_EXACT_DELEGATION: %+v", outer)
+	}
+	if directLookup.calls != 1 || gatewayLookup.calls != 1 {
+		t.Fatalf("ASSERT_OP41_DIRECT_GATEWAY_ONE_LOOKUP_EACH: direct=%d gateway=%d", directLookup.calls, gatewayLookup.calls)
 	}
 }
 

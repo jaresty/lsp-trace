@@ -22,9 +22,10 @@ const (
 	assertCrossModeV2Runtime     = "ASSERT_CROSSMODE_V2_RUNTIME_EXACT_ARTIFACT"
 	assertCrossModeV2Permutation = "ASSERT_CROSSMODE_V2_PERMUTATION_INVARIANCE"
 	assertCrossModeV2Variants    = "ASSERT_CROSSMODE_V2_VARIANT_DENOMINATOR"
+	assertCrossModeV2Retained    = "ASSERT_CROSSMODE_V2_LIVE_RETAINED_SEMANTIC_PARITY"
 )
 
-var crossModeV2FixtureFiles = []string{"target.go.txt", "caller.go.txt", "structural.json", "requests.json", "variants.json", "expected.json"}
+var crossModeV2FixtureFiles = []string{"target.go.txt", "caller.go.txt", "structural.json", "requests.json", "variants.json", "expected.json", "retained-snapshot-v2.json", "retained-request.json", "source-object.bin", "source-object.json", "retained-expected.json"}
 
 type crossModeV2Structural struct {
 	Schema              string `json:"schema"`
@@ -63,6 +64,7 @@ func TestCrossModeV2Fixture(t *testing.T) {
 	t.Run(assertCrossModeV2Runtime, testCrossModeV2Runtime)
 	t.Run(assertCrossModeV2Permutation, testCrossModeV2Permutation)
 	t.Run(assertCrossModeV2Variants, testCrossModeV2Variants)
+	t.Run(assertCrossModeV2Retained, testCrossModeV2Retained)
 }
 
 func testCrossModeV2Inventory(t *testing.T) {
@@ -151,6 +153,32 @@ func testCrossModeV2Variants(t *testing.T) {
 	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("%s: got=%v want=%v", assertCrossModeV2Variants, got, want)
+	}
+}
+
+func testCrossModeV2Retained(t *testing.T) {
+	var live, retained map[string]any
+	loadCrossModeV2JSON(t, "expected.json", &live)
+	loadCrossModeV2JSON(t, "retained-expected.json", &retained)
+	for _, key := range []string{"schema_version", "authority", "source_graph_complete", "graph_facts_added", "status"} {
+		if !reflect.DeepEqual(live[key], retained[key]) {
+			t.Fatalf("%s: %s live=%v retained=%v", assertCrossModeV2Retained, key, live[key], retained[key])
+		}
+	}
+	liveCustody := live["custody_mode"]
+	retainedCustody := retained["custody_mode"]
+	if liveCustody != "LIVE" || retainedCustody != "RETAINED" {
+		t.Fatalf("%s: custody live=%v retained=%v", assertCrossModeV2Retained, liveCustody, retainedCustody)
+	}
+	for label, artifact := range map[string]map[string]any{"live": live, "retained": retained} {
+		selection := artifact["document_selection"].(map[string]any)
+		uris := selection["selected_uris"].([]any)
+		if selection["ordering"] != "TARGET_FIRST_THEN_URI_LEXICOGRAPHIC" || len(uris) < 1 || uris[0] != selection["target_uri"] {
+			t.Fatalf("%s: %s selection=%v", assertCrossModeV2Retained, label, selection)
+		}
+		if artifact["authority"] != float64(0) || artifact["source_graph_complete"] != "UNKNOWN" || artifact["graph_facts_added"] != float64(0) {
+			t.Fatalf("%s: %s neutrality=%v", assertCrossModeV2Retained, label, artifact)
+		}
 	}
 }
 

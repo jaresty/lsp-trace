@@ -1,0 +1,18 @@
+{
+  "schema": "lsp-trace.fixture.op41-crossmode-v1",
+  "identity": {
+    "Digest": "sha256:ac53c2cec904d856d8cd46553fdd905c0f5e2ee58ce48ab520ea364cdc43aa2f",
+    "ByteLength": 34
+  },
+  "keys": [
+    {
+      "graph_subject_id": "06043ccb2ecf79409ee805af5e2982ba17958fde255dee33aaab5df38b549331",
+      "logical_source_id": "file:///var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestWriteCrossModeProbe4248255628/001/a.go"
+    },
+    {
+      "graph_subject_id": "0e04c5bbf37fea2ea363e61571285d7296b268bb797e0a11ce135374f61e3e50",
+      "logical_source_id": "file:///var/folders/bc/qbdy42vs4jn56zwrb2y09l9m0000gn/T/TestWriteCrossModeProbe4248255628/001/b.go"
+    }
+  ],
+  "physical_lookup_count": 1
+}

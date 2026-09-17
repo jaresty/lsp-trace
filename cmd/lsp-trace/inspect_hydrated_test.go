@@ -2,10 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/publication"
+	"lsp-trace/internal/sourceobject"
 )
 
 func TestInspectHelpIncludesHydratedOptions(t *testing.T) {
@@ -37,6 +41,49 @@ func TestHydratedCLIRetainedProjectionV2RequiresExplicitModeAndReachesSharedFail
 	code := runInspect([]string{path, "--hydrated", "--retained-projection-v2", "--artifact-store", store, "--json"}, &stdout, &stderr)
 	if code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "retained source projection failed in ADMIT: ADMISSION_FAILED") {
 		t.Fatalf("ASSERT_CLI_RETAINED_V2_SHARED_HANDLER: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
+func TestOperation41CLIRealFixtureExactArtifact(t *testing.T) {
+	dir := "../../internal/sourceprojection/testdata/crossmode-v2"
+	read := func(name string) []byte {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	var meta struct {
+		Identity sourceobject.Identity `json:"identity"`
+	}
+	if err := json.Unmarshal(read("source-object.json"), &meta); err != nil {
+		t.Fatal(err)
+	}
+	rootPath := t.TempDir()
+	if err := os.Chmod(rootPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := publication.OpenRoot(rootPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	store, err := sourceobject.New(root, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotID, err := store.Publish(read("source-object.bin"))
+	if err != nil || gotID != meta.Identity {
+		t.Fatalf("ASSERT_OP41_CLI_SOURCE_IDENTITY: id=%+v err=%v", gotID, err)
+	}
+	requestPath := filepath.Join(t.TempDir(), "request.json")
+	if err := os.WriteFile(requestPath, read("retained-request.json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := runInspect([]string{requestPath, "--hydrated", "--retained-projection-v2", "--artifact-store", rootPath, "--json"}, &stdout, &stderr)
+	if code != 0 || stderr.Len() != 0 || !bytes.Equal(stdout.Bytes(), read("retained-expected.json")) {
+		t.Fatalf("ASSERT_CROSS_MODE_OPERATION41_CLI_SUCCESS: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
 
