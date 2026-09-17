@@ -1,6 +1,9 @@
 package sourceprojection
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
@@ -97,6 +100,102 @@ func TestProjectCanonicalUnderCandidatePermutation(t *testing.T) {
 	}
 }
 
+func TestProjectCanonicalBytesUnderCandidatePermutation(t *testing.T) {
+	a := fixtureCandidates()
+	b := []Candidate{a[1], a[0]}
+	one, err := Project(a, fixtureSources(true), Policy{PolicyID: "public", BodyRequested: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := Project(b, fixtureSources(true), Policy{PolicyID: "public", BodyRequested: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oneBytes, err := json.Marshal(one)
+	if err != nil {
+		t.Fatal(err)
+	}
+	twoBytes, err := json.Marshal(two)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(oneBytes, twoBytes) {
+		t.Fatalf("ASSERT_C01_CANONICAL_BYTES_PERMUTATION: one=%s two=%s", oneBytes, twoBytes)
+	}
+}
+
+func TestProjectSupportsExactUTF8UTF16UTF32Ranges(t *testing.T) {
+	for _, tc := range []struct {
+		encoding string
+		start    uint32
+		end      uint32
+	}{
+		{encoding: "utf-8", start: 1, end: 5},
+		{encoding: "utf-16", start: 1, end: 3},
+		{encoding: "utf-32", start: 1, end: 2},
+	} {
+		t.Run(tc.encoding, func(t *testing.T) {
+			candidate := Candidate{UnitID: "unit", CitationID: "citation", Role: "ENDPOINT", GraphSubjectID: "node", LogicalSourceID: "source", Range: Range{Start: Position{Character: tc.start}, End: Position{Character: tc.end}}, PositionEncoding: tc.encoding, PrivacyClassification: "PUBLIC"}
+			sources := map[string]Source{"source": {LogicalSourceID: "source", Digest: "sha256:source", Bytes: []byte("a😀b"), Available: true}}
+			got, err := Project([]Candidate{candidate}, sources, Policy{PolicyID: "public", BodyRequested: true})
+			if err != nil || len(got.Units) != 1 || got.Units[0].Body != "😀" {
+				t.Fatalf("ASSERT_C02_UTF8_UTF16_UTF32_EXACT_RANGES: result=%+v err=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestProjectMutationsCannotChangeGraphBytes(t *testing.T) {
+	graphBytes := []byte(`{"nodes":[{"id":"node"}],"relations":[{"type":"CALLS","evidence":"SERVER_REPORTED"}],"authority":0,"source_graph_complete":"UNKNOWN"}`)
+	before := sha256.Sum256(graphBytes)
+	candidates := fixtureCandidates()
+	mutations := []struct {
+		name       string
+		candidates []Candidate
+		sources    map[string]Source
+		policy     Policy
+	}{
+		{name: "body", candidates: candidates, sources: fixtureSources(true), policy: Policy{PolicyID: "public", BodyRequested: true}},
+		{name: "metadata", candidates: candidates, sources: fixtureSources(true), policy: Policy{PolicyID: "metadata"}},
+		{name: "reordered", candidates: []Candidate{candidates[1], candidates[0]}, sources: fixtureSources(true), policy: Policy{PolicyID: "public", BodyRequested: true}},
+		{name: "withheld", candidates: withheldCandidates(), sources: fixtureSources(true), policy: Policy{PolicyID: "withheld", BodyRequested: true}},
+	}
+	for _, mutation := range mutations {
+		t.Run(mutation.name, func(t *testing.T) {
+			if _, err := Project(mutation.candidates, mutation.sources, mutation.policy); err != nil {
+				t.Fatal(err)
+			}
+			after := sha256.Sum256(graphBytes)
+			if after != before {
+				t.Fatalf("ASSERT_C04_GRAPH_BYTES_NEUTRAL_UNDER_SOURCE_MUTATION: before=%x after=%x", before, after)
+			}
+		})
+	}
+}
+
+func TestProjectRejectsIncompleteAndMixedCandidateIdentity(t *testing.T) {
+	const assertion = "ASSERT_C06_INVALID_ID_RANGE_ENCODING_PRIVACY_STATUS_LIMIT_FAILS"
+	for _, tc := range []struct {
+		name   string
+		mutate func([]Candidate)
+	}{
+		{name: "missing-citation", mutate: func(c []Candidate) { c[0].CitationID = "" }},
+		{name: "missing-subject", mutate: func(c []Candidate) { c[0].GraphSubjectID = "" }},
+		{name: "missing-source", mutate: func(c []Candidate) { c[0].LogicalSourceID = "" }},
+		{name: "invalid-role", mutate: func(c []Candidate) { c[0].Role = "ANCILLARY" }},
+		{name: "mixed-source-encoding", mutate: func(c []Candidate) { c[1].PositionEncoding = "utf-8" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidates := fixtureCandidates()
+			tc.mutate(candidates)
+			got, err := Project(candidates, fixtureSources(true), Policy{PolicyID: "public", BodyRequested: true})
+			if err == nil || got.Status != "" || len(got.Units) != 0 {
+				t.Fatalf("%s: result=%+v err=%v", assertion, got, err)
+			}
+		})
+	}
+}
+
 func TestProjectRejectsNonServerRelationProvenance(t *testing.T) {
 	candidates := fixtureCandidates()
 	candidates[1].RelationProvenance = "SOURCE_INFERRED"
@@ -108,7 +207,7 @@ func TestProjectRejectsNonServerRelationProvenance(t *testing.T) {
 
 func TestProjectRejectsUnsupportedEncodingWithoutPartialOutput(t *testing.T) {
 	candidates := fixtureCandidates()
-	candidates[0].PositionEncoding = "utf-8"
+	candidates[0].PositionEncoding = "utf-7"
 	got, err := Project(candidates, fixtureSources(true), Policy{PolicyID: "public", BodyRequested: true})
 	if err == nil || errors.Is(err, ErrNotImplemented) || got.Accounting.Selected != 0 {
 		t.Fatalf("ASSERT_SOURCE_PROJECTION_ENCODING_FAIL_CLOSED: result=%+v err=%v", got, err)
@@ -118,38 +217,38 @@ func TestProjectRejectsUnsupportedEncodingWithoutPartialOutput(t *testing.T) {
 func TestPositionOffsetStrictUTF16Contract(t *testing.T) {
 	t.Run("astral-two-code-units", func(t *testing.T) {
 		raw := []byte("a😀b")
-		got, err := positionOffset(raw, Position{Line: 0, Character: 3})
+		got, err := positionOffset(raw, "utf-16", Position{Line: 0, Character: 3})
 		if err != nil || got != len("a😀") {
 			t.Fatalf("ASSERT_UTF16_ASTRAL_TWO_CODE_UNITS: offset=%d err=%v", got, err)
 		}
 	})
 	t.Run("half-open-range", func(t *testing.T) {
 		raw := []byte("a😀b")
-		got, err := rangeBytes(raw, Range{Start: Position{Line: 0, Character: 1}, End: Position{Line: 0, Character: 3}})
+		got, err := rangeBytes(raw, "utf-16", Range{Start: Position{Line: 0, Character: 1}, End: Position{Line: 0, Character: 3}})
 		if err != nil || string(got) != "😀" {
 			t.Fatalf("ASSERT_UTF16_HALF_OPEN_RANGE_OFFSETS: body=%q err=%v", got, err)
 		}
 	})
 	t.Run("crlf-terminator", func(t *testing.T) {
-		if got, err := positionOffset([]byte("a\r\nb"), Position{Line: 0, Character: 2}); err == nil {
+		if got, err := positionOffset([]byte("a\r\nb"), "utf-16", Position{Line: 0, Character: 2}); err == nil {
 			t.Fatalf("ASSERT_UTF16_CRLF_TERMINATOR_NOT_ADDRESSABLE: offset=%d err=%v", got, err)
 		}
-		if got, err := positionOffset([]byte("a\r\nb"), Position{Line: 1, Character: 0}); err != nil || got != 3 {
+		if got, err := positionOffset([]byte("a\r\nb"), "utf-16", Position{Line: 1, Character: 0}); err != nil || got != 3 {
 			t.Fatalf("ASSERT_UTF16_CRLF_NEXT_LINE_BOUNDARY: offset=%d err=%v", got, err)
 		}
 	})
 	t.Run("mid-surrogate", func(t *testing.T) {
-		if got, err := positionOffset([]byte("😀"), Position{Line: 0, Character: 1}); err == nil {
+		if got, err := positionOffset([]byte("😀"), "utf-16", Position{Line: 0, Character: 1}); err == nil {
 			t.Fatalf("ASSERT_UTF16_MID_SURROGATE_REJECTED: offset=%d err=%v", got, err)
 		}
 	})
 	t.Run("line-out-of-document", func(t *testing.T) {
-		if got, err := positionOffset([]byte("a"), Position{Line: 1, Character: 0}); err == nil {
+		if got, err := positionOffset([]byte("a"), "utf-16", Position{Line: 1, Character: 0}); err == nil {
 			t.Fatalf("ASSERT_UTF16_LINE_OUT_OF_DOCUMENT_REJECTED: offset=%d err=%v", got, err)
 		}
 	})
 	t.Run("character-out-of-line", func(t *testing.T) {
-		if got, err := positionOffset([]byte("a"), Position{Line: 0, Character: 2}); err == nil {
+		if got, err := positionOffset([]byte("a"), "utf-16", Position{Line: 0, Character: 2}); err == nil {
 			t.Fatalf("ASSERT_UTF16_CHARACTER_OUT_OF_LINE_REJECTED: offset=%d err=%v", got, err)
 		}
 	})

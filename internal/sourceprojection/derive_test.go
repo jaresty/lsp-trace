@@ -17,6 +17,23 @@ func derivationResult() transientstructural.Result {
 	}}
 }
 
+func TestDeriveCandidateIdentityIsEncodingSensitive(t *testing.T) {
+	utf16 := derivationResult()
+	utf8 := derivationResult()
+	utf8.Qualification.PositionEncoding = "utf-8"
+	one, err := DeriveCandidates(utf16, "TARGET", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	two, err := DeriveCandidates(utf8, "TARGET", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(one) != 1 || len(two) != 1 || one[0].UnitID == two[0].UnitID || one[0].CitationID == two[0].CitationID {
+		t.Fatalf("ASSERT_C01_IDENTITY_FIELD_SENSITIVITY: utf16=%+v utf8=%+v", one, two)
+	}
+}
+
 func TestDeriveCandidatesPreservesDistinctEndpointAndRelationRanges(t *testing.T) {
 	itemRange := graph.Range{Start: graph.Position{Line: 2, Character: 1}, End: graph.Position{Line: 6, Character: 1}}
 	selectionRange := graph.Range{Start: graph.Position{Line: 2, Character: 7}, End: graph.Position{Line: 2, Character: 13}}

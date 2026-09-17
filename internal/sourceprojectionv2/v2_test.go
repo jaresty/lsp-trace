@@ -81,6 +81,49 @@ func TestAssembleBoundedUsesExactResponseBudget(t *testing.T) {
 	}
 }
 
+func TestAssembleBoundedRejectsDuplicateAndReorderedInputs(t *testing.T) {
+	const assertion = "ASSERT_C06_UNKNOWN_DUPLICATE_MISSING_FIELDS_FAIL_CLOSED"
+	base := Input{
+		TargetURI: "file:///target.go", SelectedURIs: []string{"file:///target.go"},
+		Documents:         []DocumentSource{{URI: "file:///target.go", PositionEncoding: "utf-16", SourceDigest: "sha256:source", SourceByteLength: 1}},
+		Candidates:        []sourceprojection.Candidate{{UnitID: "unit"}},
+		Projection:        sourceprojection.Result{Status: "COMPLETE", Units: []sourceprojection.Unit{{UnitID: "unit"}}, Citations: []sourceprojection.Citation{{CitationID: "citation", UnitID: "unit"}}, EmittedSpans: []sourceprojection.Span{}, Omissions: []sourceprojection.Omission{}},
+		DocumentsObserved: 1, TotalAcquiredBytes: 1, RequestPolicyID: "policy",
+	}
+	binding := retainedBinding{Custody: "RETAINED", Artifact: "artifact"}
+	tests := []struct {
+		name   string
+		mutate func(*Input)
+	}{
+		{name: "duplicate-selected-document", mutate: func(in *Input) { in.SelectedURIs = append(in.SelectedURIs, in.TargetURI) }},
+		{name: "duplicate-document-binding", mutate: func(in *Input) { in.Documents = append(in.Documents, in.Documents[0]) }},
+		{name: "duplicate-candidate", mutate: func(in *Input) { in.Candidates = append(in.Candidates, in.Candidates[0]) }},
+		{name: "duplicate-unit", mutate: func(in *Input) { in.Projection.Units = append(in.Projection.Units, in.Projection.Units[0]) }},
+		{name: "duplicate-citation", mutate: func(in *Input) { in.Projection.Citations = append(in.Projection.Citations, in.Projection.Citations[0]) }},
+		{name: "reordered-additional-documents", mutate: func(in *Input) {
+			in.SelectedURIs = []string{in.TargetURI, "file:///z.go", "file:///a.go"}
+			in.Documents = append(in.Documents,
+				DocumentSource{URI: "file:///z.go", PositionEncoding: "utf-16", SourceDigest: "sha256:z", SourceByteLength: 1},
+				DocumentSource{URI: "file:///a.go", PositionEncoding: "utf-16", SourceDigest: "sha256:a", SourceByteLength: 1})
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input := base
+			input.SelectedURIs = append([]string(nil), base.SelectedURIs...)
+			input.Documents = append([]DocumentSource(nil), base.Documents...)
+			input.Candidates = append([]sourceprojection.Candidate(nil), base.Candidates...)
+			input.Projection.Units = append([]sourceprojection.Unit(nil), base.Projection.Units...)
+			input.Projection.Citations = append([]sourceprojection.Citation(nil), base.Projection.Citations...)
+			tc.mutate(&input)
+			got, err := AssembleBounded(input, "RETAINED", binding, 1<<20)
+			if err == nil || got.SchemaVersion != "" {
+				t.Fatalf("%s: result=%+v err=%v", assertion, got, err)
+			}
+		})
+	}
+}
+
 func candidateSlice(candidate sourceprojection.Candidate) []sourceprojection.Candidate {
 	return []sourceprojection.Candidate{candidate}
 }

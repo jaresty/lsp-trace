@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/sourceposition"
 	"lsp-trace/internal/transientstructural"
 )
 
@@ -16,7 +17,8 @@ func DeriveCandidates(result transientstructural.Result, mode string, includeRel
 	if mode != "TARGET" && mode != "PROJECTED" && mode != "COMPLETE_CAPTURE" {
 		return nil, fmt.Errorf("unsupported projection mode %q", mode)
 	}
-	if result.Qualification.PositionEncoding != "utf-16" || result.TargetID == "" {
+	encoding := result.Qualification.PositionEncoding
+	if !sourceposition.Supported(encoding) || result.TargetID == "" {
 		return nil, errors.New("transient projection binding invalid")
 	}
 	candidates := make([]Candidate, 0, len(result.Analysis.Nodes)+len(result.Analysis.Occurrences))
@@ -28,12 +30,12 @@ func DeriveCandidates(result transientstructural.Result, mode string, includeRel
 			Role: "ENDPOINT", GraphSubjectID: node.ID, LogicalSourceID: node.URI,
 			Range: projectionRange(node.Range), EvidenceRange: projectionRange(node.SelectionRange),
 			ItemRange: projectionRange(node.ItemRange), SelectionRange: projectionRange(node.SelectionRange),
-			DisplayProvenance: "CALL_HIERARCHY_ITEM", PositionEncoding: "utf-16", PrivacyClassification: "PUBLIC",
+			DisplayProvenance: "CALL_HIERARCHY_ITEM", PositionEncoding: encoding, PrivacyClassification: "PUBLIC",
 		}
 		candidate.UnitID = canonicalID(struct {
-			Role, Subject, Source string
-			Range                 Range
-		}{candidate.Role, candidate.GraphSubjectID, candidate.LogicalSourceID, candidate.Range})
+			Role, Subject, Source, Encoding, Privacy string
+			Range                                    Range
+		}{candidate.Role, candidate.GraphSubjectID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
 		candidate.CitationID = canonicalID(struct{ Unit, Role, Subject string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID})
 		candidates = append(candidates, candidate)
 	}
@@ -44,12 +46,12 @@ func DeriveCandidates(result transientstructural.Result, mode string, includeRel
 			candidate := Candidate{
 				Role: "RELATION", GraphSubjectID: subjectID, OccurrenceID: occurrenceID, LogicalSourceID: occurrence.URI,
 				Range: projectionRange(occurrence.Range), EvidenceRange: projectionRange(occurrence.Range),
-				DisplayProvenance: "CALL_SITE_OCCURRENCE", PositionEncoding: "utf-16", RelationProvenance: "SERVER_REPORTED", PrivacyClassification: "PUBLIC",
+				DisplayProvenance: "CALL_SITE_OCCURRENCE", PositionEncoding: encoding, RelationProvenance: "SERVER_REPORTED", PrivacyClassification: "PUBLIC",
 			}
 			candidate.UnitID = canonicalID(struct {
-				Role, Subject, Occurrence, Source string
-				Range                             Range
-			}{candidate.Role, subjectID, occurrenceID, candidate.LogicalSourceID, candidate.Range})
+				Role, Subject, Occurrence, Source, Encoding, Privacy string
+				Range                                                Range
+			}{candidate.Role, subjectID, occurrenceID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
 			candidate.CitationID = canonicalID(struct{ Unit, Role, Subject, Occurrence string }{candidate.UnitID, candidate.Role, subjectID, occurrenceID})
 			candidates = append(candidates, candidate)
 		}

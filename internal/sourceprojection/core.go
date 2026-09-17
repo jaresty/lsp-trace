@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"unicode/utf8"
 
-	"lsp-trace/internal/utf16position"
+	"lsp-trace/internal/sourceposition"
 )
 
 const SchemaVersion = "lsp-trace.source-projection.v1"
@@ -149,13 +148,21 @@ func Project(candidates []Candidate, sources map[string]Source, policy Policy) (
 		return result, nil
 	}
 	seen := make(map[string]struct{}, len(ordered))
+	encodingBySource := make(map[string]string)
 	for _, candidate := range ordered {
-		if candidate.PositionEncoding != "utf-16" {
+		if !sourceposition.Supported(candidate.PositionEncoding) {
 			return Result{}, fmt.Errorf("unsupported position encoding %q", candidate.PositionEncoding)
 		}
-		if candidate.UnitID == "" {
-			return Result{}, errors.New("empty unit id")
+		if candidate.UnitID == "" || candidate.CitationID == "" || candidate.GraphSubjectID == "" || candidate.LogicalSourceID == "" {
+			return Result{}, errors.New("projection candidate identity is incomplete")
 		}
+		if candidate.Role != "ENDPOINT" && candidate.Role != "RELATION" {
+			return Result{}, fmt.Errorf("unsupported projection role %q", candidate.Role)
+		}
+		if previous, ok := encodingBySource[candidate.LogicalSourceID]; ok && previous != candidate.PositionEncoding {
+			return Result{}, fmt.Errorf("source %q mixes position encodings %q and %q", candidate.LogicalSourceID, previous, candidate.PositionEncoding)
+		}
+		encodingBySource[candidate.LogicalSourceID] = candidate.PositionEncoding
 		if candidate.Role == "RELATION" && candidate.RelationProvenance != "SERVER_REPORTED" {
 			return Result{}, fmt.Errorf("relation unit %s provenance must be SERVER_REPORTED", candidate.UnitID)
 		}
@@ -260,7 +267,7 @@ func Project(candidates []Candidate, sources map[string]Source, policy Policy) (
 			RelationProvenance:    candidate.RelationProvenance,
 		}
 		if policy.BodyRequested {
-			body, err := rangeBytes(source.Bytes, candidate.Range)
+			body, err := rangeBytes(source.Bytes, candidate.PositionEncoding, candidate.Range)
 			if err != nil {
 				return Result{}, fmt.Errorf("unit %s: %w", candidate.UnitID, err)
 			}
@@ -324,11 +331,11 @@ func assembleSpans(candidates []Candidate, sources map[string]Source, includeBod
 	bySource := make(map[string][]boundedCandidate)
 	for _, candidate := range candidates {
 		source := sources[candidate.LogicalSourceID]
-		start, err := positionOffset(source.Bytes, candidate.Range.Start)
+		start, err := positionOffset(source.Bytes, candidate.PositionEncoding, candidate.Range.Start)
 		if err != nil {
 			return nil, fmt.Errorf("unit %s start: %w", candidate.UnitID, err)
 		}
-		end, err := positionOffset(source.Bytes, candidate.Range.End)
+		end, err := positionOffset(source.Bytes, candidate.PositionEncoding, candidate.Range.End)
 		if err != nil {
 			return nil, fmt.Errorf("unit %s end: %w", candidate.UnitID, err)
 		}
@@ -367,7 +374,11 @@ func assembleSpans(candidates []Candidate, sources map[string]Source, includeBod
 			}
 			sort.Strings(unitIDs)
 			source := sources[sourceID]
-			span := Span{LogicalSourceID: sourceID, Range: Range{Start: items[i].candidate.Range.Start, End: offsetPosition(source.Bytes, end)}, SourceDigest: source.Digest, ByteLength: end - start, UnitIDs: unitIDs}
+			endPosition, err := offsetPosition(source.Bytes, items[i].candidate.PositionEncoding, end)
+			if err != nil {
+				return nil, fmt.Errorf("source %s span end: %w", sourceID, err)
+			}
+			span := Span{LogicalSourceID: sourceID, Range: Range{Start: items[i].candidate.Range.Start, End: endPosition}, SourceDigest: source.Digest, ByteLength: end - start, UnitIDs: unitIDs}
 			if includeBody {
 				span.Body = string(source.Bytes[start:end])
 			}
@@ -378,10 +389,10 @@ func assembleSpans(candidates []Candidate, sources map[string]Source, includeBod
 	return spans, nil
 }
 
-func rangeBytes(raw []byte, r Range) ([]byte, error) {
-	start, end, err := utf16position.Offsets(raw, utf16position.Range{
-		Start: projectionPosition(r.Start),
-		End:   projectionPosition(r.End),
+func rangeBytes(raw []byte, encoding string, r Range) ([]byte, error) {
+	start, end, err := sourceposition.Offsets(raw, encoding, sourceposition.Range{
+		Start: sourcePosition(r.Start),
+		End:   sourcePosition(r.End),
 	})
 	if err != nil {
 		return nil, err
@@ -389,34 +400,20 @@ func rangeBytes(raw []byte, r Range) ([]byte, error) {
 	return raw[start:end], nil
 }
 
-func positionOffset(raw []byte, position Position) (int, error) {
-	return utf16position.Offset(raw, projectionPosition(position))
+func positionOffset(raw []byte, encoding string, position Position) (int, error) {
+	return sourceposition.Offset(raw, encoding, sourcePosition(position))
 }
 
-func projectionPosition(position Position) utf16position.Position {
-	return utf16position.Position{Line: position.Line, Character: position.Character}
+func sourcePosition(position Position) sourceposition.Position {
+	return sourceposition.Position{Line: position.Line, Character: position.Character}
 }
 
-func offsetPosition(raw []byte, target int) Position {
-	lineStart := 0
-	line := uint32(0)
-	for i := 0; i < target; i++ {
-		if raw[i] == '\n' {
-			line++
-			lineStart = i + 1
-		}
+func offsetPosition(raw []byte, encoding string, target int) (Position, error) {
+	position, err := sourceposition.PositionAtOffset(raw, encoding, target)
+	if err != nil {
+		return Position{}, err
 	}
-	character := uint32(0)
-	for offset := lineStart; offset < target; {
-		r, size := utf8.DecodeRune(raw[offset:target])
-		if r > 0xffff {
-			character += 2
-		} else {
-			character++
-		}
-		offset += size
-	}
-	return Position{Line: line, Character: character}
+	return Position{Line: position.Line, Character: position.Character}, nil
 }
 
 func projectionStatus(result Result) string {

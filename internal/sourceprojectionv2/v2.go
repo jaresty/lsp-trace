@@ -119,8 +119,27 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 	if input.TargetURI == "" || len(input.SelectedURIs) == 0 || input.SelectedURIs[0] != input.TargetURI {
 		return WireResult[T]{}, errors.New("sourceprojectionv2: document selection must be target-first")
 	}
+	selectedSeen := make(map[string]struct{}, len(input.SelectedURIs))
+	for ordinal, uri := range input.SelectedURIs {
+		if uri == "" {
+			return WireResult[T]{}, errors.New("sourceprojectionv2: selected document URI is empty")
+		}
+		if _, exists := selectedSeen[uri]; exists {
+			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: duplicate selected document %q", uri)
+		}
+		selectedSeen[uri] = struct{}{}
+		if ordinal > 1 && input.SelectedURIs[ordinal-1] > uri {
+			return WireResult[T]{}, errors.New("sourceprojectionv2: additional documents must be URI-lexicographic")
+		}
+	}
 	byURI := make(map[string]DocumentSource, len(input.Documents))
 	for _, document := range input.Documents {
+		if document.URI == "" {
+			return WireResult[T]{}, errors.New("sourceprojectionv2: document binding URI is empty")
+		}
+		if _, exists := byURI[document.URI]; exists {
+			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: duplicate document binding %q", document.URI)
+		}
 		byURI[document.URI] = document
 	}
 	documents := make([]DocumentBinding, 0, len(input.SelectedURIs))
@@ -137,10 +156,21 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 	}
 	candidateByID := make(map[string]sourceprojection.Candidate, len(input.Candidates))
 	for _, candidate := range input.Candidates {
+		if candidate.UnitID == "" {
+			return WireResult[T]{}, errors.New("sourceprojectionv2: candidate unit ID is empty")
+		}
+		if _, exists := candidateByID[candidate.UnitID]; exists {
+			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: duplicate candidate unit %q", candidate.UnitID)
+		}
 		candidateByID[candidate.UnitID] = candidate
 	}
+	unitSeen := make(map[string]struct{}, len(input.Projection.Units))
 	units := make([]Unit, 0, len(input.Projection.Units))
 	for _, unit := range input.Projection.Units {
+		if _, exists := unitSeen[unit.UnitID]; exists {
+			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: duplicate projected unit %q", unit.UnitID)
+		}
+		unitSeen[unit.UnitID] = struct{}{}
 		candidate, ok := candidateByID[unit.UnitID]
 		if !ok {
 			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: unit %q has no retained candidate", unit.UnitID)
@@ -154,7 +184,15 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		units = append(units, out)
 	}
 	citations := make([]Citation, 0, len(input.Projection.Citations))
+	citationSeen := make(map[string]struct{}, len(input.Projection.Citations))
 	for _, citation := range input.Projection.Citations {
+		if citation.CitationID == "" {
+			return WireResult[T]{}, errors.New("sourceprojectionv2: citation ID is empty")
+		}
+		if _, exists := citationSeen[citation.CitationID]; exists {
+			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: duplicate citation %q", citation.CitationID)
+		}
+		citationSeen[citation.CitationID] = struct{}{}
 		candidate, ok := candidateByID[citation.UnitID]
 		if !ok {
 			return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: citation %q has no retained candidate", citation.CitationID)
