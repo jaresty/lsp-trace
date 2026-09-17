@@ -241,11 +241,31 @@ type TraversalDiagnostic struct {
 	Depth     *int           `json:"depth,omitempty"`
 }
 
+type TargetAction string
+
+const (
+	TargetActionFailAbsent       TargetAction = "FAIL_ABSENT"
+	TargetActionFailAmbiguous    TargetAction = "FAIL_AMBIGUOUS"
+	TargetActionFailMalformed    TargetAction = "FAIL_MALFORMED"
+	TargetActionFailMismatch     TargetAction = "FAIL_MISMATCH"
+	TargetActionFailUnsupported  TargetAction = "FAIL_UNSUPPORTED"
+	TargetActionFailDocument     TargetAction = "FAIL_DOCUMENT_SYMBOLS"
+	TargetActionFailUnpreparable TargetAction = "FAIL_UNPREPARABLE"
+)
+
+type TargetDiagnostic struct {
+	ExactMatches   int          `json:"exact_matches"`
+	TotalSymbols   int          `json:"total_symbols"`
+	OmittedSymbols int          `json:"omitted_symbols"`
+	Action         TargetAction `json:"action"`
+}
+
 type DomainFailure struct {
 	Phase               Phase                `json:"phase"`
 	State               TerminalState        `json:"state"`
 	Accounting          Accounting           `json:"accounting"`
 	TraversalDiagnostic *TraversalDiagnostic `json:"traversal_diagnostic,omitempty"`
+	TargetDiagnostic    *TargetDiagnostic    `json:"target_diagnostic,omitempty"`
 }
 
 func (f *DomainFailure) Error() string {

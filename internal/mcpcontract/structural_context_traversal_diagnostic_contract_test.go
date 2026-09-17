@@ -20,7 +20,6 @@ func structuralContextV4Envelope() map[string]any {
 		"phase":              "PREFLIGHT",
 		"state":              "TARGET_NOT_FOUND",
 		"error":              map[string]any{"code": "TARGET_NOT_FOUND"},
-		"target":             map[string]any{"kind": "POSITION", "line": 34, "character": 5},
 	}
 }
 
@@ -49,11 +48,25 @@ func cloneStructuralContextV4(t *testing.T, value map[string]any) map[string]any
 	return cloned
 }
 
-func TestStructuralContextTraversalDomainErrorV4PreservesV3Branches(t *testing.T) {
+func TestStructuralContextTraversalDomainErrorV4TargetDiagnosticIsClosedAndPrivate(t *testing.T) {
 	validateStructuralContextV4(t, structuralContextV4Envelope(), true)
-	symbol := structuralContextV4Envelope()
-	symbol["target"] = map[string]any{"kind": "SYMBOL", "symbol": "NewInspectHydratedHandler"}
-	validateStructuralContextV4(t, symbol, true)
+	withDiagnostic := structuralContextV4Envelope()
+	withDiagnostic["state"], withDiagnostic["error"] = "AMBIGUOUS_TARGET", map[string]any{"code": "AMBIGUOUS_TARGET"}
+	withDiagnostic["target_diagnostic"] = map[string]any{"exact_matches": 2, "total_symbols": 9, "omitted_symbols": 1, "action": "FAIL_AMBIGUOUS"}
+	validateStructuralContextV4(t, withDiagnostic, true)
+
+	for _, field := range []string{"symbol", "uri", "path", "source", "line", "character", "selector", "raw_error", "provider", "environment", "privacy_policy_id"} {
+		bad := cloneStructuralContextV4(t, withDiagnostic)
+		bad["target_diagnostic"].(map[string]any)[field] = "private"
+		validateStructuralContextV4(t, bad, false)
+	}
+	rawTarget := structuralContextV4Envelope()
+	rawTarget["target"] = map[string]any{"kind": "SYMBOL", "symbol": "private"}
+	validateStructuralContextV4(t, rawTarget, false)
+	mixed := cloneStructuralContextV4(t, withDiagnostic)
+	mixed["phase"], mixed["state"], mixed["error"] = "TRAVERSAL", "INVALID_SERVER_RESPONSE", map[string]any{"code": "INVALID_SERVER_RESPONSE"}
+	mixed["diagnostic"] = map[string]any{"stage": "PREPARE", "method": "textDocument/prepareCallHierarchy"}
+	validateStructuralContextV4(t, mixed, false)
 }
 
 func TestStructuralContextTraversalDomainErrorV4DiagnosticIsClosedAndExact(t *testing.T) {

@@ -83,31 +83,14 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	client := incomingops.NewSessionClientWithWireLimits(counted, sessionID, request.Generation,
 		time.Duration(request.RequestTimeoutMS)*time.Millisecond,
 		incomingops.WireLimits{MaxMessages: request.MaxMessages, MaxBytes: request.MaxBytes})
-	line, character, targetFailure := incomingops.ResolveTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
+	prepared, targetFailure := incomingops.ResolvePreparedTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
 	if targetFailure != nil {
 		accounting := counted.snapshot()
-		return Result{}, fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
-	}
-
-	items, prepareErr := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{
-		TextDocument: lsp.TextDocumentIdentifier{URI: request.Target.URI}, Position: lsp.Position{Line: line, Character: character},
-	})
-	if prepareErr != nil {
-		accounting := counted.snapshot()
-		failure := fail(PhaseTraversal, traversalState(ctx, accounting, runtime, sessionID, request.Generation), accounting)
-		if failure.State == StateInvalidServerResponse {
-			failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStagePrepare, Method: "textDocument/prepareCallHierarchy"}
-		}
+		failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
+		failure.TargetDiagnostic = &TargetDiagnostic{ExactMatches: prepared.ExactMatches, TotalSymbols: prepared.TotalSymbols, OmittedSymbols: prepared.OmittedSymbols, Action: TargetAction(prepared.Action)}
 		return Result{}, failure
 	}
-	if len(items) == 0 {
-		accounting := counted.snapshot()
-		return Result{}, fail(PhasePreflight, StateTargetNotFound, accounting)
-	}
-	if len(items) != 1 {
-		accounting := counted.snapshot()
-		return Result{}, fail(PhasePreflight, StateAmbiguousTarget, accounting)
-	}
+	items := prepared.Items
 	root := graphNode(items[0]).ID
 
 	down := slicer.DiscoverPrepared(ctx, client, items, slicer.Options{DownDepth: request.DownDepth, MaxNodes: request.MaxNodes})

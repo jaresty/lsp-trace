@@ -136,6 +136,39 @@ func TestStructuralContextV2TraversalDiagnosticsDirectGatewayParity(t *testing.T
 	}
 }
 
+func TestStructuralContextV2TargetDiagnosticsDirectGatewayParityAndPrivacy(t *testing.T) {
+	diagnostic := &transientstructural.TargetDiagnostic{ExactMatches: 2, TotalSymbols: 9, OmittedSymbols: 1, Action: transientstructural.TargetActionFailAmbiguous}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "AMBIGUOUS_TARGET", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateAmbiguousTarget, TargetDiagnostic: diagnostic}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := structuralContextV2Args()
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+	if direct.Error != nil || gateway.Error != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TARGET_DIAGNOSTIC_TRANSPORT: direct=%v gateway=%v", direct.Error, gateway.Error)
+	}
+	directEnvelope := direct.Result.(callResult).StructuredContent
+	outer := gateway.Result.(callResult).StructuredContent
+	var gatewayEnvelope envelope
+	if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TARGET_DIAGNOSTIC_GATEWAY_DECODE: %v", err)
+	}
+	want := map[string]any{"exact_matches": float64(2), "total_symbols": float64(9), "omitted_symbols": float64(1), "action": "FAIL_AMBIGUOUS"}
+	for label, env := range map[string]envelope{"direct": directEnvelope, "gateway": gatewayEnvelope} {
+		rawDiagnostic, _ := json.Marshal(env.TargetDiagnostic)
+		var got map[string]any
+		_ = json.Unmarshal(rawDiagnostic, &got)
+		if !reflect.DeepEqual(got, want) || env.Diagnostic != nil || env.Target != nil || env.Phase != "PREFLIGHT" || env.State != "AMBIGUOUS_TARGET" || env.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID {
+			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TARGET_DIAGNOSTIC_%s_PARITY: env=%+v diagnostic=%v", strings.ToUpper(label), env, got)
+		}
+		raw, _ := json.Marshal(env)
+		for _, forbidden := range []string{`"target"`, `"symbol"`, `"A"`, "file:///", "/w/", `"line"`, `"character"`, "source", "selector", "provider", "environment", "privacy_policy"} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_TARGET_DIAGNOSTIC_%s_FORBIDDEN_FIELDS_ABSENT: leaked %q in %s", strings.ToUpper(label), forbidden, raw)
+			}
+		}
+	}
+}
+
 func TestStructuralContextOperation35UnknownUntypedFailureFailsClosed(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "UNKNOWN_FUTURE_CODE"}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextExecutorFamily: executor}}

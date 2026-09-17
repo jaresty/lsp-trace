@@ -777,7 +777,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				line = 0
 			}
 			prepared := item(name, line)
-			if scenario == "slice-symbol" || scenario == "slice-multi-file" {
+			if scenario == "slice" || scenario == "slice-symbol" || scenario == "slice-multi-file" {
 				prepared.URI = p.TextDocument.URI
 			}
 			err = writeFake(out, m.ID, []fakeItem{prepared}, nil)

@@ -106,7 +106,16 @@ func structuralContextDomainErrorWithTarget(tool, phase, state string, args map[
 
 func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, args map[string]any) envelope {
 	env := structuralContextDomainErrorWithTarget(tool, string(failure.Phase), string(failure.State), args)
-	if tool != mcpcontract.StructuralContextV2Tool || failure.TraversalDiagnostic == nil {
+	if tool != mcpcontract.StructuralContextV2Tool {
+		return env
+	}
+	env.Target = nil
+	if failure.TargetDiagnostic != nil {
+		env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
+		env.TargetDiagnostic = failure.TargetDiagnostic
+		return env
+	}
+	if failure.TraversalDiagnostic == nil {
 		return env
 	}
 	d := failure.TraversalDiagnostic
@@ -238,6 +247,7 @@ type envelope struct {
 	Result                  any                  `json:"result,omitempty"`
 	Error                   any                  `json:"error,omitempty"`
 	Diagnostic              any                  `json:"diagnostic,omitempty"`
+	TargetDiagnostic        any                  `json:"target_diagnostic,omitempty"`
 	Target                  any                  `json:"target,omitempty"`
 	Phase                   string               `json:"phase,omitempty"`
 	State                   string               `json:"state,omitempty"`

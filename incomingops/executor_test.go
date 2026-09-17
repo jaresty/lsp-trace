@@ -73,6 +73,124 @@ func validInput() json.RawMessage {
 	return json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","line":0,"character":0,"max_depth":4,"max_nodes":20,"timeout_ms":1000,"request_timeout_ms":100}`)
 }
 
+func TestResolvePreparedPositionBoundedRecovery(t *testing.T) {
+	uri := "file:///w/a.go"
+	line, character := uint32(1), uint32(2)
+	r := lsp.Range{Start: lsp.Position{Line: 1}, End: lsp.Position{Line: 1, Character: 12}}
+	s := lsp.Range{Start: lsp.Position{Line: 1, Character: 5}, End: lsp.Position{Line: 1, Character: 6}}
+	item := lsp.CallHierarchyItem{Name: "F", Kind: 12, URI: uri, Range: r, SelectionRange: s}
+	itemRaw, _ := json.Marshal([]lsp.CallHierarchyItem{item})
+	symbolRaw, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: r, SelectionRange: s}})
+
+	t.Run("direct", func(t *testing.T) {
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {itemRaw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed != nil || len(prepared.Items) != 1 || fmt.Sprint(f.calls) != "[textDocument/prepareCallHierarchy]" {
+			t.Fatalf("ASSERT_POSITION_DIRECT_PREPARE_ONCE_NO_DOCUMENT_SYMBOL: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		}
+	})
+	t.Run("direct mismatch", func(t *testing.T) {
+		bad := item
+		bad.URI = "file:///w/other.go"
+		badRaw, _ := json.Marshal([]lsp.CallHierarchyItem{bad})
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {badRaw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "POSITION_PREPARE_MISMATCH" || len(f.calls) != 1 {
+			t.Fatalf("ASSERT_POSITION_DIRECT_MISMATCH_FAILS_PREFLIGHT: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("recovery", func(t *testing.T) {
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`), itemRaw}, "textDocument/documentSymbol": {symbolRaw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed != nil || len(prepared.Items) != 1 || prepared.Character != 5 || fmt.Sprint(f.calls) != "[textDocument/prepareCallHierarchy textDocument/documentSymbol textDocument/prepareCallHierarchy]" {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_UNIQUE_CONTAINING_CALLABLE_REUSES_ITEM: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		}
+	})
+	t.Run("ambiguous", func(t *testing.T) {
+		symbols, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: r, SelectionRange: s}, {Name: "G", Kind: 12, Range: r, SelectionRange: s}})
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {symbols}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "POSITION_SYMBOL_AMBIGUOUS" || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_AMBIGUITY_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("zero containing", func(t *testing.T) {
+		outside := lsp.Range{Start: lsp.Position{Line: 8}, End: lsp.Position{Line: 8, Character: 4}}
+		symbols, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: outside, SelectionRange: outside}})
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {symbols}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "POSITION_SYMBOL_ABSENT" || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_ZERO_CONTAINING_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("malformed", func(t *testing.T) {
+		malformed := lsp.Range{Start: lsp.Position{Line: 2}, End: lsp.Position{Line: 1}}
+		symbols, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: malformed, SelectionRange: malformed}})
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {symbols}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_MALFORMED_RANGE" || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_MALFORMED_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("prepared mismatch", func(t *testing.T) {
+		bad := item
+		bad.Kind = 5
+		badRaw, _ := json.Marshal([]lsp.CallHierarchyItem{bad})
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`), badRaw}, "textDocument/documentSymbol": {symbolRaw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_PREPARE_MISMATCH" || len(f.calls) != 3 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_PREPARED_MISMATCH_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("retryable locator miss", func(t *testing.T) {
+		miss := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "identifier not found"}}
+		f := &fakeRuntime{observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {miss}}, results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {itemRaw}, "textDocument/documentSymbol": {symbolRaw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed != nil || len(prepared.Items) != 1 || len(f.calls) != 3 {
+			t.Fatalf("ASSERT_POSITION_RETRYABLE_LOCATOR_MISS_RECOVERS: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		}
+	})
+	t.Run("unsupported document symbols", func(t *testing.T) {
+		unsupported := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: -32601, Message: "method not found"}}
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}}, observed: map[string][]sessionruntime.RoundTripResult{"textDocument/documentSymbol": {unsupported}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_UNSUPPORTED" || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_UNSUPPORTED_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+	t.Run("probe bound", func(t *testing.T) {
+		wideSelection := lsp.Range{Start: lsp.Position{Line: 1}, End: lsp.Position{Line: 1, Character: 100}}
+		wideSymbol, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: wideSelection, SelectionRange: wideSelection}})
+		empty := make([]json.RawMessage, int(maxSymbolPrepareProbeDelta)+2)
+		for i := range empty {
+			empty[i] = json.RawMessage(`[]`)
+		}
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": empty, "textDocument/documentSymbol": {wideSymbol}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_UNPREPARABLE" || len(f.calls) != int(maxSymbolPrepareProbeDelta)+3 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_PROBE_BOUND_UNCHANGED: failed=%v calls=%d", failed, len(f.calls))
+		}
+	})
+	t.Run("arbitrary error", func(t *testing.T) {
+		f := &fakeRuntime{observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {{ServerError: &lspwire.RPCError{Code: 1, Message: "boom"}}}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_PREPARE_FAILED" || len(f.calls) != 1 {
+			t.Fatalf("ASSERT_POSITION_ARBITRARY_PREPARE_ERROR_NOT_RETRIED: failed=%v calls=%v", failed, f.calls)
+		}
+	})
+}
+
 func TestIncomingUnsupportedCallHierarchySendsNoHierarchyRequests(t *testing.T) {
 	const assertion = "ASSERT_UNSUPPORTED_CALL_HIERARCHY_SENDS_NO_HIERARCHY_REQUESTS"
 	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: false}}
@@ -281,8 +399,8 @@ func TestIncomingSymbolFailuresAreExplicit(t *testing.T) {
 	}
 }
 
-func TestIncomingAbsentSymbolSuggestsExactNamesAndPositions(t *testing.T) {
-	const assertion = "ASSERT_DOCUMENT_SYMBOL_ABSENT_SUGGESTS_EXACT_SELECTORS"
+func TestIncomingAbsentSymbolReportsSanitizedBoundedAccounting(t *testing.T) {
+	const assertion = "ASSERT_DOCUMENT_SYMBOL_ABSENT_SANITIZED_BOUNDED_ACCOUNTING"
 	symbols := `[{"name":"New","kind":12,"range":{"start":{"line":3,"character":1},"end":{"line":3,"character":4}},"selectionRange":{"start":{"line":3,"character":1},"end":{"line":3,"character":4}}},{"name":"(*Executor).Execute","kind":6,"range":{"start":{"line":9,"character":0},"end":{"line":12,"character":1}},"selectionRange":{"start":{"line":9,"character":18},"end":{"line":9,"character":25}}}]`
 	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{PositionEncoding: "utf-16", CallHierarchySupport: true}, results: map[string][]json.RawMessage{"textDocument/documentSymbol": {json.RawMessage(symbols)}}}
 	_, failure := NewExecutor(f).Execute(context.Background(), operation.Request{Name: OperationIncoming, Input: json.RawMessage(`{"session_id":"s","generation":1,"uri":"file:///w/a.go","symbol":"Execute"}`)})
@@ -290,9 +408,12 @@ func TestIncomingAbsentSymbolSuggestsExactNamesAndPositions(t *testing.T) {
 		t.Fatalf("%s: failure=%v", assertion, failure)
 	}
 	diagnostic := strings.Join(failure.Diagnostics, "\n")
-	for _, want := range []string{`document symbol "Execute" not found`, `"New" at line 3, character 1`, `"(*Executor).Execute" at line 9, character 18`, `use an exact symbol name (including omitted symbols) or the line/character selector`} {
-		if !strings.Contains(diagnostic, want) {
-			t.Errorf("%s: diagnostic %q missing %q", assertion, diagnostic, want)
+	if diagnostic != "exact_matches=0 total_symbols=2 omitted_symbols=0 action=FAIL_ABSENT" {
+		t.Fatalf("%s: diagnostic=%q", assertion, diagnostic)
+	}
+	for _, forbidden := range []string{"Execute", "New", "line", "character", "file:", "/w/", "selector", "provider", "environment"} {
+		if strings.Contains(diagnostic, forbidden) {
+			t.Fatalf("%s: leaked %q in %q", assertion, forbidden, diagnostic)
 		}
 	}
 }
@@ -328,7 +449,7 @@ func TestIncomingExactSymbolMatchingIsCompleteWhileSuggestionsAreBounded(t *test
 		if failure != nil {
 			diagnostic = strings.Join(failure.Diagnostics, "\n")
 		}
-		if failure == nil || failure.Code != "DOCUMENT_SYMBOL_ABSENT" || !strings.Contains(diagnostic, "showing 8 of 9 exact document symbols; 1 omitted") || strings.Contains(diagnostic, `"Target"`) {
+		if failure == nil || failure.Code != "DOCUMENT_SYMBOL_ABSENT" || diagnostic != "exact_matches=0 total_symbols=9 omitted_symbols=1 action=FAIL_ABSENT" {
 			t.Fatalf("ASSERT_SYMBOL_SUGGESTION_BOUND_AND_OMISSION_DISCLOSURE: failure=%v diagnostic=%q", failure, diagnostic)
 		}
 	})

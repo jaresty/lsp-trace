@@ -105,28 +105,16 @@
         }
       ]
     },
-    "target": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "line", "character"],
-          "properties": {
-            "kind": { "const": "POSITION" },
-            "line": { "type": "integer", "minimum": 0 },
-            "character": { "type": "integer", "minimum": 0 }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["kind", "symbol"],
-          "properties": {
-            "kind": { "const": "SYMBOL" },
-            "symbol": { "type": "string", "minLength": 1 }
-          }
-        }
-      ]
+    "target_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_matches", "total_symbols", "omitted_symbols", "action"],
+      "properties": {
+        "exact_matches": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "total_symbols": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "omitted_symbols": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "action": { "enum": ["FAIL_ABSENT", "FAIL_AMBIGUOUS", "FAIL_MALFORMED", "FAIL_MISMATCH", "FAIL_UNSUPPORTED", "FAIL_DOCUMENT_SYMBOLS", "FAIL_UNPREPARABLE"] }
+      }
     }
   },
   "allOf": [
@@ -140,7 +128,15 @@
             "properties": { "code": { "const": "INVALID_SERVER_RESPONSE" } },
             "required": ["code"]
           }
-        }
+        },
+        "not": { "required": ["target_diagnostic"] }
+      }
+    },
+    {
+      "if": { "required": ["target_diagnostic"] },
+      "then": {
+        "properties": { "phase": { "const": "PREFLIGHT" } },
+        "not": { "required": ["diagnostic"] }
       }
     }
   ]

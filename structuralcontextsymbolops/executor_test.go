@@ -122,6 +122,15 @@ func TestWorkspaceSymbolFailuresAreExplicitAndDoNotDelegate(t *testing.T) {
 			if failure == nil || failure.Code != tc.code || len(f.requests) != 1 || len(d.calls) != 0 {
 				t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_EXPLICIT_FAIL_CLOSED_%s: failure=%v requests=%d calls=%d", tc.code, failure, len(f.requests), len(d.calls))
 			}
+			raw, err := json.Marshal(failure)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range []string{"Target", "target", "file:", "/workspace", "line", "character", "selector", "provider", "environment"} {
+				if strings.Contains(string(raw), forbidden) {
+					t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_SYMBOL_FAILURE_DIAGNOSTICS_SANITIZED_%s: leaked %q in %s", tc.code, forbidden, raw)
+				}
+			}
 		})
 	}
 }

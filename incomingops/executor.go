@@ -28,6 +28,7 @@ const (
 	OperationIncoming          operation.Name = "incoming"
 	maxSymbolPrepareProbeDelta                = uint32(64)
 	maxSymbolSuggestions                      = 8
+	maxTargetDiagnosticCount                  = 10000
 )
 
 type Runtime interface {
@@ -189,56 +190,114 @@ func ResolveSession(runtime Runtime, id string, generation uint64) (string, uint
 	return match.SessionID, match.Generation, ""
 }
 
-// ResolveTarget resolves an explicit position or one exact hierarchical document symbol.
+type PreparedTarget struct {
+	Line, Character uint32
+	Items           []lsp.CallHierarchyItem
+	ExactMatches    int
+	TotalSymbols    int
+	OmittedSymbols  int
+	Action          string
+}
+
+// ResolveTarget resolves an exact target while preserving its historical coordinate-only API.
 func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName string, line, character *uint32) (uint32, uint32, *operation.Failure) {
 	if symbolName == "" {
 		return *line, *character, nil
 	}
+	prepared, failed := ResolvePreparedTarget(ctx, client, uri, symbolName, line, character)
+	return prepared.Line, prepared.Character, failed
+}
+
+// ResolvePreparedTarget performs bounded target preflight and returns the unique prepared item.
+func ResolvePreparedTarget(ctx context.Context, client *SessionClient, uri, symbolName string, line, character *uint32) (PreparedTarget, *operation.Failure) {
+	if symbolName == "" {
+		position := lsp.Position{Line: *line, Character: *character}
+		items, err := client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}, Position: position})
+		if err == nil && len(items) == 1 {
+			if !compatiblePreparedPosition(uri, position, items[0]) {
+				return PreparedTarget{ExactMatches: 1, Action: "FAIL_MISMATCH"}, failure("POSITION_PREPARE_MISMATCH", errors.New("prepared identity mismatch"))
+			}
+			return PreparedTarget{Line: *line, Character: *character, Items: items, Action: "DIRECT_PREPARE"}, nil
+		}
+		if err != nil && !retryableSymbolPrepareMiss(err) {
+			return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, classifiedPrepareFailure(err)
+		}
+		if err == nil && len(items) > 1 {
+			return PreparedTarget{ExactMatches: len(items), Action: "FAIL_AMBIGUOUS"}, failure("POSITION_PREPARE_AMBIGUOUS", errors.New("ambiguous prepared target"))
+		}
+		return recoverPositionTarget(ctx, client, uri, position)
+	}
+	return resolveSymbolPrepared(ctx, client, uri, symbolName)
+}
+
+func resolveSymbolPrepared(ctx context.Context, client *SessionClient, uri, symbolName string) (PreparedTarget, *operation.Failure) {
 	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
 	if err != nil {
 		if strings.Contains(err.Error(), "json-rpc error -32601") {
-			return 0, 0, failure("DOCUMENT_SYMBOL_UNSUPPORTED", err)
+			return PreparedTarget{Action: "FAIL_UNSUPPORTED"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
 		}
-		return 0, 0, failure("DOCUMENT_SYMBOL_FAILED", err)
+		return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
 	}
-	var matches []lsp.DocumentSymbol
-	var suggestions []lsp.DocumentSymbol
-	totalSymbols := 0
-	var walk func([]lsp.DocumentSymbol)
-	walk = func(items []lsp.DocumentSymbol) {
-		for _, symbol := range items {
-			totalSymbols++
-			if symbol.Name == symbolName {
-				matches = append(matches, symbol)
-			}
-			if len(suggestions) < maxSymbolSuggestions {
-				suggestions = append(suggestions, symbol)
-			}
-			walk(symbol.Children)
+	flat := flattenSymbols(symbols)
+	matches := make([]lsp.DocumentSymbol, 0, 1)
+	for _, symbol := range flat {
+		if symbol.Name == symbolName {
+			matches = append(matches, symbol)
 		}
 	}
-	walk(symbols)
+	exactMatches, totalSymbols, omittedSymbols := targetDiagnosticCounts(len(matches), len(flat))
+	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
 	if len(matches) == 0 {
-		err := fmt.Errorf("document symbol %q not found", symbolName)
-		result := failure("DOCUMENT_SYMBOL_ABSENT", err)
-		if len(suggestions) > 0 {
-			var candidates []string
-			for _, symbol := range suggestions {
-				start := symbol.SelectionRange.Start
-				candidates = append(candidates, fmt.Sprintf("%q at line %d, character %d", symbol.Name, start.Line, start.Character))
-			}
-			shown := len(suggestions)
-			omitted := totalSymbols - shown
-			result.Diagnostics = append(result.Diagnostics, fmt.Sprintf("%s; available exact document symbols: %s; showing %d of %d exact document symbols; %d omitted; use an exact symbol name (including omitted symbols) or the line/character selector", err, strings.Join(candidates, "; "), shown, totalSymbols, omitted))
-		}
-		return 0, 0, result
+		base.Action = "FAIL_ABSENT"
+		f := failure("DOCUMENT_SYMBOL_ABSENT", errors.New("exact document symbol absent"))
+		f.Diagnostics = []string{fmt.Sprintf("exact_matches=0 total_symbols=%d omitted_symbols=%d action=FAIL_ABSENT", base.TotalSymbols, base.OmittedSymbols)}
+		return base, f
 	}
 	if len(matches) != 1 {
-		return 0, 0, failure("DOCUMENT_SYMBOL_AMBIGUOUS", fmt.Errorf("document symbol %q matched %d symbols", symbolName, len(matches)))
+		base.Action = "FAIL_AMBIGUOUS"
+		f := failure("DOCUMENT_SYMBOL_AMBIGUOUS", errors.New("exact document symbol ambiguous"))
+		f.Diagnostics = []string{fmt.Sprintf("exact_matches=%d total_symbols=%d omitted_symbols=%d action=FAIL_AMBIGUOUS", base.ExactMatches, base.TotalSymbols, base.OmittedSymbols)}
+		return base, f
 	}
-	symbol := matches[0]
-	if !ValidDocumentSymbolTarget(symbol) {
-		return 0, 0, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", fmt.Errorf("document symbol %q has invalid ranges", symbolName))
+	return probeDocumentSymbol(ctx, client, uri, matches[0], base)
+}
+
+func recoverPositionTarget(ctx context.Context, client *SessionClient, uri string, position lsp.Position) (PreparedTarget, *operation.Failure) {
+	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
+	if err != nil {
+		if strings.Contains(err.Error(), "json-rpc error -32601") {
+			return PreparedTarget{Action: "FAIL_UNSUPPORTED"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
+		}
+		return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
+	}
+	flat := flattenSymbols(symbols)
+	_, totalSymbols, omittedSymbols := targetDiagnosticCounts(0, len(flat))
+	containing := make([]lsp.DocumentSymbol, 0, 1)
+	for _, symbol := range flat {
+		if !ValidDocumentSymbolTarget(symbol) {
+			return PreparedTarget{TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols, Action: "FAIL_MALFORMED"}, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("malformed document symbol range"))
+		}
+		if callableSymbolKind(symbol.Kind) && rangeContainsPosition(symbol.Range, position) {
+			containing = append(containing, symbol)
+		}
+	}
+	exactMatches, _, _ := targetDiagnosticCounts(len(containing), len(flat))
+	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
+	if len(containing) == 0 {
+		base.Action = "FAIL_ABSENT"
+		return base, failure("POSITION_SYMBOL_ABSENT", errors.New("no containing callable symbol"))
+	}
+	if len(containing) != 1 {
+		base.Action = "FAIL_AMBIGUOUS"
+		return base, failure("POSITION_SYMBOL_AMBIGUOUS", errors.New("multiple containing callable symbols"))
+	}
+	return probeDocumentSymbol(ctx, client, uri, containing[0], base)
+}
+
+func probeDocumentSymbol(ctx context.Context, client *SessionClient, uri string, symbol lsp.DocumentSymbol, base PreparedTarget) (PreparedTarget, *operation.Failure) {
+	if !ValidDocumentSymbolTarget(symbol) || !callableSymbolKind(symbol.Kind) {
+		base.Action = "FAIL_MALFORMED"
+		return base, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("invalid callable document symbol"))
 	}
 	start := symbol.SelectionRange.Start
 	for delta := uint32(0); delta <= maxSymbolPrepareProbeDelta && delta <= ^uint32(0)-start.Character; delta++ {
@@ -252,22 +311,47 @@ func ResolveTarget(ctx context.Context, client *SessionClient, uri, symbolName s
 				continue
 			}
 			if len(items) != 1 || !compatiblePreparedMethod(uri, symbol, items[0]) {
-				return 0, 0, failure("DOCUMENT_SYMBOL_PREPARE_MISMATCH", fmt.Errorf("document symbol %q prepared an incompatible or ambiguous identity", symbolName))
+				base.Action = "FAIL_MISMATCH"
+				return base, failure("DOCUMENT_SYMBOL_PREPARE_MISMATCH", errors.New("prepared identity mismatch"))
 			}
-			return candidate.Line, candidate.Character, nil
+			base.Line, base.Character, base.Items, base.Action = candidate.Line, candidate.Character, items, "RECOVERED_PREPARE"
+			return base, nil
 		}
 		if retryableSymbolPrepareMiss(err) {
 			continue
 		}
-		if errors.Is(err, context.Canceled) {
-			return 0, 0, failure("CANCELLED", err)
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return 0, 0, failure("REQUEST_TIMEOUT", err)
-		}
-		return 0, 0, failure("DOCUMENT_SYMBOL_PREPARE_FAILED", err)
+		base.Action = "FAIL_DOCUMENT_SYMBOLS"
+		return base, classifiedPrepareFailure(err)
 	}
-	return 0, 0, failure("DOCUMENT_SYMBOL_UNPREPARABLE", fmt.Errorf("document symbol %q was not preparable within %d bounded positions", symbolName, maxSymbolPrepareProbeDelta+1))
+	base.Action = "FAIL_UNPREPARABLE"
+	return base, failure("DOCUMENT_SYMBOL_UNPREPARABLE", errors.New("bounded prepare probes exhausted"))
+}
+
+func targetDiagnosticCounts(matches, total int) (int, int, int) {
+	return min(matches, maxTargetDiagnosticCount), min(total, maxTargetDiagnosticCount), min(max(0, total-maxSymbolSuggestions), maxTargetDiagnosticCount)
+}
+
+func flattenSymbols(symbols []lsp.DocumentSymbol) []lsp.DocumentSymbol {
+	var flat []lsp.DocumentSymbol
+	var walk func([]lsp.DocumentSymbol)
+	walk = func(items []lsp.DocumentSymbol) {
+		for _, symbol := range items {
+			flat = append(flat, symbol)
+			walk(symbol.Children)
+		}
+	}
+	walk(symbols)
+	return flat
+}
+
+func classifiedPrepareFailure(err error) *operation.Failure {
+	if errors.Is(err, context.Canceled) {
+		return failure("CANCELLED", context.Canceled)
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return failure("REQUEST_TIMEOUT", context.DeadlineExceeded)
+	}
+	return failure("DOCUMENT_SYMBOL_PREPARE_FAILED", errors.New("prepare request failed"))
 }
 
 var supportedRelations = map[string]bool{
@@ -377,6 +461,12 @@ func rangeContainsPosition(r lsp.Range, position lsp.Position) bool {
 func retryableSymbolPrepareMiss(err error) bool {
 	message, ok := strings.CutPrefix(err.Error(), "json-rpc error 0: ")
 	return ok && (message == "identifier not found" || message == "column is beyond end of line" || strings.HasSuffix(message, " is not a function"))
+}
+
+func compatiblePreparedPosition(uri string, position lsp.Position, item lsp.CallHierarchyItem) bool {
+	return item.URI == uri && canonicalDocumentURI(item.URI) && callableSymbolKind(item.Kind) &&
+		validRange(item.Range) && validRange(item.SelectionRange) && rangeContains(item.Range, item.SelectionRange) &&
+		rangeContainsPosition(item.Range, position)
 }
 
 func compatiblePreparedMethod(uri string, symbol lsp.DocumentSymbol, item lsp.CallHierarchyItem) bool {

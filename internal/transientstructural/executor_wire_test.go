@@ -246,12 +246,18 @@ func TestExecuteMalformedTraversalResponsesCarryClosedDiagnostics(t *testing.T) 
 				return map[string]json.RawMessage{tc.method: json.RawMessage(`{}`)}
 			})
 			result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
-			if failure == nil || failure.Phase != PhaseTraversal || failure.State != StateInvalidServerResponse || !reflect.DeepEqual(result, Result{}) {
+			if failure == nil || failure.State != StateInvalidServerResponse || !reflect.DeepEqual(result, Result{}) {
 				t.Fatalf("ASSERT_MALFORMED_%s_TYPED_FAILURE: result=%+v failure=%+v", tc.stage, result, failure)
 			}
-			want := &TraversalDiagnostic{Stage: tc.stage, Method: tc.method, Direction: tc.direction}
-			if !reflect.DeepEqual(failure.TraversalDiagnostic, want) || failure.TraversalDiagnostic.Depth != nil {
-				t.Fatalf("ASSERT_MALFORMED_%s_EXACT_DIAGNOSTIC: got=%+v want=%+v", tc.stage, failure.TraversalDiagnostic, want)
+			if tc.stage == TraversalStagePrepare {
+				if failure.Phase != PhasePreflight || failure.TraversalDiagnostic != nil || failure.TargetDiagnostic == nil || failure.TargetDiagnostic.Action != TargetActionFailDocument {
+					t.Fatalf("ASSERT_MALFORMED_PREPARE_TARGET_DIAGNOSTIC: %+v", failure)
+				}
+			} else {
+				want := &TraversalDiagnostic{Stage: tc.stage, Method: tc.method, Direction: tc.direction}
+				if failure.Phase != PhaseTraversal || !reflect.DeepEqual(failure.TraversalDiagnostic, want) || failure.TraversalDiagnostic.Depth != nil {
+					t.Fatalf("ASSERT_MALFORMED_%s_EXACT_DIAGNOSTIC: got=%+v want=%+v", tc.stage, failure.TraversalDiagnostic, want)
+				}
 			}
 			raw, err := json.Marshal(failure)
 			if err != nil {
@@ -317,8 +323,8 @@ func TestExecuteExhaustiveHierarchicalSymbolResolution(t *testing.T) {
 	if failure != nil || result.State != StateComplete {
 		t.Fatalf("ASSERT_HIERARCHICAL_SYMBOL_COMPLETE: result=%+v failure=%+v", result, failure)
 	}
-	if result.Accounting.Requests != (RequestAccounting{Attempted: 5, Succeeded: 5}) || result.Accounting.Preparation != (PreparationAccounting{Attempted: 2, Returned: 2}) {
-		t.Fatalf("ASSERT_ALL_SYMBOL_PREPARES_ACCOUNTED: %+v", result.Accounting)
+	if result.Accounting.Requests != (RequestAccounting{Attempted: 4, Succeeded: 4}) || result.Accounting.Preparation != (PreparationAccounting{Attempted: 1, Returned: 1}) {
+		t.Fatalf("ASSERT_SYMBOL_PREPARED_ITEM_REUSED_ONCE: %+v", result.Accounting)
 	}
 	if len(result.Analysis.Nodes) != 1 || len(result.Analysis.Occurrences) != 1 || result.Analysis.Direction != DirectionIncoming {
 		t.Fatalf("ASSERT_SYMBOL_IMPACT_EXACT: %+v", result.Analysis)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"lsp-trace/internal/mcpcontract"
@@ -63,9 +64,8 @@ func TestStructuralContextV2TypedLocatorFailureUsesV4Envelope(t *testing.T) {
 	if directEnvelope.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || directEnvelope.Phase != "PREFLIGHT" || directEnvelope.State != "TARGET_NOT_FOUND" || directEnvelope.Diagnostic != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_direct: %+v", directEnvelope)
 	}
-	wantTarget := map[string]any{"kind": "POSITION", "line": float64(123), "character": float64(5)}
-	if !reflect.DeepEqual(directEnvelope.Target, wantTarget) {
-		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_LOCATOR_direct: got=%v want=%v", directEnvelope.Target, wantTarget)
+	if directEnvelope.Target != nil || strings.Contains(string(directRaw), "file:///workspace/store.go") || strings.Contains(string(directRaw), `"line":123`) || strings.Contains(string(directRaw), `"character":5`) {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_TARGET_PRIVATE_direct: %s", directRaw)
 	}
 	if gateway.Error != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_gateway: rpc error=%v", gateway.Error)
@@ -75,8 +75,9 @@ func TestStructuralContextV2TypedLocatorFailureUsesV4Envelope(t *testing.T) {
 	if json.Unmarshal([]byte(outer.DelegatedEnvelope), &delegated) != nil || delegated.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || delegated.Phase != "PREFLIGHT" || delegated.State != "TARGET_NOT_FOUND" || delegated.Diagnostic != nil {
 		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_ENVELOPE_gateway: %+v", outer)
 	}
-	if !reflect.DeepEqual(delegated.Target, wantTarget) {
-		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_LOCATOR_gateway: got=%v want=%v", delegated.Target, wantTarget)
+	delegatedRaw, _ := json.Marshal(delegated)
+	if delegated.Target != nil || strings.Contains(string(delegatedRaw), "file:///workspace/store.go") || strings.Contains(string(delegatedRaw), `"line":123`) || strings.Contains(string(delegatedRaw), `"character":5`) {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_DOMAIN_TARGET_PRIVATE_gateway: %s", delegatedRaw)
 	}
 }
 
