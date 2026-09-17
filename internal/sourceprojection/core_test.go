@@ -145,29 +145,93 @@ func TestProjectSupportsExactUTF8UTF16UTF32Ranges(t *testing.T) {
 	}
 }
 
-func TestProjectMutationsCannotChangeGraphBytes(t *testing.T) {
-	graphBytes := []byte(`{"nodes":[{"id":"node"}],"relations":[{"type":"CALLS","evidence":"SERVER_REPORTED"}],"authority":0,"source_graph_complete":"UNKNOWN"}`)
-	before := sha256.Sum256(graphBytes)
-	candidates := fixtureCandidates()
+func TestC04ExhaustiveSourceMutationsCannotChangeGraphOrAuthority(t *testing.T) {
+	const assertion = "ASSERT_C04_EXHAUSTIVE_SOURCE_MUTATION_GRAPH_NEUTRALITY"
+	graphBytes := []byte(`{"nodes":[{"id":"caller","support":1},{"id":"callee","support":1}],"relations":[{"id":"call","type":"CALLS","source":"caller","target":"callee","support":1,"evidence":"SERVER_REPORTED"}],"support":1,"authority":0,"accepted":false,"source_graph_complete":"UNKNOWN","graph_facts_added":0}`)
+	beforeBytes := append([]byte(nil), graphBytes...)
+	beforeDigest := sha256.Sum256(graphBytes)
+	var beforeGraph struct {
+		Nodes               []map[string]any `json:"nodes"`
+		Relations           []map[string]any `json:"relations"`
+		Support             int              `json:"support"`
+		Authority           int              `json:"authority"`
+		Accepted            bool             `json:"accepted"`
+		SourceGraphComplete string           `json:"source_graph_complete"`
+		GraphFactsAdded     int              `json:"graph_facts_added"`
+	}
+	if err := json.Unmarshal(graphBytes, &beforeGraph); err != nil {
+		t.Fatalf("%s_FIXTURE: %v", assertion, err)
+	}
+
+	baseCandidates := []Candidate{
+		{UnitID: "endpoint", CitationID: "endpoint-citation", Role: "ENDPOINT", GraphSubjectID: "callee", LogicalSourceID: "source-a", Range: Range{Start: Position{0, 0}, End: Position{0, 5}}, PositionEncoding: "utf-8", PrivacyClassification: "PUBLIC"},
+		{UnitID: "relation", CitationID: "relation-citation", Role: "RELATION", GraphSubjectID: "call", OccurrenceID: "call-occurrence", LogicalSourceID: "source-a", Range: Range{Start: Position{1, 0}, End: Position{1, 4}}, PositionEncoding: "utf-8", RelationProvenance: "SERVER_REPORTED", PrivacyClassification: "PUBLIC"},
+	}
+	baseSources := map[string]Source{"source-a": {LogicalSourceID: "source-a", Digest: "sha256:base", Bytes: []byte("alpha\nbeta\n"), Available: true}}
+	policy := Policy{PolicyID: "public", BodyRequested: true}
+	baseline, err := Project(baseCandidates, baseSources, policy)
+	if err != nil {
+		t.Fatalf("%s_BASELINE: %v", assertion, err)
+	}
+	baselineBytes, err := json.Marshal(baseline)
+	if err != nil {
+		t.Fatalf("%s_BASELINE_BYTES: %v", assertion, err)
+	}
+
+	addedCandidates := append([]Candidate(nil), baseCandidates...)
+	addedCandidates = append(addedCandidates, Candidate{UnitID: "added", CitationID: "added-citation", Role: "ENDPOINT", GraphSubjectID: "caller", LogicalSourceID: "source-b", Range: Range{Start: Position{0, 0}, End: Position{0, 5}}, PositionEncoding: "utf-8", PrivacyClassification: "PUBLIC"})
+	addedSources := map[string]Source{
+		"source-a": baseSources["source-a"],
+		"source-b": {LogicalSourceID: "source-b", Digest: "sha256:added", Bytes: []byte("gamma\n"), Available: true},
+	}
+	removedSources := map[string]Source{}
+	textSources := map[string]Source{"source-a": {LogicalSourceID: "source-a", Digest: "sha256:text-change", Bytes: []byte("ALPHA\nBETA\n"), Available: true}}
+	overlapCandidates := append([]Candidate(nil), baseCandidates...)
+	overlapCandidates[1].Range = Range{Start: Position{0, 2}, End: Position{0, 5}}
+
 	mutations := []struct {
-		name       string
-		candidates []Candidate
-		sources    map[string]Source
-		policy     Policy
+		name               string
+		candidates         []Candidate
+		sources            map[string]Source
+		wantProjectionDiff bool
 	}{
-		{name: "body", candidates: candidates, sources: fixtureSources(true), policy: Policy{PolicyID: "public", BodyRequested: true}},
-		{name: "metadata", candidates: candidates, sources: fixtureSources(true), policy: Policy{PolicyID: "metadata"}},
-		{name: "reordered", candidates: []Candidate{candidates[1], candidates[0]}, sources: fixtureSources(true), policy: Policy{PolicyID: "public", BodyRequested: true}},
-		{name: "withheld", candidates: withheldCandidates(), sources: fixtureSources(true), policy: Policy{PolicyID: "withheld", BodyRequested: true}},
+		{name: "source-addition", candidates: addedCandidates, sources: addedSources, wantProjectionDiff: true},
+		{name: "source-removal", candidates: baseCandidates, sources: removedSources, wantProjectionDiff: true},
+		{name: "source-text", candidates: baseCandidates, sources: textSources, wantProjectionDiff: true},
+		{name: "source-reordering", candidates: []Candidate{baseCandidates[1], baseCandidates[0]}, sources: baseSources},
+		{name: "source-overlap", candidates: overlapCandidates, sources: baseSources, wantProjectionDiff: true},
 	}
 	for _, mutation := range mutations {
 		t.Run(mutation.name, func(t *testing.T) {
-			if _, err := Project(mutation.candidates, mutation.sources, mutation.policy); err != nil {
-				t.Fatal(err)
+			projection, err := Project(mutation.candidates, mutation.sources, policy)
+			if err != nil {
+				t.Fatalf("%s_PROJECT_%s: %v", assertion, mutation.name, err)
 			}
-			after := sha256.Sum256(graphBytes)
-			if after != before {
-				t.Fatalf("ASSERT_C04_GRAPH_BYTES_NEUTRAL_UNDER_SOURCE_MUTATION: before=%x after=%x", before, after)
+			projectionBytes, err := json.Marshal(projection)
+			if err != nil {
+				t.Fatalf("%s_PROJECTION_BYTES_%s: %v", assertion, mutation.name, err)
+			}
+			if gotDiff := !bytes.Equal(projectionBytes, baselineBytes); gotDiff != mutation.wantProjectionDiff {
+				t.Fatalf("%s_PROJECTION_EFFECT_%s: got_diff=%t want_diff=%t", assertion, mutation.name, gotDiff, mutation.wantProjectionDiff)
+			}
+
+			if !bytes.Equal(graphBytes, beforeBytes) || sha256.Sum256(graphBytes) != beforeDigest {
+				t.Fatalf("%s_GRAPH_BYTES_%s: before=%x after=%x", assertion, mutation.name, beforeDigest, sha256.Sum256(graphBytes))
+			}
+			var afterGraph struct {
+				Nodes               []map[string]any `json:"nodes"`
+				Relations           []map[string]any `json:"relations"`
+				Support             int              `json:"support"`
+				Authority           int              `json:"authority"`
+				Accepted            bool             `json:"accepted"`
+				SourceGraphComplete string           `json:"source_graph_complete"`
+				GraphFactsAdded     int              `json:"graph_facts_added"`
+			}
+			if err := json.Unmarshal(graphBytes, &afterGraph); err != nil {
+				t.Fatalf("%s_AFTER_GRAPH_%s: %v", assertion, mutation.name, err)
+			}
+			if !reflect.DeepEqual(afterGraph.Nodes, beforeGraph.Nodes) || !reflect.DeepEqual(afterGraph.Relations, beforeGraph.Relations) || afterGraph.Support != beforeGraph.Support || afterGraph.Authority != 0 || afterGraph.Accepted || afterGraph.SourceGraphComplete != "UNKNOWN" || afterGraph.GraphFactsAdded != 0 {
+				t.Fatalf("%s_GRAPH_SEMANTICS_%s: before=%+v after=%+v", assertion, mutation.name, beforeGraph, afterGraph)
 			}
 		})
 	}
