@@ -75,12 +75,16 @@ func TestAssembleV2BoundedEndpointMappingDedupeAndCustody(t *testing.T) {
 	if len(got.Units) != 4 || len(got.Citations) != 4 {
 		t.Fatalf("%s: units=%d citations=%d", assertion, len(got.Units), len(got.Citations))
 	}
+	wantBodies := map[string]string{"target-subject": "alpha beta", "a-subject": "alpha", "b-subject": "beta", "c-subject": "alpha"}
 	for i, unit := range got.Units {
 		if unit.Role != "ENDPOINT" || unit.RelationProvenance != "" || unit.PrivacyClassification != "PUBLIC" || unit.ItemRange == nil || unit.SelectionRange == nil {
 			t.Fatalf("%s[%d]: %+v", assertion, i, unit)
 		}
 		if unit.EvidenceRange != *unit.SelectionRange {
 			t.Fatalf("%s[%d]: evidence=%+v selection=%+v", assertion, i, unit.EvidenceRange, unit.SelectionRange)
+		}
+		if unit.BodyDisposition != "RETURNED" || unit.Body != wantBodies[unit.GraphSubjectID] {
+			t.Fatalf("ASSERT_RETAINED_BODY_INCLUDE_EXACT[%d]: subject=%q disposition=%q body=%q want=%q", i, unit.GraphSubjectID, unit.BodyDisposition, unit.Body, wantBodies[unit.GraphSubjectID])
 		}
 	}
 	if got.Units[0].DisplayRange == got.Units[0].EvidenceRange || *got.Units[0].ItemRange == got.Units[0].EvidenceRange {
@@ -133,6 +137,26 @@ func TestAssembleV2BoundedRejectsInvalidInputAtomically(t *testing.T) {
 		{"policy-empty", func(_ *ResolveResult, _ *sourceprojection.Policy, id *string, _ *int) { *id = "" }, CodeInvalidRequest},
 		{"policy-mismatch", func(_ *ResolveResult, _ *sourceprojection.Policy, id *string, _ *int) { *id = "other" }, CodeInvalidRequest},
 		{"bound", func(_ *ResolveResult, _ *sourceprojection.Policy, _ *string, n *int) { *n = 0 }, CodeInvalidRequest},
+		{"negative-max-bytes", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) { p.MaxBytes = -1 }, CodeInvalidRequest},
+		{"negative-max-ranges", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) { p.MaxRanges = -1 }, CodeInvalidRequest},
+		{"negative-max-objects", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) { p.MaxObjects = -1 }, CodeInvalidRequest},
+		{"negative-max-work", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) { p.MaxWork = -1 }, CodeInvalidRequest},
+		{"negative-max-bytes-unenforced", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) {
+			p.EnforceLimits = false
+			p.MaxBytes = -1
+		}, CodeInvalidRequest},
+		{"negative-max-ranges-unenforced", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) {
+			p.EnforceLimits = false
+			p.MaxRanges = -1
+		}, CodeInvalidRequest},
+		{"negative-max-objects-unenforced", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) {
+			p.EnforceLimits = false
+			p.MaxObjects = -1
+		}, CodeInvalidRequest},
+		{"negative-max-work-unenforced", func(_ *ResolveResult, p *sourceprojection.Policy, _ *string, _ *int) {
+			p.EnforceLimits = false
+			p.MaxWork = -1
+		}, CodeInvalidRequest},
 		{"digest", func(r *ResolveResult, _ *sourceprojection.Policy, _ *string, _ *int) { r.Selections[0].Bytes[0] = 'X' }, CodeSourceMismatch},
 		{"logical-mismatch", func(r *ResolveResult, _ *sourceprojection.Policy, _ *string, _ *int) {
 			r.Selections[2].Selection.Source = retainedIdentity([]byte("different"))
@@ -163,6 +187,28 @@ func TestAssembleV2BoundedRejectsInvalidInputAtomically(t *testing.T) {
 			}
 			if typed.Key != (Key{}) && !strings.Contains(err.Error(), typed.Key.GraphSubjectID+"\x00"+typed.Key.LogicalSourceID) {
 				t.Fatalf("%s/%s: key not deterministically formatted: %v", assertion, tc.name, err)
+			}
+		})
+	}
+}
+
+func TestAssembleV2BoundedRejectsDisplayProvenanceSubstitutionAtomically(t *testing.T) {
+	cases := []struct {
+		name      string
+		assertion string
+		mutate    func(*Selection)
+	}{
+		{"kind", "ASSERT_RETAINED_PROVENANCE_KIND_SUBSTITUTION", func(s *Selection) { s.DisplayProvenance.Kind = "OTHER" }},
+		{"method", "ASSERT_RETAINED_PROVENANCE_METHOD_SUBSTITUTION", func(s *Selection) { s.DisplayProvenance.Method = "other" }},
+		{"policy", "ASSERT_RETAINED_DISPLAY_POLICY_SUBSTITUTION", func(s *Selection) { s.DisplayRangePolicy = "OTHER" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resolved := retainedResolved()
+			tc.mutate(&resolved.Selections[0].Selection)
+			got, err := AssembleV2Bounded(resolved, retainedPolicy(false), retainedTestBinding{}, "retained-public", 1<<20)
+			if err == nil || !IsCode(err, CodeInvalidProvenance) || !reflect.DeepEqual(got, reflect.Zero(reflect.TypeOf(got)).Interface()) {
+				t.Fatalf("%s: got=%+v err=%T %v", tc.assertion, got, err, err)
 			}
 		})
 	}

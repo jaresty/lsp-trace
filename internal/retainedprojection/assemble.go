@@ -11,6 +11,7 @@ import (
 	"lsp-trace/internal/sourceobject"
 	"lsp-trace/internal/sourceprojection"
 	"lsp-trace/internal/sourceprojectionv2"
+	"lsp-trace/internal/v5sourcesnapshotv2"
 )
 
 const (
@@ -47,6 +48,9 @@ func AssembleV2Bounded[T any](resolved ResolveResult, policy sourceprojection.Po
 	zero := sourceprojectionv2.WireResult[T]{}
 	if requestPolicyID == "" || requestPolicyID != policy.PolicyID || maxResponseBytes <= 0 {
 		return zero, assemblyFail(CodeInvalidRequest, Key{}, "non-empty matching policy id and positive response bound required", nil)
+	}
+	if policy.MaxBytes < 0 || policy.MaxRanges < 0 || policy.MaxObjects < 0 || policy.MaxWork < 0 {
+		return zero, assemblyFail(CodeInvalidRequest, Key{}, "projection policy bounds must be non-negative", nil)
 	}
 	candidates, sources, selectedURIs, documents, documentsObserved, acquiredBytes, err := retainedInputs(resolved)
 	if err != nil {
@@ -128,8 +132,8 @@ func validateResolvedSelection(selection Selection, raw []byte, ordinal int, all
 	if !validRange(selection.DisplayRange) || !validRange(*selection.ItemRange) || !validRange(*selection.SelectionRange) || !contains(selection.DisplayRange, *selection.ItemRange) || !contains(*selection.ItemRange, *selection.SelectionRange) {
 		return assemblyFail(CodeIncompatibleRange, key, "selection, item, and display ranges are invalid or incompatible", nil)
 	}
-	if selection.DisplayProvenance.Kind == "" || selection.DisplayRangePolicy == "" {
-		return assemblyFail(CodeInvalidProvenance, key, "display provenance kind and policy required", nil)
+	if selection.DisplayProvenance.Kind != v5sourcesnapshotv2.ProvenanceKind || selection.DisplayProvenance.Method != v5sourcesnapshotv2.ProvenanceMethod || selection.DisplayRangePolicy != v5sourcesnapshotv2.DisplayRangePolicy {
+		return assemblyFail(CodeInvalidProvenance, key, "display provenance or policy substitution", nil)
 	}
 	if !canonicalResolveDigest(selection.Source.Digest) || selection.Source.ByteLength != uint64(len(raw)) {
 		return assemblyFail(CodeSourceMismatch, key, "source identity does not match bytes", nil)
