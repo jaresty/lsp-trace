@@ -52,7 +52,7 @@ func AssembleV2Bounded[T any](resolved ResolveResult, policy sourceprojection.Po
 	if policy.MaxBytes < 0 || policy.MaxRanges < 0 || policy.MaxObjects < 0 || policy.MaxWork < 0 {
 		return zero, assemblyFail(CodeInvalidRequest, Key{}, "projection policy bounds must be non-negative", nil)
 	}
-	candidates, sources, selectedURIs, documents, documentsObserved, acquiredBytes, err := retainedInputs(resolved)
+	candidates, sources, selectedURIs, documents, documentsObserved, acquiredBytes, err := retainedInputs(resolved, policy.BodyRequested)
 	if err != nil {
 		return zero, err
 	}
@@ -71,7 +71,7 @@ func AssembleV2Bounded[T any](resolved ResolveResult, policy sourceprojection.Po
 	return result, nil
 }
 
-func retainedInputs(resolved ResolveResult) ([]sourceprojection.Candidate, map[string]sourceprojection.Source, []string, []sourceprojectionv2.DocumentSource, int, int, error) {
+func retainedInputs(resolved ResolveResult, requireBodies bool) ([]sourceprojection.Candidate, map[string]sourceprojection.Source, []string, []sourceprojectionv2.DocumentSource, int, int, error) {
 	if len(resolved.Selections) == 0 {
 		return nil, nil, nil, nil, 0, 0, assemblyFail(CodeInvalidResolveResult, Key{}, "non-empty resolved selections required", nil)
 	}
@@ -81,22 +81,28 @@ func retainedInputs(resolved ResolveResult) ([]sourceprojection.Candidate, map[s
 	var acquiredBytes uint64
 	for i, resolvedSelection := range resolved.Selections {
 		selection := resolvedSelection.Selection
-		if err := validateResolvedSelection(selection, resolvedSelection.Bytes, i, resolved.Selections); err != nil {
+		if err := validateResolvedSelection(selection, resolvedSelection.Bytes, requireBodies, i, resolved.Selections); err != nil {
 			return nil, nil, nil, nil, 0, 0, err
 		}
 		logical := selection.Key.LogicalSourceID
 		if existing, ok := sources[logical]; ok {
-			if existing.Digest != selection.Source.Digest || uint64(len(existing.Bytes)) != selection.Source.ByteLength || !equalBytes(existing.Bytes, resolvedSelection.Bytes) {
+			if existing.Digest != selection.Source.Digest || uint64(sourceprojectionByteLength(existing)) != selection.Source.ByteLength || (requireBodies && !equalBytes(existing.Bytes, resolvedSelection.Bytes)) {
 				return nil, nil, nil, nil, 0, 0, assemblyFail(CodeSourceMismatch, selection.Key, "logical source uses inconsistent identity or bytes", nil)
 			}
 		} else {
-			sources[logical] = sourceprojection.Source{LogicalSourceID: logical, Digest: selection.Source.Digest, Bytes: append([]byte(nil), resolvedSelection.Bytes...), Available: true}
+			source := sourceprojection.Source{LogicalSourceID: logical, Digest: selection.Source.Digest, ByteLength: int(selection.Source.ByteLength), Available: true}
+			if requireBodies {
+				source.Bytes = append([]byte(nil), resolvedSelection.Bytes...)
+			}
+			sources[logical] = source
 		}
-		if _, seen := identities[selection.Source]; !seen {
-			identities[selection.Source] = struct{}{}
-			acquiredBytes += selection.Source.ByteLength
-			if acquiredBytes > uint64(^uint(0)>>1) {
-				return nil, nil, nil, nil, 0, 0, assemblyFail(CodeInvalidResolveResult, selection.Key, "acquired byte accounting overflows int", nil)
+		if requireBodies {
+			if _, seen := identities[selection.Source]; !seen {
+				identities[selection.Source] = struct{}{}
+				acquiredBytes += selection.Source.ByteLength
+				if acquiredBytes > uint64(^uint(0)>>1) {
+					return nil, nil, nil, nil, 0, 0, assemblyFail(CodeInvalidResolveResult, selection.Key, "acquired byte accounting overflows int", nil)
+				}
 			}
 		}
 		candidate := retainedCandidate(selection)
@@ -106,12 +112,12 @@ func retainedInputs(resolved ResolveResult) ([]sourceprojection.Candidate, map[s
 	documents := make([]sourceprojectionv2.DocumentSource, 0, len(selectedURIs))
 	for _, uri := range selectedURIs {
 		source := sources[uri]
-		documents = append(documents, sourceprojectionv2.DocumentSource{URI: uri, DocumentVersion: 0, PositionEncoding: "utf-16", SourceDigest: source.Digest, SourceByteLength: len(source.Bytes)})
+		documents = append(documents, sourceprojectionv2.DocumentSource{URI: uri, DocumentVersion: 0, PositionEncoding: "utf-16", SourceDigest: source.Digest, SourceByteLength: sourceprojectionByteLength(source)})
 	}
 	return candidates, sources, selectedURIs, documents, len(sources), int(acquiredBytes), nil
 }
 
-func validateResolvedSelection(selection Selection, raw []byte, ordinal int, all []ResolvedSelection) error {
+func validateResolvedSelection(selection Selection, raw []byte, requireBody bool, ordinal int, all []ResolvedSelection) error {
 	key := selection.Key
 	if key.GraphSubjectID == "" || key.LogicalSourceID == "" || selection.Ordinal != ordinal {
 		return assemblyFail(CodeInvalidResolveResult, key, "invalid key or ordinal", nil)
@@ -135,12 +141,17 @@ func validateResolvedSelection(selection Selection, raw []byte, ordinal int, all
 	if selection.DisplayProvenance.Kind != v5sourcesnapshotv2.ProvenanceKind || selection.DisplayProvenance.Method != v5sourcesnapshotv2.ProvenanceMethod || selection.DisplayRangePolicy != v5sourcesnapshotv2.DisplayRangePolicy {
 		return assemblyFail(CodeInvalidProvenance, key, "display provenance or policy substitution", nil)
 	}
-	if !canonicalResolveDigest(selection.Source.Digest) || selection.Source.ByteLength != uint64(len(raw)) {
-		return assemblyFail(CodeSourceMismatch, key, "source identity does not match bytes", nil)
+	if !canonicalResolveDigest(selection.Source.Digest) {
+		return assemblyFail(CodeSourceMismatch, key, "source identity is invalid", nil)
 	}
-	sum := sha256.Sum256(raw)
-	if selection.Source.Digest != "sha256:"+hex.EncodeToString(sum[:]) {
-		return assemblyFail(CodeSourceMismatch, key, "source digest does not match bytes", nil)
+	if requireBody {
+		if selection.Source.ByteLength != uint64(len(raw)) {
+			return assemblyFail(CodeSourceMismatch, key, "source identity does not match bytes", nil)
+		}
+		sum := sha256.Sum256(raw)
+		if selection.Source.Digest != "sha256:"+hex.EncodeToString(sum[:]) {
+			return assemblyFail(CodeSourceMismatch, key, "source digest does not match bytes", nil)
+		}
 	}
 	return nil
 }
@@ -185,6 +196,13 @@ func retainedSourceOrder(target string, sources map[string]sourceprojection.Sour
 	}
 	sort.Strings(remaining)
 	return append([]string{target}, remaining...)
+}
+
+func sourceprojectionByteLength(source sourceprojection.Source) int {
+	if source.ByteLength > 0 {
+		return source.ByteLength
+	}
+	return len(source.Bytes)
 }
 
 func equalBytes(a, b []byte) bool {

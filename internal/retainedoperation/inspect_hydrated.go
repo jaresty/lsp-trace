@@ -71,14 +71,20 @@ func inspectProjection(request operation.Request, projection retainedinspection.
 	if err != nil {
 		return classify("SELECT", err)
 	}
-	if lookup == nil {
-		return fail("RESOLVE", string(sourceobject.CodePolicy), nil, "source lookup policy rejected")
-	}
-	resolved, err := retainedprojection.Resolve(plan, lookup, retainedprojection.ResolveLimits{
+	resolveLimits := retainedprojection.ResolveLimits{
 		MaxDistinctObjects:   projection.ResolveLimits.MaxDistinctObjects,
 		MaxUniqueSourceBytes: projection.ResolveLimits.MaxUniqueSourceBytes,
 		MaxLogicalSelections: projection.ResolveLimits.MaxLogicalSelections,
-	})
+	}
+	var resolved retainedprojection.ResolveResult
+	if projection.Projection.Body == "INCLUDE" {
+		if lookup == nil {
+			return fail("RESOLVE", string(sourceobject.CodePolicy), nil, "source lookup policy rejected")
+		}
+		resolved, err = retainedprojection.Resolve(plan, lookup, resolveLimits)
+	} else {
+		resolved, err = retainedprojection.ResolveMetadata(plan, resolveLimits)
+	}
 	if err != nil {
 		return classify("RESOLVE", err)
 	}

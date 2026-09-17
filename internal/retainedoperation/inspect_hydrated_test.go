@@ -84,8 +84,12 @@ func TestProjectionInlineSuccessSchemaParityBodiesAndDedup(t *testing.T) {
 			}
 			validateProjectionSchema(t, bytes.TrimSuffix(result.Artifact, []byte("\n")))
 			wire := result.Value.(sourceprojectionv2.WireResult[retainedprojection.RetainedCustodyBinding])
-			if len(wire.Units) != 2 || lookup.calls != 1 {
-				t.Fatalf("ASSERT_OPERATION_DISTINCT_IDENTITY_ONCE: units=%d calls=%d", len(wire.Units), lookup.calls)
+			wantCalls := 1
+			if body == "OMIT" {
+				wantCalls = 0
+			}
+			if len(wire.Units) != 2 || lookup.calls != wantCalls {
+				t.Fatalf("ASSERT_C05_PRIVACY_PRECEDES_BODY_RESOLUTION: body=%s units=%d calls=%d want_calls=%d", body, len(wire.Units), lookup.calls, wantCalls)
 			}
 			for _, unit := range wire.Units {
 				if body == "INCLUDE" && (unit.BodyDisposition != "RETURNED" || unit.Body == "") {
@@ -96,6 +100,18 @@ func TestProjectionInlineSuccessSchemaParityBodiesAndDedup(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestProjectionMetadataOnlyRequiresNoSourceLookup(t *testing.T) {
+	fx := validFixture(t, 1)
+	result, failure := execute(t, projectionRequest(fx, "OMIT"), nil, operation.Request{})
+	if failure != nil {
+		t.Fatalf("ASSERT_C05_PRIVACY_PRECEDES_BODY_RESOLUTION: %v", failure)
+	}
+	wire := result.Value.(sourceprojectionv2.WireResult[retainedprojection.RetainedCustodyBinding])
+	if len(wire.Units) != 1 || wire.Units[0].Body != "" || wire.Units[0].BodyDisposition != "NOT_REQUESTED" || wire.DocumentAccounting.TotalAcquiredBytes != 0 {
+		t.Fatalf("ASSERT_C05_METADATA_ONLY_NO_BODY_ACQUISITION: %+v", wire)
 	}
 }
 
@@ -172,7 +188,7 @@ func TestProjectionPipelineFailureMappingsAndSafety(t *testing.T) {
 		t.Fatalf("ASSERT_OPERATION_WRONG_SCHEMA_ZERO_BYTES: %q", ingressBytes)
 	}
 	assertTypedFailure(t, operation.Result{}, ingressFailure, "INGRESS", "ADMISSION_FAILED")
-	r := projectionRequest(fx, "OMIT")
+	r := projectionRequest(fx, "INCLUDE")
 	result, failure := execute(t, r, nil, operation.Request{})
 	assertTypedFailure(t, result, failure, "RESOLVE", "POLICY")
 
@@ -232,7 +248,7 @@ func TestProjectionPipelineFailureMappingsAndSafety(t *testing.T) {
 
 func TestProjectionResolveAndResponseBoundaries(t *testing.T) {
 	fx := validFixture(t, 1)
-	base := projectionRequest(fx, "OMIT")
+	base := projectionRequest(fx, "INCLUDE")
 	id := identity(fx.content)
 	cases := []struct {
 		name, state string

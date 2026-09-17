@@ -41,6 +41,7 @@ type Candidate struct {
 type Source struct {
 	LogicalSourceID string
 	Digest          string
+	ByteLength      int
 	Bytes           []byte
 	Available       bool
 }
@@ -261,7 +262,7 @@ func Project(candidates []Candidate, sources map[string]Source, policy Policy) (
 			Range:                 candidate.Range,
 			PositionEncoding:      candidate.PositionEncoding,
 			SourceDigest:          source.Digest,
-			SourceByteLength:      len(source.Bytes),
+			SourceByteLength:      sourceByteLength(source),
 			SelectionDisposition:  "SELECTED",
 			PrivacyClassification: candidate.PrivacyClassification,
 			RelationProvenance:    candidate.RelationProvenance,
@@ -295,6 +296,13 @@ func Project(candidates []Candidate, sources map[string]Source, policy Policy) (
 	}
 	result.Status = projectionStatus(result)
 	return result, nil
+}
+
+func sourceByteLength(source Source) int {
+	if source.ByteLength > 0 {
+		return source.ByteLength
+	}
+	return len(source.Bytes)
 }
 
 func omit(result *Result, unitID, cause string) {

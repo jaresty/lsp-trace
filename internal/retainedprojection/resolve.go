@@ -41,7 +41,7 @@ type ResolveResult struct {
 
 func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, error) {
 	zero := ResolveResult{}
-	if err := validateResolvePlan(plan, lookup, limits); err != nil {
+	if err := validateResolvePlan(plan, lookup, limits, true); err != nil {
 		return zero, err
 	}
 	if uint64(len(plan.Selections)) > limits.MaxLogicalSelections {
@@ -96,9 +96,31 @@ func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, err
 	return ResolveResult{Selections: selections}, nil
 }
 
-func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits) error {
-	if lookup == nil || limits.MaxDistinctObjects == 0 || limits.MaxUniqueSourceBytes == 0 || limits.MaxLogicalSelections == 0 {
-		return fail(CodeInvalidPlan, Key{}, "lookup and positive resolver limits required")
+func ResolveMetadata(plan Plan, limits ResolveLimits) (ResolveResult, error) {
+	zero := ResolveResult{}
+	if err := validateResolvePlan(plan, nil, limits, false); err != nil {
+		return zero, err
+	}
+	if uint64(len(plan.Selections)) > limits.MaxLogicalSelections {
+		return zero, fail(CodeResolveSelectionLimit, Key{}, "logical selection limit exceeded")
+	}
+	seen := make(map[sourceobject.Identity]struct{}, len(plan.Selections))
+	for _, selection := range plan.Selections {
+		seen[selection.Source] = struct{}{}
+		if uint64(len(seen)) > limits.MaxDistinctObjects {
+			return zero, fail(CodeResolveDistinctLimit, selection.Key, "distinct object limit exceeded")
+		}
+	}
+	selections := make([]ResolvedSelection, len(plan.Selections))
+	for i, selection := range plan.Selections {
+		selections[i] = ResolvedSelection{Selection: cloneSelection(selection)}
+	}
+	return ResolveResult{Selections: selections}, nil
+}
+
+func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits, requireLookup bool) error {
+	if (requireLookup && lookup == nil) || limits.MaxDistinctObjects == 0 || limits.MaxUniqueSourceBytes == 0 || limits.MaxLogicalSelections == 0 {
+		return fail(CodeInvalidPlan, Key{}, "required lookup and positive resolver limits required")
 	}
 	if plan.Ordering != Ordering || len(plan.Selections) == 0 || plan.Target == (Key{}) || plan.Selections[0].Key != plan.Target {
 		return fail(CodeInvalidPlan, Key{}, "canonical non-empty plan required")
