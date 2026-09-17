@@ -4,12 +4,15 @@
 package retainedprojection
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 
 	"lsp-trace/internal/graph"
+	"lsp-trace/internal/graphprovenance"
 	"lsp-trace/internal/sourceobject"
 	"lsp-trace/internal/v5sourcesnapshot"
 	"lsp-trace/internal/v5sourcesnapshotv2"
@@ -74,6 +77,7 @@ type Request struct {
 type Admitted struct {
 	artifact v5sourcesnapshotv2.Artifact
 	parent   v5sourcesnapshot.Artifact
+	raw      []byte
 }
 
 func Admit(raw []byte) (Admitted, error) {
@@ -88,7 +92,7 @@ func Admit(raw []byte) (Admitted, error) {
 	if err := json.Unmarshal(artifact.ParentSnapshot, &parent); err != nil {
 		return Admitted{}, fail(CodeAdmission, Key{}, err.Error())
 	}
-	return Admitted{artifact: artifact, parent: parent}, nil
+	return Admitted{artifact: artifact, parent: parent, raw: append([]byte(nil), raw...)}, nil
 }
 
 type EvidenceRange struct {
@@ -119,9 +123,57 @@ type Plan struct {
 	Ordering   string      `json:"ordering"`
 	Target     Key         `json:"target"`
 	Selections []Selection `json:"selections"`
+	binding    [32]byte
 }
 
 func (p Plan) Bytes() ([]byte, error) { return json.Marshal(p) }
+
+const (
+	RetainedCustody                 = "RETAINED"
+	ImmutableSourceObjectIdentityV1 = "IMMUTABLE_SOURCE_OBJECT_IDENTITY_V1"
+
+	// PlanSealDomainV1 defines the exact private plan-seal preimage:
+	// domain UTF-8 bytes, NUL, raw 32-byte SHA-256 of the exact admitted V2
+	// bytes, NUL, then the exact canonical Plan.Bytes bytes.
+	PlanSealDomainV1 = "lsp-trace.retained-projection-plan-seal.v1"
+)
+
+type RetainedCustodyBinding struct {
+	Custody         string `json:"custody"`
+	GraphSchemaID   string `json:"graph_schema_id"`
+	GraphDigest     string `json:"graph_digest"`
+	GraphByteLength uint64 `json:"graph_byte_length"`
+	CaptureID       string `json:"capture_id"`
+	ManifestID      string `json:"manifest_id"`
+	ResolverKind    string `json:"resolver_kind"`
+}
+
+func (a Admitted) CustodyBinding(plan Plan) (RetainedCustodyBinding, error) {
+	zero := RetainedCustodyBinding{}
+	if len(a.raw) == 0 || len(a.parent.GraphV5Bytes) == 0 || a.parent.GraphV5Digest == "" {
+		return zero, fail(CodeAdmission, Key{}, "valid admitted artifact required")
+	}
+	planBytes, err := plan.Bytes()
+	if err != nil {
+		return zero, fail(CodeInvalidPlan, Key{}, err.Error())
+	}
+	if plan.binding == ([32]byte{}) || plan.binding != planSeal(a.raw, planBytes) {
+		return zero, fail(CodeInvalidPlan, Key{}, "canonical plan returned by Select required")
+	}
+	graphSum := sha256.Sum256(a.parent.GraphV5Bytes)
+	if a.parent.GraphV5Digest != "sha256:"+hex.EncodeToString(graphSum[:]) {
+		return zero, fail(CodeAdmission, Key{}, "embedded graph digest mismatch")
+	}
+	captureSum := sha256.Sum256(a.raw)
+	manifestSum := sha256.Sum256(planBytes)
+	return RetainedCustodyBinding{
+		Custody: RetainedCustody, GraphSchemaID: graphprovenance.GraphV5SchemaID,
+		GraphDigest: a.parent.GraphV5Digest, GraphByteLength: uint64(len(a.parent.GraphV5Bytes)),
+		CaptureID:    "sha256:" + hex.EncodeToString(captureSum[:]),
+		ManifestID:   "sha256:" + hex.EncodeToString(manifestSum[:]),
+		ResolverKind: ImmutableSourceObjectIdentityV1,
+	}, nil
+}
 
 func Select(admitted Admitted, request Request) (Plan, error) {
 	zero := Plan{}
@@ -244,7 +296,24 @@ func Select(admitted Admitted, request Request) (Plan, error) {
 		}
 		selections = append(selections, selection)
 	}
-	return Plan{Ordering: Ordering, Target: request.Target, Selections: selections}, nil
+	plan := Plan{Ordering: Ordering, Target: request.Target, Selections: selections}
+	planBytes, err := plan.Bytes()
+	if err != nil {
+		return zero, fail(CodeInvalidPlan, Key{}, err.Error())
+	}
+	plan.binding = planSeal(admitted.raw, planBytes)
+	return plan, nil
+}
+
+func planSeal(admittedRaw, planBytes []byte) [32]byte {
+	captureDigest := sha256.Sum256(admittedRaw)
+	preimage := make([]byte, 0, len(PlanSealDomainV1)+1+len(captureDigest)+1+len(planBytes))
+	preimage = append(preimage, PlanSealDomainV1...)
+	preimage = append(preimage, 0)
+	preimage = append(preimage, captureDigest[:]...)
+	preimage = append(preimage, 0)
+	preimage = append(preimage, planBytes...)
+	return sha256.Sum256(preimage)
 }
 
 func lessKey(a, b Key) bool {
