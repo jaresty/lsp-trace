@@ -676,6 +676,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		}
 		if tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			resultID, successID = mcpcontract.UnifiedStructuralContextResultV2ID, mcpcontract.StructuralContextProjectionSuccessID
+			var version struct {
+				SchemaVersion string `json:"schema_version"`
+			}
+			if json.Unmarshal(opResult.Artifact, &version) == nil && version.SchemaVersion == "lsp-trace.unified-structural-context-result.v3" {
+				resultID, successID = mcpcontract.UnifiedStructuralContextResultV3ID, mcpcontract.StructuralContextPagingSuccessID
+			}
 		}
 		if tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily {
 			resultID, successID = mcpcontract.StructuralContextV2ResultID, mcpcontract.StructuralContextSymbolV2SuccessID

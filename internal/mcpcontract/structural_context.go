@@ -70,7 +70,7 @@ func WithStructuralContextV2(m *Manifest) *Manifest {
 		SchemaRegistration{ID: UnifiedStructuralContextResultV3ID, Family: "unified-structural-context-result.v3", Layer: "artifact", Path: "schemas/lsp-trace.unified-structural-context-result.v3.schema.json"},
 		SchemaRegistration{ID: StructuralContextPagingSuccessID, Family: "envelope-structural-context-result.v5", Layer: "envelope", Path: "schemas/envelope-structural-context-result.v5.schema.json"},
 	)
-	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextV2Tool, InputSchemaID: StructuralContextRegexLocatorInputID, EnvelopeSchemaIDs: []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}, ArtifactSchemaIDs: []string{UnifiedStructuralContextResultV2ID}, Advertised: true, Availability: "ENABLED"})
+	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextV2Tool, InputSchemaID: StructuralContextPagingInputID, EnvelopeSchemaIDs: []string{StructuralContextProjectionSuccessID, StructuralContextPagingSuccessID, StructuralContextTraversalDomainErrorID}, ArtifactSchemaIDs: []string{UnifiedStructuralContextResultV2ID, UnifiedStructuralContextResultV3ID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 

@@ -7,7 +7,7 @@ import (
 	"lsp-trace/internal/mcpcontract"
 )
 
-const unifiedStructuralContextInputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context.v5.schema.json"
+const unifiedStructuralContextInputID = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context.v6.schema.json"
 
 func TestADR0008UnifiedContextDiscoveryRED(t *testing.T) {
 	full := NewRegistryWithProfile(false, ToolProfileFull)
@@ -43,7 +43,7 @@ func TestADR0008UnifiedContextDescriptionPreservesDesignIntent(t *testing.T) {
 	if !ok {
 		t.Fatal("ASSERT_UNIFIED_CONTEXT_TOOL_PRESENT")
 	}
-	for _, required := range []string{"exact symbol", "position", "bounded document regex", "READY managed session", "locator-only", "CALLS remain server-reported", "Authority is zero", "source completeness is unknown"} {
+	for _, required := range []string{"exact symbol", "position", "document regex", "READY session", "Locators add no facts", "CALLS are server-reported", "authority 0", "completeness unknown"} {
 		if !strings.Contains(tool.Description, required) {
 			t.Errorf("ASSERT_UNIFIED_CONTEXT_DESCRIPTION[%s]: %q", required, tool.Description)
 		}
@@ -56,7 +56,7 @@ func TestADR0008UnifiedContextUsesNewImmutableInputSchemaRED(t *testing.T) {
 		t.Fatal("ASSERT_UNIFIED_CONTEXT_TOOL_PRESENT")
 	}
 	if tool.InputSchemaID != unifiedStructuralContextInputID {
-		t.Fatalf("ASSERT_UNIFIED_CONTEXT_INPUT_SCHEMA_V5: got %q", tool.InputSchemaID)
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_INPUT_SCHEMA_V6: got %q", tool.InputSchemaID)
 	}
 }
 

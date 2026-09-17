@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestStructuralContextPagingSuccessorsRegisteredButInactive(t *testing.T) {
+func TestStructuralContextPagingSuccessorsRegisteredAndActive(t *testing.T) {
 	for _, id := range []string{SourceProjectionRequestV3ID, StructuralContextPagingInputID, SourceProjectionResultV3ID, UnifiedStructuralContextResultV3ID, StructuralContextPagingSuccessID} {
 		raw, err := SchemaJSON(id)
 		if err != nil || len(raw) == 0 {
@@ -22,15 +22,15 @@ func TestStructuralContextPagingSuccessorsRegisteredButInactive(t *testing.T) {
 		if tool.Name != StructuralContextV2Tool {
 			continue
 		}
-		if tool.InputSchemaID != StructuralContextRegexLocatorInputID || !reflect.DeepEqual(tool.ArtifactSchemaIDs, []string{UnifiedStructuralContextResultV2ID}) || !reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}) {
-			t.Fatalf("ASSERT_PAGING_SUCCESSOR_INACTIVE: %+v", tool)
+		if tool.InputSchemaID != StructuralContextPagingInputID || !reflect.DeepEqual(tool.ArtifactSchemaIDs, []string{UnifiedStructuralContextResultV2ID, UnifiedStructuralContextResultV3ID}) || !reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextPagingSuccessID, StructuralContextTraversalDomainErrorID}) {
+			t.Fatalf("ASSERT_PAGING_SUCCESSOR_ACTIVE: %+v", tool)
 		}
 		return
 	}
-	t.Fatal("ASSERT_PAGING_SUCCESSOR_INACTIVE: operation 36 absent")
+	t.Fatal("ASSERT_PAGING_SUCCESSOR_ACTIVE: operation 36 absent")
 }
 
-func TestSourceProjectionRequestV3RequiresExplicitPaging(t *testing.T) {
+func TestSourceProjectionRequestV3PreservesLegacyAndBoundsExplicitPaging(t *testing.T) {
 	base := map[string]any{
 		"mode": "TARGET", "body": "OMIT", "include_relation_occurrences": false, "include_ancillary": false,
 		"display_range_policy": "FULL_DEFINITION", "privacy_policy_id": "public",
@@ -41,8 +41,8 @@ func TestSourceProjectionRequestV3RequiresExplicitPaging(t *testing.T) {
 		},
 	}
 	raw, _ := json.Marshal(base)
-	if err := ValidateJSON(SourceProjectionRequestV3ID, raw); err == nil {
-		t.Fatal("ASSERT_PAGING_V3_REQUIRES_PAGING")
+	if err := ValidateJSON(SourceProjectionRequestV3ID, raw); err != nil {
+		t.Fatalf("ASSERT_PAGING_V3_LEGACY_COMPATIBLE: %v", err)
 	}
 	base["paging"] = map[string]any{"max_page_bytes": 1024, "max_pages": 4, "max_response_bytes": 8192}
 	raw, _ = json.Marshal(base)

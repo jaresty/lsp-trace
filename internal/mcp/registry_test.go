@@ -145,17 +145,17 @@ func TestSemanticTraversalDescriptionsRouteAndExplainInvocation(t *testing.T) {
 	r := NewRegistryWithProfile(true, ToolProfileCompact)
 	checks := map[string][]string{
 		"lsp_trace_v1_incoming": {
-			"directly observes exact caller relationships",
-			"server call hierarchy",
-			"Textual occurrences do not establish calls",
-			"READY managed session",
+			"Server-reported callers",
+			"exact callee",
+			"text matches never establish CALLS",
+			"READY session",
 			"exact document URI",
 		},
 		"lsp_trace_v1_slice": {
 			"caller/callee neighborhood",
-			"server call hierarchy",
-			"Textual occurrences do not establish calls",
-			"READY managed session",
+			"Server-reported",
+			"text matches never establish CALLS",
+			"READY session",
 			"exact document URI",
 		},
 	}
@@ -283,8 +283,8 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 		"lsp_session_v1_status":              {"current", "state"},
 		"lsp_session_v1_stop":                {"stop", "generation"},
 		"lsp_session_v1_restart":             {"restart", "generation"},
-		"lsp_trace_v1_incoming":              {"prefer", "who calls", "ready"},
-		"lsp_trace_v1_slice":                 {"prefer", "caller/callee", "ready"},
+		"lsp_trace_v1_incoming":              {"server-reported", "callers", "ready"},
+		"lsp_trace_v1_slice":                 {"server-reported", "caller/callee", "ready"},
 		"lsp_trace_v1_inspect":               {"seed", "retained"},
 		"lsp_trace_v1_filter":                {"compare", "two"},
 		"lsp_trace_v1_validate":              {"schema", "validate"},

@@ -11,6 +11,7 @@ import (
 	"lsp-trace/internal/liveprojection"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/sourceprojection"
+	"lsp-trace/internal/sourceprojectionv3"
 	"lsp-trace/internal/transientstructural"
 	"lsp-trace/internal/transientstructuralresult"
 	"lsp-trace/sessionruntime"
@@ -79,6 +80,12 @@ type sourceProjectionRequest struct {
 		MaxDisplayResolutionWork   int `json:"max_display_resolution_work"`
 	} `json:"limits"`
 	PrivacyPolicyID string `json:"privacy_policy_id"`
+	Paging          *struct {
+		Cursor           string `json:"cursor,omitempty"`
+		MaxPageBytes     int    `json:"max_page_bytes"`
+		MaxPages         int    `json:"max_pages"`
+		MaxResponseBytes int    `json:"max_response_bytes"`
+	} `json:"paging,omitempty"`
 }
 
 type structuralContextDelegate interface {
@@ -175,22 +182,54 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		if composed.Status != liveprojection.CompositionComplete {
 			return fail("SOURCE_PROJECTION_FAILED", nil)
 		}
-		policyBytes, err := json.Marshal(request)
+		if request.Paging != nil && (request.Paging.MaxPageBytes <= 0 || request.Paging.MaxPages <= 0 || request.Paging.MaxResponseBytes <= 0) {
+			return fail("SOURCE_PROJECTION_FAILED", nil)
+		}
+		identityRequest := request
+		if request.Paging != nil {
+			identityPaging := *request.Paging
+			identityPaging.Cursor = ""
+			identityRequest.Paging = &identityPaging
+		}
+		policyBytes, err := json.Marshal(identityRequest)
 		if err != nil {
 			return fail("SOURCE_PROJECTION_FAILED", err)
 		}
 		sum := sha256.Sum256(policyBytes)
 		policyID := "sha256:" + hex.EncodeToString(sum[:])
-		projection, err = liveprojection.AssembleV2Bounded(composed, prepared, payload.Transient.SourceSupply.URI, plan, policyID, request.Limits.MaxResponseBytes)
+		assemblyLimit := request.Limits.MaxResponseBytes
+		if request.Paging != nil {
+			assemblyLimit = request.Paging.MaxResponseBytes
+		}
+		v2, err := liveprojection.AssembleV2Bounded(composed, prepared, payload.Transient.SourceSupply.URI, plan, policyID, assemblyLimit)
 		if err != nil {
 			return fail("SOURCE_PROJECTION_FAILED", err)
+		}
+		projection = v2
+		if request.Paging != nil {
+			projection, err = sourceprojectionv3.PaginateV2(v2, policyID, sourceprojectionv3.Limits{
+				MaxPageBytes: uint64(request.Paging.MaxPageBytes), MaxPages: uint64(request.Paging.MaxPages), MaxResponseBytes: uint64(request.Paging.MaxResponseBytes),
+				MaxObjects: uint64(request.Limits.MaxObjects), MaxRanges: uint64(request.Limits.MaxRanges), MaxSourceBytes: uint64(request.Limits.MaxSourceBytes), MaxWork: uint64(request.Limits.MaxWork),
+			}, request.Paging.Cursor)
+			if err != nil {
+				return fail("SOURCE_PROJECTION_FAILED", err)
+			}
+		}
+	}
+	schemaVersion := "lsp-trace.unified-structural-context-result.v2"
+	if target.Projection != nil {
+		var probe struct {
+			Paging json.RawMessage `json:"paging"`
+		}
+		if json.Unmarshal(target.Projection, &probe) == nil && len(probe.Paging) != 0 {
+			schemaVersion = "lsp-trace.unified-structural-context-result.v3"
 		}
 	}
 	envelope := struct {
 		SchemaVersion string          `json:"schema_version"`
 		Structural    json.RawMessage `json:"structural"`
 		Projection    any             `json:"projection,omitempty"`
-	}{SchemaVersion: "lsp-trace.unified-structural-context-result.v2", Structural: json.RawMessage(result.Artifact), Projection: projection}
+	}{SchemaVersion: schemaVersion, Structural: json.RawMessage(result.Artifact), Projection: projection}
 	artifact, err := json.Marshal(envelope)
 	if err != nil {
 		return fail("INVALID_SERVER_RESPONSE", err)

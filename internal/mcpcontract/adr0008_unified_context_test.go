@@ -3,6 +3,7 @@ package mcpcontract
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -61,10 +62,10 @@ func TestADR0008UnifiedStructuralContextProjectionComposition(t *testing.T) {
 	manifest = WithStructuralContextV2(manifest)
 	for _, tool := range manifest.Tools {
 		if tool.Name == StructuralContextV2Tool {
-			if len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != resultID {
+			if !reflect.DeepEqual(tool.ArtifactSchemaIDs, []string{resultID, UnifiedStructuralContextResultV3ID}) {
 				t.Fatalf("ASSERT_UNIFIED_CONTEXT_COMPOSED_RESULT_ONLY: %v", tool.ArtifactSchemaIDs)
 			}
-			if len(tool.EnvelopeSchemaIDs) != 2 || tool.EnvelopeSchemaIDs[0] != StructuralContextProjectionSuccessID {
+			if !reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextPagingSuccessID, StructuralContextTraversalDomainErrorID}) {
 				t.Fatalf("ASSERT_UNIFIED_CONTEXT_SUCCESS_ENVELOPE_REGISTERED: %v", tool.EnvelopeSchemaIDs)
 			}
 			if _, err := SchemaJSON(StructuralContextProjectionSuccessID); err != nil {
@@ -101,8 +102,8 @@ func TestADR0008UnifiedStructuralContextPreservesHistoricalInputSchema(t *testin
 	for _, tool := range manifest.Tools {
 		if tool.Name == StructuralContextV2Tool {
 			found = true
-			if tool.InputSchemaID != StructuralContextRegexLocatorInputID {
-				t.Fatalf("ASSERT_UNIFIED_CONTEXT_MANIFEST_USES_V5: %s", tool.InputSchemaID)
+			if tool.InputSchemaID != StructuralContextPagingInputID {
+				t.Fatalf("ASSERT_UNIFIED_CONTEXT_MANIFEST_USES_V6: %s", tool.InputSchemaID)
 			}
 		}
 	}

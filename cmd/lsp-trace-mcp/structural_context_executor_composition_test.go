@@ -153,6 +153,48 @@ func TestUnifiedStructuralContextV2ExecutorBoundsCompleteUnifiedResponse(t *test
 	}
 }
 
+func TestUnifiedStructuralContextV2ExecutorPagesLiveProjectionV3(t *testing.T) {
+	uri := "file:///repo/a.go"
+	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
+	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
+	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient}}, nil
+	})
+	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
+	projection := map[string]any{
+		"mode": "TARGET", "body": "INCLUDE", "include_relation_occurrences": false, "include_ancillary": false,
+		"display_range_policy": "FULL_DEFINITION", "privacy_policy_id": "public",
+		"limits": map[string]any{"max_objects": 10, "max_ranges": 10, "max_source_bytes": 2, "max_work": 10, "max_response_bytes": 100000, "max_additional_documents": 0, "max_document_requests": 1, "max_document_bytes": 2, "max_total_document_bytes": 2, "max_document_messages": 1, "max_document_acquisition_work": 1, "max_display_resolution_work": 1},
+		"paging": map[string]any{"max_page_bytes": 1000, "max_pages": 20, "max_response_bytes": 100000},
+	}
+	invoke := func() map[string]any {
+		t.Helper()
+		projectionRaw, _ := json.Marshal(projection)
+		input := []byte(`{"uri":"file:///repo/a.go","line":0,"character":0,"projection":` + string(projectionRaw) + `}`)
+		got, failure := e.Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: input})
+		if failure != nil {
+			t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_PAGING: %v", failure)
+		}
+		if err := mcpcontract.ValidateJSON(mcpcontract.UnifiedStructuralContextResultV3ID, got.Artifact); err != nil {
+			t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_PAGING: %v\n%s", err, got.Artifact)
+		}
+		var envelope map[string]any
+		_ = json.Unmarshal(got.Artifact, &envelope)
+		return envelope
+	}
+	first := invoke()
+	page := first["projection"].(map[string]any)
+	if page["complete"] == true || page["next_cursor"] == nil {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_FIRST_PAGE: %v", page)
+	}
+	projection["paging"].(map[string]any)["cursor"] = page["next_cursor"]
+	second := invoke()
+	secondPage := second["projection"].(map[string]any)
+	if secondPage["accounting"].(map[string]any)["pages"].(float64) != 2 {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CONTINUATION: %v", secondPage)
+	}
+}
+
 func TestUnifiedStructuralContextV2ExecutorPreservesDelegateFailure(t *testing.T) {
 	want := &operation.Failure{Code: "TARGET_NOT_FOUND", Diagnostics: []string{"bounded"}}
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
