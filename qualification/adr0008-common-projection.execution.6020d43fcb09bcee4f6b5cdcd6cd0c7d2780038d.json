@@ -1,0 +1,53 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-common-projection-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "historical_review": "qualification/ADR0008-SOURCE-PROJECTION-QUALIFICATION-REVIEW-5d392f97.md",
+  "reviewed_revision": "6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d",
+  "reviewed_at": "2026-09-17T23:21:13Z",
+  "worktree": "/Users/schwa/dev/lsp-trace",
+  "scope": "COMMON_PROJECTION_C01_C06",
+  "execution_status": "EXECUTED_WITH_BLOCKERS",
+  "tests_pass_claimed": true,
+  "common_projection_qualified": false,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 1, "FAIL": 0, "BLOCKED": 5, "NOT_RUN": 0},
+  "historical_global_failure": {"cell": "L04", "verdict": "FAIL", "changed": false},
+  "logs": [
+    {"id":"common-focused","path":"/tmp/lsp-trace-qualification-common-6020d43.log","sha256":"24ba17f9501db84d09232817997cbe2a44ce9b8a221d4f62e38eb0dd279cdb86","outcome":"PASS"},
+    {"id":"transport-focused","path":"/tmp/lsp-trace-qualification-transport-6020d43.log","sha256":"2b5bd256473946d8c543137c822f23ffb0b95b239d1dde0e450475b2390b1631","outcome":"PASS"},
+    {"id":"full-go-suite","path":"/tmp/lsp-trace-qualification-full-6020d43.log","sha256":"62d85851dcc4e2191e348a85a50d79aaf5e40a571368edb2fc510891bbdf031c","outcome":"PASS"},
+    {"id":"release-check","path":"/tmp/lsp-trace-qualification-release-6020d43.log","sha256":"699b8e48a96fb7ca0a0e30b3297d59c8f4d6d21001a828e715bb6186babed314","outcome":"PASS"}
+  ],
+  "executions": [
+    {"command":"go test -count=1 -v ./internal/sourceposition ./internal/sourceprojection ./internal/sourceprojectionv2 ./internal/sourceprojectionv3 ./internal/liveprojection ./internal/retainedprojection ./internal/retainedoperation","outcome":"PASS"},
+    {"command":"go test -count=1 -v ./internal/mcpcontract ./internal/mcp ./cmd/lsp-trace-mcp ./cmd/lsp-trace","outcome":"PASS"},
+    {"command":"go test -count=1 ./...","outcome":"PASS"},
+    {"command":"./scripts/release-check.sh","outcome":"PASS"}
+  ],
+  "fixture": {
+    "path": "internal/sourceprojection/testdata/crossmode-v2",
+    "digests": {
+      "caller.go.txt":"bdab56d3083e785aab435543361bee2c32142096a3ecfade6548ad9e408a1552",
+      "expected.json":"bf0a23db5c3d7a5f5b12724fedacda5d153d772788090aa167730fe541bb544b",
+      "requests.json":"3321d509e717b822e68252a2b5bc55fc93e376582fa73a81316db6286ecf3c6e",
+      "retained-expected.json":"8a6b70b0cfd4736062fe9dbc02a17e82e2750638804c2a134f3eb44d888be66d",
+      "retained-request.json":"e9c7355529e7607bc96ce94721b32dba2d76c70affa06c47fa11626677ea1015",
+      "retained-snapshot-v2.json":"c3c50f9a4a4e342240497d273b7717332523347edfa45e075add85f299b34a4d",
+      "source-object.bin":"ac53c2cec904d856d8cd46553fdd905c0f5e2ee58ce48ab520ea364cdc43aa2f",
+      "source-object.json":"f8e33ffa94ff235cdb3bbc91302ef1dd31500daac304f8d7d94284629d161d6b",
+      "structural.json":"256e71a16fc45e525aaa3178d3f59b42423db4c5a8c99005edd927fe917e6564",
+      "target.go.txt":"2b05f57d6142f6d746f206356233184b9a573c73809a6f12d94e184beb776d35",
+      "variants.json":"a8923361eeb617042ac7adf637572e83e83f5075aa99424e0e629330b6e064ec"
+    }
+  },
+  "cells": [
+    {"id":"C01","verdict":"BLOCKED","evidence":["crossmode V1/V2 exact artifacts and canonical ordering PASS","custody-specific physical identities and exact source bindings PASS"],"limitation":"The qualification packet does not independently mutate every identity field and still lacks a single byte-level permutation oracle over every projected unit form."},
+    {"id":"C02","verdict":"BLOCKED","evidence":["TestExactPositionEncodingsAndLineTerminators PASS for UTF-8/16/32 and LF/CR/CRLF","TestProjectSupportsExactUTF8UTF16UTF32Ranges PASS","crossmode endpoint/relation citations and overlapping emitted spans PASS"],"limitation":"No explicit BOM vector and no single integrated corpus proves every empty/cross-line/non-BMP whole endpoint and relation range with complete independent citation attribution."},
+    {"id":"C03","verdict":"PASS","evidence":["TestCommonProjectionAccountingExactBoundaries PASS","TestPaginateDeterministicReplayAndCumulativeAccounting PASS","TestPaginateZeroAndCumulativeBoundsAreReal PASS","TestPaginateRejectsOversizeDuplicateInvalidAndOverflowRecords PASS","TestProjectionPagingV3ContinuationAndTamperClosed PASS","LIVE V3 paging runtime and schema suites PASS"],"limitation":"none within the C03 predicate"},
+    {"id":"C04","verdict":"BLOCKED","evidence":["TestProjectMutationsCannotChangeGraphBytes PASS","crossmode and V2 assembly authority=0, source_graph_complete=UNKNOWN, graph_facts_added=0 PASS"],"limitation":"The packet does not explicitly execute every required addition/removal/text/overlap mutation against one before/after graph-byte oracle."},
+    {"id":"C05","verdict":"BLOCKED","evidence":["TestPrivacyEligibilityAndMetadataDefault PASS","TestPlanDocumentsPrivacyDeduplicationAndCanonicalOrder PASS","metadata-only performs no retained lookup","raw live supplies and retained private diagnostics are not serialized"],"limitation":"The full restricted, withheld, ancillary, unavailable, unauthorized, arbitrary-path, secret, command, environment, and raw-error marker corpus is not executed as one qualification set."},
+    {"id":"C06","verdict":"BLOCKED","evidence":["cursor tamper, changed request/custody/limits, duplicate record, malformed JSON, overflow, mixed carrier, malformed carrier, invalid UTF boundary, missing binding, and budget mutations fail closed"],"limitation":"The matrix requires exhaustive named compiling RED mutations for all unknown/duplicate/missing fields and invalid identity/range/encoding/privacy/status/limit plus reordered/mixed-page cases; that complete assertion-specific corpus is absent."}
+  ],
+  "global_invariants": {"graph_facts_added":0,"semantic_authority":0,"semantic_accepted":false,"source_graph_complete":"UNKNOWN","canonical_operation_count":41,"compact_advertised_tool_count":12,"operation_44":"FORBIDDEN","schema_change_policy":"ADDITIVE_ONLY"},
+  "claim_ceiling": "This execution qualifies C03 only. COMMON_PROJECTION remains BLOCKED, historical L04 remains FAIL, and implementation_qualified remains false. It does not establish source completeness, authority, acceptance, retained/live production qualification, ADR0007 interoperability, shipment, or deployment."
+}
