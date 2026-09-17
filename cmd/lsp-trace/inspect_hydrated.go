@@ -14,7 +14,9 @@ import (
 	hi "lsp-trace/internal/hydratedinspection"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/retainedoperation"
 	"lsp-trace/internal/source"
+	"lsp-trace/internal/sourceobject"
 )
 
 type hydratedIDs []string
@@ -23,7 +25,7 @@ func (v *hydratedIDs) String() string     { return fmt.Sprint([]string(*v)) }
 func (v *hydratedIDs) Set(s string) error { *v = append(*v, s); return nil }
 
 type hydratedOptions struct {
-	enabled, enablePrivatePaths                          bool
+	enabled, enablePrivatePaths, retainedProjectionV2    bool
 	request                                              hi.Request
 	sidecars                                             hydratedIDs
 	publicationRoot, artifactStore, privateRoot          string
@@ -35,6 +37,7 @@ func addHydratedFlags(fs *flag.FlagSet) *hydratedOptions {
 	o := &hydratedOptions{request: hi.DefaultRequest()}
 	r := &o.request
 	fs.BoolVar(&o.enabled, "hydrated", false, "inspect exact retained graph node/relation context offline")
+	fs.BoolVar(&o.retainedProjectionV2, "retained-projection-v2", false, "execute an explicit retained source-projection V2 request")
 	fs.Var((*hydratedIDs)(&r.NodeIDs), "node", "exact native node ID (repeatable)")
 	fs.Var((*hydratedIDs)(&r.RelationIDs), "relation", "exact native CALLS relation ID (repeatable)")
 	fs.Var((*hydratedIDs)(&r.SiblingRelationIDs), "sibling-relation", "exact native sibling relation ID (repeatable)")
@@ -67,7 +70,7 @@ func addHydratedFlags(fs *flag.FlagSet) *hydratedOptions {
 }
 func hydratedFlag(name string) bool {
 	switch name {
-	case "hydrated", "node", "relation", "sibling-relation", "sidecar-record", "sidecar", "publication-root", "artifact-store", "private-root", "enable-private-paths", "artifact-schema-id", "artifact-digest", "artifact-generation", "artifact-byte-length", "include-bodies", "whole-file", "endpoint-context", "position-encoding", "page", "cursor", "max-input-bytes", "max-output-bytes", "max-body-bytes", "max-origins", "max-spans", "max-work", "max-page-bytes", "max-pages":
+	case "hydrated", "retained-projection-v2", "node", "relation", "sibling-relation", "sidecar-record", "sidecar", "publication-root", "artifact-store", "private-root", "enable-private-paths", "artifact-schema-id", "artifact-digest", "artifact-generation", "artifact-byte-length", "include-bodies", "whole-file", "endpoint-context", "position-encoding", "page", "cursor", "max-input-bytes", "max-output-bytes", "max-body-bytes", "max-origins", "max-spans", "max-work", "max-page-bytes", "max-pages":
 		return true
 	}
 	return false
@@ -94,6 +97,9 @@ func readHydratedFile(name string, limit int) ([]byte, error) {
 }
 func runInspectHydrated(input string, o *hydratedOptions, jsonOutput bool, stdout, stderr io.Writer) int {
 	fail := func(err error) int { fmt.Fprintf(stderr, "inspect hydrated: INVALID_INPUT: %v\n", err); return 1 }
+	if o.retainedProjectionV2 {
+		return runRetainedProjectionV2(input, o, jsonOutput, stdout, fail)
+	}
 	r := o.request
 	r.Input = "preflight"
 	if r.Page && !jsonOutput {
@@ -163,6 +169,54 @@ func runInspectHydrated(input string, o *hydratedOptions, jsonOutput bool, stdou
 		output = []byte(text)
 	}
 	if _, err = stdout.Write(output); err != nil {
+		return fail(err)
+	}
+	return 0
+}
+
+func runRetainedProjectionV2(input string, o *hydratedOptions, jsonOutput bool, stdout io.Writer, fail func(error) int) int {
+	if !jsonOutput {
+		return fail(errors.New("--retained-projection-v2 requires --json"))
+	}
+	if o.artifactStore == "" || o.privateRoot != "" || o.enablePrivatePaths || len(o.sidecars) != 0 {
+		return fail(errors.New("--retained-projection-v2 requires a process-pinned --artifact-store and forbids private-path and sidecar ingress"))
+	}
+	for _, set := range []bool{len(o.request.NodeIDs) != 0, len(o.request.RelationIDs) != 0, len(o.request.SiblingRelationIDs) != 0, len(o.request.SidecarRecordIDs) != 0, o.request.IncludeBodies, o.request.WholeFile, o.request.EndpointContext, o.request.Page, o.request.Cursor != "", o.request.PositionEncoding != ""} {
+		if set {
+			return fail(errors.New("legacy hydrated projection flags are incompatible with --retained-projection-v2"))
+		}
+	}
+	raw, err := readHydratedFile(input, o.request.CorePolicy.MaxInputBytes)
+	if err != nil {
+		return fail(err)
+	}
+	artifactRoot, err := publication.OpenRoot(o.artifactStore)
+	if err != nil {
+		return fail(errors.New("artifact store unavailable"))
+	}
+	defer artifactRoot.Close()
+	lookup, err := sourceobject.New(artifactRoot, 16<<20)
+	if err != nil {
+		return fail(err)
+	}
+	request := operation.Request{Name: operation.InspectHydrated, Input: raw, ArtifactStore: artifactRoot}
+	var publicationRoot *publication.Root
+	if o.publicationRoot != "" {
+		publicationRoot, err = publication.OpenRoot(o.publicationRoot)
+		if err != nil {
+			return fail(errors.New("publication root unavailable"))
+		}
+		defer publicationRoot.Close()
+		request.PublicationRoot = publicationRoot
+	}
+	result, failure := retainedoperation.NewInspectHydratedHandler(lookup)(context.Background(), request)
+	if failure != nil {
+		return fail(failure)
+	}
+	if result.ArtifactSchemaID == "" || len(result.Artifact) == 0 {
+		return fail(errors.New("unexpected retained projection result"))
+	}
+	if _, err = stdout.Write(result.Artifact); err != nil {
 		return fail(err)
 	}
 	return 0

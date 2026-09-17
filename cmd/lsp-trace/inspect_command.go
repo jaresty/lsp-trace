@@ -36,7 +36,7 @@ func validateAllSeedAccounting(projection inspectAllProjection) error {
 	return inspection.ValidateAllSeedAccounting(projection)
 }
 
-const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect CAPTURE_SET_SELECTOR --private-capture-set-root ABSOLUTE_ROOT [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]\n       lsp-trace inspect SELECTOR --hydrated (--publication-root ROOT | --artifact-store ROOT | --private-root ROOT --enable-private-paths) --artifact-schema-id ID --artifact-digest sha256:HEX --artifact-generation g-HEX --artifact-byte-length N [options]"
+const inspectUsage = "usage: lsp-trace inspect SELECTOR_OR_ARTIFACT (--seed LABEL | --all-seeds) [--json]\n       lsp-trace inspect CAPTURE_SET_SELECTOR --private-capture-set-root ABSOLUTE_ROOT [--json]\n       lsp-trace inspect SELECTOR_OR_ARTIFACT --all-seeds --ancillary [--page] [--cursor TOKEN] --json\n       lsp-trace inspect REQUEST.json --hydrated --retained-projection-v2 --artifact-store ROOT [--publication-root ROOT] --json\n       lsp-trace inspect ARTIFACT --hydrated [--node ID | --relation ID | --sibling-relation ID] [options]\n       lsp-trace inspect SELECTOR --hydrated (--publication-root ROOT | --artifact-store ROOT | --private-root ROOT --enable-private-paths) --artifact-schema-id ID --artifact-digest sha256:HEX --artifact-generation g-HEX --artifact-byte-length N [options]"
 
 func runInspect(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
@@ -75,6 +75,10 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 			privateCaptureSetVisited = true
 		}
 	})
+	if hydrated.retainedProjectionV2 && !hydrated.enabled {
+		fmt.Fprintln(stderr, "inspect hydrated: INVALID_INPUT: --retained-projection-v2 requires --hydrated")
+		return 1
+	}
 	if privateCaptureSetVisited {
 		if *privateCaptureSetRoot == "" || legacyVisited || hydratedVisited || hydrated.enabled || *ancillary || fs.NArg() != 0 {
 			fmt.Fprintln(stderr, "inspect capture-set: INVALID_INPUT: private capture-set inspection requires only SELECTOR, --private-capture-set-root ABSOLUTE_ROOT, and optional --json")

@@ -16,15 +16,33 @@ func TestInspectHelpIncludesHydratedOptions(t *testing.T) {
 	if stdout.Len() != 0 {
 		t.Fatalf("help wrote stdout: %q", stdout.String())
 	}
-	for _, want := range []string{"-hydrated", "-node", "-relation", "-seed", "-publication-root", "-artifact-store", "-private-root", "-enable-private-paths"} {
+	for _, want := range []string{"-hydrated", "-retained-projection-v2", "-node", "-relation", "-seed", "-publication-root", "-artifact-store", "-private-root", "-enable-private-paths"} {
 		if !strings.Contains(stderr.String(), want) {
 			t.Fatalf("help omits %q: %q", want, stderr.String())
 		}
 	}
 }
 
+func TestHydratedCLIRetainedProjectionV2RequiresExplicitModeAndReachesSharedFailure(t *testing.T) {
+	request := `{"mode":"RETAINED_SOURCE_PROJECTION","retained_source_evidence":{"inline_snapshot_v2":"{}"},"selection":{"target":{"graph_subject_id":"node","logical_source_id":"file:///source.go"},"selections":[{"graph_subject_id":"node","logical_source_id":"file:///source.go"}]},"projection":{"body":"OMIT","privacy_policy_id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","limits":{"max_source_bytes":1024,"max_ranges":4,"max_objects":4,"max_work":4,"max_response_bytes":4096}},"resolve_limits":{"max_distinct_objects":4,"max_unique_source_bytes":1024,"max_logical_selections":4}}`
+	path := filepath.Join(t.TempDir(), "request.json")
+	if err := os.WriteFile(path, []byte(request), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := t.TempDir()
+	if err := os.Chmod(store, 0700); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := runInspect([]string{path, "--hydrated", "--retained-projection-v2", "--artifact-store", store, "--json"}, &stdout, &stderr)
+	if code == 0 || stdout.Len() != 0 || !strings.Contains(stderr.String(), "retained source projection failed in ADMIT: ADMISSION_FAILED") {
+		t.Fatalf("ASSERT_CLI_RETAINED_V2_SHARED_HANDLER: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+}
+
 func TestHydratedCLIRejectsBeforeIO(t *testing.T) {
 	for _, args := range [][]string{
+		{"absent.json", "--retained-projection-v2", "--artifact-store", "/request-must-not-select-or-activate-a-root", "--json"},
 		{"absent.json", "--hydrated", "--all-seeds"},
 		{"absent.json", "--hydrated", "--seed", "seed"},
 		{"absent.json", "--hydrated", "--seed="},
