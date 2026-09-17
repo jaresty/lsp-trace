@@ -17,6 +17,7 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/transientstructural"
 )
 
 const (
@@ -167,6 +168,22 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return failWithDiagnostics("WORKSPACE_SYMBOL_ABSENT", fmt.Errorf("no exact workspace symbol match"), []string{fmt.Sprintf("exact_matches=0 returned_candidates=%d", len(symbols))})
 	}
 	if len(matches) > 1 {
+		if e.operation == operation.Name("structural_context_v2") {
+			diagnostic := &transientstructural.TargetDiagnostic{
+				ExactMatches:   len(matches),
+				TotalSymbols:   len(symbols),
+				OmittedSymbols: max(0, len(symbols)-len(matches)),
+				Action:         transientstructural.TargetActionFailAmbiguous,
+			}
+			return operation.Result{}, &operation.Failure{
+				Code: "AMBIGUOUS_TARGET",
+				Err: &transientstructural.DomainFailure{
+					Phase:            transientstructural.PhasePreflight,
+					State:            transientstructural.StateAmbiguousTarget,
+					TargetDiagnostic: diagnostic,
+				},
+			}
+		}
 		return failWithDiagnostics("WORKSPACE_SYMBOL_AMBIGUOUS", fmt.Errorf("multiple exact workspace symbol matches"), []string{fmt.Sprintf("exact_matches=%d diagnostics_bounded=true", len(matches))})
 	}
 	location := matches[0].Location

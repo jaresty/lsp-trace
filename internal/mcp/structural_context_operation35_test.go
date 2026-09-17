@@ -9,8 +9,11 @@ import (
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/transientstructural"
 	"lsp-trace/internal/transientstructuralresult"
+	"lsp-trace/sessionruntime"
+	"lsp-trace/structuralcontextsymbolops"
 )
 
 type structuralContextRecordingExecutor struct {
@@ -133,6 +136,55 @@ func TestStructuralContextV2TraversalDiagnosticsDirectGatewayParity(t *testing.T
 				}
 			}
 		})
+	}
+}
+
+type ambiguousStructuralContextSymbolRuntime struct{}
+
+func (ambiguousStructuralContextSymbolRuntime) Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure) {
+	return sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, ""
+}
+
+func (ambiguousStructuralContextSymbolRuntime) Records() []sessionruntime.Record {
+	return []sessionruntime.Record{{SessionID: "s", Generation: 1, State: session.Ready, Routing: sessionruntime.RoutingMetadata{WorkspaceRoot: "/workspace"}}}
+}
+
+func (ambiguousStructuralContextSymbolRuntime) RoundTrip(context.Context, sessionruntime.RoundTripRequest) sessionruntime.RoundTripResult {
+	return sessionruntime.RoundTripResult{Result: json.RawMessage(`[{"name":"run","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":3}}}},{"name":"run","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":2,"character":0},"end":{"line":2,"character":3}}}}]`)}
+}
+
+func TestStructuralContextV2RealSymbolLocatorAmbiguityDirectGatewayParityAndPrivacy(t *testing.T) {
+	delegate := &structuralContextRecordingExecutor{}
+	executor := structuralcontextsymbolops.NewUnifiedV2Executor(ambiguousStructuralContextSymbolRuntime{}, delegate)
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := map[string]any{"symbol": "run", "session_id": "s", "generation": float64(1), "up_depth": float64(0), "down_depth": float64(0), "max_nodes": float64(10), "analysis": map[string]any{"kind": "NEIGHBORHOOD"}, "request_timeout_ms": float64(15000), "timeout_ms": float64(30000)}
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+	if direct.Error != nil || gateway.Error != nil {
+		t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_TYPED_TRANSPORT: direct=%v gateway=%v", direct.Error, gateway.Error)
+	}
+	directEnvelope := direct.Result.(callResult).StructuredContent
+	outer := gateway.Result.(callResult).StructuredContent
+	var gatewayEnvelope envelope
+	if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+		t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_GATEWAY_DECODE: %v", err)
+	}
+	for label, env := range map[string]envelope{"direct": directEnvelope, "gateway": gatewayEnvelope} {
+		raw, _ := json.Marshal(env)
+		if env.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || env.Phase != "PREFLIGHT" || env.State != "AMBIGUOUS_TARGET" || env.TargetDiagnostic == nil {
+			t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_V4: %s", strings.ToUpper(label), raw)
+		}
+		if err := mcpcontract.ValidateJSON(mcpcontract.StructuralContextTraversalDomainErrorID, raw); err != nil {
+			t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_SCHEMA: %v\n%s", strings.ToUpper(label), err, raw)
+		}
+		for _, forbidden := range []string{`"target"`, `"symbol"`, `"run"`, "file:///", "/workspace/", `"line"`, `"character"`, "source", "selector", "provider", "request_timeout_ms"} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_PRIVACY: leaked %q in %s", strings.ToUpper(label), forbidden, raw)
+			}
+		}
+	}
+	if len(delegate.calls) != 0 {
+		t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_NO_CANDIDATE_SELECTION_OR_RETRY: calls=%d", len(delegate.calls))
 	}
 }
 
