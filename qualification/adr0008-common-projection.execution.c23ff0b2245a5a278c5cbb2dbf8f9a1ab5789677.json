@@ -1,0 +1,37 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-common-projection-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "predecessor_execution": "qualification/adr0008-common-projection.execution.6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d.json",
+  "reviewed_revision": "c23ff0b2245a5a278c5cbb2dbf8f9a1ab5789677",
+  "reviewed_at": "2026-09-17T23:30:58Z",
+  "scope": "COMMON_PROJECTION_C01_C06",
+  "execution_status": "EXECUTED_WITH_BLOCKERS",
+  "tests_pass_claimed": true,
+  "common_projection_qualified": false,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 2, "FAIL": 0, "BLOCKED": 4, "NOT_RUN": 0},
+  "historical_global_failure": {"cell":"L04","verdict":"FAIL","changed":false},
+  "logs": [
+    {"id":"c02-focused","path":"/tmp/lsp-trace-qualification-c02-c23ff0b.log","sha256":"a9530115bf0134706835a9451b40668ffeee89142b62728522941198ec79dc90","outcome":"PASS"},
+    {"id":"full-go-suite","path":"/tmp/lsp-trace-qualification-full-c23ff0b.log","sha256":"47a3ed093ba6ef41d4e713ddc2e71f2b113837678139fc49440f275023eb7639","outcome":"PASS"}
+  ],
+  "cells": [
+    {"id":"C01","verdict":"BLOCKED","carried_from":"6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d","limitation":"Every identity field is not independently mutated across all projected-unit forms."},
+    {"id":"C02","verdict":"PASS","evidence":["TestExactPositionEncodingsAndLineTerminators PASS","TestBOMEmptyAndCrossLineRanges PASS","TestProjectSupportsExactUTF8UTF16UTF32Ranges PASS","TestC02IntegratedEncodingRangeCitationCorpusAcrossCustody PASS for UTF-8, UTF-16, and UTF-32"],"limitation":"none within the C02 predicate"},
+    {"id":"C03","verdict":"PASS","carried_from":"qualification/adr0008-common-projection.execution.6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d.json","evidence":["full repository suite re-executed PASS at c23ff0b2245a5a278c5cbb2dbf8f9a1ab5789677"]},
+    {"id":"C04","verdict":"BLOCKED","carried_from":"6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d","limitation":"Every required source mutation is not executed against one graph-byte oracle."},
+    {"id":"C05","verdict":"BLOCKED","carried_from":"6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d","limitation":"The complete privacy and non-disclosure marker corpus is absent."},
+    {"id":"C06","verdict":"BLOCKED","carried_from":"6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d","limitation":"The complete assertion-specific malformed-input and page-mutation corpus is absent."}
+  ],
+  "c02_proof": {
+    "encodings": ["utf-8","utf-16","utf-32"],
+    "line_terminators": ["LF","CR","CRLF"],
+    "bom": "UTF-8_BOM_EXPLICIT",
+    "ranges": ["empty","cross-line","non-BMP","overlapping-endpoint-and-relation"],
+    "citations": ["endpoint","server-reported-relation-occurrence"],
+    "custody_modes": ["LIVE","RETAINED"],
+    "properties": ["whole ranges","independent evidence/display ranges","exact bodies","shared emitted span with both unit IDs","logical parity across custody"]
+  },
+  "global_invariants": {"graph_facts_added":0,"semantic_authority":0,"semantic_accepted":false,"source_graph_complete":"UNKNOWN","canonical_operation_count":41,"compact_advertised_tool_count":12,"operation_44":"FORBIDDEN","schema_change_policy":"ADDITIVE_ONLY"},
+  "claim_ceiling": "This execution qualifies C02 and carries forward C03. COMMON_PROJECTION remains BLOCKED; historical L04 remains FAIL; implementation_qualified remains false."
+}
