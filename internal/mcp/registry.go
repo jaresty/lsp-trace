@@ -448,6 +448,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 	for i := range tools {
 		if tools[i].Name == "lsp_trace_v1_execute" {
 			tools[i].InputSchema = canonicalExecuteInputSchema(tools)
+			tools[i].PresentationInputSchema = executePresentationInputSchema(tools)
 			break
 		}
 	}
@@ -1017,6 +1018,35 @@ func canonicalExecuteInputSchema(tools []Tool) map[string]any {
 		"type":    "object", "additionalProperties": false,
 		"properties": map[string]any{"request": map[string]any{"oneOf": branches}},
 		"required":   []any{"request"},
+	}
+}
+
+func executePresentationInputSchema(tools []Tool) map[string]any {
+	operations := make([]string, 0, len(tools)-1)
+	for _, tool := range tools {
+		if tool.Name != "lsp_trace_v1_execute" {
+			operations = append(operations, tool.Name)
+		}
+	}
+	sort.Strings(operations)
+	operationEnum := make([]any, len(operations))
+	for i, operation := range operations {
+		operationEnum[i] = operation
+	}
+	return map[string]any{
+		"$schema": "https://json-schema.org/draft/2020-12/schema",
+		"type":    "object", "additionalProperties": false,
+		"properties": map[string]any{
+			"request": map[string]any{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]any{
+					"operation": map[string]any{"type": "string", "enum": operationEnum},
+					"arguments": map[string]any{"type": "object"},
+				},
+				"required": []any{"operation", "arguments"},
+			},
+		},
+		"required": []any{"request"},
 	}
 }
 

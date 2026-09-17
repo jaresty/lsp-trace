@@ -117,12 +117,14 @@ Operation numbers are append-only compatibility identities, not lexical display 
 
 Operations 31–37 are append-only. Profile work MUST NOT fill, move, reuse, or reinterpret an existing number. The compact advertised profile remains exactly ten tools and does not advertise operations 35, 36, and 37.
 
-For every operation 1–37:
+For every canonical operation:
 
 1. exact canonical resolution remains available;
-2. `lsp_trace_v1_execute` retains one schema branch for that canonical name (except execute itself, which is not recursively branched);
-3. hidden status changes only direct advertisement, never canonical execute routing;
-4. aliases, schemas, envelopes, limits, availability, and runtime behavior remain unchanged by profile selection.
+2. `lsp_trace_v1_execute` retains one canonical validation branch for that operation (except execute itself, which is not recursively branched);
+3. MCP advertisement uses a bounded dispatcher presentation schema containing the canonical operation-name enum and an opaque arguments object, while dispatch still validates arguments against the selected operation's canonical schema;
+4. the compact profile advertises all 12 compact tools and its serialized tool metadata must remain at or below 40 KiB;
+5. hidden status changes only direct advertisement, never canonical execute routing;
+6. aliases, canonical schemas, envelopes, limits, availability, and runtime behavior remain unchanged by profile selection.
 
 ## Current state and RED boundary
 
