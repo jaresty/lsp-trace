@@ -1,0 +1,84 @@
+{
+  "schema_version": "lsp-trace.private.adr0007-adr0008-interoperability-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "reviewed_revision": "5d392f9710225bd1761af67fd9d851c2ff4b2f82",
+  "reviewed_at": "2026-09-17T19:59:55Z",
+  "branch": "pi-qualification-review",
+  "worktree": "/private/tmp/lsp-trace-qualification-review",
+  "execution_status": "EXECUTED_WITH_BLOCKERS_AND_FAILURE",
+  "tests_pass_claimed": false,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 0, "FAIL": 1, "BLOCKED": 22, "NOT_RUN": 0},
+  "managed_session": {
+    "session_id": "sk1:71207826e6edd64af821c6e9076553df80494aca21d4b6ad0d464c04ea48d5e6",
+    "generation": 1,
+    "workspace_uri": "file:///private/tmp/lsp-trace-qualification-review",
+    "server_profile": "gopls",
+    "position_encoding": "utf-16",
+    "derive_count": 1,
+    "state": "READY"
+  },
+  "binaries": {
+    "fresh_cli": {"path": "/tmp/lsp-trace-qualification-5d392f97", "sha256": "15bf0f115cfb76ade8a496969e635135add543be00bf3987b94b116aa000a272", "revision": "5d392f9710225bd1761af67fd9d851c2ff4b2f82"},
+    "installed_provider": {"sha256": "a12aff35061ddafceff9a0704d83208fd095595d8571f84dcf7285cd0561d665", "revision": "5d392f9710225bd1761af67fd9d851c2ff4b2f82", "provenance": "operator-supplied; child managed-session execution observed"}
+  },
+  "fixture": {
+    "path": "internal/sourceprojection/testdata/crossmode-v2",
+    "digests": {
+      "caller.go.txt": "bdab56d3083e785aab435543361bee2c32142096a3ecfade6548ad9e408a1552",
+      "expected.json": "bf0a23db5c3d7a5f5b12724fedacda5d153d772788090aa167730fe541bb544b",
+      "requests.json": "3321d509e717b822e68252a2b5bc55fc93e376582fa73a81316db6286ecf3c6e",
+      "retained-expected.json": "8a6b70b0cfd4736062fe9dbc02a17e82e2750638804c2a134f3eb44d888be66d",
+      "retained-request.json": "e9c7355529e7607bc96ce94721b32dba2d76c70affa06c47fa11626677ea1015",
+      "retained-snapshot-v2.json": "c3c50f9a4a4e342240497d273b7717332523347edfa45e075add85f299b34a4d",
+      "source-object.bin": "ac53c2cec904d856d8cd46553fdd905c0f5e2ee58ce48ab520ea364cdc43aa2f",
+      "source-object.json": "f8e33ffa94ff235cdb3bbc91302ef1dd31500daac304f8d7d94284629d161d6b",
+      "structural.json": "256e71a16fc45e525aaa3178d3f59b42423db4c5a8c99005edd927fe917e6564",
+      "target.go.txt": "2b05f57d6142f6d746f206356233184b9a573c73809a6f12d94e184beb776d35",
+      "variants.json": "a8923361eeb617042ac7adf637572e83e83f5075aa99424e0e629330b6e064ec"
+    }
+  },
+  "executions": [
+    {"id": "focused-live-fixture", "command": "go test -count=1 -v ./internal/liveprojection -run '^TestCrossModeV2Fixture$'", "outcome": "PASS", "log": "/tmp/lsp-trace-qualification-crossmode-live.log"},
+    {"id": "focused-retained", "command": "go test -count=1 -v ./internal/retainedoperation -run '^TestOperation41CrossMode'", "outcome": "PASS", "log": "/tmp/lsp-trace-qualification-crossmode-retained.log"},
+    {"id": "focused-retained-parity", "command": "go test -count=1 -v ./internal/mcp -run '^TestOperation41RealFixtureDirectGatewayExactParity$'", "outcome": "PASS", "log": "/tmp/lsp-trace-qualification-op41-parity.log"},
+    {"id": "full-go-suite", "command": "go test -count=1 ./...", "outcome": "PASS", "log": "/tmp/lsp-trace-qualification-go-test-all.log"},
+    {"id": "release-check", "command": "./scripts/release-check.sh", "outcome": "PASS", "log": "/tmp/lsp-trace-qualification-release-check.log"},
+    {"id": "managed-target-projection", "command": "lsp_trace_v2_structural_context exact position internal/liveprojection/crossmode_v2_fixture_test.go:59:6 TARGET projection", "outcome": "COMPLETE", "request_id": "sc_b1c0ade21faf3fcaf037a68c171cbe8a"},
+    {"id": "host-domain-failure-rendering", "command": "lsp_trace_v2_structural_context symbol QualificationDefinitelyMissingSymbol_5d392f97", "outcome": "FAIL", "canonical_failure": "invalid operation envelope", "host_decoration": "Expected parameters"}
+  ],
+  "tracks": [
+    {"id": "COMMON_PROJECTION", "status": "BLOCKED"},
+    {"id": "RETAINED_OBJECT_RESOLVER", "status": "BLOCKED"},
+    {"id": "LIVE_SESSION_RESOLVER", "status": "FAIL"},
+    {"id": "ADR0007_INTEROPERABILITY", "status": "BLOCKED"},
+    {"id": "COMPATIBILITY", "status": "BLOCKED"}
+  ],
+  "cells": [
+    {"id":"C01","verdict":"BLOCKED","evidence":["TestCrossModeV2Fixture/ASSERT_CROSSMODE_V2_RUNTIME_EXACT_ARTIFACT PASS","TestCrossModeV2Fixture/ASSERT_CROSSMODE_V2_PERMUTATION_INVARIANCE PASS"],"limitation":"Permutation assertion compares decoded JSON equality, not byte-identical canonical output; every identity-field sensitivity is not independently exercised."},
+    {"id":"C02","verdict":"BLOCKED","evidence":["TestOperation41CrossModeRetainedOracle PASS: utf-16, independent evidence/item/selection/display ranges"],"limitation":"No qualifying UTF-8/UTF-32, BOM, newline-family, empty/cross-line, and full citation corpus."},
+    {"id":"C03","verdict":"BLOCKED","evidence":["TestOperation41CrossModeAdversarialAtomicFailures PASS for selected object/range/source/work/response limits"],"limitation":"No complete object/node/page/page-count and exact observed/limit accounting proof across all required resources."},
+    {"id":"C04","verdict":"BLOCKED","evidence":["fixture and managed projection retain authority=0, source_graph_complete=UNKNOWN, graph_facts_added=0"],"limitation":"No before/after graph-byte oracle over source additions, removals, reorderings, text, and overlap changes."},
+    {"id":"C05","verdict":"BLOCKED","evidence":["fixture variants include privacy-withheld; retained oracle checks body-returned/body-withheld accounting"],"limitation":"No complete policy/opt-in corpus proving restricted, ancillary, unauthorized, locator, secret, command, environment, and raw-error non-disclosure."},
+    {"id":"C06","verdict":"BLOCKED","evidence":["TestOperation41CrossModeAdversarialAtomicFailures PASS for mixed carrier, malformed carrier, invalid UTF-16 boundary, and missing subject binding"],"limitation":"Required named compiling RED corpus for every unknown/duplicate/missing field and all invalid identity/range/encoding/privacy/status/limit/page cases is incomplete."},
+    {"id":"R01","verdict":"BLOCKED","evidence":["TestOperation41CrossModeRetainedOracle PASS on retained V2 fixture"],"limitation":"No exact admitted V5 manifest binding and predecessor V2/V3 reader/hash inventory satisfying every clause."},
+    {"id":"R02","verdict":"BLOCKED","evidence":["retained exact source-object lookup executes once and verifies expected artifact"],"limitation":"No qualifying commit/tree/blob, dirty buffer, non-Git, digest-only unavailable, and alternate-class rejection receipt set."},
+    {"id":"R03","verdict":"BLOCKED","evidence":["missing-source and corrupt-source typed-failure subtests PASS"],"limitation":"Withheld, collected, shallow-history, rewritten-history, GC and all prohibited fallback outcomes are not jointly qualified."},
+    {"id":"R04","verdict":"BLOCKED","evidence":["release check exercises unrelated atomic no-replace publication guards"],"limitation":"No source-projection owner-only race receipt or complete cold offline replay packet with tampered/mixed/reordered negative cases."},
+    {"id":"L01","verdict":"BLOCKED","evidence":["managed session sk1:71207826e6edd64af821c6e9076553df80494aca21d4b6ad0d464c04ea48d5e6 generation 1 projected exact admitted target bytes"],"limitation":"No qualifying post-request mutation, document substitution, ambient-checkout, or retained-fallback negative execution."},
+    {"id":"L02","verdict":"BLOCKED","evidence":["cross-mode variants enumerate document/projection/response limits"],"limitation":"Synthetic fixture enumeration does not execute every independent structural/projection budget and partial-frontier assertion."},
+    {"id":"L03","verdict":"BLOCKED","evidence":["exact-position child-session TARGET projection completed"],"limitation":"No attributable symbol/position TARGET and snippet trial adjudication showing whether live constraints reshape and requalify common/retained contracts."},
+    {"id":"L04","verdict":"FAIL","evidence":["valid child-session symbol request produced typed domain failure 'invalid operation envelope' and host appended 'Expected parameters'"],"limitation":"This FAIL is host-renderer-specific; canonical server envelope correctness is not disproved."},
+    {"id":"I01","verdict":"BLOCKED","evidence":[],"limitation":"Typed ADR0007 admissions for TARGET/NEIGHBORHOOD/Describe/Embed/index-build do not exist and execute."},
+    {"id":"I02","verdict":"BLOCKED","evidence":[],"limitation":"Canonical cache equality/invalidation implementation and vectors are absent."},
+    {"id":"I03","verdict":"BLOCKED","evidence":[],"limitation":"ADR0007 endpoint/relation citation schema and executing provenance references are absent."},
+    {"id":"I04","verdict":"BLOCKED","evidence":[],"limitation":"Retained/live cross-corpus admission mapping and exact coexistence execution are absent."},
+    {"id":"I05","verdict":"BLOCKED","evidence":[],"limitation":"ADR0007 terminal accounting and denominator mapping execution are absent."},
+    {"id":"I06","verdict":"BLOCKED","evidence":[],"limitation":"ADR0007 semantic output authority/graph-fact guard does not exist and execute."},
+    {"id":"I07","verdict":"BLOCKED","evidence":[],"limitation":"Privacy/body/deletion ownership and executable dependent-artifact deletion/invalidation policy are absent."},
+    {"id":"X01","verdict":"BLOCKED","evidence":["TestToolProfilesPreserveFullAndCompactAdvertisement passed in release check","release check schema-byte guards passed","full go suite passed"],"limitation":"No one current execution packet proves every predecessor hash, operation-33 retained-only boundary, legacy route removal, and ADR0007 core-integration absence clause."},
+    {"id":"X02","verdict":"BLOCKED","evidence":["TestOperation41RealFixtureDirectGatewayExactParity PASS"],"limitation":"Retained direct/gateway parity passes, but unified operation-36 direct MCP/canonical execute/CLI projection and typed-failure parity is not fully executed; host rendering separately FAILS L04."}
+  ],
+  "global_invariants": {"graph_facts_added":0,"semantic_authority":0,"semantic_accepted":false,"source_graph_complete":"UNKNOWN","canonical_operation_count":41,"compact_advertised_tool_count":12,"operation_44":"FORBIDDEN","schema_change_policy":"ADDITIVE_ONLY"},
+  "claim_ceiling": "This execution records partial current-revision evidence and one qualifying host-renderer failure. It does not qualify implementation, retained or live projection, ADR0007 interoperability, source completeness, authority, acceptance, shipment, deployment, or production behavior."
+}
