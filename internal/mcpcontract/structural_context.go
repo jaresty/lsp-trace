@@ -35,6 +35,11 @@ const (
 	StructuralContextProjectionSuccessID     = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v4.schema.json"
 	StructuralContextProjectionDomainErrorID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v3.schema.json"
 	StructuralContextTraversalDomainErrorID  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-domain-error.v4.schema.json"
+	SourceProjectionRequestV3ID              = "https://jaresty.github.io/lsp-trace/mcp/schemas/source-projection-request.v3.schema.json"
+	StructuralContextPagingInputID           = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-structural-context.v6.schema.json"
+	SourceProjectionResultV3ID               = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.source-projection.v3.schema.json"
+	UnifiedStructuralContextResultV3ID       = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.unified-structural-context-result.v3.schema.json"
+	StructuralContextPagingSuccessID         = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-structural-context-result.v5.schema.json"
 )
 
 func WithStructuralContextV2(m *Manifest) *Manifest {
@@ -59,6 +64,11 @@ func WithStructuralContextV2(m *Manifest) *Manifest {
 		SchemaRegistration{ID: StructuralContextProjectionSuccessID, Family: "envelope-structural-context-result.v4", Layer: "envelope", Path: "schemas/envelope-structural-context-result.v4.schema.json"},
 		SchemaRegistration{ID: StructuralContextProjectionDomainErrorID, Family: "envelope-structural-context-domain-error.v3", Layer: "envelope", Path: "schemas/envelope-structural-context-domain-error.v3.schema.json"},
 		SchemaRegistration{ID: StructuralContextTraversalDomainErrorID, Family: "envelope-structural-context-domain-error.v4", Layer: "envelope", Path: "schemas/envelope-structural-context-domain-error.v4.schema.json"},
+		SchemaRegistration{ID: SourceProjectionRequestV3ID, Family: "source-projection-request.v3", Layer: "input", Path: "schemas/source-projection-request.v3.schema.json"},
+		SchemaRegistration{ID: StructuralContextPagingInputID, Family: "input-structural-context.v6", Layer: "input", Path: "schemas/input-structural-context.v6.schema.json"},
+		SchemaRegistration{ID: SourceProjectionResultV3ID, Family: "source-projection.v3", Layer: "artifact", Path: "schemas/lsp-trace.source-projection.v3.schema.json"},
+		SchemaRegistration{ID: UnifiedStructuralContextResultV3ID, Family: "unified-structural-context-result.v3", Layer: "artifact", Path: "schemas/lsp-trace.unified-structural-context-result.v3.schema.json"},
+		SchemaRegistration{ID: StructuralContextPagingSuccessID, Family: "envelope-structural-context-result.v5", Layer: "envelope", Path: "schemas/envelope-structural-context-result.v5.schema.json"},
 	)
 	c.Tools = append(c.Tools, ToolContract{Name: StructuralContextV2Tool, InputSchemaID: StructuralContextRegexLocatorInputID, EnvelopeSchemaIDs: []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}, ArtifactSchemaIDs: []string{UnifiedStructuralContextResultV2ID}, Advertised: true, Availability: "ENABLED"})
 	return &c
@@ -78,7 +88,7 @@ func WithStructuralContext(m *Manifest) *Manifest {
 	return &c
 }
 
-//go:embed testdata/schemas/input-structural-context.v1.schema.json testdata/schemas/lsp-trace.transient-structural-result.v1.schema.json testdata/schemas/envelope-structural-context-result.v1.schema.json testdata/schemas/envelope-structural-context-domain-error.v1.schema.json testdata/schemas/input-structural-context.v2.schema.json testdata/schemas/input-structural-context.v3.schema.json testdata/schemas/input-structural-context.v4.schema.json testdata/schemas/input-structural-context.v5.schema.json testdata/schemas/source-projection-request.v1.schema.json testdata/schemas/source-projection-request.v2.schema.json testdata/schemas/lsp-trace.transient-structural-result.v2.schema.json testdata/schemas/lsp-trace.source-projection.v1.schema.json testdata/schemas/lsp-trace.source-projection.v2.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v1.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v3.schema.json testdata/schemas/envelope-structural-context-result.v4.schema.json testdata/schemas/envelope-structural-context-domain-error.v2.schema.json testdata/schemas/envelope-structural-context-domain-error.v3.schema.json testdata/schemas/envelope-structural-context-domain-error.v4.schema.json
+//go:embed testdata/schemas/input-structural-context.v1.schema.json testdata/schemas/lsp-trace.transient-structural-result.v1.schema.json testdata/schemas/envelope-structural-context-result.v1.schema.json testdata/schemas/envelope-structural-context-domain-error.v1.schema.json testdata/schemas/input-structural-context.v2.schema.json testdata/schemas/input-structural-context.v3.schema.json testdata/schemas/input-structural-context.v4.schema.json testdata/schemas/input-structural-context.v5.schema.json testdata/schemas/source-projection-request.v1.schema.json testdata/schemas/source-projection-request.v2.schema.json testdata/schemas/lsp-trace.transient-structural-result.v2.schema.json testdata/schemas/lsp-trace.source-projection.v1.schema.json testdata/schemas/lsp-trace.source-projection.v2.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v1.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v2.schema.json testdata/schemas/envelope-structural-context-result.v3.schema.json testdata/schemas/envelope-structural-context-result.v4.schema.json testdata/schemas/envelope-structural-context-domain-error.v2.schema.json testdata/schemas/envelope-structural-context-domain-error.v3.schema.json testdata/schemas/envelope-structural-context-domain-error.v4.schema.json testdata/schemas/source-projection-request.v3.schema.json testdata/schemas/input-structural-context.v6.schema.json testdata/schemas/lsp-trace.source-projection.v3.schema.json testdata/schemas/lsp-trace.unified-structural-context-result.v3.schema.json testdata/schemas/envelope-structural-context-result.v5.schema.json
 var structuralContextFiles embed.FS
 
 func structuralContextSchemaPaths() map[string]string {
@@ -104,6 +114,11 @@ func structuralContextSchemaPaths() map[string]string {
 		StructuralContextV2DomainErrorID:         "testdata/schemas/envelope-structural-context-domain-error.v2.schema.json",
 		StructuralContextProjectionDomainErrorID: "testdata/schemas/envelope-structural-context-domain-error.v3.schema.json",
 		StructuralContextTraversalDomainErrorID:  "testdata/schemas/envelope-structural-context-domain-error.v4.schema.json",
+		SourceProjectionRequestV3ID:              "testdata/schemas/source-projection-request.v3.schema.json",
+		StructuralContextPagingInputID:           "testdata/schemas/input-structural-context.v6.schema.json",
+		SourceProjectionResultV3ID:               "testdata/schemas/lsp-trace.source-projection.v3.schema.json",
+		UnifiedStructuralContextResultV3ID:       "testdata/schemas/lsp-trace.unified-structural-context-result.v3.schema.json",
+		StructuralContextPagingSuccessID:         "testdata/schemas/envelope-structural-context-result.v5.schema.json",
 	}
 }
 
