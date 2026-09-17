@@ -129,10 +129,10 @@ func TestADR0008SuccessorReferenceClosureAndOperation36Activation(t *testing.T) 
 	if tool == nil {
 		t.Fatal("ASSERT_SUCCESSOR_REFERENCE_CLOSURE_WITHOUT_RUNTIME_SWITCH: tool absent")
 	}
-	if tool.InputSchemaID != StructuralContextProjectionInputID ||
+	if tool.InputSchemaID != StructuralContextRegexLocatorInputID ||
 		!reflect.DeepEqual(tool.ArtifactSchemaIDs, []string{UnifiedStructuralContextResultV2ID}) ||
 		!reflect.DeepEqual(tool.EnvelopeSchemaIDs, []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID}) {
-		t.Fatalf("ASSERT_OPERATION36_V4_V2_ACTIVATED: %+v", tool)
+		t.Fatalf("ASSERT_OPERATION36_V5_V2_ACTIVATED: %+v", tool)
 	}
 	compiler, _, err := registeredCompiler(manifest)
 	if err != nil {

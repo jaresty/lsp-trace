@@ -77,6 +77,14 @@ func gatewayMatrixCases() []gatewayMatrixCase {
 		{"derive-workspace", "lsp_session_v1_derive_workspace", map[string]any{"session_id": "parent", "generation": 1, "workspace_uri": "file:///workspace-child"}},
 		{"lifecycle", "lsp_session_v1_list", map[string]any{}},
 		{"traversal", "lsp_trace_v1_incoming", map[string]any{"session_id": "s", "uri": "file:///workspace/main.go", "symbol": "Root"}},
+		{"v2-structural-context-regex", mcpcontract.StructuralContextV2Tool, map[string]any{
+			"session_id": "s", "generation": 1, "down_depth": 1, "up_depth": 0, "max_nodes": 8,
+			"timeout_ms": 1000, "request_timeout_ms": 500, "analysis": map[string]any{"kind": "NEIGHBORHOOD"},
+			"regex_locator": map[string]any{
+				"uri": "file:///workspace/main.go", "pattern": `func\s+Root`, "match_index": 0,
+				"limits": map[string]any{"max_document_bytes": 4096, "max_matches": 8, "max_pattern_bytes": 128, "max_work": 4096},
+			},
+		}},
 		{"v1-slice", "lsp_trace_v1_slice", map[string]any{"session_id": "s", "start_mode": "at", "uri": "file:///workspace/main.go", "symbol": "Root"}},
 		{"hydrated", "lsp_trace_v1_inspect_hydrated", map[string]any{"input": `{}`, "node_ids": []any{"n"}}},
 	}
@@ -84,7 +92,7 @@ func gatewayMatrixCases() []gatewayMatrixCase {
 
 func matrixServer(registry *Registry, executor *gatewayMatrixExecutor) *Server {
 	families := map[ExecutorFamily]Executor{}
-	for _, family := range []ExecutorFamily{OfflineExecutorFamily, LifecycleExecutorFamily, IncomingExecutorFamily, SliceExecutorFamily, AcquisitionV2ExecutorFamily} {
+	for _, family := range []ExecutorFamily{OfflineExecutorFamily, LifecycleExecutorFamily, IncomingExecutorFamily, SliceExecutorFamily, AcquisitionV2ExecutorFamily, StructuralContextV2ExecutorFamily} {
 		families[family] = executor
 	}
 	return &Server{Registry: registry, Executor: executor, Executors: families}
@@ -135,8 +143,19 @@ func TestExecuteGatewayNestedDirectMatrix(t *testing.T) {
 				directEnv := direct.Result.(callResult).StructuredContent
 				directBytes, _ := json.Marshal(directEnv)
 				sum := sha256.Sum256([]byte(delegated))
-				if delegated != string(directBytes) || env["delegated_digest"] != "sha256:"+hex.EncodeToString(sum[:]) {
-					t.Fatalf("%s exact bytes/digest: delegated=%s direct=%s env=%v", assertion, delegated, directBytes, env)
+				digestMatches := env["delegated_digest"] == "sha256:"+hex.EncodeToString(sum[:])
+				responsesMatch := delegated == string(directBytes)
+				if tc.tool == mcpcontract.StructuralContextV2Tool {
+					var delegatedValue, directValue map[string]any
+					if json.Unmarshal([]byte(delegated), &delegatedValue) != nil || json.Unmarshal(directBytes, &directValue) != nil {
+						t.Fatalf("%s structural response decode: delegated=%s direct=%s", assertion, delegated, directBytes)
+					}
+					delete(delegatedValue, "request_id")
+					delete(directValue, "request_id")
+					responsesMatch = reflect.DeepEqual(delegatedValue, directValue)
+				}
+				if !responsesMatch || !digestMatches {
+					t.Fatalf("%s exact semantic response/delegated digest: delegated=%s direct=%s env=%v", assertion, delegated, directBytes, env)
 				}
 				if env["requested_tool"] != tc.tool || env["delegated_outcome"] != directEnv.Outcome || env["delegated_is_error"] != directEnv.IsError {
 					t.Fatalf("%s outcome/isError: %v delegated=%v", assertion, env, directEnv)

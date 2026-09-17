@@ -3,6 +3,7 @@ package transientstructural
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -20,14 +21,15 @@ import (
 )
 
 type structuralWire struct {
-	in        *io.PipeReader
-	stdin     *io.PipeWriter
-	out       *io.PipeWriter
-	stdout    *io.PipeReader
-	uri       string
-	mu        sync.Mutex
-	methods   []string
-	responses map[string]json.RawMessage
+	in               *io.PipeReader
+	stdin            *io.PipeWriter
+	out              *io.PipeWriter
+	stdout           *io.PipeReader
+	uri              string
+	mu               sync.Mutex
+	methods          []string
+	preparePositions []string
+	responses        map[string]json.RawMessage
 }
 
 func newStructuralWire(uri string, responses map[string]json.RawMessage) *structuralWire {
@@ -60,6 +62,16 @@ func (w *structuralWire) serve() {
 			outer := map[string]any{"name": "Outer", "kind": 5, "range": w.positionRange(0, 0, 12), "selectionRange": w.positionRange(0, 5, 10), "children": []any{w.documentSymbol("F", 1)}}
 			result, _ = json.Marshal([]any{outer})
 		case "textDocument/prepareCallHierarchy":
+			var params struct {
+				Position struct {
+					Line      uint32 `json:"line"`
+					Character uint32 `json:"character"`
+				} `json:"position"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			w.mu.Lock()
+			w.preparePositions = append(w.preparePositions, fmt.Sprintf("%d:%d", params.Position.Line, params.Position.Character))
+			w.mu.Unlock()
 			result, _ = json.Marshal([]any{w.item("F", 1)})
 		case "callHierarchy/outgoingCalls":
 			var params struct {
@@ -124,6 +136,11 @@ func (w *structuralWire) observedMethods() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return append([]string(nil), w.methods...)
+}
+func (w *structuralWire) observedPreparePositions() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]string(nil), w.preparePositions...)
 }
 func (w *structuralWire) Teardown(context.Context) managedprocess.TeardownObservation {
 	_ = w.stdin.Close()
@@ -407,6 +424,39 @@ func TestExecuteTargetZeroAndMultipleMapExactly(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecuteRegexLocatorManagedWire(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
+		request := baseWireRequest(started, uri)
+		request.Target.Line, request.Target.Character = nil, nil
+		request.Target.Regex = &RegexLocator{Pattern: `func (F)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 2048}
+		result, failure := Execute(context.Background(), manager, request)
+		if failure != nil || result.State != StateComplete {
+			t.Fatalf("ASSERT_REGEX_MANAGED_COMPLETE: result=%+v failure=%+v", result, failure)
+		}
+		wantMethods := []string{"textDocument/didOpen", "textDocument/prepareCallHierarchy", "callHierarchy/outgoingCalls", "callHierarchy/incomingCalls"}
+		if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, wantMethods) {
+			t.Fatalf("ASSERT_REGEX_EXACTLY_ONCE_PREPARE: got=%v want=%v", got, wantMethods)
+		}
+		if got := starter.children[0].observedPreparePositions(); !reflect.DeepEqual(got, []string{"1:5"}) {
+			t.Fatalf("ASSERT_REGEX_SELECTED_EXACT_POSITION: %v", got)
+		}
+	})
+	t.Run("absent", func(t *testing.T) {
+		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
+		request := baseWireRequest(started, uri)
+		request.Target.Line, request.Target.Character = nil, nil
+		request.Target.Regex = &RegexLocator{Pattern: `func (Missing)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 2048}
+		result, failure := Execute(context.Background(), manager, request)
+		if failure == nil || failure.Phase != PhasePreflight || failure.State != StateTargetNotFound || !reflect.DeepEqual(result, Result{}) {
+			t.Fatalf("ASSERT_REGEX_ABSENT_ZERO_RESULT: result=%+v failure=%+v", result, failure)
+		}
+		if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, []string{"textDocument/didOpen"}) {
+			t.Fatalf("ASSERT_REGEX_FAILURE_ZERO_TRAVERSAL: %v", got)
+		}
+	})
 }
 
 func TestExecuteExactWireSequence(t *testing.T) {

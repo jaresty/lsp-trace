@@ -101,8 +101,8 @@ func TestADR0008UnifiedStructuralContextPreservesHistoricalInputSchema(t *testin
 	for _, tool := range manifest.Tools {
 		if tool.Name == StructuralContextV2Tool {
 			found = true
-			if tool.InputSchemaID != StructuralContextProjectionInputID {
-				t.Fatalf("ASSERT_UNIFIED_CONTEXT_MANIFEST_USES_V4: %s", tool.InputSchemaID)
+			if tool.InputSchemaID != StructuralContextRegexLocatorInputID {
+				t.Fatalf("ASSERT_UNIFIED_CONTEXT_MANIFEST_USES_V5: %s", tool.InputSchemaID)
 			}
 		}
 	}

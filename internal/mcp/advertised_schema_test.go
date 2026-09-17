@@ -10,7 +10,7 @@ import (
 )
 
 func TestStructuralContextV2AdvertisementIsSelfContained(t *testing.T) {
-	canonicalBefore, err := mcpcontract.SchemaJSON(mcpcontract.StructuralContextProjectionInputID)
+	canonicalBefore, err := mcpcontract.SchemaJSON(mcpcontract.StructuralContextRegexLocatorInputID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestStructuralContextV2AdvertisementIsSelfContained(t *testing.T) {
 		}
 	}
 
-	canonicalAfter, err := mcpcontract.SchemaJSON(mcpcontract.StructuralContextProjectionInputID)
+	canonicalAfter, err := mcpcontract.SchemaJSON(mcpcontract.StructuralContextRegexLocatorInputID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -34,7 +34,20 @@ type structuralContextInput struct {
 	MaxMessages      int             `json:"max_messages,omitempty"`
 	MaxBytes         int64           `json:"max_bytes,omitempty"`
 	Projection       json.RawMessage `json:"projection,omitempty"`
-	Analysis         struct {
+	RegexLocator     *struct {
+		URI            string `json:"uri"`
+		Pattern        string `json:"pattern"`
+		MatchIndex     int    `json:"match_index"`
+		CaptureGroup   int    `json:"capture_group,omitempty"`
+		ExpectedDigest string `json:"expected_document_digest,omitempty"`
+		Limits         struct {
+			MaxDocumentBytes int `json:"max_document_bytes"`
+			MaxMatches       int `json:"max_matches"`
+			MaxPatternBytes  int `json:"max_pattern_bytes"`
+			MaxWork          int `json:"max_work"`
+		} `json:"limits"`
+	} `json:"regex_locator,omitempty"`
+	Analysis struct {
 		Kind      string `json:"kind"`
 		Direction string `json:"direction,omitempty"`
 		Depth     int    `json:"depth,omitempty"`
@@ -209,7 +222,12 @@ func (e *structuralContextExecutor) Execute(parent context.Context, op operation
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(in.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	q := transientstructural.Request{SessionID: id, Generation: generation, Target: transientstructural.Target{URI: in.URI, Symbol: in.Symbol, Line: in.Line, Character: in.Character}, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, CaptureSupply: len(in.Projection) != 0, Analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisKind(in.Analysis.Kind), Direction: transientstructural.Direction(in.Analysis.Direction), MaxDepth: in.Analysis.Depth}}
+	target := transientstructural.Target{URI: in.URI, Symbol: in.Symbol, Line: in.Line, Character: in.Character}
+	if in.RegexLocator != nil {
+		target.URI = in.RegexLocator.URI
+		target.Regex = &transientstructural.RegexLocator{Pattern: in.RegexLocator.Pattern, MatchIndex: in.RegexLocator.MatchIndex, CaptureGroup: in.RegexLocator.CaptureGroup, ExpectedDigest: in.RegexLocator.ExpectedDigest, MaxDocumentBytes: in.RegexLocator.Limits.MaxDocumentBytes, MaxMatches: in.RegexLocator.Limits.MaxMatches, MaxPatternBytes: in.RegexLocator.Limits.MaxPatternBytes, MaxWork: in.RegexLocator.Limits.MaxWork}
+	}
+	q := transientstructural.Request{SessionID: id, Generation: generation, Target: target, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, CaptureSupply: len(in.Projection) != 0 || in.RegexLocator != nil, Analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisKind(in.Analysis.Kind), Direction: transientstructural.Direction(in.Analysis.Direction), MaxDepth: in.Analysis.Depth}}
 	got, domain := transientstructural.Execute(ctx, e.runtime.Manager, q)
 	if domain != nil {
 		return fail(string(domain.State), domain)

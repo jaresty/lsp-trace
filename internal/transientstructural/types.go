@@ -67,11 +67,23 @@ const (
 	OmissionDuplicate       OmissionReason = "DEDUPLICATION"
 )
 
+type RegexLocator struct {
+	Pattern          string
+	MatchIndex       int
+	CaptureGroup     int
+	ExpectedDigest   string
+	MaxDocumentBytes int
+	MaxMatches       int
+	MaxPatternBytes  int
+	MaxWork          int
+}
+
 type Target struct {
 	URI       string
 	Symbol    string
 	Line      *uint32
 	Character *uint32
+	Regex     *RegexLocator
 }
 
 type AnalysisRequest struct {

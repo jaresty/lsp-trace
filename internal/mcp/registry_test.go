@@ -146,14 +146,17 @@ func TestSemanticTraversalDescriptionsRouteAndExplainInvocation(t *testing.T) {
 	checks := map[string][]string{
 		"lsp_trace_v1_incoming": {
 			"directly observes exact caller relationships",
+			"server call hierarchy",
 			"Textual occurrences do not establish calls",
+			"READY managed session",
 			"exact document URI",
-			"workspace-root URI is invalid",
 		},
 		"lsp_trace_v1_slice": {
-			"directly observes caller and callee dependency neighborhoods",
+			"caller/callee neighborhood",
+			"server call hierarchy",
+			"Textual occurrences do not establish calls",
+			"READY managed session",
 			"exact document URI",
-			"workspace-root URI is invalid",
 		},
 	}
 	for name, phrases := range checks {
@@ -161,10 +164,7 @@ func TestSemanticTraversalDescriptionsRouteAndExplainInvocation(t *testing.T) {
 		if !ok {
 			t.Fatalf("ASSERT_SEMANTIC_ROUTING_DESCRIPTION[%s]: tool missing", name)
 		}
-		for _, phrase := range append(phrases,
-			"Configured aliases are valid session_id values",
-			"Omit detail for bounded inline output; detail=compact requires output_selector",
-		) {
+		for _, phrase := range phrases {
 			if !strings.Contains(tool.Description, phrase) {
 				t.Errorf("ASSERT_SEMANTIC_ROUTING_DESCRIPTION[%s]: missing %q in %q", name, phrase, tool.Description)
 			}
@@ -284,7 +284,7 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 		"lsp_session_v1_stop":                {"stop", "generation"},
 		"lsp_session_v1_restart":             {"restart", "generation"},
 		"lsp_trace_v1_incoming":              {"prefer", "who calls", "ready"},
-		"lsp_trace_v1_slice":                 {"prefer", "outgoing", "ready"},
+		"lsp_trace_v1_slice":                 {"prefer", "caller/callee", "ready"},
 		"lsp_trace_v1_inspect":               {"seed", "retained"},
 		"lsp_trace_v1_filter":                {"compare", "two"},
 		"lsp_trace_v1_validate":              {"schema", "validate"},

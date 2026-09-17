@@ -80,6 +80,19 @@ func TestExecutionTransportDelegatesOnceAndPreservesRequest(t *testing.T) {
 	}
 }
 
+func TestExecutionTransportPreservesStructuralContextRegexRequest(t *testing.T) {
+	const input = `{"operation":"lsp_trace_v2_structural_context","arguments":{"session_id":"s","generation":1,"down_depth":1,"up_depth":0,"max_nodes":8,"timeout_ms":1000,"request_timeout_ms":500,"analysis":{"kind":"NEIGHBORHOOD"},"regex_locator":{"uri":"file:///workspace/main.go","pattern":"func\\s+Root","match_index":0,"limits":{"max_document_bytes":4096,"max_matches":8,"max_pattern_bytes":128,"max_work":4096}}}}`
+	executor := &recordingExecutor{result: operation.Result{Value: map[string]any{"accepted": true}}}
+	var stdout, stderr bytes.Buffer
+	code := runExecutionWithExecutor(context.Background(), []string{"--request-id", "regex-1", "--input", "-"}, strings.NewReader(input), &stdout, &stderr, executor)
+	if code != executionExitSuccess || executor.calls != 1 || stderr.Len() != 0 {
+		t.Fatalf("ASSERT_EXECUTION_STRUCTURAL_CONTEXT_REGEX_DELEGATES: code=%d calls=%d stderr=%q", code, executor.calls, stderr.String())
+	}
+	if got := executor.requests[0]; got.Name != operation.Name("execute") || got.RequestID != "regex-1" || string(got.Input) != input {
+		t.Fatalf("ASSERT_EXECUTION_STRUCTURAL_CONTEXT_REGEX_PRESERVED: request=%#v", got)
+	}
+}
+
 func TestExecutionTransportPreservesImmutableResultData(t *testing.T) {
 	executor := &recordingExecutor{result: operation.Result{
 		Value:         map[string]any{"reference": "immutable://generation/1"},

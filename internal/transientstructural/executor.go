@@ -8,6 +8,7 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/regexlocator"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/slicer"
 	"lsp-trace/internal/traverse"
@@ -70,13 +71,40 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	defer cancel()
 	document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{
 		SessionID: sessionID, Generation: request.Generation, URI: request.Target.URI,
-		LanguageID: request.LanguageID, CaptureSupply: request.CaptureSupply,
+		LanguageID: request.LanguageID, CaptureSupply: request.CaptureSupply || request.Target.Regex != nil,
 	})
 	if document.Failure != "" {
 		return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, fail(PhaseTraversal, terminalForContext(ctx), Accounting{})
+	}
+	if request.Target.Regex != nil {
+		if document.Supply == nil {
+			return Result{}, fail(PhasePreflight, StateInvalidServerResponse, Accounting{})
+		}
+		locator := request.Target.Regex
+		selected, err := regexlocator.Resolve(regexlocator.Request{
+			Document: document.Supply.Content, Pattern: locator.Pattern, MatchIndex: locator.MatchIndex,
+			CaptureGroup: locator.CaptureGroup, ExpectedDigest: locator.ExpectedDigest,
+			Encoding: metadata.PositionEncoding,
+			Limits:   regexlocator.Limits{MaxDocumentBytes: locator.MaxDocumentBytes, MaxMatches: locator.MaxMatches, MaxPatternBytes: locator.MaxPatternBytes, MaxWork: locator.MaxWork},
+		})
+		if err != nil {
+			state := StateInvalidServerResponse
+			if typed, ok := err.(*regexlocator.Error); ok {
+				switch typed.Code {
+				case regexlocator.CodeMatchAbsent, regexlocator.CodeCaptureAbsent, regexlocator.CodeDigestMismatch:
+					state = StateTargetNotFound
+				case regexlocator.CodeResourceLimit:
+					state = StateResourceLimit
+				}
+			}
+			return Result{}, fail(PhasePreflight, state, Accounting{})
+		}
+		line, character := selected.Position.Line, selected.Position.Character
+		request.Target.Symbol, request.Target.Regex = "", nil
+		request.Target.Line, request.Target.Character = &line, &character
 	}
 
 	counted := &countingRuntime{manager: runtime}
@@ -185,11 +213,16 @@ func validateRequest(request Request) TerminalState {
 		return StateInvalidServerResponse
 	}
 	position := request.Target.Line != nil || request.Target.Character != nil
-	if request.Target.Symbol == "" {
-		if request.Target.Line == nil || request.Target.Character == nil {
+	regex := request.Target.Regex != nil
+	if request.Target.Symbol != "" {
+		if position || regex {
 			return StateInvalidServerResponse
 		}
-	} else if position {
+	} else if regex {
+		if position || request.Target.URI == "" {
+			return StateInvalidServerResponse
+		}
+	} else if request.Target.Line == nil || request.Target.Character == nil {
 		return StateInvalidServerResponse
 	}
 	switch request.Analysis.Kind {

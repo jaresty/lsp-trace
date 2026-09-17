@@ -14,10 +14,9 @@ func TestStructuralContextV2SourceInspectionAndAmbiguityGuidance(t *testing.T) {
 	}
 	description := completeToolDescription(tool)
 	for _, required := range []string{
-		"exact-position", "projection mode TARGET", "up_depth=0", "down_depth=0",
-		"Expand call relationships separately", "Do not automatically retry traversal failures",
-		"AMBIGUOUS_TARGET", "resolve the declaration externally", "zero-based line and character",
-		"do not expose candidate, path, or source dumps", "Authority remains zero", "source_graph_complete remains UNKNOWN",
+		"exact symbol", "position", "bounded document regex", "READY managed session",
+		"locator-only", "CALLS remain server-reported", "Optional source projection is bounded",
+		"Authority is zero", "source completeness is unknown",
 	} {
 		if !strings.Contains(description, required) {
 			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_USABILITY_METADATA[%s]: %s", required, description)
