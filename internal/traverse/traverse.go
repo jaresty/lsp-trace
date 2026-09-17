@@ -230,7 +230,7 @@ func Incoming(ctx context.Context, client Client, params lsp.PrepareCallHierarch
 					invalidRange = err
 					break
 				}
-				if !graph.RangeContains(caller.Range, normalized) {
+				if !graph.RangeContains(rng(call.From.Range), normalized) {
 					outsideCallerRange = true
 				}
 			}

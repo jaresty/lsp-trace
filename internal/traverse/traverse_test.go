@@ -352,19 +352,95 @@ func TestIncomingRejectsMalformedCallSiteRange(t *testing.T) {
 	}
 }
 
-func TestIncomingRetainsCallSiteOutsideCallerItemRange(t *testing.T) {
-	leaf, caller := item("leaf", 8), item("caller", 4)
-	outside := lsp.Range{Start: lsp.Position{Line: 5, Character: 2}, End: lsp.Position{Line: 5, Character: 6}}
+func TestRangeContainsHalfOpenBoundariesAndMultilineUTF16Coordinates(t *testing.T) {
+	outer := graph.Range{Start: graph.Position{Line: 3, Character: 4}, End: graph.Position{Line: 6, Character: 12}}
+	tests := []struct {
+		name  string
+		inner graph.Range
+		want  bool
+	}{
+		{name: "equal range", inner: outer, want: true},
+		{name: "zero-length inner range shares outer end boundary", inner: graph.Range{Start: outer.End, End: outer.End}, want: true},
+		{name: "starts one UTF-16 coordinate unit before", inner: graph.Range{Start: graph.Position{Line: 3, Character: 3}, End: graph.Position{Line: 3, Character: 4}}, want: false},
+		{name: "ends one UTF-16 coordinate unit after", inner: graph.Range{Start: graph.Position{Line: 6, Character: 12}, End: graph.Position{Line: 6, Character: 13}}, want: false},
+		{name: "multiline inside using UTF-16 coordinate values", inner: graph.Range{Start: graph.Position{Line: 4, Character: 7}, End: graph.Position{Line: 6, Character: 11}}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := graph.RangeContains(outer, tt.inner); got != tt.want {
+				t.Fatalf("ASSERT_RANGE_CONTAINS_HALF_OPEN_UTF16: got %t want %t for %#v", got, tt.want, tt.inner)
+			}
+		})
+	}
+}
+
+func selectionRangeNode(item graph.Item) graph.Node {
+	item.Range = item.SelectionRange
+	return graph.NewNode(item)
+}
+
+func TestIncomingValidatesCallSiteAgainstOriginalCallerRangeBeforeCanonicalCollapse(t *testing.T) {
+	leaf, caller := item("leaf", 12), item("caller", 4)
+	caller.Range = lsp.Range{Start: lsp.Position{Line: 4}, End: lsp.Position{Line: 9}}
+	caller.SelectionRange = lsp.Range{Start: lsp.Position{Line: 4, Character: 5}, End: lsp.Position{Line: 4, Character: 11}}
+	insideBody := lsp.Range{Start: lsp.Position{Line: 7, Character: 2}, End: lsp.Position{Line: 7, Character: 24}}
+	canonicalCaller := selectionRangeNode(graph.Item{Name: caller.Name, Kind: caller.Kind, Detail: caller.Detail, URI: caller.URI, Range: rng(caller.Range), SelectionRange: rng(caller.SelectionRange), Data: caller.Data})
+	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+		"leaf":   {{From: caller, FromRanges: []lsp.Range{insideBody}}},
+		"caller": {},
+	}}
+
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{NodeFactory: selectionRangeNode})
+	if !r.Summary.Complete || r.Summary.EdgeCount != 1 || len(r.Edges[0].CallSites) != 1 {
+		t.Fatalf("ASSERT_GOPLS_SHAPE_EDGE_RETAINED: %#v", r)
+	}
+	if len(r.Diagnostics) != 0 {
+		t.Fatalf("ASSERT_GOPLS_SHAPE_NO_FALSE_OUTSIDE_DIAGNOSTIC: %#v", r.Diagnostics)
+	}
+	var got graph.Node
+	for _, node := range r.Nodes {
+		if node.Name == caller.Name {
+			got = node
+		}
+	}
+	if got.ID != canonicalCaller.ID || got.Range != rng(caller.SelectionRange) || got.SelectionRange != rng(caller.SelectionRange) {
+		t.Fatalf("ASSERT_GOPLS_SHAPE_CANONICAL_IDENTITY_UNCHANGED: got=%#v want=%#v", got, canonicalCaller)
+	}
+}
+
+func TestIncomingRetainsCallSiteOutsideOriginalCallerItemRange(t *testing.T) {
+	leaf, caller := item("leaf", 12), item("caller", 4)
+	caller.Range = lsp.Range{Start: lsp.Position{Line: 4}, End: lsp.Position{Line: 9}}
+	caller.SelectionRange = lsp.Range{Start: lsp.Position{Line: 4, Character: 5}, End: lsp.Position{Line: 4, Character: 11}}
+	outside := lsp.Range{Start: lsp.Position{Line: 10, Character: 2}, End: lsp.Position{Line: 10, Character: 6}}
 	f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
 		"leaf":   {{From: caller, FromRanges: []lsp.Range{outside}}},
 		"caller": {},
 	}}
-	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{})
+	r := Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{NodeFactory: selectionRangeNode})
 	if !r.Summary.Complete || r.Summary.EdgeCount != 1 || len(r.Edges[0].CallSites) != 1 {
 		t.Fatalf("ASSERT_OUTSIDE_CALL_SITE_EDGE_RETAINED: %#v", r)
 	}
 	if len(r.Diagnostics) != 1 || !strings.Contains(r.Diagnostics[0].Message, "SERVER_CALL_SITE_OUTSIDE_CALLER_RANGE") {
 		t.Fatalf("ASSERT_OUTSIDE_CALL_SITE_WARNING: %#v", r.Diagnostics)
+	}
+}
+
+func TestIncomingOutsideDiagnosticDoesNotChangeNoFrontierOutcome(t *testing.T) {
+	leaf, caller := item("leaf", 12), item("caller", 4)
+	caller.Range = lsp.Range{Start: lsp.Position{Line: 4}, End: lsp.Position{Line: 9}}
+	caller.SelectionRange = lsp.Range{Start: lsp.Position{Line: 4, Character: 5}, End: lsp.Position{Line: 4, Character: 11}}
+	run := func(fromRange lsp.Range) graph.Result {
+		f := &fakeClient{targets: []lsp.CallHierarchyItem{leaf}, calls: map[string][]lsp.CallHierarchyIncomingCall{
+			"leaf":   {{From: caller, FromRanges: []lsp.Range{fromRange}}},
+			"caller": {},
+		}}
+		return Incoming(context.Background(), f, lsp.PrepareCallHierarchyParams{}, Options{NodeFactory: selectionRangeNode})
+	}
+	inside := run(lsp.Range{Start: lsp.Position{Line: 7}, End: lsp.Position{Line: 7, Character: 4}})
+	outside := run(lsp.Range{Start: lsp.Position{Line: 10}, End: lsp.Position{Line: 10, Character: 4}})
+	if len(inside.Frontier) != 0 || len(outside.Frontier) != 0 || inside.Summary != outside.Summary || len(inside.Diagnostics) != 0 || len(outside.Diagnostics) != 1 {
+		t.Fatalf("ASSERT_DIAGNOSTIC_ONLY_NO_FRONTIER_OUTCOME_UNCHANGED: inside=%#v outside=%#v", inside, outside)
 	}
 }
 
