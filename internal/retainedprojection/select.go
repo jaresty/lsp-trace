@@ -47,8 +47,12 @@ func (e *Error) Error() string {
 }
 
 func IsCode(err error, code Code) bool {
-	var typed *Error
-	return errors.As(err, &typed) && typed.Code == code
+	var selection *Error
+	if errors.As(err, &selection) && selection.Code == code {
+		return true
+	}
+	var assembly *AssemblyError
+	return errors.As(err, &assembly) && assembly.Code == code
 }
 
 func fail(code Code, key Key, detail string) error {
