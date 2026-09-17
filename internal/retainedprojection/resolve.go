@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/sourceobject"
 )
 
@@ -88,7 +89,7 @@ func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, err
 	selections := make([]ResolvedSelection, len(plan.Selections))
 	for i, selection := range plan.Selections {
 		selections[i] = ResolvedSelection{
-			Selection: selection,
+			Selection: cloneSelection(selection),
 			Bytes:     append([]byte(nil), cache[selection.Source]...),
 		}
 	}
@@ -102,9 +103,17 @@ func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits) error {
 	if plan.Ordering != Ordering || len(plan.Selections) == 0 || plan.Target == (Key{}) || plan.Selections[0].Key != plan.Target {
 		return fail(CodeInvalidPlan, Key{}, "canonical non-empty plan required")
 	}
+	keys := make(map[Key]struct{}, len(plan.Selections))
 	for i, selection := range plan.Selections {
 		if selection.Ordinal != i || selection.Key.GraphSubjectID == "" || selection.Key.LogicalSourceID == "" || !canonicalResolveDigest(selection.Source.Digest) {
 			return fail(CodeInvalidPlan, selection.Key, "invalid selection")
+		}
+		if _, duplicate := keys[selection.Key]; duplicate {
+			return fail(CodeInvalidPlan, selection.Key, "duplicate selection key")
+		}
+		keys[selection.Key] = struct{}{}
+		if i > 1 && !lessKey(plan.Selections[i-1].Key, selection.Key) {
+			return fail(CodeInvalidPlan, selection.Key, "additional selection keys are not strictly ordered")
 		}
 		wantRole := "ADDITIONAL"
 		if i == 0 {
@@ -115,6 +124,23 @@ func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits) error {
 		}
 	}
 	return nil
+}
+
+func cloneSelection(selection Selection) Selection {
+	cloned := selection
+	cloned.EvidenceRanges = append([]EvidenceRange(nil), selection.EvidenceRanges...)
+	cloned.ItemRange = cloneRange(selection.ItemRange)
+	cloned.SelectionRange = cloneRange(selection.SelectionRange)
+	cloned.CallSiteRange = cloneRange(selection.CallSiteRange)
+	return cloned
+}
+
+func cloneRange(value *graph.Range) *graph.Range {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func canonicalResolveDigest(digest string) bool {

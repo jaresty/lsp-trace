@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/sourceobject"
 )
 
@@ -86,6 +87,81 @@ func TestResolveDefensiveCopies(t *testing.T) {
 	got.Selections[0].Bytes[0] = 'X'
 	if string(storeBytes) != "mutable" || string(got.Selections[1].Bytes) != "mutable" {
 		t.Fatalf("ASSERT_RESOLVE_NO_MUTABLE_ALIASES: store=%q duplicate=%q", storeBytes, got.Selections[1].Bytes)
+	}
+}
+
+func TestResolveSelectionMetadataIsDeeplyIsolated(t *testing.T) {
+	o := object("metadata")
+	p := resolvePlan(o, o)
+	p.Selections[1].Key.GraphSubjectID = "duplicate-source"
+	item := graph.Range{Start: graph.Position{Line: 1}, End: graph.Position{Line: 2}}
+	selection := graph.Range{Start: graph.Position{Line: 1, Character: 1}, End: graph.Position{Line: 1, Character: 2}}
+	callSite := graph.Range{Start: graph.Position{Line: 3}, End: graph.Position{Line: 4}}
+	for i := range p.Selections {
+		itemCopy, selectionCopy, callSiteCopy := item, selection, callSite
+		p.Selections[i].EvidenceRanges = []EvidenceRange{{RelationID: "relation", Range: itemCopy}}
+		p.Selections[i].ItemRange = &itemCopy
+		p.Selections[i].SelectionRange = &selectionCopy
+		p.Selections[i].CallSiteRange = &callSiteCopy
+	}
+	got, err := Resolve(p, lookupFunc(func(sourceobject.Identity) (sourceobject.Object, error) { return o, nil }), generousLimits())
+	if err != nil {
+		t.Fatalf("ASSERT_RESOLVE_METADATA_CLONE_SETUP: %v", err)
+	}
+
+	p.Selections[0].EvidenceRanges[0].RelationID = "input-mutated"
+	p.Selections[0].ItemRange.Start.Line = 99
+	p.Selections[0].SelectionRange.Start.Line = 99
+	p.Selections[0].CallSiteRange.Start.Line = 99
+	if got.Selections[0].Selection.EvidenceRanges[0].RelationID != "relation" || got.Selections[0].Selection.ItemRange.Start.Line != 1 || got.Selections[0].Selection.SelectionRange.Start.Line != 1 || got.Selections[0].Selection.CallSiteRange.Start.Line != 3 {
+		t.Fatalf("ASSERT_RESOLVE_METADATA_NO_INPUT_ALIAS: %+v", got.Selections[0].Selection)
+	}
+
+	got.Selections[0].Selection.EvidenceRanges[0].RelationID = "output-mutated"
+	got.Selections[0].Selection.ItemRange.Start.Line = 77
+	got.Selections[0].Selection.SelectionRange.Start.Line = 77
+	got.Selections[0].Selection.CallSiteRange.Start.Line = 77
+	if got.Selections[1].Selection.EvidenceRanges[0].RelationID != "relation" || got.Selections[1].Selection.ItemRange.Start.Line != 1 || got.Selections[1].Selection.SelectionRange.Start.Line != 1 || got.Selections[1].Selection.CallSiteRange.Start.Line != 3 {
+		t.Fatalf("ASSERT_RESOLVE_METADATA_NO_OUTPUT_ALIAS: %+v", got.Selections[1].Selection)
+	}
+	if p.Selections[1].EvidenceRanges[0].RelationID != "relation" || p.Selections[1].ItemRange.Start.Line != 1 || p.Selections[1].SelectionRange.Start.Line != 1 || p.Selections[1].CallSiteRange.Start.Line != 3 {
+		t.Fatalf("ASSERT_RESOLVE_METADATA_OUTPUT_CANNOT_MUTATE_INPUT: %+v", p.Selections[1])
+	}
+}
+
+func TestResolveRejectsNonCanonicalPlanKeysBeforeLookup(t *testing.T) {
+	a, b, c := object("a"), object("b"), object("c")
+	base := resolvePlan(a, b, c)
+	base.Selections[0].Key = Key{"target", "file:///target.go"}
+	base.Target = base.Selections[0].Key
+	base.Selections[1].Key = Key{"a", "file:///a.go"}
+	base.Selections[2].Key = Key{"b", "file:///b.go"}
+
+	tests := []struct {
+		name   string
+		mutate func(*Plan)
+	}{
+		{"out-of-order-additional", func(p *Plan) {
+			p.Selections[1], p.Selections[2] = p.Selections[2], p.Selections[1]
+			p.Selections[1].Ordinal, p.Selections[2].Ordinal = 1, 2
+		}},
+		{"duplicate-additional", func(p *Plan) { p.Selections[2].Key = p.Selections[1].Key }},
+		{"duplicate-target", func(p *Plan) { p.Selections[2].Key = p.Target }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			p := base
+			p.Selections = append([]Selection(nil), base.Selections...)
+			tc.mutate(&p)
+			calls := 0
+			got, err := Resolve(p, lookupFunc(func(sourceobject.Identity) (sourceobject.Object, error) {
+				calls++
+				return sourceobject.Object{}, errors.New("must not lookup")
+			}), generousLimits())
+			if !reflect.DeepEqual(got, ResolveResult{}) || !IsCode(err, CodeInvalidPlan) || calls != 0 {
+				t.Fatalf("ASSERT_RESOLVE_CANONICAL_KEYS_%s_PRELOOKUP: got=%+v calls=%d err=%T %v", tc.name, got, calls, err, err)
+			}
+		})
 	}
 }
 
