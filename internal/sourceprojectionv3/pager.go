@@ -55,13 +55,26 @@ type Accounting struct {
 	Work          uint64 `json:"work"`
 }
 
+type Header struct {
+	SchemaVersion        string `json:"schema_version"`
+	Authority            int    `json:"authority"`
+	SourceGraphComplete  string `json:"source_graph_complete"`
+	GraphFactsAdded      int    `json:"graph_facts_added"`
+	CustodyMode          string `json:"custody_mode"`
+	PhysicalProjectionID string `json:"physical_projection_id"`
+	RequestPolicyID      string `json:"request_policy_id"`
+	Status               string `json:"status"`
+}
+
 type Request struct {
+	Header  Header
 	Binding Binding
 	Limits  Limits
 	Cursor  string
 }
 
 type Page struct {
+	Header
 	Records    []Record   `json:"records"`
 	Accounting Accounting `json:"accounting"`
 	NextCursor string     `json:"next_cursor,omitempty"`
@@ -70,6 +83,7 @@ type Page struct {
 
 type cursorPayload struct {
 	Version    int        `json:"version"`
+	Header     Header     `json:"header"`
 	Binding    Binding    `json:"binding"`
 	Limits     Limits     `json:"limits"`
 	Next       uint64     `json:"next"`
@@ -85,10 +99,10 @@ func Paginate(records []Record, request Request) (Page, error) {
 	if err := validateRequest(records, request); err != nil {
 		return Page{}, err
 	}
-	state := cursorPayload{Version: CursorVersion, Binding: request.Binding, Limits: request.Limits}
+	state := cursorPayload{Version: CursorVersion, Header: request.Header, Binding: request.Binding, Limits: request.Limits}
 	if request.Cursor != "" {
 		decoded, err := decodeCursor(request.Cursor)
-		if err != nil || decoded.Binding != request.Binding || decoded.Limits != request.Limits || decoded.Next > uint64(len(records)) {
+		if err != nil || decoded.Header != request.Header || decoded.Binding != request.Binding || decoded.Limits != request.Limits || decoded.Next > uint64(len(records)) {
 			return Page{}, ErrInvalidCursor
 		}
 		state = decoded
@@ -97,7 +111,7 @@ func Paginate(records []Record, request Request) (Page, error) {
 		return Page{}, ErrResourceLimit
 	}
 
-	page := Page{Records: make([]Record, 0)}
+	page := Page{Header: request.Header, Records: make([]Record, 0)}
 	pageBytes := uint64(0)
 	for state.Next < uint64(len(records)) {
 		record := records[state.Next]
@@ -126,10 +140,7 @@ func Paginate(records []Record, request Request) (Page, error) {
 		if next.Work, ok = checkedAdd(next.Work, record.Work); !ok {
 			return Page{}, ErrResourceLimit
 		}
-		if next.ResponseBytes, ok = checkedAdd(next.ResponseBytes, recordBytes); !ok {
-			return Page{}, ErrResourceLimit
-		}
-		if exceeds(next.Objects, request.Limits.MaxObjects) || exceeds(next.Ranges, request.Limits.MaxRanges) || exceeds(next.SourceBytes, request.Limits.MaxSourceBytes) || exceeds(next.Work, request.Limits.MaxWork) || exceeds(next.ResponseBytes, request.Limits.MaxResponseBytes) {
+		if exceeds(next.Objects, request.Limits.MaxObjects) || exceeds(next.Ranges, request.Limits.MaxRanges) || exceeds(next.SourceBytes, request.Limits.MaxSourceBytes) || exceeds(next.Work, request.Limits.MaxWork) {
 			return Page{}, ErrResourceLimit
 		}
 		page.Records = append(page.Records, cloneRecord(record))
@@ -138,20 +149,45 @@ func Paginate(records []Record, request Request) (Page, error) {
 		state.Next++
 	}
 	state.Accounting.Pages++
-	page.Accounting = state.Accounting
 	page.Complete = state.Next == uint64(len(records))
-	if !page.Complete {
-		cursor, err := encodeCursor(state)
-		if err != nil {
-			return Page{}, err
-		}
-		page.NextCursor = cursor
+	if err := finalizeResponseAccounting(&page, &state, request.Limits.MaxResponseBytes); err != nil {
+		return Page{}, err
 	}
 	return page, nil
 }
 
+func finalizeResponseAccounting(page *Page, state *cursorPayload, maxResponseBytes uint64) error {
+	prior := state.Accounting.ResponseBytes
+	total := prior
+	for range 32 {
+		state.Accounting.ResponseBytes = total
+		page.Accounting = state.Accounting
+		page.NextCursor = ""
+		if !page.Complete {
+			cursor, err := encodeCursor(*state)
+			if err != nil {
+				return err
+			}
+			page.NextCursor = cursor
+		}
+		raw, err := json.Marshal(page)
+		if err != nil {
+			return err
+		}
+		next, ok := checkedAdd(prior, uint64(len(raw)))
+		if !ok || next > maxResponseBytes {
+			return ErrResourceLimit
+		}
+		if next == total {
+			return nil
+		}
+		total = next
+	}
+	return ErrResourceLimit
+}
+
 func validateRequest(records []Record, request Request) error {
-	if request.Binding.RequestDigest == "" || request.Binding.CustodyMode == "" || request.Binding.CustodyDigest == "" || request.Binding.ProjectionDigest == "" {
+	if request.Header.SchemaVersion != "lsp-trace.source-projection.v3" || request.Header.Authority != 0 || request.Header.SourceGraphComplete != "UNKNOWN" || request.Header.GraphFactsAdded != 0 || request.Header.CustodyMode == "" || request.Header.CustodyMode != request.Binding.CustodyMode || request.Header.PhysicalProjectionID == "" || request.Header.RequestPolicyID == "" || request.Header.Status == "" || request.Binding.RequestDigest == "" || request.Binding.CustodyDigest == "" || request.Binding.ProjectionDigest == "" {
 		return ErrInvalidRequest
 	}
 	limits := request.Limits
