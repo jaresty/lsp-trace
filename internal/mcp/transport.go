@@ -20,6 +20,8 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/retainedinspection"
+	"lsp-trace/internal/retainedoperation"
 	"lsp-trace/internal/strictjson"
 	"lsp-trace/internal/transientstructural"
 	"lsp-trace/internal/vcssymbolsidecar"
@@ -487,6 +489,14 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		compact = false
 	}
 	if failure != nil {
+		var retainedFailure *retainedoperation.Failure
+		if tool.Name == mcpcontract.HydratedTool && errors.As(failure, &retainedFailure) {
+			return bindEnvelope(base, tool, envelope{
+				EnvelopeVersion: "1", EnvelopeSchemaID: retainedinspection.DomainErrorEnvelopeSchemaID,
+				Tool: tool.Name, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true,
+				Phase: retainedFailure.Phase, State: retainedFailure.State, Diagnostics: append([]string(nil), retainedFailure.Diagnostics...),
+			})
+		}
 		if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
 			state, phase := failure.Code, "ACQUISITION"
 			switch state {
@@ -785,8 +795,12 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		return bindEnvelope(base, tool, successEnvelope)
 	}
 	content := string(opResult.Artifact)
+	envelopeID := artifactSuccessSchemaID(tool.Name)
+	if tool.Name == mcpcontract.HydratedTool && artifactID == retainedinspection.SourceProjectionSchemaID {
+		envelopeID = retainedinspection.ArtifactEnvelopeSchemaID
+	}
 	env := envelope{
-		EnvelopeVersion: "1", EnvelopeSchemaID: artifactSuccessSchemaID(tool.Name), Tool: tool.Name, RequestID: requestID,
+		EnvelopeVersion: "1", EnvelopeSchemaID: envelopeID, Tool: tool.Name, RequestID: requestID,
 		Outcome: outcome, OperationStatus: operationStatus, Content: &content, ArtifactSchemaID: artifactID,
 		LogicalDigest: opResult.LogicalDigest,
 	}
@@ -996,6 +1010,9 @@ func supportsV1Verification(artifactID string) bool {
 func canonicalEnvelopeSchemaID(tool Tool, id string) string {
 	switch tool.EnvelopePolicy {
 	case EnvelopePolicyHydrated:
+		if id == retainedinspection.ArtifactEnvelopeSchemaID || id == retainedinspection.DomainErrorEnvelopeSchemaID {
+			return id
+		}
 		return mcpcontract.HydratedEnvelopeID(id)
 	case EnvelopePolicyProgramCLeiden:
 		return mcpcontract.ProgramCLeidenEnvelopeID(id)

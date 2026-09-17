@@ -25,8 +25,10 @@ import (
 	"lsp-trace/internal/programc"
 	"lsp-trace/internal/provider"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/retainedoperation"
 	"lsp-trace/internal/seedbinding"
 	"lsp-trace/internal/session"
+	"lsp-trace/internal/sourceobject"
 	"lsp-trace/lifecycleops"
 	"lsp-trace/sessionruntime"
 	"lsp-trace/sliceops"
@@ -410,7 +412,14 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 	if err != nil {
 		return nil, nil, err
 	}
-	handlers[operation.InspectHydrated] = operation.InspectHydratedHandler
+	var sourceLookup *sourceobject.Store
+	if artifactStore != nil {
+		sourceLookup, err = sourceobject.New(artifactStore, 16<<20)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	handlers[operation.InspectHydrated] = retainedoperation.NewInspectHydratedHandler(sourceLookup)
 	handlers[operation.VerifyV2] = operation.NewVerifyV2Handler(commandCustodyLoader{})
 	handlers[operation.VerifyRetainedCallsV2] = operation.NewVerifyRetainedCallsV2Handler(commandCustodyLoader{})
 	handlers[operation.ExportRetainedCalls] = operation.ExportRetainedCallsHandler

@@ -14,6 +14,8 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/mcp"
+	"lsp-trace/internal/provider"
+	"lsp-trace/internal/publication"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/sessionruntime"
 	"lsp-trace/sliceops"
@@ -48,6 +50,50 @@ func TestHostSelectorCompositionIncludesLifecycle(t *testing.T) {
 		t.Fatalf("ASSERT_PRODUCTION_INCOMING_RELATION_COLLECTOR=%v ASSERT_PRODUCTION_SLICE_RELATION_COLLECTOR=%v", incomingCollector, sliceCollector)
 	}
 	t.Log("PASS ASSERT_HOST_SELECTOR_COMPOSES_LIFECYCLE_WITHOUT_AUTHORITY_CHANGE")
+}
+
+func TestProductionInspectHydratedSourceStoreUsesPinnedArtifactRoot(t *testing.T) {
+	path := t.TempDir()
+	if err := os.Chmod(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root, err := publication.OpenRoot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	server, _, err := newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(false, provider.NewConfiguredInventory(provider.Provisioned{}), nil, nil, nil, root, mcp.ToolProfileFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if server.ArtifactStore != root {
+		t.Fatal("ASSERT_PRODUCTION_INSPECT_HYDRATED_PROCESS_PINNED_ARTIFACT_STORE")
+	}
+}
+
+func TestProductionInspectHydratedRetainedProjectionComposition(t *testing.T) {
+	server, _, err := newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(false, provider.NewConfiguredInventory(provider.Provisioned{}), nil, nil, nil, nil, mcp.ToolProfileFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arguments := `{"mode":"RETAINED_SOURCE_PROJECTION","retained_source_evidence":{"inline_snapshot_v2":"{}"},"selection":{"target":{"graph_subject_id":"subject","logical_source_id":"source"},"selections":[{"graph_subject_id":"subject","logical_source_id":"source"}]},"projection":{"body":"INCLUDE","privacy_policy_id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","limits":{"max_source_bytes":1024,"max_ranges":8,"max_objects":8,"max_work":1024,"max_response_bytes":4096}},"resolve_limits":{"max_distinct_objects":8,"max_unique_source_bytes":1024,"max_logical_selections":8}}`
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_inspect_hydrated","arguments":` + arguments + `}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"operation":"lsp_trace_v1_inspect_hydrated","arguments":` + arguments + `}}}}`,
+	}, "\n") + "\n"
+	var stdout bytes.Buffer
+	if err := server.Serve(strings.NewReader(input), &stdout); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("ASSERT_PRODUCTION_INSPECT_HYDRATED_RETAINED_HANDLER: responses=%q", stdout.String())
+	}
+	for _, line := range lines {
+		if !strings.Contains(line, "envelope-inspect-hydrated-domain-error.v2.schema.json") {
+			t.Fatalf("ASSERT_PRODUCTION_INSPECT_HYDRATED_V2_DOMAIN_ENVELOPE: response=%s", line)
+		}
+	}
 }
 
 func TestAlwaysLocalLifecycleListDispatch(t *testing.T) {

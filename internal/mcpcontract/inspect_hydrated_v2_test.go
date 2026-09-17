@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	hi "lsp-trace/internal/hydratedinspection"
+	"lsp-trace/internal/operation"
 	ri "lsp-trace/internal/retainedinspection"
 )
 
@@ -89,6 +90,20 @@ func TestHydratedV2SchemaJSONValidatesEnvelopes(t *testing.T) {
 	} {
 		if err := ValidateJSON(map[bool]string{true: ri.ArtifactEnvelopeSchemaID, false: ri.DomainErrorEnvelopeSchemaID}[bytes.Contains(bad, []byte(`"content"`))], bad); err == nil {
 			t.Fatalf("adversarial envelope accepted: %s", bad)
+		}
+	}
+}
+
+func TestOperationValidatorUsesHydratedV2UnionWithoutNarrowingLegacy(t *testing.T) {
+	validator, err := NewOperationInputValidator()
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := json.RawMessage(`{"input":"{}","node_ids":["node"]}`)
+	projection := json.RawMessage(`{"mode":"RETAINED_SOURCE_PROJECTION","retained_source_evidence":{"inline_snapshot_v2":"{}"},"selection":{"target":{"graph_subject_id":"subject","logical_source_id":"file:///source.go"},"selections":[{"graph_subject_id":"subject","logical_source_id":"file:///source.go"}]},"projection":{"body":"INCLUDE","privacy_policy_id":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","limits":{"max_source_bytes":1024,"max_ranges":8,"max_objects":8,"max_work":1024,"max_response_bytes":4096}},"resolve_limits":{"max_distinct_objects":8,"max_unique_source_bytes":1024,"max_logical_selections":8}}`)
+	for _, input := range []json.RawMessage{legacy, projection} {
+		if err := validator.ValidateOperationInput(operation.InspectHydrated, input); err != nil {
+			t.Fatalf("ASSERT_OPERATION_41_V2_UNION_PREFLIGHT: %v", err)
 		}
 	}
 }

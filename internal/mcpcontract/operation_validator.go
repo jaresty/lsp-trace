@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/boundedanalysis"
-	"lsp-trace/internal/hydratedinspection"
 	"lsp-trace/internal/operation"
 )
 
@@ -65,9 +64,6 @@ func NewOperationInputValidator() (*OperationInputValidator, error) {
 func (v *OperationInputValidator) ValidateOperationInput(name operation.Name, input json.RawMessage) error {
 	if v == nil {
 		return fmt.Errorf("operation input validator is nil")
-	}
-	if name == operation.InspectHydrated {
-		return hydratedinspection.ValidateInputJSON(input)
 	}
 	bounded := name == operation.BoundedRetainedAnalysis || name == operation.BoundedRetainedMetrics || name == operation.BoundedRetainedRanking
 	if name == operation.Validate {

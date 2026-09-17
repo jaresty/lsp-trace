@@ -11,8 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/retainedinspection"
+	"lsp-trace/internal/retainedoperation"
 )
 
 type gatewayMatrixExecutor struct {
@@ -144,6 +147,50 @@ func TestExecuteGatewayNestedDirectMatrix(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestInspectHydratedRetainedV2DirectGatewayEnvelopeParity(t *testing.T) {
+	registry := NewRegistry(false)
+	args := map[string]any{
+		"mode":                     "RETAINED_SOURCE_PROJECTION",
+		"retained_source_evidence": map[string]any{"inline_snapshot_v2": "{}"},
+		"selection":                map[string]any{"target": map[string]any{"graph_subject_id": "subject", "logical_source_id": "file:///source.go"}, "selections": []any{map[string]any{"graph_subject_id": "subject", "logical_source_id": "file:///source.go"}}},
+		"projection":               map[string]any{"body": "INCLUDE", "privacy_policy_id": "sha256:" + strings.Repeat("a", 64), "limits": map[string]any{"max_source_bytes": 1024, "max_ranges": 8, "max_objects": 8, "max_work": 1024, "max_response_bytes": 4096}},
+		"resolve_limits":           map[string]any{"max_distinct_objects": 8, "max_unique_source_bytes": 1024, "max_logical_selections": 8},
+	}
+	call := func(executor *gatewayMatrixExecutor, gateway bool) response {
+		server := matrixServer(registry, executor)
+		if gateway {
+			arguments := map[string]any{"request": map[string]any{"operation": mcpcontract.HydratedTool, "arguments": args}}
+			return server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, "lsp_trace_v1_execute", arguments))
+		}
+		return directMatrixCall(server, mcpcontract.HydratedTool, args)
+	}
+	assertParity := func(direct, gateway response, schemaID, outcome string) {
+		t.Helper()
+		if direct.Error != nil || gateway.Error != nil {
+			t.Fatalf("ASSERT_INSPECT_HYDRATED_RETAINED_TRANSPORT_ERRORS: direct=%v gateway=%v", direct.Error, gateway.Error)
+		}
+		directEnvelope := direct.Result.(callResult).StructuredContent
+		directBytes, _ := json.Marshal(directEnvelope)
+		gatewayEnvelope := gateway.Result.(callResult).StructuredContent
+		if directEnvelope.EnvelopeSchemaID != schemaID || gatewayEnvelope.DelegatedEnvelope != string(directBytes) || gatewayEnvelope.DelegatedOutcome != outcome {
+			t.Fatalf("ASSERT_INSPECT_HYDRATED_RETAINED_DIRECT_GATEWAY_PARITY: direct=%+v gateway=%+v", directEnvelope, gatewayEnvelope)
+		}
+	}
+	success := func() *gatewayMatrixExecutor {
+		return &gatewayMatrixExecutor{artifacts: map[operation.Name][]byte{operation.InspectHydrated: []byte(`{"schema_version":"lsp-trace.source-projection.v2"}`)}}
+	}
+	assertParity(call(success(), false), call(success(), true), retainedinspection.ArtifactEnvelopeSchemaID, "COMPLETE")
+	failure := func() *gatewayMatrixExecutor {
+		return &gatewayMatrixExecutor{artifacts: map[operation.Name][]byte{}, failure: &operation.Failure{Code: "ADMISSION_FAILED", Diagnostics: []string{"retained snapshot ingress rejected"}, Err: &retainedoperation.Failure{Phase: "INGRESS", State: "ADMISSION_FAILED", Diagnostics: []string{"retained snapshot ingress rejected"}}}}
+	}
+	assertParity(call(failure(), false), call(failure(), true), retainedinspection.DomainErrorEnvelopeSchemaID, "DOMAIN_ERROR")
+	legacy := &gatewayMatrixExecutor{artifacts: map[operation.Name][]byte{}, failure: &operation.Failure{Code: operation.FailureInvalidInput, Diagnostics: []string{"legacy"}}}
+	legacyEnvelope := call(legacy, false).Result.(callResult).StructuredContent
+	if legacyEnvelope.EnvelopeSchemaID != mcpcontract.HydratedEnvelopeID("https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-domain-error.v1.schema.json") {
+		t.Fatalf("ASSERT_INSPECT_HYDRATED_LEGACY_V1_ENVELOPE: %+v", legacyEnvelope)
 	}
 }
 
