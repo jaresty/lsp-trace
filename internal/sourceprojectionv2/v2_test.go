@@ -81,8 +81,7 @@ func TestAssembleBoundedUsesExactResponseBudget(t *testing.T) {
 	}
 }
 
-func TestAssembleBoundedRejectsDuplicateAndReorderedInputs(t *testing.T) {
-	const assertion = "ASSERT_C06_UNKNOWN_DUPLICATE_MISSING_FIELDS_FAIL_CLOSED"
+func TestC06AssemblyMutationCorpusFailsTerminalZero(t *testing.T) {
 	base := Input{
 		TargetURI: "file:///target.go", SelectedURIs: []string{"file:///target.go"},
 		Documents:         []DocumentSource{{URI: "file:///target.go", PositionEncoding: "utf-16", SourceDigest: "sha256:source", SourceByteLength: 1}},
@@ -95,6 +94,8 @@ func TestAssembleBoundedRejectsDuplicateAndReorderedInputs(t *testing.T) {
 		name   string
 		mutate func(*Input)
 	}{
+		{name: "missing-target", mutate: func(in *Input) { in.TargetURI = "" }},
+		{name: "invalid-status", mutate: func(in *Input) { in.Projection.Status = "REPAIRED" }},
 		{name: "duplicate-selected-document", mutate: func(in *Input) { in.SelectedURIs = append(in.SelectedURIs, in.TargetURI) }},
 		{name: "duplicate-document-binding", mutate: func(in *Input) { in.Documents = append(in.Documents, in.Documents[0]) }},
 		{name: "duplicate-candidate", mutate: func(in *Input) { in.Candidates = append(in.Candidates, in.Candidates[0]) }},
@@ -117,8 +118,8 @@ func TestAssembleBoundedRejectsDuplicateAndReorderedInputs(t *testing.T) {
 			input.Projection.Citations = append([]sourceprojection.Citation(nil), base.Projection.Citations...)
 			tc.mutate(&input)
 			got, err := AssembleBounded(input, "RETAINED", binding, 1<<20)
-			if err == nil || got.SchemaVersion != "" {
-				t.Fatalf("%s: result=%+v err=%v", assertion, got, err)
+			if err == nil || !reflect.DeepEqual(got, WireResult[retainedBinding]{}) {
+				t.Fatalf("ASSERT_C06_%s_TERMINAL_ZERO: result=%+v err=%v", strings.ToUpper(strings.ReplaceAll(tc.name, "-", "_")), got, err)
 			}
 		})
 	}

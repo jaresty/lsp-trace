@@ -116,6 +116,9 @@ type WireResult[T any] struct {
 }
 
 func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, maxResponseBytes int) (WireResult[T], error) {
+	if !validProjectionStatus(input.Projection.Status) {
+		return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: invalid projection status %q", input.Projection.Status)
+	}
 	if input.TargetURI == "" || len(input.SelectedURIs) == 0 || input.SelectedURIs[0] != input.TargetURI {
 		return WireResult[T]{}, errors.New("sourceprojectionv2: document selection must be target-first")
 	}
@@ -219,6 +222,15 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: V2 response bytes %d exceed limit %d", len(raw), maxResponseBytes)
 	}
 	return result, nil
+}
+
+func validProjectionStatus(status string) bool {
+	switch status {
+	case "COMPLETE", "PARTIAL", "TRUNCATED", "SOURCE_UNAVAILABLE", "SUCCESSFUL_EMPTY":
+		return true
+	default:
+		return false
+	}
 }
 
 func displayKind(candidate sourceprojection.Candidate) string {

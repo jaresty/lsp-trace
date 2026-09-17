@@ -1,12 +1,16 @@
 package sourceprojectionv3
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+
+	"lsp-trace/internal/strictjson"
 )
 
 const CursorVersion = 1
@@ -241,7 +245,7 @@ func decodeCursor(cursor string) (cursorPayload, error) {
 		return cursorPayload{}, ErrInvalidCursor
 	}
 	var envelope cursorEnvelope
-	if json.Unmarshal(raw, &envelope) != nil || !json.Valid(envelope.Payload) {
+	if strictDecode(raw, &envelope) != nil || !json.Valid(envelope.Payload) {
 		return cursorPayload{}, ErrInvalidCursor
 	}
 	digest := sha256.Sum256(envelope.Payload)
@@ -249,10 +253,25 @@ func decodeCursor(cursor string) (cursorPayload, error) {
 		return cursorPayload{}, ErrInvalidCursor
 	}
 	var payload cursorPayload
-	if json.Unmarshal(envelope.Payload, &payload) != nil || payload.Version != CursorVersion {
+	if strictDecode(envelope.Payload, &payload) != nil || payload.Version != CursorVersion {
 		return cursorPayload{}, ErrInvalidCursor
 	}
 	return payload, nil
+}
+
+func strictDecode(raw []byte, target any) error {
+	if err := strictjson.RejectDuplicates(raw); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return ErrInvalidCursor
+	}
+	return nil
 }
 
 func RecordDigest(records []Record) (string, error) {

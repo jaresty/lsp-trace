@@ -157,6 +157,9 @@ func Project(candidates []Candidate, sources map[string]Source, policy Policy) (
 		if candidate.UnitID == "" || candidate.CitationID == "" || candidate.GraphSubjectID == "" || candidate.LogicalSourceID == "" {
 			return Result{}, errors.New("projection candidate identity is incomplete")
 		}
+		if candidate.PrivacyClassification == "" {
+			return Result{}, errors.New("projection candidate privacy classification is empty")
+		}
 		if candidate.Role != "ENDPOINT" && candidate.Role != "RELATION" {
 			return Result{}, fmt.Errorf("unsupported projection role %q", candidate.Role)
 		}

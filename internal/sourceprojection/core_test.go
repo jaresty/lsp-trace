@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -237,24 +238,28 @@ func TestC04ExhaustiveSourceMutationsCannotChangeGraphOrAuthority(t *testing.T) 
 	}
 }
 
-func TestProjectRejectsIncompleteAndMixedCandidateIdentity(t *testing.T) {
-	const assertion = "ASSERT_C06_INVALID_ID_RANGE_ENCODING_PRIVACY_STATUS_LIMIT_FAILS"
+func TestC06ProjectionCandidateMutationCorpusFailsTerminalZero(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		mutate func([]Candidate)
 	}{
-		{name: "missing-citation", mutate: func(c []Candidate) { c[0].CitationID = "" }},
-		{name: "missing-subject", mutate: func(c []Candidate) { c[0].GraphSubjectID = "" }},
-		{name: "missing-source", mutate: func(c []Candidate) { c[0].LogicalSourceID = "" }},
+		{name: "missing-citation-identity", mutate: func(c []Candidate) { c[0].CitationID = "" }},
+		{name: "missing-subject-identity", mutate: func(c []Candidate) { c[0].GraphSubjectID = "" }},
+		{name: "missing-source-identity", mutate: func(c []Candidate) { c[0].LogicalSourceID = "" }},
 		{name: "invalid-role", mutate: func(c []Candidate) { c[0].Role = "ANCILLARY" }},
+		{name: "invalid-range", mutate: func(c []Candidate) {
+			c[0].Range = Range{Start: Position{Line: 2}, End: Position{Line: 1}}
+		}},
+		{name: "invalid-encoding", mutate: func(c []Candidate) { c[0].PositionEncoding = "utf-7" }},
 		{name: "mixed-source-encoding", mutate: func(c []Candidate) { c[1].PositionEncoding = "utf-8" }},
+		{name: "invalid-privacy", mutate: func(c []Candidate) { c[0].PrivacyClassification = "" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			candidates := fixtureCandidates()
 			tc.mutate(candidates)
 			got, err := Project(candidates, fixtureSources(true), Policy{PolicyID: "public", BodyRequested: true})
-			if err == nil || got.Status != "" || len(got.Units) != 0 {
-				t.Fatalf("%s: result=%+v err=%v", assertion, got, err)
+			if err == nil || !reflect.DeepEqual(got, Result{}) {
+				t.Fatalf("ASSERT_C06_%s_TERMINAL_ZERO: result=%+v err=%v", strings.ToUpper(strings.ReplaceAll(tc.name, "-", "_")), got, err)
 			}
 		})
 	}
