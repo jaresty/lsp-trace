@@ -1,0 +1,43 @@
+{
+  "schema_version": "adr0008-source-projection-exception.v1",
+  "exception_id": "ADR0008-L04-PI-MCP-ADAPTER-2.32.1",
+  "recorded_at": "2026-09-17",
+  "cell_id": "L04",
+  "decision": "ACCEPTED_EXTERNAL_EXCEPTION",
+  "owner": {
+    "component": "pi-mcp-adapter",
+    "upstream": "https://github.com/nicobailon/pi-mcp-adapter",
+    "observed_version": "2.32.1"
+  },
+  "applies_to": {
+    "qualification_revision": "5d392f9710225bd1761af67fd9d851c2ff4b2f82",
+    "execution_record": "qualification/adr0008-source-projection-matrix.execution.5d392f9710225bd1761af67fd9d851c2ff4b2f82.json",
+    "observed_behavior": "The host adapter appends Expected parameters guidance to an MCP runtime error whenever an advertised input schema exists, conflating runtime/domain failure presentation with request-validation failure presentation."
+  },
+  "rationale": [
+    "The behavior is introduced by the external host adapter after lsp-trace returns its MCP result.",
+    "Changing lsp-trace envelopes or advertised schemas to suppress host-added guidance would weaken canonical contracts and create host-specific behavior.",
+    "The exception permits lsp-trace release decisions to treat this presentation defect as externally owned while it remains observable and unresolved."
+  ],
+  "non_effects": {
+    "cell_verdict_remains": "FAIL",
+    "implementation_qualified_remains": false,
+    "does_not_assert_canonical_envelope_correctness": true,
+    "does_not_waive_request_validation": true,
+    "does_not_authorize_lsp_trace_workarounds": true,
+    "does_not_modify_historical_execution": true
+  },
+  "release_disposition": {
+    "blocking_for_lsp_trace_release": false,
+    "blocking_for_formal_adr0008_qualification": true
+  },
+  "revalidation": {
+    "expires_when": [
+      "the installed pi-mcp-adapter version differs from 2.32.1",
+      "the adapter changes direct-tool error rendering",
+      "the L04 pass or fail criteria change",
+      "lsp-trace changes the affected MCP envelope or advertised input schema"
+    ],
+    "required_action": "Re-run L04 without assuming this exception and issue an additive superseding exception record if still necessary."
+  }
+}
