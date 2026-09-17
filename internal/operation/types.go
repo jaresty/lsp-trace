@@ -55,10 +55,11 @@ type Request struct {
 // Result is the transport-independent operation result. Artifact contains the
 // exact authoritative bytes produced by existing CLI semantics.
 type Result struct {
-	Value          any
-	Artifact       []byte
-	LogicalDigest  string
-	CustodyReceipt any
+	Value            any
+	Artifact         []byte
+	ArtifactSchemaID string
+	LogicalDigest    string
+	CustodyReceipt   any
 }
 
 // Failure classifies an operation failure without imposing an MCP envelope.

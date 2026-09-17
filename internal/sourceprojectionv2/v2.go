@@ -170,7 +170,7 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		CustodyMode: custodyMode, CustodyBinding: custodyBinding, PhysicalProjectionID: physicalID, RequestPolicyID: input.RequestPolicyID, Status: input.Projection.Status,
 		DocumentSelection: DocumentSelection{Ordering: "TARGET_FIRST_THEN_URI_LEXICOGRAPHIC", TargetURI: input.TargetURI, SelectedURIs: append([]string(nil), input.SelectedURIs...)},
 		DocumentBindings:  documents, DocumentAccounting: DocumentAccounting{Candidates: input.DocumentsObserved, Selected: len(input.SelectedURIs), Acquired: len(documents), TotalAcquiredBytes: input.TotalAcquiredBytes},
-		Units: units, Citations: citations, EmittedSpans: append([]sourceprojection.Span(nil), input.Projection.EmittedSpans...), Accounting: input.Projection.Accounting,
+		Units: units, Citations: citations, EmittedSpans: append([]sourceprojection.Span{}, input.Projection.EmittedSpans...), Accounting: input.Projection.Accounting,
 		Omissions: append([]sourceprojection.Omission{}, input.Projection.Omissions...), PrivacySummary: input.Projection.PrivacySummary,
 	}
 	raw, err := json.Marshal(result)

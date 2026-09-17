@@ -26,6 +26,15 @@ func InspectHydratedHandler(_ context.Context, request Request) (Result, *Failur
 		}
 		return inspectHydrated(r, false)
 	}
+	return InspectHydratedLegacyDecoded(request, probe)
+}
+
+// InspectHydratedLegacyDecoded preserves the admitted legacy path for callers
+// that have already decoded the V1/V2 union exactly once.
+func InspectHydratedLegacyDecoded(request Request, probe hydratedinspection.Request) (Result, *Failure) {
+	if probe.PublicationSelector == nil && probe.ContentAddressedArtifact == nil {
+		return inspectHydrated(probe, false)
+	}
 	config := artifactingress.Config{
 		MaxBytes:        artifactingress.HydrationCoreMaxBytes,
 		PublicationRoot: request.PublicationRoot,
