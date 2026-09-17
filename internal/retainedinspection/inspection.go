@@ -18,9 +18,12 @@ import (
 const (
 	Mode                        = "RETAINED_SOURCE_PROJECTION"
 	InputSchemaID               = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-inspect-hydrated.v2.schema.json"
+	InputSchemaV3ID             = "https://jaresty.github.io/lsp-trace/mcp/schemas/input-inspect-hydrated.v3.schema.json"
 	ArtifactEnvelopeSchemaID    = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-inspect-hydrated-artifact.v2.schema.json"
+	ArtifactEnvelopeSchemaV3ID  = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-inspect-hydrated-artifact.v3.schema.json"
 	DomainErrorEnvelopeSchemaID = "https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-inspect-hydrated-domain-error.v2.schema.json"
 	SourceProjectionSchemaID    = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.source-projection.v2.schema.json"
+	SourceProjectionSchemaV3ID  = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.source-projection.v3.schema.json"
 	SourceSnapshotSchemaID      = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-v5-source-snapshot.v2.schema.json"
 	maxRequestBytes             = hi.MaxRequestBytes
 )
@@ -40,10 +43,17 @@ type ProjectionLimits struct {
 	MaxWork          uint64 `json:"max_work"`
 	MaxResponseBytes uint64 `json:"max_response_bytes"`
 }
+type Paging struct {
+	MaxPageBytes     uint64 `json:"max_page_bytes"`
+	MaxPages         uint64 `json:"max_pages"`
+	MaxResponseBytes uint64 `json:"max_response_bytes"`
+	Cursor           string `json:"cursor,omitempty"`
+}
 type Projection struct {
 	Body            string           `json:"body"`
 	PrivacyPolicyID string           `json:"privacy_policy_id"`
 	Limits          ProjectionLimits `json:"limits"`
+	Paging          *Paging          `json:"paging,omitempty"`
 }
 type ResolveLimits struct {
 	MaxDistinctObjects   uint64 `json:"max_distinct_objects"`
@@ -130,6 +140,9 @@ func (r Request) Check() error {
 	if q.MaxDistinctObjects < 1 || q.MaxDistinctObjects > 10000 || q.MaxUniqueSourceBytes < 1 || q.MaxUniqueSourceBytes > 64<<20 || q.MaxLogicalSelections < 1 || q.MaxLogicalSelections > 10000 {
 		return errors.New("resolve limit out of range")
 	}
+	if p := r.Projection.Paging; p != nil && (p.MaxPageBytes < 1 || p.MaxPageBytes > 1<<20 || p.MaxPages < 1 || p.MaxPages > 10000 || p.MaxResponseBytes < 1 || p.MaxResponseBytes > 64<<20 || len(p.Cursor) > 2048) {
+		return errors.New("paging limit out of range")
+	}
 	return nil
 }
 func validKey(k Key) bool {
@@ -148,7 +161,7 @@ func canonicalDigest(s string) bool {
 }
 
 func Decode(raw []byte) (Decoded, error) {
-	if err := ValidateInputJSON(raw); err != nil {
+	if err := ValidateInputJSONV3(raw); err != nil {
 		return Decoded{}, err
 	}
 	var tag struct {
@@ -228,6 +241,32 @@ func ArtifactEnvelopeSchema() []byte {
 	b, _ := json.Marshal(s)
 	return b
 }
+func InputSchemaV3() []byte {
+	var s map[string]any
+	_ = json.Unmarshal(InputSchema(), &s)
+	s["$id"] = InputSchemaV3ID
+	branch := s["oneOf"].([]any)[1].(map[string]any)
+	projection := branch["properties"].(map[string]any)["projection"].(map[string]any)
+	paging := obj(map[string]any{
+		"max_page_bytes": integer(1, 1<<20), "max_pages": integer(1, 10000),
+		"max_response_bytes": integer(1, 64<<20), "cursor": map[string]any{"type": "string", "minLength": 1, "maxLength": 2048},
+	}, "max_page_bytes", "max_pages", "max_response_bytes")
+	projection["properties"].(map[string]any)["paging"] = paging
+	b, _ := json.Marshal(s)
+	return b
+}
+
+func ArtifactEnvelopeSchemaV3() []byte {
+	var s map[string]any
+	_ = json.Unmarshal(ArtifactEnvelopeSchema(), &s)
+	s["$id"] = ArtifactEnvelopeSchemaV3ID
+	p := s["properties"].(map[string]any)
+	p["envelope_schema_id"] = map[string]any{"const": ArtifactEnvelopeSchemaV3ID}
+	p["artifact_schema_id"] = map[string]any{"const": SourceProjectionSchemaV3ID}
+	b, _ := json.Marshal(s)
+	return b
+}
+
 func DomainErrorEnvelopeSchema() []byte {
 	id := DomainErrorEnvelopeSchemaID
 	diag := map[string]any{"type": "array", "maxItems": 64, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": 1024}}
@@ -242,6 +281,37 @@ func DomainErrorEnvelopeSchema() []byte {
 var once sync.Once
 var compiled *jsonschema.Schema
 var compileErr error
+var onceV3 sync.Once
+var compiledV3 *jsonschema.Schema
+var compileErrV3 error
+
+func ValidateInputJSONV3(raw []byte) error {
+	if len(raw) == 0 || len(raw) > maxRequestBytes {
+		return errors.New("request byte limit")
+	}
+	onceV3.Do(func() {
+		c := jsonschema.NewCompiler()
+		doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(InputSchemaV3()))
+		if e == nil {
+			e = c.AddResource(InputSchemaV3ID, doc)
+		}
+		if e == nil {
+			compiledV3, e = c.Compile(InputSchemaV3ID)
+		}
+		compileErrV3 = e
+	})
+	if compileErrV3 != nil {
+		return compileErrV3
+	}
+	doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if e != nil {
+		return e
+	}
+	if e = compiledV3.Validate(doc); e != nil {
+		return fmt.Errorf("schema validation: %w", e)
+	}
+	return nil
+}
 
 func ValidateInputJSON(raw []byte) error {
 	if len(raw) == 0 || len(raw) > maxRequestBytes {

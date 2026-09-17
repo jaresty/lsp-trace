@@ -103,6 +103,45 @@ func TestProjectionInlineSuccessSchemaParityBodiesAndDedup(t *testing.T) {
 	}
 }
 
+func TestProjectionPagingV3ContinuationAndTamperClosed(t *testing.T) {
+	fx := validFixture(t, 2)
+	request := projectionRequest(fx, "OMIT")
+	request.Projection.Limits.MaxObjects = 10000
+	request.Projection.Limits.MaxRanges = 10000
+	request.Projection.Limits.MaxWork = 1 << 20
+	request.Projection.Paging = &retainedinspection.Paging{MaxPageBytes: 2000, MaxPages: 20, MaxResponseBytes: 1 << 20}
+	result, failure := execute(t, request, nil, operation.Request{})
+	if failure != nil || result.ArtifactSchemaID != retainedinspection.SourceProjectionSchemaV3ID {
+		t.Fatalf("ASSERT_RETAINED_V3_FIRST_PAGE: result=%+v failure=%v", result, failure)
+	}
+	var first struct {
+		Complete   bool   `json:"complete"`
+		NextCursor string `json:"next_cursor"`
+		Accounting struct {
+			Pages uint64 `json:"pages"`
+		} `json:"accounting"`
+	}
+	if err := json.Unmarshal(result.Artifact, &first); err != nil || first.Complete || first.NextCursor == "" || first.Accounting.Pages != 1 {
+		t.Fatalf("ASSERT_RETAINED_V3_FIRST_PAGE: err=%v page=%+v", err, first)
+	}
+	request.Projection.Paging.Cursor = first.NextCursor
+	result, failure = execute(t, request, nil, operation.Request{})
+	if failure != nil || result.ArtifactSchemaID != retainedinspection.SourceProjectionSchemaV3ID {
+		t.Fatalf("ASSERT_RETAINED_V3_CONTINUATION: result=%+v failure=%v", result, failure)
+	}
+	var second struct {
+		Accounting struct {
+			Pages uint64 `json:"pages"`
+		} `json:"accounting"`
+	}
+	if err := json.Unmarshal(result.Artifact, &second); err != nil || second.Accounting.Pages != 2 {
+		t.Fatalf("ASSERT_RETAINED_V3_CUMULATIVE_PAGES: err=%v page=%+v", err, second)
+	}
+	request.Projection.Paging.Cursor = first.NextCursor + "tampered"
+	result, failure = execute(t, request, nil, operation.Request{})
+	assertTypedFailure(t, result, failure, "ASSEMBLE", "LIMIT")
+}
+
 func TestProjectionMetadataOnlyRequiresNoSourceLookup(t *testing.T) {
 	fx := validFixture(t, 1)
 	result, failure := execute(t, projectionRequest(fx, "OMIT"), nil, operation.Request{})

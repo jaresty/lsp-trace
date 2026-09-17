@@ -17,8 +17,18 @@ import (
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/publication"
+	"lsp-trace/internal/retainedinspection"
 	"lsp-trace/internal/schema"
 )
+
+func TestHydratedV3EnvelopeIsCanonical(t *testing.T) {
+	tool := Tool{EnvelopePolicy: EnvelopePolicyHydrated}
+	for _, id := range []string{retainedinspection.ArtifactEnvelopeSchemaID, retainedinspection.ArtifactEnvelopeSchemaV3ID, retainedinspection.DomainErrorEnvelopeSchemaID} {
+		if got := canonicalEnvelopeSchemaID(tool, id); got != id {
+			t.Fatalf("ASSERT_HYDRATED_CANONICAL_ENVELOPE[%s]: %s", id, got)
+		}
+	}
+}
 
 func TestInitializeCarriesAutomaticWorktreeSessionGuidance(t *testing.T) {
 	const assertion = "ASSERT_MCP_INITIALIZE_AUTOMATIC_WORKTREE_SESSION_GUIDANCE"

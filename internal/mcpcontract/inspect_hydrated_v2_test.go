@@ -40,20 +40,20 @@ func TestHydratedV2CompositionPreservesV1BytesAndRegistersSuccessors(t *testing.
 	if count != 1 {
 		t.Fatalf("operation 41 registration count=%d", count)
 	}
-	if tool.InputSchemaID != ri.InputSchemaID {
+	if tool.InputSchemaID != ri.InputSchemaV3ID {
 		t.Fatalf("successor input not advertised: %s", tool.InputSchemaID)
 	}
-	for _, id := range []string{ri.ArtifactEnvelopeSchemaID, ri.DomainErrorEnvelopeSchemaID} {
+	for _, id := range []string{ri.ArtifactEnvelopeSchemaID, ri.ArtifactEnvelopeSchemaV3ID, ri.DomainErrorEnvelopeSchemaID} {
 		if !containsString(tool.EnvelopeSchemaIDs, id) {
 			t.Fatalf("missing envelope %s", id)
 		}
 	}
-	for _, id := range []string{hi.SchemaID, ri.SourceProjectionSchemaID} {
+	for _, id := range []string{hi.SchemaID, ri.SourceProjectionSchemaID, ri.SourceProjectionSchemaV3ID} {
 		if !containsString(tool.ArtifactSchemaIDs, id) {
 			t.Fatalf("missing artifact %s", id)
 		}
 	}
-	for _, id := range append(v1IDs, ri.InputSchemaID, ri.ArtifactEnvelopeSchemaID, ri.DomainErrorEnvelopeSchemaID) {
+	for _, id := range append(v1IDs, ri.InputSchemaID, ri.InputSchemaV3ID, ri.ArtifactEnvelopeSchemaID, ri.ArtifactEnvelopeSchemaV3ID, ri.DomainErrorEnvelopeSchemaID) {
 		if _, err := SchemaJSON(id); err != nil {
 			t.Fatalf("schema %s: %v", id, err)
 		}

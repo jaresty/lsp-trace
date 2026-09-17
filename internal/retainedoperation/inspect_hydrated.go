@@ -2,6 +2,8 @@ package retainedoperation
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/sourceobject"
 	"lsp-trace/internal/sourceprojection"
+	"lsp-trace/internal/sourceprojectionv3"
 )
 
 // Failure is the operation-owned retained projection failure cause.
@@ -121,11 +124,44 @@ func inspectProjection(request operation.Request, projection retainedinspection.
 	if err != nil {
 		return classifyAssembly(err)
 	}
+	if paging := projection.Projection.Paging; paging != nil {
+		requestDigest, err := retainedRequestDigest(projection)
+		if err != nil {
+			return fail("ASSEMBLE", "ASSEMBLY_FAILED", nil, "request identity rejected")
+		}
+		page, err := sourceprojectionv3.PaginateV2(wire, requestDigest, sourceprojectionv3.Limits{
+			MaxPageBytes: paging.MaxPageBytes, MaxPages: paging.MaxPages, MaxResponseBytes: paging.MaxResponseBytes,
+			MaxObjects: limits.MaxObjects, MaxRanges: limits.MaxRanges, MaxSourceBytes: limits.MaxSourceBytes, MaxWork: limits.MaxWork,
+		}, paging.Cursor)
+		if err != nil {
+			return fail("ASSEMBLE", string(sourceobject.CodeLimit), nil, "projection paging rejected")
+		}
+		artifact, err := json.Marshal(page)
+		if err != nil {
+			return fail("ASSEMBLE", "ASSEMBLY_FAILED", nil, "result serialization rejected")
+		}
+		return operation.Result{Value: page, Artifact: append(artifact, '\n'), ArtifactSchemaID: retainedinspection.SourceProjectionSchemaV3ID}, nil
+	}
 	artifact, err := json.Marshal(wire)
 	if err != nil {
 		return fail("ASSEMBLE", "ASSEMBLY_FAILED", nil, "result serialization rejected")
 	}
 	return operation.Result{Value: wire, Artifact: append(artifact, '\n'), ArtifactSchemaID: retainedinspection.SourceProjectionSchemaID}, nil
+}
+
+func retainedRequestDigest(request retainedinspection.Request) (string, error) {
+	identity := request
+	if request.Projection.Paging != nil {
+		paging := *request.Projection.Paging
+		paging.Cursor = ""
+		identity.Projection.Paging = &paging
+	}
+	raw, err := json.Marshal(identity)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(digest[:]), nil
 }
 
 func ingress(request operation.Request, evidence retainedinspection.Evidence) ([]byte, *operation.Failure) {

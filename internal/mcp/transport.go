@@ -802,8 +802,13 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 	}
 	content := string(opResult.Artifact)
 	envelopeID := artifactSuccessSchemaID(tool.Name)
-	if tool.Name == mcpcontract.HydratedTool && artifactID == retainedinspection.SourceProjectionSchemaID {
-		envelopeID = retainedinspection.ArtifactEnvelopeSchemaID
+	if tool.Name == mcpcontract.HydratedTool {
+		switch artifactID {
+		case retainedinspection.SourceProjectionSchemaID:
+			envelopeID = retainedinspection.ArtifactEnvelopeSchemaID
+		case retainedinspection.SourceProjectionSchemaV3ID:
+			envelopeID = retainedinspection.ArtifactEnvelopeSchemaV3ID
+		}
 	}
 	env := envelope{
 		EnvelopeVersion: "1", EnvelopeSchemaID: envelopeID, Tool: tool.Name, RequestID: requestID,
@@ -1016,7 +1021,7 @@ func supportsV1Verification(artifactID string) bool {
 func canonicalEnvelopeSchemaID(tool Tool, id string) string {
 	switch tool.EnvelopePolicy {
 	case EnvelopePolicyHydrated:
-		if id == retainedinspection.ArtifactEnvelopeSchemaID || id == retainedinspection.DomainErrorEnvelopeSchemaID {
+		if id == retainedinspection.ArtifactEnvelopeSchemaID || id == retainedinspection.ArtifactEnvelopeSchemaV3ID || id == retainedinspection.DomainErrorEnvelopeSchemaID {
 			return id
 		}
 		return mcpcontract.HydratedEnvelopeID(id)

@@ -23,7 +23,9 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 		SchemaRegistration{ID: hi.InputSchemaID, Family: "input-inspect-hydrated.v1", Layer: "input", Path: "schemas/input-inspect-hydrated.v1.schema.json"},
 		SchemaRegistration{ID: hi.SchemaID, Family: "output-inspect-hydrated.v1", Layer: "artifact", Path: "schemas/output-inspect-hydrated.v1.schema.json"},
 		SchemaRegistration{ID: ri.InputSchemaID, Family: "input-inspect-hydrated.v2", Layer: "input", Path: "schemas/input-inspect-hydrated.v2.schema.json"},
+		SchemaRegistration{ID: ri.InputSchemaV3ID, Family: "input-inspect-hydrated.v3", Layer: "input", Path: "schemas/input-inspect-hydrated.v3.schema.json"},
 		SchemaRegistration{ID: ri.ArtifactEnvelopeSchemaID, Family: "envelope-inspect-hydrated-artifact.v2", Layer: "envelope", Path: "schemas/envelope-inspect-hydrated-artifact.v2.schema.json"},
+		SchemaRegistration{ID: ri.ArtifactEnvelopeSchemaV3ID, Family: "envelope-inspect-hydrated-artifact.v3", Layer: "envelope", Path: "schemas/envelope-inspect-hydrated-artifact.v3.schema.json"},
 		SchemaRegistration{ID: ri.DomainErrorEnvelopeSchemaID, Family: "envelope-inspect-hydrated-domain-error.v2", Layer: "envelope", Path: "schemas/envelope-inspect-hydrated-domain-error.v2.schema.json"},
 	)
 	envelopes := []string{}
@@ -33,8 +35,8 @@ func WithHydratedInspection(m *Manifest) *Manifest {
 		c.Schemas = append(c.Schemas, SchemaRegistration{ID: id, Family: strings.TrimSuffix(strings.TrimPrefix(name, "schemas/"), ".schema.json"), Layer: "envelope", Path: name})
 		envelopes = append(envelopes, id)
 	}
-	envelopes = append(envelopes, ri.ArtifactEnvelopeSchemaID, ri.DomainErrorEnvelopeSchemaID)
-	c.Tools = append(c.Tools, ToolContract{Name: HydratedTool, Aliases: []string{}, InputSchemaID: ri.InputSchemaID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{hi.SchemaID, ri.SourceProjectionSchemaID}, Advertised: true, Availability: "ENABLED"})
+	envelopes = append(envelopes, ri.ArtifactEnvelopeSchemaID, ri.ArtifactEnvelopeSchemaV3ID, ri.DomainErrorEnvelopeSchemaID)
+	c.Tools = append(c.Tools, ToolContract{Name: HydratedTool, Aliases: []string{}, InputSchemaID: ri.InputSchemaV3ID, EnvelopeSchemaIDs: envelopes, ArtifactSchemaIDs: []string{hi.SchemaID, ri.SourceProjectionSchemaID, ri.SourceProjectionSchemaV3ID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 func readPublicContractSchema(name string) ([]byte, error) {
@@ -75,8 +77,12 @@ func readPublicContractSchema(name string) ([]byte, error) {
 		return hi.OutputSchema(), nil
 	case "testdata/schemas/input-inspect-hydrated.v2.schema.json":
 		return ri.InputSchema(), nil
+	case "testdata/schemas/input-inspect-hydrated.v3.schema.json":
+		return ri.InputSchemaV3(), nil
 	case "testdata/schemas/envelope-inspect-hydrated-artifact.v2.schema.json":
 		return ri.ArtifactEnvelopeSchema(), nil
+	case "testdata/schemas/envelope-inspect-hydrated-artifact.v3.schema.json":
+		return ri.ArtifactEnvelopeSchemaV3(), nil
 	case "testdata/schemas/envelope-inspect-hydrated-domain-error.v2.schema.json":
 		return ri.DomainErrorEnvelopeSchema(), nil
 	}

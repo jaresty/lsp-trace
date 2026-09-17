@@ -14,8 +14,8 @@ func TestStructuralContextV2SourceInspectionAndAmbiguityGuidance(t *testing.T) {
 	}
 	description := completeToolDescription(tool)
 	for _, required := range []string{
-		"exact symbol", "position", "document regex", "READY session",
-		"Locators add no facts", "CALLS are server-reported", "Bounded context",
+		"Symbol", "position", "document-regex", "READY session",
+		"no locator facts", "server-reported CALLS",
 		"authority 0", "completeness unknown",
 	} {
 		if !strings.Contains(description, required) {

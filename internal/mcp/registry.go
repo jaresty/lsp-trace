@@ -269,10 +269,10 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		mcpcontract.ContextSymbolChurnTool:        "Attribute revision-exact Git changed lines to host-profile LSP document-symbol ranges; authority remains zero, cross-revision identity is not evaluated, and no CALLS are inferred",
 		mcpcontract.ContextSymbolChurnCaptureTool: "Acquire bounded live Structural Context V2 bytes and attribute revision-exact Git changed lines through host-profile LSP document-symbol ranges; authority remains zero and cross-revision identity is not evaluated",
 		mcpcontract.StructuralDeltaTool:           "Compare exactly two bounded local transient structural V2 results; authority remains zero and no repository equivalence is claimed",
-		mcpcontract.StructuralContextV2Tool:       "Bounded context for an exact symbol, position, or document regex in a READY session. Locators add no facts; CALLS are server-reported; authority 0; completeness unknown.",
+		mcpcontract.StructuralContextV2Tool:       "Symbol, position, or document-regex context in READY session; no locator facts; server-reported CALLS; authority 0; completeness unknown.",
 		mcpcontract.StructuralContextTool:         "Analyze code structure, architecture, design dependencies, and impact analysis questions through a bounded transient live CALLS-only neighborhood or directed impact over one exact host-managed session generation; authority remains zero, source_graph_complete remains UNKNOWN, and results cannot be retained, replayed, published, hydrated, or source-supplied",
 		mcpcontract.CensusTool:                    "Run an accountable source-symbol census over one host-managed language-server generation and publish exactly one private capture set; authority remains zero, source_graph_complete remains UNKNOWN, and no cross-capture CALLS inference is performed",
-		mcpcontract.HydratedTool:                  "Inspect exact retained node/relation context offline from inline bytes, verified publication, or a host-pinned immutable content store; no paths or source acquisition",
+		mcpcontract.HydratedTool:                  "Inspect retained evidence; optional bounded source projection.",
 		mcpcontract.ProgramCLeidenTool:            "Compute the certified structural-only Program C Leiden community presentation from exact native Graph Provenance V5 envelope bytes; composite admission is not authorized",
 		mcpcontract.ProgramCComposeTool:           "Deterministically compose compatible Graph Provenance V5 captures while preserving exact constituent bytes and identities; no cross-capture CALLS inference, native-capture custody, or Leiden admission",
 		mcpcontract.ProgramCInstabilityTool:       "Compute bounded label-independent Program C A-08 community-instability evidence from exact Graph Provenance V5 envelope bytes; authority remains zero and source graph completeness remains UNKNOWN",
@@ -299,8 +299,8 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 		"lsp_trace_v2_incoming":                   "Graph Provenance V2 output is DEPRECATED; use lsp_trace_v3_incoming with output_version=lsp-trace.graph-provenance.v5. Historical V2 dispatch remains compatible",
 		"lsp_trace_v3_slice":                      "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
 		"lsp_trace_v3_incoming":                   "Acquisition route v3 with historical Graph V3 output is DEPRECATED; select output_version=lsp-trace.graph-provenance.v5 for source-qualified Graph Provenance V5 output. Historical v3 dispatch remains compatible",
-		"lsp_trace_v1_incoming":                   "Server-reported callers for an exact callee in a READY session and exact document URI; text matches never establish CALLS.",
-		"lsp_trace_v1_slice":                      "Server-reported caller/callee neighborhood for an exact target in a READY session and exact document URI; text matches never establish CALLS.",
+		"lsp_trace_v1_incoming":                   "Server-reported callers for an exact callee URI in a READY session; text never establishes CALLS.",
+		"lsp_trace_v1_slice":                      "Server-reported caller/callee neighborhood for an exact URI target in a READY session; text never establishes CALLS.",
 	}
 	registeredFamilies := make(map[string]string, len(manifest.Schemas))
 	for _, schema := range manifest.Schemas {
@@ -554,15 +554,15 @@ func routesThroughManagedWorkspaceSession(name string) bool {
 func lifecycleDescription(name string) string {
 	switch name {
 	case "lsp_session_v1_derive_workspace":
-		return "Derive a READY managed language-server session for one exact registered Git worktree by privately inheriting a READY parent launch template"
+		return "Derive READY session for exact registered Git worktree from READY parent"
 	case "lsp_session_v1_list":
-		return "Discover host-provisioned local language-server sessions and exact generations"
+		return "Discover sessions and exact generations"
 	case "lsp_session_v1_status":
-		return "Read the current observed state of one local language-server session generation"
+		return "Read current session generation state"
 	case "lsp_session_v1_stop":
-		return "Request the host runtime to stop one exact local language-server session generation"
+		return "Stop exact session generation"
 	case "lsp_session_v1_restart":
-		return "Request the host runtime to restart one exact local language-server session generation"
+		return "Restart exact session generation"
 	default:
 		return ""
 	}

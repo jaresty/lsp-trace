@@ -146,17 +146,16 @@ func TestSemanticTraversalDescriptionsRouteAndExplainInvocation(t *testing.T) {
 	checks := map[string][]string{
 		"lsp_trace_v1_incoming": {
 			"Server-reported callers",
-			"exact callee",
-			"text matches never establish CALLS",
+			"exact callee URI",
+			"text never establishes CALLS",
 			"READY session",
-			"exact document URI",
 		},
 		"lsp_trace_v1_slice": {
 			"caller/callee neighborhood",
 			"Server-reported",
-			"text matches never establish CALLS",
+			"text never establishes CALLS",
 			"READY session",
-			"exact document URI",
+			"exact URI target",
 		},
 	}
 	for name, phrases := range checks {

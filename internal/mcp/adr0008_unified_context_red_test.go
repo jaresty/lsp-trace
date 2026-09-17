@@ -43,7 +43,7 @@ func TestADR0008UnifiedContextDescriptionPreservesDesignIntent(t *testing.T) {
 	if !ok {
 		t.Fatal("ASSERT_UNIFIED_CONTEXT_TOOL_PRESENT")
 	}
-	for _, required := range []string{"exact symbol", "position", "document regex", "READY session", "Locators add no facts", "CALLS are server-reported", "authority 0", "completeness unknown"} {
+	for _, required := range []string{"Symbol", "position", "document-regex", "READY session", "no locator facts", "server-reported CALLS", "authority 0", "completeness unknown"} {
 		if !strings.Contains(tool.Description, required) {
 			t.Errorf("ASSERT_UNIFIED_CONTEXT_DESCRIPTION[%s]: %q", required, tool.Description)
 		}
