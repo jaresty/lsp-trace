@@ -196,6 +196,43 @@ func TestProjectRejectsIncompleteAndMixedCandidateIdentity(t *testing.T) {
 	}
 }
 
+func TestPrivacyEligibilityAndMetadataDefault(t *testing.T) {
+	const secret = "SECRET_RESOLVER_ROOT_TOKEN"
+	candidates := fixtureCandidates()
+	sources := fixtureSources(true)
+	sources["src/source.ts"] = Source{LogicalSourceID: "src/source.ts", Digest: sources["src/source.ts"].Digest, ByteLength: len(sources["src/source.ts"].Bytes), Bytes: append(sources["src/source.ts"].Bytes, []byte(secret)...), Available: true}
+
+	metadata, err := Project(candidates, sources, Policy{PolicyID: "metadata-default"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte(secret)) || metadata.PrivacySummary.BodyRequested || metadata.PrivacySummary.BodyReturned != 0 || len(metadata.EmittedSpans) != 0 {
+		t.Fatalf("ASSERT_C05_PRIVATE_DATA_NEVER_SERIALIZED: %s", raw)
+	}
+	for _, unit := range metadata.Units {
+		if unit.Body != "" || unit.BodyDisposition != "NOT_REQUESTED" {
+			t.Fatalf("ASSERT_C05_METADATA_ONLY_NO_BODY_ACQUISITION: %+v", unit)
+		}
+	}
+
+	withheld, err := Project(withheldCandidates(), fixtureSources(true), Policy{PolicyID: "restricted", BodyRequested: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withheld.Accounting.Selected != 0 || withheld.Accounting.Omitted != len(candidates) || withheld.PrivacySummary.BodyReturned != 0 || withheld.PrivacySummary.BodyWithheld != len(candidates) {
+		t.Fatalf("ASSERT_C05_PRIVACY_PRECEDES_BODY_RESOLUTION: %+v", withheld)
+	}
+	for _, omission := range withheld.Omissions {
+		if omission.Cause != "POLICY_WITHHELD" {
+			t.Fatalf("ASSERT_C05_PRIVACY_OMISSION_DISCOVERABLE: %+v", withheld.Omissions)
+		}
+	}
+}
+
 func TestProjectRejectsNonServerRelationProvenance(t *testing.T) {
 	candidates := fixtureCandidates()
 	candidates[1].RelationProvenance = "SOURCE_INFERRED"

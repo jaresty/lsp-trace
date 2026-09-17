@@ -113,6 +113,9 @@ func TestProjectionMetadataOnlyRequiresNoSourceLookup(t *testing.T) {
 	if len(wire.Units) != 1 || wire.Units[0].Body != "" || wire.Units[0].BodyDisposition != "NOT_REQUESTED" || wire.DocumentAccounting.TotalAcquiredBytes != 0 {
 		t.Fatalf("ASSERT_C05_METADATA_ONLY_NO_BODY_ACQUISITION: %+v", wire)
 	}
+	if bytes.Contains(result.Artifact, fx.content) || bytes.Contains(result.Artifact, []byte("source-object-root")) || bytes.Contains(result.Artifact, []byte("SQLCMDPASSWORD")) || bytes.Contains(result.Artifact, []byte("permission denied: /private/root")) {
+		t.Fatalf("ASSERT_C05_PRIVATE_DATA_NEVER_SERIALIZED: %s", result.Artifact)
+	}
 }
 
 func TestProjectionPublicationAndContentIngress(t *testing.T) {
