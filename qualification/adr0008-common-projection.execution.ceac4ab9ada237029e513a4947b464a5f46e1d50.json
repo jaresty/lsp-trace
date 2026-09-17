@@ -1,0 +1,36 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-common-projection-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "predecessor_execution": "qualification/adr0008-common-projection.execution.3679275d41fa043213b34728e4693fdec730cd06.json",
+  "reviewed_revision": "ceac4ab9ada237029e513a4947b464a5f46e1d50",
+  "reviewed_at": "2026-09-17T23:57:46Z",
+  "scope": "COMMON_PROJECTION_C01_C06",
+  "execution_status": "EXECUTED_WITH_BLOCKERS",
+  "tests_pass_claimed": true,
+  "common_projection_qualified": false,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 5, "FAIL": 0, "BLOCKED": 1, "NOT_RUN": 0},
+  "historical_global_failure": {"cell":"L04","verdict":"FAIL","changed":false},
+  "logs": [
+    {"id":"c06-focused","path":"/tmp/lsp-trace-qualification-c06-ceac4ab.log","sha256":"227229b73babbc3e57f2161f9f273af7046f583147e32ea9e6879b9a9b33ec13","outcome":"PASS"},
+    {"id":"full-go-suite","path":"/tmp/lsp-trace-qualification-full-ceac4ab.log","sha256":"a7decf756da918c7a61f7fb87a4e40df7af0c81134114f9dffb7f3a3105c2d1d","outcome":"PASS"}
+  ],
+  "cells": [
+    {"id":"C01","verdict":"BLOCKED","carried_from":"3679275d41fa043213b34728e4693fdec730cd06","limitation":"Every identity field is not independently mutated across all projected-unit forms."},
+    {"id":"C02","verdict":"PASS","carried_from":"qualification/adr0008-common-projection.execution.c23ff0b2245a5a278c5cbb2dbf8f9a1ab5789677.json","evidence":["full repository suite re-executed PASS at ceac4ab9ada237029e513a4947b464a5f46e1d50"]},
+    {"id":"C03","verdict":"PASS","carried_from":"qualification/adr0008-common-projection.execution.6020d43fcb09bcee4f6b5cdcd6cd0c7d2780038d.json","evidence":["full repository suite re-executed PASS at ceac4ab9ada237029e513a4947b464a5f46e1d50"]},
+    {"id":"C04","verdict":"PASS","carried_from":"qualification/adr0008-common-projection.execution.ebf28c738ae7a9ee5278f757fecc1a80670578e0.json","evidence":["full repository suite re-executed PASS at ceac4ab9ada237029e513a4947b464a5f46e1d50"]},
+    {"id":"C05","verdict":"PASS","carried_from":"qualification/adr0008-common-projection.execution.3679275d41fa043213b34728e4693fdec730cd06.json","evidence":["full repository suite re-executed PASS at ceac4ab9ada237029e513a4947b464a5f46e1d50"]},
+    {"id":"C06","verdict":"PASS","evidence":["TestC06ProjectionCandidateMutationCorpusFailsTerminalZero PASS","TestC06AssemblyMutationCorpusFailsTerminalZero PASS","TestC06PagerMalformedAndMixedPageCorpusFailsTerminalZero PASS"],"limitation":"none within the C06 predicate"}
+  ],
+  "c06_proof": {
+    "mutation_classes": ["unknown fields","duplicate fields and identities","missing fields and identities","invalid identity","invalid range","invalid encoding","invalid privacy","invalid status","invalid limits","reordered page","mixed page"],
+    "assertion_specific": true,
+    "compiling_red_catalogue": true,
+    "terminal_result": "exact zero value",
+    "repairs_disallowed": ["normalization to success","retry","fallback","broader policy","implicit continuation"],
+    "implementation_hardening": ["strict cursor envelope and payload decoding rejects unknown and duplicate JSON members","empty privacy classification fails before projection","unknown V2 projection status fails before assembly"]
+  },
+  "global_invariants": {"graph_facts_added":0,"semantic_authority":0,"semantic_accepted":false,"source_graph_complete":"UNKNOWN","canonical_operation_count":41,"compact_advertised_tool_count":12,"operation_44":"FORBIDDEN","schema_change_policy":"ADDITIVE_ONLY"},
+  "claim_ceiling": "This execution qualifies C06 and carries forward C02 through C05. COMMON_PROJECTION remains BLOCKED only on C01; historical L04 remains FAIL; implementation_qualified remains false."
+}
