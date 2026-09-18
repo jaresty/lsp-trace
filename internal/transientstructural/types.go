@@ -272,6 +272,35 @@ type TargetDiagnostic struct {
 	Action         TargetAction `json:"action"`
 }
 
+type ResourceReason string
+
+const (
+	ResourceReasonNodeBound             ResourceReason = "NODE_BOUND"
+	ResourceReasonRegexMaxDocumentBytes ResourceReason = "REGEX_MAX_DOCUMENT_BYTES"
+	ResourceReasonRegexMaxPatternBytes  ResourceReason = "REGEX_MAX_PATTERN_BYTES"
+	ResourceReasonRegexMaxWork          ResourceReason = "REGEX_MAX_WORK"
+	ResourceReasonRegexMaxMatches       ResourceReason = "REGEX_MAX_MATCHES"
+)
+
+type ResourceField string
+
+const (
+	ResourceFieldMaxNodes              ResourceField = "max_nodes"
+	ResourceFieldRegexMaxDocumentBytes ResourceField = "regex_locator.limits.max_document_bytes"
+	ResourceFieldRegexMaxPatternBytes  ResourceField = "regex_locator.limits.max_pattern_bytes"
+	ResourceFieldRegexMaxWork          ResourceField = "regex_locator.limits.max_work"
+	ResourceFieldRegexMaxMatches       ResourceField = "regex_locator.limits.max_matches"
+)
+
+type ResourceDiagnostic struct {
+	Reason         ResourceReason `json:"reason"`
+	Field          ResourceField  `json:"field"`
+	Allowed        int            `json:"allowed"`
+	Observed       *int           `json:"observed,omitempty"`
+	MaximumAllowed int            `json:"maximum_allowed,omitempty"`
+	SuggestedLimit *int           `json:"suggested_limit,omitempty"`
+}
+
 type FailureReason string
 
 const (
@@ -288,6 +317,7 @@ type DomainFailure struct {
 	Accounting          Accounting           `json:"accounting"`
 	TraversalDiagnostic *TraversalDiagnostic `json:"traversal_diagnostic,omitempty"`
 	TargetDiagnostic    *TargetDiagnostic    `json:"target_diagnostic,omitempty"`
+	ResourceDiagnostic  *ResourceDiagnostic  `json:"resource_diagnostic,omitempty"`
 }
 
 func (f *DomainFailure) Error() string {

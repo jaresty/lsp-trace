@@ -110,7 +110,11 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 			if typed, ok := err.(*regexlocator.Error); ok && state == StateTargetNotFound && typed.Code == regexlocator.CodeMatchAbsent {
 				return Result{}, failWithReason(PhasePreflight, state, FailureReasonNoRegexMatch, Accounting{})
 			}
-			return Result{}, fail(PhasePreflight, state, Accounting{})
+			failure := fail(PhasePreflight, state, Accounting{})
+			if typed, ok := err.(*regexlocator.Error); ok && typed.Code == regexlocator.CodeResourceLimit {
+				failure.ResourceDiagnostic = regexResourceDiagnostic(typed.Resource)
+			}
+			return Result{}, failure
 		}
 		line, character := selected.Position.Line, selected.Position.Character
 		request.Target.Symbol, request.Target.Regex = "", nil
@@ -406,6 +410,29 @@ func hasOmission(accounting Accounting, reason OmissionReason) bool {
 		}
 	}
 	return false
+}
+
+func regexResourceDiagnostic(limit *regexlocator.ResourceLimit) *ResourceDiagnostic {
+	if limit == nil {
+		return nil
+	}
+	diagnostic := &ResourceDiagnostic{Allowed: limit.Allowed, Observed: limit.Observed}
+	switch limit.Reason {
+	case regexlocator.ResourceLimitDocumentBytes:
+		diagnostic.Reason, diagnostic.Field, diagnostic.MaximumAllowed = ResourceReasonRegexMaxDocumentBytes, ResourceFieldRegexMaxDocumentBytes, MaxRegexDocumentBytes
+	case regexlocator.ResourceLimitPatternBytes:
+		diagnostic.Reason, diagnostic.Field, diagnostic.MaximumAllowed = ResourceReasonRegexMaxPatternBytes, ResourceFieldRegexMaxPatternBytes, MaxRegexPatternBytes
+	case regexlocator.ResourceLimitWork:
+		diagnostic.Reason, diagnostic.Field, diagnostic.MaximumAllowed = ResourceReasonRegexMaxWork, ResourceFieldRegexMaxWork, MaxRegexWork
+	case regexlocator.ResourceLimitMatches:
+		diagnostic.Reason, diagnostic.Field, diagnostic.MaximumAllowed = ResourceReasonRegexMaxMatches, ResourceFieldRegexMaxMatches, MaxRegexMatches
+	default:
+		return nil
+	}
+	if limit.Observed != nil {
+		diagnostic.SuggestedLimit = cappedSuggestion(limit.Allowed, *limit.Observed, diagnostic.MaximumAllowed)
+	}
+	return diagnostic
 }
 
 func bindBounds(request Request) BoundsBinding {

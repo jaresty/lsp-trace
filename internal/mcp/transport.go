@@ -89,7 +89,7 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
 
-func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, _ map[string]any) envelope {
+func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, args map[string]any) envelope {
 	env := structuralContextDomainErrorEnvelope(tool, string(failure.Phase), string(failure.State))
 	if tool != mcpcontract.StructuralContextV2Tool {
 		return env
@@ -101,6 +101,14 @@ func structuralContextTraversalDomainError(tool string, failure *transientstruct
 		env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
 		env.TargetDiagnostic = failure.TargetDiagnostic
 		return env
+	}
+	if tool == mcpcontract.StructuralContextV2Tool {
+		limit, _ := args["max_nodes"].(float64)
+		if diagnostic := transientstructural.DiagnoseResourceLimit(transientstructural.Request{MaxNodes: int(limit)}, failure); diagnostic != nil {
+			env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
+			env.ResourceDiagnostic = diagnostic
+			return env
+		}
 	}
 	if failure.TraversalDiagnostic == nil {
 		return env
@@ -234,6 +242,7 @@ type envelope struct {
 	Result                  any                  `json:"result,omitempty"`
 	Error                   any                  `json:"error,omitempty"`
 	Diagnostic              any                  `json:"diagnostic,omitempty"`
+	ResourceDiagnostic      any                  `json:"resource_diagnostic,omitempty"`
 	TargetDiagnostic        any                  `json:"target_diagnostic,omitempty"`
 	Target                  any                  `json:"target,omitempty"`
 	Reason                  string               `json:"reason,omitempty"`
@@ -556,7 +565,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
 			var domain *transientstructural.DomainFailure
 			if errors.As(failure.Err, &domain) {
-				if domain.State == transientstructural.StateTruncated || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
+				if (domain.State == transientstructural.StateTruncated && tool.Name != mcpcontract.StructuralContextV2Tool) || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
 					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
 				}
 				return bindEnvelope(base, tool, structuralContextTraversalDomainError(tool.Name, domain, operationArguments))

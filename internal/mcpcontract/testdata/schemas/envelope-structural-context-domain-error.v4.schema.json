@@ -123,6 +123,26 @@
         "omitted_symbols": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "action": { "enum": ["FAIL_ABSENT", "FAIL_AMBIGUOUS", "FAIL_MALFORMED", "FAIL_MISMATCH", "FAIL_UNSUPPORTED", "FAIL_DOCUMENT_SYMBOLS", "FAIL_UNPREPARABLE"] }
       }
+    },
+    "resource_diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "field", "allowed"],
+      "properties": {
+        "reason": { "enum": ["NODE_BOUND", "REGEX_MAX_DOCUMENT_BYTES", "REGEX_MAX_PATTERN_BYTES", "REGEX_MAX_WORK", "REGEX_MAX_MATCHES"] },
+        "field": { "enum": ["max_nodes", "regex_locator.limits.max_document_bytes", "regex_locator.limits.max_pattern_bytes", "regex_locator.limits.max_work", "regex_locator.limits.max_matches"] },
+        "allowed": { "type": "integer", "minimum": 1, "maximum": 536870912 },
+        "observed": { "type": "integer", "minimum": 1, "maximum": 536870912 },
+        "maximum_allowed": { "type": "integer", "minimum": 1, "maximum": 536870912 },
+        "suggested_limit": { "type": "integer", "minimum": 1, "maximum": 536870912 }
+      },
+      "allOf": [
+        { "if": { "properties": { "reason": { "const": "NODE_BOUND" } }, "required": ["reason"] }, "then": { "properties": { "field": { "const": "max_nodes" }, "maximum_allowed": { "const": 10000 } }, "required": ["maximum_allowed"] } },
+        { "if": { "properties": { "reason": { "const": "REGEX_MAX_DOCUMENT_BYTES" } }, "required": ["reason"] }, "then": { "properties": { "field": { "const": "regex_locator.limits.max_document_bytes" }, "maximum_allowed": { "const": 16777216 } }, "required": ["maximum_allowed"] } },
+        { "if": { "properties": { "reason": { "const": "REGEX_MAX_PATTERN_BYTES" } }, "required": ["reason"] }, "then": { "properties": { "field": { "const": "regex_locator.limits.max_pattern_bytes" }, "maximum_allowed": { "const": 4096 } }, "required": ["maximum_allowed"] } },
+        { "if": { "properties": { "reason": { "const": "REGEX_MAX_WORK" } }, "required": ["reason"] }, "then": { "properties": { "field": { "const": "regex_locator.limits.max_work" }, "maximum_allowed": { "const": 536870912 } }, "required": ["maximum_allowed"] } },
+        { "if": { "properties": { "reason": { "const": "REGEX_MAX_MATCHES" } }, "required": ["reason"] }, "then": { "properties": { "field": { "const": "regex_locator.limits.max_matches" }, "maximum_allowed": { "const": 1000 } }, "required": ["maximum_allowed"] } }
+      ]
     }
   },
   "allOf": [
@@ -144,7 +164,17 @@
       "if": { "required": ["target_diagnostic"] },
       "then": {
         "properties": { "phase": { "const": "PREFLIGHT" } },
-        "not": { "required": ["diagnostic"] }
+        "not": { "anyOf": [{ "required": ["diagnostic"] }, { "required": ["resource_diagnostic"] }] }
+      }
+    },
+    {
+      "if": { "required": ["resource_diagnostic"] },
+      "then": {
+        "properties": {
+          "state": { "enum": ["RESOURCE_LIMIT", "TRUNCATED"] },
+          "error": { "properties": { "code": { "enum": ["RESOURCE_LIMIT", "TRUNCATED"] } }, "required": ["code"] }
+        },
+        "not": { "anyOf": [{ "required": ["diagnostic"] }, { "required": ["target_diagnostic"] }] }
       }
     }
   ]

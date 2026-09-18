@@ -69,6 +69,25 @@ func TestStructuralContextTraversalDomainErrorV4TargetDiagnosticIsClosedAndPriva
 	validateStructuralContextV4(t, mixed, false)
 }
 
+func TestStructuralContextTraversalDomainErrorV4ResourceDiagnosticIsClosedAndExact(t *testing.T) {
+	value := structuralContextV4Envelope()
+	value["state"], value["error"] = "RESOURCE_LIMIT", map[string]any{"code": "RESOURCE_LIMIT"}
+	value["resource_diagnostic"] = map[string]any{"reason": "REGEX_MAX_DOCUMENT_BYTES", "field": "regex_locator.limits.max_document_bytes", "allowed": 100, "observed": 125, "maximum_allowed": 16777216, "suggested_limit": 125}
+	validateStructuralContextV4(t, value, true)
+	for name, mutate := range map[string]func(map[string]any){
+		"unknown_reason": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["reason"] = "OTHER" },
+		"unknown_field": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["field"] = "max_nodes" },
+		"unknown_property": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["path"] = "private" },
+		"wrong_state": func(v map[string]any) { v["state"], v["error"] = "TIMEOUT", map[string]any{"code": "TIMEOUT"} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := cloneStructuralContextV4(t, value)
+			mutate(bad)
+			validateStructuralContextV4(t, bad, false)
+		})
+	}
+}
+
 func TestStructuralContextTraversalDomainErrorV4ReasonIsBoundedAndPrivate(t *testing.T) {
 	withoutReason := structuralContextV4Envelope()
 	validateStructuralContextV4(t, withoutReason, true)

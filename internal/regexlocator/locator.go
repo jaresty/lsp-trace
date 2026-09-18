@@ -44,9 +44,25 @@ type Result struct {
 	MatchCount int
 }
 
+type ResourceLimitReason string
+
+const (
+	ResourceLimitDocumentBytes ResourceLimitReason = "MAX_DOCUMENT_BYTES"
+	ResourceLimitPatternBytes  ResourceLimitReason = "MAX_PATTERN_BYTES"
+	ResourceLimitWork          ResourceLimitReason = "MAX_WORK"
+	ResourceLimitMatches       ResourceLimitReason = "MAX_MATCHES"
+)
+
+type ResourceLimit struct {
+	Reason   ResourceLimitReason
+	Allowed  int
+	Observed *int
+}
+
 type Error struct {
-	Code  Code
-	Cause error
+	Code     Code
+	Cause    error
+	Resource *ResourceLimit
 }
 
 func (e *Error) Error() string {
@@ -62,18 +78,25 @@ func fail(code Code, cause error) (Result, error) {
 	return Result{}, &Error{Code: code, Cause: cause}
 }
 
+func resourceLimit(reason ResourceLimitReason, allowed int, observed *int) (Result, error) {
+	return Result{}, &Error{Code: CodeResourceLimit, Resource: &ResourceLimit{Reason: reason, Allowed: allowed, Observed: observed}}
+}
+
 func Resolve(request Request) (Result, error) {
 	limits := request.Limits
 	if request.Pattern == "" || request.MatchIndex < 0 || request.CaptureGroup < 0 ||
 		limits.MaxDocumentBytes <= 0 || limits.MaxMatches <= 0 || limits.MaxPatternBytes <= 0 || limits.MaxWork <= 0 {
 		return fail(CodeInvalidRequest, nil)
 	}
-	if len(request.Document) > limits.MaxDocumentBytes || len(request.Pattern) > limits.MaxPatternBytes {
-		return fail(CodeResourceLimit, nil)
+	if observed := len(request.Document); observed > limits.MaxDocumentBytes {
+		return resourceLimit(ResourceLimitDocumentBytes, limits.MaxDocumentBytes, &observed)
+	}
+	if observed := len(request.Pattern); observed > limits.MaxPatternBytes {
+		return resourceLimit(ResourceLimitPatternBytes, limits.MaxPatternBytes, &observed)
 	}
 	work := len(request.Document) + len(request.Pattern)
 	if work > limits.MaxWork {
-		return fail(CodeResourceLimit, nil)
+		return resourceLimit(ResourceLimitWork, limits.MaxWork, &work)
 	}
 	if request.ExpectedDigest != "" {
 		digest := fmt.Sprintf("sha256:%x", sha256.Sum256(request.Document))
@@ -93,10 +116,10 @@ func Resolve(request Request) (Result, error) {
 	}
 	matches := re.FindAllSubmatchIndex(request.Document, limits.MaxMatches+1)
 	if len(matches) > limits.MaxMatches {
-		return fail(CodeResourceLimit, nil)
+		return resourceLimit(ResourceLimitMatches, limits.MaxMatches, nil)
 	}
-	if work+len(matches) > limits.MaxWork {
-		return fail(CodeResourceLimit, nil)
+	if observed := work + len(matches); observed > limits.MaxWork {
+		return resourceLimit(ResourceLimitWork, limits.MaxWork, &observed)
 	}
 	if request.MatchIndex >= len(matches) {
 		return fail(CodeMatchAbsent, nil)

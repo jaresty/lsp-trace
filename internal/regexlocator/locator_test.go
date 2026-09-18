@@ -22,6 +22,31 @@ func TestResolveDeterministicNthCaptureAndEncoding(t *testing.T) {
 	}
 }
 
+func TestResolveResourceLimitsCarryOnlyExactConsumption(t *testing.T) {
+	cases := []struct {
+		name     string
+		request  Request
+		want     ResourceLimitReason
+		observed *int
+	}{
+		{"document", Request{Document: []byte("abc"), Pattern: "a", Encoding: "utf-8", Limits: Limits{MaxDocumentBytes: 2, MaxMatches: 2, MaxPatternBytes: 2, MaxWork: 10}}, ResourceLimitDocumentBytes, ptr(3)},
+		{"pattern", Request{Document: []byte("a"), Pattern: "abc", Encoding: "utf-8", Limits: Limits{MaxDocumentBytes: 2, MaxMatches: 2, MaxPatternBytes: 2, MaxWork: 10}}, ResourceLimitPatternBytes, ptr(3)},
+		{"work", Request{Document: []byte("ab"), Pattern: "a", Encoding: "utf-8", Limits: Limits{MaxDocumentBytes: 2, MaxMatches: 2, MaxPatternBytes: 2, MaxWork: 2}}, ResourceLimitWork, ptr(3)},
+		{"matches", Request{Document: []byte("a a"), Pattern: "a", Encoding: "utf-8", Limits: Limits{MaxDocumentBytes: 10, MaxMatches: 1, MaxPatternBytes: 10, MaxWork: 20}}, ResourceLimitMatches, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Resolve(tc.request)
+			typed, ok := err.(*Error)
+			if !ok || typed.Code != CodeResourceLimit || typed.Resource == nil || typed.Resource.Reason != tc.want || typed.Resource.Observed == nil != (tc.observed == nil) || (tc.observed != nil && *typed.Resource.Observed != *tc.observed) {
+				t.Fatalf("ASSERT_REGEX_RESOURCE_ACCOUNTING: %#v", err)
+			}
+		})
+	}
+}
+
+func ptr(value int) *int { return &value }
+
 func TestResolveFailsClosed(t *testing.T) {
 	base := Request{Document: []byte("x x"), Pattern: "x", Encoding: "utf-8", Limits: Limits{MaxDocumentBytes: 10, MaxMatches: 2, MaxPatternBytes: 10, MaxWork: 20}}
 	cases := []struct {

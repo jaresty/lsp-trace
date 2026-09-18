@@ -306,7 +306,7 @@ func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 		}
 	}
 	packageType := reflect.TypeOf((*DomainFailure)(nil))
-	if packageType.Elem().NumField() != 6 {
+	if packageType.Elem().NumField() != 7 {
 		t.Fatalf("ASSERT_FAILURE_PRIVACY_SURFACE: %+v", packageType.Elem())
 	}
 	reasonType := reflect.TypeOf(FailureReason(""))
@@ -320,6 +320,10 @@ func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 	diagnosticType := reflect.TypeOf(TraversalDiagnostic{})
 	if diagnosticType.NumField() != 4 {
 		t.Fatalf("ASSERT_TRAVERSAL_DIAGNOSTIC_CLOSED_PRIVACY_SURFACE: %+v", diagnosticType)
+	}
+	resourceDiagnosticType := reflect.TypeOf(ResourceDiagnostic{})
+	if resourceDiagnosticType.NumField() != 6 {
+		t.Fatalf("ASSERT_RESOURCE_DIAGNOSTIC_CLOSED_PRIVACY_SURFACE: %+v", resourceDiagnosticType)
 	}
 	if reflect.TypeOf(Execute).NumIn() != 3 || reflect.TypeOf(Execute).NumOut() != 2 {
 		t.Fatal("ASSERT_SOLE_ENTRY_SIGNATURE")

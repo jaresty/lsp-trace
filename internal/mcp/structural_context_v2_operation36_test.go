@@ -45,6 +45,43 @@ func TestStructuralContextV2Operation36Contract(t *testing.T) {
 	}
 }
 
+func TestStructuralContextV2ResourceDiagnosticDirectGatewayParity(t *testing.T) {
+	observed, suggested := 125, 125
+	diagnostic := &transientstructural.ResourceDiagnostic{Reason: transientstructural.ResourceReasonRegexMaxDocumentBytes, Field: transientstructural.ResourceFieldRegexMaxDocumentBytes, Allowed: 100, Observed: &observed, MaximumAllowed: 16777216, SuggestedLimit: &suggested}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(transientstructural.StateResourceLimit), Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateResourceLimit, ResourceDiagnostic: diagnostic}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := structuralContextV2Args()
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+	if direct.Error != nil || gateway.Error != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_RESOURCE_DIRECT_GATEWAY: direct=%v gateway=%v", direct.Error, gateway.Error)
+	}
+	outer := gateway.Result.(callResult).StructuredContent
+	var delegated envelope
+	if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &delegated); err != nil {
+		t.Fatal(err)
+	}
+	for route, env := range map[string]envelope{"direct": direct.Result.(callResult).StructuredContent, "gateway": delegated} {
+		raw, _ := json.Marshal(env)
+		if env.Phase != "PREFLIGHT" || env.State != "RESOURCE_LIMIT" || env.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || env.ResourceDiagnostic == nil || env.Diagnostic != nil || strings.Contains(string(raw), "file:///") {
+			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_RESOURCE_%s: %s", route, raw)
+		}
+		if err := mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw); err != nil {
+			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_RESOURCE_SCHEMA_%s: %v", route, err)
+		}
+	}
+}
+
+func TestStructuralContextV2GenericResourceFailureRemainsGeneric(t *testing.T) {
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(transientstructural.StateResourceLimit), Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateResourceLimit}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, structuralContextV2Args()))
+	env := response.Result.(callResult).StructuredContent
+	if env.State != "RESOURCE_LIMIT" || env.ResourceDiagnostic != nil || env.Diagnostic != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_GENERIC_RESOURCE: %+v", env)
+	}
+}
+
 func TestStructuralContextV2TypedLocatorFailureUsesV4Envelope(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: string(transientstructural.StateTargetNotFound), Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound}}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
