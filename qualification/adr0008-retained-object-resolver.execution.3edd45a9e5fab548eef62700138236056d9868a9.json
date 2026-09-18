@@ -1,0 +1,64 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-retained-object-resolver-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "matrix_sha256": "3922926f81d5c978a05606b99d5a749b5c58364a39e07e24a33c9253fb42f53c",
+  "predecessor_execution": "qualification/adr0008-source-projection-matrix.execution.5d392f9710225bd1761af67fd9d851c2ff4b2f82.json",
+  "predecessor_execution_sha256": "cb0e70855ba7aa913230d30c84a9953ff8e374bdc36b463d25b0a25d02557d82",
+  "common_projection_execution": "qualification/adr0008-common-projection.execution.5e624471011cb679f731bbc4079a4229f2f986b7.json",
+  "common_projection_execution_sha256": "a93db8c65a812927e7c5cf722d5a10f0b32d7260a7a08ca173149d2d0305d48c",
+  "reviewed_revision": "3edd45a9e5fab548eef62700138236056d9868a9",
+  "reviewed_at": "2026-09-18T01:23:46Z",
+  "scope": "RETAINED_OBJECT_RESOLVER_R01",
+  "execution_status": "EXECUTED",
+  "tests_pass_claimed": true,
+  "retained_object_resolver_qualified": false,
+  "common_projection_qualified": true,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 1, "FAIL": 0, "BLOCKED": 3, "NOT_RUN": 0},
+  "historical_global_failure": {"cell": "L04", "verdict": "FAIL", "changed": false},
+  "logs": [
+    {"id": "r01-focused", "path": "/tmp/lsp-trace-r01-qualification-focused-3edd45a.log", "sha256": "80d9492c497488150a18346b8ae7e49e0046474053db50b099e5abf9a2a609a5", "outcome": "PASS"},
+    {"id": "full-go-suite", "path": "/tmp/lsp-trace-r01-qualification-full-3edd45a.log", "sha256": "86e01aafdf04190fe7a1723f13a5f6ed0cfa513eae071b679256a12994dac745", "outcome": "PASS"},
+    {"id": "release-check", "path": "/tmp/lsp-trace-r01-qualification-release-3edd45a.log", "sha256": "f314b150bba30123cdd81a15eb02d924fa1c5c4b09bcd7e917bd3e141cf8a0d2", "outcome": "PASS"}
+  ],
+  "cells": [
+    {
+      "id": "R01",
+      "verdict": "PASS",
+      "evidence": [
+        "TestR01ExactV5AndAvailabilityBinding PASS",
+        "TestR01CanonicalBytesUnderPermutation PASS",
+        "TestR01CustodyAvailabilityOnlySemanticCeiling PASS",
+        "TestR01EveryAvailabilityIdentityFieldIsSensitive PASS with thirteen named mutations",
+        "TestR01StrictAdmissionMutationCorpus PASS with unknown, missing, semantic-owner, authority, reordered, and entry-identity mutations",
+        "TestR01PredecessorSchemaBytesAndReadersRemainIndependent PASS",
+        "internal/retainedmanifest is registered in the integrated ownership inventory",
+        "full repository suite PASS at reviewed_revision",
+        "release check ended RELEASE CHECK PASS at reviewed_revision"
+      ],
+      "predecessor_schema_digests": [
+        {"path": "internal/schema/schemas/lsp-trace.graph-provenance.v2.schema.json", "sha256": "cf36372444c7203d29ce836acfcdda78a8a884ea6733122c0aa3159aa9d0ea03"},
+        {"path": "internal/schema/schemas/lsp-trace.graph-provenance.v3.schema.json", "sha256": "3f993f318248891d6fa6ee7dc79dda23d7c0d515df6532f8af1edb5448556bfc"}
+      ],
+      "limitation": "Qualifies exact V5 retained-availability manifest identity, deterministic canonicalization, strict admission, semantic ceiling, and predecessor preservation only; it adds no resolver, lease, GC, deletion, publication, replay, CLI, MCP, or operation behavior."
+    },
+    {"id": "R02", "verdict": "BLOCKED", "reason": "No complete real Git/content-addressed resolver outcome corpus exists."},
+    {"id": "R03", "verdict": "BLOCKED", "reason": "No complete lease, GC, deletion, shallow, rewritten-history, and no-fallback lifecycle corpus exists."},
+    {"id": "R04", "verdict": "BLOCKED", "reason": "No retained source-projection no-replace publication race receipt and cold-replay packet covers the full predicate."}
+  ],
+  "track_statuses": {
+    "COMMON_PROJECTION": {"verdict": "PASS", "carried_from": "qualification/adr0008-common-projection.execution.5e624471011cb679f731bbc4079a4229f2f986b7.json"},
+    "RETAINED_OBJECT_RESOLVER": {"verdict": "BLOCKED", "reason": "R02-R04 remain BLOCKED"},
+    "LIVE_SESSION_RESOLVER": {"verdict": "FAIL", "reason": "historical L04 remains FAIL"}
+  },
+  "global_invariants": {
+    "graph_facts_added": 0,
+    "semantic_authority": 0,
+    "semantic_accepted": false,
+    "source_graph_complete": "UNKNOWN",
+    "canonical_operation_count": 41,
+    "compact_advertised_tool_count": 12,
+    "schema_change_policy": "ADDITIVE_ONLY"
+  },
+  "claim_ceiling": "This execution qualifies R01 only. R02 through R04 remain BLOCKED, RETAINED_OBJECT_RESOLVER remains BLOCKED, historical L04 remains FAIL, and implementation_qualified remains false."
+}
