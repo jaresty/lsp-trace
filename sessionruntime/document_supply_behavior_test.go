@@ -174,6 +174,21 @@ func TestDocumentSupplyOmittedAndLateOptIn(t *testing.T) {
 	}
 }
 
+func TestExplicitDocumentSupplyRefreshWritesAndReturnsExactEvidence(t *testing.T) {
+	m, req, _, writer := supplyFixture(t, []byte("package fixture\n"))
+	req.CaptureSupply = false
+	first := m.PrepareDocument(context.Background(), req)
+	if first.Failure != "" || first.Supply != nil {
+		t.Fatalf("ASSERT_EXPLICIT_REFRESH_PRECONDITION_OMITTED: %+v", first)
+	}
+	before := writer.Len()
+	req.CaptureSupply = true
+	refreshed := m.RefreshDocumentSupply(context.Background(), req)
+	if refreshed.Failure != "" || refreshed.Supply == nil || refreshed.Supply.Method != "textDocument/didChange" || refreshed.Version != first.Version+1 || writer.Len() <= before {
+		t.Fatalf("ASSERT_EXPLICIT_REFRESH_EXACT_WRITE: first=%+v refreshed=%+v writes=%d/%d", first, refreshed, before, writer.Len())
+	}
+}
+
 func TestDocumentSupplyFailureAndBounds(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

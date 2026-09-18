@@ -33,6 +33,34 @@ func TestResolveDisplayRangesPreservesEvidenceRoles(t *testing.T) {
 	}
 }
 
+func TestResolveEndpointUsesSmallestContainingSymbolWhenExactDefinitionIsUnavailable(t *testing.T) {
+	selection := sourceprojection.Range{Start: sourceprojection.Position{Line: 15, Character: 3}, End: sourceprojection.Position{Line: 15, Character: 18}}
+	outer := sourceprojection.Range{Start: sourceprojection.Position{Line: 1}, End: sourceprojection.Position{Line: 40}}
+	inner := sourceprojection.Range{Start: sourceprojection.Position{Line: 12}, End: sourceprojection.Position{Line: 20}}
+	raw, _ := json.Marshal([]documentSymbol{{Name: "T", Range: outer, SelectionRange: outer, Children: []documentSymbol{{Name: "Execute", Range: inner, SelectionRange: inner}}}})
+	candidate := sourceprojection.Candidate{UnitID: "u", Role: "ENDPOINT", LogicalSourceID: "file:///x.go", Range: selection, EvidenceRange: selection, ItemRange: selection, SelectionRange: selection, DisplayProvenance: "CALL_HIERARCHY_ITEM"}
+	got, err := ResolveDisplayRanges(context.Background(), displayRequester{raw}, "s", 1, []sourceprojection.Candidate{candidate}, DisplayResolutionLimits{MaxWork: 1, MaxMessages: 1, MaxBytes: 4096, RequestTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Range != inner || got[0].DisplayProvenance != "SERVER_REPORTED_DOCUMENT_SYMBOL" || got[0].EvidenceRange != selection {
+		t.Fatalf("ASSERT_ENDPOINT_CONTAINING_DEFINITION: %+v", got[0])
+	}
+}
+
+func TestResolveEndpointPreservesCallHierarchyItemWhenDocumentSymbolIsUnavailable(t *testing.T) {
+	selection := sourceprojection.Range{Start: sourceprojection.Position{Line: 50, Character: 3}, End: sourceprojection.Position{Line: 50, Character: 18}}
+	raw, _ := json.Marshal([]documentSymbol{{Name: "Other", Range: sourceprojection.Range{Start: sourceprojection.Position{Line: 1}, End: sourceprojection.Position{Line: 10}}, SelectionRange: sourceprojection.Range{Start: sourceprojection.Position{Line: 1}, End: sourceprojection.Position{Line: 1, Character: 5}}}})
+	candidate := sourceprojection.Candidate{UnitID: "u", Role: "ENDPOINT", LogicalSourceID: "file:///x.go", Range: selection, EvidenceRange: selection, ItemRange: selection, SelectionRange: selection, DisplayProvenance: "CALL_HIERARCHY_ITEM"}
+	got, err := ResolveDisplayRanges(context.Background(), displayRequester{raw}, "s", 1, []sourceprojection.Candidate{candidate}, DisplayResolutionLimits{MaxWork: 1, MaxMessages: 1, MaxBytes: 4096, RequestTimeout: time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Range != selection || got[0].DisplayProvenance != "CALL_HIERARCHY_ITEM" || got[0].EvidenceRange != selection {
+		t.Fatalf("ASSERT_ENDPOINT_CALL_HIERARCHY_FALLBACK: %+v", got[0])
+	}
+}
+
 func TestResolveRelationUsesSmallestContainingSymbol(t *testing.T) {
 	call := sourceprojection.Range{Start: sourceprojection.Position{Line: 15, Character: 3}, End: sourceprojection.Position{Line: 15, Character: 10}}
 	outer := sourceprojection.Range{Start: sourceprojection.Position{Line: 1}, End: sourceprojection.Position{Line: 40}}

@@ -76,12 +76,22 @@ func ResolveDisplayRanges(ctx context.Context, requester DocumentSymbolRequester
 					matches = append(matches, symbol.Range)
 				}
 			}
+			if candidate.Role == "ENDPOINT" && len(matches) == 0 {
+				for _, symbol := range symbols {
+					if contains(symbol.Range, candidate.EvidenceRange) {
+						matches = append(matches, symbol.Range)
+					}
+				}
+			}
+			if candidate.Role == "ENDPOINT" && len(matches) == 0 {
+				continue
+			}
 			if len(matches) == 0 {
-				return nil, fmt.Errorf("liveprojection: display range unavailable for %q", candidate.UnitID)
+				return nil, fmt.Errorf("liveprojection: display range unavailable for unit=%q role=%q uri=%q evidence=%+v selection=%+v", candidate.UnitID, candidate.Role, candidate.LogicalSourceID, candidate.EvidenceRange, candidate.SelectionRange)
 			}
 			sort.Slice(matches, func(i, j int) bool { return rangeSize(matches[i]) < rangeSize(matches[j]) })
 			if len(matches) > 1 && rangeSize(matches[0]) == rangeSize(matches[1]) && matches[0] != matches[1] {
-				return nil, fmt.Errorf("liveprojection: display range ambiguous for %q", candidate.UnitID)
+				return nil, fmt.Errorf("liveprojection: display range ambiguous for unit=%q role=%q uri=%q evidence=%+v selection=%+v", candidate.UnitID, candidate.Role, candidate.LogicalSourceID, candidate.EvidenceRange, candidate.SelectionRange)
 			}
 			out[index].Range = matches[0]
 			out[index].DisplayProvenance = "SERVER_REPORTED_DOCUMENT_SYMBOL"

@@ -291,6 +291,20 @@ const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
 // Supply and version are returned only after a confirmed complete write (or the
 // historical unchanged-document cache hit, which returns no new Supply).
 func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
+	return m.prepareDocument(ctx, req, false)
+}
+
+// RefreshDocumentSupply deliberately emits a new full-text notification for an
+// already prepared document and returns evidence from that exact successful
+// write. Callers must complete their own privacy admission before invoking it.
+func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest) DocumentResult {
+	if !req.CaptureSupply {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	return m.prepareDocument(ctx, req, true)
+}
+
+func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
 	if failure := contextFailure(ctx); failure != "" {
 		return DocumentResult{Failure: failure}
 	}
@@ -388,7 +402,7 @@ func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) Docu
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
 	}
-	if opened && previous.digest == digest {
+	if opened && previous.digest == digest && !refresh {
 		result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
 		if req.CaptureSupply && previous.supply != nil {
 			copy := *previous.supply

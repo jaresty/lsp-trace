@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"runtime/trace"
 	"time"
 
 	"lsp-trace/incomingops"
@@ -94,8 +95,9 @@ type structuralContextDelegate interface {
 }
 
 type structuralContextProjectionPreparer struct {
-	manager *sessionruntime.Manager
-	target  *sessionruntime.DocumentSupply
+	manager    *sessionruntime.Manager
+	target     *sessionruntime.DocumentSupply
+	refreshURI string
 }
 
 func (p structuralContextProjectionPreparer) PrepareDocument(ctx context.Context, request sessionruntime.DocumentRequest) sessionruntime.DocumentResult {
@@ -104,6 +106,9 @@ func (p structuralContextProjectionPreparer) PrepareDocument(ctx context.Context
 		cloned.Content = append([]byte(nil), p.target.Content...)
 		cloned.Params = append([]byte(nil), p.target.Params...)
 		return sessionruntime.DocumentResult{URI: request.URI, Version: cloned.DocumentVersion, Supply: &cloned}
+	}
+	if request.URI == p.refreshURI {
+		return p.manager.RefreshDocumentSupply(ctx, request)
 	}
 	return p.manager.PrepareDocument(ctx, request)
 }
@@ -122,6 +127,15 @@ func newUnifiedStructuralContextV2Executor(r *hostSelectorRuntime, exact *struct
 	return &unifiedStructuralContextV2Executor{exact: exact, symbol: structuralcontextsymbolops.NewUnifiedV2Executor(r, exact), manager: r.Manager}
 }
 
+func tracedProjectionFailure(ctx context.Context, stage string, err error) (operation.Result, *operation.Failure) {
+	if err != nil {
+		trace.Logf(ctx, "projection_error", "%s: %v", stage, err)
+	}
+	trace.Log(ctx, "projection_failure", stage)
+	_ = dumpRuntimeTrace(ctx, stage)
+	return fail("SOURCE_PROJECTION_FAILED", err)
+}
+
 func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op operation.Request) (operation.Result, *operation.Failure) {
 	if e == nil || e.exact == nil || e.symbol == nil || op.Name != operation.Name("structural_context_v2") {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
@@ -133,6 +147,12 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 	if err := json.Unmarshal(op.Input, &target); err != nil {
 		return fail(operation.FailureInvalidInput, err)
 	}
+	if len(target.Projection) != 0 {
+		var task *trace.Task
+		ctx, task = trace.NewTask(ctx, "structural_context_projection")
+		defer task.End()
+		trace.Log(ctx, "projection_stage", "delegate_start")
+	}
 	delegate := e.exact
 	if target.Symbol != "" {
 		delegate = e.symbol
@@ -142,6 +162,9 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		return operation.Result{}, failure
 	}
 	if !json.Valid(result.Artifact) {
+		if len(target.Projection) != 0 {
+			return tracedProjectionFailure(ctx, "delegate_artifact_invalid", nil)
+		}
 		return fail("INVALID_SERVER_RESPONSE", nil)
 	}
 	var projection any
@@ -152,37 +175,59 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 			return fail(operation.FailureInvalidInput, err)
 		}
 		maxResponseBytes = request.Limits.MaxResponseBytes
+		trace.Log(ctx, "projection_stage", "delegate_complete")
 		payload, ok := result.Value.(structuralContextProjectionInput)
-		if !ok || payload.Transient.SourceSupply == nil {
-			return fail("SOURCE_PROJECTION_FAILED", nil)
+		if !ok {
+			return tracedProjectionFailure(ctx, "projection_input_missing", nil)
 		}
 		candidates, err := sourceprojection.DeriveWorkspaceCandidates(payload.Transient, request.Mode, request.IncludeRelationOccurrences, payload.WorkspaceRoot)
 		if err != nil {
-			return fail("SOURCE_PROJECTION_FAILED", err)
+			return tracedProjectionFailure(ctx, "candidate_derivation", err)
 		}
-		plan := liveprojection.PlanDocuments(candidates, payload.Transient.SourceSupply.URI)
+		trace.Logf(ctx, "projection_stage", "candidates_complete count=%d", len(candidates))
+		targetURI := ""
+		for _, candidate := range candidates {
+			if candidate.GraphSubjectID == payload.Transient.TargetID {
+				targetURI = candidate.LogicalSourceID
+				break
+			}
+		}
+		if targetURI == "" {
+			return tracedProjectionFailure(ctx, "target_candidate_missing", nil)
+		}
+		refreshURI := ""
+		if payload.Transient.SourceSupply == nil {
+			refreshURI = targetURI
+		}
+		plan := liveprojection.PlanDocuments(candidates, targetURI)
 		maxDocuments := 1 + request.Limits.MaxAdditionalDocuments
 		if request.Limits.MaxDocumentRequests < maxDocuments {
 			maxDocuments = request.Limits.MaxDocumentRequests
 		}
-		prepared := liveprojection.Prepare(ctx, structuralContextProjectionPreparer{manager: e.manager, target: payload.Transient.SourceSupply}, payload.Transient.Qualification.SessionID, payload.Transient.Qualification.Generation, "", plan, liveprojection.PreparationLimits{MaxDocuments: maxDocuments, MaxBytes: request.Limits.MaxTotalDocumentBytes, MaxDocumentBytes: request.Limits.MaxDocumentBytes, MaxMessages: request.Limits.MaxDocumentMessages, MaxWork: request.Limits.MaxDocumentAcquisitionWork})
+		trace.Logf(ctx, "projection_stage", "prepare_start documents=%d refresh_target=%t", len(plan), refreshURI != "")
+		prepared := liveprojection.Prepare(ctx, structuralContextProjectionPreparer{manager: e.manager, target: payload.Transient.SourceSupply, refreshURI: refreshURI}, payload.Transient.Qualification.SessionID, payload.Transient.Qualification.Generation, "", plan, liveprojection.PreparationLimits{MaxDocuments: maxDocuments, MaxBytes: request.Limits.MaxTotalDocumentBytes, MaxDocumentBytes: request.Limits.MaxDocumentBytes, MaxMessages: request.Limits.MaxDocumentMessages, MaxWork: request.Limits.MaxDocumentAcquisitionWork})
 		if prepared.Status != liveprojection.PreparationComplete {
-			return fail("SOURCE_PROJECTION_FAILED", nil)
+			trace.Logf(ctx, "projection_status", "prepare_incomplete status=%s", prepared.Status)
+			return tracedProjectionFailure(ctx, "document_preparation", nil)
 		}
+		trace.Log(ctx, "projection_stage", "prepare_complete")
 		if e.manager != nil {
 			candidates, err = liveprojection.ResolveDisplayRanges(ctx, e.manager, payload.Transient.Qualification.SessionID, payload.Transient.Qualification.Generation, candidates, liveprojection.DisplayResolutionLimits{
 				MaxWork: request.Limits.MaxDisplayResolutionWork, MaxMessages: request.Limits.MaxDocumentMessages,
 				MaxBytes: int64(request.Limits.MaxDocumentBytes), RequestTimeout: 30 * time.Second,
 			})
 			if err != nil {
-				return fail("SOURCE_PROJECTION_FAILED", err)
+				return tracedProjectionFailure(ctx, "display_range_resolution", err)
 			}
 		}
+		trace.Log(ctx, "projection_stage", "display_ranges_complete")
 		policy := sourceprojection.Policy{PolicyID: request.PrivacyPolicyID, BodyRequested: request.Body == "INCLUDE", MaxBytes: request.Limits.MaxSourceBytes, MaxRanges: request.Limits.MaxRanges, MaxObjects: request.Limits.MaxObjects, MaxWork: request.Limits.MaxWork, EnforceLimits: true}
 		composed := liveprojection.Compose(prepared, payload.Transient.Qualification.SessionID, payload.Transient.Qualification.Generation, candidates, policy)
 		if composed.Status != liveprojection.CompositionComplete {
-			return fail("SOURCE_PROJECTION_FAILED", nil)
+			trace.Logf(ctx, "projection_status", "composition_incomplete status=%s", composed.Status)
+			return tracedProjectionFailure(ctx, "composition", nil)
 		}
+		trace.Log(ctx, "projection_stage", "composition_complete")
 		if request.Paging != nil && (request.Paging.MaxPageBytes <= 0 || request.Paging.MaxPages <= 0 || request.Paging.MaxResponseBytes <= 0) {
 			return fail("SOURCE_PROJECTION_FAILED", nil)
 		}
@@ -202,10 +247,11 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		if request.Paging != nil {
 			assemblyLimit = request.Paging.MaxResponseBytes
 		}
-		v2, err := liveprojection.AssembleV2Bounded(composed, prepared, payload.Transient.SourceSupply.URI, plan, policyID, assemblyLimit)
+		v2, err := liveprojection.AssembleV2Bounded(composed, prepared, targetURI, plan, policyID, assemblyLimit)
 		if err != nil {
-			return fail("SOURCE_PROJECTION_FAILED", err)
+			return tracedProjectionFailure(ctx, "assembly", err)
 		}
+		trace.Log(ctx, "projection_stage", "assembly_complete")
 		projection = v2
 		if request.Paging != nil {
 			projection, err = sourceprojectionv3.PaginateV2(v2, policyID, sourceprojectionv3.Limits{

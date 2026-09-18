@@ -71,6 +71,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "seed" {
 		return runSeedCommand(args[1:], stdout, stderr)
 	}
+	stopRuntimeTrace, err := startRuntimeFlightRecorder()
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	defer stopRuntimeTrace()
 	fs := flag.NewFlagSet("lsp-trace-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
@@ -126,7 +132,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "No managed LSP sessions are provisioned. Configure --bootstrap-config; use --print-bootstrap-example for the public template.")
 	}
 	var publicationRoot *publication.Root
-	var err error
 	if *publicationRootPath != "" {
 		publicationRoot, err = publication.OpenRoot(*publicationRootPath)
 		if err != nil {
