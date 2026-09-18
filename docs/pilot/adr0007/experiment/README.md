@@ -9,7 +9,7 @@ This package preserves the existing fixed-topology experiment without rerunning 
 
 ## Contents
 
-- `worker-fixed-topology.main.go` — worker source, SHA-256 `cee3981406a4709cc2e4979403d7285460cbc2b7b12c0edad6140b3e8a3ccddf`
+- `worker-fixed-topology.main.go` — worker source, SHA-256 `98bf44170300f84f7d48c0c8694ebc2bfe2ce09660bc59fc89554a7ac1efb09a`
 - `worker-fixed-topology.go.mod` — module metadata, SHA-256 `c5f1e03a31459edfdcd86d69a4418756a58beba0427cb8718555cd62b336c5d6`
 - `worker-fixed-topology.go.sum` — dependency checksums, SHA-256 `d802b35d06cfa78cb2b12343064a38bfcac74244cb96cca760c8219fdd2ea583`
 - four `fixed-topology-supported.result.json` files — result digests recorded in ADR 0007
