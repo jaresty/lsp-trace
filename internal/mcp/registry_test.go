@@ -310,6 +310,36 @@ func TestCanonicalDescriptionsRouteUserIntent(t *testing.T) {
 	}
 }
 
+func TestSchemaGetDescriptionKeepsInvocationContractProminent(t *testing.T) {
+	tool, ok := NewRegistry(false).ResolveCanonical("lsp_trace_v1_schema_get")
+	if !ok {
+		t.Fatal("ASSERT_SCHEMA_GET_USABILITY_METADATA: missing tool")
+	}
+
+	description := tool.Description
+	for _, required := range []string{
+		"evidence family and version",
+		"input-schema-get.v1.schema.json",
+		"requested registered schema contract",
+	} {
+		if !strings.Contains(description, required) {
+			t.Fatalf("ASSERT_SCHEMA_GET_USABILITY_METADATA[%s]: %s", required, description)
+		}
+	}
+	for _, distracting := range []string{
+		"lsp-trace.graph-provenance.v5.schema.json",
+		"lsp-trace.retained-calls.v2.schema.json",
+		"lsp-trace.bounded-retained-analysis.v1.schema.json",
+	} {
+		if strings.Contains(description, distracting) {
+			t.Fatalf("ASSERT_SCHEMA_GET_DESCRIPTION_OMITS_CATALOG[%s]: %s", distracting, description)
+		}
+	}
+	if len(description) > 1<<10 {
+		t.Fatalf("ASSERT_SCHEMA_GET_METADATA_COMPACT: %d bytes: %s", len(description), description)
+	}
+}
+
 func TestRegistryContract(t *testing.T) {
 	const (
 		canonicalAssertion = "registry has fifteen entries including separate retained CALLS export and bounded analysis"

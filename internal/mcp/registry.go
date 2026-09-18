@@ -525,7 +525,12 @@ func completeToolDescription(tool Tool) string {
 		mode = "live local"
 	}
 	resultFamily := "MCP result envelope"
-	if len(tool.ArtifactSchemaIDs) != 0 {
+	if tool.Name == "lsp_trace_v1_schema_get" {
+		// The artifact IDs are the schemas this operation can retrieve, not a list
+		// of schemas present in every response. Enumerating them here overwhelms
+		// the small invocation contract in model-facing tool descriptions.
+		resultFamily = "MCP result envelope carrying the requested registered schema contract"
+	} else if len(tool.ArtifactSchemaIDs) != 0 {
 		resultFamily = "MCP result envelope carrying " + strings.Join(tool.ArtifactSchemaIDs, ", ")
 	} else if len(tool.EnvelopeSchemaIDs) != 0 {
 		resultFamily = "MCP result envelope from " + strings.Join(tool.EnvelopeSchemaIDs, ", ")
