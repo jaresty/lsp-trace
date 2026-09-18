@@ -1,0 +1,67 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-successor-release-disposition.v1",
+  "decision_id": "ADR0008-SUCCESSOR-RELEASE-DISPOSITION-23B6865",
+  "reviewed_revision": "23b6865088f68142ed0b3243f3acee064217558b",
+  "governing_matrix": {
+    "path": "qualification/adr0008-source-projection-matrix.v1.json",
+    "sha256": "3922926f81d5c978a05606b99d5a749b5c58364a39e07e24a33c9253fb42f53c",
+    "changed": false
+  },
+  "predecessors": [
+    {
+      "path": "qualification/adr0008-retained-object-resolver.execution.f607f483a6794fb687c0646a0cfffeef78115d9c.json",
+      "sha256": "b037405d3be12e37aaf42fee15fd834ad7ab8f8f6f047f6c687ca253b7888bfa"
+    },
+    {
+      "path": "qualification/adr0008-source-projection-exception-l04.v1.json",
+      "sha256": "32c27367903517f253d769c26bbb820a9e8db446c8d972f73629bbf6aea9f4d6"
+    }
+  ],
+  "qualified_tracks": {
+    "COMMON_PROJECTION": {
+      "verdict": "PASS",
+      "cells": {
+        "C01": "PASS",
+        "C02": "PASS",
+        "C03": "PASS",
+        "C04": "PASS",
+        "C05": "PASS",
+        "C06": "PASS"
+      }
+    },
+    "RETAINED_OBJECT_RESOLVER": {
+      "verdict": "PASS",
+      "cells": {
+        "R01": "PASS",
+        "R02": "PASS",
+        "R03": "PASS",
+        "R04": "PASS"
+      }
+    }
+  },
+  "external_exception": {
+    "cell": "L04",
+    "verdict": "FAIL",
+    "owner": "pi-mcp-adapter",
+    "exception": "ACCEPTED_EXTERNAL_EXCEPTION",
+    "blocking_for_lsp_trace_release": false,
+    "blocking_for_formal_adr0008_qualification": true,
+    "upstream_pr": "https://github.com/nicobailon/pi-mcp-adapter/pull/596"
+  },
+  "disposition": {
+    "release_ready": true,
+    "implementation_qualified": false,
+    "continue_lsp_trace_work": true,
+    "wait_for_external_fix": false,
+    "revalidate_l04_when_official_release_contains_fix": true
+  },
+  "invariants": {
+    "graph_authority": 0,
+    "semantic_accepted": false,
+    "source_graph_complete": "UNKNOWN",
+    "canonical_operation_count": 41,
+    "compact_advertised_tool_count": 12,
+    "schema_change_policy": "ADDITIVE_ONLY"
+  },
+  "claim_ceiling": "ADR 0008 common projection and retained object resolver tracks are qualified and lsp-trace is release-ready under the accepted external L04 exception. L04 remains FAIL and formal implementation_qualified remains false until an official adapter release is requalified."
+}
