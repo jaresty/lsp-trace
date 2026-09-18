@@ -15,6 +15,7 @@ import (
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/programccompose"
+	"lsp-trace/internal/programcrepresentative"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/seedformat"
 )
@@ -111,6 +112,9 @@ func TestComposeVerifiedProjectionDeterministicAndEmpty(t *testing.T) {
 	if one.CensusID != p.CensusID || one.Publication.Selector != r.Publication.Receipt.Selector || len(one.Composite.Bytes) == 0 || len(one.Admission.Bytes) == 0 {
 		t.Fatal("missing retained bindings")
 	}
+	if one.Representatives.State != "EMPTY" || len(one.Representatives.Nominations) != 0 || len(one.Representatives.Unresolved) != 0 {
+		t.Fatalf("empty representatives=%+v", one.Representatives)
+	}
 	if len(one.Composite.Artifact.Constituents) == 0 || len(one.Composite.Artifact.Constituents[0].SeedMemberships) == 0 || len(one.Admission.Artifact.Constituents[0].SeedMemberships) == 0 || len(one.Outcome.CompositeSource.Constituents[0].SeedMemberships) == 0 {
 		t.Fatal("ASSERT_CENSUS_SEED_MEMBERSHIP_BINDINGS_RETAINED")
 	}
@@ -169,6 +173,33 @@ func TestCandidateStatusAndAliasing(t *testing.T) {
 		t.Fatalf("candidate=%+v outcome=%+v", got.Candidates, got.Outcome)
 	}
 }
+func TestRepresentativesRejectUncheckedLineage(t *testing.T) {
+	p := testProjection(t)
+	r, err := Compose(Request{Projection: p, Publication: evidence(t, p), Metadata: metadata()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := p.Constituents[0].Identity.ImmutableSelector
+	qualified := programcrepresentative.Output{State: programcrepresentative.StateSelected, Nominations: []programcrepresentative.Nomination{{State: programcrepresentative.StateSelected, CommunityIdentity: "community", ConstituentIdentity: id, ConstituentOrdinal: 0, ExecutionBundleID: "bundle", SeedLabel: "seed", SeedAt: "at", CommunityMembers: []string{"member"}, SelectedNode: "member"}}}
+	mapped, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified)
+	if err != nil || len(mapped.Nominations) != 1 {
+		t.Fatalf("mapped=%+v err=%v", mapped, err)
+	}
+	n := mapped.Nominations[0]
+	if n.Status != CandidateStatus || n.ConstituentOrdinal != 0 || n.BatchID != p.Constituents[0].BatchID || n.Authority != 0 || n.SourceGraphComplete != "UNKNOWN" || n.ClaimCeiling != r.Outcome.ClaimCeiling || n.AnyTruncated != r.Admission.Artifact.Completeness.AnyTruncated || n.AllTraversalComplete != r.Admission.Artifact.Completeness.AllTraversalComplete {
+		t.Fatalf("representative=%+v", n)
+	}
+	qualified.Nominations[0].ConstituentOrdinal = 1
+	if _, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified); err == nil {
+		t.Fatal("ordinal mismatch accepted")
+	}
+	qualified.Nominations[0].ConstituentOrdinal = 0
+	qualified.Nominations[0].ConstituentIdentity = "missing"
+	if _, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified); err == nil {
+		t.Fatal("identity mismatch accepted")
+	}
+}
+
 func asFailure(err error, target **Failure) bool {
 	for err != nil {
 		if f, ok := err.(*Failure); ok {

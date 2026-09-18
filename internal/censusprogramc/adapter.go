@@ -13,6 +13,7 @@ import (
 	"lsp-trace/internal/programc"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/programccompose"
+	"lsp-trace/internal/programcrepresentative"
 )
 
 type Stage string
@@ -23,6 +24,7 @@ const (
 	StageComposition    Stage = "COMPOSITION"
 	StageAdmission      Stage = "ADMISSION"
 	StageComputation    Stage = "COMPUTATION"
+	StageRepresentative Stage = "REPRESENTATIVE_QUALIFICATION"
 	CandidateStatus           = "PROVISIONAL_STRUCTURAL_CANDIDATE"
 )
 
@@ -58,13 +60,29 @@ type Candidate struct {
 	Status, ClaimCeiling string
 	Members              []string
 }
+
+// Representative is an additive, correction-oriented structural nomination.
+// It retains no semantic identity, ownership, or runtime assertion.
+type Representative struct {
+	Status, ClaimCeiling, SelectionState                                    string
+	Members, PreparedTargets, SCCMembers                                    []string
+	CensusID, BatchID, CommunityIdentity, ConstituentIdentity               string
+	ConstituentOrdinal, Distance, Authority                                 int
+	ExecutionBundleID, SeedLabel, SeedAt, SelectedNode, SourceGraphComplete string
+	AllTraversalComplete, AnyTruncated                                      bool
+}
+type RepresentativeSelection struct {
+	State                   string
+	Nominations, Unresolved []Representative
+}
 type Result struct {
-	CensusID    string
-	Publication captureset.PublicationReceipt
-	Composite   programccompose.Result
-	Admission   programcadmission.Result
-	Outcome     programc.Outcome
-	Candidates  []Candidate
+	CensusID        string
+	Publication     captureset.PublicationReceipt
+	Composite       programccompose.Result
+	Admission       programcadmission.Result
+	Outcome         programc.Outcome
+	Candidates      []Candidate
+	Representatives RepresentativeSelection
 }
 
 func Compose(request Request) (Result, error) {
@@ -102,10 +120,84 @@ func Compose(request Request) (Result, error) {
 	for i, community := range outcome.Communities {
 		candidates[i] = Candidate{Status: CandidateStatus, ClaimCeiling: outcome.ClaimCeiling, Members: append([]string(nil), community.Members...)}
 	}
-	return Result{CensusID: projection.CensusID, Publication: evidence.Receipt, Composite: cloneComposite(composite), Admission: cloneAdmission(admission), Outcome: cloneOutcome(outcome), Candidates: candidates}, nil
+	communities := outcome.Communities
+	if outcome.Outcome == "EMPTY" {
+		communities = nil
+	}
+	qualified, err := programcrepresentative.Select(programcrepresentative.Input{Admission: admission.Admission, Communities: communities})
+	if err != nil {
+		return Result{}, fail(StageRepresentative, err)
+	}
+	representatives, err := representativesFromQualification(projection, admission.Admission.SourceBinding(), outcome, qualified)
+	if err != nil {
+		return Result{}, fail(StageRepresentative, err)
+	}
+	if outcome.Outcome == "EMPTY" {
+		representatives.State = string(programcrepresentative.StateEmpty)
+	}
+	return Result{CensusID: projection.CensusID, Publication: evidence.Receipt, Composite: cloneComposite(composite), Admission: cloneAdmission(admission), Outcome: cloneOutcome(outcome), Candidates: candidates, Representatives: representatives}, nil
 }
 
 func fail(stage Stage, err error) *Failure { return &Failure{Stage: stage, Err: err} }
+
+func representativesFromQualification(projection censusacquisition.Projection, source programcadmission.CompositeSourceBinding, outcome programc.Outcome, qualified programcrepresentative.Output) (RepresentativeSelection, error) {
+	if len(source.Constituents) != len(projection.Constituents) {
+		return RepresentativeSelection{}, errors.New("representative constituent lineage cardinality mismatch")
+	}
+	for i, constituent := range source.Constituents {
+		if constituent.Identity != projection.Constituents[i].Identity.ImmutableSelector {
+			return RepresentativeSelection{}, errors.New("representative constituent lineage mismatch")
+		}
+	}
+	byIdentity := make(map[string]struct {
+		ordinal int
+		batch   string
+	}, len(projection.Constituents))
+	for i, c := range projection.Constituents {
+		byIdentity[c.Identity.ImmutableSelector] = struct {
+			ordinal int
+			batch   string
+		}{i, c.BatchID}
+	}
+	base := func(identity string, ordinal int, members []string) (Representative, error) {
+		lineage, ok := byIdentity[identity]
+		if !ok || ordinal != lineage.ordinal {
+			return Representative{}, errors.New("representative constituent identity or ordinal mismatch")
+		}
+		return Representative{Status: CandidateStatus, ClaimCeiling: outcome.ClaimCeiling, Members: append([]string(nil), members...), CensusID: projection.CensusID, ConstituentIdentity: identity, ConstituentOrdinal: lineage.ordinal, BatchID: lineage.batch, Authority: source.Authority, SourceGraphComplete: source.SourceGraphComplete, AllTraversalComplete: source.Completeness.AllTraversalComplete, AnyTruncated: source.Completeness.AnyTruncated}, nil
+	}
+	out := RepresentativeSelection{State: string(qualified.State), Nominations: make([]Representative, 0, len(qualified.Nominations)), Unresolved: make([]Representative, 0, len(qualified.Unresolved))}
+	for _, n := range qualified.Nominations {
+		c, err := base(n.ConstituentIdentity, n.ConstituentOrdinal, n.CommunityMembers)
+		if err != nil {
+			return RepresentativeSelection{}, err
+		}
+		c.SelectionState = string(n.State)
+		c.CommunityIdentity = n.CommunityIdentity
+		c.ExecutionBundleID = n.ExecutionBundleID
+		c.SeedLabel = n.SeedLabel
+		c.SeedAt = n.SeedAt
+		c.PreparedTargets = append([]string(nil), n.PreparedTargets...)
+		c.SelectedNode = n.SelectedNode
+		c.Distance = n.Distance
+		c.SCCMembers = append([]string(nil), n.SCCMembers...)
+		out.Nominations = append(out.Nominations, c)
+	}
+	for _, u := range qualified.Unresolved {
+		c, err := base(u.ConstituentIdentity, u.ConstituentOrdinal, u.CommunityMembers)
+		if err != nil {
+			return RepresentativeSelection{}, err
+		}
+		c.Status = ""
+		c.SelectionState = string(u.State)
+		c.CommunityIdentity = u.CommunityIdentity
+		c.ExecutionBundleID = u.ExecutionBundleID
+		c.SeedLabel, c.SeedAt = u.SeedLabel, u.SeedAt
+		c.PreparedTargets = append([]string(nil), u.PreparedTargets...)
+		out.Unresolved = append(out.Unresolved, c)
+	}
+	return out, nil
+}
 
 func canonicalResolvedOrder(in VerifiedPublication) error {
 	if len(in.Resolved) != len(in.Manifest.Constituents) {
