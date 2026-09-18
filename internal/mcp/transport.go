@@ -368,6 +368,27 @@ func (s *Server) handleContext(ctx context.Context, req request) response {
 	return base
 }
 
+func normalizeStructuralContextV2Arguments(name string, args map[string]any) {
+	if name != mcpcontract.StructuralContextV2Tool {
+		return
+	}
+	defaults := map[string]any{
+		"analysis":           map[string]any{"kind": "NEIGHBORHOOD"},
+		"up_depth":           float64(1),
+		"down_depth":         float64(1),
+		"max_nodes":          float64(100),
+		"timeout_ms":         float64(30000),
+		"request_timeout_ms": float64(15000),
+		"max_messages":       float64(64),
+		"max_bytes":          float64(4194304),
+	}
+	for field, value := range defaults {
+		if _, present := args[field]; !present {
+			args[field] = value
+		}
+	}
+}
+
 func (s *Server) callContext(ctx context.Context, base response, raw json.RawMessage) response {
 	// Also cover internal callers entering with raw params rather than Serve.
 	var params callParams
@@ -400,6 +421,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 		base.Error = &rpcError{Code: -32602, Message: "Unknown tool: " + params.Name}
 		return base
 	}
+	normalizeStructuralContextV2Arguments(tool.Name, params.Arguments)
 	if err := validateArguments(tool, params.Arguments); err != nil {
 		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
 		return base

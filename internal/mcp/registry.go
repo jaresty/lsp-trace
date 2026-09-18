@@ -416,7 +416,7 @@ func newRegistryWithRoutingAndProfile(publicationSupported bool, routing Routing
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.operational-custody.v1.schema.json")
 			tools[i].ArtifactSchemaIDs = appendUnique(tools[i].ArtifactSchemaIDs, "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v1.schema.json")
 		}
-		if tools[i].Name == mcpcontract.StructuralContextTool {
+		if tools[i].Name == mcpcontract.StructuralContextTool || tools[i].Name == mcpcontract.StructuralContextV2Tool {
 			tools[i].semanticValidator = func(_ context.Context, _ Tool, input map[string]any) error {
 				timeout, tok := input["timeout_ms"].(float64)
 				requestTimeout, rok := input["request_timeout_ms"].(float64)
