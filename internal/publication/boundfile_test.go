@@ -1,6 +1,7 @@
 package publication
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -218,29 +219,52 @@ func TestBoundFilePublishesNoSidecar(t *testing.T) {
 }
 
 func TestBoundFileConcurrentPublicationHasOneWinner(t *testing.T) {
-	_, root := boundRoot(t)
+	dir, root := boundRoot(t)
+	type outcome struct {
+		bytes []byte
+		err   error
+	}
+	const contenders = 16
 	var wg sync.WaitGroup
-	errs := make(chan error, 2)
-	for i := 0; i < 2; i++ {
+	outcomes := make(chan outcome, contenders)
+	for i := 0; i < contenders; i++ {
 		wg.Add(1)
-		go func() {
+		go func(i int) {
 			defer wg.Done()
-			_, err := PublishBoundFile(root, "capture.bundle", []byte("exact"), func([]byte) error { return nil })
-			errs <- err
-		}()
+			raw := []byte(fmt.Sprintf("exact-winner-%02d", i))
+			_, err := PublishBoundFile(root, "capture.bundle", raw, func(got []byte) error {
+				if !bytes.Equal(got, raw) {
+					return errors.New("verification bytes changed")
+				}
+				return nil
+			})
+			outcomes <- outcome{bytes: raw, err: err}
+		}(i)
 	}
 	wg.Wait()
-	close(errs)
+	close(outcomes)
+	var winner []byte
 	var success, exists int
-	for err := range errs {
-		if err == nil {
+	for result := range outcomes {
+		if result.err == nil {
 			success++
-		} else if errors.Is(err, os.ErrExist) {
+			winner = result.bytes
+		} else if errors.Is(result.err, os.ErrExist) {
 			exists++
+		} else {
+			t.Fatalf("unexpected loser error: %v", result.err)
 		}
 	}
-	if success != 1 || exists != 1 {
+	if success != 1 || exists != contenders-1 {
 		t.Fatalf("success=%d exists=%d", success, exists)
+	}
+	stored, err := os.ReadFile(filepath.Join(dir, "capture.bundle"))
+	if err != nil || !bytes.Equal(stored, winner) {
+		t.Fatalf("final bytes=%q winner=%q err=%v", stored, winner, err)
+	}
+	info, err := os.Stat(dir)
+	if err != nil || info.Mode().Perm() != 0700 {
+		t.Fatalf("root mode=%v err=%v", info.Mode().Perm(), err)
 	}
 }
 
