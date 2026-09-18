@@ -554,6 +554,15 @@ func cloneBatchRequest(b BatchRequest) BatchRequest {
 	b.CanonicalSeedsV2 = append([]byte(nil), b.CanonicalSeedsV2...)
 	return b
 }
+
+// CloneProjection validates and returns a deep copy with no mutable aliases.
+func CloneProjection(p Projection) (Projection, error) {
+	if err := validateProjection(p); err != nil {
+		return Projection{}, err
+	}
+	return cloneProjection(p), nil
+}
+
 func cloneProjection(p Projection) Projection {
 	q := p
 	q.ManifestBytes = append([]byte(nil), p.ManifestBytes...)
