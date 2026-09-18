@@ -28,11 +28,9 @@ const (
 	CodeManifestMismatch Code = "MANIFEST_MISMATCH"
 	CodeEntryMissing     Code = "ENTRY_MISSING"
 	CodeUnavailable      Code = "UNAVAILABLE"
-	CodeWithheld         Code = "WITHHELD"
 	CodeClassMismatch    Code = "STORAGE_CLASS_MISMATCH"
 	CodeCustodyMismatch  Code = "CUSTODY_MISMATCH"
-	CodeMissing          Code = "MISSING"
-	CodeCorrupt          Code = "CORRUPT"
+	CodeResolutionFailed Code = "RESOLUTION_FAILED"
 	CodeIdentityMismatch Code = "IDENTITY_MISMATCH"
 	CodeLimit            Code = "LIMIT"
 )
@@ -102,9 +100,6 @@ func Resolve(manifestRaw, graphBytes, captureBytes []byte, request Request, depe
 	if entry == nil {
 		return zero, fail(CodeEntryMissing, errors.New("entry is not present in admitted manifest"))
 	}
-	if entry.Availability == "WITHHELD" {
-		return zero, fail(CodeWithheld, errors.New("manifest withholds source bytes"))
-	}
 	if entry.Availability != "AVAILABLE" || entry.StorageClass == "UNAVAILABLE" {
 		return zero, fail(CodeUnavailable, errors.New("manifest records source bytes unavailable"))
 	}
@@ -171,20 +166,14 @@ func digest(raw []byte) string {
 }
 
 func classifyLookup(err error) error {
-	switch {
-	case sourceobject.IsCode(err, sourceobject.CodeMissing), errors.Is(err, os.ErrNotExist):
-		return fail(CodeMissing, err)
-	case sourceobject.IsCode(err, sourceobject.CodeCorrupt):
-		return fail(CodeCorrupt, err)
-	case sourceobject.IsCode(err, sourceobject.CodeLimit):
+	if sourceobject.IsCode(err, sourceobject.CodeLimit) {
 		return fail(CodeLimit, err)
-	default:
-		var typed *Error
-		if errors.As(err, &typed) {
-			return err
-		}
-		return fail(CodeCorrupt, err)
 	}
+	var typed *Error
+	if errors.As(err, &typed) {
+		return err
+	}
+	return fail(CodeResolutionFailed, err)
 }
 
 type gitCLI struct {
@@ -210,14 +199,14 @@ func (g *gitCLI) Get(binding GitBinding, expected sourceobject.Identity) (source
 	}
 	commitTree, err := g.text("rev-parse", binding.Commit+"^{tree}")
 	if err != nil {
-		return sourceobject.Object{}, fail(CodeMissing, err)
+		return sourceobject.Object{}, fail(CodeResolutionFailed, err)
 	}
 	if commitTree != binding.Tree {
 		return sourceobject.Object{}, fail(CodeCustodyMismatch, errors.New("commit does not bind exact tree"))
 	}
 	line, err := g.bytes(int64(256+len(binding.Path)), "ls-tree", "-z", binding.Tree, "--", binding.Path)
 	if err != nil {
-		return sourceobject.Object{}, fail(CodeMissing, err)
+		return sourceobject.Object{}, fail(CodeResolutionFailed, err)
 	}
 	want := "100644 blob " + binding.Blob + "\t" + binding.Path + "\x00"
 	wantExec := "100755 blob " + binding.Blob + "\t" + binding.Path + "\x00"
@@ -226,7 +215,7 @@ func (g *gitCLI) Get(binding GitBinding, expected sourceobject.Identity) (source
 	}
 	kind, err := g.text("cat-file", "-t", binding.Blob)
 	if err != nil {
-		return sourceobject.Object{}, fail(CodeMissing, err)
+		return sourceobject.Object{}, fail(CodeResolutionFailed, err)
 	}
 	if kind != "blob" {
 		return sourceobject.Object{}, fail(CodeCustodyMismatch, errors.New("bound object is not a blob"))
@@ -255,17 +244,17 @@ func (g *gitCLI) bytes(limit int64, args ...string) ([]byte, error) {
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fail(CodeCorrupt, err)
+		return nil, fail(CodeResolutionFailed, err)
 	}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, fail(CodeCorrupt, err)
+		return nil, fail(CodeResolutionFailed, err)
 	}
 	raw, readErr := io.ReadAll(io.LimitReader(stdout, limit+1))
 	waitErr := cmd.Wait()
 	if readErr != nil {
-		return nil, fail(CodeCorrupt, readErr)
+		return nil, fail(CodeResolutionFailed, readErr)
 	}
 	if int64(len(raw)) > limit {
 		return nil, fail(CodeLimit, errors.New("Git object exceeds configured byte limit"))
