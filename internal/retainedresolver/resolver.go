@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lsp-trace/internal/retainedlifecycle"
 	"lsp-trace/internal/retainedmanifest"
 	"lsp-trace/internal/sourceobject"
 )
@@ -32,6 +33,14 @@ const (
 	CodeCustodyMismatch  Code = "CUSTODY_MISMATCH"
 	CodeResolutionFailed Code = "RESOLUTION_FAILED"
 	CodeIdentityMismatch Code = "IDENTITY_MISMATCH"
+	CodeMissing          Code = "MISSING"
+	CodeCorrupt          Code = "CORRUPT"
+	CodeWithheld         Code = "WITHHELD"
+	CodeCollected        Code = "COLLECTED"
+	CodeShallowHistory   Code = "SHALLOW_HISTORY"
+	CodeRewrittenHistory Code = "REWRITTEN_HISTORY"
+	CodeGCCollected      Code = "GC_COLLECTED"
+	CodeDeleted          Code = "DELETED"
 	CodeLimit            Code = "LIMIT"
 )
 
@@ -70,8 +79,9 @@ type GitLookup interface {
 }
 
 type Dependencies struct {
-	Git     GitLookup
-	Objects ObjectLookup
+	Git       GitLookup
+	Objects   ObjectLookup
+	Lifecycle retainedlifecycle.Classifier
 }
 
 type Result struct {
@@ -100,8 +110,19 @@ func Resolve(manifestRaw, graphBytes, captureBytes []byte, request Request, depe
 	if entry == nil {
 		return zero, fail(CodeEntryMissing, errors.New("entry is not present in admitted manifest"))
 	}
-	if entry.Availability != "AVAILABLE" || entry.StorageClass == "UNAVAILABLE" {
+	switch entry.Availability {
+	case "WITHHELD":
+		return zero, fail(CodeWithheld, errors.New("manifest records source bytes withheld"))
+	case "COLLECTED":
+		return zero, fail(CodeCollected, errors.New("manifest records source bytes collected"))
+	case "UNAVAILABLE":
 		return zero, fail(CodeUnavailable, errors.New("manifest records source bytes unavailable"))
+	case "AVAILABLE":
+		if entry.StorageClass == "UNAVAILABLE" {
+			return zero, fail(CodeUnavailable, errors.New("manifest records source bytes unavailable"))
+		}
+	default:
+		return zero, fail(CodeManifestMismatch, errors.New("manifest availability is invalid"))
 	}
 
 	var object sourceobject.Object
@@ -113,7 +134,6 @@ func Resolve(manifestRaw, graphBytes, captureBytes []byte, request Request, depe
 		if entry.CustodyIdentity != GitCustodyIdentity(*request.Git) {
 			return zero, fail(CodeCustodyMismatch, errors.New("Git binding differs from manifest custody"))
 		}
-		object, err = dependencies.Git.Get(*request.Git, entry.Source)
 	case "CONTENT_ADDRESS", "EMBEDDED_IMMUTABLE":
 		if request.Git != nil {
 			return zero, fail(CodeClassMismatch, errors.New("Git binding cannot satisfy immutable-object class"))
@@ -124,6 +144,18 @@ func Resolve(manifestRaw, graphBytes, captureBytes []byte, request Request, depe
 		if entry.CustodyIdentity != ContentCustodyIdentity(entry.StorageClass, entry.Source) {
 			return zero, fail(CodeCustodyMismatch, errors.New("object identity differs from manifest custody"))
 		}
+	default:
+		return zero, fail(CodeClassMismatch, errors.New("unsupported retained storage class"))
+	}
+	if dependencies.Lifecycle != nil {
+		if lifecycleErr := classifyLifecycle(dependencies.Lifecycle.State(retainedlifecycle.Key{ManifestDigest: manifestID, EntryID: entry.EntryID})); lifecycleErr != nil {
+			return zero, lifecycleErr
+		}
+	}
+	switch entry.StorageClass {
+	case "GIT_BLOB":
+		object, err = dependencies.Git.Get(*request.Git, entry.Source)
+	case "CONTENT_ADDRESS", "EMBEDDED_IMMUTABLE":
 		object, err = dependencies.Objects.Get(entry.Source)
 	default:
 		return zero, fail(CodeClassMismatch, errors.New("unsupported retained storage class"))
@@ -165,8 +197,38 @@ func digest(raw []byte) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
+func classifyLifecycle(state retainedlifecycle.State) error {
+	switch state {
+	case retainedlifecycle.StateUnknown:
+		return nil
+	case retainedlifecycle.StateMissing:
+		return fail(CodeMissing, errors.New("retained object is missing"))
+	case retainedlifecycle.StateCorrupt:
+		return fail(CodeCorrupt, errors.New("retained object is corrupt"))
+	case retainedlifecycle.StateWithheld:
+		return fail(CodeWithheld, errors.New("retained object is withheld"))
+	case retainedlifecycle.StateCollected:
+		return fail(CodeCollected, errors.New("retained object is collected"))
+	case retainedlifecycle.StateShallowHistory:
+		return fail(CodeShallowHistory, errors.New("retained Git history is shallow"))
+	case retainedlifecycle.StateRewrittenHistory:
+		return fail(CodeRewrittenHistory, errors.New("retained Git history was rewritten"))
+	case retainedlifecycle.StateGCCollected:
+		return fail(CodeGCCollected, errors.New("retained Git object was garbage collected"))
+	case retainedlifecycle.StateDeleted:
+		return fail(CodeDeleted, errors.New("retained object was explicitly deleted"))
+	default:
+		return fail(CodeResolutionFailed, errors.New("invalid retained lifecycle state"))
+	}
+}
+
 func classifyLookup(err error) error {
-	if sourceobject.IsCode(err, sourceobject.CodeLimit) {
+	switch {
+	case sourceobject.IsCode(err, sourceobject.CodeMissing):
+		return fail(CodeMissing, err)
+	case sourceobject.IsCode(err, sourceobject.CodeCorrupt):
+		return fail(CodeCorrupt, err)
+	case sourceobject.IsCode(err, sourceobject.CodeLimit):
 		return fail(CodeLimit, err)
 	}
 	var typed *Error
