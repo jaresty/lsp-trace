@@ -73,7 +73,7 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	if len(got.Artifact.Constituents) != 2 || got.Artifact.Constituents[0].SHA256 == "" || got.Artifact.Constituents[0].Identity == "" || got.Artifact.Constituents[0].RevisionCustody == "" {
 		t.Fatal("ASSERT_CONSTITUENT_IDENTITY_DIGEST_CUSTODY_RETAINED")
 	}
-	if got.Artifact.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || got.Artifact.Constituents[0].SourcePolicy != validated.Constituents[0].SourcePolicy || got.Artifact.Constituents[0].WorkspaceURI != validated.Constituents[0].WorkspaceURI || got.Artifact.Constituents[0].AnalyzedVersion != validated.Constituents[0].AnalyzedVersion || got.Artifact.Constituents[0].DependencyCompleteness != validated.Constituents[0].DependencyCompleteness || got.Artifact.Constituents[0].CaptureBudget != validated.Constituents[0].CaptureBudget || !reflect.DeepEqual(got.Artifact.Constituents[0].Supplies, validated.Constituents[0].Supplies) || !reflect.DeepEqual(got.Artifact.Constituents[0].Captures, validated.Constituents[0].Captures) || !reflect.DeepEqual(got.Artifact.Constituents[0].Bindings, validated.Constituents[0].Bindings) || !reflect.DeepEqual(got.Artifact.Constituents[0].Invocation, validated.Constituents[0].Invocation) || !reflect.DeepEqual(got.Artifact.Constituents[0].Seeds, validated.Constituents[0].Seeds) || !reflect.DeepEqual(got.Artifact.Constituents[0].Frontier, validated.Constituents[0].Frontier) || !reflect.DeepEqual(got.Artifact.Constituents[0].Diagnostics, validated.Constituents[0].Diagnostics) || !reflect.DeepEqual(got.Artifact.Constituents[0].Summary, validated.Constituents[0].Summary) || !reflect.DeepEqual(got.Artifact.Constituents[0].Slice, validated.Constituents[0].Slice) {
+	if got.Artifact.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || got.Artifact.Constituents[0].SourcePolicy != validated.Constituents[0].SourcePolicy || got.Artifact.Constituents[0].WorkspaceURI != validated.Constituents[0].WorkspaceURI || got.Artifact.Constituents[0].AnalyzedVersion != validated.Constituents[0].AnalyzedVersion || got.Artifact.Constituents[0].DependencyCompleteness != validated.Constituents[0].DependencyCompleteness || got.Artifact.Constituents[0].CaptureBudget != validated.Constituents[0].CaptureBudget || !reflect.DeepEqual(got.Artifact.Constituents[0].Supplies, validated.Constituents[0].Supplies) || !reflect.DeepEqual(got.Artifact.Constituents[0].Captures, validated.Constituents[0].Captures) || !reflect.DeepEqual(got.Artifact.Constituents[0].Bindings, validated.Constituents[0].Bindings) || !reflect.DeepEqual(got.Artifact.Constituents[0].Invocation, validated.Constituents[0].Invocation) || !reflect.DeepEqual(got.Artifact.Constituents[0].Seeds, validated.Constituents[0].Seeds) || !reflect.DeepEqual(got.Artifact.Constituents[0].SeedMemberships, validated.Constituents[0].SeedMemberships) || !reflect.DeepEqual(got.Artifact.Constituents[0].Frontier, validated.Constituents[0].Frontier) || !reflect.DeepEqual(got.Artifact.Constituents[0].Diagnostics, validated.Constituents[0].Diagnostics) || !reflect.DeepEqual(got.Artifact.Constituents[0].Summary, validated.Constituents[0].Summary) || !reflect.DeepEqual(got.Artifact.Constituents[0].Slice, validated.Constituents[0].Slice) {
 		t.Fatal("ASSERT_COMPLETE_ORDERED_CONSTITUENT_BINDINGS_RETAINED")
 	}
 	for i, constituent := range validated.Constituents {
@@ -86,8 +86,11 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	if len(exposed.Constituents[0].Frontier) > 0 {
 		exposed.Constituents[0].Frontier[0] ^= 1
 	}
+	if len(exposed.Constituents[0].SeedMemberships) > 0 {
+		exposed.Constituents[0].SeedMemberships[0] ^= 1
+	}
 	stable := got.Admission.SourceBinding()
-	if stable.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || !reflect.DeepEqual(stable.Constituents[0].Frontier, validated.Constituents[0].Frontier) {
+	if stable.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || !reflect.DeepEqual(stable.Constituents[0].SeedMemberships, validated.Constituents[0].SeedMemberships) || !reflect.DeepEqual(stable.Constituents[0].Frontier, validated.Constituents[0].Frontier) {
 		t.Fatal("ASSERT_OPAQUE_ADMISSION_SOURCE_BINDING_DEEP_CLONED")
 	}
 	if len(got.Artifact.NodeIDs) != 3 || len(got.Artifact.Calls) != 1 {
@@ -123,6 +126,12 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	}
 	if !reflect.DeepEqual(outcome.CompositeSource.Constituents, got.Artifact.Constituents) || !reflect.DeepEqual(outcome.CompositeSource.Completeness.PerInput, got.Artifact.Completeness.PerInput) {
 		t.Fatal("ASSERT_ORDERED_CONSTITUENT_AND_PER_INPUT_COMPLETENESS_RETAINED")
+	}
+	if len(outcome.CompositeSource.Constituents[0].SeedMemberships) > 0 {
+		outcome.CompositeSource.Constituents[0].SeedMemberships[0] ^= 1
+		if reflect.DeepEqual(outcome.CompositeSource.Constituents[0].SeedMemberships, outcome.Projection.CompositeSource.Constituents[0].SeedMemberships) {
+			t.Fatal("ASSERT_OUTCOME_AND_PROJECTION_SEED_MEMBERSHIPS_NO_ALIAS")
+		}
 	}
 }
 

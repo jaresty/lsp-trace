@@ -174,14 +174,7 @@ func cloneAdmission(in programcadmission.Result) programcadmission.Result {
 	out.Bytes = append([]byte(nil), in.Bytes...)
 	return out
 }
-func cloneOutcome(in programc.Outcome) programc.Outcome {
-	out := in
-	out.Communities = make([]programc.Community, len(in.Communities))
-	for i := range in.Communities {
-		out.Communities[i].Members = append([]string(nil), in.Communities[i].Members...)
-	}
-	return out
-}
+func cloneOutcome(in programc.Outcome) programc.Outcome { return programc.CloneOutcome(in) }
 
 // CanonicalSelectors returns a cloned selector order for callers that need to
 // construct closed evidence without relying on positional correspondence.

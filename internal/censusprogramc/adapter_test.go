@@ -111,6 +111,13 @@ func TestComposeVerifiedProjectionDeterministicAndEmpty(t *testing.T) {
 	if one.CensusID != p.CensusID || one.Publication.Selector != r.Publication.Receipt.Selector || len(one.Composite.Bytes) == 0 || len(one.Admission.Bytes) == 0 {
 		t.Fatal("missing retained bindings")
 	}
+	if len(one.Composite.Artifact.Constituents) == 0 || len(one.Composite.Artifact.Constituents[0].SeedMemberships) == 0 || len(one.Admission.Artifact.Constituents[0].SeedMemberships) == 0 || len(one.Outcome.CompositeSource.Constituents[0].SeedMemberships) == 0 {
+		t.Fatal("ASSERT_CENSUS_SEED_MEMBERSHIP_BINDINGS_RETAINED")
+	}
+	one.Outcome.CompositeSource.Constituents[0].SeedMemberships[0] ^= 1
+	if string(one.Outcome.CompositeSource.Constituents[0].SeedMemberships) == string(one.Outcome.Projection.CompositeSource.Constituents[0].SeedMemberships) {
+		t.Fatal("ASSERT_CENSUS_OUTCOME_SEED_MEMBERSHIPS_NO_ALIAS")
+	}
 }
 func TestPublicationAndReconciliationFailures(t *testing.T) {
 	p := testProjection(t)

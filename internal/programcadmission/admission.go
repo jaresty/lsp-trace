@@ -28,19 +28,19 @@ const maxOccurrences = 100_000
 // Program C core from depending directly on the composer while retaining every
 // canonical source-binding field.
 type ConstituentReference struct {
-	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID string
-	ByteLength, GraphByteLength                                 int
-	BytesBase64                                                 string
-	SessionID, InvocationID                                     string
-	Generation                                                  uint64
-	RevisionCustody                                             string
-	SourcePolicy, WorkspaceURI, AnalyzedVersion                 string
-	DependencyCompleteness                                      string
-	CaptureBudget                                               graphprovenance.CaptureBudgetV2
-	Supplies                                                    []graphprovenance.SupplyReceiptV2
-	Captures                                                    []graphprovenance.Receipt
-	Bindings                                                    []graphprovenance.BindingV2
-	Invocation, Seeds, Frontier, Diagnostics, Summary, Slice    json.RawMessage
+	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID               string
+	ByteLength, GraphByteLength                                               int
+	BytesBase64                                                               string
+	SessionID, InvocationID                                                   string
+	Generation                                                                uint64
+	RevisionCustody                                                           string
+	SourcePolicy, WorkspaceURI, AnalyzedVersion                               string
+	DependencyCompleteness                                                    string
+	CaptureBudget                                                             graphprovenance.CaptureBudgetV2
+	Supplies                                                                  []graphprovenance.SupplyReceiptV2
+	Captures                                                                  []graphprovenance.Receipt
+	Bindings                                                                  []graphprovenance.BindingV2
+	Invocation, Seeds, SeedMemberships, Frontier, Diagnostics, Summary, Slice json.RawMessage
 }
 
 type CompatibilityReference struct {
@@ -196,6 +196,11 @@ func Admit(composite []byte) (Result, error) {
 	return Result{Artifact: artifact, Bytes: encoded, Admission: admission}, nil
 }
 
+// CloneCompositeSourceBinding returns a defensive copy of validated composite custody.
+func CloneCompositeSourceBinding(source CompositeSourceBinding) CompositeSourceBinding {
+	return cloneSourceBinding(source)
+}
+
 func cloneSourceBinding(source CompositeSourceBinding) CompositeSourceBinding {
 	clone := source
 	clone.Compatibility.EvidenceSemantics = append(json.RawMessage(nil), source.Compatibility.EvidenceSemantics...)
@@ -208,7 +213,7 @@ func cloneSourceBinding(source CompositeSourceBinding) CompositeSourceBinding {
 func constituentReferences(in []programccompose.Constituent) []ConstituentReference {
 	out := make([]ConstituentReference, len(in))
 	for i, c := range in {
-		out[i] = ConstituentReference{Identity: c.Identity, SHA256: c.SHA256, SchemaVersion: c.SchemaVersion, GraphSHA256: c.GraphSHA256, GraphSchemaID: c.GraphSchemaID, ByteLength: c.ByteLength, GraphByteLength: c.GraphByteLength, BytesBase64: c.BytesBase64, SessionID: c.SessionID, InvocationID: c.InvocationID, Generation: c.Generation, SourcePolicy: c.SourcePolicy, WorkspaceURI: c.WorkspaceURI, AnalyzedVersion: c.AnalyzedVersion, DependencyCompleteness: c.DependencyCompleteness, CaptureBudget: c.CaptureBudget, Supplies: cloneSupplies(c.Supplies), Captures: cloneReceipts(c.Captures), Bindings: cloneBindings(c.Bindings), Invocation: cloneRaw(c.Invocation), Seeds: cloneRaw(c.Seeds), Frontier: cloneRaw(c.Frontier), Diagnostics: cloneRaw(c.Diagnostics), Summary: cloneRaw(c.Summary), Slice: cloneRaw(c.Slice)}
+		out[i] = ConstituentReference{Identity: c.Identity, SHA256: c.SHA256, SchemaVersion: c.SchemaVersion, GraphSHA256: c.GraphSHA256, GraphSchemaID: c.GraphSchemaID, ByteLength: c.ByteLength, GraphByteLength: c.GraphByteLength, BytesBase64: c.BytesBase64, SessionID: c.SessionID, InvocationID: c.InvocationID, Generation: c.Generation, SourcePolicy: c.SourcePolicy, WorkspaceURI: c.WorkspaceURI, AnalyzedVersion: c.AnalyzedVersion, DependencyCompleteness: c.DependencyCompleteness, CaptureBudget: c.CaptureBudget, Supplies: cloneSupplies(c.Supplies), Captures: cloneReceipts(c.Captures), Bindings: cloneBindings(c.Bindings), Invocation: cloneRaw(c.Invocation), Seeds: cloneRaw(c.Seeds), SeedMemberships: cloneRaw(c.SeedMemberships), Frontier: cloneRaw(c.Frontier), Diagnostics: cloneRaw(c.Diagnostics), Summary: cloneRaw(c.Summary), Slice: cloneRaw(c.Slice)}
 	}
 	return out
 }
@@ -221,6 +226,7 @@ func cloneConstituentReferences(in []ConstituentReference) []ConstituentReferenc
 		out[i].Bindings = cloneBindings(in[i].Bindings)
 		out[i].Invocation = cloneRaw(in[i].Invocation)
 		out[i].Seeds = cloneRaw(in[i].Seeds)
+		out[i].SeedMemberships = cloneRaw(in[i].SeedMemberships)
 		out[i].Frontier = cloneRaw(in[i].Frontier)
 		out[i].Diagnostics = cloneRaw(in[i].Diagnostics)
 		out[i].Summary = cloneRaw(in[i].Summary)

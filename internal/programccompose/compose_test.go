@@ -22,6 +22,14 @@ func capture(t *testing.T, suffix string, nodes []graph.Node, edges []graph.Edge
 		frontier = []graph.Boundary{{NodeID: nodes[0].ID, Reason: graph.MaxDepth}}
 	}
 	r := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{WorkspaceURI: "file:///w", Server: graph.ServerInvocation{Command: "gopls"}, LanguageID: "go", Seeds: []graph.InvocationSeed{seed}, Provenance: graph.InvocationProvenance{InvocationID: "invocation-" + suffix, SourceRevision: "commit", ServerVersion: "gopls@1"}}, Nodes: nodes, Edges: edges, Seeds: []graph.SeedResult{{Label: seed.Label}}, Frontier: frontier, Diagnostics: []graph.Diagnostic{{Phase: "capture-" + suffix, Message: "diagnostic-" + suffix}}, Summary: graph.Summary{Complete: complete, Truncated: truncated}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
+	r.Canonicalize()
+	if len(nodes) > 0 {
+		r.Seeds[0].PreparedTargetIDs = []string{nodes[0].ID}
+		r.Seeds[0].ReachedNodeIDs = []string{nodes[0].ID}
+	}
+	if len(edges) > 0 {
+		r.Seeds[0].ReachedRelationIDs = []string{r.Edges[0].RelationID}
+	}
 	native, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)

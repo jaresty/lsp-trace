@@ -15,6 +15,27 @@ import (
 	"lsp-trace/internal/manageddiagnostic"
 )
 
+func TestCloneOutcomeDoesNotAliasExportedProjectionState(t *testing.T) {
+	in := Outcome{
+		Communities: []Community{{Members: []string{"a"}}},
+		Projection: Projection{
+			NodeIdentities: []string{"a", "b"},
+			NodeIDs:        map[string]int64{"a": 0, "b": 1},
+			Occurrences:    []Occurrence{{Identity: "occurrence", From: 0, To: 1}},
+			PairWeights:    map[Pair]float64{{From: 0, To: 1}: 1},
+		},
+	}
+	out := CloneOutcome(in)
+	out.Communities[0].Members[0] = "changed"
+	out.Projection.NodeIdentities[0] = "changed"
+	out.Projection.NodeIDs["a"] = 9
+	out.Projection.Occurrences[0].Identity = "changed"
+	out.Projection.PairWeights[Pair{From: 0, To: 1}] = 9
+	if in.Communities[0].Members[0] != "a" || in.Projection.NodeIdentities[0] != "a" || in.Projection.NodeIDs["a"] != 0 || in.Projection.Occurrences[0].Identity != "occurrence" || in.Projection.PairWeights[Pair{From: 0, To: 1}] != 1 {
+		t.Fatal("ASSERT_CLONE_OUTCOME_EXPORTED_PROJECTION_NO_ALIAS")
+	}
+}
+
 func validV5(t *testing.T, nodes []graph.Node, edges []graph.Edge) []byte {
 	t.Helper()
 	seed := graph.InvocationSeed{Label: "seed", At: "a.go:1:1", ResolvedURI: "file:///w/a.go", ContentSHA256: "sha256:" + strings.Repeat("a", 64), LanguageID: "go"}

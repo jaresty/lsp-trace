@@ -72,6 +72,29 @@ type Outcome struct {
 	CompositeSource                                                           programcadmission.CompositeSourceBinding
 }
 
+// CloneOutcome returns an outcome whose exported mutable projection and
+// composite-custody evidence do not share backing storage with the source.
+func CloneOutcome(in Outcome) Outcome {
+	out := in
+	out.Communities = make([]Community, len(in.Communities))
+	for i := range in.Communities {
+		out.Communities[i].Members = append([]string(nil), in.Communities[i].Members...)
+	}
+	out.Projection.NodeIdentities = append([]string(nil), in.Projection.NodeIdentities...)
+	out.Projection.NodeIDs = make(map[string]int64, len(in.Projection.NodeIDs))
+	for identity, id := range in.Projection.NodeIDs {
+		out.Projection.NodeIDs[identity] = id
+	}
+	out.Projection.Occurrences = append([]Occurrence(nil), in.Projection.Occurrences...)
+	out.Projection.PairWeights = make(map[Pair]float64, len(in.Projection.PairWeights))
+	for pair, weight := range in.Projection.PairWeights {
+		out.Projection.PairWeights[pair] = weight
+	}
+	out.Projection.CompositeSource = programcadmission.CloneCompositeSourceBinding(in.Projection.CompositeSource)
+	out.CompositeSource = programcadmission.CloneCompositeSourceBinding(in.CompositeSource)
+	return out
+}
+
 // SemanticReceipt identifies the validated native Graph V5 semantic commitment.
 type SemanticReceipt struct {
 	ReceiptVersion, SemanticCommitmentDigest, DigestScope string
@@ -313,7 +336,7 @@ func ComputeComposite(a programcadmission.CompositeProjectionAdmission, seed uin
 	if source.CompositeID == "" || source.CompositeOutputSHA256 == "" || source.ClaimCeiling != a.ClaimCeiling() || source.Authority != 0 || source.SourceGraphComplete != "UNKNOWN" || source.Completeness.WholeWorkspace {
 		return Outcome{}, &Failure{Code: CodeInvalidProvenance, Message: fmt.Sprintf("invalid composite source binding: id=%t output=%t ceiling=%t authority=%d completeness=%q whole_workspace=%t", source.CompositeID != "", source.CompositeOutputSHA256 != "", source.ClaimCeiling == a.ClaimCeiling(), source.Authority, source.SourceGraphComplete, source.Completeness.WholeWorkspace)}
 	}
-	p := Projection{NodeIdentities: ids, NodeIDs: make(map[string]int64, len(ids)), PairWeights: make(map[Pair]float64), CompositeSource: source}
+	p := Projection{NodeIdentities: ids, NodeIDs: make(map[string]int64, len(ids)), PairWeights: make(map[Pair]float64), CompositeSource: programcadmission.CloneCompositeSourceBinding(source)}
 	for i, id := range ids {
 		if id == "" || (i > 0 && ids[i-1] >= id) {
 			return Outcome{}, &Failure{Code: CodeInvalidCalls, Message: "noncanonical admitted nodes"}
@@ -381,7 +404,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, composit
 		}
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source, CompositeSource: compositeSource}, nil
+	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source, CompositeSource: programcadmission.CloneCompositeSourceBinding(compositeSource)}, nil
 }
 
 func logicalDigest(c []Community) string {

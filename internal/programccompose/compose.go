@@ -48,18 +48,18 @@ type ExactMetadata struct {
 }
 
 type Constituent struct {
-	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID string
-	ByteLength, GraphByteLength                                 int
-	BytesBase64                                                 string
-	SessionID, InvocationID                                     string
-	Generation                                                  uint64
-	SourcePolicy, WorkspaceURI, AnalyzedVersion                 string
-	DependencyCompleteness                                      string
-	CaptureBudget                                               graphprovenance.CaptureBudgetV2
-	Supplies                                                    []graphprovenance.SupplyReceiptV2
-	Captures                                                    []graphprovenance.Receipt
-	Bindings                                                    []graphprovenance.BindingV2
-	Invocation, Seeds, Frontier, Diagnostics, Summary, Slice    json.RawMessage
+	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID               string
+	ByteLength, GraphByteLength                                               int
+	BytesBase64                                                               string
+	SessionID, InvocationID                                                   string
+	Generation                                                                uint64
+	SourcePolicy, WorkspaceURI, AnalyzedVersion                               string
+	DependencyCompleteness                                                    string
+	CaptureBudget                                                             graphprovenance.CaptureBudgetV2
+	Supplies                                                                  []graphprovenance.SupplyReceiptV2
+	Captures                                                                  []graphprovenance.Receipt
+	Bindings                                                                  []graphprovenance.BindingV2
+	Invocation, Seeds, SeedMemberships, Frontier, Diagnostics, Summary, Slice json.RawMessage
 }
 
 type Compatibility struct {
@@ -404,7 +404,7 @@ func constituent(in Input, e envelope, gb []byte, n native) Constituent {
 		b, _ := json.Marshal(bindings[j])
 		return bytes.Compare(a, b) < 0
 	})
-	return Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, SourcePolicy: e.SourcePolicy, WorkspaceURI: e.WorkspaceURI, AnalyzedVersion: e.AnalyzedVersion, DependencyCompleteness: e.DependencyCompleteness, CaptureBudget: e.CaptureBudget, Supplies: supplies, Captures: captures, Bindings: bindings, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice)}
+	return Constituent{Identity: in.Identity, SHA256: in.SHA256, ByteLength: len(in.Bytes), SchemaVersion: e.SchemaVersion, GraphSHA256: e.GraphV5SHA256, GraphByteLength: len(gb), GraphSchemaID: e.GraphV5SchemaID, BytesBase64: base64.StdEncoding.EncodeToString(in.Bytes), SessionID: e.SessionID, Generation: e.Generation, InvocationID: n.inv.Provenance.InvocationID, SourcePolicy: e.SourcePolicy, WorkspaceURI: e.WorkspaceURI, AnalyzedVersion: e.AnalyzedVersion, DependencyCompleteness: e.DependencyCompleteness, CaptureBudget: e.CaptureBudget, Supplies: supplies, Captures: captures, Bindings: bindings, Invocation: cloneRaw(n.Invocation), Seeds: cloneRaw(n.Seeds), SeedMemberships: cloneRaw(n.SeedMemberships), Frontier: cloneRaw(n.Frontier), Diagnostics: cloneRaw(n.Diagnostics), Summary: cloneRaw(n.Summary), Slice: cloneRaw(n.Slice)}
 }
 
 func validateSourceRecords(items []admitted) error {
