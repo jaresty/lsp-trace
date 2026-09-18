@@ -469,7 +469,7 @@ func TestExecuteRegexLocatorManagedWire(t *testing.T) {
 		request.Target.Line, request.Target.Character = nil, nil
 		request.Target.Regex = &RegexLocator{Pattern: `func (Missing)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 2048}
 		result, failure := Execute(context.Background(), manager, request)
-		if failure == nil || failure.Phase != PhasePreflight || failure.State != StateTargetNotFound || !reflect.DeepEqual(result, Result{}) {
+		if failure == nil || failure.Phase != PhasePreflight || failure.State != StateTargetNotFound || failure.Reason != FailureReasonNoRegexMatch || !reflect.DeepEqual(result, Result{}) {
 			t.Fatalf("ASSERT_REGEX_ABSENT_ZERO_RESULT: result=%+v failure=%+v", result, failure)
 		}
 		if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, []string{"textDocument/didOpen"}) {

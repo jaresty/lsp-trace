@@ -918,8 +918,12 @@ func operationGuidance(tool Tool, advertised bool) map[string]any {
 		visibility = "advertised"
 	}
 	guidance := map[string]any{
-		"canonical_operation":      tool.Name,
-		"direct_tool":              tool.Name,
+		"canonical_operation": tool.Name,
+		"direct_tool":         tool.Name,
+		"mcp_script": map[string]any{
+			"host_tool_path_template": "<server-prefix>_" + tool.Name,
+			"gateway_request":         map[string]any{"request": map[string]any{"operation": tool.Name, "arguments": map[string]any{}}},
+		},
 		"compact_visibility":       visibility,
 		"required_arguments":       schemaStringArray(tool.InputSchema, "required"),
 		"required_argument_sets":   schemaRequiredAlternatives(tool.InputSchema),

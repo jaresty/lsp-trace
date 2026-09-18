@@ -88,8 +88,12 @@ func TestDescribeHiddenOperationFromCompactRegistry(t *testing.T) {
 	if !ok {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_PRESENT: %#v", description)
 	}
-	if guidance["canonical_operation"] != "lsp_trace_v3_slice" || guidance["direct_tool"] != "lsp_trace_v3_slice" || guidance["compact_visibility"] != "hidden" {
+	if guidance["canonical_operation"] != "lsp_trace_v3_slice" || guidance["direct_tool"] != "lsp_trace_v3_slice" || guidance["compact_visibility"] != "hidden" || guidance["direct_tool_path"] != nil {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_IDENTITY: %#v", guidance)
+	}
+	script, ok := guidance["mcp_script"].(map[string]any)
+	if !ok || script["host_tool_path_template"] != "<server-prefix>_lsp_trace_v3_slice" || !strings.Contains(toString(script["gateway_request"]), "lsp_trace_v3_slice") {
+		t.Fatalf("ASSERT_OPERATION_GUIDANCE_COPYABLE_GATEWAY_SHAPE: %#v", guidance)
 	}
 	if !reflect.DeepEqual(guidance["required_arguments"], []string{"session_id", "generation", "seed_manifest"}) {
 		t.Fatalf("ASSERT_OPERATION_GUIDANCE_REQUIRED_ARGUMENTS: %#v", guidance)

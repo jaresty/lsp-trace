@@ -33,6 +33,14 @@
         "DELIVERY_CHECK"
       ]
     },
+    "reason": {
+      "enum": [
+        "NO_REGEX_MATCH",
+        "SOURCE_UNAVAILABLE",
+        "PREPARE_FAILED",
+        "TRAVERSAL_FAILED"
+      ]
+    },
     "state": {
       "enum": [
         "UNSUPPORTED",

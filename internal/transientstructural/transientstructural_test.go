@@ -271,6 +271,25 @@ func TestRequestedDepthBoundaryAllowsNonFatalCallSiteWarnings(t *testing.T) {
 	}
 }
 
+func TestDocumentPreparationFailureReason(t *testing.T) {
+	failure := documentPreparationFailure(PhaseTraversal, session.SessionNotFound, Accounting{})
+	if failure.Phase != PhaseTraversal || failure.State != StateInvalidServerResponse || failure.Reason != FailureReasonPrepareFailed {
+		t.Fatalf("ASSERT_DOCUMENT_PREPARATION_FAILURE_REASON: %+v", failure)
+	}
+
+	typed := documentPreparationFailure(PhaseTraversal, session.RequestTimeout, Accounting{})
+	if typed.State != StateTimeout || typed.Reason != "" {
+		t.Fatalf("ASSERT_TYPED_PREPARATION_FAILURE_HAS_NO_GENERIC_REASON: %+v", typed)
+	}
+}
+
+func TestSourceUnavailableFailureReason(t *testing.T) {
+	failure := sourceUnavailableFailure()
+	if failure.Phase != PhasePreflight || failure.State != StateInvalidServerResponse || failure.Reason != FailureReasonSourceUnavailable {
+		t.Fatalf("ASSERT_SOURCE_UNAVAILABLE_FAILURE_REASON: %+v", failure)
+	}
+}
+
 func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 	legal := map[Phase][]TerminalState{
 		PhasePreflight:     {StateUnsupported, StateAmbiguousTarget, StateTargetNotFound, StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged, StateInvalidServerResponse},
@@ -287,8 +306,12 @@ func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 		}
 	}
 	packageType := reflect.TypeOf((*DomainFailure)(nil))
-	if packageType.Elem().NumField() != 5 {
+	if packageType.Elem().NumField() != 6 {
 		t.Fatalf("ASSERT_FAILURE_PRIVACY_SURFACE: %+v", packageType.Elem())
+	}
+	reasonType := reflect.TypeOf(FailureReason(""))
+	if reasonType.Kind() != reflect.String {
+		t.Fatalf("ASSERT_FAILURE_REASON_BOUNDED_STRING: %v", reasonType)
 	}
 	targetDiagnosticType := reflect.TypeOf(TargetDiagnostic{})
 	if targetDiagnosticType.NumField() != 4 {

@@ -94,6 +94,9 @@ func structuralContextTraversalDomainError(tool string, failure *transientstruct
 	if tool != mcpcontract.StructuralContextV2Tool {
 		return env
 	}
+	if failure.Reason != "" {
+		env.Reason = string(failure.Reason)
+	}
 	if failure.TargetDiagnostic != nil {
 		env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
 		env.TargetDiagnostic = failure.TargetDiagnostic
@@ -233,6 +236,7 @@ type envelope struct {
 	Diagnostic              any                  `json:"diagnostic,omitempty"`
 	TargetDiagnostic        any                  `json:"target_diagnostic,omitempty"`
 	Target                  any                  `json:"target,omitempty"`
+	Reason                  string               `json:"reason,omitempty"`
 	Phase                   string               `json:"phase,omitempty"`
 	State                   string               `json:"state,omitempty"`
 	Content                 *string              `json:"content,omitempty"`
@@ -557,7 +561,11 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			default:
 				state = "INVALID_SERVER_RESPONSE"
 			}
-			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, phase, state))
+			fallbackDomain := &transientstructural.DomainFailure{Phase: transientstructural.Phase(phase), State: transientstructural.TerminalState(state)}
+			if phase == "TRAVERSAL" && state == "INVALID_SERVER_RESPONSE" {
+				fallbackDomain.Reason = transientstructural.FailureReasonTraversalFailed
+			}
+			return bindEnvelope(base, tool, structuralContextTraversalDomainError(tool.Name, fallbackDomain, operationArguments))
 		}
 		if tool.ExecutorFamily == CensusExecutorFamily {
 			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "config", "INVALID_CONFIG"))

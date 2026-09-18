@@ -272,9 +272,19 @@ type TargetDiagnostic struct {
 	Action         TargetAction `json:"action"`
 }
 
+type FailureReason string
+
+const (
+	FailureReasonNoRegexMatch      FailureReason = "NO_REGEX_MATCH"
+	FailureReasonSourceUnavailable FailureReason = "SOURCE_UNAVAILABLE"
+	FailureReasonPrepareFailed     FailureReason = "PREPARE_FAILED"
+	FailureReasonTraversalFailed   FailureReason = "TRAVERSAL_FAILED"
+)
+
 type DomainFailure struct {
 	Phase               Phase                `json:"phase"`
 	State               TerminalState        `json:"state"`
+	Reason              FailureReason        `json:"reason,omitempty"`
 	Accounting          Accounting           `json:"accounting"`
 	TraversalDiagnostic *TraversalDiagnostic `json:"traversal_diagnostic,omitempty"`
 	TargetDiagnostic    *TargetDiagnostic    `json:"target_diagnostic,omitempty"`

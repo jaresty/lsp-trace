@@ -69,6 +69,26 @@ func TestStructuralContextTraversalDomainErrorV4TargetDiagnosticIsClosedAndPriva
 	validateStructuralContextV4(t, mixed, false)
 }
 
+func TestStructuralContextTraversalDomainErrorV4ReasonIsBoundedAndPrivate(t *testing.T) {
+	withoutReason := structuralContextV4Envelope()
+	validateStructuralContextV4(t, withoutReason, true)
+
+	withReason := structuralContextV4Envelope()
+	withReason["reason"] = "NO_REGEX_MATCH"
+	validateStructuralContextV4(t, withReason, true)
+
+	for _, reason := range []string{"ARBITRARY", "no_regex_match", "SOURCE_UNAVAILABLE ", "file:///private"} {
+		bad := cloneStructuralContextV4(t, withReason)
+		bad["reason"] = reason
+		validateStructuralContextV4(t, bad, false)
+	}
+	for _, field := range []string{"raw_error", "uri", "path", "source", "selector", "provider"} {
+		bad := cloneStructuralContextV4(t, withReason)
+		bad[field] = "private"
+		validateStructuralContextV4(t, bad, false)
+	}
+}
+
 func TestStructuralContextTraversalDomainErrorV4DiagnosticIsClosedAndExact(t *testing.T) {
 	cases := []map[string]any{
 		{"stage": "PREPARE", "method": "textDocument/prepareCallHierarchy"},

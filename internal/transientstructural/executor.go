@@ -75,7 +75,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	}
 	document := runtime.PrepareDocument(ctx, documentRequest)
 	if document.Failure != "" {
-		return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
+		return Result{}, documentPreparationFailure(PhaseTraversal, document.Failure, Accounting{})
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, fail(PhaseTraversal, terminalForContext(ctx), Accounting{})
@@ -84,11 +84,11 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		if document.Supply == nil {
 			document = runtime.RefreshDocumentSupply(ctx, documentRequest)
 			if document.Failure != "" {
-				return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
+				return Result{}, documentPreparationFailure(PhaseTraversal, document.Failure, Accounting{})
 			}
 		}
 		if document.Supply == nil {
-			return Result{}, fail(PhasePreflight, StateInvalidServerResponse, Accounting{})
+			return Result{}, sourceUnavailableFailure()
 		}
 		locator := request.Target.Regex
 		selected, err := regexlocator.Resolve(regexlocator.Request{
@@ -106,6 +106,9 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 				case regexlocator.CodeResourceLimit:
 					state = StateResourceLimit
 				}
+			}
+			if typed, ok := err.(*regexlocator.Error); ok && state == StateTargetNotFound && typed.Code == regexlocator.CodeMatchAbsent {
+				return Result{}, failWithReason(PhasePreflight, state, FailureReasonNoRegexMatch, Accounting{})
 			}
 			return Result{}, fail(PhasePreflight, state, Accounting{})
 		}
@@ -152,6 +155,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		accounting = accountUnadmitted(accounting, rawNodes, rawEdges, omissionForTerminal(state))
 		failure := fail(PhaseTraversal, state, accounting)
 		if state == StateInvalidServerResponse {
+			failure.Reason = FailureReasonTraversalFailed
 			if !down.Complete || !down.TraversalComplete {
 				failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: DirectionOutgoing}
 			} else if !upComplete {
@@ -441,9 +445,25 @@ func legalTerminalPair(phase Phase, state TerminalState) bool {
 	}
 }
 
+func documentPreparationFailure(phase Phase, preparationFailure session.Failure, accounting Accounting) *DomainFailure {
+	state := terminalForSessionFailure(preparationFailure)
+	if state == StateInvalidServerResponse {
+		return failWithReason(phase, state, FailureReasonPrepareFailed, accounting)
+	}
+	return fail(phase, state, accounting)
+}
+
+func sourceUnavailableFailure() *DomainFailure {
+	return failWithReason(PhasePreflight, StateInvalidServerResponse, FailureReasonSourceUnavailable, Accounting{})
+}
+
 func fail(phase Phase, state TerminalState, accounting Accounting) *DomainFailure {
+	return failWithReason(phase, state, "", accounting)
+}
+
+func failWithReason(phase Phase, state TerminalState, reason FailureReason, accounting Accounting) *DomainFailure {
 	if state == StateComplete || state == StateEmpty || !legalTerminalPair(phase, state) {
 		panic("illegal transient structural phase/state pair")
 	}
-	return &DomainFailure{Phase: phase, State: state, Accounting: accounting}
+	return &DomainFailure{Phase: phase, State: state, Reason: reason, Accounting: accounting}
 }

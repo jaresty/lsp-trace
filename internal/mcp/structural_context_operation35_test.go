@@ -97,6 +97,22 @@ func TestStructuralContextOperation35PreservesTypedDomainFailures(t *testing.T) 
 	}
 }
 
+func TestStructuralContextV2TraversalFailureReasonProjection(t *testing.T) {
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "INVALID_SERVER_RESPONSE"}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	response := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, structuralContextV2Args()))
+	env := response.Result.(callResult).StructuredContent
+	raw, _ := json.Marshal(env)
+	var projected map[string]any
+	_ = json.Unmarshal(raw, &projected)
+	if env.Phase != "TRAVERSAL" || env.State != "INVALID_SERVER_RESPONSE" || projected["error"].(map[string]any)["code"] != "INVALID_SERVER_RESPONSE" || projected["reason"] != "TRAVERSAL_FAILED" {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_GENERIC_FAILURE_REASON: %s", raw)
+	}
+	if err := mcpcontract.ValidateJSON(mcpcontract.StructuralContextTraversalDomainErrorID, raw); err != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_GENERIC_FAILURE_REASON_SCHEMA: %v\\n%s", err, raw)
+	}
+}
+
 func TestStructuralContextV2TraversalDiagnosticsDirectGatewayParity(t *testing.T) {
 	depthZero, depthOne := 0, 1
 	cases := []struct {
