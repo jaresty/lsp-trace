@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nais:lsp-trace:adr0007:envelope:v0-draft",
+  "title": "ADR 0007 semantic worker NDJSON envelope draft",
+  "description": "Documentation-only G1 draft. Not a frozen protocol, public schema, or executable contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "message_type",
+    "message_id",
+    "correlation_id",
+    "payload"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "version"],
+      "properties": {
+        "family": { "const": "adr0007-semantic-worker" },
+        "version": { "const": "0-draft" }
+      }
+    },
+    "message_type": {
+      "type": "string",
+      "enum": ["request", "response", "event", "error"]
+    },
+    "message_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "correlation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "payload": {
+      "type": "object"
+    }
+  }
+}

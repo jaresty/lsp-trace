@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nais:lsp-trace:adr0007:enablement:v0-draft",
+  "status": "PILOT_ENABLED_LOCAL_ONLY",
+  "decision": "ENABLED_BY_PROJECT_OWNER",
+  "accepted": "2026-09-18",
+  "scope": {
+    "operation": "Describe",
+    "corpus": "revision-bound-code",
+    "item_type": "assembled-source-projection",
+    "acquisition_mode": "TARGET",
+    "admitted_packet_count": 4
+  },
+  "owner": "PROJECT_OWNER",
+  "governance_exception": "g7-local-exception.md",
+  "model": {
+    "name": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+    "sha256": "1664fccab734674a50763490a8c6931b70e3f2f8ec10031b54806d30e5f956b6"
+  },
+  "runtime": {
+    "yzma_commit": "347c6ee0b893cc0bcac50ff7fb12ece0611fd01a",
+    "llama_bundle": "v0.4.0",
+    "llama_manifest_sha256": "b95e8680b4d30761492bbc2d4a6fed656f124c5756dd4387cf02c30d27c13d90"
+  },
+  "worker": {
+    "sha256": "623ad4341720192d57fe95372343ad7d87450ef8bfb5baa6ecc0c05288d16d83"
+  },
+  "adapter": {
+    "sha256": "af22f92bddbaa925cfced6fc93032c398ba671310404a3648c330436a8a171c1"
+  },
+  "inputs": [
+    {"path":"experiment/01.prompt.txt","sha256":"2789fe17e2f21a0105ab8c674e03e8a47ea2bc849ceaab3e7c1670c6a2e597dc"},
+    {"path":"experiment/02.prompt.txt","sha256":"5baa9b24abbcb45ef4e158974652b5ac0b07a44528f93cf85b069989308aa07e"},
+    {"path":"experiment/03.prompt.txt","sha256":"35b784f6c597306647294d5823aea3178b279861494fd8975e6871d3245a30dc"},
+    {"path":"experiment/04.prompt.txt","sha256":"6d0524715b840f5b5ddb0a4324f4a134ecb15a4e839fae044b437656accf892c"}
+  ],
+  "thresholds": "local-gate-decisions.md",
+  "conformance": "experiment/FULL-CONFORMANCE.md",
+  "enablement": {
+    "authorized": true,
+    "scope": "local four-packet Describe diagnostic only",
+    "prohibitions": ["public CLI", "MCP surface", "core integration", "production use", "repository census", "shipment"],
+    "reason": "Explicit project-owner enablement after digest review"
+  }
+}

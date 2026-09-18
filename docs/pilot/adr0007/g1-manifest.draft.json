@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nais:lsp-trace:adr0007:g1-manifest:v0-draft",
+  "status": "PREREQUISITES_DRAFT",
+  "pilot_status": "PILOT_DISABLED",
+  "gate": "G1_PROTOCOL",
+  "authority": "ADR 0007 prerequisite preparation only",
+  "artifacts": [
+    {
+      "path": "docs/pilot/adr0007/protocol-decision.md",
+      "sha256": "a11a1a1cc64e08aeaa99492b7a90603df260eadec78acc7341e33ed796009045"
+    },
+    {
+      "path": "docs/pilot/adr0007/schemas/envelope.v0.draft.json",
+      "sha256": "a53a8555023b0d1b86da3c2a23a369d116485e12f3605805e3ce1c0bf3427979"
+    },
+    {
+      "path": "docs/pilot/adr0007/lifecycle-and-cancellation.md",
+      "sha256": "ac002b7bb5891f43df41c8cbe92647895335bd8a91951a78da4c7e6fe71c8700"
+    },
+    {
+      "path": "docs/pilot/adr0007/conformance-vectors.md",
+      "sha256": "6b3bfc1c1b4e247c7f1c04d7ccea4b4dc071339943a20ba249bf86ded2ddcfe9"
+    }
+  ],
+  "unresolved": [
+    "protocol-visible operation and control vocabulary",
+    "final envelope and field schemas",
+    "canonicalization and digest policy",
+    "ordering and concurrency policy",
+    "cancellation races and shutdown semantics",
+    "resource limits",
+    "accepted terminal-list references",
+    "final conformance vector inputs and expected outputs"
+  ],
+  "enablement": {
+    "authorized": false,
+    "requires": "A later explicit enablement record referencing a complete approved G1-G8 bundle digest"
+  }
+}

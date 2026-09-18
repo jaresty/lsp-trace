@@ -1,0 +1,238 @@
+Task: Explain the target from the perspective of its mechanically selected immediate outward consumer. The ordered chain below is mechanically established by a server-reported CALLS relation and is authoritative within this bounded packet: C2 OUTWARD_CONSUMER calls C1 TARGET. Consumer identity is not a model decision: set nearest_outward_consumer from C2 and do not return OUTWARD_CONSUMER_UNRESOLVED. Your task is only to explain what C1 provides to C2. Describe what C1 provides to C2 and C1’s one-layer contribution toward the system boundary. Do not skip layers or infer a human user. Do not claim runtime use, ownership, product purpose, canonical feature identity, value, or completeness.
+
+Mechanical metadata: authority=0; accepted=false; source_graph_complete=UNKNOWN.
+ORDERED_CHAIN: C2 OUTWARD_CONSUMER -> C1 TARGET
+
+C1 TARGET node: Execute (incomingops/executor.go)
+C1 source:
+func (e *Executor) Execute(parent context.Context, op operation.Request) (operation.Result, *operation.Failure) {
+	if e == nil || e.runtime == nil || op.Name != OperationIncoming {
+		return operation.Result{}, failure(operation.FailureNotImplemented, operation.ErrNotImplemented)
+	}
+	var input request
+	if err := decodeClosed(op.Input, &input); err != nil {
+		return operation.Result{}, failure(operation.FailureInvalidInput, err)
+	}
+	applyDefaults(&input)
+	if err := validate(input); err != nil {
+		return operation.Result{}, failure(operation.FailureInvalidInput, err)
+	}
+	resolvedID, resolvedGeneration, runtimeFailure := ResolveSession(e.runtime, input.SessionID, input.Generation)
+	input.SessionID, input.Generation = resolvedID, resolvedGeneration
+	if runtimeFailure != "" {
+		return operation.Result{}, failure(string(runtimeFailure), nil)
+	}
+	metadata, runtimeFailure := e.runtime.Metadata(input.SessionID, input.Generation)
+	if runtimeFailure != "" {
+		return operation.Result{}, failure(string(runtimeFailure), nil)
+	}
+	if err := ValidateDocumentURI(SessionWorkspace(e.runtime, input.SessionID, input.Generation), input.URI); err != nil {
+		return operation.Result{}, failure(operation.FailureInvalidInput, err)
+	}
+	if input.Relations != nil {
+		return e.executeComposition(parent, op.Input, input, metadata)
+	}
+	if !metadata.CallHierarchySupport {
+		return operation.Result{}, failure(string(graph.UnsupportedCallHierarchy), nil)
+	}
+	switch metadata.PositionEncoding {
+	case "utf-8", "utf-16", "utf-32":
+	default:
+		return operation.Result{}, failure("UNSUPPORTED_POSITION_ENCODING", fmt.Errorf("retained position encoding %q is unsupported", metadata.PositionEncoding))
+	}
+	ctx, cancel := context.WithTimeout(parent, time.Duration(input.TimeoutMS)*time.Millisecond)
+	defer cancel()
+	if runtime, ok := e.runtime.(documentRuntime); ok {
+		document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{SessionID: input.SessionID, Generation: input.Generation, URI: input.URI, LanguageID: input.LanguageID})
+		if document.Failure != "" {
+			return operation.Result{}, failure(string(document.Failure), nil)
+		}
+		input.LanguageID = document.LanguageID
+	}
+	client := NewSessionClient(e.runtime, input.SessionID, input.Generation, time.Duration(input.RequestTimeoutMS)*time.Millisecond)
+	line, character, targetFailure := ResolveTarget(ctx, client, input.URI, input.Symbol, input.Line, input.Character)
+	if targetFailure != nil {
+		return operation.Result{}, targetFailure
+	}
+	result := traverse.Incoming(ctx, client, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: input.URI}, Position: lsp.Position{Line: line, Character: character}}, traverse.Options{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, SchemaVersion: graph.SchemaVersionV3})
+	result.Invocation.Target = graph.Target{URI: input.URI, Line: int(line), Column: int(character)}
+	result.Invocation.Limits = graph.Limits{MaxDepth: input.MaxDepth, MaxNodes: input.MaxNodes, TimeoutMS: input.TimeoutMS}
+	result.Invocation.RequestTimeoutMS = input.RequestTimeoutMS
+	result.Invocation.LanguageID = input.LanguageID
+	result.Capabilities.CallHierarchyProvider = metadata.CallHierarchySupport
+	artifact, err := json.Marshal(result)
+	if err != nil {
+		return operation.Result{}, failure(operation.FailureInternal, err)
+	}
+	return operation.Result{Artifact: append(artifact, '\n')}, nil
+}
+
+C2 OUTWARD_CONSUMER node: callContext (internal/mcp/transport.go)
+C2 source:
+func (s *Server) callContext(ctx context.Context, base response, raw json.RawMessage) response {
+	// Also cover internal callers entering with raw params rather than Serve.
+	var params callParams
+	selected, decodeErr := decodeBoundedParams(raw, &params)
+	if !selected {
+		if err := strictjson.RejectDuplicates(raw); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params: " + err.Error()}
+			return base
+		}
+		decodeErr = decodeClosed(raw, &params, "name", "arguments", "_meta")
+	}
+	if decodeErr != nil || params.Name == "" {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
+		return base
+	}
+	if params.Arguments == nil {
+		var members map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &members); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
+			return base
+		}
+		if _, present := members["arguments"]; present {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid params"}
+			return base
+		}
+		params.Arguments = map[string]any{}
+	}
+	tool, ok := s.Registry.Resolve(params.Name)
+	if !ok {
+		base.Error = &rpcError{Code: -32602, Message: "Unknown tool: " + params.Name}
+		return base
+	}
+	if err := validateArguments(tool, params.Arguments); err != nil {
+		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
+		return base
+	}
+	if tool.Name == "lsp_trace_v1_execute" {
+		if nested, selected, err := decodeGatewayRequest(params.Arguments); selected {
+			if err != nil {
+				base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
+				return base
+			}
+			return s.callGatewayContext(ctx, base, nested)
+		}
+	}
+	if tool.semanticValidator != nil {
+		if err := tool.semanticValidator(ctx, tool, cloneMap(params.Arguments)); err != nil {
+			base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments: " + err.Error()}
+			return base
+		}
+	}
+	requestID := s.nextRequestID()
+	if tool.Availability != Enabled {
+		env := envelope{
+			EnvelopeVersion: "1", EnvelopeSchemaID: disabledEnvelopeSchemaID, Tool: tool.Name, RequestID: requestID,
+			Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Code: "TOOL_NOT_IMPLEMENTED",
+		}
+		return bindEnvelope(base, tool, env)
+	}
+	selector, publicationRequested := params.Arguments["output_selector"].(string)
+	groupBy, _ := params.Arguments["group_by"].(string)
+	groupedSlice := tool.Name == "lsp_trace_v3_slice" && groupBy == "leiden"
+	detail, _ := params.Arguments["detail"].(string)
+	transportDetail := detail
+	if tool.ExecutorFamily == LifecycleExecutorFamily || tool.Name == "lsp_trace_v1_schema_get" {
+		transportDetail = ""
+	}
+	compact := transportDetail == "compact"
+	if compact && !publicationRequested {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_REQUIRES_SELECTOR", []string{"compact detail requires output_selector so the full artifact remains available; a selector is a caller-supplied publication destination, not the artifact or its schema identity; configure --publication-root and set output_selector on the artifact-producing operation; through lsp_trace_v1_execute use request.arguments.output_selector"})
+		return bindEnvelope(base, tool, env)
+	}
+	if publicationRequested && s.PublicationRoot == nil {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_SELECTOR_UNSAFE", []string{"selector publication is disabled"})
+		return bindEnvelope(base, tool, env)
+	}
+	executor := s.Executor
+	if routed, ok := s.Executors[tool.ExecutorFamily]; ok {
+		executor = routed
+	}
+	if executor == nil {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{"operation executor unavailable for family " + string(tool.ExecutorFamily)})
+		return bindEnvelope(base, tool, env)
+	}
+	operationArguments := params.Arguments
+	if publicationRequested || transportDetail != "" {
+		operationArguments = make(map[string]any, len(params.Arguments))
+		for key, value := range params.Arguments {
+			if (key != "output_selector" || groupedSlice) && (key != "detail" || transportDetail == "") {
+				operationArguments[key] = value
+			}
+		}
+	}
+	opInput, err := json.Marshal(operationArguments)
+	if err != nil {
+		env := domainErrorEnvelope(tool.Name, requestID, "OUTPUT_VALIDATION_FAILED", []string{err.Error()})
+		return bindEnvelope(base, tool, env)
+	}
+	started := time.Now()
+	opResult, failure := executor.Execute(ctx, operation.Request{
+		Name: operationName(tool.Name), RequestID: requestID, Input: opInput, PublicationRoot: s.PublicationRoot, ArtifactStore: s.ArtifactStore,
+	})
+	if groupedSlice {
+		publicationRequested = false
+		compact = false
+	}
+	if failure != nil {
+		var retainedFailure *retainedoperation.Failure
+		if tool.Name == mcpcontract.HydratedTool && errors.As(failure, &retainedFailure) {
+			return bindEnvelope(base, tool, envelope{
+				EnvelopeVersion: "1", EnvelopeSchemaID: retainedinspection.DomainErrorEnvelopeSchemaID,
+				Tool: tool.Name, RequestID: requestID, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true,
+				Phase: retainedFailure.Phase, State: retainedFailure.State, Diagnostics: append([]string(nil), retainedFailure.Diagnostics...),
+			})
+		}
+		if tool.ExecutorFamily == ContextSymbolChurnExecutorFamily || tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+			state, phase := failure.Code, "ACQUISITION"
+			switch state {
+			case operation.FailureInvalidInput:
+				state, phase = "INVALID_INPUT", "DECODE"
+			case "PROFILE_UNAVAILABLE":
+				phase = "PROFILE"
+			case "TIMEOUT", "RESOURCE_LIMIT", "ACQUISITION_FAILED":
+			case "STRUCTURAL_ACQUISITION_FAILED":
+				phase = "STRUCTURAL_ACQUISITION"
+			case "WORKSPACE_UNAVAILABLE":
+				phase = "WORKSPACE"
+			case "SYMBOL_CHURN_ACQUISITION_FAILED":
+				phase = "SYMBOL_CHURN_ACQUISITION"
+			default:
+				state = "ACQUISITION_FAILED"
+			}
+			message := state
+			if failure.Err != nil {
+				message = failure.Err.Error()
+			}
+			if tool.ExecutorFamily == ContextSymbolChurnCaptureExecutorFamily {
+				return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelopeFor(tool.Name, mcpcontract.ContextSymbolChurnCaptureDomainErrorID, requestID, phase, state, message))
+			}
+			return bindEnvelope(base, tool, contextSymbolChurnDomainErrorEnvelope(requestID, phase, state, message))
+		}
+		if tool.ExecutorFamily == ContextChurnExecutorFamily {
+			phase, state := "HISTORY", "GIT_FAILED"
+			if failure.Code == operation.FailureInvalidInput {
+				phase, state = "DECODE", "INVALID_INPUT"
+			} else if failure.Code == "TIMEOUT" {
+				state = "TIMEOUT"
+			} else if failure.Code == "RESOURCE_LIMIT" {
+				state = "RESOURCE_LIMIT"
+			}
+			message := state
+			if failure.Err != nil {
+				message = failure.Err.Error()
+			}
+			return bindEnvelope(base, tool, contextChurnDomainErrorEnvelope(requestID, phase, state, message))
+		}
+		if tool.ExecutorFamily == StructuralDeltaExecutorFamily {
+			phase := "COMPARE"
+			if failure.Code == "INVALID_INPUT" {
+				phase = "DECODE"
+			}
+			return bindEnvelope(base, tool, structuralDeltaDomainErrorEnvelope(requestID, phase, failure.Code, failure.Err.Error()))
+		}
+		if tool.ExecutorFamily == StructuralContextExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolExecutorFamily || tool.ExecutorFamily == StructuralContextSymbolV2ExecutorFamily || tool.ExecutorFamily == StructuralContextV2ExecutorFamily {
+			var domain *transientstructural.DomainFailure
+			if errors.As(failure.Err, &domain) {
+				if domain.State == transientstructural.StateTruncated || (tool.Name == mcpcontract.Stru

@@ -1,0 +1,4 @@
+{"protocol":"adr0007-semantic-worker","message_type":"response","message_id":"final-03","correlation_id":"final-c-03","status":"BACKEND_FAILURE"}
+{"protocol":"adr0007-semantic-worker","message_type":"response","message_id":"final-02","correlation_id":"final-c-02","status":"BACKEND_FAILURE"}
+{"protocol":"adr0007-semantic-worker","message_type":"response","message_id":"final-04","correlation_id":"final-c-04","status":"BACKEND_FAILURE"}
+{"protocol":"adr0007-semantic-worker","message_type":"response","message_id":"final-01","correlation_id":"final-c-01","status":"BACKEND_FAILURE"}

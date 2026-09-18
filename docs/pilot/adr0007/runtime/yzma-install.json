@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "tag": "v0.4.0",
+  "upstream_tag": "b10809",
+  "arch": "arm64",
+  "os": "darwin",
+  "processor": "cpu",
+  "manifest_sha256": "b95e8680b4d30761492bbc2d4a6fed656f124c5756dd4387cf02c30d27c13d90",
+  "installed": "2026-09-18T16:27:08.266176Z",
+  "assets": [
+    {
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10809/llama-b10809-bin-macos-arm64.tar.gz",
+      "sha256": "7d692df9e1e386e62f1c12b843903218041e6cd74c9415aa39a7ed3176f9eaa2"
+    }
+  ]
+}

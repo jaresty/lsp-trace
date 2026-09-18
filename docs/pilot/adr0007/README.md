@@ -21,5 +21,21 @@ The prerequisite architecture direction is a separate backend-neutral, network-d
 5. [Protocol outline](protocol-outline.md)
 6. [Yzma candidate supply-chain dossier](supply-chain-candidate.md)
 7. [Threat model and conformance tests](threat-model.md)
+8. [G1 protocol decision draft](protocol-decision.md)
+9. [G1 lifecycle and cancellation draft](lifecycle-and-cancellation.md)
+10. [G1 conformance vectors](conformance-vectors.md)
+11. [G2 admission and lineage](admission-and-lineage.md)
+12. [G3 artifact governance](artifact-governance.md)
+13. [G4 supply-chain controls](supply-chain-controls.md)
+14. [G5 runtime containment](runtime-containment.md)
+15. [G6 evaluation thresholds](evaluation-thresholds.md)
+16. [G7 ownership decision worksheet](ownership-decision-worksheet.md)
+17. [G8 draft bundle manifest](g8-bundle-manifest.draft.json)
+18. [Recovered relative-consumer experiment package](experiment/README.md)
+19. [Final bounded local pilot report](FINAL-PILOT-REPORT.md)
+
+## Bounded local diagnostic result
+
+The four-packet `TARGET` Describe diagnostic completed under network denial with all packets returning `COMPLETE / SUPPORTED`. This result is retained as local evidence only. It does not change the prerequisite bundle status, create production or public authorization, or authorize CLI/MCP/core integration, shipment, census behavior, or feature-identity claims. The fail-closed runtime preflight is `experiment/preflight-final-four-packet.sh`; immutable v2 outputs and hashes are under `experiment/final-four-packet-v2/`.
 
 Every document is intentionally draft. Later approval requires named accountable identities, recorded decisions, and immutable digests; a path, commit, review, or process boundary alone is insufficient.

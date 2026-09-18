@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:nais:lsp-trace:adr0007:g8-bundle:v0-draft",
+  "status": "PREREQUISITES_DRAFT",
+  "pilot_status": "PILOT_DISABLED",
+  "gate": "G8_BUNDLE",
+  "authority": "ADR 0007 prerequisite preparation only",
+  "artifacts": [
+    {"path":"docs/pilot/adr0007/admission-and-lineage.md","sha256":"2a50bca77e0c15376028cdf86ce9032d277d2c7bb9cd3f0b008ff9f36fbdcbdb"},
+    {"path":"docs/pilot/adr0007/artifact-governance.md","sha256":"abb06d159811c3e44b4ab94876842c6f1715a9051d40e92239e3a034651ecefa"},
+    {"path":"docs/pilot/adr0007/conformance-vectors.md","sha256":"6b3bfc1c1b4e247c7f1c04d7ccea4b4dc071339943a20ba249bf86ded2ddcfe9"},
+    {"path":"docs/pilot/adr0007/evaluation-plan.md","sha256":"d1d18ebc45308a4cb7a5a30912b14de830b408a95465f247310eb1463b912779"},
+    {"path":"docs/pilot/adr0007/evaluation-thresholds.md","sha256":"4c5d5f24d2dcd89901a7b1021ab48262f40c0fba928e1d3287f1c0219c3af503"},
+    {"path":"docs/pilot/adr0007/lifecycle-and-cancellation.md","sha256":"ac002b7bb5891f43df41c8cbe92647895335bd8a91951a78da4c7e6fe71c8700"},
+    {"path":"docs/pilot/adr0007/ownership-and-approvals.md","sha256":"2ebb875f52d3ef5810145762a0171c7be8c09fd1048f72c720bed1ef3bcbec1a"},
+    {"path":"docs/pilot/adr0007/ownership-decision-worksheet.md","sha256":"d9be15be21c098db1278a5dcfd43fbb09af6990a5c45c8c3a20805578f155e60"},
+    {"path":"docs/pilot/adr0007/prerequisite-gates.md","sha256":"80669b3cfedcd61d00f4be84e07fa35f52cc6d1f8c0de08e2596e8b411d91e1f"},
+    {"path":"docs/pilot/adr0007/protocol-decision.md","sha256":"a11a1a1cc64e08aeaa99492b7a90603df260eadec78acc7341e33ed796009045"},
+    {"path":"docs/pilot/adr0007/protocol-outline.md","sha256":"58d44c1f1d38a5a219fabe3c6aadf6bea40bde9b28606c9af327c539ef2c4d2c"},
+    {"path":"docs/pilot/adr0007/runtime-containment.md","sha256":"574ded2463af68b708889c701236a3748f7a37e43eea8601898e148d817a756f"},
+    {"path":"docs/pilot/adr0007/supply-chain-controls.md","sha256":"405f95885888f1d6f41eb30ae13356245780c6a03923e9df276cda4b6949f482"},
+    {"path":"docs/pilot/adr0007/schemas/envelope.v0.draft.json","sha256":"a53a8555023b0d1b86da3c2a23a369d116485e12f3605805e3ce1c0bf3427979"}
+  ],
+  "gates": ["G1_PROTOCOL","G2_ADMISSION_LINEAGE","G3_ARTIFACT_GOVERNANCE","G4_SUPPLY_CHAIN","G5_RUNTIME_CONTAINMENT","G6_EVALUATION","G7_OWNERSHIP"],
+  "enablement": {"authorized": false, "requires": "Explicit later enablement record referencing a complete approved G1-G8 bundle digest"}
+}
