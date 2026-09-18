@@ -427,6 +427,25 @@ func TestExecuteTargetZeroAndMultipleMapExactly(t *testing.T) {
 }
 
 func TestExecuteRegexLocatorManagedWire(t *testing.T) {
+	t.Run("late capture after direct position", func(t *testing.T) {
+		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
+		if result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri)); failure != nil || result.State != StateComplete {
+			t.Fatalf("ASSERT_REGEX_LATE_CAPTURE_DIRECT_PRECONDITION: result=%+v failure=%+v", result, failure)
+		}
+		starter.children[0].resetMethods()
+		request := baseWireRequest(started, uri)
+		request.Target.Line, request.Target.Character = nil, nil
+		request.Target.Regex = &RegexLocator{Pattern: `func (F)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 2048}
+		result, failure := Execute(context.Background(), manager, request)
+		if failure != nil || result.State != StateComplete {
+			t.Fatalf("ASSERT_REGEX_LATE_CAPTURE_EQUIVALENT_TO_DIRECT_POSITION: result=%+v failure=%+v", result, failure)
+		}
+		if got := starter.children[0].observedPreparePositions(); !reflect.DeepEqual(got, []string{"1:5", "1:5"}) {
+			t.Fatalf("ASSERT_REGEX_LATE_CAPTURE_UTF16_POSITION: %v", got)
+		}
+		t.Log("ASSERT_REGEX_LATE_CAPTURE_EQUIVALENT_TO_DIRECT_POSITION: PASS")
+		t.Log("ASSERT_REGEX_LATE_CAPTURE_UTF16_POSITION: PASS")
+	})
 	t.Run("success", func(t *testing.T) {
 		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
 		request := baseWireRequest(started, uri)

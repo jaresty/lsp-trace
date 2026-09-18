@@ -69,10 +69,11 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(request.TimeoutMS)*time.Millisecond)
 	defer cancel()
-	document := runtime.PrepareDocument(ctx, sessionruntime.DocumentRequest{
+	documentRequest := sessionruntime.DocumentRequest{
 		SessionID: sessionID, Generation: request.Generation, URI: request.Target.URI,
 		LanguageID: request.LanguageID, CaptureSupply: request.CaptureSupply || request.Target.Regex != nil,
-	})
+	}
+	document := runtime.PrepareDocument(ctx, documentRequest)
 	if document.Failure != "" {
 		return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
 	}
@@ -80,6 +81,12 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		return Result{}, fail(PhaseTraversal, terminalForContext(ctx), Accounting{})
 	}
 	if request.Target.Regex != nil {
+		if document.Supply == nil {
+			document = runtime.RefreshDocumentSupply(ctx, documentRequest)
+			if document.Failure != "" {
+				return Result{}, fail(PhaseTraversal, terminalForSessionFailure(document.Failure), Accounting{})
+			}
+		}
 		if document.Supply == nil {
 			return Result{}, fail(PhasePreflight, StateInvalidServerResponse, Accounting{})
 		}
