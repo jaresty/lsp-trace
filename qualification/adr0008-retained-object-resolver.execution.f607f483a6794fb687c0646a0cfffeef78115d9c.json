@@ -1,0 +1,31 @@
+{
+  "schema_version":"lsp-trace.private.adr0008-retained-object-resolver-qualification-execution.v1",
+  "matrix":"qualification/adr0008-source-projection-matrix.v1.json",
+  "matrix_sha256":"3922926f81d5c978a05606b99d5a749b5c58364a39e07e24a33c9253fb42f53c",
+  "predecessor_execution":"qualification/adr0008-retained-object-resolver.execution.e42ff78805fd3838cb81ef2cd154ec166cfd3066.json",
+  "predecessor_execution_sha256":"37ca9d67ddf5a6e2083c24b5b4a5e0d584dd348b5c92329aed8aed6ad2019a7d",
+  "reviewed_revision":"f607f483a6794fb687c0646a0cfffeef78115d9c",
+  "scope":"RETAINED_OBJECT_RESOLVER_R04",
+  "execution_status":"EXECUTED",
+  "tests_pass_claimed":true,
+  "retained_object_resolver_qualified":true,
+  "common_projection_qualified":true,
+  "implementation_qualified":false,
+  "verdict_counts":{"PASS":4,"FAIL":0,"BLOCKED":0,"NOT_RUN":0},
+  "historical_global_failure":{"cell":"L04","verdict":"FAIL","changed":false},
+  "logs":[
+    {"id":"r04-focused","path":"/tmp/lsp-trace-r04-focused-f607f48.log","sha256":"9ff6a12b432733ed45fd88d085dbc87a2c8a904d9e741f52747b073daab1bb8d","outcome":"PASS"},
+    {"id":"r04-race","path":"/tmp/lsp-trace-r04-race-f607f48.log","sha256":"2ce7bb7fbbeffec72d37632141858534ba50fe5e8926adca08550367872a9209","outcome":"PASS"},
+    {"id":"full-go-suite","path":"/tmp/lsp-trace-r04-full-f607f48.log","sha256":"3789f19d0a4ce9fbcd9d024e2655157131443c66dd0dff1c8f13e8d7d7b7ceab","outcome":"PASS"},
+    {"id":"release-check","path":"/tmp/lsp-trace-r04-release-f607f48.log","sha256":"962e76562dcff20920b6e00bbd9bcbdd057fb0bd34c8ab28d7c57bfd1f067fad","outcome":"PASS"}
+  ],
+  "cells":[
+    {"id":"R01","verdict":"PASS","carried_from":"qualification/adr0008-retained-object-resolver.execution.3edd45a9e5fab548eef62700138236056d9868a9.json"},
+    {"id":"R02","verdict":"PASS","carried_from":"qualification/adr0008-retained-object-resolver.execution.4955c0fc87cef6867b8c19e6c197285341022b68.json"},
+    {"id":"R03","verdict":"PASS","carried_from":"qualification/adr0008-retained-object-resolver.execution.e42ff78805fd3838cb81ef2cd154ec166cfd3066.json"},
+    {"id":"R04","verdict":"PASS","evidence":["TestBoundFileConcurrentPublicationHasOneWinner PASS with one winner, os.ErrExist losers, and winner bytes retained","TestReplayFreshInstancesHaveExactByteParityAndDeepCopies PASS","TestReplayRejectsMissingMixedTamperedAndReorderedPacketState PASS with private typed zero output","TestExactLookupRejectsSecondDependencyCall PASS","race, full repository, and release checks PASS at reviewed_revision"],"limitation":"Qualifies private exact-input cold replay and local atomic no-replace publication. It does not qualify deployment, network replay, secure erasure, or historical L04."}
+  ],
+  "track_statuses":{"COMMON_PROJECTION":{"verdict":"PASS"},"RETAINED_OBJECT_RESOLVER":{"verdict":"PASS"},"LIVE_SESSION_RESOLVER":{"verdict":"FAIL","reason":"historical L04 remains FAIL"}},
+  "global_invariants":{"graph_facts_added":0,"semantic_authority":0,"semantic_accepted":false,"source_graph_complete":"UNKNOWN","canonical_operation_count":41,"compact_advertised_tool_count":12,"schema_change_policy":"ADDITIVE_ONLY"},
+  "claim_ceiling":"This execution qualifies R04 and carries R01-R03. RETAINED_OBJECT_RESOLVER is PASS. Historical L04 remains FAIL and implementation_qualified remains false."
+}
