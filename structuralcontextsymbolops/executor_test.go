@@ -3,9 +3,11 @@ package structuralcontextsymbolops
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
+	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
@@ -109,6 +111,29 @@ func TestUnifiedV2SymbolBranchUsesCanonicalOperationName(t *testing.T) {
 	}
 	if json.Unmarshal(d.calls[0].Input, &delegated) != nil || string(delegated.Projection) != projection {
 		t.Fatalf("%s_PROJECTION_PRESERVED: %s", assertion, d.calls[0].Input)
+	}
+}
+
+func TestAmbiguousTargetCandidatesAreBoundedSortedDeduplicatedAndConfined(t *testing.T) {
+	r := func(uri string, line uint32) lsp.WorkspaceSymbol {
+		return lsp.WorkspaceSymbol{Name: "Target", Kind: 12, Location: lsp.Location{URI: uri, Range: &lsp.Range{Start: lsp.Position{Line: line}, End: lsp.Position{Line: line, Character: 1}}}}
+	}
+	matches := []lsp.WorkspaceSymbol{r("file:///workspace/z.go", 2), r("file:///workspace/a.go", 1), r("file:///workspace/a.go", 1), r("file:///other/x.go", 0)}
+	diagnostic := ambiguousTargetDiagnostic("/workspace", matches, matches, 10000)
+	if len(diagnostic.Candidates) != 2 || diagnostic.Candidates[0].URI != "file:///workspace/a.go" || diagnostic.Candidates[1].URI != "file:///workspace/z.go" {
+		t.Fatalf("ASSERT_AMBIGUOUS_CANDIDATE_ORDER_AND_BOUND: %+v", diagnostic.Candidates)
+	}
+	accounting := diagnostic.CandidateAccounting
+	if accounting == nil || accounting.Observed == nil || *accounting.Observed != 4 || accounting.Accepted != 3 || accounting.Returned != 2 || accounting.Excluded != 1 || accounting.Deduplicated != 1 || accounting.Truncated != 0 {
+		t.Fatalf("ASSERT_AMBIGUOUS_CANDIDATE_ACCOUNTING: %+v", accounting)
+	}
+	many := make([]lsp.WorkspaceSymbol, 0, defaultMaxNodes+1)
+	for i := 0; i <= defaultMaxNodes; i++ {
+		many = append(many, r(fmt.Sprintf("file:///workspace/%03d.go", i), uint32(i)))
+	}
+	diagnostic = ambiguousTargetDiagnostic("/workspace", many, many, 10000)
+	if len(diagnostic.Candidates) != defaultMaxNodes || diagnostic.CandidateAccounting.Truncated != 1 {
+		t.Fatalf("ASSERT_AMBIGUOUS_CANDIDATE_PUBLIC_CAP: candidates=%d accounting=%+v", len(diagnostic.Candidates), diagnostic.CandidateAccounting)
 	}
 }
 

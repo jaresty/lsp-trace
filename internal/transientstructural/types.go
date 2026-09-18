@@ -265,11 +265,41 @@ const (
 	TargetActionFailUnpreparable TargetAction = "FAIL_UNPREPARABLE"
 )
 
+type TargetCandidatePosition struct {
+	Line      int `json:"line"`
+	Character int `json:"character"`
+}
+
+type TargetCandidateRange struct {
+	Start TargetCandidatePosition `json:"start"`
+	End   TargetCandidatePosition `json:"end"`
+}
+
+// TargetCandidate contains only server-returned workspace-contained location metadata.
+type TargetCandidate struct {
+	URI       string               `json:"uri"`
+	Name      string               `json:"name"`
+	Kind      int                  `json:"kind"`
+	Container string               `json:"container,omitempty"`
+	Range     TargetCandidateRange `json:"range"`
+}
+
+type TargetCandidateAccounting struct {
+	Observed     *int `json:"observed,omitempty"`
+	Accepted     int  `json:"accepted"`
+	Returned     int  `json:"returned"`
+	Excluded     int  `json:"excluded"`
+	Deduplicated int  `json:"deduplicated"`
+	Truncated    int  `json:"truncated"`
+}
+
 type TargetDiagnostic struct {
-	ExactMatches   int          `json:"exact_matches"`
-	TotalSymbols   int          `json:"total_symbols"`
-	OmittedSymbols int          `json:"omitted_symbols"`
-	Action         TargetAction `json:"action"`
+	ExactMatches        int                        `json:"exact_matches"`
+	TotalSymbols        int                        `json:"total_symbols"`
+	OmittedSymbols      int                        `json:"omitted_symbols"`
+	Action              TargetAction               `json:"action"`
+	Candidates          []TargetCandidate          `json:"candidates,omitempty"`
+	CandidateAccounting *TargetCandidateAccounting `json:"candidate_accounting,omitempty"`
 }
 
 type ResourceReason string

@@ -193,7 +193,10 @@ func TestStructuralContextV2RealSymbolLocatorAmbiguityDirectGatewayParityAndPriv
 		if err := mcpcontract.ValidateJSON(mcpcontract.StructuralContextTraversalDomainErrorID, raw); err != nil {
 			t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_SCHEMA: %v\n%s", strings.ToUpper(label), err, raw)
 		}
-		for _, forbidden := range []string{`"target"`, `"symbol"`, `"run"`, "file:///", "/workspace/", `"line"`, `"character"`, "source", "selector", "provider", "request_timeout_ms"} {
+		if !strings.Contains(string(raw), `"candidate_accounting"`) || strings.Count(string(raw), `"uri":"file:///workspace/`) != 2 {
+			t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_BOUNDED_CANDIDATES: %s", strings.ToUpper(label), raw)
+		}
+		for _, forbidden := range []string{`"target"`, "source", "selector", "provider", "request_timeout_ms"} {
 			if strings.Contains(string(raw), forbidden) {
 				t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_%s_PRIVACY: leaked %q in %s", strings.ToUpper(label), forbidden, raw)
 			}

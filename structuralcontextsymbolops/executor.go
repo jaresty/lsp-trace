@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -169,12 +170,7 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 	}
 	if len(matches) > 1 {
 		if e.operation == operation.Name("structural_context_v2") {
-			diagnostic := &transientstructural.TargetDiagnostic{
-				ExactMatches:   len(matches),
-				TotalSymbols:   len(symbols),
-				OmittedSymbols: max(0, len(symbols)-len(matches)),
-				Action:         transientstructural.TargetActionFailAmbiguous,
-			}
+			diagnostic := ambiguousTargetDiagnostic(workspace, symbols, matches, maxNodes)
 			return operation.Result{}, &operation.Failure{
 				Code: "AMBIGUOUS_TARGET",
 				Err: &transientstructural.DomainFailure{
@@ -199,6 +195,67 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		return fail(operation.FailureInternal, err)
 	}
 	return e.delegate.Execute(parent, operation.Request{Name: e.delegateOperation, Input: raw})
+}
+
+func ambiguousTargetDiagnostic(workspace string, symbols, matches []lsp.WorkspaceSymbol, cap int) *transientstructural.TargetDiagnostic {
+	observed := len(symbols)
+	d := &transientstructural.TargetDiagnostic{ExactMatches: len(matches), TotalSymbols: observed, OmittedSymbols: max(0, observed-len(matches)), Action: transientstructural.TargetActionFailAmbiguous}
+	accepted := make([]transientstructural.TargetCandidate, 0, len(matches))
+	excluded := 0
+	for _, symbol := range matches {
+		if symbol.Location.Range == nil || !validRange(*symbol.Location.Range) || !concreteConfinedDocument(workspace, symbol.Location.URI) {
+			excluded++
+			continue
+		}
+		r := *symbol.Location.Range
+		accepted = append(accepted, transientstructural.TargetCandidate{URI: symbol.Location.URI, Name: symbol.Name, Kind: symbol.Kind, Container: symbol.ContainerName, Range: transientstructural.TargetCandidateRange{Start: transientstructural.TargetCandidatePosition{Line: int(r.Start.Line), Character: int(r.Start.Character)}, End: transientstructural.TargetCandidatePosition{Line: int(r.End.Line), Character: int(r.End.Character)}}})
+	}
+	sort.Slice(accepted, func(i, j int) bool {
+		a, b := accepted[i], accepted[j]
+		if a.URI != b.URI {
+			return a.URI < b.URI
+		}
+		if a.Name != b.Name {
+			return a.Name < b.Name
+		}
+		if a.Kind != b.Kind {
+			return a.Kind < b.Kind
+		}
+		if a.Container != b.Container {
+			return a.Container < b.Container
+		}
+		if a.Range.Start.Line != b.Range.Start.Line {
+			return a.Range.Start.Line < b.Range.Start.Line
+		}
+		if a.Range.Start.Character != b.Range.Start.Character {
+			return a.Range.Start.Character < b.Range.Start.Character
+		}
+		if a.Range.End.Line != b.Range.End.Line {
+			return a.Range.End.Line < b.Range.End.Line
+		}
+		return a.Range.End.Character < b.Range.End.Character
+	})
+	unique := accepted[:0]
+	for _, c := range accepted {
+		if len(unique) == 0 || c != unique[len(unique)-1] {
+			unique = append(unique, c)
+		}
+	}
+	deduplicated := len(accepted) - len(unique)
+	if cap < 1 {
+		cap = defaultMaxNodes
+	}
+	cap = min(cap, defaultMaxNodes)
+	truncated := max(0, len(unique)-cap)
+	returned := unique
+	if len(returned) > cap {
+		returned = returned[:cap]
+	}
+	d.CandidateAccounting = &transientstructural.TargetCandidateAccounting{Observed: &observed, Accepted: len(accepted), Returned: len(returned), Excluded: excluded, Deduplicated: deduplicated, Truncated: truncated}
+	if len(returned) > 0 {
+		d.Candidates = returned
+	}
+	return d
 }
 
 func workspaceRoot(runtime incomingops.Runtime, id string, generation uint64) string {

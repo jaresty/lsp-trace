@@ -121,7 +121,9 @@
         "exact_matches": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "total_symbols": { "type": "integer", "minimum": 0, "maximum": 10000 },
         "omitted_symbols": { "type": "integer", "minimum": 0, "maximum": 10000 },
-        "action": { "enum": ["FAIL_ABSENT", "FAIL_AMBIGUOUS", "FAIL_MALFORMED", "FAIL_MISMATCH", "FAIL_UNSUPPORTED", "FAIL_DOCUMENT_SYMBOLS", "FAIL_UNPREPARABLE"] }
+        "action": { "enum": ["FAIL_ABSENT", "FAIL_AMBIGUOUS", "FAIL_MALFORMED", "FAIL_MISMATCH", "FAIL_UNSUPPORTED", "FAIL_DOCUMENT_SYMBOLS", "FAIL_UNPREPARABLE"] },
+        "candidates": {"type":"array","maxItems":100,"items":{"type":"object","additionalProperties":false,"required":["uri","name","kind","range"],"properties":{"uri":{"type":"string","pattern":"^file:"},"name":{"type":"string"},"kind":{"type":"integer","minimum":0},"container":{"type":"string"},"range":{"type":"object","additionalProperties":false,"required":["start","end"],"properties":{"start":{"type":"object","additionalProperties":false,"required":["line","character"],"properties":{"line":{"type":"integer","minimum":0},"character":{"type":"integer","minimum":0}}},"end":{"type":"object","additionalProperties":false,"required":["line","character"],"properties":{"line":{"type":"integer","minimum":0},"character":{"type":"integer","minimum":0}}}}}}}},
+        "candidate_accounting": {"type":"object","additionalProperties":false,"required":["accepted","returned","excluded","deduplicated","truncated"],"properties":{"observed":{"type":"integer","minimum":0,"maximum":10000},"accepted":{"type":"integer","minimum":0,"maximum":10000},"returned":{"type":"integer","minimum":0,"maximum":10000},"excluded":{"type":"integer","minimum":0,"maximum":10000},"deduplicated":{"type":"integer","minimum":0,"maximum":10000},"truncated":{"type":"integer","minimum":0,"maximum":10000}}}
       }
     },
     "resource_diagnostic": {

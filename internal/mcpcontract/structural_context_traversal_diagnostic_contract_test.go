@@ -54,6 +54,16 @@ func TestStructuralContextTraversalDomainErrorV4TargetDiagnosticIsClosedAndPriva
 	withDiagnostic["state"], withDiagnostic["error"] = "AMBIGUOUS_TARGET", map[string]any{"code": "AMBIGUOUS_TARGET"}
 	withDiagnostic["target_diagnostic"] = map[string]any{"exact_matches": 2, "total_symbols": 9, "omitted_symbols": 1, "action": "FAIL_AMBIGUOUS"}
 	validateStructuralContextV4(t, withDiagnostic, true)
+	withCandidates := cloneStructuralContextV4(t, withDiagnostic)
+	withCandidates["target_diagnostic"].(map[string]any)["candidates"] = []any{map[string]any{"uri": "file:///workspace/a.go", "name": "Target", "kind": 12, "range": map[string]any{"start": map[string]any{"line": 1, "character": 2}, "end": map[string]any{"line": 1, "character": 8}}}}
+	withCandidates["target_diagnostic"].(map[string]any)["candidate_accounting"] = map[string]any{"observed": 2, "accepted": 1, "returned": 1, "excluded": 1, "deduplicated": 0, "truncated": 0}
+	validateStructuralContextV4(t, withCandidates, true)
+	badCandidate := cloneStructuralContextV4(t, withCandidates)
+	badCandidate["target_diagnostic"].(map[string]any)["candidates"].([]any)[0].(map[string]any)["source"] = "private"
+	validateStructuralContextV4(t, badCandidate, false)
+	badAccounting := cloneStructuralContextV4(t, withCandidates)
+	badAccounting["target_diagnostic"].(map[string]any)["candidate_accounting"].(map[string]any)["provider"] = "private"
+	validateStructuralContextV4(t, badAccounting, false)
 
 	for _, field := range []string{"symbol", "uri", "path", "source", "line", "character", "selector", "raw_error", "provider", "environment", "privacy_policy_id"} {
 		bad := cloneStructuralContextV4(t, withDiagnostic)
@@ -75,10 +85,10 @@ func TestStructuralContextTraversalDomainErrorV4ResourceDiagnosticIsClosedAndExa
 	value["resource_diagnostic"] = map[string]any{"reason": "REGEX_MAX_DOCUMENT_BYTES", "field": "regex_locator.limits.max_document_bytes", "allowed": 100, "observed": 125, "maximum_allowed": 16777216, "suggested_limit": 125}
 	validateStructuralContextV4(t, value, true)
 	for name, mutate := range map[string]func(map[string]any){
-		"unknown_reason": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["reason"] = "OTHER" },
-		"unknown_field": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["field"] = "max_nodes" },
+		"unknown_reason":   func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["reason"] = "OTHER" },
+		"unknown_field":    func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["field"] = "max_nodes" },
 		"unknown_property": func(v map[string]any) { v["resource_diagnostic"].(map[string]any)["path"] = "private" },
-		"wrong_state": func(v map[string]any) { v["state"], v["error"] = "TIMEOUT", map[string]any{"code": "TIMEOUT"} },
+		"wrong_state":      func(v map[string]any) { v["state"], v["error"] = "TIMEOUT", map[string]any{"code": "TIMEOUT"} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			bad := cloneStructuralContextV4(t, value)

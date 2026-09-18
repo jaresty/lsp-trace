@@ -314,7 +314,7 @@ func TestOnlyLegalLifecycleTerminalsAndSoleProductionFunction(t *testing.T) {
 		t.Fatalf("ASSERT_FAILURE_REASON_BOUNDED_STRING: %v", reasonType)
 	}
 	targetDiagnosticType := reflect.TypeOf(TargetDiagnostic{})
-	if targetDiagnosticType.NumField() != 4 {
+	if targetDiagnosticType.NumField() != 6 {
 		t.Fatalf("ASSERT_TARGET_DIAGNOSTIC_CLOSED_PRIVACY_SURFACE: %+v", targetDiagnosticType)
 	}
 	diagnosticType := reflect.TypeOf(TraversalDiagnostic{})
