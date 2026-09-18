@@ -74,6 +74,31 @@ Describe is independent of corpus size and acquisition mode. It receives exactly
 
 Search and grouping never rewrite admissions, item evidence, descriptions, source authority, source acceptance, or prior judgments.
 
+### Relative-consumer descriptions for structural networks
+
+For an admitted directed structural network whose edges are server-reported `caller → callee` relationships, Describe may explain an internal object from the perspective of its nearest evidenced outward consumer. Here, “consumer” is relative: it is the immediately preceding caller toward a caller-designated system boundary, not necessarily a human or external product user.
+
+Consumer selection is deterministic structural preprocessing, not model inference:
+
+1. Condense strongly connected components before ordering; members of one component remain an explicit cyclic unit.
+2. Orient callers to the left and callees to the right.
+3. For target `T`, select each immediate incoming predecessor one layer to the left as a nearest outward consumer.
+4. Preserve multiple same-layer predecessors as alternatives; do not collapse them through model judgment.
+5. Continue leftward only when the admitted packet includes the next server-reported edge, stopping at the caller-designated boundary or the packet bound.
+6. If no incoming predecessor is admitted, record `OUTWARD_CONSUMER_UNRESOLVED`; source order, lexical relevance, embedding similarity, or source-span size cannot substitute for a relationship.
+
+The model receives the ordered relationship as immutable input and may describe only what the target provides to that immediate consumer and the target's one-layer contribution toward the boundary. It cannot add an edge, skip an intermediate layer, choose a different consumer, infer dynamic dispatch, replace the relative consumer with a human, or promote the description into product purpose, value, audience, ownership, runtime use, canonical feature identity, or completeness. When deterministic preprocessing has supplied a valid predecessor edge, unresolved consumer identity is not a model output option; semantic uncertainty belongs in the description or its limitations.
+
+#### Bounded relative-consumer experiment
+
+A local network-denied experiment on 2026-09-17 reused four revision-bound projected packets rooted at transient structural context, incoming calls, slice, and lifecycle executors. The first variant asked the model to discover the consumer from relevance-selected source spans. All four returned `OUTWARD_CONSUMER_UNRESOLVED`, and one selected a neighboring executor instead of the packet target. This rejected relevance-ranked source selection for consumer identity.
+
+A successor mechanically selected the immediate incoming predecessor from server-reported `CALLS` and supplied exactly the target and consumer definitions. Three targets selected `internal/mcp/transport.go:callContext`; the deeper transient target selected `cmd/lsp-trace-mcp/structural_context_executor.go:Execute`, one layer left. The model still contradicted fixed topology while `OUTWARD_CONSUMER_UNRESOLVED` remained grammatically available. A final grammar removed that verdict for packets already carrying a predecessor edge. All four executions then returned `SUPPORTED` and preserved the mechanically supplied consumer relationship.
+
+Semantic quality remained mixed. The transient and lifecycle results described distinguishing behavior, while incoming-calls and slice descriptions degraded to generic operation execution; one introduced the unsupported phrase “business logic.” The experiment therefore supports mechanical relative-consumer selection but does not qualify generated explanations. A successor evaluator must reject generic descriptions that omit distinguishing target behavior, terminology unsupported by admitted source, and boundary claims broader than one evidenced layer.
+
+The experiment remains non-authoritative and non-qualifying: `authority=0`, `accepted=false`, and `source_graph_complete=UNKNOWN`. Its local worker source digest was `sha256:cee3981406a4709cc2e4979403d7285460cbc2b7b12c0edad6140b3e8a3ccddf`; the four final result digests were `sha256:84b87c5a9671f6f9b87af571d0d6280b6a8648821b9cd50be886cfebfe906026`, `sha256:e30cdc15b42a030d3ae5941fd1914cc081fe759d7f3bb2b56b0b97bf3a085ffd`, `sha256:55aba4efd17ecb10c06a4e7a61ec39b99262e0d160c2cee123ee0cf5d1e39bdf`, and `sha256:c29b946748db80a2d205c979be9e9e640268df487252d3343a068e88ea7f39e7`. These local artifacts are diagnostic inputs for a future frozen campaign, not qualification receipts.
+
 ## Practical engineering use and capability ceiling
 
 The index may retrieve governing decisions and requirements, related symbols and tests, prior failures, analogues, unresolved assumptions, and relevant working context. It may emit bounded work-context packets, candidate change sites, and review targets with exact provenance and coverage.
