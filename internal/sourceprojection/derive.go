@@ -32,11 +32,8 @@ func DeriveCandidates(result transientstructural.Result, mode string, includeRel
 			ItemRange: projectionRange(node.ItemRange), SelectionRange: projectionRange(node.SelectionRange),
 			DisplayProvenance: "CALL_HIERARCHY_ITEM", PositionEncoding: encoding, PrivacyClassification: "PUBLIC",
 		}
-		candidate.UnitID = canonicalID(struct {
-			Role, Subject, Source, Encoding, Privacy string
-			Range                                    Range
-		}{candidate.Role, candidate.GraphSubjectID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
-		candidate.CitationID = canonicalID(struct{ Unit, Role, Subject string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID})
+		candidate.UnitID = candidateUnitID(candidate)
+		candidate.CitationID = candidateCitationID(candidate)
 		candidates = append(candidates, candidate)
 	}
 	if mode != "TARGET" && includeRelationOccurrences {
@@ -48,16 +45,33 @@ func DeriveCandidates(result transientstructural.Result, mode string, includeRel
 				Range: projectionRange(occurrence.Range), EvidenceRange: projectionRange(occurrence.Range),
 				DisplayProvenance: "CALL_SITE_OCCURRENCE", PositionEncoding: encoding, RelationProvenance: "SERVER_REPORTED", PrivacyClassification: "PUBLIC",
 			}
-			candidate.UnitID = canonicalID(struct {
-				Role, Subject, Occurrence, Source, Encoding, Privacy string
-				Range                                                Range
-			}{candidate.Role, subjectID, occurrenceID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
-			candidate.CitationID = canonicalID(struct{ Unit, Role, Subject, Occurrence string }{candidate.UnitID, candidate.Role, subjectID, occurrenceID})
+			candidate.UnitID = candidateUnitID(candidate)
+			candidate.CitationID = candidateCitationID(candidate)
 			candidates = append(candidates, candidate)
 		}
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].UnitID < candidates[j].UnitID })
 	return candidates, nil
+}
+
+func candidateUnitID(candidate Candidate) string {
+	if candidate.Role == "RELATION" {
+		return canonicalID(struct {
+			Role, Subject, Occurrence, Source, Encoding, Privacy string
+			Range                                                Range
+		}{candidate.Role, candidate.GraphSubjectID, candidate.OccurrenceID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
+	}
+	return canonicalID(struct {
+		Role, Subject, Source, Encoding, Privacy string
+		Range                                    Range
+	}{candidate.Role, candidate.GraphSubjectID, candidate.LogicalSourceID, candidate.PositionEncoding, candidate.PrivacyClassification, candidate.Range})
+}
+
+func candidateCitationID(candidate Candidate) string {
+	if candidate.Role == "RELATION" {
+		return canonicalID(struct{ Unit, Role, Subject, Occurrence string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID, candidate.OccurrenceID})
+	}
+	return canonicalID(struct{ Unit, Role, Subject string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID})
 }
 
 func projectionRange(r graph.Range) Range {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"lsp-trace/internal/sourceprojection"
 )
@@ -202,6 +203,12 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		}
 		citations = append(citations, Citation{CitationID: citation.CitationID, UnitID: citation.UnitID, Role: citation.Role, SubjectID: citation.SubjectID, OccurrenceID: citation.OccurrenceID, EvidenceRange: candidate.EvidenceRange, DisplayRange: candidate.Range})
 	}
+	sort.Slice(units, func(i, j int) bool { return units[i].UnitID < units[j].UnitID })
+	sort.Slice(citations, func(i, j int) bool { return citations[i].CitationID < citations[j].CitationID })
+	emittedSpans := append([]sourceprojection.Span{}, input.Projection.EmittedSpans...)
+	sort.Slice(emittedSpans, func(i, j int) bool { return canonicalLess(emittedSpans[i], emittedSpans[j]) })
+	omissions := append([]sourceprojection.Omission{}, input.Projection.Omissions...)
+	sort.Slice(omissions, func(i, j int) bool { return canonicalLess(omissions[i], omissions[j]) })
 	physicalID, err := physicalProjectionID(documents)
 	if err != nil {
 		return WireResult[T]{}, err
@@ -211,8 +218,8 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		CustodyMode: custodyMode, CustodyBinding: custodyBinding, PhysicalProjectionID: physicalID, RequestPolicyID: input.RequestPolicyID, Status: input.Projection.Status,
 		DocumentSelection: DocumentSelection{Ordering: "TARGET_FIRST_THEN_URI_LEXICOGRAPHIC", TargetURI: input.TargetURI, SelectedURIs: append([]string(nil), input.SelectedURIs...)},
 		DocumentBindings:  documents, DocumentAccounting: DocumentAccounting{Candidates: input.DocumentsObserved, Selected: len(input.SelectedURIs), Acquired: len(documents), TotalAcquiredBytes: input.TotalAcquiredBytes},
-		Units: units, Citations: citations, EmittedSpans: append([]sourceprojection.Span{}, input.Projection.EmittedSpans...), Accounting: input.Projection.Accounting,
-		Omissions: append([]sourceprojection.Omission{}, input.Projection.Omissions...), PrivacySummary: input.Projection.PrivacySummary,
+		Units: units, Citations: citations, EmittedSpans: emittedSpans, Accounting: input.Projection.Accounting,
+		Omissions: omissions, PrivacySummary: input.Projection.PrivacySummary,
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {
@@ -222,6 +229,12 @@ func AssembleBounded[T any](input Input, custodyMode string, custodyBinding T, m
 		return WireResult[T]{}, fmt.Errorf("sourceprojectionv2: V2 response bytes %d exceed limit %d", len(raw), maxResponseBytes)
 	}
 	return result, nil
+}
+
+func canonicalLess(left, right any) bool {
+	leftRaw, _ := json.Marshal(left)
+	rightRaw, _ := json.Marshal(right)
+	return string(leftRaw) < string(rightRaw)
 }
 
 func validProjectionStatus(status string) bool {
