@@ -27,7 +27,10 @@ func TestC05CompletePrivacyEligibilityAndNonDisclosureCorpus(t *testing.T) {
 	candidate := func(id, role, uri, privacy string) sourceprojection.Candidate {
 		return sourceprojection.Candidate{
 			UnitID: id, CitationID: id + "-citation", Role: role, GraphSubjectID: id + "-subject",
-			LogicalSourceID: uri, Range: sourceprojection.Range{Start: sourceprojection.Position{0, 0}, End: sourceprojection.Position{0, 6}},
+			LogicalSourceID: uri, Range: sourceprojection.Range{
+				Start: sourceprojection.Position{Line: 0, Character: 0},
+				End:   sourceprojection.Position{Line: 0, Character: 6},
+			},
 			PositionEncoding: "utf-8", PrivacyClassification: privacy,
 		}
 	}
