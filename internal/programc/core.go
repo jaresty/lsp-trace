@@ -54,11 +54,12 @@ type Occurrence struct {
 	Weight                                                    float64
 }
 type Projection struct {
-	NodeIdentities []string
-	NodeIDs        map[string]int64
-	Occurrences    []Occurrence
-	PairWeights    map[Pair]float64
-	Source         SourceBinding
+	NodeIdentities  []string
+	NodeIDs         map[string]int64
+	Occurrences     []Occurrence
+	PairWeights     map[Pair]float64
+	Source          SourceBinding
+	CompositeSource programcadmission.CompositeSourceBinding
 }
 type Community struct{ Members []string }
 type Outcome struct {
@@ -68,6 +69,7 @@ type Outcome struct {
 	Communities                                                               []Community
 	Projection                                                                Projection
 	Source                                                                    SourceBinding
+	CompositeSource                                                           programcadmission.CompositeSourceBinding
 }
 
 // SemanticReceipt identifies the validated native Graph V5 semantic commitment.
@@ -297,7 +299,7 @@ func Compute(input []byte, seed uint64) (Outcome, *Failure) {
 	if failure != nil {
 		return Outcome{}, failure
 	}
-	return computeProjection(p, seed, p.Source, ClaimCeiling)
+	return computeProjection(p, seed, p.Source, programcadmission.CompositeSourceBinding{}, ClaimCeiling)
 }
 
 // ComputeComposite runs the same deterministic partition implementation only
@@ -307,7 +309,11 @@ func ComputeComposite(a programcadmission.CompositeProjectionAdmission, seed uin
 		return Outcome{}, &Failure{Code: CodeInvalidProvenance, Message: "validated composite admission required"}
 	}
 	ids := a.NodeIdentities()
-	p := Projection{NodeIdentities: ids, NodeIDs: make(map[string]int64, len(ids)), PairWeights: make(map[Pair]float64)}
+	source := a.SourceBinding()
+	if source.CompositeID == "" || source.CompositeOutputSHA256 == "" || source.ClaimCeiling != a.ClaimCeiling() || source.Authority != 0 || source.SourceGraphComplete != "UNKNOWN" || source.Completeness.WholeWorkspace {
+		return Outcome{}, &Failure{Code: CodeInvalidProvenance, Message: fmt.Sprintf("invalid composite source binding: id=%t output=%t ceiling=%t authority=%d completeness=%q whole_workspace=%t", source.CompositeID != "", source.CompositeOutputSHA256 != "", source.ClaimCeiling == a.ClaimCeiling(), source.Authority, source.SourceGraphComplete, source.Completeness.WholeWorkspace)}
+	}
+	p := Projection{NodeIdentities: ids, NodeIDs: make(map[string]int64, len(ids)), PairWeights: make(map[Pair]float64), CompositeSource: source}
 	for i, id := range ids {
 		if id == "" || (i > 0 && ids[i-1] >= id) {
 			return Outcome{}, &Failure{Code: CodeInvalidCalls, Message: "noncanonical admitted nodes"}
@@ -325,10 +331,10 @@ func ComputeComposite(a programcadmission.CompositeProjectionAdmission, seed uin
 	if failure := enforceCaps(len(ids), len(p.Occurrences)); failure != nil {
 		return Outcome{}, failure
 	}
-	return computeProjection(p, seed, SourceBinding{}, a.ClaimCeiling())
+	return computeProjection(p, seed, SourceBinding{}, source, a.ClaimCeiling())
 }
 
-func computeProjection(p Projection, seed uint64, source SourceBinding, claimCeiling string) (Outcome, *Failure) {
+func computeProjection(p Projection, seed uint64, source SourceBinding, compositeSource programcadmission.CompositeSourceBinding, claimCeiling string) (Outcome, *Failure) {
 	outcome := "COMPLETE"
 	canonical := make([]Community, 0, len(p.NodeIdentities))
 	seen := make(map[string]bool, len(p.NodeIdentities))
@@ -375,7 +381,7 @@ func computeProjection(p Projection, seed uint64, source SourceBinding, claimCei
 		}
 	}
 	sort.Slice(canonical, func(i, j int) bool { return compareStrings(canonical[i].Members, canonical[j].Members) < 0 })
-	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source}, nil
+	return Outcome{Outcome: outcome, ProfileID: ProfileID, ProfileDigest: ProfileDigest, Algorithm: algorithm, Resolution: 1, Seed: seed, Communities: canonical, LogicalDigest: logicalDigest(canonical), ClaimCeiling: claimCeiling, Projection: p, Source: source, CompositeSource: compositeSource}, nil
 }
 
 func logicalDigest(c []Community) string {

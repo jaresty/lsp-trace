@@ -23,15 +23,24 @@ const SourceGraphComplete = "UNKNOWN"
 const maxNodes = 10_000
 const maxOccurrences = 100_000
 
+// ConstituentReference is a complete local mirror of a validated composite
+// constituent. Keeping the mirror in the admission package prevents the
+// Program C core from depending directly on the composer while retaining every
+// canonical source-binding field.
 type ConstituentReference struct {
 	Identity, SHA256, SchemaVersion, GraphSHA256, GraphSchemaID string
 	ByteLength, GraphByteLength                                 int
+	BytesBase64                                                 string
 	SessionID, InvocationID                                     string
 	Generation                                                  uint64
 	RevisionCustody                                             string
+	SourcePolicy, WorkspaceURI, AnalyzedVersion                 string
+	DependencyCompleteness                                      string
+	CaptureBudget                                               graphprovenance.CaptureBudgetV2
 	Supplies                                                    []graphprovenance.SupplyReceiptV2
 	Captures                                                    []graphprovenance.Receipt
 	Bindings                                                    []graphprovenance.BindingV2
+	Invocation, Seeds, Frontier, Diagnostics, Summary, Slice    json.RawMessage
 }
 
 type CompatibilityReference struct {
@@ -52,8 +61,30 @@ type Artifact struct {
 	SourceGraphComplete                                                    string
 	Compatibility                                                          CompatibilityReference
 	Constituents                                                           []ConstituentReference
+	Completeness                                                           CompositeCompleteness
 	NodeIDs                                                                []string
 	Calls                                                                  []ProjectedCall
+}
+
+// CompositeCompleteness retains the composite's conservative completeness
+// ceiling without representing it as one native capture.
+type CompositeCompleteness struct {
+	AllTraversalComplete bool
+	AnyTruncated         bool
+	WholeWorkspace       bool
+	PerInput             []json.RawMessage
+}
+
+// CompositeSourceBinding preserves the complete, ordered source bindings for
+// a validated composite projection. It remains authority 0 and never forges a
+// native Graph Provenance V5 identity.
+type CompositeSourceBinding struct {
+	CompositeID, CompositeOutputSHA256, ClaimCeiling string
+	Authority                                        int
+	SourceGraphComplete                              string
+	Compatibility                                    CompatibilityReference
+	Constituents                                     []ConstituentReference
+	Completeness                                     CompositeCompleteness
 }
 
 // CompositeProjectionAdmission is an opaque, validated, non-native Program C input.
@@ -62,6 +93,7 @@ type CompositeProjectionAdmission struct {
 	nodeIDs      []string
 	occurrences  []Occurrence
 	claimCeiling string
+	source       CompositeSourceBinding
 	valid        bool
 }
 
@@ -82,6 +114,9 @@ func (a CompositeProjectionAdmission) Occurrences() []Occurrence {
 	return append([]Occurrence(nil), a.occurrences...)
 }
 func (a CompositeProjectionAdmission) ClaimCeiling() string { return a.claimCeiling }
+func (a CompositeProjectionAdmission) SourceBinding() CompositeSourceBinding {
+	return cloneSourceBinding(a.source)
+}
 
 type Result struct {
 	Artifact  Artifact
@@ -95,6 +130,16 @@ func Admit(composite []byte) (Result, error) {
 	a, err := programccompose.Validate(composite)
 	if err != nil {
 		return Result{}, fmt.Errorf("composite admission: %w", err)
+	}
+	// Validate intentionally clears identity fields while recomputing them. Read
+	// those fields only from the bytes that have just passed exact replay.
+	var verified programccompose.Artifact
+	if err := json.Unmarshal(composite, &verified); err != nil {
+		return Result{}, fmt.Errorf("composite admission: %w", err)
+	}
+	a.CompositeID, a.OutputSHA256 = verified.CompositeID, verified.OutputSHA256
+	if a.CompositeID == "" || a.OutputSHA256 == "" {
+		return Result{}, errors.New("composite admission: missing canonical composite identity")
 	}
 	if len(a.Nodes) > maxNodes {
 		return Result{}, errors.New("composite admission: node cap exceeded")
@@ -129,12 +174,14 @@ func Admit(composite []byte) (Result, error) {
 	}
 	sort.Slice(calls, func(i, j int) bool { return calls[i].OccurrenceID < calls[j].OccurrenceID })
 	sort.Slice(occurrences, func(i, j int) bool { return occurrences[i].Identity < occurrences[j].Identity })
-	refs := make([]ConstituentReference, len(a.Constituents))
-	for i, c := range a.Constituents {
-		refs[i] = ConstituentReference{Identity: c.Identity, SHA256: c.SHA256, SchemaVersion: c.SchemaVersion, GraphSHA256: c.GraphSHA256, GraphSchemaID: c.GraphSchemaID, ByteLength: c.ByteLength, GraphByteLength: c.GraphByteLength, SessionID: c.SessionID, InvocationID: c.InvocationID, Generation: c.Generation, RevisionCustody: a.Compatibility.RevisionCustody, Supplies: append([]graphprovenance.SupplyReceiptV2(nil), c.Supplies...), Captures: append([]graphprovenance.Receipt(nil), c.Captures...), Bindings: append([]graphprovenance.BindingV2(nil), c.Bindings...)}
+	refs := constituentReferences(a.Constituents)
+	for i := range refs {
+		refs[i].RevisionCustody = a.Compatibility.RevisionCustody
 	}
 	compat := CompatibilityReference{WorkspaceURI: a.Compatibility.WorkspaceURI, SourceRevision: a.Compatibility.SourceRevision, PositionEncoding: a.Compatibility.PositionEncoding, RevisionCustody: a.Compatibility.RevisionCustody, AcquisitionSemantics: a.Compatibility.AcquisitionSemantics, PrivacyPolicy: a.Compatibility.PrivacyPolicy, ServerCommand: a.Compatibility.ServerCommand, ServerVersion: a.Compatibility.ServerVersion, LanguageID: a.Compatibility.LanguageID, EvidenceSemantics: append(json.RawMessage(nil), a.Compatibility.EvidenceSemantics...), SensitivityPolicy: append(json.RawMessage(nil), a.Compatibility.SensitivityPolicy...)}
-	artifact := Artifact{Version: Version, CompositeID: a.CompositeID, CompositeOutputSHA256: a.OutputSHA256, ClaimCeiling: a.ClaimCeiling, Authority: Authority, SourceGraphComplete: SourceGraphComplete, Compatibility: compat, Constituents: refs, NodeIDs: nodeIDs, Calls: calls}
+	completeness := CompositeCompleteness{AllTraversalComplete: a.Completeness.AllTraversalComplete, AnyTruncated: a.Completeness.AnyTruncated, WholeWorkspace: a.Completeness.WholeWorkspace, PerInput: cloneRawMessages(a.Completeness.PerInput)}
+	source := CompositeSourceBinding{CompositeID: a.CompositeID, CompositeOutputSHA256: a.OutputSHA256, ClaimCeiling: a.ClaimCeiling, Authority: Authority, SourceGraphComplete: SourceGraphComplete, Compatibility: compat, Constituents: refs, Completeness: completeness}
+	artifact := Artifact{Version: Version, CompositeID: a.CompositeID, CompositeOutputSHA256: a.OutputSHA256, ClaimCeiling: a.ClaimCeiling, Authority: Authority, SourceGraphComplete: SourceGraphComplete, Compatibility: compat, Constituents: refs, Completeness: completeness, NodeIDs: nodeIDs, Calls: calls}
 	pre, err := json.Marshal(artifact)
 	if err != nil {
 		return Result{}, err
@@ -145,8 +192,101 @@ func Admit(composite []byte) (Result, error) {
 		return Result{}, err
 	}
 	encoded = append(encoded, '\n')
-	admission := CompositeProjectionAdmission{nodeIDs: nodeIDs, occurrences: occurrences, claimCeiling: a.ClaimCeiling, valid: true}
+	admission := CompositeProjectionAdmission{nodeIDs: nodeIDs, occurrences: occurrences, claimCeiling: a.ClaimCeiling, source: source, valid: true}
 	return Result{Artifact: artifact, Bytes: encoded, Admission: admission}, nil
+}
+
+func cloneSourceBinding(source CompositeSourceBinding) CompositeSourceBinding {
+	clone := source
+	clone.Compatibility.EvidenceSemantics = append(json.RawMessage(nil), source.Compatibility.EvidenceSemantics...)
+	clone.Compatibility.SensitivityPolicy = append(json.RawMessage(nil), source.Compatibility.SensitivityPolicy...)
+	clone.Constituents = cloneConstituentReferences(source.Constituents)
+	clone.Completeness.PerInput = cloneRawMessages(source.Completeness.PerInput)
+	return clone
+}
+
+func constituentReferences(in []programccompose.Constituent) []ConstituentReference {
+	out := make([]ConstituentReference, len(in))
+	for i, c := range in {
+		out[i] = ConstituentReference{Identity: c.Identity, SHA256: c.SHA256, SchemaVersion: c.SchemaVersion, GraphSHA256: c.GraphSHA256, GraphSchemaID: c.GraphSchemaID, ByteLength: c.ByteLength, GraphByteLength: c.GraphByteLength, BytesBase64: c.BytesBase64, SessionID: c.SessionID, InvocationID: c.InvocationID, Generation: c.Generation, SourcePolicy: c.SourcePolicy, WorkspaceURI: c.WorkspaceURI, AnalyzedVersion: c.AnalyzedVersion, DependencyCompleteness: c.DependencyCompleteness, CaptureBudget: c.CaptureBudget, Supplies: cloneSupplies(c.Supplies), Captures: cloneReceipts(c.Captures), Bindings: cloneBindings(c.Bindings), Invocation: cloneRaw(c.Invocation), Seeds: cloneRaw(c.Seeds), Frontier: cloneRaw(c.Frontier), Diagnostics: cloneRaw(c.Diagnostics), Summary: cloneRaw(c.Summary), Slice: cloneRaw(c.Slice)}
+	}
+	return out
+}
+
+func cloneConstituentReferences(in []ConstituentReference) []ConstituentReference {
+	out := append([]ConstituentReference(nil), in...)
+	for i := range out {
+		out[i].Supplies = cloneSupplies(in[i].Supplies)
+		out[i].Captures = cloneReceipts(in[i].Captures)
+		out[i].Bindings = cloneBindings(in[i].Bindings)
+		out[i].Invocation = cloneRaw(in[i].Invocation)
+		out[i].Seeds = cloneRaw(in[i].Seeds)
+		out[i].Frontier = cloneRaw(in[i].Frontier)
+		out[i].Diagnostics = cloneRaw(in[i].Diagnostics)
+		out[i].Summary = cloneRaw(in[i].Summary)
+		out[i].Slice = cloneRaw(in[i].Slice)
+	}
+	return out
+}
+
+func cloneSupplies(in []graphprovenance.SupplyReceiptV2) []graphprovenance.SupplyReceiptV2 {
+	out := append([]graphprovenance.SupplyReceiptV2(nil), in...)
+	for i := range out {
+		out[i].Observation.Observation = cloneRaw(in[i].Observation.Observation)
+		if in[i].Receipt != nil {
+			r := cloneReceipt(*in[i].Receipt)
+			out[i].Receipt = &r
+		}
+	}
+	return out
+}
+
+func cloneReceipts(in []graphprovenance.Receipt) []graphprovenance.Receipt {
+	if in == nil {
+		return nil
+	}
+	out := make([]graphprovenance.Receipt, len(in))
+	for i := range in {
+		out[i] = cloneReceipt(in[i])
+	}
+	return out
+}
+
+func cloneReceipt(in graphprovenance.Receipt) graphprovenance.Receipt {
+	out := in
+	out.Content = append([]byte(nil), in.Content...)
+	out.CanonicalReceipt = append([]byte(nil), in.CanonicalReceipt...)
+	if in.Supply != nil {
+		s := *in.Supply
+		s.Params = cloneRaw(in.Supply.Params)
+		out.Supply = &s
+	}
+	return out
+}
+
+func cloneBindings(in []graphprovenance.BindingV2) []graphprovenance.BindingV2 {
+	out := append([]graphprovenance.BindingV2(nil), in...)
+	for i := range out {
+		out[i].ReceiptIDs = append([]string(nil), in[i].ReceiptIDs...)
+	}
+	return out
+}
+
+func cloneRaw(in json.RawMessage) json.RawMessage {
+	if in == nil {
+		return nil
+	}
+	out := make(json.RawMessage, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneRawMessages(in []json.RawMessage) []json.RawMessage {
+	out := make([]json.RawMessage, len(in))
+	for i := range in {
+		out[i] = append(json.RawMessage(nil), in[i]...)
+	}
+	return out
 }
 
 func occurrenceIdentity(compositeID, relationID string, ordinal int, site graph.Range) string {

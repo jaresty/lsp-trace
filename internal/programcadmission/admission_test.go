@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -51,6 +52,10 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	validated, err := programccompose.Validate(one.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := programcadmission.Admit(one.Bytes)
 	if err != nil {
 		t.Fatal(err)
@@ -67,6 +72,23 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	}
 	if len(got.Artifact.Constituents) != 2 || got.Artifact.Constituents[0].SHA256 == "" || got.Artifact.Constituents[0].Identity == "" || got.Artifact.Constituents[0].RevisionCustody == "" {
 		t.Fatal("ASSERT_CONSTITUENT_IDENTITY_DIGEST_CUSTODY_RETAINED")
+	}
+	if got.Artifact.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || got.Artifact.Constituents[0].SourcePolicy != validated.Constituents[0].SourcePolicy || got.Artifact.Constituents[0].WorkspaceURI != validated.Constituents[0].WorkspaceURI || got.Artifact.Constituents[0].AnalyzedVersion != validated.Constituents[0].AnalyzedVersion || got.Artifact.Constituents[0].DependencyCompleteness != validated.Constituents[0].DependencyCompleteness || got.Artifact.Constituents[0].CaptureBudget != validated.Constituents[0].CaptureBudget || !reflect.DeepEqual(got.Artifact.Constituents[0].Supplies, validated.Constituents[0].Supplies) || !reflect.DeepEqual(got.Artifact.Constituents[0].Captures, validated.Constituents[0].Captures) || !reflect.DeepEqual(got.Artifact.Constituents[0].Bindings, validated.Constituents[0].Bindings) || !reflect.DeepEqual(got.Artifact.Constituents[0].Invocation, validated.Constituents[0].Invocation) || !reflect.DeepEqual(got.Artifact.Constituents[0].Seeds, validated.Constituents[0].Seeds) || !reflect.DeepEqual(got.Artifact.Constituents[0].Frontier, validated.Constituents[0].Frontier) || !reflect.DeepEqual(got.Artifact.Constituents[0].Diagnostics, validated.Constituents[0].Diagnostics) || !reflect.DeepEqual(got.Artifact.Constituents[0].Summary, validated.Constituents[0].Summary) || !reflect.DeepEqual(got.Artifact.Constituents[0].Slice, validated.Constituents[0].Slice) {
+		t.Fatal("ASSERT_COMPLETE_ORDERED_CONSTITUENT_BINDINGS_RETAINED")
+	}
+	for i, constituent := range validated.Constituents {
+		if got.Artifact.Constituents[i].Identity != constituent.Identity || got.Artifact.Constituents[i].SHA256 != constituent.SHA256 || got.Artifact.Constituents[i].InvocationID != constituent.InvocationID {
+			t.Fatal("ASSERT_CONSTITUENT_CANONICAL_ORDER_RETAINED")
+		}
+	}
+	exposed := got.Admission.SourceBinding()
+	exposed.Constituents[0].BytesBase64 = "tampered"
+	if len(exposed.Constituents[0].Frontier) > 0 {
+		exposed.Constituents[0].Frontier[0] ^= 1
+	}
+	stable := got.Admission.SourceBinding()
+	if stable.Constituents[0].BytesBase64 != validated.Constituents[0].BytesBase64 || !reflect.DeepEqual(stable.Constituents[0].Frontier, validated.Constituents[0].Frontier) {
+		t.Fatal("ASSERT_OPAQUE_ADMISSION_SOURCE_BINDING_DEEP_CLONED")
 	}
 	if len(got.Artifact.NodeIDs) != 3 || len(got.Artifact.Calls) != 1 {
 		t.Fatalf("ASSERT_EXACT_CALL_UNION_AND_ISOLATES nodes=%d calls=%d", len(got.Artifact.NodeIDs), len(got.Artifact.Calls))
@@ -89,6 +111,56 @@ func TestAdmissionDeterministicSeparateConservativeProjection(t *testing.T) {
 	}
 	if outcome.ClaimCeiling != programccompose.ClaimCeiling {
 		t.Fatal("ASSERT_COMPOSITE_CLAIM_CEILING_RETAINED")
+	}
+	if outcome.Projection.CompositeSource.CompositeID != got.Artifact.CompositeID || outcome.CompositeSource.CompositeID != got.Artifact.CompositeID {
+		t.Fatal("ASSERT_COMPOSITE_SOURCE_IDENTITY_RETAINED")
+	}
+	if outcome.Projection.CompositeSource.ClaimCeiling != programccompose.ClaimCeiling || outcome.CompositeSource.ClaimCeiling != programccompose.ClaimCeiling {
+		t.Fatal("ASSERT_COMPOSITE_SOURCE_CLAIM_CEILING_RETAINED")
+	}
+	if outcome.CompositeSource.Authority != 0 || outcome.CompositeSource.SourceGraphComplete != "UNKNOWN" || outcome.CompositeSource.Completeness.WholeWorkspace {
+		t.Fatal("ASSERT_COMPOSITE_SOURCE_CONSERVATIVE_CEILINGS_RETAINED")
+	}
+	if !reflect.DeepEqual(outcome.CompositeSource.Constituents, got.Artifact.Constituents) || !reflect.DeepEqual(outcome.CompositeSource.Completeness.PerInput, got.Artifact.Completeness.PerInput) {
+		t.Fatal("ASSERT_ORDERED_CONSTITUENT_AND_PER_INPUT_COMPLETENESS_RETAINED")
+	}
+}
+
+func TestAdmissionPreservesDirectedOccurrencesAndSelfLoops(t *testing.T) {
+	a, b, isolate := node("a"), node("b"), node("isolate")
+	forward := edge(a, b)
+	forward.CallSites = append(forward.CallSites, graph.Range{End: graph.Position{Character: 2}})
+	reverse := edge(b, a)
+	loop := edge(a, a)
+	one := capture(t, "directed-one", []graph.Node{a, b, isolate}, []graph.Edge{forward, loop})
+	two := capture(t, "directed-two", []graph.Node{a, b}, []graph.Edge{reverse})
+	composite, err := programccompose.Compose([]programccompose.Input{two, one})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admitted, err := programcadmission.Admit(composite.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, failure := programc.ComputeComposite(admitted.Admission, 23)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	if len(outcome.Projection.Occurrences) != 4 || len(admitted.Artifact.Calls) != 4 {
+		t.Fatalf("ASSERT_CALL_SITE_MULTIPLICITY_RETAINED occurrences=%d calls=%d", len(outcome.Projection.Occurrences), len(admitted.Artifact.Calls))
+	}
+	ids := outcome.Projection.NodeIDs
+	if outcome.Projection.PairWeights[programc.Pair{From: ids[a.ID], To: ids[b.ID]}] != 2 || outcome.Projection.PairWeights[programc.Pair{From: ids[b.ID], To: ids[a.ID]}] != 1 || outcome.Projection.PairWeights[programc.Pair{From: ids[a.ID], To: ids[a.ID]}] != 1 {
+		t.Fatal("ASSERT_DIRECTED_AND_SELF_LOOP_CALLS_RETAINED")
+	}
+	foundIsolate := false
+	for _, community := range outcome.Communities {
+		for _, id := range community.Members {
+			foundIsolate = foundIsolate || id == isolate.ID
+		}
+	}
+	if !foundIsolate {
+		t.Fatal("ASSERT_ISOLATE_RETAINED_WITH_DIRECTED_CALLS")
 	}
 }
 
