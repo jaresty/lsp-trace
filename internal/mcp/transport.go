@@ -89,29 +89,11 @@ func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
 	return envelope{EnvelopeVersion: "1", EnvelopeSchemaID: schemaID, Tool: tool, RequestID: id, Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true, Phase: phase, State: state, Error: map[string]any{"code": state}}
 }
 
-func structuralContextDomainErrorWithTarget(tool, phase, state string, args map[string]any) envelope {
-	env := structuralContextDomainErrorEnvelope(tool, phase, state)
+func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, _ map[string]any) envelope {
+	env := structuralContextDomainErrorEnvelope(tool, string(failure.Phase), string(failure.State))
 	if tool != mcpcontract.StructuralContextV2Tool {
 		return env
 	}
-	if symbol, ok := args["symbol"].(string); ok {
-		env.Target = map[string]any{"kind": "SYMBOL", "symbol": symbol}
-		return env
-	}
-	line, lineOK := args["line"].(float64)
-	character, characterOK := args["character"].(float64)
-	if lineOK && characterOK {
-		env.Target = map[string]any{"kind": "POSITION", "line": line, "character": character}
-	}
-	return env
-}
-
-func structuralContextTraversalDomainError(tool string, failure *transientstructural.DomainFailure, args map[string]any) envelope {
-	env := structuralContextDomainErrorWithTarget(tool, string(failure.Phase), string(failure.State), args)
-	if tool != mcpcontract.StructuralContextV2Tool {
-		return env
-	}
-	env.Target = nil
 	if failure.TargetDiagnostic != nil {
 		env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
 		env.TargetDiagnostic = failure.TargetDiagnostic
@@ -575,7 +557,7 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 			default:
 				state = "INVALID_SERVER_RESPONSE"
 			}
-			return bindEnvelope(base, tool, structuralContextDomainErrorWithTarget(tool.Name, phase, state, operationArguments))
+			return bindEnvelope(base, tool, structuralContextDomainErrorEnvelope(tool.Name, phase, state))
 		}
 		if tool.ExecutorFamily == CensusExecutorFamily {
 			return bindEnvelope(base, tool, censusDomainErrorEnvelope(tool.Name, requestID, "config", "INVALID_CONFIG"))

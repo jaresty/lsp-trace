@@ -81,6 +81,34 @@ func TestStructuralContextV2TypedLocatorFailureUsesV4Envelope(t *testing.T) {
 	}
 }
 
+func TestStructuralContextV2ProjectionFailureUsesSchemaValidPrivateV4Envelope(t *testing.T) {
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "SOURCE_PROJECTION_FAILED"}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := structuralContextV2Args()
+	delete(args, "symbol")
+	args["uri"] = "file:///workspace/store.go"
+	args["line"] = 123
+	args["character"] = 5
+
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	if direct.Error != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_PROJECTION_FAILURE_ENVELOPE: rpc error=%v", direct.Error)
+	}
+	env := direct.Result.(callResult).StructuredContent
+	raw, _ := json.Marshal(env)
+	if env.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || env.State != "INVALID_SERVER_RESPONSE" || env.Target != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_PROJECTION_FAILURE_ENVELOPE: env=%+v raw=%s", env, raw)
+	}
+	if err := mcpcontract.ValidateStructuralContextV2EnvelopeExclusive(raw); err != nil {
+		t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_PROJECTION_FAILURE_SCHEMA: %v\n%s", err, raw)
+	}
+	for _, forbidden := range []string{"file:///workspace/store.go", `"line":123`, `"character":5`} {
+		if strings.Contains(string(raw), forbidden) {
+			t.Fatalf("ASSERT_STRUCTURAL_CONTEXT_V2_PROJECTION_FAILURE_PRIVATE: leaked %q in %s", forbidden, raw)
+		}
+	}
+}
+
 func TestStructuralContextV2ProjectionDirectGatewayParity(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{artifact: unifiedStructuralContextV2Artifact()}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}

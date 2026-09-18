@@ -1,6 +1,9 @@
 package sourceprojection
 
 import (
+	"net/url"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -70,6 +73,77 @@ func TestDeriveCandidatesPreservesDistinctEndpointAndRelationRanges(t *testing.T
 		} else if evidence.Interface().(Range) != projectionRange(occurrenceRange) || item.Interface().(Range) != (Range{}) || selection.Interface().(Range) != (Range{}) {
 			t.Fatalf("ASSERT_PROJECTION_RELATION_CALL_SITE_REMAINS_EVIDENCE: %+v", candidate)
 		}
+	}
+}
+
+func TestDeriveWorkspaceCandidatesMatchesCanonicalWorkspaceAdmission(t *testing.T) {
+	workspace := t.TempDir()
+	external := t.TempDir()
+	for _, name := range []string{"a.go", "b.go"} {
+		if err := os.WriteFile(filepath.Join(workspace, name), []byte("package p\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	externalPath := filepath.Join(external, "context.go")
+	if err := os.WriteFile(externalPath, []byte("package context\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fileURI := func(path string) string { return (&url.URL{Scheme: "file", Path: path}).String() }
+	r := graph.Range{Start: graph.Position{Line: 1}, End: graph.Position{Line: 1, Character: 1}}
+	result := transientstructural.Result{
+		TargetID:      "root",
+		Qualification: transientstructural.Qualification{PositionEncoding: "utf-16"},
+		Analysis: transientstructural.AnalysisResult{
+			Nodes: []transientstructural.NodeFact{
+				{ID: "root", URI: fileURI(filepath.Join(workspace, "a.go")), Range: r},
+				{ID: "peer", URI: fileURI(filepath.Join(workspace, "b.go")), Range: r},
+				{ID: "external", URI: fileURI(externalPath), Range: r},
+			},
+			Occurrences: []transientstructural.OccurrenceFact{
+				{ID: "local", CallerID: "root", CalleeID: "peer", URI: fileURI(filepath.Join(workspace, "a.go")), Range: r},
+				{ID: "touches-external", CallerID: "root", CalleeID: "external", URI: fileURI(filepath.Join(workspace, "a.go")), Range: r},
+			},
+		},
+	}
+
+	candidates, err := DeriveWorkspaceCandidates(result, "PROJECTED", true, workspace)
+	if err != nil {
+		t.Fatalf("ASSERT_WORKSPACE_CANDIDATES_CANONICAL_ADMISSION: %v", err)
+	}
+	if len(candidates) != 3 {
+		t.Fatalf("ASSERT_WORKSPACE_CANDIDATES_EXCLUDE_EXTERNAL_ENDPOINTS: %+v", candidates)
+	}
+	for _, candidate := range candidates {
+		if candidate.GraphSubjectID == "external" || candidate.LogicalSourceID == fileURI(externalPath) {
+			t.Fatalf("ASSERT_WORKSPACE_CANDIDATES_EXCLUDE_EXTERNAL_ENDPOINTS: %+v", candidate)
+		}
+	}
+
+	outsideOccurrence := result
+	outsideOccurrence.Analysis.Occurrences = append([]transientstructural.OccurrenceFact(nil), result.Analysis.Occurrences...)
+	outsideOccurrence.Analysis.Occurrences[0].URI = fileURI(externalPath)
+	if _, err := DeriveWorkspaceCandidates(outsideOccurrence, "PROJECTED", true, workspace); err == nil {
+		t.Fatal("ASSERT_WORKSPACE_CANDIDATES_OUTSIDE_CALLSITE_FAILS_CLOSED: got nil error")
+	}
+
+	externalTarget := result
+	externalTarget.TargetID = "external"
+	if _, err := DeriveWorkspaceCandidates(externalTarget, "TARGET", false, workspace); err == nil {
+		t.Fatal("ASSERT_WORKSPACE_CANDIDATES_TARGET_MUST_BE_ADMITTED: got nil error")
+	}
+
+	for name, raw := range map[string]string{
+		"malformed":  "https://example.invalid/a.go",
+		"unresolved": fileURI(filepath.Join(workspace, "missing.go")),
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := result
+			invalid.Analysis.Nodes = append([]transientstructural.NodeFact(nil), result.Analysis.Nodes...)
+			invalid.Analysis.Nodes[0].URI = raw
+			if _, err := DeriveWorkspaceCandidates(invalid, "PROJECTED", true, workspace); err == nil {
+				t.Fatal("ASSERT_WORKSPACE_CANDIDATES_INVALID_URI_FAILS_CLOSED: got nil error")
+			}
+		})
 	}
 }
 

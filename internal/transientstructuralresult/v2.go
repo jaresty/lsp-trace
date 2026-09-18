@@ -311,6 +311,17 @@ func sortedIDs(ids map[string]bool) []string {
 }
 func finiteNumber(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
+// WorkspaceRelativeURI applies the same canonical workspace-containment rule used by ProjectV2.
+func WorkspaceRelativeURI(root, raw string) (string, error) {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil || !filepath.IsAbs(realRoot) {
+		return "", errors.New("invalid workspace root")
+	}
+	return relativeURI(realRoot, raw)
+}
+
+func IsOutsideWorkspace(err error) bool { return errors.Is(err, errOutsideWorkspace) }
+
 func relativeURI(realRoot, raw string) (string, error) {
 	u, err := url.Parse(raw)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {

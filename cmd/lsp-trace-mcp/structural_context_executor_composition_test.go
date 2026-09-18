@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"lsp-trace/internal/graph"
@@ -19,6 +22,20 @@ func (f structuralContextDelegateFunc) Execute(ctx context.Context, req operatio
 }
 
 const validStructuralV2 = `{"schema_version":"lsp-trace.transient-structural-result.v2","authority":0,"source_graph_complete":"UNKNOWN","position_encoding":"utf-16","target_node_id":"tn_0123456789abcdef0123456789abcdef","nodes":[{"node_id":"tn_0123456789abcdef0123456789abcdef","name":"A","kind":12,"path":"src/a.go","declaration_range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}],"calls":[],"analytics_scope":"BOUNDED_LOCAL","strong_components":[],"weak_projection":"DIRECTED_ARCS_COLLAPSED_TO_SIMPLE_UNDIRECTED_PAIRS; SELF_LOOPS_IGNORED; PARALLEL_AND_ANTIPARALLEL_ARCS_COLLAPSED","weak_bridges":[],"articulation_points":[],"pagerank_damping":0.85,"analytics_tolerance":1e-12,"pagerank":[],"hits":[],"coupling":[{"node_id":"tn_0123456789abcdef0123456789abcdef","ca":0,"ce":0,"instability":0}],"external_nodes_omitted":0,"external_calls_omitted":0}`
+
+func projectionWorkspace(t *testing.T, names ...string) (string, map[string]string) {
+	t.Helper()
+	root := t.TempDir()
+	uris := make(map[string]string, len(names))
+	for _, name := range names {
+		path := filepath.Join(root, name)
+		if err := os.WriteFile(path, []byte("A\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		uris[name] = (&url.URL{Scheme: "file", Path: path}).String()
+	}
+	return root, uris
+}
 
 func TestUnifiedStructuralContextV2ExecutorComposesStructuralResult(t *testing.T) {
 	const structural = validStructuralV2
@@ -57,11 +74,12 @@ func TestUnifiedStructuralContextV2ExecutorComposesStructuralResult(t *testing.T
 }
 
 func TestUnifiedStructuralContextV2ExecutorBindsLiveProjection(t *testing.T) {
-	uri := "file:///repo/a.go"
+	workspaceRoot, uris := projectionWorkspace(t, "a.go")
+	uri := uris["a.go"]
 	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
 	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
-		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient}}, nil
+		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient, WorkspaceRoot: workspaceRoot}}, nil
 	})
 	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
 	projection := `{"mode":"TARGET","body":"INCLUDE","include_relation_occurrences":false,"include_ancillary":false,"display_range_policy":"EXACT_EVIDENCE","limits":{"max_objects":1,"max_ranges":1,"max_source_bytes":2,"max_work":1,"max_response_bytes":100000,"max_additional_documents":0,"max_document_requests":1,"max_document_bytes":2,"max_total_document_bytes":2,"max_document_messages":1,"max_document_acquisition_work":1,"max_display_resolution_work":1},"privacy_policy_id":"public"}`
@@ -81,11 +99,12 @@ func TestUnifiedStructuralContextV2ExecutorBindsLiveProjection(t *testing.T) {
 }
 
 func TestUnifiedStructuralContextV2ExecutorLiveProjectionHonorsDocumentAndPrivacyBoundaries(t *testing.T) {
-	uri := "file:///repo/a.go"
+	workspaceRoot, uris := projectionWorkspace(t, "a.go", "b.go")
+	uri := uris["a.go"]
 	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
-	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}, {ID: "other", URI: "file:///repo/b.go", Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
+	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}, {ID: "other", URI: uris["b.go"], Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
-		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient}}, nil
+		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient, WorkspaceRoot: workspaceRoot}}, nil
 	})
 	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
 	for _, tc := range []struct {
@@ -139,11 +158,12 @@ func TestUnifiedStructuralContextV2ExecutorLiveProjectionHonorsDocumentAndPrivac
 }
 
 func TestUnifiedStructuralContextV2ExecutorBoundsCompleteUnifiedResponse(t *testing.T) {
-	uri := "file:///repo/a.go"
+	workspaceRoot, uris := projectionWorkspace(t, "a.go")
+	uri := uris["a.go"]
 	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
 	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
-		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient}}, nil
+		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient, WorkspaceRoot: workspaceRoot}}, nil
 	})
 	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
 	projection := `{"mode":"TARGET","body":"INCLUDE","include_relation_occurrences":false,"include_ancillary":false,"display_range_policy":"EXACT_EVIDENCE","limits":{"max_objects":1,"max_ranges":1,"max_source_bytes":2,"max_work":1,"max_response_bytes":2000,"max_additional_documents":0,"max_document_requests":1,"max_document_bytes":2,"max_total_document_bytes":2,"max_document_messages":1,"max_document_acquisition_work":1,"max_display_resolution_work":1},"privacy_policy_id":"public"}`
@@ -154,18 +174,19 @@ func TestUnifiedStructuralContextV2ExecutorBoundsCompleteUnifiedResponse(t *test
 }
 
 func TestUnifiedStructuralContextV2ExecutorPagesLiveProjectionV3(t *testing.T) {
-	uri := "file:///repo/a.go"
+	workspaceRoot, uris := projectionWorkspace(t, "a.go")
+	uri := uris["a.go"]
 	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
 	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
-		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient}}, nil
+		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient, WorkspaceRoot: workspaceRoot}}, nil
 	})
 	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
 	projection := map[string]any{
 		"mode": "TARGET", "body": "INCLUDE", "include_relation_occurrences": false, "include_ancillary": false,
 		"display_range_policy": "FULL_DEFINITION", "privacy_policy_id": "public",
 		"limits": map[string]any{"max_objects": 10, "max_ranges": 10, "max_source_bytes": 2, "max_work": 10, "max_response_bytes": 100000, "max_additional_documents": 0, "max_document_requests": 1, "max_document_bytes": 2, "max_total_document_bytes": 2, "max_document_messages": 1, "max_document_acquisition_work": 1, "max_display_resolution_work": 1},
-		"paging": map[string]any{"max_page_bytes": 1000, "max_pages": 20, "max_response_bytes": 100000},
+		"paging": map[string]any{"max_page_bytes": 1200, "max_pages": 20, "max_response_bytes": 100000},
 	}
 	invoke := func() map[string]any {
 		t.Helper()

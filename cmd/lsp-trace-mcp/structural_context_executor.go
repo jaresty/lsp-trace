@@ -57,7 +57,8 @@ type structuralContextInput struct {
 type structuralContextExecutor struct{ runtime *hostSelectorRuntime }
 
 type structuralContextProjectionInput struct {
-	Transient transientstructural.Result
+	Transient     transientstructural.Result
+	WorkspaceRoot string
 }
 
 type sourceProjectionRequest struct {
@@ -155,7 +156,7 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		if !ok || payload.Transient.SourceSupply == nil {
 			return fail("SOURCE_PROJECTION_FAILED", nil)
 		}
-		candidates, err := sourceprojection.DeriveCandidates(payload.Transient, request.Mode, request.IncludeRelationOccurrences)
+		candidates, err := sourceprojection.DeriveWorkspaceCandidates(payload.Transient, request.Mode, request.IncludeRelationOccurrences, payload.WorkspaceRoot)
 		if err != nil {
 			return fail("SOURCE_PROJECTION_FAILED", err)
 		}
@@ -277,8 +278,10 @@ func (e *structuralContextExecutor) Execute(parent context.Context, op operation
 	}
 	var projected any
 	var err error
+	var root string
 	if op.Name == operation.Name("structural_context_v2") {
-		root, ok := e.runtime.Manager.WorkspaceRoot(id, generation)
+		var ok bool
+		root, ok = e.runtime.Manager.WorkspaceRoot(id, generation)
 		if !ok {
 			return fail("INVALID_SERVER_RESPONSE", nil)
 		}
@@ -295,7 +298,7 @@ func (e *structuralContextExecutor) Execute(parent context.Context, op operation
 	}
 	result := operation.Result{Artifact: raw}
 	if op.Name == operation.Name("structural_context_v2") {
-		result.Value = structuralContextProjectionInput{Transient: got}
+		result.Value = structuralContextProjectionInput{Transient: got, WorkspaceRoot: root}
 	}
 	return result, nil
 }
