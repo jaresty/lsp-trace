@@ -1,0 +1,66 @@
+{
+  "schema_version": "lsp-trace.private.adr0008-retained-object-resolver-qualification-execution.v1",
+  "matrix": "qualification/adr0008-source-projection-matrix.v1.json",
+  "matrix_sha256": "3922926f81d5c978a05606b99d5a749b5c58364a39e07e24a33c9253fb42f53c",
+  "predecessor_execution": "qualification/adr0008-retained-object-resolver.execution.4955c0fc87cef6867b8c19e6c197285341022b68.json",
+  "predecessor_execution_sha256": "db97efde639ec0d6005aecd28cbbcfb9a8a1cc6e5af92b355aaccece1d89b78f",
+  "historical_execution": "qualification/adr0008-source-projection-matrix.execution.5d392f9710225bd1761af67fd9d851c2ff4b2f82.json",
+  "historical_execution_sha256": "cb0e70855ba7aa913230d30c84a9953ff8e374bdc36b463d25b0a25d02557d82",
+  "common_projection_execution": "qualification/adr0008-common-projection.execution.5e624471011cb679f731bbc4079a4229f2f986b7.json",
+  "common_projection_execution_sha256": "a93db8c65a812927e7c5cf722d5a10f0b32d7260a7a08ca173149d2d0305d48c",
+  "reviewed_revision": "e42ff78805fd3838cb81ef2cd154ec166cfd3066",
+  "reviewed_at": "2026-09-18T02:24:10Z",
+  "scope": "RETAINED_OBJECT_RESOLVER_R03",
+  "execution_status": "EXECUTED",
+  "tests_pass_claimed": true,
+  "retained_object_resolver_qualified": false,
+  "common_projection_qualified": true,
+  "implementation_qualified": false,
+  "verdict_counts": {"PASS": 3, "FAIL": 0, "BLOCKED": 1, "NOT_RUN": 0},
+  "historical_global_failure": {"cell": "L04", "verdict": "FAIL", "changed": false},
+  "logs": [
+    {"id": "r03-focused", "path": "/tmp/lsp-trace-r03-focused-e42ff78.log", "sha256": "d685523b283a729da2a704f15a4d8a991404be51673d8d46c6672ff8e0a5546a", "outcome": "PASS"},
+    {"id": "r03-adjacent", "path": "/tmp/lsp-trace-r03-adjacent-e42ff78.log", "sha256": "3f227aabb65171f0b53313548383e9a692c735e8f91886374320d3c30ddf322c", "outcome": "PASS"},
+    {"id": "r03-race", "path": "/tmp/lsp-trace-r03-race-e42ff78.log", "sha256": "51cc38b9a395b4d283d321381b1c9f987e7f6b3741f5592764832772c0ce786e", "outcome": "PASS"},
+    {"id": "r03-mutations", "path": "/tmp/lsp-trace-r03-mutations-e42ff78.log", "sha256": "0dabc96413060b3f1dbc6b433a872d49f2b1f6122ee96a3ab456b970627a025c", "outcome": "PASS"},
+    {"id": "full-go-suite", "path": "/tmp/lsp-trace-r03-full-e42ff78.log", "sha256": "ee5322f4936bb780d23cca6bbd3d0e8f2ac3152c51a9754969848e11288323aa", "outcome": "PASS"},
+    {"id": "release-check", "path": "/tmp/lsp-trace-r03-release-e42ff78.log", "sha256": "8fbb059813e3623317ca89087fa315be55714cf8333cf949e525c9ac7dd0281f", "outcome": "PASS"}
+  ],
+  "cells": [
+    {"id": "R01", "verdict": "PASS", "carried_from": "qualification/adr0008-retained-object-resolver.execution.3edd45a9e5fab548eef62700138236056d9868a9.json"},
+    {"id": "R02", "verdict": "PASS", "carried_from": "qualification/adr0008-retained-object-resolver.execution.4955c0fc87cef6867b8c19e6c197285341022b68.json"},
+    {
+      "id": "R03",
+      "verdict": "PASS",
+      "evidence": [
+        "TestR03ManifestTerminalStatesDoNotLookup PASS for WITHHELD, COLLECTED, and UNAVAILABLE with zero resolver calls and byte-unchanged graph/manifest inputs",
+        "TestR03TypedObjectFailuresRemainDistinctFromLimit PASS for MISSING, CORRUPT, and LIMIT with exactly one selected object lookup",
+        "TestR03RealSourceObjectDeletionAndCorruptionAreExact PASS through real private sourceobject.Store deletion and corruption interventions",
+        "TestR03ExactLifecycleStatesTerminateBeforeResolver PASS for SHALLOW_HISTORY, REWRITTEN_HISTORY, GC_COLLECTED, and DELETED with zero Git lookup calls",
+        "TestR03UnknownLifecycleDoesNotRelabelGenericFailure PASS with one lifecycle classification and one selected Git lookup",
+        "TestExactLeasePreservesThenReleaseAllowsGC PASS against real Git refs, reflog expiry, and git gc --prune=now",
+        "TestExpiredLeaseSweepAllowsGC PASS against an injected clock and real Git GC",
+        "isolated exact-revision mutation/restore record detects terminal-code collapse, resolver fallthrough, active-lease loss, release retention, and custody-byte mutation",
+        "internal/retainedlifecycle and internal/retainedresolver are registered in the integrated ownership inventory",
+        "adjacent custody packages, race suites, full repository suite, and release check PASS at reviewed_revision"
+      ],
+      "limitation": "Qualifies exact R03 lifecycle classification, explicit Git lease retention/release/expiry under real local GC, no retry/fallthrough at the resolver boundary, and custody-byte preservation. It does not qualify R04 publication races or cold offline replay, production deployment, secure erasure, or source-graph completeness."
+    },
+    {"id": "R04", "verdict": "BLOCKED", "reason": "No complete no-replace publication race receipt and cold offline replay packet exists."}
+  ],
+  "track_statuses": {
+    "COMMON_PROJECTION": {"verdict": "PASS", "carried_from": "qualification/adr0008-common-projection.execution.5e624471011cb679f731bbc4079a4229f2f986b7.json"},
+    "RETAINED_OBJECT_RESOLVER": {"verdict": "BLOCKED", "reason": "R04 remains BLOCKED"},
+    "LIVE_SESSION_RESOLVER": {"verdict": "FAIL", "reason": "historical L04 remains FAIL"}
+  },
+  "global_invariants": {
+    "graph_facts_added": 0,
+    "semantic_authority": 0,
+    "semantic_accepted": false,
+    "source_graph_complete": "UNKNOWN",
+    "canonical_operation_count": 41,
+    "compact_advertised_tool_count": 12,
+    "schema_change_policy": "ADDITIVE_ONLY"
+  },
+  "claim_ceiling": "This execution qualifies R03 and carries R01-R02. R04 remains BLOCKED, RETAINED_OBJECT_RESOLVER remains BLOCKED, historical L04 remains FAIL, and implementation_qualified remains false."
+}
