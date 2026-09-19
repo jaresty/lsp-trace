@@ -45,6 +45,25 @@ func digestOf(raw []byte) string {
 // passes Validate/Admit, running the full acquisition -> CaptureV2 -> CaptureV5
 // -> v5sourcesnapshot.Build -> v2 pipeline with a fake LSP wire client. It uses
 // only exported APIs so it is portable across packages.
+// VariantV2Artifact starts from a valid artifact and canonically reserializes a caller mutation.
+// Mutations are deliberately not validated so admission-rejection tests can supply
+// malformed serialized artifacts while retaining the original request metadata.
+func VariantV2Artifact(t testing.TB, mutate func(*v5sourcesnapshotv2.Artifact)) Artifact {
+	t.Helper()
+	base := ValidV2Artifact(t)
+	var artifact v5sourcesnapshotv2.Artifact
+	if err := json.Unmarshal(base.Raw, &artifact); err != nil {
+		t.Fatal(err)
+	}
+	mutate(&artifact)
+	raw, err := json.Marshal(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base.Raw = raw
+	return base
+}
+
 func ValidV2Artifact(t testing.TB) Artifact {
 	t.Helper()
 	root := t.TempDir()

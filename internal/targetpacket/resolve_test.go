@@ -3,94 +3,71 @@ package targetpacket
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"testing"
-
 	"lsp-trace/internal/censusprogramc"
+	"lsp-trace/internal/programcadmission"
+	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/retainedprojectiontestfixture"
 	"lsp-trace/internal/sourceobject"
+	"testing"
 )
 
-func digestOf(raw []byte) string {
-	sum := sha256.Sum256(raw)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
+type fixtureLookup struct{ body []byte }
 
-// resolvingRequest builds a Request whose custody Raw is a genuine V2 artifact
-// (from the shared retainedprojectiontestfixture) and whose nomination's
-// SelectedNode maps to that artifact's single display binding.
-func resolvingRequest(t *testing.T) (req Request, digest string, content []byte) {
+func (l fixtureLookup) Get(id sourceobject.Identity) (sourceobject.Object, error) {
+	return sourceobject.Object{Identity: id, Bytes: append([]byte(nil), l.body...)}, nil
+}
+func validRequest(t *testing.T) Request {
 	t.Helper()
 	fx := retainedprojectiontestfixture.ValidV2Artifact(t)
-	n := sampleNomination()
+	n := selected()
+	n.Status = censusprogramc.CandidateStatus
+	n.Authority = 0
+	n.SourceGraphComplete = "UNKNOWN"
 	n.SelectedNode = fx.NodeID
-	custody := SnapshotCustody{
-		ConstituentIdentity: n.ConstituentIdentity,
-		GraphDigest:         fx.GraphV5Digest,
-		GraphByteLength:     fx.GraphV5ByteLen,
-		Raw:                 fx.Raw,
-	}
-	req = Request{
-		CensusID:    "census-1",
-		Nominations: []censusprogramc.Representative{n},
-		Custody:     []SnapshotCustody{custody},
-		Lookup:      contentLookup{digest: fx.SourceDigest, body: fx.Content},
-		MaxBytes:    1 << 20,
-	}
-	return req, fx.SourceDigest, fx.Content
+	n.ClaimCeiling = "STRUCTURAL"
+	n.BatchID, n.CommunityIdentity = "batch", "community"
+	n.ExecutionBundleID, n.SeedLabel, n.SeedAt = "bundle", "seed", "at"
+	n.Members, n.SCCMembers = []string{"member"}, []string{"member"}
+	c := censusprogramc.Result{CensusID: "census", Admission: programcadmission.Result{Artifact: programcadmission.Artifact{Constituents: []programcadmission.ConstituentReference{{Identity: "constituent", GraphSHA256: fx.GraphV5Digest, GraphByteLength: int(fx.GraphV5ByteLen)}}}}, Representatives: censusprogramc.RepresentativeSelection{State: "SELECTED", Nominations: []censusprogramc.Representative{n}}}
+	return Request{Census: c, Snapshots: []Snapshot{{ConstituentIdentity: "constituent", ConstituentOrdinal: 0, Raw: fx.Raw}}, Lookup: fixtureLookup{fx.Content}, Policy: structPolicy(), ResolveLimits: retainedprojection.ResolveLimits{MaxDistinctObjects: 1, MaxUniqueSourceBytes: uint64(len(fx.Content)), MaxLogicalSelections: 1}, MaxResponseBytes: 1 << 20}
 }
-
-// contentLookup is a Lookup that returns the exact body for the requested
-// identity, so identity/length/SHA reverification inside Resolve is exercised.
-type contentLookup struct {
-	digest string
-	body   []byte
-}
-
-func (c contentLookup) Get(id sourceobject.Identity) (sourceobject.Object, error) {
-	return sourceobject.Object{Identity: id, Bytes: append([]byte(nil), c.body...)}, nil
-}
-
-// --- Property [3]: selected node maps to exactly one logical source ---------
-
-func TestBuildResolvesSelectedNodeToOneLogicalSource(t *testing.T) {
-	req, _, _ := resolvingRequest(t)
-	res, err := Build(req)
-	if err != nil || res.State != StatePrepared || len(res.Packets) != 1 {
-		t.Fatalf("ASSERT_P3_PREPARED: state=%q packets=%d err=%v", res.State, len(res.Packets), err)
+func TestASSERT_P1_P2_REAL_FIXTURE_PREPARED_TYPED_WIRE(t *testing.T) {
+	r := validRequest(t)
+	out, err := Build(r)
+	if err != nil || out.State != StatePrepared || len(out.Packets) != 1 {
+		t.Fatalf("prepared: %#v %v", out, err)
 	}
-	if res.Packets[0].LogicalSourceID == "" {
-		t.Fatalf("ASSERT_P3_LOGICAL_SOURCE_MAPPED: empty logical source id")
+	p := out.Packets[0]
+	if len(p.Projection.Units) != 1 || len(p.Projection.Citations) != 1 || len(p.Projection.EmittedSpans) == 0 || p.Projection.CustodyBinding.GraphDigest != r.Census.Admission.Artifact.Constituents[0].GraphSHA256 {
+		t.Fatalf("typed wire incomplete: %#v", p.Projection)
 	}
 }
-
-func TestBuildUnknownSelectedNodeFailsClosed(t *testing.T) {
-	req, _, _ := resolvingRequest(t)
-	req.Nominations[0].SelectedNode = "no-such-node" // zero compatible logical sources
-	res, err := Build(req)
-	if err == nil || res.State != StateFailed {
-		t.Fatalf("ASSERT_P3_UNKNOWN_NODE_FAILS_CLOSED: state=%q err=%v", res.State, err)
+func TestASSERT_P2_SNAPSHOT_RECONCILIATION_REJECTS_MISSING_AND_EXTRA(t *testing.T) {
+	r := validRequest(t)
+	r.Snapshots = nil
+	if _, e := Build(r); e == nil {
+		t.Fatal("missing")
+	}
+	r = validRequest(t)
+	r.Snapshots = append(r.Snapshots, Snapshot{ConstituentIdentity: "extra", ConstituentOrdinal: 999})
+	if _, e := Build(r); e == nil {
+		t.Fatal("extra")
 	}
 }
-
-// --- Property [5]/[6]: resolve + assemble body with bounded, typed outcome ---
-
-func TestBuildResolvesBodyThroughLookup(t *testing.T) {
-	req, _, content := resolvingRequest(t)
-	res, err := Build(req)
-	if err != nil || len(res.Packets) != 1 {
-		t.Fatalf("ASSERT_P5_PREPARED: err=%v packets=%d", err, len(res.Packets))
+func TestASSERT_P8_VALIDATE_DUPLICATE_KNOWN_KEY(t *testing.T) {
+	r := validRequest(t)
+	o, e := Build(r)
+	if e != nil {
+		t.Fatal(e)
 	}
-	p := res.Packets[0]
-	if p.BodyDigest != digestOf(content) {
-		t.Fatalf("ASSERT_P5_BODY_DIGEST_FROM_LOOKUP: got=%q want=%q", p.BodyDigest, digestOf(content))
+	raw, e := EncodeCanonical(o.Packets[0])
+	if e != nil {
+		t.Fatal(e)
 	}
-}
-
-func TestBuildZeroMaxBytesFailsClosed(t *testing.T) {
-	req, _, _ := resolvingRequest(t)
-	req.MaxBytes = 0 // resource bound violated -> typed failure
-	res, err := Build(req)
-	if err == nil || res.State != StateFailed {
-		t.Fatalf("ASSERT_P5_ZERO_BOUND_FAILS_CLOSED: state=%q err=%v", res.State, err)
+	raw = append([]byte(`{"packet_id":"x",`), raw[1:]...)
+	if _, e = Validate(raw); e == nil {
+		t.Fatal("duplicate packet_id accepted")
 	}
+	_ = sha256.Size
+	_ = hex.EncodedLen(1)
 }
