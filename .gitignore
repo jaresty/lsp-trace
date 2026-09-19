@@ -1,6 +1,8 @@
 .DS_Store
 /.mcp.json
 /lsp-trace
+/lsp-trace-mcp
+/.lsp-trace-mcp/
 /dist/
 /coverage.out
 node_modules/

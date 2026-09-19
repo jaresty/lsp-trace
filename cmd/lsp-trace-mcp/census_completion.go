@@ -20,16 +20,16 @@ type censusCompletion struct {
 }
 
 func (r *censusRuntime) run(ctx context.Context, request operation.Request) censusCompletion {
-	prepared, failure := r.execute(ctx, request)
+	prepared, failure, reason := r.execute(ctx, request)
 	if failure != nil {
-		return censusFailureCompletion(failure)
+		return censusFailureCompletion(failure, reason)
 	}
-	projection, failure := r.acquire(ctx, prepared)
+	projection, failure, reason := r.acquire(ctx, prepared)
 	if failure != nil {
-		return censusFailureCompletion(failure)
+		return censusFailureCompletion(failure, reason)
 	}
 	if request.PublicationRoot == nil {
-		return censusFailureCompletion(censusPublicationFailure())
+		return censusFailureCompletion(censusPublicationFailure(), reasonPublicationRootRequired)
 	}
 	publisher := captureset.NewPublisher(request.PublicationRoot)
 	completionCtx, cancel := context.WithDeadline(ctx, prepared.deadline)
@@ -38,9 +38,9 @@ func (r *censusRuntime) run(ctx context.Context, request operation.Request) cens
 }
 
 func completeCensusProjectionWith(ctx context.Context, projection censusacquisition.Projection, publisher censusProjectionPublisher, verifier censusProjectionVerifier) censusCompletion {
-	receipt, failure := publishCensusProjectionWith(ctx, projection, publisher)
+	receipt, failure, reason := publishCensusProjectionWith(ctx, projection, publisher)
 	if failure != nil {
-		return censusFailureCompletion(failure)
+		return censusFailureCompletion(failure, reason)
 	}
 	verificationStatus := receipt.VerificationStatus
 	authority := captureset.NativeV5Authority()
@@ -80,7 +80,7 @@ func completeCensusProjectionWith(ctx context.Context, projection censusacquisit
 	return censusCompletion{Result: &result}
 }
 
-func censusFailureCompletion(failure *censusRuntimeFailure) censusCompletion {
+func censusFailureCompletion(failure *censusRuntimeFailure, reason censusFailureReason) censusCompletion {
 	stage := censusresult.StageConfig
 	if failure != nil {
 		switch failure.stage {
@@ -93,5 +93,8 @@ func censusFailureCompletion(failure *censusRuntimeFailure) censusCompletion {
 		}
 	}
 	diagnostic, _ := censusresult.NewDiagnostic(stage, nil)
+	if detail := censusFailureDetail(reason); detail != "" {
+		diagnostic = diagnostic.WithDetail(detail)
+	}
 	return censusCompletion{Diagnostic: &diagnostic}
 }

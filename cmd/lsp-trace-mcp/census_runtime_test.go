@@ -66,12 +66,12 @@ func TestCensusRuntimeAdmissionFailureStopsBeforeRootAndDiscovery(t *testing.T) 
 	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 	shell := newCensusRuntime(runtime)
 	calls := 0
-	shell.admit = func(ctx context.Context, raw []byte) (censusAdmittedSession, *censusAdmissionFailure) {
+	shell.admit = func(ctx context.Context, raw []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason) {
 		calls++
 		return newCensusExecutor(runtime).execute(ctx, raw)
 	}
 	beforeStarts, beforeMethods, beforeTeardown, beforeClose := starter.snapshot()
-	_, failure := shell.execute(context.Background(), censusRuntimeRequest(t, nil, runtimeRaw(t, "missing", started.Generation, nil)))
+	_, failure, _ := shell.execute(context.Background(), censusRuntimeRequest(t, nil, runtimeRaw(t, "missing", started.Generation, nil)))
 	afterStarts, afterMethods, afterTeardown, afterClose := starter.snapshot()
 	if calls != 1 || failure == nil || failure.stage != censusStageAcquisition || !reflect.DeepEqual(beforeMethods, afterMethods) || beforeStarts != afterStarts || beforeTeardown != afterTeardown || beforeClose != afterClose {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_ADMISSION_ONCE_SHORT_CIRCUIT: calls=%d failure=%+v methods=%v/%v lifecycle=%d/%d/%d/%d/%d/%d", calls, failure, beforeMethods, afterMethods, beforeStarts, afterStarts, beforeTeardown, afterTeardown, beforeClose, afterClose)
@@ -82,7 +82,7 @@ func TestCensusRuntimeRequiresHostRootBeforeDiscovery(t *testing.T) {
 	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 	before := runtime.Census()
 	_, beforeMethods, _, _ := starter.snapshot()
-	_, failure := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, nil, runtimeRaw(t, "project", started.Generation, nil)))
+	_, failure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, nil, runtimeRaw(t, "project", started.Generation, nil)))
 	_, afterMethods, _, _ := starter.snapshot()
 	if failure == nil || failure.stage != censusStageConfig || failure.code != censusCodeInvalidConfig || !reflect.DeepEqual(beforeMethods, afterMethods) || !reflect.DeepEqual(before, runtime.Census()) {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_ROOT_REQUIRED_NO_DISCOVERY: failure=%+v methods=%v/%v", failure, beforeMethods, afterMethods)
@@ -96,7 +96,7 @@ func TestCensusRuntimeIdentityOptionsDiscoveryAndDefensiveCopies(t *testing.T) {
 	writeRuntimeSource(t, workspace, "a.go")
 	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 	raw := runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{".", "a.go"}, "includes": []string{"**/*.go"}, "excludes": []string{"generated/**"}, "max_nodes": 2})
-	result, failure := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), raw))
+	result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), raw))
 	if failure != nil {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_DISCOVERY_SUCCESS: %+v", failure)
 	}
@@ -114,7 +114,7 @@ func TestCensusRuntimeIdentityOptionsDiscoveryAndDefensiveCopies(t *testing.T) {
 	}
 	result.options.sources[0] = "mutated"
 	result.discovery.Accounting.Files[0].Disposition = census.FileUnreadable
-	again, againFailure := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}, "max_nodes": 2})))
+	again, againFailure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}, "max_nodes": 2})))
 	if againFailure != nil || again.options.sources[0] != "a.go" || again.discovery.Accounting.Files[0].Disposition == census.FileUnreadable {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_DEFENSIVE_COPY: again=%+v failure=%+v", again, againFailure)
 	}
@@ -134,7 +134,7 @@ func TestCensusRuntimeNonEmptyDiscoveryResponsesSurviveAndAreUsed(t *testing.T) 
 		workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
 		results: map[string]json.RawMessage{"textDocument/documentSymbol": symbols, "textDocument/prepareCallHierarchy": items},
 	})
-	result, failure := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}})))
+	result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}})))
 	if failure != nil {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_NONEMPTY_RESPONSES_SUCCESS: %+v", failure)
 	}
@@ -155,7 +155,7 @@ func TestCensusRuntimeMalformedDocumentSymbolsRemainClosedAndPrivacySafe(t *test
 		workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true,
 		results: map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(privatePayload)},
 	})
-	result, failure := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}})))
+	result, failure, _ := newCensusRuntime(runtime).execute(context.Background(), censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, map[string]any{"sources": []string{"a.go"}})))
 	if failure != nil {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_MALFORMED_SYMBOLS_ACCOUNTED_NOT_FAILED: %+v", failure)
 	}
@@ -202,7 +202,7 @@ func TestCensusRuntimeDeadlineCancellationAndConstructionSurface(t *testing.T) {
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Millisecond))
 	defer cancel()
-	_, failure := shell.execute(ctx, censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil)))
+	_, failure, _ := shell.execute(ctx, censusRuntimeRequest(t, openCensusRuntimeRoot(t), runtimeRaw(t, "project", started.Generation, nil)))
 	afterStarts, afterMethods, afterTeardown, afterClose := starter.snapshot()
 	if failure == nil || failure.stage != censusStageAcquisition || beforeStarts != afterStarts || !reflect.DeepEqual(beforeMethods, afterMethods) || beforeTeardown != afterTeardown || beforeClose != afterClose {
 		t.Fatalf("ASSERT_CENSUS_RUNTIME_CANCELLED_NOT_COMPLETE_NO_LIFECYCLE: failure=%+v methods=%v/%v", failure, beforeMethods, afterMethods)
@@ -212,7 +212,7 @@ func TestCensusRuntimeDeadlineCancellationAndConstructionSurface(t *testing.T) {
 func TestPlannedBatchUsesAdmittedHostManagerWithoutLifecycleDelta(t *testing.T) {
 	workspace := t.TempDir()
 	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: workspace, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
-	admitted, failure := newCensusExecutor(runtime).execute(context.Background(), runtimeRaw(t, "project", started.Generation, nil))
+	admitted, failure, _ := newCensusExecutor(runtime).execute(context.Background(), runtimeRaw(t, "project", started.Generation, nil))
 	if failure != nil {
 		t.Fatalf("ASSERT_PLANNED_BATCH_MCP_ADMITTED: %+v", failure)
 	}
@@ -296,7 +296,7 @@ func TestCensusRuntimeAcquireRejectsIncompleteDiscoveryBeforeBatch(t *testing.T)
 		discovery: censusacquisition.Discovery{Session: censusacquisition.SessionIdentity{SessionID: started.SessionID, Generation: started.Generation}, Complete: false},
 		deadline:  time.Now().Add(time.Second),
 	}
-	projection, failure := newCensusRuntime(runtime).acquire(context.Background(), result)
+	projection, failure, _ := newCensusRuntime(runtime).acquire(context.Background(), result)
 	if failure == nil || failure.stage != censusStageDiscovery || failure.code != censusCodeDiscoveryFailed || len(projection.Constituents) != 0 {
 		t.Fatalf("ASSERT_MCP_CENSUS_INCOMPLETE_DISCOVERY_CLASSIFIED_NO_PROJECTION: projection=%+v failure=%+v", projection, failure)
 	}

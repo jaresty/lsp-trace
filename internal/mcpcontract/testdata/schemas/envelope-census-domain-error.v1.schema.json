@@ -22,7 +22,8 @@
         "stage": {"enum": ["syntax", "config", "discovery", "acquisition", "assembly", "publication"]},
         "code": {"enum": ["INVALID_SYNTAX", "INVALID_CONFIG", "DISCOVERY_FAILED", "ACQUISITION_FAILED", "ASSEMBLY_FAILED", "PUBLICATION_FAILED"]},
         "batch_ordinal": {"type": "integer", "minimum": 1, "maximum": 159},
-        "retry": {"const": true}
+        "retry": {"const": true},
+        "detail": {"type": "string", "minLength": 1, "maxLength": 512}
       },
       "allOf": [
         {"if": {"required": ["batch_ordinal"]}, "then": {"properties": {"stage": {"const": "acquisition"}, "code": {"const": "ACQUISITION_FAILED"}}}},

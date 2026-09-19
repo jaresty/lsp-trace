@@ -28,7 +28,7 @@ func TestPublishCensusProjectionCopiesBytesAndPreservesCommittedReceipt(t *testi
 		cancel()
 		return captureset.PublicationResult{Receipt: want, Err: errors.New("ignored after receipt")}
 	})
-	got, failure := publishCensusProjectionWith(ctx, projection, publisher)
+	got, failure, _ := publishCensusProjectionWith(ctx, projection, publisher)
 	if failure != nil || got != want || string(projection.Constituents[0].Raw) != "exact" || ctx.Err() == nil {
 		t.Fatalf("ASSERT_MCP_CENSUS_COMMITTED_RECEIPT_SURVIVES_DEGRADATION: receipt=%+v failure=%+v raw=%q err=%v", got, failure, projection.Constituents[0].Raw, ctx.Err())
 	}
@@ -38,15 +38,15 @@ func TestPublishCensusProjectionFailsBeforeReceipt(t *testing.T) {
 	publisher := censusProjectionPublisherFunc(func(captureset.Manifest, [][]byte, captureset.ExactBytesAuthority) captureset.PublicationResult {
 		return captureset.PublicationResult{Err: errors.New("precommit")}
 	})
-	if receipt, failure := publishCensusProjectionWith(context.Background(), censusacquisition.Projection{}, publisher); receipt != nil || failure == nil || failure.stage != censusStagePublication || failure.code != censusCodePublicationFailed {
+	if receipt, failure, _ := publishCensusProjectionWith(context.Background(), censusacquisition.Projection{}, publisher); receipt != nil || failure == nil || failure.stage != censusStagePublication || failure.code != censusCodePublicationFailed {
 		t.Fatalf("ASSERT_MCP_CENSUS_PRECOMMIT_PUBLICATION_FAILURE: receipt=%+v failure=%+v", receipt, failure)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if receipt, failure := publishCensusProjectionWith(ctx, censusacquisition.Projection{}, publisher); receipt != nil || failure == nil {
+	if receipt, failure, _ := publishCensusProjectionWith(ctx, censusacquisition.Projection{}, publisher); receipt != nil || failure == nil {
 		t.Fatalf("ASSERT_MCP_CENSUS_CANCEL_BEFORE_PUBLICATION: receipt=%+v failure=%+v", receipt, failure)
 	}
-	if receipt, failure := publishCensusProjection(context.Background(), operation.Request{}, censusacquisition.Projection{}); receipt != nil || failure == nil {
+	if receipt, failure, _ := publishCensusProjection(context.Background(), operation.Request{}, censusacquisition.Projection{}); receipt != nil || failure == nil {
 		t.Fatalf("ASSERT_MCP_CENSUS_HOST_ROOT_REQUIRED: receipt=%+v failure=%+v", receipt, failure)
 	}
 }

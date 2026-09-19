@@ -236,7 +236,7 @@ func TestCensusExecutorConstructionBoundary(t *testing.T) {
 
 func TestCensusExecutorExactAliasGenerationSuccess(t *testing.T) {
 	runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
-	admitted, failure := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation))
+	admitted, failure, _ := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation))
 	if failure != nil || admitted.sessionID != started.SessionID || admitted.generation != started.Generation || admitted.workspace == "" || admitted.positionEncoding != "utf-16" {
 		t.Fatalf("ASSERT_CENSUS_EXACT_ALIAS_GENERATION_ADMITTED: admitted=%+v failure=%+v", admitted, failure)
 	}
@@ -252,7 +252,7 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 			"zero generation": []byte(`{"session_id":"project","generation":0,"sources":["."]}`),
 		} {
 			t.Run(name, func(t *testing.T) {
-				_, failure := newCensusExecutor(runtime).execute(context.Background(), raw)
+				_, failure, _ := newCensusExecutor(runtime).execute(context.Background(), raw)
 				assertCensusFailure(t, failure, censusStageConfig, censusCodeInvalidConfig)
 			})
 		}
@@ -277,16 +277,16 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			runtime, _, started := censusRuntimeFixture(t, test.options)
-			_, failure := newCensusExecutor(runtime).execute(context.Background(), censusRequest(test.alias, test.generation(started)))
+			_, failure, _ := newCensusExecutor(runtime).execute(context.Background(), censusRequest(test.alias, test.generation(started)))
 			assertCensusFailure(t, failure, test.stage, test.code)
 		})
 	}
 
 	t.Run("generation conversion boundary", func(t *testing.T) {
 		runtime, _, _ := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
-		_, maximumFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775807,"sources":["."]}`))
+		_, maximumFailure, _ := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775807,"sources":["."]}`))
 		assertCensusFailure(t, maximumFailure, censusStageAcquisition, censusCodeAcquisitionFailed)
-		_, overflowFailure := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775808,"sources":["."]}`))
+		_, overflowFailure, _ := newCensusExecutor(runtime).execute(context.Background(), []byte(`{"session_id":"project","generation":9223372036854775808,"sources":["."]}`))
 		assertCensusFailure(t, overflowFailure, censusStageConfig, censusCodeInvalidConfig)
 		if math.MaxInt64 <= 0 {
 			t.Fatal("ASSERT_CENSUS_GENERATION_MAX_INT64_PLATFORM")
@@ -297,7 +297,7 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 		base := t.TempDir()
 		requested := filepath.Join(base, "parent", "..", "workspace")
 		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{workspace: requested, ready: true, documentSymbolSupport: true, callHierarchySupport: true})
-		admitted, failure := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation))
+		admitted, failure, _ := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation))
 		if failure != nil || admitted.workspace != filepath.Clean(requested) || !filepath.IsAbs(admitted.workspace) || strings.TrimSpace(admitted.workspace) == "" {
 			t.Fatalf("ASSERT_CENSUS_CANONICAL_ABSOLUTE_WORKSPACE: requested=%q admitted=%+v failure=%+v", requested, admitted, failure)
 		}
@@ -307,7 +307,7 @@ func TestCensusExecutorAdmissionMatrix(t *testing.T) {
 		runtime, _, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, failure := newCensusExecutor(runtime).execute(ctx, censusRequest("project", started.Generation))
+		_, failure, _ := newCensusExecutor(runtime).execute(ctx, censusRequest("project", started.Generation))
 		assertCensusFailure(t, failure, censusStageAcquisition, censusCodeAcquisitionFailed)
 	})
 }
@@ -316,7 +316,7 @@ func TestCensusExecutorHasNoRuntimeSideEffects(t *testing.T) {
 	runtime, starter, started := censusRuntimeFixture(t, censusRuntimeOptions{ready: true, documentSymbolSupport: true, callHierarchySupport: true})
 	beforeCensus := runtime.Census()
 	beforeStarts, beforeMethods, beforeTeardown, beforeClose := starter.snapshot()
-	if _, failure := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation)); failure != nil {
+	if _, failure, _ := newCensusExecutor(runtime).execute(context.Background(), censusRequest("project", started.Generation)); failure != nil {
 		t.Fatalf("ASSERT_CENSUS_SIDE_EFFECT_FIXTURE_ADMITTED: %+v", failure)
 	}
 	afterCensus := runtime.Census()
@@ -334,7 +334,7 @@ func TestCensusExecutorFailuresAreTypedAndPrivacySafe(t *testing.T) {
 		[]byte(`{"session_id":"missing","generation":1,"sources":["."]}`),
 		[]byte(`{"session_id":"project","generation":0,"sources":["."]}`),
 	} {
-		_, failure := newCensusExecutor(runtime).execute(context.Background(), raw)
+		_, failure, _ := newCensusExecutor(runtime).execute(context.Background(), raw)
 		failures = append(failures, failure)
 	}
 	assertCensusFailure(t, failures[0], censusStageAcquisition, censusCodeAcquisitionFailed)

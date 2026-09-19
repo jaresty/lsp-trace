@@ -35,6 +35,17 @@ type Diagnostic struct {
 	Code          Code   `json:"code"`
 	BatchOrdinal  *int   `json:"batch_ordinal,omitempty"`
 	Retry         bool   `json:"retry"`
+	// Detail is an optional, human-readable, non-authoritative explanation of
+	// which specific check produced the failure. It never changes the stage or
+	// code contract; it exists so an opaque stage code (for example
+	// INVALID_CONFIG) can name its actionable cause. Omitted when empty.
+	Detail string `json:"detail,omitempty"`
+}
+
+// WithDetail returns a copy of d annotated with an actionable failure reason.
+func (d Diagnostic) WithDetail(detail string) Diagnostic {
+	d.Detail = detail
+	return d
 }
 
 func NewDiagnostic(stage Stage, batchOrdinal *int) (Diagnostic, error) {

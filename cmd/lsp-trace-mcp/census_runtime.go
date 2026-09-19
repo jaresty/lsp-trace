@@ -105,7 +105,7 @@ type censusRuntimeFailure = censusAdmissionFailure
 
 type censusRuntime struct {
 	runtime *hostSelectorRuntime
-	admit   func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure)
+	admit   func(context.Context, []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason)
 }
 
 func newCensusRuntime(runtime *hostSelectorRuntime) *censusRuntime {
@@ -119,16 +119,16 @@ func executeCensusPlannedBatch(ctx context.Context, runtime *hostSelectorRuntime
 	return acquisitionorchestration.ExecutePlannedBatch(ctx, runtime.Manager, acquisitionorchestration.PlannedBatchRequest{SessionID: admitted.sessionID, Generation: admitted.generation, RequestID: requestID, Manifest: manifest, CanonicalSeedsV2: append([]byte(nil), canonicalSeedsV2...)})
 }
 
-func (r *censusRuntime) execute(parent context.Context, request operation.Request) (censusRuntimeResult, *censusRuntimeFailure) {
+func (r *censusRuntime) execute(parent context.Context, request operation.Request) (censusRuntimeResult, *censusRuntimeFailure, censusFailureReason) {
 	if r == nil || r.admit == nil {
-		return censusRuntimeResult{}, censusConfigFailure()
+		return censusRuntimeResult{}, censusConfigFailure(), reasonRuntimeUnprovisioned
 	}
-	admitted, failure := r.admit(parent, append([]byte(nil), request.Input...))
+	admitted, failure, reason := r.admit(parent, append([]byte(nil), request.Input...))
 	if failure != nil {
-		return censusRuntimeResult{}, failure
+		return censusRuntimeResult{}, failure, reason
 	}
 	if request.PublicationRoot == nil || r.runtime == nil || r.runtime.Manager == nil {
-		return censusRuntimeResult{}, censusConfigFailure()
+		return censusRuntimeResult{}, censusConfigFailure(), reasonPublicationRootRequired
 	}
 	options := cloneCensusRuntimeConfig(admitted.options)
 	deadline := effectiveCensusDeadline(parent, time.Now().Add(time.Duration(options.timeoutMS)*time.Millisecond))
@@ -136,9 +136,9 @@ func (r *censusRuntime) execute(parent context.Context, request operation.Reques
 	defer cancel()
 	discovery, err := censusRuntimeDiscover(ctx, r.runtime.Manager, admitted, options)
 	if err != nil {
-		return censusRuntimeResult{}, censusDiscoveryFailure()
+		return censusRuntimeResult{}, censusDiscoveryFailure(), reasonDiscoveryFailed
 	}
-	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil
+	return censusRuntimeResult{admitted: admitted, options: cloneCensusRuntimeConfig(options), discovery: discovery, deadline: deadline}, nil, reasonNone
 }
 
 func effectiveCensusDeadline(parent context.Context, configured time.Time) time.Time {
@@ -155,9 +155,9 @@ func censusRuntimeAcquisitionLimits(options censusRuntimeConfig) acquisitionops.
 	return acquisitionops.Limits{MaxNodes: &maxNodes, MaxRequests: &maxRequests, MaxEvidenceBytes: &maxEvidenceBytes, MaxPathWork: &maxPathWork, TimeoutMS: &timeoutMS, RequestTimeoutMS: &requestTimeoutMS, MaxResponseBytes: &maxResponseBytes, MaxMessages: &maxMessages}
 }
 
-func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure) {
+func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResult) (censusacquisition.Projection, *censusRuntimeFailure, censusFailureReason) {
 	if r == nil || r.runtime == nil || r.runtime.Manager == nil || result.admitted.sessionID == "" || result.admitted.generation == 0 || result.deadline.IsZero() {
-		return censusacquisition.Projection{}, censusConfigFailure()
+		return censusacquisition.Projection{}, censusConfigFailure(), reasonRuntimeUnprovisioned
 	}
 	options := cloneCensusRuntimeConfig(result.options)
 	ctx, cancel := context.WithDeadline(parent, result.deadline)
@@ -170,12 +170,12 @@ func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResu
 	}
 	projection, err := core.Run(ctx, censusacquisition.SessionIdentity{SessionID: result.admitted.sessionID, Generation: result.admitted.generation})
 	if errors.Is(err, censusacquisition.ErrDiscoveryIncomplete) {
-		return censusacquisition.Projection{}, censusDiscoveryFailure()
+		return censusacquisition.Projection{}, censusDiscoveryFailure(), reasonDiscoveryIncomplete
 	}
 	if err != nil {
-		return censusacquisition.Projection{}, censusAcquisitionFailure()
+		return censusacquisition.Projection{}, censusAcquisitionFailure(), reasonAcquisitionFailed
 	}
-	return projection, nil
+	return projection, nil, reasonNone
 }
 
 type censusRuntimeEnumerator struct {
