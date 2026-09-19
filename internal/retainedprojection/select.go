@@ -148,6 +148,18 @@ type RetainedCustodyBinding struct {
 	ResolverKind    string `json:"resolver_kind"`
 }
 
+// DisplayKeys returns the (graph_subject_id, logical_source_id) keys of the
+// admitted artifact's display bindings, in artifact order. It exposes only the
+// identity pair — no ranges, provenance, or bytes — so callers can map a
+// selected node to its logical source without reaching into the artifact.
+func (a Admitted) DisplayKeys() []Key {
+	keys := make([]Key, 0, len(a.artifact.DisplayBindings))
+	for _, binding := range a.artifact.DisplayBindings {
+		keys = append(keys, Key{GraphSubjectID: binding.GraphSubjectID, LogicalSourceID: binding.LogicalSourceID})
+	}
+	return keys
+}
+
 func (a Admitted) CustodyBinding(plan Plan) (RetainedCustodyBinding, error) {
 	zero := RetainedCustodyBinding{}
 	if len(a.raw) == 0 || len(a.parent.GraphV5Bytes) == 0 || a.parent.GraphV5Digest == "" {

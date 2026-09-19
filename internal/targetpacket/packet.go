@@ -10,9 +10,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 
 	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/retainedprojection"
+	"lsp-trace/internal/sourceprojection"
 )
 
 // Code is a closed, typed outcome discriminator. Every failure path returns a
@@ -132,6 +134,11 @@ func Build(req Request) (Result, error) {
 		return fail(CodeInvalidRequest, "a non-nil source lookup is required")
 	}
 
+	// Property [5]: bounded assembly requires a positive response bound.
+	if req.MaxBytes <= 0 {
+		return fail(CodeInvalidRequest, "a positive MaxBytes response bound is required")
+	}
+
 	// Index the separately supplied retained V2 custody by constituent, failing
 	// closed on duplicates (Property [2]: duplicate custody fails closed).
 	custodyByConstituent := make(map[string]SnapshotCustody, len(req.Custody))
@@ -149,14 +156,60 @@ func Build(req Request) (Result, error) {
 			// Property [2]: missing custody fails closed.
 			return fail(CodeCustodyMismatch, "no custody for constituent "+n.ConstituentIdentity)
 		}
-		// Property [2]: custody GraphDigest/GraphByteLength must exactly equal
-		// the constituent's immutable Graph V5 identity, reverified from bytes.
-		sum := sha256.Sum256(custody.Raw)
-		recomputed := "sha256:" + hex.EncodeToString(sum[:])
-		if custody.GraphDigest != recomputed || custody.GraphByteLength != uint64(len(custody.Raw)) {
-			return fail(CodeCustodyMismatch, "custody graph identity mismatch for "+n.ConstituentIdentity)
+
+		// Property [2]/[4]: admit the supplied V2 snapshot through the retained
+		// projection code path (validates the artifact and its embedded Graph V5
+		// parent). Arbitrary or wrong-graph bytes fail closed here.
+		admitted, err := retainedprojection.Admit(custody.Raw)
+		if err != nil {
+			return fail(CodeCustodyMismatch, "custody artifact did not admit for "+n.ConstituentIdentity)
 		}
 
+		// Property [3]: the selected node maps within the admitted snapshot to
+		// exactly one (graph_subject_id, logical_source_id) display binding. Zero
+		// or multiple fail closed without lexical choice.
+		key, mapErr := mapSelectedNode(admitted, n.SelectedNode)
+		if mapErr != nil {
+			return fail(CodeLogicalSource, mapErr.Error())
+		}
+
+		plan, err := retainedprojection.Select(admitted, retainedprojection.Request{Target: key, Selections: []retainedprojection.Key{key}})
+		if err != nil {
+			return fail(CodeLogicalSource, "selection failed for "+n.SelectedNode)
+		}
+
+		// Property [2]: bind custody to the immutable Graph V5 identity via the
+		// retained projection code (fails closed on forged/mutated/wrong-graph).
+		binding, err := admitted.CustodyBinding(plan)
+		if err != nil {
+			return fail(CodeCustodyMismatch, "custody binding failed for "+n.ConstituentIdentity)
+		}
+		// Property [2]: the separately-supplied custody digest/length must match
+		// the admitted artifact's Graph V5 identity.
+		if custody.GraphDigest != binding.GraphDigest || custody.GraphByteLength != binding.GraphByteLength {
+			return fail(CodeCustodyMismatch, "supplied custody graph identity mismatch for "+n.ConstituentIdentity)
+		}
+
+		// Property [4]: source bodies resolve only through the process-supplied
+		// lookup; identity/length/SHA-256 are reverified by Resolve.
+		resolved, err := retainedprojection.Resolve(plan, req.Lookup, retainedprojection.ResolveLimits{
+			MaxDistinctObjects: 64, MaxUniqueSourceBytes: uint64(req.MaxBytes), MaxLogicalSelections: 64,
+		})
+		if err != nil {
+			return fail(CodeResolveFailed, "source resolution failed for "+n.SelectedNode)
+		}
+
+		// Property [5]/[6]: bounded, typed V2 assembly with the retained custody.
+		policy := sourceprojection.Policy{
+			PolicyID: retainedPolicyID, BodyRequested: true,
+			MaxBytes: req.MaxBytes, MaxRanges: 1024, MaxObjects: 64, MaxWork: 1 << 20, EnforceLimits: true,
+		}
+		wire, err := retainedprojection.AssembleV2Bounded(resolved, policy, binding, retainedPolicyID, req.MaxBytes)
+		if err != nil {
+			return fail(CodeAssemblyFailed, "bounded assembly failed for "+n.SelectedNode)
+		}
+
+		body, bodyDigest := resolvedBody(resolved, key)
 		p := Packet{
 			// Property [1]: bind exactly one nomination, all fields, authority 0,
 			// accepted false.
@@ -176,16 +229,57 @@ func Build(req Request) (Result, error) {
 			Authority:           0,
 			Accepted:            false,
 
-			GraphDigest:     custody.GraphDigest,
-			GraphByteLength: custody.GraphByteLength,
-			ResolverKind:    "IMMUTABLE_SOURCE_OBJECT_IDENTITY_V1",
-			LogicalSourceID: n.SelectedNode,
-			Completeness:    n.SourceGraphComplete,
+			GraphDigest:     binding.GraphDigest,
+			GraphByteLength: binding.GraphByteLength,
+			CaptureID:       binding.CaptureID,
+			ManifestID:      binding.ManifestID,
+			ResolverKind:    binding.ResolverKind,
+			PrivacyPolicyID: wire.RequestPolicyID,
+			LogicalSourceID: key.LogicalSourceID,
+			BodyDigest:      bodyDigest,
+			Body:            body,
+			Completeness:    wire.SourceGraphComplete,
 		}
 		p.PacketID = packetIdentity(p)
 		packets = append(packets, p)
 	}
 	return Result{State: StatePrepared, Packets: packets}, nil
+}
+
+const retainedPolicyID = "targetpacket.retained.v1"
+
+// mapSelectedNode finds the single display binding whose graph subject equals
+// the selected node and returns its (graph_subject_id, logical_source_id) key.
+// Zero or multiple compatible bindings fail closed (Property [3]).
+func mapSelectedNode(admitted retainedprojection.Admitted, selectedNode string) (retainedprojection.Key, error) {
+	var found retainedprojection.Key
+	matches := 0
+	for _, key := range admitted.DisplayKeys() {
+		if key.GraphSubjectID == selectedNode {
+			found = key
+			matches++
+		}
+	}
+	if matches == 0 {
+		return retainedprojection.Key{}, errors.New("selected node maps to no logical source: " + selectedNode)
+	}
+	if matches > 1 {
+		return retainedprojection.Key{}, errors.New("selected node maps to multiple logical sources: " + selectedNode)
+	}
+	return found, nil
+}
+
+// resolvedBody returns the resolved source bytes and their sha256 digest for the
+// selection matching key, if present.
+func resolvedBody(resolved retainedprojection.ResolveResult, key retainedprojection.Key) ([]byte, string) {
+	for _, sel := range resolved.Selections {
+		if sel.Selection.Key == key {
+			body := append([]byte(nil), sel.Bytes...)
+			sum := sha256.Sum256(body)
+			return body, "sha256:" + hex.EncodeToString(sum[:])
+		}
+	}
+	return nil, ""
 }
 
 // packetIdentity is the deterministic SHA-256 over the covered packet fields

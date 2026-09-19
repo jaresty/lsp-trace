@@ -1,24 +1,18 @@
 package targetpacket
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"reflect"
 	"testing"
 
 	"lsp-trace/internal/censusprogramc"
-	"lsp-trace/internal/sourceobject"
 )
 
 // --- fixtures -------------------------------------------------------------
-
-// graphBytes is a deterministic fake Graph V5 body for one constituent.
-var graphBytes = []byte("graph-v5-constituent-bytes")
-
-func graphDigest(b []byte) string {
-	sum := sha256.Sum256(b)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
+//
+// sampleRequest and sampleNomination build a Request backed by a genuine
+// serialized V2 snapshot artifact (see validV2Artifact in resolve_test.go), so
+// every property test drives the real Admit -> Select -> CustodyBinding ->
+// Resolve -> AssembleV2Bounded pipeline rather than a fake custody stub.
 
 func sampleNomination() censusprogramc.Representative {
 	return censusprogramc.Representative{
@@ -43,40 +37,23 @@ func sampleNomination() censusprogramc.Representative {
 	}
 }
 
-func sampleCustody() SnapshotCustody {
-	return SnapshotCustody{
-		ConstituentIdentity: "constituent-1",
-		GraphDigest:         graphDigest(graphBytes),
-		GraphByteLength:     uint64(len(graphBytes)),
-		Raw:                 append([]byte(nil), graphBytes...),
-	}
-}
-
-// stubLookup returns a fixed object body for any identity; the wrong-bytes
-// perturbation is exercised by wrongLookup.
-type stubLookup struct{ obj sourceobject.Object }
-
-func (s stubLookup) Get(sourceobject.Identity) (sourceobject.Object, error) { return s.obj, nil }
-
-func sampleRequest() Request {
-	return Request{
-		CensusID:    "census-1",
-		Nominations: []censusprogramc.Representative{sampleNomination()},
-		Custody:     []SnapshotCustody{sampleCustody()},
-		Lookup:      stubLookup{},
-		MaxBytes:    1 << 20,
-	}
+// sampleRequest returns a Request backed by a genuine V2 snapshot artifact.
+func sampleRequest(t *testing.T) Request {
+	t.Helper()
+	req, _, _ := resolvingRequest(t)
+	return req
 }
 
 // --- Property [1]: exact one-nomination binding, authority 0, accepted=false
 
 func TestBuildBindsExactlyOneNominationWithAllFields(t *testing.T) {
-	res, err := Build(sampleRequest())
+	req := sampleRequest(t)
+	res, err := Build(req)
 	if err != nil || res.State != StatePrepared || len(res.Packets) != 1 {
 		t.Fatalf("ASSERT_P1_ONE_PACKET_PREPARED: state=%q packets=%d err=%v", res.State, len(res.Packets), err)
 	}
 	p := res.Packets[0]
-	n := sampleNomination()
+	n := req.Nominations[0]
 	if p.CensusID != n.CensusID || p.BatchID != n.BatchID || p.ConstituentIdentity != n.ConstituentIdentity ||
 		p.ConstituentOrdinal != n.ConstituentOrdinal || p.ExecutionBundleID != n.ExecutionBundleID ||
 		p.SeedLabel != n.SeedLabel || p.SeedPosition != n.SeedAt || p.CommunityIdentity != n.CommunityIdentity ||
@@ -92,18 +69,19 @@ func TestBuildBindsExactlyOneNominationWithAllFields(t *testing.T) {
 // --- Property [2]: custody digest/length == Graph V5; wrong-graph fails closed
 
 func TestBuildCustodyMatchesGraphV5(t *testing.T) {
-	res, err := Build(sampleRequest())
+	req := sampleRequest(t)
+	res, err := Build(req)
 	if err != nil || len(res.Packets) != 1 {
 		t.Fatalf("ASSERT_P2_PREPARED: err=%v packets=%d", err, len(res.Packets))
 	}
 	p := res.Packets[0]
-	if p.GraphDigest != graphDigest(graphBytes) || p.GraphByteLength != uint64(len(graphBytes)) {
+	if p.GraphDigest == "" || p.GraphDigest != req.Custody[0].GraphDigest || p.GraphByteLength != req.Custody[0].GraphByteLength {
 		t.Fatalf("ASSERT_P2_CUSTODY_BINDS_GRAPH_V5: digest=%q len=%d", p.GraphDigest, p.GraphByteLength)
 	}
 }
 
 func TestBuildWrongGraphCustodyFailsClosed(t *testing.T) {
-	req := sampleRequest()
+	req := sampleRequest(t)
 	req.Custody[0].GraphDigest = "sha256:deadbeef" // wrong-graph
 	res, err := Build(req)
 	if err == nil || res.State != StateFailed {
@@ -112,7 +90,7 @@ func TestBuildWrongGraphCustodyFailsClosed(t *testing.T) {
 }
 
 func TestBuildMissingCustodyFailsClosed(t *testing.T) {
-	req := sampleRequest()
+	req := sampleRequest(t)
 	req.Custody = nil // missing custody for the nomination's constituent
 	res, err := Build(req)
 	if err == nil || res.State != StateFailed {
@@ -123,7 +101,7 @@ func TestBuildMissingCustodyFailsClosed(t *testing.T) {
 // --- Property [4]: lookup-only source resolution; nil lookup fails closed
 
 func TestBuildNilLookupFailsClosed(t *testing.T) {
-	req := sampleRequest()
+	req := sampleRequest(t)
 	req.Lookup = nil
 	res, err := Build(req)
 	if err == nil || res.State != StateFailed {
@@ -134,8 +112,9 @@ func TestBuildNilLookupFailsClosed(t *testing.T) {
 // --- Property [6]: deterministic packet identity over covered fields
 
 func TestBuildPacketIDIsDeterministic(t *testing.T) {
-	a, errA := Build(sampleRequest())
-	b, errB := Build(sampleRequest())
+	req := sampleRequest(t) // same input built once, resolved twice
+	a, errA := Build(req)
+	b, errB := Build(req)
 	if errA != nil || errB != nil || len(a.Packets) != 1 || len(b.Packets) != 1 {
 		t.Fatalf("ASSERT_P6_TWO_PREPARED: errA=%v errB=%v", errA, errB)
 	}
@@ -145,12 +124,15 @@ func TestBuildPacketIDIsDeterministic(t *testing.T) {
 }
 
 func TestBuildPacketIDChangesWithField(t *testing.T) {
-	base, _ := Build(sampleRequest())
-	req := sampleRequest()
-	req.Nominations[0].SelectedNode = "node-99" // covered field perturbation
-	other, err := Build(req)
-	if err != nil || len(base.Packets) != 1 || len(other.Packets) != 1 {
+	req := sampleRequest(t)
+	base, err := Build(req)
+	if err != nil || len(base.Packets) != 1 {
 		t.Fatalf("ASSERT_P6_PREPARED: err=%v", err)
+	}
+	req.Nominations[0].BatchID = "batch-CHANGED" // covered field perturbation (valid node retained)
+	other, err := Build(req)
+	if err != nil || len(other.Packets) != 1 {
+		t.Fatalf("ASSERT_P6_PREPARED_2: err=%v", err)
 	}
 	if base.Packets[0].PacketID == other.Packets[0].PacketID {
 		t.Fatalf("ASSERT_P6_ID_COVERS_FIELDS: id unchanged after field change: %q", base.Packets[0].PacketID)
@@ -160,7 +142,7 @@ func TestBuildPacketIDChangesWithField(t *testing.T) {
 // --- Property [7]: EMPTY / UNRESOLVED / PREPARED / FAILED are distinct
 
 func TestBuildEmptyWhenNoNominations(t *testing.T) {
-	req := sampleRequest()
+	req := sampleRequest(t)
 	req.Nominations = nil
 	res, err := Build(req)
 	if err != nil || res.State != StateEmpty || len(res.Packets) != 0 {
@@ -172,8 +154,6 @@ func TestBuildUnresolvedNominationYieldsNoPacket(t *testing.T) {
 	req := Request{
 		CensusID:   "census-1",
 		Unresolved: []censusprogramc.Representative{sampleNomination()},
-		Custody:    []SnapshotCustody{sampleCustody()},
-		Lookup:     stubLookup{},
 		MaxBytes:   1 << 20,
 	}
 	res, err := Build(req)
@@ -185,7 +165,7 @@ func TestBuildUnresolvedNominationYieldsNoPacket(t *testing.T) {
 // --- Property [8]: defensive cloning; mutating an input does not affect output
 
 func TestBuildDefensivelyClonesInputs(t *testing.T) {
-	req := sampleRequest()
+	req := sampleRequest(t)
 	res, err := Build(req)
 	if err != nil || len(res.Packets) != 1 {
 		t.Fatalf("ASSERT_P8_PREPARED: err=%v", err)
@@ -201,6 +181,7 @@ func TestBuildDefensivelyClonesInputs(t *testing.T) {
 // --- Property [9]: existing census result unchanged across Build (success/fail)
 
 func TestBuildDoesNotMutateCensusResult(t *testing.T) {
+	req := sampleRequest(t)
 	result := censusprogramc.Result{
 		CensusID: "census-1",
 		Candidates: []censusprogramc.Candidate{
@@ -208,7 +189,7 @@ func TestBuildDoesNotMutateCensusResult(t *testing.T) {
 		},
 		Representatives: censusprogramc.RepresentativeSelection{
 			State:       "SELECTED",
-			Nominations: []censusprogramc.Representative{sampleNomination()},
+			Nominations: req.Nominations,
 		},
 	}
 	snapshot := censusprogramc.Result{
@@ -216,8 +197,6 @@ func TestBuildDoesNotMutateCensusResult(t *testing.T) {
 		Candidates:      append([]censusprogramc.Candidate(nil), result.Candidates...),
 		Representatives: result.Representatives,
 	}
-	req := sampleRequest()
-	req.Nominations = result.Representatives.Nominations
 	res, err := Build(req)
 	// Bind the guard to real work: a no-op Build must not pass this test, so we
 	// require a prepared packet AND the census result unchanged.
