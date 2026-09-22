@@ -147,7 +147,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 			prepared.Items = []lsp.CallHierarchyItem{{Name: symbol.Name, Kind: symbol.Kind, URI: request.Target.URI, Range: symbol.Range, SelectionRange: symbol.SelectionRange}}
 		} else {
 			accounting := counted.snapshot()
-			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
+			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, counted.targetResourceFailureObserved(), runtime, sessionID, request.Generation), accounting)
 			failure.TargetDiagnostic = preparedTargetDiagnostic(prepared)
 			return Result{}, failure
 		}
@@ -156,7 +156,7 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		prepared, targetFailure = incomingops.ResolvePreparedTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
 		if targetFailure != nil {
 			accounting := counted.snapshot()
-			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
+			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, counted.targetResourceFailureObserved(), runtime, sessionID, request.Generation), accounting)
 			failure.TargetDiagnostic = preparedTargetDiagnostic(prepared)
 			return Result{}, failure
 		}
@@ -493,7 +493,7 @@ func preparedTargetDiagnostic(prepared incomingops.PreparedTarget) *TargetDiagno
 	return diagnostic
 }
 
-func targetResolutionState(ctx context.Context, code string, accounting Accounting, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
+func targetResolutionState(ctx context.Context, code string, accounting Accounting, targetResourceFailure bool, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
 	switch code {
 	case "DOCUMENT_SYMBOL_ABSENT", "ENUMERATION_TRUNCATED":
 		return StateTargetNotFound
@@ -502,6 +502,21 @@ func targetResolutionState(ctx context.Context, code string, accounting Accounti
 	case "DOCUMENT_SYMBOL_UNSUPPORTED":
 		return StateUnsupported
 	default:
+		// Context cancellation/deadline retains precedence. Metadata remains
+		// authoritative for stale or missing generations; typed resource evidence
+		// wins only after metadata succeeds or reports LifecycleConflict.
+		if ctx.Err() != nil {
+			return terminalForContext(ctx)
+		}
+		if _, failure := runtime.Metadata(sessionID, generation); failure != "" {
+			if targetResourceFailure && failure == session.LifecycleConflict {
+				return StateResourceLimit
+			}
+			return terminalForSessionFailure(failure)
+		}
+		if targetResourceFailure {
+			return StateResourceLimit
+		}
 		state := traversalState(ctx, accounting, runtime, sessionID, generation)
 		switch state {
 		case StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged:

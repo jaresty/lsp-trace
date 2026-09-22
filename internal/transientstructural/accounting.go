@@ -15,6 +15,9 @@ type countingRuntime struct {
 	manager *sessionruntime.Manager
 	mu      sync.Mutex
 	account Accounting
+	// targetResourceExhausted records only the current execution's failing
+	// document-symbol request; it is intentionally private and non-sticky.
+	targetResourceExhausted bool
 }
 
 func (r *countingRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
@@ -38,6 +41,9 @@ func (r *countingRuntime) RoundTrip(ctx context.Context, request sessionruntime.
 	result := r.manager.RoundTrip(ctx, request)
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if request.Method == "textDocument/documentSymbol" && result.Failure == session.ResourceExhausted {
+		r.targetResourceExhausted = true
+	}
 	if result.Failure == "" && result.ServerError == nil {
 		r.account.Requests.Succeeded++
 		if frontier {
@@ -77,6 +83,12 @@ func (r *countingRuntime) RoundTrip(ctx context.Context, request sessionruntime.
 		}
 	}
 	return result
+}
+
+func (r *countingRuntime) targetResourceFailureObserved() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.targetResourceExhausted
 }
 
 func (r *countingRuntime) snapshot() Accounting {
