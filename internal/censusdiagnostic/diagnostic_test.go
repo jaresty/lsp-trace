@@ -116,6 +116,41 @@ func TestRecorderBoundsConcurrencyAndStrictLedger(t *testing.T) {
 	}
 }
 
+func TestValidationEvidenceRoundTripAndClosedEnums(t *testing.T) {
+	path := testLedger(t, "validation.ndjson")
+	recorder, err := NewRecorder(path, 4096, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := Record{Fingerprint: "sha256:abc", Category: "INVALID_INPUT", Ordinal: func() *int { n := 6; return &n }(), FailedField: "envelope", FailedInvariant: "canonical_input_decode"}
+	if err := recorder.Record(record); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadLast(path)
+	if err != nil || got.FailedField != record.FailedField || got.FailedInvariant != record.FailedInvariant || got.Ordinal == nil || *got.Ordinal != 6 {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+
+	inputIdentity := Record{Fingerprint: "sha256:abc", Category: "INVALID_INPUT", FailedField: "input_identity", FailedInvariant: "NULL_MEMBER_FORBIDDEN"}
+	if err := recorder.Record(inputIdentity); err != nil {
+		t.Fatalf("Record rejected finite input_identity evidence: %v", err)
+	}
+	got, err = ReadLast(path)
+	if err != nil || got.FailedField != inputIdentity.FailedField || got.FailedInvariant != inputIdentity.FailedInvariant {
+		t.Fatalf("input_identity replay got=%+v err=%v", got, err)
+	}
+
+	for _, invalid := range []Record{
+		{Fingerprint: "x", Category: "INVALID_INPUT", FailedField: "secret", FailedInvariant: "canonical_input_decode"},
+		{Fingerprint: "x", Category: "INVALID_INPUT", FailedField: "envelope", FailedInvariant: "secret"},
+		{Fingerprint: "x", Category: "INVALID_INPUT", FailedField: "envelope"},
+	} {
+		if err := recorder.Record(invalid); err == nil {
+			t.Fatalf("accepted invalid evidence %+v", invalid)
+		}
+	}
+}
+
 func TestParseRejectsUnknownFieldsInvalidEvidenceAndCategories(t *testing.T) {
 	cases := []string{
 		`{"fingerprint":"x","category":"ADMISSION","extra":"x"}`,

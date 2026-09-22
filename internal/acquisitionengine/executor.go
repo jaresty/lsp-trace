@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"sync/atomic"
 	"time"
 
@@ -129,13 +130,195 @@ func DecodeManifest(raw []byte, mode operation.Name) (Manifest, error) {
 
 // CanonicalInput closes raw JSON spelling before authority is minted. The same
 // returned bytes must be passed to ExecuteAuthorized.
+type ValidationDiagnostic struct {
+	FailedField     string
+	FailedInvariant string
+	ExpectedCount   *int
+	ObservedCount   *int
+}
+
+const (
+	ValidationFieldInputIdentity = "input_identity"
+	ValidationFieldSeedManifest  = "seed_manifest"
+	ValidationFieldSeedLabel     = "seed_label"
+	ValidationFieldSeedURI       = "seed_uri"
+	ValidationFieldSeedPosition  = "seed_position"
+	ValidationFieldOptions       = "options"
+	ValidationFieldEnvelope      = "envelope"
+
+	ValidationInvariantInputByteLimit      = "INPUT_BYTE_LIMIT"
+	ValidationInvariantDuplicateJSONMember = "DUPLICATE_JSON_MEMBER"
+	ValidationInvariantTopLevelObject      = "TOP_LEVEL_OBJECT_REQUIRED"
+	ValidationInvariantTypedJSONDecode     = "TYPED_JSON_DECODE"
+	ValidationInvariantTrailingContent     = "TRAILING_CONTENT_FORBIDDEN"
+	ValidationInvariantNullMember          = "NULL_MEMBER_FORBIDDEN"
+	ValidationInvariantEmptySelector       = "EMPTY_SELECTOR_FORBIDDEN"
+	ValidationInvariantCanonicalEncode     = "CANONICAL_ENCODE"
+)
+
+type ValidationError struct {
+	Diagnostic ValidationDiagnostic
+	err        error
+}
+
+func (e *ValidationError) Error() string { return e.err.Error() }
+func (e *ValidationError) Unwrap() error { return e.err }
+
 func CanonicalInput(raw []byte) (Input, []byte, error) {
 	var in Input
-	if err := decode(raw, &in); err != nil {
-		return in, nil, err
+	if diagnostic, err := decodeCanonical(raw, &in); err != nil {
+		return in, nil, &ValidationError{Diagnostic: diagnostic, err: err}
 	}
 	canonical, err := json.Marshal(in)
-	return in, canonical, err
+	if err != nil {
+		return in, nil, &ValidationError{Diagnostic: ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantCanonicalEncode}, err: err}
+	}
+	return in, canonical, nil
+}
+
+func decodeCanonical(raw []byte, v any) (ValidationDiagnostic, error) {
+	if len(raw) > MaxInputBytes {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantInputByteLimit}, fmt.Errorf("acquisition input exceeds %d bytes", MaxInputBytes)
+	}
+	scan := json.NewDecoder(bytes.NewReader(raw))
+	var first json.RawMessage
+	if err := scan.Decode(&first); err != nil {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantTypedJSONDecode}, err
+	}
+	if err := strictjson.RejectDuplicates(first); err != nil {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantDuplicateJSONMember}, err
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantTopLevelObject}, fmt.Errorf("object required")
+	}
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.DisallowUnknownFields()
+	if err := d.Decode(v); err != nil {
+		invariant := ValidationInvariantTypedJSONDecode
+		// Retain the historical coarse record for unknown members.
+		if hasUnknownInputMember(valueObject(raw)) {
+			invariant = "canonical_input_decode"
+		}
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: invariant}, err
+	}
+	var trailing json.RawMessage
+	if err := d.Decode(&trailing); err == nil {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantTrailingContent}, fmt.Errorf("one JSON object required")
+	} else if err != io.EOF {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantTypedJSONDecode}, err
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return ValidationDiagnostic{FailedField: ValidationFieldEnvelope, FailedInvariant: ValidationInvariantTypedJSONDecode}, err
+	}
+	if field, empty := canonicalInvalidMember(value); empty {
+		return ValidationDiagnostic{FailedField: field, FailedInvariant: ValidationInvariantEmptySelector}, fmt.Errorf("selector must not be empty when present")
+	}
+	if field, null := canonicalNullMember(value, ValidationFieldEnvelope); null {
+		return ValidationDiagnostic{FailedField: field, FailedInvariant: ValidationInvariantNullMember}, fmt.Errorf("null acquisition member is not permitted")
+	}
+	return ValidationDiagnostic{}, nil
+}
+
+func valueObject(raw []byte) map[string]any {
+	var value map[string]any
+	_ = json.Unmarshal(raw, &value)
+	return value
+}
+
+func hasUnknownInputMember(value map[string]any) bool {
+	for key := range value {
+		switch key {
+		case "session_id", "generation", "seed_manifest", "output_version", "production_v5", "group_by", "group_options", "output_selector":
+		default:
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalField(key, parent string) string {
+	switch key {
+	case "session_id", "generation":
+		return ValidationFieldInputIdentity
+	case "symbol", "language_id":
+		return ValidationFieldSeedLabel
+	case "seed_manifest":
+		return ValidationFieldSeedManifest
+	case "label":
+		return ValidationFieldSeedLabel
+	case "uri":
+		return ValidationFieldSeedURI
+	case "position", "line", "character":
+		return ValidationFieldSeedPosition
+	case "group_options", "options", "seed", "pagerank_top_k", "hub_top_k":
+		return ValidationFieldOptions
+	default:
+		return parent
+	}
+}
+
+func canonicalInvalidMember(value any) (string, bool) {
+	var walk func(any, string) (string, bool)
+	walk = func(v any, field string) (string, bool) {
+		switch x := v.(type) {
+		case map[string]any:
+			keys := make([]string, 0, len(x))
+			for key := range x {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				child := x[key]
+				f := canonicalField(key, field)
+				if (key == "symbol" || key == "language_id") && child == "" {
+					return f, true
+				}
+				if found, ok := walk(child, f); ok {
+					return found, true
+				}
+			}
+		case []any:
+			for _, child := range x {
+				if found, ok := walk(child, field); ok {
+					return found, true
+				}
+			}
+		}
+		return "", false
+	}
+	return walk(value, ValidationFieldEnvelope)
+}
+
+func canonicalNullMember(value any, field string) (string, bool) {
+	var walk func(any, string) (string, bool)
+	walk = func(v any, current string) (string, bool) {
+		if v == nil {
+			return current, true
+		}
+		switch x := v.(type) {
+		case map[string]any:
+			keys := make([]string, 0, len(x))
+			for key := range x {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				if found, ok := walk(x[key], canonicalField(key, current)); ok {
+					return found, true
+				}
+			}
+		case []any:
+			for _, child := range x {
+				if found, ok := walk(child, current); ok {
+					return found, true
+				}
+			}
+		}
+		return "", false
+	}
+	return walk(value, field)
 }
 func decode(raw []byte, v any) error {
 	if len(raw) > MaxInputBytes {

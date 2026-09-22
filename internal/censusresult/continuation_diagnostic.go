@@ -21,12 +21,14 @@ const (
 	ContinuationDescriptorUnavailable  ContinuationCause = "DESCRIPTOR_UNAVAILABLE"
 	ContinuationStopCheckpointMismatch ContinuationCause = "STOP_CHECKPOINT_MISMATCH"
 	ContinuationPublicationFailed      ContinuationCause = "PUBLICATION_FAILED"
+	ContinuationHandoffBuildFailed     ContinuationCause = "HANDOFF_BUILD_FAILED"
 	ContinuationCaptureFailed          ContinuationCause = "CAPTURE_FAILED"
 
 	CodeContinuationHostConstructionFailed ContinuationCode = "CONTINUATION_HOST_CONSTRUCTION_FAILED"
 	CodeContinuationDescriptorUnavailable  ContinuationCode = "CONTINUATION_DESCRIPTOR_UNAVAILABLE"
 	CodeContinuationStopCheckpointMismatch ContinuationCode = "CONTINUATION_STOP_CHECKPOINT_MISMATCH"
 	CodeContinuationPublicationFailed      ContinuationCode = "CONTINUATION_PUBLICATION_FAILED"
+	CodeContinuationPreconditionFailed     ContinuationCode = "CONTINUATION_PRECONDITION_FAILED"
 	CodeContinuationCaptureFailed          ContinuationCode = "CONTINUATION_CAPTURE_FAILED"
 )
 
@@ -189,6 +191,14 @@ func NewContinuationDiagnostic(cause ContinuationCause, ctx ContinuationDiagnost
 		}
 		d.ObservedStage, d.ObservedStatus = ctx.ObservedStage, ctx.ObservedStatus
 		d.ResourceCategory, d.ResourceObserved, d.ResourceLimit = ctx.ResourceCategory, ctx.ResourceObserved, ctx.ResourceLimit
+	case ContinuationHandoffBuildFailed:
+		d.Code = CodeContinuationPreconditionFailed
+		d.Stage = "CONTINUATION_PRECONDITION"
+		d.FailedField = "committed_handoff"
+		d.Invariant = "configured continuation custody must contain a complete committed census handoff"
+		d.RetryAction = "do not retry unchanged; census commit is preserved"
+		d.CallerAction = "provision complete continuation custody, reconnect the project session, and resubmit"
+		d.Guidance = "Provision complete continuation custody, reconnect only this project session, and resubmit from the preserved census commit."
 	case ContinuationPublicationFailed:
 		d.Code = CodeContinuationPublicationFailed
 		d.Stage = "DESCRIPTOR_PUBLICATION"

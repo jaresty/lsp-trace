@@ -237,8 +237,8 @@ func TestFocusedSidecarStates(t *testing.T) {
 	}
 }
 func TestFocusedUnsupported(t *testing.T) {
-	if _, e := HydrateFocused(Input{Artifact: []byte(`{"schema_version":"unsupported.provider.v1"}`)}, DefaultFocusRequest()); e == nil || !strings.Contains(e.Error(), "unsupported") {
-		t.Fatal("ASSERT_UNSUPPORTED: no generic provider family")
+	if _, e := HydrateFocused(Input{Artifact: []byte(`{"schema_version":"unsupported.provider.v1"}`)}, DefaultFocusRequest()); e == nil || !strings.Contains(e.Error(), "SUPPORTED_EVIDENCE_FAMILY_VERSION") || !strings.Contains(e.Error(), "accepted schema versions") {
+		t.Fatalf("ASSERT_UNSUPPORTED: unknown family must fail with supported-family guidance: %v", e)
 	}
 }
 func TestFocusedActualFR20Measurement(t *testing.T) {

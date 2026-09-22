@@ -79,10 +79,46 @@ type handoffWire struct {
 // CommittedHandoff has no exported mutable state. Accessors return defensive copies.
 type CommittedHandoff struct{ wire handoffWire }
 
+type ValidationCause uint8
+
+const (
+	validationCauseUnknown ValidationCause = iota
+	ValidationCauseProjection
+	ValidationCauseWorkspace
+	ValidationCausePositionEncoding
+	ValidationCauseCensusResult
+	ValidationCauseIdentityReconciliation
+	ValidationCausePublicationReconciliation
+	ValidationCauseManifest
+	ValidationCauseCompose
+	ValidationCauseIdentity
+)
+
+type validationError struct {
+	cause ValidationCause
+	msg   string
+	err   error
+}
+
+func (e *validationError) Error() string { return e.msg }
+func (e *validationError) Unwrap() error { return e.err }
+
+func ClassifyValidationCause(err error) ValidationCause {
+	var typed *validationError
+	if errors.As(err, &typed) {
+		return typed.cause
+	}
+	return validationCauseUnknown
+}
+
+func validationFailure(cause ValidationCause, msg string, err error) error {
+	return &validationError{cause: cause, msg: msg, err: err}
+}
+
 func BuildHandoff(in BuildInput) (CommittedHandoff, error) {
 	projection, err := censusacquisition.CloneProjection(in.Projection)
 	if err != nil {
-		return CommittedHandoff{}, fmt.Errorf("projection: %w", err)
+		return CommittedHandoff{}, validationFailure(ValidationCauseProjection, fmt.Sprintf("projection: %s", err), err)
 	}
 	if err := censusresult.Validate(in.Result); err != nil {
 		return CommittedHandoff{}, fmt.Errorf("census result: %w", err)
@@ -161,25 +197,25 @@ func (h CommittedHandoff) Validate() error {
 		return errors.New("invalid handoff authority ceiling")
 	}
 	if err := validateWorkspace(w.Workspace); err != nil {
-		return err
+		return validationFailure(ValidationCauseWorkspace, err.Error(), err)
 	}
 	if w.PositionEncoding == "" || w.PositionEncoding != w.Metadata.PositionEncoding {
-		return errors.New("position encoding mismatch")
+		return validationFailure(ValidationCausePositionEncoding, "position encoding mismatch", nil)
 	}
 	if err := censusresult.Validate(w.Result); err != nil {
-		return fmt.Errorf("census result: %w", err)
+		return validationFailure(ValidationCauseCensusResult, "census result: "+err.Error(), err)
 	}
 	if w.Result.Publication.VerificationStatus != "VERIFIED" || w.Result.Publication.DirectorySyncStatus != censusresult.DirectorySyncComplete || w.Result.Publication.CloseStatus != censusresult.CloseComplete {
 		return errors.New("validated committed census result required")
 	}
 	if w.CensusID != w.Result.CensusID || w.Projection.CensusID != w.CensusID || w.Result.CaptureSetID != w.Manifest.LogicalDigest || w.Result.SessionID != w.Projection.Session.SessionID || w.Result.Generation != w.Projection.Session.Generation || w.Result.BatchCount != len(w.Projection.Batches) {
-		return errors.New("census identity reconciliation failed")
+		return validationFailure(ValidationCauseIdentityReconciliation, "census identity reconciliation failed", nil)
 	}
 	if w.Result.Publication.Selector != w.Receipt.Selector || w.Result.Publication.Digest != w.Receipt.ArtifactSHA256 || w.Result.Publication.ByteLength != w.Receipt.ByteLength || w.Result.Publication.VerificationStatus != w.Receipt.VerificationStatus {
-		return errors.New("publication receipt reconciliation failed")
+		return validationFailure(ValidationCausePublicationReconciliation, "publication receipt reconciliation failed", nil)
 	}
 	if !equalJSON(w.Manifest, w.Projection.Manifest) {
-		return errors.New("projection manifest mismatch")
+		return validationFailure(ValidationCauseManifest, "projection manifest mismatch", nil)
 	}
 	projection, err := projectionFrom(w.Projection, w.Workspace)
 	if err != nil {
@@ -187,11 +223,11 @@ func (h CommittedHandoff) Validate() error {
 	}
 	publication := censusprogramc.VerifiedPublication{Receipt: w.Receipt, Manifest: w.Manifest, Resolved: cloneResolved(w.Constituents)}
 	if _, err := censusprogramc.Compose(censusprogramc.Request{Projection: projection, Publication: publication, Metadata: metadataTo(w.Metadata)}); err != nil {
-		return fmt.Errorf("handoff reconciliation: %w", err)
+		return validationFailure(ValidationCauseCompose, "handoff reconciliation: "+err.Error(), err)
 	}
 	want, err := identity(w)
 	if err != nil || want != w.HandoffID {
-		return errors.New("handoff identity mismatch")
+		return validationFailure(ValidationCauseIdentity, "handoff identity mismatch", nil)
 	}
 	return nil
 }

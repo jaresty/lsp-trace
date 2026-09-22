@@ -295,6 +295,18 @@ func testFreshCaptureWithResolver(t *testing.T, f fixture, unavailable bool) *Fr
 	return &FreshCaptureDependencies{Context: context.Background(), Preparer: preparer, Resolver: resolver, Limits: ManagedPreparationLimits{MaxDocuments: 100, MaxMessages: 100, MaxWork: 10_000, MaxDocumentBytes: 1 << 20, MaxTotalBytes: 8 << 20}}
 }
 
+func TestBuildHandoffClassifiesMalformedProjection(t *testing.T) {
+	f := newFixture(t)
+	f.input.Projection.Session.SessionID = ""
+	_, err := BuildHandoff(f.input)
+	if err == nil {
+		t.Fatal("ASSERT_MALFORMED_PROJECTION_REJECTED")
+	}
+	if got := ClassifyValidationCause(err); got != ValidationCauseProjection {
+		t.Fatalf("ASSERT_PROJECTION_CAUSE: got %v", got)
+	}
+}
+
 func TestBuildHandoffRequiresAndReconcilesCommittedEvidence(t *testing.T) {
 	f := newFixture(t)
 	cases := map[string]func(*BuildInput){

@@ -86,6 +86,10 @@ type censusPrivateFailure struct {
 	ordinal           *int
 	operationCode     string
 	operationCategory string
+	failedField       string
+	failedInvariant   string
+	expectedCount     *int
+	observedCount     *int
 }
 
 func (e censusPrivateFailure) Error() string { return "census private acquisition failure" }
@@ -120,19 +124,40 @@ func (a censusRuntimeBatchAcquirer) AcquireV5(ctx context.Context, request censu
 		case "CENSUS_BATCH_ADMISSION_FAILED":
 			category = "ADMISSION"
 		default:
+			censusAcquisitionBranchTrace(ctx, "UNMAPPED_OPERATION_CODE")
 			return censusacquisition.AcquiredV5{}, code
 		}
 		private := &censusPrivateFailure{category: category, ordinal: ordinal}
+		var validation *acquisitionengine.ValidationError
+		if errors.As(failure.Err, &validation) {
+			private.failedField = validation.Diagnostic.FailedField
+			private.failedInvariant = validation.Diagnostic.FailedInvariant
+			private.expectedCount = validation.Diagnostic.ExpectedCount
+			private.observedCount = validation.Diagnostic.ObservedCount
+		}
 		if category == "ACQUISITION" {
 			private.operationCode = code.Code
 			private.operationCategory = "ACQUISITION"
 		}
 		return censusacquisition.AcquiredV5{}, private
 	}
-	if !result.BoundedTraversalComplete || result.SessionID != request.Session.SessionID || result.Generation != request.Session.Generation {
+	if !result.BoundedTraversalComplete {
+		censusAcquisitionBranchTrace(ctx, "BATCH_RESULT_INCOMPLETE")
+		ordinal := request.Ordinal
+		return censusacquisition.AcquiredV5{}, &censusPrivateFailure{category: "ACQUISITION", ordinal: &ordinal, operationCode: "CENSUS_BATCH_INCOMPLETE", operationCategory: "ACQUISITION"}
+	}
+	if result.SessionID != request.Session.SessionID || result.Generation != request.Session.Generation {
+		censusAcquisitionBranchTrace(ctx, "BATCH_RESULT_IDENTITY_DRIFT")
 		return censusacquisition.AcquiredV5{}, errors.New("census batch execution incomplete or identity drifted")
 	}
 	return censusacquisition.AcquiredV5{Session: request.Session, Raw: append([]byte(nil), result.RawV5...)}, nil
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 type censusRuntimeFailure = censusAdmissionFailure
@@ -211,15 +236,28 @@ func (r *censusRuntime) acquire(parent context.Context, result censusRuntimeResu
 		Discoverer: fixedCensusRuntimeDiscovery{discovery: result.discovery},
 		Acquirer:   censusRuntimeBatchAcquirer{runtime: r.runtime, admitted: result.admitted, limits: limits, execute: r.batchExecute},
 		Planning:   &censusacquisition.PlanningConfig{DownDepth: int(options.downDepth), UpDepth: int(options.upDepth), MaxBatchTargets: int(options.maxBatchTargets)},
+		OnErrorPhase: func(phase censusacquisition.Phase) {
+			censusAcquisitionBranchTrace(ctx, "CORE_ERROR_"+string(phase))
+		},
 	}
+	censusAcquisitionBranchTrace(ctx, "BEFORE_ACQUIRE")
 	projection, err := core.Run(ctx, censusacquisition.SessionIdentity{SessionID: result.admitted.sessionID, Generation: result.admitted.generation})
-	if errors.Is(err, censusacquisition.ErrDiscoveryIncomplete) {
-		return censusacquisition.Projection{}, censusDiscoveryFailure(), reasonDiscoveryIncomplete
-	}
 	if err != nil {
 		var typed *censusPrivateFailure
-		if errors.As(err, &typed) && r.acquisitionDiagnostic != nil {
-			_ = r.acquisitionDiagnostic.Record(censusdiagnostic.Record{Fingerprint: result.admitted.requestReceipt.Fingerprint, Category: typed.category, Ordinal: typed.ordinal, OperationCode: typed.operationCode, OperationCategory: typed.operationCategory})
+		if errors.As(err, &typed) {
+			if r.acquisitionDiagnostic == nil {
+				censusAcquisitionBranchTrace(ctx, "RECORDER_ABSENT")
+			} else {
+				recordErr := r.acquisitionDiagnostic.Record(censusdiagnostic.Record{Fingerprint: result.admitted.requestReceipt.Fingerprint, Category: typed.category, Ordinal: typed.ordinal, OperationCode: typed.operationCode, OperationCategory: typed.operationCategory, FailedField: typed.failedField, FailedInvariant: typed.failedInvariant, ExpectedCount: typed.expectedCount, ObservedCount: typed.observedCount})
+				if recordErr != nil {
+					censusAcquisitionBranchTrace(ctx, "RECORDER_REJECTED")
+				} else {
+					censusAcquisitionBranchTrace(ctx, "RECORD_ACCEPTED")
+				}
+			}
+		}
+		if errors.Is(err, censusacquisition.ErrDiscoveryIncomplete) {
+			return censusacquisition.Projection{}, censusDiscoveryFailure(), reasonDiscoveryIncomplete
 		}
 		return censusacquisition.Projection{}, censusAcquisitionFailure(), reasonAcquisitionFailed
 	}

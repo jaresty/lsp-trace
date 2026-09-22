@@ -2,13 +2,13 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"strings"
 
 	"lsp-trace/internal/lspwire"
 )
@@ -138,17 +138,37 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				documentURI = p.TextDocument.URI
 			}
 		case "textDocument/documentSymbol":
+			var p struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			if p.TextDocument.URI != "" {
+				documentURI = p.TextDocument.URI
+			}
 			mode := os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL")
 			if mode == "hang" {
 				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
 				continue
 			}
 			rng := `{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}`
+			selectionRange := rng
 			name := "leaf"
+			if mode == "process-target" {
+				rng = `{"start":{"line":2,"character":0},"end":{"line":4,"character":1}}`
+				selectionRange = `{"start":{"line":2,"character":5},"end":{"line":2,"character":11}}`
+				name = "Target"
+				if len(documentURI) >= len("peer.go") && documentURI[len(documentURI)-len("peer.go"):] == "peer.go" {
+					name = "Peer"
+					rng = `{"start":{"line":2,"character":0},"end":{"line":2,"character":14}}`
+					selectionRange = `{"start":{"line":2,"character":5},"end":{"line":2,"character":9}}`
+				}
+			}
 			if mode == "mismatch" {
 				name = "other"
 			}
-			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"range":%s,"selectionRange":%s}]`, name, rng, rng))
+			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"range":%s,"selectionRange":%s}]`, name, rng, selectionRange))
 			if mode == "hierarchical" {
 				result = json.RawMessage(`[{"name":"document","kind":2,"range":{"start":{"line":0,"character":0},"end":{"line":20,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":0}},"children":[{"name":"leaf","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}}},{"name":"peer","kind":12,"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":4}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":4}}},{"name":"Nested","kind":5,"range":{"start":{"line":4,"character":0},"end":{"line":10,"character":0}},"selectionRange":{"start":{"line":4,"character":0},"end":{"line":4,"character":6}},"children":[{"name":"hidden","kind":6,"range":{"start":{"line":5,"character":0},"end":{"line":5,"character":6}},"selectionRange":{"start":{"line":5,"character":0},"end":{"line":5,"character":6}}}]}]}]`)
 			}
@@ -160,16 +180,36 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				return fixtureInputErrorCode
 			}
 		case "textDocument/prepareCallHierarchy":
+			var p struct {
+				TextDocument struct {
+					URI string `json:"uri"`
+				} `json:"textDocument"`
+				Position struct {
+					Line      int `json:"line"`
+					Character int `json:"character"`
+				} `json:"position"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			if p.TextDocument.URI != "" {
+				documentURI = p.TextDocument.URI
+			}
 			if os.Getenv("LSP_TRACE_FAKE_LSP_HANG_PREPARE") == "1" {
 				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
 				continue
 			}
 			uri, _ := json.Marshal(documentURI)
-			name, line := "leaf", 0
-			if os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL") == "hierarchical" && bytes.Contains(m.Params, []byte(`"line":2`)) {
-				name, line = "peer", 2
+			name, line, endLine, endCharacter, selectionStart, selectionEnd := "leaf", 0, 0, 4, 0, 4
+			mode := os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL")
+			if mode == "hierarchical" && p.Position.Line == 2 {
+				name, line, endLine = "peer", 2, 2
 			}
-			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"uri":%s,"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":4}},"selectionRange":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":4}},"data":{"fixture":%q}}]`, name, uri, line, line, line, line, name))
+			if mode == "process-target" {
+				name, line, endLine, endCharacter, selectionStart, selectionEnd = "Target", p.Position.Line, 4, 1, 5, 11
+				if len(documentURI) >= len("peer.go") && documentURI[len(documentURI)-len("peer.go"):] == "peer.go" {
+					name, endLine, endCharacter, selectionEnd = "Peer", p.Position.Line, 14, 9
+				}
+			}
+			result := json.RawMessage(fmt.Sprintf(`[{"name":%q,"kind":12,"uri":%s,"range":{"start":{"line":%d,"character":0},"end":{"line":%d,"character":%d}},"selectionRange":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"data":{"fixture":%q}}]`, name, uri, line, endLine, endCharacter, line, selectionStart, line, selectionEnd, name))
 			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
@@ -179,7 +219,22 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
 				continue
 			}
-			if err := w.Write(response(m.ID, json.RawMessage(`[]`))); err != nil {
+			var p struct {
+				Item struct {
+					Name string `json:"name"`
+					URI  string `json:"uri"`
+				} `json:"item"`
+			}
+			_ = json.Unmarshal(m.Params, &p)
+			result := json.RawMessage(`[]`)
+			if os.Getenv("LSP_TRACE_FAKE_LSP_DOCUMENT_SYMBOL") == "process-target" && p.Item.Name == "Target" {
+				peerURI := p.Item.URI
+				if slash := strings.LastIndex(peerURI, "/"); slash >= 0 {
+					peerURI = peerURI[:slash+1] + "peer.go"
+				}
+				result = json.RawMessage(fmt.Sprintf(`[{"to":{"name":"Peer","kind":12,"uri":%q,"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":14}},"selectionRange":{"start":{"line":2,"character":5},"end":{"line":2,"character":9}},"data":{"fixture":"Peer"}},"fromRanges":[{"start":{"line":3,"character":1},"end":{"line":3,"character":5}}]}]`, peerURI))
+			}
+			if err := w.Write(response(m.ID, result)); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode
 			}

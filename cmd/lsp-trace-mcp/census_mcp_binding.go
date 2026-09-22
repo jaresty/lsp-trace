@@ -151,7 +151,7 @@ func (b *privateCensusMCPBinding) callContinuation(ctx context.Context, request 
 				continuationBoundaryTrace(ctx, "HOST_RESUME", "RETURN", "ERROR", "TYPED")
 				continuationBoundaryTrace(ctx, "MAPPING", "ENTER", "NONE", "NONE")
 				mapped, mapErr := projectCensusContinuationFailure(request.RequestID, diagnostic, "")
-				continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "OK", "TYPED")
+				continuationMappingReturnTrace(ctx, mapErr)
 				return mapped, mapErr
 			}
 			continuationBoundaryTrace(ctx, "HOST_RESUME", "RETURN", "ERROR", "UNTYPED")
@@ -164,7 +164,7 @@ func (b *privateCensusMCPBinding) callContinuation(ctx context.Context, request 
 		continuationBoundaryTrace(ctx, "HOST_RESUME", "RETURN", "OK", "NONE")
 		continuationBoundaryTrace(ctx, "MAPPING", "ENTER", "NONE", "NONE")
 		mapped, mapErr := projectCensusContinuationMCP(request.RequestID, result)
-		continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "OK", "NONE")
+		continuationMappingReturnTrace(ctx, mapErr)
 		return mapped, mapErr
 	}
 	fresh := make(map[string]any, len(decoded)-2)
@@ -201,7 +201,7 @@ func (b *privateCensusMCPBinding) callContinuation(ctx context.Context, request 
 			continuationBoundaryTrace(ctx, "HOST_FRESH", "RETURN", "ERROR", "TYPED")
 			continuationBoundaryTrace(ctx, "MAPPING", "ENTER", "NONE", "NONE")
 			mapped, mapErr := projectCensusContinuationFailure(request.RequestID, diagnostic, completion.Result.Publication.Selector)
-			continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "OK", "TYPED")
+			continuationMappingReturnTrace(ctx, mapErr)
 			return mapped, mapErr
 		}
 		continuationBoundaryTrace(ctx, "HOST_FRESH", "RETURN", "ERROR", "UNTYPED")
@@ -214,7 +214,7 @@ func (b *privateCensusMCPBinding) callContinuation(ctx context.Context, request 
 	continuationBoundaryTrace(ctx, "HOST_FRESH", "RETURN", "OK", "NONE")
 	continuationBoundaryTrace(ctx, "MAPPING", "ENTER", "NONE", "NONE")
 	mapped, mapErr := projectCensusContinuationMCP(request.RequestID, result)
-	continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "OK", "NONE")
+	continuationMappingReturnTrace(ctx, mapErr)
 	return mapped, mapErr
 }
 
@@ -242,6 +242,7 @@ func projectCensusContinuationDomainError(requestID string) (privateCensusMCPRes
 
 func projectCensusContinuationMCP(requestID string, result censusContinuationMCPResult) (privateCensusMCPResult, error) {
 	if requestID == "" || result.Descriptor == "" || (result.Census == nil) == (result.CensusSelector == "") {
+		censusMappingDiagnosticTrace(context.Background(), "PRECONDITION")
 		return privateCensusMCPResult{}, errors.New("invalid census continuation result")
 	}
 	catalogStatus, outcome := "COMPLETE", "COMPLETE"
@@ -266,15 +267,79 @@ func projectCensusContinuationMCP(requestID string, result censusContinuationMCP
 		composite["census_identity"] = map[string]any{"selector": result.CensusSelector, "digest": result.CensusDigest, "byte_length": result.CensusByteLength}
 	}
 	resultRaw, err := json.Marshal(composite)
-	if err != nil || mcpcontract.ValidateFutureCensusCompositeResultV2(resultRaw) != nil {
+	if err != nil {
+		censusMappingDiagnosticTrace(context.Background(), "MARSHAL")
+		return privateCensusMCPResult{}, errors.New("invalid census continuation result")
+	}
+	if result.Census != nil {
+		if token := censusMappingResultDiagnostic(*result.Census, catalog, result.Status); token != "" {
+			censusMappingDiagnosticTrace(context.Background(), token)
+			return privateCensusMCPResult{}, errors.New("invalid census continuation result")
+		}
+	}
+	if mcpcontract.ValidateFutureCensusCompositeResultV2(resultRaw) != nil {
+		field, invariant := mcpcontract.ClassifyFutureCensusCompositeResultV2(resultRaw)
+		token := "UNKNOWN_SCHEMA"
+		if field != "UNKNOWN" {
+			token = "RESULT_V2_" + field + "_" + invariant
+		}
+		censusMappingDiagnosticTrace(context.Background(), token)
 		return privateCensusMCPResult{}, errors.New("invalid census continuation result")
 	}
 	envelope := censusMCPEnvelope{EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.FutureCensusCompositeSuccessID, Tool: mcpcontract.FutureCensusTool, RequestID: requestID, Outcome: outcome, OperationStatus: "SUCCEEDED", Result: composite}
 	raw, err := json.Marshal(envelope)
-	if err != nil || mcpcontract.ValidateFutureCensusCompositeEnvelopeV2(raw) != nil {
+	if err != nil {
+		censusMappingDiagnosticTrace(context.Background(), "MARSHAL")
+		return privateCensusMCPResult{}, errors.New("invalid census continuation envelope")
+	}
+	if mcpcontract.ValidateFutureCensusCompositeEnvelopeV2(raw) != nil {
+		censusMappingDiagnosticTrace(context.Background(), "ENVELOPE_V2_VALIDATION")
 		return privateCensusMCPResult{}, errors.New("invalid census continuation envelope")
 	}
 	return privateCensusMCPResult{Text: append([]byte(nil), raw...), Structured: append([]byte(nil), raw...)}, nil
+}
+
+func censusMappingResultDiagnostic(r censusresult.Result, catalog map[string]any, continuationStatus string) string {
+	if err := censusresult.Validate(r); err != nil {
+		switch {
+		case r.SchemaVersion != censusresult.SchemaVersion:
+			return "RESULT_V2_CENSUS_SCHEMA_VERSION"
+		case r.Status != "SUCCEEDED":
+			return "RESULT_V2_CENSUS_STATUS"
+		case r.SessionID == "":
+			return "RESULT_V2_CENSUS_SESSION_ID"
+		case r.Generation == 0:
+			return "RESULT_V2_CENSUS_GENERATION"
+		case r.TargetCount < 1:
+			return "RESULT_V2_CENSUS_TARGET_COUNT"
+		case r.BatchCount < 1 || r.BatchCount > r.TargetCount:
+			return "RESULT_V2_CENSUS_BATCH_COUNT"
+		case r.FileAccounting.Denominator < 0 || r.SymbolAccounting.Denominator < 0:
+			return "RESULT_V2_CENSUS_ACCOUNTING_RANGE"
+		case r.Authority != 0 || r.SourceGraphComplete != "UNKNOWN" || r.NativeAggregateCustody || r.CrossCaptureCalls == nil || len(r.CrossCaptureCalls) != 0 || r.LeidenAdmissible:
+			return "RESULT_V2_CENSUS_AUTHORITY"
+		case r.Publication.Selector == "":
+			return "RESULT_V2_CENSUS_PUBLICATION_SELECTOR"
+		case r.Publication.Digest == "":
+			return "RESULT_V2_CENSUS_PUBLICATION_DIGEST"
+		case r.Publication.ByteLength == 0:
+			return "RESULT_V2_CENSUS_PUBLICATION_BYTE_LENGTH"
+		case r.Publication.VerificationStatus == "" || r.Publication.DirectorySyncStatus == "" || r.Publication.CloseStatus == "":
+			return "RESULT_V2_CENSUS_PUBLICATION_STATUS"
+		default:
+			return "RESULT_V2_CENSUS_ACCOUNTING"
+		}
+	}
+	if catalog["checkpoint_selector"] != catalog["composite_selector"] || catalog["checkpoint_selector"] != catalog["catalog_selector"] {
+		return "RESULT_V2_CATALOG_SELECTOR"
+	}
+	if catalog["status"] != "COMPLETE" && catalog["status"] != "PAUSED" && catalog["status"] != "DEGRADED" {
+		return "RESULT_V2_CATALOG_STATUS"
+	}
+	if continuationStatus == "PAUSED" && catalog["resume_guidance"] == nil {
+		return "RESULT_V2_CATALOG_GUIDANCE"
+	}
+	return ""
 }
 
 func projectPrivateCensusMCP(requestID string, completion censusCompletion) (privateCensusMCPResult, error) {

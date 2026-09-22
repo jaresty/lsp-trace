@@ -59,13 +59,17 @@ func TestAcquisitionDiagnosticFlagBootstrapValidationAndLifecycle(t *testing.T) 
 	}{
 		{"relative", func(string) []string { return []string{"--acquisition-diagnostic-path", "relative.ndjson"} }},
 		{"unclean", func(p string) []string {
-			return []string{"--acquisition-diagnostic-path", filepath.Join(filepath.Dir(p), ".", filepath.Base(p))}
+			return []string{"--acquisition-diagnostic-path", filepath.Dir(p) + string(filepath.Separator) + "." + string(filepath.Separator) + filepath.Base(p)}
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "diagnostic.ndjson")
+			args := tc.args(path)
+			if tc.name == "unclean" && (filepath.Clean(args[1]) == args[1] || !filepath.IsAbs(args[1])) {
+				t.Fatalf("unclean fixture was normalized: %q", args[1])
+			}
 			var out, errOut bytes.Buffer
-			if code := run(tc.args(path), input, &out, &errOut); code == 0 || out.Len() != 0 {
+			if code := run(args, input, &out, &errOut); code == 0 || out.Len() != 0 || !strings.Contains(errOut.String(), "acquisition diagnostic:") {
 				t.Fatalf("run=%d stdout=%q stderr=%s", code, out.String(), errOut.String())
 			}
 		})

@@ -8,13 +8,51 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/trace"
+	"strings"
 	"sync"
 	"time"
 
+	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censusprogramc"
+	"lsp-trace/internal/programccompose"
 	"lsp-trace/internal/publication"
 )
 
-const runtimeTracePathEnv = "LSP_TRACE_RUNTIME_TRACE_PATH"
+const runtimeTracePathEnv = "LSP_TRACE_GO_RUNTIME_TRACE_PATH"
+const censusMappingDiagnosticEnv = "LSP_TRACE_CENSUS_MAPPING_DIAGNOSTICS"
+
+var censusAcquisitionBranchTag = map[string]bool{
+	"BEFORE_ACQUIRE": true, "UNMAPPED_OPERATION_CODE": true, "RECORDER_ABSENT": true,
+	"RECORDER_REJECTED": true, "RECORD_ACCEPTED": true,
+	"CORE_ERROR_INPUT": true, "CORE_ERROR_DISCOVERY": true, "CORE_ERROR_PLANNING": true,
+	"CORE_ERROR_BATCH_ACQUIRE": true, "CORE_ERROR_BATCH_ADMISSION": true, "CORE_ERROR_MANIFEST": true,
+	"BATCH_RESULT_INCOMPLETE": true, "BATCH_RESULT_IDENTITY_DRIFT": true,
+}
+
+func validCensusAcquisitionBranchTag(tag string) bool {
+	return censusAcquisitionBranchTag[tag]
+}
+
+func censusAcquisitionBranchTrace(_ context.Context, tag string) {
+	if os.Getenv(runtimeTracePathEnv) == "" || !validCensusAcquisitionBranchTag(tag) {
+		return
+	}
+	line := "CENSUS_ACQUISITION_BRANCH tag=" + tag
+	runtimeTraceState.Lock()
+	if runtimeTraceState.recorder != nil && runtimeTraceState.path != "" {
+		runtimeTraceState.markers = append(runtimeTraceState.markers, line)
+	}
+	runtimeTraceState.Unlock()
+}
+
+var censusHandoffBranch = map[programccompose.BranchCode]bool{
+	programccompose.BranchUnknown: true, programccompose.BranchInputCount: true, programccompose.BranchInputBytes: true,
+	programccompose.BranchInputIdentity: true, programccompose.BranchInputMetadata: true, programccompose.BranchInputIdentityConflict: true,
+	programccompose.BranchInputProvenance: true, programccompose.BranchInputEnvelopeDecode: true, programccompose.BranchInputGraphBase64: true,
+	programccompose.BranchInputGraphDecode: true, programccompose.BranchSourceRecords: true, programccompose.BranchCompatibility: true,
+	programccompose.BranchSummaryDecode: true, programccompose.BranchNodeConflict: true, programccompose.BranchOccurrenceLimit: true,
+	programccompose.BranchEdgeConflict: true, programccompose.BranchResourceLimit: true,
+}
 
 type diagnosticSinkUnavailable struct {
 	Sink  string
@@ -28,6 +66,7 @@ var runtimeTraceState struct {
 	sync.Mutex
 	recorder *trace.FlightRecorder
 	path     string
+	markers  []string
 }
 
 var descriptorTraceOutput io.Writer = os.Stderr
@@ -73,7 +112,23 @@ var continuationTraceBoundary = map[string]bool{
 }
 var continuationTraceStage = map[string]bool{"ENTER": true, "RETURN": true}
 var continuationTraceResult = map[string]bool{"NONE": true, "OK": true, "ERROR": true}
-var continuationTraceClass = map[string]bool{"NONE": true, "TYPED": true, "UNTYPED": true}
+var continuationTraceClass = map[string]bool{"NONE": true, "TYPED": true, "UNTYPED": true, "MAPPING_ERROR": true}
+
+func validCompletionSubcause(s completionSubcause) bool {
+	switch s {
+	case completionResultMissing, completionDiagnosticPresent, custodyMissing, custodyCloneProjection, custodyCloneManifest, handoffProjection, handoffWorkspace, handoffPositionEncoding, handoffResult, handoffIdentityReconciliation, handoffPublicationReconciliation, handoffManifest, handoffCompose, handoffIdentity, completionUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+var continuationPreconditionCause = map[string]bool{
+	"HANDOFF_BUILD": true, "STORE_OPEN": true, "CONTRACT_OBJECT": true,
+	"HANDOFF_OBJECT": true, "CENSUS_COMMIT_OBJECT": true, "CHECKPOINT_PERSIST": true,
+	"INPUT_VALIDATION": true, "OBJECT_IDENTITY": true, "OBJECT_SIZE": true,
+	"UNKNOWN_PRE_PUBLICATION": true,
+}
 
 type descriptorTraceCorrelationKey struct{}
 
@@ -91,6 +146,89 @@ func withDescriptorTraceCorrelation(ctx context.Context, generation any) context
 		label = "G2"
 	}
 	return context.WithValue(ctx, descriptorTraceCorrelationKey{}, descriptorTraceCorrelation{Operation: "CENSUS", Generation: label})
+}
+
+func censusHandoffBranchTrace(ctx context.Context, branch programccompose.BranchCode) {
+	if os.Getenv(runtimeTracePathEnv) == "" || !censusHandoffBranch[branch] {
+		return
+	}
+	line := fmt.Sprintf("CENSUS_HANDOFF_BRANCH branch=%s", branch)
+	trace.Log(ctx, "census_continuation", line)
+	writeDescriptorTrace(line)
+}
+
+func censusHandoffStageTrace(ctx context.Context, stage censusprogramc.Stage) {
+	if os.Getenv(runtimeTracePathEnv) == "" {
+		return
+	}
+	switch stage {
+	case censusprogramc.StagePublication, censusprogramc.StageReconciliation, censusprogramc.StageComposition,
+		censusprogramc.StageAdmission, censusprogramc.StageComputation, censusprogramc.StageRepresentative:
+	default:
+		stage = "UNKNOWN"
+	}
+	line := fmt.Sprintf("CENSUS_HANDOFF_STAGE stage=%s", stage)
+	trace.Log(ctx, "census_continuation", line)
+	writeDescriptorTrace(line)
+}
+
+func continuationPreconditionCauseTrace(ctx context.Context, cause censuscontinuation.PreconditionCause, subcause ...completionSubcause) {
+	if os.Getenv(runtimeTracePathEnv) == "" || !continuationPreconditionCause[string(cause)] {
+		return
+	}
+	line := fmt.Sprintf("CONTINUATION_PRECONDITION_CAUSE cause=%s", cause)
+	if cause == censuscontinuation.PreconditionCauseHandoffBuild && len(subcause) > 0 && validCompletionSubcause(subcause[0]) {
+		line = fmt.Sprintf("CONTINUATION_PRECONDITION_CAUSE subcause=%s", subcause[0])
+	}
+	trace.Log(ctx, "census_continuation", line)
+	writeDescriptorTrace(line)
+}
+
+func continuationMappingReturnTrace(ctx context.Context, mapErr error) {
+	if mapErr == nil {
+		continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "OK", "NONE")
+		return
+	}
+	continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "ERROR", "MAPPING_ERROR")
+}
+
+func censusMappingDiagnosticTrace(ctx context.Context, predicate string) {
+	if os.Getenv(runtimeTracePathEnv) == "" || os.Getenv(censusMappingDiagnosticEnv) == "" {
+		return
+	}
+	if !validCensusMappingDiagnostic(predicate) {
+		return
+	}
+	continuationBoundaryTrace(ctx, "MAPPING", "RETURN", "ERROR", "MAPPING_ERROR")
+	trace.Log(ctx, "census_continuation", "CENSUS_MAPPING_DIAGNOSTIC predicate="+predicate)
+	writeDescriptorTrace("CENSUS_MAPPING_DIAGNOSTIC predicate=" + predicate)
+}
+
+func validCensusMappingDiagnostic(predicate string) bool {
+	switch predicate {
+	case "PRECONDITION", "RESULT_V2_VALIDATION", "UNKNOWN_SCHEMA", "MARSHAL", "ENVELOPE_V2_VALIDATION",
+		"RESULT_V2_CENSUS_SCHEMA_VERSION", "RESULT_V2_CENSUS_STATUS", "RESULT_V2_CENSUS_SESSION_ID", "RESULT_V2_CENSUS_GENERATION", "RESULT_V2_CENSUS_TARGET_COUNT", "RESULT_V2_CENSUS_BATCH_COUNT", "RESULT_V2_CENSUS_ACCOUNTING_RANGE", "RESULT_V2_CENSUS_ACCOUNTING", "RESULT_V2_CENSUS_AUTHORITY", "RESULT_V2_CENSUS_PUBLICATION_SELECTOR", "RESULT_V2_CENSUS_PUBLICATION_DIGEST", "RESULT_V2_CENSUS_PUBLICATION_BYTE_LENGTH", "RESULT_V2_CENSUS_PUBLICATION_STATUS", "RESULT_V2_CATALOG_SELECTOR", "RESULT_V2_CATALOG_STATUS", "RESULT_V2_CATALOG_GUIDANCE",
+		"RESULT_V2_ROOT_DECODE", "RESULT_V2_CATALOG_TYPE", "RESULT_V2_CATALOG_SELECTOR_EQUALITY", "RESULT_V2_CENSUS_IDENTITY_SELECTOR_EQUALITY", "RESULT_V2_CATALOG_PAUSED_FIELDS_FORBIDDEN", "RESULT_V2_CATALOG_PAUSED_FIELDS_REQUIRED", "RESULT_V2_CATALOG_GUIDANCE_CONST", "RESULT_V2_CATALOG_REQUEST_COUNT_MINIMUM", "RESULT_V2_CATALOG_PREPARATION_COUNT_MINIMUM", "RESULT_V2_CATALOG_PREPARATION_COUNT_LTE_REQUEST_COUNT":
+		return true
+	}
+	parts := strings.Split(predicate, "_")
+	if len(parts) < 6 || parts[0] != "RESULT" || parts[1] != "V2" || parts[3] != "DEPTH" {
+		return false
+	}
+	if parts[2] != "ROOT" && parts[2] != "CENSUS" && parts[2] != "CATALOG" {
+		return false
+	}
+	if parts[4] != "0" && parts[4] != "1" && parts[4] != "2" && parts[4] != "3" {
+		if len(parts) < 7 || parts[4] != "3" || parts[5] != "PLUS" {
+			return false
+		}
+	}
+	for _, allowed := range []string{"PATTERN", "MAX_LENGTH", "REQUIRED", "TYPE", "MINIMUM", "MAXIMUM", "ENUM", "CONST", "MIN_ITEMS", "MAX_ITEMS", "ADDITIONALPROPERTIES", "ONEOF", "ALLOF", "NOT", "$REF", "OTHER"} {
+		if strings.HasSuffix(predicate, "_"+allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 func continuationBoundaryTrace(ctx context.Context, boundary, stage, result, class string) {
@@ -159,6 +297,11 @@ func writeDescriptorTrace(line string) {
 		}
 	}
 	_, _ = fmt.Fprintln(output, line)
+	runtimeTraceState.Lock()
+	if runtimeTraceState.recorder != nil && runtimeTraceState.path != "" {
+		runtimeTraceState.markers = append(runtimeTraceState.markers, line)
+	}
+	runtimeTraceState.Unlock()
 }
 
 func startRuntimeFlightRecorder() (func(), error) {
@@ -173,6 +316,13 @@ func startRuntimeFlightRecorder() (func(), error) {
 	if err != nil || !parentInfo.IsDir() || parentInfo.Mode().Perm() != 0o700 {
 		return nil, &diagnosticSinkUnavailable{Sink: "RUNTIME_TRACE", cause: errors.New("parent unavailable")}
 	}
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			return nil, &diagnosticSinkUnavailable{Sink: "RUNTIME_TRACE", cause: errors.New("sink custody invalid")}
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, &diagnosticSinkUnavailable{Sink: "RUNTIME_TRACE", cause: err}
+	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, &diagnosticSinkUnavailable{Sink: "RUNTIME_TRACE", cause: err}
@@ -183,7 +333,7 @@ func startRuntimeFlightRecorder() (func(), error) {
 		return nil, &diagnosticSinkUnavailable{Sink: "RUNTIME_TRACE", cause: errors.Join(statErr, closeErr, errors.New("sink custody invalid"))}
 	}
 	recorder := trace.NewFlightRecorder(trace.FlightRecorderConfig{
-		MinAge:   time.Minute,
+		MinAge:   0,
 		MaxBytes: 16 << 20,
 	})
 	if err := recorder.Start(); err != nil {
@@ -192,14 +342,27 @@ func startRuntimeFlightRecorder() (func(), error) {
 	runtimeTraceState.Lock()
 	runtimeTraceState.recorder = recorder
 	runtimeTraceState.path = path
+	runtimeTraceState.markers = nil
 	runtimeTraceState.Unlock()
 	continuationBoundaryTrace(context.Background(), "STARTUP", "ENTER", "OK", "NONE")
 	return func() {
 		recorder.Stop()
+		_ = dumpRuntimeTrace(context.Background(), "stop")
+		runtimeTraceState.Lock()
+		markers := append([]string(nil), runtimeTraceState.markers...)
+		path := runtimeTraceState.path
+		runtimeTraceState.Unlock()
+		if file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600); err == nil {
+			for _, marker := range markers {
+				_, _ = fmt.Fprintln(file, marker)
+			}
+			_ = file.Close()
+		}
 		runtimeTraceState.Lock()
 		if runtimeTraceState.recorder == recorder {
 			runtimeTraceState.recorder = nil
 			runtimeTraceState.path = ""
+			runtimeTraceState.markers = nil
 		}
 		runtimeTraceState.Unlock()
 	}, nil

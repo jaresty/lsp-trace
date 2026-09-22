@@ -78,6 +78,40 @@ type ResumeRequest struct {
 	StopAfter             StopAfter
 }
 
+type PreconditionCause string
+
+const (
+	PreconditionCauseHandoffBuild       PreconditionCause = "HANDOFF_BUILD"
+	PreconditionCauseStoreOpen          PreconditionCause = "STORE_OPEN"
+	PreconditionCauseContractObject     PreconditionCause = "CONTRACT_OBJECT"
+	PreconditionCauseHandoffObject      PreconditionCause = "HANDOFF_OBJECT"
+	PreconditionCauseCensusCommitObject PreconditionCause = "CENSUS_COMMIT_OBJECT"
+	PreconditionCauseCheckpointPersist  PreconditionCause = "CHECKPOINT_PERSIST"
+	PreconditionCauseInputValidation    PreconditionCause = "INPUT_VALIDATION"
+	PreconditionCauseObjectIdentity     PreconditionCause = "OBJECT_IDENTITY"
+	PreconditionCauseObjectSize         PreconditionCause = "OBJECT_SIZE"
+	PreconditionCauseUnknown            PreconditionCause = "UNKNOWN_PRE_PUBLICATION"
+)
+
+func preconditionCause(code string) PreconditionCause {
+	switch code {
+	case "HANDOFF_VALIDATE", "HANDOFF_SERIALIZE":
+		return PreconditionCauseHandoffObject
+	case "STORE_REQUIRED":
+		return PreconditionCauseStoreOpen
+	case "CONTRACT_VALIDATE", "CONTRACT_PERSIST":
+		return PreconditionCauseContractObject
+	case "HANDOFF_PERSIST":
+		return PreconditionCauseCensusCommitObject
+	case "INITIAL_CHECKPOINT_PERSIST":
+		return PreconditionCauseCheckpointPersist
+	case "STOP_AFTER_INVALID", "WORKER_V2_REQUIRED", "WORKER_REQUIRED":
+		return PreconditionCauseInputValidation
+	default:
+		return PreconditionCauseUnknown
+	}
+}
+
 type Result struct {
 	Status                   ContinuationStatus
 	CensusID                 string
@@ -88,6 +122,7 @@ type Result struct {
 	PrivateStage             string
 	PrivateCode              string
 	PrivateSubcode           string
+	PreconditionCause        PreconditionCause
 	PrivateResourceComponent string
 	PrivateResourceCategory  string
 	PrivateResourceLimit     int64
@@ -375,12 +410,13 @@ func applyPrivateResourceLimit(result *Result, err error) {
 
 func preconditionFailure(req Request, code string) Result {
 	return Result{
-		Status:       StatusFailedCatalog,
-		CensusID:     req.Handoff.CensusID(),
-		HandoffID:    req.Handoff.HandoffID(),
-		PrivateStage: "RUN_PRECONDITION",
-		PrivateCode:  code,
-		Err:          errors.New("continuation precondition failed"),
+		Status:            StatusFailedCatalog,
+		CensusID:          req.Handoff.CensusID(),
+		HandoffID:         req.Handoff.HandoffID(),
+		PrivateStage:      "RUN_PRECONDITION",
+		PrivateCode:       code,
+		PreconditionCause: preconditionCause(code),
+		Err:               errors.New("continuation precondition failed"),
 	}
 }
 

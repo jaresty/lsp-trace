@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime/trace"
 
 	"lsp-trace/internal/acquisitionauthority"
 	"lsp-trace/internal/acquisitionengine"
@@ -15,6 +16,18 @@ import (
 )
 
 const privateCensusBatchRoute = "private-census-batch"
+
+var plannedBatchInvalidInputClass = map[string]bool{
+	"request_validate": true, "canonical_input_validation": true, "identity": true,
+	"workspace": true, "seed_authority": true,
+}
+
+func plannedBatchInvalidInputTrace(ctx context.Context, class string) {
+	if !plannedBatchInvalidInputClass[class] {
+		return
+	}
+	trace.Log(ctx, "acquisition_invalid_input", "ACQUISITION_INVALID_INPUT_TRACE invariant="+class)
+}
 
 type PlannedBatchRequest struct {
 	SessionID        string
@@ -39,6 +52,7 @@ func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBa
 		return fail(operation.FailureInternal, fmt.Errorf("managed runtime required"))
 	}
 	if request.SessionID == "" || request.Generation == 0 || request.RequestID == "" {
+		plannedBatchInvalidInputTrace(ctx, "request_validate")
 		return fail(operation.FailureInvalidInput, fmt.Errorf("exact planned batch identity required"))
 	}
 	if err := ctx.Err(); err != nil {
@@ -51,27 +65,32 @@ func ExecutePlannedBatch(ctx context.Context, runtime Runtime, request PlannedBa
 	op := operation.Request{Name: acquisitionengine.SliceV3, RequestID: request.RequestID, Input: raw, RetainedSeedSpec: bytes.Clone(request.CanonicalSeedsV2)}
 	input, canonical, err := acquisitionengine.CanonicalInput(op.Input)
 	if err != nil {
+		plannedBatchInvalidInputTrace(ctx, "canonical_input_validation")
 		return fail(operation.FailureInvalidInput, err)
 	}
 	op.Input = canonical
 	if input.SessionID != request.SessionID || input.Generation != request.Generation {
+		plannedBatchInvalidInputTrace(ctx, "identity")
 		return fail(operation.FailureInvalidInput, fmt.Errorf("planned batch identity drift"))
 	}
 	workspace := ""
 	for _, record := range runtime.Records() {
 		if record.SessionID == request.SessionID && record.Generation == request.Generation {
 			if workspace != "" {
+				plannedBatchInvalidInputTrace(ctx, "workspace")
 				return fail(operation.FailureInvalidInput, fmt.Errorf("ambiguous host workspace"))
 			}
 			workspace = record.Profile.Workspace().String()
 		}
 	}
 	if workspace == "" {
+		plannedBatchInvalidInputTrace(ctx, "workspace")
 		return fail(operation.FailureInvalidInput, fmt.Errorf("host workspace unavailable"))
 	}
 	binding := acquisitionauthority.Binding{Operation: acquisitionengine.SliceV3, Route: privateCensusBatchRoute, RequestID: request.RequestID, Workspace: workspace, SessionID: request.SessionID, Generation: request.Generation, Input: canonical}
 	authority, err := acquisitionauthority.MintSeedAuthority(binding, op.RetainedSeedSpec, seedbinding.CallerAssertedLocal, false, "", true)
 	if err != nil {
+		plannedBatchInvalidInputTrace(ctx, "seed_authority")
 		return fail(operation.FailureInvalidInput, err)
 	}
 	result, failure := acquisitionengine.ExecuteAuthorized(ctx, runtime, op, privateCensusBatchRoute, authority, nil, binding)

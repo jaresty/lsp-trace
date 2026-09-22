@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/censusprogramc"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/continuationhost"
 	"lsp-trace/internal/describerequest"
 	"lsp-trace/internal/describeworker"
 	"lsp-trace/internal/liveprojection"
+	"lsp-trace/internal/programccompose"
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/sourceprojection"
@@ -205,10 +207,32 @@ func (h *productionCensusContinuationHost) Fresh(ctx context.Context, completion
 	continuationBoundaryTrace(ctx, "HOST_FRESH", "ENTER", "NONE", "NONE")
 	handoff, err := completion.BuildCommittedHandoff()
 	if err != nil {
-		return censusContinuationMCPResult{}, err
+		cause := completionUnknown
+		if completion.Result == nil {
+			cause = completionResultMissing
+		} else if completion.Diagnostic != nil {
+			cause = completionDiagnosticPresent
+		} else if completion.continuation == nil {
+			cause = custodyMissing
+		} else if completion.continuationError != "" {
+			cause = completion.continuationError
+		} else {
+			cause = classifyHandoffError(err)
+		}
+		continuationPreconditionCauseTrace(ctx, censuscontinuation.PreconditionCauseHandoffBuild, cause)
+		stage := handoffFailureStage(err)
+		censusHandoffStageTrace(ctx, stage)
+		if stage == censusprogramc.StageComposition {
+			var failure *censusprogramc.Failure
+			if errors.As(err, &failure) && failure != nil {
+				censusHandoffBranchTrace(ctx, programccompose.ErrorBranch(failure.Err))
+			}
+		}
+		return censusContinuationMCPResult{}, censusresult.NewContinuationFailure(censusresult.ContinuationHandoffBuildFailed, censusresult.ContinuationDiagnosticContext{})
 	}
 	workspace, err := url.Parse(handoff.WorkspaceIdentity().URI)
 	if err != nil || workspace.Scheme != "file" {
+		continuationPreconditionCauseTrace(ctx, censuscontinuation.PreconditionCauseInputValidation)
 		return censusContinuationMCPResult{}, errors.New("continuation workspace unavailable")
 	}
 	stopAfter := censuscontinuation.StopAfter("")
@@ -222,6 +246,7 @@ func (h *productionCensusContinuationHost) Fresh(ctx context.Context, completion
 	continuationBoundaryTrace(ctx, "CHECKPOINT", "ENTER", "NONE", "NONE")
 	result := censuscontinuation.Run(ctx, censuscontinuation.Request{Handoff: handoff, Workspace: workspace.Path, Contract: h.contract, Worker: worker, WorkerV2: workerV2, Store: h.store, FreshCapture: h.freshCapture, StopAfter: stopAfter})
 	if result.Err != nil {
+		continuationPreconditionCauseTrace(ctx, result.PreconditionCause)
 		continuationBoundaryTrace(ctx, "CHECKPOINT", "RETURN", "ERROR", "UNTYPED")
 	} else {
 		continuationBoundaryTrace(ctx, "CHECKPOINT", "RETURN", "OK", "NONE")
@@ -240,6 +265,45 @@ func (h *productionCensusContinuationHost) Fresh(ctx context.Context, completion
 		continuationBoundaryTrace(ctx, "HOST_FRESH", "RETURN", "OK", "NONE")
 	}
 	return projected, err
+}
+
+func handoffFailureStage(err error) censusprogramc.Stage {
+	var failure *censusprogramc.Failure
+	if !errors.As(err, &failure) || failure == nil {
+		return ""
+	}
+	switch failure.Stage {
+	case censusprogramc.StagePublication, censusprogramc.StageReconciliation, censusprogramc.StageComposition,
+		censusprogramc.StageAdmission, censusprogramc.StageComputation, censusprogramc.StageRepresentative:
+		return failure.Stage
+	default:
+		return ""
+	}
+}
+
+func classifyHandoffError(err error) completionSubcause {
+	switch censuscontinuation.ClassifyValidationCause(err) {
+	case censuscontinuation.ValidationCauseProjection:
+		return handoffProjection
+	case censuscontinuation.ValidationCauseWorkspace:
+		return handoffWorkspace
+	case censuscontinuation.ValidationCausePositionEncoding:
+		return handoffPositionEncoding
+	case censuscontinuation.ValidationCauseCensusResult:
+		return handoffResult
+	case censuscontinuation.ValidationCauseIdentityReconciliation:
+		return handoffIdentityReconciliation
+	case censuscontinuation.ValidationCausePublicationReconciliation:
+		return handoffPublicationReconciliation
+	case censuscontinuation.ValidationCauseManifest:
+		return handoffManifest
+	case censuscontinuation.ValidationCauseCompose:
+		return handoffCompose
+	case censuscontinuation.ValidationCauseIdentity:
+		return handoffIdentity
+	default:
+		return completionUnknown
+	}
 }
 
 func (h *productionCensusContinuationHost) Resume(ctx context.Context, selector, publicStop string) (censusContinuationMCPResult, error) {

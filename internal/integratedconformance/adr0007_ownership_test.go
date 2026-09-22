@@ -8,6 +8,7 @@ import (
 func ownsADR0007ProductionPath(path string) bool {
 	for _, prefix := range []string{
 		"internal/censuscontinuation/",
+		"internal/censusdiagnostic/",
 		"internal/censusprogramc/",
 		"internal/continuationhost/",
 		"internal/describerequest/",
@@ -30,6 +31,11 @@ func ownsADR0007ProductionPath(path string) bool {
 		"cmd/lsp-trace/census_catalog_runner_test.go",
 		"cmd/lsp-trace/census_continuation_test.go",
 		"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go",
+		"cmd/lsp-trace-mcp/acquisition_diagnostic_bootstrap_test.go",
+		"cmd/lsp-trace-mcp/census_acquisition_process_e2e_test.go",
+		"cmd/lsp-trace-mcp/census_acquisition_process_retention_test.go",
+		"cmd/lsp-trace-mcp/census_handoff_stage_trace_test.go",
+		"cmd/lsp-trace-mcp/census_single_constituent_handoff_test.go",
 		"cmd/lsp-trace-mcp/census_continuation_binding_test.go",
 		"cmd/lsp-trace-mcp/census_continuation_host.go",
 		"cmd/lsp-trace-mcp/census_continuation_test.go",
@@ -54,6 +60,7 @@ func ownsADR0007ProductionPath(path string) bool {
 
 func excludesADR0007OwnershipPath(path string) bool {
 	return strings.HasPrefix(path, ".pi/evidence/") ||
+		strings.Contains(path, "/.pi/evidence/") ||
 		strings.HasPrefix(path, "docs/") ||
 		path == "censuscontinuation.test"
 }
@@ -96,6 +103,7 @@ func TestADR0007ProductionOwnershipRegistration(t *testing.T) {
 func TestADR0007OwnershipExclusionsRemainUnowned(t *testing.T) {
 	for _, path := range []string{
 		".pi/evidence/adr0007-v4-red.txt",
+		"cmd/lsp-trace-mcp/.pi/evidence/private-runtime.trace",
 		"docs/pilot/adr0007/README.md",
 		"docs/pilot/adr0007/governance-authorization-proposal.md",
 		"censuscontinuation.test",

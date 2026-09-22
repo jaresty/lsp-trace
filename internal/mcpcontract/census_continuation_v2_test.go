@@ -223,6 +223,18 @@ func TestFutureCensusPausedCompositeAccepted(t *testing.T) {
 	}
 }
 
+func TestFutureCensusPausedPreparationCountBounded(t *testing.T) {
+	catalog := `{"kind":"ADR_0007_FEATURE_CATALOG","checkpoint_selector":"` + goodContinuationSelector + `","composite_selector":"` + goodContinuationSelector + `","catalog_selector":"` + goodContinuationSelector + `","status":"PAUSED","request_count":3,"preparation_count":2,"resume_guidance":"Resume with this selector and omit stop_after to continue exactly the remaining work once.","authority":0,"accepted":false,"completeness":"UNKNOWN"}`
+	for name, preparation := range map[string]string{"negative": "-1", "fractional": "1.5", "exceeds": "4"} {
+		t.Run(name, func(t *testing.T) {
+			raw := []byte(`{"schema_version":"lsp-trace.census-feature-catalog-result.v2","census":` + validFutureCensusResultJSON + `,"catalog":` + strings.Replace(catalog, `"preparation_count":2`, `"preparation_count":`+preparation, 1) + `}`)
+			if err := ValidateFutureCensusCompositeResultV2(raw); err == nil {
+				t.Fatal("invalid paused preparation_count accepted")
+			}
+		})
+	}
+}
+
 func TestFutureCensusCompositeResultAndEnvelopeExclusivity(t *testing.T) {
 	schemas := continuationSchemas(t)
 	census := validFutureCensusResultJSON

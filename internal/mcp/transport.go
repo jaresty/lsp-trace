@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -45,16 +46,17 @@ type Executor interface {
 }
 
 type Server struct {
-	Registry        *Registry
-	Executor        Executor
-	Executors       map[ExecutorFamily]Executor
-	PublicationRoot *publication.Root
-	ArtifactStore   *publication.Root
-	Publisher       *publication.Publisher
-	requestSequence atomic.Uint64
-	lifecycleMu     sync.Mutex
-	serveGeneration uint64
-	serveCancel     context.CancelFunc
+	Registry           *Registry
+	Executor           Executor
+	Executors          map[ExecutorFamily]Executor
+	PublicationRoot    *publication.Root
+	ArtifactStore      *publication.Root
+	Publisher          *publication.Publisher
+	EnvelopeDiagnostic func(string)
+	requestSequence    atomic.Uint64
+	lifecycleMu        sync.Mutex
+	serveGeneration    uint64
+	serveCancel        context.CancelFunc
 }
 
 type request struct {
@@ -70,10 +72,11 @@ type rpcError struct {
 }
 
 type response struct {
-	JSONRPC string    `json:"jsonrpc"`
-	ID      any       `json:"id,omitempty"`
-	Result  any       `json:"result,omitempty"`
-	Error   *rpcError `json:"error,omitempty"`
+	JSONRPC    string    `json:"jsonrpc"`
+	ID         any       `json:"id,omitempty"`
+	Result     any       `json:"result,omitempty"`
+	Error      *rpcError `json:"error,omitempty"`
+	diagnostic func(string)
 }
 
 func structuralContextDomainErrorEnvelope(tool, phase, state string) envelope {
@@ -365,7 +368,7 @@ func (s *Server) Shutdown() {
 }
 
 func (s *Server) handleContext(ctx context.Context, req request) response {
-	base := response{JSONRPC: "2.0", ID: req.ID}
+	base := response{JSONRPC: "2.0", ID: req.ID, diagnostic: s.EnvelopeDiagnostic}
 	if req.JSONRPC != "2.0" {
 		base.Error = &rpcError{Code: -32600, Message: "Invalid Request"}
 		return base
@@ -946,7 +949,7 @@ func (s *Server) callGatewayContext(ctx context.Context, base response, nested g
 		base.Error = &rpcError{Code: -32602, Message: "Invalid tool arguments"}
 		return base
 	}
-	delegated := s.callContext(ctx, response{JSONRPC: base.JSONRPC, ID: base.ID}, rawParams)
+	delegated := s.callContext(ctx, response{JSONRPC: base.JSONRPC, ID: base.ID, diagnostic: base.diagnostic}, rawParams)
 	if delegated.Error != nil {
 		return delegated
 	}
@@ -1095,6 +1098,9 @@ func bindEnvelope(base response, tool Tool, env envelope) response {
 		err = validateEmittedEnvelope(tool, env, raw)
 	}
 	if err != nil {
+		if base.diagnostic != nil {
+			base.diagnostic(envelopeValidationClass(err))
+		}
 		base.Error = &rpcError{Code: -32603, Message: "Internal error: invalid operation envelope"}
 		return base
 	}
@@ -1139,6 +1145,37 @@ func canonicalEnvelopeSchemaID(tool Tool, id string) string {
 		return mcpcontract.PublicAnalyticsV2EnvelopeID(id)
 	default:
 		return id
+	}
+}
+
+const (
+	envelopeDiagnosticSchemaIDUnregistered = "SCHEMA_ID_UNREGISTERED"
+	envelopeDiagnosticSchemaValidation     = "SCHEMA_VALIDATION"
+	envelopeDiagnosticExclusivityZero      = "EXCLUSIVITY_ZERO_MATCH"
+	envelopeDiagnosticExclusivityMulti     = "EXCLUSIVITY_MULTI_MATCH"
+	envelopeDiagnosticResultValidation     = "RESULT_VALIDATION"
+	envelopeDiagnosticContentParity        = "CONTENT_PARITY"
+	envelopeDiagnosticUnknown              = "UNKNOWN"
+)
+
+func envelopeValidationClass(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "schema") && (strings.Contains(message, "not permitted") || strings.Contains(message, "required")):
+		return envelopeDiagnosticSchemaIDUnregistered
+	case strings.Contains(message, "mutually exclusive"):
+		return envelopeDiagnosticContentParity
+	case strings.Contains(message, "zero matches"):
+		return envelopeDiagnosticExclusivityZero
+	case strings.Contains(message, "multiple matches"):
+		return envelopeDiagnosticExclusivityMulti
+	case strings.Contains(message, "validation"):
+		return envelopeDiagnosticSchemaValidation
+	default:
+		return envelopeDiagnosticUnknown
 	}
 }
 

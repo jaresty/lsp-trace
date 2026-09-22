@@ -70,16 +70,17 @@ type buildError struct {
 
 func (e *buildError) Error() string { return e.err.Error() + ": " + e.output }
 
-func TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes(t *testing.T) {
-	root := repositoryRoot(t)
+func authorityCallViolations(root string) ([]string, error) {
 	fset := token.NewFileSet()
 	forbidden := map[string]bool{"MintSeedAuthority": true, "PrepareSource": true, "SealPreparedSource": true}
+	var violations []string
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			// Evidence copies and agent configuration are not production source, at any depth.
+			if entry.Name() == ".git" || entry.Name() == ".pi" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -108,12 +109,40 @@ func TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes(t *testing.T) {
 			if rel == "cmd/lsp-trace/census_batch_acquirer.go" && selector.Sel.Name == "MintSeedAuthority" {
 				return true
 			}
-			t.Errorf("ASSERT_AUTHORITY_MINT_CALLSITE_PRIVATE_OWNER_ONLY: %s calls %s", rel, selector.Sel.Name)
+			violations = append(violations, rel+" calls "+selector.Sel.Name)
 			return true
 		})
 		return nil
 	})
+	return violations, err
+}
+
+func TestAuthorityMintCallsAreOwnedByPrivateOrchestrationRoutes(t *testing.T) {
+	violations, err := authorityCallViolations(repositoryRoot(t))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, violation := range violations {
+		t.Errorf("ASSERT_AUTHORITY_MINT_CALLSITE_PRIVATE_OWNER_ONLY: %s", violation)
+	}
+}
+
+func TestAuthorityScanExcludesEvidenceButRejectsProductionCalls(t *testing.T) {
+	root := t.TempDir()
+	for _, rel := range []string{"src/forbidden.go", "src/.pi/evidence/copied.go"} {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("package fixture\nfunc forbidden() { acquisitionauthority.MintSeedAuthority() }\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	violations, err := authorityCallViolations(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(violations) != 1 || violations[0] != "src/forbidden.go calls MintSeedAuthority" {
+		t.Fatalf("ASSERT_AUTHORITY_SOURCE_VS_EVIDENCE: violations=%v", violations)
 	}
 }

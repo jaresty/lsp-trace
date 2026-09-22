@@ -139,9 +139,58 @@ type admitted struct {
 	env envelope
 }
 
+type BranchCode string
+
+const (
+	BranchUnknown               BranchCode = "UNKNOWN"
+	BranchInputCount            BranchCode = "INPUT_COUNT"
+	BranchInputBytes            BranchCode = "INPUT_BYTES"
+	BranchInputIdentity         BranchCode = "INPUT_IDENTITY"
+	BranchInputMetadata         BranchCode = "INPUT_METADATA"
+	BranchInputIdentityConflict BranchCode = "INPUT_IDENTITY_CONFLICT"
+	BranchInputProvenance       BranchCode = "INPUT_PROVENANCE"
+	BranchInputEnvelopeDecode   BranchCode = "INPUT_ENVELOPE_DECODE"
+	BranchInputGraphBase64      BranchCode = "INPUT_GRAPH_BASE64"
+	BranchInputGraphDecode      BranchCode = "INPUT_GRAPH_DECODE"
+	BranchSourceRecords         BranchCode = "SOURCE_RECORDS"
+	BranchCompatibility         BranchCode = "COMPATIBILITY"
+	BranchSummaryDecode         BranchCode = "SUMMARY_DECODE"
+	BranchNodeConflict          BranchCode = "NODE_CONFLICT"
+	BranchOccurrenceLimit       BranchCode = "OCCURRENCE_LIMIT"
+	BranchEdgeConflict          BranchCode = "EDGE_CONFLICT"
+	BranchResourceLimit         BranchCode = "RESOURCE_LIMIT"
+)
+
+type branchError struct {
+	code BranchCode
+	err  error
+}
+
+func (e *branchError) Error() string { return e.err.Error() }
+func (e *branchError) Unwrap() error { return e.err }
+func tagged(code BranchCode, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &branchError{code: code, err: err}
+}
+
+func ErrorBranch(err error) BranchCode {
+	var taggedErr *branchError
+	if !errors.As(err, &taggedErr) || taggedErr == nil {
+		return BranchUnknown
+	}
+	switch taggedErr.code {
+	case BranchInputCount, BranchInputBytes, BranchInputIdentity, BranchInputMetadata, BranchInputIdentityConflict, BranchInputProvenance, BranchInputEnvelopeDecode, BranchInputGraphBase64, BranchInputGraphDecode, BranchSourceRecords, BranchCompatibility, BranchSummaryDecode, BranchNodeConflict, BranchOccurrenceLimit, BranchEdgeConflict, BranchResourceLimit:
+		return taggedErr.code
+	default:
+		return BranchUnknown
+	}
+}
+
 func Compose(inputs []Input) (Result, error) {
 	if len(inputs) < 2 || len(inputs) > MaxInputs {
-		return Result{}, fmt.Errorf("input count %d outside [2,%d]", len(inputs), MaxInputs)
+		return Result{}, tagged(BranchInputCount, fmt.Errorf("input count %d outside [2,%d]", len(inputs), MaxInputs))
 	}
 	total := 0
 	items := make([]admitted, len(inputs))
@@ -149,38 +198,38 @@ func Compose(inputs []Input) (Result, error) {
 	for i, in := range inputs {
 		total += len(in.Bytes)
 		if total > MaxTotalInputBytes {
-			return Result{}, errors.New("total input byte cap exceeded")
+			return Result{}, tagged(BranchInputBytes, errors.New("total input byte cap exceeded"))
 		}
 		if in.Identity == "" || in.ByteLength != len(in.Bytes) || in.SHA256 != rawDigest(in.Bytes) {
-			return Result{}, fmt.Errorf("input %d immutable identity/digest/length mismatch", i)
+			return Result{}, tagged(BranchInputIdentity, fmt.Errorf("input %d immutable identity/digest/length mismatch", i))
 		}
 		m := in.ExactMetadata
 		if m.WorkspaceIdentity == "" || m.RevisionCustody == "" || m.PositionEncoding == "" || m.AcquisitionSemantics == "" || m.PrivacyPolicy == "" {
-			return Result{}, fmt.Errorf("input %d ambiguous exact metadata", i)
+			return Result{}, tagged(BranchInputMetadata, fmt.Errorf("input %d ambiguous exact metadata", i))
 		}
 		if previous, ok := seenInput[in.Identity]; ok && previous != in.SHA256 {
-			return Result{}, fmt.Errorf("input identity conflict %q", in.Identity)
+			return Result{}, tagged(BranchInputIdentityConflict, fmt.Errorf("input identity conflict %q", in.Identity))
 		}
 		seenInput[in.Identity] = in.SHA256
 		if v, err := graphprovenance.ValidateFor(in.Bytes, graphprovenance.Family, "v5"); err != nil || v != graphprovenance.VersionV5 {
-			return Result{}, fmt.Errorf("input %d invalid graph provenance V5: %w", i, err)
+			return Result{}, tagged(BranchInputProvenance, fmt.Errorf("input %d invalid graph provenance V5: %w", i, err))
 		}
 		var e envelope
 		if err := strictDecode(in.Bytes, &e); err != nil {
-			return Result{}, fmt.Errorf("input %d: %w", i, err)
+			return Result{}, tagged(BranchInputEnvelopeDecode, fmt.Errorf("input %d: %w", i, err))
 		}
 		gb, err := base64.StdEncoding.DecodeString(e.GraphV5)
 		if err != nil {
-			return Result{}, err
+			return Result{}, tagged(BranchInputGraphBase64, err)
 		}
 		n, err := parseNative(gb)
 		if err != nil {
-			return Result{}, fmt.Errorf("input %d graph: %w", i, err)
+			return Result{}, tagged(BranchInputGraphDecode, fmt.Errorf("input %d graph: %w", i, err))
 		}
 		items[i] = admitted{in: in, env: e, n: n, c: constituent(in, e, gb, n)}
 	}
 	if err := validateSourceRecords(items); err != nil {
-		return Result{}, err
+		return Result{}, tagged(BranchSourceRecords, err)
 	}
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].c.InvocationID != items[j].c.InvocationID {
@@ -193,7 +242,7 @@ func Compose(inputs []Input) (Result, error) {
 	})
 	compat, err := compatible(items)
 	if err != nil {
-		return Result{}, err
+		return Result{}, tagged(BranchCompatibility, err)
 	}
 	nodes := map[string]graph.Node{}
 	edges := map[string]graph.Edge{}
@@ -208,7 +257,7 @@ func Compose(inputs []Input) (Result, error) {
 		per[i] = cloneRaw(x.n.Summary)
 		var s summary
 		if err := json.Unmarshal(x.n.Summary, &s); err != nil {
-			return Result{}, err
+			return Result{}, tagged(BranchSummaryDecode, err)
 		}
 		allComplete = allComplete && s.TraversalComplete
 		anyTruncated = anyTruncated || s.Truncated
@@ -225,7 +274,7 @@ func Compose(inputs []Input) (Result, error) {
 		work.NativeReceiptRecords += receiptRecordCount(x.n.EvidenceReceipt)
 		for _, n := range x.n.Nodes {
 			if old, ok := nodes[n.ID]; ok && !canonicalEqual(old, n) {
-				return Result{}, fmt.Errorf("node id conflict %q", n.ID)
+				return Result{}, tagged(BranchNodeConflict, fmt.Errorf("node id conflict %q", n.ID))
 			}
 			nodes[n.ID] = n
 		}
@@ -233,11 +282,11 @@ func Compose(inputs []Input) (Result, error) {
 			occurrenceCount += len(e.CallSites)
 			work.Occurrences += len(e.CallSites)
 			if occurrenceCount > maxOccurrences {
-				return Result{}, errors.New("occurrence cap exceeded")
+				return Result{}, tagged(BranchOccurrenceLimit, errors.New("occurrence cap exceeded"))
 			}
 			if old, ok := edges[e.RelationID]; ok {
 				if !canonicalEqual(old, e) {
-					return Result{}, fmt.Errorf("edge id conflict %q", e.RelationID)
+					return Result{}, tagged(BranchEdgeConflict, fmt.Errorf("edge id conflict %q", e.RelationID))
 				}
 			} else {
 				edges[e.RelationID] = e
@@ -247,7 +296,7 @@ func Compose(inputs []Input) (Result, error) {
 	work.MergedNodes = len(nodes)
 	work.SemanticWork = semanticWork(work)
 	if err := enforceResourceCaps(total, work); err != nil {
-		return Result{}, err
+		return Result{}, tagged(BranchResourceLimit, err)
 	}
 	ns := make([]graph.Node, 0, len(nodes))
 	for _, n := range nodes {

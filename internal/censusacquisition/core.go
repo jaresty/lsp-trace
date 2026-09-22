@@ -132,7 +132,9 @@ func (b BatchRequest) AcquisitionManifest(limits acquisitionops.Limits) acquisit
 		id := batchTargetID(i, t)
 		ts[i] = acquisitionops.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch, LanguageID: t.LanguageID}, DownDepth: &down, UpDepth: &up}
 	}
-	return acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: append([]acquisitionops.Target(nil), ts[1:]...), Limits: limits}
+	requiredTargets := make([]acquisitionops.Target, len(ts)-1)
+	copy(requiredTargets, ts[1:])
+	return acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: requiredTargets, Limits: limits}
 }
 
 type AcquiredV5 struct {
@@ -167,10 +169,22 @@ type PlanningConfig struct {
 	MaxBatchTargets int
 }
 
+type Phase string
+
+const (
+	PhaseInput          Phase = "INPUT"
+	PhaseDiscovery      Phase = "DISCOVERY"
+	PhasePlanning       Phase = "PLANNING"
+	PhaseBatchAcquire   Phase = "BATCH_ACQUIRE"
+	PhaseBatchAdmission Phase = "BATCH_ADMISSION"
+	PhaseManifest       Phase = "MANIFEST"
+)
+
 type Core struct {
-	Discoverer Discoverer
-	Acquirer   Acquirer
-	Planning   *PlanningConfig
+	Discoverer   Discoverer
+	Acquirer     Acquirer
+	Planning     *PlanningConfig
+	OnErrorPhase func(Phase)
 }
 
 type batchAcquisitionFailure struct {
@@ -188,7 +202,13 @@ func failBatch(ordinal int, err error) error {
 
 // Run performs authority-neutral discovery, batch acquisition, and exact
 // validation. Its result is data, not a completion or publication capability.
-func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
+func (c Core) Run(ctx context.Context, s SessionIdentity) (projection Projection, runErr error) {
+	phase := PhaseInput
+	defer func() {
+		if runErr != nil && c.OnErrorPhase != nil {
+			c.OnErrorPhase(phase)
+		}
+	}()
 	if err := s.Validate(); err != nil {
 		return Projection{}, err
 	}
@@ -199,6 +219,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if c.Discoverer == nil || c.Acquirer == nil {
 		return Projection{}, errors.New("discoverer and acquirer required")
 	}
+	phase = PhaseDiscovery
 	d, err := c.Discoverer.Discover(ctx, s)
 	if err != nil {
 		return Projection{}, fmt.Errorf("discovery: %w", err)
@@ -223,6 +244,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if err != nil {
 		return Projection{}, err
 	}
+	phase = PhasePlanning
 	plan, err := planTargets(targets, planning.MaxBatchTargets)
 	if err != nil {
 		return Projection{}, err
@@ -249,10 +271,12 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	meta := make([]captureset.Constituent, len(batches))
 	for i := range batches {
 		req := batches[i]
+		phase = PhaseBatchAcquire
 		got, e := c.Acquirer.AcquireV5(ctx, cloneBatchRequest(req))
 		if e != nil {
 			return Projection{}, failBatch(i, fmt.Errorf("acquire batch %d: %w", i, e))
 		}
+		phase = PhaseBatchAdmission
 		if got.Session != s {
 			return Projection{}, failBatch(i, fmt.Errorf("session identity drift during batch %d", i))
 		}
@@ -263,6 +287,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		meta[i] = identity
 		cs[i] = Constituent{req.BatchID, i, append([]byte(nil), got.Raw...), identity}
 	}
+	phase = PhaseManifest
 	manifestBatches := make([]captureset.Batch, len(plan.Batches))
 	start := 0
 	for i, batch := range plan.Batches {

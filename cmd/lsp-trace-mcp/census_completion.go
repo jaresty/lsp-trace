@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 
 	"lsp-trace/internal/captureset"
@@ -31,23 +32,54 @@ type censusCompletionCustody struct {
 	workspace   censuscontinuation.WorkspaceIdentity
 }
 
+type completionSubcause string
+
+const (
+	completionResultMissing          completionSubcause = "COMPLETION_RESULT_MISSING"
+	completionDiagnosticPresent      completionSubcause = "COMPLETION_DIAGNOSTIC_PRESENT"
+	custodyMissing                   completionSubcause = "CUSTODY_MISSING"
+	custodyCloneProjection           completionSubcause = "CUSTODY_CLONE_PROJECTION"
+	custodyCloneManifest             completionSubcause = "CUSTODY_CLONE_MANIFEST"
+	handoffProjection                completionSubcause = "HANDOFF_PROJECTION"
+	handoffWorkspace                 completionSubcause = "HANDOFF_WORKSPACE"
+	handoffPositionEncoding          completionSubcause = "HANDOFF_POSITION_ENCODING"
+	handoffResult                    completionSubcause = "HANDOFF_RESULT"
+	handoffIdentityReconciliation    completionSubcause = "HANDOFF_IDENTITY_RECONCILIATION"
+	handoffPublicationReconciliation completionSubcause = "HANDOFF_PUBLICATION_RECONCILIATION"
+	handoffManifest                  completionSubcause = "HANDOFF_MANIFEST"
+	handoffCompose                   completionSubcause = "HANDOFF_COMPOSE"
+	handoffIdentity                  completionSubcause = "HANDOFF_IDENTITY"
+	completionUnknown                completionSubcause = "UNKNOWN"
+)
+
 type censusCompletion struct {
 	Result              *censusresult.Result
 	Diagnostic          *censusresult.Diagnostic
 	DiscoveryDiagnostic *censusresult.DiscoveryDiagnostic
 	RequestReceipt      *censusrequest.Receipt
 	continuation        *censusCompletionCustody
+	continuationError   completionSubcause
 }
 
 func (c censusCompletion) BuildCommittedHandoff() (censuscontinuation.CommittedHandoff, error) {
-	if c.Result == nil || c.Diagnostic != nil || c.continuation == nil {
+	if c.Result == nil {
+		return censuscontinuation.CommittedHandoff{}, errors.New("committed continuation custody incomplete")
+	}
+	if c.Diagnostic != nil {
+		return censuscontinuation.CommittedHandoff{}, errors.New("committed continuation custody incomplete")
+	}
+	if c.continuation == nil || c.continuationError != "" {
 		return censuscontinuation.CommittedHandoff{}, errors.New("committed continuation custody incomplete")
 	}
 	custody, err := cloneCensusCompletionCustody(*c.continuation)
 	if err != nil {
 		return censuscontinuation.CommittedHandoff{}, errors.New("committed continuation custody incomplete")
 	}
-	return censuscontinuation.BuildHandoff(censuscontinuation.BuildInput{Result: custody.result, Projection: custody.projection, Publication: custody.publication, Metadata: custody.metadata, Workspace: custody.workspace})
+	handoff, err := censuscontinuation.BuildHandoff(censuscontinuation.BuildInput{Result: custody.result, Projection: custody.projection, Publication: custody.publication, Metadata: custody.metadata, Workspace: custody.workspace})
+	if err != nil {
+		return censuscontinuation.CommittedHandoff{}, fmt.Errorf("committed continuation custody incomplete: %w", err)
+	}
+	return handoff, nil
 }
 
 func (r *censusRuntime) run(ctx context.Context, request operation.Request) censusCompletion {
@@ -142,15 +174,35 @@ func completeCensusProjection(ctx context.Context, projection censusacquisition.
 		}
 		if cloned, cloneErr := cloneCensusCompletionCustody(custody); cloneErr == nil {
 			completion.continuation = &cloned
+		} else {
+			completion.continuationError = classifyCustodyCloneError(cloneErr)
 		}
 	}
 	return completion
 }
 
+func classifyCustodyCloneError(err error) completionSubcause {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, errCustodyProjectionClone) {
+		return custodyCloneProjection
+	}
+	if errors.Is(err, errCustodyManifestClone) {
+		return custodyCloneManifest
+	}
+	return completionUnknown
+}
+
+var (
+	errCustodyProjectionClone = errors.New("custody projection clone")
+	errCustodyManifestClone   = errors.New("custody manifest clone")
+)
+
 func cloneCensusCompletionCustody(in censusCompletionCustody) (censusCompletionCustody, error) {
 	projection, err := censusacquisition.CloneProjection(in.projection)
 	if err != nil {
-		return censusCompletionCustody{}, err
+		return censusCompletionCustody{}, fmt.Errorf("%w: %v", errCustodyProjectionClone, err)
 	}
 	out := in
 	out.projection = projection
@@ -160,10 +212,10 @@ func cloneCensusCompletionCustody(in censusCompletionCustody) (censusCompletionC
 	}
 	manifestBytes, err := json.Marshal(in.publication.Manifest)
 	if err != nil {
-		return censusCompletionCustody{}, err
+		return censusCompletionCustody{}, fmt.Errorf("%w: %v", errCustodyManifestClone, err)
 	}
 	if err := json.Unmarshal(manifestBytes, &out.publication.Manifest); err != nil {
-		return censusCompletionCustody{}, err
+		return censusCompletionCustody{}, fmt.Errorf("%w: %v", errCustodyManifestClone, err)
 	}
 	return out, nil
 }

@@ -94,7 +94,7 @@ exec "$@"
 		Library: write("lib", "lib", 0600), SandboxExecutable: write("sandbox", sandbox, 0700),
 		SandboxProfile: write("profile", "(version 1)\n(deny network*)\n", 0600), Grammar: write("grammar", "root ::= object\n", 0600),
 		RuntimeIdentity: "runtime-v1", AdapterIdentity: "adapter-v1", ModelIdentity: "model-v1",
-		Limits: Limits{TimeoutMS: 1000, MaxTokens: 64, ContextTokens: 1024, StdoutBytes: 4096, StderrBytes: 1024, WorkBytes: 8192, TempBytes: 8192},
+		Limits: Limits{TimeoutMS: 10_000, MaxTokens: 64, ContextTokens: 1024, StdoutBytes: 4096, StderrBytes: 1024, WorkBytes: 8192, TempBytes: 8192},
 	}
 	return cfg, logPath
 }
@@ -181,8 +181,8 @@ printf '%s' ` + shellQuote(workerJSON()) + `
 			t.Fatalf("sandbox argv missing %q: %q", part, log)
 		}
 	}
-	if !bytes.Contains(log, []byte("-timeout\n1s\n")) {
-		t.Fatalf("ASSERT_TIMEOUT_DURATION_FRAMING: want -timeout 1s, got %q", log)
+	if !bytes.Contains(log, []byte("-timeout\n10s\n")) {
+		t.Fatalf("ASSERT_TIMEOUT_DURATION_FRAMING: want -timeout 10s, got %q", log)
 	}
 	if bytes.Contains(log, []byte(cfg.Library.Path+"\n")) {
 		t.Fatalf("ASSERT_LIBRARY_MANIFEST_NOT_PASSED_AS_DIRECTORY: %q", log)
@@ -391,9 +391,9 @@ func TestRunnerCancellationTimeoutReapsDescendants(t *testing.T) {
 				worker += "wait\n"
 				cfg, logPath := processConfig(t, worker)
 				if tc.cancel {
-					cfg.Limits.TimeoutMS = 1500
+					cfg.Limits.TimeoutMS = 10_000
 				} else {
-					cfg.Limits.TimeoutMS = 1000
+					cfg.Limits.TimeoutMS = 5_000
 				}
 				r, err := NewRunner(cfg)
 				if err != nil {

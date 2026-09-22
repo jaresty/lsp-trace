@@ -224,9 +224,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	if err := bindCensusDiagnosticRecorder(server, acquisitionDiagnostic); err != nil {
-		fmt.Fprintln(stderr, "acquisition diagnostic:", err)
-		return 1
+	if os.Getenv("LSP_TRACE_GO_RUNTIME_TRACE_PATH") != "" {
+		server.EnvelopeDiagnostic = func(marker string) { fmt.Fprintln(stderr, "go-runtime-diagnostic:", marker) }
 	}
 	var bootstrapSessions []bootstrapSession
 	if config != nil {
@@ -293,6 +292,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			return 1
 		}
 		server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(binding.runtime, continuationHost)
+	}
+	if err := bindCensusDiagnosticRecorder(server, acquisitionDiagnostic); err != nil {
+		fmt.Fprintln(stderr, "acquisition diagnostic:", err)
+		return 1
 	}
 	serveErr := server.Serve(stdin, stdout)
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)

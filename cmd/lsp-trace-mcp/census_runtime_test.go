@@ -258,6 +258,33 @@ func TestEffectiveCensusDeadlineNeverExtendsParent(t *testing.T) {
 	}
 }
 
+func TestCensusAcquisitionBranchTraceFiniteTagWhitelist(t *testing.T) {
+	for _, tag := range []string{"BEFORE_ACQUIRE", "UNMAPPED_OPERATION_CODE", "RECORDER_ABSENT", "RECORDER_REJECTED", "RECORD_ACCEPTED", "CORE_ERROR_INPUT", "CORE_ERROR_DISCOVERY", "CORE_ERROR_PLANNING", "CORE_ERROR_BATCH_ACQUIRE", "CORE_ERROR_BATCH_ADMISSION", "CORE_ERROR_MANIFEST", "BATCH_RESULT_INCOMPLETE", "BATCH_RESULT_IDENTITY_DRIFT"} {
+		if !validCensusAcquisitionBranchTag(tag) {
+			t.Fatalf("ASSERT_FINITE_BRANCH_TAG_ALLOWED: %q", tag)
+		}
+	}
+	for _, tag := range []string{"", "OTHER", "ACQUISITION_FAILED", "raw-error", "file:///private/path"} {
+		if validCensusAcquisitionBranchTag(tag) {
+			t.Fatalf("ASSERT_FINITE_BRANCH_TAG_REJECTED: %q", tag)
+		}
+	}
+}
+
+func TestCensusAcquisitionBranchTraceRequiresOptIn(t *testing.T) {
+	t.Setenv(runtimeTracePathEnv, "")
+	runtimeTraceState.Lock()
+	before := len(runtimeTraceState.markers)
+	runtimeTraceState.Unlock()
+	censusAcquisitionBranchTrace(context.Background(), "BEFORE_ACQUIRE")
+	runtimeTraceState.Lock()
+	after := len(runtimeTraceState.markers)
+	runtimeTraceState.Unlock()
+	if after != before {
+		t.Fatalf("ASSERT_PRIVATE_BRANCH_TRACE_DISABLED_WITHOUT_OPT_IN: before=%d after=%d", before, after)
+	}
+}
+
 func TestCensusRuntimeBatchAcquirerMapsPrivateFailureTaxonomyAndOrdinal(t *testing.T) {
 	cases := []struct{ code, category string }{
 		{"CENSUS_BATCH_INVALID_INPUT", "INVALID_INPUT"},
@@ -284,6 +311,17 @@ func TestCensusRuntimeBatchAcquirerMapsPrivateFailureTaxonomyAndOrdinal(t *testi
 			}
 		})
 	}
+	t.Run("canonical input diagnostic", func(t *testing.T) {
+		_, _, validationErr := acquisitionengine.CanonicalInput([]byte(`{"unexpected":"private"}`))
+		a := censusRuntimeBatchAcquirer{admitted: censusAdmittedSession{sessionID: "s", generation: 1}, execute: func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+			return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: "CENSUS_BATCH_INVALID_INPUT", Err: validationErr}
+		}}
+		_, err := a.AcquireV5(context.Background(), censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, CensusID: "c", BatchID: "b", Ordinal: 6, CanonicalSeedsV2: []byte("seed"), Targets: []censusacquisition.PreparedTarget{{URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#0:0:12:Target:0"}}})
+		var typed *censusPrivateFailure
+		if !errors.As(err, &typed) || typed.category != "INVALID_INPUT" || typed.ordinal == nil || *typed.ordinal != 6 || typed.failedField != "envelope" || typed.failedInvariant != "canonical_input_decode" {
+			t.Fatalf("private failure=%+v err=%v", typed, err)
+		}
+	})
 	t.Run("unknown", func(t *testing.T) {
 		a := censusRuntimeBatchAcquirer{admitted: censusAdmittedSession{sessionID: "s", generation: 1}, execute: func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
 			return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: "UNKNOWN"}
@@ -292,6 +330,60 @@ func TestCensusRuntimeBatchAcquirerMapsPrivateFailureTaxonomyAndOrdinal(t *testi
 			t.Fatal("unknown failure code accepted")
 		}
 	})
+}
+
+func TestCensusRuntimeBatchAcquirerDistinguishesSuccessfulBatchResultPredicates(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		result  acquisitionorchestration.PlannedBatchResult
+		wantTag string
+	}{
+		{name: "incomplete", result: acquisitionorchestration.PlannedBatchResult{SessionID: "s", Generation: 7}, wantTag: "BATCH_RESULT_INCOMPLETE"},
+		{name: "identity drift", result: acquisitionorchestration.PlannedBatchResult{SessionID: "other", Generation: 7, BoundedTraversalComplete: true}, wantTag: "BATCH_RESULT_IDENTITY_DRIFT"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.Chmod(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			tracePath := filepath.Join(dir, "runtime.trace")
+			t.Setenv(runtimeTracePathEnv, tracePath)
+			stop, err := startRuntimeFlightRecorder()
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := censusRuntimeBatchAcquirer{admitted: censusAdmittedSession{sessionID: "s", generation: 7}, execute: func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+				return tc.result, nil
+			}}
+			request := censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 7}, CensusID: "c", BatchID: "b", Ordinal: 6, CanonicalSeedsV2: []byte("seed"), Targets: []censusacquisition.PreparedTarget{{URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#0:0:12:Target:0"}}}
+			_, err = a.AcquireV5(context.Background(), request)
+			if err == nil {
+				stop()
+				t.Fatal("ASSERT_BATCH_RESULT_ERROR_NON_NIL")
+			}
+			var typed *censusPrivateFailure
+			if tc.name == "incomplete" {
+				if !errors.As(err, &typed) || typed.category != "ACQUISITION" || typed.ordinal == nil || *typed.ordinal != 6 || typed.operationCode != "CENSUS_BATCH_INCOMPLETE" || typed.operationCategory != "ACQUISITION" {
+					stop()
+					t.Fatalf("ASSERT_INCOMPLETE_TYPED_PRIVATE_FAILURE: failure=%+v err=%v", typed, err)
+				}
+			} else if err.Error() != "census batch execution incomplete or identity drifted" {
+				stop()
+				t.Fatalf("ASSERT_IDENTITY_DRIFT_GENERIC_ERROR: err=%v", err)
+			} else if errors.As(err, &typed) && typed.operationCode == "CENSUS_BATCH_INCOMPLETE" {
+				stop()
+				t.Fatalf("ASSERT_IDENTITY_DRIFT_NOT_INCOMPLETE: %+v", typed)
+			}
+			stop()
+			traceBytes, readErr := os.ReadFile(tracePath)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if !strings.Contains(string(traceBytes), "CENSUS_ACQUISITION_BRANCH tag="+tc.wantTag) {
+				t.Fatalf("ASSERT_BATCH_RESULT_PRIVATE_TAG: expected=%s", tc.wantTag)
+			}
+		})
+	}
 }
 
 func TestCensusRuntimeBatchAcquirerDeterministicRequestAndReceipt(t *testing.T) {

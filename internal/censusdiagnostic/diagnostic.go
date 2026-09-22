@@ -22,6 +22,10 @@ type Record struct {
 	Ordinal           *int   `json:"ordinal,omitempty"`
 	OperationCode     string `json:"operation_code,omitempty"`
 	OperationCategory string `json:"operation_category,omitempty"`
+	FailedField       string `json:"failed_field,omitempty"`
+	FailedInvariant   string `json:"failed_invariant,omitempty"`
+	ExpectedCount     *int   `json:"expected_count,omitempty"`
+	ObservedCount     *int   `json:"observed_count,omitempty"`
 }
 type Recorder struct {
 	path       string
@@ -138,6 +142,32 @@ func validate(v Record) error {
 	}
 	if v.Category == "ACQUISITION" != (v.OperationCode != "" && v.OperationCategory != "") {
 		return errors.New("invalid acquisition operation evidence")
+	}
+	if v.FailedField != "" {
+		valid := map[string]bool{"envelope": true, "seed_manifest": true, "seed_label": true, "seed_uri": true, "seed_position": true, "options": true, "input_identity": true}
+		if !valid[v.FailedField] {
+			return errors.New("invalid acquisition diagnostic field")
+		}
+	}
+	if v.FailedInvariant != "" {
+		valid := map[string]bool{
+			"canonical_input_decode": true, "canonical_input_encode": true,
+			"INPUT_BYTE_LIMIT": true, "DUPLICATE_JSON_MEMBER": true,
+			"TOP_LEVEL_OBJECT_REQUIRED": true, "TYPED_JSON_DECODE": true,
+			"TRAILING_CONTENT_FORBIDDEN": true, "NULL_MEMBER_FORBIDDEN": true,
+			"EMPTY_SELECTOR_FORBIDDEN": true, "CANONICAL_ENCODE": true,
+		}
+		if !valid[v.FailedInvariant] {
+			return errors.New("invalid acquisition diagnostic invariant")
+		}
+	}
+	if (v.FailedField == "") != (v.FailedInvariant == "") {
+		return errors.New("incomplete acquisition validation evidence")
+	}
+	for _, n := range []*int{v.ExpectedCount, v.ObservedCount} {
+		if n != nil && (*n < 0 || *n > 1000000) {
+			return errors.New("invalid acquisition diagnostic count")
+		}
 	}
 	return nil
 }

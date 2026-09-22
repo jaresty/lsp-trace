@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"lsp-trace/acquisitionops"
+	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/census"
 	"lsp-trace/internal/graph"
@@ -32,6 +33,28 @@ type acquirerFunc func(context.Context, BatchRequest) (AcquiredV5, error)
 
 func (f acquirerFunc) AcquireV5(c context.Context, b BatchRequest) (AcquiredV5, error) {
 	return f(c, b)
+}
+
+func TestAcquisitionManifestSingleTargetUsesCanonicalEmptyRequiredTargets(t *testing.T) {
+	batch := BatchRequest{DownDepth: 1, Targets: []PreparedTarget{{URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#0:0:12:Target:0"}}}
+	manifest := batch.AcquisitionManifest(acquisitionops.Limits{})
+	if manifest.RequiredTargets == nil {
+		t.Fatal("ASSERT_SINGLE_TARGET_REQUIRED_TARGETS_NONNIL")
+	}
+	rawManifest, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(rawManifest), `"required_targets":[]`) || strings.Contains(string(rawManifest), `"required_targets":null`) {
+		t.Fatalf("ASSERT_SINGLE_TARGET_REQUIRED_TARGETS_JSON_ARRAY: %s", rawManifest)
+	}
+	raw, err := json.Marshal(acquisitionops.Input{SessionID: "s", Generation: 1, SeedManifest: manifest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := acquisitionengine.CanonicalInput(raw); err != nil {
+		t.Fatalf("ASSERT_SINGLE_TARGET_CANONICAL_INPUT_ROUNDTRIP: %v", err)
+	}
 }
 func seed(i int) []byte {
 	raw, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", i), Path: fmt.Sprintf("f%03d.go", i), Line: uint64(i + 11), Column: uint64(i + 4)}}}}, "/w")
@@ -136,6 +159,37 @@ func TestCoreIncompleteDiscoveryReturnsStableSentinel(t *testing.T) {
 	var incomplete *DiscoveryIncompleteError
 	if !errors.As(err, &incomplete) || len(incomplete.Observations) != 2 || incomplete.Observations[0].Dimension != DiscoveryNodeCeiling || incomplete.Observations[1].Known {
 		t.Fatalf("ASSERT_INCOMPLETE_DISCOVERY_PRESERVES_OBSERVATIONS: %#v", err)
+	}
+}
+
+func TestCoreErrorPhaseObserverNilAndRepresentativeFailures(t *testing.T) {
+	cases := []struct {
+		name string
+		core Core
+		want Phase
+	}{
+		{name: "input", core: Core{}, want: PhaseInput},
+		{name: "discovery", core: Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return Discovery{}, errors.New("discovery") }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, nil })}, want: PhaseDiscovery},
+		{name: "discovery seed", core: Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) {
+			d := discovery(1)
+			d.Targets[0].CanonicalSeedV2 = []byte("invalid")
+			return d, nil
+		}), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, nil })}, want: PhaseDiscovery},
+		{name: "batch acquire", core: Core{Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) { return discovery(1), nil }), Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) { return AcquiredV5{}, errors.New("acquire") })}, want: PhaseBatchAcquire},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []Phase
+			tc.core.OnErrorPhase = func(p Phase) { got = append(got, p) }
+			_, err := tc.core.Run(context.Background(), SessionIdentity{"s", 7})
+			if err == nil || len(got) != 1 || got[0] != tc.want {
+				t.Fatalf("ASSERT_EXACT_CORE_ERROR_PHASE: err=%v phases=%v want=%s", err, got, tc.want)
+			}
+		})
+	}
+	_, err := (Core{OnErrorPhase: nil}).Run(context.Background(), SessionIdentity{"s", 7})
+	if err == nil {
+		t.Fatal("ASSERT_NIL_OBSERVER_PRESERVES_ERROR")
 	}
 }
 

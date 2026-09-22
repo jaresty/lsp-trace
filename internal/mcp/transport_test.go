@@ -619,6 +619,22 @@ func TestCustodyLogicalDigestParityAcrossInlineAndPublication(t *testing.T) {
 	}
 }
 
+func TestEnvelopeValidationClassificationIsClosedAndDefaultOff(t *testing.T) {
+	if got := envelopeValidationClass(fmt.Errorf("envelope schema %q is not permitted", "x")); got != envelopeDiagnosticSchemaIDUnregistered {
+		t.Fatalf("schema classification: got %q", got)
+	}
+	if got := envelopeValidationClass(fmt.Errorf("inline content and publication receipt are mutually exclusive")); got != envelopeDiagnosticContentParity {
+		t.Fatalf("content classification: got %q", got)
+	}
+	if got := envelopeValidationClass(fmt.Errorf("unrecognized internal failure")); got != envelopeDiagnosticUnknown {
+		t.Fatalf("unknown classification: got %q", got)
+	}
+	server := &Server{Registry: NewRegistry(false)}
+	if server.EnvelopeDiagnostic != nil {
+		t.Fatal("diagnostic callback must be default-off")
+	}
+}
+
 func TestEmittedArtifactIdentityMustBelongToManifestTool(t *testing.T) {
 	const assertion = "runtime rejects an artifact schema identity not declared for the canonical tool"
 	t.Log("ASSERTION: " + assertion)
