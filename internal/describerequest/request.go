@@ -221,14 +221,23 @@ func rangeText(r sourceprojection.Range) string {
 }
 func graphRangeText(r interface{}) string { raw, _ := json.Marshal(r); return string(raw) }
 
+// ValidateRecord checks intrinsic identity without requiring a preceding
+// alternative. Batch ordering remains the responsibility of Validate.
+func ValidateRecord(r Record) error {
+	if r.Envelope.Protocol != Protocol || r.Envelope.MessageType != MessageType || r.Envelope.Corpus != Corpus || r.Envelope.ItemType != ItemType || r.Envelope.AcquisitionMode != AcquisitionMode || r.Envelope.DeadlineMS <= 0 || r.Envelope.DeadlineMS > maxDeadlineMS || r.Envelope.TargetMessageID != "" {
+		return errors.New("envelope constants mismatch")
+	}
+	s := sha256.Sum256([]byte(r.Envelope.Prompt))
+	if r.Lineage.AlternativeOrdinal < 0 || r.Envelope.AdmissionID == "" || r.Envelope.AdmissionID != r.Lineage.CensusID || r.Envelope.SourceRevision == "" || r.Lineage.PacketID == "" || r.Lineage.CensusID == "" || r.Lineage.AlternativeID == "" || r.Lineage.LineageIdentity != lineageIdentity(r) || r.Envelope.InputSHA256 != hex.EncodeToString(s[:]) || r.Envelope.InputBytes != len([]byte(r.Envelope.Prompt)) || r.Envelope.MessageID != envelopeID("message", r) || r.Envelope.CorrelationID != envelopeID("correlation", r) || r.Lineage.Authority != 0 || r.Lineage.Accepted || r.Lineage.Completeness != "UNKNOWN" || r.Lineage.SourceGraphComplete != "UNKNOWN" || r.RecordID != recordID(r) {
+		return errors.New("record integrity mismatch")
+	}
+	return nil
+}
+
 func Validate(records []Record) error {
 	for i, r := range records {
-		if r.Envelope.Protocol != Protocol || r.Envelope.MessageType != MessageType || r.Envelope.Corpus != Corpus || r.Envelope.ItemType != ItemType || r.Envelope.AcquisitionMode != AcquisitionMode || r.Envelope.DeadlineMS <= 0 || r.Envelope.DeadlineMS > maxDeadlineMS || r.Envelope.TargetMessageID != "" {
-			return errors.New("envelope constants mismatch")
-		}
-		s := sha256.Sum256([]byte(r.Envelope.Prompt))
-		if r.Envelope.AdmissionID == "" || r.Envelope.AdmissionID != r.Lineage.CensusID || r.Envelope.SourceRevision == "" || r.Lineage.PacketID == "" || r.Lineage.CensusID == "" || r.Lineage.AlternativeID == "" || r.Lineage.LineageIdentity != lineageIdentity(r) || r.Envelope.InputSHA256 != hex.EncodeToString(s[:]) || r.Envelope.InputBytes != len([]byte(r.Envelope.Prompt)) || r.Envelope.MessageID != envelopeID("message", r) || r.Envelope.CorrelationID != envelopeID("correlation", r) || r.Lineage.Authority != 0 || r.Lineage.Accepted || r.Lineage.Completeness != "UNKNOWN" || r.Lineage.SourceGraphComplete != "UNKNOWN" || r.RecordID != recordID(r) {
-			return errors.New("record integrity mismatch")
+		if err := ValidateRecord(r); err != nil {
+			return err
 		}
 		if i == 0 && r.Lineage.AlternativeOrdinal != 0 {
 			return errors.New("noncanonical request order")

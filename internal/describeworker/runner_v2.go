@@ -61,7 +61,7 @@ func (r *Runner) RunV2(ctx context.Context, request describerequest.Record, pack
 	if r == nil || r.manager == nil || r.validated.config.ResponseVersion != ResponseVersionV2 {
 		return RunResultV2{}, failure(StageStart, CodePolicyMismatch)
 	}
-	if err := describerequest.Validate([]describerequest.Record{request}); err != nil || attemptID == "" || len(attemptID) > 256 {
+	if err := describerequest.ValidateRecord(request); err != nil || attemptID == "" || len(attemptID) > 256 {
 		return RunResultV2{}, failure(StagePreflight, CodePolicyMismatch)
 	}
 	c := r.validated.config

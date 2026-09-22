@@ -1,11 +1,12 @@
 # ADR 0011: Add versioned definition and reference evidence as a Program C grouping input
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-09-21
+- **Accepted:** 2026-09-22
 - **Decision owners:** LSP Trace maintainers
 - **Extends:** [ADR 0007](0007-optional-local-semantic-feature-index.md)
 - **Related:** [ADR 0009](0009-provenance-bounded-semantic-discovery.md), [ADR 0010](0010-provenance-bounded-feature-attribution.md)
-- **Implementation authorization:** None; documentation and specification only
+- **Implementation authorization:** Granted 2026-09-22 for staged, additive implementation, schema work, and qualification tests under the contracts below. This does not qualify a grouping policy, admit definition/reference evidence to Leiden, enable a public CLI/MCP surface, migrate historical artifacts, or accept feature identities.
 
 ## Context
 
@@ -28,7 +29,7 @@ Add a staged, additive **definition/reference evidence family** and an explicitl
 - the new relations never become `CALLS` and never inherit CALLS custody or runtime claims;
 - representative selection and outward-consumer selection remain CALLS-only until a separately versioned and qualified successor says otherwise.
 
-This ADR specifies contracts and qualification gates. It does not authorize implementation, schema registration, production-code changes, tests, public enablement, or migration of historical artifacts.
+This ADR authorizes staged additive implementation, schema registration for the new versioned family, and qualification work under these contracts. Implementation must fail closed until the specified method, custody, admission, policy, and replay gates pass. Acceptance does not qualify any grouping policy or authorize public enablement, migration of historical artifacts, or changes to historical CALLS-only bytes and omitted-selector meaning.
 
 ## Authority and claim ceiling
 
@@ -327,7 +328,7 @@ Qualification must demonstrate deterministic replay for exact input bytes, recei
 ## Sequencing
 
 1. **ADR 0007 first:** retain its immutable provisional-inventory, authority, correction, and CALLS-only outward-consumer contracts. This ADR extends only the available grouping-input families.
-2. **This ADR next:** freeze additive acquisition, occurrence, admission, policy, identity, artifact, replay, and qualification contracts. Implementation remains unauthorized until a separate implementation decision accepts them and the policy qualification prerequisites exist.
+2. **This ADR next:** staged additive implementation and qualification are authorized by the 2026-09-22 decision. Freeze exact acquisition, occurrence, admission, policy, identity, artifact, replay, and qualification contracts before enabling each dependent stage. A definition/reference grouping policy remains ineligible for Leiden until its own immutable qualification receipt is strictly verified as `QUALIFIED`; this ADR's acceptance is not that receipt.
 3. **ADR 0010 after immutable anchors/results exist:** exact attribution may consume the new immutable occurrence anchors, grouping inputs, constituent memberships, and results. It does not reacquire evidence or reinterpret grouping.
 4. **ADR 0009 after ADR 0010:** semantic discovery may index the new immutable evidence and attribution artifacts as typed inputs. Ranking or synthesis cannot repair, broaden, or upgrade them.
 
@@ -392,4 +393,4 @@ Rejected for the initial version. Representative and outward-consumer semantics 
 8. Which future ADR, if any, may define reference-aware representatives or outward consumers?
 9. Which CLI/MCP names and advertisement profiles should expose the new family after qualification and separate implementation authorization?
 
-Until these decisions are frozen and qualified, the new family remains specification-only and grouping fails closed with `GROUPING_POLICY_UNQUALIFIED`.
+Authorized implementation and qualification work may proceed while these decisions remain open. Until the relevant contracts and policy decisions are frozen and the matching grouping policy is independently qualified, definition/reference grouping remains disabled and admission fails closed with `GROUPING_POLICY_UNQUALIFIED`. Public CLI/MCP enablement requires its separate qualification and authorization; ADR 0010 attribution still waits for the immutable inventory and anchors.
