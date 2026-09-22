@@ -90,8 +90,12 @@ def paused_v2(delegated, result) -> bool:
         and catalog.get("accepted") is False
         and catalog.get("completeness") == "UNKNOWN"
         and isinstance(catalog.get("request_count"), int)
+        and not isinstance(catalog.get("request_count"), bool)
         and catalog.get("request_count") >= 1
-        and catalog.get("preparation_count") == 0
+        and isinstance(catalog.get("preparation_count"), int)
+        and not isinstance(catalog.get("preparation_count"), bool)
+        and 0 <= catalog.get("preparation_count") <= catalog.get("request_count")
+        and catalog.get("resume_guidance") == "Resume with this selector and omit stop_after to continue exactly the remaining work once."
         and all(selector(catalog.get(key)) for key in ("checkpoint_selector", "composite_selector", "catalog_selector"))
     )
     identity = result.get("census_identity")
