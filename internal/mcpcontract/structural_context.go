@@ -196,7 +196,7 @@ func ValidateStructuralContextV2EnvelopeExclusive(data []byte) error {
 	named, _ := value["envelope_schema_id"].(string)
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	for _, id := range []string{StructuralContextV2ResultID, SourceProjectionResultV2ID, UnifiedStructuralContextResultV2ID, StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID} {
+	for _, id := range []string{StructuralContextV2ResultID, SourceProjectionResultV2ID, UnifiedStructuralContextResultV2ID, SourceProjectionResultV3ID, UnifiedStructuralContextResultV3ID, StructuralContextProjectionSuccessID, StructuralContextPagingSuccessID, StructuralContextTraversalDomainErrorID} {
 		raw, _ := StructuralContextSchemaJSON(id)
 		doc, e := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 		if e != nil {
@@ -211,16 +211,23 @@ func ValidateStructuralContextV2EnvelopeExclusive(data []byte) error {
 		return errFutureShape
 	}
 	matches := []string{}
-	for _, id := range []string{StructuralContextProjectionSuccessID, StructuralContextTraversalDomainErrorID} {
+	var namedValidationError error
+	for _, id := range []string{StructuralContextProjectionSuccessID, StructuralContextPagingSuccessID, StructuralContextTraversalDomainErrorID} {
 		s, e := compiler.Compile(id)
 		if e != nil {
 			return e
 		}
-		if s.Validate(doc) == nil {
+		validationError := s.Validate(doc)
+		if validationError == nil {
 			matches = append(matches, id)
+		} else if id == named {
+			namedValidationError = validationError
 		}
 	}
 	if len(matches) != 1 || matches[0] != named {
+		if namedValidationError != nil {
+			return namedValidationError
+		}
 		return errFutureShape
 	}
 	return nil

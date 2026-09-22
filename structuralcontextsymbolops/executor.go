@@ -157,6 +157,10 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		if errors.Is(err, context.Canceled) {
 			return fail("CANCELLED", err)
 		}
+		if e.operation == operation.Name("structural_context_v2") {
+			entered := false
+			return operation.Result{}, &operation.Failure{Code: "INVALID_SERVER_RESPONSE", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateInvalidServerResponse, TargetDiagnostic: &transientstructural.TargetDiagnostic{Action: transientstructural.TargetActionFailMalformed, ProviderMethod: "workspace/symbol", NormalizationStage: "PROVIDER_DECODE", FailedField: "response", FailedInvariant: "VALID_JSON", ProjectionEntered: &entered}}}
+		}
 		return fail("WORKSPACE_SYMBOL_MALFORMED", err)
 	}
 	matches := make([]lsp.WorkspaceSymbol, 0, 1)
@@ -166,6 +170,19 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		}
 	}
 	if len(matches) == 0 {
+		if e.operation == operation.Name("structural_context_v2") {
+			entered, zero := false, 0
+			diagnostic := &transientstructural.TargetDiagnostic{ExactMatches: 0, TotalSymbols: len(symbols), Action: transientstructural.TargetActionFailAbsent, ProviderMethod: "workspace/symbol", NormalizationStage: "EXACT_MATCH", FailedField: "symbol", FailedInvariant: "EXACT_MATCH_PRESENT", ProjectionEntered: &entered, LocatorScope: "LSP_SYMBOLS", Guidance: "no exact LSP symbol match was reported; this does not establish source absence; symbol locator covers LSP symbols; to recover, provide regex_locator.uri and regex_locator.pattern plus match_index and limits", Recovery: &transientstructural.TargetRecovery{Kind: "REGEX_LOCATOR_TEMPLATE", RequiredPattern: true, MatchIndex: &zero, RequiredFields: []string{"uri", "pattern", "match_index"}, Limits: map[string]int{"max_document_bytes": 16777216, "max_pattern_bytes": 4096, "max_work": 536870912, "max_matches": 1000}}}
+			code := "TARGET_NOT_FOUND"
+			if len(symbols) >= defaultMaxNodes {
+				code = "ENUMERATION_TRUNCATED"
+				diagnostic.Action = transientstructural.TargetActionEnumerationTruncated
+				diagnostic.OmittedSymbols = len(symbols)
+				diagnostic.Completeness = "UNKNOWN"
+				diagnostic.Recoveries = []transientstructural.TargetRecovery{{Kind: "POSITION_LOCATOR_TEMPLATE", RequiredFields: []string{"uri", "line", "character"}}, *diagnostic.Recovery}
+			}
+			return operation.Result{}, &operation.Failure{Code: code, Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound, TargetDiagnostic: diagnostic}}
+		}
 		return failWithDiagnostics("WORKSPACE_SYMBOL_ABSENT", fmt.Errorf("no exact workspace symbol match"), []string{fmt.Sprintf("exact_matches=0 returned_candidates=%d", len(symbols))})
 	}
 	if len(matches) > 1 {
@@ -187,6 +204,14 @@ func (e *Executor) Execute(parent context.Context, op operation.Request) (operat
 		code := "WORKSPACE_SYMBOL_MALFORMED"
 		if location.Range != nil && validRange(*location.Range) {
 			code = "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"
+		}
+		if e.operation == operation.Name("structural_context_v2") && code == "WORKSPACE_SYMBOL_MALFORMED" {
+			entered, index, zero := false, 0, 0
+			diagnostic := &transientstructural.TargetDiagnostic{ExactMatches: 1, TotalSymbols: len(symbols), OmittedSymbols: max(0, len(symbols)-1), Action: transientstructural.TargetActionFailMalformed, ProviderMethod: "workspace/symbol", ItemIndex: &index, NormalizationStage: "POST_DECODE_NORMALIZATION", FailedField: "location.range", FailedInvariant: "RANGE_ORDER", ProjectionEntered: &entered}
+			if concreteConfinedDocument(workspace, location.URI) {
+				diagnostic.Recovery = &transientstructural.TargetRecovery{Kind: "REGEX_LOCATOR_TEMPLATE", URI: location.URI, RequiredPattern: true, MatchIndex: &zero, RequiredFields: []string{"uri", "pattern", "match_index"}, Limits: map[string]int{"max_document_bytes": 16777216, "max_pattern_bytes": 4096, "max_work": 536870912, "max_matches": 1000}}
+			}
+			return operation.Result{}, &operation.Failure{Code: "INVALID_SERVER_RESPONSE", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateInvalidServerResponse, TargetDiagnostic: diagnostic}}
 		}
 		return fail(code, errors.New("workspace symbol location is not one concrete confined document"))
 	}

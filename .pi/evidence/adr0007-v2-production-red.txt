@@ -1,0 +1,6 @@
+# lsp-trace/internal/describerequest [lsp-trace/internal/describerequest.test]
+internal/describerequest/request_v2_production_test.go:9:24: undefined: VariantEPromptPrefix
+internal/describerequest/request_v2_production_test.go:18:24: undefined: VariantEPromptPrefix
+internal/describerequest/request_v2_production_test.go:23:24: undefined: PinnedRuntimeGrammarV2
+FAIL	lsp-trace/internal/describerequest [build failed]
+FAIL

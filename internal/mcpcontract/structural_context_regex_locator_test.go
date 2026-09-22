@@ -15,6 +15,7 @@ func TestStructuralContextRegexLocatorContract(t *testing.T) {
 		valid     bool
 	}{
 		{"valid", "ASSERT_REGEX_LOCATOR_VALID", `{` + base + `,` + validLocator + `}`, true},
+		{"defaultable-limits", "ASSERT_REGEX_LOCATOR_LIMITS_DEFAULTABLE", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{}}}`, true},
 		{"exclusive-symbol", "ASSERT_REGEX_LOCATOR_EXCLUSIVE_SYMBOL", `{` + base + `,"symbol":"Target",` + validLocator + `}`, false},
 		{"exclusive-position", "ASSERT_REGEX_LOCATOR_EXCLUSIVE_POSITION", `{` + base + `,"uri":"file:///workspace/main.go","line":0,"character":0,` + validLocator + `}`, false},
 		{"requires-uri", "ASSERT_REGEX_LOCATOR_REQUIRES_URI", `{` + base + `,"regex_locator":{"pattern":"Target","match_index":0,"limits":{"max_document_bytes":1,"max_matches":1,"max_pattern_bytes":1,"max_work":1}}}`, false},
@@ -26,6 +27,11 @@ func TestStructuralContextRegexLocatorContract(t *testing.T) {
 		{"requires-limits", "ASSERT_REGEX_LOCATOR_REQUIRES_LIMITS", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0}}`, false},
 		{"positive-limits", "ASSERT_REGEX_LOCATOR_POSITIVE_LIMITS", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{"max_document_bytes":0,"max_matches":0,"max_pattern_bytes":0,"max_work":0}}}`, false},
 		{"unknown-field", "ASSERT_REGEX_LOCATOR_UNKNOWN_FIELD", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"fallback":true,"limits":{"max_document_bytes":1,"max_matches":1,"max_pattern_bytes":1,"max_work":1}}}`, false},
+		{"unknown-limit", "ASSERT_REGEX_LOCATOR_UNKNOWN_LIMIT", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{"fallback":1}}}`, false},
+		{"work-hard-cap", "ASSERT_REGEX_LOCATOR_WORK_HARD_CAP", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{"max_work":536870913}}}`, false},
+		{"matches-hard-cap", "ASSERT_REGEX_LOCATOR_MATCHES_HARD_CAP", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{"max_matches":1001}}}`, false},
+		{"duplicate-limit", "ASSERT_REGEX_LOCATOR_DUPLICATE_LIMIT_REJECTED", `{` + base + `,"regex_locator":{"uri":"file:///workspace/main.go","pattern":"Target","match_index":0,"limits":{"max_work":1,"max_work":2}}}`, false},
+		{"trailing-json", "ASSERT_REGEX_LOCATOR_TRAILING_JSON_REJECTED", `{` + base + `,` + validLocator + `} {}`, false},
 	}
 
 	for _, tc := range cases {

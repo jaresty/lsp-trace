@@ -23,10 +23,27 @@
         "code": {"enum": ["INVALID_SYNTAX", "INVALID_CONFIG", "DISCOVERY_FAILED", "ACQUISITION_FAILED", "ASSEMBLY_FAILED", "PUBLICATION_FAILED"]},
         "batch_ordinal": {"type": "integer", "minimum": 1, "maximum": 159},
         "retry": {"const": true},
-        "detail": {"type": "string", "minLength": 1, "maxLength": 512}
+        "detail": {"type": "string", "minLength": 1, "maxLength": 512},
+        "publication_failure": {"enum": ["ROOT_OPEN", "PRIVATE_VALIDATION", "ENCODE", "CANONICALIZE", "TEMP_WRITE", "FSYNC", "NO_REPLACE", "VERIFY", "RECEIPT", "CLEANUP", "INTERNAL"]},
+        "publication_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category"],
+          "properties": {
+            "category": {"enum": ["UNKNOWN", "CANDIDATE_BYTES", "CODEC_LIMIT_BYTES", "CONSTITUENT_COUNT"]},
+            "observed": {"type": "integer", "minimum": 0, "maximum": 17179869184},
+            "limit": {"type": "integer", "minimum": 0, "maximum": 17179869184}
+          },
+          "allOf": [
+            {"if": {"properties": {"category": {"const": "UNKNOWN"}}}, "then": {"not": {"anyOf": [{"required": ["observed"]}, {"required": ["limit"]}]}}},
+            {"if": {"properties": {"category": {"enum": ["CANDIDATE_BYTES", "CODEC_LIMIT_BYTES", "CONSTITUENT_COUNT"]}}}, "then": {"required": ["observed"]}}
+          ]
+        }
       },
       "allOf": [
         {"if": {"required": ["batch_ordinal"]}, "then": {"properties": {"stage": {"const": "acquisition"}, "code": {"const": "ACQUISITION_FAILED"}}}},
+        {"if": {"required": ["publication_failure"]}, "then": {"properties": {"stage": {"const": "publication"}, "code": {"const": "PUBLICATION_FAILED"}}}},
+        {"if": {"required": ["publication_accounting"]}, "then": {"properties": {"stage": {"const": "publication"}, "code": {"const": "PUBLICATION_FAILED"}}}},
         {"oneOf": [
           {"properties": {"stage": {"const": "syntax"}, "code": {"const": "INVALID_SYNTAX"}}},
           {"properties": {"stage": {"const": "config"}, "code": {"const": "INVALID_CONFIG"}}},

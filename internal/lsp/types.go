@@ -50,6 +50,7 @@ type DocumentSymbol struct {
 	SelectionRange Range            `json:"selectionRange"`
 	Children       []DocumentSymbol `json:"children,omitempty"`
 	Flat           bool             `json:"flat,omitempty"`
+	LocationURI    string           `json:"-"`
 	ContainerName  string           `json:"containerName,omitempty"`
 }
 

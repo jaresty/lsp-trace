@@ -678,11 +678,64 @@ func TestEnvelopePolicyCanonicalizesWithoutToolNameDispatch(t *testing.T) {
 	}
 }
 
+type fixedArtifactExecutor struct {
+	artifact []byte
+}
+
+func (e fixedArtifactExecutor) Execute(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+	var envelope map[string]any
+	if json.Unmarshal(e.artifact, &envelope) == nil {
+		envelope["request_id"] = request.RequestID
+		artifact, _ := json.Marshal(envelope)
+		return operation.Result{Artifact: artifact}, nil
+	}
+	return operation.Result{Artifact: append([]byte(nil), e.artifact...)}, nil
+}
+
+func TestCensusContinuationHostUnavailableDirectGatewayParity(t *testing.T) {
+	artifact := []byte(`{"envelope_version":"1","envelope_schema_id":"https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-result.v1.schema.json","tool":"lsp_trace_v1_census","request_id":"offline-1","outcome":"COMMITTED_DEGRADED","operation_status":"SUCCEEDED","isError":false,"result":{"schema_version":"lsp-trace.census-diagnostic.v1","status":"SUCCEEDED_DEGRADED","stage":"committed-degradation","code":"CONTINUATION_HOST_UNAVAILABLE","retry":false,"detail":"continuation host capability requires bootstrap continuation configuration; census commit is preserved; provision the host, reconnect, and resubmit; do not retry on this connection"}}`)
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{CensusExecutorFamily: fixedArtifactExecutor{artifact: artifact}}}
+	arguments := `{"session_id":"s","generation":1,"sources":["."],"continuation":{"kind":"ADR_0007_FEATURE_CATALOG","stop_after":"DESCRIBE_REQUESTS"}}`
+	responses := runServerMessages(t, server, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lsp_trace_v1_census","arguments":` + arguments + `}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lsp_trace_v1_execute","arguments":{"request":{"operation":"lsp_trace_v1_census","arguments":` + arguments + `}}}}`,
+	}, "\n")+"\n")
+	direct := decodeEnvelopeForAssertion(t, "ASSERT_CONTINUATION_HOST_UNAVAILABLE_DIRECT_TYPED", responses[0])
+	gateway := decodeEnvelopeForAssertion(t, "ASSERT_CONTINUATION_HOST_UNAVAILABLE_GATEWAY_TYPED", responses[1])
+	delegatedRaw, _ := gateway["delegated_envelope"].(string)
+	var delegated map[string]any
+	if err := json.Unmarshal([]byte(delegatedRaw), &delegated); err != nil {
+		t.Fatalf("ASSERT_CONTINUATION_HOST_UNAVAILABLE_GATEWAY_DELEGATED_ENVELOPE: %v gateway=%v", err, gateway)
+	}
+	for label, envelope := range map[string]map[string]any{"direct": direct, "gateway": delegated} {
+		result, _ := envelope["result"].(map[string]any)
+		if envelope["outcome"] != "COMMITTED_DEGRADED" || result["code"] != "CONTINUATION_HOST_UNAVAILABLE" || result["retry"] != false {
+			t.Fatalf("ASSERT_CONTINUATION_HOST_UNAVAILABLE_TRANSPORT_PARITY_%s: %v", strings.ToUpper(label), envelope)
+		}
+		raw, _ := json.Marshal(envelope)
+		if err := mcpcontract.ValidateFutureCensusEnvelopeExclusive(raw); err != nil {
+			t.Fatalf("ASSERT_CONTINUATION_HOST_UNAVAILABLE_TRANSPORT_SCHEMA_%s: %v", strings.ToUpper(label), err)
+		}
+	}
+}
+
 func TestCensusDomainFailuresUseCensusEnvelopeSchema(t *testing.T) {
 	if got := domainFailureSchemaID(mcpcontract.CensusTool); got != mcpcontract.CensusDomainErrorID {
 		t.Fatalf("ASSERT_CENSUS_DOMAIN_FAILURE_SCHEMA: got=%q want=%q", got, mcpcontract.CensusDomainErrorID)
 	}
 	env := censusDomainErrorEnvelope(mcpcontract.CensusTool, "r", "config", "INVALID_CONFIG")
+	diagnostic := env.Error.(map[string]any)
+	detail, _ := diagnostic["detail"].(string)
+	for _, required := range []string{"request", "input schema", "correct", "resubmit"} {
+		if !strings.Contains(detail, required) {
+			t.Fatalf("ASSERT_CENSUS_INVALID_CONFIG_CALLER_ACTION_%s: %q", strings.ToUpper(required), detail)
+		}
+	}
+	for _, forbidden := range []string{"worker", "availability", "auto-retry", "retry automatically"} {
+		if strings.Contains(strings.ToLower(detail), forbidden) {
+			t.Fatalf("ASSERT_CENSUS_INVALID_CONFIG_NO_%s: %q", strings.ToUpper(forbidden), detail)
+		}
+	}
 	raw, err := json.Marshal(env)
 	if err != nil {
 		t.Fatal(err)

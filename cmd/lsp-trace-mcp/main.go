@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,6 +16,8 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/acquisitionorchestration"
+	"lsp-trace/internal/censusdiagnostic"
+	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/custodyevidence"
 	executionruntime "lsp-trace/internal/execution"
 	"lsp-trace/internal/managedprocess"
@@ -27,6 +30,7 @@ import (
 	"lsp-trace/internal/publication"
 	"lsp-trace/internal/retainedoperation"
 	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/serveridentity"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/sourceobject"
 	"lsp-trace/lifecycleops"
@@ -39,8 +43,8 @@ var (
 	buildCommit  = "UNKNOWN"
 )
 
-func buildIdentity() (string, string) {
-	version, revision := buildVersion, buildCommit
+func buildIdentity() (string, string, bool) {
+	version, revision, dirty := buildVersion, buildCommit, false
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if version == "devel" && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			version = info.Main.Version
@@ -48,6 +52,9 @@ func buildIdentity() (string, string) {
 		for _, setting := range info.Settings {
 			if setting.Key == "vcs.revision" && revision == "UNKNOWN" && setting.Value != "" {
 				revision = setting.Value
+			}
+			if setting.Key == "vcs.modified" && setting.Value == "true" {
+				dirty = true
 			}
 		}
 	}
@@ -57,7 +64,7 @@ func buildIdentity() (string, string) {
 	if revision == "" {
 		revision = "UNKNOWN"
 	}
-	return version, revision
+	return version, revision, dirty
 }
 
 func main() {
@@ -77,12 +84,18 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer stopRuntimeTrace()
+	if err := validateBasePublicationFailureLedgerSink(); err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
 	fs := flag.NewFlagSet("lsp-trace-mcp", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	enableLiveLSP := fs.Bool("enable-live-lsp", false, "enable accepted persistent live-LSP tools")
 	publicationRootPath := fs.String("publication-root", "", "permit verified publication hydration and output_selector beneath this pinned root")
+	acquisitionDiagnosticPath := fs.String("acquisition-diagnostic-path", "", "optional host-owned absolute private census acquisition diagnostic ledger")
 	artifactStorePath := fs.String("artifact-store", "", "pinned immutable sha256 artifact store for hydration")
 	bootstrapConfigPath := fs.String("bootstrap-config", "", "host-owned managed-process startup configuration")
+	bootstrapTimeoutValue := fs.String("bootstrap-timeout", defaultBootstrapTimeout.String(), "managed-process bootstrap readiness timeout (greater than zero, maximum 1h)")
 	custodyTrustPath := fs.String("custody-trust-config", "", "host-owned policy-pinned operational custody grants")
 	toolProfileValue := fs.String("tool-profile", string(mcp.ToolProfileDefault), "MCP advertisement profile: default, advanced, full, or compact")
 	printBootstrapExample := fs.Bool("print-bootstrap-example", false, "print a safe host-managed process bootstrap template and exit")
@@ -96,14 +109,27 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			profileCount++
 		}
 	}
+	bootstrapTimeout, err := parseBootstrapTimeout(*bootstrapTimeoutValue)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
 	if *printVersion {
-		version, revision := buildIdentity()
+		version, revision, _ := buildIdentity()
 		fmt.Fprintf(stdout, "lsp-trace-mcp %s revision=%s\n", version, revision)
 		return 0
 	}
 	if profileCount > 1 {
 		fmt.Fprintln(stderr, "--tool-profile may be specified only once")
 		return 2
+	}
+	var acquisitionDiagnostic *censusdiagnostic.Recorder
+	if *acquisitionDiagnosticPath != "" {
+		acquisitionDiagnostic, err = censusdiagnostic.NewRecorder(*acquisitionDiagnosticPath, censusdiagnostic.DefaultMaxBytes, censusdiagnostic.DefaultMaxRecords)
+		if err != nil {
+			fmt.Fprintln(stderr, "acquisition diagnostic:", err)
+			return 1
+		}
 	}
 	toolProfile := mcp.ToolProfile(*toolProfileValue)
 	switch toolProfile {
@@ -133,12 +159,17 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	var publicationRoot *publication.Root
 	if *publicationRootPath != "" {
+		basePublicationTrace(context.Background(), publication.BoundFileTraceEvent{Stage: "ROOT_SOURCE", Result: "CLI_ARGUMENT", OK: true})
 		publicationRoot, err = publication.OpenRoot(*publicationRootPath)
 		if err != nil {
+			basePublicationTrace(context.Background(), publication.BoundFileTraceEvent{Stage: "ROOT_OPEN", Result: "OPEN_FAILED", OK: false})
 			fmt.Fprintln(stderr, "publication root:", err)
 			return 1
 		}
+		basePublicationTrace(context.Background(), publication.BoundFileTraceEvent{Stage: "ROOT_OPEN", Result: "OPENED", OK: true})
 		defer publicationRoot.Close()
+	} else {
+		basePublicationTrace(context.Background(), publication.BoundFileTraceEvent{Stage: "ROOT_SOURCE", Result: "ABSENT", OK: false})
 	}
 	var artifactStore *publication.Root
 	if *artifactStorePath != "" {
@@ -193,9 +224,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
+	if err := bindCensusDiagnosticRecorder(server, acquisitionDiagnostic); err != nil {
+		fmt.Fprintln(stderr, "acquisition diagnostic:", err)
+		return 1
+	}
 	var bootstrapSessions []bootstrapSession
 	if config != nil {
-		bootstrapSessions, err = startBootstrap(context.Background(), manager, *config, 10*time.Second)
+		bootstrapSessions, err = startBootstrap(context.Background(), manager, *config, bootstrapTimeout)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 1
@@ -239,6 +274,25 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 				return 1
 			}
 		}
+	}
+	var continuationHost *productionCensusContinuationHost
+	if config != nil && config.Continuation != nil {
+		continuationHost, err = newProductionCensusContinuationHost(*config.Continuation, manager)
+		if err != nil {
+			var constructionErr *continuationConstructionError
+			if errors.As(err, &constructionErr) {
+				err = censusresult.NewContinuationFailure(censusresult.ContinuationHostConstructionFailed, censusresult.ContinuationDiagnosticContext{ConstructionStage: string(constructionErr.Stage), ConstructionReason: string(constructionErr.Reason)})
+			}
+			fmt.Fprintln(stderr, "bootstrap continuation:", err)
+			return 1
+		}
+		defer continuationHost.Close()
+		binding, ok := server.Executors[mcp.CensusExecutorFamily].(*privateCensusMCPBinding)
+		if !ok || binding.runtime == nil {
+			fmt.Fprintln(stderr, "bootstrap continuation: census binding unavailable")
+			return 1
+		}
+		server.Executors[mcp.CensusExecutorFamily] = newPrivateCensusMCPBinding(binding.runtime, continuationHost)
 	}
 	serveErr := server.Serve(stdin, stdout)
 	shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -303,7 +357,7 @@ func (e legacyManifestExecutor) Execute(ctx context.Context, request operation.R
 }
 
 func composeHostSelectorExecutors(server *mcp.Server, selected *hostSelectorRuntime) {
-	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.New(selected))
+	server.Executors[mcp.LifecycleExecutorFamily] = lifecycleops.NewExecutor(lifecycleops.NewWithServerIdentity(selected, server.Registry.ServerIdentity()))
 	server.Executors[mcp.IncomingExecutorFamily] = incomingops.NewExecutor(selected)
 	server.Executors[mcp.SliceExecutorFamily] = sliceops.NewExecutor(selected)
 	server.Executors[mcp.AcquisitionV2ExecutorFamily] = legacyManifestExecutor{runtime: selected}
@@ -385,8 +439,9 @@ func newServerRuntimeWithSeedAuthoritiesAndProfile(enableLiveLSP bool, inventory
 
 func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP bool, inventory provider.ConfiguredInventory, trust *custodyevidence.HostTrustStore, revision seedbinding.RevisionAuthority, publicationRoot, artifactStore *publication.Root, profile mcp.ToolProfile) (*mcp.Server, *sessionruntime.Manager, error) {
 	registry := mcp.NewRegistryWithProviderInventoryAndProfile(enableLiveLSP, publicationRoot != nil, inventory, profile)
-	version, buildRevision := buildIdentity()
-	registry.SetBuildIdentity(version, buildRevision)
+	version, buildRevision, dirty := buildIdentity()
+	identity := serveridentity.New("lsp-trace-mcp "+version, buildRevision, dirty, os.Executable)
+	registry.SetServerIdentity(identity)
 	validator, err := mcpcontract.NewOperationInputValidator()
 	if err != nil {
 		return nil, nil, err
@@ -459,7 +514,7 @@ func newServerRuntimeWithSeedAuthoritiesAndProfileAndArtifactStore(enableLiveLSP
 	return &mcp.Server{
 		Registry: registry, Executor: operation.NewOffline(validator, handlers),
 		Executors: map[mcp.ExecutorFamily]mcp.Executor{
-			mcp.LifecycleExecutorFamily:           lifecycleops.NewExecutor(lifecycleops.New(manager)),
+			mcp.LifecycleExecutorFamily:           lifecycleops.NewExecutor(lifecycleops.NewWithServerIdentity(manager, identity)),
 			mcp.IncomingExecutorFamily:            incomingops.NewExecutor(manager),
 			mcp.SliceExecutorFamily:               sliceops.NewExecutor(manager),
 			mcp.AcquisitionV2ExecutorFamily:       legacyManifestExecutor{runtime: manager},

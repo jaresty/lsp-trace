@@ -1,0 +1,8 @@
+{
+  "status": "STAGING_PREFLIGHT_OK",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-20260921T110946Z",
+  "artifact_sha256": {
+    "lsp-trace.new": "612df012de2278083603b93dd71354d2c31dab39f6e6406bceb752cd8b833cd8",
+    "lsp-trace-mcp.new": "686137d78737b66ee0f03e44bf474a99b3b202dfedcd76183c70b5df14173850"
+  }
+}

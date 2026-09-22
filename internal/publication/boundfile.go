@@ -56,6 +56,51 @@ func postcommitCloseStatus(attempted bool, err error) string {
 	return CloseComplete
 }
 
+type BoundFileTraceEvent struct {
+	Stage  string
+	Result string
+	OK     bool
+}
+
+type BoundFileTrace func(BoundFileTraceEvent)
+
+type BoundFileTraceSink interface {
+	WriteBoundFileTrace(BoundFileTraceEvent) error
+}
+
+type BoundFileTraceSinkFailure struct {
+	Stage  string
+	Reason string
+	cause  error
+}
+
+func (f *BoundFileTraceSinkFailure) Error() string { return "bound-file trace sink failed" }
+func (f *BoundFileTraceSinkFailure) Unwrap() error {
+	if f == nil {
+		return nil
+	}
+	return f.cause
+}
+
+type BoundFilePublicationResult struct {
+	Receipt      *BoundFileReceipt
+	Failure      *Failure
+	TraceFailure *BoundFileTraceSinkFailure
+}
+
+type boundFileTraceSinkFunc func(BoundFileTraceEvent) error
+
+func (f boundFileTraceSinkFunc) WriteBoundFileTrace(event BoundFileTraceEvent) error { return f(event) }
+
+func emitBoundFileTrace(trace BoundFileTrace, stage, result string, ok bool) {
+	if trace != nil {
+		trace(BoundFileTraceEvent{Stage: stage, Result: result, OK: ok})
+	}
+}
+
+var testHookBoundFileAfterTempBeforeInstall func() error
+var errInjectedBeforeInstall = errors.New("injected before install")
+
 type BoundFileReceipt struct {
 	FinalSelector       string
 	Digest              string
@@ -73,16 +118,25 @@ type BoundFileReceipt struct {
 // the kernel operation succeeds the result is committed success; any late
 // verification problem is represented in VerificationStatus, never as failure.
 func PublishBoundFile(root *Root, selector string, raw []byte, verify func([]byte) error) (*BoundFileReceipt, error) {
+	return PublishBoundFileWithTrace(root, selector, raw, verify, nil)
+}
+
+func PublishBoundFileWithTrace(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace) (receipt *BoundFileReceipt, returnErr error) {
 	if root == nil || raw == nil || verify == nil {
+		emitBoundFileTrace(trace, "OPEN_VALIDATE", "INVALID_REQUEST", false)
 		return nil, errors.New("invalid bound file request")
 	}
 	if err := root.ValidatePrivate(); err != nil {
+		emitBoundFileTrace(trace, "OPEN_VALIDATE", "PRIVATE_INVALID", false)
 		return nil, err
 	}
+	emitBoundFileTrace(trace, "OPEN_VALIDATE", "PRIVATE_VALID", true)
 	t, err := capabilityTarget(root, selector)
 	if err != nil {
+		emitBoundFileTrace(trace, "CANDIDATE", "CANONICALIZATION_FAILED", false)
 		return nil, err
 	}
+	emitBoundFileTrace(trace, "CANDIDATE", "CANONICAL", true)
 	committed := false
 	closeTarget := func() error {
 		if t == nil || !t.owned || t.parent == nil {
@@ -97,27 +151,36 @@ func PublishBoundFile(root *Root, selector string, raw []byte, verify func([]byt
 	}
 	defer func() {
 		if !committed {
-			_ = closeTarget()
+			cleanupErr := closeTarget()
+			returnErr = errors.Join(returnErr, cleanupErr)
+			emitBoundFileTrace(trace, "CLEANUP", map[bool]string{true: "COMPLETE", false: "FAILED"}[cleanupErr == nil], cleanupErr == nil)
 		}
 	}()
 	lock := targetLock(t.key)
 	lock.Lock()
 	defer lock.Unlock()
 	if _, err := t.parent.Lstat(t.name); err == nil {
+		emitBoundFileTrace(trace, "TARGET", "EXISTS", false)
 		return nil, os.ErrExist
 	} else if !os.IsNotExist(err) {
+		emitBoundFileTrace(trace, "TARGET", "STAT_FAILED", false)
 		return nil, err
 	}
+	emitBoundFileTrace(trace, "TARGET", "ABSENT", true)
 	if testForceUnsupportedPrimitive {
+		emitBoundFileTrace(trace, "TEMP", "UNSUPPORTED", false)
 		return nil, errExactFDUnsupported
 	}
-	published, directoryStatus, closeStatus, err := publishExactFD(root, selector, raw, verify)
+	published, directoryStatus, closeStatus, err := publishExactFD(root, selector, raw, verify, trace)
 	if err != nil {
-		return nil, errors.Join(err, closeTarget())
+		return nil, err
 	}
 	committed = published
 	if err := closeTarget(); err != nil {
 		closeStatus = CloseFailed
+		emitBoundFileTrace(trace, "CLEANUP", "FAILED", false)
+	} else {
+		emitBoundFileTrace(trace, "CLEANUP", "COMPLETE", true)
 	}
 	sum := sha256.Sum256(raw)
 	status := "VERIFIED"
@@ -127,10 +190,14 @@ func PublishBoundFile(root *Root, selector string, raw []byte, verify func([]byt
 	verifyErr, verifyCloseFailed := verifyPublishedExact(root, selector, raw, verify)
 	if verifyErr != nil {
 		status = "COMMITTED_VERIFICATION_FAILED"
+		emitBoundFileTrace(trace, "TARGET_EQUAL", "NOT_EQUAL", false)
+	} else {
+		emitBoundFileTrace(trace, "TARGET_EQUAL", "EQUAL", true)
 	}
 	if verifyCloseFailed {
 		closeStatus = CloseFailed
 	}
+	emitBoundFileTrace(trace, "RECEIPT", "CREATED", true)
 	return &BoundFileReceipt{
 		FinalSelector: selector, Digest: "sha256:" + hex.EncodeToString(sum[:]),
 		ByteLength: uint64(len(raw)), Mechanism: BoundFileMechanism,
@@ -138,6 +205,43 @@ func PublishBoundFile(root *Root, selector string, raw []byte, verify func([]byt
 		DirectorySyncStatus: directoryStatus, CloseStatus: closeStatus,
 		VerificationStatus: status,
 	}, nil
+}
+
+func PublishBoundFileWithTraceSink(root *Root, selector string, raw []byte, verify func([]byte) error, sink BoundFileTraceSink) BoundFilePublicationResult {
+	var traceFailure *BoundFileTraceSinkFailure
+	var last, primaryFailure, cleanupFailure BoundFileTraceEvent
+	trace := func(event BoundFileTraceEvent) {
+		last = event
+		if !event.OK {
+			if event.Stage == "CLEANUP" {
+				cleanupFailure = event
+			} else if primaryFailure.Stage == "" {
+				primaryFailure = event
+			}
+		}
+		if sink != nil && traceFailure == nil {
+			if err := sink.WriteBoundFileTrace(event); err != nil {
+				traceFailure = &BoundFileTraceSinkFailure{Stage: "TRACE_WRITE", Reason: "SINK_FAILED", cause: err}
+			}
+		}
+	}
+	receipt, err := PublishBoundFileWithTrace(root, selector, raw, verify, trace)
+	result := BoundFilePublicationResult{Receipt: receipt, TraceFailure: traceFailure}
+	if err != nil {
+		failureEvent := primaryFailure
+		if failureEvent.Stage == "" {
+			failureEvent = cleanupFailure
+		}
+		if failureEvent.Stage == "" {
+			failureEvent = last
+		}
+		stage, code := failureEvent.Stage, failureEvent.Result
+		if errors.Is(err, errInjectedBeforeInstall) {
+			stage, code = "NO_REPLACE", "INJECTED_BEFORE_INSTALL"
+		}
+		result.Failure = &Failure{Stage: stage, Code: code, Cleanup: receipt == nil, AtomicRename: false, cause: err}
+	}
+	return result
 }
 
 func verifyPublishedExact(root *Root, selector string, raw []byte, verify func([]byte) error) (verifyErr error, closeFailed bool) {

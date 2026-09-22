@@ -132,60 +132,149 @@ type PublicationReceipt struct {
 	VerificationStatus  string `json:"verification_status"`
 }
 
+type PublicationFailure struct {
+	Stage               string
+	Reason              string
+	CandidateSHA256     string
+	CandidateByteLength uint64
+	CodecCategory       string
+	CodecLimit          uint64
+	RootSource          string
+	TargetExists        *bool
+	TargetEqual         *bool
+	TempBytesCommitted  bool
+	FinalBytesCommitted bool
+	Err                 error
+}
+
+func (f *PublicationFailure) Error() string {
+	if f == nil || f.Err == nil {
+		return "capture-set publication failed"
+	}
+	return "capture-set publication failed: " + f.Err.Error()
+}
+
+func (f *PublicationFailure) Unwrap() error {
+	if f == nil {
+		return nil
+	}
+	return f.Err
+}
+
 type PublicationResult struct {
-	Receipt *PublicationReceipt
-	Code    string
-	Err     error
+	Receipt       *PublicationReceipt
+	Code          string
+	Failure       *PublicationFailure
+	LedgerFailure *FailureLedgerWriteFailure
+	Err           error
 }
 
 type Publisher struct {
-	root *publication.Root
+	root   *publication.Root
+	trace  publication.BoundFileTrace
+	ledger *FailureLedger
 }
 
 func NewPublisher(root *publication.Root) *Publisher {
 	return &Publisher{root: root}
 }
 
+func NewPublisherWithTrace(root *publication.Root, trace publication.BoundFileTrace) *Publisher {
+	return &Publisher{root: root, trace: trace}
+}
+
+func NewPublisherWithFailureLedger(root *publication.Root, ledger *FailureLedger) *Publisher {
+	return &Publisher{root: root, ledger: ledger}
+}
+
+func NewPublisherWithTraceAndFailureLedger(root *publication.Root, trace publication.BoundFileTrace, ledger *FailureLedger) *Publisher {
+	return &Publisher{root: root, trace: trace, ledger: ledger}
+}
+
+func FailedFailureLedger(err error) *FailureLedger {
+	if err == nil {
+		return nil
+	}
+	return &FailureLedger{write: func(FailureLedgerRecord) error { return err }}
+}
+
+func (p *Publisher) recordFailure(result PublicationResult) PublicationResult {
+	if p == nil || p.ledger == nil || result.Failure == nil {
+		return result
+	}
+	if err := p.ledger.Record(result.Failure); err != nil {
+		result.LedgerFailure = &FailureLedgerWriteFailure{Stage: "LEDGER_WRITE", Reason: "SINK_FAILED", cause: err}
+	}
+	return result
+}
+
 // PublishCaptureSet is the all-or-nothing private publication primitive. The
 // supplied byte strings may be in any order; each must be exactly admitted and
 // must bijectively match manifest.Constituents before staging begins.
 func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority ExactBytesAuthority) PublicationResult {
+	fail := func(stage, reason string, err error) PublicationResult {
+		failure := &PublicationFailure{Stage: stage, Reason: reason, CodecCategory: "CAPTURE_SET_V1", RootSource: "HOST_PUBLICATION_ROOT", Err: err}
+		return p.recordFailure(PublicationResult{Failure: failure, Err: failure})
+	}
 	manifestRaw, err := EncodeCanonical(m)
 	if err != nil || m.Disclosure != "PRIVATE" {
 		if err == nil {
 			err = errors.New("only private capture sets may be published")
 		}
-		return PublicationResult{Err: err}
+		return fail("PRIVATE_VALIDATION", "MANIFEST_REJECTED", err)
 	}
 	if len(exactV5) != len(m.Constituents) {
-		return PublicationResult{Err: errors.New("constituent byte cardinality mismatch")}
+		return fail("PRIVATE_VALIDATION", "CONSTITUENT_CARDINALITY", errors.New("constituent byte cardinality mismatch"))
 	}
 	bySelector := make(map[string][]byte, len(exactV5))
 	for _, raw := range exactV5 {
 		c, admitErr := authority.Constituent(raw)
 		if admitErr != nil {
-			return PublicationResult{Err: admitErr}
+			return fail("PRIVATE_VALIDATION", "CONSTITUENT_REJECTED", admitErr)
 		}
 		if _, duplicate := bySelector[c.ImmutableSelector]; duplicate {
-			return PublicationResult{Err: errors.New("duplicate constituent bytes")}
+			return fail("PRIVATE_VALIDATION", "DUPLICATE_CONSTITUENT", errors.New("duplicate constituent bytes"))
 		}
 		bySelector[c.ImmutableSelector] = append([]byte(nil), raw...)
 	}
 	for _, c := range m.Constituents {
 		raw, ok := bySelector[c.ImmutableSelector]
 		if !ok {
-			return PublicationResult{Err: errors.New("manifest constituent association mismatch")}
+			return fail("PRIVATE_VALIDATION", "CONSTITUENT_ASSOCIATION", errors.New("manifest constituent association mismatch"))
 		}
 		if verifyErr := authority.VerifyConstituent(c, raw); verifyErr != nil {
-			return PublicationResult{Err: verifyErr}
+			return fail("PRIVATE_VALIDATION", "CONSTITUENT_VERIFY", verifyErr)
 		}
 	}
 	bundleRaw, err := encodePrivateBundle(m, manifestRaw, bySelector)
 	if err != nil {
-		return PublicationResult{Err: err}
+		return fail("ENCODE", "BUNDLE_ENCODE", err)
+	}
+	sum := sha256.Sum256(bundleRaw)
+	candidateDigest := "sha256:" + hex.EncodeToString(sum[:])
+	var last, primaryFailure, cleanupFailure publication.BoundFileTraceEvent
+	var tempBytesCommitted, finalBytesCommitted bool
+	trace := func(event publication.BoundFileTraceEvent) {
+		last = event
+		if !event.OK {
+			if event.Stage == "CLEANUP" {
+				cleanupFailure = event
+			} else if primaryFailure.Stage == "" {
+				primaryFailure = event
+			}
+		}
+		if event.Stage == "TEMP" && event.Result == "CREATED" && event.OK {
+			tempBytesCommitted = true
+		}
+		if event.Stage == "HARDLINK" && event.Result == "INSTALLED" && event.OK {
+			finalBytesCommitted = true
+		}
+		if p.trace != nil {
+			p.trace(event)
+		}
 	}
 	selector := CaptureSetPublicationSelector(m)
-	receipt, err := publication.PublishBoundFile(p.root, selector, bundleRaw, func(committed []byte) error {
+	receipt, err := publication.PublishBoundFileWithTrace(p.root, selector, bundleRaw, func(committed []byte) error {
 		decoded, verifyErr := decodePrivateBundle(committed, authority)
 		if verifyErr != nil {
 			return verifyErr
@@ -195,13 +284,33 @@ func (p *Publisher) PublishCaptureSet(m Manifest, exactV5 [][]byte, authority Ex
 			return errors.New("committed bundle is not canonical")
 		}
 		return nil
-	})
+	}, trace)
 	if err != nil {
 		code := publication.CodePublicationFailed
 		if errors.Is(err, os.ErrExist) {
 			code = publication.CodeTargetExists
 		}
-		return PublicationResult{Code: code, Err: err}
+		failureEvent := primaryFailure
+		if failureEvent.Stage == "" {
+			failureEvent = cleanupFailure
+		}
+		if failureEvent.Stage == "" {
+			failureEvent = last
+		}
+		stage := map[string]string{"OPEN_VALIDATE": "PRIVATE_VALIDATION", "CANDIDATE": "CANONICALIZE", "TARGET": "NO_REPLACE", "TEMP": "TEMP_WRITE", "WRITE_FSYNC": "FSYNC", "HARDLINK": "NO_REPLACE", "TARGET_EQUAL": "VERIFY", "RECEIPT": "RECEIPT", "CLEANUP": "CLEANUP"}[failureEvent.Stage]
+		if stage == "" {
+			stage = "INTERNAL"
+		}
+		failure := &PublicationFailure{Stage: stage, Reason: failureEvent.Result, CandidateSHA256: candidateDigest, CandidateByteLength: uint64(len(bundleRaw)), CodecCategory: "CAPTURE_SET_V1", CodecLimit: uint64(MaxBundleBytes), RootSource: "HOST_PUBLICATION_ROOT", TempBytesCommitted: tempBytesCommitted, FinalBytesCommitted: finalBytesCommitted, Err: err}
+		if failureEvent.Stage == "TARGET" {
+			v := failureEvent.Result == "EXISTS"
+			failure.TargetExists = &v
+		}
+		if failureEvent.Stage == "TARGET_EQUAL" {
+			v := failureEvent.Result == "EQUAL"
+			failure.TargetEqual = &v
+		}
+		return p.recordFailure(PublicationResult{Code: code, Failure: failure, Err: failure})
 	}
 	return PublicationResult{Receipt: &PublicationReceipt{
 		Selector: selector, Disclosure: "PRIVATE",

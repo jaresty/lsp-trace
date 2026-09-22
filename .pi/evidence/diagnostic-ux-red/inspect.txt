@@ -1,0 +1,9 @@
+{"Time":"2026-09-20T16:55:49.445569-07:00","Action":"start","Package":"lsp-trace/internal/operation"}
+{"Time":"2026-09-20T16:55:49.807511-07:00","Action":"run","Package":"lsp-trace/internal/operation","Test":"TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate"}
+{"Time":"2026-09-20T16:55:49.807572-07:00","Action":"output","Package":"lsp-trace/internal/operation","Test":"TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate","Output":"=== RUN   TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate\n"}
+{"Time":"2026-09-20T16:55:49.809127-07:00","Action":"output","Package":"lsp-trace/internal/operation","Test":"TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate","Output":"    inspect_hydrated_test.go:22: ASSERT_INSPECT_HYDRATED_ACTIONABLE_INPUT.SCHEMA_VERSION: INPUT_INVALID: unsupported evidence family/version: \n"}
+{"Time":"2026-09-20T16:55:49.809157-07:00","Action":"output","Package":"lsp-trace/internal/operation","Test":"TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate","Output":"--- FAIL: TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate (0.00s)\n"}
+{"Time":"2026-09-20T16:55:49.809165-07:00","Action":"fail","Package":"lsp-trace/internal/operation","Test":"TestInspectHydratedUnsupportedEvidenceDiagnosticIsActionableAndPrivate","Elapsed":0}
+{"Time":"2026-09-20T16:55:49.809181-07:00","Action":"output","Package":"lsp-trace/internal/operation","Output":"FAIL\n"}
+{"Time":"2026-09-20T16:55:49.809895-07:00","Action":"output","Package":"lsp-trace/internal/operation","Output":"FAIL\tlsp-trace/internal/operation\t0.364s\n"}
+{"Time":"2026-09-20T16:55:49.809909-07:00","Action":"fail","Package":"lsp-trace/internal/operation","Elapsed":0.364}

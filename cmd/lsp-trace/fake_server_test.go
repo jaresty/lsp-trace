@@ -62,6 +62,29 @@ func TestSubprocessLifecycleAndHierarchyShapes(t *testing.T) {
 	}
 }
 
+func TestSubprocessUnadvertisedOperationalCallHierarchyRetainsServerOccurrence(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\nfunc start() { leaf() }\nfunc leaf() {}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	methodLog := filepath.Join(t.TempDir(), "methods.log")
+	args := []string{"slice", "--workspace", workspace, "--server", os.Args[0], "--server-arg", "-test.run=^TestFakeLanguageServerProcess$", "--server-env", "LSP_TRACE_FAKE_SERVER=1", "--server-env", "LSP_TRACE_FAKE_SCENARIO=slice-unadvertised-operational", "--server-env", "LSP_TRACE_FAKE_METHOD_LOG=" + methodLog, "--at", "main.go:2:6", "--down-depth", "1", "--up-depth", "0", "--request-timeout", "500ms", "--timeout", "2s"}
+	stdout, stderr, code := captureRun(t, args)
+	var result graph.Result
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("ASSERT_UNADVERTISED_OPERATIONAL_CALL_HIERARCHY_JSON: %v stdout=%q stderr=%q", err, stdout, stderr)
+	}
+	methods, err := os.ReadFile(methodLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSite := graph.Range{Start: graph.Position{Line: 0, Character: 5}, End: graph.Position{Line: 0, Character: 9}}
+	relations := graph.NormalizeRelations(result)
+	if code != 0 || result.Capabilities.CallHierarchyProvider || result.CapabilityQuality.Advertised || len(result.Edges) != 1 || len(result.Edges[0].CallSites) != 1 || result.Edges[0].CallSites[0] != wantSite || len(relations.Relations) != 1 || relations.Relations[0].Kind != graph.RelationCalls || relations.Relations[0].EvidenceClass != graph.EvidenceServerReported || len(relations.Relations[0].Anchors) != 1 || relations.Relations[0].Anchors[0].Range != wantSite || methodCount(methods, "textDocument/prepareCallHierarchy") != 1 || methodCount(methods, "callHierarchy/outgoingCalls") != 1 {
+		t.Fatalf("ASSERT_UNADVERTISED_OPERATIONAL_CALL_HIERARCHY_SERVER_OCCURRENCE: code=%d capabilities=%#v quality=%#v edges=%#v relations=%#v methods=%q diagnostics=%#v stderr=%q", code, result.Capabilities, result.CapabilityQuality, result.Edges, relations.Relations, methods, result.Diagnostics, stderr)
+	}
+}
+
 func TestSubprocessSliceRelaysServerStderrWhenInitializeEndsWithEOF(t *testing.T) {
 	workspace := t.TempDir()
 	if err := os.WriteFile(filepath.Join(workspace, "main.go"), []byte("package main\n"), 0600); err != nil {
@@ -705,6 +728,9 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				return err
 			}
 			capabilities := map[string]any{"callHierarchyProvider": true}
+			if scenario == "slice-unadvertised-operational" {
+				delete(capabilities, "callHierarchyProvider")
+			}
 			if strings.HasPrefix(scenario, "slice") {
 				capabilities["documentSymbolProvider"] = true
 			}
@@ -777,7 +803,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				line = 0
 			}
 			prepared := item(name, line)
-			if scenario == "slice" || scenario == "slice-symbol" || scenario == "slice-multi-file" {
+			if scenario == "slice" || scenario == "slice-symbol" || scenario == "slice-multi-file" || scenario == "slice-unadvertised-operational" {
 				prepared.URI = p.TextDocument.URI
 			}
 			err = writeFake(out, m.ID, []fakeItem{prepared}, nil)
@@ -792,7 +818,7 @@ func serveFake(scenario string, in io.Reader, out io.Writer) error {
 				break
 			}
 			calls := []map[string]any{}
-			if (scenario == "slice" || scenario == "slice-noisy") && p.Item.Name == "start" {
+			if (scenario == "slice" || scenario == "slice-noisy" || scenario == "slice-unadvertised-operational") && p.Item.Name == "start" {
 				calls = append(calls, map[string]any{"to": item("leaf", 1), "fromRanges": []fakeRange{{Start: fakePosition{Line: 0, Character: 5}, End: fakePosition{Line: 0, Character: 9}}}})
 			}
 			if scenario == "slice-identity" && p.Item.Name == "root" {

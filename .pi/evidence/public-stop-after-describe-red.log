@@ -1,0 +1,33 @@
+{"ImportPath":"lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]","Action":"build-output","Output":"# lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]","Action":"build-output","Output":"cmd/lsp-trace/census_catalog_cli_test.go:57:20: got.StopAfter undefined (type censusCLIOptions has no field or method StopAfter)\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]","Action":"build-output","Output":"cmd/lsp-trace/census_catalog_cli_test.go:58:75: got.StopAfter undefined (type censusCLIOptions has no field or method StopAfter)\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]","Action":"build-fail"}
+{"Time":"2026-09-20T16:30:26.844938-07:00","Action":"start","Package":"lsp-trace/cmd/lsp-trace"}
+{"Time":"2026-09-20T16:30:26.844991-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace","Output":"FAIL\tlsp-trace/cmd/lsp-trace [build failed]\n"}
+{"Time":"2026-09-20T16:30:26.844998-07:00","Action":"fail","Package":"lsp-trace/cmd/lsp-trace","Elapsed":0,"FailedBuild":"lsp-trace/cmd/lsp-trace [lsp-trace/cmd/lsp-trace.test]"}
+{"Time":"2026-09-20T16:30:27.056309-07:00","Action":"start","Package":"lsp-trace/internal/mcpcontract"}
+{"Time":"2026-09-20T16:30:27.35381-07:00","Action":"run","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests"}
+{"Time":"2026-09-20T16:30:27.353852-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests","Output":"=== RUN   TestFutureCensusRequestV2StopAfterDescribeRequests\n"}
+{"Time":"2026-09-20T16:30:27.353866-07:00","Action":"run","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/fresh"}
+{"Time":"2026-09-20T16:30:27.353872-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/fresh","Output":"=== RUN   TestFutureCensusRequestV2StopAfterDescribeRequests/fresh\n"}
+{"Time":"2026-09-20T16:30:27.353917-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/fresh","Output":"    census_continuation_v2_test.go:115: ASSERT_STOP_AFTER_DESCRIBE_REQUESTS_MCP_CONTRACT: ok=true err=census semantic-v1: invalid shape got=map[]\n"}
+{"Time":"2026-09-20T16:30:27.353932-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/fresh","Output":"--- FAIL: TestFutureCensusRequestV2StopAfterDescribeRequests/fresh (0.00s)\n"}
+{"Time":"2026-09-20T16:30:27.353936-07:00","Action":"fail","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/fresh","Elapsed":0}
+{"Time":"2026-09-20T16:30:27.353947-07:00","Action":"run","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay"}
+{"Time":"2026-09-20T16:30:27.353956-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay","Output":"=== RUN   TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay\n"}
+{"Time":"2026-09-20T16:30:27.353969-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay","Output":"    census_continuation_v2_test.go:115: ASSERT_STOP_AFTER_DESCRIBE_REQUESTS_MCP_CONTRACT: ok=true err=census semantic-v1: invalid shape got=map[]\n"}
+{"Time":"2026-09-20T16:30:27.353974-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay","Output":"--- FAIL: TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay (0.00s)\n"}
+{"Time":"2026-09-20T16:30:27.353977-07:00","Action":"fail","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/same_stop_replay","Elapsed":0}
+{"Time":"2026-09-20T16:30:27.353979-07:00","Action":"run","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum"}
+{"Time":"2026-09-20T16:30:27.35398-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum","Output":"=== RUN   TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum\n"}
+{"Time":"2026-09-20T16:30:27.353983-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum","Output":"--- PASS: TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum (0.00s)\n"}
+{"Time":"2026-09-20T16:30:27.353984-07:00","Action":"pass","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/unknown_enum","Elapsed":0}
+{"Time":"2026-09-20T16:30:27.35399-07:00","Action":"run","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type"}
+{"Time":"2026-09-20T16:30:27.353991-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type","Output":"=== RUN   TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type\n"}
+{"Time":"2026-09-20T16:30:27.353995-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type","Output":"--- PASS: TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type (0.00s)\n"}
+{"Time":"2026-09-20T16:30:27.353996-07:00","Action":"pass","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests/wrong_type","Elapsed":0}
+{"Time":"2026-09-20T16:30:27.353997-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests","Output":"--- FAIL: TestFutureCensusRequestV2StopAfterDescribeRequests (0.00s)\n"}
+{"Time":"2026-09-20T16:30:27.353998-07:00","Action":"fail","Package":"lsp-trace/internal/mcpcontract","Test":"TestFutureCensusRequestV2StopAfterDescribeRequests","Elapsed":0}
+{"Time":"2026-09-20T16:30:27.354624-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Output":"FAIL\n"}
+{"Time":"2026-09-20T16:30:27.355094-07:00","Action":"output","Package":"lsp-trace/internal/mcpcontract","Output":"FAIL\tlsp-trace/internal/mcpcontract\t0.299s\n"}
+{"Time":"2026-09-20T16:30:27.355101-07:00","Action":"fail","Package":"lsp-trace/internal/mcpcontract","Elapsed":0.299}

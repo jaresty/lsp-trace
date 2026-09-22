@@ -1,0 +1,2 @@
+ok  	lsp-trace/internal/censuscontinuation	1.395s
+ok  	lsp-trace/cmd/lsp-trace	0.375s

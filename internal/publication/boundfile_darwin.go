@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error) (bool, string, string, error) {
+func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte) error, trace BoundFileTrace) (bool, string, string, error) {
 	parentFD, name, err := boundParentFD(root, selector)
 	if err != nil {
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, err
@@ -31,6 +31,7 @@ func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte)
 		tmp := ".lsp-trace-bundle-" + hex.EncodeToString(token[:])
 		sourceFD, err = unix.Openat(parentFD, tmp, unix.O_RDWR|unix.O_CREAT|unix.O_EXCL|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
 		if err == nil {
+			emitBoundFileTrace(trace, "TEMP", "CREATED", true)
 			if unlinkErr := unix.Unlinkat(parentFD, tmp, 0); unlinkErr != nil {
 				unix.Close(sourceFD)
 				return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, unlinkErr
@@ -42,13 +43,23 @@ func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte)
 		}
 	}
 	if sourceFD < 0 {
+		emitBoundFileTrace(trace, "TEMP", "FAILED", false)
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.New("temporary source collision limit reached")
 	}
 	f := os.NewFile(uintptr(sourceFD), "unlinked-capture-bundle")
 	if err := prepareSource(f, raw, verify); err != nil {
+		emitBoundFileTrace(trace, "WRITE_FSYNC", "FAILED", false)
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(err, closeBoundSource(f))
 	}
+	emitBoundFileTrace(trace, "WRITE_FSYNC", "COMPLETE", true)
+	if testHookBoundFileAfterTempBeforeInstall != nil {
+		if err := testHookBoundFileAfterTempBeforeInstall(); err != nil {
+			emitBoundFileTrace(trace, "HARDLINK", "INJECTED_BEFORE_INSTALL", false)
+			return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(errInjectedBeforeInstall, err, closeBoundSource(f))
+		}
+	}
 	if err := unix.Fclonefileat(sourceFD, parentFD, name, unix.CLONE_NOOWNERCOPY); err != nil {
+		emitBoundFileTrace(trace, "HARDLINK", "FAILED", false)
 		if errors.Is(err, unix.EEXIST) {
 			return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(os.ErrExist, closeBoundSource(f))
 		}
@@ -58,6 +69,7 @@ func publishExactFD(root *Root, selector string, raw []byte, verify func([]byte)
 		return false, DirectorySyncNotAttemptedPostCommit, CloseNotAttempted, errors.Join(err, closeBoundSource(f))
 	}
 	committed = true
+	emitBoundFileTrace(trace, "HARDLINK", "INSTALLED", true)
 	directoryStatus := postcommitDirectorySyncStatus(true, syncBoundDirectory(parentFD))
 	sourceCloseErr := closeBoundSource(f)
 	rootCloseErr := closeBoundRootFD(parentFD)

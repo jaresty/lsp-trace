@@ -1,0 +1,9 @@
+{"Time":"2026-09-20T07:22:32.540873-07:00","Action":"start","Package":"lsp-trace/internal/censuscontinuation"}
+{"Time":"2026-09-20T07:22:32.734141-07:00","Action":"run","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRetainedProgramCCaptureFailureClassification"}
+{"Time":"2026-09-20T07:22:32.734218-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRetainedProgramCCaptureFailureClassification","Output":"=== RUN   TestRetainedProgramCCaptureFailureClassification\n"}
+{"Time":"2026-09-20T07:22:40.445898-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRetainedProgramCCaptureFailureClassification","Output":"    nonempty_packet_diagnostic_test.go:114: ASSERT_RETAINED_PROGRAM_C_CAPTURE_CLASSIFICATION code=NONE constituents=4 snapshots=4 captured=128 unavailable=11\n"}
+{"Time":"2026-09-20T07:22:40.44598-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRetainedProgramCCaptureFailureClassification","Output":"--- PASS: TestRetainedProgramCCaptureFailureClassification (7.71s)\n"}
+{"Time":"2026-09-20T07:22:40.445991-07:00","Action":"pass","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRetainedProgramCCaptureFailureClassification","Elapsed":7.71}
+{"Time":"2026-09-20T07:22:40.446009-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Output":"PASS\n"}
+{"Time":"2026-09-20T07:22:40.452764-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Output":"ok  \tlsp-trace/internal/censuscontinuation\t7.912s\n"}
+{"Time":"2026-09-20T07:22:40.452806-07:00","Action":"pass","Package":"lsp-trace/internal/censuscontinuation","Elapsed":7.912}

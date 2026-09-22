@@ -10,6 +10,7 @@ import (
 
 	"lsp-trace/internal/captureset"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/programc"
 	"lsp-trace/internal/programcadmission"
 	"lsp-trace/internal/programccompose"
@@ -61,6 +62,13 @@ type Candidate struct {
 	Members              []string
 }
 
+// RepresentativePredecessor is the census-owned transport form of one exact
+// qualified incoming call-site occurrence.
+type RepresentativePredecessor struct {
+	OccurrenceID, RelationID, CallerID, TargetID string
+	CallSite                                     graph.Range
+}
+
 // Representative is an additive, correction-oriented structural nomination.
 // It retains no semantic identity, ownership, or runtime assertion.
 type Representative struct {
@@ -70,6 +78,7 @@ type Representative struct {
 	ConstituentOrdinal, Distance, Authority                                 int
 	ExecutionBundleID, SeedLabel, SeedAt, SelectedNode, SourceGraphComplete string
 	AllTraversalComplete, AnyTruncated                                      bool
+	IncomingPredecessors                                                    []RepresentativePredecessor
 }
 type RepresentativeSelection struct {
 	State                   string
@@ -144,20 +153,27 @@ func representativesFromQualification(projection censusacquisition.Projection, s
 	if len(source.Constituents) != len(projection.Constituents) {
 		return RepresentativeSelection{}, errors.New("representative constituent lineage cardinality mismatch")
 	}
-	for i, constituent := range source.Constituents {
-		if constituent.Identity != projection.Constituents[i].Identity.ImmutableSelector {
-			return RepresentativeSelection{}, errors.New("representative constituent lineage mismatch")
+	projectionByIdentity := make(map[string]string, len(projection.Constituents))
+	for _, constituent := range projection.Constituents {
+		identity := constituent.Identity.ImmutableSelector
+		if identity == "" || projectionByIdentity[identity] != "" {
+			return RepresentativeSelection{}, errors.New("representative projection lineage identity conflict")
 		}
+		projectionByIdentity[identity] = constituent.BatchID
 	}
 	byIdentity := make(map[string]struct {
 		ordinal int
 		batch   string
-	}, len(projection.Constituents))
-	for i, c := range projection.Constituents {
-		byIdentity[c.Identity.ImmutableSelector] = struct {
+	}, len(source.Constituents))
+	for i, constituent := range source.Constituents {
+		batch, ok := projectionByIdentity[constituent.Identity]
+		if !ok {
+			return RepresentativeSelection{}, errors.New("representative constituent lineage mismatch")
+		}
+		byIdentity[constituent.Identity] = struct {
 			ordinal int
 			batch   string
-		}{i, c.BatchID}
+		}{i, batch}
 	}
 	base := func(identity string, ordinal int, members []string) (Representative, error) {
 		lineage, ok := byIdentity[identity]
@@ -181,6 +197,10 @@ func representativesFromQualification(projection censusacquisition.Projection, s
 		c.SelectedNode = n.SelectedNode
 		c.Distance = n.Distance
 		c.SCCMembers = append([]string(nil), n.SCCMembers...)
+		c.IncomingPredecessors, err = cloneRepresentativePredecessors(n.SelectedNode, n.IncomingPredecessors)
+		if err != nil {
+			return RepresentativeSelection{}, err
+		}
 		out.Nominations = append(out.Nominations, c)
 	}
 	for _, u := range qualified.Unresolved {
@@ -196,6 +216,66 @@ func representativesFromQualification(projection censusacquisition.Projection, s
 		c.PreparedTargets = append([]string(nil), u.PreparedTargets...)
 		out.Unresolved = append(out.Unresolved, c)
 	}
+	sort.Slice(out.Nominations, func(i, j int) bool {
+		a, b := out.Nominations[i], out.Nominations[j]
+		if a.CommunityIdentity != b.CommunityIdentity {
+			return a.CommunityIdentity < b.CommunityIdentity
+		}
+		if a.ConstituentOrdinal != b.ConstituentOrdinal {
+			return a.ConstituentOrdinal < b.ConstituentOrdinal
+		}
+		if a.ConstituentIdentity != b.ConstituentIdentity {
+			return a.ConstituentIdentity < b.ConstituentIdentity
+		}
+		if a.ExecutionBundleID != b.ExecutionBundleID {
+			return a.ExecutionBundleID < b.ExecutionBundleID
+		}
+		if a.SeedAt != b.SeedAt {
+			return a.SeedAt < b.SeedAt
+		}
+		if a.SeedLabel != b.SeedLabel {
+			return a.SeedLabel < b.SeedLabel
+		}
+		return a.SelectedNode < b.SelectedNode
+	})
+	return out, nil
+}
+
+func cloneRepresentativePredecessors(selected string, in []programcrepresentative.IncomingPredecessor) ([]RepresentativePredecessor, error) {
+	out := make([]RepresentativePredecessor, len(in))
+	seen := make(map[string]bool, len(in))
+	for i, predecessor := range in {
+		if predecessor.OccurrenceID == "" || predecessor.RelationID == "" || predecessor.CallerID == "" || predecessor.TargetID == "" || predecessor.TargetID != selected || predecessor.CallerID == predecessor.TargetID || seen[predecessor.OccurrenceID] {
+			return nil, errors.New("invalid representative predecessor")
+		}
+		seen[predecessor.OccurrenceID] = true
+		out[i] = RepresentativePredecessor{OccurrenceID: predecessor.OccurrenceID, RelationID: predecessor.RelationID, CallerID: predecessor.CallerID, TargetID: predecessor.TargetID, CallSite: predecessor.CallSite}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.RelationID != b.RelationID {
+			return a.RelationID < b.RelationID
+		}
+		if a.OccurrenceID != b.OccurrenceID {
+			return a.OccurrenceID < b.OccurrenceID
+		}
+		if a.CallerID != b.CallerID {
+			return a.CallerID < b.CallerID
+		}
+		if a.TargetID != b.TargetID {
+			return a.TargetID < b.TargetID
+		}
+		if a.CallSite.Start.Line != b.CallSite.Start.Line {
+			return a.CallSite.Start.Line < b.CallSite.Start.Line
+		}
+		if a.CallSite.Start.Character != b.CallSite.Start.Character {
+			return a.CallSite.Start.Character < b.CallSite.Start.Character
+		}
+		if a.CallSite.End.Line != b.CallSite.End.Line {
+			return a.CallSite.End.Line < b.CallSite.End.Line
+		}
+		return a.CallSite.End.Character < b.CallSite.End.Character
+	})
 	return out, nil
 }
 

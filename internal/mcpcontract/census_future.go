@@ -38,8 +38,21 @@ func WithCensus(m *Manifest) *Manifest {
 		SchemaRegistration{ID: CensusResultID, Family: "census-result.v1", Layer: "artifact", Path: "schemas/lsp-trace.census-result.v1.schema.json"},
 		SchemaRegistration{ID: CensusSuccessID, Family: "envelope-census-result.v1", Layer: "envelope", Path: "schemas/envelope-census-result.v1.schema.json"},
 		SchemaRegistration{ID: CensusDomainErrorID, Family: "envelope-census-domain-error.v1", Layer: "envelope", Path: "schemas/envelope-census-domain-error.v1.schema.json"},
+		SchemaRegistration{ID: FutureCensusV2InputID, Family: "input-census.v2", Layer: "input", Path: "schemas/input-census.v2.schema.json"},
+		SchemaRegistration{ID: FutureCensusCompositeResultID, Family: "census-feature-catalog-result.v2", Layer: "artifact", Path: "schemas/lsp-trace.census-feature-catalog-result.v2.schema.json"},
+		SchemaRegistration{ID: FutureCensusCompositeSuccessID, Family: "envelope-census-feature-catalog-result.v2", Layer: "envelope", Path: "schemas/envelope-census-feature-catalog-result.v2.schema.json"},
+		SchemaRegistration{ID: CensusContinuationDiagnosticID, Family: "census-continuation-diagnostic.v1", Layer: "artifact", Path: "schemas/lsp-trace.census-continuation-diagnostic.v1.schema.json"},
+		SchemaRegistration{ID: CensusContinuationDiagnosticEnvelopeID, Family: "envelope-census-continuation-diagnostic.v1", Layer: "envelope", Path: "schemas/envelope-census-continuation-diagnostic.v1.schema.json"},
+		SchemaRegistration{ID: CensusContinuationDiagnosticV2ID, Family: "census-continuation-diagnostic.v2", Layer: "artifact", Path: "schemas/lsp-trace.census-continuation-diagnostic.v2.schema.json"},
+		SchemaRegistration{ID: CensusContinuationDiagnosticEnvelopeV2ID, Family: "envelope-census-continuation-diagnostic.v2", Layer: "envelope", Path: "schemas/envelope-census-continuation-diagnostic.v2.schema.json"},
+		SchemaRegistration{ID: CensusRequestReceiptID, Family: "census-request-receipt.v1", Layer: "artifact", Path: "schemas/lsp-trace.census-request-receipt.v1.schema.json"},
+		SchemaRegistration{ID: CensusDiscoveryDiagnosticV2ID, Family: "census-discovery-diagnostic.v2", Layer: "artifact", Path: "schemas/lsp-trace.census-discovery-diagnostic.v2.schema.json"},
+		SchemaRegistration{ID: CensusDiscoveryDiagnosticEnvelopeV2ID, Family: "envelope-census-discovery-diagnostic.v2", Layer: "envelope", Path: "schemas/envelope-census-discovery-diagnostic.v2.schema.json"},
 	)
-	c.Tools = append(c.Tools, ToolContract{Name: CensusTool, Aliases: []string{}, InputSchemaID: CensusInputID, EnvelopeSchemaIDs: []string{CensusSuccessID, CensusDomainErrorID}, ArtifactSchemaIDs: []string{CensusResultID}, Advertised: true, Availability: "ENABLED"})
+	// The canonical operation name remains v1 for wire compatibility. The v2 input
+	// is a strict additive union: omitting continuation preserves historical v1
+	// decoding and bytes; supplying continuation selects the successor runtime.
+	c.Tools = append(c.Tools, ToolContract{Name: CensusTool, Aliases: []string{}, InputSchemaID: FutureCensusV2InputID, EnvelopeSchemaIDs: []string{CensusSuccessID, CensusDomainErrorID, FutureCensusCompositeSuccessID, CensusContinuationDiagnosticEnvelopeID, CensusContinuationDiagnosticEnvelopeV2ID, CensusDiscoveryDiagnosticEnvelopeV2ID}, ArtifactSchemaIDs: []string{CensusResultID, FutureCensusCompositeResultID, CensusContinuationDiagnosticID, CensusContinuationDiagnosticV2ID, CensusDiscoveryDiagnosticV2ID, CensusRequestReceiptID}, Advertised: true, Availability: "ENABLED"})
 	return &c
 }
 
@@ -48,10 +61,20 @@ func censusSchema(name string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	idByPath := map[string]string{
-		"testdata/schemas/input-census.v1.schema.json":                 CensusInputID,
-		"testdata/schemas/lsp-trace.census-result.v1.schema.json":      CensusResultID,
-		"testdata/schemas/envelope-census-result.v1.schema.json":       CensusSuccessID,
-		"testdata/schemas/envelope-census-domain-error.v1.schema.json": CensusDomainErrorID,
+		"testdata/schemas/input-census.v1.schema.json":                             CensusInputID,
+		"testdata/schemas/lsp-trace.census-result.v1.schema.json":                  CensusResultID,
+		"testdata/schemas/envelope-census-result.v1.schema.json":                   CensusSuccessID,
+		"testdata/schemas/envelope-census-domain-error.v1.schema.json":             CensusDomainErrorID,
+		"testdata/schemas/input-census.v2.schema.json":                             FutureCensusV2InputID,
+		"testdata/schemas/lsp-trace.census-feature-catalog-result.v2.schema.json":  FutureCensusCompositeResultID,
+		"testdata/schemas/envelope-census-feature-catalog-result.v2.schema.json":   FutureCensusCompositeSuccessID,
+		"testdata/schemas/lsp-trace.census-continuation-diagnostic.v1.schema.json": CensusContinuationDiagnosticID,
+		"testdata/schemas/envelope-census-continuation-diagnostic.v1.schema.json":  CensusContinuationDiagnosticEnvelopeID,
+		"testdata/schemas/lsp-trace.census-continuation-diagnostic.v2.schema.json": CensusContinuationDiagnosticV2ID,
+		"testdata/schemas/envelope-census-continuation-diagnostic.v2.schema.json":  CensusContinuationDiagnosticEnvelopeV2ID,
+		"testdata/schemas/lsp-trace.census-request-receipt.v1.schema.json":         CensusRequestReceiptID,
+		"testdata/schemas/lsp-trace.census-discovery-diagnostic.v2.schema.json":    CensusDiscoveryDiagnosticV2ID,
+		"testdata/schemas/envelope-census-discovery-diagnostic.v2.schema.json":     CensusDiscoveryDiagnosticEnvelopeV2ID,
 	}
 	id, ok := idByPath[name]
 	if !ok {
@@ -72,6 +95,9 @@ var (
 )
 
 func FutureCensusSchemaJSON(schemaID string) ([]byte, error) {
+	if raw, ok, err := futureCensusV2SchemaJSON(schemaID); ok {
+		return raw, err
+	}
 	paths := map[string]string{
 		FutureCensusInputID:       "testdata/schemas/input-census.v1.schema.json",
 		FutureCensusResultID:      "testdata/schemas/lsp-trace.census-result.v1.schema.json",
@@ -100,7 +126,7 @@ func ValidateFutureCensusEnvelopeExclusive(data []byte) error {
 	named, _ := value["envelope_schema_id"].(string)
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
-	ids := []string{FutureCensusResultID, FutureCensusSuccessID, FutureCensusDomainErrorID}
+	ids := []string{FutureCensusResultID, FutureCensusSuccessID, FutureCensusCompositeResultID, FutureCensusCompositeSuccessID, FutureCensusDomainErrorID, CensusContinuationDiagnosticID, CensusContinuationDiagnosticEnvelopeID, CensusContinuationDiagnosticV2ID, CensusContinuationDiagnosticEnvelopeV2ID, CensusRequestReceiptID, CensusDiscoveryDiagnosticV2ID, CensusDiscoveryDiagnosticEnvelopeV2ID}
 	for _, id := range ids {
 		raw, err := FutureCensusSchemaJSON(id)
 		if err != nil {
@@ -119,7 +145,7 @@ func ValidateFutureCensusEnvelopeExclusive(data []byte) error {
 		return errFutureCensusShape
 	}
 	matches := make([]string, 0, 1)
-	for _, id := range []string{FutureCensusSuccessID, FutureCensusDomainErrorID} {
+	for _, id := range []string{FutureCensusSuccessID, FutureCensusCompositeSuccessID, FutureCensusDomainErrorID, CensusContinuationDiagnosticEnvelopeID, CensusContinuationDiagnosticEnvelopeV2ID, CensusDiscoveryDiagnosticEnvelopeV2ID} {
 		compiled, err := compiler.Compile(id)
 		if err != nil {
 			return err

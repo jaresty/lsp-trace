@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"lsp-trace/internal/operation"
+	"lsp-trace/internal/serveridentity"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
@@ -49,6 +50,22 @@ type publicSession struct {
 	LanguageID        string        `json:"language_id"`
 	ServerProfile     string        `json:"server_profile"`
 	RelationProviders []string      `json:"relation_providers"`
+	PositionEncoding  string        `json:"position_encoding"`
+	ServerInstance    any           `json:"server_instance,omitempty"`
+}
+
+type publicFullSession struct {
+	sessionruntime.Record
+	PositionEncoding string `json:"position_encoding"`
+	ServerInstance   any    `json:"server_instance,omitempty"`
+}
+
+type publicFullListSnapshot struct {
+	Sessions       []publicFullSession
+	Observations   []sessionruntime.Observation
+	Census         sessionruntime.Census
+	Resolution     *SessionResolution `json:"resolution,omitempty"`
+	ServerInstance any                `json:"server_instance,omitempty"`
 }
 
 type publicCensus struct {
@@ -64,35 +81,61 @@ type publicCensus struct {
 }
 
 type publicListSnapshot struct {
-	Sessions   []publicSession    `json:"sessions"`
-	Census     publicCensus       `json:"census"`
-	Resolution *SessionResolution `json:"resolution,omitempty"`
+	Sessions       []publicSession    `json:"sessions"`
+	Census         publicCensus       `json:"census"`
+	Resolution     *SessionResolution `json:"resolution,omitempty"`
+	ServerInstance any                `json:"server_instance,omitempty"`
 }
 
-func publicSessionFromRecord(record sessionruntime.Record) publicSession {
-	return publicSession{
-		SessionID: record.SessionID, Alias: record.Routing.Alias, Generation: record.Generation,
+func publicIdentity(identity serveridentity.Identity) any {
+	if identity.InstanceID == "" {
+		return nil
+	}
+	copy := identity
+	return &copy
+}
+
+type metadataRuntime interface {
+	Metadata(string, uint64) (sessionruntime.SessionMetadata, session.Failure)
+}
+
+func positionEncoding(record sessionruntime.Record, runtime Runtime) string {
+	encoding := "UNKNOWN"
+	if provider, ok := runtime.(metadataRuntime); ok {
+		if metadata, failure := provider.Metadata(record.SessionID, record.Generation); failure == "" {
+			switch metadata.PositionEncoding {
+			case "utf-8", "utf-16", "utf-32":
+				encoding = metadata.PositionEncoding
+			}
+		}
+	}
+	return encoding
+}
+
+func publicSessionFromRecord(record sessionruntime.Record, runtime Runtime, identity any) publicSession {
+	return publicSession{SessionID: record.SessionID, Alias: record.Routing.Alias, Generation: record.Generation,
 		State: record.State, Readiness: record.Routing.Readiness, Started: record.Started,
 		LanguageID: record.Routing.LanguageID, ServerProfile: record.Routing.ServerProfile,
-		RelationProviders: append([]string(nil), record.Routing.RelationProviders...),
-	}
+		RelationProviders: append([]string(nil), record.Routing.RelationProviders...), PositionEncoding: positionEncoding(record, runtime), ServerInstance: identity}
 }
 
-func publicListFromSnapshot(snapshot ListSnapshot) publicListSnapshot {
+func publicFullListFromSnapshot(snapshot ListSnapshot, runtime Runtime, identity any) publicFullListSnapshot {
+	sessions := make([]publicFullSession, len(snapshot.Sessions))
+	for i, record := range snapshot.Sessions {
+		sessions[i] = publicFullSession{Record: record, PositionEncoding: positionEncoding(record, runtime), ServerInstance: identity}
+	}
+	return publicFullListSnapshot{Sessions: sessions, Observations: snapshot.Observations, Census: snapshot.Census, Resolution: snapshot.Resolution, ServerInstance: identity}
+}
+
+func publicListFromSnapshot(snapshot ListSnapshot, runtime Runtime, identity any) publicListSnapshot {
 	sessions := make([]publicSession, len(snapshot.Sessions))
 	for i, record := range snapshot.Sessions {
-		sessions[i] = publicSessionFromRecord(record)
+		sessions[i] = publicSessionFromRecord(record, runtime, identity)
 	}
 	census := snapshot.Census
-	return publicListSnapshot{
-		Sessions: sessions,
-		Census: publicCensus{
-			Sessions: census.Sessions, Generations: census.Generations, Requests: census.Requests,
-			Children: census.Children, Cancels: census.Cancels, Tombstones: census.Tombstones,
-			Observations: census.Observations, Operations: census.Operations, Workers: census.Workers,
-		},
-		Resolution: snapshot.Resolution,
-	}
+	return publicListSnapshot{Sessions: sessions, Census: publicCensus{Sessions: census.Sessions, Generations: census.Generations, Requests: census.Requests,
+		Children: census.Children, Cancels: census.Cancels, Tombstones: census.Tombstones, Observations: census.Observations, Operations: census.Operations, Workers: census.Workers},
+		Resolution: snapshot.Resolution, ServerInstance: identity}
 }
 
 // Execute validates a closed direct-dispatch request before selecting one of
@@ -141,9 +184,9 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 			}
 		}
 		if input.Detail == "full" {
-			return operation.Result{Value: result}, nil
+			return operation.Result{Value: publicFullListFromSnapshot(result, e.service.runtime, publicIdentity(e.service.identity))}, nil
 		}
-		return operation.Result{Value: publicListFromSnapshot(result)}, nil
+		return operation.Result{Value: publicListFromSnapshot(result, e.service.runtime, publicIdentity(e.service.identity))}, nil
 	case OperationStatus, OperationStop, OperationRestart:
 		var input selectorRequest
 		if err := decodeClosed(request.Input, &input); err != nil {
@@ -167,9 +210,9 @@ func (e *Executor) Execute(ctx context.Context, request operation.Request) (oper
 				return operation.Result{}, e.actionableFailure(ctx, input, failure)
 			}
 			if input.Detail == "full" {
-				return operation.Result{Value: record}, nil
+				return operation.Result{Value: publicFullSession{Record: record, PositionEncoding: positionEncoding(record, e.service.runtime), ServerInstance: publicIdentity(e.service.identity)}}, nil
 			}
-			return operation.Result{Value: publicSessionFromRecord(record)}, nil
+			return operation.Result{Value: publicSessionFromRecord(record, e.service.runtime, publicIdentity(e.service.identity))}, nil
 		}
 		if input.CallerID == "" {
 			return operation.Result{}, lifecycleFailure(operation.FailureInvalidInput, fmt.Errorf("caller_id is required"))

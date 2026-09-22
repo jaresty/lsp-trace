@@ -190,13 +190,27 @@ func ResolveSession(runtime Runtime, id string, generation uint64) (string, uint
 	return match.SessionID, match.Generation, ""
 }
 
+type PreparedTargetRecovery struct {
+	Available         bool
+	URI               string
+	Line              uint32
+	Character         uint32
+	UnavailableReason string
+}
+
 type PreparedTarget struct {
-	Line, Character uint32
-	Items           []lsp.CallHierarchyItem
-	ExactMatches    int
-	TotalSymbols    int
-	OmittedSymbols  int
-	Action          string
+	Line, Character    uint32
+	Items              []lsp.CallHierarchyItem
+	ExactMatches       int
+	TotalSymbols       int
+	OmittedSymbols     int
+	Action             string
+	ProviderMethod     string
+	ItemIndex          *int
+	NormalizationStage string
+	FailedField        string
+	FailedInvariant    string
+	Recovery           *PreparedTargetRecovery
 }
 
 // ResolveTarget resolves an exact target while preserving its historical coordinate-only API.
@@ -239,15 +253,29 @@ func resolveSymbolPrepared(ctx context.Context, client *SessionClient, uri, symb
 		return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
 	}
 	flat := flattenSymbols(symbols)
-	matches := make([]lsp.DocumentSymbol, 0, 1)
-	for _, symbol := range flat {
+	type indexedSymbol struct {
+		index  int
+		symbol lsp.DocumentSymbol
+	}
+	matches := make([]indexedSymbol, 0, 1)
+	for index, symbol := range flat {
 		if symbol.Name == symbolName {
-			matches = append(matches, symbol)
+			matches = append(matches, indexedSymbol{index: index, symbol: symbol})
 		}
 	}
 	exactMatches, totalSymbols, omittedSymbols := targetDiagnosticCounts(len(matches), len(flat))
 	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
 	if len(matches) == 0 {
+		base.ProviderMethod = "textDocument/documentSymbol"
+		base.NormalizationStage = "EXACT_MATCH"
+		base.FailedField = "symbol"
+		base.FailedInvariant = "EXACT_MATCH_PRESENT"
+		if base.OmittedSymbols > 0 {
+			base.Action = "ENUMERATION_TRUNCATED"
+			f := failure("ENUMERATION_TRUNCATED", errors.New("document symbol enumeration truncated before exact match"))
+			f.Diagnostics = []string{fmt.Sprintf("exact_matches=0 total_symbols=%d omitted_symbols=%d action=ENUMERATION_TRUNCATED completeness=UNKNOWN", base.TotalSymbols, base.OmittedSymbols)}
+			return base, f
+		}
 		base.Action = "FAIL_ABSENT"
 		f := failure("DOCUMENT_SYMBOL_ABSENT", errors.New("exact document symbol absent"))
 		f.Diagnostics = []string{fmt.Sprintf("exact_matches=0 total_symbols=%d omitted_symbols=%d action=FAIL_ABSENT", base.TotalSymbols, base.OmittedSymbols)}
@@ -259,7 +287,74 @@ func resolveSymbolPrepared(ctx context.Context, client *SessionClient, uri, symb
 		f.Diagnostics = []string{fmt.Sprintf("exact_matches=%d total_symbols=%d omitted_symbols=%d action=FAIL_AMBIGUOUS", base.ExactMatches, base.TotalSymbols, base.OmittedSymbols)}
 		return base, f
 	}
-	return probeDocumentSymbol(ctx, client, uri, matches[0], base)
+	return probeDocumentSymbol(ctx, client, uri, matches[0].symbol, matches[0].index, base)
+}
+
+// ResolveSourceTarget resolves one exact document definition without establishing
+// callable identity or any relationship evidence.
+func ResolveSourceTarget(ctx context.Context, client *SessionClient, uri, symbolName string, line, character *uint32) (lsp.DocumentSymbol, PreparedTarget, *operation.Failure) {
+	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
+	if err != nil {
+		if strings.Contains(err.Error(), "json-rpc error -32601") {
+			return lsp.DocumentSymbol{}, PreparedTarget{Action: "FAIL_UNSUPPORTED", ProviderMethod: "textDocument/documentSymbol"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
+		}
+		return lsp.DocumentSymbol{}, PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS", ProviderMethod: "textDocument/documentSymbol"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
+	}
+	flat := flattenSymbols(symbols)
+	matches := make([]lsp.DocumentSymbol, 0, 1)
+	for index, symbol := range flat {
+		if !ValidDocumentSymbolTarget(symbol) {
+			base := PreparedTarget{TotalSymbols: len(flat), ProviderMethod: "textDocument/documentSymbol"}
+			return lsp.DocumentSymbol{}, malformedPreparedTarget(uri, symbol, index, base), failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("malformed document symbol range"))
+		}
+		if symbolName != "" && symbol.Name == symbolName {
+			matches = append(matches, symbol)
+		} else if symbolName == "" && line != nil && character != nil && rangeContainsPosition(symbol.Range, lsp.Position{Line: *line, Character: *character}) {
+			matches = append(matches, symbol)
+		}
+	}
+	if symbolName == "" && len(matches) > 1 {
+		innermost := matches[:0]
+		for i, candidate := range matches {
+			containsNarrower := false
+			for j, other := range matches {
+				if i != j && rangeContainsRange(candidate.Range, other.Range) && candidate.Range != other.Range {
+					containsNarrower = true
+					break
+				}
+			}
+			if !containsNarrower {
+				innermost = append(innermost, candidate)
+			}
+		}
+		matches = innermost
+	}
+	base := PreparedTarget{ExactMatches: len(matches), TotalSymbols: len(flat), ProviderMethod: "textDocument/documentSymbol", NormalizationStage: "EXACT_MATCH"}
+	if len(matches) == 0 {
+		base.Action = "FAIL_ABSENT"
+		return lsp.DocumentSymbol{}, base, failure("SOURCE_TARGET_ABSENT", errors.New("exact document symbol absent"))
+	}
+	if len(matches) != 1 {
+		base.Action = "FAIL_AMBIGUOUS"
+		return lsp.DocumentSymbol{}, base, failure("SOURCE_TARGET_AMBIGUOUS", errors.New("exact document symbol ambiguous"))
+	}
+	base.Action = "RESOLVED_DOCUMENT_SYMBOL"
+	base.Line, base.Character = matches[0].SelectionRange.Start.Line, matches[0].SelectionRange.Start.Character
+	return matches[0], base, nil
+}
+
+func rangeContainsRange(outer, inner lsp.Range) bool {
+	return comparePosition(outer.Start, inner.Start) <= 0 && comparePosition(inner.End, outer.End) <= 0
+}
+
+func comparePosition(a, b lsp.Position) int {
+	if a.Line < b.Line || a.Line == b.Line && a.Character < b.Character {
+		return -1
+	}
+	if a == b {
+		return 0
+	}
+	return 1
 }
 
 func recoverPositionTarget(ctx context.Context, client *SessionClient, uri string, position lsp.Position) (PreparedTarget, *operation.Failure) {
@@ -273,9 +368,10 @@ func recoverPositionTarget(ctx context.Context, client *SessionClient, uri strin
 	flat := flattenSymbols(symbols)
 	_, totalSymbols, omittedSymbols := targetDiagnosticCounts(0, len(flat))
 	containing := make([]lsp.DocumentSymbol, 0, 1)
-	for _, symbol := range flat {
+	for index, symbol := range flat {
 		if !ValidDocumentSymbolTarget(symbol) {
-			return PreparedTarget{TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols, Action: "FAIL_MALFORMED"}, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("malformed document symbol range"))
+			base := PreparedTarget{TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
+			return malformedPreparedTarget(uri, symbol, index, base), failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("malformed document symbol range"))
 		}
 		if callableSymbolKind(symbol.Kind) && rangeContainsPosition(symbol.Range, position) {
 			containing = append(containing, symbol)
@@ -284,6 +380,14 @@ func recoverPositionTarget(ctx context.Context, client *SessionClient, uri strin
 	exactMatches, _, _ := targetDiagnosticCounts(len(containing), len(flat))
 	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
 	if len(containing) == 0 {
+		base.ProviderMethod = "textDocument/documentSymbol"
+		base.NormalizationStage = "EXACT_MATCH"
+		base.FailedField = "range"
+		base.FailedInvariant = "POSITION_CONTAINMENT_PRESENT"
+		if base.OmittedSymbols > 0 {
+			base.Action = "ENUMERATION_TRUNCATED"
+			return base, failure("ENUMERATION_TRUNCATED", errors.New("document symbol enumeration truncated before containing callable was established"))
+		}
 		base.Action = "FAIL_ABSENT"
 		return base, failure("POSITION_SYMBOL_ABSENT", errors.New("no containing callable symbol"))
 	}
@@ -291,13 +395,12 @@ func recoverPositionTarget(ctx context.Context, client *SessionClient, uri strin
 		base.Action = "FAIL_AMBIGUOUS"
 		return base, failure("POSITION_SYMBOL_AMBIGUOUS", errors.New("multiple containing callable symbols"))
 	}
-	return probeDocumentSymbol(ctx, client, uri, containing[0], base)
+	return probeDocumentSymbol(ctx, client, uri, containing[0], 0, base)
 }
 
-func probeDocumentSymbol(ctx context.Context, client *SessionClient, uri string, symbol lsp.DocumentSymbol, base PreparedTarget) (PreparedTarget, *operation.Failure) {
+func probeDocumentSymbol(ctx context.Context, client *SessionClient, uri string, symbol lsp.DocumentSymbol, index int, base PreparedTarget) (PreparedTarget, *operation.Failure) {
 	if !ValidDocumentSymbolTarget(symbol) || !callableSymbolKind(symbol.Kind) {
-		base.Action = "FAIL_MALFORMED"
-		return base, failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("invalid callable document symbol"))
+		return malformedPreparedTarget(uri, symbol, index, base), failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("invalid callable document symbol"))
 	}
 	start := symbol.SelectionRange.Start
 	for delta := uint32(0); delta <= maxSymbolPrepareProbeDelta && delta <= ^uint32(0)-start.Character; delta++ {
@@ -325,6 +428,29 @@ func probeDocumentSymbol(ctx context.Context, client *SessionClient, uri string,
 	}
 	base.Action = "FAIL_UNPREPARABLE"
 	return base, failure("DOCUMENT_SYMBOL_UNPREPARABLE", errors.New("bounded prepare probes exhausted"))
+}
+
+func malformedPreparedTarget(uri string, symbol lsp.DocumentSymbol, index int, base PreparedTarget) PreparedTarget {
+	base.Action = "FAIL_MALFORMED"
+	base.ProviderMethod = "textDocument/documentSymbol"
+	base.ItemIndex = &index
+	base.NormalizationStage = "POST_DECODE_NORMALIZATION"
+	if !ValidDocumentSymbolTarget(symbol) {
+		base.FailedField = "range"
+		base.FailedInvariant = "VALID_DOCUMENT_SYMBOL_RANGE"
+	} else {
+		base.FailedField = "kind"
+		base.FailedInvariant = "CALLABLE_SYMBOL_KIND"
+	}
+	position := symbol.SelectionRange.Start
+	if symbol.Flat && symbol.LocationURI == uri && validRange(symbol.Range) {
+		base.Recovery = &PreparedTargetRecovery{Available: true, URI: symbol.LocationURI, Line: position.Line, Character: position.Character}
+	} else if !symbol.Flat && uri != "" && ValidDocumentSymbolTarget(symbol) {
+		base.Recovery = &PreparedTargetRecovery{Available: true, URI: uri, Line: position.Line, Character: position.Character}
+	} else {
+		base.Recovery = &PreparedTargetRecovery{UnavailableReason: "NO_INDEPENDENTLY_VALID_LOCATOR"}
+	}
+	return base
 }
 
 func targetDiagnosticCounts(matches, total int) (int, int, int) {
@@ -664,7 +790,7 @@ func (c *SessionClient) DocumentSymbols(ctx context.Context, params lsp.Document
 		if err := decodeStrict(raw, &symbol); err != nil {
 			return nil, fmt.Errorf("malformed textDocument/documentSymbol result: %w", err)
 		}
-		symbols = append(symbols, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range})
+		symbols = append(symbols, lsp.DocumentSymbol{Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Location.Range, SelectionRange: symbol.Location.Range, Flat: true, LocationURI: symbol.Location.URI, ContainerName: symbol.ContainerName})
 	}
 	return symbols, nil
 }

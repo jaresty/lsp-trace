@@ -36,6 +36,6 @@ The prerequisite architecture direction is a separate backend-neutral, network-d
 
 ## Bounded local diagnostic result
 
-The four-packet `TARGET` Describe diagnostic completed under network denial with all packets returning `COMPLETE / SUPPORTED`. This result is retained as local evidence only. It does not change the prerequisite bundle status, create production or public authorization, or authorize CLI/MCP/core integration, shipment, census behavior, or feature-identity claims. The fail-closed runtime preflight is `experiment/preflight-final-four-packet.sh`; immutable v2 outputs and hashes are under `experiment/final-four-packet-v2/`.
+The four-packet `TARGET` Describe diagnostic completed under network denial with all packets returning `COMPLETE / SUPPORTED`. This result is accepted as an approved local operational pilot. It does not create hosted/service or public authorization, or authorize CLI/MCP/core integration, shipment, census behavior, or feature-identity claims. The fail-closed runtime preflight is `experiment/preflight-final-four-packet.sh`; immutable v2 outputs and hashes are under `experiment/final-four-packet-v2/`.
 
 Every document is intentionally draft. Later approval requires named accountable identities, recorded decisions, and immutable digests; a path, commit, review, or process boundary alone is insufficient.

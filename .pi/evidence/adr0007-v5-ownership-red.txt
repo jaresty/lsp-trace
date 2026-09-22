@@ -1,0 +1,6 @@
+command: go test ./internal/integratedconformance -run '^TestADR0007ProductionOwnershipRegistration$' -count=1
+result: Go test: 16 passed, 4 failed in 1 packages
+assertion: ASSERT_ADR0007_PRODUCTION_REGISTERED
+violating observation: unowned path "internal/v5sourcesnapshotv5/v5.go"
+violating observation: unowned path "internal/schema/schemas/lsp-trace.graph-v5-source-snapshot.v5.schema.json"
+violating observation: unowned path "internal/v5assertions/v5_red_test.go"

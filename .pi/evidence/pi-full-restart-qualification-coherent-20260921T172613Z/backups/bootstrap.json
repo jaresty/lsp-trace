@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "processes": [
+    {
+      "alias": "project",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/Users/schwa/dev/lsp-trace",
+        "profile": "gopls",
+        "environment_reference": "developer"
+      },
+      "execution": {
+        "path": "/Users/schwa/.local/bin/gopls",
+        "directory": "/Users/schwa/dev/lsp-trace"
+      }
+    },
+    {
+      "alias": "d01-csharp",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/Users/schwa/.local/share/lsp-trace-private/DASL-D01-prepared-20260908T035521Z-45951/workspace",
+        "profile": "csharp-ls",
+        "environment_reference": "developer"
+      },
+      "execution": {
+        "path": "/opt/homebrew/bin/csharp-ls",
+        "arguments": ["--features", "razor-support", "--solution", "DaslAnalysis.sln"],
+        "directory": "/Users/schwa/.local/share/lsp-trace-private/DASL-D01-prepared-20260908T035521Z-45951/workspace"
+      }
+    },
+    {
+      "alias": "nais-discovery-cue",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/Users/schwa/dev/nais-discovery",
+        "profile": "cue",
+        "environment_reference": "developer"
+      },
+      "execution": {
+        "path": "/opt/homebrew/bin/cue",
+        "arguments": ["lsp"],
+        "directory": "/Users/schwa/dev/nais-discovery"
+      }
+    }
+  ],
+  "continuation": {
+    "publication_root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-v2-admission-20260921T160121Z/continuation-publication",
+    "max_object_bytes": 67108864,
+    "capabilities": ["STOP_AFTER_DESCRIBE_REQUESTS"]
+  }
+}

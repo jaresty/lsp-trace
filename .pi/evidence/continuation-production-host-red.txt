@@ -1,0 +1,5 @@
+--- FAIL: TestCensusCatalogProductionHandoffHostContractPersistsInitialCheckpoint (0.09s)
+    census_catalog_runner_test.go:156: ASSERT_CENSUS_PRODUCTION_INITIAL_CHECKPOINT: status="FAILED_CATALOG" stage="RUN_PRECONDITION" code="INITIAL_CHECKPOINT_PERSIST" error=true
+FAIL
+FAIL	lsp-trace/cmd/lsp-trace	0.318s
+FAIL

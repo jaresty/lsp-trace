@@ -23,7 +23,7 @@
     "llama_manifest_sha256": "b95e8680b4d30761492bbc2d4a6fed656f124c5756dd4387cf02c30d27c13d90"
   },
   "worker": {
-    "sha256": "623ad4341720192d57fe95372343ad7d87450ef8bfb5baa6ecc0c05288d16d83"
+    "sha256": "b9ad7048c3e1b36ca97006142a0402c450c94a179392cbe97eaea28b18b08a61"
   },
   "adapter": {
     "sha256": "af22f92bddbaa925cfced6fc93032c398ba671310404a3648c330436a8a171c1"
@@ -38,7 +38,7 @@
   "conformance": "experiment/FULL-CONFORMANCE.md",
   "enablement": {
     "authorized": true,
-    "scope": "local four-packet Describe diagnostic only",
+    "scope": "local operational four-packet Describe pilot only",
     "prohibitions": ["public CLI", "MCP surface", "core integration", "production use", "repository census", "shipment"],
     "reason": "Explicit project-owner enablement after digest review"
   }

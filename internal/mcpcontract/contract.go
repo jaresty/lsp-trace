@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
+
+	"lsp-trace/internal/strictjson"
 )
 
 //go:embed testdata/stage1-manifest.v1.json
@@ -170,6 +172,9 @@ func SchemaJSON(schemaID string) ([]byte, error) {
 }
 
 func ValidateJSON(schemaID string, data []byte) error {
+	if err := strictjson.RejectDuplicates(data); err != nil {
+		return fmt.Errorf("invalid JSON: %w", err)
+	}
 	manifest, err := LoadManifest()
 	if err != nil {
 		return err

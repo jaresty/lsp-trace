@@ -1,0 +1,7 @@
+{
+  "schema_version": "lsp-trace.qualification-execution-accounting.v1",
+  "source": "/Users/schwa/dev/lsp-trace/.pi/evidence/final-qualification-20260921T204725Z/POST_SESSION_LIST.json",
+  "custody": "HOST_RETAINED",
+  "workers": 0,
+  "model_invocations": 0
+}

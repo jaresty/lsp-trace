@@ -64,13 +64,20 @@ const (
 	ReadinessFailed  ReadinessState = "FAILED"
 )
 
+func capabilitySupported(provider json.RawMessage) bool {
+	return string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+}
+
 type SessionMetadata struct {
 	PositionEncoding       string
 	CallHierarchySupport   bool
 	DocumentSymbolSupport  bool
 	WorkspaceSymbolSupport bool
+	DefinitionSupport      bool
+	ReferencesSupport      bool
 	ProviderName           string
 	ProviderVersion        string
+	ServerCommand          string
 }
 
 type ReadinessSnapshot struct {
@@ -100,6 +107,10 @@ type readinessOperation struct {
 type Child interface {
 	Teardown(context.Context) managedprocess.TeardownObservation
 	Close() managedprocess.ResourceObservation
+}
+
+type reapReconciler interface {
+	ReconcileReap(context.Context) managedprocess.TeardownObservation
 }
 
 // wireChild resources must be interruptible by Close/Teardown, without acquiring
@@ -282,6 +293,9 @@ type openDocument struct {
 }
 
 const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
+const DocumentURIUnavailable session.Failure = "DOCUMENT_URI_UNAVAILABLE"
+const DocumentOutsideWorkspace session.Failure = "DOCUMENT_OUTSIDE_WORKSPACE"
+const DocumentSourceUnavailable session.Failure = "DOCUMENT_SOURCE_UNAVAILABLE"
 
 // PrepareDocument resolves one effective language identity, synchronizes the
 // workspace file, and retains the exact value used by the document generation.
@@ -310,7 +324,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	}
 	u, err := url.Parse(req.URI)
 	if err != nil || u.Scheme != "file" || u.Host != "" || u.Path == "" {
-		return DocumentResult{Failure: LanguageIDUnavailable}
+		return DocumentResult{Failure: DocumentURIUnavailable}
 	}
 	path := filepath.Clean(filepath.FromSlash(u.Path))
 	m.mu.Lock()
@@ -331,7 +345,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	m.mu.Unlock()
 	rel, err := filepath.Rel(workspace, path)
 	if err != nil || rel == ".." || filepath.IsAbs(rel) || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
-		return DocumentResult{Failure: LanguageIDUnavailable}
+		return DocumentResult{Failure: DocumentOutsideWorkspace}
 	}
 	languageID := req.LanguageID
 	if languageID == "" {
@@ -364,7 +378,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 	} else {
 		text, err = os.ReadFile(path)
 		if err != nil {
-			return DocumentResult{Failure: LanguageIDUnavailable}
+			return DocumentResult{Failure: DocumentSourceUnavailable}
 		}
 	}
 	if failure := contextFailure(ctx); failure != "" {
@@ -402,7 +416,8 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		m.mu.Unlock()
 		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
 	}
-	if opened && previous.digest == digest && !refresh {
+	cacheCanSatisfy := !req.CaptureSupply || previous.supply != nil
+	if opened && previous.digest == digest && !refresh && cacheCanSatisfy {
 		result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
 		if req.CaptureSupply && previous.supply != nil {
 			copy := *previous.supply
@@ -848,12 +863,22 @@ func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result Round
 	return result
 }
 
+type reapReconciliation struct {
+	generation uint64
+	child      Child
+	resources  managedprocess.ResourceObservation
+	running    bool
+	done       chan struct{}
+	failure    session.Failure
+}
+
 type runtimeSession struct {
 	record                 Record
 	transientIdentity      string
 	attemptID              manageddiagnostic.StartupAttemptID
 	process                Child
 	retired                *ownedTransport // joined exact-child retirement, never a replacement lookup
+	reap                   *reapReconciliation
 	spec                   managedprocess.Spec
 	pending                *lspwire.Pending
 	requests               map[lspwire.RequestKey]*Request
@@ -1169,6 +1194,18 @@ func (m *Manager) WorkspaceRoot(sessionID string, generation uint64) (string, bo
 	return r.record.Routing.WorkspaceRoot, true
 }
 
+// SessionLanguageID returns the configured non-empty language identity for one
+// exact live session generation.
+func (m *Manager) SessionLanguageID(sessionID string, generation uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.sessions[sessionID]
+	if !ok || r.record.Generation != generation || r.languageID == "" {
+		return "", false
+	}
+	return r.languageID, true
+}
+
 func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
 	seedSources := map[string][]byte{}
 	if req.SeedBinding != nil {
@@ -1466,6 +1503,8 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 					CallHierarchyProvider   json.RawMessage `json:"callHierarchyProvider"`
 					DocumentSymbolProvider  json.RawMessage `json:"documentSymbolProvider"`
 					WorkspaceSymbolProvider json.RawMessage `json:"workspaceSymbolProvider"`
+					DefinitionProvider      json.RawMessage `json:"definitionProvider"`
+					ReferencesProvider      json.RawMessage `json:"referencesProvider"`
 				} `json:"capabilities"`
 			}
 			if err := json.Unmarshal(message.Result, &initialized); err != nil {
@@ -1482,7 +1521,9 @@ func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child
 			documentSymbols := initialized.Capabilities.DocumentSymbolProvider
 			metadata.DocumentSymbolSupport = string(documentSymbols) == "true" || (len(documentSymbols) > 0 && string(documentSymbols) != "false" && string(documentSymbols) != "null")
 			workspaceSymbols := initialized.Capabilities.WorkspaceSymbolProvider
-			metadata.WorkspaceSymbolSupport = string(workspaceSymbols) == "true" || (len(workspaceSymbols) > 0 && string(workspaceSymbols) != "false" && string(workspaceSymbols) != "null")
+			metadata.WorkspaceSymbolSupport = capabilitySupported(workspaceSymbols)
+			metadata.DefinitionSupport = capabilitySupported(initialized.Capabilities.DefinitionProvider)
+			metadata.ReferencesSupport = capabilitySupported(initialized.Capabilities.ReferencesProvider)
 			response <- readinessResult{metadata: metadata}
 			return
 		}
@@ -1877,7 +1918,67 @@ func (m *Manager) Restart(ctx context.Context, id, caller string) session.Lifecy
 	return m.terminate(ctx, id, caller, true)
 }
 
-func (m *Manager) terminate(_ context.Context, id, caller string, restart bool) session.LifecycleResult {
+const reapReconciliationTimeout = 250 * time.Millisecond
+
+func (m *Manager) reconcileFailedReap(ctx context.Context, id string) session.Failure {
+	m.mu.Lock()
+	r := m.sessions[id]
+	if r == nil || r.reap == nil {
+		m.mu.Unlock()
+		return ""
+	}
+	state := r.reap
+	if state.generation != r.record.Generation || state.child != r.process {
+		m.mu.Unlock()
+		return session.SessionReapIncomplete
+	}
+	if state.running {
+		done := state.done
+		m.mu.Unlock()
+		select {
+		case <-done:
+			return state.failure
+		case <-ctx.Done():
+			return session.SessionReapIncomplete
+		}
+	}
+	reconciler, ok := state.child.(reapReconciler)
+	if !ok {
+		m.mu.Unlock()
+		return session.SessionReapIncomplete
+	}
+	state.running = true
+	state.done = make(chan struct{})
+	m.mu.Unlock()
+
+	joinCtx, cancel := context.WithTimeout(ctx, reapReconciliationTimeout)
+	observation := reconciler.ReconcileReap(joinCtx)
+	cancel()
+	complete := observation.Death.Reap.Kind == managedprocess.ReapComplete &&
+		(observation.Death.Kind == managedprocess.DeathExited || observation.Death.Kind == managedprocess.DeathSignaled)
+	if observation.Census.Bounded {
+		complete = complete && observation.Census.Err == nil && !observation.Census.Truncated && observation.Census.Members == 0
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.sessions[id]
+	state.running = false
+	state.failure = session.SessionReapIncomplete
+	if current == r && current.reap == state && current.record.Generation == state.generation && current.process == state.child && complete && m.algebra.ReconcileReap(id, state.generation) {
+		current.retired = &ownedTransport{child: state.child, resources: state.resources, teardown: observation}
+		current.reap = nil
+		state.failure = ""
+		m.observe(id, state.generation, "reap-reconciled", current.record.State, "")
+	}
+	close(state.done)
+	return state.failure
+}
+
+func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool) session.LifecycleResult {
+	if failure := m.reconcileFailedReap(ctx, id); failure != "" {
+		return session.LifecycleResult{Failure: failure}
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r := m.sessions[id]
@@ -2018,6 +2119,11 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 		if r != nil {
 			r.record.State = session.Poisoned
 			r.protocolOwned, r.lifecycleOwned = false, false
+			if operation.Failure == session.SessionReapIncomplete && resources.Kind == managedprocess.ResourcesClosed {
+				if _, ok := child.(reapReconciler); ok {
+					r.reap = &reapReconciliation{generation: operation.Generation, child: child, resources: resources}
+				}
+			}
 		}
 		m.finishOperation(operation)
 		m.mu.Unlock()
@@ -2173,7 +2279,9 @@ func (m *Manager) Metadata(id string, generation uint64) (SessionMetadata, sessi
 	if r.record.State != session.Ready || r.protocolOwned {
 		return SessionMetadata{}, session.LifecycleConflict
 	}
-	return r.metadata, ""
+	metadata := r.metadata
+	metadata.ServerCommand = r.spec.Path
+	return metadata, ""
 }
 
 func (m *Manager) Records() []Record {

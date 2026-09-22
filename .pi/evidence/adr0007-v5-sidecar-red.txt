@@ -1,0 +1,4 @@
+command: go test ./internal/censuscontinuation -run '^TestV5ReplayAfterWorkspaceDeletionAndEndpointSidecarTamper$' -count=1 -v
+result: Go test: 0 passed, 1 failed in 1 packages
+assertion: ASSERT_CHECKPOINT_V5_SIDECAR_SEMANTIC_RECOMPUTATION
+failure: pipeline_test.go:199: ASSERT_CHECKPOINT_V5_SIDECAR_SEMANTIC_RECOMPUTATION

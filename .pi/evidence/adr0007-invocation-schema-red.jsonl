@@ -1,0 +1,9 @@
+{"Time":"2026-09-20T12:25:13.294957-07:00","Action":"start","Package":"lsp-trace/internal/integratedconformance"}
+{"Time":"2026-09-20T12:25:13.647446-07:00","Action":"run","Package":"lsp-trace/internal/integratedconformance","Test":"TestADR0007ResponseV2SchemaOwnershipIsAdditive"}
+{"Time":"2026-09-20T12:25:13.647526-07:00","Action":"output","Package":"lsp-trace/internal/integratedconformance","Test":"TestADR0007ResponseV2SchemaOwnershipIsAdditive","Output":"=== RUN   TestADR0007ResponseV2SchemaOwnershipIsAdditive\n"}
+{"Time":"2026-09-20T12:25:13.647558-07:00","Action":"output","Package":"lsp-trace/internal/integratedconformance","Test":"TestADR0007ResponseV2SchemaOwnershipIsAdditive","Output":"    adr0007_response_v2_ownership_test.go:14: ASSERT_ADR0007_RESPONSE_V2_SCHEMA_OWNED: id=lsp-trace.describe-invocation.v2 err=unknown describe v2 schema\n"}
+{"Time":"2026-09-20T12:25:13.647588-07:00","Action":"output","Package":"lsp-trace/internal/integratedconformance","Test":"TestADR0007ResponseV2SchemaOwnershipIsAdditive","Output":"--- FAIL: TestADR0007ResponseV2SchemaOwnershipIsAdditive (0.00s)\n"}
+{"Time":"2026-09-20T12:25:13.647593-07:00","Action":"fail","Package":"lsp-trace/internal/integratedconformance","Test":"TestADR0007ResponseV2SchemaOwnershipIsAdditive","Elapsed":0}
+{"Time":"2026-09-20T12:25:13.647596-07:00","Action":"output","Package":"lsp-trace/internal/integratedconformance","Output":"FAIL\n"}
+{"Time":"2026-09-20T12:25:13.64834-07:00","Action":"output","Package":"lsp-trace/internal/integratedconformance","Output":"FAIL\tlsp-trace/internal/integratedconformance\t0.353s\n"}
+{"Time":"2026-09-20T12:25:13.648363-07:00","Action":"fail","Package":"lsp-trace/internal/integratedconformance","Elapsed":0.353}

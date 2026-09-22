@@ -39,6 +39,9 @@ const (
 	FamilyTechnicalCommunityRegister = "technical-community-register"
 	FamilyPassageVerification        = "passage-verification"
 	FamilyVCSSymbolChurn             = "vcs-symbol-churn-sidecar"
+	FamilyCensusFeatureCatalog       = "census-feature-catalog-result"
+	FamilyCensusRequestReceipt       = "census-request-receipt"
+	FamilyCensusDiscoveryDiagnostic  = "census-discovery-diagnostic"
 
 	SourceDenominatorVersionV1 = "lsp-trace.source-denominator.v1"
 )
@@ -55,7 +58,7 @@ var familyVersions = map[string]map[string]string{
 	FamilyGraphProvenance:            {"v1": "lsp-trace.graph-provenance.v1", "v2": "lsp-trace.graph-provenance.v2", "v3": "lsp-trace.graph-provenance.v3", "v5": "lsp-trace.graph-provenance.v5"},
 	FamilyRetainedCalls:              {"v1": "lsp-trace.retained-calls.v1", "v2": "lsp-trace.retained-calls.v2"},
 	FamilyRetainedRelations:          {"v1": "lsp-trace.retained-relations.v1"},
-	FamilyGraphV5SourceSnapshot:      {"v1": "lsp-trace.graph-v5-source-snapshot.v1", "v2": "lsp-trace.graph-v5-source-snapshot.v2"},
+	FamilyGraphV5SourceSnapshot:      {"v1": "lsp-trace.graph-v5-source-snapshot.v1", "v2": "lsp-trace.graph-v5-source-snapshot.v2", "v3": "lsp-trace.graph-v5-source-snapshot.v3", "v4": "lsp-trace.graph-v5-source-snapshot.v4", "v5": "lsp-trace.graph-v5-source-snapshot.v5", "v6": "lsp-trace.graph-v5-source-snapshot.v6"},
 	FamilyBoundedAnalysis:            {"v1": "lsp-trace.bounded-retained-analysis.v1"},
 	FamilyBoundedMetrics:             {"v1": "lsp-trace.bounded-retained-metrics.v1"},
 	FamilyBoundedRanking:             {"v1": "lsp-trace.bounded-retained-ranking.v1"},
@@ -70,6 +73,9 @@ var familyVersions = map[string]map[string]string{
 	FamilyTechnicalCommunityRegister: {"v1": "lsp-trace.technical-community-register.v1"},
 	FamilyPassageVerification:        {"v1": "lsp-trace.passage-verification.v1"},
 	FamilyVCSSymbolChurn:             {"v2": "lsp-trace.vcs-symbol-churn-sidecar.v2", "v3": "lsp-trace.vcs-symbol-churn-sidecar.v3"},
+	FamilyCensusFeatureCatalog:       {"v2": "lsp-trace.census-feature-catalog-result.v2"},
+	FamilyCensusRequestReceipt:       {"v1": "lsp-trace.census-request-receipt.v1"},
+	FamilyCensusDiscoveryDiagnostic:  {"v2": "lsp-trace.census-discovery-diagnostic.v2"},
 }
 
 var versionFields = map[string]string{
@@ -99,6 +105,9 @@ var versionFields = map[string]string{
 	FamilyTechnicalCommunityRegister: "schema_version",
 	FamilyPassageVerification:        "schema_version",
 	FamilyVCSSymbolChurn:             "schema_version",
+	FamilyCensusFeatureCatalog:       "schema_version",
+	FamilyCensusRequestReceipt:       "schema_version",
+	FamilyCensusDiscoveryDiagnostic:  "schema_version",
 }
 
 // RegisteredFamilies returns a detached, lexically ordered snapshot of the

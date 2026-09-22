@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -38,6 +39,35 @@ func signedSeedTrust(t *testing.T, receipt seedbinding.HostCustodyReceipt) (stri
 		t.Fatal(err)
 	}
 	return selector, &bootstrapSeedTrust{receipts: map[string]seedbinding.HostReceiptAuthority{selector: {Receipt: receipt}}}
+}
+
+func TestBootstrapContinuationManagedPreparationDiagnosticPathIsOptionalAndStrict(t *testing.T) {
+	write := func(body string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "bootstrap.json")
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	const process = `"processes":[{"profile":{"trust_domain":"test","workspace":"/workspace","profile":"go","environment_reference":"local"},"execution":{"path":"/server","directory":"/workspace"}}]`
+	root := t.TempDir()
+	if err := os.Chmod(root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	diagnostic := filepath.Join(root, "diagnostic.ndjson")
+	for _, body := range []string{
+		fmt.Sprintf(`{"version":1,%s,"continuation":{"publication_root":%q,"max_object_bytes":1024,"capabilities":["STOP_AFTER_DESCRIBE_REQUESTS"]}}`, process, root),
+		fmt.Sprintf(`{"version":1,%s,"continuation":{"publication_root":%q,"max_object_bytes":1024,"managed_preparation_diagnostic_path":%q,"capabilities":["STOP_AFTER_DESCRIBE_REQUESTS"]}}`, process, root, diagnostic),
+	} {
+		if _, err := loadBootstrapConfig(write(body)); err != nil {
+			t.Fatalf("ASSERT_BOOTSTRAP_MANAGED_DIAGNOSTIC_OPTIONAL: %v", err)
+		}
+	}
+	body := fmt.Sprintf(`{"version":1,%s,"continuation":{"publication_root":%q,"max_object_bytes":1024,"managed_preparation_diagnostic_path":%q,"managed_preparation_diagnostic_uri":"file:///forbidden","capabilities":["STOP_AFTER_DESCRIBE_REQUESTS"]}}`, process, root, diagnostic)
+	if _, err := loadBootstrapConfig(write(body)); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("ASSERT_BOOTSTRAP_MANAGED_DIAGNOSTIC_UNKNOWN_NEIGHBOR: %v", err)
+	}
 }
 
 func TestProductionCLIHasNoSeedCustodyRootSelector(t *testing.T) {
@@ -265,6 +295,20 @@ func TestBootstrapRollbackAndShutdownOwnEveryStartedSession(t *testing.T) {
 		}
 		assertBootstrapRecordsStopped(t, assertion, manager.Records())
 		t.Log("PASS " + assertion)
+	})
+
+	t.Run("readiness timeout is not success", func(t *testing.T) {
+		const assertion = "ASSERT_BOOTSTRAP_TIMEOUT_NOT_READY"
+		timed := valid
+		timed.BootstrapTimeout = "1ns"
+		_, manager, err := newServerRuntime(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := startBootstrap(context.Background(), manager, bootstrapConfig{Version: 1, Processes: []bootstrapProcessConfig{timed}}, 5*time.Second); err == nil || !strings.Contains(err.Error(), "readiness failed") {
+			t.Fatalf("%s: err=%v", assertion, err)
+		}
+		assertBootstrapRecordsStopped(t, assertion, manager.Records())
 	})
 
 	t.Run("shutdown", func(t *testing.T) {

@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"lsp-trace/internal/censusrequest"
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
-
 
 type censusFailureStage string
 type censusFailureCode string
@@ -30,20 +30,31 @@ const (
 type censusFailureReason string
 
 const (
-	reasonNone                    censusFailureReason = ""
-	reasonRequestUndecodable      censusFailureReason = "request-undecodable"
-	reasonRuntimeUnprovisioned    censusFailureReason = "runtime-unprovisioned"
-	reasonSessionSelectorInvalid  censusFailureReason = "session-selector-invalid"
-	reasonNoReadySession          censusFailureReason = "no-ready-session"
-	reasonCancelled               censusFailureReason = "request-cancelled"
-	reasonWorkspaceNotCanonical   censusFailureReason = "workspace-not-canonical"
-	reasonSessionMetadataMissing  censusFailureReason = "session-metadata-unavailable"
-	reasonCapabilitiesUnsupported censusFailureReason = "language-server-capabilities-unsupported"
-	reasonPublicationRootRequired censusFailureReason = "publication-root-required"
-	reasonDiscoveryFailed         censusFailureReason = "workspace-discovery-failed"
-	reasonDiscoveryIncomplete     censusFailureReason = "discovery-accounting-incomplete"
-	reasonAcquisitionFailed       censusFailureReason = "symbol-acquisition-failed"
-	reasonPublicationNoReceipt    censusFailureReason = "capture-set-publication-failed"
+	reasonNone                         censusFailureReason = ""
+	reasonRequestUndecodable           censusFailureReason = "request-undecodable"
+	reasonRuntimeUnprovisioned         censusFailureReason = "runtime-unprovisioned"
+	reasonSessionSelectorInvalid       censusFailureReason = "session-selector-invalid"
+	reasonNoReadySession               censusFailureReason = "no-ready-session"
+	reasonCancelled                    censusFailureReason = "request-cancelled"
+	reasonWorkspaceNotCanonical        censusFailureReason = "workspace-not-canonical"
+	reasonSessionMetadataMissing       censusFailureReason = "session-metadata-unavailable"
+	reasonCapabilitiesUnsupported      censusFailureReason = "language-server-capabilities-unsupported"
+	reasonPublicationRootRequired      censusFailureReason = "publication-root-required"
+	reasonDiscoveryFailed              censusFailureReason = "workspace-discovery-failed"
+	reasonDiscoveryIncomplete          censusFailureReason = "discovery-accounting-incomplete"
+	reasonAcquisitionFailed            censusFailureReason = "symbol-acquisition-failed"
+	reasonPublicationNoReceipt         censusFailureReason = "capture-set-publication-failed"
+	reasonPublicationRootOpen          censusFailureReason = "ROOT_OPEN"
+	reasonPublicationPrivateValidation censusFailureReason = "PRIVATE_VALIDATION"
+	reasonPublicationEncode            censusFailureReason = "ENCODE"
+	reasonPublicationCanonicalize      censusFailureReason = "CANONICALIZE"
+	reasonPublicationTempWrite         censusFailureReason = "TEMP_WRITE"
+	reasonPublicationFsync             censusFailureReason = "FSYNC"
+	reasonPublicationNoReplace         censusFailureReason = "NO_REPLACE"
+	reasonPublicationVerify            censusFailureReason = "VERIFY"
+	reasonPublicationReceipt           censusFailureReason = "RECEIPT"
+	reasonPublicationCleanup           censusFailureReason = "CLEANUP"
+	reasonPublicationInternal          censusFailureReason = "INTERNAL"
 )
 
 // censusFailureDetail maps a closed reason token to a static, path-free,
@@ -78,6 +89,8 @@ func censusFailureDetail(reason censusFailureReason) string {
 		return "symbol acquisition over the session failed"
 	case reasonPublicationNoReceipt:
 		return "the capture set could not be published (verify the publication root is an owner-only directory)"
+	case reasonPublicationRootOpen, reasonPublicationPrivateValidation, reasonPublicationEncode, reasonPublicationCanonicalize, reasonPublicationTempWrite, reasonPublicationFsync, reasonPublicationNoReplace, reasonPublicationVerify, reasonPublicationReceipt, reasonPublicationCleanup, reasonPublicationInternal:
+		return "capture-set publication failed at the reported publication stage"
 	default:
 		return ""
 	}
@@ -86,6 +99,7 @@ func censusFailureDetail(reason censusFailureReason) string {
 type censusAdmissionFailure struct {
 	stage censusFailureStage
 	code  censusFailureCode
+	err   error
 }
 
 type censusAdmittedSession struct {
@@ -94,6 +108,7 @@ type censusAdmittedSession struct {
 	workspace        string
 	positionEncoding string
 	options          censusRuntimeConfig
+	requestReceipt   censusrequest.Receipt
 }
 
 type censusExecutor struct {
@@ -105,9 +120,40 @@ func newCensusExecutor(runtime *hostSelectorRuntime) *censusExecutor {
 }
 
 func (e *censusExecutor) execute(ctx context.Context, raw []byte) (censusAdmittedSession, *censusAdmissionFailure, censusFailureReason) {
-	request, err := mcpcontract.DecodeFutureCensusRequestV1(raw)
+	batchTargets := censusBatchTargetsFromContext(ctx)
+	decodeRaw := raw
+	if batchTargets != 0 {
+		var internal map[string]json.RawMessage
+		if json.Unmarshal(raw, &internal) != nil {
+			return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+		}
+		delete(internal, "batch_targets")
+		var err error
+		decodeRaw, err = json.Marshal(internal)
+		if err != nil {
+			return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+		}
+	}
+	request, err := mcpcontract.DecodeFutureCensusRequestV1(decodeRaw)
 	if err != nil {
 		return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+	}
+	receipt, err := censusrequest.Decode(decodeRaw)
+	if err != nil {
+		return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+	}
+	options := censusRuntimeConfigFromDecoded(request)
+	if batchTargets != 0 {
+		if batchTargets < 1 || batchTargets > 63 {
+			return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+		}
+		semantic := receipt.Semantic
+		semantic.BatchTargets = uint64(batchTargets)
+		receipt, err = censusrequest.New(receipt.Refresh, semantic)
+		if err != nil {
+			return censusAdmittedSession{}, censusConfigFailure(), reasonRequestUndecodable
+		}
+		options.maxBatchTargets = uint64(batchTargets)
 	}
 	if ctx.Err() != nil {
 		return censusAdmittedSession{}, censusAcquisitionFailure(), reasonCancelled
@@ -164,7 +210,8 @@ func (e *censusExecutor) execute(ctx context.Context, raw []byte) (censusAdmitte
 		generation:       match.Generation,
 		workspace:        workspace,
 		positionEncoding: metadata.PositionEncoding,
-		options:          cloneCensusRuntimeConfig(censusRuntimeConfigFromDecoded(request)),
+		options:          cloneCensusRuntimeConfig(options),
+		requestReceipt:   receipt,
 	}, nil, reasonNone
 }
 

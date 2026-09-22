@@ -1,0 +1,19 @@
+--- FAIL: TestLoadBootstrapStopOnlyContinuationRequiresNoWorkerPins (0.00s)
+    bootstrap_continuation_host_test.go:72: ASSERT_STOP_ONLY_BOOTSTRAP_NO_WORKER_MODEL_PIN_PREFLIGHT: json: unknown field "capabilities"
+--- FAIL: TestLoadBootstrapFullResumeStillRequiresExactPins (0.00s)
+    bootstrap_continuation_host_test.go:91: ASSERT_FULL_RESUME_REQUIRES_EXACT_WORKER_PINS: json: unknown field "capabilities"
+--- FAIL: TestLoadBootstrapContinuationRequiresOwnerOnlyConfigAndStorage (0.00s)
+    --- FAIL: TestLoadBootstrapContinuationRequiresOwnerOnlyConfigAndStorage/config (0.00s)
+        bootstrap_continuation_host_test.go:116: ASSERT_CONTINUATION_BOOTSTRAP_OWNER_ONLY_CONFIG: json: unknown field "capabilities"
+    --- FAIL: TestLoadBootstrapContinuationRequiresOwnerOnlyConfigAndStorage/storage (0.00s)
+        bootstrap_continuation_host_test.go:116: ASSERT_CONTINUATION_BOOTSTRAP_OWNER_ONLY_STORAGE: json: unknown field "capabilities"
+--- FAIL: TestCensusContinuationHostUnprovisionedAfterCommitIsTypedAndPrivate (0.00s)
+    census_continuation_binding_test.go:69: ASSERT_CONTINUATION_HOST_UNPROVISIONED_TYPED_NOT_TRANSPORT_ERROR: direct=census continuation host unavailable after commit canonical=census continuation host unavailable after commit
+FAIL
+FAIL	lsp-trace/cmd/lsp-trace-mcp	0.227s
+FAIL
+--- FAIL: TestCensusContinuationHostUnavailableDirectGatewayParity (0.06s)
+    transport_test.go:707: ASSERT_CONTINUATION_HOST_UNAVAILABLE_TRANSPORT_PARITY_DIRECT: map[envelope_schema_id:https://jaresty.github.io/lsp-trace/mcp/schemas/envelope-census-domain-error.v1.schema.json envelope_version:1 error:map[code:ASSEMBLY_FAILED detail:request violates the census input schema or configuration invariant; correct the request fields and resubmit retry:true schema_version:lsp-trace.census-diagnostic.v1 stage:assembly status:FAILED] isError:true operation_status:FAILED outcome:DOMAIN_ERROR request_id:offline-1 tool:lsp_trace_v1_census]
+FAIL
+FAIL	lsp-trace/internal/mcp	0.263s
+FAIL

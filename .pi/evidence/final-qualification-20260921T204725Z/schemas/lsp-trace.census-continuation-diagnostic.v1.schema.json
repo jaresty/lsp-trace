@@ -1,0 +1,112 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.census-continuation-diagnostic.v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "code", "phase", "stage", "failed_field", "invariant", "census_commit_preserved", "retry", "retry_action", "caller_action", "guidance"],
+  "properties": {
+    "schema_version": {"const": "lsp-trace.census-continuation-diagnostic.v1"},
+    "status": {"const": "FAILED"},
+    "code": {"enum": ["CONTINUATION_HOST_CONSTRUCTION_FAILED", "CONTINUATION_DESCRIPTOR_UNAVAILABLE", "CONTINUATION_STOP_CHECKPOINT_MISMATCH", "CONTINUATION_PUBLICATION_FAILED", "CONTINUATION_CAPTURE_FAILED"]},
+    "phase": {"const": "CONTINUATION"},
+    "stage": {"type": "string", "minLength": 1},
+    "failed_field": {"type": "string", "minLength": 1},
+    "invariant": {"type": "string", "minLength": 1},
+    "census_commit_preserved": {"const": true},
+    "retry": {"type": "boolean"},
+    "retry_action": {"type": "string", "minLength": 1},
+    "caller_action": {"type": "string", "minLength": 1},
+    "guidance": {"type": "string", "minLength": 1},
+    "recovery": {"type": "string", "minLength": 1},
+    "public_selector": {"type": "string", "pattern": "^g-[0-9a-f]{64}\\.selector\\.json$"},
+    "expected_stage": {"type": "string", "minLength": 1},
+    "expected_status": {"type": "string", "minLength": 1},
+    "observed_stage": {"type": "string", "minLength": 1},
+    "observed_status": {"type": "string", "minLength": 1},
+    "construction_stage": {"enum": ["ROOT_OPEN", "STORE_PRIVATE_VALIDATION", "CONTRACT_CONSTRUCTION", "RUNTIME_ARITY", "WORKER_ASSEMBLY", "HOST_ASSEMBLY"]},
+    "construction_reason": {"enum": ["ROOT_OPEN_FAILED", "STORE_PRIVATE_VALIDATION_FAILED", "CONTRACT_CONSTRUCTION_FAILED", "RUNTIME_ARITY_INVALID", "WORKER_ASSEMBLY_FAILED", "HOST_ASSEMBLY_FAILED"]},
+    "resource_category": {"enum": ["input", "output", "unique_source", "availability", "internal"]},
+    "resource_observed": {"type": "integer", "minimum": 1},
+    "resource_limit": {"type": "integer", "minimum": 1}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"code": {"const": "CONTINUATION_STOP_CHECKPOINT_MISMATCH"}}},
+      "then": {"required": ["expected_stage", "expected_status", "observed_stage", "observed_status"]},
+      "else": {
+        "if": {"properties": {"code": {"const": "CONTINUATION_CAPTURE_FAILED"}}},
+        "then": {"required": ["observed_stage", "observed_status"]},
+        "else": {"not": {"anyOf": [{"required": ["expected_stage"]}, {"required": ["expected_status"]}, {"required": ["observed_stage"]}, {"required": ["observed_status"]}]}}
+      }
+    },
+    {
+      "if": {"properties": {"code": {"const": "CONTINUATION_HOST_CONSTRUCTION_FAILED"}}},
+      "then": {"required": ["construction_stage", "construction_reason"]},
+      "else": {"not": {"anyOf": [{"required": ["construction_stage"]}, {"required": ["construction_reason"]}]}}
+    },
+    {
+      "if": {"properties": {"code": {"const": "CONTINUATION_CAPTURE_FAILED"}}},
+      "then": {
+        "required": ["observed_stage", "observed_status", "resource_category", "recovery"],
+        "properties": {"recovery": {"const": "RESTART_FROM_PRESERVED_CENSUS_COMMIT"}},
+        "oneOf": [
+          {
+            "required": ["resource_observed", "resource_limit"],
+            "properties": {
+              "resource_category": {"enum": ["input", "output", "unique_source"]},
+              "failed_field": {"enum": ["graph_bytes", "artifact_bytes", "source_bytes", "total_source_bytes", "receipts", "bindings", "outcomes", "work"]},
+              "invariant": {"const": "OBSERVED_MUST_NOT_EXCEED_LIMIT"},
+              "caller_action": {"const": "INCREASE_BOUNDED_CAPTURE_LIMIT"}
+            }
+          },
+          {
+            "not": {"anyOf": [{"required": ["resource_observed"]}, {"required": ["resource_limit"]}]},
+            "properties": {
+              "resource_category": {"const": "availability"},
+              "failed_field": {"const": "source_preparation"},
+              "invariant": {"const": "CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT"},
+              "caller_action": {"const": "RETRY_WITH_MANAGED_SOURCE_SUPPLY"}
+            }
+          },
+          {
+            "not": {"anyOf": [{"required": ["resource_observed"]}, {"required": ["resource_limit"]}]},
+            "properties": {
+              "resource_category": {"const": "internal"},
+              "failed_field": {"const": "resolver"},
+              "invariant": {"const": "CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT"},
+              "caller_action": {"const": "RETRY_OR_REPORT_CAPTURE_IMPLEMENTATION"}
+            }
+          },
+          {
+            "not": {"anyOf": [{"required": ["resource_observed"]}, {"required": ["resource_limit"]}]},
+            "properties": {
+              "resource_category": {"const": "internal"},
+              "failed_field": {"const": "serialization"},
+              "invariant": {"const": "CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT"},
+              "caller_action": {"const": "REPORT_CAPTURE_IMPLEMENTATION"}
+            }
+          },
+          {
+            "not": {"anyOf": [{"required": ["resource_observed"]}, {"required": ["resource_limit"]}]},
+            "properties": {
+              "resource_category": {"const": "internal"},
+              "failed_field": {"const": "runtime_injection"},
+              "invariant": {"const": "CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT"},
+              "caller_action": {"const": "FIX_CAPTURE_RUNTIME_INJECTION"}
+            }
+          },
+          {
+            "not": {"anyOf": [{"required": ["resource_observed"]}, {"required": ["resource_limit"]}]},
+            "properties": {
+              "resource_category": {"const": "internal"},
+              "failed_field": {"const": "capture"},
+              "invariant": {"const": "CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT"},
+              "caller_action": {"const": "RETRY_OR_REPORT_CAPTURE_IMPLEMENTATION"}
+            }
+          }
+        ]
+      },
+      "else": {"not": {"anyOf": [{"required": ["resource_category"]}, {"required": ["resource_observed"]}, {"required": ["resource_limit"]}, {"required": ["recovery"]}]}}
+    }
+  ]
+}

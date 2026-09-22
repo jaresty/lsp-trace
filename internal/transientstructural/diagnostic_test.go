@@ -27,8 +27,16 @@ func TestRegexResourceDiagnosticMapsExactPreflightBound(t *testing.T) {
 	if got == nil || got.Reason != ResourceReasonRegexMaxDocumentBytes || got.Field != ResourceFieldRegexMaxDocumentBytes || got.Allowed != 100 || got.Observed == nil || *got.Observed != 125 || got.MaximumAllowed != MaxRegexDocumentBytes || got.SuggestedLimit == nil || *got.SuggestedLimit != 125 {
 		t.Fatalf("ASSERT_REGEX_RESOURCE_DIAGNOSTIC: %+v", got)
 	}
-	if got := regexResourceDiagnostic(&regexlocator.ResourceLimit{Reason: regexlocator.ResourceLimitMatches, Allowed: 1}); got == nil || got.Observed != nil || got.SuggestedLimit != nil {
-		t.Fatalf("ASSERT_REGEX_MATCHES_NO_INVENTED_CONSUMPTION: %+v", got)
+	matchObserved := 2
+	match := regexResourceDiagnostic(&regexlocator.ResourceLimit{Reason: regexlocator.ResourceLimitMatches, Allowed: 1, Observed: &matchObserved})
+	if match == nil || match.Field != ResourceFieldRegexMaxMatches || match.Allowed != 1 || match.Observed == nil || *match.Observed != 2 || match.MaximumAllowed != MaxRegexMatches || match.SuggestedLimit == nil || *match.SuggestedLimit != 2 || len(match.SuggestedLimits) != 1 || match.SuggestedLimits[0] != (SuggestedLimit{Field: ResourceFieldRegexMaxMatches, Current: 1, Observed: 2, Suggested: 2}) || match.CallerAction != "REQUIRED" || match.RequestFragment == nil || match.RequestFragment.RegexLocator == nil || match.RequestFragment.RegexLocator.Limits.MaxMatches != 2 {
+		t.Fatalf("ASSERT_REGEX_MAX_MATCHES_COMPLETE_RESOURCE_DIAGNOSTIC: %+v", match)
+	}
+
+	workObserved := MaxRegexWork + 1
+	work := regexResourceDiagnostic(&regexlocator.ResourceLimit{Reason: regexlocator.ResourceLimitWork, Allowed: 64, Observed: &workObserved})
+	if work == nil || len(work.SuggestedLimits) != 1 || work.SuggestedLimits[0].Field != ResourceFieldRegexMaxWork || work.SuggestedLimits[0].Current != 64 || work.SuggestedLimits[0].Observed != workObserved || work.SuggestedLimits[0].Suggested != MaxRegexWork || work.CallerAction != "REQUIRED" || work.RequestFragment == nil || work.RequestFragment.RegexLocator == nil || work.RequestFragment.RegexLocator.Limits.MaxWork != MaxRegexWork {
+		t.Fatalf("ASSERT_REGEX_MAX_WORK_SUGGESTED_LIMITS_FRAGMENT: %+v", work)
 	}
 }
 

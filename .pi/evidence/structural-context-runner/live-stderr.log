@@ -1,0 +1,1 @@
+WARNING: local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted.

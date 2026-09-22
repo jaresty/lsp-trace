@@ -1,0 +1,7 @@
+{
+  "schema_version": "lsp-trace.qualification-execution-accounting.v1",
+  "custody": "OPERATOR_RETAINED",
+  "source": "PUBLIC_RESPONSE.json acquisition-stage terminal + POST_SESSION_LIST.json Census.Workers + empty managed-preparation-private/diagnostic.ndjson",
+  "workers": 0,
+  "model_invocations": 0
+}

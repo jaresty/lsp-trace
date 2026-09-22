@@ -1,0 +1,9 @@
+{"Time":"2026-09-20T16:55:56.801382-07:00","Action":"start","Package":"lsp-trace/internal/mcp"}
+{"Time":"2026-09-20T16:55:57.074076-07:00","Action":"run","Package":"lsp-trace/internal/mcp","Test":"TestCensusDomainFailuresUseCensusEnvelopeSchema"}
+{"Time":"2026-09-20T16:55:57.07414-07:00","Action":"output","Package":"lsp-trace/internal/mcp","Test":"TestCensusDomainFailuresUseCensusEnvelopeSchema","Output":"=== RUN   TestCensusDomainFailuresUseCensusEnvelopeSchema\n"}
+{"Time":"2026-09-20T16:55:57.074161-07:00","Action":"output","Package":"lsp-trace/internal/mcp","Test":"TestCensusDomainFailuresUseCensusEnvelopeSchema","Output":"    transport_test.go:690: ASSERT_CENSUS_INVALID_CONFIG_CALLER_ACTION_REQUEST: \"\"\n"}
+{"Time":"2026-09-20T16:55:57.074166-07:00","Action":"output","Package":"lsp-trace/internal/mcp","Test":"TestCensusDomainFailuresUseCensusEnvelopeSchema","Output":"--- FAIL: TestCensusDomainFailuresUseCensusEnvelopeSchema (0.00s)\n"}
+{"Time":"2026-09-20T16:55:57.074177-07:00","Action":"fail","Package":"lsp-trace/internal/mcp","Test":"TestCensusDomainFailuresUseCensusEnvelopeSchema","Elapsed":0}
+{"Time":"2026-09-20T16:55:57.074186-07:00","Action":"output","Package":"lsp-trace/internal/mcp","Output":"FAIL\n"}
+{"Time":"2026-09-20T16:55:57.074767-07:00","Action":"output","Package":"lsp-trace/internal/mcp","Output":"FAIL\tlsp-trace/internal/mcp\t0.273s\n"}
+{"Time":"2026-09-20T16:55:57.074783-07:00","Action":"fail","Package":"lsp-trace/internal/mcp","Elapsed":0.273}

@@ -1,0 +1,18 @@
+{
+  "session_id": "REPLACE_FROM_SINGLE_POST_RESTART_SESSION_LIST",
+  "generation": 0,
+  "sources": [
+    "internal/censuscontinuation/pipeline.go",
+    "internal/censuscontinuation/capture.go"
+  ],
+  "down_depth": 1,
+  "up_depth": 0,
+  "max_nodes": 10000,
+  "batch_targets": 16,
+  "timeout_ms": 60000,
+  "request_timeout_ms": 30000,
+  "continuation": {
+    "kind": "ADR_0007_FEATURE_CATALOG",
+    "stop_after": "DESCRIBE_REQUESTS"
+  }
+}

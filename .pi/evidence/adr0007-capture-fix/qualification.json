@@ -1,0 +1,44 @@
+{
+  "schema_version": "lsp-trace.private-adr0007-capture-qualification.v1",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "INCOMPLETE_LIVE_CENSUS_BLOCKED",
+  "correction": {
+    "component": "v5sourcesnapshotv6.CaptureSelected",
+    "mechanism": "omit reconstructed Objects from continuation JSON; retain source bytes once in V6 Raw",
+    "host_object_limit_bytes": 67108864,
+    "program_c_reproduction_bytes": 24693581,
+    "public_schema_changed": false,
+    "historical_v1_v5_changed": false
+  },
+  "private_rejection_accounting": [
+    "component",
+    "limit",
+    "observed_bytes",
+    "category"
+  ],
+  "categories": ["input", "output", "unique_source"],
+  "tests": {
+    "red": ".pi/evidence/adr0007-capture-fix/red.txt",
+    "focused_green": "3 passed",
+    "exact_size_persistence_green": "1 passed",
+    "private_accounting_green": "1 passed",
+    "race_green": "5 passed",
+    "historical_v1_v5_green": "56 passed",
+    "vet": "clean"
+  },
+  "live_qualification": {
+    "project_session_id": "sk1:949e027243da188035cc5c6532c4cb10df4210f2bdde80acc58b7b7b9af5f283",
+    "generation": 1,
+    "state": "POISONED",
+    "restart_operation_id": "i1",
+    "stop_operation_id": "i2",
+    "failure": "REAP_INCOMPLETE: host operator must inspect and reap the trusted local child before retrying",
+    "nais_session_id": "sk1:0fd6bbef7da1dbd871650446858abcd9a10a47a7c1709c8d937b523a456fee76",
+    "nais_state": "READY",
+    "workers": 0,
+    "census_selector": null,
+    "checkpoint_id": null,
+    "same_stop_replay_identity": null
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "status": "STAGED_VALID",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-v6-cardinality-20260921T144639Z",
+  "accepted_fix": "V6 capture cardinality limits and immutable checkpoint diagnostics",
+  "request_semantic_fingerprint": "sha256:246a63cddcc552144d60578a4f127e34eddb970f496f863cd6a3509011783cb9",
+  "schema_fingerprint": {
+    "schema_id": "lsp-trace.graph-v5-source-snapshot.v6.schema.json",
+    "sha256": "ba85dcb1546478eb7a6a79b146894a0ce52db9531fab7318312c44341bef85e4",
+    "registered_copies_match": true
+  },
+  "sha256": {
+    "validator": "bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b",
+    "request": "3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d",
+    "handoff": "482500b0e8d4a0ea9446dbf15cef749b4b06dd73806c25ee0caa056ab07064d6",
+    "rollback": "5404148ee47e440697f44eb1a74c3b8c3440a7d599b360a230653b5a9ab89643",
+    "mcp_config": "e0d07d4f86ad63a7d202eb7918f28c469aa186a741700bf6e1d6c69ff6372337",
+    "bootstrap_config": "2239226dc6341bb6f6e42a1354528a570d5ffd3c662ceabfb58fc59d59788840",
+    "lsp_trace": "7bfcdf5377f4795b788a09157ac72547b454881e0fdf7910086bb6d243ba2f7a",
+    "lsp_trace_mcp": "37d85afcac1ebb2414922c78d9742fb799c6b74f90d5c2c246c9016d411a03d3"
+  },
+  "backup_sha256": {
+    "mcp_config": "249b99ec80aebb043960447cbdf058e0a195c2d4ceb83272d2bb428cadf1cf2a",
+    "bootstrap_config": "afbcc0a2b3833d383dbda71dc06402b0284bf29547861ffee22ff1035b2a8d78",
+    "lsp_trace": "e7965f36699394fd05055163f3c30565ad3ad97b60fa1070a9fe9f45a24a1a92",
+    "lsp_trace_mcp": "c9567f3562d1335f5da30577ae49e82049c5d3b65ec8f250162344705a33eb3e"
+  },
+  "bounded_smoke": {
+    "status": "PASS",
+    "tests": [
+      "internal/censuscontinuation.TestProductionCaptureLimitsAdmitRetainedNominationTier",
+      "internal/censuscontinuation.TestFailedCaptureCheckpointDiagnosticRoundTripAndLegacyCompatibility",
+      "internal/censuscontinuation.TestRetainedV6FailureReferenceAndOptionalImmutableReplay",
+      "cmd/lsp-trace-mcp.TestProductionContinuationUsesCoherentBoundedCaptureDefaults",
+      "cmd/lsp-trace.TestCLICensusCatalogUsesCoherentBoundedCaptureDefaults"
+    ]
+  },
+  "publication_root_argument_count": 1,
+  "diagnostic_sinks_enabled": false,
+  "root_mode": "0700",
+  "roots_brand_new_and_empty": true,
+  "roots_pairwise_distinct": true,
+  "continuation": {
+    "max_object_bytes": 67108864,
+    "capabilities": ["STOP_AFTER_DESCRIBE_REQUESTS"]
+  },
+  "capture_defaults_expected_post_restart": {
+    "max_artifact_bytes": 67108864,
+    "max_parent_bytes": 67108864,
+    "max_bindings": 1000,
+    "max_receipts": 1000,
+    "max_source_bytes": 1048576,
+    "max_total_source_bytes": 8388608,
+    "max_work": 10000
+  },
+  "validator_negative_checks": {
+    "dot_source_rejected": true,
+    "omitted_semantic_field_rejected": true
+  },
+  "post_restart_session_expected": {
+    "workspace": "/Users/schwa/dev/lsp-trace",
+    "readiness": "READY",
+    "workers": 0
+  }
+}

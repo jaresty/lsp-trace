@@ -1,0 +1,9 @@
+{"Time":"2026-09-21T09:15:31.365392-07:00","Action":"start","Package":"lsp-trace/cmd/lsp-trace-mcp"}
+{"Time":"2026-09-21T09:15:31.706411-07:00","Action":"run","Package":"lsp-trace/cmd/lsp-trace-mcp","Test":"TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets"}
+{"Time":"2026-09-21T09:15:31.706717-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Test":"TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets","Output":"=== RUN   TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets\n"}
+{"Time":"2026-09-21T09:15:31.78326-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Test":"TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets","Output":"    census_staged_admission_test.go:123: ASSERT_CENSUS_PRIVATE_SANITIZED_PUBLIC_DECODERS_direct err=\u003cnil\u003e calls=1 reason=\n"}
+{"Time":"2026-09-21T09:15:31.783626-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Test":"TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets","Output":"--- FAIL: TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets (0.08s)\n"}
+{"Time":"2026-09-21T09:15:31.783631-07:00","Action":"fail","Package":"lsp-trace/cmd/lsp-trace-mcp","Test":"TestProductionGatewayContinuationAdmissionSanitizesPrivateBatchTargets","Elapsed":0.08}
+{"Time":"2026-09-21T09:15:31.786476-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Output":"FAIL\n"}
+{"Time":"2026-09-21T09:15:31.78662-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Output":"FAIL\tlsp-trace/cmd/lsp-trace-mcp\t0.421s\n"}
+{"Time":"2026-09-21T09:15:31.786638-07:00","Action":"fail","Package":"lsp-trace/cmd/lsp-trace-mcp","Elapsed":0.421}

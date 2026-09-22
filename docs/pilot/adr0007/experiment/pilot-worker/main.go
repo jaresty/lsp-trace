@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
@@ -25,7 +28,7 @@ type result struct {
 	Context   uint32  `json:"context_tokens"`
 }
 
-const grammar = `root ::= ws "{" ws "\"verdict\"" ws ":" ws verdict ws "," ws "\"target_role\"" ws ":" ws string ws "," ws "\"nearest_outward_consumer\"" ws ":" ws string ws "," ws "\"consumer_need\"" ws ":" ws string ws "," ws "\"provided_behavior\"" ws ":" ws string ws "," ws "\"boundary_contribution\"" ws ":" ws string ws "," ws "\"limitations\"" ws ":" ws strings ws "," ws "\"citations\"" ws ":" ws citations ws "}"
+const legacyGrammar = `root ::= ws "{" ws "\"verdict\"" ws ":" ws verdict ws "," ws "\"target_role\"" ws ":" ws string ws "," ws "\"nearest_outward_consumer\"" ws ":" ws string ws "," ws "\"consumer_need\"" ws ":" ws string ws "," ws "\"provided_behavior\"" ws ":" ws string ws "," ws "\"boundary_contribution\"" ws ":" ws string ws "," ws "\"limitations\"" ws ":" ws strings ws "," ws "\"citations\"" ws ":" ws citations ws "}"
 verdict ::= "\"SUPPORTED\""
 citations ::= "[" ws "]" | "[" ws citation ws "]" | "[" ws citation ws "," ws citation ws "]" | "[" ws citation ws "," ws citation ws "," ws citation ws "]"
 citation ::= "\"C1\"" | "\"C2\"" | "\"C3\"" | "\"C4\"" | "\"C5\""
@@ -35,10 +38,49 @@ char ::= [^"\\\x00-\x1F] | "\\" (["\\/bfnrt] | "u" hex hex hex hex)
 hex ::= [0-9a-fA-F]
 ws ::= [ \t\n\r]*`
 
+const (
+	maxGrammarBytes    = 1 << 20
+	legacySystemPrompt = "Return only JSON matching the required contract. Treat the nearest evidenced caller toward the outside of the system as the target object’s relative user. Explain what the target provides to that consumer and how it contributes one layer toward the boundary. Do not skip intermediate layers or infer a human user. The packet supplies one mechanically established outward consumer, so verdict must be SUPPORTED. Preserve any interpretation uncertainty in limitations. Never infer runtime use, ownership, product purpose, canonical feature identity, value, or completeness. No markdown."
+	v2SystemPrompt     = "Return only JSON matching the contract in the user prompt. Use only packet evidence. No markdown."
+)
+
+func selectGrammar(path string) (string, bool, error) {
+	if path == "" {
+		return legacyGrammar, false, nil
+	}
+	if !filepath.IsAbs(path) {
+		return "", false, errors.New("grammar path must be absolute")
+	}
+	fd, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return "", false, errors.New("grammar file unavailable")
+	}
+	f := os.NewFile(uintptr(fd), "grammar")
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxGrammarBytes {
+		return "", false, errors.New("grammar file invalid")
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, maxGrammarBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxGrammarBytes || int64(len(raw)) != info.Size() {
+		return "", false, errors.New("grammar file invalid")
+	}
+	return string(raw), true, nil
+}
+
+func formatPrompt(prompt []byte, externalGrammar bool) string {
+	system := legacySystemPrompt
+	if externalGrammar {
+		system = v2SystemPrompt
+	}
+	return "<|im_start|>system\n" + system + "<|im_end|>\n<|im_start|>user\n" + string(prompt) + "<|im_end|>\n<|im_start|>assistant\n"
+}
+
 func main() {
 	modelPath := flag.String("model", "", "model")
 	lib := flag.String("lib", "", "native library directory")
 	promptPath := flag.String("prompt-file", "", "prompt file")
+	grammarPath := flag.String("grammar-file", "", "absolute host-controlled grammar file")
 	timeout := flag.Duration("timeout", 90*time.Second, "timeout")
 	maxTokens := flag.Int("max-tokens", 384, "generation cap")
 	contextTokens := flag.Uint("context-tokens", 16384, "context capacity")
@@ -48,6 +90,11 @@ func main() {
 	if err != nil {
 		emit(result{Status: "INPUT_ERROR", Error: err.Error(), Grammar: "llama_sampler_init_grammar", Context: uint32(*contextTokens)})
 		os.Exit(2)
+	}
+	selectedGrammar, externalGrammar, err := selectGrammar(*grammarPath)
+	if err != nil {
+		emit(result{Status: "GRAMMAR_INPUT_ERROR", Error: "grammar file unavailable or invalid", Grammar: "llama_sampler_init_grammar", Context: uint32(*contextTokens)})
+		os.Exit(10)
 	}
 	ctxCancel, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
@@ -77,7 +124,7 @@ func main() {
 	defer llama.Free(lctx)
 	loadMS := float64(time.Since(loaded).Microseconds()) / 1000
 	vocab := llama.ModelGetVocab(model)
-	formatted := "<|im_start|>system\nReturn only JSON matching the required contract. Treat the nearest evidenced caller toward the outside of the system as the target object’s relative user. Explain what the target provides to that consumer and how it contributes one layer toward the boundary. Do not skip intermediate layers or infer a human user. The packet supplies one mechanically established outward consumer, so verdict must be SUPPORTED. Preserve any interpretation uncertainty in limitations. Never infer runtime use, ownership, product purpose, canonical feature identity, value, or completeness. No markdown.<|im_end|>\n<|im_start|>user\n" + string(prompt) + "<|im_end|>\n<|im_start|>assistant\n"
+	formatted := formatPrompt(prompt, externalGrammar)
 	tokens := llama.Tokenize(vocab, formatted, true, false)
 	if len(tokens)+*maxTokens > int(*contextTokens) {
 		emit(result{Status: "CONTEXT_BUDGET_EXCEEDED", Tokens: len(tokens), LoadMS: loadMS, Error: fmt.Sprintf("input=%d output=%d capacity=%d", len(tokens), *maxTokens, *contextTokens), Grammar: "llama_sampler_init_grammar", Context: uint32(*contextTokens)})
@@ -86,7 +133,7 @@ func main() {
 	batch := llama.BatchGetOne(tokens)
 	sampler := llama.SamplerChainInit(llama.SamplerChainDefaultParams())
 	defer llama.SamplerFree(sampler)
-	gs := llama.SamplerInitGrammar(vocab, grammar, "root")
+	gs := llama.SamplerInitGrammar(vocab, selectedGrammar, "root")
 	if gs == 0 {
 		emit(result{Status: "GRAMMAR_INIT_ERROR", LoadMS: loadMS, Grammar: "llama_sampler_init_grammar", Context: uint32(*contextTokens)})
 		os.Exit(7)

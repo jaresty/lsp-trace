@@ -1,0 +1,63 @@
+{
+  "status": "STAGED_VALID",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-regex-adr0010-20260921T154419Z",
+  "accepted_scope": [
+    "capture committed-workspace fallback and terminal-gap diagnostics",
+    "regex locator UX phase1",
+    "ADR0010 additive featureattribution contracts (not externally exposed)"
+  ],
+  "request_semantic_fingerprint": "sha256:246a63cddcc552144d60578a4f127e34eddb970f496f863cd6a3509011783cb9",
+  "sha256": {
+    "lsp_trace": "285855bf3aaf233d29f15fbdc2a26ec226a9979ecceb028b4d92e90940bfb3cb",
+    "lsp_trace_mcp": "539dd6bf66f92d10363372f2485b0227bf87df9e4c0e55c8664b6c70b1f71b7f",
+    "mcp_config": "84243b17efde2b7bcdf330374da81dbe199a2f391f7ff3bad7ee8f4682eeb631",
+    "bootstrap_config": "0a492c4248f3cc95a4928b018354d397e1c342498d25fb773963c2f02350d59c",
+    "request": "3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d",
+    "validator": "bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b",
+    "handoff": "248f212e9ad8e63ea7c74d569f948c57e90346d3bb7400a051347336a5926306",
+    "rollback": "9dfa537c1a6474cee5d5020e012a57dea36c4d0327a18b59e9e3ff68c68026da"
+  },
+  "backup_sha256": {
+    "mcp_config": "e0d07d4f86ad63a7d202eb7918f28c469aa186a741700bf6e1d6c69ff6372337",
+    "bootstrap_config": "2239226dc6341bb6f6e42a1354528a570d5ffd3c662ceabfb58fc59d59788840",
+    "lsp_trace": "7bfcdf5377f4795b788a09157ac72547b454881e0fdf7910086bb6d243ba2f7a",
+    "lsp_trace_mcp": "37d85afcac1ebb2414922c78d9742fb799c6b74f90d5c2c246c9016d411a03d3"
+  },
+  "schema_pins": {
+    "source_snapshot_v6": "ba85dcb1546478eb7a6a79b146894a0ce52db9531fab7318312c44341bef85e4",
+    "structural_context_input_v6": "27a5c6c8036d268d199eaf6339e92c856ff09a7890ba58710862988e4b2bf588",
+    "structural_context_domain_error_v4": "9f99adfa94c95965062d10cbb472d77ec4287feea707ff2a8ab6fd4053b5bae8"
+  },
+  "bounded_smoke": {
+    "capture": "PASS 6",
+    "regex": "PASS 28",
+    "featureattribution": "PASS 7"
+  },
+  "capture_defaults": {
+    "max_artifact_bytes": 67108864,
+    "max_parent_bytes": 67108864,
+    "max_bindings": 1000,
+    "max_receipts": 1000,
+    "max_source_bytes": 1048576,
+    "max_total_source_bytes": 8388608,
+    "max_work": 10000
+  },
+  "regex_defaults": {
+    "max_document_bytes": 61440,
+    "max_pattern_bytes": 4096,
+    "max_matches": 100,
+    "max_work": 65536
+  },
+  "regex_hard_maxima": {
+    "max_document_bytes": 16777216,
+    "max_pattern_bytes": 4096,
+    "max_matches": 1000,
+    "max_work": 536870912
+  },
+  "post_restart_expected": {
+    "readiness": "READY",
+    "workers": 0
+  },
+  "one_shot_acceptance": "progression beyond PROGRAM_C_COMPUTED OR exactly one typed FAILED_CAPTURE checkpoint; public checkpoint-first diagnostic",
+  "post_restart_regex_probe": "DEFERRED_TO_PRESERVE_ONE_SHOT"
+}

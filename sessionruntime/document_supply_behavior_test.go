@@ -160,17 +160,55 @@ func TestDocumentSupplyRemainsHistoricalAfterFailedRestart(t *testing.T) {
 }
 
 func TestDocumentSupplyOmittedAndLateOptIn(t *testing.T) {
+	const content = "package fixture\n"
+	m, req, _, writer := supplyFixture(t, []byte(content))
+	req.CaptureSupply = false
+	first := m.PrepareDocument(context.Background(), req)
+	if first.Failure != "" || first.Supply != nil {
+		t.Fatalf("ASSERT_INITIAL_OMITTED_SUPPLY: %+v", first)
+	}
+	beforeCached := writer.Len()
+	cached := m.PrepareDocument(context.Background(), req)
+	if cached.Failure != "" || cached.Supply != nil || cached.Version != first.Version || writer.Len() != beforeCached {
+		t.Fatalf("ASSERT_OMITTED_UNCHANGED_CACHE_HIT_ZERO_WRITE: first=%+v cached=%+v writes=%d/%d", first, cached, beforeCached, writer.Len())
+	}
+
+	req.CaptureSupply = true
+	late := m.PrepareDocument(context.Background(), req)
+	if late.Failure != "" || late.Supply == nil {
+		t.Fatalf("ASSERT_RETROSPECTIVE_SUPPLY_SUCCESS: first=%+v late=%+v", first, late)
+	}
+	if late.Version != first.Version+1 || late.Supply.Classification != "LSP_SUPPLIED" || late.Supply.SessionID != req.SessionID || late.Supply.Generation != req.Generation || late.Supply.URI != req.URI || late.Supply.DocumentVersion != late.Version || late.Supply.Method != "textDocument/didChange" || !bytes.Equal(late.Supply.Content, []byte(content)) {
+		t.Fatalf("ASSERT_RETROSPECTIVE_SUPPLY_EXACT_WRITE: first=%+v late=%+v", first, late)
+	}
+	written := writer.Bytes()[beforeCached:]
+	if bytes.Count(written, []byte(`"method":"textDocument/didChange"`)) != 1 {
+		t.Fatalf("ASSERT_RETROSPECTIVE_SUPPLY_EXACTLY_ONE_DID_CHANGE: %q", written)
+	}
+	msg, err := lspwire.NewReader(bytes.NewReader(written), lspwire.DefaultLimits()).Read()
+	if err != nil || msg.Method != late.Supply.Method || !bytes.Equal(msg.Params, late.Supply.Params) {
+		t.Fatalf("ASSERT_RETROSPECTIVE_SUPPLY_PARAMS_MATCH_SUCCESSFUL_WRITE: msg=%+v supply=%+v err=%v", msg, late.Supply, err)
+	}
+	beforeReused := writer.Len()
+	reused := m.PrepareDocument(context.Background(), req)
+	if reused.Failure != "" || reused.Supply == nil || reused.Version != late.Version || reused.Supply.DocumentVersion != late.Supply.DocumentVersion || reused.Supply.Method != late.Supply.Method || !bytes.Equal(reused.Supply.Content, late.Supply.Content) || !bytes.Equal(reused.Supply.Params, late.Supply.Params) || writer.Len() != beforeReused {
+		t.Fatalf("ASSERT_RETROSPECTIVE_SUPPLY_CACHE_REUSED_ZERO_WRITE: late=%+v reused=%+v writes=%d/%d", late, reused, beforeReused, writer.Len())
+	}
+}
+
+func TestDocumentSupplyLateOptInWriteFailureHasNoSupply(t *testing.T) {
 	m, req, _, writer := supplyFixture(t, []byte("package fixture\n"))
 	req.CaptureSupply = false
 	first := m.PrepareDocument(context.Background(), req)
 	if first.Failure != "" || first.Supply != nil {
-		t.Fatalf("ASSERT_OMITTED_NO_BYTES: %+v", first)
+		t.Fatalf("ASSERT_LATE_OPT_IN_WRITE_FAILURE_PRECONDITION: %+v", first)
 	}
 	before := writer.Len()
+	writer.fail = true
 	req.CaptureSupply = true
-	late := m.PrepareDocument(context.Background(), req)
-	if late.Failure != "" || late.Supply != nil || writer.Len() != before {
-		t.Fatalf("ASSERT_NO_RETROSPECTIVE_SUPPLY: %+v", late)
+	failed := m.PrepareDocument(context.Background(), req)
+	if failed.Failure != session.SessionPoisoned || failed.Supply != nil || writer.Len() != before {
+		t.Fatalf("ASSERT_LATE_OPT_IN_WRITE_FAILURE_NO_SUPPLY: result=%+v writes=%d/%d", failed, before, writer.Len())
 	}
 }
 

@@ -1,0 +1,7 @@
+{
+  "schema_version": "lsp-trace.qualification-execution-accounting.v1",
+  "custody": "OPERATOR_RETAINED",
+  "workers": 0,
+  "model_invocations": 0,
+  "source": "POST_SESSION_LIST.json Census.Workers=0 and PUBLIC_RESPONSE.json terminal PROGRAM_C_COMPUTED/FAILED_CAPTURE before Describe worker construction"
+}

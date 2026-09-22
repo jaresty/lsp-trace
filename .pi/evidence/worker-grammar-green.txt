@@ -1,0 +1,6 @@
+GREEN verification before worker rebuild:
+- go test ./internal/describeworker -count=1: 72 passed
+- go vet ./internal/describeworker/...: passed
+- cd docs/pilot/adr0007/experiment/pilot-worker && go vet ./...: passed
+- cd docs/pilot/adr0007/experiment/pilot-worker && go test ./... -count=1: 2 passed
+No model command executed.

@@ -1,0 +1,53 @@
+=== RUN   TestV4PersistentAssertionMatrix
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_PARENT_V3_EXACT_BYTES
+    v4_red_test.go:27: ASSERT_V4_PARENT_V3_EXACT_BYTES: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_V3_OCCURRENCES_UNCHANGED
+    v4_red_test.go:27: ASSERT_V4_V3_OCCURRENCES_UNCHANGED: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_ENDPOINT_NOT_V1_BOUND
+    v4_red_test.go:27: ASSERT_V4_ENDPOINT_NOT_V1_BOUND: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_NO_ARBITRARY_ENDPOINTS
+    v4_red_test.go:27: ASSERT_V4_NO_ARBITRARY_ENDPOINTS: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_SOURCE_UNAVAILABLE_NO_SUBSTITUTE
+    v4_red_test.go:27: ASSERT_V4_SOURCE_UNAVAILABLE_NO_SUBSTITUTE: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_CONSTITUENT_IDENTITY_COMPLETE
+    v4_red_test.go:27: ASSERT_V4_CONSTITUENT_IDENTITY_COMPLETE: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_CANONICAL_ORDER
+    v4_red_test.go:27: ASSERT_V4_CANONICAL_ORDER: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_CLOSED_SCHEMA
+    v4_red_test.go:27: ASSERT_V4_CLOSED_SCHEMA: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_CAPTURE_ONLY_WORKSPACE_READ
+    v4_red_test.go:27: ASSERT_V4_CAPTURE_ONLY_WORKSPACE_READ: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V4_ONE_ARTIFACT_SET
+    v4_red_test.go:27: ASSERT_RETAINED_V4_ONE_ARTIFACT_SET: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V4_ONE_PROJECT_PASS
+    v4_red_test.go:27: ASSERT_RETAINED_V4_ONE_PROJECT_PASS: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V3_OCCURRENCE_EXACT
+    v4_red_test.go:27: ASSERT_RETAINED_V3_OCCURRENCE_EXACT: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_TARGETPACKET_V4_RECONCILIATION
+    v4_red_test.go:27: ASSERT_TARGETPACKET_V4_RECONCILIATION: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V1_V2_V3_GOLDENS_UNCHANGED
+    v4_red_test.go:27: ASSERT_V1_V2_V3_GOLDENS_UNCHANGED: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_V4_AUTHORITY_TUPLE
+    v4_red_test.go:27: ASSERT_V4_AUTHORITY_TUPLE: V4 production correction not yet present
+=== RUN   TestV4PersistentAssertionMatrix/ASSERT_PUBLICATION_V4_REGISTERED_ADDITIVELY
+    v4_red_test.go:27: ASSERT_PUBLICATION_V4_REGISTERED_ADDITIVELY: V4 production correction not yet present
+--- FAIL: TestV4PersistentAssertionMatrix (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_PARENT_V3_EXACT_BYTES (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_V3_OCCURRENCES_UNCHANGED (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_ENDPOINT_NOT_V1_BOUND (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_NO_ARBITRARY_ENDPOINTS (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_SOURCE_UNAVAILABLE_NO_SUBSTITUTE (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_CONSTITUENT_IDENTITY_COMPLETE (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_CANONICAL_ORDER (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_CLOSED_SCHEMA (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_CAPTURE_ONLY_WORKSPACE_READ (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V4_ONE_ARTIFACT_SET (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V4_ONE_PROJECT_PASS (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_RETAINED_V3_OCCURRENCE_EXACT (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_TARGETPACKET_V4_RECONCILIATION (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V1_V2_V3_GOLDENS_UNCHANGED (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_V4_AUTHORITY_TUPLE (0.00s)
+    --- FAIL: TestV4PersistentAssertionMatrix/ASSERT_PUBLICATION_V4_REGISTERED_ADDITIVELY (0.00s)
+FAIL
+FAIL	lsp-trace/internal/v4assertions	0.315s
+FAIL

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Runner",
+    "kind": 12,
+    "location": {
+      "uri": "file:///workspace/runner.go",
+      "range": {
+        "start": {"line": 7, "character": 9},
+        "end": {"line": 7, "character": 3}
+      }
+    }
+  }
+]

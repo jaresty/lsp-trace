@@ -104,8 +104,8 @@ func TestPrivateCensusCandidateBinaryQualification(t *testing.T) {
 	if err := json.Unmarshal(realProcess.Structured, &realEnvelope); err != nil {
 		t.Fatal(err)
 	}
-	if realEnvelope.Outcome != "DOMAIN_ERROR" || realEnvelope.OperationStatus != "FAILED" || !realProcess.IsError || realEnvelope.RequestID != "candidate-real-gopls-34" || realEnvelope.EnvelopeSchemaID != mcpcontract.FutureCensusDomainErrorID {
-		t.Fatalf("ASSERT_CANDIDATE34_REAL_GOPLS_FAILS_CLOSED: envelope=%+v raw=%s", realEnvelope, realProcess.Structured)
+	if realEnvelope.Outcome != "DOMAIN_ERROR" || realEnvelope.OperationStatus != "FAILED" || !realProcess.IsError || realEnvelope.RequestID != "candidate-real-gopls-34" || realEnvelope.EnvelopeSchemaID != mcpcontract.CensusDiscoveryDiagnosticEnvelopeV2ID || realEnvelope.Diagnostic == nil || len(realEnvelope.Diagnostic.Observations) != 6 || realEnvelope.RequestReceipt == nil {
+		t.Fatalf("ASSERT_CANDIDATE34_REAL_GOPLS_DISCOVERY_DIAGNOSTIC_V2: envelope=%+v raw=%s", realEnvelope, realProcess.Structured)
 	}
 	if strings.Contains(string(realProcess.Structured), publicationPath) || strings.Contains(string(realProcess.Structured), workspace) || strings.Contains(string(realProcess.Structured), gopls) {
 		t.Fatalf("ASSERT_CANDIDATE34_REAL_GOPLS_DOMAIN_PRIVACY: %s", realProcess.Structured)

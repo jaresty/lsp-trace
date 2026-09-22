@@ -1,0 +1,12 @@
+{
+  "run_root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z",
+  "base_publication_root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/base-publication",
+  "continuation_root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/continuation-publication",
+  "trace_dir": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/trace",
+  "ledger_dir": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/ledger",
+  "rollback_dir": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/rollback",
+  "artifacts_dir": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/artifacts",
+  "runtime_trace_path": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/trace/runtime.trace",
+  "failure_ledger_path": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-mcp-adapter-publication-root-qualification-20260921T110258Z/ledger/publication-failures.ndjson",
+  "max_object_bytes": 67108864
+}

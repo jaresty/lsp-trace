@@ -66,6 +66,31 @@ type receiptIdentity struct {
 	Digest string
 }
 
+// Build constructs V2 purely from an exact V1 parent and explicit display
+// bindings. It performs no acquisition or workspace reads.
+func Build(parentV1 []byte, bindings []DisplayBinding) ([]byte, error) {
+	if _, err := v5sourcesnapshot.Validate(parentV1); err != nil {
+		return nil, admissionError("V2_PARENT_INVALID", err.Error())
+	}
+	cloned := append([]DisplayBinding(nil), bindings...)
+	sort.Slice(cloned, func(i, j int) bool {
+		a, b := cloned[i], cloned[j]
+		if a.GraphSubjectID != b.GraphSubjectID {
+			return a.GraphSubjectID < b.GraphSubjectID
+		}
+		return a.LogicalSourceID < b.LogicalSourceID
+	})
+	a := Artifact{SchemaVersion: Version, Policy: Policy, ParentSchemaVersion: v5sourcesnapshot.Version, ParentSnapshotDigest: digest(parentV1), ParentSnapshot: append([]byte(nil), parentV1...), DisplayBindings: cloned}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Validate(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func Validate(raw []byte) (string, error) {
 	if len(raw) > MaxBytes {
 		return "", admissionError("V2_BYTE_LIMIT", "artifact exceeds byte limit")

@@ -410,33 +410,27 @@ func constituent(in Input, e envelope, gb []byte, n native) Constituent {
 func validateSourceRecords(items []admitted) error {
 	receiptIDs := map[string]any{}
 	requestIDs := map[string]any{}
-	contentDigests := map[string]any{}
 	bindings := map[string]any{}
 	for _, x := range items {
+		namespace := x.in.Identity + "\x00"
 		for _, s := range x.env.Supplies {
-			if err := exactRecord(requestIDs, "supply request id", s.RequestID, s); err != nil {
+			if err := exactRecord(requestIDs, "supply request id", namespace+s.RequestID, s); err != nil {
 				return err
 			}
 			if s.Receipt != nil {
-				if err := exactRecord(receiptIDs, "receipt id", s.Receipt.ID, *s.Receipt); err != nil {
-					return err
-				}
-				if err := exactRecord(contentDigests, "content digest", rawDigest(s.Receipt.Content), *s.Receipt); err != nil {
+				if err := exactRecord(receiptIDs, "receipt id", namespace+s.Receipt.ID, *s.Receipt); err != nil {
 					return err
 				}
 			}
 		}
 		for _, r := range x.env.Captures {
-			if err := exactRecord(receiptIDs, "receipt id", r.ID, r); err != nil {
-				return err
-			}
-			if err := exactRecord(contentDigests, "content digest", rawDigest(r.Content), r); err != nil {
+			if err := exactRecord(receiptIDs, "receipt id", namespace+r.ID, r); err != nil {
 				return err
 			}
 		}
 		for _, b := range x.env.Bindings {
 			keyBytes, _ := json.Marshal(b)
-			if err := exactRecord(bindings, "binding", string(keyBytes), b); err != nil {
+			if err := exactRecord(bindings, "binding", namespace+string(keyBytes), b); err != nil {
 				return err
 			}
 		}

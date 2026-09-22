@@ -140,6 +140,54 @@ func TestPrepareFailureIsTerminalWithoutPartialSupplies(t *testing.T) {
 	}
 }
 
+func TestPrepareFailureSafeDimensionCountsAndPrivacy(t *testing.T) {
+	const privateURI = "file:///private/secret.go"
+	cases := []struct {
+		name    string
+		failure session.Failure
+		want    DocumentPreparationFailure
+	}{
+		{"cancelled", session.RequestCancelled, DocumentPreparationContextCancelled},
+		{"deadline", session.RequestTimeout, DocumentPreparationContextDeadline},
+		{"stale", session.StaleGeneration, DocumentPreparationStaleGeneration},
+		{"lifecycle", session.LifecycleConflict, DocumentPreparationLifecycleConflict},
+		{"resource", session.ResourceExhausted, DocumentPreparationResourceExhausted},
+		{"poisoned", session.SessionPoisoned, DocumentPreparationSessionPoisoned},
+		{"supply", sessionruntime.DocumentSupplyUnavailable, DocumentPreparationSupplyUnavailable},
+		{"uri", sessionruntime.DocumentURIUnavailable, DocumentPreparationURIUnavailable},
+		{"workspace", sessionruntime.DocumentOutsideWorkspace, DocumentPreparationOutsideWorkspace},
+		{"source", sessionruntime.DocumentSourceUnavailable, DocumentPreparationSourceUnavailable},
+		{"language", sessionruntime.LanguageIDUnavailable, DocumentPreparationLanguageIDUnavailable},
+		{"unknown", session.Failure("PRIVATE_RAW_FAILURE"), DocumentPreparationUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			preparer := &recordingPreparer{responses: map[string]sessionruntime.DocumentResult{privateURI: {Failure: tc.failure}}}
+			got := Prepare(context.Background(), preparer, "s", 1, "go", []string{"file:///ok.go", privateURI, "file:///later.go"}, generousLimits())
+			if got.Failure == nil || got.Failure.Dimension != tc.want || got.Failure.FailingOrdinal != 1 || got.Accounting.Attempted != 2 || got.Accounting.Succeeded != 1 || got.Accounting.Planned != 3 || len(preparer.requests) != 2 || len(got.Supplies) != 0 {
+				t.Fatalf("ASSERT_PREPARATION_SAFE_FAILURE_%s: %+v requests=%d", tc.name, got, len(preparer.requests))
+			}
+			raw, err := json.Marshal(got)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, forbidden := range []string{privateURI, "PRIVATE_RAW_FAILURE", string(tc.failure), string(tc.want)} {
+				if strings.Contains(string(raw), forbidden) {
+					t.Fatalf("ASSERT_PREPARATION_FAILURE_PRIVACY_%s: found=%q json=%s", tc.name, forbidden, raw)
+				}
+			}
+		})
+	}
+}
+
+func TestPrepareNilSupplyHasDistinctSafeDimension(t *testing.T) {
+	preparer := &recordingPreparer{responses: map[string]sessionruntime.DocumentResult{"file:///missing.go": {}}}
+	got := Prepare(context.Background(), preparer, "s", 1, "go", []string{"file:///missing.go", "file:///later.go"}, generousLimits())
+	if got.Failure == nil || got.Failure.Dimension != DocumentPreparationSupplyMissing || got.Failure.FailingOrdinal != 0 || got.Accounting.Attempted != 1 || got.Accounting.Succeeded != 0 || got.Accounting.Planned != 2 || len(preparer.requests) != 1 || len(got.Supplies) != 0 {
+		t.Fatalf("ASSERT_PREPARATION_SUPPLY_MISSING: %+v requests=%d", got, len(preparer.requests))
+	}
+}
+
 func TestPrepareRawSuppliesAreNotJSON(t *testing.T) {
 	t.Log(assertRawSuppliesPrivate)
 	got := Prepare(context.Background(), &recordingPreparer{}, "s", 1, "go", []string{"file:///target.go"}, generousLimits())

@@ -1,0 +1,7 @@
+Guard: go test ./cmd/lsp-trace -run TestCLICommittedContinuationCustody -count=1
+Assertion [P 1a]: ASSERT_CLI_COMMITTED_DEGRADED_HANDOFF_BUILDS
+Observed RED: census_continuation_test.go:87: ASSERT_CLI_COMMITTED_DEGRADED_HANDOFF_BUILDS: committed continuation custody incomplete
+Property [P 1a]: committed sync/close degradation with complete verified custody is continuation-eligible.
+Property [P 1b]: publication failure or incomplete verified custody is continuation-ineligible.
+Assertion [P 1a]: ASSERT_CENSUS_FRESH_PIPELINE_ONCE
+Observed RED: code=0 contracts=0 runs=0 because fresh catalog returned historical committed degradation before continuation.

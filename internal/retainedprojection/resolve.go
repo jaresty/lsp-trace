@@ -8,6 +8,7 @@ import (
 
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/sourceobject"
+	"lsp-trace/internal/v5sourcesnapshotv3"
 )
 
 const (
@@ -35,8 +36,14 @@ type ResolvedSelection struct {
 	Bytes     []byte
 }
 
+type ResolvedRelation struct {
+	Selection RelationSelection
+	Bytes     []byte
+}
+
 type ResolveResult struct {
 	Selections []ResolvedSelection
+	Relations  []ResolvedRelation
 }
 
 func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, error) {
@@ -44,11 +51,11 @@ func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, err
 	if err := validateResolvePlan(plan, lookup, limits, true); err != nil {
 		return zero, err
 	}
-	if uint64(len(plan.Selections)) > limits.MaxLogicalSelections {
+	if uint64(len(plan.Selections)+len(plan.Relations)) > limits.MaxLogicalSelections {
 		return zero, fail(CodeResolveSelectionLimit, Key{}, "logical selection limit exceeded")
 	}
 
-	identities := make([]sourceobject.Identity, 0, len(plan.Selections))
+	identities := make([]sourceobject.Identity, 0, len(plan.Selections)+len(plan.Relations))
 	seen := make(map[sourceobject.Identity]struct{}, len(plan.Selections))
 	var uniqueBytes uint64
 	for _, selection := range plan.Selections {
@@ -63,6 +70,22 @@ func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, err
 		}
 		if id.ByteLength > math.MaxUint64-uniqueBytes || uniqueBytes+id.ByteLength > limits.MaxUniqueSourceBytes {
 			return zero, fail(CodeResolveSourceBytesLimit, selection.Key, "unique source byte limit exceeded")
+		}
+		uniqueBytes += id.ByteLength
+	}
+
+	for _, relation := range plan.Relations {
+		id := relation.Source
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		identities = append(identities, id)
+		if uint64(len(identities)) > limits.MaxDistinctObjects {
+			return zero, fail(CodeResolveDistinctLimit, relation.Caller, "distinct object limit exceeded")
+		}
+		if id.ByteLength > math.MaxUint64-uniqueBytes || uniqueBytes+id.ByteLength > limits.MaxUniqueSourceBytes {
+			return zero, fail(CodeResolveSourceBytesLimit, relation.Caller, "unique source byte limit exceeded")
 		}
 		uniqueBytes += id.ByteLength
 	}
@@ -93,7 +116,11 @@ func Resolve(plan Plan, lookup Lookup, limits ResolveLimits) (ResolveResult, err
 			Bytes:     append([]byte(nil), cache[selection.Source]...),
 		}
 	}
-	return ResolveResult{Selections: selections}, nil
+	relations := make([]ResolvedRelation, len(plan.Relations))
+	for i, relation := range plan.Relations {
+		relations[i] = ResolvedRelation{Selection: relation, Bytes: append([]byte(nil), cache[relation.Source]...)}
+	}
+	return ResolveResult{Selections: selections, Relations: relations}, nil
 }
 
 func ResolveMetadata(plan Plan, limits ResolveLimits) (ResolveResult, error) {
@@ -101,7 +128,7 @@ func ResolveMetadata(plan Plan, limits ResolveLimits) (ResolveResult, error) {
 	if err := validateResolvePlan(plan, nil, limits, false); err != nil {
 		return zero, err
 	}
-	if uint64(len(plan.Selections)) > limits.MaxLogicalSelections {
+	if uint64(len(plan.Selections)+len(plan.Relations)) > limits.MaxLogicalSelections {
 		return zero, fail(CodeResolveSelectionLimit, Key{}, "logical selection limit exceeded")
 	}
 	seen := make(map[sourceobject.Identity]struct{}, len(plan.Selections))
@@ -111,11 +138,21 @@ func ResolveMetadata(plan Plan, limits ResolveLimits) (ResolveResult, error) {
 			return zero, fail(CodeResolveDistinctLimit, selection.Key, "distinct object limit exceeded")
 		}
 	}
+	for _, relation := range plan.Relations {
+		seen[relation.Source] = struct{}{}
+		if uint64(len(seen)) > limits.MaxDistinctObjects {
+			return zero, fail(CodeResolveDistinctLimit, relation.Caller, "distinct object limit exceeded")
+		}
+	}
 	selections := make([]ResolvedSelection, len(plan.Selections))
 	for i, selection := range plan.Selections {
 		selections[i] = ResolvedSelection{Selection: cloneSelection(selection)}
 	}
-	return ResolveResult{Selections: selections}, nil
+	relations := make([]ResolvedRelation, len(plan.Relations))
+	for i, relation := range plan.Relations {
+		relations[i] = ResolvedRelation{Selection: relation}
+	}
+	return ResolveResult{Selections: selections, Relations: relations}, nil
 }
 
 func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits, requireLookup bool) error {
@@ -143,6 +180,22 @@ func validateResolvePlan(plan Plan, lookup Lookup, limits ResolveLimits, require
 		}
 		if selection.Role != wantRole {
 			return fail(CodeInvalidPlan, selection.Key, "invalid selection role")
+		}
+	}
+	occurrences := map[string]struct{}{}
+	for i, relation := range plan.Relations {
+		if relation.Ordinal != i || relation.RelationID == "" || relation.OccurrenceID == "" || relation.Direction != v5sourcesnapshotv3.Direction || relation.Caller.GraphSubjectID == "" || relation.Caller.LogicalSourceID == "" || relation.Callee.GraphSubjectID == "" || relation.Callee.LogicalSourceID == "" || !validRange(relation.Range) || !canonicalResolveDigest(relation.Source.Digest) {
+			return fail(CodeInvalidPlan, relation.Caller, "invalid relation selection")
+		}
+		if _, ok := occurrences[relation.OccurrenceID]; ok {
+			return fail(CodeInvalidPlan, relation.Caller, "duplicate relation occurrence")
+		}
+		occurrences[relation.OccurrenceID] = struct{}{}
+		if _, ok := keys[relation.Caller]; !ok {
+			return fail(CodeInvalidPlan, relation.Caller, "relation caller not selected")
+		}
+		if _, ok := keys[relation.Callee]; !ok {
+			return fail(CodeInvalidPlan, relation.Callee, "relation callee not selected")
 		}
 	}
 	return nil

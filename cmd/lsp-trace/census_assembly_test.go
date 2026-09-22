@@ -63,7 +63,7 @@ func TestCensusAssemblyCapabilityZeroAndPublicationReplay(t *testing.T) {
 }
 
 func TestRunInitializedCensusAcquisitionRejectsMissingRuntime(t *testing.T) {
-	if _, err := runInitializedCensusAcquisition(context.Background(), nil, nil, acquisitionops.Limits{}); err == nil {
+	if _, err := runInitializedCensusAcquisition(context.Background(), nil, nil, acquisitionops.Limits{}, 1, 0, 63); err == nil {
 		t.Fatal("ASSERT_INITIALIZED_RUNTIME_REQUIRED")
 	}
 }
@@ -104,7 +104,7 @@ func censusPublicationProjection(t *testing.T, targetCount int) censusacquisitio
 			return discovery, nil
 		}),
 		Acquirer: censusAcquirerFunc(func(_ context.Context, request censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
-			g := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{Server: graph.ServerInvocation{Command: "fake"}, Seeds: []graph.InvocationSeed{}, Provenance: graph.InvocationProvenance{InvocationID: "i", SourceRevision: "r", ServerVersion: "v"}, Expansion: graph.ExpansionConfig{TopmostSiblings: true}}, Seeds: []graph.SeedResult{}, Summary: graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
+			g := graph.Result{SchemaVersion: graph.SchemaVersionV5, Invocation: graph.Invocation{WorkspaceURI: "file:///private/work", LanguageID: "go", Server: graph.ServerInvocation{Command: "fake"}, Seeds: []graph.InvocationSeed{}, Provenance: graph.InvocationProvenance{InvocationID: "i", SourceRevision: "r", ServerVersion: "v"}, Expansion: graph.ExpansionConfig{TopmostSiblings: true}}, Seeds: []graph.SeedResult{}, Summary: graph.Summary{Complete: true}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}}
 			native, _ := json.Marshal(g)
 			raw, err := graphprovenance.CaptureV5WithSeedSpec(native, request.Session.SessionID, request.Session.Generation, manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable, Records: []manageddiagnostic.Record{}}, request.CanonicalSeedsV2)
 			return censusacquisition.AcquiredV5{Session: request.Session, Raw: raw}, err

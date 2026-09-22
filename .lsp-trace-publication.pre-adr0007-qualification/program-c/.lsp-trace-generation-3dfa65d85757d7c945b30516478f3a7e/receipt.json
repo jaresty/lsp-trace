@@ -1,0 +1,1 @@
+{"receipt_version":"lsp-trace.byte-custody-receipt.v1","exact_serialized_bytes_digest":"sha256:09c852d15f4ead7d6505d96bb6e4abe9456ffb853a4952d6ad571c59c0da366c","artifact_byte_length":26842,"digest_algorithm":"SHA-256","digest_scope":"EXACT_SERIALIZED_OUTPUT_BYTES","integrity_claim":"INTEGRITY_AND_CUSTODY_ONLY","authenticity_claim":false,"directory_durability":"CHECKED"}

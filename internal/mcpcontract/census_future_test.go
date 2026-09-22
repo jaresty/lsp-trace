@@ -15,7 +15,7 @@ func futureCensusSchemas(t *testing.T) map[string]*jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	c.DefaultDraft(jsonschema.Draft2020)
-	ids := []string{FutureCensusInputID, FutureCensusResultID, FutureCensusSuccessID, FutureCensusDomainErrorID}
+	ids := []string{FutureCensusInputID, FutureCensusResultID, FutureCensusSuccessID, FutureCensusDomainErrorID, CensusContinuationDiagnosticID, CensusContinuationDiagnosticV2ID}
 	for _, id := range ids {
 		raw, e := FutureCensusSchemaJSON(id)
 		if e != nil {
@@ -212,6 +212,22 @@ func TestFutureCensusResultParityCeilingsAndEnvelopes(t *testing.T) {
 	domain := `{"envelope_version":"1","envelope_schema_id":"` + FutureCensusDomainErrorID + `","tool":"lsp_trace_v1_census","request_id":"r","outcome":"DOMAIN_ERROR","operation_status":"FAILED","isError":true,"error":{"schema_version":"lsp-trace.census-diagnostic.v1","status":"FAILED","stage":"acquisition","code":"ACQUISITION_FAILED","batch_ordinal":1,"retry":true}}`
 	schemaAccepts(t, s[FutureCensusDomainErrorID], []byte(domain), true)
 }
+func TestCensusContinuationDiagnosticV2IsStrictAndV1RemainsHistorical(t *testing.T) {
+	s := futureCensusSchemas(t)
+	v2 := `{"schema_version":"lsp-trace.census-continuation-diagnostic.v2","status":"FAILED","code":"CONTINUATION_CAPTURE_FAILED","phase":"CONTINUATION","stage":"CAPTURE","failed_field":"source_preparation","invariant":"CAPTURE_MUST_REACH_TERMINAL_CHECKPOINT","census_commit_preserved":true,"retry":false,"retry_action":"do not retry unchanged; census commit is preserved","caller_action":"RECONFIGURE_MANAGED_SOURCE_SUPPLY_THEN_RESUME","guidance":"Reconfigure managed source supply, then resume from an authorized selector.","observed_stage":"PROGRAM_C_COMPUTED","observed_status":"FAILED_CAPTURE","resource_category":"availability","recovery":"RESTART_FROM_PRESERVED_CENSUS_COMMIT","recovery_selector_state":"RECOVERY_SELECTOR_UNAVAILABLE","preserved_census_selector":"census.json","last_successful_stage":"PROGRAM_C_COMPUTED","terminal_stage":"PROGRAM_C_COMPUTED","terminal_status":"FAILED_CAPTURE","authority":0}`
+	schemaAccepts(t, s[CensusContinuationDiagnosticV2ID], []byte(v2), true)
+	schemaAccepts(t, s[CensusContinuationDiagnosticV2ID], []byte(strings.Replace(v2, `"authority":0`, `"authority":0,"unknown":true`, 1)), false)
+	schemaAccepts(t, s[CensusContinuationDiagnosticV2ID], []byte(strings.Replace(v2, `"preserved_census_selector":"census.json"`, `"preserved_census_selector":"/private/census.json"`, 1)), false)
+	schemaAccepts(t, s[CensusContinuationDiagnosticV2ID], []byte(strings.Replace(v2, "RECONFIGURE_MANAGED_SOURCE_SUPPLY_THEN_RESUME", "RETRY_WITH_MANAGED_SOURCE_SUPPLY", 1)), false)
+	v1 := strings.Replace(v2, "lsp-trace.census-continuation-diagnostic.v2", "lsp-trace.census-continuation-diagnostic.v1", 1)
+	v1 = strings.Replace(v1, "RECONFIGURE_MANAGED_SOURCE_SUPPLY_THEN_RESUME", "RETRY_WITH_MANAGED_SOURCE_SUPPLY", 1)
+	for _, field := range []string{`,"recovery_selector_state":"RECOVERY_SELECTOR_UNAVAILABLE"`, `,"preserved_census_selector":"census.json"`, `,"last_successful_stage":"PROGRAM_C_COMPUTED"`, `,"terminal_stage":"PROGRAM_C_COMPUTED"`, `,"terminal_status":"FAILED_CAPTURE"`, `,"authority":0`} {
+		v1 = strings.Replace(v1, field, "", 1)
+	}
+	schemaAccepts(t, s[CensusContinuationDiagnosticID], []byte(v1), true)
+	schemaAccepts(t, s[CensusContinuationDiagnosticID], []byte(strings.Replace(v1, "RETRY_WITH_MANAGED_SOURCE_SUPPLY", "RECONFIGURE_MANAGED_SOURCE_SUPPLY_THEN_RESUME", 1)), false)
+}
+
 func TestFutureCensusSchemasAreDirectAndHistoricalManifestUnchanged(t *testing.T) {
 	futureCensusSchemas(t)
 	base, e := LoadManifest()

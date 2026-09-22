@@ -80,6 +80,9 @@ func TestSelectRealAdmissionsNearestSCCAndIsolation(t *testing.T) {
 	if got.State != StateSelected || len(got.Nominations) != 1 || got.Nominations[0].SelectedNode != b.ID || got.Nominations[0].Distance != 1 {
 		t.Fatalf("nearest=%+v", got)
 	}
+	if predecessors := got.Nominations[0].IncomingPredecessors; len(predecessors) != 1 || predecessors[0].CallerID != a.ID || predecessors[0].TargetID != b.ID {
+		t.Fatalf("ASSERT_INCOMING_PREDECESSORS: %+v", predecessors)
+	}
 }
 func TestSelectRealAdmissionUnresolvedAndEmpty(t *testing.T) {
 	a, b := rnode("a"), rnode("b")
@@ -173,6 +176,84 @@ func TestDecodeFailsClosedOnMembershipContradictions(t *testing.T) {
 			}
 			if _, err := decode(encode(memberships...), nodes, nil); err == nil {
 				t.Fatal("contradictory membership accepted")
+			}
+		})
+	}
+}
+
+func TestImmediateIncomingExcludesSelfCallsForOutwardConsumers(t *testing.T) {
+	nodes := []string{"caller", "selected"}
+	relations := map[string][]programcadmission.Occurrence{
+		"incoming": {{Identity: "incoming-1", RelationID: "incoming", From: 0, To: 1, Weight: 1}},
+		"self":     {{Identity: "self-1", RelationID: "self", From: 1, To: 1, Weight: 1}},
+	}
+	s := &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"incoming": true, "self": true}}
+
+	got, err := immediateIncoming(nodes, relations, s, "selected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].OccurrenceID != "incoming-1" {
+		t.Fatalf("ASSERT_OUTWARD_PREDECESSORS_EXCLUDE_SELF_CALLS: %+v", got)
+	}
+}
+
+func TestImmediateIncomingRetainsOccurrencesAndCanonicalizes(t *testing.T) {
+	nodes := []string{"caller", "selected", "inactive"}
+	callSite := func(line, character uint32) graph.Range {
+		return graph.Range{Start: graph.Position{Line: line, Character: character}, End: graph.Position{Line: line, Character: character + 1}}
+	}
+	occurrences := []programcadmission.Occurrence{
+		{Identity: "z", RelationID: "parallel-b", From: 0, To: 1, Weight: 1, CallSite: callSite(4, 2)},
+		{Identity: "b", RelationID: "parallel-a", From: 0, To: 1, Weight: 1, CallSite: callSite(3, 1)},
+		{Identity: "a", RelationID: "parallel-a", From: 0, To: 1, Weight: 1, CallSite: callSite(2, 1)},
+		{Identity: "reverse", RelationID: "reverse", From: 1, To: 0, Weight: 1},
+		{Identity: "inactive", RelationID: "inactive", From: 2, To: 1, Weight: 1},
+		{Identity: "cross-seed", RelationID: "cross-seed", From: 0, To: 1, Weight: 1},
+	}
+	build := func(reverse bool) map[string][]programcadmission.Occurrence {
+		out := map[string][]programcadmission.Occurrence{}
+		for i := range occurrences {
+			o := occurrences[i]
+			if reverse {
+				o = occurrences[len(occurrences)-1-i]
+			}
+			out[o.RelationID] = append(out[o.RelationID], o)
+		}
+		return out
+	}
+	s := &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"parallel-a": true, "parallel-b": true, "reverse": true, "inactive": true}}
+	want := []IncomingPredecessor{
+		{OccurrenceID: "a", RelationID: "parallel-a", CallerID: "caller", TargetID: "selected", CallSite: callSite(2, 1)},
+		{OccurrenceID: "b", RelationID: "parallel-a", CallerID: "caller", TargetID: "selected", CallSite: callSite(3, 1)},
+		{OccurrenceID: "z", RelationID: "parallel-b", CallerID: "caller", TargetID: "selected", CallSite: callSite(4, 2)},
+	}
+	for _, reverse := range []bool{false, true} {
+		got, err := immediateIncoming(nodes, build(reverse), s, "selected")
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("ASSERT_INCOMING_OCCURRENCES_CANONICAL reverse=%t got=%+v err=%v", reverse, got, err)
+		}
+	}
+}
+
+func TestImmediateIncomingFailsClosed(t *testing.T) {
+	valid := programcadmission.Occurrence{Identity: "occurrence", RelationID: "relation", From: 0, To: 1, Weight: 1}
+	cases := map[string]struct {
+		nodes     []string
+		relations map[string][]programcadmission.Occurrence
+		seed      *seed
+		target    string
+	}{
+		"empty target":       {[]string{"caller", "selected"}, map[string][]programcadmission.Occurrence{"relation": {valid}}, &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"relation": true}}, ""},
+		"empty relation":     {[]string{"caller", "selected"}, map[string][]programcadmission.Occurrence{"relation": nil}, &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"relation": true}}, "selected"},
+		"malformed":          {[]string{"caller", "selected"}, map[string][]programcadmission.Occurrence{"relation": {{RelationID: "relation", From: 0, To: 1, Weight: 1}}}, &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"relation": true}}, "selected"},
+		"relation mismatch":  {[]string{"caller", "selected"}, map[string][]programcadmission.Occurrence{"relation": {{Identity: "occurrence", RelationID: "other", From: 0, To: 1, Weight: 1}}}, &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"relation": true}}, "selected"},
+		"duplicate identity": {[]string{"caller", "selected"}, map[string][]programcadmission.Occurrence{"relation": {valid, valid}}, &seed{prepared: map[string]bool{"caller": true}, reached: map[string]bool{"selected": true}, relations: map[string]bool{"relation": true}}, "selected"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got, err := immediateIncoming(tc.nodes, tc.relations, tc.seed, tc.target); err == nil {
+				t.Fatalf("ASSERT_INCOMING_FAILS_CLOSED: got=%+v", got)
 			}
 		})
 	}

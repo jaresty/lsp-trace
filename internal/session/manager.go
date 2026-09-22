@@ -546,6 +546,24 @@ func (m *Manager) ObserveInitialization(sessionID string, generation uint64, com
 	return classifyLifecycleResult(LifecycleResult{State: Ready, Generation: generation})
 }
 
+// ReconcileReap records a later exact-generation owned-wait completion. It is
+// intentionally narrower than lifecycle completion: it cannot change state,
+// allocate a successor, or supersede an incumbent intent.
+func (m *Manager) ReconcileReap(sessionID string, generation uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s := m.lifecycles[sessionID]
+	if s == nil || s.generation != generation || s.incumbent != nil || s.state != Poisoned && s.state != Crashed {
+		return false
+	}
+	if s.reaped {
+		return true
+	}
+	s.reaped = true
+	m.appendLifecycle(sessionID, generation, "reap-reconciled", "", "", s.state, "", "")
+	return true
+}
+
 func (m *Manager) ObservePoison(sessionID string, generation uint64) LifecycleResult {
 	m.mu.Lock()
 	defer m.mu.Unlock()

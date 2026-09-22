@@ -1,0 +1,6 @@
+=== RUN   TestCensusGatewayAcquisitionFailureNeedsPrivateDiagnosticRED
+    census_gateway_acquisition_failure_test.go:120: ASSERT_PRIVATE_ACQUISITION_DIAGNOSTIC_RECORDED records=0 ledger=
+--- FAIL: TestCensusGatewayAcquisitionFailureNeedsPrivateDiagnosticRED (0.07s)
+FAIL
+FAIL	lsp-trace/cmd/lsp-trace-mcp	0.293s
+FAIL

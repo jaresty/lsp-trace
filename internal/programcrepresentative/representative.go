@@ -25,6 +25,11 @@ type Input struct {
 	Admission   programcadmission.CompositeProjectionAdmission
 	Communities []programc.Community
 }
+type IncomingPredecessor struct {
+	OccurrenceID, RelationID, CallerID, TargetID string
+	CallSite                                     graph.Range
+}
+
 type Nomination struct {
 	CommunityIdentity, ConstituentIdentity, ExecutionBundleID, SeedLabel, SeedAt string
 	ConstituentOrdinal                                                           int
@@ -32,6 +37,7 @@ type Nomination struct {
 	SelectedNode                                                                 string
 	Distance                                                                     int
 	SCCMembers                                                                   []string
+	IncomingPredecessors                                                         []IncomingPredecessor
 	State                                                                        State
 }
 type Unresolved struct {
@@ -123,7 +129,11 @@ func Select(in Input) (Output, error) {
 					out.Unresolved = append(out.Unresolved, Unresolved{CommunityIdentity: communityID, ConstituentIdentity: c.Identity, ConstituentOrdinal: ordinal, ExecutionBundleID: s.bundle, SeedLabel: s.label, SeedAt: s.at, PreparedTargets: keys(s.prepared), CommunityMembers: append([]string(nil), members...), State: StateUnresolved})
 					continue
 				}
-				out.Nominations = append(out.Nominations, Nomination{CommunityIdentity: communityID, ConstituentIdentity: c.Identity, ConstituentOrdinal: ordinal, ExecutionBundleID: s.bundle, SeedLabel: s.label, SeedAt: s.at, PreparedTargets: keys(s.prepared), CommunityMembers: members, SelectedNode: selected, Distance: distance, SCCMembers: scc, State: StateSelected})
+				incoming, err := immediateIncoming(nodeIDs, byRelation, s, selected)
+				if err != nil {
+					return Output{}, err
+				}
+				out.Nominations = append(out.Nominations, Nomination{CommunityIdentity: communityID, ConstituentIdentity: c.Identity, ConstituentOrdinal: ordinal, ExecutionBundleID: s.bundle, SeedLabel: s.label, SeedAt: s.at, PreparedTargets: keys(s.prepared), CommunityMembers: members, SelectedNode: selected, Distance: distance, SCCMembers: scc, IncomingPredecessors: incoming, State: StateSelected})
 			}
 		}
 	}
@@ -229,6 +239,10 @@ func decode(c programcadmission.ConstituentReference, nodes map[string]bool, rel
 				return nil, fmt.Errorf("duplicate reached membership")
 			}
 			s.reached[m.EndpointID] = true
+		case "SIBLING_CANDIDATE":
+			// Admitted sibling evidence is orthogonal to mechanical representative
+			// qualification. Preserve fail-closed handling for every unknown kind.
+			continue
 		case "CALL_RELATION":
 			if len(relations[m.EndpointID]) == 0 {
 				return nil, fmt.Errorf("relation endpoint not admitted")
@@ -256,6 +270,69 @@ func decode(c programcadmission.ConstituentReference, nodes map[string]bool, rel
 	})
 	return out, nil
 }
+func immediateIncoming(nodes []string, rel map[string][]programcadmission.Occurrence, s *seed, target string) ([]IncomingPredecessor, error) {
+	if target == "" || s == nil {
+		return nil, fmt.Errorf("invalid incoming predecessor target")
+	}
+	active := map[string]bool{}
+	for n := range s.prepared {
+		active[n] = true
+	}
+	for n := range s.reached {
+		active[n] = true
+	}
+	if !active[target] {
+		return nil, fmt.Errorf("inactive incoming predecessor target")
+	}
+	out := []IncomingPredecessor{}
+	occurrenceIDs := map[string]bool{}
+	for relationID := range s.relations {
+		occurrences := rel[relationID]
+		if relationID == "" || len(occurrences) == 0 {
+			return nil, fmt.Errorf("empty incoming relation")
+		}
+		for _, o := range occurrences {
+			if o.Identity == "" || o.RelationID != relationID || o.From < 0 || o.To < 0 || int(o.From) >= len(nodes) || int(o.To) >= len(nodes) || o.Weight != 1 {
+				return nil, fmt.Errorf("invalid incoming occurrence")
+			}
+			if occurrenceIDs[o.Identity] {
+				return nil, fmt.Errorf("duplicate incoming occurrence identity")
+			}
+			occurrenceIDs[o.Identity] = true
+			caller, callee := nodes[o.From], nodes[o.To]
+			if caller != callee && callee == target && active[caller] && active[callee] {
+				out = append(out, IncomingPredecessor{OccurrenceID: o.Identity, RelationID: o.RelationID, CallerID: caller, TargetID: callee, CallSite: o.CallSite})
+			}
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.RelationID != b.RelationID {
+			return a.RelationID < b.RelationID
+		}
+		if a.OccurrenceID != b.OccurrenceID {
+			return a.OccurrenceID < b.OccurrenceID
+		}
+		if a.CallerID != b.CallerID {
+			return a.CallerID < b.CallerID
+		}
+		if a.TargetID != b.TargetID {
+			return a.TargetID < b.TargetID
+		}
+		if a.CallSite.Start.Line != b.CallSite.Start.Line {
+			return a.CallSite.Start.Line < b.CallSite.Start.Line
+		}
+		if a.CallSite.Start.Character != b.CallSite.Start.Character {
+			return a.CallSite.Start.Character < b.CallSite.Start.Character
+		}
+		if a.CallSite.End.Line != b.CallSite.End.Line {
+			return a.CallSite.End.Line < b.CallSite.End.Line
+		}
+		return a.CallSite.End.Character < b.CallSite.End.Character
+	})
+	return out, nil
+}
+
 func choose(nodes []string, rel map[string][]programcadmission.Occurrence, s *seed, eligible []string) (string, int, []string, bool) {
 	// Only relation-membered occurrences whose endpoints are reached/prepared are admitted.
 	adj := map[string][]string{}

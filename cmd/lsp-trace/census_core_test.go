@@ -85,7 +85,10 @@ func TestRunCensusCoreCardinalityLifecycleAndDeterminism(t *testing.T) {
 				discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 					return discovery, nil
 				},
-				acquire: func(ctx context.Context, _ *initializedAcquisitionRuntime, d censusacquisition.Discoverer, _ acquisitionops.Limits) (censusAssembly, error) {
+				acquire: func(ctx context.Context, _ *initializedAcquisitionRuntime, d censusacquisition.Discoverer, _ acquisitionops.Limits, downDepth, upDepth, maxBatchTargets int) (censusAssembly, error) {
+					if downDepth != 3 || upDepth != 2 || maxBatchTargets != 16 {
+						t.Fatalf("ASSERT_CENSUS_PLANNING_FORWARDED down=%d up=%d batch=%d", downDepth, upDepth, maxBatchTargets)
+					}
 					acquired, _ = d.Discover(ctx, discovery.Session)
 					cap := censusPublicationCapabilityFor(t, projection)
 					return censusAssembly{state: cap.state, token: cap.token}, nil
@@ -96,7 +99,7 @@ func TestRunCensusCoreCardinalityLifecycleAndDeterminism(t *testing.T) {
 					return successfulCorePublication(t, c)
 				},
 			}
-			first := runCensusCore(censusCLIOptions{PublicationRoot: "private"}, censusCoreConfig{}, deps)
+			first := runCensusCore(censusCLIOptions{PublicationRoot: "private", DownDepth: 3, UpDepth: 2, MaxBatchTargets: 16}, censusCoreConfig{}, deps)
 			if initialized != 1 || callbacks != 1 || shutdown != 1 {
 				t.Fatalf("ASSERT_ONE_LIFECYCLE init=%d callback=%d shutdown=%d", initialized, callbacks, shutdown)
 			}
@@ -162,7 +165,7 @@ func TestRunCensusCoreFailBeforePublishMatrix(t *testing.T) {
 				discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 					return tc.discovery()
 				},
-				acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits) (censusAssembly, error) {
+				acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
 					if tc.acquireErr != nil {
 						return censusAssembly{}, tc.acquireErr
 					}
@@ -212,7 +215,7 @@ func TestRunCensusCoreCancellationDriftAndPublicationOutcomes(t *testing.T) {
 				discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 					return discoveryFromProjection(projection), nil
 				},
-				acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits) (censusAssembly, error) {
+				acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
 					c := censusPublicationCapabilityFor(t, projection)
 					return censusAssembly{state: c.state, token: c.token}, nil
 				},
@@ -250,7 +253,7 @@ func TestRunCensusCoreCancellationAfterCapabilityNeverPublishes(t *testing.T) {
 			discover: func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error) {
 				return discoveryFromProjection(projection), nil
 			},
-			acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits) (censusAssembly, error) {
+			acquire: func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error) {
 				c := censusPublicationCapabilityFor(t, projection)
 				return censusAssembly{state: c.state, token: c.token}, nil
 			},

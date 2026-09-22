@@ -2,11 +2,11 @@
 
 ## Decision
 
-**RETAIN AS A COMPLETED BOUNDED LOCAL DIAGNOSTIC PILOT.** The exact pinned model was restored and the four-packet run completed successfully. This report does not authorize production, public, MCP, core, census, shipment, or any other broadened use.
+**ACCEPT AS AN APPROVED LOCAL OPERATIONAL PILOT.** The exact pinned model was restored and the four-packet run completed successfully. The pilot is authorized for repeatable local execution only; it does not authorize hosted/service deployment, public, MCP, core, census, shipment, or any other external surface.
 
 ## Acceptance
 
-Accepted by the project owner as bounded local diagnostic evidence. This acceptance does not promote the draft enablement record, qualify the worker for production, or authorize any public, core, MCP, shipment, census, or feature-identity use.
+Accepted by the project owner as a local operational pilot. This acceptance authorizes repeatable local execution under the pinned tuple and safeguards; it does not authorize hosted/service deployment, public, core, MCP, shipment, census, or feature-identity use.
 
 ## Bound scope
 
@@ -45,4 +45,4 @@ The adapter binary used hashes to `af22f92bddbaa925cfced6fc93032c398ba671310404a
 
 ## Assessment
 
-The run demonstrates envelope admission and terminal backend-failure accounting under network denial. It does **not** demonstrate semantic correctness, replay, latency qualification, or successful four-packet Describe behavior. Keep the pilot local-only and outside production/public/core surfaces. The bounded four-packet diagnostic run may be retained as local evidence; it is not a production qualification, public authorization, repository census, or feature-identity claim.
+The run demonstrates envelope admission and terminal backend-failure accounting under network denial. It does **not** demonstrate semantic correctness, replay, latency qualification, or successful four-packet Describe behavior. Keep the pilot local-only and outside hosted/service, public, core, MCP, shipment, census, and feature-identity surfaces. Repeat local runs must use the fail-closed preflight, network denial, pinned tuple, admitted packets, and immutable output capture.

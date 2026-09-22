@@ -70,7 +70,7 @@ func TestRunCensusHelpGrammarIsValidatedWithoutSideEffects(t *testing.T) {
 }
 
 func TestCensusHelpSurfacesHaveExactSupportedFlagParity(t *testing.T) {
-	want := []string{"--config", "--down-depth", "--exclude", "--include", "--machine", "--max-nodes", "--profile", "--publication-root", "--request-timeout", "--server", "--server-arg", "--source", "--timeout", "--up-depth", "--workspace"}
+	want := []string{"--batch-targets", "--catalog", "--catalog-config", "--config", "--down-depth", "--exclude", "--include", "--machine", "--max-nodes", "--profile", "--publication-root", "--request-timeout", "--resume", "--server", "--server-arg", "--source", "--stop-after", "--timeout", "--up-depth", "--workspace"}
 	flags := func(text string) []string {
 		t.Helper()
 		seen := map[string]bool{}

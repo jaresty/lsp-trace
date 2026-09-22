@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "processes": [
+    {
+      "alias": "project",
+      "language_id": "go",
+      "profile": {
+        "trust_domain": "local-development",
+        "workspace": "/Users/schwa/dev/lsp-trace",
+        "profile": "gopls-0.23.0",
+        "environment_reference": "inherited-local"
+      },
+      "execution": {
+        "path": "/Users/schwa/.local/bin/gopls",
+        "arguments": [],
+        "directory": "/Users/schwa/dev/lsp-trace"
+      }
+    }
+  ]
+}

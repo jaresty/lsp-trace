@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 
 	"lsp-trace/internal/captureset"
@@ -197,6 +198,83 @@ func TestRepresentativesRejectUncheckedLineage(t *testing.T) {
 	qualified.Nominations[0].ConstituentIdentity = "missing"
 	if _, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified); err == nil {
 		t.Fatal("identity mismatch accepted")
+	}
+}
+
+func TestRepresentativesTransportPredecessorsWithoutRecomputation(t *testing.T) {
+	p := testProjection(t)
+	r, err := Compose(Request{Projection: p, Publication: evidence(t, p), Metadata: metadata()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := p.Constituents[0].Identity.ImmutableSelector
+	callSite := graph.Range{Start: graph.Position{Line: 7, Character: 3}, End: graph.Position{Line: 7, Character: 5}}
+	base := programcrepresentative.Nomination{State: programcrepresentative.StateSelected, ConstituentIdentity: id, ConstituentOrdinal: 0, ExecutionBundleID: "bundle", SeedLabel: "seed", SeedAt: "at", CommunityMembers: []string{"member"}, PreparedTargets: []string{"prepared"}, SelectedNode: "member", SCCMembers: []string{"member"}}
+	later := base
+	later.CommunityIdentity = "z-community"
+	later.IncomingPredecessors = []programcrepresentative.IncomingPredecessor{{OccurrenceID: "occ-z", RelationID: "rel-z", CallerID: "opaque-caller-z", TargetID: "member", CallSite: callSite}}
+	earlier := base
+	earlier.CommunityIdentity = "a-community"
+	earlier.IncomingPredecessors = []programcrepresentative.IncomingPredecessor{
+		{OccurrenceID: "occ-b", RelationID: "rel", CallerID: "opaque-caller-b", TargetID: "member", CallSite: callSite},
+		{OccurrenceID: "occ-a", RelationID: "rel", CallerID: "opaque-caller-a", TargetID: "member", CallSite: callSite},
+	}
+	qualified := programcrepresentative.Output{State: programcrepresentative.StateSelected, Nominations: []programcrepresentative.Nomination{later, earlier}}
+
+	mapped, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mapped.Nominations) != 2 || mapped.Nominations[0].CommunityIdentity != "a-community" || mapped.Nominations[1].CommunityIdentity != "z-community" {
+		t.Fatalf("ASSERT_REPRESENTATIVE_NOMINATION_ORDER: %+v", mapped.Nominations)
+	}
+	got := mapped.Nominations[0]
+	want := []RepresentativePredecessor{
+		{OccurrenceID: "occ-a", RelationID: "rel", CallerID: "opaque-caller-a", TargetID: "member", CallSite: callSite},
+		{OccurrenceID: "occ-b", RelationID: "rel", CallerID: "opaque-caller-b", TargetID: "member", CallSite: callSite},
+	}
+	if !reflect.DeepEqual(got.IncomingPredecessors, want) {
+		t.Fatalf("ASSERT_REPRESENTATIVE_PREDECESSOR_TRANSPORT: got=%+v", got.IncomingPredecessors)
+	}
+	if got.Authority != 0 || got.SourceGraphComplete != "UNKNOWN" {
+		t.Fatalf("ASSERT_REPRESENTATIVE_AUTHORITY_COMPLETENESS: %+v", got)
+	}
+	qualified.Nominations[1].CommunityMembers[0] = "mutated"
+	qualified.Nominations[1].PreparedTargets[0] = "mutated"
+	qualified.Nominations[1].SCCMembers[0] = "mutated"
+	qualified.Nominations[1].IncomingPredecessors[0].CallerID = "mutated"
+	qualified.Nominations[1].IncomingPredecessors[0].CallSite.Start.Line = 99
+	if got.Members[0] == "mutated" || got.PreparedTargets[0] == "mutated" || got.SCCMembers[0] == "mutated" || got.IncomingPredecessors[1].CallerID == "mutated" || got.IncomingPredecessors[1].CallSite.Start.Line == 99 {
+		t.Fatal("ASSERT_REPRESENTATIVE_TRANSPORT_DEEP_CLONE")
+	}
+}
+
+func TestRepresentativesRejectMalformedPredecessors(t *testing.T) {
+	p := testProjection(t)
+	r, err := Compose(Request{Projection: p, Publication: evidence(t, p), Metadata: metadata()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := p.Constituents[0].Identity.ImmutableSelector
+	valid := programcrepresentative.Nomination{State: programcrepresentative.StateSelected, CommunityIdentity: "community", ConstituentIdentity: id, ConstituentOrdinal: 0, ExecutionBundleID: "bundle", SeedLabel: "seed", SeedAt: "at", CommunityMembers: []string{"member"}, SelectedNode: "member", IncomingPredecessors: []programcrepresentative.IncomingPredecessor{{OccurrenceID: "occ", RelationID: "rel", CallerID: "caller", TargetID: "member"}}}
+	cases := map[string]func(*programcrepresentative.Nomination){
+		"empty":           func(n *programcrepresentative.Nomination) { n.IncomingPredecessors[0].OccurrenceID = "" },
+		"target mismatch": func(n *programcrepresentative.Nomination) { n.IncomingPredecessors[0].TargetID = "other" },
+		"self call":       func(n *programcrepresentative.Nomination) { n.IncomingPredecessors[0].CallerID = "member" },
+		"duplicate identity": func(n *programcrepresentative.Nomination) {
+			n.IncomingPredecessors = append(n.IncomingPredecessors, n.IncomingPredecessors[0])
+		},
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			n := valid
+			n.IncomingPredecessors = append([]programcrepresentative.IncomingPredecessor(nil), valid.IncomingPredecessors...)
+			mutate(&n)
+			qualified := programcrepresentative.Output{State: programcrepresentative.StateSelected, Nominations: []programcrepresentative.Nomination{n}}
+			if got, err := representativesFromQualification(p, r.Admission.Admission.SourceBinding(), r.Outcome, qualified); err == nil {
+				t.Fatalf("ASSERT_REPRESENTATIVE_PREDECESSOR_FAILS_CLOSED: %+v", got)
+			}
+		})
 	}
 }
 

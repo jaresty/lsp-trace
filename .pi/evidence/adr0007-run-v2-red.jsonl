@@ -1,0 +1,7 @@
+{"ImportPath":"lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]","Action":"build-output","Output":"# lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]\n"}
+{"ImportPath":"lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]","Action":"build-output","Output":"internal/describeworker/runner_process_test.go:213:22: runner.RunV2 undefined (type *Runner has no field or method RunV2)\n"}
+{"ImportPath":"lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]","Action":"build-output","Output":"internal/describeworker/runner_process_test.go:229:25: runner.RunV2 undefined (type *Runner has no field or method RunV2)\n"}
+{"ImportPath":"lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]","Action":"build-fail"}
+{"Time":"2026-09-20T12:20:17.162705-07:00","Action":"start","Package":"lsp-trace/internal/describeworker"}
+{"Time":"2026-09-20T12:20:17.162744-07:00","Action":"output","Package":"lsp-trace/internal/describeworker","Output":"FAIL\tlsp-trace/internal/describeworker [build failed]\n"}
+{"Time":"2026-09-20T12:20:17.16275-07:00","Action":"fail","Package":"lsp-trace/internal/describeworker","Elapsed":0,"FailedBuild":"lsp-trace/internal/describeworker [lsp-trace/internal/describeworker.test]"}

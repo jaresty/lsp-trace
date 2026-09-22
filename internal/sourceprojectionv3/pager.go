@@ -77,12 +77,22 @@ type Request struct {
 	Cursor  string
 }
 
+type Continuation struct {
+	SnapshotID  string         `json:"snapshot_id"`
+	CustodyID   string         `json:"custody_id"`
+	Page        uint64         `json:"page"`
+	PageLimit   uint64         `json:"page_limit"`
+	ExpiresAt   string         `json:"expires_at"`
+	NextRequest map[string]any `json:"next_request"`
+}
+
 type Page struct {
 	Header
-	Records    []Record   `json:"records"`
-	Accounting Accounting `json:"accounting"`
-	NextCursor string     `json:"next_cursor,omitempty"`
-	Complete   bool       `json:"complete"`
+	Records      []Record      `json:"records"`
+	Accounting   Accounting    `json:"accounting"`
+	NextCursor   string        `json:"next_cursor,omitempty"`
+	Complete     bool          `json:"complete"`
+	Continuation *Continuation `json:"continuation,omitempty"`
 }
 
 type cursorPayload struct {

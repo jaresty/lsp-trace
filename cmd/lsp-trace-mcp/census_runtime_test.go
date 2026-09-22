@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -255,6 +256,42 @@ func TestEffectiveCensusDeadlineNeverExtendsParent(t *testing.T) {
 	if got := effectiveCensusDeadline(context.Background(), configured); !got.Equal(configured) {
 		t.Fatalf("ASSERT_MCP_CENSUS_CONFIGURED_DEADLINE: got=%v want=%v", got, configured)
 	}
+}
+
+func TestCensusRuntimeBatchAcquirerMapsPrivateFailureTaxonomyAndOrdinal(t *testing.T) {
+	cases := []struct{ code, category string }{
+		{"CENSUS_BATCH_INVALID_INPUT", "INVALID_INPUT"},
+		{"CENSUS_BATCH_SESSION_DRIFT", "SESSION_DRIFT"},
+		{"CENSUS_BATCH_CANCELLED", "CANCELLED"},
+		{"CENSUS_BATCH_ACQUISITION_FAILED", "ACQUISITION"},
+		{"CENSUS_BATCH_ADMISSION_FAILED", "ADMISSION"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.category, func(t *testing.T) {
+			a := censusRuntimeBatchAcquirer{admitted: censusAdmittedSession{sessionID: "s", generation: 1}, execute: func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+				return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: tc.code}
+			}}
+			_, err := a.AcquireV5(context.Background(), censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, CensusID: "c", BatchID: "b", Ordinal: 7, CanonicalSeedsV2: []byte("seed"), Targets: []censusacquisition.PreparedTarget{{URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#0:0:12:Target:0"}}})
+			var typed *censusPrivateFailure
+			if !errors.As(err, &typed) || typed.category != tc.category || typed.ordinal == nil || *typed.ordinal != 7 {
+				t.Fatalf("err=%T %+v", err, err)
+			}
+			if tc.category == "ACQUISITION" && (typed.operationCode == "" || typed.operationCategory != "ACQUISITION") {
+				t.Fatalf("operation evidence=%+v", typed)
+			}
+			if tc.category != "ACQUISITION" && (typed.operationCode != "" || typed.operationCategory != "") {
+				t.Fatalf("unexpected operation evidence=%+v", typed)
+			}
+		})
+	}
+	t.Run("unknown", func(t *testing.T) {
+		a := censusRuntimeBatchAcquirer{admitted: censusAdmittedSession{sessionID: "s", generation: 1}, execute: func(context.Context, *hostSelectorRuntime, censusAdmittedSession, string, acquisitionengine.Manifest, []byte) (acquisitionorchestration.PlannedBatchResult, *operation.Failure) {
+			return acquisitionorchestration.PlannedBatchResult{}, &operation.Failure{Code: "UNKNOWN"}
+		}}
+		if _, err := a.AcquireV5(context.Background(), censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 1}, CensusID: "c", BatchID: "b", CanonicalSeedsV2: []byte("seed"), Targets: []censusacquisition.PreparedTarget{{URI: "file:///w/a.go", SelectionRange: lsp.Range{Start: lsp.Position{}}, Name: "Target", Kind: 12, SymbolIdentity: "a.go#0:0:12:Target:0"}}}); err == nil {
+			t.Fatal("unknown failure code accepted")
+		}
+	})
 }
 
 func TestCensusRuntimeBatchAcquirerDeterministicRequestAndReceipt(t *testing.T) {

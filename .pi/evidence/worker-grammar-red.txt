@@ -1,0 +1,6 @@
+RED command: go test ./internal/describeworker -run 'TestRunner(EndToEndHappyPath|V2ProcessExecutionProducesVersionedTerminalRecords)' -count=1
+Result: 3 passed, 2 failed
+Failure: TestRunnerV2ProcessExecutionProducesVersionedTerminalRecords/success
+Assertion: ASSERT_RUN_V2_EXACT_GRAMMAR_ARG
+Observed: RunV2 omitted adjacent -grammar-file Config.Grammar.Path arguments.
+V1 omission guard passed.

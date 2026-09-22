@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -221,6 +222,246 @@ func structuralManagerWithResponses(t *testing.T, build func(string) map[string]
 	return manager, started, uri, starter
 }
 
+func TestSourceOnlyTargetUsesDocumentSymbolsWithoutCallHierarchy(t *testing.T) {
+	manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+		return map[string]json.RawMessage{
+			"initialize": json.RawMessage(`{"capabilities":{"documentSymbolProvider":true,"definitionProvider":true,"referencesProvider":true,"positionEncoding":"utf-16"}}`),
+		}
+	})
+	line, character := uint32(1), uint32(7)
+	result, failure := Execute(context.Background(), manager, Request{
+		SessionID: "stable-alias", Generation: started.Generation, LanguageID: "cue",
+		Target: Target{URI: uri, Line: &line, Character: &character}, SourceOnlyTarget: true,
+		UpDepth: 0, DownDepth: 0, MaxNodes: 5, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192,
+		Analysis: AnalysisRequest{Kind: AnalysisNeighborhood}, CaptureSupply: true,
+	})
+	if failure != nil || result.State != StateComplete || len(result.Analysis.Nodes) != 1 || len(result.Analysis.Occurrences) != 0 || !strings.Contains(result.ClaimCeiling, "establishes no callable identity") {
+		t.Fatalf("ASSERT_SOURCE_ONLY_TARGET_DOCUMENT_SYMBOL_SUCCESS: result=%+v failure=%+v", result, failure)
+	}
+	methods := starter.children[0].observedMethods()
+	if !slices.Contains(methods, "textDocument/documentSymbol") {
+		t.Fatalf("ASSERT_SOURCE_ONLY_TARGET_DOCUMENT_SYMBOL_REQUESTED: methods=%v", methods)
+	}
+	for _, forbidden := range []string{"workspace/symbol", "textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls", "callHierarchy/outgoingCalls", "textDocument/definition", "textDocument/references"} {
+		if slices.Contains(methods, forbidden) {
+			t.Fatalf("ASSERT_SOURCE_ONLY_TARGET_NO_RELATION_OR_WORKSPACE_REQUESTS: forbidden=%s methods=%v", forbidden, methods)
+		}
+	}
+}
+
+func TestUnsupportedCallHierarchyDiagnosticReturnsSourceOnlyRecoveryByLocatorMode(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		target     func(string) Target
+		locatorKey string
+		want       map[string]any
+	}{
+		{name: "position", target: func(uri string) Target {
+			line, character := uint32(1), uint32(7)
+			return Target{URI: uri, Line: &line, Character: &character}
+		}, want: map[string]any{"line": 1, "character": 7}},
+		{name: "symbol-uri", target: func(uri string) Target { return Target{URI: uri, Symbol: "ExactSymbol"} }, want: map[string]any{"symbol": "ExactSymbol"}},
+		{name: "regex", target: func(uri string) Target {
+			return Target{URI: uri, Regex: &RegexLocator{Pattern: `func (Exact)`, MatchIndex: 2, CaptureGroup: 1, ExpectedDigest: "sha256:" + strings.Repeat("a", 64), MaxDocumentBytes: 4096, MaxMatches: 10, MaxPatternBytes: 128, MaxWork: 8192}}
+		}, locatorKey: "regex_locator", want: map[string]any{"pattern": `func (Exact)`, "match_index": 2, "capture_group": 1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, started, uri, _ := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+				return map[string]json.RawMessage{"initialize": json.RawMessage(`{"capabilities":{"documentSymbolProvider":true,"definitionProvider":true,"referencesProvider":true,"positionEncoding":"utf-16"}}`)}
+			})
+			_, failure := Execute(context.Background(), manager, Request{SessionID: "stable-alias", Generation: started.Generation, Target: tc.target(uri), UpDepth: 1, DownDepth: 1, MaxNodes: 5, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192, Analysis: AnalysisRequest{Kind: AnalysisNeighborhood}})
+			if failure == nil || failure.State != StateUnsupported || failure.TargetDiagnostic == nil {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_UNSUPPORTED_TYPED: %+v", failure)
+			}
+			diagnostic := failure.TargetDiagnostic
+			for _, want := range []string{"failed_capability=textDocument/prepareCallHierarchy", "textDocument/documentSymbol", "textDocument/definition", "textDocument/references", "workspace_symbol_dependency=false", "definition and references are non-CALLS"} {
+				if !strings.Contains(diagnostic.Guidance, want) {
+					t.Fatalf("ASSERT_CALL_HIERARCHY_CAPABILITY_DIAGNOSTIC_%q: %+v", want, diagnostic)
+				}
+			}
+			recovery := diagnostic.Recovery
+			if recovery == nil || recovery.Kind != "SOURCE_ONLY_REQUEST_TEMPLATE" || recovery.Complete == nil || *recovery.Complete || !reflect.DeepEqual(recovery.OmittedFields, []string{"projection.privacy_policy_id"}) {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_RECOVERY_CLOSED_TEMPLATE: %+v", recovery)
+			}
+			fragment := recovery.RequestFragment
+			if fragment["up_depth"] != 0 || fragment["down_depth"] != 0 {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_RECOVERY_ZERO_DEPTH: %#v", fragment)
+			}
+			projection := fragment["projection"].(map[string]any)
+			if projection["mode"] != "TARGET" || projection["include_relation_occurrences"] != false || projection["body"] != "INCLUDE" {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_RECOVERY_TARGET_PROJECTION: %#v", projection)
+			}
+			locator := fragment
+			if tc.locatorKey != "" {
+				locator = fragment[tc.locatorKey].(map[string]any)
+			}
+			if locator["uri"] != uri {
+				t.Fatalf("ASSERT_CALL_HIERARCHY_RECOVERY_URI_%s: %#v", tc.name, locator)
+			}
+			for field, want := range tc.want {
+				if locator[field] != want {
+					t.Fatalf("ASSERT_CALL_HIERARCHY_RECOVERY_LOCATOR_%s_%s: got=%#v want=%#v", tc.name, field, locator[field], want)
+				}
+			}
+		})
+	}
+}
+
+func TestSourceOnlyTargetLocatorVariants(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		target func(string) Target
+	}{
+		{name: "symbol-uri", target: func(uri string) Target { return Target{URI: uri, Symbol: "F"} }},
+		{name: "regex-position", target: func(uri string) Target {
+			return Target{URI: uri, Regex: &RegexLocator{Pattern: "func F", MatchIndex: 0, MaxDocumentBytes: 4096, MaxMatches: 10, MaxPatternBytes: 128, MaxWork: 4096}}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+				return map[string]json.RawMessage{"initialize": json.RawMessage(`{"capabilities":{"documentSymbolProvider":true,"definitionProvider":true,"referencesProvider":true,"positionEncoding":"utf-16"}}`)}
+			})
+			result, failure := Execute(context.Background(), manager, Request{SessionID: "stable-alias", Generation: started.Generation, LanguageID: "cue", Target: tc.target(uri), SourceOnlyTarget: true, UpDepth: 0, DownDepth: 0, MaxNodes: 5, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192, Analysis: AnalysisRequest{Kind: AnalysisNeighborhood}, CaptureSupply: true})
+			if failure != nil || result.State != StateComplete || len(result.Analysis.Nodes) != 1 || len(result.Analysis.Occurrences) != 0 {
+				t.Fatalf("ASSERT_SOURCE_ONLY_TARGET_LOCATOR_%s: result=%+v failure=%+v", tc.name, result, failure)
+			}
+			methods := starter.children[0].observedMethods()
+			for _, forbidden := range []string{"workspace/symbol", "textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls", "callHierarchy/outgoingCalls", "textDocument/definition", "textDocument/references"} {
+				if slices.Contains(methods, forbidden) {
+					t.Fatalf("ASSERT_SOURCE_ONLY_TARGET_LOCATOR_NO_RELATIONS_%s: forbidden=%s methods=%v", tc.name, forbidden, methods)
+				}
+			}
+		})
+	}
+}
+
+func TestMalformedGoplsSymbolInformationDiagnosticIsActionableFailClosedAndSafe(t *testing.T) {
+	fixture, err := os.ReadFile("../../incomingops/testdata/document-symbol-gopls-symbol-information-runner.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, projection := range []bool{false, true} {
+		t.Run(fmt.Sprintf("projection_%t", projection), func(t *testing.T) {
+			manager, started, uri, starter := structuralManagerWithResponses(t, func(uri string) map[string]json.RawMessage {
+				raw := strings.ReplaceAll(string(fixture), "file:///w/a.go", uri)
+				return map[string]json.RawMessage{"textDocument/documentSymbol": json.RawMessage(raw)}
+			})
+			result, failure := Execute(context.Background(), manager, Request{
+				SessionID: "stable-alias", Generation: started.Generation, LanguageID: "go", Target: Target{URI: uri, Symbol: "Runner"},
+				UpDepth: 0, DownDepth: 0, MaxNodes: 5, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192,
+				Analysis: AnalysisRequest{Kind: AnalysisNeighborhood},
+			})
+			if failure == nil || result.State != "" || failure.State != StateInvalidServerResponse || failure.Phase != PhasePreflight {
+				t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_FAIL_CLOSED: result=%+v failure=%+v", result, failure)
+			}
+			diagnostic := failure.TargetDiagnostic
+			if diagnostic == nil || diagnostic.ExactMatches != 1 || diagnostic.TotalSymbols != 2 || diagnostic.Action != TargetActionFailMalformed || diagnostic.ProviderMethod != "textDocument/documentSymbol" || diagnostic.ItemIndex == nil || *diagnostic.ItemIndex != 0 || diagnostic.NormalizationStage != "POST_DECODE_NORMALIZATION" || diagnostic.FailedField != "kind" || diagnostic.FailedInvariant != "CALLABLE_SYMBOL_KIND" || diagnostic.ProjectionEntered == nil || *diagnostic.ProjectionEntered {
+				t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_ACTIONABLE_DIAGNOSTIC: %+v", diagnostic)
+			}
+			if diagnostic.Recovery == nil || diagnostic.Recovery.Kind != "POSITION_LOCATOR" || diagnostic.Recovery.URI != uri || diagnostic.Recovery.Line == nil || *diagnostic.Recovery.Line != 42 || diagnostic.Recovery.Character == nil || *diagnostic.Recovery.Character != 3 {
+				t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_POSITION_RECOVERY: %+v", diagnostic.Recovery)
+			}
+			methods := starter.children[0].observedMethods()
+			for _, forbidden := range []string{"textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls", "callHierarchy/outgoingCalls"} {
+				if slices.Contains(methods, forbidden) {
+					t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_NO_PREPARE_OR_TRAVERSAL: forbidden=%s methods=%v", forbidden, methods)
+				}
+			}
+			raw, _ := json.Marshal(failure)
+			for _, leaked := range []string{"Runner", `\"name\"`, `\"location\"`, "provider_error", "source_body", "/Users/"} {
+				if strings.Contains(string(raw), leaked) {
+					t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_NO_LEAK_%q: %s", leaked, raw)
+				}
+			}
+		})
+	}
+}
+
+func TestMalformedGoplsSymbolInformationWithoutValidLocatorExplainsUnavailableSafely(t *testing.T) {
+	fixture, err := os.ReadFile("../../incomingops/testdata/document-symbol-gopls-symbol-information-runner-no-uri.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+		return map[string]json.RawMessage{"textDocument/documentSymbol": fixture}
+	})
+	_, failure := Execute(context.Background(), manager, Request{
+		SessionID: "stable-alias", Generation: started.Generation, LanguageID: "go", Target: Target{URI: uri, Symbol: "Runner"},
+		UpDepth: 0, DownDepth: 0, MaxNodes: 5, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192,
+		Analysis: AnalysisRequest{Kind: AnalysisNeighborhood},
+	})
+	if failure == nil || failure.State != StateInvalidServerResponse || failure.TargetDiagnostic == nil {
+		t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_NO_LOCATOR_FAIL_CLOSED: %+v", failure)
+	}
+	recovery := failure.TargetDiagnostic.Recovery
+	if recovery == nil || recovery.Kind != "UNAVAILABLE" || recovery.UnavailableReason != "NO_INDEPENDENTLY_VALID_LOCATOR" || recovery.URI != "" || recovery.Line != nil || recovery.Character != nil {
+		t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_RECOVERY_UNAVAILABLE_REASON: %+v", recovery)
+	}
+	methods := starter.children[0].observedMethods()
+	for _, forbidden := range []string{"textDocument/prepareCallHierarchy", "callHierarchy/incomingCalls", "callHierarchy/outgoingCalls"} {
+		if slices.Contains(methods, forbidden) {
+			t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_NO_LOCATOR_NO_TRAVERSAL: forbidden=%s methods=%v", forbidden, methods)
+		}
+	}
+	raw, _ := json.Marshal(failure)
+	for _, leaked := range []string{"Runner", `\"name\"`, `\"location\"`, "provider_error", "source_body", "/Users/"} {
+		if strings.Contains(string(raw), leaked) {
+			t.Fatalf("ASSERT_GOPLS_SYMBOL_INFORMATION_NO_LOCATOR_NO_LEAK_%q: %s", leaked, raw)
+		}
+	}
+}
+
+func TestExecuteAcceptsGoplsIdentifierRangeCallHierarchyVariant(t *testing.T) {
+	manager, started, uri, starter := structuralManagerWithResponses(t, func(uri string) map[string]json.RawMessage {
+		rng := func(line, start, end int) map[string]any {
+			return map[string]any{"start": map[string]int{"line": line, "character": start}, "end": map[string]int{"line": line, "character": end}}
+		}
+		item := func(name string, line, start, end int) map[string]any {
+			nameRange := rng(line, start, end)
+			return map[string]any{"name": name, "kind": 12, "detail": "fixture", "uri": uri, "range": nameRange, "selectionRange": nameRange}
+		}
+		prepared, _ := json.Marshal([]any{item("F", 1, 5, 6)})
+		outgoing, _ := json.Marshal([]any{map[string]any{"to": item("G", 2, 5, 6), "fromRanges": []any{rng(1, 9, 10)}}})
+		incoming, _ := json.Marshal([]any{map[string]any{"from": item("H", 3, 5, 6), "fromRanges": []any{rng(4, 7, 8)}}})
+		return map[string]json.RawMessage{
+			"textDocument/prepareCallHierarchy": prepared,
+			"callHierarchy/outgoingCalls":       outgoing,
+			"callHierarchy/incomingCalls":       incoming,
+		}
+	})
+	result, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+	if failure != nil || result.State != StateComplete || len(result.Analysis.Occurrences) != 2 {
+		t.Fatalf("ASSERT_GOPLS_IDENTIFIER_RANGE_VARIANT_COMPLETE: result=%+v failure=%+v", result, failure)
+	}
+	wantMethods := []string{"textDocument/didOpen", "textDocument/prepareCallHierarchy", "callHierarchy/outgoingCalls", "callHierarchy/incomingCalls"}
+	if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, wantMethods) {
+		t.Fatalf("ASSERT_GOPLS_IDENTIFIER_RANGE_VARIANT_TRANSCRIPT: got=%v want=%v", got, wantMethods)
+	}
+}
+
+func TestExecuteMalformedOutgoingItemCarriesAttributableSafeDiagnostic(t *testing.T) {
+	manager, started, uri, _ := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+		return map[string]json.RawMessage{"callHierarchy/outgoingCalls": json.RawMessage(`[{"to":{"name":"G","kind":12,"uri":"not a uri","range":{"start":{"line":2,"character":0},"end":{"line":2,"character":1}},"selectionRange":{"start":{"line":2,"character":0},"end":{"line":2,"character":1}}},"fromRanges":[{"start":{"line":1,"character":7},"end":{"line":1,"character":8}}]}]`)}
+	})
+	_, failure := Execute(context.Background(), manager, baseWireRequest(started, uri))
+	if failure == nil || failure.TraversalDiagnostic == nil {
+		t.Fatalf("ASSERT_MALFORMED_OUTGOING_ITEM_TYPED_FAILURE: %+v", failure)
+	}
+	raw, _ := json.Marshal(failure.TraversalDiagnostic)
+	var diagnostic map[string]any
+	_ = json.Unmarshal(raw, &diagnostic)
+	for field, want := range map[string]any{"provider_method": "callHierarchy/outgoingCalls", "item_index": float64(0), "failed_field": "item.uri", "failed_invariant": "CONCRETE_DOCUMENT_URI", "provider_variant": "CALL_HIERARCHY_OUTGOING_CALL", "projection_entered": false, "guidance": "USE_TARGET_MODE_OR_FIX_PROVIDER_RESPONSE"} {
+		if !reflect.DeepEqual(diagnostic[field], want) {
+			t.Fatalf("ASSERT_MALFORMED_OUTGOING_ITEM_ACTIONABLE_%s: got=%v want=%v diagnostic=%s", strings.ToUpper(field), diagnostic[field], want, raw)
+		}
+	}
+	for _, leaked := range []string{"not a uri", uri, "provider_error", "raw_response", "source_body"} {
+		if strings.Contains(string(raw), leaked) {
+			t.Fatalf("ASSERT_MALFORMED_OUTGOING_ITEM_PRIVACY_%q: %s", leaked, raw)
+		}
+	}
+}
+
 func TestExecuteConcreteManagerTransientNeighborhood(t *testing.T) {
 	manager, started, uri := structuralManager(t)
 	line, character := uint32(1), uint32(5)
@@ -271,16 +512,26 @@ func TestExecuteMalformedTraversalResponsesCarryClosedDiagnostics(t *testing.T) 
 					t.Fatalf("ASSERT_MALFORMED_PREPARE_TARGET_DIAGNOSTIC: %+v", failure)
 				}
 			} else {
-				want := &TraversalDiagnostic{Stage: tc.stage, Method: tc.method, Direction: tc.direction}
-				if failure.Phase != PhaseTraversal || !reflect.DeepEqual(failure.TraversalDiagnostic, want) || failure.TraversalDiagnostic.Depth != nil {
-					t.Fatalf("ASSERT_MALFORMED_%s_EXACT_DIAGNOSTIC: got=%+v want=%+v", tc.stage, failure.TraversalDiagnostic, want)
+				if failure.Phase != PhaseTraversal || failure.TraversalDiagnostic == nil || failure.TraversalDiagnostic.Stage != tc.stage || failure.TraversalDiagnostic.Method != tc.method || failure.TraversalDiagnostic.Direction != tc.direction || failure.TraversalDiagnostic.Depth != nil {
+					t.Fatalf("ASSERT_MALFORMED_%s_EXACT_DIAGNOSTIC: got=%+v", tc.stage, failure.TraversalDiagnostic)
+				}
+				diagnosticRaw, _ := json.Marshal(failure.TraversalDiagnostic)
+				var diagnostic map[string]any
+				_ = json.Unmarshal(diagnosticRaw, &diagnostic)
+				for field, want := range map[string]any{"provider_method": tc.method, "failed_field": "response", "failed_invariant": "ARRAY_RESULT", "provider_variant": "NON_ARRAY", "projection_entered": false, "guidance": "RETRY_PROVIDER_OR_REPORT_MALFORMED_RESPONSE"} {
+					if !reflect.DeepEqual(diagnostic[field], want) {
+						t.Fatalf("ASSERT_MALFORMED_%s_ACTIONABLE_%s: got=%v want=%v diagnostic=%s", tc.stage, strings.ToUpper(field), diagnostic[field], want, diagnosticRaw)
+					}
+				}
+				if _, exists := diagnostic["item_index"]; exists {
+					t.Fatalf("ASSERT_MALFORMED_%s_UNATTRIBUTABLE_ITEM_INDEX_OMITTED: %s", tc.stage, diagnosticRaw)
 				}
 			}
 			raw, err := json.Marshal(failure)
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, forbidden := range []string{"private", uri, "source", "selector", "environment", "provider"} {
+			for _, forbidden := range []string{"private", uri, "source_body", "selector", "environment", "provider_error", "raw_response"} {
 				if forbidden != "" && string(raw) != "" && containsJSONText(raw, forbidden) {
 					t.Fatalf("ASSERT_MALFORMED_%s_PRIVACY: leaked %q in %s", tc.stage, forbidden, raw)
 				}
@@ -463,6 +714,21 @@ func TestExecuteRegexLocatorManagedWire(t *testing.T) {
 			t.Fatalf("ASSERT_REGEX_SELECTED_EXACT_POSITION: %v", got)
 		}
 	})
+	t.Run("resource rejection precedes prepare and projection", func(t *testing.T) {
+		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
+		request := baseWireRequest(started, uri)
+		request.Target.Line, request.Target.Character = nil, nil
+		request.Target.Regex = &RegexLocator{Pattern: `func (F)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 1}
+		result, failure := Execute(context.Background(), manager, request)
+		if failure == nil || failure.Phase != PhasePreflight || failure.State != StateResourceLimit || failure.ResourceDiagnostic == nil || failure.ResourceDiagnostic.Field != ResourceFieldRegexMaxWork || !reflect.DeepEqual(result, Result{}) {
+			t.Fatalf("ASSERT_REGEX_RESOURCE_FAILS_PREFLIGHT: result=%+v failure=%+v", result, failure)
+		}
+		for _, method := range starter.children[0].observedMethods() {
+			if method != "textDocument/didOpen" {
+				t.Fatalf("ASSERT_REGEX_RESOURCE_FAILS_BEFORE_PREPARE_TRAVERSAL_PROJECTION: %v", starter.children[0].observedMethods())
+			}
+		}
+	})
 	t.Run("absent", func(t *testing.T) {
 		manager, started, uri, starter := structuralManagerWithResponses(t, nil)
 		request := baseWireRequest(started, uri)
@@ -474,6 +740,32 @@ func TestExecuteRegexLocatorManagedWire(t *testing.T) {
 		}
 		if got := starter.children[0].observedMethods(); !reflect.DeepEqual(got, []string{"textDocument/didOpen"}) {
 			t.Fatalf("ASSERT_REGEX_FAILURE_ZERO_TRAVERSAL: %v", got)
+		}
+	})
+	t.Run("truncated document-symbol recovery", func(t *testing.T) {
+		manager, started, uri, starter := structuralManagerWithResponses(t, func(string) map[string]json.RawMessage {
+			symbols := make([]map[string]any, 0, 9)
+			for i := 0; i < 9; i++ {
+				rng := map[string]any{"start": map[string]int{"line": 8 + i, "character": 0}, "end": map[string]int{"line": 8 + i, "character": 4}}
+				symbols = append(symbols, map[string]any{"name": fmt.Sprintf("Outside%d", i), "kind": 12, "range": rng, "selectionRange": rng})
+			}
+			raw, _ := json.Marshal(symbols)
+			return map[string]json.RawMessage{"textDocument/prepareCallHierarchy": json.RawMessage(`[]`), "textDocument/documentSymbol": raw}
+		})
+		request := baseWireRequest(started, uri)
+		request.Target.Line, request.Target.Character = nil, nil
+		request.Target.Regex = &RegexLocator{Pattern: `func (F)`, CaptureGroup: 1, MaxDocumentBytes: 1024, MaxMatches: 10, MaxPatternBytes: 100, MaxWork: 2048}
+		result, failure := Execute(context.Background(), manager, request)
+		if failure == nil || failure.State != StateTargetNotFound || failure.TargetDiagnostic == nil || failure.TargetDiagnostic.Action != TargetActionEnumerationTruncated || failure.TargetDiagnostic.Completeness != "UNKNOWN" || len(failure.TargetDiagnostic.Recoveries) != 2 || !reflect.DeepEqual(result, Result{}) {
+			t.Fatalf("ASSERT_REGEX_RECOVERY_TRUNCATED_UNKNOWN_NOT_ABSENT: result=%+v failure=%+v", result, failure)
+		}
+		wantLimits := map[string]int{"max_document_bytes": 60 * 1024, "max_pattern_bytes": 4 * 1024, "max_work": 64 * 1024, "max_matches": 100}
+		if got := failure.TargetDiagnostic.Recoveries[1]; got.Kind != "REGEX_LOCATOR_TEMPLATE" || !reflect.DeepEqual(got.Limits, wantLimits) {
+			t.Fatalf("ASSERT_REGEX_RECOVERY_PRACTICAL_INITIAL_LIMITS: got=%+v want=%v", got, wantLimits)
+		}
+		methods := starter.children[0].observedMethods()
+		if slices.Contains(methods, "workspace/symbol") || !reflect.DeepEqual(methods, []string{"textDocument/didOpen", "textDocument/prepareCallHierarchy", "textDocument/documentSymbol"}) {
+			t.Fatalf("ASSERT_REGEX_RECOVERY_NAMED_DOCUMENT_NO_WORKSPACE_ENUMERATION: %v", methods)
 		}
 	})
 }

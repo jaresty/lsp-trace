@@ -169,23 +169,35 @@ func TestCensusDiscoveryAdapterCancellationZeroFilesAndClosedErrors(t *testing.T
 	}
 }
 
+func TestCensusMaxNodesDoesNotTruncateDiscoveryDenominator(t *testing.T) {
+	workspace := t.TempDir()
+	s := &fakeCensusInitializedSession{}
+	c := &fakeCensusDiscoveryClient{}
+	discoverer, err := newCensusDiscoveryAdapter(censusCLIOptions{Workspace: workspace, Sources: []string{"."}, MaxNodes: 25}, s, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, ok := discoverer.(censusacquisition.DiscoveryAdapter)
+	if !ok {
+		t.Fatalf("ASSERT_CENSUS_MAX_NODES_ACQUISITION_ONLY: unexpected discoverer %T", discoverer)
+	}
+	if adapter.Limits.MaxFiles != 0 || adapter.Limits.MaxSymbols != 0 {
+		t.Fatalf("ASSERT_CENSUS_MAX_NODES_ACQUISITION_ONLY: discovery limits=%+v", adapter.Limits)
+	}
+}
+
 func TestCensusDiscoveryAdapterEnumerationLimitFailsClosedAfterExclusions(t *testing.T) {
 	workspace := t.TempDir()
 	writeCensusSource(t, workspace, "excluded/0.go", "package excluded\n")
 	writeCensusSource(t, workspace, "src/1.go", "package one\n")
 	writeCensusSource(t, workspace, "src/2.go", "package two\n")
-	s := &fakeCensusInitializedSession{}
-	c := &fakeCensusDiscoveryClient{}
-	d, err := newCensusDiscoveryAdapter(censusCLIOptions{Workspace: workspace, Sources: []string{"."}, Excludes: []string{"excluded/**"}, MaxNodes: 1}, s, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err := d.Discover(context.Background(), censusacquisition.SessionIdentity{SessionID: s.SessionID(), Generation: s.Generation()})
+	enumerator := censusWorkspaceEnumerator{workspace: workspace, roots: []string{"."}, filters: censusacquisition.Filters{Excludes: []string{"excluded/**"}}, maxFiles: 1}
+	got, err := enumerator.Enumerate(context.Background())
 	if !errors.Is(err, source.ErrDiscoveryLimit) || strings.Contains(err.Error(), workspace) {
 		t.Fatalf("ASSERT_CENSUS_ENUMERATION_LIMIT_CLOSED: got=%+v err=%#v", got, err)
 	}
-	if got.Accounting.FileDenominator != 0 || len(got.FileLedger.Entries) != 0 || len(c.uris) != 0 {
-		t.Fatalf("ASSERT_CENSUS_ENUMERATION_LIMIT_NO_PARTIAL: got=%+v calls=%v", got, c.uris)
+	if len(got) != 0 {
+		t.Fatalf("ASSERT_CENSUS_ENUMERATION_LIMIT_NO_PARTIAL: got=%+v", got)
 	}
 }
 

@@ -1,0 +1,4 @@
+Guard: go test ./cmd/lsp-trace -run TestCensusCatalogFreshRunsPipelineAndPublishesOnce -count=1
+Assertion: ASSERT_CENSUS_FRESH_MANAGED_RUNTIME_INJECTED
+Observed result: census_catalog_runner_test.go:116: ASSERT_CENSUS_FRESH_MANAGED_RUNTIME_INJECTED
+State: RED before V6 production runtime composition

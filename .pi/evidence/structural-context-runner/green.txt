@@ -1,0 +1,7 @@
+ok  	lsp-trace/internal/lsp	0.229s
+ok  	lsp-trace/incomingops	0.329s
+ok  	lsp-trace/internal/transientstructural	0.602s
+ok  	lsp-trace/structuralcontextsymbolops	0.438s
+ok  	lsp-trace/internal/mcpcontract	1.649s
+ok  	lsp-trace/internal/schema	0.714s
+ok  	lsp-trace/internal/mcp	1.660s

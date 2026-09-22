@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
 	"lsp-trace/internal/lsp"
 	"lsp-trace/internal/operation"
 	"lsp-trace/internal/session"
+	"lsp-trace/internal/transientstructural"
 	"lsp-trace/sessionruntime"
 )
 
@@ -134,6 +136,84 @@ func TestAmbiguousTargetCandidatesAreBoundedSortedDeduplicatedAndConfined(t *tes
 	diagnostic = ambiguousTargetDiagnostic("/workspace", many, many, 10000)
 	if len(diagnostic.Candidates) != defaultMaxNodes || diagnostic.CandidateAccounting.Truncated != 1 {
 		t.Fatalf("ASSERT_AMBIGUOUS_CANDIDATE_PUBLIC_CAP: candidates=%d accounting=%+v", len(diagnostic.Candidates), diagnostic.CandidateAccounting)
+	}
+}
+
+func TestUnifiedV2MalformedExactMatchDiagnosticIsActionableProjectionIndependentAndSafe(t *testing.T) {
+	fixture, err := os.ReadFile("testdata/workspace-symbol-one-match-malformed-range.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, projection := range []string{"", `,"projection":{"mode":"TARGET","body":"OMIT","include_relation_occurrences":false,"include_ancillary":false,"limits":{"max_objects":1,"max_ranges":1,"max_source_bytes":0,"max_work":1,"max_response_bytes":4096},"privacy_policy_id":"public"}`} {
+		f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: fixture}
+		d := &delegate{}
+		in := json.RawMessage(`{"session_id":"s","generation":1,"symbol":"Runner","down_depth":0,"up_depth":0,"max_nodes":5` + projection + `,"analysis":{"kind":"NEIGHBORHOOD"}}`)
+		_, failure := NewUnifiedV2Executor(f, d).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: in})
+		if failure == nil || failure.Code != "INVALID_SERVER_RESPONSE" || len(d.calls) != 0 {
+			t.Fatalf("ASSERT_MALFORMED_EXACT_ONE_FAIL_CLOSED: failure=%+v calls=%d", failure, len(d.calls))
+		}
+		raw, _ := json.Marshal(failure.Err)
+		var domain map[string]any
+		if json.Unmarshal(raw, &domain) != nil {
+			t.Fatalf("ASSERT_MALFORMED_EXACT_ONE_TYPED_DIAGNOSTIC: %s", raw)
+		}
+		diagnostic, _ := domain["target_diagnostic"].(map[string]any)
+		for key, want := range map[string]any{"exact_matches": float64(1), "action": "FAIL_MALFORMED", "provider_method": "workspace/symbol", "item_index": float64(0), "normalization_stage": "POST_DECODE_NORMALIZATION", "failed_invariant": "RANGE_ORDER", "projection_entered": false} {
+			if diagnostic[key] != want {
+				t.Fatalf("ASSERT_MALFORMED_EXACT_ONE_ACTIONABLE_%s: diagnostic=%v", strings.ToUpper(key), diagnostic)
+			}
+		}
+		recovery, _ := diagnostic["recovery"].(map[string]any)
+		if recovery["kind"] != "REGEX_LOCATOR_TEMPLATE" || recovery["uri"] != "file:///workspace/runner.go" || recovery["required_pattern"] != true || recovery["match_index"] != float64(0) {
+			t.Fatalf("ASSERT_MALFORMED_EXACT_ONE_REGEX_RECOVERY: %v", recovery)
+		}
+		for _, leaked := range []string{"Runner", `\"name\"`, `\"kind\"`, "raw_error", "source_body", "/Users/"} {
+			if strings.Contains(string(raw), leaked) {
+				t.Fatalf("ASSERT_MALFORMED_EXACT_ONE_NO_LEAK_%q: %s", leaked, raw)
+			}
+		}
+	}
+}
+
+func TestUnifiedV2TruncatedSymbolEnumerationOffersExplicitRecovery(t *testing.T) {
+	symbols := make([]map[string]any, 100)
+	for i := range symbols {
+		symbols[i] = map[string]any{"name": fmt.Sprintf("Other%d", i), "kind": 12, "location": map[string]any{"uri": fmt.Sprintf("file:///workspace/%03d.go", i), "range": map[string]any{"start": map[string]any{"line": 0, "character": 0}, "end": map[string]any{"line": 0, "character": 1}}}}
+	}
+	raw, _ := json.Marshal(symbols)
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: raw}
+	d := &delegate{}
+	_, failure := NewUnifiedV2Executor(f, d).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: minimalInput("Missing")})
+	if failure == nil || failure.Code != "ENUMERATION_TRUNCATED" || len(d.calls) != 0 {
+		t.Fatalf("ASSERT_TRUNCATED_SYMBOL_ENUMERATION_TYPED_RECOVERY: failure=%+v calls=%d", failure, len(d.calls))
+	}
+	body, _ := json.Marshal(failure.Err)
+	text := string(body)
+	for _, required := range []string{`"action":"ENUMERATION_TRUNCATED"`, `"total_symbols":100`, `"omitted_symbols":100`, `"locator_scope":"LSP_SYMBOLS"`, `"completeness":"UNKNOWN"`, `"kind":"POSITION_LOCATOR_TEMPLATE"`, `"kind":"REGEX_LOCATOR_TEMPLATE"`} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("ASSERT_TRUNCATED_SYMBOL_ENUMERATION_TYPED_RECOVERY missing %s: %s", required, text)
+		}
+	}
+}
+
+func TestUnifiedV2AbsentSymbolExplainsRegexLocatorWithoutGuessingURI(t *testing.T) {
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[]`)}
+	_, failure := NewUnifiedV2Executor(f, &delegate{}).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: minimalInput("nearest_outward_consumer")})
+	if failure == nil || failure.Code != "TARGET_NOT_FOUND" {
+		t.Fatalf("ASSERT_EXHAUSTIVE_ZERO_MATCH_REMAINS_TARGET_NOT_FOUND: %+v", failure)
+	}
+	if domain, ok := failure.Err.(*transientstructural.DomainFailure); !ok || domain.TargetDiagnostic == nil || domain.TargetDiagnostic.Action != transientstructural.TargetActionFailAbsent || domain.TargetDiagnostic.OmittedSymbols != 0 {
+		t.Fatalf("ASSERT_EXHAUSTIVE_ZERO_MATCH_REMAINS_TARGET_NOT_FOUND: %+v", failure.Err)
+	}
+	raw, _ := json.Marshal(failure.Err)
+	text := string(raw)
+	for _, required := range []string{"no exact LSP symbol match was reported", "does not establish source absence", "provide regex_locator.uri and regex_locator.pattern", "LSP_SYMBOLS", "regex_locator", "uri", "pattern", "match_index", "max_document_bytes", "max_pattern_bytes", "max_work", "max_matches"} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("ASSERT_TARGET_NOT_FOUND_GUIDANCE_%s: %s", strings.ToUpper(required), text)
+		}
+	}
+	if strings.Contains(text, "file://") || strings.Contains(text, "nearest_outward_consumer") {
+		t.Fatalf("ASSERT_TARGET_NOT_FOUND_NO_GUESSED_URI_OR_SYMBOL: %s", text)
 	}
 }
 

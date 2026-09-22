@@ -1,0 +1,4 @@
+e0d07d4f86ad63a7d202eb7918f28c469aa186a741700bf6e1d6c69ff6372337  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-regex-adr0010-20260921T154419Z/backups/mcp.json
+2239226dc6341bb6f6e42a1354528a570d5ffd3c662ceabfb58fc59d59788840  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-regex-adr0010-20260921T154419Z/backups/bootstrap.json
+7bfcdf5377f4795b788a09157ac72547b454881e0fdf7910086bb6d243ba2f7a  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-regex-adr0010-20260921T154419Z/backups/lsp-trace
+37d85afcac1ebb2414922c78d9742fb799c6b74f90d5c2c246c9016d411a03d3  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-regex-adr0010-20260921T154419Z/backups/lsp-trace-mcp

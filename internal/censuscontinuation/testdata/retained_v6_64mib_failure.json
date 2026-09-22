@@ -1,0 +1,33 @@
+{
+  "program_c": {
+    "sha256": "sha256:a9967c3cba6b7ee9c035c892a5baee486a8d54ba342921c6276a5b4e51291f6c",
+    "byte_length": 25645747,
+    "nominations": 135,
+    "unresolved": 1179,
+    "candidates": 18,
+    "constituents": 5
+  },
+  "contract": {
+    "sha256": "sha256:03acae1f8ad8edcc567b45a2c1abbebc08c2080ded1c7ccf1d777f09c4a8650b",
+    "byte_length": 1150,
+    "max_artifact_bytes": 67108864,
+    "max_parent_bytes": 67108864,
+    "max_receipts": 100,
+    "max_source_bytes": 1048576,
+    "max_total_source_bytes": 8388608,
+    "max_bindings": 100,
+    "max_work": 10000
+  },
+  "failed_checkpoint": {
+    "checkpoint_id": "sha256:b31bb28b59fcfead99d08ad3b6a6e2bacdfae712c6575cfa6c6ae4ea130554b3",
+    "object_sha256": "sha256:e0b345686f39327319b1a1a74686a101a7a3d17bdda0e267a0503816fb51ff63",
+    "stage": "PROGRAM_C_COMPUTED",
+    "status": "FAILED_CAPTURE"
+  },
+  "expected_first_rejection": {
+    "category": "input",
+    "failed_field": "bindings",
+    "observed": 135,
+    "limit": 100
+  }
+}

@@ -123,6 +123,7 @@ func TestStructuralContextV2TraversalDiagnosticsDirectGatewayParity(t *testing.T
 		{name: "prepare", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStagePrepare, Method: "textDocument/prepareCallHierarchy"}, want: map[string]any{"stage": "PREPARE", "method": "textDocument/prepareCallHierarchy"}},
 		{name: "outgoing", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: transientstructural.DirectionOutgoing, Depth: &depthOne}, want: map[string]any{"stage": "OUTGOING", "method": "callHierarchy/outgoingCalls", "direction": "OUTGOING", "depth": float64(1)}},
 		{name: "incoming", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStageIncoming, Method: "callHierarchy/incomingCalls", Direction: transientstructural.DirectionIncoming, Depth: &depthZero}, want: map[string]any{"stage": "INCOMING", "method": "callHierarchy/incomingCalls", "direction": "INCOMING", "depth": float64(0)}},
+		{name: "malformed-response", diagnostic: &transientstructural.TraversalDiagnostic{Stage: transientstructural.TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: transientstructural.DirectionOutgoing, ProviderMethod: "callHierarchy/outgoingCalls", FailedField: "response", FailedInvariant: "ARRAY_RESULT", ProviderVariant: "NON_ARRAY", ProjectionEntered: func() *bool { value := false; return &value }(), Guidance: "RETRY_PROVIDER_OR_REPORT_MALFORMED_RESPONSE"}, want: map[string]any{"stage": "OUTGOING", "method": "callHierarchy/outgoingCalls", "direction": "OUTGOING", "provider_method": "callHierarchy/outgoingCalls", "failed_field": "response", "failed_invariant": "ARRAY_RESULT", "provider_variant": "NON_ARRAY", "projection_entered": false, "guidance": "RETRY_PROVIDER_OR_REPORT_MALFORMED_RESPONSE"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -204,6 +205,89 @@ func TestStructuralContextV2RealSymbolLocatorAmbiguityDirectGatewayParityAndPriv
 	}
 	if len(delegate.calls) != 0 {
 		t.Fatalf("ASSERT_REAL_SYMBOL_AMBIGUITY_NO_CANDIDATE_SELECTION_OR_RETRY: calls=%d", len(delegate.calls))
+	}
+}
+
+func TestStructuralContextV2TruncatedRecoveryDirectGatewayParity(t *testing.T) {
+	entered := false
+	zero := 0
+	diagnostic := &transientstructural.TargetDiagnostic{
+		ExactMatches: 0, TotalSymbols: 9, OmittedSymbols: 1,
+		Action:         transientstructural.TargetActionEnumerationTruncated,
+		ProviderMethod: "textDocument/documentSymbol", NormalizationStage: "EXACT_MATCH",
+		FailedField: "range", FailedInvariant: "POSITION_CONTAINMENT_PRESENT", ProjectionEntered: &entered,
+		Completeness: "UNKNOWN",
+		Recoveries: []transientstructural.TargetRecovery{
+			{Kind: "POSITION_LOCATOR_TEMPLATE", RequiredFields: []string{"uri", "line", "character"}},
+			{Kind: "REGEX_LOCATOR_TEMPLATE", RequiredPattern: true, MatchIndex: &zero, RequiredFields: []string{"uri", "pattern", "match_index"}, Limits: map[string]int{"max_document_bytes": 60 * 1024, "max_pattern_bytes": 4 * 1024, "max_work": 64 * 1024, "max_matches": 100}},
+		},
+	}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "ENUMERATION_TRUNCATED", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound, TargetDiagnostic: diagnostic}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := structuralContextV2Args()
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+	if direct.Error != nil || gateway.Error != nil {
+		t.Fatalf("ASSERT_TRUNCATED_RECOVERY_TYPED_TRANSPORT: direct=%v gateway=%v", direct.Error, gateway.Error)
+	}
+	directEnvelope := direct.Result.(callResult).StructuredContent
+	outer := gateway.Result.(callResult).StructuredContent
+	var gatewayEnvelope envelope
+	if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+		t.Fatalf("ASSERT_TRUNCATED_RECOVERY_GATEWAY_DECODE: %v", err)
+	}
+	for label, env := range map[string]envelope{"direct": directEnvelope, "gateway": gatewayEnvelope} {
+		raw, _ := json.Marshal(env)
+		for _, required := range []string{`"action":"ENUMERATION_TRUNCATED"`, `"completeness":"UNKNOWN"`, `"provider_method":"textDocument/documentSymbol"`, `"normalization_stage":"EXACT_MATCH"`, `"failed_field":"range"`, `"failed_invariant":"POSITION_CONTAINMENT_PRESENT"`, `"kind":"POSITION_LOCATOR_TEMPLATE"`, `"kind":"REGEX_LOCATOR_TEMPLATE"`} {
+			if !strings.Contains(string(raw), required) {
+				t.Fatalf("ASSERT_TRUNCATED_RECOVERY_%s_PARITY missing %s: %s", strings.ToUpper(label), required, raw)
+			}
+		}
+		if err := mcpcontract.ValidateJSON(mcpcontract.StructuralContextTraversalDomainErrorID, raw); err != nil {
+			t.Fatalf("ASSERT_TRUNCATED_RECOVERY_%s_SCHEMA: %v\n%s", strings.ToUpper(label), err, raw)
+		}
+	}
+}
+
+func TestStructuralContextV2UnsupportedRecoveryFragmentDirectGatewayParityAndPrivacy(t *testing.T) {
+	complete := false
+	diagnostic := &transientstructural.TargetDiagnostic{
+		Action: transientstructural.TargetActionFailUnsupported, ProviderMethod: "textDocument/prepareCallHierarchy", LocatorScope: "URI_POSITION",
+		Recovery: &transientstructural.TargetRecovery{Kind: "SOURCE_ONLY_REQUEST_TEMPLATE", Complete: &complete, OmittedFields: []string{"projection.privacy_policy_id"}, RequestFragment: map[string]any{
+			"session_id": "s", "generation": uint64(1), "uri": "file:///workspace/a.go", "line": 2, "character": 3, "up_depth": 0, "down_depth": 0,
+			"projection": map[string]any{"mode": "TARGET", "body": "INCLUDE", "include_relation_occurrences": false},
+		}},
+	}
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "UNSUPPORTED", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateUnsupported, TargetDiagnostic: diagnostic}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	args := structuralContextV2Args()
+	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
+	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))
+	if direct.Error != nil || gateway.Error != nil {
+		t.Fatalf("ASSERT_UNSUPPORTED_RECOVERY_TRANSPORT: direct=%v gateway=%v", direct.Error, gateway.Error)
+	}
+	directEnvelope := direct.Result.(callResult).StructuredContent
+	outer := gateway.Result.(callResult).StructuredContent
+	var gatewayEnvelope envelope
+	if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	directRaw, _ := json.Marshal(directEnvelope)
+	gatewayRaw, _ := json.Marshal(gatewayEnvelope)
+	for label, raw := range map[string][]byte{"direct": directRaw, "gateway": gatewayRaw} {
+		for _, required := range []string{`"kind":"SOURCE_ONLY_REQUEST_TEMPLATE"`, `"omitted_fields":["projection.privacy_policy_id"]`, `"complete":false`, `"mode":"TARGET"`, `"up_depth":0`, `"down_depth":0`} {
+			if !strings.Contains(string(raw), required) {
+				t.Fatalf("ASSERT_UNSUPPORTED_RECOVERY_%s_PARITY missing %s: %s", label, required, raw)
+			}
+		}
+		if err := mcpcontract.ValidateJSON(mcpcontract.StructuralContextTraversalDomainErrorID, raw); err != nil {
+			t.Fatalf("ASSERT_UNSUPPORTED_RECOVERY_%s_SCHEMA: %v\n%s", label, err, raw)
+		}
+		for _, forbidden := range []string{"SECRET_SOURCE", "textDocument/definition", "textDocument/references"} {
+			if strings.Contains(string(raw), forbidden) {
+				t.Fatalf("ASSERT_UNSUPPORTED_RECOVERY_%s_PRIVACY: leaked %q", label, forbidden)
+			}
+		}
 	}
 }
 

@@ -105,6 +105,7 @@ type Request struct {
 	MaxMessages      int
 	MaxBytes         int64
 	CaptureSupply    bool
+	SourceOnlyTarget bool
 	Analysis         AnalysisRequest
 }
 
@@ -247,22 +248,30 @@ const (
 )
 
 type TraversalDiagnostic struct {
-	Stage     TraversalStage `json:"stage"`
-	Method    string         `json:"method"`
-	Direction Direction      `json:"direction,omitempty"`
-	Depth     *int           `json:"depth,omitempty"`
+	Stage             TraversalStage `json:"stage"`
+	Method            string         `json:"method"`
+	Direction         Direction      `json:"direction,omitempty"`
+	Depth             *int           `json:"depth,omitempty"`
+	ProviderMethod    string         `json:"provider_method,omitempty"`
+	ItemIndex         *int           `json:"item_index,omitempty"`
+	FailedField       string         `json:"failed_field,omitempty"`
+	FailedInvariant   string         `json:"failed_invariant,omitempty"`
+	ProviderVariant   string         `json:"provider_variant,omitempty"`
+	ProjectionEntered *bool          `json:"projection_entered,omitempty"`
+	Guidance          string         `json:"guidance,omitempty"`
 }
 
 type TargetAction string
 
 const (
-	TargetActionFailAbsent       TargetAction = "FAIL_ABSENT"
-	TargetActionFailAmbiguous    TargetAction = "FAIL_AMBIGUOUS"
-	TargetActionFailMalformed    TargetAction = "FAIL_MALFORMED"
-	TargetActionFailMismatch     TargetAction = "FAIL_MISMATCH"
-	TargetActionFailUnsupported  TargetAction = "FAIL_UNSUPPORTED"
-	TargetActionFailDocument     TargetAction = "FAIL_DOCUMENT_SYMBOLS"
-	TargetActionFailUnpreparable TargetAction = "FAIL_UNPREPARABLE"
+	TargetActionFailAbsent           TargetAction = "FAIL_ABSENT"
+	TargetActionEnumerationTruncated TargetAction = "ENUMERATION_TRUNCATED"
+	TargetActionFailAmbiguous        TargetAction = "FAIL_AMBIGUOUS"
+	TargetActionFailMalformed        TargetAction = "FAIL_MALFORMED"
+	TargetActionFailMismatch         TargetAction = "FAIL_MISMATCH"
+	TargetActionFailUnsupported      TargetAction = "FAIL_UNSUPPORTED"
+	TargetActionFailDocument         TargetAction = "FAIL_DOCUMENT_SYMBOLS"
+	TargetActionFailUnpreparable     TargetAction = "FAIL_UNPREPARABLE"
 )
 
 type TargetCandidatePosition struct {
@@ -293,6 +302,21 @@ type TargetCandidateAccounting struct {
 	Truncated    int  `json:"truncated"`
 }
 
+type TargetRecovery struct {
+	Kind              string         `json:"kind"`
+	URI               string         `json:"uri,omitempty"`
+	Line              *int           `json:"line,omitempty"`
+	Character         *int           `json:"character,omitempty"`
+	RequiredPattern   bool           `json:"required_pattern,omitempty"`
+	MatchIndex        *int           `json:"match_index,omitempty"`
+	RequiredFields    []string       `json:"required_fields,omitempty"`
+	Limits            map[string]int `json:"limits,omitempty"`
+	UnavailableReason string         `json:"unavailable_reason,omitempty"`
+	Complete          *bool          `json:"complete,omitempty"`
+	RequestFragment   map[string]any `json:"request_fragment,omitempty"`
+	OmittedFields     []string       `json:"omitted_fields,omitempty"`
+}
+
 type TargetDiagnostic struct {
 	ExactMatches        int                        `json:"exact_matches"`
 	TotalSymbols        int                        `json:"total_symbols"`
@@ -300,6 +324,18 @@ type TargetDiagnostic struct {
 	Action              TargetAction               `json:"action"`
 	Candidates          []TargetCandidate          `json:"candidates,omitempty"`
 	CandidateAccounting *TargetCandidateAccounting `json:"candidate_accounting,omitempty"`
+	ProviderMethod      string                     `json:"provider_method,omitempty"`
+	ProviderAdapter     string                     `json:"provider_adapter,omitempty"`
+	ItemIndex           *int                       `json:"item_index,omitempty"`
+	NormalizationStage  string                     `json:"normalization_stage,omitempty"`
+	FailedField         string                     `json:"failed_field,omitempty"`
+	FailedInvariant     string                     `json:"failed_invariant,omitempty"`
+	ProjectionEntered   *bool                      `json:"projection_entered,omitempty"`
+	LocatorScope        string                     `json:"locator_scope,omitempty"`
+	Guidance            string                     `json:"guidance,omitempty"`
+	Recovery            *TargetRecovery            `json:"recovery,omitempty"`
+	Recoveries          []TargetRecovery           `json:"recoveries,omitempty"`
+	Completeness        string                     `json:"completeness,omitempty"`
 }
 
 type ResourceReason string
@@ -322,13 +358,39 @@ const (
 	ResourceFieldRegexMaxMatches       ResourceField = "regex_locator.limits.max_matches"
 )
 
+type SuggestedLimit struct {
+	Field     ResourceField `json:"field"`
+	Current   int           `json:"current"`
+	Observed  int           `json:"observed"`
+	Suggested int           `json:"suggested"`
+}
+
+type RegexLimitsFragment struct {
+	MaxDocumentBytes int `json:"max_document_bytes,omitempty"`
+	MaxPatternBytes  int `json:"max_pattern_bytes,omitempty"`
+	MaxWork          int `json:"max_work,omitempty"`
+	MaxMatches       int `json:"max_matches,omitempty"`
+}
+
+type RegexLocatorFragment struct {
+	Limits RegexLimitsFragment `json:"limits"`
+}
+
+type BoundedRequestFragment struct {
+	MaxNodes     int                   `json:"max_nodes,omitempty"`
+	RegexLocator *RegexLocatorFragment `json:"regex_locator,omitempty"`
+}
+
 type ResourceDiagnostic struct {
-	Reason         ResourceReason `json:"reason"`
-	Field          ResourceField  `json:"field"`
-	Allowed        int            `json:"allowed"`
-	Observed       *int           `json:"observed,omitempty"`
-	MaximumAllowed int            `json:"maximum_allowed,omitempty"`
-	SuggestedLimit *int           `json:"suggested_limit,omitempty"`
+	Reason          ResourceReason          `json:"reason"`
+	Field           ResourceField           `json:"field"`
+	Allowed         int                     `json:"allowed"`
+	Observed        *int                    `json:"observed,omitempty"`
+	MaximumAllowed  int                     `json:"maximum_allowed,omitempty"`
+	SuggestedLimit  *int                    `json:"suggested_limit,omitempty"`
+	SuggestedLimits []SuggestedLimit        `json:"suggested_limits,omitempty"`
+	CallerAction    string                  `json:"caller_action,omitempty"`
+	RequestFragment *BoundedRequestFragment `json:"request_fragment,omitempty"`
 }
 
 type FailureReason string

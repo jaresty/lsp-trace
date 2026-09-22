@@ -150,6 +150,11 @@ func TestStructuralContextV2ProjectionDirectGatewayParity(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{artifact: unifiedStructuralContextV2Artifact()}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
 	args := structuralContextV2Args()
+	delete(args, "line")
+	delete(args, "character")
+	args["symbol"] = "model"
+	args["up_depth"] = 0
+	args["down_depth"] = 0
 	args["projection"] = map[string]any{"mode": "TARGET", "body": "OMIT", "include_relation_occurrences": false, "include_ancillary": false, "display_range_policy": "FULL_DEFINITION", "limits": map[string]any{"max_objects": 1, "max_ranges": 1, "max_source_bytes": 0, "max_work": 1, "max_response_bytes": 4096, "max_additional_documents": 0, "max_document_requests": 1, "max_document_bytes": 1024, "max_total_document_bytes": 1024, "max_document_messages": 1, "max_document_acquisition_work": 1, "max_display_resolution_work": 1}, "privacy_policy_id": "public"}
 	direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, mcpcontract.StructuralContextV2Tool, args))
 	gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": args}}))

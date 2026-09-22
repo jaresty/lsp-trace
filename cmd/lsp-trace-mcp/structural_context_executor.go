@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"runtime/trace"
+	"sync"
 	"time"
 
 	"lsp-trace/incomingops"
@@ -19,7 +20,12 @@ import (
 	"lsp-trace/structuralcontextsymbolops"
 )
 
-const structuralContextOperation operation.Name = "structural_context"
+const (
+	structuralContextOperation              operation.Name = "structural_context"
+	structuralContextContinuationTTL                       = 5 * time.Minute
+	structuralContextContinuationMaxEntries                = 64
+	structuralContextContinuationMaxBytes                  = 64 << 20
+)
 
 type structuralContextInput struct {
 	SessionID        string          `json:"session_id"`
@@ -90,6 +96,23 @@ type sourceProjectionRequest struct {
 	} `json:"paging,omitempty"`
 }
 
+func sourceOnlyProjection(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return false
+	}
+	var mode string
+	var occurrences bool
+	if json.Unmarshal(fields["mode"], &mode) != nil || mode != "TARGET" {
+		return false
+	}
+	value, present := fields["include_relation_occurrences"]
+	return present && json.Unmarshal(value, &occurrences) == nil && !occurrences
+}
+
 type structuralContextDelegate interface {
 	Execute(context.Context, operation.Request) (operation.Result, *operation.Failure)
 }
@@ -113,10 +136,28 @@ func (p structuralContextProjectionPreparer) PrepareDocument(ctx context.Context
 	return p.manager.PrepareDocument(ctx, request)
 }
 
+type structuralContextContinuation struct {
+	requestDigest string
+	structural    json.RawMessage
+	expires       time.Time
+	sequence      uint64
+	bytes         int64
+	page          func(string) (sourceprojectionv3.Page, error)
+}
+
 type unifiedStructuralContextV2Executor struct {
 	exact   structuralContextDelegate
 	symbol  structuralContextDelegate
 	manager *sessionruntime.Manager
+
+	continuationMu         sync.Mutex
+	continuations          map[string]structuralContextContinuation
+	continuationSequence   uint64
+	continuationBytes      int64
+	continuationNow        func() time.Time
+	continuationTTL        time.Duration
+	continuationMaxEntries int
+	continuationMaxBytes   int64
 }
 
 func newStructuralContextExecutor(r *hostSelectorRuntime) *structuralContextExecutor {
@@ -124,7 +165,69 @@ func newStructuralContextExecutor(r *hostSelectorRuntime) *structuralContextExec
 }
 
 func newUnifiedStructuralContextV2Executor(r *hostSelectorRuntime, exact *structuralContextExecutor) *unifiedStructuralContextV2Executor {
-	return &unifiedStructuralContextV2Executor{exact: exact, symbol: structuralcontextsymbolops.NewUnifiedV2Executor(r, exact), manager: r.Manager}
+	return &unifiedStructuralContextV2Executor{exact: exact, symbol: structuralcontextsymbolops.NewUnifiedV2Executor(r, exact), manager: r.Manager,
+		continuationTTL: structuralContextContinuationTTL, continuationMaxEntries: structuralContextContinuationMaxEntries, continuationMaxBytes: structuralContextContinuationMaxBytes}
+}
+
+func (e *unifiedStructuralContextV2Executor) continuationConfig() (func() time.Time, time.Duration, int, int64) {
+	now := e.continuationNow
+	if now == nil {
+		now = time.Now
+	}
+	ttl := e.continuationTTL
+	if ttl <= 0 || ttl > structuralContextContinuationTTL {
+		ttl = structuralContextContinuationTTL
+	}
+	entries := e.continuationMaxEntries
+	if entries <= 0 {
+		entries = structuralContextContinuationMaxEntries
+	}
+	bytes := e.continuationMaxBytes
+	if bytes <= 0 {
+		bytes = structuralContextContinuationMaxBytes
+	}
+	return now, ttl, entries, bytes
+}
+
+func (e *unifiedStructuralContextV2Executor) removeContinuationLocked(cursor string) {
+	if c, ok := e.continuations[cursor]; ok {
+		delete(e.continuations, cursor)
+		e.continuationBytes -= c.bytes
+	}
+}
+
+func (e *unifiedStructuralContextV2Executor) cleanupContinuationsLocked(now time.Time) {
+	for cursor, c := range e.continuations {
+		if !now.Before(c.expires) {
+			e.removeContinuationLocked(cursor)
+		}
+	}
+}
+
+func (e *unifiedStructuralContextV2Executor) retainContinuationLocked(cursor string, c structuralContextContinuation, now time.Time) bool {
+	_, _, maxEntries, maxBytes := e.continuationConfig()
+	e.cleanupContinuationsLocked(now)
+	if c.bytes > maxBytes {
+		return false
+	}
+	for len(e.continuations) >= maxEntries || e.continuationBytes+c.bytes > maxBytes {
+		oldestCursor := ""
+		oldestSequence := ^uint64(0)
+		for candidate, retained := range e.continuations {
+			if retained.sequence < oldestSequence || retained.sequence == oldestSequence && candidate < oldestCursor {
+				oldestCursor, oldestSequence = candidate, retained.sequence
+			}
+		}
+		if oldestCursor == "" {
+			return false
+		}
+		e.removeContinuationLocked(oldestCursor)
+	}
+	e.continuationSequence++
+	c.sequence = e.continuationSequence
+	e.continuations[cursor] = c
+	e.continuationBytes += c.bytes
+	return true
 }
 
 func tracedProjectionFailure(ctx context.Context, stage string, err error) (operation.Result, *operation.Failure) {
@@ -136,16 +239,116 @@ func tracedProjectionFailure(ctx context.Context, stage string, err error) (oper
 	return fail("SOURCE_PROJECTION_FAILED", err)
 }
 
+func structuralContextRequestDigest(raw json.RawMessage) (string, error) {
+	var request map[string]any
+	if err := json.Unmarshal(raw, &request); err != nil {
+		return "", err
+	}
+	if projection, ok := request["projection"].(map[string]any); ok {
+		if paging, ok := projection["paging"].(map[string]any); ok {
+			delete(paging, "cursor")
+		}
+	}
+	canonical, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(canonical)
+	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+func structuralContextContinuationMetadata(v2 any, page sourceprojectionv3.Page, expires time.Time, pageLimit uint64) (*sourceprojectionv3.Continuation, error) {
+	if page.Complete || page.NextCursor == "" {
+		return nil, nil
+	}
+	raw, err := json.Marshal(v2)
+	if err != nil {
+		return nil, err
+	}
+	snapshotHash := sha256.Sum256(raw)
+	var identity struct {
+		PhysicalProjectionID string          `json:"physical_projection_id"`
+		CustodyBinding       json.RawMessage `json:"custody_binding"`
+	}
+	if err := json.Unmarshal(raw, &identity); err != nil || identity.PhysicalProjectionID == "" || len(identity.CustodyBinding) == 0 {
+		return nil, sourceprojectionv3.ErrInvalidRequest
+	}
+	custodyHash := sha256.Sum256(identity.CustodyBinding)
+	return &sourceprojectionv3.Continuation{
+		SnapshotID: "sha256:" + hex.EncodeToString(snapshotHash[:]), CustodyID: "sha256:" + hex.EncodeToString(custodyHash[:]),
+		Page: page.Accounting.Pages, PageLimit: pageLimit, ExpiresAt: expires.UTC().Format(time.RFC3339Nano),
+		NextRequest: map[string]any{"projection": map[string]any{"paging": map[string]any{"cursor": page.NextCursor}}},
+	}, nil
+}
+
+func unifiedStructuralContextArtifact(structural json.RawMessage, projection any) ([]byte, error) {
+	return json.Marshal(struct {
+		SchemaVersion string          `json:"schema_version"`
+		Structural    json.RawMessage `json:"structural"`
+		Projection    any             `json:"projection"`
+	}{SchemaVersion: "lsp-trace.unified-structural-context-result.v3", Structural: structural, Projection: projection})
+}
+
+func (e *unifiedStructuralContextV2Executor) resume(cursor, requestDigest string, maxResponseBytes int) (operation.Result, *operation.Failure, bool) {
+	if cursor == "" {
+		return operation.Result{}, nil, false
+	}
+	e.continuationMu.Lock()
+	defer e.continuationMu.Unlock()
+	now, _, _, _ := e.continuationConfig()
+	e.cleanupContinuationsLocked(now())
+	continued, ok := e.continuations[cursor]
+	if !ok || continued.requestDigest != requestDigest {
+		return operation.Result{}, &operation.Failure{Code: "SOURCE_PROJECTION_FAILED"}, true
+	}
+	page, err := continued.page(cursor)
+	if err != nil {
+		return operation.Result{}, &operation.Failure{Code: "SOURCE_PROJECTION_FAILED"}, true
+	}
+	artifact, err := unifiedStructuralContextArtifact(continued.structural, page)
+	if err != nil || maxResponseBytes > 0 && len(artifact) > maxResponseBytes {
+		return operation.Result{}, &operation.Failure{Code: "SOURCE_PROJECTION_FAILED"}, true
+	}
+	e.removeContinuationLocked(cursor)
+	if page.NextCursor != "" && !e.retainContinuationLocked(page.NextCursor, continued, now()) {
+		return operation.Result{}, &operation.Failure{Code: "SOURCE_PROJECTION_FAILED"}, true
+	}
+	return operation.Result{Artifact: artifact}, nil, true
+}
+
 func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op operation.Request) (operation.Result, *operation.Failure) {
 	if e == nil || e.exact == nil || e.symbol == nil || op.Name != operation.Name("structural_context_v2") {
 		return fail(operation.FailureNotImplemented, operation.ErrNotImplemented)
 	}
 	var target struct {
-		Symbol     string          `json:"symbol"`
-		Projection json.RawMessage `json:"projection"`
+		URI          string          `json:"uri"`
+		Symbol       string          `json:"symbol"`
+		Line         *uint32         `json:"line"`
+		Character    *uint32         `json:"character"`
+		UpDepth      int             `json:"up_depth"`
+		DownDepth    int             `json:"down_depth"`
+		RegexLocator json.RawMessage `json:"regex_locator"`
+		Projection   json.RawMessage `json:"projection"`
 	}
 	if err := json.Unmarshal(op.Input, &target); err != nil {
 		return fail(operation.FailureInvalidInput, err)
+	}
+	var projectionRequest sourceProjectionRequest
+	requestDigest := ""
+	if len(target.Projection) != 0 {
+		if err := json.Unmarshal(target.Projection, &projectionRequest); err != nil {
+			return fail(operation.FailureInvalidInput, err)
+		}
+		var err error
+		requestDigest, err = structuralContextRequestDigest(op.Input)
+		if err != nil {
+			return fail(operation.FailureInvalidInput, err)
+		}
+		if projectionRequest.Paging != nil && projectionRequest.Paging.Cursor != "" {
+			if result, failure, handled := e.resume(projectionRequest.Paging.Cursor, requestDigest, projectionRequest.Paging.MaxResponseBytes); handled {
+				return result, failure
+			}
+		}
 	}
 	if len(target.Projection) != 0 {
 		var task *trace.Task
@@ -153,8 +356,9 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		defer task.End()
 		trace.Log(ctx, "projection_stage", "delegate_start")
 	}
+	sourceOnlyTarget := sourceOnlyProjection(target.Projection) && target.UpDepth == 0 && target.DownDepth == 0 && target.URI != "" && ((target.Line != nil && target.Character != nil) || target.Symbol != "" || len(target.RegexLocator) != 0)
 	delegate := e.exact
-	if target.Symbol != "" {
+	if target.Symbol != "" && !sourceOnlyTarget {
 		delegate = e.symbol
 	}
 	result, failure := delegate.Execute(ctx, op)
@@ -170,10 +374,7 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 	var projection any
 	maxResponseBytes := 0
 	if len(target.Projection) != 0 {
-		var request sourceProjectionRequest
-		if err := json.Unmarshal(target.Projection, &request); err != nil {
-			return fail(operation.FailureInvalidInput, err)
-		}
+		request := projectionRequest
 		maxResponseBytes = request.Limits.MaxResponseBytes
 		trace.Log(ctx, "projection_stage", "delegate_complete")
 		payload, ok := result.Value.(structuralContextProjectionInput)
@@ -254,12 +455,49 @@ func (e *unifiedStructuralContextV2Executor) Execute(ctx context.Context, op ope
 		trace.Log(ctx, "projection_stage", "assembly_complete")
 		projection = v2
 		if request.Paging != nil {
-			projection, err = sourceprojectionv3.PaginateV2(v2, policyID, sourceprojectionv3.Limits{
+			pagingLimits := sourceprojectionv3.Limits{
 				MaxPageBytes: uint64(request.Paging.MaxPageBytes), MaxPages: uint64(request.Paging.MaxPages), MaxResponseBytes: uint64(request.Paging.MaxResponseBytes),
 				MaxObjects: uint64(request.Limits.MaxObjects), MaxRanges: uint64(request.Limits.MaxRanges), MaxSourceBytes: uint64(request.Limits.MaxSourceBytes), MaxWork: uint64(request.Limits.MaxWork),
-			}, request.Paging.Cursor)
-			if err != nil {
-				return fail("SOURCE_PROJECTION_FAILED", err)
+			}
+			page, pageErr := sourceprojectionv3.PaginateV2(v2, policyID, pagingLimits, "")
+			if pageErr != nil {
+				return fail("SOURCE_PROJECTION_FAILED", pageErr)
+			}
+			now, ttl, _, _ := e.continuationConfig()
+			expires := now().Add(ttl)
+			page.Continuation, pageErr = structuralContextContinuationMetadata(v2, page, expires, pagingLimits.MaxPages)
+			if pageErr != nil {
+				return fail("SOURCE_PROJECTION_FAILED", pageErr)
+			}
+			projection = page
+			if page.NextCursor != "" {
+				retainedV2, marshalErr := json.Marshal(v2)
+				if marshalErr != nil {
+					return fail("SOURCE_PROJECTION_FAILED", marshalErr)
+				}
+				continued := structuralContextContinuation{
+					requestDigest: requestDigest,
+					structural:    append(json.RawMessage(nil), result.Artifact...),
+					expires:       expires,
+					bytes:         int64(len(result.Artifact) + len(retainedV2)),
+					page: func(cursor string) (sourceprojectionv3.Page, error) {
+						next, err := sourceprojectionv3.PaginateV2(v2, policyID, pagingLimits, cursor)
+						if err != nil {
+							return sourceprojectionv3.Page{}, err
+						}
+						next.Continuation, err = structuralContextContinuationMetadata(v2, next, expires, pagingLimits.MaxPages)
+						return next, err
+					},
+				}
+				e.continuationMu.Lock()
+				if e.continuations == nil {
+					e.continuations = make(map[string]structuralContextContinuation)
+				}
+				retained := e.retainContinuationLocked(page.NextCursor, continued, now())
+				e.continuationMu.Unlock()
+				if !retained {
+					return fail("SOURCE_PROJECTION_FAILED", sourceprojectionv3.ErrResourceLimit)
+				}
 			}
 		}
 	}
@@ -313,7 +551,14 @@ func (e *structuralContextExecutor) Execute(parent context.Context, op operation
 		target.URI = in.RegexLocator.URI
 		target.Regex = &transientstructural.RegexLocator{Pattern: in.RegexLocator.Pattern, MatchIndex: in.RegexLocator.MatchIndex, CaptureGroup: in.RegexLocator.CaptureGroup, ExpectedDigest: in.RegexLocator.ExpectedDigest, MaxDocumentBytes: in.RegexLocator.Limits.MaxDocumentBytes, MaxMatches: in.RegexLocator.Limits.MaxMatches, MaxPatternBytes: in.RegexLocator.Limits.MaxPatternBytes, MaxWork: in.RegexLocator.Limits.MaxWork}
 	}
-	q := transientstructural.Request{SessionID: id, Generation: generation, Target: target, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, CaptureSupply: len(in.Projection) != 0 || in.RegexLocator != nil, Analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisKind(in.Analysis.Kind), Direction: transientstructural.Direction(in.Analysis.Direction), MaxDepth: in.Analysis.Depth}}
+	var projectionRequest sourceProjectionRequest
+	if len(in.Projection) != 0 {
+		if err := json.Unmarshal(in.Projection, &projectionRequest); err != nil {
+			return fail(operation.FailureInvalidInput, err)
+		}
+	}
+	sourceOnlyTarget := sourceOnlyProjection(in.Projection) && in.UpDepth == 0 && in.DownDepth == 0 && target.URI != "" && ((target.Line != nil && target.Character != nil) || target.Symbol != "" || target.Regex != nil)
+	q := transientstructural.Request{SessionID: id, Generation: generation, Target: target, DownDepth: in.DownDepth, UpDepth: in.UpDepth, MaxNodes: in.MaxNodes, TimeoutMS: in.TimeoutMS, RequestTimeoutMS: in.RequestTimeoutMS, MaxMessages: in.MaxMessages, MaxBytes: in.MaxBytes, CaptureSupply: len(in.Projection) != 0 || in.RegexLocator != nil, SourceOnlyTarget: sourceOnlyTarget, Analysis: transientstructural.AnalysisRequest{Kind: transientstructural.AnalysisKind(in.Analysis.Kind), Direction: transientstructural.Direction(in.Analysis.Direction), MaxDepth: in.Analysis.Depth}}
 	got, domain := transientstructural.Execute(ctx, e.runtime.Manager, q)
 	if domain != nil {
 		return fail(string(domain.State), domain)

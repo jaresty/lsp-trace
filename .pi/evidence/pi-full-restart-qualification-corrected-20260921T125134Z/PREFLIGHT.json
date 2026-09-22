@@ -1,0 +1,22 @@
+{
+  "status": "STAGED_VALID",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-corrected-20260921T125134Z",
+  "request_semantic_fingerprint": "sha256:246a63cddcc552144d60578a4f127e34eddb970f496f863cd6a3509011783cb9",
+  "sha256": {
+    "validator": "bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b",
+    "request": "3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d",
+    "handoff": "ee2cc6e4efb7d3a6c7c27c67e8b905ac1d3250267991d647450fd1b1ea24f5d3",
+    "mcp_config": "2fda952e1b2f0212f29ba4755a06cb5615daf7b59bbbd5f45bf9be2b28557519",
+    "bootstrap_config": "a41f33280ed850a1afbfa4bd8db22a3df7f39f5442b7a1227ce5f3b9d8173897",
+    "lsp_trace": "ebd503c94cca39afe2f74836afc4f3393574dfe0c9a3264609849a3b3997a4b2",
+    "lsp_trace_mcp": "00da842f664f572932895b561a693c415740bebcaaea048526f792b0395136d9"
+  },
+  "backup_sha256": {
+    "mcp_config": "02433b0895fd8f3abe6374c4a4ca0a1ef1b66e07bf0b6316bfe48c23ae0fdae4",
+    "bootstrap_config": "522ef2844d3982f51cf26444488c75f4e21cc358500870423335873ba8a9cb06",
+    "lsp_trace": "612df012de2278083603b93dd71354d2c31dab39f6e6406bceb752cd8b833cd8",
+    "lsp_trace_mcp": "686137d78737b66ee0f03e44bf474a99b3b202dfedcd76183c70b5df14173850"
+  },
+  "publication_root_argument_count": 1,
+  "diagnostic_sinks_enabled": false
+}

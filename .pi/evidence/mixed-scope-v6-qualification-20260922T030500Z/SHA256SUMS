@@ -1,0 +1,8 @@
+6d832fdf1b6268536034368bb25bcceb8a505099795d85a9979a807e4f55c93c  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/artifacts/lsp-trace
+ff1c89760a778c27124cde862e6c6018de6c7725f1f6b7a618bff30eb3d358b0  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/artifacts/lsp-trace-mcp
+4cb301870d81d61e262d34dbe6af7144a5fca1078cd4113eb5d01d97ae7b4c90  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/BOOTSTRAP_CONFIG.json
+c497f5c31b66b866ab0bfd4569758d237d10073762b7efd9b1b178524aec655c  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/MCP_CONFIG.json
+3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/REQUEST.json
+bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/validate-staged-request.py
+40bee2e53dc3823681b6821da4074f80c12ba87327454b43af3603c788debfdb  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/preflight.py
+d2dad0aab347fc23b803c5ac4af0f22f61269a2eca900c8ab2db443010fafb58  .pi/evidence/mixed-scope-v6-qualification-20260922T030500Z/check-result.py

@@ -1,0 +1,30 @@
+{
+  "mcp.json": {
+    "source": "/Users/schwa/dev/lsp-trace/.mcp.json",
+    "backup": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-20260921T110946Z/backups/mcp.json",
+    "sha256": "sha256:d4c8595e89731e7ca48ba631d30ed26661a427611cc4f69df1525fe0f27fc471",
+    "bytes": 905,
+    "mode": "0600"
+  },
+  "bootstrap.json": {
+    "source": "/Users/schwa/dev/lsp-trace/.lsp-trace-mcp-bootstrap.json",
+    "backup": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-20260921T110946Z/backups/bootstrap.json",
+    "sha256": "sha256:e5c823c423c9acbbd45d8b6b9eef12f5b24aeba568f74a9299fbfd9a76477072",
+    "bytes": 1251,
+    "mode": "0600"
+  },
+  "lsp-trace": {
+    "source": "/Users/schwa/.local/bin/lsp-trace",
+    "backup": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-20260921T110946Z/backups/lsp-trace",
+    "sha256": "sha256:d0e1d716e46167f7aa300b5834e91874b0b2fec65d70e219d2f653aa112e3412",
+    "bytes": 14560290,
+    "mode": "0600"
+  },
+  "lsp-trace-mcp": {
+    "source": "/Users/schwa/.local/bin/lsp-trace-mcp",
+    "backup": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-20260921T110946Z/backups/lsp-trace-mcp",
+    "sha256": "sha256:00da842f664f572932895b561a693c415740bebcaaea048526f792b0395136d9",
+    "bytes": 14240402,
+    "mode": "0600"
+  }
+}

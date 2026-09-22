@@ -1,0 +1,4 @@
+2fda952e1b2f0212f29ba4755a06cb5615daf7b59bbbd5f45bf9be2b28557519  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-64mib-20260921T134932Z/backups/mcp.json
+a41f33280ed850a1afbfa4bd8db22a3df7f39f5442b7a1227ce5f3b9d8173897  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-64mib-20260921T134932Z/backups/bootstrap.json
+ebd503c94cca39afe2f74836afc4f3393574dfe0c9a3264609849a3b3997a4b2  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-64mib-20260921T134932Z/backups/lsp-trace
+00da842f664f572932895b561a693c415740bebcaaea048526f792b0395136d9  /Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-64mib-20260921T134932Z/backups/lsp-trace-mcp

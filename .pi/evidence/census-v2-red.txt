@@ -1,0 +1,14 @@
+# lsp-trace/internal/mcpcontract [lsp-trace/internal/mcpcontract.test]
+internal/mcpcontract/census_continuation_v2_test.go:21:34: undefined: FutureCensusV2InputID
+internal/mcpcontract/census_continuation_v2_test.go:21:57: undefined: FutureCensusCompositeResultID
+internal/mcpcontract/census_continuation_v2_test.go:21:88: undefined: FutureCensusCompositeSuccessID
+internal/mcpcontract/census_continuation_v2_test.go:82:17: undefined: DecodeFutureCensusRequestV2
+internal/mcpcontract/census_continuation_v2_test.go:85:29: undefined: FutureCensusV2InputID
+internal/mcpcontract/census_continuation_v2_test.go:100:17: undefined: DecodeFutureCensusRequestV2
+internal/mcpcontract/census_continuation_v2_test.go:103:29: undefined: FutureCensusV2InputID
+internal/mcpcontract/census_continuation_v2_test.go:113:17: undefined: DecodeFutureCensusRequestV2
+internal/mcpcontract/census_continuation_v2_test.go:132:17: undefined: DecodeFutureCensusRequestV2
+internal/mcpcontract/census_continuation_v2_test.go:148:29: undefined: FutureCensusCompositeResultID
+internal/mcpcontract/census_continuation_v2_test.go:148:29: too many errors
+FAIL	lsp-trace/internal/mcpcontract [build failed]
+FAIL

@@ -1,0 +1,15 @@
+{
+  "base-publication": {
+    "entries": 0
+  },
+  "continuation-publication": {
+    "entries": 0
+  },
+  "trace-root": {
+    "entries": 0
+  },
+  "ledger-root": {
+    "entries": 0
+  },
+  "private_diagnostic_bytes": 0
+}

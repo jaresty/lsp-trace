@@ -175,6 +175,10 @@ func run(stdin io.Reader, stdout, stderr io.Writer) int {
 				return fixtureInputErrorCode
 			}
 		case "callHierarchy/outgoingCalls":
+			if os.Getenv("LSP_TRACE_FAKE_LSP_ACQUISITION") == "hang-outgoing" {
+				hanging[string(m.ID)] = append(json.RawMessage(nil), m.ID...)
+				continue
+			}
 			if err := w.Write(response(m.ID, json.RawMessage(`[]`))); err != nil {
 				fmt.Fprintln(errout, err)
 				return fixtureInputErrorCode

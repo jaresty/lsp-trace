@@ -1219,16 +1219,9 @@ func execute(ctx context.Context, c config) (out graph.Result, code int) {
 	base.Capabilities.CallHierarchyProvider = client.SupportsCallHierarchy()
 	base.CapabilityQuality.Advertised = base.Capabilities.CallHierarchyProvider
 	base.CapabilityQuality.CrossModuleEdges = graph.Unknown
-	if !base.Capabilities.CallHierarchyProvider {
-		base.Terminals = []graph.Boundary{{Reason: graph.UnsupportedCallHierarchy}}
-		base.Summary.Complete = false
-		for _, seed := range resolved {
-			base.Seeds = append(base.Seeds, graph.SeedResult{Label: seed.spec.Label, Requested: graph.Target{URI: seed.uri, Line: seed.line, Column: seed.column}, Failure: &graph.SeedFailure{Phase: "capability", Message: string(graph.UnsupportedCallHierarchy)}})
-		}
-		base.Canonicalize()
-		_ = client.Shutdown(context.Background())
-		return base, 2
-	}
+	// Capability advertisement is descriptive, not an operational gate. Some
+	// servers successfully implement prepare and traversal without advertising
+	// callHierarchyProvider; exact requests remain the only source of CALLS.
 	opened := map[string]struct{}{}
 	openFailed := map[string]error{}
 	for _, seed := range resolved {

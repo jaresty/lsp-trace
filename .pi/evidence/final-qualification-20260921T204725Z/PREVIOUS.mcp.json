@@ -1,0 +1,41 @@
+{
+  "mcpServers": {
+    "lsp-trace": {
+      "command": "/Users/schwa/.local/bin/lsp-trace-mcp",
+      "args": [
+        "--bootstrap-config",
+        "/Users/schwa/dev/lsp-trace/.lsp-trace-mcp-bootstrap.json",
+        "--publication-root",
+        "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-mapping-20260921T174315Z/base-publication",
+        "--tool-profile",
+        "compact"
+      ],
+      "cwd": "/Users/schwa/dev/lsp-trace",
+      "lifecycle": "lazy",
+      "requestTimeoutMs": 30000,
+      "directTools": true,
+      "searchKeywords": {
+        "lsp_trace_v1_incoming": [
+          "who calls this callee",
+          "callers",
+          "incoming call hierarchy"
+        ],
+        "lsp_trace_v1_slice": [
+          "call graph",
+          "upstream and downstream",
+          "dependencies"
+        ],
+        "lsp_session_v1_list": [
+          "ready language server",
+          "find session",
+          "session selector"
+        ],
+        "lsp_session_v1_status": [
+          "current generation",
+          "session ready",
+          "poisoned session"
+        ]
+      }
+    }
+  }
+}

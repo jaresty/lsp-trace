@@ -1,0 +1,4 @@
+go test ./internal/v5sourcesnapshotv6 -run 'TestV6(CaptureResultJSONDoesNotDuplicateSourceObjects|RepeatedSourceChargesUniqueBytesOnce|GraphInputLimitOwnedBySerializer)$' -count=1
+FAIL TestV6CaptureResultJSONDoesNotDuplicateSourceObjects: ASSERT_V6_CAPTURE_RESULT_NO_DUPLICATE_SOURCE_OBJECTS encoded=15692 raw=11352
+FAIL TestV6RepeatedSourceChargesUniqueBytesOnce: ASSERT_V6_REPEATED_SOURCE_CHARGED_ONCE: v6 total source limit
+FAIL TestV6GraphInputLimitOwnedBySerializer: ASSERT_V6_GRAPH_INPUT_LIMIT_OWNER: <nil>

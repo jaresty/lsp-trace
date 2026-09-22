@@ -279,6 +279,47 @@ func validEncoding(value string) bool {
 	return value == "utf-8" || value == "utf-16" || value == "utf-32"
 }
 
+// BuildFromReceipts constructs the historical V1 wire format purely from
+// explicitly supplied immutable receipts. It performs no workspace reads.
+func BuildFromReceipts(v5Bytes []byte, workspace, positionEncoding string, receipts []Receipt) ([]byte, error) {
+	if len(v5Bytes) > MaxBytes {
+		return nil, errors.New("source snapshot input byte limit")
+	}
+	if !validEncoding(positionEncoding) {
+		return nil, errors.New("source snapshot position encoding")
+	}
+	v5, native, err := decodeV5(v5Bytes)
+	if err != nil {
+		return nil, err
+	}
+	if v5.SessionID == "" || v5.Generation == 0 {
+		return nil, errors.New("source snapshot V5 parent session or generation missing")
+	}
+	cloned := make([]Receipt, len(receipts))
+	for i, r := range receipts {
+		cloned[i] = r
+		cloned[i].Content = append([]byte(nil), r.Content...)
+		cloned[i].CanonicalReceipt = append([]byte(nil), r.CanonicalReceipt...)
+	}
+	bindings, err := derive(native, cloned, workspace)
+	if err != nil {
+		return nil, err
+	}
+	artifact := Artifact{SchemaVersion: Version, Policy: Policy, GraphV5Bytes: append([]byte(nil), v5Bytes...), GraphV5Digest: digest(v5Bytes), SessionID: v5.SessionID, Generation: v5.Generation, PositionEncoding: positionEncoding, Workspace: workspace, Receipts: cloned, Bindings: bindings}
+	raw, err := json.Marshal(artifact)
+	if err != nil {
+		return nil, err
+	}
+	raw = append(raw, '\n')
+	if len(raw) > MaxBytes {
+		return nil, errors.New("source snapshot output byte limit")
+	}
+	if _, err := Validate(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func Build(v5Bytes []byte, workspace, positionEncoding string) ([]byte, error) {
 	if len(v5Bytes) > MaxBytes {
 		return nil, errors.New("source snapshot input byte limit")

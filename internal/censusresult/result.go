@@ -131,7 +131,7 @@ func Validate(r Result) error {
 	if r.SchemaVersion != SchemaVersion || r.Status != "SUCCEEDED" || strings.TrimSpace(r.CensusID) == "" || strings.TrimSpace(r.CaptureSetID) == "" || strings.TrimSpace(r.SessionID) == "" || r.Generation == 0 {
 		return errors.New("invalid census result identity")
 	}
-	if r.TargetCount < 1 || r.BatchCount < 1 || r.BatchCount != (r.TargetCount+62)/63 {
+	if r.TargetCount < 1 || r.BatchCount < 1 || r.BatchCount > r.TargetCount {
 		return errors.New("invalid census target or batch accounting")
 	}
 	f := r.FileAccounting

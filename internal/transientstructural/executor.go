@@ -2,12 +2,15 @@ package transientstructural
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/graph"
 	"lsp-trace/internal/lsp"
+	"lsp-trace/internal/operation"
 	"lsp-trace/internal/regexlocator"
 	"lsp-trace/internal/session"
 	"lsp-trace/internal/slicer"
@@ -56,8 +59,19 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	if failure != "" {
 		return Result{}, fail(PhasePreflight, terminalForSessionFailure(failure), Accounting{})
 	}
-	if !metadata.CallHierarchySupport || (request.Target.Symbol != "" && !metadata.DocumentSymbolSupport) {
-		return Result{}, fail(PhasePreflight, StateUnsupported, Accounting{})
+	if request.SourceOnlyTarget {
+		if !metadata.DocumentSymbolSupport {
+			failure := fail(PhasePreflight, StateUnsupported, Accounting{})
+			failure.TargetDiagnostic = &TargetDiagnostic{Action: TargetActionFailUnsupported, ProviderMethod: "textDocument/documentSymbol"}
+			return Result{}, failure
+		}
+	} else if !metadata.CallHierarchySupport || (request.Target.Symbol != "" && !metadata.DocumentSymbolSupport) {
+		failure := fail(PhasePreflight, StateUnsupported, Accounting{})
+		failure.TargetDiagnostic = &TargetDiagnostic{
+			Action: TargetActionFailUnsupported, ProviderMethod: "textDocument/prepareCallHierarchy", LocatorScope: locatorMode(request.Target),
+			Guidance: capabilityGuidance(metadata), Recovery: sourceOnlyTargetRecovery(request),
+		}
+		return Result{}, failure
 	}
 	if !supportedEncoding(metadata.PositionEncoding) {
 		return Result{}, fail(PhasePreflight, StateUnsupported, Accounting{})
@@ -125,12 +139,27 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	client := incomingops.NewSessionClientWithWireLimits(counted, sessionID, request.Generation,
 		time.Duration(request.RequestTimeoutMS)*time.Millisecond,
 		incomingops.WireLimits{MaxMessages: request.MaxMessages, MaxBytes: request.MaxBytes})
-	prepared, targetFailure := incomingops.ResolvePreparedTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
-	if targetFailure != nil {
-		accounting := counted.snapshot()
-		failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
-		failure.TargetDiagnostic = &TargetDiagnostic{ExactMatches: prepared.ExactMatches, TotalSymbols: prepared.TotalSymbols, OmittedSymbols: prepared.OmittedSymbols, Action: TargetAction(prepared.Action)}
-		return Result{}, failure
+	var prepared incomingops.PreparedTarget
+	if request.SourceOnlyTarget {
+		symbol, sourcePrepared, targetFailure := incomingops.ResolveSourceTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
+		prepared = sourcePrepared
+		if targetFailure == nil {
+			prepared.Items = []lsp.CallHierarchyItem{{Name: symbol.Name, Kind: symbol.Kind, URI: request.Target.URI, Range: symbol.Range, SelectionRange: symbol.SelectionRange}}
+		} else {
+			accounting := counted.snapshot()
+			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
+			failure.TargetDiagnostic = preparedTargetDiagnostic(prepared)
+			return Result{}, failure
+		}
+	} else {
+		var targetFailure *operation.Failure
+		prepared, targetFailure = incomingops.ResolvePreparedTarget(ctx, client, request.Target.URI, request.Target.Symbol, request.Target.Line, request.Target.Character)
+		if targetFailure != nil {
+			accounting := counted.snapshot()
+			failure := fail(PhasePreflight, targetResolutionState(ctx, targetFailure.Code, accounting, runtime, sessionID, request.Generation), accounting)
+			failure.TargetDiagnostic = preparedTargetDiagnostic(prepared)
+			return Result{}, failure
+		}
 	}
 	items := prepared.Items
 	root := graphNode(items[0]).ID
@@ -161,9 +190,9 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		if state == StateInvalidServerResponse {
 			failure.Reason = FailureReasonTraversalFailed
 			if !down.Complete || !down.TraversalComplete {
-				failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStageOutgoing, Method: "callHierarchy/outgoingCalls", Direction: DirectionOutgoing}
+				failure.TraversalDiagnostic = traversalFailureDiagnostic(TraversalStageOutgoing, "callHierarchy/outgoingCalls", DirectionOutgoing, down.Diagnostics)
 			} else if !upComplete {
-				failure.TraversalDiagnostic = &TraversalDiagnostic{Stage: TraversalStageIncoming, Method: "callHierarchy/incomingCalls", Direction: DirectionIncoming}
+				failure.TraversalDiagnostic = traversalFailureDiagnostic(TraversalStageIncoming, "callHierarchy/incomingCalls", DirectionIncoming, up.Diagnostics)
 			}
 		}
 		return Result{}, failure
@@ -207,18 +236,46 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 		return Result{}, fail(PhaseDeliveryCheck, state, accounting)
 	}
 	state = StateComplete
-	if accounting.Occurrences.Admitted == 0 {
+	if !request.SourceOnlyTarget && accounting.Occurrences.Admitted == 0 {
 		state = StateEmpty
 	}
 	policy := frozenPolicyBinding()
+	resultClaimCeiling := claimCeiling
+	if request.SourceOnlyTarget {
+		resultClaimCeiling = "Under the named managed session generation, document-symbol response, exact target locator, and projection policy, this result identifies one source definition only; it establishes no callable identity, CALLS relationship, reference relationship, or relationship completeness."
+	}
 	return Result{
 		SchemaVersion: resultSchemaVersion, EvidenceClass: evidenceClassTransientLive, Authority: 0, SourceGraphComplete: sourceGraphCompleteUnknown,
-		Retained: false, Replayable: false, PublicationEligible: false, HydrationEligible: false, ClaimCeiling: claimCeiling,
+		Retained: false, Replayable: false, PublicationEligible: false, HydrationEligible: false, ClaimCeiling: resultClaimCeiling,
 		Phase: PhaseDeliveryCheck, State: state,
 		Qualification: Qualification{SessionID: sessionID, Generation: request.Generation, PositionEncoding: metadata.PositionEncoding},
 		TargetID:      rootOpaque(projection), GraphDigest: graphDigest(projection, policy, bounds), Policy: policy, Bounds: bounds,
 		Accounting: accounting, Analysis: analysis, SourceSupply: document.Supply,
 	}, nil
+}
+
+func locatorMode(target Target) string {
+	if target.Regex != nil {
+		return "REGEX_TO_POSITION"
+	}
+	if target.Symbol != "" {
+		return "DOCUMENT_SYMBOL_EXACT_NAME"
+	}
+	return "URI_POSITION"
+}
+
+func capabilityGuidance(metadata sessionruntime.SessionMetadata) string {
+	available := make([]string, 0, 3)
+	if metadata.DocumentSymbolSupport {
+		available = append(available, "textDocument/documentSymbol")
+	}
+	if metadata.DefinitionSupport {
+		available = append(available, "textDocument/definition")
+	}
+	if metadata.ReferencesSupport {
+		available = append(available, "textDocument/references")
+	}
+	return fmt.Sprintf("failed_capability=textDocument/prepareCallHierarchy available=%s workspace_symbol_dependency=false caller_action=request zero-depth TARGET source-only inspection when documentSymbol is available; definition and references are non-CALLS", strings.Join(available, ","))
 }
 
 func validateRequest(request Request) TerminalState {
@@ -344,9 +401,101 @@ func metadataRecheck(runtime *sessionruntime.Manager, sessionID string, generati
 	return ""
 }
 
+func traversalFailureDiagnostic(stage TraversalStage, method string, direction Direction, diagnostics []graph.Diagnostic) *TraversalDiagnostic {
+	diagnostic := &TraversalDiagnostic{Stage: stage, Method: method, Direction: direction}
+	for _, observed := range diagnostics {
+		if observed.Method != method {
+			continue
+		}
+		entered := false
+		if strings.HasPrefix(observed.Message, "malformed "+method+" result:") {
+			diagnostic.ProviderMethod = method
+			diagnostic.FailedField = "response"
+			diagnostic.FailedInvariant = "ARRAY_RESULT"
+			diagnostic.ProviderVariant = "NON_ARRAY"
+			diagnostic.ProjectionEntered = &entered
+			diagnostic.Guidance = "RETRY_PROVIDER_OR_REPORT_MALFORMED_RESPONSE"
+			break
+		}
+		var itemIndex int
+		var failedField, failedInvariant string
+		if count, _ := fmt.Sscanf(observed.Message, "MALFORMED_CALL_HIERARCHY_OUTGOING_CALL item_index=%d failed_field=%s failed_invariant=%s", &itemIndex, &failedField, &failedInvariant); count == 3 {
+			diagnostic.ProviderMethod = method
+			diagnostic.ItemIndex = &itemIndex
+			diagnostic.FailedField = failedField
+			diagnostic.FailedInvariant = failedInvariant
+			diagnostic.ProviderVariant = "CALL_HIERARCHY_OUTGOING_CALL"
+			diagnostic.ProjectionEntered = &entered
+			diagnostic.Guidance = "USE_TARGET_MODE_OR_FIX_PROVIDER_RESPONSE"
+			break
+		}
+	}
+	return diagnostic
+}
+
+func sourceOnlyTargetRecovery(request Request) *TargetRecovery {
+	fragment := map[string]any{
+		"session_id": request.SessionID, "generation": request.Generation,
+		"up_depth": 0, "down_depth": 0,
+		"projection": map[string]any{"mode": "TARGET", "body": "INCLUDE", "include_relation_occurrences": false},
+	}
+	target := request.Target
+	switch {
+	case target.Line != nil && target.Character != nil && target.URI != "":
+		fragment["uri"], fragment["line"], fragment["character"] = target.URI, int(*target.Line), int(*target.Character)
+	case target.Symbol != "" && target.URI != "":
+		fragment["uri"], fragment["symbol"] = target.URI, target.Symbol
+	case target.Regex != nil && target.URI != "":
+		locator := map[string]any{
+			"uri": target.URI, "pattern": target.Regex.Pattern, "match_index": target.Regex.MatchIndex, "capture_group": target.Regex.CaptureGroup,
+			"limits": map[string]any{"max_document_bytes": target.Regex.MaxDocumentBytes, "max_matches": target.Regex.MaxMatches, "max_pattern_bytes": target.Regex.MaxPatternBytes, "max_work": target.Regex.MaxWork},
+		}
+		if target.Regex.ExpectedDigest != "" {
+			locator["expected_document_digest"] = target.Regex.ExpectedDigest
+		}
+		fragment["regex_locator"] = locator
+	default:
+		return &TargetRecovery{Kind: "UNAVAILABLE", UnavailableReason: "NO_INDEPENDENTLY_VALID_LOCATOR"}
+	}
+	complete := false
+	return &TargetRecovery{Kind: "SOURCE_ONLY_REQUEST_TEMPLATE", Complete: &complete, RequestFragment: fragment, OmittedFields: []string{"projection.privacy_policy_id"}}
+}
+
+func preparedTargetDiagnostic(prepared incomingops.PreparedTarget) *TargetDiagnostic {
+	entered := false
+	diagnostic := &TargetDiagnostic{
+		ExactMatches:       prepared.ExactMatches,
+		TotalSymbols:       prepared.TotalSymbols,
+		OmittedSymbols:     prepared.OmittedSymbols,
+		Action:             TargetAction(prepared.Action),
+		ProviderMethod:     prepared.ProviderMethod,
+		ItemIndex:          prepared.ItemIndex,
+		NormalizationStage: prepared.NormalizationStage,
+		FailedField:        prepared.FailedField,
+		FailedInvariant:    prepared.FailedInvariant,
+		ProjectionEntered:  &entered,
+	}
+	if prepared.Action == string(TargetActionEnumerationTruncated) {
+		zero := 0
+		diagnostic.Completeness = "UNKNOWN"
+		diagnostic.Recoveries = []TargetRecovery{
+			{Kind: "POSITION_LOCATOR_TEMPLATE", RequiredFields: []string{"uri", "line", "character"}},
+			{Kind: "REGEX_LOCATOR_TEMPLATE", RequiredPattern: true, MatchIndex: &zero, RequiredFields: []string{"uri", "pattern", "match_index"}, Limits: map[string]int{"max_document_bytes": 60 * 1024, "max_pattern_bytes": 4 * 1024, "max_work": 64 * 1024, "max_matches": 100}},
+		}
+	} else if prepared.Recovery != nil {
+		if prepared.Recovery.Available {
+			line, character := int(prepared.Recovery.Line), int(prepared.Recovery.Character)
+			diagnostic.Recovery = &TargetRecovery{Kind: "POSITION_LOCATOR", URI: prepared.Recovery.URI, Line: &line, Character: &character}
+		} else {
+			diagnostic.Recovery = &TargetRecovery{Kind: "UNAVAILABLE", UnavailableReason: prepared.Recovery.UnavailableReason}
+		}
+	}
+	return diagnostic
+}
+
 func targetResolutionState(ctx context.Context, code string, accounting Accounting, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
 	switch code {
-	case "DOCUMENT_SYMBOL_ABSENT":
+	case "DOCUMENT_SYMBOL_ABSENT", "ENUMERATION_TRUNCATED":
 		return StateTargetNotFound
 	case "DOCUMENT_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_PREPARE_MISMATCH":
 		return StateAmbiguousTarget
@@ -431,6 +580,22 @@ func regexResourceDiagnostic(limit *regexlocator.ResourceLimit) *ResourceDiagnos
 	}
 	if limit.Observed != nil {
 		diagnostic.SuggestedLimit = cappedSuggestion(limit.Allowed, *limit.Observed, diagnostic.MaximumAllowed)
+		if diagnostic.SuggestedLimit != nil {
+			diagnostic.SuggestedLimits = []SuggestedLimit{{Field: diagnostic.Field, Current: limit.Allowed, Observed: *limit.Observed, Suggested: *diagnostic.SuggestedLimit}}
+			diagnostic.CallerAction = "REQUIRED"
+			fragment := &BoundedRequestFragment{RegexLocator: &RegexLocatorFragment{}}
+			switch diagnostic.Field {
+			case ResourceFieldRegexMaxDocumentBytes:
+				fragment.RegexLocator.Limits.MaxDocumentBytes = *diagnostic.SuggestedLimit
+			case ResourceFieldRegexMaxPatternBytes:
+				fragment.RegexLocator.Limits.MaxPatternBytes = *diagnostic.SuggestedLimit
+			case ResourceFieldRegexMaxWork:
+				fragment.RegexLocator.Limits.MaxWork = *diagnostic.SuggestedLimit
+			case ResourceFieldRegexMaxMatches:
+				fragment.RegexLocator.Limits.MaxMatches = *diagnostic.SuggestedLimit
+			}
+			diagnostic.RequestFragment = fragment
+		}
 	}
 	return diagnostic
 }

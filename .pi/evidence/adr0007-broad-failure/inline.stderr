@@ -1,0 +1,2 @@
+WARNING: local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted.
+No managed LSP sessions are provisioned. Configure --bootstrap-config; use --print-bootstrap-example for the public template.

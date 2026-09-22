@@ -295,8 +295,8 @@ func TestConstituentCanonicalizesAndPreservesEveryV5SourceField(t *testing.T) {
 func TestSourceRecordExactTypedDedupeAndConflict(t *testing.T) {
 	receipt := graphprovenance.Receipt{ID: "receipt", URI: "file:///w/a.go", Content: []byte("one")}
 	supply := graphprovenance.SupplyReceiptV2{RequestID: "request", Status: "NO_NOTIFICATION_OBSERVATION", Receipt: &receipt}
-	a := admitted{env: envelope{Supplies: []graphprovenance.SupplyReceiptV2{supply}, Bindings: []graphprovenance.BindingV2{{Pointer: "/p", URI: receipt.URI, ReceiptIDs: []string{receipt.ID}}}}}
-	b := admitted{env: a.env}
+	a := admitted{in: Input{Identity: "constituent-a"}, env: envelope{Supplies: []graphprovenance.SupplyReceiptV2{supply}, Bindings: []graphprovenance.BindingV2{{Pointer: "/p", URI: receipt.URI, ReceiptIDs: []string{receipt.ID}}}}}
+	b := admitted{in: Input{Identity: "constituent-a"}, env: a.env}
 	if err := validateSourceRecords([]admitted{a, b}); err != nil {
 		t.Fatal("ASSERT_EXACT_TYPED_SOURCE_DEDUPE", err)
 	}
@@ -306,13 +306,16 @@ func TestSourceRecordExactTypedDedupeAndConflict(t *testing.T) {
 	if err := validateSourceRecords([]admitted{a, b}); err == nil {
 		t.Fatal("ASSERT_SOURCE_ID_CONFLICT_FAILS_CLOSED")
 	}
-	conflict = receipt
-	conflict.ID = "other-receipt"
-	conflict.URI = receipt.URI
-	conflict.Content = append([]byte(nil), receipt.Content...)
-	b.env.Supplies = []graphprovenance.SupplyReceiptV2{{RequestID: "other-request", Status: supply.Status, Receipt: &conflict}}
-	if err := validateSourceRecords([]admitted{a, b}); err == nil {
-		t.Fatal("ASSERT_CONTENT_DIGEST_METADATA_CONFLICT_FAILS_CLOSED")
+	duplicateContent := receipt
+	duplicateContent.ID = "other-receipt"
+	duplicateContent.Content = append([]byte(nil), receipt.Content...)
+	b.in.Identity = "constituent-b"
+	b.env.Supplies = []graphprovenance.SupplyReceiptV2{{RequestID: supply.RequestID, Status: supply.Status, Receipt: &duplicateContent}}
+	if err := validateSourceRecords([]admitted{a, b}); err != nil {
+		t.Fatal("ASSERT_DISTINCT_CONSTITUENTS_REUSE_SOURCE_RECORD_IDS", err)
+	}
+	if err := validateSourceRecords([]admitted{b, a}); err != nil {
+		t.Fatal("ASSERT_DISTINCT_CONSTITUENT_NAMESPACE_ORDER_INDEPENDENT", err)
 	}
 }
 

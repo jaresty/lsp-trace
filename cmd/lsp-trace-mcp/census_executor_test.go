@@ -340,7 +340,7 @@ func TestCensusExecutorFailuresAreTypedAndPrivacySafe(t *testing.T) {
 	assertCensusFailure(t, failures[0], censusStageAcquisition, censusCodeAcquisitionFailed)
 	assertCensusFailure(t, failures[1], censusStageConfig, censusCodeInvalidConfig)
 	typeOfFailure := reflect.TypeOf(*failures[0])
-	if typeOfFailure.NumField() != 2 || typeOfFailure.Field(0).Name != "stage" || typeOfFailure.Field(0).Type.Name() != "censusFailureStage" || typeOfFailure.Field(1).Name != "code" || typeOfFailure.Field(1).Type.Name() != "censusFailureCode" {
+	if typeOfFailure.NumField() != 3 || typeOfFailure.Field(0).Name != "stage" || typeOfFailure.Field(0).Type.Name() != "censusFailureStage" || typeOfFailure.Field(1).Name != "code" || typeOfFailure.Field(1).Type.Name() != "censusFailureCode" || typeOfFailure.Field(2).Name != "err" || typeOfFailure.Field(2).Type != reflect.TypeOf((*error)(nil)).Elem() {
 		t.Fatalf("ASSERT_CENSUS_FAILURE_CLOSED_TYPED_FIELDS: %+v", typeOfFailure)
 	}
 	for _, failure := range failures {

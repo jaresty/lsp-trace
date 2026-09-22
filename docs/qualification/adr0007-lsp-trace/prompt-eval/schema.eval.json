@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/eval/adr0007-minimal-semantic-payload.v1.schema.json",
+  "title": "ADR0007 minimal semantic payload (eval only)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "target_role",
+    "consumer_need",
+    "provided_behavior",
+    "boundary_contribution",
+    "limitations",
+    "citations"
+  ],
+  "properties": {
+    "verdict": {"enum": ["SUPPORTED", "UNRESOLVED"]},
+    "target_role": {"type": "string", "minLength": 1, "maxLength": 512},
+    "consumer_need": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "provided_behavior": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "boundary_contribution": {"type": "string", "minLength": 1, "maxLength": 2048},
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {"type": "string", "minLength": 1, "maxLength": 512}
+    },
+    "citations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_role", "consumer_need", "provided_behavior", "boundary_contribution", "limitations"],
+      "properties": {
+        "target_role": {"$ref": "#/$defs/citationIDs"},
+        "consumer_need": {"$ref": "#/$defs/citationIDs"},
+        "provided_behavior": {"$ref": "#/$defs/citationIDs"},
+        "boundary_contribution": {"$ref": "#/$defs/citationIDs"},
+        "limitations": {"$ref": "#/$defs/citationIDs"}
+      }
+    }
+  },
+  "$defs": {
+    "citationIDs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["C1", "C2"]}
+    }
+  }
+}

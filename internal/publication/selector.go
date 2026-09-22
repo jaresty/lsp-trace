@@ -198,11 +198,24 @@ func existingTarget(root *Root, selector string) (*target, error) {
 	return &target{parent: current, owned: owned, name: parts[len(parts)-1]}, nil
 }
 
+type TraceEvent struct {
+	Stage  string
+	Reason string
+	OK     bool
+}
+
 type Request struct {
 	Root             *Root
 	Selector         string
 	Bytes            []byte
 	ArtifactSchemaID string
+	Trace            func(TraceEvent)
+}
+
+func tracePublication(req Request, stage, reason string, ok bool) {
+	if req.Trace != nil {
+		req.Trace(TraceEvent{Stage: stage, Reason: reason, OK: ok})
+	}
 }
 
 type Receipt struct {
@@ -443,10 +456,14 @@ func createTemporarySibling(parent *os.Root) (*os.File, string, error) {
 }
 
 func (p *Publisher) Publish(req Request) Result {
+	tracePublication(req, "ENTER", "START", true)
 	target, err := safeTarget(req.Root, req.Selector)
 	if err != nil {
+		tracePublication(req, "ROOT_NAMESPACE", "INVALID", false)
+		tracePublication(req, "EXIT", "SELECTOR_REJECTED", false)
 		return failure("selector", CodeOutputSelectorUnsafe, true, false, err)
 	}
+	tracePublication(req, "ROOT_NAMESPACE", "PRIVATE_DIRECTORY", true)
 	defer target.close()
 	lock := targetLock(target.key)
 	lock.Lock()
@@ -454,17 +471,27 @@ func (p *Publisher) Publish(req Request) Result {
 
 	if info, err := target.parent.Lstat(target.name); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
+			tracePublication(req, "TARGET", "UNSAFE", false)
+			tracePublication(req, "EXIT", "SELECTOR_REJECTED", false)
 			return failure("selector", CodeOutputSelectorUnsafe, true, false, errors.New("unsafe final target"))
 		}
+		tracePublication(req, "TARGET", "EXISTS", true)
+		tracePublication(req, "EXIT", "TARGET_EXISTS", false)
 		return failure("install", CodeTargetExists, true, false, os.ErrExist)
 	} else if !os.IsNotExist(err) {
+		tracePublication(req, "TARGET", "STAT_FAILED", false)
+		tracePublication(req, "EXIT", "INSTALL_FAILED", false)
 		return failure("install", CodePublicationFailed, true, false, err)
 	}
+	tracePublication(req, "TARGET", "ABSENT", true)
 
 	tmp, tmpName, err := createTemporarySibling(target.parent)
 	if err != nil {
+		tracePublication(req, "TEMP_CREATE", "FAILED", false)
+		tracePublication(req, "EXIT", "STAGE_FAILED", false)
 		return failure("stage", CodePublicationFailed, false, false, err)
 	}
+	tracePublication(req, "TEMP_CREATE", "CREATED", true)
 	cleanup := false
 	defer func() { _ = target.parent.Remove(tmpName) }()
 	if err = writeAll(tmp, req.Bytes); err == nil {
@@ -476,8 +503,12 @@ func (p *Publisher) Publish(req Request) Result {
 	}
 	if err != nil {
 		cleanup = target.parent.Remove(tmpName) == nil
+		tracePublication(req, "TEMP_SYNC_CLOSE", "FAILED", false)
+		tracePublication(req, "EXIT", "STAGE_FAILED", false)
 		return failure("stage", CodePublicationFailed, cleanup, false, err)
 	}
+	tracePublication(req, "TEMP_SYNC_CLOSE", "SYNCED_CLOSED", true)
+	tracePublication(req, "RENAME", "NOT_USED", true)
 
 	// A component-relative hard-link install is the available atomic no-replace
 	// namespace primitive. Removing the private sibling after success does not
@@ -485,24 +516,36 @@ func (p *Publisher) Publish(req Request) Result {
 	if err = target.parent.Link(tmpName, target.name); err != nil {
 		cleanup = target.parent.Remove(tmpName) == nil
 		if errors.Is(err, os.ErrExist) {
+			tracePublication(req, "NO_REPLACE", "TARGET_EXISTS", false)
+			tracePublication(req, "EXIT", "TARGET_EXISTS", false)
 			return failure("install", CodeTargetExists, cleanup, false, err)
 		}
+		tracePublication(req, "NO_REPLACE", "HARD_LINK_FAILED", false)
+		tracePublication(req, "EXIT", "INSTALL_FAILED", false)
 		return failure("install", CodePublicationFailed, cleanup, false, err)
 	}
+	tracePublication(req, "NO_REPLACE", "HARD_LINK_INSTALLED", true)
 	cleanup = target.parent.Remove(tmpName) == nil
 	_ = cleanup // post-install cleanup cannot change the committed outcome
 	persisted, err := readPublished(target.parent, target.name)
 	if err != nil {
+		tracePublication(req, "REREAD_EQUAL", "REREAD_FAILED", false)
+		tracePublication(req, "EXIT", "REREAD_FAILED", false)
 		return failure("reread", CodePublicationFailed, cleanup, true, err)
 	}
 	if !bytes.Equal(persisted, req.Bytes) {
+		tracePublication(req, "REREAD_EQUAL", "NOT_EQUAL", false)
+		tracePublication(req, "EXIT", "REREAD_MISMATCH", false)
 		return failure("reread", CodePublicationFailed, cleanup, true, errors.New("published exact bytes mismatch"))
 	}
+	tracePublication(req, "REREAD_EQUAL", "EQUAL", true)
 	sum := sha256.Sum256(persisted)
-	return Result{Receipt: &Receipt{
+	result := Result{Receipt: &Receipt{
 		Digest: "sha256:" + hex.EncodeToString(sum[:]), ByteLength: uint64(len(persisted)),
 		ArtifactSchemaID: req.ArtifactSchemaID, PublicationMechanism: PublicationMechanism,
 	}}
+	tracePublication(req, "EXIT", "PUBLISHED", true)
+	return result
 }
 
 type Operation struct {

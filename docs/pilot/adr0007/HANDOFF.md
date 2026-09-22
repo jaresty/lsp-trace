@@ -10,7 +10,7 @@ The local narrow Describe pilot is enabled only in scope, not publicly or in pro
 - Model: Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf, SHA-256 `1664fccab734674a50763490a8c6931b70e3f2f8ec10031b54806d30e5f956b6`.
 - Yzma: commit `347c6ee0b893cc0bcac50ff7fb12ece0611fd01a`.
 - llama.cpp: `v0.4.0`, installer manifest SHA-256 `b95e8680b4d30761492bbc2d4a6fed656f124c5756dd4387cf02c30d27c13d90`.
-- Worker SHA-256: `623ad4341720192d57fe95372343ad7d87450ef8bfb5baa6ecc0c05288d16d83`.
+- Worker SHA-256: `b9ad7048c3e1b36ca97006142a0402c450c94a179392cbe97eaea28b18b08a61`.
 - NDJSON adapter SHA-256: `af22f92bddbaa925cfced6fc93032c398ba671310404a3648c330436a8a171c1`.
 - Enablement record: `docs/pilot/adr0007/enablement-record.draft.json`.
 

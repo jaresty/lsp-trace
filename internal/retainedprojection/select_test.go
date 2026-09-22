@@ -92,8 +92,11 @@ func TestSelectTerminalFailuresReturnZeroPlan(t *testing.T) {
 		{"missing-subject", CodeMissingBinding, func(_ *Admitted, r *Request) { r.Selections[1].GraphSubjectID = "missing" }},
 		{"missing-display", CodeMissingDisplay, func(a *Admitted, _ *Request) { a.artifact.DisplayBindings = a.artifact.DisplayBindings[1:] }},
 		{"duplicate-selection", CodeAmbiguousSelection, func(_ *Admitted, r *Request) { r.Selections = append(r.Selections, r.Selections[0]) }},
-		{"duplicate-display", CodeAmbiguousSelection, func(a *Admitted, _ *Request) {
-			a.artifact.DisplayBindings = append(a.artifact.DisplayBindings, a.artifact.DisplayBindings[0])
+		{"coordinated-differing-display", CodeAmbiguousSelection, func(a *Admitted, _ *Request) {
+			duplicate := a.artifact.DisplayBindings[0]
+			duplicate.ReceiptID = "receipt-a"
+			duplicate.SourceDigest = digestA
+			a.artifact.DisplayBindings = append(a.artifact.DisplayBindings, duplicate)
 		}},
 		{"receipt-mismatch", CodeReceiptMismatch, func(a *Admitted, _ *Request) { a.artifact.DisplayBindings[0].ReceiptID = "receipt-a" }},
 		{"source-mismatch", CodeSourceMismatch, func(a *Admitted, _ *Request) { a.artifact.DisplayBindings[0].SourceDigest = digestA }},
@@ -116,6 +119,61 @@ func TestSelectTerminalFailuresReturnZeroPlan(t *testing.T) {
 				t.Fatalf("ASSERT_SELECT_TYPED_TERMINAL_%s: %T %v", tc.code, err, err)
 			}
 		})
+	}
+}
+
+func TestSelectIdenticalDisplayDuplicatesAcceptedDeterministically(t *testing.T) {
+	base := fixture()
+	duplicate := base.artifact.DisplayBindings[0]
+	request := Request{Target: Key{"target", "file:///target.go"}, Selections: []Key{{"target", "file:///target.go"}, {"a", "file:///a.go"}}}
+	var baseline []byte
+	for i, bindings := range [][]v5sourcesnapshotv2.DisplayBinding{
+		append(append([]v5sourcesnapshotv2.DisplayBinding(nil), base.artifact.DisplayBindings...), duplicate),
+		append([]v5sourcesnapshotv2.DisplayBinding{duplicate}, base.artifact.DisplayBindings...),
+	} {
+		admitted := cloneAdmitted(t, base)
+		admitted.artifact.DisplayBindings = bindings
+		plan, err := Select(admitted, request)
+		if err != nil {
+			t.Fatalf("ASSERT_SELECT_IDENTICAL_DISPLAY_DUPLICATE_ACCEPTED[%d]: %v", i, err)
+		}
+		if len(plan.Selections) != len(request.Selections) {
+			t.Fatalf("ASSERT_SELECT_IDENTICAL_DISPLAY_DUPLICATE_DEDUPED[%d]: selections=%d", i, len(plan.Selections))
+		}
+		raw, err := plan.Bytes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			baseline = raw
+		} else if !reflect.DeepEqual(raw, baseline) {
+			t.Fatalf("ASSERT_SELECT_IDENTICAL_DISPLAY_DUPLICATE_PERMUTATION: got=%s want=%s", raw, baseline)
+		}
+	}
+}
+
+func TestSelectCoordinatedDifferingDisplayRejectedPermutationInvariant(t *testing.T) {
+	base := fixture()
+	different := base.artifact.DisplayBindings[0]
+	different.ReceiptID = "receipt-a"
+	different.SourceDigest = digestA
+	request := Request{Target: Key{"target", "file:///target.go"}, Selections: []Key{{"target", "file:///target.go"}}}
+	var baseline string
+	for i, bindings := range [][]v5sourcesnapshotv2.DisplayBinding{
+		append(append([]v5sourcesnapshotv2.DisplayBinding(nil), base.artifact.DisplayBindings...), different),
+		append([]v5sourcesnapshotv2.DisplayBinding{different}, base.artifact.DisplayBindings...),
+	} {
+		admitted := cloneAdmitted(t, base)
+		admitted.artifact.DisplayBindings = bindings
+		plan, err := Select(admitted, request)
+		if !reflect.DeepEqual(plan, Plan{}) || !IsCode(err, CodeAmbiguousSelection) {
+			t.Fatalf("ASSERT_SELECT_COORDINATED_DIFFERING_DISPLAY_REJECTED[%d]: plan=%+v err=%v", i, plan, err)
+		}
+		if i == 0 {
+			baseline = err.Error()
+		} else if err.Error() != baseline {
+			t.Fatalf("ASSERT_SELECT_COORDINATED_DIFFERING_DISPLAY_PERMUTATION: got=%q want=%q", err, baseline)
+		}
 	}
 }
 

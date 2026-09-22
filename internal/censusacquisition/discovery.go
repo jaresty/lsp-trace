@@ -122,16 +122,22 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	complete := true
 	symbolOrdinal := 0
 	filesAttempted := 0
+	var nodeBoundary, depthBoundary, providerIncomplete, timeoutBoundary, byteBoundary bool
+	var sourceOmissions uint64
 	for fileOrdinal, file := range files {
 		fileDisposition := file.Disposition
 		if fileDisposition == "" && ctx.Err() != nil {
 			fileDisposition = census.FileIncomplete
+			timeoutBoundary = true
+			sourceOmissions++
 		}
 		if fileDisposition == "" && !selectPath(includes, excludes, file.Path) {
 			fileDisposition = census.FileExcluded
 		}
 		if fileDisposition == "" && a.Limits.MaxFiles > 0 && filesAttempted >= a.Limits.MaxFiles {
 			fileDisposition = census.FileIncomplete
+			nodeBoundary = true
+			sourceOmissions++
 		}
 		if fileDisposition != "" {
 			appendFile(&out, fileOrdinal, file.Path, fileDisposition)
@@ -144,17 +150,20 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		if err := a.Supplier.Supply(ctx, file); err != nil {
 			appendFile(&out, fileOrdinal, file.Path, census.FileUnreadable)
 			complete = false
+			providerIncomplete = true
 			continue
 		}
 		if !a.Client.SupportsDocumentSymbols() {
 			appendFile(&out, fileOrdinal, file.Path, census.FileUnsupported)
 			complete = false
+			providerIncomplete = true
 			continue
 		}
 		symbols, err := a.Client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}})
 		if err != nil {
 			appendFile(&out, fileOrdinal, file.Path, census.FileDocumentSymbolFailed)
 			complete = false
+			providerIncomplete = true
 			continue
 		}
 		maxNodes := defaultMaxSymbolNodes
@@ -166,10 +175,14 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 		if a.Limits.MaxStringBytes > 0 {
 			maxStrings = a.Limits.MaxStringBytes
 		}
-		flat, bounded := flattenDocumentSymbols(symbols, maxNodes, maxDepth, maxStrings)
-		if !bounded {
+		flat, boundary := flattenDocumentSymbolsBounded(symbols, maxNodes, maxDepth, maxStrings)
+		if boundary != "" {
 			appendFile(&out, fileOrdinal, file.Path, census.FileIncomplete)
 			complete = false
+			sourceOmissions++
+			nodeBoundary = nodeBoundary || boundary == "nodes"
+			depthBoundary = depthBoundary || boundary == "depth"
+			byteBoundary = byteBoundary || boundary == "bytes"
 			continue
 		}
 		sort.SliceStable(flat, func(i, j int) bool { return documentSymbolKey(flat[i]) < documentSymbolKey(flat[j]) })
@@ -181,11 +194,15 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 			disposition := census.SymbolIncomplete
 			if ctx.Err() != nil || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols) {
 				fileComplete, complete = false, false
+				sourceOmissions++
+				timeoutBoundary = timeoutBoundary || ctx.Err() != nil
+				nodeBoundary = nodeBoundary || ordinal >= captureset.MaxTargets || (a.Limits.MaxSymbols > 0 && ordinal >= a.Limits.MaxSymbols)
 			} else if !callableSymbolKind(symbol.Kind) {
 				disposition = census.SymbolNonCallable
 			} else if !a.Client.SupportsCallHierarchy() {
 				disposition = census.SymbolUnsupported
 				fileComplete, complete = false, false
+				providerIncomplete = true
 			} else {
 				items, prepareErr := a.Client.PrepareCallHierarchy(ctx, lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: file.URI}, Position: symbol.SelectionRange.Start})
 				switch {
@@ -196,14 +213,17 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 				case len(items) != 1 || !preparedItemMatches(items[0], file.URI, symbol):
 					disposition = census.SymbolIncomplete
 					fileComplete, complete = false, false
+					providerIncomplete = true
+					sourceOmissions++
 				default:
 					seed, seedErr := canonicalPositionSeed(a.Workspace, file.Path, ordinal, symbol.SelectionRange.Start)
 					if seedErr == nil {
 						disposition = census.SymbolSelected
-						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
+						out.Targets = append(out.Targets, PreparedTarget{CensusOrdinal: ordinal, CanonicalSeedV2: seed, URI: file.URI, LanguageID: file.LanguageID, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range, SelectionRange: symbol.SelectionRange, SymbolIdentity: identity})
 					} else {
 						disposition = census.SymbolIncomplete
 						fileComplete, complete = false, false
+						sourceOmissions++
 					}
 				}
 			}
@@ -224,11 +244,15 @@ func (a DiscoveryAdapter) Discover(ctx context.Context, session SessionIdentity)
 	out.SymbolLedger.Denominator = symbolOrdinal
 	if ctx.Err() != nil {
 		complete = false
+		timeoutBoundary = true
 	}
 	accountingErr := out.Accounting.Validate()
 	discoveryErr := validateDiscovery(out)
 	_, _, canonicalErr := canonicalTargets(out)
 	out.Complete = complete && len(out.Targets) > 0 && accountingErr == nil && discoveryErr == nil && canonicalErr == nil
+	if !out.Complete {
+		out.Observations = discoveryObservations(a.Limits, uint64(filesAttempted+symbolOrdinal), sourceOmissions, nodeBoundary, depthBoundary, providerIncomplete, timeoutBoundary, byteBoundary)
+	}
 	return cloneDiscovery(out), nil
 }
 
@@ -315,12 +339,17 @@ func matchSegments(patterns, candidates []string) bool {
 }
 
 func flattenDocumentSymbols(in []lsp.DocumentSymbol, maxNodes, maxDepth, maxStringBytes int) ([]lsp.DocumentSymbol, bool) {
+	out, boundary := flattenDocumentSymbolsBounded(in, maxNodes, maxDepth, maxStringBytes)
+	return out, boundary == ""
+}
+
+func flattenDocumentSymbolsBounded(in []lsp.DocumentSymbol, maxNodes, maxDepth, maxStringBytes int) ([]lsp.DocumentSymbol, string) {
 	type frame struct {
 		symbols []lsp.DocumentSymbol
 		depth   int
 	}
 	if len(in) > maxNodes {
-		return nil, false
+		return nil, "nodes"
 	}
 	stack := []frame{{symbols: in, depth: 1}}
 	out := make([]lsp.DocumentSymbol, 0, len(in))
@@ -329,17 +358,23 @@ func flattenDocumentSymbols(in []lsp.DocumentSymbol, maxNodes, maxDepth, maxStri
 		last := len(stack) - 1
 		f := stack[last]
 		stack = stack[:last]
-		if f.depth > maxDepth || len(f.symbols) > maxNodes-len(out) {
-			return nil, false
+		if f.depth > maxDepth {
+			return nil, "depth"
+		}
+		if len(f.symbols) > maxNodes-len(out) {
+			return nil, "nodes"
 		}
 		for i := len(f.symbols) - 1; i >= 0; i-- {
 			s := f.symbols[i]
 			if len(s.Name) > maxStringBytes-stringsSeen {
-				return nil, false
+				return nil, "bytes"
 			}
 			stringsSeen += len(s.Name)
-			if len(s.Detail) > maxStringBytes-stringsSeen || len(out) >= maxNodes {
-				return nil, false
+			if len(s.Detail) > maxStringBytes-stringsSeen {
+				return nil, "bytes"
+			}
+			if len(out) >= maxNodes {
+				return nil, "nodes"
 			}
 			stringsSeen += len(s.Detail)
 			children := s.Children
@@ -350,7 +385,51 @@ func flattenDocumentSymbols(in []lsp.DocumentSymbol, maxNodes, maxDepth, maxStri
 			}
 		}
 	}
-	return out, true
+	return out, ""
+}
+
+func discoveryObservations(limits DiscoveryLimits, observed, omitted uint64, node, depth, provider, timeout, bytes bool) []DiscoveryObservation {
+	unknown := func(d DiscoveryDimension) DiscoveryObservation { return DiscoveryObservation{Dimension: d} }
+	known := func(d DiscoveryDimension, observed, limit, omitted *uint64) DiscoveryObservation {
+		return DiscoveryObservation{Dimension: d, Known: true, Observed: observed, Limit: limit, Omitted: omitted}
+	}
+	obs := observed
+	omit := omitted
+	out := []DiscoveryObservation{unknown(DiscoveryNodeCeiling), unknown(DiscoveryDepthBoundary), unknown(DiscoveryTargetSourceOmissions), unknown(DiscoveryProviderCompleteness), unknown(DiscoveryTimeoutRequestBudget), unknown(DiscoveryMessageByteBudget)}
+	if node {
+		limit := uint64(captureset.MaxTargets)
+		if limits.MaxSymbols > 0 && limits.MaxSymbols < int(limit) {
+			limit = uint64(limits.MaxSymbols)
+		}
+		if limits.MaxFiles > 0 && limits.MaxFiles < int(limit) {
+			limit = uint64(limits.MaxFiles)
+		}
+		out[0] = known(DiscoveryNodeCeiling, &obs, &limit, &omit)
+	}
+	if depth {
+		limit := uint64(defaultMaxSymbolDepth)
+		if limits.MaxDepth > 0 {
+			limit = uint64(limits.MaxDepth)
+		}
+		out[1] = known(DiscoveryDepthBoundary, nil, &limit, &omit)
+	}
+	if omitted > 0 {
+		out[2] = known(DiscoveryTargetSourceOmissions, nil, nil, &omit)
+	}
+	if provider {
+		out[3] = known(DiscoveryProviderCompleteness, nil, nil, &omit)
+	}
+	if timeout {
+		out[4] = known(DiscoveryTimeoutRequestBudget, nil, nil, &omit)
+	}
+	if bytes {
+		limit := uint64(defaultMaxStringBytes)
+		if limits.MaxStringBytes > 0 {
+			limit = uint64(limits.MaxStringBytes)
+		}
+		out[5] = known(DiscoveryMessageByteBudget, nil, &limit, &omit)
+	}
+	return out
 }
 func documentSymbolKey(s lsp.DocumentSymbol) string {
 	return fmt.Sprintf("%010d:%010d:%05d:%s:%s", s.SelectionRange.Start.Line, s.SelectionRange.Start.Character, s.Kind, s.Name, s.Detail)

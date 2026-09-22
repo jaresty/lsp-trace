@@ -122,7 +122,8 @@ func TestCoreBatchFailurePreservesExactOneBasedOrdinal(t *testing.T) {
 func TestCoreIncompleteDiscoveryReturnsStableSentinel(t *testing.T) {
 	_, err := (Core{
 		Discoverer: discoveryFunc(func(context.Context, SessionIdentity) (Discovery, error) {
-			return Discovery{Session: SessionIdentity{"s", 7}, Complete: false}, nil
+			limit, omitted := uint64(10000), uint64(37)
+			return Discovery{Session: SessionIdentity{"s", 7}, Complete: false, Observations: []DiscoveryObservation{{Dimension: DiscoveryNodeCeiling, Known: true, Limit: &limit, Omitted: &omitted}, {Dimension: DiscoveryProviderCompleteness, Known: false}}}, nil
 		}),
 		Acquirer: acquirerFunc(func(context.Context, BatchRequest) (AcquiredV5, error) {
 			t.Fatal("ASSERT_INCOMPLETE_DISCOVERY_ZERO_ACQUISITION")
@@ -131,6 +132,10 @@ func TestCoreIncompleteDiscoveryReturnsStableSentinel(t *testing.T) {
 	}).Run(context.Background(), SessionIdentity{"s", 7})
 	if !errors.Is(err, ErrDiscoveryIncomplete) {
 		t.Fatalf("ASSERT_INCOMPLETE_DISCOVERY_STABLE_SENTINEL: %v", err)
+	}
+	var incomplete *DiscoveryIncompleteError
+	if !errors.As(err, &incomplete) || len(incomplete.Observations) != 2 || incomplete.Observations[0].Dimension != DiscoveryNodeCeiling || incomplete.Observations[1].Known {
+		t.Fatalf("ASSERT_INCOMPLETE_DISCOVERY_PRESERVES_OBSERVATIONS: %#v", err)
 	}
 }
 
@@ -430,6 +435,33 @@ func TestPlanningDepthBoundsAndPropagation(t *testing.T) {
 				t.Fatalf("invalid planning acquired %d batches", calls)
 			}
 		})
+	}
+}
+
+func TestBatchTargetPlanningIsBoundedIndependentAndLegacyCompatible(t *testing.T) {
+	legacy, err := run(t, discovery(23), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(legacy.Batches) != 1 || len(legacy.Batches[0].Targets) != 23 {
+		t.Fatalf("ASSERT_BATCH_TARGETS_OMISSION_LEGACY_63: batches=%d", len(legacy.Batches))
+	}
+
+	explicit, err := runWithPlanning(t, discovery(23), &PlanningConfig{DownDepth: 1, UpDepth: 0, MaxBatchTargets: 16}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(explicit.Batches) != 2 || len(explicit.Batches[0].Targets) != 16 || len(explicit.Batches[1].Targets) != 7 {
+		t.Fatalf("ASSERT_BATCH_TARGETS_16_YIELDS_TWO_CONSTITUENTS: sizes=%v", []int{len(explicit.Batches[0].Targets), len(explicit.Batches[1].Targets)})
+	}
+	repeated, err := runWithPlanning(t, discovery(23), &PlanningConfig{DownDepth: 1, UpDepth: 0, MaxBatchTargets: 16}, nil)
+	if err != nil || explicit.CensusID != repeated.CensusID || !reflect.DeepEqual(explicit.ManifestBytes, repeated.ManifestBytes) {
+		t.Fatalf("ASSERT_BATCH_TARGETS_DETERMINISTIC: err=%v", err)
+	}
+	for _, invalid := range []int{-1, 64} {
+		if _, err := runWithPlanning(t, discovery(23), &PlanningConfig{DownDepth: 1, MaxBatchTargets: invalid}, nil); err == nil {
+			t.Fatalf("ASSERT_BATCH_TARGETS_BOUNDS_REJECT_%d", invalid)
+		}
 	}
 }
 

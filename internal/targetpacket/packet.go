@@ -9,13 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sort"
 	"strings"
 
 	"lsp-trace/internal/censusprogramc"
+	"lsp-trace/internal/graph"
 	"lsp-trace/internal/retainedprojection"
 	"lsp-trace/internal/sourceprojection"
 	"lsp-trace/internal/sourceprojectionv2"
+	"lsp-trace/internal/v5sourcesnapshotv5"
+	"lsp-trace/internal/v5sourcesnapshotv6"
 )
 
 type Stage string
@@ -110,6 +114,7 @@ func cloneRepresentative(in censusprogramc.Representative) censusprogramc.Repres
 	in.Members = append([]string(nil), in.Members...)
 	in.PreparedTargets = append([]string(nil), in.PreparedTargets...)
 	in.SCCMembers = append([]string(nil), in.SCCMembers...)
+	in.IncomingPredecessors = append([]censusprogramc.RepresentativePredecessor(nil), in.IncomingPredecessors...)
 	return in
 }
 
@@ -121,25 +126,59 @@ func cloneRepresentatives(in []censusprogramc.Representative) []censusprogramc.R
 	return out
 }
 
-type Packet struct {
-	SchemaVersion   string                                                                   `json:"schema_version"`
-	PacketID        string                                                                   `json:"packet_id"`
-	CensusID        string                                                                   `json:"census_id"`
-	Lineage         Lineage                                                                  `json:"lineage"`
-	Status          string                                                                   `json:"status"`
-	Authority       int                                                                      `json:"authority"`
-	Accepted        bool                                                                     `json:"accepted"`
-	Completeness    string                                                                   `json:"completeness"`
-	ClaimCeiling    string                                                                   `json:"claim_ceiling"`
-	PrivacyPolicyID string                                                                   `json:"privacy_policy_id"`
-	Custody         retainedprojection.RetainedCustodyBinding                                `json:"custody_binding"`
-	Projection      sourceprojectionv2.WireResult[retainedprojection.RetainedCustodyBinding] `json:"projection"`
+type ConsumerResolution string
+
+const (
+	ConsumerResolved   ConsumerResolution = "RESOLVED"
+	ConsumerUnresolved ConsumerResolution = "OUTWARD_CONSUMER_UNRESOLVED"
+)
+
+type ConsumerAlternative struct {
+	RelationID            string                                    `json:"relation_id"`
+	OccurrenceID          string                                    `json:"occurrence_id"`
+	CallerID              string                                    `json:"caller_id"`
+	TargetID              string                                    `json:"target_id"`
+	CallSite              graph.Range                               `json:"call_site"`
+	CallerLogicalSourceID string                                    `json:"caller_logical_source_id"`
+	CallerDisplay         sourceprojectionv2.Unit                   `json:"caller_display"`
+	RelationUnit          sourceprojectionv2.Unit                   `json:"relation_unit"`
+	RelationCitation      sourceprojectionv2.Citation               `json:"relation_citation"`
+	RelationSpan          sourceprojection.Span                     `json:"relation_span"`
+	Custody               retainedprojection.RetainedCustodyBinding `json:"custody_binding"`
+	ReconciliationID      string                                    `json:"reconciliation_id"`
 }
+
+type Packet struct {
+	SchemaVersion        string                                                                   `json:"schema_version"`
+	PacketID             string                                                                   `json:"packet_id"`
+	CensusID             string                                                                   `json:"census_id"`
+	Lineage              Lineage                                                                  `json:"lineage"`
+	Status               string                                                                   `json:"status"`
+	Authority            int                                                                      `json:"authority"`
+	Accepted             bool                                                                     `json:"accepted"`
+	Completeness         string                                                                   `json:"completeness"`
+	ClaimCeiling         string                                                                   `json:"claim_ceiling"`
+	PrivacyPolicyID      string                                                                   `json:"privacy_policy_id"`
+	Custody              retainedprojection.RetainedCustodyBinding                                `json:"custody_binding"`
+	Projection           sourceprojectionv2.WireResult[retainedprojection.RetainedCustodyBinding] `json:"projection"`
+	ConsumerResolution   ConsumerResolution                                                       `json:"consumer_resolution"`
+	ConsumerAlternatives []ConsumerAlternative                                                    `json:"consumer_alternatives"`
+}
+type MemberFailure struct {
+	NominationID   string `json:"nomination_id"`
+	PacketIntentID string `json:"packet_intent_id"`
+	Role           string `json:"role"`
+	GraphSubjectID string `json:"graph_subject_id"`
+	Code           string `json:"code"`
+	EvidenceID     string `json:"evidence_id"`
+}
+
 type Result struct {
-	State           PreparationState                `json:"state"`
-	Packets         []Packet                        `json:"packets,omitempty"`
-	UnresolvedCount int                             `json:"unresolved_count"`
-	Unresolved      []censusprogramc.Representative `json:"unresolved,omitempty"`
+	State               PreparationState                `json:"state"`
+	Packets             []Packet                        `json:"packets,omitempty"`
+	PreparationFailures []MemberFailure                 `json:"preparation_failures,omitempty"`
+	UnresolvedCount     int                             `json:"unresolved_count"`
+	Unresolved          []censusprogramc.Representative `json:"unresolved,omitempty"`
 }
 
 func Build(req Request) (Result, error) {
@@ -177,6 +216,7 @@ func Build(req Request) (Result, error) {
 	nominations := cloneRepresentatives(reps.Nominations)
 	sort.Slice(nominations, func(i, j int) bool { return lineageKey(nominations[i]) < lineageKey(nominations[j]) })
 	packets := make([]Packet, 0, len(nominations))
+	preparationFailures := make([]MemberFailure, 0)
 	ids := map[string]bool{}
 	for _, n := range nominations {
 		if !validRepresentative(census, n) {
@@ -191,6 +231,11 @@ func Build(req Request) (Result, error) {
 			return failed(StageReconcile, CodeCustodyMismatch, errors.New("missing or foreign snapshot"))
 		}
 		used[n.ConstituentOrdinal] = true
+		nominationID := stableNominationID(n)
+		if unavailable := unavailableSnapshotMembers(s.Raw, nominationID, n.SelectedNode); len(unavailable) > 0 {
+			preparationFailures = append(preparationFailures, unavailable...)
+			continue
+		}
 		admitted, err := retainedprojection.Admit(s.Raw)
 		if err != nil {
 			return failed(StageAdmit, CodeCustodyMismatch, errors.New("snapshot admission failed"))
@@ -199,7 +244,11 @@ func Build(req Request) (Result, error) {
 		if err != nil {
 			return failed(StageSelect, CodeInvalidRequest, err)
 		}
-		plan, err := retainedprojection.Select(admitted, retainedprojection.Request{Target: key, Selections: []retainedprojection.Key{key}})
+		projectionRequest, err := consumerProjectionRequest(admitted, key, n.IncomingPredecessors)
+		if err != nil {
+			return failed(StageSelect, CodeInvalidRequest, err)
+		}
+		plan, err := retainedprojection.Select(admitted, projectionRequest)
 		if err != nil {
 			return failed(StageSelect, CodeInvalidRequest, err)
 		}
@@ -207,7 +256,11 @@ func Build(req Request) (Result, error) {
 		if err != nil {
 			return failed(StageAdmit, CodeCustodyMismatch, err)
 		}
-		if binding.GraphDigest != constituent.GraphSHA256 || int(binding.GraphByteLength) != constituent.GraphByteLength {
+		expectedDigest, expectedLength := constituent.SHA256, constituent.ByteLength
+		if expectedDigest == "" && expectedLength == 0 {
+			expectedDigest, expectedLength = constituent.GraphSHA256, constituent.GraphByteLength
+		}
+		if binding.GraphDigest != expectedDigest || int(binding.GraphByteLength) != expectedLength {
 			return failed(StageReconcile, CodeCustodyMismatch, errors.New("snapshot graph differs from census admission"))
 		}
 		resolved, err := retainedprojection.Resolve(plan, req.Lookup, req.ResolveLimits)
@@ -223,7 +276,15 @@ func Build(req Request) (Result, error) {
 			}
 			return failed(stage, CodeAssemblyFailed, safe(err))
 		}
-		p := Packet{SchemaVersion: "lsp-trace.targetpacket.v2", CensusID: census.CensusID, Lineage: cloneLineage(n, key.LogicalSourceID), Status: "PROVISIONAL", Authority: 0, Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: n.ClaimCeiling, PrivacyPolicyID: req.Policy.PolicyID, Custody: binding, Projection: wire}
+		alternatives, err := reconcileConsumerAlternatives(n.IncomingPredecessors, wire, binding)
+		if err != nil {
+			return failed(StageReconcile, CodeCustodyMismatch, err)
+		}
+		resolution := ConsumerUnresolved
+		if len(alternatives) > 0 {
+			resolution = ConsumerResolved
+		}
+		p := Packet{SchemaVersion: "lsp-trace.targetpacket.v2", CensusID: census.CensusID, Lineage: cloneLineage(n, key.LogicalSourceID), Status: "PROVISIONAL", Authority: 0, Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: n.ClaimCeiling, PrivacyPolicyID: req.Policy.PolicyID, Custody: binding, Projection: wire, ConsumerResolution: resolution, ConsumerAlternatives: alternatives}
 		p.PacketID, err = packetIdentity(p)
 		if err != nil {
 			return failed(StageAssemble, CodeAssemblyFailed, errors.New("packet encoding failed"))
@@ -241,7 +302,57 @@ func Build(req Request) (Result, error) {
 	}
 	sort.Slice(packets, func(i, j int) bool { return packets[i].PacketID < packets[j].PacketID })
 	sort.Slice(unresolved, func(i, j int) bool { return lineageKey(unresolved[i]) < lineageKey(unresolved[j]) })
-	return Result{State: StatePrepared, Packets: packets, UnresolvedCount: len(unresolved), Unresolved: unresolved}, nil
+	return Result{State: StatePrepared, Packets: packets, PreparationFailures: preparationFailures, UnresolvedCount: len(unresolved), Unresolved: unresolved}, nil
+}
+
+func stableNominationID(r censusprogramc.Representative) string {
+	b, _ := json.Marshal(r)
+	sum := sha256.Sum256(append([]byte("lsp-trace:census-nomination:v1\x00"), b...))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func unavailableSnapshotMembers(raw []byte, nominationID, selectedNode string) []MemberFailure {
+	var v6 v5sourcesnapshotv6.Artifact
+	if json.Unmarshal(raw, &v6) == nil && v6.SchemaVersion == v5sourcesnapshotv6.Version {
+		return unavailableOutcomes(nominationID, selectedNode, v6.Outcomes)
+	}
+	var artifact v5sourcesnapshotv5.Artifact
+	if json.Unmarshal(raw, &artifact) != nil || artifact.SchemaVersion != v5sourcesnapshotv5.Version {
+		return nil
+	}
+	return unavailableOutcomes(nominationID, selectedNode, artifact.Outcomes)
+}
+
+func unavailableOutcomes[T interface {
+	v5sourcesnapshotv5.Outcome | v5sourcesnapshotv6.Outcome
+}](nominationID, selectedNode string, outcomes []T) []MemberFailure {
+	retainedNominationID := nominationID
+	type fields struct{ NominationID, Role, Subject, Status, Code string }
+	rows := make([]fields, 0, len(outcomes))
+	for _, outcome := range outcomes {
+		b, _ := json.Marshal(outcome)
+		var row struct {
+			NominationID string `json:"nomination_id"`
+			Role         string `json:"role"`
+			Subject      string `json:"graph_subject_id"`
+			Status       string `json:"status"`
+			Code         string `json:"code"`
+		}
+		_ = json.Unmarshal(b, &row)
+		rows = append(rows, fields{row.NominationID, row.Role, row.Subject, row.Status, row.Code})
+		if row.Role == "TARGET" && row.Subject == selectedNode {
+			retainedNominationID = row.NominationID
+		}
+	}
+	var failures []MemberFailure
+	for _, outcome := range rows {
+		if outcome.NominationID == retainedNominationID && outcome.Status == "SOURCE_UNAVAILABLE" {
+			intent := canonicalProjectionID(struct{ NominationID string }{nominationID})
+			evidence := canonicalProjectionID(struct{ NominationID, Role, Subject, Code string }{nominationID, outcome.Role, outcome.Subject, outcome.Code})
+			failures = append(failures, MemberFailure{NominationID: nominationID, PacketIntentID: intent, Role: outcome.Role, GraphSubjectID: outcome.Subject, Code: outcome.Code, EvidenceID: evidence})
+		}
+	}
+	return failures
 }
 func safe(err error) error {
 	var selected *retainedprojection.Error
@@ -288,11 +399,159 @@ func validRepresentative(census censusprogramc.Result, n censusprogramc.Represen
 	}
 	return n.ClaimCeiling != ""
 }
+func consumerProjectionRequest(a retainedprojection.Admitted, target retainedprojection.Key, predecessors []censusprogramc.RepresentativePredecessor) (retainedprojection.Request, error) {
+	request := retainedprojection.Request{Target: target, Selections: []retainedprojection.Key{target}}
+	keys := a.DisplayKeys()
+	seen := map[string]bool{}
+	selected := map[retainedprojection.Key]bool{target: true}
+	for _, predecessor := range predecessors {
+		if predecessor.RelationID == "" || predecessor.OccurrenceID == "" || predecessor.CallerID == "" || predecessor.TargetID != target.GraphSubjectID || predecessor.CallerID == predecessor.TargetID || seen[predecessor.OccurrenceID] {
+			return retainedprojection.Request{}, errors.New("invalid consumer predecessor")
+		}
+		seen[predecessor.OccurrenceID] = true
+		var caller retainedprojection.Key
+		count := 0
+		for _, candidate := range keys {
+			if candidate.GraphSubjectID == predecessor.CallerID && (count == 0 || candidate != caller) {
+				caller, count = candidate, count+1
+			}
+		}
+		if count != 1 {
+			return retainedprojection.Request{}, errors.New("consumer caller must map exactly once")
+		}
+		if !selected[caller] {
+			request.Selections = append(request.Selections, caller)
+			selected[caller] = true
+		}
+		request.Relations = append(request.Relations, retainedprojection.RelationSelector{RelationID: predecessor.RelationID, Caller: caller, Callee: target, Range: predecessor.CallSite})
+	}
+	return request, nil
+}
+
+func reconcileConsumerAlternatives(predecessors []censusprogramc.RepresentativePredecessor, wire sourceprojectionv2.WireResult[retainedprojection.RetainedCustodyBinding], binding retainedprojection.RetainedCustodyBinding) ([]ConsumerAlternative, error) {
+	if len(predecessors) == 0 {
+		return []ConsumerAlternative{}, nil
+	}
+	out := make([]ConsumerAlternative, 0, len(predecessors))
+	for _, predecessor := range predecessors {
+		var caller, relation *sourceprojectionv2.Unit
+		for i := range wire.Units {
+			u := &wire.Units[i]
+			if u.Role == "ENDPOINT" && u.GraphSubjectID == predecessor.CallerID {
+				if caller != nil {
+					return nil, errors.New("ambiguous consumer caller output")
+				}
+				caller = u
+			}
+			if u.Role == "RELATION" && u.GraphSubjectID == predecessor.RelationID && u.OccurrenceID == predecessor.OccurrenceID {
+				if relation != nil {
+					return nil, errors.New("ambiguous consumer relation output")
+				}
+				relation = u
+			}
+		}
+		if caller == nil || relation == nil || relation.EvidenceRange != projectionRange(predecessor.CallSite) || relation.LogicalSourceID != caller.LogicalSourceID {
+			return nil, errors.New("consumer relation output mismatch")
+		}
+		var citation *sourceprojectionv2.Citation
+		for i := range wire.Citations {
+			c := &wire.Citations[i]
+			if c.UnitID == relation.UnitID && c.Role == "RELATION" && c.SubjectID == predecessor.RelationID && c.OccurrenceID == predecessor.OccurrenceID {
+				if citation != nil {
+					return nil, errors.New("ambiguous consumer relation citation")
+				}
+				citation = c
+			}
+		}
+		var span *sourceprojection.Span
+		for i := range wire.EmittedSpans {
+			s := &wire.EmittedSpans[i]
+			for _, id := range s.UnitIDs {
+				if id == relation.UnitID {
+					if span != nil {
+						return nil, errors.New("ambiguous consumer relation span")
+					}
+					span = s
+				}
+			}
+		}
+		if citation == nil {
+			return nil, errors.New("consumer relation citation missing")
+		}
+		if span == nil {
+			return nil, errors.New("consumer relation span missing")
+		}
+		if citation.EvidenceRange != relation.EvidenceRange {
+			return nil, errors.New("consumer relation citation range mismatch")
+		}
+		if !spanCarriesUnit(*span, *relation) {
+			return nil, errors.New("consumer relation span linkage mismatch")
+		}
+		alternative := ConsumerAlternative{RelationID: predecessor.RelationID, OccurrenceID: predecessor.OccurrenceID, CallerID: predecessor.CallerID, TargetID: predecessor.TargetID, CallSite: predecessor.CallSite, CallerLogicalSourceID: caller.LogicalSourceID, CallerDisplay: cloneUnit(*caller), RelationUnit: cloneUnit(*relation), RelationCitation: *citation, RelationSpan: cloneSpan(*span), Custody: binding}
+		alternative.ReconciliationID = consumerReconciliationID(alternative)
+		out = append(out, alternative)
+	}
+	sort.Slice(out, func(i, j int) bool { return consumerKey(out[i]) < consumerKey(out[j]) })
+	return out, nil
+}
+
+func projectionRange(r graph.Range) sourceprojection.Range {
+	return sourceprojection.Range{Start: sourceprojection.Position{Line: r.Start.Line, Character: r.Start.Character}, End: sourceprojection.Position{Line: r.End.Line, Character: r.End.Character}}
+}
+
+func spanCarriesUnit(span sourceprojection.Span, unit sourceprojectionv2.Unit) bool {
+	if span.LogicalSourceID != unit.LogicalSourceID || span.SourceDigest == "" || span.SourceDigest != unit.SourceDigest || span.ByteLength != len(span.Body) || !projectionContains(span.Range, unit.DisplayRange) {
+		return false
+	}
+	if unit.BodyDisposition == "RETURNED" && (unit.Body == "" || !strings.Contains(span.Body, unit.Body)) {
+		return false
+	}
+	count := 0
+	for _, id := range span.UnitIDs {
+		if id == unit.UnitID {
+			count++
+		}
+	}
+	return count == 1
+}
+
+func projectionContains(outer, inner sourceprojection.Range) bool {
+	beforeOrEqual := func(a, b sourceprojection.Position) bool {
+		return a.Line < b.Line || a.Line == b.Line && a.Character <= b.Character
+	}
+	return beforeOrEqual(outer.Start, inner.Start) && beforeOrEqual(inner.End, outer.End)
+}
+func cloneUnit(u sourceprojectionv2.Unit) sourceprojectionv2.Unit {
+	if u.ItemRange != nil {
+		v := *u.ItemRange
+		u.ItemRange = &v
+	}
+	if u.SelectionRange != nil {
+		v := *u.SelectionRange
+		u.SelectionRange = &v
+	}
+	return u
+}
+func cloneSpan(s sourceprojection.Span) sourceprojection.Span {
+	s.UnitIDs = append([]string(nil), s.UnitIDs...)
+	return s
+}
+func consumerReconciliationID(a ConsumerAlternative) string {
+	a.ReconciliationID = ""
+	b, _ := json.Marshal(a)
+	sum := sha256.Sum256(append([]byte("lsp-trace.targetpacket.consumer.v1\x00"), b...))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+func consumerKey(a ConsumerAlternative) string {
+	b, _ := json.Marshal([]any{a.RelationID, a.OccurrenceID, a.CallerID, a.TargetID, a.CallerLogicalSourceID, a.CallSite})
+	return string(b)
+}
+
 func mapSelectedNode(a retainedprojection.Admitted, node string) (retainedprojection.Key, error) {
 	var found retainedprojection.Key
 	count := 0
 	for _, k := range a.DisplayKeys() {
-		if k.GraphSubjectID == node {
+		if k.GraphSubjectID == node && (count == 0 || k != found) {
 			found = k
 			count++
 		}
@@ -346,7 +605,7 @@ func Validate(raw []byte) (Packet, error) {
 }
 func validPacket(p Packet) bool {
 	l := p.Lineage
-	if p.SchemaVersion != "lsp-trace.targetpacket.v2" || p.Status != "PROVISIONAL" || p.Authority != 0 || p.Accepted || p.Completeness != "UNKNOWN" || p.CensusID == "" || l.CensusID != p.CensusID || l.Status != censusprogramc.CandidateStatus || l.SelectionState != "SELECTED" || l.SourceGraphComplete != "UNKNOWN" || l.ClaimCeiling == "" || l.ClaimCeiling != p.ClaimCeiling || l.ConstituentIdentity == "" || l.ConstituentOrdinal < 0 || l.Distance < 0 || l.BatchID == "" || l.CommunityIdentity == "" || l.ExecutionBundleID == "" || l.SeedLabel == "" || l.SeedAt == "" || l.SelectedNode == "" || l.SelectedLogicalSourceID == "" || !canonicalStrings(l.Members) || !canonicalStrings(l.SCCMembers) {
+	if p.SchemaVersion != "lsp-trace.targetpacket.v2" || p.Status != "PROVISIONAL" || p.Authority != 0 || p.Accepted || p.Completeness != "UNKNOWN" || p.CensusID == "" || l.CensusID != p.CensusID || l.Status != censusprogramc.CandidateStatus || l.SelectionState != "SELECTED" || l.SourceGraphComplete != "UNKNOWN" || l.ClaimCeiling == "" || l.ClaimCeiling != p.ClaimCeiling || l.ConstituentIdentity == "" || l.ConstituentOrdinal < 0 || l.Distance < 0 || l.BatchID == "" || l.CommunityIdentity == "" || l.ExecutionBundleID == "" || l.SeedLabel == "" || l.SeedAt == "" || l.SelectedNode == "" || l.SelectedLogicalSourceID == "" || !canonicalStrings(l.Members) || !canonicalStrings(l.SCCMembers) || !validConsumers(p) {
 		return false
 	}
 	w := p.Projection
@@ -383,6 +642,59 @@ func validPacket(p Packet) bool {
 	return true
 }
 
+func validConsumers(p Packet) bool {
+	if len(p.ConsumerAlternatives) == 0 {
+		return p.ConsumerResolution == ConsumerUnresolved
+	}
+	if p.ConsumerResolution != ConsumerResolved {
+		return false
+	}
+	for i, a := range p.ConsumerAlternatives {
+		if a.RelationID == "" || a.OccurrenceID == "" || a.CallerID == "" || a.TargetID != p.Lineage.SelectedNode || a.CallerID == a.TargetID || a.CallerLogicalSourceID == "" ||
+			a.CallerDisplay.Role != "ENDPOINT" || a.CallerDisplay.GraphSubjectID != a.CallerID || a.CallerDisplay.LogicalSourceID != a.CallerLogicalSourceID || a.CallerDisplay.PositionEncoding != "utf-16" || !validProjectionUnit(a.CallerDisplay) || a.CallerDisplay.UnitID != canonicalEndpointUnitID(a.CallerDisplay) ||
+			a.RelationUnit.Role != "RELATION" || a.RelationUnit.GraphSubjectID != a.RelationID || a.RelationUnit.OccurrenceID != a.OccurrenceID || a.RelationUnit.LogicalSourceID != a.CallerLogicalSourceID || a.RelationUnit.PositionEncoding != "utf-16" || a.RelationUnit.DisplayProvenance.Kind != "SERVER_REPORTED" || a.RelationUnit.DisplayProvenance.Method != "callHierarchy" || a.RelationUnit.RelationProvenance != "SERVER_REPORTED" || a.RelationUnit.EvidenceRange != projectionRange(a.CallSite) || a.RelationUnit.DisplayRange != projectionRange(a.CallSite) || !validProjectionUnit(a.RelationUnit) || a.RelationUnit.UnitID != canonicalRelationUnitID(a.RelationUnit) ||
+			a.RelationCitation.UnitID != a.RelationUnit.UnitID || a.RelationCitation.CitationID != canonicalRelationCitationID(a.RelationUnit) || a.RelationCitation.Role != "RELATION" || a.RelationCitation.SubjectID != a.RelationID || a.RelationCitation.OccurrenceID != a.OccurrenceID || a.RelationCitation.EvidenceRange != a.RelationUnit.EvidenceRange || a.RelationCitation.DisplayRange != a.RelationUnit.DisplayRange ||
+			!spanCarriesUnit(a.RelationSpan, a.RelationUnit) || a.Custody != p.Custody || a.ReconciliationID == "" || a.ReconciliationID != consumerReconciliationID(a) || !consumerProofInProjection(p, a) {
+			return false
+		}
+		if i > 0 && consumerKey(p.ConsumerAlternatives[i-1]) >= consumerKey(a) {
+			return false
+		}
+	}
+	return true
+}
+
+func consumerProofInProjection(p Packet, a ConsumerAlternative) bool {
+	caller, relation, citation, span := 0, 0, 0, 0
+	for _, u := range p.Projection.Units {
+		if reflect.DeepEqual(u, a.CallerDisplay) {
+			caller++
+		}
+		if reflect.DeepEqual(u, a.RelationUnit) {
+			relation++
+		}
+	}
+	for _, c := range p.Projection.Citations {
+		if c == a.RelationCitation {
+			citation++
+		}
+	}
+	for _, s := range p.Projection.EmittedSpans {
+		if s.LogicalSourceID == a.RelationSpan.LogicalSourceID && s.Range == a.RelationSpan.Range && s.SourceDigest == a.RelationSpan.SourceDigest && s.ByteLength == a.RelationSpan.ByteLength && s.Body == a.RelationSpan.Body && len(s.UnitIDs) == len(a.RelationSpan.UnitIDs) {
+			equal := true
+			for i := range s.UnitIDs {
+				if s.UnitIDs[i] != a.RelationSpan.UnitIDs[i] {
+					equal = false
+				}
+			}
+			if equal {
+				span++
+			}
+		}
+	}
+	return caller == 1 && relation == 1 && citation == 1 && span == 1
+}
+
 func validProjectionStatus(status string) bool {
 	switch status {
 	case "COMPLETE", "PARTIAL", "TRUNCATED", "SOURCE_UNAVAILABLE", "SUCCESSFUL_EMPTY":
@@ -407,6 +719,49 @@ func validCustody(c retainedprojection.RetainedCustodyBinding) bool {
 }
 func validBody(u sourceprojectionv2.Unit) bool {
 	return (u.BodyDisposition == "RETURNED" && u.Body != "") || (u.BodyDisposition == "NOT_REQUESTED" && u.Body == "") || (u.BodyDisposition == "OMITTED" && u.Body == "")
+}
+
+func validProjectionUnit(u sourceprojectionv2.Unit) bool {
+	return u.UnitID != "" && u.SourceDigest != "" && u.SourceByteLength > 0 && projectionContains(u.DisplayRange, u.EvidenceRange) && validBody(u)
+}
+
+func canonicalProjectionID(value any) string {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	digest := sha256.Sum256(raw)
+	return "sha256:" + hex.EncodeToString(digest[:])
+}
+
+func canonicalEndpointUnitID(u sourceprojectionv2.Unit) string {
+	return canonicalProjectionID(struct {
+		Role, GraphSubjectID, LogicalSourceID                                                string
+		DisplayRange, EvidenceRange, ItemRange, SelectionRange                               sourceprojection.Range
+		SourceDigest                                                                         string
+		SourceByteLength                                                                     uint64
+		PositionEncoding, DisplayProvenanceKind, DisplayProvenanceMethod, DisplayRangePolicy string
+	}{u.Role, u.GraphSubjectID, u.LogicalSourceID, u.DisplayRange, u.EvidenceRange, derefRange(u.ItemRange), derefRange(u.SelectionRange), u.SourceDigest, uint64(u.SourceByteLength), u.PositionEncoding, u.DisplayProvenance.Kind, u.DisplayProvenance.Method, "FULL_DEFINITION"})
+}
+
+func canonicalRelationUnitID(u sourceprojectionv2.Unit) string {
+	return canonicalProjectionID(struct {
+		Role, GraphSubjectID, OccurrenceID, LogicalSourceID string
+		Range                                               sourceprojection.Range
+		Digest                                              string
+		ByteLength                                          uint64
+	}{u.Role, u.GraphSubjectID, u.OccurrenceID, u.LogicalSourceID, u.DisplayRange, u.SourceDigest, uint64(u.SourceByteLength)})
+}
+
+func canonicalRelationCitationID(u sourceprojectionv2.Unit) string {
+	return canonicalProjectionID(struct{ UnitID, Role, Subject, Occurrence string }{u.UnitID, u.Role, u.GraphSubjectID, u.OccurrenceID})
+}
+
+func derefRange(value *sourceprojection.Range) sourceprojection.Range {
+	if value == nil {
+		return sourceprojection.Range{}
+	}
+	return *value
 }
 func hasCitation(citations []sourceprojectionv2.Citation, u sourceprojectionv2.Unit) bool {
 	for _, c := range citations {

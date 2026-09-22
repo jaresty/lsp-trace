@@ -1,0 +1,16 @@
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"# lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:136:10: undefined: continuationConstructionStage\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:137:10: undefined: continuationConstructionReason\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:138:16: undefined: productionCensusContinuationFactory\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:141:30: undefined: constructionStageRootOpen\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:141:65: undefined: constructionReasonRootOpenFailed\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:141:115: undefined: productionCensusContinuationFactory\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:142:45: undefined: constructionStageStorePrivateValidation\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:142:94: undefined: constructionReasonStorePrivateValidationFailed\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:142:158: undefined: productionCensusContinuationFactory\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:143:42: undefined: constructionStageContractConstruction\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-output","Output":"cmd/lsp-trace-mcp/bootstrap_continuation_host_test.go:143:42: too many errors\n"}
+{"ImportPath":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]","Action":"build-fail"}
+{"Time":"2026-09-20T20:33:01.046064-07:00","Action":"start","Package":"lsp-trace/cmd/lsp-trace-mcp"}
+{"Time":"2026-09-20T20:33:01.046099-07:00","Action":"output","Package":"lsp-trace/cmd/lsp-trace-mcp","Output":"FAIL\tlsp-trace/cmd/lsp-trace-mcp [build failed]\n"}
+{"Time":"2026-09-20T20:33:01.046105-07:00","Action":"fail","Package":"lsp-trace/cmd/lsp-trace-mcp","Elapsed":0,"FailedBuild":"lsp-trace/cmd/lsp-trace-mcp [lsp-trace/cmd/lsp-trace-mcp.test]"}

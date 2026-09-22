@@ -1,0 +1,6 @@
+ADR0007_V2_PREFLIGHT_GREEN
+RED: TestCensusCatalogProductionHandoffHostContractPersistsInitialCheckpoint failed RUN_PRECONDITION/WORKER_V2_REQUIRED.
+RED2: fixture-only WorkerV2 assignment failed compile because lazyCensusCatalogWorker lacked RunV2.
+GREEN: go test ./cmd/lsp-trace focused set: 4 passed.
+GREEN: go test ./internal/describeworker TestRunnerV2ProcessExecutionProducesVersionedTerminalRecords: 3 passed.
+MODEL_CALLS_BEFORE_CAMPAIGN=0

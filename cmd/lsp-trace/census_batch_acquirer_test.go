@@ -73,7 +73,7 @@ func successfulBatchResponse(t *testing.T, request operation.Request, complete, 
 		seeds[i] = graph.SeedResult{Label: target.ID, ReachedNodeIDs: []string{nodes[i].ID}}
 		invocationSeeds[i] = graph.InvocationSeed{Label: target.ID, At: target.Locator.URI, ResolvedURI: target.Locator.URI, LanguageID: "go"}
 	}
-	native, err := json.Marshal(graph.Result{SchemaVersion: graph.SchemaVersionV5, Nodes: nodes, Seeds: seeds, Summary: graph.Summary{Complete: complete, Truncated: truncated}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}, Invocation: graph.Invocation{Server: graph.ServerInvocation{Command: "fake"}, Seeds: invocationSeeds, Provenance: graph.InvocationProvenance{InvocationID: "i", SourceRevision: "r", ServerVersion: "v"}}})
+	native, err := json.Marshal(graph.Result{SchemaVersion: graph.SchemaVersionV5, Nodes: nodes, Seeds: seeds, Summary: graph.Summary{Complete: complete, Truncated: truncated}, Capabilities: graph.Capabilities{CallHierarchyProvider: true}, Invocation: graph.Invocation{WorkspaceURI: "file:///w", LanguageID: "go", Server: graph.ServerInvocation{Command: "fake"}, Seeds: invocationSeeds, Provenance: graph.InvocationProvenance{InvocationID: "i", SourceRevision: "r", ServerVersion: "v"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func censusBatchTestTarget(i int) censusacquisition.PreparedTarget {
 		panic(err)
 	}
 	name := fmt.Sprintf("Target%d", i)
-	return censusacquisition.PreparedTarget{CensusOrdinal: i, CanonicalSeedV2: seed, URI: fmt.Sprintf("file:///w/f%03d.go", i), SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}, Name: name, Kind: 12, SymbolIdentity: fmt.Sprintf("f%03d.go#%d:%d:%d:%s:%d", i, i+10, i+3, 12, name, i)}
+	return censusacquisition.PreparedTarget{CensusOrdinal: i, CanonicalSeedV2: seed, URI: fmt.Sprintf("file:///w/f%03d.go", i), LanguageID: "go", SelectionRange: lsp.Range{Start: lsp.Position{Line: uint32(i + 10), Character: uint32(i + 3)}}, Name: name, Kind: 12, SymbolIdentity: fmt.Sprintf("f%03d.go#%d:%d:%d:%s:%d", i, i+10, i+3, 12, name, i)}
 }
 
 func batchRequest(n, ordinal int) censusacquisition.BatchRequest {
@@ -131,6 +131,61 @@ func batchRequest(n, ordinal int) censusacquisition.BatchRequest {
 		panic(err)
 	}
 	return censusacquisition.BatchRequest{Session: censusacquisition.SessionIdentity{SessionID: "s", Generation: 7}, CensusID: "c", BatchID: fmt.Sprintf("b%d", ordinal), Ordinal: ordinal, DownDepth: 1, UpDepth: 0, Targets: targets, CanonicalSeedsV2: seeds}
+}
+
+func TestBatchAdapterProductionConstituentHasCompleteProgramCCompatibilityIdentity(t *testing.T) {
+	s := &fakeBatchSession{id: "s", generation: 7}
+	s.respond = func(_ context.Context, request operation.Request) (operation.Result, *operation.Failure) {
+		return successfulBatchResponse(t, request, true, false), nil
+	}
+	got, failure := newCensusBatchAcquirer(s, acquisitionops.Limits{}).acquireBatch(context.Background(), batchRequest(1, 0))
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	var envelope graphprovenance.EvidenceV5
+	if err := json.Unmarshal(got.Raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	native, err := base64.StdEncoding.DecodeString(envelope.GraphV5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		Invocation  graph.Invocation `json:"invocation"`
+		Evidence    json.RawMessage  `json:"evidence_semantics"`
+		Sensitivity json.RawMessage  `json:"sensitivity_policy"`
+	}
+	if err := json.Unmarshal(native, &result); err != nil {
+		t.Fatal(err)
+	}
+	missing := []string{}
+	if result.Invocation.WorkspaceURI == "" {
+		missing = append(missing, "workspace_uri")
+	}
+	if result.Invocation.Provenance.SourceRevision == "" {
+		missing = append(missing, "source_revision")
+	}
+	if result.Invocation.Provenance.InvocationID == "" {
+		missing = append(missing, "invocation_id")
+	}
+	if result.Invocation.Server.Command == "" {
+		missing = append(missing, "server_command")
+	}
+	if result.Invocation.Provenance.ServerVersion == "" {
+		missing = append(missing, "server_version")
+	}
+	if result.Invocation.LanguageID == "" {
+		missing = append(missing, "language_id")
+	}
+	if len(result.Evidence) == 0 {
+		missing = append(missing, "evidence_semantics")
+	}
+	if len(result.Sensitivity) == 0 {
+		missing = append(missing, "sensitivity_policy")
+	}
+	if len(missing) != 0 {
+		t.Fatalf("ASSERT_PRODUCTION_CENSUS_CONSTITUENT_COMPLETE_PROGRAM_C_COMPATIBILITY_IDENTITY missing=%v", missing)
+	}
 }
 
 func TestBatchAdapterExactRequestIdentityAndImmutability(t *testing.T) {

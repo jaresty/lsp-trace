@@ -1,0 +1,51 @@
+{
+  "status": "STAGED_VALID",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-coherent-20260921T172613Z",
+  "accepted_scope": [
+    "final effective V2 batch_targets admission",
+    "CUE-compatible zero-depth TARGET source-only context",
+    "capture terminal diagnostics and committed-workspace fallback",
+    "regex locator phase1",
+    "ADR0010 contracts"
+  ],
+  "request_semantic_fingerprint": "sha256:246a63cddcc552144d60578a4f127e34eddb970f496f863cd6a3509011783cb9",
+  "sha256": {
+    "lsp_trace": "5ac19ebf2d007c5242bcc755212976ad21fe28f61e98a39352462f6854c87ce5",
+    "lsp_trace_mcp": "b7856c5cb627005c6dc414147d68ff4e7ac16f843053ea247cf2952416e1875c",
+    "installed_lsp_trace": "5ac19ebf2d007c5242bcc755212976ad21fe28f61e98a39352462f6854c87ce5",
+    "installed_lsp_trace_mcp": "b7856c5cb627005c6dc414147d68ff4e7ac16f843053ea247cf2952416e1875c",
+    "mcp_config": "ab4bf933d6007cfc751a8b7c2c683d34d2aadb1ad8466641003c22a110000418",
+    "bootstrap_config": "3e61b35c060f590ca58163565e4b2ce780075e517a727c749ff9085700fe0059",
+    "request": "3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d",
+    "validator": "bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b",
+    "handoff": "c9814daa7bed7918dc91c0e5fb6826a0c852e0692a42f1080adbd95e74e4544e",
+    "rollback": "31a5da00a3c9baf766418cf1633cf1a4df287e44bab48deaf1dd9e22a6cb19f4"
+  },
+  "backup_sha256": {
+    "mcp_config": "06b8d6d2da9f6bb10e2a670bbbbff4b31e09624ba093ad8ca89257374235e180",
+    "bootstrap_config": "b713e1c20c2d23fa96c0c9fa4cd55e82be4370944bf4e8d427330e939a92c9af",
+    "lsp_trace": "285855bf3aaf233d29f15fbdc2a26ec226a9979ecceb028b4d92e90940bfb3cb",
+    "lsp_trace_mcp": "2ad54651bae49da6a81667a79304105e16acc846bf3f84792c3c150ec4b5d337"
+  },
+  "schema_pins": {
+    "source_snapshot_v6": "ba85dcb1546478eb7a6a79b146894a0ce52db9531fab7318312c44341bef85e4",
+    "structural_context_input_v6": "fa33e9bff4a5cfa9a0ea8969aff777c30c3972c4c8d26d6723465b2d02e3fb9e",
+    "structural_context_domain_error_v4": "9f99adfa94c95965062d10cbb472d77ec4287feea707ff2a8ab6fd4053b5bae8"
+  },
+  "configuration": {
+    "mcp_base_roots": 1,
+    "diagnostics": "OFF",
+    "bootstrap_mode": "0600",
+    "runtime_root_mode": "0700",
+    "continuation_max_object_bytes": 67108864,
+    "continuation_capabilities": [
+      "STOP_AFTER_DESCRIBE_REQUESTS"
+    ]
+  },
+  "post_restart_expected": {
+    "project": "READY",
+    "nais-discovery-cue": "READY",
+    "workers": 0
+  },
+  "one_shot_acceptance": "progression beyond PROGRAM_C_COMPUTED OR exactly one typed FAILED_CAPTURE checkpoint; public checkpoint-first diagnostic"
+}

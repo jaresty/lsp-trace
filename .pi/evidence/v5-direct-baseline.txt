@@ -1,0 +1,3 @@
+Command: go test ./internal/v5sourcesnapshotv4
+Result: Go test: 1 passed in 1 packages
+Purpose: pre-edit historical V4 package baseline before additive V5 RED guards.

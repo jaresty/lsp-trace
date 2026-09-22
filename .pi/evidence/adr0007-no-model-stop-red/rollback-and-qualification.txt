@@ -1,0 +1,25 @@
+ADR0007 no-model stop qualification rollback and verification
+
+Rollback
+1. Restore the prior installed lsp-trace and lsp-trace-mcp binaries from the owner-held rollback copies created before installation.
+2. Restore the owner-held bootstrap-config rollback copy; it contains the prior continuation configuration.
+3. Restore the preserved pre-qualification census publication directory by moving the current fresh directory aside and moving `.lsp-trace-publication.pre-adr0007-qualification` back to `.lsp-trace-publication`.
+4. Remove the qualification-only continuation and census publication directories only after confirming no retained selector is needed.
+5. Reconnect only the project MCP client and verify both managed sessions remain READY with zero workers.
+6. Revert only the files listed in the ADR0007 no-model-stop change set; preserve all unrelated worktree modifications.
+
+Qualification results
+- Focused non-race tests: PASS, 1199 tests across cmd/lsp-trace-mcp, cmd/lsp-trace, internal/censusresult, internal/mcp.
+- Production stop-only host characterization: PASS.
+- Command-level focused race tests: PASS, 51 tests.
+- Internal censuscontinuation/continuationhost race batch: INCOMPLETE; exceeded 180 seconds and again 360 seconds. No race failure was emitted before timeout.
+- go vet focused packages: PASS.
+- gofmt -d changed files: PASS, empty output.
+- git diff --check: PASS.
+- Config permissions: PASS; bootstrap and MCP config mode 0600, census and continuation roots mode 0700.
+- Installed executable digest observed by live server: sha256:88e1974a1da02e6f5c02aa5be69159134cf14f2bf58fc6d4d266c12cafc1fcf4.
+- Live managed sessions: project READY, independent NAIS/D01 READY, server census Workers=0.
+- Live exact stop request: census commit succeeded and returned typed CONTINUATION_HOST_UNAVAILABLE committed-degradation with retry=false and explicit provision/reconnect/resubmit guidance. Generic INVALID_CONFIG masking is repaired.
+- Live PAUSED selector: NOT QUALIFIED. Host remained unavailable before descriptor publication.
+- Same-stop identical replay/no reacquisition: NOT RUN because no PAUSED selector was produced.
+- Worker/model invocation: NONE; server worker census remained zero and no resume was issued.

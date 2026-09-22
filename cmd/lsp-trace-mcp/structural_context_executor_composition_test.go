@@ -37,6 +37,25 @@ func projectionWorkspace(t *testing.T, names ...string) (string, map[string]stri
 	return root, uris
 }
 
+func TestSourceOnlyProjectionEligibilityIsClosed(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{name: "exact", raw: `{"mode":"TARGET","include_relation_occurrences":false}`, want: true},
+		{name: "occurrences", raw: `{"mode":"TARGET","include_relation_occurrences":true}`},
+		{name: "omitted-occurrences", raw: `{"mode":"TARGET"}`},
+		{name: "projected", raw: `{"mode":"PROJECTED","include_relation_occurrences":false}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := sourceOnlyProjection(json.RawMessage(tc.raw)); got != tc.want {
+				t.Fatalf("ASSERT_SOURCE_ONLY_PROJECTION_CLOSED_ELIGIBILITY: got=%t want=%t raw=%s", got, tc.want, tc.raw)
+			}
+		})
+	}
+}
+
 func TestUnifiedStructuralContextV2ExecutorComposesStructuralResult(t *testing.T) {
 	const structural = validStructuralV2
 	for _, tc := range []struct {
@@ -178,7 +197,9 @@ func TestUnifiedStructuralContextV2ExecutorPagesLiveProjectionV3(t *testing.T) {
 	uri := uris["a.go"]
 	r := graph.Range{Start: graph.Position{Line: 0, Character: 0}, End: graph.Position{Line: 0, Character: 1}}
 	transient := transientstructural.Result{TargetID: "root", Qualification: transientstructural.Qualification{SessionID: "s", Generation: 1, PositionEncoding: "utf-16"}, Analysis: transientstructural.AnalysisResult{Nodes: []transientstructural.NodeFact{{ID: "root", URI: uri, Range: r}}}, SourceSupply: &sessionruntime.DocumentSupply{Classification: "LSP_SUPPLIED", SessionID: "s", Generation: 1, URI: uri, DocumentVersion: 1, Method: "textDocument/didOpen", Content: []byte("A\n")}}
+	delegateCalls := 0
 	delegate := structuralContextDelegateFunc(func(_ context.Context, _ operation.Request) (operation.Result, *operation.Failure) {
+		delegateCalls++
 		return operation.Result{Artifact: []byte(validStructuralV2), Value: structuralContextProjectionInput{Transient: transient, WorkspaceRoot: workspaceRoot}}, nil
 	})
 	e := &unifiedStructuralContextV2Executor{exact: delegate, symbol: delegate}
@@ -191,7 +212,7 @@ func TestUnifiedStructuralContextV2ExecutorPagesLiveProjectionV3(t *testing.T) {
 	invoke := func() map[string]any {
 		t.Helper()
 		projectionRaw, _ := json.Marshal(projection)
-		input := []byte(`{"uri":"file:///repo/a.go","line":0,"character":0,"projection":` + string(projectionRaw) + `}`)
+		input := []byte(`{"session_id":"s","generation":1,"uri":"file:///repo/a.go","line":0,"character":0,"timeout_ms":30000,"request_timeout_ms":15000,"projection":` + string(projectionRaw) + `}`)
 		got, failure := e.Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: input})
 		if failure != nil {
 			t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_PAGING: %v", failure)
@@ -208,11 +229,56 @@ func TestUnifiedStructuralContextV2ExecutorPagesLiveProjectionV3(t *testing.T) {
 	if page["complete"] == true || page["next_cursor"] == nil {
 		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_FIRST_PAGE: %v", page)
 	}
-	projection["paging"].(map[string]any)["cursor"] = page["next_cursor"]
+	firstCursor := page["next_cursor"].(string)
+	continuation, ok := page["continuation"].(map[string]any)
+	if !ok || continuation["snapshot_id"] == nil || continuation["custody_id"] == nil || continuation["page"] != float64(1) || continuation["page_limit"] != float64(20) || continuation["expires_at"] == nil {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CONTINUATION_IDENTITY: %v", page)
+	}
+	nextRequest, ok := continuation["next_request"].(map[string]any)
+	if !ok || nextRequest["projection"].(map[string]any)["paging"].(map[string]any)["cursor"] != firstCursor {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_NEXT_REQUEST_FRAGMENT: %v", continuation)
+	}
+	projection["paging"].(map[string]any)["cursor"] = firstCursor
+	baseRequest := map[string]any{"session_id": "s", "generation": float64(1), "uri": "file:///repo/a.go", "line": float64(0), "character": float64(0), "timeout_ms": float64(30000), "request_timeout_ms": float64(15000), "projection": projection}
+	mutations := map[string]func(map[string]any){
+		"session":     func(v map[string]any) { v["session_id"] = "changed" },
+		"generation":  func(v map[string]any) { v["generation"] = float64(2) },
+		"target":      func(v map[string]any) { v["uri"] = "file:///repo/changed.go" },
+		"locator":     func(v map[string]any) { v["line"] = float64(1) },
+		"mode":        func(v map[string]any) { v["projection"].(map[string]any)["mode"] = "PROJECTED" },
+		"body":        func(v map[string]any) { v["projection"].(map[string]any)["body"] = "OMIT" },
+		"display":     func(v map[string]any) { v["projection"].(map[string]any)["display_range_policy"] = "EXACT_EVIDENCE" },
+		"ancillary":   func(v map[string]any) { v["projection"].(map[string]any)["include_ancillary"] = true },
+		"occurrences": func(v map[string]any) { v["projection"].(map[string]any)["include_relation_occurrences"] = true },
+		"privacy":     func(v map[string]any) { v["projection"].(map[string]any)["privacy_policy_id"] = "changed" },
+		"limits": func(v map[string]any) {
+			v["projection"].(map[string]any)["limits"].(map[string]any)["max_work"] = float64(9)
+		},
+		"timeout":         func(v map[string]any) { v["timeout_ms"] = float64(29999) },
+		"request-timeout": func(v map[string]any) { v["request_timeout_ms"] = float64(14999) },
+	}
+	for name, mutate := range mutations {
+		raw, _ := json.Marshal(baseRequest)
+		var changed map[string]any
+		_ = json.Unmarshal(raw, &changed)
+		mutate(changed)
+		changedInput, _ := json.Marshal(changed)
+		if got, failure := e.Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: changedInput}); failure == nil || failure.Code != "SOURCE_PROJECTION_FAILED" || len(got.Artifact) != 0 {
+			t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CURSOR_MISMATCH_%s: artifact=%d failure=%v", name, len(got.Artifact), failure)
+		}
+	}
 	second := invoke()
 	secondPage := second["projection"].(map[string]any)
 	if secondPage["accounting"].(map[string]any)["pages"].(float64) != 2 {
 		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CONTINUATION: %v", secondPage)
+	}
+	if delegateCalls != 1 {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CONTINUATION_RETAINED_NO_REACQUISITION: delegate_calls=%d", delegateCalls)
+	}
+	projectionRaw, _ := json.Marshal(projection)
+	replayInput := []byte(`{"session_id":"s","generation":1,"uri":"file:///repo/a.go","line":0,"character":0,"timeout_ms":30000,"request_timeout_ms":15000,"projection":` + string(projectionRaw) + `}`)
+	if got, failure := e.Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: replayInput}); failure == nil || failure.Code != "SOURCE_PROJECTION_FAILED" || len(got.Artifact) != 0 {
+		t.Fatalf("ASSERT_UNIFIED_CONTEXT_V3_CURSOR_REPLAY_REJECTED: artifact=%d failure=%v", len(got.Artifact), failure)
 	}
 }
 

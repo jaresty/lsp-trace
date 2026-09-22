@@ -273,6 +273,31 @@ func (p *Process) Wait() DeathObservation {
 	return p.death
 }
 
+// ReconcileReap joins only the wait already owned by this exact Process. It
+// never signals, kills, or looks up a PID as a substitute for wait completion.
+// Local Darwin supervision also proves the original process group has no
+// remaining helper children before reporting a complete reconciliation.
+func (p *Process) ReconcileReap(ctx context.Context) TeardownObservation {
+	observation := TeardownObservation{Phases: []TeardownPhase{PhaseWait}}
+	select {
+	case <-p.done:
+		observation.Phases = append(observation.Phases, PhaseReap)
+		observation.Death = p.death
+	case <-ctx.Done():
+		observation.Death = DeathObservation{Kind: DeathUnknown, Reap: ReapObservation{Kind: ReapFailed, Err: ctx.Err(), Evidence: p.evidence}, Evidence: p.evidence}
+		return observation
+	}
+	if p.localDarwin {
+		observation.Census = censusLocalDarwinGroup(p.cmd.Process.Pid, 64)
+		var exitErr *exec.ExitError
+		if observation.Census.Members == 0 && !observation.Census.Truncated && errors.As(observation.Census.Err, &exitErr) && exitErr.ExitCode() == 1 {
+			// Darwin ps reports an empty process group with status 1.
+			observation.Census.Err = nil
+		}
+	}
+	return observation
+}
+
 func (p *Process) Observe() SurvivorObservation {
 	select {
 	case <-p.done:

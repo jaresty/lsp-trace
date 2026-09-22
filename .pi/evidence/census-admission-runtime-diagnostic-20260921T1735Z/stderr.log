@@ -1,0 +1,13 @@
+CONTINUATION_TRACE operation=CENSUS generation=OTHER boundary=STARTUP stage=ENTER result=OK class=NONE
+WARNING: local LSP child processes run with the developer's permissions, are not sandboxed, may access local files and network, and must be trusted.
+BASE_PUBLICATION_TRACE stage=ROOT_SOURCE result=CLI_ARGUMENT ok=TRUE
+BASE_PUBLICATION_TRACE stage=ROOT_OPEN result=OPENED ok=TRUE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=BINDING stage=ENTER result=NONE class=NONE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=HOST_FRESH stage=ENTER result=NONE class=NONE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=HOST_FRESH stage=ENTER result=NONE class=NONE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=CHECKPOINT stage=ENTER result=NONE class=NONE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=CHECKPOINT stage=RETURN result=ERROR class=UNTYPED
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=HOST_FRESH stage=RETURN result=ERROR class=TYPED
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=HOST_FRESH stage=RETURN result=ERROR class=TYPED
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=MAPPING stage=ENTER result=NONE class=NONE
+CONTINUATION_TRACE operation=CENSUS generation=G1 boundary=MAPPING stage=RETURN result=OK class=TYPED

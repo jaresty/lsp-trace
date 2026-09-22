@@ -174,13 +174,19 @@ func PlanBatches(targetCount int) []Batch {
 }
 
 func Prepare(targets []Target, constituents []Constituent, files, symbols Ledger, censusPolicy, duplicatePolicy string) (Manifest, error) {
+	return PrepareWithBatches(targets, constituents, PlanBatches(len(targets)), files, symbols, censusPolicy, duplicatePolicy)
+}
+
+// PrepareWithBatches retains an already-fixed contiguous acquisition partition.
+// It is authority-neutral and does not infer cross-capture relationships.
+func PrepareWithBatches(targets []Target, constituents []Constituent, batches []Batch, files, symbols Ledger, censusPolicy, duplicatePolicy string) (Manifest, error) {
 	if len(targets) < 1 || len(targets) > MaxTargets {
 		return Manifest{}, fmt.Errorf("target count outside [1,%d]", MaxTargets)
 	}
 	ordered := OrderTargets(targets)
 	cs := append([]Constituent(nil), constituents...)
 	sort.Slice(cs, func(i, j int) bool { return cs[i].ImmutableSelector < cs[j].ImmutableSelector })
-	batches := PlanBatches(len(ordered))
+	batches = append([]Batch(nil), batches...)
 	if len(cs) != len(batches) {
 		return Manifest{}, fmt.Errorf("constituent count %d does not match batch count %d", len(cs), len(batches))
 	}
@@ -295,8 +301,7 @@ func validateContent(m Manifest, identity bool) error {
 			return errors.New("target canonical order mismatch")
 		}
 	}
-	expected := (len(m.Targets) + 62) / 63
-	if len(m.Constituents) != expected || len(m.Batches) != expected {
+	if len(m.Batches) == 0 || len(m.Constituents) != len(m.Batches) {
 		return errors.New("missing constituent or batch")
 	}
 	seenC := map[string]bool{}
@@ -322,11 +327,15 @@ func validateContent(m Manifest, identity bool) error {
 		}
 	}
 	pos := 0
+	maxBatchTargets := m.Batches[0].TargetCount
+	if maxBatchTargets < 1 || maxBatchTargets > MaxBatchTargets {
+		return errors.New("batch target bound exceeded")
+	}
 	seenBatchConstituent := map[int]bool{}
 	for i, b := range m.Batches {
 		want := len(m.Targets) - pos
-		if want > 63 {
-			want = 63
+		if want > maxBatchTargets {
+			want = maxBatchTargets
 		}
 		if b.Ordinal != i || b.TargetStart != pos || b.TargetCount != want || b.ConstituentIndex < 0 || b.ConstituentIndex >= len(m.Constituents) || seenBatchConstituent[b.ConstituentIndex] {
 			return errors.New("non-consecutive, non-maximal, or non-bijective batch assignment")

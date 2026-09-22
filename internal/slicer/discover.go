@@ -228,7 +228,7 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 		}
 		sort.Slice(calls, func(i, j int) bool { return node(calls[i].To).ID < node(calls[j].To).ID })
 		omittedCalleeIDs := make([]string, 0)
-		for _, call := range calls {
+		for itemIndex, call := range calls {
 			callee := node(call.To)
 			var semanticMatches []graph.Node
 			for _, existing := range nodesByID {
@@ -240,8 +240,18 @@ func Discover(ctx context.Context, client Client, sourceURI string, opts Options
 				callee = semanticMatches[0]
 			}
 			if err := graph.ValidateItem(callee.Item); err != nil {
+				field, invariant := "item", "REQUIRED_FIELD"
+				switch err.Error() {
+				case "invalid item URI":
+					field, invariant = "item.uri", "CONCRETE_DOCUMENT_URI"
+				case "item range end precedes start":
+					field, invariant = "item.range", "RANGE_ORDER"
+				case "selection range is outside item range":
+					field, invariant = "item.selectionRange", "SELECTION_WITHIN_RANGE"
+				}
 				result.Complete = false
-				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-outgoing", Method: "callHierarchy/outgoingCalls", NodeID: q.node.ID, Message: err.Error()})
+				message := fmt.Sprintf("MALFORMED_CALL_HIERARCHY_OUTGOING_CALL item_index=%d failed_field=%s failed_invariant=%s", itemIndex, field, invariant)
+				result.Diagnostics = append(result.Diagnostics, graph.Diagnostic{Phase: "slice-outgoing", Method: "callHierarchy/outgoingCalls", NodeID: q.node.ID, Message: message})
 				continue
 			}
 			ranges := make([]graph.Range, len(call.FromRanges))

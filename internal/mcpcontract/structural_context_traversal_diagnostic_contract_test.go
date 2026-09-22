@@ -79,6 +79,32 @@ func TestStructuralContextTraversalDomainErrorV4TargetDiagnosticIsClosedAndPriva
 	validateStructuralContextV4(t, mixed, false)
 }
 
+func TestStructuralContextTraversalDomainErrorV4SourceOnlyRecoveryTemplateIsClosedAndPrivate(t *testing.T) {
+	envelope := structuralContextV4Envelope()
+	envelope["state"], envelope["error"] = "UNSUPPORTED", map[string]any{"code": "UNSUPPORTED"}
+	envelope["target_diagnostic"] = map[string]any{
+		"exact_matches": 0, "total_symbols": 0, "omitted_symbols": 0, "action": "FAIL_UNSUPPORTED", "provider_method": "textDocument/prepareCallHierarchy", "locator_scope": "URI_POSITION",
+		"recovery": map[string]any{"kind": "SOURCE_ONLY_REQUEST_TEMPLATE", "complete": false, "omitted_fields": []any{"projection.privacy_policy_id"}, "request_fragment": map[string]any{
+			"session_id": "s", "generation": 1, "uri": "file:///workspace/a.go", "line": 2, "character": 3, "up_depth": 0, "down_depth": 0,
+			"projection": map[string]any{"mode": "TARGET", "body": "INCLUDE", "include_relation_occurrences": false},
+		}},
+	}
+	validateStructuralContextV4(t, envelope, true)
+	for _, mutate := range []func(map[string]any){
+		func(v map[string]any) { v["target_diagnostic"].(map[string]any)["private_source"] = "secret" },
+		func(v map[string]any) {
+			v["target_diagnostic"].(map[string]any)["recovery"].(map[string]any)["omitted_fields"] = []any{"projection.body"}
+		},
+		func(v map[string]any) {
+			v["target_diagnostic"].(map[string]any)["recovery"].(map[string]any)["request_fragment"].(map[string]any)["definition"] = true
+		},
+	} {
+		bad := cloneStructuralContextV4(t, envelope)
+		mutate(bad)
+		validateStructuralContextV4(t, bad, false)
+	}
+}
+
 func TestStructuralContextTraversalDomainErrorV4ResourceDiagnosticIsClosedAndExact(t *testing.T) {
 	value := structuralContextV4Envelope()
 	value["state"], value["error"] = "RESOURCE_LIMIT", map[string]any{"code": "RESOURCE_LIMIT"}

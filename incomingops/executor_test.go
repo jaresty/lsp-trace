@@ -118,14 +118,28 @@ func TestResolvePreparedPositionBoundedRecovery(t *testing.T) {
 			t.Fatalf("ASSERT_POSITION_RECOVERY_AMBIGUITY_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
 		}
 	})
-	t.Run("zero containing", func(t *testing.T) {
+	t.Run("zero containing exhaustive", func(t *testing.T) {
 		outside := lsp.Range{Start: lsp.Position{Line: 8}, End: lsp.Position{Line: 8, Character: 4}}
 		symbols, _ := json.Marshal([]lsp.DocumentSymbol{{Name: "F", Kind: 12, Range: outside, SelectionRange: outside}})
 		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {symbols}}}
 		client := NewSessionClient(f, "s", 1, 100)
-		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
-		if failed == nil || failed.Code != "POSITION_SYMBOL_ABSENT" || len(f.calls) != 2 {
-			t.Fatalf("ASSERT_POSITION_RECOVERY_ZERO_CONTAINING_FAILS_CLOSED: failed=%v calls=%v", failed, f.calls)
+		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "POSITION_SYMBOL_ABSENT" || prepared.Action != "FAIL_ABSENT" || prepared.OmittedSymbols != 0 || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_EXHAUSTIVE_ZERO_CONTAINING_FAILS_ABSENT: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		}
+	})
+	t.Run("zero containing truncated", func(t *testing.T) {
+		symbols := make([]lsp.DocumentSymbol, 0, maxSymbolSuggestions+1)
+		for i := 0; i <= maxSymbolSuggestions; i++ {
+			outside := lsp.Range{Start: lsp.Position{Line: uint32(8 + i)}, End: lsp.Position{Line: uint32(8 + i), Character: 4}}
+			symbols = append(symbols, lsp.DocumentSymbol{Name: fmt.Sprintf("F%d", i), Kind: 12, Range: outside, SelectionRange: outside})
+		}
+		raw, _ := json.Marshal(symbols)
+		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {raw}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "ENUMERATION_TRUNCATED" || prepared.Action != "ENUMERATION_TRUNCATED" || prepared.OmittedSymbols != 1 || prepared.ProviderMethod != "textDocument/documentSymbol" || prepared.NormalizationStage != "EXACT_MATCH" || prepared.FailedField != "range" || prepared.FailedInvariant != "POSITION_CONTAINMENT_PRESENT" || len(f.calls) != 2 {
+			t.Fatalf("ASSERT_POSITION_RECOVERY_TRUNCATED_ENUMERATION_UNKNOWN_NOT_ABSENT: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
 		}
 	})
 	t.Run("malformed", func(t *testing.T) {
@@ -449,8 +463,8 @@ func TestIncomingExactSymbolMatchingIsCompleteWhileSuggestionsAreBounded(t *test
 		if failure != nil {
 			diagnostic = strings.Join(failure.Diagnostics, "\n")
 		}
-		if failure == nil || failure.Code != "DOCUMENT_SYMBOL_ABSENT" || diagnostic != "exact_matches=0 total_symbols=9 omitted_symbols=1 action=FAIL_ABSENT" {
-			t.Fatalf("ASSERT_SYMBOL_SUGGESTION_BOUND_AND_OMISSION_DISCLOSURE: failure=%v diagnostic=%q", failure, diagnostic)
+		if failure == nil || failure.Code != "ENUMERATION_TRUNCATED" || diagnostic != "exact_matches=0 total_symbols=9 omitted_symbols=1 action=ENUMERATION_TRUNCATED completeness=UNKNOWN" {
+			t.Fatalf("ASSERT_SYMBOL_TRUNCATED_ENUMERATION_NEVER_IMPLIES_ABSENCE: failure=%v diagnostic=%q", failure, diagnostic)
 		}
 	})
 }

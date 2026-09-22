@@ -1,0 +1,11 @@
+Command: go test ./cmd/lsp-trace -run TestBatchAdapterProductionConstituentHasCompleteProgramCCompatibilityIdentity -count=1 -v
+Result: FAIL
+Assertion: ASSERT_PRODUCTION_CENSUS_CONSTITUENT_COMPLETE_PROGRAM_C_COMPATIBILITY_IDENTITY
+Missing fields: workspace_uri, language_id
+Boundary: production census batch constituent immutable Graph Provenance V5 native invocation identity
+
+Real two-source retained follow-up:
+Run root: /tmp/lsp-trace-adr0007-qualification.gFvnLT
+Constituents: 2
+Additional field absent in both real constituents after workspace/language repair: server_command
+All other required compatibility coordinates were present in both constituents.

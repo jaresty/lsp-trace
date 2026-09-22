@@ -1,0 +1,6 @@
+=== RUN   TestManagedPreparationExplicitLanguageIDIsNotMisclassifiedByURIAdmission
+    capture_managed_test.go:326: ASSERT_EXPLICIT_LANGUAGE_ID_NOT_MISCLASSIFIED: language_id=go diagnostic=failure=LANGUAGE_ID_UNAVAILABLE attempted=3 succeeded=2 planned=4 failing_ordinal=2 err=managed source preparation failed: managed document preparation unavailable
+--- FAIL: TestManagedPreparationExplicitLanguageIDIsNotMisclassifiedByURIAdmission (0.00s)
+FAIL
+FAIL	lsp-trace/internal/censuscontinuation	0.369s
+FAIL

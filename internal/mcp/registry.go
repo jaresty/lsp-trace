@@ -9,6 +9,7 @@ import (
 
 	"lsp-trace/internal/mcpcontract"
 	"lsp-trace/internal/provider"
+	"lsp-trace/internal/serveridentity"
 )
 
 const (
@@ -220,6 +221,7 @@ type Registry struct {
 	toolProfile          ToolProfile
 	servingVersion       string
 	buildRevision        string
+	serverIdentity       serveridentity.Identity
 }
 
 func NewRegistry(enableLiveLSP bool) *Registry {
@@ -479,6 +481,15 @@ func (r *Registry) SetBuildIdentity(version, revision string) {
 	}
 	r.servingVersion, r.buildRevision = version, revision
 }
+
+// SetServerIdentity installs the immutable, self-measured executing-process identity.
+func (r *Registry) SetServerIdentity(identity serveridentity.Identity) {
+	r.serverIdentity = identity
+	r.SetBuildIdentity(identity.BinaryVersion, identity.SourceRevision)
+}
+
+// ServerIdentity returns the immutable executing-process identity.
+func (r *Registry) ServerIdentity() serveridentity.Identity { return r.serverIdentity }
 
 func appendUnique(ids []string, id string) []string {
 	for _, candidate := range ids {
@@ -782,7 +793,7 @@ func (r *Registry) Capabilities() map[string]any {
 	if revision == "" {
 		revision = "UNKNOWN"
 	}
-	return map[string]any{
+	result := map[string]any{
 		"serving_binary_version": version, "build_revision": revision,
 		"mcp_adapter_revision":                "lsp-trace-mcp.v1",
 		"supported_acquisition_versions":      []string{"v1", "v2", "v3"},
@@ -826,6 +837,10 @@ func (r *Registry) Capabilities() map[string]any {
 			"default_when_omitted": "CALLS_ONLY", "provider_authority": "HOST_PROVISIONED_ONLY",
 		},
 	}
+	if r.serverIdentity.InstanceID != "" {
+		result["server_instance"] = r.serverIdentity
+	}
+	return result
 }
 
 // DescribeOperation returns static registry-owned metadata for one canonical

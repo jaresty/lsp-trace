@@ -121,6 +121,27 @@ func structuralContextTraversalDomainError(tool string, failure *transientstruct
 	if d.Depth != nil {
 		diagnostic["depth"] = *d.Depth
 	}
+	if d.ProviderMethod != "" {
+		diagnostic["provider_method"] = d.ProviderMethod
+	}
+	if d.ItemIndex != nil {
+		diagnostic["item_index"] = *d.ItemIndex
+	}
+	if d.FailedField != "" {
+		diagnostic["failed_field"] = d.FailedField
+	}
+	if d.FailedInvariant != "" {
+		diagnostic["failed_invariant"] = d.FailedInvariant
+	}
+	if d.ProviderVariant != "" {
+		diagnostic["provider_variant"] = d.ProviderVariant
+	}
+	if d.ProjectionEntered != nil {
+		diagnostic["projection_entered"] = *d.ProjectionEntered
+	}
+	if d.Guidance != "" {
+		diagnostic["guidance"] = d.Guidance
+	}
 	env.EnvelopeSchemaID = mcpcontract.StructuralContextTraversalDomainErrorID
 	env.Diagnostic = diagnostic
 	return env
@@ -394,6 +415,52 @@ func normalizeStructuralContextV2Arguments(name string, args map[string]any) {
 	for field, value := range defaults {
 		if _, present := args[field]; !present {
 			args[field] = value
+		}
+	}
+	normalizeStructuralContextV2SourceOnlyProjection(args)
+	locator, ok := args["regex_locator"].(map[string]any)
+	if !ok {
+		return
+	}
+	limits, ok := locator["limits"].(map[string]any)
+	if !ok {
+		return
+	}
+	for field, value := range map[string]any{
+		"max_document_bytes": float64(60 * 1024),
+		"max_matches":        float64(100),
+		"max_pattern_bytes":  float64(4 * 1024),
+		"max_work":           float64(64 * 1024),
+	} {
+		if _, present := limits[field]; !present {
+			limits[field] = value
+		}
+	}
+}
+
+func normalizeStructuralContextV2SourceOnlyProjection(args map[string]any) {
+	projection, ok := args["projection"].(map[string]any)
+	if !ok || projection["mode"] != "TARGET" || projection["include_relation_occurrences"] != false || args["up_depth"] != float64(0) || args["down_depth"] != float64(0) {
+		return
+	}
+	_, position := args["line"].(float64)
+	_, character := args["character"].(float64)
+	_, symbol := args["symbol"].(string)
+	_, regex := args["regex_locator"].(map[string]any)
+	if !(position && character || symbol || regex) {
+		return
+	}
+	if _, present := projection["include_ancillary"]; !present {
+		projection["include_ancillary"] = false
+	}
+	if _, present := projection["display_range_policy"]; !present {
+		projection["display_range_policy"] = "FULL_DEFINITION"
+	}
+	if _, present := projection["limits"]; !present {
+		projection["limits"] = map[string]any{
+			"max_objects": float64(80), "max_ranges": float64(80), "max_source_bytes": float64(2097152), "max_work": float64(10000), "max_response_bytes": float64(8388608),
+			"max_additional_documents": float64(20), "max_document_requests": float64(21), "max_document_bytes": float64(1048576), "max_total_document_bytes": float64(8388608),
+			"max_document_messages": float64(32), "max_document_acquisition_work": float64(21), "max_display_resolution_work": float64(21),
 		}
 	}
 }
@@ -1130,7 +1197,7 @@ func censusDomainErrorEnvelope(tool, requestID, stage, code string) envelope {
 	return envelope{
 		EnvelopeVersion: "1", EnvelopeSchemaID: mcpcontract.CensusDomainErrorID, Tool: tool, RequestID: requestID,
 		Outcome: "DOMAIN_ERROR", OperationStatus: "FAILED", IsError: true,
-		Error: map[string]any{"schema_version": "lsp-trace.census-diagnostic.v1", "status": "FAILED", "stage": stage, "code": code, "retry": true},
+		Error: map[string]any{"schema_version": "lsp-trace.census-diagnostic.v1", "status": "FAILED", "stage": stage, "code": code, "retry": true, "detail": "request violates the census input schema or configuration invariant; correct the request fields and resubmit"},
 	}
 }
 

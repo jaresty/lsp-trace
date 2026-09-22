@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"lsp-trace/internal/describeworker"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
 	"lsp-trace/internal/seedbinding"
@@ -28,14 +29,80 @@ import (
 var publicBootstrapExample []byte
 
 type bootstrapConfig struct {
-	Version   int                            `json:"version"`
-	Processes []bootstrapProcessConfig       `json:"processes,omitempty"`
-	Providers []bootstrapProviderDeclaration `json:"providers,omitempty"`
+	Version      int                            `json:"version"`
+	Processes    []bootstrapProcessConfig       `json:"processes,omitempty"`
+	Providers    []bootstrapProviderDeclaration `json:"providers,omitempty"`
+	Continuation *bootstrapContinuationConfig   `json:"continuation,omitempty"`
+}
+
+type bootstrapContinuationConfig struct {
+	PublicationRoot                  string                             `json:"publication_root"`
+	MaxObjectBytes                   int64                              `json:"max_object_bytes"`
+	ManagedPreparationDiagnosticPath string                             `json:"managed_preparation_diagnostic_path,omitempty"`
+	Capabilities                     []string                           `json:"capabilities,omitempty"`
+	Worker                           *bootstrapContinuationWorkerConfig `json:"worker,omitempty"`
+}
+
+const (
+	continuationCapabilityStopAfterDescribeRequests = "STOP_AFTER_DESCRIBE_REQUESTS"
+	continuationCapabilityResume                    = "RESUME"
+)
+
+func (c bootstrapContinuationConfig) hasCapability(wanted string) bool {
+	for _, capability := range c.Capabilities {
+		if capability == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func (c bootstrapContinuationConfig) stopAfterDescribeRequests() bool {
+	return c.hasCapability(continuationCapabilityStopAfterDescribeRequests)
+}
+
+func (c bootstrapContinuationConfig) resumeEnabled() bool {
+	return c.hasCapability(continuationCapabilityResume) || len(c.Capabilities) == 0 && c.Worker != nil
+}
+
+type bootstrapContinuationWorkerConfig struct {
+	Worker            describeworker.FilePin      `json:"worker"`
+	Model             describeworker.FilePin      `json:"model"`
+	Library           describeworker.FilePin      `json:"library"`
+	SandboxExecutable describeworker.FilePin      `json:"sandbox_executable"`
+	SandboxProfile    describeworker.FilePin      `json:"sandbox_profile"`
+	Grammar           describeworker.FilePin      `json:"grammar"`
+	RuntimeIdentity   string                      `json:"runtime_identity"`
+	AdapterIdentity   string                      `json:"adapter_identity"`
+	ModelIdentity     string                      `json:"model_identity"`
+	Limits            bootstrapContinuationLimits `json:"limits"`
+}
+
+type bootstrapContinuationLimits struct {
+	TimeoutMS     int `json:"timeout_ms"`
+	MaxTokens     int `json:"max_tokens"`
+	ContextTokens int `json:"context_tokens"`
+	StdoutBytes   int `json:"stdout_bytes"`
+	StderrBytes   int `json:"stderr_bytes"`
+	WorkBytes     int `json:"work_bytes"`
+	TempBytes     int `json:"temp_bytes"`
+}
+
+func (c bootstrapContinuationWorkerConfig) config() describeworker.Config {
+	limits := c.Limits
+	return describeworker.Config{
+		Worker: c.Worker, Model: c.Model, Library: c.Library,
+		SandboxExecutable: c.SandboxExecutable, SandboxProfile: c.SandboxProfile, Grammar: c.Grammar,
+		RuntimeIdentity: c.RuntimeIdentity, AdapterIdentity: c.AdapterIdentity, ModelIdentity: c.ModelIdentity,
+		ResponseVersion: describeworker.ResponseVersionV2,
+		Limits:          describeworker.Limits{TimeoutMS: limits.TimeoutMS, MaxTokens: limits.MaxTokens, ContextTokens: limits.ContextTokens, StdoutBytes: limits.StdoutBytes, StderrBytes: limits.StderrBytes, WorkBytes: limits.WorkBytes, TempBytes: limits.TempBytes},
+	}
 }
 
 type bootstrapProcessConfig struct {
 	Alias               string                    `json:"alias,omitempty"`
 	LanguageID          string                    `json:"language_id,omitempty"`
+	BootstrapTimeout    string                    `json:"bootstrap_timeout,omitempty"`
 	Profile             bootstrapProfileIdentity  `json:"profile"`
 	Execution           managedExecutionAuthority `json:"execution"`
 	SeedBinding         *seedbinding.Manifest     `json:"seed_binding,omitempty"`
@@ -99,6 +166,40 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	if config.Version != 1 || len(config.Processes)+len(config.Providers) == 0 {
 		return bootstrapConfig{}, fmt.Errorf("bootstrap config requires version 1 and at least one process or provider")
 	}
+	if config.Continuation != nil {
+		continuation := config.Continuation
+		if continuation.MaxObjectBytes < 1 || !canonicalAbsolutePath(continuation.PublicationRoot) {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap continuation configuration invalid")
+		}
+		if info, statErr := os.Lstat(absolutePath); statErr != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap continuation configuration requires owner-only regular config mode 0600")
+		}
+		if info, statErr := os.Lstat(continuation.PublicationRoot); statErr != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap continuation storage requires owner-only directory mode 0700")
+		}
+		seenCapabilities := map[string]bool{}
+		for _, capability := range continuation.Capabilities {
+			if seenCapabilities[capability] || capability != continuationCapabilityStopAfterDescribeRequests && capability != continuationCapabilityResume {
+				return bootstrapConfig{}, fmt.Errorf("bootstrap continuation capability invalid")
+			}
+			seenCapabilities[capability] = true
+		}
+		if continuation.Worker == nil && !continuation.stopAfterDescribeRequests() {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap continuation requires stop capability or exact worker pins")
+		}
+		if continuation.resumeEnabled() && continuation.Worker == nil {
+			return bootstrapConfig{}, fmt.Errorf("bootstrap continuation resume requires exact worker pins")
+		}
+		if continuation.Worker != nil {
+			pins := []describeworker.FilePin{continuation.Worker.Worker, continuation.Worker.Model, continuation.Worker.Library, continuation.Worker.SandboxExecutable, continuation.Worker.SandboxProfile, continuation.Worker.Grammar}
+			for _, pin := range pins {
+				digestBytes, digestErr := hex.DecodeString(strings.TrimPrefix(pin.SHA256, "sha256:"))
+				if !canonicalAbsolutePath(pin.Path) || len(pin.SHA256) != len("sha256:")+64 || !strings.HasPrefix(pin.SHA256, "sha256:") || strings.ToLower(pin.SHA256) != pin.SHA256 || digestErr != nil || len(digestBytes) != sha256.Size {
+					return bootstrapConfig{}, fmt.Errorf("bootstrap continuation pin invalid")
+				}
+			}
+		}
+	}
 	base := filepath.Dir(absolutePath)
 	resolve := func(value string) string {
 		if value == "" {
@@ -119,6 +220,11 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 		}
 		if strings.TrimSpace(process.LanguageID) != process.LanguageID {
 			return bootstrapConfig{}, fmt.Errorf("bootstrap process %d language_id is not canonical", i)
+		}
+		if process.BootstrapTimeout != "" {
+			if _, err := parseBootstrapTimeout(process.BootstrapTimeout); err != nil {
+				return bootstrapConfig{}, fmt.Errorf("bootstrap process %d: %w", i, err)
+			}
 		}
 	}
 	for i := range config.Providers {
@@ -163,9 +269,14 @@ func loadBootstrapConfig(path string) (bootstrapConfig, error) {
 	return config, nil
 }
 
+func canonicalAbsolutePath(value string) bool {
+	return value != "" && filepath.IsAbs(value) && filepath.Clean(value) == value
+}
+
 type preparedBootstrap struct {
 	alias            string
 	languageID       string
+	bootstrapTimeout string
 	profile          runtimeprofile.Profile
 	process          managedprocess.Spec
 	seedBinding      *seedbinding.Manifest
@@ -218,7 +329,7 @@ func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 				return nil, fmt.Errorf("bootstrap process %d: %w", i, err)
 			}
 		}
-		prepared = append(prepared, preparedBootstrap{alias: process.Alias, languageID: process.LanguageID, profile: profile, process: spec, seedBinding: process.SeedBinding, providerIdentity: identity})
+		prepared = append(prepared, preparedBootstrap{alias: process.Alias, languageID: process.LanguageID, bootstrapTimeout: process.BootstrapTimeout, profile: profile, process: spec, seedBinding: process.SeedBinding, providerIdentity: identity})
 	}
 	for i, process := range prepared {
 		if process.alias != "" {
@@ -230,7 +341,37 @@ func prepareBootstrap(config bootstrapConfig) ([]preparedBootstrap, error) {
 	return prepared, nil
 }
 
-func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config bootstrapConfig, timeout time.Duration) ([]bootstrapSession, error) {
+const (
+	defaultBootstrapTimeout = 10 * time.Second
+	maxBootstrapTimeout     = time.Hour
+)
+
+func parseBootstrapTimeout(value string) (time.Duration, error) {
+	timeout, err := time.ParseDuration(value)
+	if err != nil || timeout <= 0 || timeout > maxBootstrapTimeout {
+		return 0, fmt.Errorf("bootstrap timeout must be a Go duration greater than zero and at most %s", maxBootstrapTimeout)
+	}
+	return timeout, nil
+}
+
+func effectiveBootstrapTimeout(processValue string, hostValue time.Duration) (time.Duration, error) {
+	if processValue != "" {
+		return parseBootstrapTimeout(processValue)
+	}
+	if hostValue == 0 {
+		return defaultBootstrapTimeout, nil
+	}
+	if hostValue < 0 || hostValue > maxBootstrapTimeout {
+		return 0, fmt.Errorf("bootstrap timeout must be greater than zero and at most %s", maxBootstrapTimeout)
+	}
+	return hostValue, nil
+}
+
+func bootstrapReadinessDeadline(now time.Time, timeout time.Duration) time.Time {
+	return now.Add(timeout)
+}
+
+func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config bootstrapConfig, hostTimeout time.Duration) ([]bootstrapSession, error) {
 	prepared, err := prepareBootstrap(config)
 	if err != nil {
 		return nil, err
@@ -242,7 +383,7 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 	sort.Strings(providerIDs)
 	started := make([]bootstrapSession, 0, len(prepared))
 	rollback := func() {
-		rollbackContext, cancel := context.WithTimeout(context.Background(), timeout)
+		rollbackContext, cancel := context.WithTimeout(context.Background(), hostTimeout)
 		defer cancel()
 		_ = stopBootstrap(rollbackContext, manager, started)
 	}
@@ -263,7 +404,12 @@ func startBootstrap(ctx context.Context, manager *sessionruntime.Manager, config
 		repositoryRoot, gitCommit := pinnedGitMetadata(process.process.Dir)
 		session := bootstrapSession{Alias: process.alias, SessionID: result.SessionID, Generation: result.Generation, RepositoryRoot: repositoryRoot, GitCommit: gitCommit, CustodyProvenance: result.CustodyProvenance}
 		started = append(started, session)
-		deadline := time.Now().Add(timeout)
+		readinessTimeout, err := effectiveBootstrapTimeout(process.bootstrapTimeout, hostTimeout)
+		if err != nil {
+			rollback()
+			return nil, fmt.Errorf("bootstrap process %d: %w", i, err)
+		}
+		deadline := bootstrapReadinessDeadline(time.Now(), readinessTimeout)
 		pending := manager.BeginReadiness(ctx, session.SessionID, session.Generation, deadline)
 		ready, found := manager.WaitReadiness(ctx, pending.ID)
 		if !found || ready.SessionID != session.SessionID || ready.Generation != session.Generation || ready.State != sessionruntime.ReadinessReady || ready.Failure != "" {

@@ -160,6 +160,50 @@ func TestSessionListRoutingContract(t *testing.T) {
 	})
 }
 
+func TestSessionListAndStatusExposeKnownOrUnknownPositionEncoding(t *testing.T) {
+	known := record("known", 4)
+	unknown := record("unknown", 5)
+	f := &fakeRuntime{
+		records: []sessionruntime.Record{known, unknown},
+		metadata: map[string]sessionruntime.SessionMetadata{
+			"known": {PositionEncoding: "utf-16"},
+		},
+	}
+	executor := NewExecutor(New(f))
+	list, failure := executeLifecycle(t, executor, OperationList, `{}`)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	raw, _ := json.Marshal(list.Value)
+	if !strings.Contains(string(raw), `"session_id":"known"`) || !strings.Contains(string(raw), `"position_encoding":"utf-16"`) || !strings.Contains(string(raw), `"session_id":"unknown"`) || !strings.Contains(string(raw), `"position_encoding":"UNKNOWN"`) {
+		t.Fatalf("ASSERT_SESSION_LIST_POSITION_ENCODING_KNOWN_OR_UNKNOWN: %s", raw)
+	}
+	fullList, failure := executeLifecycle(t, executor, OperationList, `{"detail":"full"}`)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	fullListRaw, _ := json.Marshal(fullList.Value)
+	if !strings.Contains(string(fullListRaw), `"position_encoding":"utf-16"`) || !strings.Contains(string(fullListRaw), `"position_encoding":"UNKNOWN"`) || !strings.Contains(string(fullListRaw), `"routing"`) {
+		t.Fatalf("ASSERT_SESSION_LIST_FULL_POSITION_ENCODING_PRESERVES_HISTORY: %s", fullListRaw)
+	}
+	status, failure := executeLifecycle(t, executor, OperationStatus, `{"session_id":"known","generation":4}`)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	statusRaw, _ := json.Marshal(status.Value)
+	if !strings.Contains(string(statusRaw), `"position_encoding":"utf-16"`) {
+		t.Fatalf("ASSERT_SESSION_STATUS_POSITION_ENCODING_KNOWN: %s", statusRaw)
+	}
+	fullStatus, failure := executeLifecycle(t, executor, OperationStatus, `{"session_id":"known","generation":4,"detail":"full"}`)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	fullStatusRaw, _ := json.Marshal(fullStatus.Value)
+	if !strings.Contains(string(fullStatusRaw), `"position_encoding":"utf-16"`) || !strings.Contains(string(fullStatusRaw), `"routing"`) {
+		t.Fatalf("ASSERT_SESSION_STATUS_FULL_POSITION_ENCODING_PRESERVES_HISTORY: %s", fullStatusRaw)
+	}
+}
+
 func TestExecutorExactFourContracts(t *testing.T) {
 	for _, assertion := range []string{assertFourContracts, assertStructuralFirst, assertFaithfulResults, assertContextPropagation} {
 		t.Log("ASSERTION: " + assertion)

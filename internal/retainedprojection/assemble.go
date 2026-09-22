@@ -108,6 +108,25 @@ func retainedInputs(resolved ResolveResult, requireBodies bool) ([]sourceproject
 		candidate := retainedCandidate(selection)
 		candidates = append(candidates, candidate)
 	}
+	for _, resolvedRelation := range resolved.Relations {
+		relation := resolvedRelation.Selection
+		if relation.Caller == (Key{}) || relation.Callee == (Key{}) || relation.OccurrenceID == "" || relation.PositionEncoding != "utf-16" || !validRange(relation.Range) {
+			return nil, nil, nil, nil, 0, 0, assemblyFail(CodeInvalidResolveResult, relation.Caller, "invalid relation selection", nil)
+		}
+		logical := relation.Caller.LogicalSourceID
+		if existing, ok := sources[logical]; ok {
+			if existing.Digest != relation.Source.Digest || uint64(sourceprojectionByteLength(existing)) != relation.Source.ByteLength || (requireBodies && !equalBytes(existing.Bytes, resolvedRelation.Bytes)) {
+				return nil, nil, nil, nil, 0, 0, assemblyFail(CodeSourceMismatch, relation.Caller, "relation source mismatch", nil)
+			}
+		} else {
+			source := sourceprojection.Source{LogicalSourceID: logical, Digest: relation.Source.Digest, ByteLength: int(relation.Source.ByteLength), Available: true}
+			if requireBodies {
+				source.Bytes = append([]byte(nil), resolvedRelation.Bytes...)
+			}
+			sources[logical] = source
+		}
+		candidates = append(candidates, retainedRelationCandidate(relation))
+	}
 	selectedURIs := retainedSourceOrder(resolved.Selections[0].Selection.Key.LogicalSourceID, sources)
 	documents := make([]sourceprojectionv2.DocumentSource, 0, len(selectedURIs))
 	for _, uri := range selectedURIs {
@@ -171,6 +190,18 @@ func retainedCandidate(selection Selection) sourceprojection.Candidate {
 		PositionEncoding, DisplayProvenanceKind, DisplayProvenanceMethod, DisplayRangePolicy string
 	}{candidate.Role, candidate.GraphSubjectID, candidate.LogicalSourceID, candidate.Range, candidate.EvidenceRange, candidate.ItemRange, candidate.SelectionRange, selection.Source.Digest, selection.Source.ByteLength, selection.PositionEncoding, selection.DisplayProvenance.Kind, selection.DisplayProvenance.Method, selection.DisplayRangePolicy})
 	candidate.CitationID = retainedCanonicalID(struct{ UnitID, Role, Subject string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID})
+	return candidate
+}
+
+func retainedRelationCandidate(selection RelationSelection) sourceprojection.Candidate {
+	candidate := sourceprojection.Candidate{Role: "RELATION", GraphSubjectID: selection.RelationID, OccurrenceID: selection.OccurrenceID, LogicalSourceID: selection.Caller.LogicalSourceID, Range: projectionRangeRetained(selection.Range), EvidenceRange: projectionRangeRetained(selection.Range), DisplayProvenance: "SERVER_REPORTED", RelationProvenance: "SERVER_REPORTED", PositionEncoding: selection.PositionEncoding, PrivacyClassification: "PUBLIC"}
+	candidate.UnitID = retainedCanonicalID(struct {
+		Role, GraphSubjectID, OccurrenceID, LogicalSourceID string
+		Range                                               sourceprojection.Range
+		Digest                                              string
+		ByteLength                                          uint64
+	}{candidate.Role, candidate.GraphSubjectID, candidate.OccurrenceID, candidate.LogicalSourceID, candidate.Range, selection.Source.Digest, selection.Source.ByteLength})
+	candidate.CitationID = retainedCanonicalID(struct{ UnitID, Role, Subject, Occurrence string }{candidate.UnitID, candidate.Role, candidate.GraphSubjectID, candidate.OccurrenceID})
 	return candidate
 }
 

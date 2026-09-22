@@ -28,10 +28,35 @@ import (
 
 var ErrDiscoveryIncomplete = errors.New("discovery accounting incomplete")
 
+type DiscoveryDimension string
+
+type DiscoveryObservation struct {
+	Dimension DiscoveryDimension
+	Known     bool
+	Observed  *uint64
+	Limit     *uint64
+	Omitted   *uint64
+}
+
 const (
-	CensusPolicy    = "closed-file-document-symbol-preparation-v1"
-	DuplicatePolicy = "reject-canonical-seed-v2-identity-and-census-ordinal-v1"
-	IDDomain        = "lsp-trace:census-acquisition:v1"
+	DiscoveryNodeCeiling           DiscoveryDimension = "NODE_CEILING"
+	DiscoveryDepthBoundary         DiscoveryDimension = "DEPTH_BOUNDARY"
+	DiscoveryTargetSourceOmissions DiscoveryDimension = "TARGET_SOURCE_OMISSIONS"
+	DiscoveryProviderCompleteness  DiscoveryDimension = "PROVIDER_COMPLETENESS"
+	DiscoveryTimeoutRequestBudget  DiscoveryDimension = "TIMEOUT_REQUEST_BUDGET"
+	DiscoveryMessageByteBudget     DiscoveryDimension = "MESSAGE_BYTE_BUDGET"
+)
+
+type DiscoveryIncompleteError struct{ Observations []DiscoveryObservation }
+
+func (e *DiscoveryIncompleteError) Error() string { return ErrDiscoveryIncomplete.Error() }
+func (e *DiscoveryIncompleteError) Unwrap() error { return ErrDiscoveryIncomplete }
+
+const (
+	CensusPolicy          = "closed-file-document-symbol-preparation-v1"
+	DuplicatePolicy       = "reject-canonical-seed-v2-identity-and-census-ordinal-v1"
+	IDDomain              = "lsp-trace:census-acquisition:v1"
+	maxCensusBatchTargets = 63
 )
 
 type SessionIdentity struct {
@@ -69,6 +94,7 @@ type PreparedTarget struct {
 	CensusOrdinal   int
 	CanonicalSeedV2 []byte
 	URI             string
+	LanguageID      string
 	SelectionRange  lsp.Range
 	Name            string
 	Kind            int
@@ -85,6 +111,7 @@ type Discovery struct {
 	FileLedger, SymbolLedger captureset.Ledger
 	Targets                  []PreparedTarget
 	Complete                 bool
+	Observations             []DiscoveryObservation
 }
 type Discoverer interface {
 	Discover(context.Context, SessionIdentity) (Discovery, error)
@@ -103,7 +130,7 @@ func (b BatchRequest) AcquisitionManifest(limits acquisitionops.Limits) acquisit
 		line, ch := t.Position().Line, t.Position().Character
 		down, up := b.DownDepth, b.UpDepth
 		id := batchTargetID(i, t)
-		ts[i] = acquisitionops.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch}, DownDepth: &down, UpDepth: &up}
+		ts[i] = acquisitionops.Target{ID: id, Locator: acquisition.Locator{URI: t.URI, Line: &line, Character: &ch, LanguageID: t.LanguageID}, DownDepth: &down, UpDepth: &up}
 	}
 	return acquisitionops.Manifest{SchemaVersion: acquisitionops.ManifestVersion, CoordinateConvention: "zero-based-session", Root: ts[0], RequiredTargets: append([]acquisitionops.Target(nil), ts[1:]...), Limits: limits}
 }
@@ -135,8 +162,9 @@ type Projection struct {
 // PlanningConfig is authority-neutral input fixed before batch identities are
 // minted. A nil configuration preserves the legacy depth defaults.
 type PlanningConfig struct {
-	DownDepth int
-	UpDepth   int
+	DownDepth       int
+	UpDepth         int
+	MaxBatchTargets int
 }
 
 type Core struct {
@@ -179,7 +207,11 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		return Projection{}, errors.New("session identity drift during discovery")
 	}
 	if !d.Complete {
-		return Projection{}, ErrDiscoveryIncomplete
+		observations := append([]DiscoveryObservation(nil), d.Observations...)
+		if len(observations) > 6 {
+			observations = observations[:6]
+		}
+		return Projection{}, &DiscoveryIncompleteError{Observations: observations}
 	}
 	if err = validateDiscovery(d); err != nil {
 		return Projection{}, err
@@ -191,7 +223,7 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 	if err != nil {
 		return Projection{}, err
 	}
-	plan, err := census.PlanTargets(targets)
+	plan, err := planTargets(targets, planning.MaxBatchTargets)
 	if err != nil {
 		return Projection{}, err
 	}
@@ -231,7 +263,13 @@ func (c Core) Run(ctx context.Context, s SessionIdentity) (Projection, error) {
 		meta[i] = identity
 		cs[i] = Constituent{req.BatchID, i, append([]byte(nil), got.Raw...), identity}
 	}
-	m, err := captureset.Prepare(targets, meta, d.FileLedger, d.SymbolLedger, CensusPolicy, DuplicatePolicy)
+	manifestBatches := make([]captureset.Batch, len(plan.Batches))
+	start := 0
+	for i, batch := range plan.Batches {
+		manifestBatches[i] = captureset.Batch{Ordinal: i, TargetStart: start, TargetCount: len(batch.Targets), ConstituentIndex: i}
+		start += len(batch.Targets)
+	}
+	m, err := captureset.PrepareWithBatches(targets, meta, manifestBatches, d.FileLedger, d.SymbolLedger, CensusPolicy, DuplicatePolicy)
 	if err != nil {
 		return Projection{}, fmt.Errorf("manifest preparation: %w", err)
 	}
@@ -481,7 +519,7 @@ func validateProjection(p Projection) error {
 	if len(p.Batches) == 0 {
 		return errors.New("planned batches required")
 	}
-	planning, err := resolvePlanning(&PlanningConfig{DownDepth: p.Batches[0].DownDepth, UpDepth: p.Batches[0].UpDepth})
+	planning, err := resolvePlanning(&PlanningConfig{DownDepth: p.Batches[0].DownDepth, UpDepth: p.Batches[0].UpDepth, MaxBatchTargets: len(p.Batches[0].Targets)})
 	if err != nil {
 		return err
 	}
@@ -495,16 +533,20 @@ func validateProjection(p Projection) error {
 	if p.CensusID != stableID("census", planningIdentity(joinTargetBytes(mts), planning)) {
 		return errors.New("census ID mutation")
 	}
-	plans := captureset.PlanBatches(len(mts))
+	planned, err := planTargets(mts, planning.MaxBatchTargets)
+	if err != nil {
+		return err
+	}
+	plans := planned.Batches
 	if len(plans) != len(p.Batches) || len(p.Batches) != len(p.Constituents) {
 		return errors.New("batch cardinality mutation")
 	}
 	for i, x := range plans {
 		b := p.Batches[i]
-		if b.Ordinal != i || b.Session != p.Session || b.CensusID != p.CensusID || b.DownDepth != planning.DownDepth || b.UpDepth != planning.UpDepth || len(b.Targets) != x.TargetCount {
+		if b.Ordinal != i || b.Session != p.Session || b.CensusID != p.CensusID || b.DownDepth != planning.DownDepth || b.UpDepth != planning.UpDepth || len(b.Targets) != len(x.Targets) {
 			return errors.New("batch assignment mutation")
 		}
-		batchIdentity := []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(mts[x.TargetStart:x.TargetStart+x.TargetCount])))
+		batchIdentity := []byte(fmt.Sprintf("%s\x00%d\x00%s", p.CensusID, i, joinTargetBytes(x.Targets)))
 		wantID := stableID("batch", planningIdentity(batchIdentity, planning))
 		seeds, _ := combineSeedsForPlanning(b.Targets, p.Workspace, planning)
 		if b.BatchID != wantID || !bytes.Equal(b.CanonicalSeedsV2, seeds) {
@@ -524,7 +566,13 @@ func validateProjection(p Projection) error {
 	for i := range p.Constituents {
 		meta[i] = p.Constituents[i].Identity
 	}
-	m, err := captureset.Prepare(mts, meta, p.Manifest.FileLedger, p.Manifest.SymbolLedger, CensusPolicy, DuplicatePolicy)
+	manifestBatches := make([]captureset.Batch, len(plans))
+	start := 0
+	for i, batch := range plans {
+		manifestBatches[i] = captureset.Batch{Ordinal: i, TargetStart: start, TargetCount: len(batch.Targets), ConstituentIndex: i}
+		start += len(batch.Targets)
+	}
+	m, err := captureset.PrepareWithBatches(mts, meta, manifestBatches, p.Manifest.FileLedger, p.Manifest.SymbolLedger, CensusPolicy, DuplicatePolicy)
 	if err == nil {
 		m, err = captureset.AssociateBatches(m, meta)
 	}
@@ -584,13 +632,33 @@ func cloneProjection(p Projection) Projection {
 }
 func resolvePlanning(config *PlanningConfig) (PlanningConfig, error) {
 	if config == nil {
-		return PlanningConfig{DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth}, nil
+		return PlanningConfig{DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxBatchTargets: maxCensusBatchTargets}, nil
 	}
 	planning := *config
-	if planning.DownDepth < 0 || planning.DownDepth > 64 || planning.UpDepth < 0 || planning.UpDepth > 64 {
-		return PlanningConfig{}, errors.New("planning depths must each be within [0,64]")
+	if planning.MaxBatchTargets == 0 {
+		planning.MaxBatchTargets = maxCensusBatchTargets
+	}
+	if planning.DownDepth < 0 || planning.DownDepth > 64 || planning.UpDepth < 0 || planning.UpDepth > 64 || planning.MaxBatchTargets < 1 || planning.MaxBatchTargets > maxCensusBatchTargets {
+		return PlanningConfig{}, errors.New("planning bounds invalid")
 	}
 	return planning, nil
+}
+
+func planTargets(targets []captureset.Target, max int) (census.BatchPlan, error) {
+	if err := captureset.ValidatePlanningTargets(targets); err != nil {
+		return census.BatchPlan{}, err
+	}
+	ordered := captureset.OrderTargets(targets)
+	plan := census.BatchPlan{}
+	for start, ordinal := 0, 0; start < len(ordered); ordinal++ {
+		end := start + max
+		if end > len(ordered) {
+			end = len(ordered)
+		}
+		plan.Batches = append(plan.Batches, census.Batch{Ordinal: ordinal, Targets: append([]captureset.Target(nil), ordered[start:end]...)})
+		start = end
+	}
+	return plan, nil
 }
 
 func planningIdentity(base []byte, planning PlanningConfig) []byte {

@@ -115,8 +115,8 @@ func Resolve(request Request) (Result, error) {
 		return fail(CodeCaptureAbsent, nil)
 	}
 	matches := re.FindAllSubmatchIndex(request.Document, limits.MaxMatches+1)
-	if len(matches) > limits.MaxMatches {
-		return resourceLimit(ResourceLimitMatches, limits.MaxMatches, nil)
+	if observed := len(matches); observed > limits.MaxMatches {
+		return resourceLimit(ResourceLimitMatches, limits.MaxMatches, &observed)
 	}
 	if observed := work + len(matches); observed > limits.MaxWork {
 		return resourceLimit(ResourceLimitWork, limits.MaxWork, &observed)

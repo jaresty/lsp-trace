@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"lsp-trace/internal/serveridentity"
 	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
@@ -56,7 +57,10 @@ type DeriveRuntime interface {
 	DeriveWorkspace(context.Context, sessionruntime.DeriveWorkspaceRequest) sessionruntime.DeriveWorkspaceResult
 }
 
-type Service struct{ runtime Runtime }
+type Service struct {
+	runtime  Runtime
+	identity serveridentity.Identity
+}
 
 type SessionResolution struct {
 	URI        string `json:"uri"`
@@ -91,6 +95,11 @@ type OperationSnapshot struct {
 }
 
 func New(runtime Runtime) *Service { return &Service{runtime: runtime} }
+
+// NewWithServerIdentity binds immutable executing-process identity to lifecycle views.
+func NewWithServerIdentity(runtime Runtime, identity serveridentity.Identity) *Service {
+	return &Service{runtime: runtime, identity: identity}
+}
 
 func (s *Service) DeriveWorkspace(ctx context.Context, id string, generation uint64, workspaceURI string) (sessionruntime.DeriveWorkspaceResult, Failure) {
 	runtime, ok := s.runtime.(DeriveRuntime)

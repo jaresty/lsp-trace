@@ -1,0 +1,7 @@
+6d832fdf1b6268536034368bb25bcceb8a505099795d85a9979a807e4f55c93c  .pi/evidence/acquisition-real-code-qualification-20260922T044000Z/artifacts/lsp-trace
+fc158a6edab4552597c2636ee61bcc52588dba73a1501d4ee7b116da766c67dc  .pi/evidence/acquisition-real-code-qualification-20260922T044000Z/artifacts/lsp-trace-mcp
+aca7ff4ba449480c1a0978768782f130cdca2adf2a30e6fff3d822555e6b0cf4  .pi/evidence/acquisition-real-code-qualification-20260922T044000Z/BOOTSTRAP_CONFIG.json
+5f5f550418b61f7d28d80af37ff3ecb7da421d4d1d769c3210484c00a88287ed  /Users/schwa/dev/lsp-trace/.pi/evidence/acquisition-real-code-qualification-20260922T044000Z/MCP_CONFIG.json
+5f5f550418b61f7d28d80af37ff3ecb7da421d4d1d769c3210484c00a88287ed  .mcp.json
+55ac28e3f865fb73b2238cd089348acca367c81c38ceec705ce825540b496814  /Users/schwa/dev/lsp-trace/.pi/evidence/acquisition-real-code-qualification-20260922T044000Z/HANDOFF.md
+49193ac3da4b18fc94cbf8f19127271fcb1561c74a868002a371616e131d6283  /Users/schwa/dev/lsp-trace/.pi/evidence/acquisition-real-code-qualification-20260922T044000Z/REQUEST.template.json

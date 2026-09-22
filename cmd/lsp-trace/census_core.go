@@ -6,23 +6,28 @@ import (
 
 	"lsp-trace/acquisitionops"
 	"lsp-trace/internal/censusacquisition"
+	"lsp-trace/internal/censusrequest"
+	"lsp-trace/internal/censusresult"
+	"lsp-trace/internal/programccompose"
 )
 
 // censusCoreDependencies is a package-main-only test seam. Production callers
 // use productionCensusCoreDependencies; none of these functions confer census
 // assembly or publication authority outside package main.
 type censusCoreDependencies struct {
-	runSession func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int
-	discover   func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error)
-	acquire    func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits) (censusAssembly, error)
-	capability func(censusAssembly) (censusPublicationCapability, error)
-	publish    func(context.Context, censusPublicationCapability, string) censusPublicationOutcome
+	runSession          func(initializedAcquisitionRunnerConfig, func(context.Context, *initializedAcquisitionRuntime) int) int
+	discover            func(context.Context, censusCLIOptions, *initializedAcquisitionRuntime, bool) (censusacquisition.Discovery, error)
+	acquire             func(context.Context, *initializedAcquisitionRuntime, censusacquisition.Discoverer, acquisitionops.Limits, int, int, int) (censusAssembly, error)
+	capability          func(censusAssembly) (censusPublicationCapability, error)
+	publish             func(context.Context, censusPublicationCapability, string) censusPublicationOutcome
+	publishContinuation func(context.Context, censusPublicationCapability, string, programccompose.ExactMetadata) censusPublicationOutcome
 }
 
 type censusCoreConfig struct {
 	runner        initializedAcquisitionRunnerConfig
 	limits        acquisitionops.Limits
 	callHierarchy bool
+	afterCommit   func(context.Context, *initializedAcquisitionRuntime, censusPublicationOutcome) int
 }
 
 type fixedCensusDiscovery struct{ discovery censusacquisition.Discovery }
@@ -47,7 +52,8 @@ func productionCensusCoreDependencies() censusCoreDependencies {
 		capability: func(assembly censusAssembly) (censusPublicationCapability, error) {
 			return assembly.publicationCapability()
 		},
-		publish: publishCensusCaptureSet,
+		publish:             publishCensusCaptureSet,
+		publishContinuation: publishCensusCaptureSetWithContinuation,
 	}
 }
 
@@ -67,10 +73,22 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 			return fail(censusStageAcquisition, nil)
 		}
 		discovery, err := deps.discover(ctx, options, runtime, cfg.callHierarchy)
-		if err != nil || !discovery.Complete || len(discovery.Targets) == 0 || discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
+		if err != nil || len(discovery.Targets) == 0 || discovery.Session.SessionID != runtime.SessionID() || discovery.Session.Generation != runtime.Generation() {
 			return fail(censusStageDiscovery, nil)
 		}
-		assembly, err := deps.acquire(ctx, runtime, fixedCensusDiscovery{discovery: discovery}, cfg.limits)
+		if !discovery.Complete {
+			receipt, receiptErr := censusrequest.New(censusrequest.RefreshCoordinate{SessionID: runtime.SessionID(), Generation: runtime.Generation()}, censusrequest.SemanticFields{Sources: options.Sources, Includes: options.Includes, Excludes: options.Excludes, DownDepth: uint64(options.DownDepth), UpDepth: uint64(options.UpDepth), MaxNodes: uint64(options.MaxNodes), BatchTargets: uint64(options.MaxBatchTargets), TimeoutMS: uint64(options.Timeout.Milliseconds()), RequestTimeoutMS: uint64(options.RequestTimeout.Milliseconds()), StopAfter: options.StopAfter})
+			if receiptErr != nil {
+				return fail(censusStageDiscovery, nil)
+			}
+			diagnostic, diagnosticErr := censusresult.NewDiscoveryDiagnosticFromAcquisition(discovery.Observations, receipt.Semantic)
+			if diagnosticErr != nil {
+				return fail(censusStageDiscovery, nil)
+			}
+			outcome = censusPublicationOutcome{DiscoveryDiagnostic: &diagnostic, RequestReceipt: &receipt}
+			return 1
+		}
+		assembly, err := deps.acquire(ctx, runtime, fixedCensusDiscovery{discovery: discovery}, cfg.limits, options.DownDepth, options.UpDepth, options.MaxBatchTargets)
 		if err != nil {
 			return fail(censusStageAcquisition, censusBatchOrdinal(err))
 		}
@@ -84,7 +102,18 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		if err := ctx.Err(); err != nil {
 			return fail(censusStageAcquisition, nil)
 		}
-		outcome = deps.publish(ctx, capability, options.PublicationRoot)
+		if deps.publishContinuation != nil {
+			metadata, metadataFailure := runtime.Metadata(runtime.SessionID(), runtime.Generation())
+			if metadataFailure != "" || metadata.PositionEncoding == "" {
+				return fail(censusStageCommitted, nil)
+			}
+			outcome = deps.publishContinuation(ctx, capability, options.PublicationRoot, programccompose.ExactMetadata{
+				RevisionCustody: "CALLER_ASSERTED", PositionEncoding: metadata.PositionEncoding,
+				AcquisitionSemantics: "managed-lsp-v1", PrivacyPolicy: "private-census-v1",
+			})
+		} else {
+			outcome = deps.publish(ctx, capability, options.PublicationRoot)
+		}
 		if outcome.Result == nil {
 			if outcome.Diagnostic == nil {
 				return fail(censusStagePublication, nil)
@@ -93,6 +122,9 @@ func runCensusCore(options censusCLIOptions, cfg censusCoreConfig, deps censusCo
 		}
 		if err := validateCensusCLIResult(*outcome.Result); err != nil {
 			return fail(censusStageCommitted, nil)
+		}
+		if cfg.afterCommit != nil {
+			return cfg.afterCommit(ctx, runtime, outcome)
 		}
 		return 0
 	})

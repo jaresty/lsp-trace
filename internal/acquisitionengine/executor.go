@@ -425,6 +425,8 @@ func (e *Executor) execute(ctx context.Context, op operation.Request, route stri
 				return fail("OUTPUT_VALIDATION_FAILED", cloneErr)
 			}
 			enriched.SchemaVersion = graph.SchemaVersionV5
+			enriched.Invocation.WorkspaceURI = workspace
+			enriched.Invocation.Server.Command = metadata.ServerCommand
 			enriched.Invocation.Expansion.TopmostSiblings = req.TopmostSiblings
 			enriched.SiblingCandidates = siblings
 			enriched.Invocation.Expansion.TopmostSiblingOutcome = graph.TopmostSiblingNotRequested

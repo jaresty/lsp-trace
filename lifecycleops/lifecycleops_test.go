@@ -23,6 +23,15 @@ type fakeRuntime struct {
 	calls        int
 	stopIDs      []string
 	restartIDs   []string
+	metadata     map[string]sessionruntime.SessionMetadata
+}
+
+func (f *fakeRuntime) Metadata(id string, generation uint64) (sessionruntime.SessionMetadata, session.Failure) {
+	metadata, ok := f.metadata[id]
+	if !ok {
+		return sessionruntime.SessionMetadata{}, ""
+	}
+	return metadata, ""
 }
 
 func (f *fakeRuntime) Records() []sessionruntime.Record {

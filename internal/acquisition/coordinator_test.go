@@ -120,6 +120,47 @@ func TestTopmostSiblingExpansionDistinctSeedsSharesGlobalRequestBudget(t *testin
 	}
 }
 
+func TestPartialAcquisitionFreezesHistoricalGraphDiagnosticAndTypedAccounting(t *testing.T) {
+	f := fixture()
+	a, b, peer := item("a", 0), item("b", 4), item("peer", 2)
+	for _, i := range []lsp.CallHierarchyItem{a, b, peer} {
+		f.add(i)
+	}
+	f.symbols[a.URI] = []lsp.DocumentSymbol{{
+		Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+			{Name: a.Name, Kind: a.Kind, Range: a.Range, SelectionRange: a.SelectionRange},
+			{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+			{Name: b.Name, Kind: b.Kind, Range: b.Range, SelectionRange: b.SelectionRange},
+		},
+	}}
+	r := request(a, b)
+	r.TopmostSiblings = true
+	r.Limits.MaxRequests = 4
+	got := run(t, f, r)
+
+	t.Run("historical graph diagnostic", func(t *testing.T) {
+		const historical = "MULTI_TARGET_ACQUISITION_PARTIAL: consult coordinator accounting"
+		found := false
+		for _, diagnostic := range got.Graph.Diagnostics {
+			if diagnostic.Phase == "prepare" && diagnostic.Message == historical {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("ASSERT_PARTIAL_ACQUISITION_HISTORICAL_DIAGNOSTIC: diagnostics=%#v", got.Graph.Diagnostics)
+		}
+	})
+
+	t.Run("typed accounting", func(t *testing.T) {
+		if got.AcquisitionComplete || len(got.Targets) != 2 || got.Usage.Requests != 4 || got.Usage.PrepareProbes != 3 || len(got.Graph.SiblingCandidates) != 1 {
+			t.Fatalf("ASSERT_PARTIAL_ACQUISITION_TYPED_ACCOUNTING: complete=%t targets=%d usage=%#v siblings=%d", got.AcquisitionComplete, len(got.Targets), got.Usage, len(got.Graph.SiblingCandidates))
+		}
+		if got.Targets[0].Resolution.Status != Resolved || got.Targets[0].Admission != Admitted || got.Targets[1].Resolution.Status != Resolved || got.Targets[1].Admission != Admitted {
+			t.Fatalf("ASSERT_PARTIAL_ACQUISITION_TARGET_ACCOUNTING: targets=%#v", got.Targets)
+		}
+	})
+}
+
 func TestFlatTopmostSiblingCorrespondenceUsesPreparedServerIdentity(t *testing.T) {
 	seed, peer := item("seed", 0), item("peer", 2)
 	setup := func(items []lsp.CallHierarchyItem) (*fakeClient, Request) {

@@ -1,0 +1,14 @@
+{"Time":"2026-09-19T17:16:00.429935-07:00","Action":"start","Package":"lsp-trace/internal/censuscontinuation"}
+{"Time":"2026-09-19T17:16:00.658245-07:00","Action":"run","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsStageSkip"}
+{"Time":"2026-09-19T17:16:00.658299-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsStageSkip","Output":"=== RUN   TestRecoveryChainRejectsStageSkip\n"}
+{"Time":"2026-09-19T17:16:00.658581-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsStageSkip","Output":"    recovery_hardening_test.go:66: ASSERT_RECOVERY_CHAIN_STAGE_SKIP_REJECTED\n"}
+{"Time":"2026-09-19T17:16:00.65859-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsStageSkip","Output":"--- FAIL: TestRecoveryChainRejectsStageSkip (0.00s)\n"}
+{"Time":"2026-09-19T17:16:00.658593-07:00","Action":"fail","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsStageSkip","Elapsed":0}
+{"Time":"2026-09-19T17:16:00.658599-07:00","Action":"run","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsContractSubstitution"}
+{"Time":"2026-09-19T17:16:00.6586-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsContractSubstitution","Output":"=== RUN   TestRecoveryChainRejectsContractSubstitution\n"}
+{"Time":"2026-09-19T17:16:00.658705-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsContractSubstitution","Output":"    recovery_hardening_test.go:110: ASSERT_RECOVERY_CHAIN_CONTRACT_SUBSTITUTION_REJECTED\n"}
+{"Time":"2026-09-19T17:16:00.658715-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsContractSubstitution","Output":"--- FAIL: TestRecoveryChainRejectsContractSubstitution (0.00s)\n"}
+{"Time":"2026-09-19T17:16:00.658716-07:00","Action":"fail","Package":"lsp-trace/internal/censuscontinuation","Test":"TestRecoveryChainRejectsContractSubstitution","Elapsed":0}
+{"Time":"2026-09-19T17:16:00.658718-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Output":"FAIL\n"}
+{"Time":"2026-09-19T17:16:00.659096-07:00","Action":"output","Package":"lsp-trace/internal/censuscontinuation","Output":"FAIL\tlsp-trace/internal/censuscontinuation\t0.229s\n"}
+{"Time":"2026-09-19T17:16:00.659106-07:00","Action":"fail","Package":"lsp-trace/internal/censuscontinuation","Elapsed":0.229}

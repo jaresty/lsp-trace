@@ -71,7 +71,7 @@ func TestEnabledToolRequiresOperationSpecificDescriptionBeforeSuffixComposition(
 func TestCensusOperation34CanonicalSchemaRejectsCallerAuthorityAndCompletenessExpansion(t *testing.T) {
 	registry := NewRegistryWithProfile(false, ToolProfileFull)
 	tool, ok := registry.ResolveCanonical(mcpcontract.CensusTool)
-	if !ok || tool.InputSchemaID != mcpcontract.CensusInputID || len(tool.EnvelopeSchemaIDs) != 2 || len(tool.ArtifactSchemaIDs) != 1 || tool.ArtifactSchemaIDs[0] != mcpcontract.CensusResultID {
+	if !ok || tool.InputSchemaID != mcpcontract.FutureCensusV2InputID || len(tool.EnvelopeSchemaIDs) != 5 || len(tool.ArtifactSchemaIDs) != 5 || tool.ArtifactSchemaIDs[0] != mcpcontract.CensusResultID || tool.ArtifactSchemaIDs[1] != mcpcontract.FutureCensusCompositeResultID || tool.ArtifactSchemaIDs[2] != mcpcontract.CensusContinuationDiagnosticID || tool.ArtifactSchemaIDs[3] != mcpcontract.CensusDiscoveryDiagnosticV2ID || tool.ArtifactSchemaIDs[4] != mcpcontract.CensusRequestReceiptID || tool.EnvelopeSchemaIDs[4] != mcpcontract.CensusDiscoveryDiagnosticEnvelopeV2ID {
 		t.Fatalf("ASSERT_CENSUS_CANONICAL_SCHEMA_EXCLUSIVITY: %+v", tool)
 	}
 	valid := map[string]any{"session_id": "s", "generation": float64(1), "sources": []any{"."}}

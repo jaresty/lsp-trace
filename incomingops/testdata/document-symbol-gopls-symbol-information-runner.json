@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Runner",
+    "kind": 23,
+    "location": {
+      "uri": "file:///w/a.go",
+      "range": {
+        "start": {"line": 42, "character": 3},
+        "end": {"line": 47, "character": 4}
+      }
+    },
+    "containerName": ""
+  },
+  {
+    "name": "helper",
+    "kind": 12,
+    "location": {
+      "uri": "file:///w/a.go",
+      "range": {
+        "start": {"line": 49, "character": 0},
+        "end": {"line": 51, "character": 1}
+      }
+    },
+    "containerName": ""
+  }
+]

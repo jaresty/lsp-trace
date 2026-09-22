@@ -142,7 +142,11 @@ func admit(input Input, p Policy) (admitted, error) {
 	case v5sourcesnapshot.Version:
 		version = "source-snapshot-v1"
 	default:
-		return fail(fmt.Errorf("unsupported evidence family/version: %s", header.SchemaVersion))
+		observedState := "unrecognized"
+		if header.SchemaVersion == "" {
+			observedState = "missing"
+		}
+		return fail(fmt.Errorf("input.schema_version violates SUPPORTED_EVIDENCE_FAMILY_VERSION: observed=%s; accepted schema versions are %s, %s, %s, and %s; call lsp_trace_v1_schema_get to discover registered schemas; correct input.schema_version and resubmit; minimal corrected request fragment: {\"schema_version\":\"%s\"}", observedState, graphprovenance.Version, graphprovenance.VersionV2, graphprovenance.VersionV5, v5sourcesnapshot.Version, graphprovenance.Version))
 	}
 	if version == "source-snapshot-v1" {
 		if _, e := v5sourcesnapshot.Validate(input.Artifact); e != nil {

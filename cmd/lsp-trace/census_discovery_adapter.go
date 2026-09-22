@@ -114,13 +114,10 @@ func newCensusDiscoveryAdapter(options censusCLIOptions, session initializedCens
 		Files: censusWorkspaceEnumerator{
 			workspace: workspace, roots: roots,
 			filters:  censusacquisition.Filters{Includes: append([]string(nil), options.Includes...), Excludes: append([]string(nil), options.Excludes...)},
-			maxFiles: options.MaxNodes,
+			maxFiles: censusMaxDiscoveredEntries,
 		},
 		Supplier: censusRuntimeDocumentSupplier{runtime: session},
 		Client:   client,
-		Limits: censusacquisition.DiscoveryLimits{
-			MaxFiles: options.MaxNodes, MaxSymbols: options.MaxNodes,
-		},
 	}, nil
 }
 

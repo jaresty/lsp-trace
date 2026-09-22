@@ -1,0 +1,19 @@
+{
+  "status": "STAGED_VALID",
+  "root": "/Users/schwa/dev/lsp-trace/.pi/evidence/pi-full-restart-qualification-terminal-mapping-20260921T174315Z",
+  "request_semantic_fingerprint": "sha256:246a63cddcc552144d60578a4f127e34eddb970f496f863cd6a3509011783cb9",
+  "sha256": {
+    "lsp_trace": "11c9195b2939d9c59b80ddd222c1fe4c23021413ff765afd700b9b21b5554194",
+    "lsp_trace_mcp": "4e0cf7f4f29d3ba0901a92d9b329ce7c382a10128e8da0debc8bd8c87a280dde",
+    "installed_lsp_trace": "11c9195b2939d9c59b80ddd222c1fe4c23021413ff765afd700b9b21b5554194",
+    "installed_lsp_trace_mcp": "4e0cf7f4f29d3ba0901a92d9b329ce7c382a10128e8da0debc8bd8c87a280dde",
+    "mcp_config": "a2ac0320bded64534db69012763841bfb2cd1644e21c05553f843689d4b4f52e",
+    "bootstrap_config": "8a06a9f9bffd174ded8e7cbc88304d8a2e628b01cea19c4dd83cdcd9c1114421",
+    "request": "3997832a977c56f90541d808349da0591ab03628910631236f15bb57eae1090d",
+    "validator": "bff520193bbfc783d35b9fa461284ab379a3092131830835170d6be3abba5f2b",
+    "handoff": "8a7dee2d02174ceb49cb2e476baa374109a5598efbb0bb789d6a3bc3f17ed90c",
+    "rollback": "1319192c869832a299ee25b2b4c29189e08e79feef8e16634d2fff543964dee5"
+  },
+  "correction": "availability/internal terminal capture diagnostics admit zero resource counts and map publicly as COMMITTED_DEGRADED",
+  "focused_verification": "55 tests and 55 race tests passed; local process returned typed source_preparation diagnostic"
+}
