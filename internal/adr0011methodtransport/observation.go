@@ -65,7 +65,7 @@ func newTransactionObservation(req Request) (TransactionObservation, error) {
 		TextDocument struct {
 			URI string `json:"uri"`
 		} `json:"textDocument"`
-		Position struct {
+		Position *struct {
 			Line      uint32 `json:"line"`
 			Character uint32 `json:"character"`
 		} `json:"position"`
@@ -81,11 +81,14 @@ func newTransactionObservation(req Request) (TransactionObservation, error) {
 	observation := TransactionObservation{
 		DeclaredSessionID: req.SessionID, DeclaredGeneration: req.Generation,
 		DeclaredMethod: req.Method, DeclaredQueryURI: query.TextDocument.URI,
-		DeclaredLine: query.Position.Line, DeclaredCharacter: query.Position.Character,
 		DeclaredDeadline: req.Deadline, DeclaredMaxMessages: req.MaxMessages,
 		DeclaredMaxBytes: req.MaxBytes, ParamsSHA256: fmt.Sprintf("sha256:%x", sum),
 		ParamsBytes: len(req.Params), RawResultDisposition: RawResultNotInvoked,
 		LocalWriteCorrespondence: LocalWriteNotObserved,
+	}
+	if query.Position != nil {
+		observation.DeclaredLine = query.Position.Line
+		observation.DeclaredCharacter = query.Position.Character
 	}
 	if query.Context != nil {
 		observation.IncludeDeclarationPresent = true

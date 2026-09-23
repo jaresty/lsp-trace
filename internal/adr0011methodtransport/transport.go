@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	MethodDefinition = "textDocument/definition"
-	MethodReferences = "textDocument/references"
+	MethodDefinition     = "textDocument/definition"
+	MethodReferences     = "textDocument/references"
+	methodDocumentSymbol = "textDocument/documentSymbol"
 
 	maxDeadline    = time.Minute
 	maxMessages    = 64
@@ -156,7 +157,8 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 	out.observation.ReportedProviderName = metadata.ProviderName
 	out.observation.ReportedProviderVersion = metadata.ProviderVersion
 	out.observation.ReportedMethodAdvertised = (req.Method == MethodDefinition && metadata.DefinitionSupport) ||
-		(req.Method == MethodReferences && metadata.ReferencesSupport)
+		(req.Method == MethodReferences && metadata.ReferencesSupport) ||
+		(req.Method == methodDocumentSymbol && metadata.DocumentSymbolSupport)
 	if !out.observation.ReportedMethodAdvertised {
 		out.status, out.failure = unsupportedCapability, "method capability unavailable"
 		return out
@@ -250,7 +252,7 @@ func validate(ctx context.Context, t *Transport, req Request) error {
 	if req.Generation == 0 {
 		return errors.New("positive exact generation is required")
 	}
-	if req.Method != MethodDefinition && req.Method != MethodReferences {
+	if req.Method != MethodDefinition && req.Method != MethodReferences && req.Method != methodDocumentSymbol {
 		return errors.New("unsupported method")
 	}
 	now := time.Now()
@@ -293,6 +295,20 @@ func validateParams(method string, raw json.RawMessage) error {
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
+	if method == methodDocumentSymbol {
+		var p struct {
+			TextDocument struct {
+				URI string `json:"uri"`
+			} `json:"textDocument"`
+		}
+		if err := decodeOne(dec, &p); err != nil {
+			return fmt.Errorf("invalid documentSymbol params: %w", err)
+		}
+		if p.TextDocument.URI == "" {
+			return errors.New("documentSymbol params require textDocument.uri")
+		}
+		return nil
+	}
 	if method == MethodDefinition {
 		var p struct {
 			TextDocument struct {
@@ -346,6 +362,9 @@ func validateCanonicalParamKeys(method string, raw json.RawMessage) error {
 		case "textDocument":
 			allowed = []string{"uri"}
 		case "position":
+			if method == methodDocumentSymbol {
+				return errors.New("params contain non-canonical member")
+			}
 			allowed = []string{"line", "character"}
 		case "context":
 			if method != MethodReferences {

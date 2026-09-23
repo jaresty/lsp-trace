@@ -42,7 +42,7 @@ func matchesOwnedDocument(req RoundTripRequest, documents map[string]openDocumen
 }
 
 // OwnedMethodPair is an in-memory, manager-local observation of one keyed
-// definition/references transaction. It is not a published method receipt,
+// definition/references/documentSymbol transaction. It is not a published method receipt,
 // provider authentication, terminal ledger, or admitted occurrence.
 type OwnedMethodPair struct {
 	SessionID  string
@@ -76,7 +76,14 @@ func ownedQueryURI(req RoundTripRequest) (string, bool) {
 		return "", false
 	}
 	var root map[string]json.RawMessage
-	if json.Unmarshal(req.Params, &root) != nil || len(root) != 2 && len(root) != 3 {
+	if json.Unmarshal(req.Params, &root) != nil {
+		return "", false
+	}
+	if req.Method == "textDocument/documentSymbol" {
+		if len(root) != 1 {
+			return "", false
+		}
+	} else if len(root) != 2 && len(root) != 3 {
 		return "", false
 	}
 	var doc map[string]json.RawMessage
@@ -86,6 +93,9 @@ func ownedQueryURI(req RoundTripRequest) (string, bool) {
 	var uri string
 	if json.Unmarshal(doc["uri"], &uri) != nil || uri == "" {
 		return "", false
+	}
+	if req.Method == "textDocument/documentSymbol" {
+		return uri, true
 	}
 	var position map[string]json.RawMessage
 	if json.Unmarshal(root["position"], &position) != nil || len(position) != 2 {
@@ -111,7 +121,7 @@ func ownedQueryURI(req RoundTripRequest) (string, bool) {
 }
 
 // CompletedOwnedMethodPair returns a copy only for an opted-in, bounded,
-// successful managed transaction. A zero value cannot issue D/R evidence.
+// successful managed transaction. A zero value cannot issue method evidence.
 func (r RoundTripResult) CompletedOwnedMethodPair() (OwnedMethodPair, bool) {
 	if r.Failure != "" || r.ServerError != nil || r.ownedMethodPair == nil {
 		return OwnedMethodPair{}, false
@@ -127,7 +137,7 @@ func (r RoundTripResult) CompletedOwnedMethodPair() (OwnedMethodPair, bool) {
 }
 
 func eligibleOwnedMethodRequest(req RoundTripRequest) bool {
-	return req.CaptureOwnedMethodPair && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") &&
+	return req.CaptureOwnedMethodPair && (req.Method == "textDocument/definition" || req.Method == "textDocument/references" || req.Method == "textDocument/documentSymbol") &&
 		req.SessionID != "" && req.Generation != 0 && req.MaxMessages >= 1 && req.MaxMessages <= 64 &&
 		req.MaxBytes >= 1 && req.MaxBytes <= 1<<20 && len(req.Params) >= 1 && len(req.Params) <= 64<<10
 }
