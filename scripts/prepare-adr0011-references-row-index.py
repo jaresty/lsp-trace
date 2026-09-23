@@ -27,7 +27,7 @@ COMPOSITES = {
     40: ["receipt_duplicate", "receipt_unknown", "receipt_trailing", "ledger_duplicate", "ledger_unknown", "ledger_trailing"],
     41: ["target_absent", "selection_tied", "uri_mismatch", "point_mismatch", "source_mismatch", "revision_mismatch"],
     53: ["diagnostic_within_cap", "diagnostic_withheld"],
-    55: ["live_wire", "live_messages", "aggregate_work"],
+    55: ["live_wire_diagnostic", "live_wire_withheld", "live_messages_diagnostic", "live_messages_withheld", "aggregate_work_diagnostic", "aggregate_work_withheld"],
     56: ["symbol_empty", "no_containing_selection"],
     57: ["selection_tied", "selection_overlap"],
     58: ["malformed_later_child", "unknown_field", "duplicate_key"],
@@ -87,18 +87,34 @@ def main() -> None:
             variants = SUBSTITUTIONS[number] if family == "SUBSTITUTION" else COMPOSITES.get(number, ["base"])
             for variant in variants:
                 case_id = f"R11-{family}-{number:03}-{variant}"
+                substituted = family == "SUBSTITUTION"
+                lifecycle = family == "LIFECYCLE"
+                receipt = cells[2 if lifecycle else 3] if not substituted else None
+                if number in (53, 55):
+                    receipt = ("D; VERIFIED_DIAGNOSTIC with independently replayable redaction"
+                               if "diagnostic" in variant else "N; WITHHELD, no verified diagnostic")
                 cases.append({
                     "case_id": case_id,
+                    "source_kind": "NORMATIVE_MATRIX_ROW",
                     "matrix_line": number,
                     "variant": variant,
                     "fixture": cells[0],
+                    "required_independent_observation": cells[1] if substituted else None,
                     "expected_as_written": {
-                        "outcome_and_query": cells[1],
+                        "outcome_and_query": ("No new issued request outcome or terminal; pre-invocation REVISION_MISMATCH, POLICY_MISMATCH or TARGET_IDENTITY_UNRESOLVED only where applicable"
+                                              if substituted else cells[1]),
                         "counters": ("N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission"
-                                     if family == "SUBSTITUTION" else (cells[1] if family == "LIFECYCLE" else cells[2])),
-                        "receipt_publication": None if family == "SUBSTITUTION" else cells[2 if family == "LIFECYCLE" else 3],
-                        "eligibility": None if family == "SUBSTITUTION" else cells[3 if family == "LIFECYCLE" else 4],
+                                     if substituted else (cells[1] if lifecycle else cells[2])),
+                        "receipt_publication": ("No newly verified receipt; substituted object NOT_ATTEMPTED or unchanged original VERIFIED_SUCCESS"
+                                                if substituted else receipt),
+                        "eligibility": "substituted path inactive" if substituted else cells[3 if lifecycle else 4],
                     },
+                    "historical_stored_counters": ({"E": 2, "E_B": 2, "E_T": 2, "P": 2, "A": 2, "A_new": 0}
+                                                   if lifecycle else None),
+                    "original_unchanged_receipt_may_remain_verified": (True if substituted else None),
+                    "lifecycle_original_eligibility": ("ACTIVE; removal denied" if number == 99 else
+                                                       "TOMBSTONED_OR_QUARANTINED" if lifecycle else None),
+                    "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP" if number == 53 else None),
                     "input_selectors_and_digests": None,
                     "owner_and_fixture_profile": None,
                     "observed_counters_and_dispositions": None,
@@ -111,15 +127,42 @@ def main() -> None:
     # The matrix's hard-bound prose additionally requires independently
     # selected limits not yet numerically frozen in the accepted contract.
     # These are explicit incomplete obligations, not invented test results.
-    for bound in ("elapsed_time", "total_retained_bytes", "total_retained_objects",
-                  "allocation", "document_supply_bytes", "document_requests", "document_total_bytes"):
+    policy_bounds = ("elapsed_time", "total_retained_bytes", "total_retained_objects",
+                     "allocation", "document_supply_bytes", "document_requests", "document_total_bytes")
+    for bound in policy_bounds:
+        for side in ("at", "over"):
+            cases.append({
+                "case_id": f"R11-POLICY_BOUND-045-{bound}-{side}",
+                "source_kind": "SUPPLEMENTARY_POLICY_BOUND_PLACEHOLDER",
+                "matrix_line": 45,
+                "variant": f"{bound}-{side}",
+                "fixture": f"independent selected {bound} {side} cap; policy value not yet frozen",
+                "expected_as_written": {"outcome_and_query": None, "counters": None,
+                                        "receipt_publication": None, "eligibility": None},
+                "input_selectors_and_digests": None,
+                "owner_and_fixture_profile": None,
+                "observed_counters_and_dispositions": None,
+                "publication_and_readback": None,
+                "privacy_redaction": None,
+                "executable_guard": None,
+                "reviewer": None,
+                "disposition": "INCOMPLETE",
+            })
+    # The normative tables contain over-limit fixtures but not independent
+    # exactly-at-cap controls for all four accepted numeric bounds.
+    for bound, line in (("queries_16", 51), ("params_65536", 52),
+                        ("result_1048576", 53), ("canonical_1500000", 54)):
         cases.append({
-            "case_id": "R11-POLICY_BOUND-045-" + bound,
-            "matrix_line": 45,
-            "variant": bound,
-            "fixture": "independent selected " + bound + " cap; policy value not yet frozen",
-            "expected_as_written": {"outcome_and_query": None, "counters": None,
-                                    "receipt_publication": None, "eligibility": "inactive if over limit"},
+            "case_id": f"R11-SELECTED_AT-{line:03}-{bound}",
+            "source_kind": "SUPPLEMENTARY_AT_LIMIT_CONTROL",
+            "matrix_line": line,
+            "variant": bound + "-at",
+            "fixture": f"independent exactly-at-limit {bound}; reject if shadowed by earlier cap",
+            "expected_as_written": {"outcome_and_query": None,
+                                    "counters": ("N=16 declared; other counters require a pinned full acquisition fixture"
+                                                 if bound == "queries_16" else None),
+                                    "receipt_publication": None, "eligibility": None},
+            "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP" if bound == "result_1048576" else "UNVERIFIED"),
             "input_selectors_and_digests": None,
             "owner_and_fixture_profile": None,
             "observed_counters_and_dispositions": None,
@@ -138,9 +181,11 @@ def main() -> None:
         "contract_sha256": "sha256:" + CONTRACT_HASH,
         "matrix_sha256": "sha256:" + MATRIX_HASH,
         "implementation_schema_policy_digests": None,
+        "coverage_status": "DRAFT_INCOMPLETE_UNREVIEWED",
+        "selected_result_bound_reachability": "BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP_FOR_1048576_BYTE_RESULT_AND_1048577_OVER_LIMIT",
         "substitution_common_verdict": "No newly issued request outcome or terminal; E/E_B/E_T/P/A=U/0/0/0/0 for new admission; N=1 already declared; no newly verified receipt; substituted path inactive. Original unchanged receipt may remain verified.",
         "counts_by_family": {family: sum(c["case_id"].startswith("R11-" + family + "-") for c in cases)
-                             for family in [*(name for name, _ in ranges), "POLICY_BOUND"]},
+                             for family in [*(name for name, _ in ranges), "POLICY_BOUND", "SELECTED_AT"]},
         "cases": cases,
     }
     OUTPUT.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
