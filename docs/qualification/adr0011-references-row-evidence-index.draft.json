@@ -6,10 +6,11 @@
   "implementation_schema_policy_digests": null,
   "substitution_common_verdict": "No newly issued request outcome or terminal; E/E_B/E_T/P/A=U/0/0/0/0 for new admission; N=1 already declared; no newly verified receipt; substituted path inactive. Original unchanged receipt may remain verified.",
   "counts_by_family": {
-    "TERMINAL": 27,
-    "BOUND_TARGET": 9,
+    "TERMINAL": 43,
+    "BOUND_TARGET": 20,
     "SUBSTITUTION": 72,
-    "LIFECYCLE": 5
+    "LIFECYCLE": 6,
+    "POLICY_BOUND": 7
   },
   "cases": [
     {
@@ -153,9 +154,9 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-022-base",
+      "case_id": "R11-TERMINAL-022-partial_write",
       "matrix_line": 22,
-      "variant": "base",
+      "variant": "partial_write",
       "fixture": "Partial/short **request write**, no completed keyed write",
       "expected_as_written": {
         "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
@@ -173,9 +174,49 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-023-base",
+      "case_id": "R11-TERMINAL-022-short_write",
+      "matrix_line": 22,
+      "variant": "short_write",
+      "fixture": "Partial/short **request write**, no completed keyed write",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-023-short_read",
       "matrix_line": 23,
-      "variant": "base",
+      "variant": "short_read",
+      "fixture": "Short/unmatched **response read**, no complete keyed response",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-023-unmatched_read",
+      "matrix_line": 23,
+      "variant": "unmatched_read",
       "fixture": "Short/unmatched **response read**, no complete keyed response",
       "expected_as_written": {
         "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
@@ -353,9 +394,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-032-base",
+      "case_id": "R11-TERMINAL-032-pre_evaluation_work",
       "matrix_line": 32,
-      "variant": "base",
+      "variant": "pre_evaluation_work",
+      "fixture": "**Pre-evaluation** selected work/byte limit, result E cannot be safely counted",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-032-pre_evaluation_bytes",
+      "matrix_line": 32,
+      "variant": "pre_evaluation_bytes",
       "fixture": "**Pre-evaluation** selected work/byte limit, result E cannot be safely counted",
       "expected_as_written": {
         "outcome_and_query": "`RESOURCE_LIMIT` / `NONE`; 0/0",
@@ -473,9 +534,9 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-038-base",
+      "case_id": "R11-TERMINAL-038-duplicate_plain",
       "matrix_line": 38,
-      "variant": "base",
+      "variant": "duplicate_plain",
       "fixture": "Duplicate **parameter JSON key**, including escaped/case alias",
       "expected_as_written": {
         "outcome_and_query": "`POLICY_MISMATCH` / `NONE`; 0/0; zero invocation",
@@ -493,9 +554,49 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-039-base",
+      "case_id": "R11-TERMINAL-038-duplicate_escaped_alias",
+      "matrix_line": 38,
+      "variant": "duplicate_escaped_alias",
+      "fixture": "Duplicate **parameter JSON key**, including escaped/case alias",
+      "expected_as_written": {
+        "outcome_and_query": "`POLICY_MISMATCH` / `NONE`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-038-duplicate_case_alias",
+      "matrix_line": 38,
+      "variant": "duplicate_case_alias",
+      "fixture": "Duplicate **parameter JSON key**, including escaped/case alias",
+      "expected_as_written": {
+        "outcome_and_query": "`POLICY_MISMATCH` / `NONE`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-039-duplicate_plain",
       "matrix_line": 39,
-      "variant": "base",
+      "variant": "duplicate_plain",
       "fixture": "Duplicate **result JSON key** in later element",
       "expected_as_written": {
         "outcome_and_query": "`MALFORMED` / `MALFORMED`; 1/1",
@@ -513,9 +614,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-040-base",
+      "case_id": "R11-TERMINAL-039-duplicate_escaped_alias",
+      "matrix_line": 39,
+      "variant": "duplicate_escaped_alias",
+      "fixture": "Duplicate **result JSON key** in later element",
+      "expected_as_written": {
+        "outcome_and_query": "`MALFORMED` / `MALFORMED`; 1/1",
+        "counters": "2/2/2/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC; failing ordinal 1",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-receipt_duplicate",
       "matrix_line": 40,
-      "variant": "base",
+      "variant": "receipt_duplicate",
       "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
       "expected_as_written": {
         "outcome_and_query": "— / NONE; no *new* verified verdict",
@@ -533,9 +654,209 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-TERMINAL-041-base",
+      "case_id": "R11-TERMINAL-040-receipt_unknown",
+      "matrix_line": 40,
+      "variant": "receipt_unknown",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-receipt_trailing",
+      "matrix_line": 40,
+      "variant": "receipt_trailing",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-ledger_duplicate",
+      "matrix_line": 40,
+      "variant": "ledger_duplicate",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-ledger_unknown",
+      "matrix_line": 40,
+      "variant": "ledger_unknown",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-ledger_trailing",
+      "matrix_line": 40,
+      "variant": "ledger_trailing",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-target_absent",
       "matrix_line": 41,
-      "variant": "base",
+      "variant": "target_absent",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-selection_tied",
+      "matrix_line": 41,
+      "variant": "selection_tied",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-uri_mismatch",
+      "matrix_line": 41,
+      "variant": "uri_mismatch",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-point_mismatch",
+      "matrix_line": 41,
+      "variant": "point_mismatch",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-source_mismatch",
+      "matrix_line": 41,
+      "variant": "source_mismatch",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-revision_mismatch",
+      "matrix_line": 41,
+      "variant": "revision_mismatch",
       "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
       "expected_as_written": {
         "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
@@ -593,9 +914,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-053-base",
+      "case_id": "R11-BOUND_TARGET-053-diagnostic_within_cap",
       "matrix_line": 53,
-      "variant": "base",
+      "variant": "diagnostic_within_cap",
+      "fixture": "**1,048,577** exact result bytes (`MaxResultBytes+1`)",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0 for admission",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D with redacted bound only; VERIFIED_DIAGNOSTIC if within its own cap, otherwise N/WITHHELD; never retain over-bound raw",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-053-diagnostic_withheld",
+      "matrix_line": 53,
+      "variant": "diagnostic_withheld",
       "fixture": "**1,048,577** exact result bytes (`MaxResultBytes+1`)",
       "expected_as_written": {
         "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0 for admission",
@@ -633,9 +974,9 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-055-base",
+      "case_id": "R11-BOUND_TARGET-055-live_wire",
       "matrix_line": 55,
-      "variant": "base",
+      "variant": "live_wire",
       "fixture": "Selected live-wire/message/aggregate-work limit exceeded **before evaluable output**",
       "expected_as_written": {
         "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0",
@@ -653,9 +994,49 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-056-base",
+      "case_id": "R11-BOUND_TARGET-055-live_messages",
+      "matrix_line": 55,
+      "variant": "live_messages",
+      "fixture": "Selected live-wire/message/aggregate-work limit exceeded **before evaluable output**",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D redacted; VERIFIED_DIAGNOSTIC or N/WITHHELD by privacy policy",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-055-aggregate_work",
+      "matrix_line": 55,
+      "variant": "aggregate_work",
+      "fixture": "Selected live-wire/message/aggregate-work limit exceeded **before evaluable output**",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D redacted; VERIFIED_DIAGNOSTIC or N/WITHHELD by privacy policy",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-056-symbol_empty",
       "matrix_line": 56,
-      "variant": "base",
+      "variant": "symbol_empty",
       "fixture": "Document-symbol `[]` / no containing selection",
       "expected_as_written": {
         "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
@@ -673,9 +1054,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-057-base",
+      "case_id": "R11-BOUND_TARGET-056-no_containing_selection",
+      "matrix_line": 56,
+      "variant": "no_containing_selection",
+      "fixture": "Document-symbol `[]` / no containing selection",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate verified-empty target result cannot issue target identity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-057-selection_tied",
       "matrix_line": 57,
-      "variant": "base",
+      "variant": "selection_tied",
       "fixture": "Document-symbol tied/overlapping most-specific selections",
       "expected_as_written": {
         "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
@@ -693,9 +1094,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-058-base",
+      "case_id": "R11-BOUND_TARGET-057-selection_overlap",
+      "matrix_line": 57,
+      "variant": "selection_overlap",
+      "fixture": "Document-symbol tied/overlapping most-specific selections",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate diagnostic ambiguity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-058-malformed_later_child",
       "matrix_line": 58,
-      "variant": "base",
+      "variant": "malformed_later_child",
       "fixture": "Malformed later document-symbol child, unknown field or duplicate key",
       "expected_as_written": {
         "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
@@ -713,9 +1134,129 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-BOUND_TARGET-059-base",
+      "case_id": "R11-BOUND_TARGET-058-unknown_field",
+      "matrix_line": 58,
+      "variant": "unknown_field",
+      "fixture": "Malformed later document-symbol child, unknown field or duplicate key",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate MALFORMED diagnostic, no valid prefix identity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-058-duplicate_key",
+      "matrix_line": 58,
+      "variant": "duplicate_key",
+      "fixture": "Malformed later document-symbol child, unknown field or duplicate key",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate MALFORMED diagnostic, no valid prefix identity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-source_mismatch",
       "matrix_line": 59,
-      "variant": "base",
+      "variant": "source_mismatch",
+      "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; target receipt not replay-eligible",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-version_mismatch",
+      "matrix_line": 59,
+      "variant": "version_mismatch",
+      "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; target receipt not replay-eligible",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-revision_mismatch",
+      "matrix_line": 59,
+      "variant": "revision_mismatch",
+      "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; target receipt not replay-eligible",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-encoding_mismatch",
+      "matrix_line": 59,
+      "variant": "encoding_mismatch",
+      "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; target receipt not replay-eligible",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-missing_payload",
+      "matrix_line": 59,
+      "variant": "missing_payload",
       "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
       "expected_as_written": {
         "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
@@ -2233,9 +2774,29 @@
       "disposition": "INCOMPLETE"
     },
     {
-      "case_id": "R11-LIFECYCLE-100-base",
+      "case_id": "R11-LIFECYCLE-100-retire_delete_failed",
       "matrix_line": 100,
-      "variant": "base",
+      "variant": "retire_delete_failed",
+      "fixture": "Reviewed removal or revoke, **deletion fails** and bytes may remain",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "H for new admission; DELETE_FAILED_QUARANTINED, exact failed selector inventory",
+        "eligibility": "inactive/quarantined pending reviewed resolution; revoke dependents tombstoned"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-100-revoke_delete_failed",
+      "matrix_line": 100,
+      "variant": "revoke_delete_failed",
       "fixture": "Reviewed removal or revoke, **deletion fails** and bytes may remain",
       "expected_as_written": {
         "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
@@ -2262,6 +2823,146 @@
         "counters": "—/NONE; historical 2/2/2/2/0 new",
         "receipt_publication": "N; REPLAY_UNAVAILABLE_UNEXPLAINED",
         "eligibility": "inactive/quarantined, **not** a legitimate tombstone"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-elapsed_time",
+      "matrix_line": 45,
+      "variant": "elapsed_time",
+      "fixture": "independent selected elapsed_time cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-total_retained_bytes",
+      "matrix_line": 45,
+      "variant": "total_retained_bytes",
+      "fixture": "independent selected total_retained_bytes cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-total_retained_objects",
+      "matrix_line": 45,
+      "variant": "total_retained_objects",
+      "fixture": "independent selected total_retained_objects cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-allocation",
+      "matrix_line": 45,
+      "variant": "allocation",
+      "fixture": "independent selected allocation cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-document_supply_bytes",
+      "matrix_line": 45,
+      "variant": "document_supply_bytes",
+      "fixture": "independent selected document_supply_bytes cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-document_requests",
+      "matrix_line": 45,
+      "variant": "document_requests",
+      "fixture": "independent selected document_requests cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-POLICY_BOUND-045-document_total_bytes",
+      "matrix_line": 45,
+      "variant": "document_total_bytes",
+      "fixture": "independent selected document_total_bytes cap; policy value not yet frozen",
+      "expected_as_written": {
+        "outcome_and_query": null,
+        "counters": null,
+        "receipt_publication": null,
+        "eligibility": "inactive if over limit"
       },
       "input_selectors_and_digests": null,
       "owner_and_fixture_profile": null,

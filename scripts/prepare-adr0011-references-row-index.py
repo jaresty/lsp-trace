@@ -17,6 +17,24 @@ MATRIX_HASH = "c370fd6ae76bb3b74a15da12a7a9c41d9730c68662830294a50dfe89177546a2"
 CONTRACT_HASH = "d71ec03c9244eb70fe9d93023410e0dc5cedc9932c992b7ff1ef45f2fc42f7f9"
 
 # Each normative substitution field is independently indexed, not rolled up.
+# Some non-substitution rows also demand independent alternatives or bounds.
+COMPOSITES = {
+    22: ["partial_write", "short_write"],
+    23: ["short_read", "unmatched_read"],
+    32: ["pre_evaluation_work", "pre_evaluation_bytes"],
+    38: ["duplicate_plain", "duplicate_escaped_alias", "duplicate_case_alias"],
+    39: ["duplicate_plain", "duplicate_escaped_alias"],
+    40: ["receipt_duplicate", "receipt_unknown", "receipt_trailing", "ledger_duplicate", "ledger_unknown", "ledger_trailing"],
+    41: ["target_absent", "selection_tied", "uri_mismatch", "point_mismatch", "source_mismatch", "revision_mismatch"],
+    53: ["diagnostic_within_cap", "diagnostic_withheld"],
+    55: ["live_wire", "live_messages", "aggregate_work"],
+    56: ["symbol_empty", "no_containing_selection"],
+    57: ["selection_tied", "selection_overlap"],
+    58: ["malformed_later_child", "unknown_field", "duplicate_key"],
+    59: ["source_mismatch", "version_mismatch", "revision_mismatch", "encoding_mismatch", "missing_payload"],
+    100: ["retire_delete_failed", "revoke_delete_failed"],
+}
+
 SUBSTITUTIONS = {
     67: ["method", "query_occurrence_id"],
     68: ["query_uri"],
@@ -66,7 +84,8 @@ def main() -> None:
             expected_columns = 2 if family == "SUBSTITUTION" else (4 if family == "LIFECYCLE" else 5)
             if len(cells) != expected_columns:
                 raise SystemExit(f"line {number}: unexpected column count")
-            for variant in SUBSTITUTIONS[number] if family == "SUBSTITUTION" else ["base"]:
+            variants = SUBSTITUTIONS[number] if family == "SUBSTITUTION" else COMPOSITES.get(number, ["base"])
+            for variant in variants:
                 case_id = f"R11-{family}-{number:03}-{variant}"
                 cases.append({
                     "case_id": case_id,
@@ -89,6 +108,27 @@ def main() -> None:
                     "reviewer": None,
                     "disposition": "INCOMPLETE",
                 })
+    # The matrix's hard-bound prose additionally requires independently
+    # selected limits not yet numerically frozen in the accepted contract.
+    # These are explicit incomplete obligations, not invented test results.
+    for bound in ("elapsed_time", "total_retained_bytes", "total_retained_objects",
+                  "allocation", "document_supply_bytes", "document_requests", "document_total_bytes"):
+        cases.append({
+            "case_id": "R11-POLICY_BOUND-045-" + bound,
+            "matrix_line": 45,
+            "variant": bound,
+            "fixture": "independent selected " + bound + " cap; policy value not yet frozen",
+            "expected_as_written": {"outcome_and_query": None, "counters": None,
+                                    "receipt_publication": None, "eligibility": "inactive if over limit"},
+            "input_selectors_and_digests": None,
+            "owner_and_fixture_profile": None,
+            "observed_counters_and_dispositions": None,
+            "publication_and_readback": None,
+            "privacy_redaction": None,
+            "executable_guard": None,
+            "reviewer": None,
+            "disposition": "INCOMPLETE",
+        })
     ids = [case["case_id"] for case in cases]
     if len(ids) != len(set(ids)):
         raise SystemExit("duplicate row identity")
@@ -100,7 +140,7 @@ def main() -> None:
         "implementation_schema_policy_digests": None,
         "substitution_common_verdict": "No newly issued request outcome or terminal; E/E_B/E_T/P/A=U/0/0/0/0 for new admission; N=1 already declared; no newly verified receipt; substituted path inactive. Original unchanged receipt may remain verified.",
         "counts_by_family": {family: sum(c["case_id"].startswith("R11-" + family + "-") for c in cases)
-                             for family, _ in ranges},
+                             for family in [*(name for name, _ in ranges), "POLICY_BOUND"]},
         "cases": cases,
     }
     OUTPUT.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
