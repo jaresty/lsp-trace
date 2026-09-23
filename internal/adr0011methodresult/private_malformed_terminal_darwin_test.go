@@ -50,8 +50,8 @@ func TestADR0011PrivateManagedMalformedTerminal(t *testing.T) {
 		t.Fatalf("ASSERT_TERMINAL_BUILD: %v", err)
 	}
 	terminal, err := VerifyPrivateMalformedTerminal(record, expected, source, 1, 6, "test-revision", "CALLER_ASSERTED")
-	if err != nil || terminal.Terminal != "MALFORMED" || terminal.N != 1 || terminal.E != 2 || terminal.P != 1 || terminal.A != 0 || terminal.ErrorOrdinal != 1 || terminal.Transport != "SUCCESS" || terminal.ResultLength != len(observed.last.Result) || terminal.ResultDigest != privateDigest(observed.last.Result) {
-		t.Fatalf("ASSERT_TERMINAL_MALFORMED_N1_E2_P1_A0: %+v %v", terminal, err)
+	if err != nil || terminal.Terminal != "MALFORMED" || terminal.N != 1 || terminal.E != 2 || terminal.P != 0 || terminal.A != 0 || terminal.DiagnosticValidPrefix != 1 || terminal.ErrorOrdinal != 1 || terminal.Transport != "SUCCESS" || terminal.ResultLength != len(observed.last.Result) || terminal.ResultDigest != privateDigest(observed.last.Result) {
+		t.Fatalf("ASSERT_TERMINAL_MALFORMED_N1_E2_P0_A0_PREFIX1: %+v %v", terminal, err)
 	}
 	dir := filepath.Join(t.TempDir(), "private")
 	if err := os.Mkdir(dir, 0700); err != nil {

@@ -21,27 +21,28 @@ const privateMalformedTerminalLimit = 1500000
 var ErrPrivateMalformedTerminal = errors.New("private malformed terminal invalid")
 
 type PrivateMalformedTerminal struct {
-	Version         string
-	ClaimCeiling    string
-	Terminal        string
-	Transport       string
-	SessionID       string
-	Generation      uint64
-	KeyID           uint64
-	Method          string
-	ParamsBase64    string
-	ResultBase64    string
-	ResultLength    int
-	ResultDigest    string
-	Write           sessionruntime.RequestWriteObservation
-	Read            sessionruntime.ResponseReadObservation
-	Source          sessionruntime.OwnedDocumentBinding
-	QueryLine       uint32
-	QueryCharacter  uint32
-	Revision        string
-	RevisionCustody string
-	N, E, P, A      int
-	ErrorOrdinal    int
+	Version               string
+	ClaimCeiling          string
+	Terminal              string
+	Transport             string
+	SessionID             string
+	Generation            uint64
+	KeyID                 uint64
+	Method                string
+	ParamsBase64          string
+	ResultBase64          string
+	ResultLength          int
+	ResultDigest          string
+	Write                 sessionruntime.RequestWriteObservation
+	Read                  sessionruntime.ResponseReadObservation
+	Source                sessionruntime.OwnedDocumentBinding
+	QueryLine             uint32
+	QueryCharacter        uint32
+	Revision              string
+	RevisionCustody       string
+	N, E, P, A            int // P is whole-result successfully parsed items (zero on MALFORMED).
+	DiagnosticValidPrefix int // Independently validated prefix; never eligible for admission.
+	ErrorOrdinal          int
 }
 type PrivateMalformedTerminalReceipt struct{ Selector, Digest string }
 
@@ -78,7 +79,7 @@ func malformedTerminalExpected(e OwnerPairExpected, source []byte, line, charact
 	if firstFailure != nil || len(first.Items) != 1 {
 		return PrivateMalformedTerminal{}, ErrPrivateMalformedTerminal
 	}
-	return PrivateMalformedTerminal{Version: privateMalformedTerminalVersion, ClaimCeiling: "PRIVATE;UNADMITTED;NO_PRODUCER_AUTHENTICATION;NO_COMPLETENESS;NO_CALLS;NO_SOURCE_CONTEXT", Terminal: "MALFORMED", Transport: "SUCCESS", SessionID: e.SessionID, Generation: e.Generation, KeyID: e.KeyID, Method: e.Method, ParamsBase64: base64.StdEncoding.EncodeToString(e.Params), ResultBase64: base64.StdEncoding.EncodeToString(e.Result), ResultLength: len(e.Result), ResultDigest: privateDigest(e.Result), Write: e.Write, Read: e.Read, Source: *e.Source, QueryLine: line, QueryCharacter: character, Revision: revision, RevisionCustody: custody, N: 1, E: 2, P: 1, A: 0, ErrorOrdinal: 1}, nil
+	return PrivateMalformedTerminal{Version: privateMalformedTerminalVersion, ClaimCeiling: "PRIVATE;UNADMITTED;NO_PRODUCER_AUTHENTICATION;NO_COMPLETENESS;NO_CALLS;NO_SOURCE_CONTEXT", Terminal: "MALFORMED", Transport: "SUCCESS", SessionID: e.SessionID, Generation: e.Generation, KeyID: e.KeyID, Method: e.Method, ParamsBase64: base64.StdEncoding.EncodeToString(e.Params), ResultBase64: base64.StdEncoding.EncodeToString(e.Result), ResultLength: len(e.Result), ResultDigest: privateDigest(e.Result), Write: e.Write, Read: e.Read, Source: *e.Source, QueryLine: line, QueryCharacter: character, Revision: revision, RevisionCustody: custody, N: 1, E: 2, P: 0, A: 0, DiagnosticValidPrefix: len(first.Items), ErrorOrdinal: 1}, nil
 }
 func canonicalMalformedTerminal(r PrivateMalformedTerminal) ([]byte, error) {
 	raw, err := json.Marshal(r)
