@@ -1,0 +1,18 @@
+{
+ "status":"PROPOSED_UNREGISTERED_NOT_QUALIFIED",
+ "profile":"GO_GOPLS_DEFINITION_EXACT_V1",
+ "method":"textDocument/definition",
+ "provider":"gopls",
+ "language":"go",
+ "encoding":"utf-16",
+ "rangeAdapter":"GO_IDENTIFIER_RANGE_V1",
+ "requireReadyGenerationPinnedSession":true,
+ "requireAdvertisedCapability":true,
+ "requireCleanRegisteredLocalFileCustody":true,
+ "requireVerifiedSubordinateQueryBeforeInvocation":true,
+ "requireAllOrNoneTargetSupply":true,
+ "limits":{"queriesPerAcquisition":16,"queriesPerRequest":1,"targetsPerRequest":1000,"paramsBytes":65536,"resultBytes":524288,"canonicalRecordBytes":1500000,"messagesPerRequest":4,"managerCountedBodyBytesPerRequest":1048576,"exactFramedWireBytesPerRequest":null,"deadlineMilliseconds":15000,"documentBytes":262144,"documentRequestsPerQuery":21,"totalDocumentBytesPerQuery":4194304,"evaluationWorkUnits":100000,"retainedCanonicalBytesPerAcquisition":134217728},
+ "privacy":{"policyId":"DEFINITION_PRIVATE_EXACT_V1","rawParamsAndResults":"PRIVATE","diagnostics":"REDACTED","canonicalRetention":"NO_AUTO_EXPIRY"},
+ "otherLanguages":{"requireSeparateQualifiedRangeAdapter":true,"requireSeparateFrozenProviderExecutableVersionCapabilityRevisionProfile":true,"inheritGoLexicalPolicy":false,"inheritGoUriPolicy":false},
+ "admissionClaim":false
+}

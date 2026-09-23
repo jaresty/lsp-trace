@@ -1,0 +1,14 @@
+{
+ "$schema":"https://json-schema.org/draft/2020-12/schema",
+ "$id":"urn:lsp-trace:draft:unregistered:adr0011-definition-lsp:v1",
+ "$comment":"PROPOSED only. Validate params using #/$defs/params and result using #/$defs/result. format uri needs an asserting validator; Go file URI custody requires replay.",
+ "$defs":{
+  "uri":{"type":"string","format":"uri","pattern":"^file:///[^#?]+$","minLength":9,"maxLength":4096},
+  "point":{"type":"object","additionalProperties":false,"required":["line","character"],"properties":{"line":{"type":"integer","minimum":0},"character":{"type":"integer","minimum":0}}},
+  "range":{"type":"object","additionalProperties":false,"required":["start","end"],"properties":{"start":{"$ref":"#/$defs/point"},"end":{"$ref":"#/$defs/point"}}},
+  "params":{"type":"object","additionalProperties":false,"required":["textDocument","position"],"properties":{"textDocument":{"type":"object","additionalProperties":false,"required":["uri"],"properties":{"uri":{"$ref":"#/$defs/uri"}}},"position":{"$ref":"#/$defs/point"}}},
+  "location":{"type":"object","additionalProperties":false,"required":["uri","range"],"properties":{"uri":{"$ref":"#/$defs/uri"},"range":{"$ref":"#/$defs/range"}}},
+  "locationLink":{"type":"object","additionalProperties":false,"required":["targetUri","targetRange","targetSelectionRange"],"properties":{"targetUri":{"$ref":"#/$defs/uri"},"targetRange":{"$ref":"#/$defs/range"},"targetSelectionRange":{"$ref":"#/$defs/range"},"originSelectionRange":{"$ref":"#/$defs/range"}}},
+  "result":{"oneOf":[{"type":"null"},{"type":"array","maxItems":0},{"$ref":"#/$defs/location"},{"type":"array","minItems":1,"items":{"$ref":"#/$defs/location"}},{"type":"array","minItems":1,"items":{"$ref":"#/$defs/locationLink"}}]}
+ }
+}
