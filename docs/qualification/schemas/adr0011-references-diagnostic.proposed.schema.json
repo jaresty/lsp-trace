@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/docs/qualification/schemas/adr0011-references-diagnostic.proposed.schema.json",
+  "title": "Private ADR0011 references diagnostic D (proposed v1; not admitted)",
+  "description": "Shape only. Strict duplicate-key rejection, canonical byte encoding, independent observations, privacy selection, byte/work bounds, custody and replay must be enforced outside JSON Schema. Never an occurrence or successful method receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "role", "privacyPolicyId", "methodPolicyId", "schemaDigest", "implementationDigest", "targetDigest", "method", "queryOccurrenceId", "sessionId", "generation", "requestKey", "invocationId", "paramsDigest", "writeDigest", "readDigest", "sourceDigest", "revisionDigest", "responsePresence", "reason", "outcome", "queryDisposition", "counts", "error"],
+  "properties": {
+    "version": {"const": "lsp-trace.adr0011.references-diagnostic.v1"},
+    "role": {"const": "PRIVATE_DIAGNOSTIC_ONLY"},
+    "privacyPolicyId": {"$ref": "#/$defs/digest"},
+    "methodPolicyId": {"$ref": "#/$defs/digest"},
+    "schemaDigest": {"$ref": "#/$defs/digest"},
+    "implementationDigest": {"$ref": "#/$defs/digest"},
+    "targetDigest": {"$ref": "#/$defs/digest"},
+    "method": {"const": "textDocument/references"},
+    "queryOccurrenceId": {"$ref": "#/$defs/opaque"},
+    "sessionId": {"$ref": "#/$defs/opaque"},
+    "generation": {"type": "integer", "minimum": 1},
+    "requestKey": {"$ref": "#/$defs/opaque"},
+    "invocationId": {"$ref": "#/$defs/opaque"},
+    "paramsDigest": {"$ref": "#/$defs/digest"},
+    "writeDigest": {"$ref": "#/$defs/digest"},
+    "readDigest": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "revisionDigest": {"$ref": "#/$defs/digest"},
+    "responsePresence": {"enum": ["RESULT_PRESENT", "RESULT_ABSENT", "MATCHED_ERROR"]},
+    "reason": {"enum": ["MATCHED_SERVER_ERROR", "MISSING_RESULT", "MALFORMED_RESULT", "RESULT_ELEMENT_LIMIT", "RESULT_BYTE_LIMIT", "PRE_EVALUATION_WORK_LIMIT", "POST_EVALUATION_WORK_LIMIT", "WIRE_LIMIT", "PARTIAL_CANCELLED", "PARTIAL_TIMEOUT"]},
+    "outcome": {"enum": ["PROVIDER_FAILURE", "MALFORMED", "RESOURCE_LIMIT", "PARTIAL"]},
+    "queryDisposition": {"enum": ["NONE", "MALFORMED", "LIMITED", "FAILED"]},
+    "counts": {"$ref": "#/$defs/counts"},
+    "error": {"$ref": "#/$defs/error"}
+  },
+  "allOf": [
+    {"if": {"properties": {"reason": {"const": "MATCHED_SERVER_ERROR"}}}, "then": {"properties": {"responsePresence": {"const": "MATCHED_ERROR"}, "outcome": {"const": "PROVIDER_FAILURE"}, "queryDisposition": {"const": "NONE"}, "error": {"$ref": "#/$defs/serverError"}, "counts": {"properties": {"begun": {"const": 0}, "terminal": {"const": 0}, "elements": {"const": "UNKNOWN"}, "elementBegun": {"const": 0}, "elementTerminal": {"const": 0}, "diagnosticValidPrefix": {"const": 0}}}}}},
+    {"if": {"properties": {"reason": {"const": "MISSING_RESULT"}}}, "then": {"properties": {"responsePresence": {"const": "RESULT_ABSENT"}, "outcome": {"const": "PROVIDER_FAILURE"}, "queryDisposition": {"const": "NONE"}}}},
+    {"if": {"properties": {"reason": {"const": "MALFORMED_RESULT"}}}, "then": {"properties": {"responsePresence": {"const": "RESULT_PRESENT"}, "outcome": {"const": "MALFORMED"}, "queryDisposition": {"const": "MALFORMED"}}}},
+    {"if": {"properties": {"reason": {"enum": ["RESULT_ELEMENT_LIMIT", "RESULT_BYTE_LIMIT", "PRE_EVALUATION_WORK_LIMIT", "WIRE_LIMIT"]}}}, "then": {"properties": {"outcome": {"const": "RESOURCE_LIMIT"}}}},
+    {"if": {"properties": {"reason": {"const": "POST_EVALUATION_WORK_LIMIT"}}}, "then": {"properties": {"outcome": {"const": "PARTIAL"}, "queryDisposition": {"const": "LIMITED"}}}},
+    {"if": {"properties": {"reason": {"enum": ["PARTIAL_CANCELLED", "PARTIAL_TIMEOUT"]}}}, "then": {"properties": {"outcome": {"const": "PARTIAL"}, "queryDisposition": {"const": "FAILED"}}}},
+    {"if": {"properties": {"error": {"properties": {"codePresence": {"const": "ABSENT"}}, "required": ["codePresence"]}}}, "then": {"properties": {"error": {"not": {"required": ["code"]}}}}},
+    {"if": {"properties": {"error": {"properties": {"codePresence": {"const": "PRESENT"}}, "required": ["codePresence"]}}}, "then": {"properties": {"error": {"required": ["code"]}}}}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"},
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["declared", "begun", "terminal", "elements", "elementBegun", "elementTerminal", "parsed", "admitted", "diagnosticValidPrefix"],
+      "properties": {
+        "declared": {"const": 1}, "begun": {"type": "integer", "minimum": 0, "maximum": 1},
+        "terminal": {"type": "integer", "minimum": 0, "maximum": 1},
+        "elements": {"oneOf": [{"type": "integer", "minimum": 0, "maximum": 1001}, {"const": "UNKNOWN"}]},
+        "elementBegun": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "elementTerminal": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "parsed": {"const": 0}, "admitted": {"const": 0},
+        "diagnosticValidPrefix": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "failingOrdinal": {"type": "integer", "minimum": 0, "maximum": 999}
+      }
+    },
+    "error": {
+      "type": "object", "additionalProperties": false, "required": ["codePresence"],
+      "properties": {"codePresence": {"enum": ["ABSENT", "PRESENT"]}, "code": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647}}
+    },
+    "serverError": {"allOf": [{"$ref": "#/$defs/error"}, {"properties": {"codePresence": {"enum": ["ABSENT", "PRESENT"]}}}]}
+  }
+}
