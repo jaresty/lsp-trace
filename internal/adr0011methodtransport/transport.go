@@ -43,6 +43,8 @@ type Request struct {
 	Deadline    time.Time
 	MaxMessages int
 	MaxBytes    int64
+	// Private default-off manager-owned query/result pair; not a receipt.
+	CaptureOwnedMethodPair bool
 }
 
 // Outcome classifies one private transport attempt, not a parsed LSP method result.
@@ -83,6 +85,7 @@ type Result struct {
 	messages    int
 	bytes       int64
 	observation *TransactionObservation
+	ownedPair   *sessionruntime.OwnedMethodPair
 }
 
 // Observation returns an unverified in-memory value, never a method receipt.
@@ -157,6 +160,7 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 		SessionID: req.SessionID, Generation: req.Generation, Method: req.Method,
 		Params: append(json.RawMessage(nil), req.Params...), Deadline: req.Deadline,
 		MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes,
+		CaptureOwnedMethodPair: req.CaptureOwnedMethodPair,
 	}
 	out.observation.RoundTripCalled = true
 	result := t.runtime.RoundTrip(ctx, wire)
@@ -205,6 +209,14 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 		out.server = result.ServerError.Message
 		out.serverCode = result.ServerError.Code
 		return out
+	}
+	if req.CaptureOwnedMethodPair {
+		pair, present := result.CompletedOwnedMethodPair()
+		if !present || !ownedPairMatches(req, result, pair, out.observation.LocalWriteCorrespondence) {
+			out.status, out.failure = transportFailure, "managed method pair correspondence failed"
+			return out
+		}
+		out.ownedPair = &pair
 	}
 	out.status = transportSuccess
 	if result.Result == nil {
