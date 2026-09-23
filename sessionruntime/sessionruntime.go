@@ -240,6 +240,8 @@ type RoundTripRequest struct {
 	Deadline    time.Time
 	MaxMessages int
 	MaxBytes    int64
+	// Private default-off in-memory D/R query/result observation, not a receipt.
+	CaptureOwnedMethodPair bool `json:"-"`
 	// Private opt-in for bounded exact definition response frame bytes; zero disables.
 	CaptureDefinitionResponseFrameMaxBytes int64 `json:"-"`
 	// Separate private opt-in for bounded references response frame bytes.
@@ -618,6 +620,7 @@ type RoundTripResult struct {
 	requestWrite            *RequestWriteObservation
 	methodRequestFrame      []byte
 	responseRead            *ResponseReadObservation
+	ownedMethodPair         *OwnedMethodPair
 	definitionResponseFrame []byte
 	referencesResponseFrame []byte
 }
@@ -726,7 +729,13 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
 	writer := lspwire.NewWriter(writeCapture, m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
-	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: req.Params}
+	requestParams := req.Params
+	if eligibleOwnedMethodRequest(req) {
+		// The owned writer and retained pair must use the same pre-write copy,
+		// never a caller-owned slice that can be changed during the read.
+		requestParams = append(json.RawMessage(nil), req.Params...)
+	}
+	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: requestParams}
 	requestBody, _ := json.Marshal(requestMessage)
 	result.RequestMessages = 1
 	result.RequestBytes = int64(len(requestBody))
@@ -853,6 +862,7 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 				if raw, retained := writeCapture.retainedFrame(); retained {
 					result.methodRequestFrame = raw
 				}
+				result.ownedMethodPair = buildOwnedMethodPair(req, result, requestParams, read.message.Result)
 			}
 			if m.methodCandidateTestHook != nil && VerifyMethodFrameCorrespondence(req, result) == nil {
 				requestFrame, requestOK := result.CompletedMethodRequestFrame()
