@@ -194,6 +194,111 @@ func SelectDocumentSymbolCandidate(q Query, raw []byte) (Candidate, error) {
 	return *chosen, nil
 }
 
+// ValidateDocumentSymbolResultV1 checks a complete result independently of a query point.
+func ValidateDocumentSymbolResultV1(raw []byte) error {
+	if len(raw) == 0 || len(raw) > maxResultBytes || !boundedJSONTokens(raw) || strictjson.RejectDuplicates(raw) != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return ErrUnresolved
+	}
+	var roots []symbol
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if dec.Decode(&roots) != nil || roots == nil || dec.Decode(new(any)) != io.EOF || !exactDocumentSymbolKeys(raw) {
+		return ErrUnresolved
+	}
+	type entry struct {
+		s         symbol
+		depth     int
+		parent    Range
+		hasParent bool
+	}
+	stack := make([]entry, 0, len(roots))
+	for _, root := range roots {
+		stack = append(stack, entry{s: root, depth: 1})
+	}
+	count := 0
+	for len(stack) > 0 {
+		e := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		count++
+		if count > maxSymbols || e.depth > maxDepth || e.s.Name == "" || e.s.Kind < 1 || e.s.Kind > 26 {
+			return ErrUnresolved
+		}
+		display, ok := unpack(e.s.Range)
+		if !ok {
+			return ErrUnresolved
+		}
+		selection, ok := unpack(e.s.SelectionRange)
+		if !ok || !encloses(display, selection) || e.hasParent && !encloses(e.parent, display) {
+			return ErrUnresolved
+		}
+		for _, child := range e.s.Children {
+			stack = append(stack, entry{s: child, depth: e.depth + 1, parent: display, hasParent: true})
+		}
+	}
+	return nil
+}
+
+// exactDocumentSymbolKeys closes encoding/json's case-insensitive field aliases.
+func exactDocumentSymbolKeys(raw []byte) bool {
+	var roots []json.RawMessage
+	if json.Unmarshal(raw, &roots) != nil {
+		return false
+	}
+	var fields func(json.RawMessage, ...string) (map[string]json.RawMessage, bool)
+	fields = func(raw json.RawMessage, allowed ...string) (map[string]json.RawMessage, bool) {
+		if bytes.Equal(raw, []byte("null")) {
+			return nil, true
+		}
+		var object map[string]json.RawMessage
+		if json.Unmarshal(raw, &object) != nil || object == nil {
+			return nil, false
+		}
+		for key := range object {
+			found := false
+			for _, name := range allowed {
+				if key == name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, false
+			}
+		}
+		return object, true
+	}
+	var checkRange func(json.RawMessage) bool
+	checkRange = func(raw json.RawMessage) bool {
+		r, ok := fields(raw, "start", "end")
+		if !ok {
+			return false
+		}
+		for _, point := range []json.RawMessage{r["start"], r["end"]} {
+			if _, ok := fields(point, "line", "character"); !ok {
+				return false
+			}
+		}
+		return true
+	}
+	stack := append([]json.RawMessage(nil), roots...)
+	for len(stack) > 0 {
+		item := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		s, ok := fields(item, "name", "detail", "kind", "tags", "deprecated", "range", "selectionRange", "children")
+		if !ok || !checkRange(s["range"]) || !checkRange(s["selectionRange"]) {
+			return false
+		}
+		if children, present := s["children"]; present && !bytes.Equal(children, []byte("null")) {
+			var nested []json.RawMessage
+			if json.Unmarshal(children, &nested) != nil || nested == nil {
+				return false
+			}
+			stack = append(stack, nested...)
+		}
+	}
+	return true
+}
+
 // SelectDocumentSymbolCandidateV1 is a private, unadmitted selector. It
 // validates the entire hierarchy before returning a most-specific match.
 func SelectDocumentSymbolCandidateV1(q Query, raw []byte) (Candidate, error) {

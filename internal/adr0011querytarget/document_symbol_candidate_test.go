@@ -18,6 +18,36 @@ const hierarchical = `[{
  }]
 }]`
 
+func TestValidateDocumentSymbolResultV1CompleteResult(t *testing.T) {
+	if err := ValidateDocumentSymbolResultV1([]byte(`[]`)); err != nil {
+		t.Fatalf("ASSERT_DOC_RESULT_EMPTY_VALID: %v", err)
+	}
+	if _, err := SelectDocumentSymbolCandidateV1(candidateQuery(), []byte(`[]`)); !errors.Is(err, ErrUnresolved) {
+		t.Fatalf("ASSERT_DOC_RESULT_EMPTY_SELECTOR_UNRESOLVED: %v", err)
+	}
+	badChild := strings.Replace(hierarchical, `}]`, `},{"name":"Bad","kind":0}]`, 1)
+	for _, raw := range []string{badChild, `null`, `[{}]`, `[] {}`, `[{"name":"x","name":"x"}]`, `[{"unknown":1}]`, strings.Replace(hierarchical, `"name":"Parent"`, `"Name":"Parent"`, 1), strings.Replace(hierarchical, `"line":0`, `"Line":0`, 1)} {
+		if err := ValidateDocumentSymbolResultV1([]byte(raw)); err == nil {
+			t.Fatalf("ASSERT_DOC_RESULT_REJECT_WHOLE: accepted %s", raw)
+		}
+	}
+	item := `{"name":"A","kind":12,"range":{"start":{"line":0,"character":0},"end":{"line":1,"character":0}},"selectionRange":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}`
+	for depth, valid := range map[int]bool{64: true, 65: false} {
+		raw := []byte(`[` + strings.Repeat(strings.TrimSuffix(item, `}`)+`,"children":[`, depth-1) + item + strings.Repeat(`]}`, depth-1) + `]`)
+		if (ValidateDocumentSymbolResultV1(raw) == nil) != valid {
+			t.Fatalf("ASSERT_DOC_RESULT_DEPTH_%d: expected valid=%v", depth, valid)
+		}
+	}
+	// Even the shortest valid symbol exceeds 104 bytes, so 10000 items
+	// already exceed the independent 1 MiB byte cap; both boundaries reject.
+	for n, valid := range map[int]bool{10000: false, 10001: false} {
+		raw := []byte(`[` + strings.TrimSuffix(strings.Repeat(item+`,`, n), `,`) + `]`)
+		if (ValidateDocumentSymbolResultV1(raw) == nil) != valid {
+			t.Fatalf("ASSERT_DOC_RESULT_CARDINALITY_%d: expected valid=%v", n, valid)
+		}
+	}
+}
+
 func candidateQuery() Query {
 	return Query{OccurrenceID: "declared-query", URI: "file:///w/a.go", Encoding: "utf-16", DocumentVersion: "4", SourceDigest: "sha256:" + strings.Repeat("a", 64), SessionID: "project", Generation: 1, Line: 2, Character: 3}
 }
