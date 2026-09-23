@@ -56,6 +56,19 @@ type OwnedMethodPair struct {
 	Source     *OwnedDocumentBinding
 }
 
+// emitOwnedMethodPairTestHook isolates a package-only observer from the retained pair
+// and from transport success. The hook is never configured by production hosts.
+func emitOwnedMethodPairTestHook(hook func(OwnedMethodPair), pair OwnedMethodPair) {
+	defer func() { _ = recover() }()
+	pair.Params = append(json.RawMessage(nil), pair.Params...)
+	pair.Result = append(json.RawMessage(nil), pair.Result...)
+	if pair.Source != nil {
+		source := *pair.Source
+		pair.Source = &source
+	}
+	hook(pair)
+}
+
 // ownedQueryURI rejects aliases and duplicate keys before comparing a
 // predeclared source to the exact manager-owned method query.
 func ownedQueryURI(req RoundTripRequest) (string, bool) {

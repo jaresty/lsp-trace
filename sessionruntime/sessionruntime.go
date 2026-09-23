@@ -158,6 +158,7 @@ type Config struct {
 	transientIdentityRandom io.Reader
 	// Package-private, default-off owner-path probe; never configured by hosts.
 	methodCandidateTestHook func(methodCandidateObservation)
+	ownedMethodPairTestHook func(OwnedMethodPair)
 }
 type StartRequest struct {
 	Profile           runtimeprofile.Profile
@@ -876,6 +877,9 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 					result.methodRequestFrame = raw
 				}
 				result.ownedMethodPair = buildOwnedMethodPair(req, result, requestParams, read.message.Result)
+				if result.ownedMethodPair != nil && m.ownedMethodPairTestHook != nil {
+					emitOwnedMethodPairTestHook(m.ownedMethodPairTestHook, *result.ownedMethodPair)
+				}
 			}
 			if m.methodCandidateTestHook != nil && VerifyMethodFrameCorrespondence(req, result) == nil {
 				requestFrame, requestOK := result.CompletedMethodRequestFrame()
@@ -1024,6 +1028,7 @@ type Manager struct {
 	diagnosticOperations    map[DiagnosticOperationHandle]diagnosticOperation
 	diagnosticOrder         []DiagnosticOperationHandle
 	methodCandidateTestHook func(methodCandidateObservation)
+	ownedMethodPairTestHook func(OwnedMethodPair)
 }
 
 func New(c Config) (*Manager, error) {
@@ -1065,7 +1070,7 @@ func New(c Config) (*Manager, error) {
 	if gitList == nil {
 		gitList = boundedGitWorktreeList
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook}, nil
 }
 
 const (
