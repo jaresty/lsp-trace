@@ -45,10 +45,12 @@ func TestADR0011ManagedMethodPeer(t *testing.T) {
 			if os.Getenv("ADR0011_METHOD_WIRE_CAPS") == "none" {
 				raw = json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","definitionProvider":false,"referencesProvider":false},"serverInfo":{"name":"adr0011-test-peer","version":"1"}}`)
 			} else {
-				raw = json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","definitionProvider":true,"referencesProvider":true},"serverInfo":{"name":"adr0011-test-peer","version":"1"}}`)
+				raw = json.RawMessage(`{"capabilities":{"positionEncoding":"utf-16","definitionProvider":true,"referencesProvider":true,"documentSymbolProvider":true},"serverInfo":{"name":"adr0011-test-peer","version":"1"}}`)
 			}
 		case "initialized":
 			continue
+		case "textDocument/documentSymbol":
+			raw = json.RawMessage(`[{"name":"Query","kind":12,"range":{"start":{"line":1,"character":0},"end":{"line":1,"character":15}},"selectionRange":{"start":{"line":1,"character":5},"end":{"line":1,"character":10}}}]`)
 		case transport.MethodDefinition:
 			switch os.Getenv("ADR0011_METHOD_WIRE_CASE") {
 			case "D-04":
