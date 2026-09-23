@@ -114,7 +114,7 @@ def main() -> None:
                     "original_unchanged_receipt_may_remain_verified": (True if substituted else None),
                     "lifecycle_original_eligibility": ("ACTIVE; removal denied" if number == 99 else
                                                        "TOMBSTONED_OR_QUARANTINED" if lifecycle else None),
-                    "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP" if number == 53 else None),
+                    "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_COUNTED_BODY_CAP" if number == 53 else None),
                     "input_selectors_and_digests": None,
                     "owner_and_fixture_profile": None,
                     "observed_counters_and_dispositions": None,
@@ -162,7 +162,7 @@ def main() -> None:
                                     "counters": ("N=16 declared; other counters require a pinned full acquisition fixture"
                                                  if bound == "queries_16" else None),
                                     "receipt_publication": None, "eligibility": None},
-            "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP" if bound == "result_1048576" else "UNVERIFIED"),
+            "cap_reachability": ("BLOCKED_BY_CURRENT_1MIB_MANAGER_COUNTED_BODY_CAP" if bound == "result_1048576" else "UNVERIFIED"),
             "input_selectors_and_digests": None,
             "owner_and_fixture_profile": None,
             "observed_counters_and_dispositions": None,
@@ -182,7 +182,8 @@ def main() -> None:
         "matrix_sha256": "sha256:" + MATRIX_HASH,
         "implementation_schema_policy_digests": None,
         "coverage_status": "DRAFT_INCOMPLETE_UNREVIEWED",
-        "selected_result_bound_reachability": "BLOCKED_BY_CURRENT_1MIB_MANAGER_WIRE_CAP_FOR_1048576_BYTE_RESULT_AND_1048577_OVER_LIMIT",
+        "selected_result_bound_reachability": "BLOCKED_BY_CURRENT_1MIB_MANAGER_COUNTED_BODY_CAP_FOR_1048576_BYTE_RESULT_AND_1048577_OVER_LIMIT",
+        "manager_maxbytes_semantics": "sessionruntime/sessionruntime.go:830-835 sums remarshaled decoded JSON-RPC message bodies including envelope and other messages, excluding Content-Length headers; exact framed-wire bytes are not established by this counter",
         "substitution_common_verdict": "No newly issued request outcome or terminal; E/E_B/E_T/P/A=U/0/0/0/0 for new admission; N=1 already declared; no newly verified receipt; substituted path inactive. Original unchanged receipt may remain verified.",
         "counts_by_family": {family: sum(c["case_id"].startswith("R11-" + family + "-") for c in cases)
                              for family in [*(name for name, _ in ranges), "POLICY_BOUND", "SELECTED_AT"]},
