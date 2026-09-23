@@ -242,6 +242,8 @@ type RoundTripRequest struct {
 	MaxBytes    int64
 	// Private default-off in-memory D/R query/result observation, not a receipt.
 	CaptureOwnedMethodPair bool `json:"-"`
+	// Optional private prepared-document guard. It is not analyzed-source proof.
+	ExpectedOwnedDocument *OwnedDocumentBinding `json:"-"`
 	// Private opt-in for bounded exact definition response frame bytes; zero disables.
 	CaptureDefinitionResponseFrameMaxBytes int64 `json:"-"`
 	// Separate private opt-in for bounded references response frame bytes.
@@ -635,6 +637,13 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 // roundTrip is the single transaction path. classify is package-private so only
 // manager-owned workflows can append semantic disposition to the same collector.
 func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool) RoundTripResult {
+	if req.ExpectedOwnedDocument != nil {
+		// Use pre-lock copies for both the source guard and owned write; caller
+		// mutation while a response is pending cannot change either identity.
+		req.Params = append(json.RawMessage(nil), req.Params...)
+		expected := *req.ExpectedOwnedDocument
+		req.ExpectedOwnedDocument = &expected
+	}
 	if failure := contextFailure(parent); failure != "" {
 		return RoundTripResult{Failure: failure}
 	}
@@ -651,6 +660,10 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 	if r.record.State != session.Ready || r.protocolOwned {
 		m.mu.Unlock()
 		return RoundTripResult{Failure: session.LifecycleConflict}
+	}
+	if req.ExpectedOwnedDocument != nil && !matchesOwnedDocument(req, r.documents) {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: DocumentSupplyUnavailable}
 	}
 	child, ok := r.process.(wireChild)
 	if !ok {

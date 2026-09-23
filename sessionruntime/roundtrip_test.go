@@ -73,7 +73,7 @@ func (c *roundTripChild) serve() {
 		c.mu.Lock()
 		c.requests = append(c.requests, msg)
 		c.mu.Unlock()
-		if msg.Method == "$/cancelRequest" {
+		if msg.Method == "$/cancelRequest" || msg.Method == "textDocument/didOpen" || msg.Method == "textDocument/didChange" {
 			continue
 		}
 		switch c.mode {
