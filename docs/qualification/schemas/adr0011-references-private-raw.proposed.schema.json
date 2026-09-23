@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/docs/qualification/schemas/adr0011-references-private-raw.proposed.schema.json",
+  "title": "ADR0011 references owner-only private raw manifest (PROPOSED; not admitted)",
+  "description": "Closed manifest only, never raw bytes. Schema cannot establish exact raw readback, aggregate bounds, owner access, strict duplicate-key/canonical parsing, privacy, retention or replay. No public selector or successful method receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "role", "privacyPolicyId", "methodPolicyId", "schemaDigest", "implementationDigest", "targetDigest", "method", "queryOccurrenceId", "sessionId", "generation", "requestKey", "invocationId", "paramsDigest", "writeDigest", "readDigest", "sourceDigest", "revisionDigest", "responsePresence", "reason", "rawResultDigest", "rawResultBytes", "rawResultSelector", "access"],
+  "properties": {
+    "version": {"const": "lsp-trace.adr0011.references-private-raw.v1"},
+    "role": {"const": "OWNER_ONLY_MALFORMED_RESULT_REPLAY"},
+    "privacyPolicyId": {"$ref": "#/$defs/digest"},
+    "methodPolicyId": {"$ref": "#/$defs/digest"},
+    "schemaDigest": {"$ref": "#/$defs/digest"},
+    "implementationDigest": {"$ref": "#/$defs/digest"},
+    "targetDigest": {"$ref": "#/$defs/digest"},
+    "method": {"const": "textDocument/references"},
+    "queryOccurrenceId": {"$ref": "#/$defs/opaque"},
+    "sessionId": {"$ref": "#/$defs/opaque"},
+    "generation": {"type": "integer", "minimum": 1},
+    "requestKey": {"$ref": "#/$defs/opaque"},
+    "invocationId": {"$ref": "#/$defs/opaque"},
+    "paramsDigest": {"$ref": "#/$defs/digest"},
+    "writeDigest": {"$ref": "#/$defs/digest"},
+    "readDigest": {"$ref": "#/$defs/digest"},
+    "sourceDigest": {"$ref": "#/$defs/digest"},
+    "revisionDigest": {"$ref": "#/$defs/digest"},
+    "responsePresence": {"const": "RESULT_PRESENT"},
+    "reason": {"const": "MALFORMED_RESULT"},
+    "rawResultDigest": {"$ref": "#/$defs/digest"},
+    "rawResultBytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+    "rawResultSelector": {"type": "string", "pattern": "^adr0011-references-private-raw-v1-[0-9a-f]{64}\\.bin$"},
+    "access": {"const": "OWNER_ONLY"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "opaque": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_-]+$"}
+  }
+}
