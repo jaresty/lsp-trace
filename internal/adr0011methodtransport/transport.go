@@ -45,6 +45,8 @@ type Request struct {
 	MaxBytes    int64
 	// Private default-off manager-owned query/result pair; not a receipt.
 	CaptureOwnedMethodPair bool
+	// Optional prepared-document expectation, verified by the managed owner.
+	ExpectedOwnedDocument *sessionruntime.OwnedDocumentBinding
 }
 
 // Outcome classifies one private transport attempt, not a parsed LSP method result.
@@ -132,6 +134,10 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 	// Bind validation, the local digest, and the forwarded wire params to one
 	// private copy rather than retaining a caller-owned mutable slice.
 	req.Params = append(json.RawMessage(nil), req.Params...)
+	if req.ExpectedOwnedDocument != nil {
+		expected := *req.ExpectedOwnedDocument
+		req.ExpectedOwnedDocument = &expected
+	}
 	if err := validate(ctx, t, req); err != nil {
 		return Result{status: preflightFailure, method: req.Method, failure: err.Error()}
 	}
@@ -161,6 +167,7 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 		Params: append(json.RawMessage(nil), req.Params...), Deadline: req.Deadline,
 		MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes,
 		CaptureOwnedMethodPair: req.CaptureOwnedMethodPair,
+		ExpectedOwnedDocument:  req.ExpectedOwnedDocument,
 	}
 	out.observation.RoundTripCalled = true
 	result := t.runtime.RoundTrip(ctx, wire)
@@ -259,7 +266,10 @@ func validate(ctx context.Context, t *Transport, req Request) error {
 	if req.MaxBytes <= 0 || req.MaxBytes > maxBytes {
 		return errors.New("byte limit outside hard bounds")
 	}
-	return validateParams(req.Method, req.Params)
+	if err := validateParams(req.Method, req.Params); err != nil {
+		return err
+	}
+	return validateOwnedSourceExpectation(req)
 }
 
 // ValidateMethodParams reuses private transport preflight during offline

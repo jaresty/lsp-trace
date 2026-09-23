@@ -114,6 +114,10 @@ func startManagedMethodPeer(t *testing.T, modes ...string) (*sessionruntime.Mana
 }
 
 func startManagedMethodPeerWithCapabilities(t *testing.T, advertised bool, modes ...string) (*sessionruntime.Manager, sessionruntime.StartResult, string) {
+	return startManagedMethodPeerWorkspace(t, "/workspace", advertised, modes...)
+}
+
+func startManagedMethodPeerWorkspace(t *testing.T, workspace string, advertised bool, modes ...string) (*sessionruntime.Manager, sessionruntime.StartResult, string) {
 	t.Helper()
 	mode := ""
 	if len(modes) != 0 {
@@ -130,7 +134,7 @@ func startManagedMethodPeerWithCapabilities(t *testing.T, advertised bool, modes
 	if err != nil {
 		t.Fatal(err)
 	}
-	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: "/workspace", Profile: "go", EnvironmentReference: "local"})
+	validated, err := runtimeprofile.Validate(runtimeprofile.Selector{TrustDomain: "test", Workspace: workspace, Profile: "go", EnvironmentReference: "local"})
 	if err != nil {
 		t.Fatal(err)
 	}
