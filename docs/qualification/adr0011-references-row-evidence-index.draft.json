@@ -1,0 +1,2276 @@
+{
+  "version": "adr0011.references.row-evidence-index.draft.v1",
+  "decision": "INCOMPLETE",
+  "contract_sha256": "sha256:d71ec03c9244eb70fe9d93023410e0dc5cedc9932c992b7ff1ef45f2fc42f7f9",
+  "matrix_sha256": "sha256:c370fd6ae76bb3b74a15da12a7a9c41d9730c68662830294a50dfe89177546a2",
+  "implementation_schema_policy_digests": null,
+  "substitution_common_verdict": "No newly issued request outcome or terminal; E/E_B/E_T/P/A=U/0/0/0/0 for new admission; N=1 already declared; no newly verified receipt; substituted path inactive. Original unchanged receipt may remain verified.",
+  "counts_by_family": {
+    "TERMINAL": 27,
+    "BOUND_TARGET": 9,
+    "SUBSTITUTION": 72,
+    "LIFECYCLE": 5
+  },
+  "cases": [
+    {
+      "case_id": "R11-TERMINAL-015-base",
+      "matrix_line": 15,
+      "variant": "base",
+      "fixture": "Capability absent; **zero method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "`UNSUPPORTED` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-016-base",
+      "matrix_line": 16,
+      "variant": "base",
+      "fixture": "Server error with code **0 present**",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-017-base",
+      "matrix_line": 17,
+      "variant": "base",
+      "fixture": "Server error with code **absent** (same error message)",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC; diagnostic records absence, never code 0",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-018-base",
+      "matrix_line": 18,
+      "variant": "base",
+      "fixture": "Cancel **before output**",
+      "expected_as_written": {
+        "outcome_and_query": "`CANCELLED` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-019-base",
+      "matrix_line": 19,
+      "variant": "base",
+      "fixture": "Timeout **before output**",
+      "expected_as_written": {
+        "outcome_and_query": "`TIMEOUT` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-020-base",
+      "matrix_line": 20,
+      "variant": "base",
+      "fixture": "Cancel **after one complete element prefix, before complete top-level value**",
+      "expected_as_written": {
+        "outcome_and_query": "`PARTIAL` / `FAILED`; 1/1",
+        "counters": "U/1/1/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-021-base",
+      "matrix_line": 21,
+      "variant": "base",
+      "fixture": "Timeout **after one complete element prefix, before complete top-level value**",
+      "expected_as_written": {
+        "outcome_and_query": "`PARTIAL` / `FAILED`; 1/1",
+        "counters": "U/1/1/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-022-base",
+      "matrix_line": 22,
+      "variant": "base",
+      "fixture": "Partial/short **request write**, no completed keyed write",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-023-base",
+      "matrix_line": 23,
+      "variant": "base",
+      "fixture": "Short/unmatched **response read**, no complete keyed response",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-024-base",
+      "matrix_line": 24,
+      "variant": "base",
+      "fixture": "Transport-success response **missing result payload**",
+      "expected_as_written": {
+        "outcome_and_query": "`PROVIDER_FAILURE` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC (absence encoded)",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-025-base",
+      "matrix_line": 25,
+      "variant": "base",
+      "fixture": "Exact successful **`null`** under admitted target and full denominator",
+      "expected_as_written": {
+        "outcome_and_query": "`COMPLETE_EMPTY` / `EMPTY`; 1/1",
+        "counters": "0/0/0/0/0",
+        "receipt_publication": "V; VERIFIED_SUCCESS",
+        "eligibility": "active empty result, no occurrence"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-026-base",
+      "matrix_line": 26,
+      "variant": "base",
+      "fixture": "Exact successful **`[]`** under admitted target and full denominator",
+      "expected_as_written": {
+        "outcome_and_query": "`COMPLETE_EMPTY` / `EMPTY`; 1/1",
+        "counters": "0/0/0/0/0",
+        "receipt_publication": "V; VERIFIED_SUCCESS, distinct bytes/identity from `null`",
+        "eligibility": "active empty result, no occurrence"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-027-base",
+      "matrix_line": 27,
+      "variant": "base",
+      "fixture": "Two **equal valid locations** with distinct original ordinals",
+      "expected_as_written": {
+        "outcome_and_query": "`COMPLETE` / `ITEMS`; 1/1",
+        "counters": "2/2/2/2/2",
+        "receipt_publication": "V; VERIFIED_SUCCESS; two distinct occurrence IDs",
+        "eligibility": "active"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-028-base",
+      "matrix_line": 28,
+      "variant": "base",
+      "fixture": "Malformed **first** member in complete two-element array",
+      "expected_as_written": {
+        "outcome_and_query": "`MALFORMED` / `MALFORMED`; 1/1",
+        "counters": "2/1/1/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC, failing ordinal 0; later element unbegun",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-029-base",
+      "matrix_line": 29,
+      "variant": "base",
+      "fixture": "Valid first, malformed **second** member in complete two-element array",
+      "expected_as_written": {
+        "outcome_and_query": "`MALFORMED` / `MALFORMED`; 1/1",
+        "counters": "2/2/2/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC, failing ordinal 1, diagnostic prefix 1 only",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-030-base",
+      "matrix_line": 30,
+      "variant": "base",
+      "fixture": "Exactly **1,000** valid returned locations under all byte/work bounds",
+      "expected_as_written": {
+        "outcome_and_query": "`COMPLETE` / `ITEMS`; 1/1",
+        "counters": "1000/1000/1000/1000/1000",
+        "receipt_publication": "V; VERIFIED_SUCCESS",
+        "eligibility": "active"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-031-base",
+      "matrix_line": 31,
+      "variant": "base",
+      "fixture": "Exactly **1,001** returned locations, complete array count safely known",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / `LIMITED`; 1/1",
+        "counters": "1001/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC; no truncation to 1,000",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-032-base",
+      "matrix_line": 32,
+      "variant": "base",
+      "fixture": "**Pre-evaluation** selected work/byte limit, result E cannot be safely counted",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / `NONE`; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-033-base",
+      "matrix_line": 33,
+      "variant": "base",
+      "fixture": "**Post-evaluation** work limit after one valid element of a complete two-element array",
+      "expected_as_written": {
+        "outcome_and_query": "`PARTIAL` / `LIMITED`; 1/1",
+        "counters": "2/1/1/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC; second unbegun",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-034-base",
+      "matrix_line": 34,
+      "variant": "base",
+      "fixture": "Privacy policy **withholds before element evaluation** otherwise available mandatory canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; WITHHELD",
+        "eligibility": "inactive; no new admission"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-035-base",
+      "matrix_line": 35,
+      "variant": "base",
+      "fixture": "**Precommit** no-replace publication failure after valid two-item parse",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0 (B observed, no verified terminal T)",
+        "counters": "2/2/2/2/0 *provisional, not an issued ledger*",
+        "receipt_publication": "N; PRECOMMIT_FAILED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-036-base",
+      "matrix_line": 36,
+      "variant": "base",
+      "fixture": "**`COMMITTED_VERIFICATION_FAILED`** after bytes committed",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0 (B observed, no verified terminal T)",
+        "counters": "2/2/2/2/0 *provisional, not an issued ledger*",
+        "receipt_publication": "N; PUBLICATION_UNVERIFIED; quarantine exact selector/digest",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-037-base",
+      "matrix_line": 37,
+      "variant": "base",
+      "fixture": "**Duplicate returned Location** (not a duplicate JSON key)",
+      "expected_as_written": {
+        "outcome_and_query": "`COMPLETE` / `ITEMS`; 1/1",
+        "counters": "2/2/2/2/2",
+        "receipt_publication": "V; VERIFIED_SUCCESS; exact ordinal 0 and 1 identities differ",
+        "eligibility": "active"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-038-base",
+      "matrix_line": 38,
+      "variant": "base",
+      "fixture": "Duplicate **parameter JSON key**, including escaped/case alias",
+      "expected_as_written": {
+        "outcome_and_query": "`POLICY_MISMATCH` / `NONE`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-039-base",
+      "matrix_line": 39,
+      "variant": "base",
+      "fixture": "Duplicate **result JSON key** in later element",
+      "expected_as_written": {
+        "outcome_and_query": "`MALFORMED` / `MALFORMED`; 1/1",
+        "counters": "2/2/2/0/0",
+        "receipt_publication": "D; VERIFIED_DIAGNOSTIC; failing ordinal 1",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-040-base",
+      "matrix_line": 40,
+      "variant": "base",
+      "fixture": "Duplicate/unknown/trailing **receipt or ledger field**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; no *new* verified verdict",
+        "counters": "U/0/0/0/0 for new admission",
+        "receipt_publication": "N under substituted bytes; original object may remain VERIFIED_SUCCESS",
+        "eligibility": "inactive for substituted object"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-TERMINAL-041-base",
+      "matrix_line": 41,
+      "variant": "base",
+      "fixture": "Query-target receipt absent, tied selection, or URI/point/source/revision mismatch **before method invocation**",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE, `TARGET_IDENTITY_UNRESOLVED`; 0/0; zero invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-051-base",
+      "matrix_line": 51,
+      "variant": "base",
+      "fixture": "**17th** acquisition query under `MaxAcquisitionQueries=16`",
+      "expected_as_written": {
+        "outcome_and_query": "`POLICY_MISMATCH` / NONE; 17 rejected/0/0, no invocation",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-052-base",
+      "matrix_line": 52,
+      "variant": "base",
+      "fixture": "**65,537** exact parameter bytes (`MaxParamsBytes+1`)",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "N; NOT_ATTEMPTED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-053-base",
+      "matrix_line": 53,
+      "variant": "base",
+      "fixture": "**1,048,577** exact result bytes (`MaxResultBytes+1`)",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0 for admission",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D with redacted bound only; VERIFIED_DIAGNOSTIC if within its own cap, otherwise N/WITHHELD; never retain over-bound raw",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-054-base",
+      "matrix_line": 54,
+      "variant": "base",
+      "fixture": "**1,500,001** encoded canonical bytes (`MaxCanonicalRecordBytes+1`) with a bounded, fully parsed 1,000-element raw result",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/1/0 (no verified terminal)",
+        "counters": "1000/1000/1000/1000/0 *provisional, no issued ledger*",
+        "receipt_publication": "N; PRECOMMIT_FAILED",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-055-base",
+      "matrix_line": 55,
+      "variant": "base",
+      "fixture": "Selected live-wire/message/aggregate-work limit exceeded **before evaluable output**",
+      "expected_as_written": {
+        "outcome_and_query": "`RESOURCE_LIMIT` / NONE; 1/0/0",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "D redacted; VERIFIED_DIAGNOSTIC or N/WITHHELD by privacy policy",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-056-base",
+      "matrix_line": 56,
+      "variant": "base",
+      "fixture": "Document-symbol `[]` / no containing selection",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate verified-empty target result cannot issue target identity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-057-base",
+      "matrix_line": 57,
+      "variant": "base",
+      "fixture": "Document-symbol tied/overlapping most-specific selections",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate diagnostic ambiguity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-058-base",
+      "matrix_line": 58,
+      "variant": "base",
+      "fixture": "Malformed later document-symbol child, unknown field or duplicate key",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; subordinate MALFORMED diagnostic, no valid prefix identity",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-BOUND_TARGET-059-base",
+      "matrix_line": 59,
+      "variant": "base",
+      "fixture": "Subordinate target's managed source/version/revision/encoding mismatch or missing canonical payload",
+      "expected_as_written": {
+        "outcome_and_query": "— / NONE; 1/0/0, `TARGET_IDENTITY_UNRESOLVED`",
+        "counters": "U/0/0/0/0",
+        "receipt_publication": "references N/NOT_ATTEMPTED; target receipt not replay-eligible",
+        "eligibility": "inactive"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-067-method",
+      "matrix_line": 67,
+      "variant": "method",
+      "fixture": "Method name or exact query occurrence ID",
+      "expected_as_written": {
+        "outcome_and_query": "method/query identity rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-067-query_occurrence_id",
+      "matrix_line": 67,
+      "variant": "query_occurrence_id",
+      "fixture": "Method name or exact query occurrence ID",
+      "expected_as_written": {
+        "outcome_and_query": "method/query identity rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-068-query_uri",
+      "matrix_line": 68,
+      "variant": "query_uri",
+      "fixture": "Query URI",
+      "expected_as_written": {
+        "outcome_and_query": "query/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-069-query_line",
+      "matrix_line": 69,
+      "variant": "query_line",
+      "fixture": "Query line or character (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "query/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-069-query_character",
+      "matrix_line": 69,
+      "variant": "query_character",
+      "fixture": "Query line or character (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "query/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-070-encoding",
+      "matrix_line": 70,
+      "variant": "encoding",
+      "fixture": "UTF encoding",
+      "expected_as_written": {
+        "outcome_and_query": "encoding/source mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-071-raw_params_formatting",
+      "matrix_line": 71,
+      "variant": "raw_params_formatting",
+      "fixture": "Exact raw params **formatting** with semantically equal JSON",
+      "expected_as_written": {
+        "outcome_and_query": "exact-byte digest mismatch; do not normalize",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-072-params_value",
+      "matrix_line": 72,
+      "variant": "params_value",
+      "fixture": "Params field value or `includeDeclaration`",
+      "expected_as_written": {
+        "outcome_and_query": "grammar or query mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-072-include_declaration",
+      "matrix_line": 72,
+      "variant": "include_declaration",
+      "fixture": "Params field value or `includeDeclaration`",
+      "expected_as_written": {
+        "outcome_and_query": "grammar or query mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-073-session_id",
+      "matrix_line": 73,
+      "variant": "session_id",
+      "fixture": "Managed session ID or generation (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "session/generation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-073-generation",
+      "matrix_line": 73,
+      "variant": "generation",
+      "fixture": "Managed session ID or generation (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "session/generation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-074-request_key",
+      "matrix_line": 74,
+      "variant": "request_key",
+      "fixture": "Owned request key or collision-safe invocation ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "key/invocation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-074-invocation_id",
+      "matrix_line": 74,
+      "variant": "invocation_id",
+      "fixture": "Owned request key or collision-safe invocation ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "key/invocation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-075-completed_write",
+      "matrix_line": 75,
+      "variant": "completed_write",
+      "fixture": "Completed request-write or selected response-read observation (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "keyed wire-consistency mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-075-selected_read",
+      "matrix_line": 75,
+      "variant": "selected_read",
+      "fixture": "Completed request-write or selected response-read observation (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "keyed wire-consistency mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-076-capability",
+      "matrix_line": 76,
+      "variant": "capability",
+      "fixture": "Capability advertisement or provider/adapter as reported (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "capability/provider policy mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-076-provider",
+      "matrix_line": 76,
+      "variant": "provider",
+      "fixture": "Capability advertisement or provider/adapter as reported (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "capability/provider policy mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-076-adapter",
+      "matrix_line": 76,
+      "variant": "adapter",
+      "fixture": "Capability advertisement or provider/adapter as reported (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "capability/provider policy mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-077-git_root",
+      "matrix_line": 77,
+      "variant": "git_root",
+      "fixture": "Host Git root, before/after commit or cleanliness evidence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "`HOST_GIT_PROBE_V1`/revision mismatch, never provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-077-git_before_commit",
+      "matrix_line": 77,
+      "variant": "git_before_commit",
+      "fixture": "Host Git root, before/after commit or cleanliness evidence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "`HOST_GIT_PROBE_V1`/revision mismatch, never provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-077-git_after_commit",
+      "matrix_line": 77,
+      "variant": "git_after_commit",
+      "fixture": "Host Git root, before/after commit or cleanliness evidence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "`HOST_GIT_PROBE_V1`/revision mismatch, never provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-077-git_before_clean",
+      "matrix_line": 77,
+      "variant": "git_before_clean",
+      "fixture": "Host Git root, before/after commit or cleanliness evidence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "`HOST_GIT_PROBE_V1`/revision mismatch, never provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-077-git_after_clean",
+      "matrix_line": 77,
+      "variant": "git_after_clean",
+      "fixture": "Host Git root, before/after commit or cleanliness evidence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "`HOST_GIT_PROBE_V1`/revision mismatch, never provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-078-revision_commit",
+      "matrix_line": 78,
+      "variant": "revision_commit",
+      "fixture": "Revision commit or revision custody (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "revision mismatch, never upgraded to provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-078-revision_custody",
+      "matrix_line": 78,
+      "variant": "revision_custody",
+      "fixture": "Revision commit or revision custody (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "revision mismatch, never upgraded to provider verified",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-079-prepared_uri",
+      "matrix_line": 79,
+      "variant": "prepared_uri",
+      "fixture": "Prepared document URI, version or digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "document/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-079-prepared_version",
+      "matrix_line": 79,
+      "variant": "prepared_version",
+      "fixture": "Prepared document URI, version or digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "document/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-079-prepared_digest",
+      "matrix_line": 79,
+      "variant": "prepared_digest",
+      "fixture": "Prepared document URI, version or digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "document/target mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-080-symbol_source_payload",
+      "matrix_line": 80,
+      "variant": "symbol_source_payload",
+      "fixture": "Document-symbol source payload or its full result bytes (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate target receipt mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-080-symbol_result_bytes",
+      "matrix_line": 80,
+      "variant": "symbol_result_bytes",
+      "fixture": "Document-symbol source payload or its full result bytes (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate target receipt mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-081-symbol_selection_range",
+      "matrix_line": 81,
+      "variant": "symbol_selection_range",
+      "fixture": "Document-symbol selection range or uniquely chosen target symbol identity (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate target derivation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-081-target_symbol_id",
+      "matrix_line": 81,
+      "variant": "target_symbol_id",
+      "fixture": "Document-symbol selection range or uniquely chosen target symbol identity (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate target derivation mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-symbol_method_selector",
+      "matrix_line": 82,
+      "variant": "symbol_method_selector",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-symbol_method_digest",
+      "matrix_line": 82,
+      "variant": "symbol_method_digest",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-symbol_terminal_selector",
+      "matrix_line": 82,
+      "variant": "symbol_terminal_selector",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-symbol_terminal_digest",
+      "matrix_line": 82,
+      "variant": "symbol_terminal_digest",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-query_target_selector",
+      "matrix_line": 82,
+      "variant": "query_target_selector",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-082-query_target_digest",
+      "matrix_line": 82,
+      "variant": "query_target_digest",
+      "fixture": "Document-symbol method, terminal or query-target selector/digest (test each component)",
+      "expected_as_written": {
+        "outcome_and_query": "subordinate cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-083-references_method",
+      "matrix_line": 83,
+      "variant": "references_method",
+      "fixture": "References method, result payload or result presence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "references receipt and cardinality mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-083-references_result_payload",
+      "matrix_line": 83,
+      "variant": "references_result_payload",
+      "fixture": "References method, result payload or result presence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "references receipt and cardinality mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-083-references_result_presence",
+      "matrix_line": 83,
+      "variant": "references_result_presence",
+      "fixture": "References method, result payload or result presence (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "references receipt and cardinality mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-084-returned_uri",
+      "matrix_line": 84,
+      "variant": "returned_uri",
+      "fixture": "Reference returned URI, range or ordinal (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "occurrence identity/multiplicity mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-084-returned_range",
+      "matrix_line": 84,
+      "variant": "returned_range",
+      "fixture": "Reference returned URI, range or ordinal (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "occurrence identity/multiplicity mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-084-returned_ordinal",
+      "matrix_line": 84,
+      "variant": "returned_ordinal",
+      "fixture": "Reference returned URI, range or ordinal (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "occurrence identity/multiplicity mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-085-references_method_selector",
+      "matrix_line": 85,
+      "variant": "references_method_selector",
+      "fixture": "References method receipt selector/digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "transaction cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-085-references_method_digest",
+      "matrix_line": 85,
+      "variant": "references_method_digest",
+      "fixture": "References method receipt selector/digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "transaction cross-object link mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-terminal_selector",
+      "matrix_line": 86,
+      "variant": "terminal_selector",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-terminal_digest",
+      "matrix_line": 86,
+      "variant": "terminal_digest",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-N",
+      "matrix_line": 86,
+      "variant": "N",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-B",
+      "matrix_line": 86,
+      "variant": "B",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-T",
+      "matrix_line": 86,
+      "variant": "T",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-E",
+      "matrix_line": 86,
+      "variant": "E",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-E_B",
+      "matrix_line": 86,
+      "variant": "E_B",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-E_T",
+      "matrix_line": 86,
+      "variant": "E_T",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-P",
+      "matrix_line": 86,
+      "variant": "P",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-086-A",
+      "matrix_line": 86,
+      "variant": "A",
+      "fixture": "Terminal member ledger selector/digest or N/B/T/E/E_B/E_T/P/A value (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "terminal balance/custody mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-occurrence_selector",
+      "matrix_line": 87,
+      "variant": "occurrence_selector",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-occurrence_digest",
+      "matrix_line": 87,
+      "variant": "occurrence_digest",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-kind",
+      "matrix_line": 87,
+      "variant": "kind",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-custody_role",
+      "matrix_line": 87,
+      "variant": "custody_role",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-source_role",
+      "matrix_line": 87,
+      "variant": "source_role",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-target_role",
+      "matrix_line": 87,
+      "variant": "target_role",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-087-occurrence_id",
+      "matrix_line": 87,
+      "variant": "occurrence_id",
+      "fixture": "Occurrence ledger selector/digest, kind, custody role, source/target direction or ID (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "typed-admission mismatch; never retype as CALLS",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-088-privacy_policy",
+      "matrix_line": 88,
+      "variant": "privacy_policy",
+      "fixture": "Privacy/method/admission policy ID or implementation/schema digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "selected policy/version mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-088-method_policy",
+      "matrix_line": 88,
+      "variant": "method_policy",
+      "fixture": "Privacy/method/admission policy ID or implementation/schema digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "selected policy/version mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-088-admission_policy",
+      "matrix_line": 88,
+      "variant": "admission_policy",
+      "fixture": "Privacy/method/admission policy ID or implementation/schema digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "selected policy/version mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-088-implementation_digest",
+      "matrix_line": 88,
+      "variant": "implementation_digest",
+      "fixture": "Privacy/method/admission policy ID or implementation/schema digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "selected policy/version mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-088-schema_digest",
+      "matrix_line": 88,
+      "variant": "schema_digest",
+      "fixture": "Privacy/method/admission policy ID or implementation/schema digest (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "selected policy/version mismatch",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-089-family_version",
+      "matrix_line": 89,
+      "variant": "family_version",
+      "fixture": "Unknown family version/kind, duplicate key or trailing canonical content (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "closed-schema replay rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-089-family_kind",
+      "matrix_line": 89,
+      "variant": "family_kind",
+      "fixture": "Unknown family version/kind, duplicate key or trailing canonical content (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "closed-schema replay rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-089-duplicate_key",
+      "matrix_line": 89,
+      "variant": "duplicate_key",
+      "fixture": "Unknown family version/kind, duplicate key or trailing canonical content (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "closed-schema replay rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-SUBSTITUTION-089-trailing_content",
+      "matrix_line": 89,
+      "variant": "trailing_content",
+      "fixture": "Unknown family version/kind, duplicate key or trailing canonical content (test each)",
+      "expected_as_written": {
+        "outcome_and_query": "closed-schema replay rejection",
+        "counters": "N=1 declared; no new verified B/T; E/E_B/E_T/P/A=U/0/0/0/0 for new admission",
+        "receipt_publication": null,
+        "eligibility": null
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-097-base",
+      "matrix_line": 97,
+      "variant": "base",
+      "fixture": "Reviewed `RETIRE_DERIVATIVES_AND_REMOVE`, zero active dependents, successful deletion",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "H; REMOVED with exact removal manifest",
+        "eligibility": "tombstoned, no active input"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-098-base",
+      "matrix_line": 98,
+      "variant": "base",
+      "fixture": "Reviewed `PRIVACY_REVOKE` while active dependents exist; cascade all tombstones then remove",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "H; REMOVED with exact revoke/dependency manifest",
+        "eligibility": "tombstoned, no active input"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-099-base",
+      "matrix_line": 99,
+      "variant": "base",
+      "fixture": "Retire attempted while live occurrence/derivative still pins payload",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "original V; VERIFIED_SUCCESS; removal disposition `REMOVAL_DENIED_ACTIVE_DEPENDENCY`, no deletion",
+        "eligibility": "original active; removal denied"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-100-base",
+      "matrix_line": 100,
+      "variant": "base",
+      "fixture": "Reviewed removal or revoke, **deletion fails** and bytes may remain",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "H for new admission; DELETE_FAILED_QUARANTINED, exact failed selector inventory",
+        "eligibility": "inactive/quarantined pending reviewed resolution; revoke dependents tombstoned"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    },
+    {
+      "case_id": "R11-LIFECYCLE-101-base",
+      "matrix_line": 101,
+      "variant": "base",
+      "fixture": "Mandatory payload **missing without reviewed removal manifest**",
+      "expected_as_written": {
+        "outcome_and_query": "—/NONE; historical 2/2/2/2/0 new",
+        "counters": "—/NONE; historical 2/2/2/2/0 new",
+        "receipt_publication": "N; REPLAY_UNAVAILABLE_UNEXPLAINED",
+        "eligibility": "inactive/quarantined, **not** a legitimate tombstone"
+      },
+      "input_selectors_and_digests": null,
+      "owner_and_fixture_profile": null,
+      "observed_counters_and_dispositions": null,
+      "publication_and_readback": null,
+      "privacy_redaction": null,
+      "executable_guard": null,
+      "reviewer": null,
+      "disposition": "INCOMPLETE"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# RESOLVES_TO_DEFINITION — proposed falsification matrix
+
+**Status: PROPOSED, NOT EXECUTED OR QUALIFIED.** Companion to [the definition contract proposal](adr0011-definition-occurrence-contract.proposed.md). Definition implementation starts only after independently `QUALIFIED` references and separately accepted definition implementation contract. Each row needs frozen exact input bytes, declared profile/source/Git custody, N/B/T/E/E_B/E_T/P/A, terminal verdict, publication/readback state, replay eligibility, and an executable guard; missing independently measured fields mean `INCOMPLETE`. No row treats a synthetic peer as real qualification.
+
+`U` means E is unknowable, not zero. `V` is independently verified method/terminal/occurrence evidence; `D` is bounded redacted diagnostic evidence, not a successful method receipt; `N` means no verified receipt. `—` means no verified method verdict is issuable. All rows below propose **N=1** unless noted. Counters refer to newly admitted occurrences, not existing historical ledgers.
+
+## Mandatory method and result controls
+
+| Independent fixture | Required method/query; B/T | E/E_B/E_T/P/A | Receipt and new eligibility |
+| --- | --- | --- | --- |
+| Definition capability absent; zero invocation | `UNSUPPORTED`/NONE; 0/0 | U/0/0/0/0 | N; inactive |
+| Server error code `0` present versus error code absent (two fixtures) | `PROVIDER_FAILURE`/NONE; 0/0 | U/0/0/0/0 | D; inactive; preserve presence distinction |
+| Cancel or timeout before provider output (two fixtures) | `CANCELLED` or `TIMEOUT`/NONE; 0/0 | U/0/0/0/0 | N; inactive |
+| Cancel or timeout after one independently evaluated complete prefix but before a complete top-level value (two fixtures) | `PARTIAL`/FAILED; 1/1 | U/1/1/0/0 | D if independently replayable; inactive |
+| Partial write or unmatched/short read (two fixtures) | `PROVIDER_FAILURE`/NONE; 0/0 | U/0/0/0/0 | N; inactive |
+| Transport-success response lacking `result` | `PROVIDER_FAILURE`/NONE; 0/0 | U/0/0/0/0 | D encoding absence; inactive |
+| Exact `null` versus `[]` (two fixtures) | `COMPLETE_EMPTY`/EMPTY; 1/1 | 0/0/0/0/0 | V; distinct byte identities, no occurrence |
+| One valid scalar `Location` | `COMPLETE`/ITEMS; 1/1 | 1/1/1/1/1 | V; ordinal 0 |
+| Two valid `Location` targets, two valid `LocationLink` targets (separate fixtures) | `COMPLETE`/ITEMS; 1/1 | 2/2/2/2/2 | V; each target/range shape retained |
+| Two equal targets of each admitted array shape (separate fixtures) | `COMPLETE`/ITEMS; 1/1 | 2/2/2/2/2 | V; two distinct ordinal-bound occurrence IDs |
+| Scalar `LocationLink` under selected grammar | `MALFORMED`/MALFORMED; 1/1 | 1/1/1/0/0 if independently evaluated | D; inactive |
+| Mixed `Location`/`LocationLink` two-item array, valid Location first | `MALFORMED`/MALFORMED; 1/1 | 2/2/2/0/0 | D; second shape mismatch ordinal 1; prefix diagnostic only |
+| Malformed first target in complete two-item array | `MALFORMED`/MALFORMED; 1/1 | 2/1/1/0/0 | D; ordinal 0; later item unbegun |
+| Valid first, malformed second; duplicate key in second (two fixtures) | `MALFORMED`/MALFORMED; 1/1 | 2/2/2/0/0 | D; valid prefix diagnostic only |
+| Exactly 1,000 valid targets; 1,001 complete returned targets (two fixtures) | `COMPLETE`/ITEMS or `RESOURCE_LIMIT`/LIMITED; 1/1 | 1000/1000/1000/1000/1000 or 1001/0/0/0/0 | V or D; no truncation |
+| Pre-evaluation work limit; post-one-element work limit (two fixtures) | `RESOURCE_LIMIT`/NONE; 0/0 or `PARTIAL`/LIMITED; 1/1 | U/0/0/0/0 or 2/1/1/0/0 | D if privacy permits; inactive |
+| Privacy withholding before mandatory payload evaluation | —/NONE; 0/0 | U/0/0/0/0 | N; WITHHELD |
+| Precommit failure or committed verification failure after two valid items (two fixtures) | —/NONE; 1/0 | 2/2/2/2/0 provisional, **not** an issued ledger | N; inactive; latter quarantines selector/digest; internal method completion exists but **issuable T=0** |
+
+These expected element counters require recorded evaluator events, not a parser's final item count; if the event carrier is unavailable the row is `INCOMPLETE`. A short or incomplete frame does not magically expose a valid prefix; `E_B/E_T=1/1` on partial rows requires an actual owner/evaluator observation seam. Otherwise record the row as **INCOMPLETE**, not a fabricated pass.
+
+## Independent bounds, query and source controls
+
+- For proposed initial `GO_GOPLS_DEFINITION_EXACT_V1`, reject the 17th predeclared query without invocation. Reject 65,537 exact parameter bytes, **524,289 result bytes**, and 1,500,001 complete canonical-record bytes at their respective **independent** boundaries. Independently exercise 4/5 messages, 1,048,576/1,048,577 wire bytes, 15,000 ms deadline, 262,144/262,145 document bytes, 21/22 document requests, 8,388,608/8,388,609 aggregate document bytes, 100,000/100,001 evaluation work units, and 128 MiB aggregate retained canonical bytes with safely controlled fixtures. A limit that the current Manager cannot expose remains `INCOMPLETE`, not an inferred pass. No truncation or borrowed Program C `MaxInputs` bound.
+- Publish and independently replay-verify a mandatory `DEFINITION_QUERY_OCCURRENCE_V1` subordinate receipt **before invocation**. Reject missing, ambiguous, stale, absent-payload or substituted query occurrence/range (`QUERY_IDENTITY_UNRESOLVED` proposed gate), stale generation, mismatched negotiated encoding, dirty/unknown host Git revision, or changed HEAD/root/cleanliness between the two host probes; all require zero invocation. For the first Go/gopls profile, test the versioned `GO_IDENTIFIER_RANGE_V1` adapter on identifier start/interior/end, UTF-16 surrogate boundary, invalid/over-bound prepared source, and two candidate spans; reject zero or ambiguous matches before invocation. A CUE or other-language arm requires its **own** qualified source/range adapter and provider profile. Keep `HOST_OBSERVED_GIT` distinct from `CALLER_ASSERTED` revision.
+- Verify `Location.range`, `LocationLink.targetRange` and contained `targetSelectionRange`; test missing, inverted, disjoint, outside-source, non-eligible-language-profile or unavailable cross-document source. With a `LocationLink.originSelectionRange`, test exact equality (eligible) and independently substitute start and end: mismatch yields whole-result `MALFORMED`, P=A=0. No ambient file fallback or replacement of references target identity.
+- For a complete two-target result with one unavailable exact target source, require independently measured E=2, E_B=2, E_T=2, P=2, A=0, `COMPLETE` method outcome and `EXCLUDED` query disposition under the selected **all-or-none** policy; no partial acceptance. `[]`/`null` require complete declared denominator and all publication checks.
+
+## Independently substituted fields — one fixture per field
+
+Change only one independently supplied expectation or retained object at a time. New A=0 and no new verified terminal/receipt; original unchanged receipt may remain valid. Independently substitute: method; capability; provider/adapter; occurrence ID; query URI; query line; query character; query range; UTF encoding; raw params formatting; param value; session ID; generation; owned key; invocation ID; completed write; matched read; Git root; before commit; after commit; before status; after status; revision/custody; prepared query URI/version/digest; result presence; exact result bytes; target URI; target range; target selection range; target original ordinal; cross-document source URI/version/digest; method selector/digest; terminal selector/digest and **each** N/B/T/E/E_B/E_T/P/A; occurrence selector/digest/kind/direction/ID; privacy/method/admission policy and implementation/schema digests; unknown version/kind/field; duplicate key; trailing canonical content. Each result must have its own executable guard and observed verdict—one aggregate substitution test is insufficient.
+
+## Lifecycle and non-regression
+
+- With zero live dependents, reviewed `RETIRE_DERIVATIVES_AND_REMOVE` writes an immutable manifest and leaves historical occurrences tombstoned; with active dependents, deny removal. `PRIVACY_REVOKE` atomically tombstones every dependent before removal. Failed deletion quarantines exact bytes; unexplained missing payload fails closed as `REPLAY_UNAVAILABLE_UNEXPLAINED`. Each case has **zero newly admitted** occurrences and no fabricated new method verdict.
+- Pin exact method, query/source, terminal, occurrence, retention and schema/policy implementations for both synthetic and real clean Go/gopls fixtures. Test historical CALLS-only bytes/schemas and typed-boundary rejection as downstream non-regression; no grouping eligibility or CUE transfer is inferred from a definition occurrence.
+
+**Review blockers:** the user selected unique source-bound per-language query range (Go first), strict `originSelectionRange` equality, transaction-scoped target identity and all-or-none target-supply admission for drafting. This revision proposes exact shape grammar and positive Go/gopls limits. Independently verify joint feasibility; complete the evaluator/partial-failure observation carrier, nested strict-parser fixtures, root-lock/manifest schema, provider capability receipt and policy/schema IDs before requesting implementation acceptance. Other language profiles require their own qualified adapters and limits. Independent contract review may begin now and may eventually `ACCEPT_FOR_IMPLEMENTATION`, `REVISE`, or `DECLINE` a closed definition contract; **definition implementation** remains barred until references is independently `QUALIFIED`. This open draft is not contract acceptance.
