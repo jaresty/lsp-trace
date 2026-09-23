@@ -130,9 +130,10 @@ func emit(observer Observer, event Event) {
 }
 
 type Reader struct {
-	r        *bufio.Reader
-	limits   Limits
-	observer Observer
+	r            *bufio.Reader
+	limits       Limits
+	observer     Observer
+	frameCapture *framedReadCapture // optional, scoped to one ReadWithFrame call
 }
 
 func NewReader(r io.Reader, limits Limits) *Reader { return NewReaderObserved(r, limits, nil) }
@@ -145,6 +146,9 @@ func (r *Reader) Read() (Message, error) {
 	var used int64
 	for {
 		line, err := r.r.ReadString('\n')
+		if r.frameCapture != nil {
+			r.frameCapture.add([]byte(line))
+		}
 		used += int64(len(line))
 		emit(r.observer, Event{Stage: EventHeaderRead, Bytes: int64(len(line)), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe)})
 		if err != nil {
@@ -181,6 +185,9 @@ func (r *Reader) Read() (Message, error) {
 	}
 	body := make([]byte, length)
 	n, err := io.ReadFull(r.r, body)
+	if r.frameCapture != nil {
+		r.frameCapture.add(body[:n])
+	}
 	emit(r.observer, Event{Stage: EventBodyRead, Bytes: int64(n), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)})
 	if err != nil {
 		return Message{}, err

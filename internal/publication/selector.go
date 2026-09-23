@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync"
@@ -381,8 +382,28 @@ func safeTargetWithPathPolicy(root *Root, selector string, requirePathIdentity b
 		}
 		return nil, err
 	}
-	key := fmt.Sprintf("%T:%v:%s", parentInfo.Sys(), parentInfo.Sys(), canonicalFinalComponent(name))
-	return &target{parent: current, owned: owned, name: name, key: key}, nil
+	return &target{parent: current, owned: owned, name: name, key: targetLockKey(parentInfo, name)}, nil
+}
+
+func targetLockKey(parentInfo os.FileInfo, name string) string {
+	// Full Stat_t formatting includes mutable directory size/timestamps. A
+	// publication itself can change those fields before a concurrent removal
+	// tries to acquire the same lock. Use stable device/inode where exposed;
+	// on platforms without them, conservatively serialize by final name.
+	if parentInfo != nil {
+		raw := parentInfo.Sys()
+		v := reflect.ValueOf(raw)
+		if v.IsValid() && v.Kind() == reflect.Pointer && !v.IsNil() {
+			v = v.Elem()
+		}
+		if v.IsValid() && v.Kind() == reflect.Struct {
+			dev, ino := v.FieldByName("Dev"), v.FieldByName("Ino")
+			if dev.IsValid() && ino.IsValid() && dev.CanInterface() && ino.CanInterface() {
+				return fmt.Sprintf("%T:%v:%v:%s", raw, dev.Interface(), ino.Interface(), canonicalFinalComponent(name))
+			}
+		}
+	}
+	return "conservative-global:" + canonicalFinalComponent(name)
 }
 
 func canonicalFinalComponent(name string) string {

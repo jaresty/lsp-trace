@@ -156,6 +156,8 @@ type Config struct {
 	startupAttemptEntropy   func(uint64) []byte
 	startupAttemptRandom    io.Reader
 	transientIdentityRandom io.Reader
+	// Package-private, default-off owner-path probe; never configured by hosts.
+	methodCandidateTestHook func(methodCandidateObservation)
 }
 type StartRequest struct {
 	Profile           runtimeprofile.Profile
@@ -238,6 +240,12 @@ type RoundTripRequest struct {
 	Deadline    time.Time
 	MaxMessages int
 	MaxBytes    int64
+	// Private opt-in for bounded exact definition response frame bytes; zero disables.
+	CaptureDefinitionResponseFrameMaxBytes int64 `json:"-"`
+	// Separate private opt-in for bounded references response frame bytes.
+	CaptureReferencesResponseFrameMaxBytes int64 `json:"-"`
+	// Private D/R request-frame opt-in; zero disables. This does not publish bytes.
+	CaptureMethodRequestFrameMaxBytes int64 `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
 	DiagnosticCallerID string
 	DiagnosticTargetID string
@@ -590,23 +598,28 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 }
 
 type RoundTripResult struct {
-	Key                 lspwire.RequestKey
-	DiagnosticOperation DiagnosticOperationHandle `json:"-"`
-	Result              json.RawMessage
-	ServerError         *lspwire.RPCError
-	Failure             session.Failure
-	Messages            int
-	Bytes               int64
-	RequestMessages     int
-	RequestBytes        int64
-	Duration            time.Duration
-	ThermalPhase        string
-	Notifications       []lspwire.Message
-	Responses           []lspwire.Message
-	started             time.Time
-	diagnostic          manageddiagnostic.RequestObservation
-	diagnosticSink      func(manageddiagnostic.Record)
-	eventCollector      *manageddiagnostic.EventCollector
+	Key                     lspwire.RequestKey
+	DiagnosticOperation     DiagnosticOperationHandle `json:"-"`
+	Result                  json.RawMessage
+	ServerError             *lspwire.RPCError
+	Failure                 session.Failure
+	Messages                int
+	Bytes                   int64
+	RequestMessages         int
+	RequestBytes            int64
+	Duration                time.Duration
+	ThermalPhase            string
+	Notifications           []lspwire.Message
+	Responses               []lspwire.Message
+	started                 time.Time
+	diagnostic              manageddiagnostic.RequestObservation
+	diagnosticSink          func(manageddiagnostic.Record)
+	eventCollector          *manageddiagnostic.EventCollector
+	requestWrite            *RequestWriteObservation
+	methodRequestFrame      []byte
+	responseRead            *ResponseReadObservation
+	definitionResponseFrame []byte
+	referencesResponseFrame []byte
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
@@ -705,7 +718,13 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 	}
 	defer cancel()
 
-	writer := lspwire.NewWriter(checkedWriter{child.Stdin()}, m.wire)
+	requestFrameCap := int64(0)
+	if (req.Method == "textDocument/definition" || req.Method == "textDocument/references") &&
+		req.CaptureMethodRequestFrameMaxBytes > 0 && req.CaptureMethodRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes {
+		requestFrameCap = req.CaptureMethodRequestFrameMaxBytes
+	}
+	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
+	writer := lspwire.NewWriter(writeCapture, m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
 	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: req.Params}
 	requestBody, _ := json.Marshal(requestMessage)
@@ -721,15 +740,37 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 		return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
 	}
 	collector.Record(diagnosticEventWriteComplete, result.RequestBytes, true)
+	result.requestWrite = &RequestWriteObservation{
+		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+	}
 
 	type readResult struct {
-		message lspwire.Message
-		err     error
+		message  lspwire.Message
+		frame    lspwire.ReadFrameObservation
+		raw      []byte
+		retained bool
+		err      error
+	}
+	captureCap := int64(0)
+	switch req.Method {
+	case "textDocument/definition":
+		captureCap = req.CaptureDefinitionResponseFrameMaxBytes
+	case "textDocument/references":
+		captureCap = req.CaptureReferencesResponseFrameMaxBytes
 	}
 	reads := make(chan readResult, 1)
 	reader := lspwire.NewReader(child.Stdout(), m.wire)
 	for result.Messages < maxMessages {
-		go func() { msg, err := reader.Read(); reads <- readResult{msg, err} }()
+		go func() {
+			if captureCap > 0 {
+				msg, frame, raw, retained, err := reader.ReadWithFrameIfWithin(captureCap)
+				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				return
+			}
+			msg, frame, err := reader.ReadWithFrame()
+			reads <- readResult{message: msg, frame: frame, err: err}
+		}()
 		select {
 		case <-ctx.Done():
 			// Preserve cooperative $/cancelRequest behavior, but never let that
@@ -787,6 +828,18 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 				continue
 			}
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
+			result.responseRead = &ResponseReadObservation{
+				SessionID: req.SessionID, Generation: req.Generation, Key: key,
+				FrameBytes: read.frame.FrameBytes, FrameSHA256: read.frame.FrameSHA256,
+			}
+			if captureCap > 0 && read.retained && read.message.Kind() == lspwire.KindSuccessResponse {
+				switch req.Method {
+				case "textDocument/definition":
+					result.definitionResponseFrame = append([]byte(nil), read.raw...)
+				case "textDocument/references":
+					result.referencesResponseFrame = append([]byte(nil), read.raw...)
+				}
+			}
 			result.Result, result.ServerError = append(json.RawMessage(nil), read.message.Result...), read.message.Error
 			collector.Record(diagnosticEventResponseDecoded, int64(len(result.Result)), result.ServerError == nil)
 			if classify != nil {
@@ -794,6 +847,24 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 					collector.Record(diagnosticEventSemanticMatched, int64(responseID), true)
 				} else {
 					collector.Record(diagnosticEventSemanticUnmatched, int64(responseID), false)
+				}
+			}
+			if read.message.Kind() == lspwire.KindSuccessResponse && result.requestWrite != nil {
+				if raw, retained := writeCapture.retainedFrame(); retained {
+					result.methodRequestFrame = raw
+				}
+			}
+			if m.methodCandidateTestHook != nil && VerifyMethodFrameCorrespondence(req, result) == nil {
+				requestFrame, requestOK := result.CompletedMethodRequestFrame()
+				responseFrame, responseOK := result.CompletedMethodResponseFrame()
+				writeObservation, writeOK := result.CompletedRequestWrite()
+				readObservation, readOK := result.CompletedResponseRead()
+				if requestOK && responseOK && writeOK && readOK {
+					emitMethodCandidateTestHook(m.methodCandidateTestHook, methodCandidateObservation{
+						SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+						RequestWrite: writeObservation, ResponseRead: readObservation,
+						RequestFrame: requestFrame, ResponseFrame: responseFrame,
+					})
 				}
 			}
 			return m.finishRoundTrip(req.SessionID, owner, result, "", false)
@@ -929,6 +1000,7 @@ type Manager struct {
 	diagnosticEvictions     uint64
 	diagnosticOperations    map[DiagnosticOperationHandle]diagnosticOperation
 	diagnosticOrder         []DiagnosticOperationHandle
+	methodCandidateTestHook func(methodCandidateObservation)
 }
 
 func New(c Config) (*Manager, error) {
@@ -970,7 +1042,7 @@ func New(c Config) (*Manager, error) {
 	if gitList == nil {
 		gitList = boundedGitWorktreeList
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation)}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook}, nil
 }
 
 const (

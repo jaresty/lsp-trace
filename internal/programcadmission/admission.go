@@ -102,8 +102,11 @@ type CompositeProjectionAdmission struct {
 type Occurrence struct {
 	Identity, RelationID, Provider, ProviderVersion, Language string
 	From, To                                                  int64
-	CallSite                                                  graph.Range
-	Weight                                                    float64
+	// Ordinal is the original zero-based index within the validated edge's
+	// CallSites, not the position in the identity-sorted admission slice.
+	Ordinal  int
+	CallSite graph.Range
+	Weight   float64
 }
 
 func (a CompositeProjectionAdmission) Valid() bool { return a.valid }
@@ -166,7 +169,7 @@ func Admit(composite []byte) (Result, error) {
 		for ordinal, site := range e.CallSites {
 			id := occurrenceIdentity(a.CompositeID, e.RelationID, ordinal, site)
 			calls = append(calls, ProjectedCall{id, e.RelationID, e.CallerNodeID, e.CalleeNodeID, site})
-			occurrences = append(occurrences, Occurrence{Identity: id, RelationID: e.RelationID, Provider: a.Compatibility.ServerCommand, ProviderVersion: a.Compatibility.ServerVersion, Language: a.Compatibility.LanguageID, From: from, To: to, CallSite: site, Weight: 1})
+			occurrences = append(occurrences, Occurrence{Identity: id, RelationID: e.RelationID, Provider: a.Compatibility.ServerCommand, ProviderVersion: a.Compatibility.ServerVersion, Language: a.Compatibility.LanguageID, From: from, To: to, Ordinal: ordinal, CallSite: site, Weight: 1})
 			if len(occurrences) > maxOccurrences {
 				return Result{}, errors.New("composite admission: occurrence cap exceeded")
 			}

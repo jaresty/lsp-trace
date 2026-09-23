@@ -81,6 +81,17 @@ func (c *roundTripChild) serve() {
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "window/logMessage", Params: json.RawMessage(`{"type":3}`)})
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`null`)})
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`{"ok":true}`)})
+		case "references-empty":
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[]`)})
+		case "references-null":
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`null`)})
+		case "unmatched-only":
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`[]`)})
+		case "references-repeated":
+			location := `{"uri":"file:///fixture/main.go","range":{"start":{"line":1,"character":0},"end":{"line":1,"character":1}}}`
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "window/logMessage", Params: json.RawMessage(`{"type":3}`)})
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`999`), Result: json.RawMessage(`null`)})
+			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: json.RawMessage(`[` + location + `,` + location + `]`)})
 		case "server-error":
 			_ = w.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Error: &lspwire.RPCError{Code: -32603, Message: "boom"}})
 		case "malformed":

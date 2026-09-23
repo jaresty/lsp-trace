@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sort"
 
+	"lsp-trace/internal/directedwalk"
 	"lsp-trace/internal/graph"
 )
 
@@ -168,35 +169,11 @@ func project(sessionID string, generation uint64, down, up traversalProjection, 
 }
 
 func directedDepths(root string, edges []graph.Edge, maxDepth int, reverse bool) map[string]int {
-	depths := map[string]int{root: 0}
-	adjacency := map[string][]string{}
-	for _, edge := range edges {
-		from, to := edge.CallerNodeID, edge.CalleeNodeID
-		if reverse {
-			from, to = to, from
-		}
-		adjacency[from] = append(adjacency[from], to)
+	pairs := make([]directedwalk.Edge, len(edges))
+	for i, edge := range edges {
+		pairs[i] = directedwalk.Edge{From: edge.CallerNodeID, To: edge.CalleeNodeID}
 	}
-	for from := range adjacency {
-		sort.Strings(adjacency[from])
-	}
-	queue := []string{root}
-	for len(queue) > 0 {
-		from := queue[0]
-		queue = queue[1:]
-		depth := depths[from]
-		if depth >= maxDepth {
-			continue
-		}
-		for _, to := range adjacency[from] {
-			if old, exists := depths[to]; exists && old <= depth+1 {
-				continue
-			}
-			depths[to] = depth + 1
-			queue = append(queue, to)
-		}
-	}
-	return depths
+	return directedwalk.Depths(root, pairs, maxDepth, reverse)
 }
 
 func nodeWitnesses(rawID, root string, down, up map[string]int) []Witness {

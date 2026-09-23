@@ -51,6 +51,8 @@ Definition/reference evidence means only that a named language-server method ret
 
 No transformation, community score, agreement, multiplicity, or repeated provider return may raise this ceiling.
 
+**Producer-authentication parity with CALLS (decision update):** Like historical Program C CALLS captures, this family does not authenticate the producer or resist forgery by a privileged actor in the same process as the managed session/publication root. An immutable, digest-checked, replay-verified method receipt establishes the exact bytes and their consistency under a named acquisition path, not independent owner identity, provider authentication, or an unforgeable observation of the child stream. Same-process substitution remains a known limitation, not a security property silently claimed by an owner-path hook or a `VERIFIED` readback. An isolated owner, signature, or independently pinned OS trust anchor is **not a prerequisite** for this family's bounded structural grouping under this ceiling. This change does not weaken the independent exact-query, key/generation, bounded-frame, revision/custody, declared-member, references query-target, occurrence-admission, privacy, replay, or grouping-policy gates below. No D/R occurrence or Leiden input is admitted by this decision alone. A versioned, bounded immutable method transaction may bind the exact validated query identity, manager-reported session/generation/key and outcome, and retained result payload/terminal ledger under this ceiling; **retaining exact framed JSON-RPC request/response bytes is optional diagnostic evidence, not an admission prerequisite**. Do not make a 24-hour frame replay window a Leiden gate. The transaction and ledger still require canonical replay and privacy qualification; digests without available payload or already admitted immutable occurrence evidence cannot reconstruct result ordinals or newly admit an occurrence.
+
 ## Stage 1: relation and occurrence semantics
 
 Introduce two relation kinds in a new evidence-family version. Neither is a `CALLS` subtype or alias.
@@ -94,6 +96,16 @@ Repeated responses that normalize to the same endpoint pair remain distinct occu
 
 No definition/reference occurrence may be serialized, counted, projected, labeled, or advertised as `CALLS`.
 
+A symbol or exact source range may participate simultaneously in `CALLS`, `REFERENCES_SYMBOL`, and `RESOLVES_TO_DEFINITION` evidence. Preserve all independently admitted occurrences, method receipts, kinds, orientations, and custody identities; shared endpoints, overlapping display spans, or equal node IDs never deduplicate occurrences across kinds. A combined presentation remains a typed, provenance-separated view. Only a separately identified and qualified composition policy may turn eligible occurrences from several families into algorithmic inputs; it cannot rewrite or upgrade their original relations.
+
+### MVP: one typed up/down traversal
+
+The MVP uses **one bounded traversal over explicitly selected admitted relation kinds**, not a second definition/reference-only traversal. This clause selects architecture; it does not claim the mixed walk is implemented or qualified. The existing `up_depth`, `down_depth`, and node-bound concepts apply to the selected typed graph: down follows the canonical source-to-target direction, up follows admitted incoming edges, and each traversed occurrence counts as one hop in its direction. `CALLS` remains caller-to-callee; `REFERENCES_SYMBOL` remains referencing occurrence/symbol-to-referenced symbol; `RESOLVES_TO_DEFINITION` remains query/reference occurrence-to-returned definition target. A mixed walk may cross eligible kinds, but each contributing occurrence keeps its kind, exact method/custody receipt, direction, ordinal, and multiplicity. Node/frontier accounting cannot erase an occurrence merely because another kind reaches the same endpoint; kind-specific counts and omissions remain visible alongside the bounded combined traversal.
+
+Method-specific acquisition feeds the traversal only after its independent receipt, target-identity, and occurrence-admission gates. `textDocument/definition` does not provide an inverse lookup from a definition target; incoming definition edges require independently admitted occurrences or a verified reverse index. A references response similarly cannot supply its own referenced-symbol identity. Missing inverse or unacquired evidence is an explicit limitation, never an empty or complete upstream neighborhood. A selected depth is a bound on **admitted edges available to this walk**, not permission to recursively issue unbounded LSP methods or infer source completeness.
+
+This reuse is an MVP architecture choice, not authorization to broaden historical CALLS-only schemas or omitted selectors. The new typed selection remains private and fail-closed until its additive contract and qualification are verified; separate CLI/MCP enablement and grouping-policy admission remain required. The existing live CALLS-only call-hierarchy acquisition and its historical bytes are unchanged.
+
 ## Stage 2: bounded capability-aware acquisition
 
 Acquisition is live, bounded, and capability-aware. It is separate from deterministic offline grouping.
@@ -130,6 +142,22 @@ Do not reuse V6 `TARGET`/`CALLER` custody or incoming CALLS occurrence semantics
 - `DEFINITION_TARGET`.
 
 Custody records the server-reported method result, its exact request context, and its limitations. It neither authenticates semantic truth nor transfers CALLS custody.
+
+### Bounded source-bearing context
+
+A definition or reference occurrence is not adequately displayed by symbol names or identifier-sized ranges alone. Its successor source-context projection selects, separately and within independent document, range, byte, work, and privacy limits:
+
+- the exact query/reference occurrence range and its uniquely resolved containing source definition, when available;
+- the exact referenced-symbol or returned definition target range and its server-reported full definition display range, when available;
+- exact source bodies for those display ranges only from admitted document supplies with matching managed session generation, document version, encoding, revision/custody, logical URI, and source digest.
+
+Preserve evidence, server item/target, and display ranges independently, following ADR 0008's provenance rules. `textDocument/documentSymbol` display resolution is a separate bounded acquisition with its own method receipt; it cannot invent a referenced-symbol identity, fix a definition result, add a relation, or turn a reference into a call. Query/reference containment must resolve to a unique server-reported definition range; missing or ambiguous containment never silently selects one. Cross-document source requires an exact admitted supply for each document; no checkout read, import resolver, or other ambient fallback is allowed. Every candidate receives one terminal source-context disposition with exact selected, unavailable, ambiguous, withheld, and limit-omitted accounting. A failed or withheld projection does not erase a valid method occurrence, but a source-bearing packet or Describe input must mark the missing context explicitly rather than presenting an identifier fragment as a full definition. Such an item is ineligible for a context-complete Describe claim until the required source-bearing selections are actually returned. Context presentation and any downstream generated description remain `authority=0`, `accepted=false`, and `completeness=UNKNOWN`.
+
+### Source-efficient many-to-one representation
+
+Normalize source presentation without normalizing away evidence. An immutable **source-point selection** is identified by exact logical URI, source digest and byte length, revision/retained-source custody or managed session generation and document version, position encoding, half-open evidence range, and privacy-policy identity. An immutable **context span** additionally binds its server-reported full-definition display range, display-resolution receipt, projection-policy identity, and source-body disposition. A single context span may serve several distinct source points only when those span identities and admitted source bytes match exactly. Canonical ordering assigns stable source-point and span IDs; emitted bodies are stored once per eligible span under the same privacy partition, with each occurrence retaining exact IDs for its own source/query and target selections. Selection/occurrence roles and method receipts remain on the occurrence bindings, not in a shared source body's identity.
+
+Several `CALLS`, `REFERENCES_SYMBOL`, or `RESOLVES_TO_DEFINITION` occurrences may therefore reference one exact source point or context span; neither shared text nor shared IDs merges, retypes, ranks, or deduplicates their relation occurrences. A different evidence range forbids source-point reuse but may still share one otherwise identical context span; a different revision, session generation, document version, digest, position encoding, display range, privacy identity, projection policy, receipt, or source disposition forbids span reuse. A missing or mismatched source-point/span reference fails closed. Account independently for source-point candidates and terminal dispositions, unique emitted spans and source bytes, and every occurrence-to-point/span binding, including multiplicity. Deduplication changes stored source bytes only; it cannot alter relation denominators, custody, typed outcomes, or authority.
 
 ## Stage 3: immutable grouping-input admission and composition
 
@@ -266,7 +294,7 @@ Every artifact carries exact family/version discriminators. Readers reject unkno
 
 ### Snapshot, packet, and checkpoint
 
-A successor snapshot binds the exact definition/reference receipts and occurrence ledger. A packet preserves canonical occurrence direction, multiplicity, policy actions, projected `PairWeight` contributions, and exclusions. A checkpoint binds every predecessor identity needed for workspace-free replay and discloses whether CALLS evidence exists for representative/outward-consumer processing.
+A successor snapshot binds the exact definition/reference receipts and occurrence ledger. A packet preserves canonical occurrence direction, multiplicity, policy actions, projected `PairWeight` contributions, exclusions, and separately typed source-context selections or explicit omissions. When one symbol has evidence from several relation families, the packet shows each kind and exact occurrence without cross-kind deduplication. A source-bearing packet binds independently admitted containing/query and target definition display ranges and bodies to their custody and projection receipts; a symbol-only fragment is never presented as equivalent context. A checkpoint binds every predecessor identity needed for workspace-free replay and discloses whether CALLS evidence exists for representative/outward-consumer processing.
 
 ### Replay
 
