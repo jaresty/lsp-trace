@@ -2,10 +2,57 @@ package adr0011methodresult
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/sessionruntime"
+	"strings"
 	"testing"
 )
+
+func TestOwnerPairCanonicalResultGrammar(t *testing.T) {
+	key := lspwire.RequestKey{Generation: 3, ID: 7}
+	pair := sessionruntime.OwnedMethodPair{SessionID: "s", Generation: 3, Key: key, Method: "textDocument/definition", Params: []byte(`{"textDocument":{"uri":"file:///a"},"position":{"line":0,"character":0}}`), Write: sessionruntime.RequestWriteObservation{SessionID: "s", Generation: 3, Key: key, Method: "textDocument/definition", FrameBytes: 120, FrameSHA256: rawSHA([]byte("write"))}, Read: sessionruntime.ResponseReadObservation{SessionID: "s", Generation: 3, Key: key, FrameBytes: 50, FrameSHA256: rawSHA([]byte("read"))}}
+	location := `{"uri":"file:///a","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}`
+	cases := []struct {
+		name, method, result string
+		valid                bool
+	}{
+		{"null", "textDocument/definition", `null`, true},
+		{"empty references", "textDocument/references", `[]`, true},
+		{"repeated locations", "textDocument/references", `[` + location + `,` + location + `]`, true},
+		{"candidate limit inclusive", "textDocument/references", `[` + strings.TrimSuffix(strings.Repeat(location+`,`, 1000), `,`) + `]`, true},
+		{"scalar", "textDocument/definition", `true`, false},
+		{"references object", "textDocument/references", location, false},
+		{"malformed location", "textDocument/definition", `{"uri":"file:///a","range":{}}`, false},
+		{"duplicate nested keys", "textDocument/definition", `{"uri":"file:///a","range":{"start":{"line":0,"line":1,"character":0},"end":{"line":0,"character":1}}}`, false},
+		{"candidate limit", "textDocument/references", `[` + strings.TrimSuffix(strings.Repeat(location+`,`, 1001), `,`) + `]`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pair.Method, pair.Write.Method, pair.Result = tc.method, tc.method, []byte(tc.result)
+			if tc.method == "textDocument/references" {
+				pair.Params = []byte(`{"textDocument":{"uri":"file:///a"},"position":{"line":0,"character":0},"context":{"includeDeclaration":true}}`)
+			} else {
+				pair.Params = []byte(`{"textDocument":{"uri":"file:///a"},"position":{"line":0,"character":0}}`)
+			}
+			expected := OwnerPairExpected{SessionID: pair.SessionID, Generation: pair.Generation, KeyID: key.ID, Method: pair.Method, Params: pair.Params, Result: pair.Result, Write: pair.Write, Read: pair.Read}
+			built, buildErr := BuildOwnerPairCanonical(pair)
+			if (buildErr == nil) != tc.valid {
+				t.Fatalf("build grammar validity = %v, want %v", buildErr == nil, tc.valid)
+			}
+			if !tc.valid {
+				record := ownerPairRecord{OwnerPairCanonicalVersion, "PRIVATE;UNADMITTED;NO_PRODUCER_AUTHENTICATION", expected.SessionID, expected.Generation, expected.KeyID, expected.Method, base64.StdEncoding.EncodeToString(expected.Params), base64.StdEncoding.EncodeToString(expected.Result), expected.Write, expected.Read, nil}
+				built, _ = json.Marshal(record)
+				built = append(built, '\n')
+			}
+			verifyErr := VerifyOwnerPairCanonical(built, expected)
+			if (verifyErr == nil) != tc.valid {
+				t.Fatalf("verify grammar validity = %v, want %v", verifyErr == nil, tc.valid)
+			}
+		})
+	}
+}
 
 func TestOwnerPairCanonicalSourceQueryBinding(t *testing.T) {
 	key := lspwire.RequestKey{Generation: 3, ID: 7}

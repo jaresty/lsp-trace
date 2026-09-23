@@ -16,6 +16,7 @@ import (
 // OwnerPairCanonicalVersion is private and unadmitted, not a method receipt.
 const OwnerPairCanonicalVersion = "lsp-trace.private.adr0011-owner-pair.UNADMITTED.NO_PRODUCER_AUTHENTICATION.v0"
 const ownerPairMaxBytes = 1500000
+const ownerPairMaxCandidates = 1000
 
 var ErrInvalidOwnerPairCanonical = errors.New("private unadmitted owner pair invalid")
 
@@ -54,7 +55,7 @@ func validOwnerPair(e OwnerPairExpected) bool {
 		e.Write.SessionID != e.SessionID || e.Write.Generation != e.Generation || e.Write.Key.Generation != e.Generation || e.Write.Key.ID != e.KeyID || e.Write.Method != e.Method ||
 		e.Read.SessionID != e.SessionID || e.Read.Generation != e.Generation || e.Read.Key.Generation != e.Generation || e.Read.Key.ID != e.KeyID ||
 		e.Write.FrameBytes <= 0 || e.Read.FrameBytes <= 0 || !validDigest(e.Write.FrameSHA256) || !validDigest(e.Read.FrameSHA256) ||
-		strictjson.RejectDuplicates(e.Params) != nil || strictjson.RejectDuplicates(e.Result) != nil || transport.ValidateMethodParams(e.Method, e.Params) != nil || !json.Valid(e.Result) {
+		strictjson.RejectDuplicates(e.Params) != nil || strictjson.RejectDuplicates(e.Result) != nil || transport.ValidateMethodParams(e.Method, e.Params) != nil || !validOwnerPairResult(e.Method, e.Result) {
 		return false
 	}
 	if e.Source != nil {
@@ -70,6 +71,11 @@ func validOwnerPair(e OwnerPairExpected) bool {
 	}
 	return true
 }
+func validOwnerPairResult(method string, result []byte) bool {
+	_, failure := parseRawUntrusted(method, result, ownerPairMaxCandidates)
+	return failure == nil
+}
+
 func validDigest(s string) bool {
 	if !strings.HasPrefix(s, "sha256:") || len(s) != 71 {
 		return false
