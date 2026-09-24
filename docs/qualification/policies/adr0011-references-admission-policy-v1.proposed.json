@@ -1,1 +1,1 @@
-{"admission":"VERIFIED_FINAL_ONLY","failure_a":0,"failure_t":0,"final_outcomes":["COMPLETE","COMPLETE_EMPTY"],"max_occurrences":1000,"schema_version":"REFERENCES_ADMISSION_POLICY_V1"}
+{"admission":"VERIFIED_FINAL_ONLY","failure_a":0,"failure_t":0,"final_outcomes":["COMPLETE","COMPLETE_EMPTY"],"max_occurrences":1000,"schema_version":"REFERENCES_ADMISSION_POLICY_V1","selection":"ALL_WELL_FORMED_LOCATIONS_NO_PARTIAL_ADMISSION"}

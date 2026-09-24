@@ -190,5 +190,8 @@ func TestFreezeSelectedPolicyBytes(t *testing.T) {
 		if name == "privacy" && (v["code_disclosure_default"] != "DENY_INCLUDING_ZERO" || v["capture_default"] != "OFF") {
 			t.Fatal("privacy defaults")
 		}
+		if name == "admission" && v["selection"] != "ALL_WELL_FORMED_LOCATIONS_NO_PARTIAL_ADMISSION" {
+			t.Fatal("admission selection must exclude partial issuance")
+		}
 	}
 }
