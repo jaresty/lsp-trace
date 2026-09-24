@@ -39,11 +39,11 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 		}
 		return map[string]any{"selector": selector, "digest": d, "schema_version": role}
 	}
-	ctx := map[string]any{"transaction_id": d, "query_occurrence_id": d, "method_ref": ref("lsp-trace.adr0011.references-symbol.method.v1"), "target_ref": ref("lsp-trace.adr0011.references-symbol.target.v1"), "source_identity_ref": ref("REFERENCES_SOURCE_IDENTITY_V1"), "revision_identity_ref": ref("REFERENCES_REVISION_IDENTITY_V1"), "method_policy_ref": ref("REFERENCES_POLICY_V1"), "admission_policy_ref": ref("REFERENCES_POLICY_V1"), "privacy_policy_ref": ref("REFERENCES_POLICY_V1"), "retention_policy_ref": ref("REFERENCES_POLICY_V1"), "implementation_digest": d, "schema_digests": []any{map[string]any{"role": "proposal", "digest": d}, map[string]any{"role": "candidate", "digest": d}, map[string]any{"role": "final", "digest": d}, map[string]any{"role": "event", "digest": d}}, "session_id": "s", "generation": 1, "request_key": "k", "invocation_id": "i"}
+	ctx := map[string]any{"transaction_id": d, "query_occurrence_id": d, "method_ref": ref("lsp-trace.adr0011.references-symbol.method.v1"), "target_ref": ref("lsp-trace.adr0011.references-symbol.target.v1"), "source_identity_ref": ref("REFERENCES_SOURCE_IDENTITY_V1"), "revision_identity_ref": ref("REFERENCES_REVISION_IDENTITY_V1"), "method_policy_ref": ref("REFERENCES_METHOD_POLICY_V1"), "admission_policy_ref": ref("REFERENCES_ADMISSION_POLICY_V1"), "privacy_policy_ref": ref("LOCAL_QUALIFICATION_PRIVACY_V1"), "retention_policy_ref": ref("REFERENCES_RETENTION_POLICY_V1"), "implementation_digest": d, "schema_digests": []any{map[string]any{"role": "proposal", "digest": d}, map[string]any{"role": "candidate", "digest": d}, map[string]any{"role": "final", "digest": d}, map[string]any{"role": "event", "digest": d}}, "session_id": "s", "generation": 1, "request_key": "k", "invocation_id": "i"}
 	proposal := map[string]any{"schema_version": "REFERENCES_EVALUATION_PROPOSAL_V1", "context": ctx, "raw_result_ref": ref("REFERENCES_RAW_RESULT_V1"), "raw_result_presence": "PRESENT", "raw_result_digest": d, "raw_result_byte_length": 2, "scanner_observation_ref": ref("REFERENCES_SCANNER_OBSERVATION_V1"), "top_level_form": "ARRAY", "declared_n": 1, "evaluator_event_ref": ref("REFERENCES_EVALUATOR_EVENTS_V1"), "observed_b": 1, "known_e": 0, "observed_e_b": 0, "observed_e_t": 0, "whole_result_p": 0, "proposed_outcome": "COMPLETE_EMPTY", "proposed_disposition": "EMPTY"}
 	candidate := map[string]any{"schema_version": "REFERENCES_OCCURRENCE_CANDIDATE_V1", "context": ctx, "proposal_ref": ref("REFERENCES_EVALUATION_PROPOSAL_V1"), "occurrences": []any{}, "proposed_p": 0}
 	final := map[string]any{"schema_version": "REFERENCES_FINAL_ISSUANCE_V1", "context": ctx, "proposal_ref": ref("REFERENCES_EVALUATION_PROPOSAL_V1"), "candidate_ref": ref("REFERENCES_OCCURRENCE_CANDIDATE_V1"), "issued_outcome": "COMPLETE_EMPTY", "issued_disposition": "EMPTY", "n": 1, "b": 1, "t": 1, "e": 0, "e_b": 0, "e_t": 0, "p": 0, "a": 0, "dependency_refs": []any{ref("lsp-trace.adr0011.references-symbol.target.v1"), ref("lsp-trace.adr0011.references-symbol.method.v1"), ref("REFERENCES_RAW_RESULT_V1"), ref("REFERENCES_EVALUATOR_EVENTS_V1"), ref("REFERENCES_EVALUATION_PROPOSAL_V1"), ref("REFERENCES_OCCURRENCE_CANDIDATE_V1"), ref("REFERENCES_SOURCE_IDENTITY_V1"), ref("REFERENCES_REVISION_IDENTITY_V1")}}
-	events := map[string]any{"schema_version": "REFERENCES_EVALUATOR_EVENTS_V1", "transaction_id": d, "request_key": "k", "invocation_id": "i", "response_read_ref": ref("REFERENCES_RAW_RESULT_V1"), "events": []any{map[string]any{"sequence": 0, "kind": "QUERY_BEGIN", "ordinal": nil, "terminal_disposition": "NONE"}, map[string]any{"sequence": 1, "kind": "QUERY_TERMINAL", "ordinal": nil, "terminal_disposition": "EMPTY"}}}
+	events := map[string]any{"schema_version": "REFERENCES_EVALUATOR_EVENTS_V1", "transaction_id": d, "request_key": "k", "invocation_id": "i", "response_read_ref": ref("REFERENCES_RESPONSE_READ_V1"), "raw_result_ref": ref("REFERENCES_RAW_RESULT_V1"), "events": []any{map[string]any{"sequence": 0, "kind": "QUERY_BEGIN", "ordinal": nil, "terminal_disposition": "NONE"}, map[string]any{"sequence": 1, "kind": "QUERY_TERMINAL", "ordinal": nil, "terminal_disposition": "EMPTY"}}}
 	check := func(label string, x map[string]any, valid bool) {
 		t.Helper()
 		e := s.Validate(x)
@@ -94,6 +94,7 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 		{"final proposal", final, "proposal_ref"},
 		{"final candidate", final, "candidate_ref"},
 		{"events response", events, "response_read_ref"},
+		{"events raw", events, "raw_result_ref"},
 	} {
 		x := mutate(tc.base, tc.field, ref("REFERENCES_TARGET_V1"))
 		check("ASSERT_ISSUANCE_ROLE_REJECTED "+tc.name, x, false)
@@ -111,7 +112,14 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 	check("final missing terminal", mutate(final, "t", 0), false)
 	check("final empty with A", mutate(final, "a", 1), false)
 	check("bad outcome pair", mutate(proposal, "proposed_disposition", "ITEMS"), false)
+	check("event response raw confusion", mutate(events, "response_read_ref", ref("REFERENCES_RAW_RESULT_V1")), false)
+	check("event raw response confusion", mutate(events, "raw_result_ref", ref("REFERENCES_RESPONSE_READ_V1")), false)
 	check("event wrong begin ordinal", mutate(events, "events", []any{map[string]any{"sequence": 0, "kind": "QUERY_BEGIN", "ordinal": 0, "terminal_disposition": "NONE"}, map[string]any{"sequence": 1, "kind": "QUERY_TERMINAL", "ordinal": nil, "terminal_disposition": "EMPTY"}}), false)
+	method := map[string]any{"Version": "lsp-trace.adr0011.references-symbol.method.v1", "Method": "textDocument/references", "SessionID": "s", "Generation": 1, "RequestKey": "k", "InvocationID": "i", "ParamsDigest": d, "TargetRef": ref("lsp-trace.adr0011.references-symbol.target.v1"), "SourceRef": ref("REFERENCES_SOURCE_IDENTITY_V1"), "RevisionRef": ref("REFERENCES_REVISION_IDENTITY_V1"), "ResponseReadRef": ref("REFERENCES_RESPONSE_READ_V1"), "RawResultRef": ref("REFERENCES_RAW_RESULT_V1")}
+	check("required method", method, true)
+	check("unsafe raw method rejected", mutate(method, "ResultBase64", "e30="), false)
+	check("wrong method role", mutate(method, "Version", "lsp-trace.adr0011.references-symbol.target.v1"), false)
+	check("wrong raw role", mutate(method, "RawResultRef", ref("REFERENCES_RESPONSE_READ_V1")), false)
 	check("extra context", mutate(proposal, "context", func() map[string]any {
 		b, _ := json.Marshal(ctx)
 		var x map[string]any

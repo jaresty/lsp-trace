@@ -1,0 +1,1 @@
+{"max_acquisition_queries":16,"max_canonical_record_bytes":1500000,"max_params_bytes":65536,"max_result_bytes":1048576,"max_result_elements":1000,"method":"textDocument/references","schema_version":"REFERENCES_METHOD_POLICY_V1"}

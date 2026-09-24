@@ -1,0 +1,1 @@
+{"block_on_exhaustion":true,"committed_unverified":"PRIVATE_NON_ISSUABLE_NO_RETRY","issued_dependency_deletion":"REPLAY_INCOMPLETE","root_mode":"0700","schema_version":"REFERENCES_RETENTION_POLICY_V1","transaction_max_bytes":134217728,"transaction_max_objects":256,"uncertainty_max_bytes":524288,"uncertainty_max_entries":256,"verified_file_mode":"0600"}
