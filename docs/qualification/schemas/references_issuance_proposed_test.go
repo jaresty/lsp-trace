@@ -130,9 +130,11 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 		}
 		return map[string]any{"argv": argv, "exit_status": 0, "stdout": output, "stderr": output, "observed_at": "2026-09-24T03:00:00Z"}
 	}
-	host := map[string]any{"schema_version": "REFERENCES_HOST_GIT_OBSERVATION_V1", "root_uri": "file:///worktree", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false, "observation_phase": "BEFORE", "executable_uri": "file:///usr/bin/git", "executable_digest": d, "cwd_uri": "file:///worktree", "commands": []any{command("git", "rev-parse", "--show-toplevel"), command("git", "rev-parse", "HEAD"), command("git", "status", "--porcelain=v1", "--untracked-files=all")}}
+	host := map[string]any{"schema_version": "REFERENCES_HOST_GIT_OBSERVATION_V1", "root_uri": "file:///worktree", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false, "observation_phase": "BEFORE", "custody": "HOST_OBSERVED_GIT", "executable_uri": "file:///usr/bin/git", "executable_digest": d, "cwd_uri": "file:///worktree", "commands": []any{command("git", "rev-parse", "--show-toplevel"), command("git", "rev-parse", "HEAD"), command("git", "status", "--porcelain=v1", "--untracked-files=all")}}
 	check("host Git full closed probe shape", host, true)
-	for _, field := range []string{"executable_uri", "executable_digest", "cwd_uri", "commands"} {
+	check("host Git caller custody rejected", mutate(host, "custody", "CALLER_ASSERTED"), false)
+	check("host Git provider custody rejected", mutate(host, "custody", "PROVIDER_VERIFIED"), false)
+	for _, field := range []string{"custody", "executable_uri", "executable_digest", "cwd_uri", "commands"} {
 		x := mutate(host, field, nil)
 		delete(x, field)
 		check("host Git missing "+field, x, false)

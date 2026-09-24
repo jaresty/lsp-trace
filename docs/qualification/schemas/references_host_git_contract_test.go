@@ -23,9 +23,9 @@ type gitProbeCommand struct {
 	at             string
 }
 type gitProbe struct {
-	phase, rootURI, commit, cwdURI, executableURI, executableDigest string
-	dirty                                                           bool
-	commands                                                        []gitProbeCommand
+	phase, rootURI, commit, cwdURI, executableURI, executableDigest, custody string
+	dirty                                                                    bool
+	commands                                                                 []gitProbeCommand
 }
 
 func gitProbeOutput(b []byte) gitProbeStream {
@@ -40,7 +40,7 @@ func checkGitProbePair(before, after gitProbe, rootURI, commit, executableURI, e
 		if i == 1 {
 			phase = "AFTER"
 		}
-		if p.phase != phase || p.dirty || p.rootURI != rootURI || p.cwdURI != rootURI || p.commit != commit || p.executableURI != executableURI || p.executableDigest != executableDigest || len(p.commands) != 3 {
+		if p.phase != phase || p.custody != "HOST_OBSERVED_GIT" || p.dirty || p.rootURI != rootURI || p.cwdURI != rootURI || p.commit != commit || p.executableURI != executableURI || p.executableDigest != executableDigest || len(p.commands) != 3 {
 			return false
 		}
 		for j, cmd := range p.commands {
@@ -89,7 +89,7 @@ func TestReferencesHostGitProbeContractCounterexamples(t *testing.T) {
 		cmd := func(argv []string, stdout string) gitProbeCommand {
 			return gitProbeCommand{argv, 0, gitProbeOutput([]byte(stdout)), gitProbeOutput(nil), "2026-09-24T03:00:00Z"}
 		}
-		return gitProbe{phase, root, commit, root, executable, executableDigest, false, []gitProbeCommand{cmd([]string{"git", "rev-parse", "--show-toplevel"}, "/worktree\n"), cmd([]string{"git", "rev-parse", "HEAD"}, commit+"\n"), cmd([]string{"git", "status", "--porcelain=v1", "--untracked-files=all"}, "")}}
+		return gitProbe{phase, root, commit, root, executable, executableDigest, "HOST_OBSERVED_GIT", false, []gitProbeCommand{cmd([]string{"git", "rev-parse", "--show-toplevel"}, "/worktree\n"), cmd([]string{"git", "rev-parse", "HEAD"}, commit+"\n"), cmd([]string{"git", "status", "--porcelain=v1", "--untracked-files=all"}, "")}}
 	}
 	valid := func(b, a gitProbe) bool { return checkGitProbePair(b, a, root, commit, executable, executableDigest) }
 	if !valid(mk("BEFORE"), mk("AFTER")) {
@@ -104,6 +104,8 @@ func TestReferencesHostGitProbeContractCounterexamples(t *testing.T) {
 		"wrong commit":            func(p *gitProbe) { p.commands[1].stdout = gitProbeOutput([]byte(strings.Repeat("c", 40) + "\n")) },
 		"dirty":                   func(p *gitProbe) { p.commands[2].stdout = gitProbeOutput([]byte("?? secret\n")) },
 		"dirty flag":              func(p *gitProbe) { p.dirty = true },
+		"caller custody":          func(p *gitProbe) { p.custody = "CALLER_ASSERTED" },
+		"provider custody":        func(p *gitProbe) { p.custody = "PROVIDER_VERIFIED" },
 		"wrong argv":              func(p *gitProbe) { p.commands[0].argv[2] = "HEAD" },
 		"nonzero exit":            func(p *gitProbe) { p.commands[0].status = 1 },
 		"stderr":                  func(p *gitProbe) { p.commands[0].stderr = gitProbeOutput([]byte("warning")) },
