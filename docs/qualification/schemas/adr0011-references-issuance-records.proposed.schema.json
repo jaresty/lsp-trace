@@ -12,10 +12,10 @@
     "count": {"type":"integer","minimum":0,"maximum":1000},
     "ref": {"type":"object","additionalProperties":false,"required":["selector","digest","schema_version"],"properties":{
       "selector":{"type":"string","minLength":1,"maxLength":1024,"pattern":"^[a-zA-Z0-9][a-zA-Z0-9._/-]*$","not":{"pattern":"(^|/)\\.\\.?(/|$)"}},
-      "digest":{"$ref":"#/$defs/digest"},"schema_version":{"type":"string","minLength":1,"maxLength":128,"pattern":"^[A-Z][A-Z0-9_]*_V[1-9][0-9]*$"}
+      "digest":{"$ref":"#/$defs/digest"},"schema_version":{"type":"string","minLength":1,"maxLength":128,"pattern":"^([A-Z][A-Z0-9_]*_V[1-9][0-9]*|lsp-trace\\.adr0011\\.references-symbol\\.(method|target)\\.v1)$"}
     }},
-    "methodRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"REFERENCES_METHOD_V1"}}}]},
-    "targetRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"REFERENCES_TARGET_V1"}}}]},
+    "methodRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"lsp-trace.adr0011.references-symbol.method.v1"},"selector":{"pattern":"^adr0011-method-[0-9a-f]{64}\\.json$"}}}]},
+    "targetRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"lsp-trace.adr0011.references-symbol.target.v1"},"selector":{"pattern":"^adr0011-target-[0-9a-f]{64}\\.json$"}}}]},
     "sourceRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"REFERENCES_SOURCE_IDENTITY_V1"}}}]},
     "revisionRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"REFERENCES_REVISION_IDENTITY_V1"}}}]},
     "policyRef": {"allOf":[{"$ref":"#/$defs/ref"},{"properties":{"schema_version":{"const":"REFERENCES_POLICY_V1"}}}]},
