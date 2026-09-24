@@ -120,6 +120,45 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 	check("unsafe raw method rejected", mutate(method, "ResultBase64", "e30="), false)
 	check("wrong method role", mutate(method, "Version", "lsp-trace.adr0011.references-symbol.target.v1"), false)
 	check("wrong raw role", mutate(method, "RawResultRef", ref("REFERENCES_RESPONSE_READ_V1")), false)
+	// The accepted HOST_GIT_PROBE_V1 prerequisite must have room for exact,
+	// independently retained output from each of the three commands in both phases.
+	output := map[string]any{"selector": "adr0011-references-host-git-output-v1-" + d[len("sha256:"):] + ".bin", "digest": d, "byte_length": 0}
+	command := func(args ...string) map[string]any {
+		argv := make([]any, len(args))
+		for i, arg := range args {
+			argv[i] = arg
+		}
+		return map[string]any{"argv": argv, "exit_status": 0, "stdout": output, "stderr": output, "observed_at": "2026-09-24T03:00:00Z"}
+	}
+	host := map[string]any{"schema_version": "REFERENCES_HOST_GIT_OBSERVATION_V1", "root_uri": "file:///worktree", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "dirty": false, "observation_phase": "BEFORE", "executable_uri": "file:///usr/bin/git", "executable_digest": d, "cwd_uri": "file:///worktree", "commands": []any{command("git", "rev-parse", "--show-toplevel"), command("git", "rev-parse", "HEAD"), command("git", "status", "--porcelain=v1", "--untracked-files=all")}}
+	check("host Git full closed probe shape", host, true)
+	for _, field := range []string{"executable_uri", "executable_digest", "cwd_uri", "commands"} {
+		x := mutate(host, field, nil)
+		delete(x, field)
+		check("host Git missing "+field, x, false)
+	}
+	for _, tc := range []struct{ name, field string }{{"stdout", "stdout"}, {"stderr", "stderr"}, {"timestamp", "observed_at"}, {"argv", "argv"}, {"status", "exit_status"}} {
+		x := mutate(host, "observation_phase", "AFTER")
+		cmds := x["commands"].([]any)
+		delete(cmds[0].(map[string]any), tc.field)
+		check("host Git missing "+tc.name, x, false)
+	}
+	for _, tc := range []struct {
+		name  string
+		value any
+	}{{"swapped argv", []any{"git", "rev-parse", "HEAD"}}, {"truncated output", map[string]any{"selector": "adr0011-references-host-git-output-v1-" + d[len("sha256:"):] + ".bin", "digest": d, "byte_length": 1048577}}, {"bad timestamp", "not-a-timestamp"}} {
+		x := mutate(host, "observation_phase", "AFTER")
+		cmds := x["commands"].([]any)
+		field := "argv"
+		if tc.name == "truncated output" {
+			field = "stdout"
+		}
+		if tc.name == "bad timestamp" {
+			field = "observed_at"
+		}
+		cmds[0].(map[string]any)[field] = tc.value
+		check("host Git "+tc.name, x, false)
+	}
 	check("extra context", mutate(proposal, "context", func() map[string]any {
 		b, _ := json.Marshal(ctx)
 		var x map[string]any
