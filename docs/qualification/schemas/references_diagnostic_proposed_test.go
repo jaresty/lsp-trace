@@ -50,4 +50,27 @@ func TestADR0011ReferencesDiagnosticPostEvaluationWorkLimitShape(t *testing.T) {
 	if err := schema.Validate(d); err == nil {
 		t.Fatal("ASSERT_R11_D_POST_WORK_REJECT_RESOURCE_LIMIT: row-33 misclassification accepted")
 	}
+	// A server-error D is allowed only with an explicitly authorized exact signed code.
+	// Without that policy, the response is WITHHELD outside this D shape.
+	encoded, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var serverError map[string]any
+	if err := json.Unmarshal(encoded, &serverError); err != nil {
+		t.Fatal(err)
+	}
+	serverError["reason"] = "MATCHED_SERVER_ERROR"
+	serverError["responsePresence"] = "MATCHED_ERROR"
+	serverError["outcome"] = "PROVIDER_FAILURE"
+	serverError["queryDisposition"] = "NONE"
+	serverError["counts"] = map[string]any{"declared": 1, "begun": 0, "terminal": 0, "elements": "UNKNOWN", "elementBegun": 0, "elementTerminal": 0, "parsed": 0, "admitted": 0, "diagnosticValidPrefix": 0}
+	serverError["error"] = map[string]any{"codePresence": "ABSENT"}
+	if err := schema.Validate(serverError); err == nil {
+		t.Fatal("ASSERT_SERVER_ERROR_CODE_WITHHELD: code-erased D accepted")
+	}
+	serverError["error"] = map[string]any{"codePresence": "PRESENT", "code": 0}
+	if err := schema.Validate(serverError); err != nil {
+		t.Fatalf("ASSERT_SERVER_ERROR_ZERO_AUTHORIZED_SHAPE: %v", err)
+	}
 }

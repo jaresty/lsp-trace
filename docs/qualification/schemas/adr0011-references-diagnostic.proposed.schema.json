@@ -63,6 +63,6 @@
       "type": "object", "additionalProperties": false, "required": ["codePresence"],
       "properties": {"codePresence": {"enum": ["ABSENT", "PRESENT"]}, "code": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647}}
     },
-    "serverError": {"allOf": [{"$ref": "#/$defs/error"}, {"properties": {"codePresence": {"enum": ["ABSENT", "PRESENT"]}}}]}
+    "serverError": {"allOf": [{"$ref": "#/$defs/error"}, {"properties": {"codePresence": {"const": "PRESENT"}}, "required": ["code"]}]}
   }
 }
