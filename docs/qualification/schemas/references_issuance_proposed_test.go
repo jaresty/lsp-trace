@@ -120,6 +120,30 @@ func TestReferencesIssuanceProposedShapes(t *testing.T) {
 	check("unsafe raw method rejected", mutate(method, "ResultBase64", "e30="), false)
 	check("wrong method role", mutate(method, "Version", "lsp-trace.adr0011.references-symbol.target.v1"), false)
 	check("wrong raw role", mutate(method, "RawResultRef", ref("REFERENCES_RESPONSE_READ_V1")), false)
+	// Both owned methods must expose exact write-parameter and read-result slices.
+	owner := map[string]any{"schema_version": "REFERENCES_OWNER_READ_OBSERVATION_V1", "session_id": "s", "generation": 1, "request_key": "k", "invocation_id": "i", "method": "textDocument/documentSymbol", "wire_id": 1, "write_selector": "adr0011-references-write-v1-" + d[len("sha256:"):] + ".bin", "write_digest": d, "write_byte_length": 100, "params_offset": 20, "params_byte_length": 20, "params_digest": d, "read_selector": "adr0011-references-read-v1-" + d[len("sha256:"):] + ".bin", "read_digest": d, "read_byte_length": 100, "result_presence": "PRESENT", "result_offset": 20, "result_byte_length": 20, "result_digest": d}
+	check("owner write and read spans", owner, true)
+	for _, field := range []string{"write_selector", "write_byte_length", "params_offset", "params_byte_length", "params_digest", "read_selector", "read_byte_length", "wire_id"} {
+		x := mutate(owner, field, nil)
+		delete(x, field)
+		check("owner missing "+field, x, false)
+	}
+	check("owner overlong params", mutate(owner, "params_byte_length", 65537), false)
+	check("owner wrong write selector", mutate(owner, "write_selector", "../escape"), false)
+	targetResultRef := map[string]any{"schema_version": "REFERENCES_TARGET_RESULT_V1", "selector": "adr0011-references-issuance-v1-target-result-" + d[len("sha256:"):] + ".json", "digest": d}
+	targetResult := map[string]any{"schema_version": "REFERENCES_TARGET_RESULT_V1", "owner_read_ref": ref("REFERENCES_OWNER_READ_OBSERVATION_V1"), "payload_selector": "adr0011-references-target-result-v1-" + d[len("sha256:"):] + ".bin", "payload_digest": d, "payload_byte_length": 20, "access": "OWNER_ONLY"}
+	check("target result payload", targetResult, true)
+	check("target result borrowed references bytes", mutate(targetResult, "payload_selector", "adr0011-references-raw-payload-v1-"+d[len("sha256:"):]+".bin"), false)
+	point := map[string]any{"line": 1, "character": 2}
+	span := map[string]any{"start": point, "end": map[string]any{"line": 1, "character": 5}}
+	target := map[string]any{"Version": "lsp-trace.adr0011.references-symbol.target.v1", "Method": "textDocument/documentSymbol", "SessionID": "s", "Generation": 1, "RequestKey": "k", "ParamsDigest": d, "SourceRef": ref("REFERENCES_SOURCE_IDENTITY_V1"), "RevisionRef": ref("REFERENCES_REVISION_IDENTITY_V1"), "OwnerReadRef": ref("REFERENCES_OWNER_READ_OBSERVATION_V1"), "TargetResultRef": targetResultRef, "QueryOccurrenceID": d, "QueryURI": "file:///worktree/example.go", "QueryLine": 1, "QueryCharacter": 2, "Encoding": "utf-16", "SymbolName": "Example", "SymbolKind": 12, "DisplayRange": span, "SelectionRange": span, "TargetID": d, "SymbolID": d, "ResultDigest": d}
+	check("subordinate target replay shape", target, true)
+	for _, field := range []string{"TargetResultRef", "QueryOccurrenceID", "QueryURI", "QueryLine", "QueryCharacter", "Encoding", "SymbolName", "SymbolKind", "DisplayRange", "SelectionRange"} {
+		x := mutate(target, field, nil)
+		delete(x, field)
+		check("target missing "+field, x, false)
+	}
+	check("target wrong result role", mutate(target, "TargetResultRef", ref("REFERENCES_RAW_RESULT_V1")), false)
 	// The accepted HOST_GIT_PROBE_V1 prerequisite must have room for exact,
 	// independently retained output from each of the three commands in both phases.
 	output := map[string]any{"selector": "adr0011-references-host-git-output-v1-" + d[len("sha256:"):] + ".bin", "digest": d, "byte_length": 0}
