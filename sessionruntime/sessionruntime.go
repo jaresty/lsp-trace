@@ -251,6 +251,9 @@ type RoundTripRequest struct {
 	CaptureReferencesResponseFrameMaxBytes int64 `json:"-"`
 	// Private D/R request-frame opt-in; zero disables. This does not publish bytes.
 	CaptureMethodRequestFrameMaxBytes int64 `json:"-"`
+	// Private per-run documentSymbol frame caps; zero disables each capture.
+	CaptureDocumentSymbolRequestFrameMaxBytes  int64 `json:"-"`
+	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
 	// Diagnostic join values must be opaque safe identities, never labels or paths.
 	DiagnosticCallerID string
 	DiagnosticTargetID string
@@ -265,6 +268,9 @@ type DocumentRequest struct {
 	// CaptureSupply returns an owned observation of this call's successful
 	// notification write. Omitted mode retains its historical behavior.
 	CaptureSupply bool `json:",omitempty"`
+	// PreparedNoFollow is an opt-in, host-private filesystem supply mode.
+	// It never accepts retained seed source or falls back to ordinary preparation.
+	PreparedNoFollow bool `json:",omitempty"`
 }
 
 // MaxDocumentSupplyBytes bounds opt-in notification evidence. It does not bound
@@ -351,6 +357,7 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		return DocumentResult{Failure: session.StaleGeneration}
 	}
 	workspace := filepath.Clean(r.record.Profile.Workspace().String())
+	registeredWorkspace := r.record.Profile.Workspace().String()
 	configured := r.languageID
 	retainedSource, retained := r.seedSources[req.URI]
 	retainedSource = append([]byte(nil), retainedSource...)
@@ -371,7 +378,18 @@ func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refr
 		return DocumentResult{Failure: LanguageIDUnavailable}
 	}
 	var text []byte
-	if retained {
+	if req.PreparedNoFollow {
+		if !req.CaptureSupply || retained || registeredWorkspace != workspace || !filepath.IsAbs(workspace) ||
+			req.URI != (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() ||
+			!filepath.IsAbs(path) || filepath.ToSlash(u.Path) != filepath.ToSlash(path) ||
+			u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || u.User != nil {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		text, err = readPreparedNoFollow(workspace, path)
+		if err != nil || !utf8.Valid(text) {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+	} else if retained {
 		text = retainedSource
 	} else if req.CaptureSupply {
 		// Bind scope to the host-owned workspace, not an arbitrary URI path.
@@ -626,6 +644,8 @@ type RoundTripResult struct {
 	ownedMethodPair         *OwnedMethodPair
 	definitionResponseFrame []byte
 	referencesResponseFrame []byte
+	documentSymbolRequestFrame []byte
+	documentSymbolResponseFrame []byte
 }
 
 // RoundTrip executes one complete protocol transaction while exclusively
@@ -740,6 +760,13 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 		req.CaptureMethodRequestFrameMaxBytes > 0 && req.CaptureMethodRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes {
 		requestFrameCap = req.CaptureMethodRequestFrameMaxBytes
 	}
+	documentSymbolCapture := req.Method == "textDocument/documentSymbol" &&
+		eligibleOwnedMethodRequest(req) && req.ExpectedOwnedDocument != nil &&
+		req.CaptureDocumentSymbolRequestFrameMaxBytes > 0 && req.CaptureDocumentSymbolRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes &&
+		req.CaptureDocumentSymbolResponseFrameMaxBytes > 0 && req.CaptureDocumentSymbolResponseFrameMaxBytes <= maxMethodFrameCorrespondenceBytes
+	if documentSymbolCapture {
+		requestFrameCap = req.CaptureDocumentSymbolRequestFrameMaxBytes
+	}
 	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
 	writer := lspwire.NewWriter(writeCapture, m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
@@ -781,6 +808,10 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 		captureCap = req.CaptureDefinitionResponseFrameMaxBytes
 	case "textDocument/references":
 		captureCap = req.CaptureReferencesResponseFrameMaxBytes
+	case "textDocument/documentSymbol":
+		if documentSymbolCapture {
+			captureCap = req.CaptureDocumentSymbolResponseFrameMaxBytes
+		}
 	}
 	reads := make(chan readResult, 1)
 	reader := lspwire.NewReader(child.Stdout(), m.wire)
@@ -861,6 +892,11 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 					result.definitionResponseFrame = append([]byte(nil), read.raw...)
 				case "textDocument/references":
 					result.referencesResponseFrame = append([]byte(nil), read.raw...)
+				case "textDocument/documentSymbol":
+					if raw, retained := writeCapture.retainedFrame(); retained {
+						result.documentSymbolRequestFrame = raw
+						result.documentSymbolResponseFrame = append([]byte(nil), read.raw...)
+					}
 				}
 			}
 			result.Result, result.ServerError = append(json.RawMessage(nil), read.message.Result...), read.message.Error
@@ -873,8 +909,10 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 				}
 			}
 			if read.message.Kind() == lspwire.KindSuccessResponse && result.requestWrite != nil {
-				if raw, retained := writeCapture.retainedFrame(); retained {
-					result.methodRequestFrame = raw
+				if req.Method != "textDocument/documentSymbol" {
+					if raw, retained := writeCapture.retainedFrame(); retained {
+						result.methodRequestFrame = raw
+					}
 				}
 				result.ownedMethodPair = buildOwnedMethodPair(req, result, requestParams, read.message.Result)
 				if result.ownedMethodPair != nil && m.ownedMethodPairTestHook != nil {

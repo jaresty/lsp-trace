@@ -16,6 +16,7 @@ import (
 	"lsp-trace/incomingops"
 	"lsp-trace/internal/acquisitionengine"
 	"lsp-trace/internal/acquisitionorchestration"
+	"lsp-trace/internal/adr0011acquisition"
 	"lsp-trace/internal/censusdiagnostic"
 	"lsp-trace/internal/censusresult"
 	"lsp-trace/internal/custodyevidence"
@@ -314,6 +315,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 type hostSelectorRuntime struct {
 	*sessionruntime.Manager
+	// Host-private ADR 0011 owner: constructed disabled, with no root or operation.
+	adr0011Owner      *adr0011acquisition.Owner
 	aliases           map[string]string
 	relationCollector productionRelationCollector
 }
@@ -325,7 +328,7 @@ func newHostSelectorRuntime(manager *sessionruntime.Manager, sessions []bootstra
 			aliases[started.Alias] = started.SessionID
 		}
 	}
-	return &hostSelectorRuntime{Manager: manager, aliases: aliases}
+	return &hostSelectorRuntime{Manager: manager, adr0011Owner: adr0011acquisition.NewDisabled(manager), aliases: aliases}
 }
 
 func composeHostSelectorRuntime(server *mcp.Server, manager *sessionruntime.Manager, sessions []bootstrapSession) *hostSelectorRuntime {

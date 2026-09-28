@@ -1,0 +1,3 @@
+# ADR0011 context schema-digest labels — synthetic implementation decision
+
+**ACCEPT_CONTEXT_LABELS_FOR_SYNTHETIC_IMPLEMENTATION_ONLY.** Independent read-only review accepted `adr0011-context-schema-digest-labels.synthetic.proposed.md` at SHA-256 `6d8e5d7ee37c0d375a16b3511f3e809d1afb5546e6dfe06588b2278a1f9d087d`. The sixteen sorted lowercase indexing aliases map bijectively to the accepted successor definitions and one pinned complete-schema digest. Four policy receipts remain independently selected and replayed. This decision changes no accepted schema bytes, does not admit a query or pin the implementation binary, and does not qualify or issue an occurrence.

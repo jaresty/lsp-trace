@@ -1,0 +1,5 @@
+# ADR0011 scanner source byte pin — synthetic implementation decision
+
+**ACCEPT_SCANNER_SYNTHETIC_BYTEPIN_FOR_IMPLEMENTATION_ONLY.** An independent read-only reviewer verified SHA-256 `2eaad298bc11a317c5ac0a7ff38f536f4dd616304264f3f62a24cf8ca9941730` over the complete current bytes of `internal/adr0011acquisition/raw_scanner.go` and accepted `docs/qualification/adr0011-scanner-synthetic-bytepin.proposed.md` exclusively for a local test-owned synthetic transaction. The owner must verify the source bytes before a new private scanner receipt; replay must select the pin independently of the record and rescan the immutable exact payload under the byte-work cap.
+
+This is **not** a reviewed immutable commit, verified build/binary or dependency closure, provider authentication, live occurrence qualification, or approval to expose a selector. Source availability and source-byte match fail closed for this synthetic producer. Scanner/event predecessors remain inert until independently sealed; only a complete final issuance closure could alter issued accounting. `T=A=0` until then; authority 0, accepted false, completeness UNKNOWN.

@@ -62,6 +62,12 @@ func Parse(wire transport.Result, maxCandidates int) (Result, *Failure) {
 	return parseRawUntrusted(wire.Method(), wire.Raw(), maxCandidates)
 }
 
+// ParseRawReferences replays exact retained bytes without trusting evaluation.Items.
+// Parsing conveys no transport custody, occurrence admission, or issuance.
+func ParseRawReferences(raw []byte, maxCandidates int) (Result, *Failure) {
+	return parseRawUntrusted(transport.MethodReferences, raw, maxCandidates)
+}
+
 // parseRawUntrusted replays the method-result grammar without manufacturing a
 // transport outcome or producer custody. Only a separately bound transaction
 // record can use its output, and parsing alone never admits an occurrence.
