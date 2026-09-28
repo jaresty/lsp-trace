@@ -474,6 +474,24 @@ func preparedTargetDiagnostic(prepared incomingops.PreparedTarget) *TargetDiagno
 		FailedField:        prepared.FailedField,
 		FailedInvariant:    prepared.FailedInvariant,
 		ProjectionEntered:  &entered,
+		LocatorScope:       prepared.LocatorScope,
+		Guidance:           prepared.Guidance,
+	}
+	if len(prepared.Candidates) > 0 {
+		diagnostic.Candidates = make([]TargetCandidate, 0, len(prepared.Candidates))
+		for _, candidate := range prepared.Candidates {
+			diagnostic.Candidates = append(diagnostic.Candidates, TargetCandidate{
+				URI: candidate.URI, Name: candidate.Name, Kind: candidate.Kind,
+				Range: TargetCandidateRange{
+					Start: TargetCandidatePosition{Line: int(candidate.Range.Start.Line), Character: int(candidate.Range.Start.Character)},
+					End:   TargetCandidatePosition{Line: int(candidate.Range.End.Line), Character: int(candidate.Range.End.Character)},
+				},
+			})
+		}
+		diagnostic.CandidateAccounting = &TargetCandidateAccounting{
+			Observed: &prepared.TotalSymbols, Accepted: len(prepared.Candidates), Returned: len(prepared.Candidates),
+			Excluded: prepared.TotalSymbols - len(prepared.Candidates), Truncated: prepared.OmittedSymbols,
+		}
 	}
 	if prepared.Action == string(TargetActionEnumerationTruncated) {
 		zero := 0

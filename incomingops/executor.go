@@ -198,6 +198,13 @@ type PreparedTargetRecovery struct {
 	UnavailableReason string
 }
 
+type PreparedTargetCandidate struct {
+	URI   string
+	Name  string
+	Kind  int
+	Range lsp.Range
+}
+
 type PreparedTarget struct {
 	Line, Character    uint32
 	Items              []lsp.CallHierarchyItem
@@ -205,11 +212,14 @@ type PreparedTarget struct {
 	TotalSymbols       int
 	OmittedSymbols     int
 	Action             string
+	Candidates         []PreparedTargetCandidate
 	ProviderMethod     string
 	ItemIndex          *int
 	NormalizationStage string
 	FailedField        string
 	FailedInvariant    string
+	LocatorScope       string
+	Guidance           string
 	Recovery           *PreparedTargetRecovery
 }
 
@@ -368,22 +378,28 @@ func recoverPositionTarget(ctx context.Context, client *SessionClient, uri strin
 	flat := flattenSymbols(symbols)
 	_, totalSymbols, omittedSymbols := targetDiagnosticCounts(0, len(flat))
 	containing := make([]lsp.DocumentSymbol, 0, 1)
+	candidates := make([]PreparedTargetCandidate, 0, min(len(flat), maxSymbolSuggestions))
 	for index, symbol := range flat {
 		if !ValidDocumentSymbolTarget(symbol) {
 			base := PreparedTarget{TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
 			return malformedPreparedTarget(uri, symbol, index, base), failure("DOCUMENT_SYMBOL_MALFORMED_RANGE", errors.New("malformed document symbol range"))
+		}
+		if len(candidates) < maxSymbolSuggestions {
+			candidates = append(candidates, PreparedTargetCandidate{URI: uri, Name: symbol.Name, Kind: symbol.Kind, Range: symbol.Range})
 		}
 		if callableSymbolKind(symbol.Kind) && rangeContainsPosition(symbol.Range, position) {
 			containing = append(containing, symbol)
 		}
 	}
 	exactMatches, _, _ := targetDiagnosticCounts(len(containing), len(flat))
-	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols}
+	base := PreparedTarget{ExactMatches: exactMatches, TotalSymbols: totalSymbols, OmittedSymbols: omittedSymbols, Candidates: candidates}
 	if len(containing) == 0 {
 		base.ProviderMethod = "textDocument/documentSymbol"
 		base.NormalizationStage = "EXACT_MATCH"
 		base.FailedField = "range"
 		base.FailedInvariant = "POSITION_CONTAINMENT_PRESENT"
+		base.LocatorScope = "URI_POSITION"
+		base.Guidance = "no callable document symbol contains the requested position; candidate kinds 6, 9, and 12 are callable"
 		if base.OmittedSymbols > 0 {
 			base.Action = "ENUMERATION_TRUNCATED"
 			return base, failure("ENUMERATION_TRUNCATED", errors.New("document symbol enumeration truncated before containing callable was established"))
