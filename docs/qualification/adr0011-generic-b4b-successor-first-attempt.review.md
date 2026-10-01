@@ -1,0 +1,7 @@
+# B4b selector successor: first-attempt review
+
+The first private seed is **not accepted**. Its proposed positive selector included `{"scheme":"file","language":"go"}`, whereas accepted B4a holds `Language=nil`. The language match was unproven, and the seed's RED cannot count as a valid positive witness. Its implementation also returned SUPPORTED for nonempty syntactically valid filters without proving every constraint.
+
+Preserved first seed: `b4b_successor.go` SHA256 `b5af724d8cb4321d17cdc8f5be1e1ec149b4b921343c2a5a0eb1110e85634491`; `b4b_successor_test.go` SHA256 `577320c08baabac2238049019cf96697c9ed03455cb224a534f853154e52ecb7`; basis decision SHA256 `d04c91afa55a4b9f5b23c91da3f23af4ca3554fe8ab5841663adbe62b332f758`. Earlier unaccepted B4b: `b4b.go` SHA256 `34a4a4eea5fc61ddb506aae23ccd59e80255f37a754da6cd2d5aeaae02ce1906`; `b4b_test.go` SHA256 `bb2e26c41c5114b0ea8521248af25b7202893d5b7dc69655c0292e1cb02e630d`.
+
+The separate verified successor holds `file:///w/a.go` independently with no held language, and treats only the scheme-only `[{"scheme":"file"}]` as a positive witness. Its pre-implementation, compiling scaffold produced assertion-specific RED: `selector [{"scheme":"file"}]: got UNKNOWN, want SUPPORTED`; after scheme comparison the named test is GREEN. Untitled, unheld language, wrong scheme type, and absent selector are controls. This remains a **partial selector subcomponent**: no capability-event chronology, no full B4b acceptance, and no path/glob or guessed-language positive claim.
