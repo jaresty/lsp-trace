@@ -1,0 +1,4 @@
+ADR0011 proposal-only adequacy correction baseline (child phase child-adr0011-adequacy)
+Command: GOPROXY=off GOSUMDB=off GOTOOLCHAIN=local go test ./docs/qualification/schemas -run 'TestADR0011(Admission|Lifecycle)ProposalReplay' -count=1
+Observed: Go test: 27 passed in 1 packages
+This passing baseline does not witness either corrected assertion. The earlier missing-transitive test lacks role:candidate in its original parent body, and the existing lifecycle fixture has one dependent.
