@@ -1,0 +1,18 @@
+{
+  "id": "ADR0011_DEFINITION_EXACT_PROPOSED_V1",
+  "status": "PROPOSED_INDEPENDENT_REVIEW_REQUIRED",
+  "schema": "https://jaresty.github.io/lsp-trace/qualification/proposed/adr0011-definition-result.v1.schema.json",
+  "method": "textDocument/definition",
+  "profile": "GO_GOPLS_DEFINITION_EXACT_V1_PROPOSED",
+  "defaultEnabled": false,
+  "privacy": { "rawParameters": "PRIVATE_EXACT", "rawResult": "PRIVATE_EXACT", "diagnostics": "REDACTED", "withheldMandatoryBytes": "NO_ISSUANCE", "rootOwner": "HOST_ONLY", "rootMode": "0700", "receiptMode": "0600" },
+  "preInvocation": { "queryReceipt": "INDEPENDENTLY_DERIVED_PUBLISHED_AND_REPLAY_VERIFIED", "queryRange": "GO_IDENTIFIER_RANGE_V1_PROPOSED", "queryPosition": "START_OR_INTERIOR_NOT_END_OR_SURROGATE_INTERIOR", "querySource": "EXACT_URI_VERSION_DIGEST_AND_BYTES", "params": "EXACT_RAW_BYTES_AND_SHA256", "identity": ["queryReceiptSelectorDigest", "sourceSelectorDigest", "method", "rawParamsDigest", "session", "generation", "ownedRequestKey", "invocationId", "capabilitySelectorDigest", "providerProfileDigest", "policyDigest"], "missingOrAmbiguous": "ZERO_INVOCATION" },
+  "result": { "acceptedShapes": ["null", "emptyArray", "scalarLocation", "homogeneousLocationArray", "homogeneousLocationLinkArray"], "scalarLocationLink": "MALFORMED", "mixedArray": "MALFORMED", "strictDecodedKeys": true, "rejectDuplicateDecodedKeys": true, "rejectTrailingContent": true, "rawNullAndEmptyArrayDistinct": true, "originalOrdinalsPreserved": true, "equalTargetsNotCollapsed": true, "locationRange": "range", "linkTargetRange": "targetRange", "linkSelectionRange": "targetSelectionRange", "linkOriginRange": "originSelectionRange_OPTIONAL_EXACT_QUERY_RANGE", "selectionContainedInTarget": true, "validPrefix": "DIAGNOSTIC_ONLY_P_ZERO_A_ZERO_ON_MALFORMED" },
+  "source": { "queryAndEveryTarget": "INDEPENDENT_EXACT_URI_VERSION_DIGEST_BYTES", "crossDocumentAmbientFallback": false, "unavailableTarget": "ALL_TARGETS_EXCLUDED_A_ZERO", "completeParsedNonemptyExclusion": "COMPLETE_EMPTY_ONLY_AFTER_FULL_DENOMINATOR_TERMINAL_AND_PUBLICATION_VERIFIED_QUERY_EXCLUDED", "incompleteDenominator": "NO_ISSUABLE_TERMINAL" },
+  "evaluation": { "events": "OBSERVED_ONLY_NEVER_INFER_FROM_FINAL_PARSE", "unknownCount": "UNKNOWN_NOT_ZERO", "partialWire": "UNAVAILABLE_PENDING_MANAGER_OWNED_BODY_PREFIX_AND_FRAMED_CAP", "partialWithoutObservedPrefix": "INCOMPLETE", "managerDecodedBodyCapBytes": 1048576, "framedWireCapBytes": null, "framedWireCapState": "IMPLEMENTATION_PREREQUISITE_NOT_AVAILABLE" },
+  "limits": { "queries": 16, "targets": 1000, "rawParamsBytes": 65536, "resultBytes": 524288, "canonicalRecordBytes": 1500000, "messages": 4, "deadlineMilliseconds": 15000, "documentBytes": 262144, "documentRequests": 21, "totalDocumentBytes": 4194304, "evaluationWork": 100000, "retainedAcquisitionBytes": 134217728 },
+  "publication": { "verifiedReadbackRequired": true, "committedUnverified": "QUARANTINE_NO_NEW_ISSUANCE", "activeRead": "ROOT_SHARED_LEASE_THROUGH_USE_AND_RECHECK_GENERATION_DEPENDENCIES", "revocation": "EXCLUSIVE_LOCK_COMPLETE_SET_TOMBSTONE_BEFORE_DELETION", "cachedEligibilityAfterLease": "INVALID_REACQUIRE_AND_REVALIDATE", "lockTimeout": "ABORT_NO_DELETION" },
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN"
+}

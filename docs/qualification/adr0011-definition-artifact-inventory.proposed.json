@@ -1,0 +1,23 @@
+{
+  "status": "PROPOSED_INDEPENDENT_REVIEW_REQUIRED",
+  "authority": 0,
+  "accepted": false,
+  "artifacts": [
+    {
+      "role": "COMPLETE_DECODED_DEFINITION_RESULT_SCHEMA_ONLY",
+      "path": "schemas/adr0011-definition-result.proposed.schema.json",
+      "sha256": "655f28c1abc956b891dedcaebb16287048af17edd2ae052c4da849a0c06629d7"
+    },
+    {
+      "role": "EXACT_DEFINITION_POLICY_PROPOSAL_ONLY",
+      "path": "policies/adr0011-definition-exact.proposed.json",
+      "sha256": "6fbc17066dfa7839bcc1a19ab22c27f5402e672d628826e1f6dc48ac388a94f3"
+    }
+  ],
+  "unresolved": [
+    "Independent contract acceptance and role-specific canonical receipt schemas/policies",
+    "Manager-owned partial body-prefix and independently observed framed-wire cap",
+    "Executable evaluator event capture and full-denominator terminal replay",
+    "Cross-process read lease, complete-set revocation and clean provider fixtures"
+  ]
+}

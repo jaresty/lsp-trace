@@ -49,12 +49,12 @@ func TestPreparedTargetDiagnosticReportsBoundedContainmentCandidates(t *testing.
 		FailedField: "range", FailedInvariant: "POSITION_CONTAINMENT_PRESENT",
 		LocatorScope: "URI_POSITION", Guidance: "no callable document symbol contains the requested position; candidate kinds 6, 9, and 12 are callable",
 		Candidates: []incomingops.PreparedTargetCandidate{{
-			URI: "file:///workspace/FeatureAuthorizeAttribute.cs", Name: "FeatureAuthorizeAttribute", Kind: 5,
+			URI: "file:///workspace/AccessAttribute.cs", Name: "AccessAttribute", Kind: 5,
 			Range: lsp.Range{Start: lsp.Position{Line: 8, Character: 1}, End: lsp.Position{Line: 20, Character: 2}},
 		}},
 	}
 	got := preparedTargetDiagnostic(prepared)
-	if got == nil || len(got.Candidates) != 1 || got.Candidates[0].Name != "FeatureAuthorizeAttribute" || got.Candidates[0].Kind != 5 || got.Candidates[0].Range.Start.Line != 8 || got.CandidateAccounting == nil || got.CandidateAccounting.Observed == nil || *got.CandidateAccounting.Observed != 14 || got.CandidateAccounting.Returned != 1 || got.CandidateAccounting.Excluded != 13 || got.CandidateAccounting.Truncated != 6 || got.LocatorScope != "URI_POSITION" || got.Guidance == "" || got.Completeness != "UNKNOWN" {
+	if got == nil || len(got.Candidates) != 1 || got.Candidates[0].Name != "AccessAttribute" || got.Candidates[0].Kind != 5 || got.Candidates[0].Range.Start.Line != 8 || got.CandidateAccounting == nil || got.CandidateAccounting.Observed == nil || *got.CandidateAccounting.Observed != 14 || got.CandidateAccounting.Returned != 1 || got.CandidateAccounting.Excluded != 13 || got.CandidateAccounting.Truncated != 6 || got.LocatorScope != "URI_POSITION" || got.Guidance == "" || got.Completeness != "UNKNOWN" {
 		t.Fatalf("ASSERT_POSITION_CONTAINMENT_DIAGNOSTIC_CANDIDATES: %+v", got)
 	}
 }

@@ -217,6 +217,36 @@ func TestUnifiedV2AbsentSymbolExplainsRegexLocatorWithoutGuessingURI(t *testing.
 	}
 }
 
+// Lane D synthetic UX-08: product failure and private candidate view are deliberately separate.
+func TestLaneDUX08SymbolsPresentExactMatchFailure(t *testing.T) {
+	f := &fakeRuntime{metadata: sessionruntime.SessionMetadata{WorkspaceSymbolSupport: true}, result: json.RawMessage(`[{"name":"Other","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":3,"character":2},"end":{"line":3,"character":7}}}},{"name":"Container","kind":5,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":8,"character":0},"end":{"line":12,"character":1}}}}]`)}
+	d := &delegate{}
+	_, failure := NewUnifiedV2Executor(f, d).Execute(context.Background(), operation.Request{Name: operation.Name("structural_context_v2"), Input: minimalInput("Missing")})
+	if failure == nil || failure.Code != "TARGET_NOT_FOUND" || len(f.requests) != 1 || f.requests[0].Method != "workspace/symbol" || len(d.calls) != 0 {
+		t.Fatalf("UX08_PRODUCT_FAILURE_AND_ACTIONS: failure=%+v requests=%v delegate=%v", failure, f.requests, d.calls)
+	}
+	domain, ok := failure.Err.(*transientstructural.DomainFailure)
+	if !ok || domain.TargetDiagnostic == nil {
+		t.Fatalf("UX08_TYPED_DIAGNOSTIC: %+v", failure.Err)
+	}
+	got := domain.TargetDiagnostic
+	if got.TotalSymbols != 2 || got.OmittedSymbols != 0 || got.NormalizationStage != "EXACT_MATCH" || got.FailedInvariant != "EXACT_MATCH_PRESENT" || got.LocatorScope != "LSP_SYMBOLS" || got.Recovery == nil || got.Recovery.Kind != "REGEX_LOCATOR_TEMPLATE" {
+		t.Fatalf("UX08_MATCH_STAGE_SCOPE_AND_RECOVERY: %+v", got)
+	}
+	// Non-product diagnostic: inspect only this synthetic fixture's returned LSP symbols.
+	// The product TARGET_NOT_FOUND payload intentionally does not carry these candidates.
+	var symbols []lsp.WorkspaceSymbol
+	if err := json.Unmarshal(f.result, &symbols); err != nil {
+		t.Fatal(err)
+	}
+	if len(symbols) != 2 || symbols[0].Name != "Other" || symbols[0].Kind != 12 || symbols[0].Location.Range.Start.Line != 3 || symbols[1].Name != "Container" || symbols[1].Kind != 5 || symbols[1].Location.Range.End.Line != 12 {
+		t.Fatalf("UX08_TEST_ONLY_CANDIDATE_VIEW: %+v", symbols)
+	}
+	if len(got.Candidates) != 0 {
+		t.Fatalf("UX08_PRODUCT_CANDIDATES_UNEXPECTED: %+v", got.Candidates)
+	}
+}
+
 func TestWorkspaceSymbolFailuresAreExplicitAndDoNotDelegate(t *testing.T) {
 	cases := []struct{ name, result, code string }{{"absent", `[{"name":"target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_ABSENT"}, {"ambiguous", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}},{"name":"Target","kind":12,"location":{"uri":"file:///workspace/b.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_AMBIGUOUS"}, {"unresolved", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace/a.go"}}]`, "WORKSPACE_SYMBOL_MALFORMED"}, {"root", `[{"name":"Target","kind":12,"location":{"uri":"file:///workspace","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}, {"outside", `[{"name":"Target","kind":12,"location":{"uri":"file:///other/a.go","range":{"start":{"line":0,"character":0},"end":{"line":0,"character":1}}}}]`, "WORKSPACE_SYMBOL_OUTSIDE_WORKSPACE"}}
 	for _, tc := range cases {

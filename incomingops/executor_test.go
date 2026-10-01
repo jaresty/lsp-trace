@@ -122,13 +122,13 @@ func TestResolvePreparedPositionBoundedRecovery(t *testing.T) {
 		outside := lsp.Range{Start: lsp.Position{Line: 8}, End: lsp.Position{Line: 8, Character: 4}}
 		classRange := lsp.Range{Start: lsp.Position{Line: 1}, End: lsp.Position{Line: 4}}
 		symbols, _ := json.Marshal([]lsp.DocumentSymbol{
-			{Name: "FeatureAuthorizeAttribute", Kind: 5, Range: classRange, SelectionRange: s},
+			{Name: "AccessAttribute", Kind: 5, Range: classRange, SelectionRange: s},
 			{Name: "F", Kind: 12, Range: outside, SelectionRange: outside},
 		})
 		f := &fakeRuntime{results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {json.RawMessage(`[]`)}, "textDocument/documentSymbol": {symbols}}}
 		client := NewSessionClient(f, "s", 1, 100)
 		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
-		if failed == nil || failed.Code != "POSITION_SYMBOL_ABSENT" || prepared.Action != "FAIL_ABSENT" || prepared.OmittedSymbols != 0 || prepared.LocatorScope != "URI_POSITION" || len(prepared.Candidates) != 2 || prepared.Candidates[0].Name != "FeatureAuthorizeAttribute" || prepared.Candidates[0].Kind != 5 || prepared.Guidance == "" || len(f.calls) != 2 {
+		if failed == nil || failed.Code != "POSITION_SYMBOL_ABSENT" || prepared.Action != "FAIL_ABSENT" || prepared.OmittedSymbols != 0 || prepared.LocatorScope != "URI_POSITION" || len(prepared.Candidates) != 2 || prepared.Candidates[0].Name != "AccessAttribute" || prepared.Candidates[0].Kind != 5 || prepared.Guidance == "" || len(f.calls) != 2 {
 			t.Fatalf("ASSERT_POSITION_RECOVERY_EXHAUSTIVE_ZERO_CONTAINING_REPORTS_NONCALLABLE_CANDIDATE: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
 		}
 	})

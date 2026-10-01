@@ -324,6 +324,66 @@ func TestStructuralContextV2TargetDiagnosticsDirectGatewayParityAndPrivacy(t *te
 	}
 }
 
+// Lane D synthetic UX-12: validation is exercised on both existing transports.
+// corrected is a test-only suggestion, not a product diagnostic or new API.
+func TestLaneDUX12ValidationVsDomainDirectGateway(t *testing.T) {
+	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "TARGET_NOT_FOUND", Err: &transientstructural.DomainFailure{Phase: transientstructural.PhasePreflight, State: transientstructural.StateTargetNotFound}}}
+	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}
+	valid := structuralContextV2Args()
+	invalid := structuralContextV2Args()
+	delete(invalid, "session_id")
+	corrected := map[string]any{"session_id": "s"} // synthetic correction; not returned by MCP
+	if corrected["session_id"] != valid["session_id"] {
+		t.Fatal("UX12_TEST_ONLY_CORRECTED_FRAGMENT")
+	}
+	for _, tc := range []struct {
+		name    string
+		args    map[string]any
+		gateway bool
+	}{
+		{"direct-invalid", invalid, false}, {"gateway-invalid", invalid, true},
+		{"direct-domain", valid, false}, {"gateway-domain", valid, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			method := mcpcontract.StructuralContextV2Tool
+			args := tc.args
+			if tc.gateway {
+				method = "lsp_trace_v1_execute"
+				args = map[string]any{"request": map[string]any{"operation": mcpcontract.StructuralContextV2Tool, "arguments": tc.args}}
+			}
+			got := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, method, args))
+			if strings.Contains(tc.name, "invalid") {
+				if got.Error == nil || got.Error.Code != -32602 || got.Result != nil {
+					t.Fatalf("UX12_VALIDATION_STAGE_%s: %+v", tc.name, got)
+				}
+			} else {
+				if got.Error != nil || got.Result == nil {
+					t.Fatalf("UX12_DOMAIN_NOT_VALIDATION_%s: %+v", tc.name, got)
+				}
+				call, ok := got.Result.(callResult)
+				if !ok {
+					t.Fatalf("UX12_DOMAIN_RESULT_SHAPE_%s: %T", tc.name, got.Result)
+				}
+				domain := call.StructuredContent
+				if tc.gateway {
+					if domain.DelegatedEnvelope == "" {
+						t.Fatalf("UX12_GATEWAY_DELEGATED_ENVELOPE_MISSING: %+v", domain)
+					}
+					if err := json.Unmarshal([]byte(domain.DelegatedEnvelope), &domain); err != nil {
+						t.Fatalf("UX12_GATEWAY_DELEGATED_ENVELOPE_DECODE: %v", err)
+					}
+				}
+				if domain.EnvelopeSchemaID != mcpcontract.StructuralContextTraversalDomainErrorID || domain.Phase != "PREFLIGHT" || domain.State != "TARGET_NOT_FOUND" {
+					t.Fatalf("UX12_TYPED_DOMAIN_CODE_STAGE_%s: %+v", tc.name, domain)
+				}
+			}
+		})
+	}
+	if len(executor.calls) != 2 {
+		t.Fatalf("UX12_OBSERVED_EXECUTOR_CALLS_VALID_ONLY: %d", len(executor.calls))
+	}
+}
+
 func TestStructuralContextOperation35UnknownUntypedFailureFailsClosed(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "UNKNOWN_FUTURE_CODE"}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextExecutorFamily: executor}}
