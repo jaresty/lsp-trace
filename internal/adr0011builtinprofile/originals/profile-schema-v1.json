@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jaresty.github.io/lsp-trace/schemas/adr0011-builtin-local-references-v1.proposed.schema.json",
+  "title": "PROPOSED private built-in local references profile and attempt selection; no production registration",
+  "oneOf": [
+    {"$ref": "#/$defs/profile"},
+    {"$ref": "#/$defs/plan"},
+    {"$ref": "#/$defs/implementationMeasurement"},
+    {"$ref": "#/$defs/hostSelection"}
+  ],
+  "$defs": {
+    "digest": {"type":"string","pattern":"^sha256:[0-9a-f]{64}$"},
+    "uri": {"type":"string","format":"uri","minLength":1},
+    "pinnedFile": {"type":"object","additionalProperties":false,"required":["byte_length","digest","uri"],"properties":{"byte_length":{"type":"integer","minimum":1},"digest":{"$ref":"#/$defs/digest"},"uri":{"$ref":"#/$defs/uri"}}},
+    "policyFile": {"type":"object","additionalProperties":false,"required":["byte_length","digest","role"],"properties":{"byte_length":{"type":"integer","minimum":1},"digest":{"$ref":"#/$defs/digest"},"role":{"type":"string","minLength":1}}},
+    "roleRef": {"type":"object","additionalProperties":false,"required":["role","schema_version","selector","digest","byte_length"],"properties":{"role":{"type":"string","minLength":1},"schema_version":{"$ref":"#/$defs/uri"},"selector":{"type":"string","pattern":"^[A-Za-z0-9][A-Za-z0-9._-]*$","maxLength":255},"digest":{"$ref":"#/$defs/digest"},"byte_length":{"type":"integer","minimum":1}}},
+    "fourDigests": {"type":"object","additionalProperties":false,"required":["method","admission","privacy","retention"],"properties":{"method":{"$ref":"#/$defs/digest"},"admission":{"$ref":"#/$defs/digest"},"privacy":{"$ref":"#/$defs/digest"},"retention":{"$ref":"#/$defs/digest"}}},
+    "profile": {
+      "type":"object","additionalProperties":false,
+      "required":["activation","admission_schema","canonical_json","historical_roles","historical_schema","identity_rules","limits","model","policies","private_root","profile_schema","production_query_declaration_role","request_key_successor_schema","selection","target_query","version","witness_policy"],
+      "properties":{
+        "activation":{"const":"EXPLICIT_REFERENCES_OPERATION_ONLY"},
+        "admission_schema":{"$ref":"#/$defs/pinnedFile"},
+        "canonical_json":{"const":"SORTED_KEYS_UTF8_NO_WHITESPACE_NO_DUPLICATES_INTEGER_ONLY_V1"},
+        "historical_roles":{"type":"object","minProperties":20,"maxProperties":20,"additionalProperties":{"type":"string","minLength":1}},
+        "historical_schema":{"$ref":"#/$defs/pinnedFile"},
+        "identity_rules":{"type":"object","additionalProperties":false,"required":["declaration_domain","implementation_measurement_role","invocation_domain","plan_domain","selection_domain"],"properties":{"declaration_domain":{"const":"ADR0011_PRODUCTION_QUERY_DECLARATION_V1"},"implementation_measurement_role":{"const":"ADR0011_INSTALLED_EXECUTABLE_MEASUREMENT_V1"},"invocation_domain":{"const":"ADR0011_LOCAL_REFERENCES_INVOCATION_V1"},"plan_domain":{"const":"ADR0011_LOCAL_REFERENCES_PLAN_V1"},"selection_domain":{"const":"ADR0011_LOCAL_REFERENCES_SELECTION_V1"}}},
+        "limits":{"type":"object","additionalProperties":false,"required":["max_acquisition_queries","max_canonical_record_bytes","max_params_bytes","max_result_bytes","max_result_elements","max_transaction_bytes","max_transaction_objects"],"properties":{"max_acquisition_queries":{"const":16},"max_canonical_record_bytes":{"const":1500000},"max_params_bytes":{"const":65536},"max_result_bytes":{"const":1048576},"max_result_elements":{"const":1000},"max_transaction_bytes":{"const":134217728},"max_transaction_objects":{"const":256}}},
+        "model":{"const":"BUILTIN_LOCAL_REFERENCES_V1"},
+        "policies":{"type":"object","additionalProperties":false,"required":["method","admission","privacy","retention"],"properties":{"method":{"$ref":"#/$defs/policyFile"},"admission":{"$ref":"#/$defs/policyFile"},"privacy":{"$ref":"#/$defs/policyFile"},"retention":{"$ref":"#/$defs/policyFile"}}},
+        "private_root":{"type":"object","additionalProperties":false,"required":["directory_mode","file_mode","locator","on_absent","on_unsafe_or_synced_or_uncertain","same_uid_adversary_protection"],"properties":{"directory_mode":{"const":"0700"},"file_mode":{"const":"0600"},"locator":{"const":"OS_USER_CONFIG_DIR/lsp-trace/private/adr0011-references-v1"},"on_absent":{"const":"CREATE_ONLY_ON_EXPLICIT_AUTHORIZED_OPERATION"},"on_unsafe_or_synced_or_uncertain":{"const":"FAIL_CLOSED"},"same_uid_adversary_protection":{"const":false}}},
+        "profile_schema":{"$ref":"#/$defs/pinnedFile"},
+        "production_query_declaration_role":{"const":"https://jaresty.github.io/lsp-trace/schemas/adr0011-production-admission-v1.proposed.schema.json#/$defs/productionQueryDeclaration"},
+        "request_key_successor_schema":{"type":"object","additionalProperties":false,"required":["byte_length","digest","selection","uri"],"properties":{"byte_length":{"type":"integer","minimum":1},"digest":{"$ref":"#/$defs/digest"},"selection":{"const":"NOT_A_SUBSTITUTION_FOR_HISTORICAL_ROLE_MAP"},"uri":{"$ref":"#/$defs/uri"}}},
+        "selection":{"type":"object","additionalProperties":false,"required":["concurrent_second_process","cross_process_lock_implemented","on_missing_or_mismatch","on_restart","profile_override_from_request","version_change"],"properties":{"concurrent_second_process":{"const":"FAIL_CLOSED_UNTIL_EXCLUSIVE_SELECTOR_PROVEN"},"cross_process_lock_implemented":{"const":false},"on_missing_or_mismatch":{"const":"NO_INVOCATION_NO_ISSUANCE"},"on_restart":{"const":"REPLAY_EXACT_ATTEMPT_VERSION_NO_LATEST"},"profile_override_from_request":{"const":false},"version_change":{"const":"NEW_PROFILE_ID_ONLY"}}},
+        "target_query":{"type":"object","additionalProperties":false,"required":["implementation_rule","policy","schema","schema_role_uri"],"properties":{"implementation_rule":{"const":"ADR0011_DOCUMENT_SYMBOL_TARGET_IMPLEMENTATION_V1"},"policy":{"$ref":"#/$defs/policyFile"},"schema":{"$ref":"#/$defs/pinnedFile"},"schema_role_uri":{"const":"https://jaresty.github.io/lsp-trace/schemas/adr0011-references-issuance-records.proposed.schema.json#/$defs/targetResult"}}},
+        "version":{"const":1},
+        "witness_policy":{"type":"object","additionalProperties":false,"required":["role","version","selected_roles","host_selected_before_invocation"],"properties":{"role":{"const":"ADR0011_ATTEMPT_WITNESS_POLICY_V1"},"version":{"const":1},"selected_roles":{"const":["attempt_initiation","attempt_query_begin","attempt_terminal_journal","attempt_scanner_knowledge","attempt_request_key_observation"]},"host_selected_before_invocation":{"const":true}}}
+      }
+    },
+    "plan": {
+      "type":"object","additionalProperties":false,
+      "required":["role","version","profile_digest","session_id","generation","workspace_uri","query_uri","line","character","encoding","document_version","document_byte_length","document_digest","source_ref","git_root_uri","git_commit","git_before","policy_digests","schema_digest","implementation_digest","invocation_nonce","params_digest","limits","target_schema_digest","target_policy_digest","target_implementation_digest"],
+      "properties":{
+        "role":{"const":"ADR0011_LOCAL_REFERENCES_PLAN_V1"},"version":{"const":1},"profile_digest":{"$ref":"#/$defs/digest"},"session_id":{"type":"string","minLength":1},"generation":{"type":"integer","minimum":1},"workspace_uri":{"$ref":"#/$defs/uri"},"query_uri":{"$ref":"#/$defs/uri"},"line":{"type":"integer","minimum":0},"character":{"type":"integer","minimum":0},"encoding":{"enum":["utf-8","utf-16","utf-32"]},"document_version":{"type":"integer","minimum":0},"document_byte_length":{"type":"integer","minimum":1},"document_digest":{"$ref":"#/$defs/digest"},"source_ref":{"$ref":"#/$defs/roleRef"},"git_root_uri":{"$ref":"#/$defs/uri"},"git_commit":{"type":"string","pattern":"^[0-9a-f]{40,64}$"},"git_before":{"$ref":"#/$defs/roleRef"},"policy_digests":{"$ref":"#/$defs/fourDigests"},"schema_digest":{"$ref":"#/$defs/digest"},"implementation_digest":{"$ref":"#/$defs/digest"},"invocation_nonce":{"type":"string","pattern":"^[0-9a-f]{32,128}$"},"params_digest":{"$ref":"#/$defs/digest"},"target_schema_digest":{"$ref":"#/$defs/digest"},"target_policy_digest":{"$ref":"#/$defs/digest"},"target_implementation_digest":{"$ref":"#/$defs/digest"},"limits":{"type":"object","additionalProperties":false,"required":["max_messages","max_wire_bytes","timeout_ms","max_work"],"properties":{"max_messages":{"type":"integer","minimum":1},"max_wire_bytes":{"type":"integer","minimum":1},"timeout_ms":{"type":"integer","minimum":1},"max_work":{"type":"integer","minimum":1}}}
+      }
+    },
+    "implementationMeasurement": {
+      "type":"object","additionalProperties":false,
+      "required":["role","version","profile_digest","executable_digest","executable_byte_length","adapter_scope","measurement_rule"],
+      "properties":{"role":{"const":"ADR0011_INSTALLED_EXECUTABLE_MEASUREMENT_V1"},"version":{"const":1},"profile_digest":{"$ref":"#/$defs/digest"},"executable_digest":{"$ref":"#/$defs/digest"},"executable_byte_length":{"type":"integer","minimum":1},"adapter_scope":{"const":"LINKED_INTO_INSTALLED_EXECUTABLE_ONLY_V1"},"measurement_rule":{"const":"PIN_OPENED_EXECUTABLE_FILE_COMPARE_PATH_AT_START_PREWRITE_POSTCAPTURE_V1"}}
+    },
+    "hostSelection": {
+      "type":"object","additionalProperties":false,
+      "required":["role","version","profile_digest","plan_id","plan_ref","declaration_ref","implementation_digest","policy_digests","schema_digest","root_identity_digest","session_id","generation","invocation_nonce","expected_custody_ref","target_schema_digest","target_policy_digest","target_implementation_digest"],
+      "properties":{"role":{"const":"ADR0011_LOCAL_REFERENCES_SELECTION_V1"},"version":{"const":1},"profile_digest":{"$ref":"#/$defs/digest"},"plan_id":{"$ref":"#/$defs/digest"},"plan_ref":{"$ref":"#/$defs/roleRef"},"declaration_ref":{"$ref":"#/$defs/roleRef"},"implementation_digest":{"$ref":"#/$defs/digest"},"policy_digests":{"$ref":"#/$defs/fourDigests"},"schema_digest":{"$ref":"#/$defs/digest"},"root_identity_digest":{"$ref":"#/$defs/digest"},"session_id":{"type":"string","minLength":1},"generation":{"type":"integer","minimum":1},"invocation_nonce":{"type":"string","pattern":"^[0-9a-f]{32,128}$"},"expected_custody_ref":{"$ref":"#/$defs/roleRef"},"target_schema_digest":{"$ref":"#/$defs/digest"},"target_policy_digest":{"$ref":"#/$defs/digest"},"target_implementation_digest":{"$ref":"#/$defs/digest"}}
+    }
+  }
+}
