@@ -12,3 +12,6 @@ __pycache__/
 # Private local qualification artifacts (root and nested work areas).
 /.pi/evidence/
 **/.pi/evidence/
+/.pi/lsp-trace-bootstrap.json
+/.pi/lsp-trace-publication/
+/.pi/mcp.json
