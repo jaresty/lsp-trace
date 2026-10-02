@@ -1,0 +1,24 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "sk1:fcbe2d08e21ac9e5dd973cf650d6b6e001fad9873942df4cecdb9bccb52246ab",
+    "transaction": "b4-manager-a-definition-id1"
+  },
+  "original": {
+    "length": 36,
+    "private_ref": "held:A/source.bytes",
+    "sha256": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+  },
+  "payload": {
+    "custody": "OWNER_BUFFER",
+    "source_bytes": {
+      "length": 36,
+      "private_ref": "held:A/source.bytes",
+      "sha256": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+    },
+    "uri": "file:///w/definition.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [],
+  "role": "SOURCE"
+}

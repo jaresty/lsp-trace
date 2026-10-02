@@ -1,0 +1,2 @@
+package definition
+func alphaZZ() {}

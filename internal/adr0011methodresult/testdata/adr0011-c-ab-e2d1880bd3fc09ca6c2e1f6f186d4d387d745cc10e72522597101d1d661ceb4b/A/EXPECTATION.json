@@ -1,0 +1,18 @@
+{
+  "case": "A",
+  "basis": "SOURCE_FIRST_ACCEPTED_INDEPENDENT_ORACLE_CORE_WRITE6_NOT_RESPONSE_DERIVED",
+  "prediction_only": true,
+  "result_form": "LOCATION",
+  "candidate_count": 1,
+  "targets": [
+    {
+      "ordinal": 0,
+      "kind": "LOCATION",
+      "uri": "file:///w/target-a.go",
+      "selection_range": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 12}},
+      "target_range": null,
+      "target_source_sha256": "2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c"
+    }
+  ],
+  "custody": {"authority": 0, "accepted": false, "completeness": "UNKNOWN", "producer_authentication": "NO_PRODUCER_AUTHENTICATION"}
+}

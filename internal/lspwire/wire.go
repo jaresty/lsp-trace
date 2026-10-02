@@ -19,6 +19,7 @@ var (
 	ErrDuplicateContentLength = errors.New("duplicate Content-Length")
 	ErrMissingContentLength   = errors.New("missing Content-Length")
 	ErrFrameTooLarge          = errors.New("frame too large")
+	ErrOriginalFrameTooLarge  = errors.New("complete original-wire frame too large")
 	ErrHeaderTooLarge         = errors.New("headers too large")
 	ErrMalformedJSON          = errors.New("malformed JSON")
 	ErrWrongVersion           = errors.New("wrong JSON-RPC version")
@@ -130,23 +131,44 @@ func emit(observer Observer, event Event) {
 }
 
 type Reader struct {
-	r            *bufio.Reader
-	limits       Limits
-	observer     Observer
-	frameCapture *framedReadCapture // optional, scoped to one ReadWithFrame call
+	r                  *bufio.Reader
+	limits             Limits
+	observer           Observer
+	decodeEntry        func()             // private, notification-only pre-decode test seam; nil by default
+	retainEntry        func()             // private notification before original frame bytes are copied
+	frameCapture       *framedReadCapture // optional, scoped to one ReadWithFrame call
+	originalFrameLimit int64              // opt-in complete original-wire frame bound; zero disables it
 }
 
 func NewReader(r io.Reader, limits Limits) *Reader { return NewReaderObserved(r, limits, nil) }
 func NewReaderObserved(r io.Reader, limits Limits, observer Observer) *Reader {
 	return &Reader{r: bufio.NewReader(r), limits: limits.normalized(), observer: observer}
 }
+
+// NewReaderObservedAtDecode is package-internal test instrumentation. entry is
+// called at decode entry, not after a successful or failed decode. A nil entry
+// leaves the ordinary reader path unchanged; neither callback controls flow.
+func NewReaderObservedAtDecode(r io.Reader, limits Limits, observer Observer, entry, retain func()) *Reader {
+	reader := NewReaderObserved(r, limits, observer)
+	reader.decodeEntry = entry
+	reader.retainEntry = retain
+	return reader
+}
+
+// LimitOriginalFrameBytes bounds each complete original frame, including all
+// header bytes and its separator. Set before the first Read; Reader is single-
+// consumer. A positive bound rejects at the complete header before decode or
+// raw-frame retention; zero leaves the historical reader behavior unchanged.
+func (r *Reader) LimitOriginalFrameBytes(maxBytes int64) { r.originalFrameLimit = maxBytes }
+
 func (r *Reader) Read() (Message, error) {
 	length := -1
 	seenLength := false
 	var used int64
+	var pendingHeader []byte // only used with the opt-in bound; capped by MaxHeaderBytes
 	for {
 		line, err := r.r.ReadString('\n')
-		if r.frameCapture != nil {
+		if r.originalFrameLimit <= 0 && r.frameCapture != nil {
 			r.frameCapture.add([]byte(line))
 		}
 		used += int64(len(line))
@@ -156,6 +178,14 @@ func (r *Reader) Read() (Message, error) {
 		}
 		if used > r.limits.MaxHeaderBytes {
 			return Message{}, ErrHeaderTooLarge
+		}
+		if r.originalFrameLimit > 0 {
+			if used > r.originalFrameLimit {
+				return Message{}, fmt.Errorf("%w: header exceeds %d", ErrOriginalFrameTooLarge, r.originalFrameLimit)
+			}
+			if r.frameCapture != nil {
+				pendingHeader = append(pendingHeader, line...)
+			}
 		}
 		line = strings.TrimRight(line, "\r\n")
 		if line == "" {
@@ -180,6 +210,14 @@ func (r *Reader) Read() (Message, error) {
 	if length < 0 {
 		return Message{}, ErrMissingContentLength
 	}
+	if r.originalFrameLimit > 0 {
+		if int64(length) > r.originalFrameLimit-used {
+			return Message{}, fmt.Errorf("%w: %d + %d > %d", ErrOriginalFrameTooLarge, used, length, r.originalFrameLimit)
+		}
+		if r.frameCapture != nil {
+			r.frameCapture.add(pendingHeader)
+		}
+	}
 	if int64(length) > r.limits.MaxBodyBytes {
 		return Message{}, fmt.Errorf("%w: %d > %d", ErrFrameTooLarge, length, r.limits.MaxBodyBytes)
 	}
@@ -191,6 +229,12 @@ func (r *Reader) Read() (Message, error) {
 	emit(r.observer, Event{Stage: EventBodyRead, Bytes: int64(n), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)})
 	if err != nil {
 		return Message{}, err
+	}
+	if r.decodeEntry != nil {
+		func() {
+			defer func() { _ = recover() }()
+			r.decodeEntry()
+		}()
 	}
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.UseNumber()

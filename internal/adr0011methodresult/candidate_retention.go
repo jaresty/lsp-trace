@@ -20,6 +20,13 @@ type CandidateExpectation struct {
 // receipt. Exact LSP frames are neither required nor retained here. The owner
 // must explicitly review and remove the file; no timed deletion is implied.
 func PublishPrivateCandidate(root *publication.Root, selector string, raw []byte) (*publication.BoundFileReceipt, error) {
+	return publishPrivateCandidateObserved(nil, root, selector, raw)
+}
+
+// This observer marks entry into the existing *private candidate* publisher,
+// not D/public publication. It cannot authorize or change publication.
+func publishPrivateCandidateObserved(onPublication func(), root *publication.Root, selector string, raw []byte) (*publication.BoundFileReceipt, error) {
+	notifyPrivateCEntry(onPublication)
 	if _, err := VerifyCanonicalCandidate(raw); err != nil {
 		return nil, err
 	}

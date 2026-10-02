@@ -1,0 +1,147 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "sk1:fcbe2d08e21ac9e5dd973cf650d6b6e001fad9873942df4cecdb9bccb52246ab",
+    "transaction": "b4-manager-a-definition-id1"
+  },
+  "original": {
+    "length": 2119,
+    "private_ref": "held:A/capability-artifact.bin",
+    "sha256": "sha256:f3d03d3969e9e34675d1eb16a3b58c09028ccd998845ef5e9dfcd00df71d1443"
+  },
+  "payload": {
+    "events": [
+      {
+        "request_direction": "SERVER_TO_CLIENT",
+        "request_frame": {
+          "length": 231,
+          "private_ref": "held:A/cap-3.frame",
+          "sha256": "sha256:c081ae868351adc32bc0bcedb81c7fd761857c2e9ed8632360bdfaa840ccea15"
+        },
+        "request_frame_ordinal": 3,
+        "request_id": "definition-register",
+        "request_method": "client/registerCapability",
+        "request_params": {
+          "registrations": [
+            {
+              "id": "def-reg-1",
+              "method": "textDocument/definition",
+              "registerOptions": {
+                "documentSelector": null
+              }
+            }
+          ]
+        },
+        "response_direction": "CLIENT_TO_SERVER",
+        "response_error": null,
+        "response_frame": {
+          "length": 80,
+          "private_ref": "held:A/cap-4.frame",
+          "sha256": "sha256:9a6607c2e240192b01f950be1afb94017ac85fbdfe6adc61654377447a9f264d"
+        },
+        "response_frame_ordinal": 4,
+        "response_id": "definition-register",
+        "response_result": null,
+        "response_status": "SUCCESS",
+        "target_write_frame_ordinal": 5
+      }
+    ],
+    "initialize": {
+      "request_direction": "CLIENT_TO_SERVER",
+      "request_frame": {
+        "length": 196,
+        "private_ref": "held:A/cap-0.frame",
+        "sha256": "sha256:e8ade37966d8ff51b2a19a899691fe69dc90e02f508f73f7d1af752269663c84"
+      },
+      "request_frame_ordinal": 0,
+      "request_id": 10,
+      "request_method": "initialize",
+      "request_params": {
+        "capabilities": {
+          "textDocument": {
+            "definition": {
+              "dynamicRegistration": true
+            }
+          }
+        },
+        "processId": null,
+        "rootUri": "file:///w"
+      },
+      "response_direction": "SERVER_TO_CLIENT",
+      "response_error": null,
+      "response_frame": {
+        "length": 102,
+        "private_ref": "held:A/cap-1.frame",
+        "sha256": "sha256:3438b3c6e0964beb3f2f0f8872a73c4d82b3a033639d232295a936e431e55830"
+      },
+      "response_frame_ordinal": 1,
+      "response_id": 10,
+      "response_result": {
+        "capabilities": {
+          "definitionProvider": false
+        }
+      },
+      "response_status": "SUCCESS",
+      "target_write_frame_ordinal": 5
+    },
+    "initialized_notification": {
+      "direction": "CLIENT_TO_SERVER",
+      "frame": {
+        "length": 74,
+        "private_ref": "held:A/cap-2.frame",
+        "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+      },
+      "frame_ordinal": 2
+    },
+    "observed_frames": [
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 196,
+          "private_ref": "held:A/cap-0.frame",
+          "sha256": "sha256:e8ade37966d8ff51b2a19a899691fe69dc90e02f508f73f7d1af752269663c84"
+        },
+        "frame_ordinal": 0
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 102,
+          "private_ref": "held:A/cap-1.frame",
+          "sha256": "sha256:3438b3c6e0964beb3f2f0f8872a73c4d82b3a033639d232295a936e431e55830"
+        },
+        "frame_ordinal": 1
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 74,
+          "private_ref": "held:A/cap-2.frame",
+          "sha256": "sha256:3323265525f25974ce4cac579cc2fbc1674e11000d02aaa2f88cb5f88bc18f62"
+        },
+        "frame_ordinal": 2
+      },
+      {
+        "direction": "SERVER_TO_CLIENT",
+        "frame": {
+          "length": 231,
+          "private_ref": "held:A/cap-3.frame",
+          "sha256": "sha256:c081ae868351adc32bc0bcedb81c7fd761857c2e9ed8632360bdfaa840ccea15"
+        },
+        "frame_ordinal": 3
+      },
+      {
+        "direction": "CLIENT_TO_SERVER",
+        "frame": {
+          "length": 80,
+          "private_ref": "held:A/cap-4.frame",
+          "sha256": "sha256:9a6607c2e240192b01f950be1afb94017ac85fbdfe6adc61654377447a9f264d"
+        },
+        "frame_ordinal": 4
+      }
+    ],
+    "target_write_frame_ordinal": 5
+  },
+  "predecessors": [],
+  "role": "CAPABILITY_EVENTS"
+}

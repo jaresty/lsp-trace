@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lsp-trace/internal/adr0011cobserve"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
@@ -159,6 +160,10 @@ type Config struct {
 	// Package-private, default-off owner-path probe; never configured by hosts.
 	methodCandidateTestHook func(methodCandidateObservation)
 	ownedMethodPairTestHook func(OwnedMethodPair)
+	// Private C test probes; nil in production, never affect admission.
+	cWireObserver lspwire.Observer
+	cDecodeEntry  func()
+	cRetainEntry  func()
 }
 type StartRequest struct {
 	Profile           runtimeprofile.Profile
@@ -858,7 +863,28 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		}
 	}
 	reads := make(chan readResult, 1)
-	reader := lspwire.NewReader(child.Stdout(), m.wire)
+	decodeEntry, retainEntry := m.cDecodeEntry, m.cRetainEntry
+	if private != nil {
+		if probe := adr0011cobserve.From(parent); probe != nil {
+			if decodeEntry == nil {
+				decodeEntry = func() { adr0011cobserve.Notify(probe, adr0011cobserve.DecodeEntry) }
+			}
+			if retainEntry == nil {
+				retainEntry = func() { adr0011cobserve.Notify(probe, adr0011cobserve.RetainEntry) }
+			}
+		}
+	}
+	var reader *lspwire.Reader
+	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
+		reader = lspwire.NewReader(child.Stdout(), m.wire)
+	} else {
+		reader = lspwire.NewReaderObservedAtDecode(child.Stdout(), m.wire, m.cWireObserver, decodeEntry, retainEntry)
+	}
+	if private != nil {
+		// Checkpoint C, first increment: per complete original-wire frame,
+		// independent of the existing transaction/cumulative byte budget.
+		reader.LimitOriginalFrameBytes(2 << 20)
+	}
 	for result.Messages < maxMessages {
 		go func() {
 			if captureCap > 0 {
@@ -897,7 +923,9 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		case read := <-reads:
 			if read.err != nil {
 				failure := session.SessionPoisoned
-				if errors.Is(read.err, io.EOF) {
+				if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) {
+					failure = session.ResourceExhausted
+				} else if errors.Is(read.err, io.EOF) {
 					failure = session.SessionCrashed
 				}
 				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
@@ -1117,6 +1145,9 @@ type Manager struct {
 	diagnosticOrder         []DiagnosticOperationHandle
 	methodCandidateTestHook func(methodCandidateObservation)
 	ownedMethodPairTestHook func(OwnedMethodPair)
+	cWireObserver           lspwire.Observer
+	cDecodeEntry            func()
+	cRetainEntry            func()
 	privateB4Leases         map[[32]byte]*privateB4Reservation
 	privateB4Bytes          int64
 }
@@ -1160,7 +1191,7 @@ func New(c Config) (*Manager, error) {
 	if gitList == nil {
 		gitList = boundedGitWorktreeList
 	}
-	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook}, nil
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
 }
 
 const (

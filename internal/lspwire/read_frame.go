@@ -25,6 +25,7 @@ type framedReadCapture struct {
 	digest    hash.Hash
 	bytes     int64
 	maxRaw    int64
+	onRetain  func() // optional test-only notification before each raw append
 	raw       []byte
 	overLimit bool
 }
@@ -40,6 +41,12 @@ func (c *framedReadCapture) add(p []byte) {
 		c.overLimit = true
 		return
 	}
+	if c.onRetain != nil {
+		func() {
+			defer func() { _ = recover() }()
+			c.onRetain()
+		}()
+	}
 	c.raw = append(c.raw, p...)
 }
 
@@ -53,7 +60,7 @@ func (r *Reader) ReadWithExactFrame(maxBytes int64) (Message, ReadFrameObservati
 	if maxBytes <= 0 {
 		return Message{}, ReadFrameObservation{}, nil, ErrInvalidFrameCaptureLimit
 	}
-	capture := &framedReadCapture{digest: sha256.New(), maxRaw: maxBytes}
+	capture := &framedReadCapture{digest: sha256.New(), maxRaw: maxBytes, onRetain: r.retainEntry}
 	r.frameCapture = capture
 	defer func() { r.frameCapture = nil }()
 	message, err := r.Read()
@@ -78,7 +85,7 @@ func (r *Reader) ReadWithFrameIfWithin(maxBytes int64) (Message, ReadFrameObserv
 	if maxBytes <= 0 {
 		return Message{}, ReadFrameObservation{}, nil, false, ErrInvalidFrameCaptureLimit
 	}
-	capture := &framedReadCapture{digest: sha256.New(), maxRaw: maxBytes}
+	capture := &framedReadCapture{digest: sha256.New(), maxRaw: maxBytes, onRetain: r.retainEntry}
 	r.frameCapture = capture
 	defer func() { r.frameCapture = nil }()
 	message, err := r.Read()
