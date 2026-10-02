@@ -244,6 +244,7 @@ func (p Plan) Bytes() ([]byte, error) { return json.Marshal(p) }
 const (
 	RetainedCustody                 = "RETAINED"
 	ImmutableSourceObjectIdentityV1 = "IMMUTABLE_SOURCE_OBJECT_IDENTITY_V1"
+	GraphProvenanceV5SchemaID       = "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-provenance.v5.schema.json"
 
 	// PlanSealDomainV1 defines the exact private plan-seal preimage:
 	// domain UTF-8 bytes, NUL, raw 32-byte SHA-256 of the exact admitted V2
@@ -294,6 +295,27 @@ func (a Admitted) DisplayKeys() []Key {
 	return keys
 }
 
+// ValidateGraphCustody checks that exact graph-provenance.v5 envelope bytes
+// match the schema identity, digest, and length declared by the binding.
+func ValidateGraphCustody(binding RetainedCustodyBinding, graphBytes []byte) error {
+	if binding.GraphSchemaID != GraphProvenanceV5SchemaID {
+		return errors.New("graph custody schema mismatch")
+	}
+	sum := sha256.Sum256(graphBytes)
+	if binding.GraphDigest != "sha256:"+hex.EncodeToString(sum[:]) {
+		return errors.New("graph custody digest mismatch")
+	}
+	if binding.GraphByteLength != uint64(len(graphBytes)) {
+		return errors.New("graph custody byte length mismatch")
+	}
+	if _, err := graphprovenance.ValidateFor(graphBytes, graphprovenance.Family, "v5"); err != nil {
+		return fmt.Errorf("graph custody envelope: %w", err)
+	}
+	return nil
+}
+
+// CustodyBinding preserves the historical graph.v5 schema label for compatibility.
+// That label describes the embedded graph object, not exact outer-envelope custody.
 func (a Admitted) CustodyBinding(plan Plan) (RetainedCustodyBinding, error) {
 	zero := RetainedCustodyBinding{}
 	if len(a.raw) == 0 || len(a.parent.GraphV5Bytes) == 0 || a.parent.GraphV5Digest == "" {
@@ -319,6 +341,18 @@ func (a Admitted) CustodyBinding(plan Plan) (RetainedCustodyBinding, error) {
 		ManifestID:   "sha256:" + hex.EncodeToString(manifestSum[:]),
 		ResolverKind: ImmutableSourceObjectIdentityV1,
 	}, nil
+}
+
+// GraphProvenanceCustodyBinding explicitly binds the exact outer
+// graph-provenance.v5 envelope while preserving the historical source and plan
+// seals produced by CustodyBinding.
+func (a Admitted) GraphProvenanceCustodyBinding(plan Plan) (RetainedCustodyBinding, error) {
+	binding, err := a.CustodyBinding(plan)
+	if err != nil {
+		return RetainedCustodyBinding{}, err
+	}
+	binding.GraphSchemaID = GraphProvenanceV5SchemaID
+	return binding, nil
 }
 
 func Select(admitted Admitted, request Request) (Plan, error) {

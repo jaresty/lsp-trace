@@ -252,7 +252,7 @@ func Build(req Request) (Result, error) {
 		if err != nil {
 			return failed(StageSelect, CodeInvalidRequest, err)
 		}
-		binding, err := admitted.CustodyBinding(plan)
+		binding, err := admitted.GraphProvenanceCustodyBinding(plan)
 		if err != nil {
 			return failed(StageAdmit, CodeCustodyMismatch, err)
 		}
@@ -578,6 +578,9 @@ func EncodeCanonical(p Packet) ([]byte, error) {
 	p.PacketID = id
 	return json.Marshal(p)
 }
+
+// Validate checks packet JSON, semantics, and identities. It does not validate
+// graph bytes because none are supplied to this entry point.
 func Validate(raw []byte) (Packet, error) {
 	if err := rejectDuplicateKeys(raw); err != nil {
 		return Packet{}, err
@@ -603,6 +606,20 @@ func Validate(raw []byte) (Packet, error) {
 	}
 	return p, nil
 }
+
+// ValidateWithGraph validates the packet and admits the exact graph-provenance
+// envelope bytes bound by its retained custody declaration.
+func ValidateWithGraph(raw, graphBytes []byte) (Packet, error) {
+	p, err := Validate(raw)
+	if err != nil {
+		return Packet{}, err
+	}
+	if err := retainedprojection.ValidateGraphCustody(p.Custody, graphBytes); err != nil {
+		return Packet{}, err
+	}
+	return p, nil
+}
+
 func validPacket(p Packet) bool {
 	l := p.Lineage
 	if p.SchemaVersion != "lsp-trace.targetpacket.v2" || p.Status != "PROVISIONAL" || p.Authority != 0 || p.Accepted || p.Completeness != "UNKNOWN" || p.CensusID == "" || l.CensusID != p.CensusID || l.Status != censusprogramc.CandidateStatus || l.SelectionState != "SELECTED" || l.SourceGraphComplete != "UNKNOWN" || l.ClaimCeiling == "" || l.ClaimCeiling != p.ClaimCeiling || l.ConstituentIdentity == "" || l.ConstituentOrdinal < 0 || l.Distance < 0 || l.BatchID == "" || l.CommunityIdentity == "" || l.ExecutionBundleID == "" || l.SeedLabel == "" || l.SeedAt == "" || l.SelectedNode == "" || l.SelectedLogicalSourceID == "" || !canonicalStrings(l.Members) || !canonicalStrings(l.SCCMembers) || !validConsumers(p) {
@@ -711,7 +728,7 @@ func validPhysicalProjectionID(w sourceprojectionv2.WireResult[retainedprojectio
 	return w.PhysicalProjectionID == "sha256:"+hex.EncodeToString(digest[:])
 }
 func validCustody(c retainedprojection.RetainedCustodyBinding) bool {
-	if c.Custody != retainedprojection.RetainedCustody || c.GraphSchemaID == "" || c.CaptureID == "" || c.ManifestID == "" || c.ResolverKind == "" || c.GraphByteLength == 0 || len(c.GraphDigest) != len("sha256:")+64 || !strings.HasPrefix(c.GraphDigest, "sha256:") {
+	if c.Custody != retainedprojection.RetainedCustody || c.GraphSchemaID != retainedprojection.GraphProvenanceV5SchemaID || c.CaptureID == "" || c.ManifestID == "" || c.ResolverKind == "" || c.GraphByteLength == 0 || len(c.GraphDigest) != len("sha256:")+64 || !strings.HasPrefix(c.GraphDigest, "sha256:") {
 		return false
 	}
 	_, err := hex.DecodeString(c.GraphDigest[len("sha256:"):])
