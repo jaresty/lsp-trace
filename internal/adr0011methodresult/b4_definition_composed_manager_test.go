@@ -204,7 +204,7 @@ func composedTargetEqual(c DefinitionCandidate, w bridgeOracleTarget) bool {
 }
 
 func TestADR0011PrivateComposedManagerDefinition(t *testing.T) {
-	root := filepath.Join("..", "..", ".pi", "evidence", "adr0011-composed-b4-manager-id1-held-v1")
+	root := filepath.Join("testdata", "adr0011-composed-b4-manager-id1-held-v1")
 	assets := bridgeManifestAssets(t, filepath.Join(root, "manifest.json"), composedManifestSHA)
 	for _, c := range []string{"A", "B"} {
 		t.Run(c, func(t *testing.T) {

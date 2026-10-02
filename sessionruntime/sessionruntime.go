@@ -884,6 +884,7 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		// Checkpoint C, first increment: per complete original-wire frame,
 		// independent of the existing transaction/cumulative byte budget.
 		reader.LimitOriginalFrameBytes(2 << 20)
+		reader.LimitCumulativeOriginalFrameBytes(8 << 20)
 	}
 	for result.Messages < maxMessages {
 		go func() {
@@ -923,7 +924,7 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		case read := <-reads:
 			if read.err != nil {
 				failure := session.SessionPoisoned
-				if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) {
+				if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
 					failure = session.ResourceExhausted
 				} else if errors.Is(read.err, io.EOF) {
 					failure = session.SessionCrashed

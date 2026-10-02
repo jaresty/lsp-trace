@@ -15,15 +15,16 @@ import (
 const Version = "2.0"
 
 var (
-	ErrInvalidContentLength   = errors.New("invalid Content-Length")
-	ErrDuplicateContentLength = errors.New("duplicate Content-Length")
-	ErrMissingContentLength   = errors.New("missing Content-Length")
-	ErrFrameTooLarge          = errors.New("frame too large")
-	ErrOriginalFrameTooLarge  = errors.New("complete original-wire frame too large")
-	ErrHeaderTooLarge         = errors.New("headers too large")
-	ErrMalformedJSON          = errors.New("malformed JSON")
-	ErrWrongVersion           = errors.New("wrong JSON-RPC version")
-	ErrInvalidMessage         = errors.New("invalid JSON-RPC message")
+	ErrInvalidContentLength             = errors.New("invalid Content-Length")
+	ErrDuplicateContentLength           = errors.New("duplicate Content-Length")
+	ErrMissingContentLength             = errors.New("missing Content-Length")
+	ErrFrameTooLarge                    = errors.New("frame too large")
+	ErrOriginalFrameTooLarge            = errors.New("complete original-wire frame too large")
+	ErrCumulativeOriginalFramesTooLarge = errors.New("cumulative complete original-wire frames too large")
+	ErrHeaderTooLarge                   = errors.New("headers too large")
+	ErrMalformedJSON                    = errors.New("malformed JSON")
+	ErrWrongVersion                     = errors.New("wrong JSON-RPC version")
+	ErrInvalidMessage                   = errors.New("invalid JSON-RPC message")
 )
 
 type Limits struct{ MaxBodyBytes, MaxHeaderBytes int64 }
@@ -131,13 +132,15 @@ func emit(observer Observer, event Event) {
 }
 
 type Reader struct {
-	r                  *bufio.Reader
-	limits             Limits
-	observer           Observer
-	decodeEntry        func()             // private, notification-only pre-decode test seam; nil by default
-	retainEntry        func()             // private notification before original frame bytes are copied
-	frameCapture       *framedReadCapture // optional, scoped to one ReadWithFrame call
-	originalFrameLimit int64              // opt-in complete original-wire frame bound; zero disables it
+	r                    *bufio.Reader
+	limits               Limits
+	observer             Observer
+	decodeEntry          func()             // private, notification-only pre-decode test seam; nil by default
+	retainEntry          func()             // private notification before original frame bytes are copied
+	frameCapture         *framedReadCapture // optional, scoped to one ReadWithFrame call
+	originalFrameLimit   int64              // opt-in complete original-wire frame bound; zero disables it
+	cumulativeFrameLimit int64              // opt-in complete-frame transaction bound; zero disables it
+	cumulativeFrameBytes int64
 }
 
 func NewReader(r io.Reader, limits Limits) *Reader { return NewReaderObserved(r, limits, nil) }
@@ -161,6 +164,16 @@ func NewReaderObservedAtDecode(r io.Reader, limits Limits, observer Observer, en
 // raw-frame retention; zero leaves the historical reader behavior unchanged.
 func (r *Reader) LimitOriginalFrameBytes(maxBytes int64) { r.originalFrameLimit = maxBytes }
 
+// LimitCumulativeOriginalFrameBytes bounds complete original frames consumed by
+// this single-consumer Reader. The bound is checked after complete acquisition,
+// before retention/decode; bytes are committed only after successful validation.
+// Failed and partial reads do not consume budget. An over-budget malformed frame
+// is rejected before its syntax is known, so this is not full failure precedence.
+// Set before the first Read; zero leaves ordinary reader behavior unchanged.
+func (r *Reader) LimitCumulativeOriginalFrameBytes(maxBytes int64) {
+	r.cumulativeFrameLimit = maxBytes
+}
+
 func (r *Reader) Read() (Message, error) {
 	length := -1
 	seenLength := false
@@ -168,7 +181,7 @@ func (r *Reader) Read() (Message, error) {
 	var pendingHeader []byte // only used with the opt-in bound; capped by MaxHeaderBytes
 	for {
 		line, err := r.r.ReadString('\n')
-		if r.originalFrameLimit <= 0 && r.frameCapture != nil {
+		if r.originalFrameLimit <= 0 && r.cumulativeFrameLimit <= 0 && r.frameCapture != nil {
 			r.frameCapture.add([]byte(line))
 		}
 		used += int64(len(line))
@@ -183,6 +196,8 @@ func (r *Reader) Read() (Message, error) {
 			if used > r.originalFrameLimit {
 				return Message{}, fmt.Errorf("%w: header exceeds %d", ErrOriginalFrameTooLarge, r.originalFrameLimit)
 			}
+		}
+		if r.cumulativeFrameLimit > 0 || r.originalFrameLimit > 0 {
 			if r.frameCapture != nil {
 				pendingHeader = append(pendingHeader, line...)
 			}
@@ -214,7 +229,7 @@ func (r *Reader) Read() (Message, error) {
 		if int64(length) > r.originalFrameLimit-used {
 			return Message{}, fmt.Errorf("%w: %d + %d > %d", ErrOriginalFrameTooLarge, used, length, r.originalFrameLimit)
 		}
-		if r.frameCapture != nil {
+		if r.cumulativeFrameLimit <= 0 && r.frameCapture != nil {
 			r.frameCapture.add(pendingHeader)
 		}
 	}
@@ -223,12 +238,24 @@ func (r *Reader) Read() (Message, error) {
 	}
 	body := make([]byte, length)
 	n, err := io.ReadFull(r.r, body)
-	if r.frameCapture != nil {
+	if r.cumulativeFrameLimit <= 0 && r.frameCapture != nil {
 		r.frameCapture.add(body[:n])
 	}
 	emit(r.observer, Event{Stage: EventBodyRead, Bytes: int64(n), Closed: errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.ErrClosedPipe)})
 	if err != nil {
 		return Message{}, err
+	}
+	if r.cumulativeFrameLimit > 0 {
+		// Subtract before comparing: neither the frame nor the running total
+		// can overflow the signed byte count on the accepting path.
+		remaining := r.cumulativeFrameLimit - r.cumulativeFrameBytes
+		if remaining < used || int64(length) > remaining-used {
+			return Message{}, fmt.Errorf("%w: complete frame exceeds remaining budget", ErrCumulativeOriginalFramesTooLarge)
+		}
+	}
+	if r.cumulativeFrameLimit > 0 && r.frameCapture != nil {
+		r.frameCapture.add(pendingHeader)
+		r.frameCapture.add(body)
 	}
 	if r.decodeEntry != nil {
 		func() {
@@ -254,6 +281,9 @@ func (r *Reader) Read() (Message, error) {
 	if m.Kind() == KindInvalid {
 		emit(r.observer, Event{Stage: EventDecode, Kind: KindInvalid, Closed: true})
 		return Message{}, ErrInvalidMessage
+	}
+	if r.cumulativeFrameLimit > 0 {
+		r.cumulativeFrameBytes += used + int64(length)
 	}
 	emit(r.observer, Event{Stage: EventDecode, Kind: m.Kind()})
 	return m, nil

@@ -1,0 +1,3 @@
+Content-Length: 141
+
+{"jsonrpc":"2.0","id":1,"result":{"uri":"file:///w/target-a.go","range":{"start":{"line":1,"character":5},"end":{"line":1,"character":12}}} }

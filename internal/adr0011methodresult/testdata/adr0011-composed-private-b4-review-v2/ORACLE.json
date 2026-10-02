@@ -1,0 +1,43 @@
+{
+  "scope": "PRIVATE_SYNTHETIC_NOT_OBSERVED_OR_AUTHENTICATED",
+  "qualification": "0/162",
+  "manifest_sha256": "e2d1880bd3fc09ca6c2e1f6f186d4d387d745cc10e72522597101d1d661ceb4b",
+  "cases": {
+    "A": {
+      "session": "sk1:fcbe2d08e21ac9e5dd973cf650d6b6e001fad9873942df4cecdb9bccb52246ab",
+      "transaction": "b4-manager-a-definition-id1",
+      "completed_owner_key": "b4-owner-a-id1",
+      "query_occurrence_id": "b4-query-a",
+      "query_uri": "file:///w/definition.go",
+      "request_id": 1,
+      "generation": 1,
+      "method": "textDocument/definition",
+      "line": 1,
+      "character": 5,
+      "result_form": "scalar",
+      "candidate_count": 1,
+      "targets": [
+        {"ordinal": 0, "kind": "LOCATION", "uri": "file:///w/target-a.go", "selection_range": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 12}}, "target_range": null, "target_source_sha256": "2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c"}
+      ]
+    },
+    "B": {
+      "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+      "transaction": "b4-manager-b-definition-id1",
+      "completed_owner_key": "b4-owner-b-id1",
+      "query_occurrence_id": "b4-query-b",
+      "query_uri": "file:///w/definition.go",
+      "request_id": 1,
+      "generation": 1,
+      "method": "textDocument/definition",
+      "line": 1,
+      "character": 5,
+      "result_form": "array",
+      "candidate_count": 2,
+      "targets": [
+        {"ordinal": 0, "kind": "LOCATION", "uri": "file:///w/target-a.go", "selection_range": {"start": {"line": 1, "character": 5}, "end": {"line": 1, "character": 12}}, "target_range": null, "target_source_sha256": "2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c"},
+        {"ordinal": 1, "kind": "LOCATION", "uri": "file:///w/target-b.go", "selection_range": {"start": {"line": 2, "character": 5}, "end": {"line": 2, "character": 12}}, "target_range": null, "target_source_sha256": "318cb48346e30c507f390c86e5dceaaac490a02f8df0deff7f205db558266176"}
+      ]
+    }
+  },
+  "ceiling": {"authority": 0, "accepted": false, "completeness": "UNKNOWN", "claim_ceiling": "NO_PRODUCER_AUTHENTICATION"}
+}

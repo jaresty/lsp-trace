@@ -1,0 +1,13 @@
+{
+  "schema": "adr0011-definition-bridge-independent-oracle-manifest",
+  "version": 1,
+  "status": "PRIVATE_SYNTHETIC_IMPLEMENTATION_ONLY_PREDICTIONS",
+  "custody": {"authority": 0, "accepted": false, "completeness": "UNKNOWN", "producer_authentication": "NO_PRODUCER_AUTHENTICATION"},
+  "oracle": {"path": "oracle.json", "length": 8383, "sha256": "d82cf78ae7a8c024d22a5eac3b31e1a3c8e5a8f6dfc9c26630f97f5296432b59"},
+  "source_original_manifests": [
+    {"path": "../adr0011-definition-response-held-originals-v1-corrected/manifest.json", "sha256": "2621c234bd4aef4e7fc2e190b9672c89faa1ebada39aac9d0543ff91b804f1d7"},
+    {"path": "../adr0011-definition-b4b-held-originals-v1/manifest.json", "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"},
+    {"path": "../adr0011-definition-b4b-b4a-derived-v1/manifest.json", "sha256": "a88290ac884b4f0662d3c5ea5a07ea8031ce540fd580a866ab304d8b4bfde00c"}
+  ],
+  "limitations": "No observed server returns, producer authentication, acceptance, replay, qualification, or excluded-ordinal claims. No existing stale test was consulted."
+}

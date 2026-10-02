@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "definition-private-session",
+    "transaction": "definition-core-write-12"
+  },
+  "original": {
+    "length": 458,
+    "private_ref": "held:CORE/WRITE12/query.original",
+    "sha256": "sha256:82c2b4036553fccbfc373d8a34945dc4158d84bea12db54094717daee314264b"
+  },
+  "payload": {
+    "character": 5,
+    "encoding": "utf-16",
+    "line": 1,
+    "method": "textDocument/definition",
+    "source": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+    "uri": "file:///w/definition.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+      "role": "POLICY",
+      "selector": "private-context:definition-policy-v5"
+    },
+    {
+      "digest": "sha256:df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+      "role": "SCHEMA",
+      "selector": "private-context:envelope-v4"
+    },
+    {
+      "digest": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+      "role": "SOURCE",
+      "selector": "sha256:a077613a4a5e449372e1d895aeb49bdc3f852f589d607aaa55280704a9e49400"
+    }
+  ],
+  "role": "QUERY"
+}

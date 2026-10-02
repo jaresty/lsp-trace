@@ -1,0 +1,197 @@
+{
+  "cases": {
+    "at-cap": {
+      "decoded_compact_json_proxy_sum": 505,
+      "frames": [
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 0,
+          "path": "at-cap/00.frame",
+          "prefix_total": 2097072,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "9aa9b622f5778c82f7f469f381405d0bf4227eacfa2b351f5a44068ade7f34e2"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 1,
+          "path": "at-cap/01.frame",
+          "prefix_total": 4194144,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "58967be486f466020bc6bc270ee723c8474993127bfe9e0f5309755a3a9699ab"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 2,
+          "path": "at-cap/02.frame",
+          "prefix_total": 6291216,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "86173f36bc69e92b88dafd15e837a44ded43f659d3652ded5e060f5403ee8301"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 3,
+          "path": "at-cap/03.frame",
+          "prefix_total": 8388288,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "e15e0faf4aa8f4785282bc83bbb1cb3a218095664cd9bb7d98eaada2256d1b8a"
+        },
+        {
+          "body_length": 134,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 19,
+          "length": 157,
+          "ordinal": 4,
+          "path": "at-cap/04.frame",
+          "prefix_total": 8388445,
+          "retention_cap_eligible": true,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "6dc1ffc415a700fca455f2a9391bb4a3d495ff3e0529815c33ea4bba0b070e3c"
+        },
+        {
+          "body_length": 140,
+          "decoded_compact_json_proxy_bytes": 140,
+          "header_length": 19,
+          "length": 163,
+          "ordinal": 5,
+          "path": "at-cap/05.frame",
+          "prefix_total": 8388608,
+          "retention_cap_eligible": true,
+          "role": "matched_definition_response",
+          "separator_length": 4,
+          "sha256": "c6e6819ef4de0da57f5794395f4b5850e5aa04f44085da8b8fb98042d0dec5a0"
+        }
+      ],
+      "ordered_aggregate_sha256": "1416b181797fc5d1c66135a6390d593f9c72138da8bfcd49f810eb79c6880202",
+      "total": 8388608
+    },
+    "plus-one": {
+      "decoded_compact_json_proxy_sum": 505,
+      "frames": [
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 0,
+          "path": "plus-one/00.frame",
+          "prefix_total": 2097072,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "9aa9b622f5778c82f7f469f381405d0bf4227eacfa2b351f5a44068ade7f34e2"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 1,
+          "path": "plus-one/01.frame",
+          "prefix_total": 4194144,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "58967be486f466020bc6bc270ee723c8474993127bfe9e0f5309755a3a9699ab"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 2,
+          "path": "plus-one/02.frame",
+          "prefix_total": 6291216,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "86173f36bc69e92b88dafd15e837a44ded43f659d3652ded5e060f5403ee8301"
+        },
+        {
+          "body_length": 2097045,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 23,
+          "length": 2097072,
+          "ordinal": 3,
+          "path": "plus-one/03.frame",
+          "prefix_total": 8388288,
+          "retention_cap_eligible": false,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "e15e0faf4aa8f4785282bc83bbb1cb3a218095664cd9bb7d98eaada2256d1b8a"
+        },
+        {
+          "body_length": 134,
+          "decoded_compact_json_proxy_bytes": 73,
+          "header_length": 19,
+          "length": 157,
+          "ordinal": 4,
+          "path": "plus-one/04.frame",
+          "prefix_total": 8388445,
+          "retention_cap_eligible": true,
+          "role": "notification",
+          "separator_length": 4,
+          "sha256": "6dc1ffc415a700fca455f2a9391bb4a3d495ff3e0529815c33ea4bba0b070e3c"
+        },
+        {
+          "body_length": 141,
+          "decoded_compact_json_proxy_bytes": 140,
+          "header_length": 19,
+          "length": 164,
+          "ordinal": 5,
+          "path": "plus-one/05.frame",
+          "prefix_total": 8388609,
+          "retention_cap_eligible": false,
+          "role": "matched_definition_response",
+          "separator_length": 4,
+          "sha256": "669b01d515a27abbb1cd9b3f998912927dc33e872580ff99289f72fcc23de7e1"
+        }
+      ],
+      "ordered_aggregate_sha256": "b942b9a85d70b53c7c52378d0ae9abded5602d96e66f2e70c7dd157669c45902",
+      "total": 8388609
+    }
+  },
+  "fixture_head": "7995dfd0f55c450bf7b69601dc53e948c2a8fa5c",
+  "fixture_request_frame": {
+    "length": 178,
+    "sha256": "a985bd69c4392c1cdc8970813c1d3743abd645a7568aef3c4370e5730517b849"
+  },
+  "fixture_request_params": {
+    "length": 86,
+    "sha256": "adc9520f602074f012824ccd016ff7627d247879297da5c74e517f925327172d"
+  },
+  "fixture_response_frame": {
+    "length": 163,
+    "sha256": "c6e6819ef4de0da57f5794395f4b5850e5aa04f44085da8b8fb98042d0dec5a0"
+  },
+  "limits": {
+    "CaptureDefinitionResponseFrameMaxBytes": 163,
+    "CaptureMethodRequestFrameMaxBytes": 178,
+    "MaxBytes": 4194304,
+    "MaxMessages": 6,
+    "complete_frame_ceiling": 2097152,
+    "reservation_bytes": 8389974,
+    "reservation_ceiling": 16777216
+  },
+  "schema": "adr0011-c-cumulative-original-wire-v1"
+}

@@ -1,0 +1,34 @@
+{
+  "case": "B",
+  "character": 5,
+  "client_selector": "[{\"scheme\":\"file\"}]",
+  "completed_owner_key": "b4-owner-b-id1",
+  "document_kind": "ORDINARY",
+  "expected_sha256": "5632d69969c8e2e9f54ef692b93137624f351bf1d6018b6cc5a583ebdecff763",
+  "generation": 1,
+  "key": {
+    "generation": 1,
+    "id": 1
+  },
+  "language": "go",
+  "line": 1,
+  "manager": "manager-b",
+  "method": "textDocument/definition",
+  "position_encoding": "utf-16",
+  "profile": "b4-b",
+  "profile_selector": {
+    "environment_reference": "local",
+    "options": [],
+    "profile": "b4-b",
+    "trust_domain": "fixture",
+    "workspace": "/w"
+  },
+  "query_occurrence_id": "b4-query-b",
+  "scope": "PRIVATE_SYNTHETIC_NOT_OBSERVED_OR_AUTHENTICATED",
+  "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+  "source_custody": "OWNER_BUFFER",
+  "source_version": "buffer:v1",
+  "transaction": "b4-manager-b-definition-id1",
+  "uri": "file:///w/definition.go",
+  "workspace": "file:///w"
+}

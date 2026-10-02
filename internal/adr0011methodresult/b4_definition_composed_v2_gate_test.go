@@ -70,7 +70,7 @@ func composedV2Ceiling(t *testing.T, label string, got PrivateB4Decision) {
 }
 
 func TestADR0011PrivateComposedV2IndependentOracle(t *testing.T) {
-	root := filepath.Join("..", "..", ".pi", "evidence", "adr0011-composed-b4-manager-id1-held-v1")
+	root := filepath.Join("testdata", "adr0011-composed-b4-manager-id1-held-v1")
 	assets := bridgeManifestAssets(t, filepath.Join(root, "manifest.json"), composedManifestSHA)
 	var oracle struct {
 		ManifestSHA   string                    `json:"manifest_sha256"`
@@ -83,7 +83,7 @@ func TestADR0011PrivateComposedV2IndependentOracle(t *testing.T) {
 			ClaimCeiling string `json:"claim_ceiling"`
 		} `json:"ceiling"`
 	}
-	oraclePath := filepath.Join("..", "..", ".pi", "evidence", "adr0011-composed-private-b4-review-v2", "ORACLE.json")
+	oraclePath := filepath.Join("testdata", "adr0011-composed-private-b4-review-v2", "ORACLE.json")
 	bridgeJSON(t, bridgePinnedBytes(t, oraclePath, composedV2OracleSHA), &oracle)
 	if oracle.ManifestSHA != composedManifestSHA || oracle.Qualification != "0/162" || len(oracle.Cases) != 2 || oracle.Ceiling.Authority != 0 || oracle.Ceiling.Accepted || oracle.Ceiling.Completeness != "UNKNOWN" || oracle.Ceiling.ClaimCeiling != "NO_PRODUCER_AUTHENTICATION" {
 		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: V2 oracle envelope")

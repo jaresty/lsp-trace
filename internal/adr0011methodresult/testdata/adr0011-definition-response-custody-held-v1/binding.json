@@ -1,0 +1,266 @@
+{
+  "schema": "adr0011-definition-response-binding-v1",
+  "scope": "PRIVATE_SYNTHETIC_NOT_OBSERVED_OR_AUTHENTICATED",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "custody_limit": "Independently held response copies and WRITE/query/request metadata bind predictions per completed WRITE; not same-transaction producer custody, observed response, replay, or authentication.",
+  "bindings": [
+    {
+      "write": "CORE/WRITE4",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-4",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-4",
+      "request_id": 140,
+      "request_id_type": "number",
+      "response_id": 140,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE4/response.json",
+      "response_length": 41,
+      "response_sha256": "a974a19ff565cd42162df3c8fe1a0809244bb32e24ffe57fb59f94f8c05daef0",
+      "raw_result_length": 4,
+      "raw_result_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE4/request-write-envelope.json",
+        "length": 1754,
+        "sha256": "2bf2d3cf4de38677d3902a499c3b9fd94a2bd699e2d904b06c51ef6910f5e7d4"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE4/query-envelope.json",
+        "length": 1217,
+        "sha256": "88536d93aff6e6f1671de6c19f221657807a3bc62da901f971f52a053c8b8420"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/04-definition_write.frame",
+        "length": 180,
+        "sha256": "f4b111ccf9c0e333bc6963c4d804c546185b5ffe4e8e97812b8899074437f441"
+      }
+    },
+    {
+      "write": "CORE/WRITE6",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-6",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-6",
+      "request_id": 141,
+      "request_id_type": "number",
+      "response_id": 141,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE6/response.json",
+      "response_length": 143,
+      "response_sha256": "254b72fe4d8d74be420de1d84c05dd8a6211179a1ff1d58b43ea5ae1149cb768",
+      "raw_result_length": 106,
+      "raw_result_sha256": "b2f98041f9f4721b28d55d4521bb0a716060703d3ff6b646b174161c4f9d23c8",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE6/request-write-envelope.json",
+        "length": 1754,
+        "sha256": "1936fc3c4449ee06dfd6a77464ae9200e409a8d2b8c9afce91dd3d72d37869f1"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE6/query-envelope.json",
+        "length": 1217,
+        "sha256": "adf056c821639c936d2f35c5f047c45ecac0bb8d8e6b8d750a234b49f29d82f4"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/06-definition_write.frame",
+        "length": 180,
+        "sha256": "fa1f5039303e9d1b9390e01193d240cecb6a0666a7bb740bd80a25b952653849"
+      }
+    },
+    {
+      "write": "CORE/WRITE8",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-8",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-8",
+      "request_id": 142,
+      "request_id_type": "number",
+      "response_id": 142,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE8/response.json",
+      "response_length": 252,
+      "response_sha256": "1561e9a2c6136a8047174e1c5a1b52e03d2c3771e73b6952951520a3e9ba4b57",
+      "raw_result_length": 215,
+      "raw_result_sha256": "210d951a22ef4f8cdeed4c9762b248fc98873524b7d165bd77051e19024aa9a4",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE8/request-write-envelope.json",
+        "length": 1754,
+        "sha256": "905d1b8c262280be47d881a1010300dfc471c240bc2713e786440e253eac2fde"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE8/query-envelope.json",
+        "length": 1217,
+        "sha256": "8100edf9a244d78c009a4c8ef8a87755ba54ff9da1f07b109c2e98d122f7cec1"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/08-definition_write.frame",
+        "length": 180,
+        "sha256": "e8f4fe7cf3a0d7a17428729765ae2ed76795e7b0b73bb6a10b74bcb30ff348ec"
+      }
+    },
+    {
+      "write": "CORE/WRITE10",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-10",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-10",
+      "request_id": 143,
+      "request_id_type": "number",
+      "response_id": 143,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE10/response.json",
+      "response_length": 359,
+      "response_sha256": "e5079b0ce0d90f9304e0b7332b53589b8016305ac6b44a361e76a62bd02fcf6e",
+      "raw_result_length": 322,
+      "raw_result_sha256": "412695b1462d986714727c93c26ac4f4635ece5efd46bc641f6523eb566a79ce",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE10/request-write-envelope.json",
+        "length": 1757,
+        "sha256": "3fcd0434231b374b18bdb8c79b6241a7bc1ec3d904cdc39e1537eed8972ec641"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE10/query-envelope.json",
+        "length": 1219,
+        "sha256": "fe0dc5e1063c14a7eb4373b62a084c255af29595de4e12cc2d593ed331b9d2d1"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/10-definition_write.frame",
+        "length": 180,
+        "sha256": "bcdd4113663dc3f04bfccb375b8461426f43121618d246907f3892e15b6e0cf2"
+      }
+    },
+    {
+      "write": "CORE/WRITE12",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-12",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-12",
+      "request_id": 144,
+      "request_id_type": "number",
+      "response_id": 144,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE12/response.json",
+      "response_length": 546,
+      "response_sha256": "2743c3a2e24b7ae565a6c6b4fc1e42f83cc01160365685b0ab39a85beef2122b",
+      "raw_result_length": 509,
+      "raw_result_sha256": "1f8bb873ee7da56a1909611db357941ec354c65f682485a557c686c11a9100a8",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE12/request-write-envelope.json",
+        "length": 1757,
+        "sha256": "8717c92b79a07b656c058cb5a489e34a99410844312731e17f719089d30dc7b5"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE12/query-envelope.json",
+        "length": 1219,
+        "sha256": "0cf3d2fdea22fc6c4f3d831a8ae1abbb0c08fd0c780050e4ebe66a791fa45342"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/12-definition_write.frame",
+        "length": 180,
+        "sha256": "747b396abd3d076ec444b23a14954d72dc5591e4a23698284a4c978ee3ba845d"
+      }
+    },
+    {
+      "write": "CORE/WRITE14",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-core-write-14",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-core-14",
+      "request_id": 145,
+      "request_id_type": "number",
+      "response_id": 145,
+      "response_id_type": "number",
+      "response_path": "CORE/WRITE14/response.json",
+      "response_length": 231,
+      "response_sha256": "b77da6dd006dbce929ce07e0e9de6197012bb8a75fea537012ae8e00dddee9fd",
+      "raw_result_length": 194,
+      "raw_result_sha256": "a27a8da3bee787503638c0dd7602e7d5a5b34d345c6069d971240aba9440408e",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE14/request-write-envelope.json",
+        "length": 1757,
+        "sha256": "5be457835a27a22f7ab3d4bb690d03fa72ae781014e025422b37b52149157cf2"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE14/query-envelope.json",
+        "length": 1219,
+        "sha256": "3f2edfddef50d3971eec11091a80e04e4df20c5c5d62fceece6c6b58177b5e79"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/CORE/14-definition_write.frame",
+        "length": 180,
+        "sha256": "082d99670031d822973193dda1d256b89d29b0d94712f9e1508447817962798a"
+      }
+    },
+    {
+      "write": "STATIC_VALID_CONFLICT/WRITE20",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-static_valid_conflict-write-20",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-static_valid_conflict-20",
+      "request_id": 240,
+      "request_id_type": "number",
+      "response_id": 240,
+      "response_id_type": "number",
+      "response_path": "STATIC_VALID_CONFLICT/WRITE20/response.json",
+      "response_length": 257,
+      "response_sha256": "d882db47b3804b13ce213b00c7f7f1f055591d7fadd71b353810a3c57a591b4f",
+      "raw_result_length": 220,
+      "raw_result_sha256": "3fcf1c16cc91b402bc543e758c70d38c39cf1abd7f717197f1315e7e47652e3a",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_VALID_CONFLICT/WRITE20/request-write-envelope.json",
+        "length": 1842,
+        "sha256": "8720122e40b7344a98553684d71afbdc9b877e5cf351d9a6202cbdc520d4ea71"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_VALID_CONFLICT/WRITE20/query-envelope.json",
+        "length": 1253,
+        "sha256": "b94f73dad09ccfbaa87a08f78683cb5909d22342fb3ad605d36b7ec5aada5b71"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/STATIC_VALID_CONFLICT/20-definition_write.frame",
+        "length": 180,
+        "sha256": "4cebaa4ff965193de1005896694f1a8134c52ae5298c19447b6803e04eb6df54"
+      }
+    },
+    {
+      "write": "STATIC_MALFORMED_PRECEDENCE/WRITE26",
+      "session": "definition-private-session",
+      "generation": 1,
+      "transaction": "definition-static_malformed_precedence-write-26",
+      "method": "textDocument/definition",
+      "request_owner_key": "owner-definition-static_malformed_precedence-26",
+      "request_id": 340,
+      "request_id_type": "number",
+      "response_id": 340,
+      "response_id_type": "number",
+      "response_path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/response.json",
+      "response_length": 454,
+      "response_sha256": "7b3aee808cbdbaaea731827266bbbe83c7f37d7d9aa0526b1aa14fcd5d8d2e85",
+      "raw_result_length": 417,
+      "raw_result_sha256": "33e711a8cbfb7968013d4f6dcc8c4e5468ed7813e4559b1a5a9631ce9f6acdd6",
+      "held_write": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_MALFORMED_PRECEDENCE/WRITE26/request-write-envelope.json",
+        "length": 1872,
+        "sha256": "3dfc7e3c34fbc465f021450ee47c2a34a46493f8f5f1289c6d7b2ef07b3eace3"
+      },
+      "held_query": {
+        "path": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_MALFORMED_PRECEDENCE/WRITE26/query-envelope.json",
+        "length": 1265,
+        "sha256": "093908b0bcc709dd75f38b33d0d5847be9d16f6d210c360e5dc4f9a3bff1f730"
+      },
+      "held_request": {
+        "path": "../adr0011-definition-b4b-held-originals-v1/STATIC_MALFORMED_PRECEDENCE/26-definition_write.frame",
+        "length": 180,
+        "sha256": "d4d8ceb968b783df965cbccaa97af366f39856eed74255a573437d9d84faaae2"
+      }
+    }
+  ]
+}

@@ -10,8 +10,8 @@ import (
 // This separate private guard checks that each one reaches its intended
 // behavioral rejection, not the old all-rejecting scaffold.
 func TestB4DefinitionBridgeNegativeStatusGuards(t *testing.T) {
-	evidence := filepath.Join("..", "..", ".pi", "evidence")
-	oracleRoot := filepath.Join(evidence, "adr0011-definition-bridge-independent-oracle-v1")
+	evidence := "testdata"
+	oracleRoot := filepath.Join("testdata", "adr0011-definition-bridge-independent-oracle-v1")
 	var oracle struct {
 		Rows []bridgeOracleRow `json:"rows"`
 	}

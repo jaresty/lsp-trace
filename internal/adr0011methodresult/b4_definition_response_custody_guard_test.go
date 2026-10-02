@@ -8,11 +8,11 @@ import (
 // Additive field-isolation guard: the frozen test-first RED remains unchanged.
 // Each held-field substitution leaves the B4a-verified WRITE and response intact.
 func TestB4DefinitionBridgeHeldResponseFieldGuards(t *testing.T) {
-	evidence := filepath.Join("..", "..", ".pi", "evidence")
+	evidence := "testdata"
 	var oracle struct {
 		Rows []bridgeOracleRow `json:"rows"`
 	}
-	bridgeJSON(t, bridgePinnedBytes(t, filepath.Join(evidence, "adr0011-definition-bridge-independent-oracle-v1", "oracle.json"), bridgeOracleSHA), &oracle)
+	bridgeJSON(t, bridgePinnedBytes(t, filepath.Join("testdata", "adr0011-definition-bridge-independent-oracle-v1", "oracle.json"), bridgeOracleSHA), &oracle)
 	var row bridgeOracleRow
 	for _, item := range oracle.Rows {
 		if item.Scenario == "CORE" && item.WriteOrdinal == 6 {
@@ -22,7 +22,7 @@ func TestB4DefinitionBridgeHeldResponseFieldGuards(t *testing.T) {
 	if row.BridgeStatus != "CANDIDATE_ITEMS" || row.CandidateCount != 1 {
 		bridgeFixtureFatal(t, "oracle lacks CORE/WRITE6 positive control")
 	}
-	root := filepath.Join(evidence, "adr0011-definition-response-custody-held-v1")
+	root := filepath.Join("testdata", "adr0011-definition-response-custody-held-v1")
 	assets := bridgeManifestAssets(t, filepath.Join(root, "manifest.json"), bridgeHeldResponseManifestSHA)
 	var packet struct {
 		Bindings []bridgeHeldBinding `json:"bindings"`

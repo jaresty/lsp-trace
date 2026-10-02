@@ -1,0 +1,386 @@
+{
+  "bindings": [
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "04-definition_write.frame",
+        "frame_sha256": "f4b111ccf9c0e333bc6963c4d804c546185b5ffe4e8e97812b8899074437f441",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-4",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-4",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 140
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 455,
+          "path": "CORE/WRITE4/query.original",
+          "sha256": "be97295c14d71e64ffe76c606f55c878a56f502e17d422816683ffe2271c00c5"
+        },
+        "query_applicability": {
+          "length": 506,
+          "path": "CORE/WRITE4/query-applicability.original",
+          "sha256": "8348aeb4babda3f3bfcab0414745c024e1f7510c5ce457b598774f092461d64c"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:2512f5e2ebad7160ea4a307ede42c0c9d6b4d1e9dcce2cff4a702ee8ef30612e",
+        "QUERY_APPLICABILITY": "sha256:c7d2014f3084a4d5f244341b4392d680e497bc8703f48e6f5574711ef0fdd0e6",
+        "SOURCE": "sha256:9a4e711f249de86c03755dd97678e7b476fa9c6d10fa81985097d77917dccab1",
+        "transaction": "sha256:853762814c845cd548c967313ae637555febf458795291cc247cade5631eaaa5"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 4
+    },
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "06-definition_write.frame",
+        "frame_sha256": "fa1f5039303e9d1b9390e01193d240cecb6a0666a7bb740bd80a25b952653849",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-6",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-6",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 141
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 455,
+          "path": "CORE/WRITE6/query.original",
+          "sha256": "71763720063d02c5d9c7b4ddd2cb2fc79e877d5e6dc0b21e1c0d28be997a6ef0"
+        },
+        "query_applicability": {
+          "length": 506,
+          "path": "CORE/WRITE6/query-applicability.original",
+          "sha256": "68edc2ba6b402b14bc1d0dcc89733a283eb5204d0337443f31df4abc9824607a"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:1158efb1404643b0165a01aec939c1e007044d4c7e0a2b328ee119c1673d7a75",
+        "QUERY_APPLICABILITY": "sha256:02181bb71c6322faa989efb08a899bdaeb5b26a4936ffc683f6195ec0aeade7b",
+        "SOURCE": "sha256:357dc218f4e18dde82e7ec1873122ac66741237f5feb439ed3edb10526aafb45",
+        "transaction": "sha256:151a0c8f5ff6788dd59d67741a9167d6beeb7b1267b1be485f42a13ee1942934"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 6
+    },
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "08-definition_write.frame",
+        "frame_sha256": "e8f4fe7cf3a0d7a17428729765ae2ed76795e7b0b73bb6a10b74bcb30ff348ec",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-8",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-8",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 142
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 455,
+          "path": "CORE/WRITE8/query.original",
+          "sha256": "c08c9338bc8c623462cbd260bbd87ef5488b0e78d1c3f01a5df9340991c5bc50"
+        },
+        "query_applicability": {
+          "length": 506,
+          "path": "CORE/WRITE8/query-applicability.original",
+          "sha256": "54388f7330739ef18f8540db801e3788b9abcafa70954251e77bb28dffc86181"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:e572e0efee19e5a69bf93f7518831eb38f23f5654df57a7c213cb0913ae479bb",
+        "QUERY_APPLICABILITY": "sha256:6b5a67008cce229086bd499714fbdc7153288b321146c2f6deb0ba52ca60f0cd",
+        "SOURCE": "sha256:96c3f00603ddc153d3e6f89de5527dc30904ffebc8eeacef19342846e9a1e138",
+        "transaction": "sha256:1300aaa721d110d2f59378323610eb6d5e01e4559480ab87fe727449121b4a07"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 8
+    },
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "10-definition_write.frame",
+        "frame_sha256": "bcdd4113663dc3f04bfccb375b8461426f43121618d246907f3892e15b6e0cf2",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-10",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-10",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 143
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 458,
+          "path": "CORE/WRITE10/query.original",
+          "sha256": "86a94b89be9f90a66784b3093eb051d853f11dc2500fb75acbdfbe33d55d7530"
+        },
+        "query_applicability": {
+          "length": 507,
+          "path": "CORE/WRITE10/query-applicability.original",
+          "sha256": "65c07439de21310ddae54d8a62d8a0dbadcf3d7095bb3dcbcf77a39196aa2725"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:59fca6d2376cb2529f07dc145007738a4d774f3fa2380fdeb118c14c86e5bcd7",
+        "QUERY_APPLICABILITY": "sha256:86e5c5c6d312d945d9fdf05acfb620aecc0645caf0c6f24eeb7884b564578fda",
+        "SOURCE": "sha256:43af757900f9060f3a4876756428393dd8ede8becce8f53f2558b7e1e257b035",
+        "transaction": "sha256:86e16eb034e86d96993bc0447fa062804a48b1d680541917b0a85650749c0871"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 10
+    },
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "12-definition_write.frame",
+        "frame_sha256": "747b396abd3d076ec444b23a14954d72dc5591e4a23698284a4c978ee3ba845d",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-12",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-12",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 144
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 458,
+          "path": "CORE/WRITE12/query.original",
+          "sha256": "82c2b4036553fccbfc373d8a34945dc4158d84bea12db54094717daee314264b"
+        },
+        "query_applicability": {
+          "length": 507,
+          "path": "CORE/WRITE12/query-applicability.original",
+          "sha256": "9f4ebd8c1945b2ce0e885eb08812892aede91bc4663982581d4d860ccb5c1edb"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:9f4aec05441aad50a9ef4f547e001268b430a459367d13f4930b9197998e725c",
+        "QUERY_APPLICABILITY": "sha256:e0b753c84e8ef433d32929d5aaf4a4afd5466b8be232f058ed14fd84d2274bc6",
+        "SOURCE": "sha256:a077613a4a5e449372e1d895aeb49bdc3f852f589d607aaa55280704a9e49400",
+        "transaction": "sha256:4de9adbb5607209a47552db6ddeddd7f17bacc9460a3f422d8e568d591ca3df0"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 12
+    },
+    {
+      "held": {
+        "context_sha256": "6851dc8fb51a9a789f57ee84bf1e2706ceb95d91ce9a2f08cbfef75fc4bba93d",
+        "frame_filename": "14-definition_write.frame",
+        "frame_sha256": "082d99670031d822973193dda1d256b89d29b0d94712f9e1508447817962798a",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-core-14",
+        "session": "definition-private-session",
+        "transaction": "definition-core-write-14",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 145
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 458,
+          "path": "CORE/WRITE14/query.original",
+          "sha256": "af8ef61bba2d8f1efb2d4937bb0171182c71ff92b5b24220ced3e89632bdc280"
+        },
+        "query_applicability": {
+          "length": 507,
+          "path": "CORE/WRITE14/query-applicability.original",
+          "sha256": "970cbc98f9b1ab3e38589953431863f24ec5031b9ae02e02b7ca7a3812d7f3c5"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:87f7ebc617f2d0be21194f4ce14bbcaa8a463dba757e029808fd6f9084b9f0bd",
+        "QUERY_APPLICABILITY": "sha256:e4438fb72520e3330f09dfcae00b614944844c6c43bf8048b139755e42e702e1",
+        "SOURCE": "sha256:b0ec07e9e15c80870619cbabc1f5d459657e642e7ae0638218547d78503bb41e",
+        "transaction": "sha256:7b4c7b7545bbb51ae7c4518b15199193be1be434ce2e8d7a10d2247d95bbd0e8"
+      },
+      "scenario": "CORE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 14
+    },
+    {
+      "held": {
+        "context_sha256": "34cc1bbf9e4587588e1ddef2ce0b7748a3ebd029d7a7585f0533d4b73f413bd9",
+        "frame_filename": "20-definition_write.frame",
+        "frame_sha256": "4cebaa4ff965193de1005896694f1a8134c52ae5298c19447b6803e04eb6df54",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-static_valid_conflict-20",
+        "session": "definition-private-session",
+        "transaction": "definition-static_valid_conflict-write-20",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 240
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 492,
+          "path": "STATIC_VALID_CONFLICT/WRITE20/query.original",
+          "sha256": "b7577481749be854da4d453ff3d71b8b2644289328b487c527172fc5300b26b9"
+        },
+        "query_applicability": {
+          "length": 524,
+          "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability.original",
+          "sha256": "d3e3eabdfb578c483059a359f44eb264505b00053bea9dd1273834d88bc90225"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:91c04f5cf43ff795501e7a6ab85ee348be35cb9c49f2fd6df255ed3fcfc431e1",
+        "QUERY_APPLICABILITY": "sha256:64acaeb4c9b5e720a6d01ad266f78c54209b660b073e7bb6d3a42945cdb32009",
+        "SOURCE": "sha256:0350e72a7ee108ab0875f7b7f438d9ab135f38de43ba74bf352f7dfa6c04fb9c",
+        "transaction": "sha256:026f77cce772ef70e4355dc7fcca063b45c8eedee977dad04cba9b3ff6e39797"
+      },
+      "scenario": "STATIC_VALID_CONFLICT",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 20
+    },
+    {
+      "held": {
+        "context_sha256": "1e18515efda7105c330b6496956dad2af9c85d4a0567e15386954aad21a80e9e",
+        "frame_filename": "26-definition_write.frame",
+        "frame_sha256": "d4d8ceb968b783df965cbccaa97af366f39856eed74255a573437d9d84faaae2",
+        "source_length": 36,
+        "source_sha256": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374"
+      },
+      "identity": {
+        "generation": 1,
+        "method": "textDocument/definition",
+        "owner_key": "owner-definition-static_malformed_precedence-26",
+        "session": "definition-private-session",
+        "transaction": "definition-static_malformed_precedence-write-26",
+        "uri": "file:///w/definition.go",
+        "wire_id": {
+          "type": "number",
+          "value": 340
+        },
+        "workspace": "file:///w"
+      },
+      "originals": {
+        "query": {
+          "length": 504,
+          "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query.original",
+          "sha256": "f9184ef5b9b8cbc258f26bcb583d267b181c044e34bb7d82968b236ee3e0771d"
+        },
+        "query_applicability": {
+          "length": 530,
+          "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability.original",
+          "sha256": "0defa45ba89e4266d13bca51ca901705b269b39e692745778ae866843a69c046"
+        }
+      },
+      "private_selectors": {
+        "QUERY": "sha256:394c1b2799ced14566c4ba598e332df477baf7ad1dc33660c96232a9a0c961bc",
+        "QUERY_APPLICABILITY": "sha256:821c458107ee86eeb9a225b25354e7cf9daac46fb635f568704b8e70f222744b",
+        "SOURCE": "sha256:6a58c5213243f8e339231d40a4a0fa797c3a97609e1ada98ada622a6a44a4f72",
+        "transaction": "sha256:56658cd65781dee5960ea1431278ac02b47e15e1cb37b7220ef12b17beb28504"
+      },
+      "scenario": "STATIC_MALFORMED_PRECEDENCE",
+      "source_version_mapping": {
+        "b4a_version": "buffer:v1",
+        "custody": "OWNER_BUFFER",
+        "synthetic_only": true
+      },
+      "write_ordinal": 26
+    }
+  ],
+  "limitations": [
+    "not claimant envelopes or selector issuance",
+    "buffer:v1/OWNER_BUFFER synthetic convention not producer custody",
+    "authority=0 accepted=false completeness=UNKNOWN NO_PRODUCER_AUTHENTICATION"
+  ],
+  "status": "PRIVATE_HELD_DEFINITION_QUERY_APP_BEFORE_CLAIMANTS"
+}

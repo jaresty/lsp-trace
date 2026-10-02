@@ -1,0 +1,79 @@
+{
+  "packet": "adr0011-definition-response-custody-held-v1",
+  "scope": "PRIVATE_SYNTHETIC_NOT_OBSERVED_OR_AUTHENTICATED",
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "original_root": {
+    "path": "../adr0011-definition-response-held-originals-v1-corrected/manifest.json",
+    "length": 6522,
+    "sha256": "2621c234bd4aef4e7fc2e190b9672c89faa1ebada39aac9d0543ff91b804f1d7"
+  },
+  "lineage_roots": [
+    {
+      "path": "../adr0011-definition-b4b-b4a-derived-v1/manifest.json",
+      "length": 8296,
+      "sha256": "a88290ac884b4f0662d3c5ea5a07ea8031ce540fd580a866ab304d8b4bfde00c"
+    },
+    {
+      "path": "../adr0011-definition-b4b-held-originals-v1/manifest.json",
+      "length": 1353,
+      "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"
+    }
+  ],
+  "assets": [
+    {
+      "path": "CORE/WRITE4/response.json",
+      "length": 41,
+      "sha256": "a974a19ff565cd42162df3c8fe1a0809244bb32e24ffe57fb59f94f8c05daef0",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE4/response.json"
+    },
+    {
+      "path": "CORE/WRITE6/response.json",
+      "length": 143,
+      "sha256": "254b72fe4d8d74be420de1d84c05dd8a6211179a1ff1d58b43ea5ae1149cb768",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE6/response.json"
+    },
+    {
+      "path": "CORE/WRITE8/response.json",
+      "length": 252,
+      "sha256": "1561e9a2c6136a8047174e1c5a1b52e03d2c3771e73b6952951520a3e9ba4b57",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE8/response.json"
+    },
+    {
+      "path": "CORE/WRITE10/response.json",
+      "length": 359,
+      "sha256": "e5079b0ce0d90f9304e0b7332b53589b8016305ac6b44a361e76a62bd02fcf6e",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE10/response.json"
+    },
+    {
+      "path": "CORE/WRITE12/response.json",
+      "length": 546,
+      "sha256": "2743c3a2e24b7ae565a6c6b4fc1e42f83cc01160365685b0ab39a85beef2122b",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE12/response.json"
+    },
+    {
+      "path": "CORE/WRITE14/response.json",
+      "length": 231,
+      "sha256": "b77da6dd006dbce929ce07e0e9de6197012bb8a75fea537012ae8e00dddee9fd",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/CORE/WRITE14/response.json"
+    },
+    {
+      "path": "STATIC_VALID_CONFLICT/WRITE20/response.json",
+      "length": 257,
+      "sha256": "d882db47b3804b13ce213b00c7f7f1f055591d7fadd71b353810a3c57a591b4f",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/STATIC_VALID_CONFLICT/WRITE20/response.json"
+    },
+    {
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/response.json",
+      "length": 454,
+      "sha256": "7b3aee808cbdbaaea731827266bbbe83c7f37d7d9aa0526b1aa14fcd5d8d2e85",
+      "original": "../adr0011-definition-response-held-originals-v1-corrected/STATIC_MALFORMED_PRECEDENCE/WRITE26/response.json"
+    },
+    {
+      "path": "binding.json",
+      "length": 11831,
+      "sha256": "8f13c7dc95a0ed210d27a421799ba5c35f0d5abc04b2788d39060d716b94f67a"
+    }
+  ]
+}

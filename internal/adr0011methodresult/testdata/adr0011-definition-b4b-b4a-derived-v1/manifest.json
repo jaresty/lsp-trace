@@ -1,0 +1,233 @@
+{
+  "assets": [
+    {
+      "length": 285,
+      "path": "CORE/WRITE4/source-artifact.bin",
+      "sha256": "0beb1c86c0f79b7557828c46a1ca992c7ea924eb17e68eb0f99280e104ac3a2e"
+    },
+    {
+      "length": 651,
+      "path": "CORE/WRITE4/source-envelope.json",
+      "sha256": "a2ee35f192efac237aafb81b56cb5529f87401449a42d27210d73a6bc9cc9863"
+    },
+    {
+      "length": 1217,
+      "path": "CORE/WRITE4/query-envelope.json",
+      "sha256": "88536d93aff6e6f1671de6c19f221657807a3bc62da901f971f52a053c8b8420"
+    },
+    {
+      "length": 1724,
+      "path": "CORE/WRITE4/query-applicability-envelope.json",
+      "sha256": "ef50abf84435cc458e2940e500073051b4428802ff11a4c947102f877394418b"
+    },
+    {
+      "length": 1754,
+      "path": "CORE/WRITE4/request-write-envelope.json",
+      "sha256": "2bf2d3cf4de38677d3902a499c3b9fd94a2bd699e2d904b06c51ef6910f5e7d4"
+    },
+    {
+      "length": 285,
+      "path": "CORE/WRITE6/source-artifact.bin",
+      "sha256": "71eb226f3cda0472dc482fad07685f83e25488ac3f76ae285c8a4dc78fb3c90e"
+    },
+    {
+      "length": 651,
+      "path": "CORE/WRITE6/source-envelope.json",
+      "sha256": "f681281fe8ca015a902ade703f81e0baa35986e110d0769d62103f951738ad2a"
+    },
+    {
+      "length": 1217,
+      "path": "CORE/WRITE6/query-envelope.json",
+      "sha256": "adf056c821639c936d2f35c5f047c45ecac0bb8d8e6b8d750a234b49f29d82f4"
+    },
+    {
+      "length": 1724,
+      "path": "CORE/WRITE6/query-applicability-envelope.json",
+      "sha256": "974c2fd5fb3dbbcaacc953b28f63ad681416e79611a376ba43885196e8a3aa26"
+    },
+    {
+      "length": 1754,
+      "path": "CORE/WRITE6/request-write-envelope.json",
+      "sha256": "1936fc3c4449ee06dfd6a77464ae9200e409a8d2b8c9afce91dd3d72d37869f1"
+    },
+    {
+      "length": 285,
+      "path": "CORE/WRITE8/source-artifact.bin",
+      "sha256": "723ce62878c587931bb11a7061c43f146ba7ba7d58eb876ee2a6c583e992abc6"
+    },
+    {
+      "length": 651,
+      "path": "CORE/WRITE8/source-envelope.json",
+      "sha256": "72d91658a3f2ee91a66caa5ff016f7619ac940a736cc369716837acff08fb5ae"
+    },
+    {
+      "length": 1217,
+      "path": "CORE/WRITE8/query-envelope.json",
+      "sha256": "8100edf9a244d78c009a4c8ef8a87755ba54ff9da1f07b109c2e98d122f7cec1"
+    },
+    {
+      "length": 1724,
+      "path": "CORE/WRITE8/query-applicability-envelope.json",
+      "sha256": "688dc49f7164cb5cdfc5c0712a39d3ad06f36d40aa4d4f8d373d8ba60f874dbf"
+    },
+    {
+      "length": 1754,
+      "path": "CORE/WRITE8/request-write-envelope.json",
+      "sha256": "905d1b8c262280be47d881a1010300dfc471c240bc2713e786440e253eac2fde"
+    },
+    {
+      "length": 285,
+      "path": "CORE/WRITE10/source-artifact.bin",
+      "sha256": "476ac8db0b053aae83d2d5f6e3e395188df67df416abcb96e8458aed2a1bb30a"
+    },
+    {
+      "length": 652,
+      "path": "CORE/WRITE10/source-envelope.json",
+      "sha256": "411f28984a5297ee9b42ef2b62b7d5e5d5a98e9fa2e41f0d9902bd778c1a7aa5"
+    },
+    {
+      "length": 1219,
+      "path": "CORE/WRITE10/query-envelope.json",
+      "sha256": "fe0dc5e1063c14a7eb4373b62a084c255af29595de4e12cc2d593ed331b9d2d1"
+    },
+    {
+      "length": 1727,
+      "path": "CORE/WRITE10/query-applicability-envelope.json",
+      "sha256": "25aef2de14c4413bb70a32aa6b036679f940bf9c6e329458cffc0fda16085fc6"
+    },
+    {
+      "length": 1757,
+      "path": "CORE/WRITE10/request-write-envelope.json",
+      "sha256": "3fcd0434231b374b18bdb8c79b6241a7bc1ec3d904cdc39e1537eed8972ec641"
+    },
+    {
+      "length": 285,
+      "path": "CORE/WRITE12/source-artifact.bin",
+      "sha256": "504eec4d81e2ee8789a0a9144dd35b487780e2799a31ed5a6f3e55d0576efdc3"
+    },
+    {
+      "length": 652,
+      "path": "CORE/WRITE12/source-envelope.json",
+      "sha256": "9bb1360b3f1fc1df6a9dd92df67ed2ba3dd03dff64671e7c8f23491bfccfa277"
+    },
+    {
+      "length": 1219,
+      "path": "CORE/WRITE12/query-envelope.json",
+      "sha256": "0cf3d2fdea22fc6c4f3d831a8ae1abbb0c08fd0c780050e4ebe66a791fa45342"
+    },
+    {
+      "length": 1727,
+      "path": "CORE/WRITE12/query-applicability-envelope.json",
+      "sha256": "12a8ad2e2ecfd7030ca753f9aa49d6ed98131cc177e9ddfcabbfae9bf33b8ced"
+    },
+    {
+      "length": 1757,
+      "path": "CORE/WRITE12/request-write-envelope.json",
+      "sha256": "8717c92b79a07b656c058cb5a489e34a99410844312731e17f719089d30dc7b5"
+    },
+    {
+      "length": 285,
+      "path": "CORE/WRITE14/source-artifact.bin",
+      "sha256": "99a540b126f47e5735f243ac65580d77324b78877eb7ed944aca0b3e8ddddf6c"
+    },
+    {
+      "length": 652,
+      "path": "CORE/WRITE14/source-envelope.json",
+      "sha256": "78d7279d2313ef18b6d4c44afe1cf9767124a36bb38b9b1a51987902c664b5e6"
+    },
+    {
+      "length": 1219,
+      "path": "CORE/WRITE14/query-envelope.json",
+      "sha256": "3f2edfddef50d3971eec11091a80e04e4df20c5c5d62fceece6c6b58177b5e79"
+    },
+    {
+      "length": 1727,
+      "path": "CORE/WRITE14/query-applicability-envelope.json",
+      "sha256": "3bf99941421907d5ef5e202116b190580844599bfb5dbd63d6feb9f53ac45483"
+    },
+    {
+      "length": 1757,
+      "path": "CORE/WRITE14/request-write-envelope.json",
+      "sha256": "5be457835a27a22f7ab3d4bb690d03fa72ae781014e025422b37b52149157cf2"
+    },
+    {
+      "length": 285,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/source-artifact.bin",
+      "sha256": "6e268deb1d706b80b14f19d72a457fa5a8969157afa9e5baa2b1aa5f65c1b92d"
+    },
+    {
+      "length": 703,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/source-envelope.json",
+      "sha256": "4f6a1b257abd8a80474390e5a3c57c348f6839124065330f860ad9533d93a627"
+    },
+    {
+      "length": 1253,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-envelope.json",
+      "sha256": "b94f73dad09ccfbaa87a08f78683cb5909d22342fb3ad605d36b7ec5aada5b71"
+    },
+    {
+      "length": 1778,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/query-applicability-envelope.json",
+      "sha256": "f4f3b68da8f8ecdbe69d54f628271cbff9792c0e39bce92d5430ad680d159906"
+    },
+    {
+      "length": 1842,
+      "path": "STATIC_VALID_CONFLICT/WRITE20/request-write-envelope.json",
+      "sha256": "8720122e40b7344a98553684d71afbdc9b877e5cf351d9a6202cbdc520d4ea71"
+    },
+    {
+      "length": 285,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/source-artifact.bin",
+      "sha256": "c91885d34627a8a4e6c26cd80378b2cf363b0ea45e6cbec0c8a0c78c25fbf12f"
+    },
+    {
+      "length": 721,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/source-envelope.json",
+      "sha256": "1a77aa38c77fcf1934a7360a27232338d6beeb6cdff7b6a1950ea75257b2316d"
+    },
+    {
+      "length": 1265,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-envelope.json",
+      "sha256": "093908b0bcc709dd75f38b33d0d5847be9d16f6d210c360e5dc4f9a3bff1f730"
+    },
+    {
+      "length": 1796,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/query-applicability-envelope.json",
+      "sha256": "9cbc864e70acd0851c5524586e0a4e142d87c5a05688c78fc258a12543537a58"
+    },
+    {
+      "length": 1872,
+      "path": "STATIC_MALFORMED_PRECEDENCE/WRITE26/request-write-envelope.json",
+      "sha256": "3dfc7e3c34fbc465f021450ee47c2a34a46493f8f5f1289c6d7b2ef07b3eace3"
+    },
+    {
+      "length": 13241,
+      "path": "derivation.json",
+      "sha256": "9a8b6d69c8d7ac58cac300dafbc50f119ae9f880451323acd850c0c01b031e08"
+    }
+  ],
+  "limitations": [
+    "four private claimants for each of eight definition WRITEs, pending independent CheckB4a validation",
+    "authority=0 accepted=false completeness=UNKNOWN NO_PRODUCER_AUTHENTICATION",
+    "no replay/C/D/issuance/qualification"
+  ],
+  "predecessors": [
+    {
+      "path": "../adr0011-definition-b4b-held-originals-v1/manifest.json",
+      "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"
+    },
+    {
+      "path": "../adr0011-definition-b4b-held-query-originals-v1/manifest.json",
+      "sha256": "f4b765e5576f6ed22c839e2686116146db4d643cd53eef8af851757e824c7001"
+    },
+    {
+      "path": "../adr0011-definition-b4b-capability-derived-v1/manifest.json",
+      "sha256": "8e319123c02f66e9e584d16db976dfc47f488f0156903fdc571b3f2b94790d16"
+    },
+    {
+      "path": "../adr0011-b4b-full-candidate-private-red-v1/candidate-manifest.json",
+      "sha256": "aee6006bbafdfae8f33a6b011cf34b69ad85411489ac963ef4243fd34cbbd6ec"
+    }
+  ],
+  "status": "PRIVATE_DEFINITION_B4A_PENDING_INDEPENDENT_REVIEW"
+}

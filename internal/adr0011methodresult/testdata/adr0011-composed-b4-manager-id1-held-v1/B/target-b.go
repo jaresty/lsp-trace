@@ -1,0 +1,3 @@
+package definition
+
+func betaZZZ() {}

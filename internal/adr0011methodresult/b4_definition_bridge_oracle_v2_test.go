@@ -348,8 +348,8 @@ func bridgeAssertNoPositiveExclusion(t *testing.T, label string, got DefinitionB
 }
 
 func TestB4DefinitionBridgeIndependentOracleV2(t *testing.T) {
-	evidence := filepath.Join("..", "..", ".pi", "evidence")
-	oracleRoot := filepath.Join(evidence, "adr0011-definition-bridge-independent-oracle-v1")
+	evidence := "testdata"
+	oracleRoot := filepath.Join("testdata", "adr0011-definition-bridge-independent-oracle-v1")
 	bridgePinnedBytes(t, filepath.Join(oracleRoot, "manifest.json"), "377b3c25bc7dec58c28e10e853c038e09970b4c262443de91afe136c475c2c5a")
 	var oracle struct {
 		Rows []bridgeOracleRow `json:"rows"`

@@ -74,8 +74,8 @@ func bridgeHeldResponseFixture(t *testing.T, root string, row bridgeOracleRow, i
 }
 
 func TestB4DefinitionBridgeHeldResponseCustody(t *testing.T) {
-	evidence := filepath.Join("..", "..", ".pi", "evidence")
-	root := filepath.Join(evidence, "adr0011-definition-response-custody-held-v1")
+	evidence := "testdata"
+	root := filepath.Join("testdata", "adr0011-definition-response-custody-held-v1")
 	assets := bridgeManifestAssets(t, filepath.Join(root, "manifest.json"), bridgeHeldResponseManifestSHA)
 	var packet struct {
 		Scope        string              `json:"scope"`
@@ -96,7 +96,7 @@ func TestB4DefinitionBridgeHeldResponseCustody(t *testing.T) {
 	var oracle struct {
 		Rows []bridgeOracleRow `json:"rows"`
 	}
-	bridgeJSON(t, bridgePinnedBytes(t, filepath.Join(evidence, "adr0011-definition-bridge-independent-oracle-v1", "oracle.json"), bridgeOracleSHA), &oracle)
+	bridgeJSON(t, bridgePinnedBytes(t, filepath.Join("testdata", "adr0011-definition-bridge-independent-oracle-v1", "oracle.json"), bridgeOracleSHA), &oracle)
 	if len(oracle.Rows) != 8 {
 		bridgeFixtureFatal(t, "oracle row count is not eight")
 	}

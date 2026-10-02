@@ -1,0 +1,3 @@
+Content-Length: 79
+
+{"id":11,"jsonrpc":"2.0","result":{"capabilities":{"definitionProvider":true}}}

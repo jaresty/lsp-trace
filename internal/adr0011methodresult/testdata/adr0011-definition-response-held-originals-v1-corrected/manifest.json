@@ -1,0 +1,38 @@
+{
+  "packet": "adr0011-definition-response-held-originals-v1-corrected",
+  "status": "PRIVATE_SYNTHETIC_PREDICTIONS_ONLY",
+  "custody": "Independently authored synthetic exact response JSON originals, with only CORE/WRITE12 targetRange ends corrected in this additive root; no observed response, replay, producer authentication, live custody, acceptance, or semantic verdict is asserted.",
+  "correction": "The failed predecessor's CORE/WRITE12 LocationLink targetRange ends (4,1) for target-b and (3,1) for target-a exceeded pinned source bounds. This root changes those ends only to (2,17) and (1,17), respectively; both source lines have 17 characters and both ranges contain their targetSelectionRange (characters 5 through 12). The failed root remains unchanged. STATIC_MALFORMED_PRECEDENCE/WRITE26 retains intentional malformed ranges and is not a valid-case bound assertion.",
+  "predecessors": [
+    {"path": "../adr0011-definition-response-held-originals-v1/manifest.json", "sha256": "490496cd0897de039a7c80d977c044e0f1547a85600713a0231f7c715c46cb28", "role": "failed held-original predictions root retained unchanged"},
+    {"path": "../adr0011-definition-b4b-b4a-derived-v1/manifest.json", "sha256": "a88290ac884b4f0662d3c5ea5a07ea8031ce540fd580a866ab304d8b4bfde00c", "role": "accepted definition B4a write lineage"},
+    {"path": "../adr0011-definition-b4b-held-originals-v1/manifest.json", "sha256": "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe", "role": "raw request and source originals"}
+  ],
+  "write_predictions": [
+    {"write": "CORE/WRITE4", "request_id": 140, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE4/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/04-definition_write.frame", "response": "CORE/WRITE4/response.json", "predicted_result": "null"},
+    {"write": "CORE/WRITE6", "request_id": 141, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE6/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/06-definition_write.frame", "response": "CORE/WRITE6/response.json", "predicted_result": "scalar Location: target-a"},
+    {"write": "CORE/WRITE8", "request_id": 142, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE8/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/08-definition_write.frame", "response": "CORE/WRITE8/response.json", "predicted_result": "ordered Location array: target-a then distinct target-b"},
+    {"write": "CORE/WRITE10", "request_id": 143, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE10/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/10-definition_write.frame", "response": "CORE/WRITE10/response.json", "predicted_result": "ordered Location array: target-a repeated at ordinals 0 and 1, target-b at ordinal 2"},
+    {"write": "CORE/WRITE12", "request_id": 144, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE12/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/12-definition_write.frame", "response": "CORE/WRITE12/response.json", "predicted_result": "ordered LocationLink array: target-b then target-a"},
+    {"write": "CORE/WRITE14", "request_id": 145, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/CORE/WRITE14/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/CORE/14-definition_write.frame", "response": "CORE/WRITE14/response.json", "predicted_result": "partially valid Location array: valid target-a ordinal 0, invalid numeric URI ordinal 1"},
+    {"write": "STATIC_VALID_CONFLICT/WRITE20", "request_id": 240, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_VALID_CONFLICT/WRITE20/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/STATIC_VALID_CONFLICT/20-definition_write.frame", "response": "STATIC_VALID_CONFLICT/WRITE20/response.json", "predicted_result": "partially valid ordered array: target-b ordinal 0, null ordinal 1, target-a ordinal 2"},
+    {"write": "STATIC_MALFORMED_PRECEDENCE/WRITE26", "request_id": 340, "accepted_write": "../adr0011-definition-b4b-b4a-derived-v1/STATIC_MALFORMED_PRECEDENCE/WRITE26/request-write-envelope.json", "held_request": "../adr0011-definition-b4b-held-originals-v1/STATIC_MALFORMED_PRECEDENCE/26-definition_write.frame", "response": "STATIC_MALFORMED_PRECEDENCE/WRITE26/response.json", "predicted_result": "partially valid LocationLink array: target-a ordinal 0, target-b ordinal 1 with selection range outside target range; malformed-case coordinates remain intentionally outside pinned source bounds"}
+  ],
+  "target_sources": [
+    {"uri": "file:///w/target-a.go", "path": "targets/target-a.go"},
+    {"uri": "file:///w/target-b.go", "path": "targets/target-b.go"}
+  ],
+  "exclusion": {"status": "BLOCKED_SEPARATE_HELD_EXCLUSION_FIXTURE", "reason": "Independent per-ordinal occurrence witness is absent; raw response bytes alone do not establish any excluded ordinal."},
+  "assets": [
+    {"path":"CORE/WRITE10/response.json","length":359,"sha256":"e5079b0ce0d90f9304e0b7332b53589b8016305ac6b44a361e76a62bd02fcf6e"},
+    {"path":"CORE/WRITE12/response.json","length":546,"sha256":"2743c3a2e24b7ae565a6c6b4fc1e42f83cc01160365685b0ab39a85beef2122b"},
+    {"path":"CORE/WRITE14/response.json","length":231,"sha256":"b77da6dd006dbce929ce07e0e9de6197012bb8a75fea537012ae8e00dddee9fd"},
+    {"path":"CORE/WRITE4/response.json","length":41,"sha256":"a974a19ff565cd42162df3c8fe1a0809244bb32e24ffe57fb59f94f8c05daef0"},
+    {"path":"CORE/WRITE6/response.json","length":143,"sha256":"254b72fe4d8d74be420de1d84c05dd8a6211179a1ff1d58b43ea5ae1149cb768"},
+    {"path":"CORE/WRITE8/response.json","length":252,"sha256":"1561e9a2c6136a8047174e1c5a1b52e03d2c3771e73b6952951520a3e9ba4b57"},
+    {"path":"STATIC_MALFORMED_PRECEDENCE/WRITE26/response.json","length":454,"sha256":"7b3aee808cbdbaaea731827266bbbe83c7f37d7d9aa0526b1aa14fcd5d8d2e85"},
+    {"path":"STATIC_VALID_CONFLICT/WRITE20/response.json","length":257,"sha256":"d882db47b3804b13ce213b00c7f7f1f055591d7fadd71b353810a3c57a591b4f"},
+    {"path":"targets/target-a.go","length":37,"sha256":"2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c"},
+    {"path":"targets/target-b.go","length":38,"sha256":"318cb48346e30c507f390c86e5dceaaac490a02f8df0deff7f205db558266176"}
+  ]
+}

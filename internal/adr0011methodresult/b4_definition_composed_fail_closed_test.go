@@ -19,7 +19,7 @@ import (
 // Each negative uses a fresh manager-held lease. Caller-supplied replay data
 // may not substitute for the selected WRITE or READ, even with the same wire ID.
 func TestADR0011PrivateComposedDefinitionFailClosed(t *testing.T) {
-	root := filepath.Join("..", "..", ".pi", "evidence", "adr0011-composed-b4-manager-id1-held-v1")
+	root := filepath.Join("testdata", "adr0011-composed-b4-manager-id1-held-v1")
 	assets := bridgeManifestAssets(t, filepath.Join(root, "manifest.json"), composedManifestSHA)
 	cases := []struct {
 		name, fixture string
