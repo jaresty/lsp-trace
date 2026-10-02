@@ -139,7 +139,7 @@ func ownerReadSelector(d string) string {
 // the expected invocation or schema via the record.
 func publishOwnerRead(root *publication.Root, frames ownedFrames, expected sessionruntime.OwnedMethodPair, binding sessionruntime.OwnedDocumentBinding, sessionID string, generation uint64, invocation, schemaDigest string, read func(*publication.Root, string, int64) ([]byte, error)) (privateBodyPublication, error) {
 	absent := privateBodyPublication{stage: "ABSENT"}
-	if root == nil || !verifyOriginalRequestKey(frames, expected, sessionID, generation, invocation, schemaDigest) || !replayOwnedFrames(frames, expected, binding, sessionID, generation, 1<<20) {
+	if root == nil || !verifyOriginalRequestKey(frames, expected, sessionID, generation, invocation, schemaDigest) || !replayOwnedFrames(frames, expected, binding, sessionID, generation, 2<<20) {
 		return absent, errOwnerRead
 	}
 	writeSlice, ok := privateBodySliceFromFrame(frames.request, frames.paramsSpan)

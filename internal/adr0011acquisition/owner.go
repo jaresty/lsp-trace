@@ -171,8 +171,8 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (*mana
 		if !o.captureFrames || invocation == "" {
 			return ownedFrames{}, ErrAcquisition
 		}
-		req := sessionruntime.RoundTripRequest{SessionID: q.SessionID, Generation: q.Generation, Method: method, Params: params, ExpectedOwnedDocument: &binding, CaptureOwnedMethodPair: true, MaxMessages: 4, MaxBytes: 1 << 20, Deadline: time.Now().Add(15 * time.Second)}
-		const frameCap = 1 << 20
+		req := sessionruntime.RoundTripRequest{SessionID: q.SessionID, Generation: q.Generation, Method: method, Params: params, ExpectedOwnedDocument: &binding, CaptureOwnedMethodPair: true, ADR0011PrivateLimitAllocationV1: true, MaxMessages: 4, MaxBytes: 4194304, Deadline: time.Now().Add(15 * time.Second)}
+		const frameCap = 2 << 20
 		if method == "textDocument/documentSymbol" {
 			req.CaptureDocumentSymbolRequestFrameMaxBytes = frameCap
 			req.CaptureDocumentSymbolResponseFrameMaxBytes = frameCap

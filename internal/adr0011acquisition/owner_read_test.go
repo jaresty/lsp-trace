@@ -45,6 +45,40 @@ func ownerReadFixture(t *testing.T, method string) (ownedFrames, sessionruntime.
 	return f, p, binding
 }
 
+func TestOwnerReadSelectedResponseFrameBoundary(t *testing.T) {
+	for _, size := range []int{1<<20 + 1, 2 << 20, 2<<20 + 1} {
+		f, p, binding := ownerReadFixture(t, "textDocument/references")
+		body := []byte(`{"jsonrpc":"2.0","id":31,"result":null`)
+		bodySize := size - len(fmt.Sprintf("Content-Length: %d\r\n\r\n", size))
+		for {
+			n := len(fmt.Sprintf("Content-Length: %d\r\n\r\n", bodySize))
+			if bodySize+n == size {
+				break
+			}
+			bodySize = size - n
+		}
+		body = append(body, bytes.Repeat([]byte(" "), bodySize-len(body)-1)...)
+		body = append(body, '}')
+		f.response = append([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))), body...)
+		p.Read.FrameBytes, p.Read.FrameSHA256 = int64(len(f.response)), privateDigest(f.response)
+		f.pair = p
+		if size <= 2<<20 {
+			var ok bool
+			f.resultSpan, ok = exactOwnedSpan(f.response, "result", p.Method, p.Key.ID)
+			if !ok {
+				t.Fatal("ASSERT_OWNER_READ_RESULT_SPAN")
+			}
+		}
+		ref, err := publishOwnerRead(privatePublicationRoot(t), f, p, binding, "owned", 7, f.invocation, reviewedSuccessorSchemaDigest, nil)
+		if size <= 2<<20 && (err != nil || ref.stage != "VERIFIED") {
+			t.Fatalf("ASSERT_OWNER_READ_SELECTED_FRAME_ACCEPT size=%d ref=%+v err=%v", size, ref, err)
+		}
+		if size > 2<<20 && (err == nil || ref.stage != "ABSENT") {
+			t.Fatalf("ASSERT_OWNER_READ_OVERCAP_REJECT size=%d ref=%+v err=%v", size, ref, err)
+		}
+	}
+}
+
 func TestOwnerReadSynthetic(t *testing.T) {
 	for _, method := range []string{"textDocument/documentSymbol", "textDocument/references"} {
 		t.Run(method, func(t *testing.T) {

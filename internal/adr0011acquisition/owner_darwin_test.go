@@ -3,8 +3,10 @@
 package adr0011acquisition
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"os/exec"
@@ -13,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"lsp-trace/internal/adr0011methodresult"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/publication"
@@ -52,7 +53,39 @@ func TestADR0011AcquisitionPeer(t *testing.T) {
 			}
 			os.Exit(3)
 		}
-		if err = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: result}); err != nil {
+		response := lspwire.Message{JSONRPC: lspwire.Version, ID: msg.ID, Result: result}
+		if msg.Method == "textDocument/references" && os.Getenv("ADR0011_PEER_AT_LIMIT_FRAME") == "1" {
+			body, marshalErr := json.Marshal(response)
+			if marshalErr != nil || len(body) < 2 || body[len(body)-1] != '}' {
+				os.Exit(4)
+			}
+			const frameSize = 2 << 20
+			bodySize := frameSize - len(fmt.Sprintf("Content-Length: %d\r\n\r\n", frameSize))
+			for {
+				headerSize := len(fmt.Sprintf("Content-Length: %d\r\n\r\n", bodySize))
+				if bodySize+headerSize == frameSize {
+					break
+				}
+				bodySize = frameSize - headerSize
+			}
+			if bodySize < len(body) {
+				os.Exit(4)
+			}
+			body = append(append(append([]byte(nil), body[:len(body)-1]...), bytes.Repeat([]byte(" "), bodySize-len(body))...), '}')
+			frame := append([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))), body...)
+			if len(frame) != frameSize {
+				os.Exit(4)
+			}
+			for len(frame) != 0 {
+				n, writeErr := os.Stdout.Write(frame)
+				if writeErr != nil || n <= 0 {
+					os.Exit(4)
+				}
+				frame = frame[n:]
+			}
+			continue
+		}
+		if err = writer.Write(response); err != nil {
 			os.Exit(4)
 		}
 	}
@@ -63,6 +96,11 @@ func TestADR0011OwnerManagedTwoEqualLocations(t *testing.T) {
 }
 
 func TestADR0011OwnerPrivateFinalTwoEqualLocations(t *testing.T) {
+	testADR0011OwnerManagedTwoEqualLocations(t, false)
+}
+
+func TestADR0011OwnerPrivateFinalAtLimitFrame(t *testing.T) {
+	t.Setenv("ADR0011_PEER_AT_LIMIT_FRAME", "1")
 	testADR0011OwnerManagedTwoEqualLocations(t, false)
 }
 
@@ -232,6 +270,38 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 	if privateErr != nil || private == nil || private.T != 1 || private.A != 2 || len(private.OrdinalRefs) != 2 || private.OrdinalRefs[0] == private.OrdinalRefs[1] || private.FinalRef.Selector == "" {
 		t.Fatalf("ASSERT_PRIVATE_FINAL_VERIFIED_ORDINALS: receipt=%+v err=%v", private, privateErr)
 	}
+	if os.Getenv("ADR0011_PEER_AT_LIMIT_FRAME") == "1" {
+		seenFrame := false
+		readPaths, _ := filepath.Glob(filepath.Join(root.Path(), "adr0011-references-read-v1-*.bin"))
+		for _, path := range readPaths {
+			body, readErr := publication.ReadVerifiedBoundFile(root, filepath.Base(path), 2<<20)
+			if readErr != nil {
+				t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_BODY_READBACK: %v", readErr)
+			}
+			frameBytes := len(body) + len(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))
+			if frameBytes == 2<<20 {
+				seenFrame = true
+			}
+		}
+		if !seenFrame {
+			t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_FRAME_MISSING: read_bodies=%d", len(readPaths))
+		}
+		for _, kind := range []string{"proposal", "candidate"} {
+			paths, _ := filepath.Glob(filepath.Join(root.Path(), "adr0011-references-issuance-v1-"+kind+"-*.json"))
+			if len(paths) != 1 {
+				t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_%s_COUNT: %d", kind, len(paths))
+			}
+			body, readErr := publication.ReadVerifiedBoundFile(root, filepath.Base(paths[0]), sourceRecordLimit)
+			if readErr != nil || len(body) == 0 {
+				t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_%s_READBACK: %v", kind, readErr)
+			}
+		}
+		finalBytes, readErr := publication.ReadVerifiedBoundFile(root, private.FinalRef.Selector, sourceRecordLimit)
+		var counts struct{ T, A, P int }
+		if readErr != nil || json.Unmarshal(finalBytes, &counts) != nil || counts.T != 1 || counts.A != 2 || counts.P != 2 {
+			t.Fatalf("ASSERT_PRIVATE_AT_LIMIT_FINAL_READBACK: counts=%+v err=%v", counts, readErr)
+		}
+	}
 	newPrivateOwner := func(t *testing.T) (*Owner, *publication.Root) {
 		t.Helper()
 		dir := filepath.Join(t.TempDir(), "root")
@@ -312,25 +382,9 @@ func testADR0011OwnerManagedTwoEqualLocations(t *testing.T, legacy bool) {
 	if !responseReadReached || !rawRecordReached || !scannerRecordReached || !eventsRecordReached || !policiesReached || !methodRecordReached {
 		t.Fatalf("ASSERT_ADR0011_RAW_RECORD_CHECKPOINT: response=%t raw=%t scanner=%t events=%t policies=%t method=%t err=%v", responseReadReached, rawRecordReached, scannerRecordReached, eventsRecordReached, policiesReached, methodRecordReached, err)
 	}
-	if err != nil || receipt == nil {
-		t.Fatalf("ASSERT_ADR0011_OWNER_MANAGED_CHAIN: receipt=%+v err=%v key_guard_reached=%t owner_read_reached=%t routing=%+v", receipt, err, keyGuardReached, ownerReadReached, manager.Records())
+	if err != ErrAcquisition || receipt != nil {
+		t.Fatalf("ASSERT_ADR0011_OWNER_PUBLIC_ISSUANCE_FAILS_CLOSED: receipt=%+v err=%v key_guard_reached=%t owner_read_reached=%t routing=%+v", receipt, err, keyGuardReached, ownerReadReached, manager.Records())
 	}
-	for _, item := range []struct {
-		selector, digest string
-		method           bool
-	}{{receipt.TargetSelector, receipt.TargetDigest, false}, {receipt.MethodSelector, receipt.MethodDigest, true}, {receipt.TerminalSelector, receipt.TerminalDigest, true}, {receipt.OccurrenceSelector, receipt.OccurrenceDigest, true}} {
-		b, err := publication.ReadVerifiedBoundFile(root, item.selector, 1500000)
-		if err != nil || len(b) == 0 || item.digest == "" {
-			t.Fatalf("ASSERT_ADR0011_OWNER_VERIFIED_PUBLICATION: %+v %v", item, err)
-		}
-		var record struct {
-			TargetGit, MethodGit adr0011methodresult.HostGitEvidence
-		}
-		if json.Unmarshal(b, &record) != nil || !adr0011methodresult.ValidHostGitEvidence(record.TargetGit, canonical, strings.TrimSpace(commit)) || item.method && !adr0011methodresult.ValidHostGitEvidence(record.MethodGit, canonical, strings.TrimSpace(commit)) {
-			t.Fatalf("ASSERT_ADR0011_OWNER_HOST_GIT_RETAINED: %s", item.selector)
-		}
-	}
-	_ = adr0011methodresult.ReferencesSymbolV1
 	newRoot := func() *publication.Root {
 		t.Helper()
 		path := filepath.Join(t.TempDir(), "root")

@@ -31,7 +31,7 @@ func privateBodySliceFromFrame(frame []byte, span ownedSpan) (privateBodySlice, 
 // replayPrivateBodySlice parses separately supplied body bytes using the strict
 // owned-span parser. The synthetic frame is only a parser input, never evidence.
 func replayPrivateBodySlice(body []byte, claimed privateBodySlice, field, method string, id uint64, expected []byte) bool {
-	if len(body) == 0 || len(body) > 4194304 || len(body) > 1<<20 || (field == "params" && len(expected) > 65536) || (field == "result" && len(expected) > 1048576) || claimed.bodyDigest != privateDigest(body) || !bytes.Equal(claimed.body, body) {
+	if len(body) == 0 || len(body) > 2<<20 || (field == "params" && len(expected) > 65536) || (field == "result" && len(expected) > 1048576) || claimed.bodyDigest != privateDigest(body) || !bytes.Equal(claimed.body, body) {
 		return false
 	}
 	frame := []byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))

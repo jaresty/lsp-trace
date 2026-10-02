@@ -21,7 +21,7 @@ type ownedFrames struct {
 }
 
 func exactFrameBody(frame []byte) ([]byte, bool) {
-	if len(frame) == 0 || len(frame) > 1<<20 {
+	if len(frame) == 0 || len(frame) > 2<<20 {
 		return nil, false
 	}
 	separator := bytes.Index(frame, []byte("\r\n\r\n"))
@@ -36,7 +36,7 @@ func exactFrameBody(frame []byte) ([]byte, bool) {
 	if err != nil || length <= 0 || length != len(frame)-separator-4 {
 		return nil, false
 	}
-	reader := lspwire.NewReader(bytes.NewReader(frame), lspwire.Limits{MaxBodyBytes: 1 << 20, MaxHeaderBytes: 64 << 10})
+	reader := lspwire.NewReader(bytes.NewReader(frame), lspwire.Limits{MaxBodyBytes: 2 << 20, MaxHeaderBytes: 64 << 10})
 	if _, err = reader.Read(); err != nil {
 		return nil, false
 	}
@@ -56,7 +56,7 @@ func exactJSONField(body []byte, field string) ([]byte, bool) {
 }
 
 func verifiedOwnedFrames(result sessionruntime.RoundTripResult, pair sessionruntime.OwnedMethodPair, method string, params []byte, binding sessionruntime.OwnedDocumentBinding, sessionID string, generation uint64, capBytes int64) (ownedFrames, bool) {
-	if result.Failure != "" || result.ServerError != nil || pair.SessionID != sessionID || pair.Generation != generation || pair.Key != result.Key || pair.Key.ID == 0 || pair.Key.Generation != generation || pair.Method != method || pair.Source == nil || *pair.Source != binding || binding.URI == "" || binding.Version <= 0 || binding.SHA256 == "" || !bytes.Equal(pair.Params, params) || !bytes.Equal(pair.Result, result.Result) || pair.Write.SessionID != sessionID || pair.Read.SessionID != sessionID || pair.Write.Generation != generation || pair.Read.Generation != generation || pair.Write.Key != pair.Key || pair.Read.Key != pair.Key || pair.Write.Method != method || capBytes <= 0 || capBytes > 1<<20 {
+	if result.Failure != "" || result.ServerError != nil || pair.SessionID != sessionID || pair.Generation != generation || pair.Key != result.Key || pair.Key.ID == 0 || pair.Key.Generation != generation || pair.Method != method || pair.Source == nil || *pair.Source != binding || binding.URI == "" || binding.Version <= 0 || binding.SHA256 == "" || !bytes.Equal(pair.Params, params) || !bytes.Equal(pair.Result, result.Result) || pair.Write.SessionID != sessionID || pair.Read.SessionID != sessionID || pair.Write.Generation != generation || pair.Read.Generation != generation || pair.Write.Key != pair.Key || pair.Read.Key != pair.Key || pair.Write.Method != method || capBytes <= 0 || capBytes > 2<<20 {
 		return ownedFrames{}, false
 	}
 	var request, response []byte
