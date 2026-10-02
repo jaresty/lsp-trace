@@ -243,6 +243,8 @@ type RoundTripRequest struct {
 	MaxBytes    int64
 	// Private default-off in-memory D/R query/result observation, not a receipt.
 	CaptureOwnedMethodPair bool `json:"-"`
+	// Private allocation opt-in, not authentication or an occurrence receipt.
+	ADR0011PrivateLimitAllocationV1 bool `json:"-"`
 	// Optional private prepared-document guard. It is not analyzed-source proof.
 	ExpectedOwnedDocument *OwnedDocumentBinding `json:"-"`
 	// Private opt-in for bounded exact definition response frame bytes; zero disables.
@@ -621,30 +623,30 @@ func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, genera
 }
 
 type RoundTripResult struct {
-	Key                     lspwire.RequestKey
-	DiagnosticOperation     DiagnosticOperationHandle `json:"-"`
-	Result                  json.RawMessage
-	ServerError             *lspwire.RPCError
-	Failure                 session.Failure
-	Messages                int
-	Bytes                   int64
-	RequestMessages         int
-	RequestBytes            int64
-	Duration                time.Duration
-	ThermalPhase            string
-	Notifications           []lspwire.Message
-	Responses               []lspwire.Message
-	started                 time.Time
-	diagnostic              manageddiagnostic.RequestObservation
-	diagnosticSink          func(manageddiagnostic.Record)
-	eventCollector          *manageddiagnostic.EventCollector
-	requestWrite            *RequestWriteObservation
-	methodRequestFrame      []byte
-	responseRead            *ResponseReadObservation
-	ownedMethodPair         *OwnedMethodPair
-	definitionResponseFrame []byte
-	referencesResponseFrame []byte
-	documentSymbolRequestFrame []byte
+	Key                         lspwire.RequestKey
+	DiagnosticOperation         DiagnosticOperationHandle `json:"-"`
+	Result                      json.RawMessage
+	ServerError                 *lspwire.RPCError
+	Failure                     session.Failure
+	Messages                    int
+	Bytes                       int64
+	RequestMessages             int
+	RequestBytes                int64
+	Duration                    time.Duration
+	ThermalPhase                string
+	Notifications               []lspwire.Message
+	Responses                   []lspwire.Message
+	started                     time.Time
+	diagnostic                  manageddiagnostic.RequestObservation
+	diagnosticSink              func(manageddiagnostic.Record)
+	eventCollector              *manageddiagnostic.EventCollector
+	requestWrite                *RequestWriteObservation
+	methodRequestFrame          []byte
+	responseRead                *ResponseReadObservation
+	ownedMethodPair             *OwnedMethodPair
+	definitionResponseFrame     []byte
+	referencesResponseFrame     []byte
+	documentSymbolRequestFrame  []byte
 	documentSymbolResponseFrame []byte
 }
 
@@ -658,6 +660,10 @@ func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundT
 // roundTrip is the single transaction path. classify is package-private so only
 // manager-owned workflows can append semantic disposition to the same collector.
 func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool) RoundTripResult {
+	return m.roundTripWithPrivate(parent, req, classify, nil)
+}
+
+func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, private *privateB4Reservation) RoundTripResult {
 	if req.ExpectedOwnedDocument != nil {
 		// Use pre-lock copies for both the source guard and owned write; caller
 		// mutation while a response is pending cannot change either identity.
@@ -695,7 +701,28 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 		m.mu.Unlock()
 		return RoundTripResult{Failure: session.ResourceExhausted}
 	}
+	if private != nil {
+		if m.privateB4Leases == nil {
+			m.privateB4Leases = make(map[[32]byte]*privateB4Reservation)
+		}
+		if len(m.privateB4Leases) >= privateB4MaxSlots || private.maxCharge > privateB4MaxBytes-m.privateB4Bytes {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		if _, collision := m.privateB4Leases[private.token]; collision {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		private.selection.SessionID = req.SessionID
+		private.selection.Key.Generation = req.Generation
+		private.session = r
+		m.privateB4Leases[private.token] = private
+		m.privateB4Bytes += private.maxCharge
+	}
 	key := r.pending.Begin(req.Generation)
+	if private != nil {
+		private.selection.Key = key
+	}
 	r.requests[key] = &Request{Key: key, Deadline: req.Deadline}
 	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
 	r.protocolOwned = true
@@ -777,10 +804,24 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 		requestParams = append(json.RawMessage(nil), req.Params...)
 	}
 	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: requestParams}
-	requestBody, _ := json.Marshal(requestMessage)
+	markedWrite := req.ADR0011PrivateLimitAllocationV1 && req.CaptureOwnedMethodPair &&
+		(req.Method == "textDocument/documentSymbol" || req.Method == "textDocument/references")
+	requestBody, marshalErr := json.Marshal(requestMessage)
 	result.RequestMessages = 1
 	result.RequestBytes = int64(len(requestBody))
 	owner := &ownedTransport{child: child}
+	// This guard is independent of pair eligibility: even an oversized params
+	// token cannot escape the pre-WRITE bound by failing pair validation.
+	var frameBytes int64
+	if markedWrite {
+		if marshalErr != nil || len(requestBody) > 4194304 {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+		frameBytes = canonicalRequestFrameBytes(len(requestBody))
+		if frameBytes > 4194304 {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+	}
 	collector.Record(diagnosticEventWriteAttempt, result.RequestBytes, false)
 	if err := owner.run(ctx, func() error { return writer.Write(requestMessage) }); err != nil {
 		failure := contextFailure(ctx)
@@ -788,6 +829,9 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 			failure = session.SessionPoisoned
 		}
 		return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+	}
+	if markedWrite && writeCapture.bytes != frameBytes {
+		return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 	}
 	collector.Record(diagnosticEventWriteComplete, result.RequestBytes, true)
 	result.requestWrite = &RequestWriteObservation{
@@ -938,6 +982,12 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 	return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 }
 
+// canonicalRequestFrameBytes counts the writer's canonical header and body.
+// len(body) is bounded by the in-memory JSON marshaler's int range.
+func canonicalRequestFrameBytes(bodyLen int) int64 {
+	return int64(bodyLen) + int64(len("Content-Length: ")+len(strconv.Itoa(bodyLen))+len("\r\n\r\n"))
+}
+
 func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result RoundTripResult, failure session.Failure, poison bool) RoundTripResult {
 	if poison {
 		owner.retire()
@@ -1067,6 +1117,8 @@ type Manager struct {
 	diagnosticOrder         []DiagnosticOperationHandle
 	methodCandidateTestHook func(methodCandidateObservation)
 	ownedMethodPairTestHook func(OwnedMethodPair)
+	privateB4Leases         map[[32]byte]*privateB4Reservation
+	privateB4Bytes          int64
 }
 
 func New(c Config) (*Manager, error) {
@@ -2278,12 +2330,19 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 			m.mu.Unlock()
 			return
 		}
+		// Only a completed STOP retires this exact session generation's
+		// manager-held private leases. Release and remove under the same lock.
+		m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
 		delete(m.sessions, operation.SessionID)
 		operation.State = OperationComplete
 		m.finishOperation(operation)
 		m.mu.Unlock()
 		return
 	}
+	// A completed RESTART has finished the old child's teardown. Retire only
+	// that generation's private leases under the same lock before any successor
+	// startup can use the session or reserve new private capacity.
+	m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
 	m.mu.Unlock()
 
 	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()

@@ -66,12 +66,12 @@ func TestADR0011ManagedMalformedDiagnostic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := PublishReferenceDiagnostic(root, target, symbol, refs, expect)
+	receipt, err := publishReferenceDiagnosticUnissued(root, target, symbol, refs, expect)
 	if err != nil {
 		t.Fatalf("ASSERT_ADR0011_MANAGED_MALFORMED_DIAGNOSTIC: %v", err)
 	}
 	got, err := ReplayReferenceDiagnostic(root, receipt, symbol, refs, expect)
-	if err != nil || got.Outcome != "MALFORMED" || got.Disposition != "MALFORMED" || got.N != 1 || got.B != 1 || got.T != 1 || got.E != 2 || got.EB != 2 || got.ET != 2 || got.P != 0 || got.A != 0 || got.FailureOrdinal != 1 || len(got.Events) != 4 || got.Key != refs.Key || got.RawDigest != chainDigest(refs.Result) {
+	if err != nil || got.Outcome != "MALFORMED" || got.Disposition != "MALFORMED" || got.N != 1 || got.B != 1 || got.T != 0 || got.E != 2 || got.EB != 2 || got.ET != 2 || got.P != 0 || got.A != 0 || got.FailureOrdinal != 1 || len(got.Events) != 4 || got.Key != refs.Key || got.RawDigest != chainDigest(refs.Result) {
 		t.Fatalf("ASSERT_ADR0011_MANAGED_MALFORMED_DIAGNOSTIC: got=%+v err=%v", got, err)
 	}
 	entries, err := os.ReadDir(dir)

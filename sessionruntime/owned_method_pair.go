@@ -136,10 +136,20 @@ func (r RoundTripResult) CompletedOwnedMethodPair() (OwnedMethodPair, bool) {
 	return p, true
 }
 
+func eligibleADR0011PrivateLimitRequest(req RoundTripRequest) bool {
+	return req.ADR0011PrivateLimitAllocationV1 && req.CaptureOwnedMethodPair && req.ExpectedOwnedDocument != nil &&
+		(req.Method == "textDocument/documentSymbol" || req.Method == "textDocument/references") &&
+		req.SessionID != "" && req.Generation != 0 && req.MaxMessages >= 1 && req.MaxMessages <= 4 &&
+		req.MaxBytes >= 1 && req.MaxBytes <= 4194304 && len(req.Params) >= 1 && len(req.Params) <= 65536
+}
+
 func eligibleOwnedMethodRequest(req RoundTripRequest) bool {
-	return req.CaptureOwnedMethodPair && (req.Method == "textDocument/definition" || req.Method == "textDocument/references" || req.Method == "textDocument/documentSymbol") &&
+	// Keep the historical predicate a distinct branch, including marked
+	// definition requests and previously opted-in unmarked callers.
+	historical := req.CaptureOwnedMethodPair && (req.Method == "textDocument/definition" || req.Method == "textDocument/references" || req.Method == "textDocument/documentSymbol") &&
 		req.SessionID != "" && req.Generation != 0 && req.MaxMessages >= 1 && req.MaxMessages <= 64 &&
 		req.MaxBytes >= 1 && req.MaxBytes <= 1<<20 && len(req.Params) >= 1 && len(req.Params) <= 64<<10
+	return (historical && (!req.ADR0011PrivateLimitAllocationV1 || req.Method == "textDocument/definition")) || eligibleADR0011PrivateLimitRequest(req)
 }
 
 func buildOwnedMethodPair(req RoundTripRequest, r RoundTripResult, params, raw json.RawMessage) *OwnedMethodPair {

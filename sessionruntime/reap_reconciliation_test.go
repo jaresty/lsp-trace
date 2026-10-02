@@ -86,6 +86,20 @@ func reapManager(t *testing.T, maxSessions int, children ...Child) (*Manager, *s
 	return m, starter
 }
 
+// gatedReapSuccessorStarter holds only the test's replacement startup until
+// every racing caller has received a result for the original generation.
+// It prevents this one-window reconciliation test from accidentally testing
+// a second lifecycle after the replacement has already completed.
+type gatedReapSuccessorStarter struct {
+	Starter
+	release <-chan struct{}
+}
+
+func (s gatedReapSuccessorStarter) Start(ctx context.Context, spec managedprocess.Spec) (Child, managedprocess.StartObservation) {
+	<-s.release
+	return s.Starter.Start(ctx, spec)
+}
+
 func TestExactRestartReconcilesConfirmedOwnedReap(t *testing.T) {
 	child := newReapJoinChild()
 	m, starter := reapManager(t, 1, child, referenceChild{})
@@ -170,6 +184,43 @@ func TestExactReapReconciliationDoesNotMutateSiblingOrReplacement(t *testing.T) 
 	}
 }
 
+func TestStopRestartAfterCompletedRemovalReturnsSessionNotFound(t *testing.T) {
+	m, starter := reapManager(t, 1, referenceChild{})
+	started := m.Start(context.Background(), StartRequest{Profile: profile(t)})
+	stop := m.Stop(context.Background(), started.SessionID, "remove-owner")
+	if stop.Failure != "" || stop.IntentID == "" {
+		t.Fatalf("ASSERT_LATE_LIFECYCLE_REMOVAL_SETUP: %+v", stop)
+	}
+	waitOperation(t, m, stop.IntentID, OperationComplete)
+	m.mu.Lock()
+	_, exists := m.sessions[started.SessionID]
+	operations := len(m.operationIDs)
+	m.mu.Unlock()
+	if exists {
+		t.Fatal("ASSERT_LATE_LIFECYCLE_REMOVAL_SETUP: session still present")
+	}
+	for _, tc := range []struct {
+		name string
+		call func() session.LifecycleResult
+	}{
+		{"stop", func() session.LifecycleResult { return m.Stop(context.Background(), started.SessionID, "late-stop") }},
+		{"restart", func() session.LifecycleResult {
+			return m.Restart(context.Background(), started.SessionID, "late-restart")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.call()
+			m.mu.Lock()
+			remaining := len(m.operationIDs)
+			m.mu.Unlock()
+			if got.Failure != session.SessionNotFound || got.IntentID != "" || remaining != operations || starter.Starts() != 1 {
+				t.Fatalf("ASSERT_LATE_LIFECYCLE_REMOVAL_TYPED_RESULT: result=%+v operations=%d want=%d starts=%d", got, remaining, operations, starter.Starts())
+			}
+			t.Log("ASSERT_LATE_LIFECYCLE_REMOVAL_TYPED_RESULT: PASS")
+		})
+	}
+}
+
 func TestConcurrentStopRestartHasSingleReapReconciliationOwner(t *testing.T) {
 	child := newReapJoinChild()
 	m, starter := reapManager(t, 1, child, referenceChild{})
@@ -177,6 +228,13 @@ func TestConcurrentStopRestartHasSingleReapReconciliationOwner(t *testing.T) {
 	stop := m.Stop(context.Background(), started.SessionID, "stop-owner")
 	waitOperation(t, m, stop.IntentID, OperationFailed)
 	child.join <- completedReapObservation()
+	startupRelease := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseStartup := func() { releaseOnce.Do(func() { close(startupRelease) }) }
+	defer releaseStartup()
+	m.mu.Lock()
+	m.starter = gatedReapSuccessorStarter{Starter: starter, release: startupRelease}
+	m.mu.Unlock()
 
 	const callers = 16
 	results := make(chan session.LifecycleResult, callers)
@@ -193,6 +251,10 @@ func TestConcurrentStopRestartHasSingleReapReconciliationOwner(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+	if starts := starter.Starts(); starts != 1 {
+		t.Fatalf("ASSERT_REAP_RECONCILIATION_FIRST_WINDOW: successor started before racers returned: %d", starts)
+	}
+	releaseStartup()
 	close(results)
 	for result := range results {
 		if result.Failure != "" && result.Failure != session.LifecycleConflict && result.Failure != session.SessionReapIncomplete && result.Failure != session.StaleGeneration {

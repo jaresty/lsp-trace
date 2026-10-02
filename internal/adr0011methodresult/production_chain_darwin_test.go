@@ -19,6 +19,14 @@ import (
 	"lsp-trace/sessionruntime"
 )
 
+func publishPrivateChainForTest(root *publication.Root, symbol, refs sessionruntime.OwnedMethodPair, e ChainExpectation) (*ChainReceipt, error) {
+	target, err := PublishTarget(root, symbol, e)
+	if err != nil {
+		return nil, err
+	}
+	return publishReferencesUnissued(root, target, symbol, refs, e)
+}
+
 func TestADR0011ChainTwoEqualManagedLocations(t *testing.T) {
 	workspace := t.TempDir()
 	source := []byte("package fixture\nfunc Query() {}\n")
@@ -63,12 +71,12 @@ func TestADR0011ChainTwoEqualManagedLocations(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	receipt, err := PublishChain(root, symbol, refs, e)
+	receipt, err := publishPrivateChainForTest(root, symbol, refs, e)
 	if err != nil {
 		t.Fatalf("ASSERT_ADR0011_CHAIN_TWO_EQUAL_LOCATIONS: %v", err)
 	}
 	ledger, err := ReplayChain(root, receipt, symbol, refs, e)
-	if err != nil || ledger.Kind != ReferencesSymbolV1 || ledger.N != 1 || ledger.B != 1 || ledger.T != 1 || ledger.E != 2 || ledger.P != 2 || ledger.A != 2 || len(ledger.Occurrences) != 2 || ledger.Occurrences[0].Ordinal != 0 || ledger.Occurrences[1].Ordinal != 1 || ledger.Occurrences[0].ID == ledger.Occurrences[1].ID || ledger.Occurrences[0].URI != ledger.Occurrences[1].URI || ledger.Occurrences[0].Range != ledger.Occurrences[1].Range {
+	if err != nil || ledger.Kind != ReferencesSymbolV1 || ledger.N != 1 || ledger.B != 1 || ledger.T != 0 || ledger.E != 2 || ledger.P != 2 || ledger.A != 0 || len(ledger.Occurrences) != 2 || ledger.Occurrences[0].Ordinal != 0 || ledger.Occurrences[1].Ordinal != 1 || ledger.Occurrences[0].ID == ledger.Occurrences[1].ID || ledger.Occurrences[0].URI != ledger.Occurrences[1].URI || ledger.Occurrences[0].Range != ledger.Occurrences[1].Range {
 		t.Fatalf("ASSERT_ADR0011_CHAIN_TWO_EQUAL_LOCATIONS: ledger=%+v err=%v", ledger, err)
 	}
 	for _, o := range ledger.Occurrences {
@@ -173,7 +181,7 @@ func TestADR0011ChainTwoEqualManagedLocations(t *testing.T) {
 	defer lateRoot.Close()
 	chainPostCommitTestHook = func(role string) bool { return role != "terminal" }
 	defer func() { chainPostCommitTestHook = nil }()
-	lateReceipt, lateErr := PublishChain(lateRoot, symbol, refs, e)
+	lateReceipt, lateErr := publishPrivateChainForTest(lateRoot, symbol, refs, e)
 	if lateErr == nil || lateReceipt != nil {
 		t.Fatalf("ASSERT_ADR0011_CHAIN_LATE_PUBLICATION_ZERO: receipt=%+v err=%v", lateReceipt, lateErr)
 	}
