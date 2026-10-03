@@ -289,7 +289,8 @@ const DocumentSupplyUnavailable session.Failure = "DOCUMENT_SUPPLY_UNAVAILABLE"
 // DocumentSupply is historical supply evidence, not proof of server consumption,
 // analyzed-source identity, or a currently active generation. Public values can
 // be fabricated; offline consistency checks cannot authenticate their origin.
-// The caller owns Content and Params. Manager retains neither buffer.
+// Returned values are caller-owned copies. When capture is requested, Manager
+// retains an independent exact copy in the corresponding open-document record.
 type DocumentSupply struct {
 	Classification  string
 	SessionID       string
@@ -707,22 +708,14 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		return RoundTripResult{Failure: session.ResourceExhausted}
 	}
 	if private != nil {
-		if m.privateB4Leases == nil {
-			m.privateB4Leases = make(map[[32]byte]*privateB4Reservation)
-		}
-		if len(m.privateB4Leases) >= privateB4MaxSlots || private.maxCharge > privateB4MaxBytes-m.privateB4Bytes {
+		if failure := m.admitPrivateB4SourcesLocked(req, private); failure != "" {
 			m.mu.Unlock()
-			return RoundTripResult{Failure: session.ResourceExhausted}
+			return RoundTripResult{Failure: failure}
 		}
-		if _, collision := m.privateB4Leases[private.token]; collision {
-			m.mu.Unlock()
-			return RoundTripResult{Failure: session.ResourceExhausted}
-		}
-		private.selection.SessionID = req.SessionID
-		private.selection.Key.Generation = req.Generation
-		private.session = r
-		m.privateB4Leases[private.token] = private
-		m.privateB4Bytes += private.maxCharge
+		// Admission preflights every refusal while Manager.mu is held, then transfers
+		// source leases. From that transfer boundary onward installation is no-fail:
+		// no capacity, collision, identity, or allocation decision remains.
+		m.installPrivateB4Locked(req, r, private)
 	}
 	key := r.pending.Begin(req.Generation)
 	if private != nil {
@@ -1149,7 +1142,7 @@ type Manager struct {
 	cWireObserver           lspwire.Observer
 	cDecodeEntry            func()
 	cRetainEntry            func()
-	privateB4Leases         map[[32]byte]*privateB4Reservation
+	privateB4Leases         [privateB4MaxSlots]privateB4Slot
 	privateB4Bytes          int64
 }
 

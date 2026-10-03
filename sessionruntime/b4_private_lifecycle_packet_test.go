@@ -28,7 +28,7 @@ func lifecycleRed(t *testing.T, assertion, detail string) {
 func lifecycleCharge(m *Manager) (int, int64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return len(m.privateB4Leases), m.privateB4Bytes
+	return m.privateB4LeaseCountLocked(), m.privateB4Bytes
 }
 func lifecycleWait(t *testing.T, m *Manager, id string) {
 	t.Helper()

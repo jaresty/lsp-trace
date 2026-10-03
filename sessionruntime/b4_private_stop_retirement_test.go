@@ -19,21 +19,24 @@ func TestADR0011PrivateStoppedGenerationRetirementIsolation(t *testing.T) {
 	nextGeneration := entry(2, stopped, "stopped", 2, 31)
 	otherActive := entry(3, other, "other", 1, 17)
 	otherIdentity := entry(4, stopped, "other", 1, 23)
-	m := &Manager{privateB4Leases: map[[32]byte]*privateB4Reservation{
-		target.token: target, nextGeneration.token: nextGeneration, otherActive.token: otherActive, otherIdentity.token: otherIdentity,
-	}, privateB4Bytes: 9558 + 31 + 17 + 23}
+	reservations := []*privateB4Reservation{target, nextGeneration, otherActive, otherIdentity}
+	m := &Manager{privateB4Bytes: 9558 + 31 + 17 + 23}
+	for i, reservation := range reservations {
+		reservation.slot = i
+		m.privateB4Leases[i] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation}
+	}
 	m.mu.Lock()
 	m.retirePrivateB4StoppedLocked("stopped", 1, stopped)
-	if len(m.privateB4Leases) != 3 || m.privateB4Bytes != 71 || m.privateB4Leases[target.token] != nil ||
-		m.privateB4Leases[nextGeneration.token] != nextGeneration || m.privateB4Leases[otherActive.token] != otherActive || m.privateB4Leases[otherIdentity.token] != otherIdentity {
+	if m.privateB4LeaseCountLocked() != 3 || m.privateB4Bytes != 71 || m.privateB4ReservationLocked(target.token) != nil ||
+		m.privateB4ReservationLocked(nextGeneration.token) != nextGeneration || m.privateB4ReservationLocked(otherActive.token) != otherActive || m.privateB4ReservationLocked(otherIdentity.token) != otherIdentity {
 		m.mu.Unlock()
-		t.Fatalf("first STOP retirement crossed identity or charge: slots=%d bytes=%d", len(m.privateB4Leases), m.privateB4Bytes)
+		t.Fatalf("first STOP retirement crossed identity or charge: slots=%d bytes=%d", m.privateB4LeaseCountLocked(), m.privateB4Bytes)
 	}
 	m.retirePrivateB4StoppedLocked("stopped", 1, stopped)
 	m.retirePrivateB4StoppedLocked("stopped", 2, other)
-	if len(m.privateB4Leases) != 3 || m.privateB4Bytes != 71 {
+	if m.privateB4LeaseCountLocked() != 3 || m.privateB4Bytes != 71 {
 		m.mu.Unlock()
-		t.Fatalf("repeat/wrong session changed unrelated charge: slots=%d bytes=%d", len(m.privateB4Leases), m.privateB4Bytes)
+		t.Fatalf("repeat/wrong session changed unrelated charge: slots=%d bytes=%d", m.privateB4LeaseCountLocked(), m.privateB4Bytes)
 	}
 	m.mu.Unlock()
 }
