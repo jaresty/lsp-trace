@@ -1,0 +1,641 @@
+package lspwire
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
+	"testing"
+)
+
+const prospectiveQualificationSourceSHA256 = "1cf2d1f9850ac8524340b7ea0b66eefc373a95ef74732bbf90e2aedd5ce75611"
+
+type qualificationCountingReader struct {
+	reads int
+}
+
+func (r *qualificationCountingReader) Read([]byte) (int, error) {
+	r.reads++
+	return 0, errors.New("unexpected underlying read")
+}
+
+func qualificationLimits() SuccessorIngressLimits {
+	return SuccessorIngressLimits{
+		HeaderBytes:             1 << 20,
+		FrameBytes:              1 << 20,
+		ConsumptionBytes:        1 << 24,
+		AcquisitionBytes:        1 << 24,
+		MaxReadBytes:            4096,
+		PrefetchBytes:           4096,
+		HistoryAcquiredBytes:    1 << 24,
+		HistoryOutstandingBytes: 1 << 24,
+	}
+}
+
+type qualificationScriptedRead struct {
+	data     []byte
+	err      error
+	requests *[]int
+}
+
+type qualificationScriptedReader struct {
+	reads    []qualificationScriptedRead
+	requests []int
+}
+
+func (r *qualificationScriptedReader) Read(p []byte) (int, error) {
+	r.requests = append(r.requests, len(p))
+	if len(r.reads) == 0 {
+		return 0, io.EOF
+	}
+	next := r.reads[0]
+	r.reads = r.reads[1:]
+	if next.requests != nil {
+		*next.requests = append(*next.requests, len(p))
+	}
+	n := copy(p, next.data)
+	return n, next.err
+}
+
+type qualificationCapture struct {
+	frames [][]byte
+}
+
+func (c *qualificationCapture) ObserveOriginalFrame(frame []byte) {
+	c.frames = append(c.frames, append([]byte(nil), frame...))
+}
+
+func qualificationFrame(body []byte) []byte {
+	return append([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))), body...)
+}
+
+func qualificationReader(t *testing.T, limits SuccessorIngressLimits) *SuccessorIngressReader {
+	t.Helper()
+	r, err := NewSuccessorIngressReader(bytes.NewReader(nil), SuccessorIngressOptions{Limits: limits, OwnerID: "prospective-q1"})
+	if err != nil {
+		t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+	}
+	return r
+}
+
+func TestProspectiveQualification(t *testing.T) {
+	t.Run("Q1-B01", func(t *testing.T) {
+		// Setup: synthetic C=8388607 with two unread prefetch bytes.
+		limits := qualificationLimits()
+		limits.ConsumptionBytes = 8388608
+		r := qualificationReader(t, limits)
+		r.consumed = 8388607
+		r.prefetch = append(r.prefetch, 'x', 'x')
+		r.recorder = &ingressTestRecorder{limit: 8}
+
+		got := r.step(ingressStepInput{Checkpoint: ingressConsume, Consume: 2})
+		if got.Consumed != 2 || r.consumed != 8388609 || !r.sealed || got.OutcomeKind != ingressOutcomeConsumptionLimit || !errors.Is(got.Outcome, errIngressConsume) {
+			t.Fatalf("GOOD consume boundary: result=%+v consumed=%d sealed=%v", got, r.consumed, r.sealed)
+		}
+		if len(r.recorder.events) != 3 || r.recorder.events[0].Stage != ingressEventConsume || r.recorder.events[1].Stage != ingressEventSeal || r.recorder.events[2].Stage != ingressEventOutcome {
+			t.Fatalf("GOOD event sequence consume/seal/outcome: %+v", r.recorder.events)
+		}
+	})
+
+	t.Run("Q1-B02", func(t *testing.T) {
+		// Setup: synthetic A equals the acquisition cap before pre-read.
+		limits := qualificationLimits()
+		limits.AcquisitionBytes = 8392705
+		transport := &qualificationCountingReader{}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: limits, OwnerID: "prospective-q1"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.acquired = 8392705
+		beforeC, beforeV := r.consumed, r.validated
+
+		got := r.step(ingressStepInput{Checkpoint: ingressPreRead})
+		if got.OutcomeKind != ingressOutcomeAcquisitionLimit || !errors.Is(got.Outcome, errIngressAcquire) || got.NeedRead != 0 || !r.sealed || r.terminalOutcome != ingressOutcomeAcquisitionLimit {
+			t.Fatalf("GOOD exact acquisition refusal: result=%+v sealed=%v terminal=%v", got, r.sealed, r.terminalOutcome)
+		}
+		if transport.reads != 0 || r.acquired != 8392705 || r.consumed != beforeC || r.validated != beforeV {
+			t.Fatalf("GOOD zero-read immutable A/C/V: reads=%d A/C/V=%d/%d/%d", transport.reads, r.acquired, r.consumed, r.validated)
+		}
+	})
+
+	t.Run("Q1-B03", func(t *testing.T) {
+		// Setup: fixed prefetch backing is full; all other limits are nonbinding.
+		r := qualificationReader(t, qualificationLimits())
+		r.prefetch = append(r.prefetch, make([]byte, 4096)...)
+		got := r.step(ingressStepInput{Checkpoint: ingressPreRead})
+		if got.NeedRead != 0 || len(r.prefetch) != 4096 || cap(r.prefetch) != 4096 || r.storage.live != 4096 || len(r.storage.records) != 1 {
+			t.Fatalf("GOOD full fixed backing: NeedRead=%d len/cap=%d/%d live=%d records=%d", got.NeedRead, len(r.prefetch), cap(r.prefetch), r.storage.live, len(r.storage.records))
+		}
+	})
+
+	t.Run("Q1-B04", func(t *testing.T) {
+		// Setup: fixed prefetch backing has five unread bytes; all other limits are nonbinding.
+		r := qualificationReader(t, qualificationLimits())
+		r.prefetch = append(r.prefetch, make([]byte, 5)...)
+		got := r.step(ingressStepInput{Checkpoint: ingressPreRead})
+		if got.NeedRead != 4091 || len(r.prefetch) != 5 || cap(r.prefetch) != 4096 || r.storage.live != 4096 || len(r.storage.records) != 1 {
+			t.Fatalf("GOOD partial fixed backing: NeedRead=%d len/cap=%d/%d live=%d records=%d", got.NeedRead, len(r.prefetch), cap(r.prefetch), r.storage.live, len(r.storage.records))
+		}
+	})
+
+	t.Run("Q1-B05", func(t *testing.T) {
+		// Setup control: the maximal configured prefetch capacity is accepted.
+		limits := qualificationLimits()
+		control := qualificationReader(t, limits)
+		if cap(control.prefetch) != 4096 || control.storage.live != 4096 || len(control.storage.records) != 1 {
+			t.Fatalf("setup control: cap=%d live=%d records=%d", cap(control.prefetch), control.storage.live, len(control.storage.records))
+		}
+
+		// Behavior predicate: 4097 is rejected by invalid-limits preflight, not ledger reservation.
+		limits.PrefetchBytes = 4097
+		got, err := NewSuccessorIngressReader(bytes.NewReader(nil), SuccessorIngressOptions{Limits: limits, OwnerID: "prospective-q1"})
+		if got != nil || err == nil || err.Error() != "invalid successor limits" || errors.Is(err, errIngressReserve) {
+			t.Fatalf("GOOD exact constructor rejection: reader=%v err=%v", got, err)
+		}
+	})
+
+	t.Run("Q1-B06", func(t *testing.T) {
+		// Setup: ledger record 1 is the live 4096-byte prefetch backing.
+		r := qualificationReader(t, qualificationLimits())
+		if !r.storage.alias(1) {
+			t.Fatal("setup: alias record 1")
+		}
+		if got := r.storage.records[1]; got.aliases != 2 || r.storage.live != 4096 {
+			t.Fatalf("GOOD alias increment: record=%+v live=%d", got, r.storage.live)
+		}
+		if !r.storage.releaseAlias(1) {
+			t.Fatal("setup: release record 1 alias")
+		}
+		if got, ok := r.storage.records[1]; !ok || got.aliases != 1 || r.storage.live != 4096 {
+			t.Fatalf("GOOD alias release retains backing: present=%v record=%+v live=%d", ok, got, r.storage.live)
+		}
+	})
+
+	t.Run("Q1-B07", func(t *testing.T) {
+		// Setup: an 8192-byte ledger already contains one 4096-byte prefetch backing.
+		ledger := newIngressStorageLedger(8192)
+		if !ledger.reserveNew(1, 4096, ingressStoragePrefetch) {
+			t.Fatal("setup: reserve first prefetch backing")
+		}
+		beforeLive, beforeRecords := ledger.live, len(ledger.records)
+		if ledger.reserveNew(2, 1, ingressStoragePrefetch) {
+			t.Fatal("GOOD second prefetch backing must be denied")
+		}
+		if ledger.live != beforeLive || len(ledger.records) != beforeRecords {
+			t.Fatalf("GOOD denied reservation leaves ledger unchanged: live=%d records=%d", ledger.live, len(ledger.records))
+		}
+	})
+
+	t.Run("Q2-B01", func(t *testing.T) {
+		ledger := newIngressStorageLedger(19)
+		if !ledger.reserveNew(1, 8, ingressStorageScratch) {
+			t.Fatal("setup: reserve old scratch")
+		}
+		beforeLive, beforePeak, beforeRecords := ledger.live, ledger.peak, len(ledger.records)
+		if ledger.reserveGrowth(1, 2, 12, ingressStorageScratch) {
+			t.Fatal("GOOD budget-19 growth must be denied")
+		}
+		if ledger.live != beforeLive || ledger.peak != beforePeak || len(ledger.records) != beforeRecords || ledger.records[1].capacity != 8 {
+			t.Fatalf("GOOD denied growth unchanged: live/peak/records=%d/%d/%d old=%+v", ledger.live, ledger.peak, len(ledger.records), ledger.records[1])
+		}
+	})
+
+	t.Run("Q2-B02", func(t *testing.T) {
+		ledger := newIngressStorageLedger(20)
+		if !ledger.reserveNew(1, 8, ingressStorageScratch) || !ledger.reserveGrowth(1, 2, 12, ingressStorageScratch) {
+			t.Fatal("setup: no-alias growth")
+		}
+		if ledger.peak != 20 || ledger.live != 12 || len(ledger.records) != 1 {
+			t.Fatalf("GOOD no-alias growth live/peak/records=%d/%d/%d", ledger.live, ledger.peak, len(ledger.records))
+		}
+		if _, oldPresent := ledger.records[1]; oldPresent {
+			t.Fatal("GOOD no-alias growth retained old record")
+		}
+		if got, ok := ledger.records[2]; !ok || got.capacity != 12 || got.aliases != 1 || got.role != ingressStorageScratch {
+			t.Fatalf("GOOD no-alias new record: present=%v record=%+v", ok, got)
+		}
+	})
+
+	t.Run("Q2-B03", func(t *testing.T) {
+		ledger := newIngressStorageLedger(20)
+		if !ledger.reserveNew(1, 8, ingressStorageScratch) || !ledger.alias(1) || !ledger.reserveGrowth(1, 2, 12, ingressStorageScratch) {
+			t.Fatal("setup: aliased growth")
+		}
+		if ledger.peak != 20 || ledger.live != 20 || len(ledger.records) != 2 {
+			t.Fatalf("GOOD aliased growth live/peak/records=%d/%d/%d", ledger.live, ledger.peak, len(ledger.records))
+		}
+		if got, ok := ledger.records[1]; !ok || got.capacity != 8 || got.aliases != 1 {
+			t.Fatalf("GOOD old alias retained: present=%v record=%+v", ok, got)
+		}
+		if !ledger.releaseAlias(1) || ledger.live != 12 || len(ledger.records) != 1 {
+			t.Fatalf("GOOD final alias release live/records=%d/%d", ledger.live, len(ledger.records))
+		}
+	})
+
+	t.Run("Q2-B04", func(t *testing.T) {
+		ledger := newIngressStorageLedger(20)
+		if !ledger.reserveNew(1, 8, ingressStoragePrefetch) {
+			t.Fatal("setup: reserve old prefetch")
+		}
+		beforeLive, beforePeak, beforeRecords := ledger.live, ledger.peak, len(ledger.records)
+		if ledger.reserveGrowth(1, 2, 12, ingressStoragePrefetch) {
+			t.Fatal("GOOD prefetch growth must be denied")
+		}
+		if ledger.live != beforeLive || ledger.peak != beforePeak || len(ledger.records) != beforeRecords || ledger.records[1].capacity != 8 {
+			t.Fatalf("GOOD denied prefetch growth unchanged: live/peak/records=%d/%d/%d old=%+v", ledger.live, ledger.peak, len(ledger.records), ledger.records[1])
+		}
+	})
+
+	priorityCases := []struct {
+		name    string
+		reached ingressReached
+		kind    ingressOutcome
+		err     error
+	}{
+		{"Q3-B01", ingressReached{Preflight: errors.New("q3 preflight"), Deadline: errors.New("q3 deadline")}, ingressOutcomePreflight, nil},
+		{"Q3-B02", ingressReached{Deadline: errors.New("q3 deadline"), Cancellation: errors.New("q3 cancellation")}, ingressOutcomeDeadline, nil},
+		{"Q3-B03", ingressReached{Cancellation: errors.New("q3 cancellation"), Header: errors.New("q3 header")}, ingressOutcomeCancellation, nil},
+		{"Q3-B04", ingressReached{Header: errors.New("q3 header"), Frame: errors.New("q3 frame")}, ingressOutcomeHeaderLimit, nil},
+		{"Q3-B05", ingressReached{Frame: errors.New("q3 frame"), Reserve: errors.New("q3 reserve")}, ingressOutcomeFrameLimit, nil},
+		{"Q3-B06", ingressReached{Reserve: errors.New("q3 reserve"), Acquisition: errors.New("q3 acquisition")}, ingressOutcomeReserveStorage, nil},
+		{"Q3-B07", ingressReached{Acquisition: errors.New("q3 acquisition"), Consumption: errors.New("q3 consumption")}, ingressOutcomeAcquisitionLimit, nil},
+		{"Q3-B08", ingressReached{Consumption: errors.New("q3 consumption"), ShortEOF: errors.New("q3 short EOF")}, ingressOutcomeConsumptionLimit, nil},
+		{"Q3-B09", ingressReached{ShortEOF: errors.New("q3 short EOF"), Transport: errors.New("q3 transport")}, ingressOutcomeTransportShortEOF, nil},
+		{"Q3-B10", ingressReached{Transport: errors.New("q3 transport"), Decode: errors.New("q3 decode")}, ingressOutcomeTransport, nil},
+		{"Q3-B11", ingressReached{Decode: errors.New("q3 decode"), Success: true}, ingressOutcomeDecodeValidation, nil},
+	}
+	priorityCases[0].err = priorityCases[0].reached.Preflight
+	priorityCases[1].err = priorityCases[1].reached.Deadline
+	priorityCases[2].err = priorityCases[2].reached.Cancellation
+	priorityCases[3].err = priorityCases[3].reached.Header
+	priorityCases[4].err = priorityCases[4].reached.Frame
+	priorityCases[5].err = priorityCases[5].reached.Reserve
+	priorityCases[6].err = priorityCases[6].reached.Acquisition
+	priorityCases[7].err = priorityCases[7].reached.Consumption
+	priorityCases[8].err = priorityCases[8].reached.ShortEOF
+	priorityCases[9].err = priorityCases[9].reached.Transport
+	priorityCases[10].err = priorityCases[10].reached.Decode
+	for _, tc := range priorityCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := qualificationReader(t, qualificationLimits())
+			got := r.selectReached(tc.reached)
+			if got.Kind != tc.kind || got.Err != tc.err {
+				t.Fatalf("GOOD adjacent priority: kind/error=%v/%v want=%v/%v", got.Kind, got.Err, tc.kind, tc.err)
+			}
+		})
+	}
+
+	t.Run("Q3-B12", func(t *testing.T) {
+		r := qualificationReader(t, qualificationLimits())
+		lower := errors.New("q3 reached deadline")
+		got := r.selectReached(ingressReached{Deadline: lower})
+		if got.Kind != ingressOutcomeDeadline || got.Err != lower {
+			t.Fatalf("GOOD unreached higher ignored: kind/error=%v/%v", got.Kind, got.Err)
+		}
+	})
+
+	t.Run("Q3-B13", func(t *testing.T) {
+		body := []byte(`{"jsonrpc":"2.0","id":1,"result":{}}`)
+		frame := append([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))), body...)
+		transport := bytes.NewReader(append(append([]byte(nil), frame...), frame...))
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q3"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		for i := 1; i <= 2; i++ {
+			got, readErr := r.ReadFrame()
+			if readErr != nil || got.Kind() != KindSuccessResponse || r.sealed || r.terminalOutcome != ingressOutcomeNone {
+				t.Fatalf("GOOD frame %d success active: message=%+v err=%v sealed=%v terminal=%v", i, got, readErr, r.sealed, r.terminalOutcome)
+			}
+		}
+	})
+
+	t.Run("Q3-B14", func(t *testing.T) {
+		deadline := errors.New("q3 deadline")
+		r := qualificationReader(t, qualificationLimits())
+		r.recorder = &ingressTestRecorder{limit: 8}
+		got := r.step(ingressStepInput{Checkpoint: ingressPostRead, Returned: []byte("z"), Requested: 1, Known: knownFailures{Deadline: deadline}})
+		if got.OutcomeKind != ingressOutcomeDeadline || got.Outcome != deadline || r.acquired != 1 || !r.sealed || r.terminalOutcome != ingressOutcomeDeadline {
+			t.Fatalf("GOOD deadline persistence: result=%+v A=%d sealed=%v terminal=%v", got, r.acquired, r.sealed, r.terminalOutcome)
+		}
+		if len(r.recorder.events) != 3 || r.recorder.events[0].Stage != ingressEventRead || r.recorder.events[1].Stage != ingressEventSeal || r.recorder.events[2].Stage != ingressEventOutcome {
+			t.Fatalf("GOOD read/seal/outcome events: %+v", r.recorder.events)
+		}
+	})
+
+	t.Run("Q3-B15", func(t *testing.T) {
+		deadline := errors.New("q3 deadline")
+		transport := &qualificationCountingReader{}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q3"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.recorder = &ingressTestRecorder{limit: 8}
+		first := r.step(ingressStepInput{Checkpoint: ingressPostRead, Returned: []byte("z"), Requested: 1, Known: knownFailures{Deadline: deadline}})
+		if first.OutcomeKind != ingressOutcomeDeadline || first.Outcome != deadline {
+			t.Fatalf("setup: deadline termination: %+v", first)
+		}
+		beforeEvents, beforeReads := len(r.recorder.events), transport.reads
+		beforeA, beforeC, beforeV, beforeLive, beforeRecords := r.acquired, r.consumed, r.validated, r.storage.live, len(r.storage.records)
+		got := r.step(ingressStepInput{Checkpoint: ingressPreRead})
+		if got.OutcomeKind != ingressOutcomeRefusedSealed || got.Outcome != errIngressSealed {
+			t.Fatalf("GOOD second-step refusal decision: %+v", got)
+		}
+		if len(r.recorder.events) != beforeEvents || transport.reads != beforeReads || r.acquired != beforeA || r.consumed != beforeC || r.validated != beforeV || r.storage.live != beforeLive || len(r.storage.records) != beforeRecords || r.terminalOutcome != ingressOutcomeDeadline {
+			t.Fatalf("GOOD refusal immutable events/reads/A/C/V/live/records/terminal=%d/%d/%d/%d/%d/%d/%d/%v", len(r.recorder.events), transport.reads, r.acquired, r.consumed, r.validated, r.storage.live, len(r.storage.records), r.terminalOutcome)
+		}
+	})
+
+	t.Run("Q4-B01", func(t *testing.T) {
+		body := []byte(`{"jsonrpc":"2.0","method":"x"}`)[:29]
+		header := []byte("Content-Length: 30\r\n\r\n")
+		transport := &qualificationScriptedReader{reads: []qualificationScriptedRead{{data: header}, {data: body, err: io.EOF}}}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q4"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		_, got := r.ReadFrame()
+		if !errors.Is(got, io.EOF) || r.terminalOutcome != ingressOutcomeTransportShortEOF || !r.sealed || r.acquired != 51 || r.consumed != 51 || r.validated != 0 {
+			t.Fatalf("GOOD short EOF: err=%v terminal=%v sealed=%v A/C/V=%d/%d/%d", got, r.terminalOutcome, r.sealed, r.acquired, r.consumed, r.validated)
+		}
+		if fmt.Sprint(transport.requests) != "[4096 30]" {
+			t.Fatalf("GOOD actual read requests: %v", transport.requests)
+		}
+	})
+
+	t.Run("Q4-B02", func(t *testing.T) {
+		body := []byte(`{"jsonrpc":"2.0","method":"x"}`)
+		header := []byte("Content-Length: 30\r\n\r\n")
+		transport := &qualificationScriptedReader{reads: []qualificationScriptedRead{{data: header}, {data: body, err: io.EOF}}}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q4"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		got, readErr := r.ReadFrame()
+		if readErr != nil || got.Kind() != KindNotification || r.sealed || r.terminalOutcome != ingressOutcomeNone || r.acquired != 52 || r.consumed != 52 || r.validated != 52 {
+			t.Fatalf("GOOD complete body EOF success: message=%+v err=%v sealed=%v terminal=%v A/C/V=%d/%d/%d", got, readErr, r.sealed, r.terminalOutcome, r.acquired, r.consumed, r.validated)
+		}
+		if fmt.Sprint(transport.requests) != "[4096 30]" {
+			t.Fatalf("GOOD actual read requests: %v", transport.requests)
+		}
+	})
+
+	decoderCases := []struct {
+		name string
+		body []byte
+		want error
+	}{
+		{"Q4-B03", []byte("{"), ErrMalformedJSON},
+		{"Q4-B04", []byte("{}{}"), ErrMalformedJSON},
+		{"Q4-B05", []byte(`{"jsonrpc":"1.0","method":"x"}`), ErrWrongVersion},
+		{"Q4-B06", []byte(`{"jsonrpc":"2.0"}`), ErrInvalidMessage},
+	}
+	for _, tc := range decoderCases {
+		t.Run(tc.name, func(t *testing.T) {
+			frame := qualificationFrame(tc.body)
+			capture := &qualificationCapture{}
+			r, err := NewSuccessorIngressReader(bytes.NewReader(frame), SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q4", Capture: capture})
+			if err != nil {
+				t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+			}
+			r.recorder = &ingressTestRecorder{limit: 16}
+			_, got := r.ReadFrame()
+			if !errors.Is(got, tc.want) || !r.sealed || r.terminalOutcome != ingressOutcomeDecodeValidation || r.validated != 0 {
+				t.Fatalf("GOOD decoder terminal: err=%v sealed=%v terminal=%v V=%d", got, r.sealed, r.terminalOutcome, r.validated)
+			}
+			if len(capture.frames) != 1 || !bytes.Equal(capture.frames[0], frame) {
+				t.Fatalf("GOOD exact capture: calls=%d frame=%q", len(capture.frames), capture.frames)
+			}
+			n := len(r.recorder.events)
+			if n < 3 || r.recorder.events[n-3].Stage != ingressEventDecode || r.recorder.events[n-2].Stage != ingressEventSeal || r.recorder.events[n-1].Stage != ingressEventOutcome {
+				t.Fatalf("GOOD decode/seal/outcome terminal: %+v", r.recorder.events)
+			}
+		})
+	}
+
+	knownCases := []struct {
+		name  string
+		kind  ingressOutcome
+		known func(error) knownFailures
+	}{
+		{"Q4-B07", ingressOutcomePreflight, func(e error) knownFailures { return knownFailures{Preflight: e} }},
+		{"Q4-B08", ingressOutcomeDeadline, func(e error) knownFailures { return knownFailures{Deadline: e} }},
+		{"Q4-B09", ingressOutcomeCancellation, func(e error) knownFailures { return knownFailures{Cancellation: e} }},
+	}
+	for _, tc := range knownCases {
+		t.Run(tc.name, func(t *testing.T) {
+			terminal := errors.New(tc.name + " terminal")
+			r := qualificationReader(t, qualificationLimits())
+			r.recorder = &ingressTestRecorder{limit: 8}
+			got := r.step(ingressStepInput{Checkpoint: ingressPostRead, Returned: []byte("z"), Requested: 1, Known: tc.known(terminal)})
+			if got.OutcomeKind != tc.kind || got.Outcome != terminal || r.acquired != 1 || !r.sealed || r.terminalOutcome != tc.kind {
+				t.Fatalf("GOOD charged known terminal: result=%+v A=%d sealed=%v terminal=%v", got, r.acquired, r.sealed, r.terminalOutcome)
+			}
+			if len(r.recorder.events) != 3 || r.recorder.events[0].Stage != ingressEventRead || r.recorder.events[0].AfterA != 1 || r.recorder.events[1].Stage != ingressEventSeal || r.recorder.events[2].Stage != ingressEventOutcome {
+				t.Fatalf("GOOD A1 before terminal events: %+v", r.recorder.events)
+			}
+		})
+	}
+
+	t.Run("Q4-B10", func(t *testing.T) {
+		limits := qualificationLimits()
+		limits.AcquisitionBytes = 8392705
+		transport := &qualificationCountingReader{}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: limits, OwnerID: "prospective-q4"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.acquired = limits.AcquisitionBytes
+		r.recorder = &ingressTestRecorder{limit: 8}
+		beforeC, beforeV, beforeUnread, beforeLive, beforeRecords := r.consumed, r.validated, len(r.prefetch), r.storage.live, len(r.storage.records)
+		got := r.step(ingressStepInput{Checkpoint: ingressPreRead})
+		if got.OutcomeKind != ingressOutcomeAcquisitionLimit || got.Outcome != errIngressAcquire || got.NeedRead != 0 || !r.sealed || r.terminalOutcome != ingressOutcomeAcquisitionLimit {
+			t.Fatalf("GOOD same V5 acquisition terminal: result=%+v sealed=%v terminal=%v", got, r.sealed, r.terminalOutcome)
+		}
+		if len(r.recorder.events) != 2 || r.recorder.events[0].Stage != ingressEventSeal || r.recorder.events[1].Stage != ingressEventOutcome || transport.reads != 0 || r.acquired != limits.AcquisitionBytes || r.consumed != beforeC || r.validated != beforeV || len(r.prefetch) != beforeUnread || r.storage.live != beforeLive || len(r.storage.records) != beforeRecords {
+			t.Fatalf("GOOD immediate sealed no-delta: events=%+v reads=%d A/C/V=%d/%d/%d unread/live/records=%d/%d/%d", r.recorder.events, transport.reads, r.acquired, r.consumed, r.validated, len(r.prefetch), r.storage.live, len(r.storage.records))
+		}
+	})
+
+	q5QualificationLimits := func() SuccessorIngressLimits {
+		limits := qualificationLimits()
+		limits.HistoryAcquiredBytes = 8388608
+		limits.HistoryOutstandingBytes = 8388608
+		return limits
+	}
+
+	newHistoryReader := func(t *testing.T, history *ImmutableHistoryMetadata) (*SuccessorIngressReader, *qualificationCountingReader, error) {
+		t.Helper()
+		transport := &qualificationCountingReader{}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: q5QualificationLimits(), OwnerID: "prospective-q5", History: history})
+		return r, transport, err
+	}
+
+	t.Run("Q5-B01", func(t *testing.T) {
+		history := &ImmutableHistoryMetadata{Identity: "history-id", Cut: "history-cut", Acquired: 8388608, Outstanding: 8388608}
+		r, transport, err := newHistoryReader(t, history)
+		if err != nil || r == nil || transport.reads != 0 || r.acquired != 0 || r.consumed != 0 || r.validated != 0 {
+			t.Fatalf("GOOD history at limits accepted without charge/read: reader=%v err=%v reads=%d", r, err, transport.reads)
+		}
+	})
+
+	historyRejectCases := []struct {
+		name    string
+		history ImmutableHistoryMetadata
+	}{
+		{"Q5-B02", ImmutableHistoryMetadata{Identity: "history-id", Cut: "history-cut", Acquired: 8388609, Outstanding: 8388608}},
+		{"Q5-B03", ImmutableHistoryMetadata{Identity: "history-id", Cut: "history-cut", Acquired: 8388608, Outstanding: 8388609}},
+		{"Q5-B04", ImmutableHistoryMetadata{Identity: "", Cut: "history-cut", Acquired: 8388608, Outstanding: 8388608}},
+		{"Q5-B05", ImmutableHistoryMetadata{Identity: "history-id", Cut: "", Acquired: 8388608, Outstanding: 8388608}},
+	}
+	for _, tc := range historyRejectCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, transport, err := newHistoryReader(t, &tc.history)
+			if r != nil || err != errIngressHistory || transport.reads != 0 {
+				t.Fatalf("GOOD invalid history rejected without read: reader=%v err=%v reads=%d", r, err, transport.reads)
+			}
+		})
+	}
+
+	t.Run("Q5-B06", func(t *testing.T) {
+		history := &ImmutableHistoryMetadata{Identity: "history-id", Cut: "history-cut", Acquired: 7, Outstanding: 5}
+		r, transport, err := newHistoryReader(t, history)
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		history.Identity, history.Cut, history.Acquired, history.Outstanding = "mutated-id", "mutated-cut", 99, 88
+		got := r.options.History
+		if got == history || got.Identity != "history-id" || got.Cut != "history-cut" || got.Acquired != 7 || got.Outstanding != 5 || transport.reads != 0 || r.acquired != 0 || r.consumed != 0 || r.validated != 0 {
+			t.Fatalf("GOOD immutable history copy/no charge: stored=%+v aliases=%v reads=%d A/C/V=%d/%d/%d", got, got == history, transport.reads, r.acquired, r.consumed, r.validated)
+		}
+	})
+
+	t.Run("Q5-B07", func(t *testing.T) {
+		history := &ImmutableHistoryMetadata{Identity: "history-id", Cut: "history-cut", Acquired: 7, Outstanding: 5}
+		r, transport, err := newHistoryReader(t, history)
+		if err != nil || r == nil || transport.reads != 0 || r.acquired != 0 || r.consumed != 0 || r.validated != 0 {
+			t.Fatalf("GOOD metadata not retrocharged: reader=%v err=%v reads=%d", r, err, transport.reads)
+		}
+		if cap(r.prefetch) != 4096 || r.storage.live != 4096 || len(r.storage.records) != 1 {
+			t.Fatalf("GOOD constructor allocation allowed: prefetch-cap=%d live=%d records=%d", cap(r.prefetch), r.storage.live, len(r.storage.records))
+		}
+	})
+
+	t.Run("Q6-B01", func(t *testing.T) {
+		body := []byte(`{"jsonrpc":"2.0","method":"x"}`)
+		frame := qualificationFrame(body)
+		transport := &qualificationScriptedReader{reads: []qualificationScriptedRead{{data: frame}}}
+		r, err := NewSuccessorIngressReader(transport, SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q6"})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.recorder = &ingressTestRecorder{limit: 16}
+		got, readErr := r.ReadFrame()
+		if readErr != nil || got.Kind() != KindNotification || fmt.Sprint(transport.requests) != "[4096]" {
+			t.Fatalf("GOOD one scripted read: message=%+v err=%v requests=%v", got, readErr, transport.requests)
+		}
+		if len(r.recorder.events) == 0 {
+			t.Fatal("GOOD read observation missing")
+		}
+		read := r.recorder.events[0]
+		if read.Stage != ingressEventRead || read.BeforeA != 0 || read.AfterA != 52 || read.BeforeUnread != 0 || read.AfterUnread != 52 || read.ReadN != 52 || read.Requested != 4096 {
+			t.Fatalf("GOOD observation after charge and append: %+v", read)
+		}
+	})
+
+	t.Run("Q6-B02", func(t *testing.T) {
+		r := qualificationReader(t, qualificationLimits())
+		r.recorder = &ingressTestRecorder{limit: 4}
+		for i := 0; i < 5; i++ {
+			r.observe(ingressEvent{Stage: ingressEventRead, ReadN: i + 1})
+		}
+		if len(r.recorder.events) != 4 || !r.recorder.overflow {
+			t.Fatalf("GOOD recorder exact bound: retained=%d overflow=%v events=%+v", len(r.recorder.events), r.recorder.overflow, r.recorder.events)
+		}
+		for i, event := range r.recorder.events {
+			if event.Ordinal != uint64(i+1) || event.ReadN != i+1 {
+				t.Fatalf("GOOD retained prefix event %d: %+v", i, event)
+			}
+		}
+	})
+
+	t.Run("Q6-B03", func(t *testing.T) {
+		frame := qualificationFrame([]byte(`{"jsonrpc":"2.0","method":"x"}`))
+		nilRecorder, err := NewSuccessorIngressReader(bytes.NewReader(frame), SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q6-nil"})
+		if err != nil {
+			t.Fatalf("setup nil recorder: %v", err)
+		}
+		withRecorder, err := NewSuccessorIngressReader(bytes.NewReader(frame), SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q6-recorder"})
+		if err != nil {
+			t.Fatalf("setup recorder: %v", err)
+		}
+		withRecorder.recorder = &ingressTestRecorder{limit: 64}
+		left, leftErr := nilRecorder.ReadFrame()
+		right, rightErr := withRecorder.ReadFrame()
+		if leftErr != rightErr || left.Kind() != right.Kind() || nilRecorder.acquired != withRecorder.acquired || nilRecorder.consumed != withRecorder.consumed || nilRecorder.validated != withRecorder.validated || !bytes.Equal(nilRecorder.prefetch, withRecorder.prefetch) || nilRecorder.sealed != withRecorder.sealed || nilRecorder.terminalOutcome != withRecorder.terminalOutcome || nilRecorder.storage.live != withRecorder.storage.live || nilRecorder.storage.peak != withRecorder.storage.peak || len(nilRecorder.storage.records) != len(withRecorder.storage.records) {
+			t.Fatalf("GOOD nil/recorder noninterference: left=%+v/%v state=%d/%d/%d/%q/%v/%v/%d/%d/%d right=%+v/%v state=%d/%d/%d/%q/%v/%v/%d/%d/%d", left, leftErr, nilRecorder.acquired, nilRecorder.consumed, nilRecorder.validated, nilRecorder.prefetch, nilRecorder.sealed, nilRecorder.terminalOutcome, nilRecorder.storage.live, nilRecorder.storage.peak, len(nilRecorder.storage.records), right, rightErr, withRecorder.acquired, withRecorder.consumed, withRecorder.validated, withRecorder.prefetch, withRecorder.sealed, withRecorder.terminalOutcome, withRecorder.storage.live, withRecorder.storage.peak, len(withRecorder.storage.records))
+		}
+	})
+
+	t.Run("Q6-B04", func(t *testing.T) {
+		frame := qualificationFrame([]byte(`{"jsonrpc":"2.0","method":"x"}`))
+		capture := &qualificationCapture{}
+		r, err := NewSuccessorIngressReader(bytes.NewReader(frame), SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q6", Capture: capture})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.recorder = &ingressTestRecorder{limit: 64}
+		got, readErr := r.ReadFrame()
+		if readErr != nil || got.Kind() != KindNotification || len(capture.frames) != 1 || !bytes.Equal(capture.frames[0], frame) {
+			t.Fatalf("GOOD valid exact capture: message=%+v err=%v captures=%d", got, readErr, len(capture.frames))
+		}
+		assemble, captureAt, decode, success := -1, -1, -1, -1
+		for i, event := range r.recorder.events {
+			switch {
+			case event.Stage == ingressEventAssemble:
+				assemble = i
+			case event.Stage == ingressEventCapture:
+				captureAt = i
+			case event.Stage == ingressEventDecode:
+				decode = i
+			case event.Stage == ingressEventOutcome && event.Outcome == ingressOutcomeSuccess:
+				success = i
+			}
+		}
+		if !(assemble >= 0 && assemble < captureAt && captureAt < decode && decode < success) {
+			t.Fatalf("GOOD assemble<capture<decode<success: indexes=%d/%d/%d/%d events=%+v", assemble, captureAt, decode, success, r.recorder.events)
+		}
+	})
+
+	t.Run("Q6-B05", func(t *testing.T) {
+		frame := qualificationFrame([]byte("{"))
+		capture := &qualificationCapture{}
+		r, err := NewSuccessorIngressReader(bytes.NewReader(frame), SuccessorIngressOptions{Limits: qualificationLimits(), OwnerID: "prospective-q6", Capture: capture})
+		if err != nil {
+			t.Fatalf("setup: NewSuccessorIngressReader: %v", err)
+		}
+		r.recorder = &ingressTestRecorder{limit: 64}
+		_, got := r.ReadFrame()
+		if !errors.Is(got, ErrMalformedJSON) || len(capture.frames) != 1 || !bytes.Equal(capture.frames[0], frame) {
+			t.Fatalf("GOOD malformed exact capture: err=%v captures=%d", got, len(capture.frames))
+		}
+		assemble, captureAt, decode, seal, outcome := -1, -1, -1, -1, -1
+		for i, event := range r.recorder.events {
+			switch event.Stage {
+			case ingressEventAssemble:
+				assemble = i
+			case ingressEventCapture:
+				captureAt = i
+			case ingressEventDecode:
+				decode = i
+			case ingressEventSeal:
+				seal = i
+			case ingressEventOutcome:
+				outcome = i
+			}
+		}
+		if !(assemble >= 0 && assemble < captureAt && captureAt < decode && decode < seal && seal < outcome) {
+			t.Fatalf("GOOD assemble<capture<decode<seal<outcome: indexes=%d/%d/%d/%d/%d events=%+v", assemble, captureAt, decode, seal, outcome, r.recorder.events)
+		}
+	})
+}
