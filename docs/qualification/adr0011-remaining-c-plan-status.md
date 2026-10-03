@@ -2,6 +2,8 @@
 
 This companion distinguishes preserved planning records from later reported decisions. It is documentation maintenance, not implementation authorization or a new qualification review.
 
+> **Current sequencing successor:** [P1 integration-first private composition plan](adr0011-p1-composition-integration-plan.md) records later Unit 2 acceptance/merge and the authorized real reader-to-manager handoff. The checkpoint below predates those events; its blocked/design-only statements are historical, not current execution instructions. The original and V2 consolidated plans remain unchanged.
+
 ## Preserved plan lineage
 
 - [Original consolidated plan](adr0011-remaining-c-consolidated-plan.proposed.md) records the pre-P0-portability observation point.
