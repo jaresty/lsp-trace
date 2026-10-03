@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -212,15 +213,80 @@ type lifecycleCancelChild struct {
 	*b4ID1Child
 	teardownCalls, closeCalls, active atomic.Int32
 	written                           chan error
+	joined                            chan struct{}
+	actorMu                           sync.Mutex
+	actorLaunched, teardownStarted    bool
+	joinOnce                          sync.Once
 }
 
+func newLifecycleCancelChild(child *b4ID1Child) *lifecycleCancelChild {
+	return &lifecycleCancelChild{b4ID1Child: child, written: make(chan error, 1), joined: make(chan struct{})}
+}
+func (c *lifecycleCancelChild) launchActor(run func()) bool {
+	c.actorMu.Lock()
+	defer c.actorMu.Unlock()
+	if c.actorLaunched || c.teardownStarted {
+		return false
+	}
+	c.actorLaunched = true
+	c.active.Add(1)
+	go func() {
+		defer func() {
+			c.active.Add(-1)
+			c.joinOnce.Do(func() { close(c.joined) })
+		}()
+		run()
+	}()
+	return true
+}
 func (c *lifecycleCancelChild) Teardown(ctx context.Context) managedprocess.TeardownObservation {
 	c.teardownCalls.Add(1)
-	return c.b4ID1Child.Teardown(ctx)
+	c.actorMu.Lock()
+	c.teardownStarted = true
+	actorLaunched := c.actorLaunched
+	c.actorMu.Unlock()
+	observation := c.b4ID1Child.Teardown(ctx)
+	if !actorLaunched {
+		c.joinOnce.Do(func() { close(c.joined) })
+	}
+	<-c.joined
+	return observation
 }
 func (c *lifecycleCancelChild) Close() managedprocess.ResourceObservation {
 	c.closeCalls.Add(1)
 	return c.b4ID1Child.Close()
+}
+func TestLifecycleCancelChildTeardownBeforeActorLaunch(t *testing.T) {
+	input, stdin := io.Pipe()
+	stdout, output := io.Pipe()
+	child := newLifecycleCancelChild(&b4ID1Child{input: input, stdin: stdin, output: output, stdout: stdout})
+
+	teardownDone := make(chan managedprocess.TeardownObservation, 1)
+	go func() { teardownDone <- child.Teardown(context.Background()) }()
+	var observation managedprocess.TeardownObservation
+	select {
+	case observation = <-teardownDone:
+	case <-time.After(time.Second):
+		t.Fatal("pre-actor teardown deadlocked")
+	}
+	if observation.Death.Kind != managedprocess.DeathExited || observation.Death.Reap.Kind != managedprocess.ReapComplete {
+		t.Fatalf("pre-actor teardown observation = %+v", observation)
+	}
+	actorRan := make(chan struct{})
+	if child.launchActor(func() { close(actorRan) }) {
+		t.Fatal("actor launched after teardown")
+	}
+	select {
+	case <-actorRan:
+		t.Fatal("actor ran after teardown")
+	default:
+	}
+	_ = child.Teardown(context.Background())
+	_ = child.Close()
+	_ = child.Close()
+	if child.active.Load() != 0 || child.teardownCalls.Load() != 2 || child.closeCalls.Load() != 2 {
+		t.Fatalf("repeated cleanup: active=%d teardown=%d close=%d", child.active.Load(), child.teardownCalls.Load(), child.closeCalls.Load())
+	}
 }
 func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 	f := b4LeaseFixture(t)
@@ -245,7 +311,7 @@ func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 	}
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
-	child := &lifecycleCancelChild{b4ID1Child: &b4ID1Child{input: input, stdin: stdin, output: output, stdout: stdout}, written: make(chan error, 1)}
+	child := newLifecycleCancelChild(&b4ID1Child{input: input, stdin: stdin, output: output, stdout: stdout})
 	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
 	if err != nil {
 		lifecycleBlocked(t, "cancel manager: "+err.Error())
@@ -258,9 +324,7 @@ func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 	req := RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/definition", Params: json.RawMessage(b4LeaseGet(t, f, "A/request.params")), Deadline: time.Now().Add(3 * time.Second), MaxMessages: 1, MaxBytes: 4096, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/request.frame")))}
 	owner := B4DefinitionOwner{Transaction: declaration.Transaction, CompletedOwnerKey: declaration.CompletedOwnerKey}
 	expectedWrite := b4LeaseGet(t, f, "A/request.frame")
-	child.active.Add(1)
-	go func() {
-		defer child.active.Add(-1)
+	if !child.launchActor(func() {
 		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
 		msg, _, frame, kept, e := reader.ReadWithFrameIfWithin(4096)
 		if e != nil || !kept || msg.Method != "textDocument/definition" || !bytes.Equal(frame, expectedWrite) {
@@ -269,7 +333,9 @@ func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 		}
 		child.written <- nil
 		_, _ = io.Copy(io.Discard, input)
-	}()
+	}) {
+		lifecycleBlocked(t, "actor launch after teardown")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	type answer struct {
