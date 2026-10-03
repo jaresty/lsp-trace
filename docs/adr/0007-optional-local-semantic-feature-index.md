@@ -4,6 +4,10 @@
 - **Date:** 2026-09-13
 - **Accepted:** 2026-09-14
 
+> **Current delivery direction:** [Caller-provided inference first](0007-caller-provided-inference-amendment.md) makes the existing host LLM the primary interpretation path over bounded lsp-trace evidence. Standalone key-free local inference remains optional and deferred. The successor distinguishes ordinary host-assisted explanation from an isolated qualified Describe worker and does not enable public surfaces or waive source-disclosure restrictions.
+
+> **Earlier profile amendment (read subject to the successor above):** [Key-free local inference with optional GPT](0007-single-user-gpt-amendment.md) preserves local-model support as the delivery goal so the feature can work without an API key. GPT may support development/evaluation or an explicitly selected optional backend; it does not replace or qualify the local runtime. The amendment scopes single-user approval and TARGET Describe evaluation while preserving backend-specific safeguards. It does not enable execution or approve the draft prerequisite bundle. The hosted-inference rejection below is superseded only for that optional, explicitly governed GPT profile.
+
 ## Context
 
 Engineering work repeatedly needs bounded semantic retrieval while a design or change is still in progress: the governing decision for one symbol, related tests and prior failures for one range, analogues for one proposal, or unresolved assumptions around one requirement. Requiring a repository or source census before answering one exact-item question makes that support unavailable at the point of use.

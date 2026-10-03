@@ -6,6 +6,20 @@
 
 This directory is a documentation-only scaffold. It does not freeze or approve a prerequisite, assign an owner, enable a pilot, integrate or select Yzma, or authorize implementation, qualification, execution, shipment, public availability, a public schema registry, a core `go.mod` dependency, CLI/MCP surfaces, runtime code, or a worker.
 
+## Current delivery direction: caller-provided inference
+
+The [caller-provided inference amendment and minimal plan](../../adr/0007-caller-provided-inference-amendment.md) makes the existing host LLM the first interpretation path over bounded lsp-trace evidence. No second model, additional API key, or new service is required for that path. Inference location follows the host; remote source disclosure still requires permission.
+
+See the [bounded host-assisted caller inference example](host-assisted-example.md) for one evidence-limited answer recipe.
+
+This directory remains the standalone worker/pilot scaffold. Its `PILOT_DISABLED` state remains unchanged, and prior records are not reclassified. Its worker-specific prerequisites do not block ordinary host-assisted explanation through existing tools. Local-model support remains optional and deferred; do not restart local calibration to deliver the host-assisted example.
+
+## Earlier key-free local inference and optional GPT amendment
+
+The [accepted scope amendment](../../adr/0007-single-user-gpt-amendment.md) preserves key-free local-model execution as the delivery goal and names @jaresty (GitHub handle) as operator and human approval authority. GPT may support development/evaluation or a separately enabled optional backend. It is not a required runtime dependency, and no local request may silently fall back to remote inference.
+
+The drafts and digest manifest indexed below have **not** been migrated or approved by that amendment. Local-model verification, staged provisioning, network-denied inference, and containment remain applicable to the local backend. Optional GPT uses separate provider, disclosure, and controlled-egress requirements. TARGET Describe evaluation and single-user approval are scoped by the amendment; no backend is qualified by another's results. Prepare separately identified backend-profile bundles and preserve historical draft identities. `PREREQUISITES_DRAFT` and `PILOT_DISABLED` remain unchanged. No new model execution or source transmission is enabled here.
+
 ## Boundary and future layout
 
 Canonical draft schemas, if later authored, belong under `docs/pilot/adr0007/schemas/`. No approved artifacts exist in this scaffold. Later approved immutable bytes belong under `qualification/adr0007/approved/` only after every gate is independently satisfied and recorded, and the approved bundle must bind every component by digest.
