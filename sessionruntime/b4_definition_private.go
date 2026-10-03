@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"path/filepath"
@@ -94,6 +96,41 @@ type privateB4Reservation struct {
 	slot         int
 	sourceLeases []B4DefinitionSourceLease
 	capture      PrivateB4DefinitionCapture
+	decodeEntry  func()
+	retainEntry  func()
+}
+
+type privateB4ResponseCapture struct{ reservation *privateB4Reservation }
+
+type privateB4TransportReader struct{ io.Reader }
+
+func (r privateB4TransportReader) Read(p []byte) (int, error) {
+	n, err := r.Reader.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) {
+		err = fmt.Errorf("%w: %v", errPrivateB4Transport, err)
+	}
+	return n, err
+}
+
+func (c privateB4ResponseCapture) ObserveOriginalFrame(frame []byte) {
+	c.reservation.capture.ResponseFrame = frame
+	if c.reservation.retainEntry != nil {
+		c.reservation.retainEntry()
+	}
+	if c.reservation.decodeEntry != nil {
+		c.reservation.decodeEntry()
+	}
+}
+
+func privateB4SuccessorOptions(reservation *privateB4Reservation) lspwire.SuccessorIngressOptions {
+	return lspwire.SuccessorIngressOptions{
+		OwnerID: "sessionruntime.private-b4",
+		Capture: privateB4ResponseCapture{reservation: reservation},
+		Limits: lspwire.SuccessorIngressLimits{
+			HeaderBytes: 65536, FrameBytes: 2097152, ConsumptionBytes: 8388608, AcquisitionBytes: 8392705,
+			MaxReadBytes: 4096, PrefetchBytes: 4096, HistoryAcquiredBytes: 8388608, HistoryOutstandingBytes: 8388608,
+		},
+	}
 }
 
 type privateB4Slot struct {
@@ -189,6 +226,9 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	// A failed or unselected transaction never becomes a transferable lease.
 	writeFrame, wrote := result.CompletedMethodRequestFrame()
 	readFrame, read := result.CompletedDefinitionResponseFrame()
+	if reservation.capture.ResponseFrame != nil {
+		readFrame = reservation.capture.ResponseFrame
+	}
 	write, wroteObservation := result.CompletedRequestWrite()
 	readObservation, readObserved := result.CompletedResponseRead()
 	r := m.sessions[req.SessionID]

@@ -669,6 +669,8 @@ func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classi
 	return m.roundTripWithPrivate(parent, req, classify, nil)
 }
 
+var errPrivateB4Transport = errors.New("private B4 transport")
+
 func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, private *privateB4Reservation) RoundTripResult {
 	if req.ExpectedOwnedDocument != nil {
 		// Use pre-lock copies for both the source guard and owned write; caller
@@ -707,7 +709,14 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		m.mu.Unlock()
 		return RoundTripResult{Failure: session.ResourceExhausted}
 	}
+	var privateReader *lspwire.SuccessorIngressReader
 	if private != nil {
+		var err error
+		privateReader, err = lspwire.NewSuccessorIngressReader(privateB4TransportReader{Reader: child.Stdout()}, privateB4SuccessorOptions(private))
+		if err != nil {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
 		if failure := m.admitPrivateB4SourcesLocked(req, private); failure != "" {
 			m.mu.Unlock()
 			return RoundTripResult{Failure: failure}
@@ -866,6 +875,8 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 				retainEntry = func() { adr0011cobserve.Notify(probe, adr0011cobserve.RetainEntry) }
 			}
 		}
+		private.decodeEntry = decodeEntry
+		private.retainEntry = retainEntry
 	}
 	var reader *lspwire.Reader
 	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
@@ -881,6 +892,15 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 	}
 	for result.Messages < maxMessages {
 		go func() {
+			if privateReader != nil {
+				msg, err := privateReader.ReadFrame()
+				if m.cWireObserver != nil {
+					m.cWireObserver(lspwire.Event{Stage: lspwire.EventDecode, Kind: msg.Kind(), Closed: err != nil})
+				}
+				raw := private.capture.ResponseFrame
+				reads <- readResult{message: msg, frame: lspwire.ReadFrameObservation{FrameBytes: int64(len(raw)), FrameSHA256: privateB4Hash(raw)}, raw: raw, retained: err == nil && raw != nil, err: err}
+				return
+			}
 			if captureCap > 0 {
 				msg, frame, raw, retained, err := reader.ReadWithFrameIfWithin(captureCap)
 				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
@@ -917,7 +937,10 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 		case read := <-reads:
 			if read.err != nil {
 				failure := session.SessionPoisoned
-				if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
+				if privateReader != nil && !errors.Is(read.err, io.EOF) && !errors.Is(read.err, errPrivateB4Transport) &&
+					!errors.Is(read.err, lspwire.ErrMalformedJSON) && !errors.Is(read.err, lspwire.ErrWrongVersion) && !errors.Is(read.err, lspwire.ErrInvalidMessage) && !errors.Is(read.err, lspwire.ErrInvalidContentLength) {
+					failure = session.ResourceExhausted
+				} else if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
 					failure = session.ResourceExhausted
 				} else if errors.Is(read.err, io.EOF) {
 					failure = session.SessionCrashed
@@ -955,7 +978,11 @@ func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequ
 			if captureCap > 0 && read.retained && read.message.Kind() == lspwire.KindSuccessResponse {
 				switch req.Method {
 				case "textDocument/definition":
-					result.definitionResponseFrame = append([]byte(nil), read.raw...)
+					if privateReader != nil {
+						result.definitionResponseFrame = read.raw
+					} else {
+						result.definitionResponseFrame = append([]byte(nil), read.raw...)
+					}
 				case "textDocument/references":
 					result.referencesResponseFrame = append([]byte(nil), read.raw...)
 				case "textDocument/documentSymbol":
