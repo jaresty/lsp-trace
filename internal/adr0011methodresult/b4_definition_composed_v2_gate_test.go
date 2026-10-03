@@ -40,11 +40,12 @@ type composedV2Case struct {
 
 // Source-bound proof: these exact private implementations must retain the manager
 // lease consumption, strict result parser, and unadmitted status ceiling. This
-// does not establish real-server custody or public-schema admission.
+// older composed adapter is not source-custodied and does not establish real-server
+// custody or public-schema admission; Manager source custody is restricted to Unit 2.
 func TestADR0011PrivateComposedV2SourceBoundary(t *testing.T) {
 	adapter := bridgePinnedBytes(t, "b4_definition_private_adapter.go", "6cd2204f908fbaa749903fccf916c4121fcd1c5bc2ad0e770150888fb017cc42")
 	bridge := bridgePinnedBytes(t, "b4_definition_bridge.go", "f22da69db0aad0078370387b43f973ec28a553557e88c4c641eb946640585be6")
-	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "aa630df69e6ab3be7886fabfc3b291f42c202ba688cebf114222cf7224873e32")
+	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "70a870b7e92748ab774d102ea5660a86f07f845a617714ebf5327dbc98a6a67d")
 	for _, proof := range []struct {
 		label  string
 		source []byte

@@ -226,7 +226,7 @@ func TestADR0011StageB04StoppedLeaseV1(t *testing.T) {
 		stageBFailure(t, "B04_STOP_STALE", "stopped lease still consumable")
 	}
 	m.mu.Lock()
-	held, charged := len(m.privateB4Leases), m.privateB4Bytes
+	held, charged := m.privateB4LeaseCountLocked(), m.privateB4Bytes
 	m.mu.Unlock()
 	if held != 0 || charged != 0 {
 		stageBFailure(t, "B04_STOP_RETIRE", fmt.Sprintf("stopped lease retained: slots=%d charge=%d", held, charged))
@@ -300,7 +300,7 @@ func TestADR0011StageB05CapacityCleanupV1(t *testing.T) {
 		stageBBlocked(t, "slot fixture unfinished")
 	}
 	m.mu.Lock()
-	slots, charge := len(m.privateB4Leases), m.privateB4Bytes
+	slots, charge := m.privateB4LeaseCountLocked(), m.privateB4Bytes
 	m.mu.Unlock()
 	if slots != 4 || charge <= 0 || charge > privateB4MaxBytes {
 		stageBBlocked(t, fmt.Sprintf("four-slot prestate absent: %d/%d", slots, charge))
@@ -346,7 +346,7 @@ func TestADR0011StageB05CapacityCleanupV1(t *testing.T) {
 		stageBBlocked(t, "selected READ with failed frame retention not reached")
 	}
 	failed.mu.Lock()
-	left, bytesLeft := len(failed.privateB4Leases), failed.privateB4Bytes
+	left, bytesLeft := failed.privateB4LeaseCountLocked(), failed.privateB4Bytes
 	failed.mu.Unlock()
 	if left != 0 || bytesLeft != 0 {
 		stageBFailure(t, "B05_FAILURE_CLEANUP", fmt.Sprintf("reservation remained %d/%d", left, bytesLeft))
