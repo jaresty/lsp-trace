@@ -249,6 +249,20 @@ func TestPrivateB4C17MixedBatchOwnershipAndCheckedSettlement(t *testing.T) {
 			capabilityDone <- failure
 		}()
 		<-entered
+		profile.mu.Lock()
+		acquisitionBatch, capabilityBatch := uint64(0), uint64(0)
+		for _, entry := range profile.entries {
+			switch entry.batchFamily {
+			case privateB4EventBatchAcquisitionC17:
+				acquisitionBatch = entry.batch
+			case privateB4EventBatchCapabilityC17:
+				capabilityBatch = entry.batch
+			}
+		}
+		profile.mu.Unlock()
+		if acquisitionBatch == 0 || acquisitionBatch != capabilityBatch {
+			t.Fatalf("ASSERT_C17_EQUAL_NUMERIC_FAMILY_COLLISION_FIXTURE acquisition=%d capability=%d", acquisitionBatch, capabilityBatch)
+		}
 		if err := acquisition.commit(); err != nil {
 			t.Fatalf("ASSERT_C17_MIXED_BATCH_ACQUISITION_COMMIT err=%v", err)
 		}

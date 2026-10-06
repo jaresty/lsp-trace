@@ -49,6 +49,7 @@ type privateB4EventAccountC17 struct {
 	nextCapabilityBatch     uint64
 	capabilityBatchInFlight bool
 	nextAcquisitionBatch    uint64
+	acquisitionAdmission    *privateB4AcquisitionAdmissionC17
 	acquisitionInFlight     bool
 	acquisitionCommitted    bool
 	terminalRequested       bool
@@ -93,6 +94,8 @@ type privateB4AcquisitionAdmissionC17 struct {
 	account *privateB4EventAccountC17
 	batch   uint64
 	count   uint64
+	slots   []int
+	sealed  bool
 	settled bool
 }
 
@@ -163,10 +166,52 @@ func (a *privateB4EventAccountC17) beginAcquisitionAdmission(elementCount int) (
 	a.inFlight += count
 	a.activeCallbacks++
 	a.acquisitionInFlight = true
-	return &privateB4AcquisitionAdmissionC17{account: a, batch: batch, count: count}, nil
+	admission := &privateB4AcquisitionAdmissionC17{account: a, batch: batch, count: count}
+	a.acquisitionAdmission = admission
+	return admission, nil
 }
 
-func (t *privateB4AcquisitionAdmissionC17) settle(commit bool) error {
+func (t *privateB4AcquisitionAdmissionC17) openSlotsLocked() ([]int, error) {
+	if t == nil || t.account == nil || t.settled || t.sealed {
+		return nil, errPrivateB4EventAdmission
+	}
+	a := t.account
+	maxCount := uint64(2 + 2*privateB4MaxSourceDocuments)
+	if a.acquisitionAdmission != t || !a.acquisitionInFlight || a.acquisitionCommitted ||
+		t.count < 2 || t.count%2 != 0 || t.count > maxCount || t.count > privateB4EventLimit ||
+		t.count > a.inFlight || a.activeCallbacks == 0 {
+		return nil, errPrivateB4EventAdmission
+	}
+	slots := make([]int, 0, t.count)
+	for slot := range a.entries {
+		entry := a.entries[slot]
+		if entry.batchFamily == privateB4EventBatchAcquisitionC17 && entry.batch == t.batch && entry.state == 1 {
+			slots = append(slots, slot)
+		}
+	}
+	if uint64(len(slots)) != t.count {
+		return nil, errPrivateB4EventAdmission
+	}
+	return slots, nil
+}
+
+func (t *privateB4AcquisitionAdmissionC17) seal() error {
+	if t == nil || t.account == nil {
+		return errPrivateB4EventAdmission
+	}
+	a := t.account
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	slots, err := t.openSlotsLocked()
+	if err != nil {
+		return err
+	}
+	t.slots = slots
+	t.sealed = true
+	return nil
+}
+
+func (t *privateB4AcquisitionAdmissionC17) rollback() error {
 	if t == nil || t.account == nil {
 		return errPrivateB4EventAdmission
 	}
@@ -176,33 +221,20 @@ func (t *privateB4AcquisitionAdmissionC17) settle(commit bool) error {
 	if t.settled {
 		return errPrivateB4EventAdmission
 	}
-	count := uint64(0)
-	for slot := range a.entries {
-		if a.entries[slot].batchFamily == privateB4EventBatchAcquisitionC17 && a.entries[slot].batch == t.batch && a.entries[slot].state == 1 {
-			count++
+	slots := t.slots
+	if !t.sealed {
+		var err error
+		slots, err = t.openSlotsLocked()
+		if err != nil {
+			return err
 		}
 	}
-	if count != t.count || count > a.inFlight || a.activeCallbacks == 0 {
-		return errPrivateB4EventAdmission
+	for _, slot := range slots {
+		a.entries[slot] = privateB4EventEntryC17{}
 	}
-	for slot := range a.entries {
-		if a.entries[slot].batchFamily != privateB4EventBatchAcquisitionC17 || a.entries[slot].batch != t.batch || a.entries[slot].state != 1 {
-			continue
-		}
-		if commit {
-			a.entries[slot].batch = 0
-			a.entries[slot].batchFamily = 0
-			a.entries[slot].state = 2
-		} else {
-			a.entries[slot] = privateB4EventEntryC17{}
-		}
-	}
-	if commit {
-		a.admitted += count
-		a.acquisitionCommitted = true
-	}
-	a.inFlight -= count
+	a.inFlight -= t.count
 	a.activeCallbacks--
+	a.acquisitionAdmission = nil
 	a.acquisitionInFlight = false
 	t.settled = true
 	if a.terminalRequested && a.activeCallbacks == 0 {
@@ -211,8 +243,40 @@ func (t *privateB4AcquisitionAdmissionC17) settle(commit bool) error {
 	return nil
 }
 
-func (t *privateB4AcquisitionAdmissionC17) commit() error   { return t.settle(true) }
-func (t *privateB4AcquisitionAdmissionC17) rollback() error { return t.settle(false) }
+func (t *privateB4AcquisitionAdmissionC17) finalize() {
+	if t == nil || t.account == nil {
+		return
+	}
+	a := t.account
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if t.settled || !t.sealed {
+		return
+	}
+	for _, slot := range t.slots {
+		a.entries[slot].batch = 0
+		a.entries[slot].batchFamily = 0
+		a.entries[slot].state = 2
+	}
+	a.admitted += t.count
+	a.inFlight -= t.count
+	a.activeCallbacks--
+	a.acquisitionAdmission = nil
+	a.acquisitionInFlight = false
+	a.acquisitionCommitted = true
+	t.settled = true
+	if a.terminalRequested && a.activeCallbacks == 0 {
+		a.settled.Broadcast()
+	}
+}
+
+func (t *privateB4AcquisitionAdmissionC17) commit() error {
+	if err := t.seal(); err != nil {
+		return err
+	}
+	t.finalize()
+	return nil
+}
 
 func (a *privateB4EventAccountC17) withAcquisitionAdmission(elementCount int, appendCanonical func() error) (err error) {
 	if appendCanonical == nil {
@@ -230,7 +294,11 @@ func (a *privateB4EventAccountC17) withAcquisitionAdmission(elementCount int, ap
 	if err = appendCanonical(); err != nil {
 		return err
 	}
-	return token.commit()
+	if err = token.seal(); err != nil {
+		return err
+	}
+	token.finalize()
+	return nil
 }
 
 func (a *privateB4EventAccountC17) withEventAdmissions(identities []privateB4EventIdentityC17, appendCanonical func() error) (err error) {

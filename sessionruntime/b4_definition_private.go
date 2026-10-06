@@ -724,7 +724,7 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 	reservation.selection.Key.Generation = req.Generation
 	reservation.session = m.sessions[req.SessionID]
 	reservation.capture.TargetSources = owned
-	var admission *privateB4AcquisitionAdmissionC17
+	admission := &privateB4AcquisitionAdmissionC17{settled: true}
 	if profile != nil {
 		var err error
 		admission, err = profile.beginAcquisitionAdmission(len(admitted))
@@ -736,6 +736,9 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 				_ = admission.rollback()
 			}
 		}()
+		if err := admission.seal(); err != nil {
+			return session.ResourceExhausted
+		}
 	}
 	descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
 	if failure != "" {
@@ -745,11 +748,7 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 	for source := range seenLease {
 		source.state.Store(privateB4SourceTransferred)
 	}
-	if admission != nil {
-		if err := admission.commit(); err != nil {
-			panic("private B4 C17 acquisition settlement diverged")
-		}
-	}
+	admission.finalize()
 	return ""
 }
 

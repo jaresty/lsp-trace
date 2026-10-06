@@ -46,7 +46,7 @@ type composedV2Case struct {
 func TestADR0011PrivateComposedV2SourceBoundary(t *testing.T) {
 	adapter := bridgePinnedBytes(t, "b4_definition_private_adapter.go", "ba853adc0d3045b4755c5ce4783f2f05ddc531007b69ab17ecfbf574f0d5ce99")
 	bridge := bridgePinnedBytes(t, "b4_definition_bridge.go", "f22da69db0aad0078370387b43f973ec28a553557e88c4c641eb946640585be6")
-	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "3474e565ddd2857c5e699125300977304b5d0ec943213ac7315847ee8a503c4e")
+	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "9f666d18ef59d4868b084d6204e64b6df799a5b5ce8afca0b0257b09e20157c5")
 	for _, removed := range []string{"func (m *Manager) PreparePrivateB4Definition(", "func (m *Manager) CommitPrivateB4Definition(", "func (m *Manager) ConsumePrivateB4Definition(", "includeResult bool", "uint64(len(capture.Result))", "capture.Result = append"} {
 		if bytes.Contains(manager, []byte(removed)) {
 			t.Errorf("SEMANTIC_RED_COMPATIBILITY_REMOVAL still present %q", removed)

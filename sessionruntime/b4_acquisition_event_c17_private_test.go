@@ -167,6 +167,173 @@ func TestPrivateB4C17AcquisitionSharesCapabilityAndTargetBudget(t *testing.T) {
 	}
 }
 
+func TestPrivateB4C17AcquisitionCorruptionMatrixRefusesWithoutSettlementMutation(t *testing.T) {
+	cases := []struct {
+		name    string
+		corrupt func(*privateB4EventAccountC17, *privateB4AcquisitionAdmissionC17)
+	}{
+		{name: "family", corrupt: func(a *privateB4EventAccountC17, token *privateB4AcquisitionAdmissionC17) {
+			for i := range a.entries {
+				if a.entries[i].batch == token.batch {
+					a.entries[i].batchFamily = privateB4EventBatchCapabilityC17
+					return
+				}
+			}
+		}},
+		{name: "token", corrupt: func(_ *privateB4EventAccountC17, token *privateB4AcquisitionAdmissionC17) { token.batch++ }},
+		{name: "count", corrupt: func(_ *privateB4EventAccountC17, token *privateB4AcquisitionAdmissionC17) { token.count++ }},
+		{name: "inFlight", corrupt: func(a *privateB4EventAccountC17, _ *privateB4AcquisitionAdmissionC17) { a.inFlight-- }},
+		{name: "callback", corrupt: func(a *privateB4EventAccountC17, _ *privateB4AcquisitionAdmissionC17) { a.activeCallbacks = 0 }},
+		{name: "settled", corrupt: func(_ *privateB4EventAccountC17, token *privateB4AcquisitionAdmissionC17) { token.settled = true }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			profile, failure := newPrivateB4EventAccountC17()
+			if failure != "" {
+				t.Fatal(failure)
+			}
+			token, err := profile.beginAcquisitionAdmission(0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sealed := privateB4C17RequireSealedAdmission(t, token)
+			profile.mu.Lock()
+			tc.corrupt(profile, token)
+			profile.mu.Unlock()
+			before := profile.eventSnapshot()
+			if err := sealed.seal(); !errors.Is(err, errPrivateB4EventAdmission) {
+				t.Fatalf("ASSERT_C17_PRETRANSFER_SEAL_CORRUPTION_%s err=%v", tc.name, err)
+			}
+			if after := profile.eventSnapshot(); after != before {
+				t.Fatalf("ASSERT_C17_PRETRANSFER_SEAL_CORRUPTION_MUTATION_%s before=%+v after=%+v", tc.name, before, after)
+			}
+		})
+	}
+}
+
+func TestPrivateB4C17ForgedZeroCountAdmissionCannotSealActiveAcquisition(t *testing.T) {
+	profile, failure := newPrivateB4EventAccountC17()
+	if failure != "" {
+		t.Fatal(failure)
+	}
+	genuine, err := profile.beginAcquisitionAdmission(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forged := &privateB4AcquisitionAdmissionC17{account: profile, batch: genuine.batch + 1, count: 0}
+	before := profile.eventSnapshot()
+	if err := forged.seal(); !errors.Is(err, errPrivateB4EventAdmission) {
+		t.Fatalf("ASSERT_C17_FORGED_ADMISSION_SEAL_REJECTED err=%v", err)
+	}
+	if after := profile.eventSnapshot(); after != before || forged.sealed || forged.settled {
+		t.Fatalf("ASSERT_C17_FORGED_ADMISSION_ZERO_MUTATION before=%+v after=%+v sealed=%t settled=%t", before, after, forged.sealed, forged.settled)
+	}
+	if err := genuine.seal(); err != nil {
+		t.Fatalf("ASSERT_C17_GENUINE_ADMISSION_STILL_SEALS err=%v", err)
+	}
+	genuine.finalize()
+	if after := profile.eventSnapshot(); after.Admitted != 2 || after.InFlight != 0 || after.ActiveCallbacks != 0 {
+		t.Fatalf("ASSERT_C17_GENUINE_ADMISSION_FINALIZES snapshot=%+v", after)
+	}
+}
+
+type privateB4C17SealedAdmissionTest interface {
+	seal() error
+	finalize()
+}
+
+func privateB4C17RequireSealedAdmission(t *testing.T, token *privateB4AcquisitionAdmissionC17) privateB4C17SealedAdmissionTest {
+	t.Helper()
+	sealed, ok := any(token).(privateB4C17SealedAdmissionTest)
+	if !ok {
+		t.Fatal("ASSERT_C17_SEALED_ADMISSION_API_REQUIRED")
+	}
+	return sealed
+}
+
+func TestPrivateB4C17AcquisitionDuplicateFinalizeIsExactOnceNoOp(t *testing.T) {
+	profile, failure := newPrivateB4EventAccountC17()
+	if failure != "" {
+		t.Fatal(failure)
+	}
+	token, err := profile.beginAcquisitionAdmission(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed := privateB4C17RequireSealedAdmission(t, token)
+	if err := sealed.seal(); err != nil {
+		t.Fatalf("ASSERT_C17_PRETRANSFER_SEAL err=%v", err)
+	}
+	sealed.finalize()
+	before := profile.eventSnapshot()
+	for attempt := 0; attempt < 2; attempt++ {
+		func() {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					t.Fatalf("ASSERT_C17_FINALIZE_DUPLICATE_NO_PANIC attempt=%d recovered=%v", attempt, recovered)
+				}
+			}()
+			sealed.finalize()
+		}()
+		if after := profile.eventSnapshot(); after != before {
+			t.Fatalf("ASSERT_C17_FINALIZE_DUPLICATE_NO_MUTATION attempt=%d before=%+v after=%+v", attempt, before, after)
+		}
+	}
+}
+
+func TestPrivateB4C17AcquisitionTerminalWaitsWhileSealedUntilResolution(t *testing.T) {
+	for _, resolution := range []string{"rollback", "finalize"} {
+		t.Run(resolution, func(t *testing.T) {
+			profile, failure := newPrivateB4EventAccountC17()
+			if failure != "" {
+				t.Fatal(failure)
+			}
+			token, err := profile.beginAcquisitionAdmission(0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sealed := privateB4C17RequireSealedAdmission(t, token)
+			if err := sealed.seal(); err != nil {
+				t.Fatalf("ASSERT_C17_TERMINAL_SEALED_SETUP err=%v", err)
+			}
+			done := make(chan session.Failure, 1)
+			go func() { done <- profile.requestTerminalReleaseC17(context.Background()) }()
+			deadline := time.Now().Add(time.Second)
+			for !profile.eventSnapshot().TerminalRequested {
+				select {
+				case failure := <-done:
+					t.Fatalf("ASSERT_C17_TERMINAL_SEALED_REQUEST_RETURNED_BEFORE_OBSERVED resolution=%s failure=%s", resolution, failure)
+				default:
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("ASSERT_C17_TERMINAL_SEALED_REQUEST_NOT_OBSERVED resolution=%s", resolution)
+				}
+				time.Sleep(time.Millisecond)
+			}
+			select {
+			case failure := <-done:
+				t.Fatalf("ASSERT_C17_TERMINAL_SEALED_BLOCKS_AFTER_REQUEST resolution=%s failure=%s", resolution, failure)
+			default:
+			}
+			if resolution == "rollback" {
+				if err := token.rollback(); err != nil {
+					t.Fatalf("ASSERT_C17_TERMINAL_SEALED_ROLLBACK err=%v", err)
+				}
+			} else {
+				sealed.finalize()
+			}
+			select {
+			case failure := <-done:
+				if failure != "" {
+					t.Fatalf("ASSERT_C17_TERMINAL_SEALED_RELEASE resolution=%s failure=%s", resolution, failure)
+				}
+			case <-time.After(time.Second):
+				t.Fatalf("ASSERT_C17_TERMINAL_SEALED_RELEASE_TIMEOUT resolution=%s", resolution)
+			}
+		})
+	}
+}
+
 func TestPrivateB4C17AcquisitionTokenJoinsTerminalRelease(t *testing.T) {
 	profile, failure := newPrivateB4EventAccountC17()
 	if failure != "" {
