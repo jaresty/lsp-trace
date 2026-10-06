@@ -1,0 +1,26 @@
+{
+  "cases": {
+    "at-cap": {
+      "body_length": 2097097,
+      "header_length": 51,
+      "length": 2097152,
+      "path": "at-cap.frame",
+      "separator_length": 4,
+      "sha256": "ab86ae9277e44ef76a791ddec4c5dd7ce21d94005089e55a1218e6797a93814b"
+    },
+    "plus-one": {
+      "body_length": 2097098,
+      "header_length": 51,
+      "length": 2097153,
+      "path": "plus-one.frame",
+      "separator_length": 4,
+      "sha256": "914b4d16f0858c08a3f25e936576c29fa2eb3456b8802fbc3e327b1b2fa9675f"
+    }
+  },
+  "limits": {
+    "complete_frame_ceiling": 2097152,
+    "definition_remarshal_max_bytes": 1048576,
+    "exact_result_max_bytes": 524288
+  },
+  "schema": "adr0011-c-frames-v2"
+}

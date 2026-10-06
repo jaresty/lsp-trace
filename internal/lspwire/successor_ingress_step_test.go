@@ -153,12 +153,12 @@ func TestSuccessorPartialTransportErrorClassAndSeal(t *testing.T) {
 
 func TestSuccessorMetadataValidationOnly(t *testing.T) {
 	o := testSuccessorOptions()
-	o.History = &ImmutableHistoryMetadata{Identity: "h", Cut: "c", Acquired: 8388608, Outstanding: 8388608}
+	o.History = &ImmutableHistoryMetadata{Identity: "h", Cut: "c", Entries: 1, CutOrdinal: 1, Acquired: 8388608, Outstanding: 8388608}
 	r, e := NewSuccessorIngressReader(bytes.NewReader(nil), o)
 	if e != nil || r.acquired != 0 || r.consumed != 0 || r.validated != 0 {
 		t.Fatalf("at metadata %v %d/%d/%d", e, r.acquired, r.consumed, r.validated)
 	}
-	for _, h := range []*ImmutableHistoryMetadata{{Identity: "h", Cut: "c", Acquired: 8388609}, {Identity: "h", Cut: "c", Outstanding: 8388609}, {Identity: "", Cut: "c"}, {Identity: "h", Cut: ""}} {
+	for _, h := range []*ImmutableHistoryMetadata{{Identity: "h", Cut: "c", Entries: 1, CutOrdinal: 1, Acquired: 8388609}, {Identity: "h", Cut: "c", Entries: 1, CutOrdinal: 1, Outstanding: 8388609}, {Identity: "", Cut: "c", Entries: 1, CutOrdinal: 1}, {Identity: "h", Cut: "", Entries: 1, CutOrdinal: 1}} {
 		o.History = h
 		if _, e := NewSuccessorIngressReader(bytes.NewReader(nil), o); e == nil {
 			t.Fatalf("accepted metadata %+v", h)

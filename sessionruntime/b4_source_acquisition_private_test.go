@@ -88,6 +88,21 @@ func TestPrivateB4SourceExactBytesReachAdmissionAndStaleVersionRefuses(t *testin
 	}
 }
 
+func TestPrivateB4SourceReleaseRequiresBoundIngressState(t *testing.T) {
+	m, _, lease := privateB4PreparedSource(t, []byte("package binding\n"))
+	before := m.privateB4SourceIngress.snapshot()
+	bytesBefore := append([]byte(nil), lease.state.source.Bytes...)
+	entry := lease.state.ingress.entry()
+	entry.state = &privateB4SourceLease{manager: m}
+	if status := m.ReleasePrivateB4DefinitionSource(lease); status != PrivateB4Unavailable || lease.state.state.Load() != privateB4SourceHeld || !bytes.Equal(lease.state.source.Bytes, bytesBefore) || m.privateB4SourceIngress.snapshot() != before {
+		t.Fatalf("ASSERT_C15_SOURCE_RELEASE_BINDING status=%s state=%d snapshot=%+v", status, lease.state.state.Load(), m.privateB4SourceIngress.snapshot())
+	}
+	entry.state = lease.state
+	if status := m.ReleasePrivateB4DefinitionSource(lease); status != PrivateB4Selected {
+		t.Fatalf("ASSERT_C15_SOURCE_RELEASE_BINDING_RETRY status=%s", status)
+	}
+}
+
 func TestPrivateB4SourceReleaseReplayAndConcurrentTransfer(t *testing.T) {
 	m, req, released := privateB4PreparedSource(t, []byte("package release\n"))
 	var wg sync.WaitGroup
@@ -140,7 +155,7 @@ func TestPrivateB4SourceInstallPathIsProspectivelyInfallible(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := string(managerSource)
-	if !strings.Contains(manager, "privateB4Leases         [privateB4MaxSlots]privateB4Slot") ||
+	if !strings.Contains(manager, "privateB4Leases          [privateB4MaxSlots]privateB4Slot") ||
 		strings.Contains(manager, "privateB4Leases: make(") {
 		t.Fatal("ASSERT_B4_RESERVATION_STORAGE_FIXED_ARRAY")
 	}

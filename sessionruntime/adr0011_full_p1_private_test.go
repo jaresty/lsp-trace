@@ -26,14 +26,27 @@ type fullP1Child struct {
 	input, stdout *io.PipeReader
 	stdin, output *io.PipeWriter
 	result        json.RawMessage
+	serverError   *lspwire.RPCError
+	notifications int
+	responses     []lspwire.Message
+	serverReplies []lspwire.Message
+	mu            sync.Mutex
 	writes        atomic.Int64
 	done          chan error
 }
 
 func newFullP1Child(result json.RawMessage) *fullP1Child {
+	return newFullP1ChildWithNotifications(result, 0)
+}
+
+func newFullP1ChildWithNotifications(result json.RawMessage, notifications int) *fullP1Child {
+	return newFullP1ChildResponse(result, nil, notifications, nil)
+}
+
+func newFullP1ChildResponse(result json.RawMessage, serverError *lspwire.RPCError, notifications int, responses []lspwire.Message) *fullP1Child {
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
-	c := &fullP1Child{input: input, stdin: stdin, stdout: stdout, output: output, result: append(json.RawMessage(nil), result...), done: make(chan error, 1)}
+	c := &fullP1Child{input: input, stdin: stdin, stdout: stdout, output: output, result: append(json.RawMessage(nil), result...), serverError: serverError, notifications: notifications, responses: responses, done: make(chan error, 1)}
 	go func() {
 		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
 		writer := lspwire.NewWriter(output, lspwire.DefaultLimits())
@@ -43,11 +56,45 @@ func newFullP1Child(result json.RawMessage) *fullP1Child {
 				c.done <- err
 				return
 			}
-			if msg.Method != "textDocument/definition" {
+			if msg.Method == "initialize" {
+				if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: append(json.RawMessage(nil), msg.ID...), Result: json.RawMessage(`{"capabilities":{}}`)}); err != nil {
+					c.done <- err
+					return
+				}
+				continue
+			}
+			if msg.Method != "textDocument/definition" && msg.Method != "textDocument/references" {
 				continue
 			}
 			c.writes.Add(1)
-			if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: append(json.RawMessage(nil), msg.ID...), Result: append(json.RawMessage(nil), c.result...)}); err != nil {
+			for i := 0; i < c.notifications; i++ {
+				if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "$/progress", Params: json.RawMessage(`{"value":{}}`)}); err != nil {
+					c.done <- err
+					return
+				}
+			}
+			for i := range c.responses {
+				serverRequest := c.responses[i].Kind() == lspwire.KindRequest
+				if err := writer.Write(c.responses[i]); err != nil {
+					c.done <- err
+					return
+				}
+				if serverRequest {
+					reply, err := reader.Read()
+					if err != nil {
+						c.done <- err
+						return
+					}
+					c.mu.Lock()
+					c.serverReplies = append(c.serverReplies, reply)
+					c.mu.Unlock()
+				}
+			}
+			response := lspwire.Message{JSONRPC: lspwire.Version, ID: append(json.RawMessage(nil), msg.ID...), Result: append(json.RawMessage(nil), c.result...), Error: c.serverError}
+			if c.serverError != nil {
+				response.Result = nil
+			}
+			if err := writer.Write(response); err != nil {
 				c.done <- err
 				return
 			}
@@ -84,6 +131,22 @@ type fullP1Fixture struct {
 }
 
 func newFullP1Fixture(t *testing.T) *fullP1Fixture {
+	return newFullP1FixtureWithNotifications(t, 0)
+}
+
+func newFullP1FixtureWithNotifications(t *testing.T, notifications int) *fullP1Fixture {
+	return newFullP1FixtureResponse(t, notifications, nil, nil)
+}
+
+func newFullP1FixtureWithServerError(t *testing.T, serverError *lspwire.RPCError) *fullP1Fixture {
+	return newFullP1FixtureResponse(t, 0, serverError, nil)
+}
+
+func newFullP1FixtureWithResponses(t *testing.T, responses []lspwire.Message) *fullP1Fixture {
+	return newFullP1FixtureResponse(t, 0, nil, responses)
+}
+
+func newFullP1FixtureResponse(t *testing.T, notifications int, serverError *lspwire.RPCError, responses []lspwire.Message) *fullP1Fixture {
 	t.Helper()
 	assets := b4LeaseFixture(t)
 	var declaration struct {
@@ -107,7 +170,7 @@ func newFullP1Fixture(t *testing.T) *fullP1Fixture {
 		t.Fatal(err)
 	}
 	expectedResult := b4LeaseGet(t, assets, "A/response.result")
-	child := newFullP1Child(expectedResult)
+	child := newFullP1ChildResponse(expectedResult, serverError, notifications, responses)
 	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
 	if err != nil {
 		t.Fatal(err)
@@ -117,8 +180,9 @@ func newFullP1Fixture(t *testing.T) *fullP1Fixture {
 	if started.Failure != "" || started.SessionID != declaration.Session || started.Generation != declaration.Generation {
 		t.Fatalf("BLOCKED_NOT_RED full P1 start: %+v", started)
 	}
-	if ready := m.ObserveInitialization(started.SessionID, started.Generation, true); ready.State != session.Ready {
-		t.Fatalf("BLOCKED_NOT_RED full P1 readiness: %+v", ready)
+	pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	if ready, found := m.WaitReadiness(context.Background(), pending.ID); !found || ready.State != ReadinessReady || ready.Failure != "" {
+		t.Fatalf("BLOCKED_NOT_RED full P1 readiness: %+v found=%v", ready, found)
 	}
 
 	sourceBytes := b4LeaseGet(t, assets, "A/target-a.go")
@@ -175,6 +239,31 @@ func fullP1AssertCapture(t *testing.T, f *fullP1Fixture, capture PrivateB4Defini
 	}
 }
 
+func TestADR0011PrivateP2BothMethodsUseNonCustodialSuccessorIngress(t *testing.T) {
+	for _, method := range []string{"textDocument/definition", "textDocument/references"} {
+		t.Run(method, func(t *testing.T) {
+			f := newFullP1Fixture(t)
+			f.req.Method = method
+			f.req.ADR0011PrivateP2 = true
+			if method == "textDocument/references" {
+				f.req.Params = json.RawMessage(`{"textDocument":{"uri":"file:///w/target-a.go"},"position":{"line":0,"character":0},"context":{"includeDeclaration":true}}`)
+			}
+			result := f.m.RoundTrip(context.Background(), f.req)
+			if result.Failure != "" || !bytes.Equal(result.Result, f.expectedResult) {
+				t.Fatalf("ASSERT_P2_SUCCESSOR_EXACT_RESULT: method=%s failure=%s result=%s", method, result.Failure, result.Result)
+			}
+			f.m.mu.Lock()
+			history := f.m.sessions[f.req.SessionID].readinessHistory
+			borrowers, owners := history.borrowers, history.receiptOwners
+			leases := f.m.privateB4LeaseCountLocked()
+			f.m.mu.Unlock()
+			if borrowers != 0 || owners != 0 || leases != 0 {
+				t.Fatalf("ASSERT_P2_NONCUSTODIAL_EXACT_ONCE_CLEANUP: method=%s borrowers=%d owners=%d leases=%d", method, borrowers, owners, leases)
+			}
+		})
+	}
+}
+
 func TestADR0011FullP1ExactSuccessorSourceTransaction(t *testing.T) {
 	f := newFullP1Fixture(t)
 	result, lease, selection := f.transact(t)
@@ -190,14 +279,14 @@ func TestADR0011FullP1ExactSuccessorSourceTransaction(t *testing.T) {
 	if !sameOriginalFrame {
 		fullP1Red(t, "SUCCESSOR_EXACT_PREDECODE_FRAME", "reservation and result do not share the Successor-captured original frame")
 	}
-	capture, status := m.PreparePrivateB4Definition(lease, selection)
+	capture, status := preparePrivateB4SnapshotForTest(m, lease, selection)
 	if status != PrivateB4Selected {
 		fullP1Red(t, "PREPARE_AVAILABLE", string(status))
 	}
 	fullP1AssertCapture(t, f, capture, selection)
 	capture.ResponseFrame[0] ^= 1
 	capture.TargetSources[0].Bytes[0] ^= 1
-	retry, status := m.PreparePrivateB4Definition(lease, selection)
+	retry, status := preparePrivateB4SnapshotForTest(m, lease, selection)
 	if status != PrivateB4Selected {
 		fullP1Red(t, "PREPARE_NON_CONSUMING", string(status))
 	}
@@ -211,14 +300,14 @@ func TestADR0011FullP1RejectRetryCommitOrderingAndReplay(t *testing.T) {
 	f := newFullP1Fixture(t)
 	_, lease, selection := f.transact(t)
 	published := 0
-	if capture, status := f.m.CommitPrivateB4Definition(lease, selection, func(c PrivateB4DefinitionCapture) bool { fullP1AssertCapture(t, f, c, selection); return false }, func(PrivateB4DefinitionCapture) { published++ }); status != PrivateB4Unavailable || capture.SessionID != "" || published != 0 {
+	if capture, status := commitPrivateB4SnapshotForTest(f.m, lease, selection, func(c PrivateB4DefinitionCapture) bool { fullP1AssertCapture(t, f, c, selection); return false }, func(PrivateB4DefinitionCapture) { published++ }); status != PrivateB4Unavailable || capture.SessionID != "" || published != 0 {
 		fullP1Red(t, "REJECT_ZERO_PUBLICATION", fmt.Sprintf("status=%s published=%d", status, published))
 	}
 	if slots, _ := lifecycleCharge(f.m); slots != 1 || f.owner.TargetSources[0].state.state.Load() != privateB4SourceTransferred {
 		fullP1Red(t, "REJECT_PRESERVES_RETRY", fmt.Sprintf("slots=%d source=%d", slots, f.owner.TargetSources[0].state.state.Load()))
 	}
 	var publishedCapture PrivateB4DefinitionCapture
-	capture, status := f.m.CommitPrivateB4Definition(lease, selection, func(c PrivateB4DefinitionCapture) bool { fullP1AssertCapture(t, f, c, selection); return true }, func(c PrivateB4DefinitionCapture) {
+	capture, status := commitPrivateB4SnapshotForTest(f.m, lease, selection, func(c PrivateB4DefinitionCapture) bool { fullP1AssertCapture(t, f, c, selection); return true }, func(c PrivateB4DefinitionCapture) {
 		if f.m.privateB4LeaseCountLocked() != 1 || f.owner.TargetSources[0].state.state.Load() != privateB4SourceTransferred {
 			fullP1Red(t, "PUBLICATION_BEFORE_RELEASE", "lease/source released before callback completed")
 		}
@@ -230,11 +319,14 @@ func TestADR0011FullP1RejectRetryCommitOrderingAndReplay(t *testing.T) {
 	}
 	fullP1AssertCapture(t, f, capture, selection)
 	fullP1AssertCapture(t, f, publishedCapture, selection)
-	if slots, charged := lifecycleCharge(f.m); slots != 0 || charged != 0 {
-		fullP1Red(t, "COMMIT_RELEASE", fmt.Sprintf("slots=%d bytes=%d", slots, charged))
+	if slots, charged := lifecycleCharge(f.m); slots != 0 || charged != 0 || f.owner.TargetSources[0].state.state.Load() != privateB4SourceReleased {
+		fullP1Red(t, "COMMIT_RELEASES_SOURCE", fmt.Sprintf("slots=%d bytes=%d source=%d", slots, charged, f.owner.TargetSources[0].state.state.Load()))
 	}
-	if replay, replayStatus := f.m.ConsumePrivateB4Definition(lease, selection); replayStatus != PrivateB4Unavailable || replay.SessionID != "" {
+	if replay, replayStatus := consumePrivateB4SnapshotForTest(f.m, lease, selection); replayStatus != PrivateB4Unavailable || replay.SessionID != "" {
 		fullP1Red(t, "COMMIT_REPLAY", string(replayStatus))
+	}
+	if status := f.m.ReleasePrivateB4DefinitionSource(f.owner.TargetSources[0]); status != PrivateB4Unavailable || f.owner.TargetSources[0].state.state.Load() != privateB4SourceReleased {
+		fullP1Red(t, "COMMIT_SOURCE_RELEASE_IDEMPOTENT", fmt.Sprintf("status=%s source=%d", status, f.owner.TargetSources[0].state.state.Load()))
 	}
 }
 
@@ -250,7 +342,7 @@ func TestADR0011FullP1ConcurrentCommitExactlyOneWinner(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			_, status := f.m.CommitPrivateB4Definition(lease, selection, func(PrivateB4DefinitionCapture) bool { return true }, func(PrivateB4DefinitionCapture) { publications.Add(1) })
+			_, status := commitPrivateB4SnapshotForTest(f.m, lease, selection, func(PrivateB4DefinitionCapture) bool { return true }, func(PrivateB4DefinitionCapture) { publications.Add(1) })
 			statuses <- status
 		}()
 	}
@@ -348,10 +440,10 @@ func TestADR0011FullP1SourceBearingCapacityRefusalAndRelease(t *testing.T) {
 		fullP1Red(t, "CAPACITY_REFUSED_SOURCE_RELEASE", "refused source not releasable exactly once")
 	}
 	for i := range leases {
-		if _, got := f.m.ConsumePrivateB4Definition(leases[i], selections[i]); got != PrivateB4Selected {
+		if _, got := consumePrivateB4SnapshotForTest(f.m, leases[i], selections[i]); got != PrivateB4Selected {
 			fullP1Red(t, "CAPACITY_ACCEPTED_RELEASE", fmt.Sprintf("index=%d status=%s", i, got))
 		}
-		if _, replay := f.m.ConsumePrivateB4Definition(leases[i], selections[i]); replay != PrivateB4Unavailable {
+		if _, replay := consumePrivateB4SnapshotForTest(f.m, leases[i], selections[i]); replay != PrivateB4Unavailable {
 			fullP1Red(t, "CAPACITY_ACCEPTED_REPLAY", fmt.Sprintf("index=%d status=%s", i, replay))
 		}
 	}
@@ -360,9 +452,60 @@ func TestADR0011FullP1SourceBearingCapacityRefusalAndRelease(t *testing.T) {
 	}
 }
 
+func TestADR0011FullP1ComposedMessageAttemptsAtAndOver(t *testing.T) {
+	t.Run("64th matching response accepted", func(t *testing.T) {
+		f := newFullP1FixtureWithNotifications(t, 63)
+		f.req.MaxMessages = 65
+		result, lease, selection := f.transact(t)
+		notificationLease, notificationsOK := result.PrivateRetainedNotificationLease()
+		if result.Messages != 64 || len(result.Notifications) != 0 || !notificationsOK || result.Key != selection.Key {
+			fullP1Red(t, "COMPOSED_MESSAGE_ATTEMPTS_AT", fmt.Sprintf("messages=%d legacy_notifications=%d lease=%t key=%+v selection=%+v", result.Messages, len(result.Notifications), notificationsOK, result.Key, selection.Key))
+		}
+		if err := notificationLease.WithNotifications(func(messages []lspwire.Message) error {
+			if len(messages) != 63 {
+				return fmt.Errorf("notifications=%d", len(messages))
+			}
+			return nil
+		}); err != nil {
+			fullP1Red(t, "COMPOSED_MESSAGE_ATTEMPTS_AT_VIEW", err.Error())
+		}
+		if _, status := consumePrivateB4SnapshotForTest(f.m, lease, selection); status != PrivateB4Selected {
+			fullP1Red(t, "COMPOSED_MESSAGE_ATTEMPTS_AT_RELEASE", string(status))
+		}
+		if !notificationLease.Release() {
+			fullP1Red(t, "COMPOSED_MESSAGE_ATTEMPTS_AT_NOTIFICATION_RELEASE", "release refused")
+		}
+	})
+
+	t.Run("65th matching response refused before capture", func(t *testing.T) {
+		f := newFullP1FixtureWithNotifications(t, 64)
+		f.req.MaxMessages = 66
+		var decodes, retains atomic.Int64
+		f.m.cDecodeEntry = func() { decodes.Add(1) }
+		f.m.cRetainEntry = func() { retains.Add(1) }
+		result, lease := f.m.RoundTripPrivateB4(context.Background(), f.req, f.owner)
+		if result.Failure != session.ResourceExhausted || lease != (B4DefinitionLease{}) || result.Messages != 64 || len(result.Notifications) != 0 || result.Key.Generation != f.req.Generation || result.Key.ID == 0 {
+			fullP1Red(t, "COMPOSED_MESSAGE_ATTEMPTS_OVER", fmt.Sprintf("failure=%s lease=%v messages=%d notifications=%d key=%+v", result.Failure, lease != (B4DefinitionLease{}), result.Messages, len(result.Notifications), result.Key))
+		}
+		if retains.Load() != 64 || decodes.Load() != 64 || len(result.definitionResponseFrame) != 0 {
+			fullP1Red(t, "COMPOSED_65TH_PRE_CAPTURE_DECODE", fmt.Sprintf("retains=%d decodes=%d response_frame=%d", retains.Load(), decodes.Load(), len(result.definitionResponseFrame)))
+		}
+		if slots, charged := lifecycleCharge(f.m); slots != 0 || charged != 0 || f.owner.TargetSources[0].state.state.Load() != privateB4SourceReleased {
+			fullP1Red(t, "COMPOSED_REFUSAL_RELEASES_SOURCE", fmt.Sprintf("slots=%d bytes=%d source=%d", slots, charged, f.owner.TargetSources[0].state.state.Load()))
+		}
+		f.m.mu.Lock()
+		r := f.m.sessions[f.req.SessionID]
+		requests, protocolOwned, workers := len(r.requests), r.protocolOwned, f.m.workers
+		f.m.mu.Unlock()
+		if requests != 0 || protocolOwned || workers != 0 {
+			fullP1Red(t, "COMPOSED_REFUSAL_SYNCHRONOUS_CLEANUP", fmt.Sprintf("requests=%d protocol_owned=%v workers=%d", requests, protocolOwned, workers))
+		}
+	})
+}
+
 func TestADR0011FullP1FixedSuccessorLimits(t *testing.T) {
 	got := privateB4SuccessorOptions(&privateB4Reservation{}).Limits
-	want := lspwire.SuccessorIngressLimits{HeaderBytes: 65536, FrameBytes: 2097152, ConsumptionBytes: 8388608, AcquisitionBytes: 8392705, MaxReadBytes: 4096, PrefetchBytes: 4096, HistoryAcquiredBytes: 8388608, HistoryOutstandingBytes: 8388608}
+	want := lspwire.SuccessorIngressLimits{HeaderBytes: 65536, FrameBytes: 2097152, ConsumptionBytes: 8388608, AcquisitionBytes: 8392705, MaxReadBytes: 4096, PrefetchBytes: 4096, HistoryAcquiredBytes: 8388608, HistoryOutstandingBytes: 8388608, MessageAttempts: 64, CompleteMessageBytes: 1048576, ResultTokenBytes: 524288}
 	if got != want {
 		fullP1Red(t, "FIXED_SUCCESSOR_LIMITS", fmt.Sprintf("got=%+v want=%+v", got, want))
 	}

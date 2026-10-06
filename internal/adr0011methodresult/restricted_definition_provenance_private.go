@@ -565,6 +565,15 @@ func (m *restrictedOwnerManager) validateDefinitionProvenance(r restrictedProven
 	return a.validatedHandle(m, r.slot), nil
 }
 
+type restrictedDefinitionB4Prepared struct {
+	capture      sessionruntime.PrivateB4DefinitionCapture
+	ownedSources map[string][]byte
+	candidates   [restrictedCandidateMax]DefinitionCandidate
+	resultLen    int
+	resultSHA256 [sha256.Size]byte
+	candidateLen int
+}
+
 func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProvenanceReservation, p restrictedProcessingReservation, in restrictedDefinitionB4Input) (restrictedValidatedDefinition, error) {
 	if in.Manager == nil {
 		return restrictedValidatedDefinition{}, errRestrictedIdentity
@@ -580,57 +589,160 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 	}
 	m.unlockBoth()
 
-	capture, status := in.Manager.PreparePrivateB4Definition(in.Lease, in.Selection)
-	w := in.Replay.Write
-	if status != sessionruntime.PrivateB4Selected || capture.SessionID != in.Selection.SessionID || capture.Key != in.Selection.Key ||
-		capture.Transaction != in.Selection.Transaction || capture.CompletedOwnerKey != in.Selection.CompletedOwnerKey ||
-		capture.Method != "textDocument/definition" || w.Method != capture.Method || w.Session != capture.SessionID ||
-		w.Generation != capture.Key.Generation || w.Transaction != capture.Transaction || w.CompletedKey != capture.CompletedOwnerKey ||
-		!w.WriteCompleted || !bytes.Equal(w.RequestFrame, capture.RequestFrame) || !bytes.Equal(w.RequestParams, capture.RequestParams) ||
-		!privateCaptureHash(capture.RequestFrame, capture.RequestFrameSHA256) || !privateCaptureHash(capture.ResponseFrame, capture.ResponseFrameSHA256) ||
-		!privateCaptureHash(capture.Result, capture.ResultSHA256) {
-		return restrictedValidatedDefinition{}, errRestrictedIdentity
-	}
-	id, idErr := strconv.ParseUint(string(w.RequestID), 10, 64)
-	if idErr != nil || id == 0 || id > math.MaxInt64 || id != capture.Key.ID || !bytes.Equal(w.RequestID, []byte(strconv.FormatUint(id, 10))) {
-		return restrictedValidatedDefinition{}, errRestrictedIdentity
-	}
-	ownedSources := make(map[string][]byte, len(capture.TargetSources))
-	for _, source := range capture.TargetSources {
-		if source.URI == "" || source.AcquisitionID == "" || source.SessionID != capture.SessionID || source.Generation != capture.Key.Generation ||
-			len(source.Bytes) == 0 || !privateCaptureHash(source.Bytes, source.SHA256) {
-			return restrictedValidatedDefinition{}, errRestrictedIdentity
+	var prepared restrictedDefinitionB4Prepared
+	var prepareErr error
+	prepare := func(borrow sessionruntime.PrivateB4DefinitionBorrow) bool {
+		capture := borrow.Capture
+		result := borrow.Result
+		w := in.Replay.Write
+
+		if capture.SessionID != in.Selection.SessionID || capture.Key != in.Selection.Key ||
+			capture.Transaction != in.Selection.Transaction || capture.CompletedOwnerKey != in.Selection.CompletedOwnerKey ||
+			capture.Method != "textDocument/definition" || w.Method != capture.Method || w.Session != capture.SessionID ||
+			w.Generation != capture.Key.Generation || w.Transaction != capture.Transaction || w.CompletedKey != capture.CompletedOwnerKey ||
+			!w.WriteCompleted || !bytes.Equal(w.RequestFrame, capture.RequestFrame) || !bytes.Equal(w.RequestParams, capture.RequestParams) ||
+			!privateCaptureHash(capture.RequestFrame, capture.RequestFrameSHA256) ||
+			!privateCaptureHash(capture.ResponseFrame, capture.ResponseFrameSHA256) ||
+			!privateCaptureHash(result, capture.ResultSHA256) {
+			prepareErr = errRestrictedIdentity
+			return false
 		}
-		ownedSources[source.URI] = source.Bytes
-	}
-	request, requestBody, ok := privateB4Frame(capture.RequestFrame)
-	if !ok || request.Kind() != lspwire.KindRequest || request.Method != capture.Method || !bytes.Equal(request.ID, w.RequestID) || !bytes.Equal(request.Params, capture.RequestParams) || len(requestBody) == 0 {
-		return restrictedValidatedDefinition{}, errRestrictedState
-	}
-	response, responseBody, ok := privateB4Frame(capture.ResponseFrame)
-	if !ok || response.Kind() != lspwire.KindSuccessResponse || !bytes.Equal(response.ID, w.RequestID) || !bytes.Equal(response.Result, capture.Result) || len(responseBody) == 0 {
-		return restrictedValidatedDefinition{}, errRestrictedState
-	}
-	checked := CheckB4DefinitionBridge(DefinitionBridgeInput{Replay: in.Replay, ResponseFrame: responseBody, QueryOccurrenceID: capture.QueryOccurrenceID, TargetSources: ownedSources})
-	if checked.Status != DefinitionBridgeCandidateItems || checked.ChronologyTerminal != "SUPPORTED" || len(checked.Candidates) > restrictedCandidateMax {
-		return restrictedValidatedDefinition{}, errRestrictedState
-	}
-	total := len(capture.RequestFrame) + len(capture.ResponseFrame) + len(capture.Result)
-	for _, candidate := range checked.Candidates {
-		source := ownedSources[candidate.TargetURI]
-		if len(source) == 0 || total > int(restrictedProvenanceRawBytes)-len(source) {
-			return restrictedValidatedDefinition{}, errRestrictedBound
+
+		id, idErr := strconv.ParseUint(string(w.RequestID), 10, 64)
+		if idErr != nil || id == 0 || id > math.MaxInt64 || id != capture.Key.ID ||
+			!bytes.Equal(w.RequestID, []byte(strconv.FormatUint(id, 10))) {
+			prepareErr = errRestrictedIdentity
+			return false
 		}
-		total += len(source)
+
+		ownedSources := make(map[string][]byte, len(capture.TargetSources))
+		for _, source := range capture.TargetSources {
+			if source.URI == "" || source.AcquisitionID == "" ||
+				source.SessionID != capture.SessionID || source.Generation != capture.Key.Generation ||
+				len(source.Bytes) == 0 || !privateCaptureHash(source.Bytes, source.SHA256) {
+				prepareErr = errRestrictedIdentity
+				return false
+			}
+			ownedSources[source.URI] = source.Bytes
+		}
+
+		request, requestBody, ok := privateB4Frame(capture.RequestFrame)
+		if !ok || request.Kind() != lspwire.KindRequest || request.Method != capture.Method ||
+			!bytes.Equal(request.ID, w.RequestID) || !bytes.Equal(request.Params, capture.RequestParams) ||
+			len(requestBody) == 0 {
+			prepareErr = errRestrictedState
+			return false
+		}
+
+		response, responseBody, ok := privateB4Frame(capture.ResponseFrame)
+		if !ok || response.Kind() != lspwire.KindSuccessResponse ||
+			!bytes.Equal(response.ID, w.RequestID) || !bytes.Equal(response.Result, result) ||
+			len(responseBody) == 0 {
+			prepareErr = errRestrictedState
+			return false
+		}
+
+		checked := CheckB4DefinitionBridge(DefinitionBridgeInput{
+			Replay:            in.Replay,
+			ResponseFrame:     responseBody,
+			QueryOccurrenceID: capture.QueryOccurrenceID,
+			TargetSources:     ownedSources,
+		})
+		if checked.Status != DefinitionBridgeCandidateItems ||
+			checked.ChronologyTerminal != "SUPPORTED" ||
+			len(checked.Candidates) > restrictedCandidateMax {
+			prepareErr = errRestrictedState
+			return false
+		}
+
+		total := len(capture.RequestFrame) + len(capture.ResponseFrame) + len(result)
+		if total > int(restrictedProvenanceRawBytes) {
+			prepareErr = errRestrictedBound
+			return false
+		}
+		for _, candidate := range checked.Candidates {
+			source := ownedSources[candidate.TargetURI]
+			if len(source) == 0 || total > int(restrictedProvenanceRawBytes)-len(source) {
+				prepareErr = errRestrictedBound
+				return false
+			}
+			total += len(source)
+		}
+
+		cloneString := func(value string) string {
+			return string(append([]byte(nil), value...))
+		}
+		for i, candidate := range checked.Candidates {
+			owned := candidate
+			owned.OccurrenceID = cloneString(candidate.OccurrenceID)
+			owned.QueryOccurrenceID = cloneString(candidate.QueryOccurrenceID)
+			owned.TargetID = cloneString(candidate.TargetID)
+			owned.QueryURI = cloneString(candidate.QueryURI)
+			owned.TargetURI = cloneString(candidate.TargetURI)
+			if candidate.TargetRange != nil {
+				targetRange := *candidate.TargetRange
+				owned.TargetRange = &targetRange
+			}
+			prepared.candidates[i] = owned
+		}
+
+		prepared.capture = capture
+		prepared.capture.Result = nil
+		prepared.capture.TargetSources = make([]sessionruntime.B4DefinitionTargetSource, len(capture.TargetSources))
+		for i, source := range capture.TargetSources {
+			source.Bytes = nil
+			prepared.capture.TargetSources[i] = source
+		}
+		prepared.ownedSources = ownedSources
+		prepared.candidateLen = len(checked.Candidates)
+		prepared.resultLen = len(result)
+		prepared.resultSHA256 = sha256.Sum256(result)
+		return true
 	}
-	if total > int(restrictedProvenanceRawBytes) {
-		return restrictedValidatedDefinition{}, errRestrictedBound
+
+	_, status := in.Manager.PreparePrivateB4DefinitionBorrowed(in.Lease, in.Selection, prepare)
+	if status != sessionruntime.PrivateB4Selected {
+		if prepareErr != nil {
+			return restrictedValidatedDefinition{}, prepareErr
+		}
+		return restrictedValidatedDefinition{}, errRestrictedBusy
 	}
 
 	var committed restrictedValidatedDefinition
-	prepareCommit := func(commitCapture sessionruntime.PrivateB4DefinitionCapture) bool {
-		if !bytes.Equal(commitCapture.RequestFrame, capture.RequestFrame) || !bytes.Equal(commitCapture.ResponseFrame, capture.ResponseFrame) ||
-			!bytes.Equal(commitCapture.Result, capture.Result) || !m.tryBoth() {
+	prepareCommit := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) bool {
+		commitCapture := commitBorrow.Capture
+		savedCapture := prepared.capture
+		if commitCapture.SessionID != savedCapture.SessionID ||
+			commitCapture.Key != savedCapture.Key ||
+			commitCapture.Transaction != savedCapture.Transaction ||
+			commitCapture.CompletedOwnerKey != savedCapture.CompletedOwnerKey ||
+			commitCapture.Method != savedCapture.Method ||
+			commitCapture.RequestFrameSHA256 != savedCapture.RequestFrameSHA256 ||
+			commitCapture.ResponseFrameSHA256 != savedCapture.ResponseFrameSHA256 ||
+			commitCapture.ResultSHA256 != savedCapture.ResultSHA256 ||
+			commitCapture.QueryOccurrenceID != savedCapture.QueryOccurrenceID ||
+			!bytes.Equal(commitCapture.RequestFrame, savedCapture.RequestFrame) ||
+			!bytes.Equal(commitCapture.RequestParams, savedCapture.RequestParams) ||
+			!bytes.Equal(commitCapture.ResponseFrame, savedCapture.ResponseFrame) ||
+			len(commitCapture.Result) != 0 ||
+			len(commitCapture.TargetSources) != len(savedCapture.TargetSources) ||
+			len(commitBorrow.Result) != prepared.resultLen ||
+			sha256.Sum256(commitBorrow.Result) != prepared.resultSHA256 {
+			return false
+		}
+		for i, source := range commitCapture.TargetSources {
+			savedSource := savedCapture.TargetSources[i]
+			if source.URI != savedSource.URI ||
+				source.AcquisitionID != savedSource.AcquisitionID ||
+				source.SHA256 != savedSource.SHA256 ||
+				source.SessionID != savedSource.SessionID ||
+				source.Generation != savedSource.Generation ||
+				source.DocumentVersion != savedSource.DocumentVersion ||
+				!bytes.Equal(source.Bytes, prepared.ownedSources[source.URI]) {
+				return false
+			}
+		}
+		if !m.tryBoth() {
 			return false
 		}
 		a, err = r.exact(m)
@@ -641,20 +753,22 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 		}
 		return true
 	}
-	publish := func(sessionruntime.PrivateB4DefinitionCapture) {
+	publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) {
 		defer m.unlockBoth()
+		commitCapture := commitBorrow.Capture
 		off := 0
-		a.provenanceRequestOff, a.provenanceRequestLen = uint32(off), uint32(len(capture.RequestFrame))
-		copy(a.provenanceRaw[off:], capture.RequestFrame)
-		off += len(capture.RequestFrame)
-		a.provenanceResponseOff, a.provenanceResponseLen = uint32(off), uint32(len(capture.ResponseFrame))
-		copy(a.provenanceRaw[off:], capture.ResponseFrame)
-		off += len(capture.ResponseFrame)
-		a.provenanceResultOff, a.provenanceResultLen = uint32(off), uint32(len(capture.Result))
-		copy(a.provenanceRaw[off:], capture.Result)
-		off += len(capture.Result)
-		for i, candidate := range checked.Candidates {
-			source := ownedSources[candidate.TargetURI]
+		a.provenanceRequestOff, a.provenanceRequestLen = uint32(off), uint32(len(commitCapture.RequestFrame))
+		copy(a.provenanceRaw[off:], commitCapture.RequestFrame)
+		off += len(commitCapture.RequestFrame)
+		a.provenanceResponseOff, a.provenanceResponseLen = uint32(off), uint32(len(commitCapture.ResponseFrame))
+		copy(a.provenanceRaw[off:], commitCapture.ResponseFrame)
+		off += len(commitCapture.ResponseFrame)
+		a.provenanceResultOff, a.provenanceResultLen = uint32(off), uint32(len(commitBorrow.Result))
+		copy(a.provenanceRaw[off:], commitBorrow.Result)
+		off += len(commitBorrow.Result)
+		for i := 0; i < prepared.candidateLen; i++ {
+			candidate := prepared.candidates[i]
+			source := prepared.ownedSources[candidate.TargetURI]
 			sourceOff, sourceLen := uint32(off), uint32(len(source))
 			copy(a.provenanceRaw[off:], source)
 			off += len(source)
@@ -662,15 +776,15 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 			binary.LittleEndian.PutUint32(a.provenanceRecords[base:base+4], sourceOff)
 			binary.LittleEndian.PutUint32(a.provenanceRecords[base+4:base+8], sourceLen)
 		}
-		copy(a.provenanceCandidates[:], checked.Candidates)
-		a.provenanceCandidateCount = uint16(len(checked.Candidates))
+		copy(a.provenanceCandidates[:], prepared.candidates[:prepared.candidateLen])
+		a.provenanceCandidateCount = uint16(prepared.candidateLen)
 		rec := a.provenanceRecords
 		copy(rec[:16], []byte("ADR0011-PROV-V2"))
 		binary.LittleEndian.PutUint32(rec[16:20], restrictedProvenanceRecordVersion)
 		binary.LittleEndian.PutUint16(rec[20:22], uint16(restrictedProvenanceValidated))
 		binary.LittleEndian.PutUint32(rec[24:28], uint32(off))
 		binary.LittleEndian.PutUint16(rec[52:54], 3)
-		binary.LittleEndian.PutUint16(rec[54:56], uint16(len(checked.Candidates)))
+		binary.LittleEndian.PutUint16(rec[54:56], uint16(prepared.candidateLen))
 		binary.LittleEndian.PutUint64(rec[64:72], a.owner)
 		binary.LittleEndian.PutUint64(rec[72:80], a.session)
 		binary.LittleEndian.PutUint64(rec[80:88], a.generation)
@@ -692,7 +806,7 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 		a.provenanceFlags = 0
 		committed = a.validatedHandle(m, r.slot)
 	}
-	_, status = in.Manager.CommitPrivateB4Definition(in.Lease, in.Selection, prepareCommit, publish)
+	_, status = in.Manager.CommitPrivateB4DefinitionBorrowed(in.Lease, in.Selection, prepareCommit, publish)
 	if status != sessionruntime.PrivateB4Selected {
 		return restrictedValidatedDefinition{}, errRestrictedBusy
 	}

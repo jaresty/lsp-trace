@@ -46,7 +46,7 @@ func fixtureRequest(method string, include bool) transport.Request {
 	}
 	params += `}`
 	return transport.Request{SessionID: "exact-fixture", Generation: 7, Method: method, Params: json.RawMessage(params),
-		Deadline: time.Now().Add(20 * time.Second), MaxMessages: 5, MaxBytes: 8192}
+		Deadline: time.Now().Add(10 * time.Second), MaxMessages: 5, MaxBytes: 8192}
 }
 
 func fixtureResponse(raw string) sessionruntime.RoundTripResult {

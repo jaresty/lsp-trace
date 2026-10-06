@@ -24,6 +24,20 @@ func stageBFailure(t *testing.T, assertion, detail string) {
 	t.Helper()
 	t.Fatalf(`{"kind":"STAGE_B_SEMANTIC_RED_CANDIDATE","assertion":%q,"detail":%q}`, assertion, detail)
 }
+func privateB4BorrowedResult(t *testing.T, result RoundTripResult) []byte {
+	t.Helper()
+	lease, ok := result.PrivateB4ResultLease()
+	if !ok {
+		return nil
+	}
+	var copied []byte
+	if err := lease.WithBytes(func(raw []byte) error { copied = append([]byte(nil), raw...); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	lease.Release()
+	return copied
+}
+
 func stageBSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey) {
 	t.Helper()
 	m, s, req, owner, child := b4LeaseManager(t, f, "A")
@@ -39,9 +53,9 @@ func stageBSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, B4De
 	case <-time.After(time.Second):
 		stageBBlocked(t, "fixture WRITE/READ did not finish")
 	}
-	write, wok := result.CompletedMethodRequestFrame()
+	write, wok := privateB4BorrowedRequestFrame(t, result)
 	read, rok := result.CompletedDefinitionResponseFrame()
-	if !wok || !rok || !bytes.Equal(write, b4LeaseGet(t, f, "A/request.frame")) || !bytes.Equal(read, b4LeaseGet(t, f, "A/response.frame")) || !bytes.Equal(result.Result, b4LeaseGet(t, f, "A/response.result")) {
+	if !wok || !rok || !bytes.Equal(write, b4LeaseGet(t, f, "A/request.frame")) || !bytes.Equal(read, b4LeaseGet(t, f, "A/response.frame")) || !bytes.Equal(privateB4BorrowedResult(t, result), b4LeaseGet(t, f, "A/response.result")) {
 		stageBBlocked(t, "actual selected WRITE/READ/result not pinned A bytes")
 	}
 	return m, child, lease, B4DefinitionSelectionKey{SessionID: s.SessionID, Key: result.Key, Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey}
@@ -68,12 +82,12 @@ func TestADR0011StageB02WrongIdentityV1(t *testing.T) {
 		{SessionID: selection.SessionID, Key: selection.Key, Transaction: selection.Transaction, CompletedOwnerKey: "wrong"},
 	}
 	for i, key := range bad {
-		capture, status := m.ConsumePrivateB4Definition(lease, key)
+		capture, status := consumePrivateB4SnapshotForTest(m, lease, key)
 		if status != PrivateB4Unavailable || capture.SessionID != "" || capture.Key != (lspwire.RequestKey{}) || len(capture.RequestFrame) != 0 || len(capture.ResponseFrame) != 0 || len(capture.Result) != 0 {
 			stageBFailure(t, "B02_WRONG_IDENTITY", fmt.Sprintf("component %d accepted or disclosed", i))
 		}
 	}
-	capture, status := m.ConsumePrivateB4Definition(lease, selection)
+	capture, status := consumePrivateB4SnapshotForTest(m, lease, selection)
 	if status != PrivateB4Selected || !bytes.Equal(capture.ResponseFrame, b4LeaseGet(t, f, "A/response.frame")) {
 		stageBBlocked(t, "negative attempts destroyed valid lease control")
 	}
@@ -83,11 +97,11 @@ func TestADR0011StageB02WrongIdentityV1(t *testing.T) {
 func TestADR0011StageB03ReplayV1(t *testing.T) {
 	f := stageBControls(t)
 	m, _, lease, key := stageBSelected(t, f)
-	first, status := m.ConsumePrivateB4Definition(lease, key)
+	first, status := consumePrivateB4SnapshotForTest(m, lease, key)
 	if status != PrivateB4Selected || !bytes.Equal(first.RequestFrame, b4LeaseGet(t, f, "A/request.frame")) || !bytes.Equal(first.ResponseFrame, b4LeaseGet(t, f, "A/response.frame")) || !bytes.Equal(first.Result, b4LeaseGet(t, f, "A/response.result")) {
 		stageBBlocked(t, "first exact consumption absent")
 	}
-	second, again := m.ConsumePrivateB4Definition(lease, key)
+	second, again := consumePrivateB4SnapshotForTest(m, lease, key)
 	if again != PrivateB4Unavailable || second.SessionID != "" || len(second.ResponseFrame) != 0 || len(second.Result) != 0 {
 		stageBFailure(t, "B03_REPLAY", "second consumption yielded state or captured bytes")
 	}
@@ -96,6 +110,28 @@ func TestADR0011StageB03ReplayV1(t *testing.T) {
 // This STOP fixture deliberately does not use b4LeaseManager's background-context
 // cleanup: a broken lifecycle must not hang the test process after a timeout.
 func stageBStopSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey) {
+	m, child, lease, key, _ := stageBStopSelectedWithPair(t, f, false)
+	return m, child, lease, key
+}
+
+func stageBStopSelectedWithPair(t *testing.T, f b4ID1Fixture, capturePair bool) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey, RoundTripResult) {
+	return stageBStopSelectedWithOptions(t, f, capturePair, false)
+}
+
+func stageBStopSelectedWithOptions(t *testing.T, f b4ID1Fixture, capturePair, notification bool) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey, RoundTripResult) {
+	return stageBStopSelectedWithResponseOptions(t, f, capturePair, notification, nil, nil)
+}
+
+func stageBStopSelectedWithServerError(t *testing.T, f b4ID1Fixture, serverError *lspwire.RPCError) (*Manager, *b4LeaseChild, B4DefinitionSelectionKey, RoundTripResult) {
+	m, child, _, key, result := stageBStopSelectedWithResponseOptions(t, f, false, false, serverError, nil)
+	return m, child, key, result
+}
+
+func stageBStopSelectedWithResponses(t *testing.T, f b4ID1Fixture, responses []lspwire.Message) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey, RoundTripResult) {
+	return stageBStopSelectedWithResponseOptions(t, f, false, false, nil, responses)
+}
+
+func stageBStopSelectedWithResponseOptions(t *testing.T, f b4ID1Fixture, capturePair, notification bool, serverError *lspwire.RPCError, responses []lspwire.Message) (*Manager, *b4LeaseChild, B4DefinitionLease, B4DefinitionSelectionKey, RoundTripResult) {
 	t.Helper()
 	var declaration struct {
 		Session           string `json:"session"`
@@ -116,7 +152,7 @@ func stageBStopSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, 
 	if err != nil {
 		stageBBlocked(t, "STOP profile: "+err.Error())
 	}
-	child := b4LeaseScript(f, t, "A")
+	child := b4LeaseScriptWithResponse(f, t, "A", notification, serverError, responses)
 	m, err := New(Config{Limits: Limits{MaxSessions: 1, MaxRequests: 1, MaxChildren: 2, MaxCancels: 2, MaxTombstones: 4, MaxObservations: 64, MaxOperations: 2}, Starter: oneChildStarter{child}})
 	if err != nil {
 		stageBBlocked(t, "STOP manager: "+err.Error())
@@ -134,13 +170,19 @@ func stageBStopSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, 
 	if s.SessionID != declaration.Session || s.Generation != declaration.Generation || s.Generation != 1 {
 		stageBBlocked(t, "STOP session/generation identity")
 	}
-	if ready := m.ObserveInitialization(s.SessionID, s.Generation, true); ready.State != session.Ready {
-		stageBBlocked(t, "STOP readiness")
+	pending := m.BeginReadiness(context.Background(), s.SessionID, s.Generation, time.Now().Add(time.Second))
+	if ready, found := m.WaitReadiness(context.Background(), pending.ID); !found || ready.State != ReadinessReady || ready.Failure != "" {
+		stageBBlocked(t, fmt.Sprintf("STOP readiness=%+v found=%v", ready, found))
 	}
-	req := RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/definition", Params: json.RawMessage(b4LeaseGet(t, f, "A/request.params")), Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 4096, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/request.frame")))}
+	maxMessages := 1
+	if notification {
+		maxMessages++
+	}
+	maxMessages += len(responses)
+	req := RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: "textDocument/definition", Params: json.RawMessage(b4LeaseGet(t, f, "A/request.params")), Deadline: time.Now().Add(time.Second), MaxMessages: maxMessages, MaxBytes: 4096, CaptureOwnedMethodPair: capturePair, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/request.frame")))}
 	owner := B4DefinitionOwner{Transaction: declaration.Transaction, CompletedOwnerKey: declaration.CompletedOwnerKey}
 	result, lease := m.RoundTripPrivateB4(context.Background(), req, owner)
-	if result.Failure != "" || result.ServerError != nil || result.Key != (lspwire.RequestKey{Generation: 1, ID: 1}) || lease == (B4DefinitionLease{}) {
+	if result.Failure != "" || result.ServerError != nil || result.Key != (lspwire.RequestKey{Generation: 1, ID: 1}) || (serverError == nil && lease == (B4DefinitionLease{})) || (serverError != nil && lease != (B4DefinitionLease{})) {
 		stageBBlocked(t, "STOP selected lease absent")
 	}
 	select {
@@ -151,12 +193,14 @@ func stageBStopSelected(t *testing.T, f b4ID1Fixture) (*Manager, *b4LeaseChild, 
 	case <-time.After(time.Second):
 		stageBBlocked(t, "STOP fixture no WRITE/READ")
 	}
-	write, wok := result.CompletedMethodRequestFrame()
-	read, rok := result.CompletedDefinitionResponseFrame()
-	if !wok || !rok || !bytes.Equal(write, b4LeaseGet(t, f, "A/request.frame")) || !bytes.Equal(read, b4LeaseGet(t, f, "A/response.frame")) || !bytes.Equal(result.Result, b4LeaseGet(t, f, "A/response.result")) {
-		stageBBlocked(t, "STOP selected bytes mismatch")
+	if serverError == nil {
+		write, wok := privateB4BorrowedRequestFrame(t, result)
+		read, rok := result.CompletedDefinitionResponseFrame()
+		if !wok || !rok || !bytes.Equal(write, b4LeaseGet(t, f, "A/request.frame")) || !bytes.Equal(read, b4LeaseGet(t, f, "A/response.frame")) || !bytes.Equal(privateB4BorrowedResult(t, result), b4LeaseGet(t, f, "A/response.result")) {
+			stageBBlocked(t, "STOP selected bytes mismatch")
+		}
 	}
-	return m, child, lease, B4DefinitionSelectionKey{SessionID: s.SessionID, Key: result.Key, Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey}
+	return m, child, lease, B4DefinitionSelectionKey{SessionID: s.SessionID, Key: result.Key, Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey}, result
 }
 
 // T4: completed STOP retires the old selected lease, not merely its lookup.
@@ -221,7 +265,7 @@ func TestADR0011StageB04StoppedLeaseV1(t *testing.T) {
 	case <-time.After(time.Second):
 		stageBBlocked(t, "shutdown fixture not joined")
 	}
-	capture, status := m.ConsumePrivateB4Definition(lease, key)
+	capture, status := consumePrivateB4SnapshotForTest(m, lease, key)
 	if status != PrivateB4Unavailable || capture.SessionID != "" || len(capture.ResponseFrame) != 0 {
 		stageBFailure(t, "B04_STOP_STALE", "stopped lease still consumable")
 	}
@@ -342,7 +386,8 @@ func TestADR0011StageB05CapacityCleanupV1(t *testing.T) {
 		stageBBlocked(t, "failed-capture fixture unfinished")
 	}
 	selectedRead, readOK := outcome.CompletedResponseRead()
-	if outcome.Failure != "" || outcome.ServerError != nil || outcome.Key.ID != 1 || !readOK || selectedRead.Key != outcome.Key || selectedRead.SessionID != small.SessionID || !bytes.Equal(outcome.Result, b4LeaseGet(t, f, "A/response.result")) || noCapture != (B4DefinitionLease{}) {
+	_, resultLeaseOK := outcome.PrivateB4ResultLease()
+	if outcome.Failure != "" || outcome.ServerError != nil || outcome.Key.ID != 1 || !readOK || selectedRead.Key != outcome.Key || selectedRead.SessionID != small.SessionID || resultLeaseOK || len(outcome.Result) != 0 || noCapture != (B4DefinitionLease{}) {
 		stageBBlocked(t, "selected READ with failed frame retention not reached")
 	}
 	failed.mu.Lock()

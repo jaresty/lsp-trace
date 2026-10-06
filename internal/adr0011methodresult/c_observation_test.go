@@ -88,9 +88,10 @@ func cFixtureManager(t *testing.T, profile runtimeprofile.Selector, child *compo
 		_ = manager.Shutdown(context.Background())
 	})
 	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
-	if started.SessionID != req.SessionID || started.Generation != req.Generation || manager.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
-		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: readiness/identity")
+	if started.SessionID != req.SessionID || started.Generation != req.Generation {
+		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: identity")
 	}
+	composedRequireReadiness(t, manager, started)
 	return manager, started
 }
 func cExactWrite(t *testing.T, child *composedChild) {
@@ -185,7 +186,12 @@ func cMalformedChild(t *testing.T, in v5.B4bFullCandidateInput) (*composedChild,
 	stdout, output := io.Pipe()
 	child := &composedChild{input: input, stdin: stdin, output: output, stdout: stdout, observed: make(chan error, 1)}
 	go func() {
-		_, _, frame, retained, err := lspwire.NewReader(input, lspwire.DefaultLimits()).ReadWithFrameIfWithin(4096)
+		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+		if err := composedServeReadiness(reader, output); err != nil {
+			child.observed <- err
+			return
+		}
+		_, _, frame, retained, err := reader.ReadWithFrameIfWithin(4096)
 		if err != nil || !retained || !bytes.Equal(frame, in.Write.RequestFrame) {
 			child.observed <- fmt.Errorf("exact WRITE: %v", err)
 			return

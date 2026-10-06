@@ -155,7 +155,7 @@ func TestADR0011PrivateLifecycleRestartRetiresOldLease(t *testing.T) {
 		lifecycleBlocked(t, fmt.Sprintf("successor generation %d", generation))
 	}
 	// Action reached; a lookup refusal alone does not prove accounting release.
-	stale, availability := m.ConsumePrivateB4Definition(oldLease, key)
+	stale, availability := consumePrivateB4SnapshotForTest(m, oldLease, key)
 	if availability != PrivateB4Unavailable || stale.SessionID != "" || len(stale.ResponseFrame) != 0 {
 		lifecycleRed(t, "RESTART_OLD_LEASE", "late old-generation consumption succeeded")
 	}
@@ -183,11 +183,11 @@ func TestADR0011PrivateLifecycleRestartRetiresOldLease(t *testing.T) {
 		lifecycleRed(t, "RESTART_NEW_LEASE", fmt.Sprintf("new selection failure=%s key=%+v", result.Failure, result.Key))
 	}
 	newKey := B4DefinitionSelectionKey{SessionID: key.SessionID, Key: result.Key, Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey}
-	capture, status := m.ConsumePrivateB4Definition(newLease, newKey)
+	capture, status := consumePrivateB4SnapshotForTest(m, newLease, newKey)
 	if status != PrivateB4Selected || !bytes.Equal(capture.ResponseFrame, b4LeaseGet(t, f, "A/response.frame")) {
 		lifecycleRed(t, "RESTART_NEW_LEASE", "new lease not consumable")
 	}
-	if retained, got := other.ConsumePrivateB4Definition(otherLease, otherKey); got != PrivateB4Selected || len(retained.ResponseFrame) == 0 {
+	if retained, got := consumePrivateB4SnapshotForTest(other, otherLease, otherKey); got != PrivateB4Selected || len(retained.ResponseFrame) == 0 {
 		lifecycleRed(t, "RESTART_UNRELATED_LEASE", "unrelated manager lease lost")
 	}
 }
@@ -318,10 +318,36 @@ func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = child.Teardown(context.Background()); _ = child.Close() })
 	started := m.Start(context.Background(), StartRequest{Profile: runtimeprofile.Resolve(validated)})
-	if started.SessionID != declaration.Session || started.Generation != declaration.Generation || m.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
+	if started.SessionID != declaration.Session || started.Generation != declaration.Generation {
 		lifecycleBlocked(t, "cancel readiness/identity")
 	}
+	readinessServed := make(chan error, 1)
+	go func() {
+		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+		initialize, err := reader.Read()
+		if err != nil || initialize.Method != "initialize" || len(initialize.ID) == 0 {
+			readinessServed <- fmt.Errorf("initialize: %v", err)
+			return
+		}
+		if err := lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: initialize.ID, Result: json.RawMessage(`{"capabilities":{}}`)}); err != nil {
+			readinessServed <- err
+			return
+		}
+		initialized, err := reader.Read()
+		if err != nil || initialized.Method != "initialized" || len(initialized.ID) != 0 {
+			readinessServed <- fmt.Errorf("initialized: %v", err)
+			return
+		}
+		readinessServed <- nil
+	}()
+	pending := m.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	ready, found := m.WaitReadiness(context.Background(), pending.ID)
+	if err := <-readinessServed; err != nil || !found || ready.State != ReadinessReady || ready.Failure != "" {
+		lifecycleBlocked(t, fmt.Sprintf("cancel readiness=%+v found=%v err=%v", ready, found, err))
+	}
 	req := RoundTripRequest{SessionID: started.SessionID, Generation: started.Generation, Method: "textDocument/definition", Params: json.RawMessage(b4LeaseGet(t, f, "A/request.params")), Deadline: time.Now().Add(3 * time.Second), MaxMessages: 1, MaxBytes: 4096, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, "A/request.frame")))}
+	decodedCalls := 0
+	m.b4DecodedHooks.reserve = func(*privateB4ByteAccountV2, uint64) { decodedCalls++ }
 	owner := B4DefinitionOwner{Transaction: declaration.Transaction, CompletedOwnerKey: declaration.CompletedOwnerKey}
 	expectedWrite := b4LeaseGet(t, f, "A/request.frame")
 	if !child.launchActor(func() {
@@ -365,6 +391,9 @@ func TestADR0011PrivateLifecycleCancellationJoin(t *testing.T) {
 	}
 	if got.result.Failure != session.RequestCancelled || got.lease != (B4DefinitionLease{}) {
 		lifecycleRed(t, "CANCEL_NO_LEASE", fmt.Sprintf("failure=%s issued=%v", got.result.Failure, got.lease != (B4DefinitionLease{})))
+	}
+	if decodedCalls != 0 {
+		lifecycleRed(t, "ASSERT_C15_DECODED_CANCEL_ZERO", fmt.Sprintf("decoded owners=%d", decodedCalls))
 	}
 	if slots, charged = lifecycleCharge(m); slots != 0 || charged != 0 {
 		lifecycleRed(t, "CANCEL_RELEASE", fmt.Sprintf("slots=%d bytes=%d", slots, charged))

@@ -16,7 +16,6 @@ import (
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/runtimeprofile"
-	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -25,6 +24,34 @@ import (
 const composedManifestSHA = "e2d1880bd3fc09ca6c2e1f6f186d4d387d745cc10e72522597101d1d661ceb4b"
 
 func bridgeDigest(b []byte) string { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
+
+func composedPrivateB4Result(t *testing.T, result sessionruntime.RoundTripResult) ([]byte, bool) {
+	t.Helper()
+	lease, ok := result.PrivateB4ResultLease()
+	if !ok {
+		return nil, false
+	}
+	var raw []byte
+	if err := lease.WithBytes(func(b []byte) error { raw = append([]byte(nil), b...); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { lease.Release() })
+	return raw, true
+}
+
+func composedPrivateB4RequestFrame(t *testing.T, result sessionruntime.RoundTripResult) ([]byte, bool) {
+	t.Helper()
+	lease, ok := result.PrivateB4RequestFrameLease()
+	if !ok {
+		return nil, false
+	}
+	var frame []byte
+	if err := lease.WithBytes(func(b []byte) error { frame = append([]byte(nil), b...); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { lease.Release() })
+	return frame, true
+}
 
 type composedChild struct {
 	input    *io.PipeReader
@@ -45,6 +72,31 @@ func (c *composedChild) Teardown(context.Context) managedprocess.TeardownObserva
 func (c *composedChild) Close() managedprocess.ResourceObservation {
 	_ = c.stdout.Close()
 	return managedprocess.ResourceObservation{Kind: managedprocess.ResourcesClosed}
+}
+
+func composedServeReadiness(reader *lspwire.Reader, output io.Writer) error {
+	initialize, err := reader.Read()
+	if err != nil || initialize.Method != "initialize" || len(initialize.ID) == 0 {
+		return fmt.Errorf("initialize: %v", err)
+	}
+	body := []byte(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"definitionProvider":true}}}`, initialize.ID))
+	if _, err := fmt.Fprintf(output, "Content-Length: %d\r\n\r\n%s", len(body), body); err != nil {
+		return fmt.Errorf("initialize response: %w", err)
+	}
+	initialized, err := reader.Read()
+	if err != nil || initialized.Method != "initialized" || len(initialized.ID) != 0 {
+		return fmt.Errorf("initialized: %v", err)
+	}
+	return nil
+}
+
+func composedRequireReadiness(t *testing.T, manager *sessionruntime.Manager, started sessionruntime.StartResult) {
+	t.Helper()
+	pending := manager.BeginReadiness(context.Background(), started.SessionID, started.Generation, time.Now().Add(time.Second))
+	ready, found := manager.WaitReadiness(context.Background(), pending.ID)
+	if !found || ready.State != sessionruntime.ReadinessReady || ready.Failure != "" {
+		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: manager readiness=%+v found=%v", ready, found)
+	}
 }
 
 type composedStarter struct{ child sessionruntime.Child }
@@ -179,6 +231,10 @@ func composedFixture(t *testing.T, assets map[string]bridgeAsset, root, caseName
 		child := &composedChild{input: input, stdin: stdin, output: output, stdout: stdout, observed: make(chan error, 1)}
 		go func() {
 			r := lspwire.NewReader(input, lspwire.DefaultLimits())
+			if err := composedServeReadiness(r, output); err != nil {
+				child.observed <- err
+				return
+			}
 			msg, _, frame, retained, err := r.ReadWithFrameIfWithin(4096)
 			if err != nil || !retained || !bytes.Equal(frame, in.Write.RequestFrame) || msg.Method != d.Method || !bytes.Equal(msg.ID, []byte("1")) {
 				child.observed <- fmt.Errorf("exact WRITE: %v", err)
@@ -224,9 +280,10 @@ func TestADR0011PrivateComposedManagerDefinition(t *testing.T) {
 				_ = manager.Shutdown(context.Background())
 			})
 			started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
-			if started.SessionID != req.SessionID || started.Generation != req.Generation || manager.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
-				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s manager readiness/identity", c)
+			if started.SessionID != req.SessionID || started.Generation != req.Generation {
+				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s manager identity", c)
 			}
+			composedRequireReadiness(t, manager, started)
 			result, lease := manager.RoundTripPrivateB4(context.Background(), req, owner)
 			if result.Failure != "" || result.ServerError != nil || lease == (sessionruntime.B4DefinitionLease{}) || result.Key != (lspwire.RequestKey{Generation: 1, ID: 1}) {
 				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s private manager selection failure=%s", c, result.Failure)
@@ -239,9 +296,10 @@ func TestADR0011PrivateComposedManagerDefinition(t *testing.T) {
 			case <-time.After(3 * time.Second):
 				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s WRITE witness timeout", c)
 			}
-			requestFrame, writeOK := result.CompletedMethodRequestFrame()
+			requestFrame, writeOK := composedPrivateB4RequestFrame(t, result)
 			responseFrame, readOK := result.CompletedDefinitionResponseFrame()
-			if !writeOK || !readOK || !bytes.Equal(requestFrame, in.Write.RequestFrame) || !bytes.Equal(responseFrame, bridgeAssetBytes(t, root, c+"/response.frame", assets)) || !bytes.Equal(result.Result, bridgeAssetBytes(t, root, c+"/response.result", assets)) {
+			resultBytes, resultOK := composedPrivateB4Result(t, result)
+			if !writeOK || !readOK || !resultOK || !bytes.Equal(requestFrame, in.Write.RequestFrame) || !bytes.Equal(responseFrame, bridgeAssetBytes(t, root, c+"/response.frame", assets)) || !bytes.Equal(resultBytes, bridgeAssetBytes(t, root, c+"/response.result", assets)) {
 				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s exact manager WRITE/READ/result", c)
 			}
 			selection := sessionruntime.B4DefinitionSelectionKey{SessionID: started.SessionID, Key: result.Key, Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey}

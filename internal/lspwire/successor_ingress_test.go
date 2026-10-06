@@ -42,6 +42,151 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
+type successorAllocationLeaseProbe struct{ releases int }
+
+func (l *successorAllocationLeaseProbe) Release() { l.releases++ }
+
+type successorAllocationOwnerProbe struct {
+	role       SuccessorAllocationRole
+	capacity   uint64
+	lease      *successorAllocationLeaseProbe
+	roles      []SuccessorAllocationRole
+	capacities []uint64
+	leases     []*successorAllocationLeaseProbe
+	reject     bool
+	rejectRole SuccessorAllocationRole
+}
+
+func (o *successorAllocationOwnerProbe) ReserveSuccessorAllocation(role SuccessorAllocationRole, capacity uint64) (SuccessorAllocationLease, error) {
+	o.role, o.capacity = role, capacity
+	o.roles = append(o.roles, role)
+	o.capacities = append(o.capacities, capacity)
+	if o.reject || o.rejectRole == role {
+		return nil, errors.New("refused")
+	}
+	o.lease = &successorAllocationLeaseProbe{}
+	o.leases = append(o.leases, o.lease)
+	return o.lease, nil
+}
+
+func TestSuccessorIngressPrefetchAllocationLease(t *testing.T) {
+	owner := &successorAllocationOwnerProbe{}
+	opts := testSuccessorOptions()
+	opts.AllocationOwner = owner
+	r, err := NewSuccessorIngressReader(bytes.NewReader(nil), opts)
+	if err != nil || owner.role != SuccessorAllocationPrefetch || owner.capacity != 4096 || owner.lease == nil {
+		t.Fatalf("prefetch reservation: reader=%v err=%v owner=%+v", r, err, owner)
+	}
+	r.Close()
+	r.Close()
+	if owner.lease.releases != 1 {
+		t.Fatalf("prefetch release count=%d", owner.lease.releases)
+	}
+
+	reject := &successorAllocationOwnerProbe{reject: true}
+	opts.AllocationOwner = reject
+	if got, err := NewSuccessorIngressReader(bytes.NewReader(nil), opts); got != nil || !errors.Is(err, errIngressReserve) {
+		t.Fatalf("prefetch refusal: reader=%v err=%v", got, err)
+	}
+}
+
+func TestSuccessorIngressHeaderAllocationLease(t *testing.T) {
+	body := successorMessage()
+	frame := append(successorHeader(len(body)), body...)
+	owner := &successorAllocationOwnerProbe{}
+	opts := testSuccessorOptions()
+	opts.AllocationOwner = owner
+	r, err := NewSuccessorIngressReader(bytes.NewReader(frame), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadFrame(); err != nil {
+		t.Fatal(err)
+	}
+	if len(owner.roles) != 5 || owner.roles[1] != SuccessorAllocationHeader || owner.capacities[1] != testSuccessorHeaderLimit+1 ||
+		owner.roles[2] != SuccessorAllocationConsumeScratch || owner.capacities[2] != uint64(len(successorHeader(len(body)))) ||
+		owner.roles[3] != SuccessorAllocationBody || owner.capacities[3] != uint64(len(body)) ||
+		owner.roles[4] != SuccessorAllocationConsumeScratch || owner.capacities[4] != uint64(len(body)) {
+		t.Fatalf("frame reservation roles=%v capacities=%v", owner.roles, owner.capacities)
+	}
+	for i, lease := range owner.leases {
+		want := 1
+		if i == 0 {
+			want = 0
+		}
+		if lease.releases != want {
+			t.Fatalf("frame lifetime lease[%d]=%d want=%d", i, lease.releases, want)
+		}
+	}
+	r.Close()
+	for i, lease := range owner.leases {
+		if lease.releases != 1 {
+			t.Fatalf("close lifetime lease[%d]=%d", i, lease.releases)
+		}
+	}
+
+	reject := &successorAllocationOwnerProbe{rejectRole: SuccessorAllocationHeader}
+	opts.AllocationOwner = reject
+	r, err = NewSuccessorIngressReader(bytes.NewReader(frame), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadFrame(); !errors.Is(err, errIngressReserve) {
+		t.Fatalf("header refusal err=%v", err)
+	}
+	r.Close()
+	if len(reject.leases) != 1 || reject.leases[0].releases != 1 {
+		t.Fatalf("header refusal prefetch cleanup leases=%v", reject.leases)
+	}
+
+	reject = &successorAllocationOwnerProbe{rejectRole: SuccessorAllocationBody}
+	opts.AllocationOwner = reject
+	r, err = NewSuccessorIngressReader(bytes.NewReader(frame), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadFrame(); !errors.Is(err, errIngressReserve) {
+		t.Fatalf("body refusal err=%v", err)
+	}
+	r.Close()
+	if len(reject.leases) != 3 {
+		t.Fatalf("body refusal cleanup leases=%v", reject.leases)
+	}
+	for i, lease := range reject.leases {
+		if lease.releases != 1 {
+			t.Fatalf("body refusal lease[%d]=%d", i, lease.releases)
+		}
+	}
+}
+
+func TestSuccessorIngressConsumeScratchPartialAndRefusal(t *testing.T) {
+	owner := &successorAllocationOwnerProbe{}
+	r := &SuccessorIngressReader{
+		options:  SuccessorIngressOptions{AllocationOwner: owner, Limits: SuccessorIngressLimits{ConsumptionBytes: 1}},
+		prefetch: []byte("abc"),
+	}
+	var dst []byte
+	if err := r.consumeCopy(&dst, 3); !errors.Is(err, errIngressConsume) {
+		t.Fatalf("partial consume err=%v", err)
+	}
+	if string(dst) != "ab" || string(r.prefetch) != "c" || len(owner.roles) != 1 || owner.roles[0] != SuccessorAllocationConsumeScratch || owner.capacities[0] != 3 || owner.leases[0].releases != 1 {
+		t.Fatalf("partial consume dst=%q prefetch=%q roles=%v capacities=%v", dst, r.prefetch, owner.roles, owner.capacities)
+	}
+
+	reject := &successorAllocationOwnerProbe{rejectRole: SuccessorAllocationConsumeScratch}
+	r = &SuccessorIngressReader{
+		options:  SuccessorIngressOptions{AllocationOwner: reject, Limits: SuccessorIngressLimits{ConsumptionBytes: 10}},
+		prefetch: []byte("xyz"),
+	}
+	dst = []byte("keep")
+	if err := r.consumeCopy(&dst, 9); !errors.Is(err, errIngressReserve) {
+		t.Fatalf("scratch refusal err=%v", err)
+	}
+	if string(dst) != "keep" || string(r.prefetch) != "xyz" || r.consumed != 0 || len(reject.roles) != 1 || reject.capacities[0] != 3 {
+		t.Fatalf("scratch refusal dst=%q prefetch=%q consumed=%d roles=%v capacities=%v", dst, r.prefetch, r.consumed, reject.roles, reject.capacities)
+	}
+}
+
 type successorCapture struct{ frames [][]byte }
 
 func (c *successorCapture) ObserveOriginalFrame(p []byte) {
@@ -78,7 +223,7 @@ func (r *successorScriptReader) Read(p []byte) (int, error) {
 
 func TestSuccessorIngressHistoryBoundsAndNoRetrocharge(t *testing.T) {
 	o := testSuccessorOptions()
-	o.History = &ImmutableHistoryMetadata{Identity: "history", Cut: "cut", Acquired: 8388608, Outstanding: 8388608}
+	o.History = &ImmutableHistoryMetadata{Identity: "history", Cut: "cut", Entries: 1, CutOrdinal: 1, Acquired: 8388608, Outstanding: 8388608}
 	frame := append(successorHeader(30), successorMessage()...)
 	r, err := NewSuccessorIngressReader(bytes.NewReader(frame), o)
 	if err != nil {
@@ -94,7 +239,7 @@ func TestSuccessorIngressHistoryBoundsAndNoRetrocharge(t *testing.T) {
 		t.Fatalf("history mutated: %+v", *o.History)
 	}
 
-	o.History = &ImmutableHistoryMetadata{Identity: "history", Cut: "cut", Acquired: 8388609}
+	o.History = &ImmutableHistoryMetadata{Identity: "history", Cut: "cut", Entries: 1, CutOrdinal: 1, Acquired: 8388609}
 	if _, err := NewSuccessorIngressReader(bytes.NewReader(nil), o); err == nil {
 		t.Fatal("history acquired over bound accepted")
 	}

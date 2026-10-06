@@ -32,6 +32,12 @@ type successorBoundaryCappedReader struct {
 	max   int
 }
 
+type successorBoundaryCapture struct{ frames [][]byte }
+
+func (c *successorBoundaryCapture) ObserveOriginalFrame(frame []byte) {
+	c.frames = append(c.frames, append([]byte(nil), frame...))
+}
+
 func (r *successorBoundaryCappedReader) Read(p []byte) (int, error) {
 	if len(p) > r.max {
 		r.max = len(p)
@@ -194,6 +200,65 @@ func TestSuccessorBoundaryCumulativeCrossing(t *testing.T) {
 	}
 	if r.consumed != 8388609 || r.validated != 8388608 {
 		t.Fatalf("cross C/V=%d/%d want 8388609/8388608", r.consumed, r.validated)
+	}
+}
+
+func TestSuccessorBoundaryMessageAttemptReachedPrecedence(t *testing.T) {
+	r := &SuccessorIngressReader{}
+	for _, tc := range []struct {
+		name string
+		in   ingressReached
+		want ingressOutcome
+	}{
+		{name: "preflight", in: ingressReached{Preflight: errors.New("preflight"), MessageAttempts: errIngressMessageAttempts}, want: ingressOutcomePreflight},
+		{name: "deadline", in: ingressReached{Deadline: errors.New("deadline"), MessageAttempts: errIngressMessageAttempts}, want: ingressOutcomeDeadline},
+		{name: "cancellation", in: ingressReached{Cancellation: errors.New("cancellation"), MessageAttempts: errIngressMessageAttempts}, want: ingressOutcomeCancellation},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := r.selectReached(tc.in); got.Kind != tc.want {
+				t.Fatalf("reached precedence=%v want %v", got.Kind, tc.want)
+			}
+		})
+	}
+}
+
+func TestSuccessorBoundaryMessageAttemptsAtAndOver(t *testing.T) {
+	frame := append(successorHeader(30), successorMessage()...)
+	stream := bytes.Repeat(frame, 66)
+	capture := &successorBoundaryCapture{}
+	s := &successorBoundaryCappedReader{r: bytes.NewReader(stream)}
+	options := testSuccessorOptions()
+	options.Limits.MessageAttempts = 64
+	options.Capture = capture
+	r, err := NewSuccessorIngressReader(s, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.recorder = &ingressTestRecorder{limit: 1024}
+	for i := 1; i <= 64; i++ {
+		if _, got := r.ReadFrame(); got != nil {
+			t.Fatalf("message %d at attempt bound: %v", i, got)
+		}
+	}
+	wantValidated := uint64(64 * len(frame))
+	if r.acquired != uint64(len(stream)) || r.consumed != wantValidated || r.validated != wantValidated || r.messageAttempts != 64 || len(capture.frames) != 64 || r.sealed {
+		t.Fatalf("at A/C/V/attempts/captures/sealed=%d/%d/%d/%d/%d/%v want %d/%d/%d/64/64/false", r.acquired, r.consumed, r.validated, r.messageAttempts, len(capture.frames), r.sealed, len(stream), wantValidated, wantValidated)
+	}
+	readsAt := s.calls
+	acquiredAt, eventsAt := r.acquired, len(r.recorder.events)
+	_, got := r.ReadFrame()
+	if !errors.Is(got, errIngressMessageAttempts) || !r.sealed || r.terminalOutcome != ingressOutcomeMessageAttempts {
+		t.Fatalf("65th outcome=%v sealed=%v terminal=%v", got, r.sealed, r.terminalOutcome)
+	}
+	if s.calls != readsAt || r.acquired != acquiredAt || r.consumed != wantValidated || r.validated != wantValidated || r.messageAttempts != 65 || len(capture.frames) != 64 {
+		t.Fatalf("65th reads/A/C/V/attempts/captures=%d/%d/%d/%d/%d/%d want %d/%d/%d/%d/65/64", s.calls, r.acquired, r.consumed, r.validated, r.messageAttempts, len(capture.frames), readsAt, acquiredAt, wantValidated, wantValidated)
+	}
+	if len(r.recorder.events) != eventsAt+2 || r.recorder.events[eventsAt].Stage != ingressEventSeal || r.recorder.events[eventsAt+1].Stage != ingressEventOutcome {
+		t.Fatalf("65th event order=%+v", r.recorder.events[eventsAt:])
+	}
+	_, again := r.ReadFrame()
+	if !errors.Is(again, errIngressSealed) || s.calls != readsAt || len(r.recorder.events) != eventsAt+2 || r.terminalOutcome != ingressOutcomeMessageAttempts {
+		t.Fatalf("66th err=%v reads=%d events=%d terminal=%v", again, s.calls, len(r.recorder.events), r.terminalOutcome)
 	}
 }
 

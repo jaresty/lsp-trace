@@ -40,7 +40,7 @@ func request(method string) Request {
 		params += `,"context":{"includeDeclaration":true}`
 	}
 	params += `}`
-	return Request{SessionID: "session-exact", Generation: 7, Method: method, Params: json.RawMessage(params), Deadline: time.Now().Add(20 * time.Second), MaxMessages: 5, MaxBytes: 8192}
+	return Request{SessionID: "session-exact", Generation: 7, Method: method, Params: json.RawMessage(params), Deadline: time.Now().Add(10 * time.Second), MaxMessages: 5, MaxBytes: 8192}
 }
 
 func TestBothMethodsForwardExactWireRequest(t *testing.T) {
@@ -55,7 +55,7 @@ func TestBothMethodsForwardExactWireRequest(t *testing.T) {
 			if f.calls != 1 {
 				t.Fatalf("ASSERT_SINGLE_ROUNDTRIP: got %d calls", f.calls)
 			}
-			if f.wire.SessionID != req.SessionID || f.wire.Generation != req.Generation || f.wire.Method != method || string(f.wire.Params) != string(req.Params) || !f.wire.Deadline.Equal(req.Deadline) || f.wire.MaxMessages != req.MaxMessages || f.wire.MaxBytes != req.MaxBytes {
+			if f.wire.SessionID != req.SessionID || f.wire.Generation != req.Generation || f.wire.Method != method || string(f.wire.Params) != string(req.Params) || !f.wire.Deadline.Equal(req.Deadline) || f.wire.MaxMessages != req.MaxMessages || f.wire.MaxBytes != req.MaxBytes || !f.wire.ADR0011PrivateP2 {
 				t.Fatalf("ASSERT_EXACT_WIRE_FIELDS: got %#v", f.wire)
 			}
 			if string(got.Raw()) != `[{}]` {
@@ -163,7 +163,7 @@ func TestContextTimeoutAndCancellationAreDistinct(t *testing.T) {
 		want outcome
 	}{{"timeout", context.DeadlineExceeded, timedOut}, {"canceled", context.Canceled, canceled}} {
 		t.Run(tc.name, func(t *testing.T) {
-			deadline := time.Now().Add(20 * time.Second)
+			deadline := time.Now().Add(10 * time.Second)
 			done := make(chan struct{})
 			close(done)
 			ctx := terminalContext{Context: context.Background(), err: tc.err, deadline: deadline, done: done}

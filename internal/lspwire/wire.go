@@ -342,6 +342,53 @@ func (w *Writer) Write(m Message) error {
 	return err
 }
 
+// WriteEncodedBodyPrivate writes one already-encoded JSON body without
+// re-marshaling it. It is reserved for bounded internal callers; Write remains
+// the ordinary public behavior. The caller must keep body immutable until the
+// method returns and must reserve body and canonical-header storage first.
+func (w *Writer) WriteEncodedBodyPrivate(body []byte) error {
+	if int64(len(body)) > w.limits.MaxBodyBytes {
+		return ErrFrameTooLarge
+	}
+	const prefix = "Content-Length: "
+	const suffix = "\r\n\r\n"
+	digits := 1
+	for n := len(body); n >= 10; n /= 10 {
+		digits++
+	}
+	headerLen := len(prefix) + digits + len(suffix)
+	header := make([]byte, headerLen)
+	n := copy(header, prefix)
+	headerDigits := strconv.AppendInt(header[:n], int64(len(body)), 10)
+	n = len(headerDigits)
+	copy(header[n:], suffix)
+
+	events := []Event{{Stage: EventMarshal, Bytes: int64(len(body))}}
+	w.mu.Lock()
+	n, err := writeExact(w.w, header)
+	events = append(events, Event{Stage: EventFrame, Bytes: int64(n), Closed: errors.Is(err, io.ErrClosedPipe)})
+	if err == nil {
+		n, err = writeExact(w.w, body)
+		events = append(events, Event{Stage: EventBodyWrite, Bytes: int64(n), Closed: errors.Is(err, io.ErrClosedPipe)})
+	}
+	if err == nil {
+		state := FlushUnavailable
+		if flusher, ok := w.w.(interface{ Flush() error }); ok {
+			state = FlushSucceeded
+			if err = flusher.Flush(); err != nil {
+				state = FlushFailed
+			}
+		}
+		events = append(events, Event{Stage: EventFlush, Flush: state, Closed: errors.Is(err, io.ErrClosedPipe)})
+	}
+	shouldDrain := w.enqueueEventsLocked(events)
+	w.mu.Unlock()
+	if shouldDrain {
+		w.drainEvents()
+	}
+	return err
+}
+
 func (w *Writer) enqueueEventsLocked(events []Event) bool {
 	w.eventMu.Lock()
 	defer w.eventMu.Unlock()

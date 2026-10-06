@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/session"
 	"lsp-trace/internal/strictjson"
 )
 
@@ -152,23 +153,40 @@ func eligibleOwnedMethodRequest(req RoundTripRequest) bool {
 	return (historical && (!req.ADR0011PrivateLimitAllocationV1 || req.Method == "textDocument/definition")) || eligibleADR0011PrivateLimitRequest(req)
 }
 
-func buildOwnedMethodPair(req RoundTripRequest, r RoundTripResult, params, raw json.RawMessage) *OwnedMethodPair {
-	if !eligibleOwnedMethodRequest(req) || r.ServerError != nil || r.Key.Generation != req.Generation || r.Key.ID == 0 ||
-		r.RequestMessages != 1 || r.RequestBytes < 1 || r.RequestBytes > req.MaxBytes ||
-		r.Messages < 1 || r.Messages > req.MaxMessages || r.Bytes < 1 || r.Bytes > req.MaxBytes ||
-		len(raw) < 1 || int64(len(raw)) > req.MaxBytes || !bytes.Equal(raw, r.Result) ||
-		r.requestWrite == nil || r.responseRead == nil || r.requestWrite.FrameBytes < 1 || r.responseRead.FrameBytes < 1 ||
-		r.requestWrite.SessionID != req.SessionID || r.responseRead.SessionID != req.SessionID ||
-		r.requestWrite.Generation != req.Generation || r.responseRead.Generation != req.Generation ||
-		r.requestWrite.Key != r.Key || r.responseRead.Key != r.Key || r.requestWrite.Method != req.Method {
-		return nil
-	}
-	pair := &OwnedMethodPair{SessionID: req.SessionID, Generation: req.Generation, Key: r.Key, Method: req.Method,
-		Params: append(json.RawMessage(nil), params...), Result: append(json.RawMessage(nil), raw...),
-		Write: *r.requestWrite, Read: *r.responseRead}
+func validOwnedMethodPair(req RoundTripRequest, r RoundTripResult, raw json.RawMessage) bool {
+	return eligibleOwnedMethodRequest(req) && r.ServerError == nil && r.Key.Generation == req.Generation && r.Key.ID != 0 &&
+		r.RequestMessages == 1 && r.RequestBytes >= 1 && r.RequestBytes <= req.MaxBytes &&
+		r.Messages >= 1 && r.Messages <= req.MaxMessages && r.Bytes >= 1 && r.Bytes <= req.MaxBytes &&
+		len(raw) >= 1 && int64(len(raw)) <= req.MaxBytes && bytes.Equal(raw, r.Result) &&
+		r.requestWrite != nil && r.responseRead != nil && r.requestWrite.FrameBytes >= 1 && r.responseRead.FrameBytes >= 1 &&
+		r.requestWrite.SessionID == req.SessionID && r.responseRead.SessionID == req.SessionID &&
+		r.requestWrite.Generation == req.Generation && r.responseRead.Generation == req.Generation &&
+		r.requestWrite.Key == r.Key && r.responseRead.Key == r.Key && r.requestWrite.Method == req.Method
+}
+
+func ownedMethodPairValue(req RoundTripRequest, r RoundTripResult, params, raw json.RawMessage) OwnedMethodPair {
+	pair := OwnedMethodPair{SessionID: req.SessionID, Generation: req.Generation, Key: r.Key, Method: req.Method,
+		Params: params, Result: raw, Write: *r.requestWrite, Read: *r.responseRead}
 	if req.ExpectedOwnedDocument != nil {
 		source := *req.ExpectedOwnedDocument
 		pair.Source = &source
 	}
 	return pair
+}
+
+func buildPrivateOwnedMethodPairOwner(account *privateB4ByteAccountV2, req RoundTripRequest, r RoundTripResult, params, raw json.RawMessage) (*privateB4OwnedMethodPairOwner, session.Failure) {
+	if !validOwnedMethodPair(req, r, raw) {
+		return nil, session.ResourceExhausted
+	}
+	return newPrivateB4OwnedMethodPairOwner(account, ownedMethodPairValue(req, r, params, raw))
+}
+
+func buildOwnedMethodPair(req RoundTripRequest, r RoundTripResult, params, raw json.RawMessage) *OwnedMethodPair {
+	if !validOwnedMethodPair(req, r, raw) {
+		return nil
+	}
+	value := ownedMethodPairValue(req, r, params, raw)
+	value.Params = append(json.RawMessage(nil), params...)
+	value.Result = append(json.RawMessage(nil), raw...)
+	return &value
 }

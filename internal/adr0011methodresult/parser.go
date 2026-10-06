@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	transport "lsp-trace/internal/adr0011methodtransport"
+	"lsp-trace/internal/objectadmission"
 	"lsp-trace/internal/strictjson"
 )
 
@@ -72,14 +73,19 @@ func ParseRawReferences(raw []byte, maxCandidates int) (Result, *Failure) {
 // transport outcome or producer custody. Only a separately bound transaction
 // record can use its output, and parsing alone never admits an occurrence.
 func parseRawUntrusted(method string, raw []byte, maxCandidates int) (Result, *Failure) {
+	return parseRawUntrustedWithAdmission(method, raw, maxCandidates, nil)
+}
+
+// parseRawUntrustedWithAdmission is the private C16 parser seam. It validates
+// the complete result before admitting any target and constructs each Item only
+// inside the admission callback. A nil admitter preserves ordinary parsing.
+func parseRawUntrustedWithAdmission(method string, raw []byte, maxCandidates int, admitter objectadmission.ObjectAdmitter) (Result, *Failure) {
 	if method != transport.MethodDefinition && method != transport.MethodReferences {
 		return Result{}, &Failure{Code: FailureMethod, Ordinal: -1}
 	}
 	if maxCandidates <= 0 {
 		return Result{}, &Failure{Code: FailureLimit, Ordinal: -1}
 	}
-	// Validate the complete result first, then check duplicate keys at each
-	// member boundary so a nested duplicate retains its response ordinal.
 	if !json.Valid(raw) {
 		return Result{}, &Failure{Code: FailureMalformed, Ordinal: -1}
 	}
@@ -97,9 +103,16 @@ func parseRawUntrusted(method string, raw []byte, maxCandidates int) (Result, *F
 		if err := strictjson.RejectDuplicates(trimmed); err != nil {
 			return Result{}, &Failure{Code: FailureMalformed, Ordinal: 0}
 		}
-		item, ok := parseItem(trimmed, 0)
-		if !ok || item.Kind != Location {
+		plan, ok := parseItemPlan(trimmed, 0)
+		if !ok || plan.kind != Location {
 			return Result{}, &Failure{Code: FailureMalformed, Ordinal: 0}
+		}
+		var item Item
+		if err := withObjectAdmission(admitter, func() error {
+			item = plan.materialize()
+			return nil
+		}); err != nil {
+			return Result{}, &Failure{Code: FailureResource, Ordinal: 0}
 		}
 		return Result{Items: []Item{item}}, nil
 	}
@@ -110,36 +123,83 @@ func parseRawUntrusted(method string, raw []byte, maxCandidates int) (Result, *F
 	if _, err := dec.Token(); err != nil {
 		return Result{}, &Failure{Code: FailureMalformed, Ordinal: -1}
 	}
-	items := make([]Item, 0)
+	plans := make([]privateItemPlan, 0)
 	var kind Kind
 	for dec.More() {
-		if len(items) >= maxCandidates {
-			return Result{}, &Failure{Code: FailureResource, Ordinal: len(items)}
+		if len(plans) >= maxCandidates {
+			return Result{}, &Failure{Code: FailureResource, Ordinal: len(plans)}
 		}
 		var member json.RawMessage
 		if err := dec.Decode(&member); err != nil {
-			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(items)}
+			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(plans)}
 		}
 		if err := strictjson.RejectDuplicates(member); err != nil {
-			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(items)}
+			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(plans)}
 		}
-		item, ok := parseItem(member, len(items))
-		if !ok || method == transport.MethodReferences && item.Kind != Location || kind != "" && kind != item.Kind {
-			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(items)}
+		plan, ok := parseItemPlan(member, len(plans))
+		if !ok || method == transport.MethodReferences && plan.kind != Location || kind != "" && kind != plan.kind {
+			return Result{}, &Failure{Code: FailureMalformed, Ordinal: len(plans)}
 		}
-		kind = item.Kind
-		items = append(items, item)
+		kind = plan.kind
+		plans = append(plans, plan)
 	}
 	if _, err := dec.Token(); err != nil {
 		return Result{}, &Failure{Code: FailureMalformed, Ordinal: -1}
 	}
+	items := make([]Item, 0, len(plans))
+	for i := range plans {
+		if err := withObjectAdmission(admitter, func() error {
+			items = append(items, plans[i].materialize())
+			return nil
+		}); err != nil {
+			return Result{}, &Failure{Code: FailureResource, Ordinal: i}
+		}
+	}
 	return Result{Items: items}, nil
 }
 
+func withObjectAdmission(admitter objectadmission.ObjectAdmitter, fn func() error) error {
+	if admitter == nil {
+		return fn()
+	}
+	return admitter.WithObjectAdmission(fn)
+}
+
+type privateItemPlan struct {
+	ordinal                   int
+	kind                      Kind
+	uri                       string
+	rangeValue                Range
+	targetRange               Range
+	originSelectionRange      Range
+	hasTargetRange, hasOrigin bool
+}
+
+func (p privateItemPlan) materialize() Item {
+	item := Item{Ordinal: p.ordinal, Kind: p.kind, URI: p.uri, Range: p.rangeValue}
+	if p.hasTargetRange {
+		r := p.targetRange
+		item.TargetRange = &r
+	}
+	if p.hasOrigin {
+		r := p.originSelectionRange
+		item.OriginSelectionRange = &r
+	}
+	return item
+}
+
 func parseItem(raw []byte, ordinal int) (Item, bool) {
+	plan, ok := parseItemPlan(raw, ordinal)
+	if !ok {
+		return Item{}, false
+	}
+	return plan.materialize(), true
+}
+
+func parseItemPlan(raw []byte, ordinal int) (privateItemPlan, bool) {
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
 	_, uri := fields["uri"]
 	_, locationRange := fields["range"]
@@ -148,43 +208,43 @@ func parseItem(raw []byte, ordinal int) (Item, bool) {
 	_, targetSelection := fields["targetSelectionRange"]
 	_, origin := fields["originSelectionRange"]
 	if (uri || locationRange) && (targetURI || targetRange || targetSelection || origin) {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
 	if uri || locationRange {
 		name, ok := parseURI(fields["uri"])
 		if !ok {
-			return Item{}, false
+			return privateItemPlan{}, false
 		}
 		r, ok := parseRange(fields["range"])
 		if !ok {
-			return Item{}, false
+			return privateItemPlan{}, false
 		}
-		return Item{Ordinal: ordinal, Kind: Location, URI: name, Range: r}, true
+		return privateItemPlan{ordinal: ordinal, kind: Location, uri: name, rangeValue: r}, true
 	}
 	if !targetURI && !targetRange && !targetSelection {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
 	name, ok := parseURI(fields["targetUri"])
 	if !ok {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
 	envelope, ok := parseRange(fields["targetRange"])
 	if !ok {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
 	selection, ok := parseRange(fields["targetSelectionRange"])
 	if !ok || !contains(envelope, selection) {
-		return Item{}, false
+		return privateItemPlan{}, false
 	}
-	item := Item{Ordinal: ordinal, Kind: LocationLink, URI: name, Range: selection, TargetRange: &envelope}
+	plan := privateItemPlan{ordinal: ordinal, kind: LocationLink, uri: name, rangeValue: selection, targetRange: envelope, hasTargetRange: true}
 	if origin {
 		r, valid := parseRange(fields["originSelectionRange"])
 		if !valid {
-			return Item{}, false
+			return privateItemPlan{}, false
 		}
-		item.OriginSelectionRange = &r
+		plan.originSelectionRange, plan.hasOrigin = r, true
 	}
-	return item, true
+	return plan, true
 }
 
 func parseURI(raw json.RawMessage) (string, bool) {

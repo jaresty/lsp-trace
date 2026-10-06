@@ -261,6 +261,14 @@ type b4LeaseChild struct {
 }
 
 func b4LeaseScript(f b4ID1Fixture, t *testing.T, c string) *b4LeaseChild {
+	return b4LeaseScriptWithResponse(f, t, c, false, nil, nil)
+}
+
+func b4LeaseScriptWithNotification(f b4ID1Fixture, t *testing.T, c string, notification bool) *b4LeaseChild {
+	return b4LeaseScriptWithResponse(f, t, c, notification, nil, nil)
+}
+
+func b4LeaseScriptWithResponse(f b4ID1Fixture, t *testing.T, c string, notification bool, serverError *lspwire.RPCError, responses []lspwire.Message) *b4LeaseChild {
 	t.Helper()
 	input, stdin := io.Pipe()
 	stdout, output := io.Pipe()
@@ -269,6 +277,28 @@ func b4LeaseScript(f b4ID1Fixture, t *testing.T, c string) *b4LeaseChild {
 	response := b4LeaseGet(t, f, c+"/response.frame")
 	go func() {
 		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+		initialize, err := reader.Read()
+		if err != nil {
+			child.observed <- fmt.Errorf("fixture initialize read: %w", err)
+			return
+		}
+		if initialize.Method != "initialize" || len(initialize.ID) == 0 {
+			child.observed <- fmt.Errorf("fixture initialize not exact")
+			return
+		}
+		if err := lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: append(json.RawMessage(nil), initialize.ID...), Result: json.RawMessage(`{"capabilities":{}}`)}); err != nil {
+			child.observed <- fmt.Errorf("fixture initialize response: %w", err)
+			return
+		}
+		initialized, err := reader.Read()
+		if err != nil {
+			child.observed <- fmt.Errorf("fixture initialized read: %w", err)
+			return
+		}
+		if initialized.Method != "initialized" || len(initialized.ID) != 0 {
+			child.observed <- fmt.Errorf("fixture initialized not exact")
+			return
+		}
 		msg, _, actual, retained, err := reader.ReadWithFrameIfWithin(4096)
 		if err != nil {
 			child.observed <- fmt.Errorf("fixture WRITE read: %w", err)
@@ -276,6 +306,23 @@ func b4LeaseScript(f b4ID1Fixture, t *testing.T, c string) *b4LeaseChild {
 		}
 		if !retained || !bytes.Equal(actual, want) || msg.Method != "textDocument/definition" || !bytes.Equal(msg.ID, []byte("1")) {
 			child.observed <- fmt.Errorf("fixture WRITE not exact")
+			return
+		}
+		if notification {
+			if err := lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "$/progress", Params: json.RawMessage(`{"value":{}}`)}); err != nil {
+				child.observed <- err
+				return
+			}
+		}
+		for i := range responses {
+			if err := lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(responses[i]); err != nil {
+				child.observed <- err
+				return
+			}
+		}
+		if serverError != nil {
+			err = lspwire.NewWriter(output, lspwire.DefaultLimits()).Write(lspwire.Message{JSONRPC: lspwire.Version, ID: append(json.RawMessage(nil), msg.ID...), Error: serverError})
+			child.observed <- err
 			return
 		}
 		_, err = output.Write(response)
@@ -322,8 +369,16 @@ func b4LeaseManager(t *testing.T, f b4ID1Fixture, c string) (*Manager, StartResu
 	if s.SessionID != d.Session || s.Generation != d.Generation || s.Generation != 1 {
 		b4LeaseInvalid(t, "INVALID_SETUP", c+" session/generation")
 	}
-	if ready := m.ObserveInitialization(s.SessionID, s.Generation, true); ready.State != session.Ready {
-		b4LeaseInvalid(t, "INVALID_SETUP", c+" readiness")
+	pending := m.BeginReadiness(context.Background(), s.SessionID, s.Generation, time.Now().Add(time.Second))
+	ready, found := m.WaitReadiness(context.Background(), pending.ID)
+	if !found || ready.State != ReadinessReady || ready.Failure != "" {
+		b4LeaseInvalid(t, "INVALID_SETUP", fmt.Sprintf("%s readiness=%+v found=%v", c, ready, found))
+	}
+	m.mu.Lock()
+	historyEntries := m.sessions[s.SessionID].readinessHistory.entries
+	m.mu.Unlock()
+	if historyEntries != 3 {
+		b4LeaseInvalid(t, "INVALID_SETUP", fmt.Sprintf("%s readiness history entries=%d want=3", c, historyEntries))
 	}
 	req := RoundTripRequest{SessionID: s.SessionID, Generation: s.Generation, Method: d.Method, Params: json.RawMessage(b4LeaseGet(t, f, c+"/request.params")), Deadline: time.Now().Add(time.Second), MaxMessages: 1, MaxBytes: 4096, CaptureDefinitionResponseFrameMaxBytes: int64(len(b4LeaseGet(t, f, c+"/response.frame"))), CaptureMethodRequestFrameMaxBytes: int64(len(b4LeaseGet(t, f, c+"/request.frame")))}
 	return m, s, req, B4DefinitionOwner{Transaction: d.Transaction, CompletedOwnerKey: d.CompletedOwnerKey}, child
@@ -440,14 +495,14 @@ func TestADR0011NarrowPrivateSelectedReadLeaseV1(t *testing.T) {
 	expectedRequest := b4LeaseGet(t, f, "A/request.frame")
 	expectedResult := b4LeaseGet(t, f, "A/response.result")
 	hash := func(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(h[:]) }
-	requestFrame, requestOK := result.CompletedMethodRequestFrame()
+	requestFrame, requestOK := privateB4BorrowedRequestFrame(t, result)
 	responseFrame, responseOK := result.CompletedDefinitionResponseFrame()
 	write, writeOK := result.CompletedRequestWrite()
 	read, readOK := result.CompletedResponseRead()
-	if result.ServerError != nil || !requestOK || !responseOK || !writeOK || !readOK || write.SessionID != selection.SessionID || write.Generation != 1 || write.Key != selection.Key || write.Method != "textDocument/definition" || write.FrameBytes != int64(len(expectedRequest)) || write.FrameSHA256 != hash(expectedRequest) || read.SessionID != selection.SessionID || read.Generation != 1 || read.Key != selection.Key || read.FrameBytes != int64(len(expectedFrame)) || read.FrameSHA256 != hash(expectedFrame) || !bytes.Equal(requestFrame, expectedRequest) || !bytes.Equal(responseFrame, expectedFrame) || !bytes.Equal(result.Result, expectedResult) {
+	if result.ServerError != nil || !requestOK || !responseOK || !writeOK || !readOK || write.SessionID != selection.SessionID || write.Generation != 1 || write.Key != selection.Key || write.Method != "textDocument/definition" || write.FrameBytes != int64(len(expectedRequest)) || write.FrameSHA256 != hash(expectedRequest) || read.SessionID != selection.SessionID || read.Generation != 1 || read.Key != selection.Key || read.FrameBytes != int64(len(expectedFrame)) || read.FrameSHA256 != hash(expectedFrame) || !bytes.Equal(requestFrame, expectedRequest) || !bytes.Equal(responseFrame, expectedFrame) || !bytes.Equal(privateB4BorrowedResult(t, result), expectedResult) {
 		b4LeaseAssertionFailure(t, "private result lacks matching completed WRITE/selected READ observations")
 	}
-	capture, status := m.ConsumePrivateB4Definition(lease, selection)
+	capture, status := consumePrivateB4SnapshotForTest(m, lease, selection)
 	if status == PrivateB4Unavailable || capture.SessionID != selection.SessionID || capture.Key != selection.Key || capture.Transaction != owner.Transaction || capture.CompletedOwnerKey != owner.CompletedOwnerKey || capture.Method != "textDocument/definition" || !bytes.Equal(capture.RequestFrame, expectedRequest) || !bytes.Equal(capture.RequestParams, b4LeaseGet(t, f, "A/request.params")) || !bytes.Equal(capture.ResponseFrame, expectedFrame) || !bytes.Equal(capture.Result, expectedResult) || capture.RequestFrameSHA256 != hash(expectedRequest) || capture.ResponseFrameSHA256 != hash(expectedFrame) || capture.ResultSHA256 != hash(expectedResult) {
 		b4LeaseAssertionFailure(t, "lease capture not bound to A selected READ/WRITE")
 	}

@@ -18,7 +18,7 @@ import (
 // Shared pinned fixture, delivery and marker helpers are independently active in
 // c_cumulative_fixture_helpers_test.go and use package-local exact originals.
 func TestCCumulativeCompleteOriginalFrameSuccessor(t *testing.T) {
-	manifest, wires := cCumulativePins(t)
+	manifest, wires := cCumulativeV2Pins(t)
 	fixtureRoot, assets := cTrackedABAssets(t)
 	if !t.Run("independent-A-B-controls", TestCObservedB4SuccessorEquivalenceAndOrder) {
 		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: independent A/B controls")
@@ -26,13 +26,13 @@ func TestCCumulativeCompleteOriginalFrameSuccessor(t *testing.T) {
 	for _, name := range []string{"at-cap", "plus-one"} {
 		if !t.Run(name, func(t *testing.T) {
 			in, occurrence, sources, wants, _, req, owner, profile := composedFixture(t, assets, fixtureRoot, "A")
-			if len(req.Params) != manifest.FixtureRequestParams.Length || cCumulativeSHA(req.Params) != manifest.FixtureRequestParams.SHA || len(in.Write.RequestFrame) != manifest.FixtureRequestFrame.Length || cCumulativeSHA(in.Write.RequestFrame) != manifest.FixtureRequestFrame.SHA || !bytes.Equal(wires["at-cap"][5], bridgeAssetBytes(t, fixtureRoot, "A/response.frame", assets)) {
-				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: request/response A pins")
+			if !bytes.Equal(wires["at-cap"][5], bridgeAssetBytes(t, fixtureRoot, "A/response.frame", assets)) {
+				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: response A pin")
 			}
-			req.MaxBytes = manifest.Limits.MaxBytes
-			req.MaxMessages = manifest.Limits.MaxMessages
-			req.CaptureDefinitionResponseFrameMaxBytes = manifest.Limits.CaptureDefinitionResponseFrameMaxBytes
-			req.CaptureMethodRequestFrameMaxBytes = manifest.Limits.CaptureMethodRequestFrameMaxBytes
+			req.MaxBytes = 4 << 20
+			req.MaxMessages = 6
+			req.CaptureDefinitionResponseFrameMaxBytes = int64(len(wires["at-cap"][5]))
+			req.CaptureMethodRequestFrameMaxBytes = int64(len(in.Write.RequestFrame))
 			req.Deadline = time.Now().Add(12 * time.Second)
 			child, delivered := cCumulativeChild(in.Write.RequestFrame, wires[name])
 			manager, started := cFixtureManager(t, profile, child, req)
@@ -68,12 +68,13 @@ func TestCCumulativeCompleteOriginalFrameSuccessor(t *testing.T) {
 				}
 			})
 			m := probe.snapshot()
-			if m.ambiguous || m.decode[4] != 1 || m.retained[4] < 2 {
+			if m.ambiguous || m.decode[4] != 1 || m.retained[4] != 1 {
 				bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s fifth marker unreachable/ambiguous decoded=%v retained=%v", name, m.decode, m.retained)
 			}
 			if name == "at-cap" {
 				responseRead, responseOK := result.CompletedResponseRead()
-				if result.Failure != "" || lease == (sessionruntime.B4DefinitionLease{}) || result.Messages != 6 || len(result.Notifications) != 5 || !responseOK || responseRead.FrameBytes != 163 || responseRead.FrameSHA256 != "sha256:"+manifest.FixtureResponseFrame.SHA || !continued || decision.Status != DefinitionBridgeCandidateItems || len(decision.Candidates) != len(wants) || pubErr != nil || m.decoded != 6 || m.decode[5] != 1 || m.retained[5] < 2 || m.b4 != 1 || m.publish != 1 {
+				notificationCount, notificationReleased := privateRetainedNotificationCount(result)
+				if result.Failure != "" || lease == (sessionruntime.B4DefinitionLease{}) || result.Messages != 6 || len(result.Notifications) != 0 || notificationCount != 5 || !notificationReleased || !responseOK || responseRead.FrameBytes != 163 || responseRead.FrameSHA256 != "sha256:"+cCumulativeSHA(wires["at-cap"][5]) || !continued || decision.Status != DefinitionBridgeCandidateItems || len(decision.Candidates) != len(wants) || pubErr != nil || m.decoded != 6 || m.decode[5] != 1 || m.retained[5] != 1 || m.b4 != 1 || m.publish != 1 {
 					bridgeFixtureFatal(t, "BLOCKED_NOT_RED: at-cap six-message selection/lease/marker/B4 prerequisite: failure=%s messages=%d notifications=%d decoded=%v retained=%v b4=%d publish=%d decision=%s", result.Failure, result.Messages, len(result.Notifications), m.decode, m.retained, m.b4, m.publish, decision.Status)
 				}
 				if _, err := os.Stat(filepath.Join(dir, "synthetic.json")); err != nil {
@@ -86,7 +87,7 @@ func TestCCumulativeCompleteOriginalFrameSuccessor(t *testing.T) {
 			// cumulative failure is the success branch. Capture-cap denial alone cannot
 			// satisfy this conjunction: sixth decode must also be absent.
 			_, responseOK := result.CompletedResponseRead()
-			if result.Failure != session.ResourceExhausted || lease != (sessionruntime.B4DefinitionLease{}) || continued || result.Messages != 5 || len(result.Notifications) != 5 || responseOK || m.decoded != 5 || m.decode[5] != 0 || m.retained[5] != 0 || m.b4 != 0 || m.publish != 0 || pubErr != nil {
+			if result.Failure != session.ResourceExhausted || lease != (sessionruntime.B4DefinitionLease{}) || continued || result.Messages != 5 || len(result.Notifications) != 0 || responseOK || m.decoded != 5 || m.decode[5] != 0 || m.retained[5] != 0 || m.b4 != 0 || m.publish != 0 || pubErr != nil {
 				t.Errorf("cumulative-plus-one-boundary: sixth decoded=%d retained=%d failure=%s messages=%d notifications=%d matched=%v lease=%v continued=%v b4=%d publish=%d", m.decode[5], m.retained[5], result.Failure, result.Messages, len(result.Notifications), responseOK, lease != (sessionruntime.B4DefinitionLease{}), continued, m.b4, m.publish)
 			} else {
 				t.Logf("cumulative-plus-one-boundary: PASS sixth decoded=0 retained=0 failure=%s messages=5 lease=false b4=0 publish=0", result.Failure)

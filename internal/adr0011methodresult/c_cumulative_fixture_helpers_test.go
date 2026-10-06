@@ -188,7 +188,12 @@ func cCumulativeChild(inFrame []byte, wires [][]byte) (*composedChild, <-chan cC
 	child := &composedChild{input: input, stdin: stdin, output: output, stdout: stdout, observed: make(chan error, 1)}
 	delivered := make(chan cCumulativeDelivery, 1)
 	go func() {
-		msg, _, frame, retained, err := lspwire.NewReader(input, lspwire.DefaultLimits()).ReadWithFrameIfWithin(4096)
+		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+		if err := composedServeReadiness(reader, output); err != nil {
+			child.observed <- err
+			return
+		}
+		msg, _, frame, retained, err := reader.ReadWithFrameIfWithin(4096)
 		if err != nil || !retained || !bytes.Equal(frame, inFrame) || msg.Method != "textDocument/definition" || string(msg.ID) != "1" {
 			child.observed <- fmt.Errorf("exact WRITE: %v", err)
 			return

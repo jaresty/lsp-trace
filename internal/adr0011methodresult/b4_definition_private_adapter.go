@@ -35,8 +35,21 @@ func CheckPrivateComposedB4Definition(manager *sessionruntime.Manager, lease ses
 		selection.Transaction == "" || selection.CompletedOwnerKey == "" {
 		return out
 	}
-	capture, status := manager.ConsumePrivateB4Definition(lease, selection)
-	if status != sessionruntime.PrivateB4Selected || capture.SessionID != selection.SessionID || capture.Key != selection.Key ||
+	_, status := manager.ConsumePrivateB4DefinitionBorrowed(lease, selection, func(b sessionruntime.PrivateB4DefinitionBorrow) bool {
+		out = checkPrivateComposedB4DefinitionBorrow(b.Capture, b.Result, selection, replay, queryOccurrenceID, targetSources)
+		return true
+	})
+	if status != sessionruntime.PrivateB4Selected {
+		return PrivateB4Decision{Status: DefinitionBridgeCorrespondenceInvalid, Authority: 0,
+			Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: "NO_PRODUCER_AUTHENTICATION"}
+	}
+	return out
+}
+
+func checkPrivateComposedB4DefinitionBorrow(capture sessionruntime.PrivateB4DefinitionCapture, result []byte, selection sessionruntime.B4DefinitionSelectionKey, replay v5.B4bFullCandidateInput, queryOccurrenceID string, targetSources map[string][]byte) PrivateB4Decision {
+	out := PrivateB4Decision{Status: DefinitionBridgeCorrespondenceInvalid, Authority: 0,
+		Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: "NO_PRODUCER_AUTHENTICATION"}
+	if capture.SessionID != selection.SessionID || capture.Key != selection.Key ||
 		capture.Transaction != selection.Transaction || capture.CompletedOwnerKey != selection.CompletedOwnerKey ||
 		capture.Method != "textDocument/definition" || replay.Write.Method != capture.Method ||
 		replay.Write.Session != capture.SessionID || replay.Write.Generation != capture.Key.Generation ||
@@ -45,7 +58,7 @@ func CheckPrivateComposedB4Definition(manager *sessionruntime.Manager, lease ses
 		!bytes.Equal(replay.Write.RequestParams, capture.RequestParams) ||
 		!privateCaptureHash(capture.RequestFrame, capture.RequestFrameSHA256) ||
 		!privateCaptureHash(capture.ResponseFrame, capture.ResponseFrameSHA256) ||
-		!privateCaptureHash(capture.Result, capture.ResultSHA256) {
+		!privateCaptureHash(result, capture.ResultSHA256) {
 		return out
 	}
 	// The typed request ID must agree as bytes and value with the selected key.
@@ -62,7 +75,7 @@ func CheckPrivateComposedB4Definition(manager *sessionruntime.Manager, lease ses
 	}
 	response, responseBody, ok := privateB4Frame(capture.ResponseFrame)
 	if !ok || response.Kind() != lspwire.KindSuccessResponse || !bytes.Equal(response.ID, replay.Write.RequestID) ||
-		!bytes.Equal(response.Result, capture.Result) || len(responseBody) == 0 {
+		!bytes.Equal(response.Result, result) || len(responseBody) == 0 {
 		return out
 	}
 	// The existing bridge builds its canonical candidate and balanced ledger

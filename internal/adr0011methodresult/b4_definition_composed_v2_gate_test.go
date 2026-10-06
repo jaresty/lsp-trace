@@ -13,7 +13,6 @@ import (
 	v5 "lsp-trace/internal/adr0011genericv5proposal"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/runtimeprofile"
-	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -39,21 +38,28 @@ type composedV2Case struct {
 }
 
 // Source-bound proof: these exact private implementations must retain the manager
-// lease consumption, strict result parser, and unadmitted status ceiling. This
-// older composed adapter is not source-custodied and does not establish real-server
-// custody or public-schema admission; Manager source custody is restricted to Unit 2.
+// lease consumption, strict result parser, and unadmitted status ceiling. The manager
+// pin includes accepted C13/C14 source accounting and the reviewed Manager/B4 portion
+// of C15 explicit-byte accounting; it does not establish full C15, C16-C17, D/R
+// occurrence, public admission, publication authority, or qualification. This older
+// composed adapter is not source-custodied and does not establish real-server custody.
 func TestADR0011PrivateComposedV2SourceBoundary(t *testing.T) {
-	adapter := bridgePinnedBytes(t, "b4_definition_private_adapter.go", "6cd2204f908fbaa749903fccf916c4121fcd1c5bc2ad0e770150888fb017cc42")
+	adapter := bridgePinnedBytes(t, "b4_definition_private_adapter.go", "ba853adc0d3045b4755c5ce4783f2f05ddc531007b69ab17ecfbf574f0d5ce99")
 	bridge := bridgePinnedBytes(t, "b4_definition_bridge.go", "f22da69db0aad0078370387b43f973ec28a553557e88c4c641eb946640585be6")
-	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "70a870b7e92748ab774d102ea5660a86f07f845a617714ebf5327dbc98a6a67d")
+	manager := bridgePinnedBytes(t, filepath.Join("..", "..", "sessionruntime", "b4_definition_private.go"), "3474e565ddd2857c5e699125300977304b5d0ec943213ac7315847ee8a503c4e")
+	for _, removed := range []string{"func (m *Manager) PreparePrivateB4Definition(", "func (m *Manager) CommitPrivateB4Definition(", "func (m *Manager) ConsumePrivateB4Definition(", "includeResult bool", "uint64(len(capture.Result))", "capture.Result = append"} {
+		if bytes.Contains(manager, []byte(removed)) {
+			t.Errorf("SEMANTIC_RED_COMPATIBILITY_REMOVAL still present %q", removed)
+		}
+	}
 	for _, proof := range []struct {
 		label  string
 		source []byte
 		tokens []string
 	}{
-		{"adapter", adapter, []string{"manager.ConsumePrivateB4Definition(lease, selection)", "privateB4Frame(capture.ResponseFrame)", "CheckB4DefinitionBridge(DefinitionBridgeInput", `Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: "NO_PRODUCER_AUTHENTICATION"`}},
+		{"adapter", adapter, []string{"manager.ConsumePrivateB4DefinitionBorrowed(lease, selection, func(b sessionruntime.PrivateB4DefinitionBorrow) bool", "privateB4Frame(capture.ResponseFrame)", "CheckB4DefinitionBridge(DefinitionBridgeInput", `Accepted: false, Completeness: "UNKNOWN", ClaimCeiling: "NO_PRODUCER_AUTHENTICATION"`}},
 		{"bridge", bridge, []string{"parseRawUntrusted(w.Method, result, 1000)", "bridgeRangeWithinSource(source, item.Range)", "ProjectDefinitionCandidates("}},
-		{"manager", manager, []string{"ConsumePrivateB4Definition", "PrivateB4Selected"}},
+		{"manager", manager, []string{"ConsumePrivateB4DefinitionBorrowed", "PreparePrivateB4DefinitionBorrowed", "PrivateB4Selected"}},
 	} {
 		for _, token := range proof.tokens {
 			if !bytes.Contains(proof.source, []byte(token)) {
@@ -189,7 +195,12 @@ func TestADR0011PrivateComposedV2IndependentOracle(t *testing.T) {
 				stdout, output := io.Pipe()
 				child := &composedChild{input: input, stdin: stdin, output: output, stdout: stdout, observed: make(chan error, 1)}
 				go func() {
-					_, _, captured, retained, err := lspwire.NewReader(input, lspwire.DefaultLimits()).ReadWithFrameIfWithin(4096)
+					reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+					if err := composedServeReadiness(reader, output); err != nil {
+						child.observed <- err
+						return
+					}
+					_, _, captured, retained, err := reader.ReadWithFrameIfWithin(4096)
 					if err != nil || !retained || !bytes.Equal(captured, in.Write.RequestFrame) {
 						child.observed <- fmt.Errorf("exact WRITE: %v", err)
 						return
@@ -221,9 +232,10 @@ func composedV2Run(t *testing.T, name string, in v5.B4bFullCandidateInput, occur
 		_ = manager.Shutdown(context.Background())
 	})
 	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
-	if started.SessionID != req.SessionID || started.Generation != req.Generation || manager.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
-		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s readiness", name)
+	if started.SessionID != req.SessionID || started.Generation != req.Generation {
+		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s identity", name)
 	}
+	composedRequireReadiness(t, manager, started)
 	result, lease := manager.RoundTripPrivateB4(context.Background(), req, owner)
 	if result.Failure != "" || result.ServerError != nil || lease == (sessionruntime.B4DefinitionLease{}) || result.Key != (lspwire.RequestKey{Generation: 1, ID: 1}) {
 		bridgeFixtureFatal(t, "BLOCKED_NOT_RED: %s manager capture failure=%s", name, result.Failure)

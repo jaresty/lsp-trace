@@ -26,7 +26,6 @@ import (
 	v5 "lsp-trace/internal/adr0011genericv5proposal"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/runtimeprofile"
-	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -265,6 +264,10 @@ func restrictedProjectedChild(t *testing.T, sources map[string][]byte, requestFr
 	child := &composedChild{input: input, stdin: stdin, output: output, stdout: stdout, observed: make(chan error, 1)}
 	go func() {
 		r := lspwire.NewReader(input, lspwire.DefaultLimits())
+		if err := composedServeReadiness(r, output); err != nil {
+			child.observed <- err
+			return
+		}
 		seen := make(map[string]bool, len(sources))
 		for range sources {
 			msg, _, _, _, err := r.ReadWithFrameIfWithin(4096)
@@ -343,9 +346,10 @@ func restrictedTypedB4Input(t *testing.T) restrictedDefinitionB4Input {
 		_ = manager.Shutdown(context.Background())
 	})
 	started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
-	if started.SessionID == "" || started.Generation != req.Generation || manager.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
-		t.Fatal("BLOCKED_NOT_RED typed B4 manager readiness")
+	if started.SessionID == "" || started.Generation != req.Generation {
+		t.Fatal("BLOCKED_NOT_RED typed B4 manager identity")
 	}
+	composedRequireReadiness(t, manager, started)
 	req.SessionID = started.SessionID
 	replay.Write.Session = started.SessionID
 	restrictedRebindProjectedClaims(t, &replay)
@@ -619,11 +623,11 @@ func TestRestrictedDefinitionB4CommitPublicationCallbackIsInfallible(t *testing.
 		t.Fatal(err)
 	}
 	source := string(production)
-	start := strings.Index(source, "publish := func(sessionruntime.PrivateB4DefinitionCapture) {")
+	start := strings.Index(source, "publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) {")
 	if start < 0 {
 		t.Fatal("ASSERT_B4_COMMIT_CALLBACK_PRESENT")
 	}
-	end := strings.Index(source[start:], "\n\t}\n\t_, status = in.Manager.CommitPrivateB4Definition")
+	end := strings.Index(source[start:], "\n\t}\n\t_, status = in.Manager.CommitPrivateB4DefinitionBorrowed")
 	if end < 0 {
 		t.Fatal("ASSERT_B4_COMMIT_CALLBACK_BOUNDARY")
 	}

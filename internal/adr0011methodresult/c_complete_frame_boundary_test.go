@@ -62,7 +62,12 @@ func cBoundaryChild(inFrame, original, response []byte) (*composedChild, <-chan 
 	attempt := make(chan struct{}, 1)
 	sent := make(chan cFrameDelivery, 1)
 	go func() {
-		msg, _, frame, retained, err := lspwire.NewReader(input, lspwire.DefaultLimits()).ReadWithFrameIfWithin(4096)
+		reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+		if err := composedServeReadiness(reader, output); err != nil {
+			child.observed <- err
+			return
+		}
+		msg, _, frame, retained, err := reader.ReadWithFrameIfWithin(4096)
 		if err != nil || !retained || !bytes.Equal(frame, inFrame) || msg.Method != "textDocument/definition" || !bytes.Equal(msg.ID, []byte("1")) {
 			child.observed <- fmt.Errorf("exact WRITE: %v", err)
 			return
@@ -93,12 +98,12 @@ func TestCManagerCompleteOriginalFrameBoundary(t *testing.T) {
 		size         int
 		over         bool
 	}{
-		{"at-cap.frame", cAtCapSHA, cFrameCap, false},
-		{"over-cap.frame", cOverCapSHA, cFrameCap + 1, true},
+		{"at-cap", "", cFrameCap, false},
+		{"plus-one", "", cFrameCap + 1, true},
 	}
 	for _, item := range originals {
 		if !t.Run(item.name, func(t *testing.T) {
-			frame := cHeldOriginal(t, item.name, item.digest, item.size)
+			frame := cFrameV2Original(t, item.name)
 			in, occurrence, sources, wants, _, req, owner, profile := composedFixture(t, assets, fixtureRoot, "A")
 			response := bridgeAssetBytes(t, fixtureRoot, "A/response.frame", assets)
 			req.MaxBytes = 4 << 20 // transaction budget, NOT the per-frame admission limit
@@ -141,7 +146,8 @@ func TestCManagerCompleteOriginalFrameBoundary(t *testing.T) {
 				if delivery.frameBytes != len(frame) || delivery.frameError != nil || delivery.responseBytes != len(response) || delivery.responseError != nil || result.Failure != "" || result.ServerError != nil || lease == (sessionruntime.B4DefinitionLease{}) {
 					bridgeFixtureFatal(t, "BLOCKED_NOT_RED: at-cap transport/lease: delivery=%+v failure=%s lease=%v", delivery, result.Failure, lease != (sessionruntime.B4DefinitionLease{}))
 				}
-				if !continued || decision.Status != DefinitionBridgeCandidateItems || len(decision.Candidates) != len(wants) || publicationError != nil || result.Messages != 2 || len(result.Notifications) != 1 || counts[adr0011cobserve.DecodeEntry] != 2 || counts[adr0011cobserve.RetainEntry] == 0 || counts[adr0011cobserve.B4EvaluationEntry] != 1 || counts[adr0011cobserve.PrivateCandidatePublishEntry] != 1 {
+				notificationCount, notificationReleased := privateRetainedNotificationCount(result)
+				if !continued || decision.Status != DefinitionBridgeCandidateItems || len(decision.Candidates) != len(wants) || publicationError != nil || result.Messages != 2 || len(result.Notifications) != 0 || notificationCount != 1 || !notificationReleased || counts[adr0011cobserve.DecodeEntry] != 2 || counts[adr0011cobserve.RetainEntry] != 2 || counts[adr0011cobserve.B4EvaluationEntry] != 1 || counts[adr0011cobserve.PrivateCandidatePublishEntry] != 1 {
 					t.Errorf("SEMANTIC_RED_FRAME_AT_CAP: continued=%v status=%s counts=%v publish=%v", continued, decision.Status, counts, publicationError)
 				}
 				return

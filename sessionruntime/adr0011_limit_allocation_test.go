@@ -110,6 +110,8 @@ func TestADR0011ManagerFramedWriteBoundaryOwnerUnreachable(t *testing.T) {
 				t.Fatal("unreachable exact canonical frame")
 			}
 			req.Params = json.RawMessage(`{"padding":"` + strings.Repeat("x", n+delta) + `"}`)
+			// The boundary-search loop can exceed the fixture's original deadline under -race.
+			req.Deadline = time.Now().Add(3 * time.Second)
 			got := m.RoundTrip(context.Background(), req)
 			requests, _ := child.snapshot()
 			count := 0

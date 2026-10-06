@@ -23,7 +23,7 @@ const (
 	MethodReferences     = "textDocument/references"
 	methodDocumentSymbol = "textDocument/documentSymbol"
 
-	maxDeadline    = time.Minute
+	maxDeadline    = 15 * time.Second
 	maxMessages    = 64
 	maxBytes       = 1 << 20
 	maxParamsBytes = 64 << 10 // private provisional raw-parameter ceiling
@@ -170,6 +170,7 @@ func (t *Transport) Execute(ctx context.Context, req Request) Result {
 		MaxMessages: req.MaxMessages, MaxBytes: req.MaxBytes,
 		CaptureOwnedMethodPair: req.CaptureOwnedMethodPair,
 		ExpectedOwnedDocument:  req.ExpectedOwnedDocument,
+		ADR0011PrivateP2:       req.Method == MethodDefinition || req.Method == MethodReferences,
 	}
 	out.observation.RoundTripCalled = true
 	result := t.runtime.RoundTrip(ctx, wire)

@@ -1,8 +1,11 @@
 package manageddiagnostic
 
 import (
+	"errors"
+	"runtime"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 type EventKind uint8
@@ -11,6 +14,14 @@ const (
 	EventOperation EventKind = iota + 1
 	EventTerminal
 )
+
+const qualifiedEventGoVersion = "go1.26.5"
+
+func EventRepresentationSupported() bool {
+	return runtime.Version() == qualifiedEventGoVersion && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && unsafe.Sizeof(Event{}) == 40 && unsafe.Alignof(Event{}) == 8
+}
+
+func EventElementBytes() uint64 { return uint64(unsafe.Sizeof(Event{})) }
 
 type Event struct {
 	Sequence  uint64
@@ -28,16 +39,27 @@ type EventSnapshot struct {
 	Closed  bool
 }
 
+type EventBackingLease interface {
+	EventBackingBytes() uint64
+	ReleaseEventBacking()
+}
+
+type EventBackingOwner interface {
+	ReserveEventBacking(uint64) (EventBackingLease, error)
+}
+
 type EventCollector struct {
-	mu      sync.Mutex
-	start   time.Time
-	now     func() time.Time
-	cap     int
-	next    uint64
-	events  []Event
-	omitted uint64
-	late    uint64
-	closed  bool
+	mu       sync.Mutex
+	start    time.Time
+	now      func() time.Time
+	cap      int
+	next     uint64
+	events   []Event
+	omitted  uint64
+	late     uint64
+	closed   bool
+	backing  EventBackingLease
+	detached bool
 }
 
 func NewEventCollector(capacity int, now func() time.Time) *EventCollector {
@@ -48,6 +70,37 @@ func NewEventCollector(capacity int, now func() time.Time) *EventCollector {
 		now = time.Now
 	}
 	return &EventCollector{start: now(), now: now, cap: capacity}
+}
+
+func NewOwnedEventCollector(capacity int, now func() time.Time, owner EventBackingOwner) (*EventCollector, error) {
+	if capacity < 1 {
+		capacity = 1
+	}
+	if now == nil {
+		now = time.Now
+	}
+	if owner == nil || !EventRepresentationSupported() {
+		return nil, errors.New("manageddiagnostic: unsupported event representation")
+	}
+	bytes := uint64(capacity) * EventElementBytes()
+	lease, err := owner.ReserveEventBacking(bytes)
+	if err != nil {
+		return nil, err
+	}
+	return &EventCollector{start: now(), now: now, cap: capacity, events: make([]Event, 0, capacity), backing: lease}, nil
+}
+
+func (c *EventCollector) DetachEventBacking() (EventBackingLease, bool) {
+	if c == nil {
+		return nil, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed || c.detached || c.backing == nil {
+		return nil, false
+	}
+	c.detached = true
+	return c.backing, true
 }
 
 type OperationHandle struct {

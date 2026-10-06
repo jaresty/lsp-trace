@@ -22,7 +22,12 @@ func cObservedB4(observer adr0011cobserve.Observer, manager *sessionruntime.Mana
 		selection.Transaction == "" || selection.CompletedOwnerKey == "" {
 		return out
 	}
-	capture, status := manager.ConsumePrivateB4Definition(lease, selection)
+	var capture sessionruntime.PrivateB4DefinitionCapture
+	_, status := manager.ConsumePrivateB4DefinitionBorrowed(lease, selection, func(b sessionruntime.PrivateB4DefinitionBorrow) bool {
+		capture = b.Capture
+		capture.Result = append([]byte(nil), b.Result...)
+		return true
+	})
 	if status != sessionruntime.PrivateB4Selected || capture.SessionID != selection.SessionID || capture.Key != selection.Key ||
 		capture.Transaction != selection.Transaction || capture.CompletedOwnerKey != selection.CompletedOwnerKey ||
 		capture.Method != "textDocument/definition" || replay.Write.Method != capture.Method ||

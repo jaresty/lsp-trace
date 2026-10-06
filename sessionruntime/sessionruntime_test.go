@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"sync"
@@ -425,6 +426,14 @@ func newReadinessChild(mode string) *readinessChild {
 			}
 			if mode == "dynamic-call-hierarchy" {
 				_ = writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`77`), Method: "client/registerCapability", Params: json.RawMessage(`{"registrations":[{"id":"calls","method":"textDocument/prepareCallHierarchy","registerOptions":{}}]}`)})
+			}
+		case "readiness-history-noncanonical":
+			body := []byte(`{ "jsonrpc" : "2.0", "id" : 1, "result" : {"capabilities":{}} }`)
+			_, _ = fmt.Fprintf(output, "content-length : %d\r\nX-Test: exact\r\n\r\n", len(body))
+			_, _ = output.Write(body)
+			initialized, err := lspwire.NewReader(input, lspwire.DefaultLimits()).Read()
+			if err == nil {
+				c.initialized <- initialized
 			}
 		case "notification-before-ready":
 			writer := lspwire.NewWriter(output, lspwire.DefaultLimits())

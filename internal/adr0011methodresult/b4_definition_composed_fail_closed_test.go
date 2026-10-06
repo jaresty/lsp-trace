@@ -12,7 +12,6 @@ import (
 	v5 "lsp-trace/internal/adr0011genericv5proposal"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/runtimeprofile"
-	"lsp-trace/internal/session"
 	"lsp-trace/sessionruntime"
 )
 
@@ -55,6 +54,10 @@ func TestADR0011PrivateComposedDefinitionFailClosed(t *testing.T) {
 				framed := append([]byte(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(tc.response))), tc.response...)
 				go func() {
 					reader := lspwire.NewReader(input, lspwire.DefaultLimits())
+					if e := composedServeReadiness(reader, output); e != nil {
+						child.observed <- e
+						return
+					}
 					msg, _, frame, retained, e := reader.ReadWithFrameIfWithin(4096)
 					if e != nil || !retained || !bytes.Equal(frame, expected) || msg.Method != "textDocument/definition" {
 						child.observed <- fmt.Errorf("request control: %v", e)
@@ -75,9 +78,10 @@ func TestADR0011PrivateComposedDefinitionFailClosed(t *testing.T) {
 				_ = manager.Shutdown(context.Background())
 			})
 			started := manager.Start(context.Background(), sessionruntime.StartRequest{Profile: runtimeprofile.Resolve(validated)})
-			if started.SessionID != req.SessionID || started.Generation != req.Generation || manager.ObserveInitialization(started.SessionID, started.Generation, true).State != session.Ready {
-				bridgeFixtureFatal(t, "manager readiness")
+			if started.SessionID != req.SessionID || started.Generation != req.Generation {
+				bridgeFixtureFatal(t, "manager identity")
 			}
+			composedRequireReadiness(t, manager, started)
 			result, lease := manager.RoundTripPrivateB4(context.Background(), req, owner)
 			if result.Failure != "" || result.ServerError != nil || lease == (sessionruntime.B4DefinitionLease{}) || result.Key != (lspwire.RequestKey{Generation: 1, ID: 1}) {
 				bridgeFixtureFatal(t, "private selection failure=%s", result.Failure)

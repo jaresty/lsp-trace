@@ -1,8 +1,12 @@
 package sessionruntime
 
 import (
+	"math"
+	"strings"
+
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/session"
 )
 
 // Diagnostic handles are opaque manager-owned capabilities. They contain no
@@ -23,6 +27,7 @@ type DiagnosticGenerationHandle struct {
 type DiagnosticOperationHandle struct {
 	generation DiagnosticGenerationHandle
 	sequence   uint64
+	private    privateDiagnosticHistoryRef
 }
 
 type DiagnosticSnapshot struct {
@@ -108,6 +113,7 @@ type diagnosticOperation struct {
 	method      string
 	documentURI string
 	initialize  SessionMetadata
+	backing     managerDiagnosticLease
 }
 
 const (
@@ -133,13 +139,72 @@ func (m *Manager) newDiagnosticGeneration(attempt manageddiagnostic.StartupAttem
 }
 
 func (m *Manager) newDiagnosticOperation(g DiagnosticGenerationHandle, identity managedprocess.Identity) (DiagnosticOperationHandle, *manageddiagnostic.EventCollector) {
+	return m.newDiagnosticOperationWithOwner(g, identity, nil)
+}
+
+func (m *Manager) newPrivateB4DiagnosticOperation(g DiagnosticGenerationHandle, identity managedprocess.Identity, account *privateB4ByteAccountV2) (DiagnosticOperationHandle, *manageddiagnostic.EventCollector) {
+	if m.diagnostics == nil || account == nil {
+		return DiagnosticOperationHandle{}, nil
+	}
+	m.mu.Lock()
+	if m.privateDiagnosticHistory == nil {
+		m.privateDiagnosticHistory = new(privateDiagnosticHistory)
+	}
+	if m.diagnosticSequence == ^uint64(0) {
+		if m.diagnosticOmissions != ^uint64(0) {
+			m.diagnosticOmissions++
+		}
+		m.mu.Unlock()
+		return DiagnosticOperationHandle{}, nil
+	}
+	sequence := m.diagnosticSequence + 1
+	ref, failure := m.privateDiagnosticHistory.reserveSlot(sequence)
+	if failure != "" {
+		if m.diagnosticOmissions != ^uint64(0) {
+			m.diagnosticOmissions++
+		}
+		m.mu.Unlock()
+		return DiagnosticOperationHandle{}, nil
+	}
+	c, err := manageddiagnostic.NewOwnedEventCollector(m.limits.MaxObservations, m.now, privateB4EventBackingOwner{account: account})
+	if err != nil {
+		m.privateDiagnosticHistory.releaseSlot(ref)
+		if m.diagnosticOmissions != ^uint64(0) {
+			m.diagnosticOmissions++
+		}
+		m.mu.Unlock()
+		return DiagnosticOperationHandle{}, nil
+	}
+	m.diagnosticSequence = sequence
+	s := m.privateDiagnosticHistory.resolve(ref, sequence)
+	s.collector, s.identity, s.attemptID, s.sessionID, s.diagnosticGeneration, s.capability, s.account = c, identity, g.session.attemptID, g.session.sessionID, g.generation, g.session.capability, account
+	h := DiagnosticOperationHandle{generation: g, sequence: sequence, private: ref}
+	m.mu.Unlock()
+	c.Record(diagnosticEventBegin, 0, false)
+	return h, c
+}
+
+func (m *Manager) newDiagnosticOperationWithOwner(g DiagnosticGenerationHandle, identity managedprocess.Identity, owner manageddiagnostic.EventBackingOwner) (DiagnosticOperationHandle, *manageddiagnostic.EventCollector) {
 	if m.diagnostics == nil {
 		return DiagnosticOperationHandle{}, nil
 	}
 	m.mu.Lock()
 	m.diagnosticSequence++
 	h := DiagnosticOperationHandle{generation: g, sequence: m.diagnosticSequence}
-	c := manageddiagnostic.NewEventCollector(m.limits.MaxObservations, m.now)
+	var c *manageddiagnostic.EventCollector
+	if owner == nil {
+		c = manageddiagnostic.NewEventCollector(m.limits.MaxObservations, m.now)
+	} else {
+		var err error
+		c, err = manageddiagnostic.NewOwnedEventCollector(m.limits.MaxObservations, m.now, owner)
+		if err != nil {
+			if m.diagnosticOmissions != ^uint64(0) {
+				m.diagnosticOmissions++
+			}
+			m.mu.Unlock()
+			return DiagnosticOperationHandle{}, nil
+		}
+	}
 	m.diagnosticOperations[h] = diagnosticOperation{collector: c, identity: identity, attemptID: g.session.attemptID, sessionID: g.session.sessionID, generation: g.generation, sequence: m.diagnosticSequence, capability: g.session.capability}
 	m.diagnosticOrder = append(m.diagnosticOrder, h)
 	m.trimDiagnosticOperationsLocked()
@@ -161,6 +226,8 @@ func (m *Manager) trimDiagnosticOperationsLocked() {
 			return
 		}
 		h := m.diagnosticOrder[evicted]
+		op := m.diagnosticOperations[h]
+		op.backing.release()
 		delete(m.diagnosticOperations, h)
 		m.diagnosticEvictions++
 		copy(m.diagnosticOrder[evicted:], m.diagnosticOrder[evicted+1:])
@@ -168,11 +235,113 @@ func (m *Manager) trimDiagnosticOperationsLocked() {
 	}
 }
 
+func (m *Manager) evictOldestRetainedDiagnosticLocked(exclude DiagnosticOperationHandle) bool {
+	for i, candidate := range m.diagnosticOrder {
+		if candidate == exclude {
+			continue
+		}
+		op, ok := m.diagnosticOperations[candidate]
+		if !ok || op.collector == nil || !op.collector.Snapshot().Closed || !op.backing.active {
+			continue
+		}
+		op.backing.release()
+		delete(m.diagnosticOperations, candidate)
+		copy(m.diagnosticOrder[i:], m.diagnosticOrder[i+1:])
+		m.diagnosticOrder = m.diagnosticOrder[:len(m.diagnosticOrder)-1]
+		m.diagnosticByteEvictions++
+		return true
+	}
+	return false
+}
+
 func (m *Manager) completeDiagnosticOperationLocked(h DiagnosticOperationHandle, c *manageddiagnostic.EventCollector, terminal uint16) {
 	if c == nil {
 		return
 	}
+	if h.private.qualified {
+		slot := m.privateDiagnosticHistory.resolve(h.private, h.sequence)
+		if slot == nil {
+			return
+		}
+		c.Terminal(terminal)
+		backing, ok := c.DetachEventBacking()
+		if !ok {
+			return
+		}
+		lease, typed := backing.(*privateB4EventBackingLease)
+		if !typed {
+			backing.ReleaseEventBacking()
+			m.privateDiagnosticHistory.releaseSlot(h.private)
+			return
+		}
+		var retained managerDiagnosticLease
+		for {
+			var failure session.Failure
+			retained, failure = lease.charge.account.transferDiagnosticBackingPair(&lease.charge, &slot.metadataSource, m.managerDiagnosticOwner)
+			if failure == "" {
+				break
+			}
+			oldest, found := m.privateDiagnosticHistory.oldestClosed(h.private)
+			if !found {
+				lease.ReleaseEventBacking()
+				m.privateDiagnosticHistory.releaseSlot(h.private)
+				if m.diagnosticOmissions != ^uint64(0) {
+					m.diagnosticOmissions++
+				}
+				return
+			}
+			m.privateDiagnosticHistory.releaseSlot(oldest)
+			if m.diagnosticByteEvictions != ^uint64(0) {
+				m.diagnosticByteEvictions++
+			}
+		}
+		slot = m.privateDiagnosticHistory.resolve(h.private, h.sequence)
+		if slot == nil {
+			retained.release()
+			return
+		}
+		slot.retainedBacking = retained
+		slot.closed = true
+		return
+	}
 	c.Terminal(terminal)
+	if backing, ok := c.DetachEventBacking(); ok {
+		lease, typed := backing.(*privateB4EventBackingLease)
+		if !typed {
+			backing.ReleaseEventBacking()
+		} else {
+			if m.managerDiagnosticOwner == nil {
+				m.managerDiagnosticOwner, _ = newManagerDiagnosticOwner()
+			}
+			for {
+				if _, preflight := m.managerDiagnosticOwner.preflightSlot(lease.bytes); preflight == "" {
+					break
+				}
+				if !m.evictOldestRetainedDiagnosticLocked(h) {
+					break
+				}
+			}
+			retained, failure := lease.charge.account.transferDiagnosticBacking(&lease.charge, m.managerDiagnosticOwner)
+			if failure != "" {
+				lease.ReleaseEventBacking()
+				if m.diagnosticOmissions != ^uint64(0) {
+					m.diagnosticOmissions++
+				}
+				delete(m.diagnosticOperations, h)
+				for i, candidate := range m.diagnosticOrder {
+					if candidate == h {
+						copy(m.diagnosticOrder[i:], m.diagnosticOrder[i+1:])
+						m.diagnosticOrder = m.diagnosticOrder[:len(m.diagnosticOrder)-1]
+						break
+					}
+				}
+				return
+			}
+			op := m.diagnosticOperations[h]
+			op.backing = retained
+			m.diagnosticOperations[h] = op
+		}
+	}
 	m.trimDiagnosticOperationsLocked()
 }
 
@@ -189,6 +358,19 @@ func (m *Manager) DiagnosticSnapshotFor(attempt manageddiagnostic.StartupAttempt
 		return DiagnosticSnapshot{}, false
 	}
 	m.mu.Lock()
+	if h.private.qualified {
+		op := m.privateDiagnosticHistory.resolve(h.private, h.sequence)
+		if op == nil || !op.closed || op.attemptID != attempt || op.attemptID != h.generation.session.attemptID || op.sessionID != h.generation.session.sessionID || op.diagnosticGeneration != h.generation.generation || h.generation.session.capability == nil || h.generation.session.capability != op.capability {
+			m.mu.Unlock()
+			return DiagnosticSnapshot{}, false
+		}
+		s := op.collector.Snapshot()
+		initialize := op.initialize
+		initialize.PositionEncoding, initialize.ProviderName, initialize.ProviderVersion, initialize.ServerCommand = strings.Clone(initialize.PositionEncoding), strings.Clone(initialize.ProviderName), strings.Clone(initialize.ProviderVersion), strings.Clone(initialize.ServerCommand)
+		out := DiagnosticSnapshot{Operation: h, Events: s, ProcessIdentity: op.identity, Method: strings.Clone(op.method), DocumentURI: strings.Clone(op.documentURI), Initialize: initialize}
+		m.mu.Unlock()
+		return out, s.Closed
+	}
 	op, ok := m.diagnosticOperations[h]
 	m.mu.Unlock()
 	if !ok || op.attemptID != attempt || op.attemptID != h.generation.session.attemptID || op.sessionID != h.generation.session.sessionID || op.generation != h.generation.generation || op.sequence != h.sequence || h.generation.session.capability == nil || h.generation.session.capability != op.capability {
@@ -206,11 +388,56 @@ func (m *Manager) describeDiagnosticOperation(h DiagnosticOperationHandle, metho
 		return
 	}
 	m.mu.Lock()
+	defer m.mu.Unlock()
+	if h.private.qualified {
+		s := m.privateDiagnosticHistory.resolve(h.private, h.sequence)
+		if s == nil || s.closed {
+			return
+		}
+		parts := [...]string{method, documentURI, initialize.PositionEncoding, initialize.ProviderName, initialize.ProviderVersion, initialize.ServerCommand}
+		var bytes uint64
+		for _, part := range parts {
+			if uint64(len(part)) > math.MaxUint64-bytes {
+				if !s.described {
+					m.omitOpenPrivateDiagnosticLocked(h, s)
+				}
+				return
+			}
+			bytes += uint64(len(part))
+		}
+		var source privateB4ByteLeaseV2
+		if bytes != 0 {
+			var failure session.Failure
+			source, failure = s.account.reserve(bytes)
+			if failure != "" {
+				if !s.described {
+					m.omitOpenPrivateDiagnosticLocked(h, s)
+				}
+				return
+			}
+		}
+		owned := initialize
+		owned.PositionEncoding, owned.ProviderName, owned.ProviderVersion, owned.ServerCommand = strings.Clone(initialize.PositionEncoding), strings.Clone(initialize.ProviderName), strings.Clone(initialize.ProviderVersion), strings.Clone(initialize.ServerCommand)
+		old := s.metadataSource
+		s.method, s.documentURI, s.initialize, s.metadataSource, s.described = strings.Clone(method), strings.Clone(documentURI), owned, source, true
+		old.release()
+		return
+	}
 	if op, ok := m.diagnosticOperations[h]; ok {
 		op.method, op.documentURI, op.initialize = method, documentURI, initialize
 		m.diagnosticOperations[h] = op
 	}
-	m.mu.Unlock()
+}
+
+func (m *Manager) omitOpenPrivateDiagnosticLocked(h DiagnosticOperationHandle, s *privateDiagnosticHistorySlot) {
+	s.collector.Terminal(diagnosticEventTerminalResponse)
+	if backing, ok := s.collector.DetachEventBacking(); ok {
+		backing.ReleaseEventBacking()
+	}
+	m.privateDiagnosticHistory.releaseSlot(h.private)
+	if m.diagnosticOmissions != ^uint64(0) {
+		m.diagnosticOmissions++
+	}
 }
 
 // DiagnosticSnapshotSetFor rejects forged, stale, cross-attempt, duplicate, open,
