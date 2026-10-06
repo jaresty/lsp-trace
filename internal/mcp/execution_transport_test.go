@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -49,24 +51,34 @@ func TestExecutionToolUsesBoundedPresentationSchema(t *testing.T) {
 
 func TestCompactAdvertisementMetadataBound(t *testing.T) {
 	registry := NewRegistryWithProfile(false, ToolProfileCompact)
-	advertised := registry.Advertised()
-	if len(advertised) != 12 {
-		t.Fatalf("ASSERT_COMPACT_TOOL_COUNT_STABLE: got=%d", len(advertised))
-	}
-	wire := make([]map[string]any, 0, len(advertised))
-	for _, tool := range advertised {
-		schema := tool.InputSchema
-		if tool.PresentationInputSchema != nil {
-			schema = tool.PresentationInputSchema
-		}
-		wire = append(wire, map[string]any{"name": tool.Name, "description": tool.Description, "inputSchema": schema})
-	}
-	encoded, err := json.Marshal(wire)
-	if err != nil {
+	var wire bytes.Buffer
+	if err := (&Server{Registry: registry}).Serve(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`+"\n"), &wire); err != nil {
 		t.Fatal(err)
 	}
-	if len(encoded) > 40*1024 {
-		t.Fatalf("ASSERT_COMPACT_ADVERTISEMENT_UNDER_40_KIB: bytes=%d", len(encoded))
+	if wire.Len() > 40*1024 {
+		t.Fatalf("ASSERT_COMPACT_ADVERTISEMENT_UNDER_40_KIB: bytes=%d", wire.Len())
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal(wire.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	result, _ := response["result"].(map[string]any)
+	tools, _ := result["tools"].([]any)
+	if len(tools) != len(compactToolNames) {
+		t.Fatalf("ASSERT_COMPACT_TOOL_COUNT_STABLE: got=%d", len(tools))
+	}
+	seen := make(map[string]struct{}, len(tools))
+	for _, raw := range tools {
+		tool, _ := raw.(map[string]any)
+		name, _ := tool["name"].(string)
+		if _, ok := compactToolNames[name]; !ok {
+			t.Fatalf("ASSERT_COMPACT_CANONICAL_TOOL_NAMES: unexpected=%q", name)
+		}
+		seen[name] = struct{}{}
+	}
+	if len(seen) != len(compactToolNames) {
+		t.Fatalf("ASSERT_COMPACT_CANONICAL_TOOL_NAMES: got=%v", seen)
 	}
 }
 
