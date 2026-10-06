@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"math"
 	"strconv"
 	"unicode/utf8"
@@ -753,7 +754,7 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 		}
 		return true
 	}
-	publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) {
+	publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) error {
 		defer m.unlockBoth()
 		commitCapture := commitBorrow.Capture
 		off := 0
@@ -768,15 +769,26 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 		off += len(commitBorrow.Result)
 		for i := 0; i < prepared.candidateLen; i++ {
 			candidate := prepared.candidates[i]
-			source := prepared.ownedSources[candidate.TargetURI]
-			sourceOff, sourceLen := uint32(off), uint32(len(source))
-			copy(a.provenanceRaw[off:], source)
-			off += len(source)
-			base := restrictedRecordReserved + i*8
-			binary.LittleEndian.PutUint32(a.provenanceRecords[base:base+4], sourceOff)
-			binary.LittleEndian.PutUint32(a.provenanceRecords[base+4:base+8], sourceLen)
+			appendCanonical := func() error {
+				source := prepared.ownedSources[candidate.TargetURI]
+				sourceOff, sourceLen := uint32(off), uint32(len(source))
+				copy(a.provenanceRaw[off:], source)
+				off += len(source)
+				base := restrictedRecordReserved + i*8
+				binary.LittleEndian.PutUint32(a.provenanceRecords[base:base+4], sourceOff)
+				binary.LittleEndian.PutUint32(a.provenanceRecords[base+4:base+8], sourceLen)
+				a.provenanceCandidates[i] = candidate
+				return nil
+			}
+			if err := commitBorrow.WithTargetAppendAdmission(uint64(candidate.Ordinal), appendCanonical); err != nil {
+				if !errors.Is(err, sessionruntime.ErrPrivateB4C17NotEnabled) {
+					return err
+				}
+				if err := appendCanonical(); err != nil {
+					return err
+				}
+			}
 		}
-		copy(a.provenanceCandidates[:], prepared.candidates[:prepared.candidateLen])
 		a.provenanceCandidateCount = uint16(prepared.candidateLen)
 		rec := a.provenanceRecords
 		copy(rec[:16], []byte("ADR0011-PROV-V2"))
@@ -805,8 +817,12 @@ func (m *restrictedOwnerManager) validateDefinitionProvenanceB4(r restrictedProv
 		a.provenanceEpoch++
 		a.provenanceFlags = 0
 		committed = a.validatedHandle(m, r.slot)
+		return nil
 	}
-	_, status = in.Manager.CommitPrivateB4DefinitionBorrowed(in.Lease, in.Selection, prepareCommit, publish)
+	_, status, publishErr := in.Manager.CommitPrivateB4DefinitionBorrowedC17(in.Lease, in.Selection, prepareCommit, publish)
+	if publishErr != nil {
+		return restrictedValidatedDefinition{}, publishErr
+	}
 	if status != sessionruntime.PrivateB4Selected {
 		return restrictedValidatedDefinition{}, errRestrictedBusy
 	}

@@ -111,9 +111,15 @@ type privateB4ReservationC16 struct {
 	profile *privateB4AccountC16
 }
 
+type privateB4ReservationC17 struct {
+	legacy  *privateB4Reservation
+	profile *privateB4EventAccountC17
+}
+
 type privateB4Transaction struct {
 	legacy *privateB4Reservation
 	c16    *privateB4ReservationC16
+	c17    *privateB4ReservationC17
 }
 
 type privateB4Reservation struct {
@@ -318,6 +324,7 @@ type privateB4Slot struct {
 	token       [32]byte
 	reservation *privateB4Reservation
 	c16         *privateB4ReservationC16
+	c17         *privateB4ReservationC17
 }
 
 const (
@@ -428,11 +435,26 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		}
 		transaction.c16 = &privateB4ReservationC16{legacy: reservation, profile: profile}
 	}
+	if req.EnablePrivateC17EventAccounting {
+		profile, failure := newPrivateB4EventAccountC17WithBytes(account)
+		if failure != "" {
+			if transaction.c16 != nil {
+				_ = transaction.c16.profile.requestTerminalReleaseC16(context.Background())
+			} else {
+				account.requestTerminalRelease()
+			}
+			return RoundTripResult{Failure: failure}, B4DefinitionLease{}
+		}
+		transaction.c17 = &privateB4ReservationC17{legacy: reservation, profile: profile}
+	}
 	terminalManaged := false
 	defer func() {
 		if !terminalManaged {
 			reservation.sourceDescriptor.release()
 			reservation.releasePrivateB4ExplicitBytes()
+			if transaction.c17 != nil {
+				_ = transaction.c17.profile.requestTerminalReleaseC17(context.Background())
+			}
 			if transaction.c16 != nil {
 				_ = transaction.c16.profile.requestTerminalReleaseC16(context.Background())
 			} else {
@@ -610,6 +632,10 @@ func fmtDigest(h [32]byte) string {
 }
 
 func (m *Manager) admitPrivateB4SourcesLocked(req RoundTripRequest, reservation *privateB4Reservation) session.Failure {
+	return m.admitPrivateB4SourcesC17Locked(req, reservation, nil)
+}
+
+func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservation *privateB4Reservation, profile *privateB4EventAccountC17) session.Failure {
 	emptySlot := -1
 	for i := range m.privateB4Leases {
 		slot := &m.privateB4Leases[i]
@@ -698,6 +724,19 @@ func (m *Manager) admitPrivateB4SourcesLocked(req RoundTripRequest, reservation 
 	reservation.selection.Key.Generation = req.Generation
 	reservation.session = m.sessions[req.SessionID]
 	reservation.capture.TargetSources = owned
+	var admission *privateB4AcquisitionAdmissionC17
+	if profile != nil {
+		var err error
+		admission, err = profile.beginAcquisitionAdmission(len(admitted))
+		if err != nil {
+			return session.ResourceExhausted
+		}
+		defer func() {
+			if !admission.settled {
+				_ = admission.rollback()
+			}
+		}()
+	}
 	descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
 	if failure != "" {
 		return failure
@@ -705,6 +744,11 @@ func (m *Manager) admitPrivateB4SourcesLocked(req RoundTripRequest, reservation 
 	reservation.sourceDescriptor = descriptor
 	for source := range seenLease {
 		source.state.Store(privateB4SourceTransferred)
+	}
+	if admission != nil {
+		if err := admission.commit(); err != nil {
+			panic("private B4 C17 acquisition settlement diverged")
+		}
 	}
 	return ""
 }
@@ -720,7 +764,7 @@ func (m *Manager) installPrivateB4Locked(_ RoundTripRequest, _ *runtimeSession, 
 
 func (m *Manager) installPrivateB4TransactionLocked(_ RoundTripRequest, _ *runtimeSession, transaction *privateB4Transaction) {
 	reservation := transaction.legacy
-	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16}
+	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16, c17: transaction.c17}
 	m.privateB4Bytes += reservation.maxCharge
 }
 
@@ -753,6 +797,9 @@ func (m *Manager) releasePrivateB4ServerErrorReservation(reservation *privateB4R
 func (m *Manager) releasePrivateB4Locked(reservation *privateB4Reservation) {
 	slot := &m.privateB4Leases[reservation.slot]
 	if slot.occupied && slot.token == reservation.token && slot.reservation == reservation {
+		if slot.c17 != nil {
+			_ = slot.c17.profile.requestTerminalReleaseC17(context.Background())
+		}
 		if slot.c16 != nil {
 			_ = slot.c16.profile.requestTerminalReleaseC16(context.Background())
 		}
@@ -796,18 +843,19 @@ func (m *Manager) hasPrivateB4CallerLeaseJoinLocked(r *runtimeSession) bool {
 }
 
 type privateB4RetirementJoin struct {
-	pairOwners         [privateB4MaxSlots]*privateB4OwnedMethodPairOwner
-	pairCount          int
-	notificationOwners [privateB4MaxSlots]*privateB4RetainedNotificationOwner
-	notificationCount  int
-	serverErrorOwners  [privateB4MaxSlots]*privateB4ServerErrorOwner
-	serverErrorCount   int
-	responseOwners     [privateB4MaxSlots]*privateB4RetainedResponseOwner
-	responseCount      int
-	manager            *Manager
-	c16Reservations    [privateB4MaxSlots]*privateB4Reservation
-	c16Profiles        [privateB4MaxSlots]*privateB4ReservationC16
-	c16Count           int
+	pairOwners             [privateB4MaxSlots]*privateB4OwnedMethodPairOwner
+	pairCount              int
+	notificationOwners     [privateB4MaxSlots]*privateB4RetainedNotificationOwner
+	notificationCount      int
+	serverErrorOwners      [privateB4MaxSlots]*privateB4ServerErrorOwner
+	serverErrorCount       int
+	responseOwners         [privateB4MaxSlots]*privateB4RetainedResponseOwner
+	responseCount          int
+	manager                *Manager
+	accountingReservations [privateB4MaxSlots]*privateB4Reservation
+	c16Profiles            [privateB4MaxSlots]*privateB4ReservationC16
+	c17Profiles            [privateB4MaxSlots]*privateB4ReservationC17
+	accountingCount        int
 }
 
 func (j *privateB4RetirementJoin) wait() {
@@ -826,9 +874,13 @@ func (j *privateB4RetirementJoin) wait() {
 	for i := 0; i < j.responseCount; i++ {
 		j.responseOwners[i].waitReleased()
 	}
-	for i := 0; i < j.c16Count; i++ {
-		reservation := j.c16Reservations[i]
+	for i := 0; i < j.accountingCount; i++ {
+		reservation := j.accountingReservations[i]
+		c17 := j.c17Profiles[i]
 		c16 := j.c16Profiles[i]
+		if c17 != nil {
+			_ = c17.profile.requestTerminalReleaseC17(context.Background())
+		}
 		if c16 != nil {
 			_ = c16.profile.requestTerminalReleaseC16(context.Background())
 		}
@@ -870,10 +922,11 @@ func (m *Manager) retirePrivateB4StoppedLocked(id string, generation uint64, sto
 				join.responseOwners[join.responseCount] = reservation.retainedResponses
 				join.responseCount++
 			}
-			if m.privateB4Leases[i].c16 != nil {
-				join.c16Reservations[join.c16Count] = reservation
-				join.c16Profiles[join.c16Count] = m.privateB4Leases[i].c16
-				join.c16Count++
+			if m.privateB4Leases[i].c16 != nil || m.privateB4Leases[i].c17 != nil {
+				join.accountingReservations[join.accountingCount] = reservation
+				join.c16Profiles[join.accountingCount] = m.privateB4Leases[i].c16
+				join.c17Profiles[join.accountingCount] = m.privateB4Leases[i].c17
+				join.accountingCount++
 			} else {
 				m.releasePrivateB4Locked(reservation)
 			}
@@ -921,6 +974,7 @@ type PrivateB4DefinitionBorrow struct {
 	Result  []byte
 
 	c16 *privateB4ReservationC16
+	c17 *privateB4EventAccountC17
 }
 
 // WithObjectAdmission admits one parser-owned C16 materialization. Copies of
@@ -930,6 +984,15 @@ func (b PrivateB4DefinitionBorrow) WithObjectAdmission(materialize func() error)
 		return ErrPrivateB4C16NotEnabled
 	}
 	return b.c16.profile.WithObjectAdmission(materialize)
+}
+
+// WithTargetAppendAdmission atomically admits one original target ordinal's
+// TARGET_BEGIN and TARGET_TERMINAL pair before invoking appendCanonical.
+func (b PrivateB4DefinitionBorrow) WithTargetAppendAdmission(originalOrdinal uint64, appendCanonical func() error) error {
+	if b.c17 == nil {
+		return ErrPrivateB4C17NotEnabled
+	}
+	return b.c17.withTargetAppendAdmission(originalOrdinal, appendCanonical)
 }
 
 // PreparePrivateB4DefinitionBorrowed presents the manager-owned lexical result
@@ -963,8 +1026,13 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
-	c16 := m.privateB4Leases[reservation.slot].c16
-	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16}
+	slot := m.privateB4Leases[reservation.slot]
+	c16 := slot.c16
+	var c17 *privateB4EventAccountC17
+	if slot.c17 != nil {
+		c17 = slot.c17.profile
+	}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
 	if c16 == nil {
 		defer m.mu.Unlock()
 		if !prepare(borrow) {
@@ -993,6 +1061,119 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 	m.mu.Unlock()
 	publish(borrow)
 	return capture, PrivateB4Selected
+}
+
+// CommitPrivateB4DefinitionBorrowedC17 keeps the transaction accounting guards
+// alive through publication while executing caller callbacks outside Manager.mu.
+// A false prepare (or prepare panic) leaves the reservation reusable. After a
+// successful prepare, success, error, and panic all consume it exactly once.
+func (m *Manager) CommitPrivateB4DefinitionBorrowedC17(lease B4DefinitionLease, selection B4DefinitionSelectionKey, prepare func(PrivateB4DefinitionBorrow) bool, publish func(PrivateB4DefinitionBorrow) error) (PrivateB4DefinitionCapture, PrivateB4Status, error) {
+	if prepare == nil || publish == nil {
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, nil
+	}
+	// Preserve the accepted legacy/default-off path exactly when this transaction
+	// has no C17 profile. Its producer callback does not return an error in that
+	// mode, so the adapter only transports the already-infallible result.
+	m.mu.Lock()
+	legacyReservation := m.privateB4ReservationLocked(lease.token)
+	c17Enabled := legacyReservation != nil && m.privateB4Leases[legacyReservation.slot].c17 != nil
+	m.mu.Unlock()
+	if !c17Enabled {
+		var publishErr error
+		capture, status := m.CommitPrivateB4DefinitionBorrowed(lease, selection, prepare, func(borrow PrivateB4DefinitionBorrow) {
+			publishErr = publish(borrow)
+		})
+		return capture, status, publishErr
+	}
+
+	m.mu.Lock()
+	reservation, capture, status := m.privateB4CaptureLocked(lease, selection)
+	if status != PrivateB4Selected || reservation.resultOwner == nil || prepare == nil || publish == nil {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, nil
+	}
+	result, ok := reservation.resultOwner.managerBytes()
+	if !ok {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, nil
+	}
+	slot := m.privateB4Leases[reservation.slot]
+	if slot.c17 == nil || slot.c17.profile == nil {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, ErrPrivateB4C17NotEnabled
+	}
+	c16 := slot.c16
+	c17 := slot.c17.profile
+	if c16 != nil && c16.profile.beginBorrow() != nil {
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, nil
+	}
+	if err := c17.beginPublication(); err != nil {
+		if c16 != nil {
+			c16.profile.endBorrow()
+		}
+		m.mu.Unlock()
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, err
+	}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
+	m.mu.Unlock()
+
+	prepared := false
+	prepareCompleted := false
+	var preparePanic any
+	func() {
+		defer func() {
+			if !prepareCompleted {
+				preparePanic = recover()
+			}
+		}()
+		prepared = prepare(borrow)
+		prepareCompleted = true
+	}()
+	if !prepareCompleted || !prepared {
+		c17.endPublication()
+		if c16 != nil {
+			c16.profile.endBorrow()
+		}
+		if !prepareCompleted {
+			panic(preparePanic)
+		}
+		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, nil
+	}
+
+	var publishErr error
+	publishCompleted := false
+	var publishPanic any
+	func() {
+		defer func() {
+			if !publishCompleted {
+				publishPanic = recover()
+			}
+		}()
+		publishErr = publish(borrow)
+		publishCompleted = true
+	}()
+
+	// End both guards before reacquiring Manager.mu. A concurrent STOP/RESTART
+	// may then win the release race; either path observes and consumes the same
+	// reservation identity exactly once.
+	c17.endPublication()
+	if c16 != nil {
+		c16.profile.endBorrow()
+	}
+	m.mu.Lock()
+	if m.privateB4ReservationLocked(lease.token) == reservation {
+		m.releasePrivateB4Locked(reservation)
+	}
+	m.mu.Unlock()
+
+	if !publishCompleted {
+		panic(publishPanic)
+	}
+	if publishErr != nil {
+		return PrivateB4DefinitionCapture{}, PrivateB4Selected, publishErr
+	}
+	return capture, PrivateB4Selected, nil
 }
 
 func (m *Manager) ConsumePrivateB4DefinitionBorrowed(lease B4DefinitionLease, selection B4DefinitionSelectionKey, consume func(PrivateB4DefinitionBorrow) bool) (PrivateB4DefinitionCapture, PrivateB4Status) {

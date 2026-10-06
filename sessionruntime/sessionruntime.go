@@ -254,6 +254,10 @@ type RoundTripRequest struct {
 	// marker valid only for the marked private B4 transaction path. It is not a
 	// protocol, CLI, MCP, schema, or general Manager feature.
 	EnablePrivateC16ObjectAccounting bool `json:"-"`
+	// EnablePrivateC17EventAccounting is an experimental, default-off capability
+	// marker valid only for the marked private B4 transaction path. It is not a
+	// protocol, CLI, MCP, schema, or general Manager feature.
+	EnablePrivateC17EventAccounting bool `json:"-"`
 	// Private allocation opt-in, not authentication or an occurrence receipt.
 	ADR0011PrivateLimitAllocationV1      bool `json:"-"`
 	ADR0011PrivateOwnedMethodPairLeaseV1 bool `json:"-"`
@@ -679,7 +683,7 @@ type RoundTripResult struct {
 // owning the exact generation's stdin/stdout stream. Concurrent transactions
 // and lifecycle operations are rejected rather than queued.
 func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
-	if req.EnablePrivateC16ObjectAccounting {
+	if req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
 		return RoundTripResult{Failure: session.ToolNotImplemented}
 	}
 	if req.ADR0011PrivateP2 && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") {
@@ -786,7 +790,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		}
 		private.historyBorrowed = true
 		if !private.nonCustodial {
-			if failure := m.admitPrivateB4SourcesLocked(req, private); failure != "" {
+			var acquisitionProfile *privateB4EventAccountC17
+			if transaction != nil && transaction.c17 != nil {
+				acquisitionProfile = transaction.c17.profile
+			}
+			if failure := m.admitPrivateB4SourcesC17Locked(req, private, acquisitionProfile); failure != "" {
 				private.history.releaseBorrowerLocked()
 				private.historyBorrowed = false
 				m.mu.Unlock()
@@ -1077,7 +1085,13 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				read.frameOwner.releaseManager()
 			}
 			if custodialPrivateB4 && read.message.Kind() == lspwire.KindRequest {
-				failure, poison := writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
+				var capabilityProfile *privateB4EventAccountC17
+				if transaction != nil && transaction.c17 != nil {
+					capabilityProfile = transaction.c17.profile
+				}
+				failure, poison := writePrivateB4CapabilityResponseC17(capabilityProfile, read.message.Method, read.message.Params, func() (session.Failure, bool) {
+					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
+				})
 				releaseUnselectedFrame()
 				if failure != "" {
 					return m.finishRoundTrip(req.SessionID, owner, result, failure, poison)

@@ -613,7 +613,7 @@ func TestRestrictedDefinitionB4ForgedInitialAcquisitionRefused(t *testing.T) {
 	}
 }
 
-func TestRestrictedDefinitionB4CommitPublicationCallbackIsInfallible(t *testing.T) {
+func TestRestrictedDefinitionB4CommitPublicationCallbackIsErrorReturningAndOrdinalBounded(t *testing.T) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("ASSERT_B4_COMMIT_CALLBACK_SOURCE_LOCATION")
@@ -623,18 +623,28 @@ func TestRestrictedDefinitionB4CommitPublicationCallbackIsInfallible(t *testing.
 		t.Fatal(err)
 	}
 	source := string(production)
-	start := strings.Index(source, "publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) {")
+	start := strings.Index(source, "publish := func(commitBorrow sessionruntime.PrivateB4DefinitionBorrow) error {")
 	if start < 0 {
 		t.Fatal("ASSERT_B4_COMMIT_CALLBACK_PRESENT")
 	}
-	end := strings.Index(source[start:], "\n\t}\n\t_, status = in.Manager.CommitPrivateB4DefinitionBorrowed")
+	end := strings.Index(source[start:], "\n\t}\n\t_, status, publishErr := in.Manager.CommitPrivateB4DefinitionBorrowedC17")
 	if end < 0 {
 		t.Fatal("ASSERT_B4_COMMIT_CALLBACK_BOUNDARY")
 	}
 	callback := source[start : start+end]
-	for _, forbidden := range []string{"bool {", "return false", "tryBoth()", ".exact(m)", "make("} {
+	for _, required := range []string{"WithTargetAppendAdmission(uint64(candidate.Ordinal)", "return err", "a.provenanceState = restrictedProvenanceValidated", "committed = a.validatedHandle"} {
+		if !strings.Contains(callback, required) {
+			t.Fatalf("ASSERT_B4_COMMIT_CALLBACK_C17_REQUIRED required=%q body=%s", required, callback)
+		}
+	}
+	admission := strings.Index(callback, "WithTargetAppendAdmission(uint64(candidate.Ordinal)")
+	validated := strings.Index(callback, "a.provenanceState = restrictedProvenanceValidated")
+	if admission < 0 || validated < admission {
+		t.Fatalf("ASSERT_B4_COMMIT_CALLBACK_DELAYED_VISIBILITY admission=%d validated=%d", admission, validated)
+	}
+	for _, forbidden := range []string{"WithTargetAppendAdmission(uint64(i)", "tryBoth()", ".exact(m)", "make("} {
 		if strings.Contains(callback, forbidden) {
-			t.Fatalf("ASSERT_B4_COMMIT_CALLBACK_INFALLIBLE forbidden=%q body=%s", forbidden, callback)
+			t.Fatalf("ASSERT_B4_COMMIT_CALLBACK_C17_FORBIDDEN forbidden=%q body=%s", forbidden, callback)
 		}
 	}
 }
