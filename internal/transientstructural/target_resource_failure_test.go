@@ -434,6 +434,40 @@ func TestTargetResourceFailurePrecedenceControls(t *testing.T) {
 	if got := targetResolutionState(context.Background(), "OTHER", Accounting{}, false, manager, started.SessionID, started.Generation); got != StateInvalidServerResponse {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_ABSENT_EVIDENCE_CONTROL: got=%s", got)
 	}
+
+	cases := []struct {
+		code string
+		want TerminalState
+	}{
+		{"POSITION_SYMBOL_ABSENT", StateTargetNotFound},
+		{"DOCUMENT_SYMBOL_ABSENT", StateTargetNotFound},
+		{"SOURCE_TARGET_ABSENT", StateTargetNotFound},
+		{"ENUMERATION_TRUNCATED", StateTargetNotFound},
+		{"DOCUMENT_SYMBOL_UNPREPARABLE", StateTargetNotFound},
+		{"POSITION_PREPARE_MISMATCH", StateAmbiguousTarget},
+		{"POSITION_PREPARE_AMBIGUOUS", StateAmbiguousTarget},
+		{"POSITION_SYMBOL_AMBIGUOUS", StateAmbiguousTarget},
+		{"DOCUMENT_SYMBOL_AMBIGUOUS", StateAmbiguousTarget},
+		{"SOURCE_TARGET_AMBIGUOUS", StateAmbiguousTarget},
+		{"DOCUMENT_SYMBOL_PREPARE_MISMATCH", StateAmbiguousTarget},
+		{"DOCUMENT_SYMBOL_UNSUPPORTED", StateUnsupported},
+		{"CANCELLED", StateCancelled},
+		{"REQUEST_TIMEOUT", StateTimeout},
+		{"DOCUMENT_SYMBOL_FAILED", StateInvalidServerResponse},
+		{"DOCUMENT_SYMBOL_MALFORMED_RANGE", StateInvalidServerResponse},
+		{"DOCUMENT_SYMBOL_PREPARE_FAILED", StateInvalidServerResponse},
+	}
+	for _, tc := range cases {
+		if got := targetResolutionState(context.Background(), tc.code, Accounting{}, false, manager, started.SessionID, started.Generation); got != tc.want {
+			t.Errorf("ASSERT_TARGET_RESOLUTION_CODE_EXHAUSTIVE_%s: got=%s want=%s", tc.code, got, tc.want)
+		}
+	}
+	if got := targetResolutionState(ctx, "DOCUMENT_SYMBOL_ABSENT", Accounting{}, false, manager, started.SessionID, started.Generation); got != StateCancelled {
+		t.Fatalf("ASSERT_TARGET_RESOLUTION_CANCEL_PRECEDES_CLASSIFICATION: got=%s", got)
+	}
+	if got := targetResolutionState(context.Background(), "DOCUMENT_SYMBOL_ABSENT", Accounting{}, true, manager, started.SessionID, started.Generation); got != StateResourceLimit {
+		t.Fatalf("ASSERT_TARGET_RESOLUTION_RESOURCE_PRECEDES_CLASSIFICATION: got=%s", got)
+	}
 }
 
 func TestTargetResourceFailureGenericMalformedResponseDoesNotPoison(t *testing.T) {

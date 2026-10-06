@@ -3,6 +3,7 @@ package incomingops
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -172,8 +173,17 @@ func TestResolvePreparedPositionBoundedRecovery(t *testing.T) {
 		f := &fakeRuntime{observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {miss}}, results: map[string][]json.RawMessage{"textDocument/prepareCallHierarchy": {itemRaw}, "textDocument/documentSymbol": {symbolRaw}}}
 		client := NewSessionClient(f, "s", 1, 100)
 		prepared, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
-		if failed != nil || len(prepared.Items) != 1 || len(f.calls) != 3 {
-			t.Fatalf("ASSERT_POSITION_RETRYABLE_LOCATOR_MISS_RECOVERS: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		if failed != nil || len(prepared.Items) != 1 || prepared.Action != "RECOVERED_PREPARE" || len(f.calls) != 3 {
+			t.Fatalf("ASSERT_POSITION_RETRYABLE_VALIDATED_LOCATOR_MISS_RECOVERS: prepared=%+v failed=%v calls=%v", prepared, failed, f.calls)
+		}
+	})
+	t.Run("unrelated code zero", func(t *testing.T) {
+		miss := sessionruntime.RoundTripResult{ServerError: &lspwire.RPCError{Code: 0, Message: "type information unavailable"}}
+		f := &fakeRuntime{observed: map[string][]sessionruntime.RoundTripResult{"textDocument/prepareCallHierarchy": {miss}}}
+		client := NewSessionClient(f, "s", 1, 100)
+		_, failed := ResolvePreparedTarget(context.Background(), client, uri, "", &line, &character)
+		if failed == nil || failed.Code != "DOCUMENT_SYMBOL_PREPARE_FAILED" || len(f.calls) != 1 {
+			t.Fatalf("ASSERT_POSITION_UNRELATED_CODE_ZERO_STOPS_INITIAL_REQUEST: failed=%v calls=%v", failed, f.calls)
 		}
 	})
 	t.Run("unsupported document symbols", func(t *testing.T) {
@@ -207,6 +217,17 @@ func TestResolvePreparedPositionBoundedRecovery(t *testing.T) {
 			t.Fatalf("ASSERT_POSITION_ARBITRARY_PREPARE_ERROR_NOT_RETRIED: failed=%v calls=%v", failed, f.calls)
 		}
 	})
+}
+
+func TestRPCErrorClassificationCompatibility(t *testing.T) {
+	rpcErr := &rpcError{code: -32601, message: "method not found"}
+	if got, want := rpcErr.Error(), "json-rpc error -32601: method not found"; got != want {
+		t.Fatalf("ASSERT_RPC_ERROR_HISTORICAL_FORMAT: got=%q want=%q", got, want)
+	}
+	nonRPC := errors.New("json-rpc error -32601: identifier not found")
+	if rpcErrorCode(nonRPC) == -32601 || retryablePositionPrepareMiss(nonRPC) || retryableSymbolPrepareMiss(nonRPC) {
+		t.Fatalf("ASSERT_NON_RPC_ERROR_NOT_CLASSIFIED: code=%d position=%t symbol=%t", rpcErrorCode(nonRPC), retryablePositionPrepareMiss(nonRPC), retryableSymbolPrepareMiss(nonRPC))
+	}
 }
 
 func TestIncomingUnsupportedCallHierarchySendsNoHierarchyRequests(t *testing.T) {

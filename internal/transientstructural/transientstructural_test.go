@@ -154,7 +154,7 @@ func TestProjectionRejectsCollisionAndNodeOverflow(t *testing.T) {
 
 func TestPolicyDigestGraphDigestAndClaimPrivacy(t *testing.T) {
 	wantPolicy := PolicyBinding{
-		LifecycleID: "lsp-trace.transient-structural-lifecycle", LifecycleVersion: "1", LifecycleSHA256: "sha256:5229736442c03655b9e7e86055b120c3f2988a8de3f46663bfe0a34799bf722c",
+		LifecycleID: "lsp-trace.transient-structural-lifecycle", LifecycleVersion: "1", LifecycleSHA256: "sha256:e3ecb7d197eeb568e7d15184e853c34eb23e37820660ddb4ec30d1671ea9ff40",
 		PrivacyID: "lsp-trace.transient-structural-privacy", PrivacyVersion: "1", PrivacySHA256: "sha256:bcb3e20fd7f3bd0220cb05292eccb7a6c5be9ecc489f0495bc4b57f6d6436c7a",
 		IdentityID: "lsp-trace.transient-structural-identity", IdentityVersion: "1", IdentitySHA256: "sha256:6ed192ba653818c22e7c0526145aa221fd3ca3613a6afbcb5cd36df421be84f0",
 		AnalysisID: "lsp-trace.transient-structural-analysis", AnalysisVersion: "1", AnalysisSHA256: "sha256:24ac85888bd951c8c77f05c69c7f1bd82abfe2b406c613def6c22ee76ee44819",
@@ -284,9 +284,9 @@ func TestDocumentPreparationFailureReason(t *testing.T) {
 }
 
 func TestSourceUnavailableFailureReason(t *testing.T) {
-	failure := sourceUnavailableFailure()
-	if failure.Phase != PhasePreflight || failure.State != StateInvalidServerResponse || failure.Reason != FailureReasonSourceUnavailable {
-		t.Fatalf("ASSERT_SOURCE_UNAVAILABLE_FAILURE_REASON: %+v", failure)
+	failure := documentPreparationFailure(PhasePreflight, sessionruntime.DocumentOutsideWorkspace, Accounting{})
+	if failure.Phase != PhasePreflight || string(failure.State) != "SOURCE_UNAVAILABLE" || string(failure.Reason) != "DOCUMENT_OUTSIDE_WORKSPACE" || failure.TargetDiagnostic != nil || failure.TraversalDiagnostic != nil {
+		t.Fatalf("ASSERT_EXTERNAL_SOURCE_UNAVAILABLE_OUTSIDE_WORKSPACE: %+v", failure)
 	}
 }
 

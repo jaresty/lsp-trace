@@ -638,6 +638,15 @@ func (s *Server) callContext(ctx context.Context, base response, raw json.RawMes
 				if (domain.State == transientstructural.StateTruncated && tool.Name != mcpcontract.StructuralContextV2Tool) || (tool.Name == mcpcontract.StructuralContextSymbolV2Tool && domain.State == transientstructural.StateResourceLimit) {
 					return bindEnvelope(base, tool, structuralContextTruncationEnvelope(tool.Name, domain, operationArguments))
 				}
+				if tool.Name == mcpcontract.StructuralContextTool && domain.Phase == transientstructural.PhasePreflight && domain.State == transientstructural.StateSourceUnavailable && domain.Reason == transientstructural.FailureReasonDocumentOutsideWorkspace {
+					// V1's frozen domain-error vocabulary has no source-unavailable state.
+					// Preserve the fail-closed preflight classification without exposing
+					// the V2-only reason or any source identity details.
+					legacy := *domain
+					legacy.State = transientstructural.StateInvalidServerResponse
+					legacy.Reason = ""
+					domain = &legacy
+				}
 				return bindEnvelope(base, tool, structuralContextTraversalDomainError(tool.Name, domain, operationArguments))
 			}
 			state := failure.Code

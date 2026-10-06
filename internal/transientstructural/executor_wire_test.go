@@ -622,6 +622,21 @@ func baseWireRequest(started sessionruntime.StartResult, uri string) Request {
 		UpDepth: 1, DownDepth: 1, MaxNodes: 8, TimeoutMS: 1000, RequestTimeoutMS: 250, MaxMessages: 8, MaxBytes: 8192, Analysis: AnalysisRequest{Kind: AnalysisNeighborhood}}
 }
 
+func TestExactExternalTargetStopsBeforeLocatorAndSourceDisclosure(t *testing.T) {
+	manager, started, _, starter := structuralManagerWithResponses(t, nil)
+	external := (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(t.TempDir(), "sdk.go"))}).String()
+	request := baseWireRequest(started, external)
+	request.Target.Line, request.Target.Character = nil, nil
+	request.Target.Regex = &RegexLocator{Pattern: "Validate", MaxDocumentBytes: 1024, MaxMatches: 1, MaxPatternBytes: 64, MaxWork: 1024}
+	_, failure := Execute(context.Background(), manager, request)
+	if failure == nil || failure.State != StateSourceUnavailable || failure.Reason != FailureReasonDocumentOutsideWorkspace || failure.TargetDiagnostic != nil || failure.TraversalDiagnostic != nil {
+		t.Fatalf("ASSERT_EXTERNAL_TYPED_SOURCE_UNAVAILABLE: %+v", failure)
+	}
+	if methods := starter.children[0].observedMethods(); len(methods) != 0 {
+		t.Fatalf("ASSERT_EXTERNAL_NO_DOCUMENT_SYMBOL_OR_CALL_HIERARCHY: %v", methods)
+	}
+}
+
 func TestExecuteCapabilityAndEncodingPreflightFailures(t *testing.T) {
 	cases := []struct {
 		name       string

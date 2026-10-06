@@ -36,6 +36,7 @@ const (
 	StateCancelled             TerminalState = "CANCELLED"
 	StateGenerationChanged     TerminalState = "GENERATION_CHANGED"
 	StateInvalidServerResponse TerminalState = "INVALID_SERVER_RESPONSE"
+	StateSourceUnavailable     TerminalState = "SOURCE_UNAVAILABLE"
 	StateAnalysisFailed        TerminalState = "ANALYSIS_FAILED"
 )
 
@@ -396,10 +397,11 @@ type ResourceDiagnostic struct {
 type FailureReason string
 
 const (
-	FailureReasonNoRegexMatch      FailureReason = "NO_REGEX_MATCH"
-	FailureReasonSourceUnavailable FailureReason = "SOURCE_UNAVAILABLE"
-	FailureReasonPrepareFailed     FailureReason = "PREPARE_FAILED"
-	FailureReasonTraversalFailed   FailureReason = "TRAVERSAL_FAILED"
+	FailureReasonNoRegexMatch             FailureReason = "NO_REGEX_MATCH"
+	FailureReasonSourceUnavailable        FailureReason = "SOURCE_UNAVAILABLE"
+	FailureReasonDocumentOutsideWorkspace FailureReason = "DOCUMENT_OUTSIDE_WORKSPACE"
+	FailureReasonPrepareFailed            FailureReason = "PREPARE_FAILED"
+	FailureReasonTraversalFailed          FailureReason = "TRAVERSAL_FAILED"
 )
 
 type DomainFailure struct {

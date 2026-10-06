@@ -97,6 +97,65 @@ func TestStructuralContextOperation35PreservesTypedDomainFailures(t *testing.T) 
 	}
 }
 
+func TestStructuralContextOutsideWorkspaceCompatibilityDirectGateway(t *testing.T) {
+	failure := &operation.Failure{Code: string(transientstructural.StateSourceUnavailable), Err: &transientstructural.DomainFailure{
+		Phase:  transientstructural.PhasePreflight,
+		State:  transientstructural.StateSourceUnavailable,
+		Reason: transientstructural.FailureReasonDocumentOutsideWorkspace,
+	}}
+	tests := []struct {
+		name         string
+		tool         string
+		family       ExecutorFamily
+		args         map[string]any
+		wantSchemaID string
+		wantPhase    string
+		wantState    string
+		wantReason   string
+		wantCode     string
+	}{
+		// V1's frozen vocabulary cannot express SOURCE_UNAVAILABLE. Map the
+		// unavailable source to its existing fail-closed preflight fallback.
+		{name: "v1", tool: mcpcontract.StructuralContextTool, family: StructuralContextExecutorFamily, args: structuralContextArgs(), wantSchemaID: mcpcontract.StructuralContextDomainErrorID, wantPhase: "PREFLIGHT", wantState: "INVALID_SERVER_RESPONSE", wantCode: "INVALID_SERVER_RESPONSE"},
+		{name: "v2", tool: mcpcontract.StructuralContextV2Tool, family: StructuralContextV2ExecutorFamily, args: structuralContextV2Args(), wantSchemaID: mcpcontract.StructuralContextTraversalDomainErrorID, wantPhase: "PREFLIGHT", wantState: "SOURCE_UNAVAILABLE", wantReason: "DOCUMENT_OUTSIDE_WORKSPACE", wantCode: "SOURCE_UNAVAILABLE"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			executor := &structuralContextRecordingExecutor{failure: failure}
+			server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{tc.family: executor}}
+			direct := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(1)}, mustCallParams(t, tc.tool, tc.args))
+			gateway := server.callContext(context.Background(), response{JSONRPC: "2.0", ID: float64(2)}, mustCallParams(t, "lsp_trace_v1_execute", map[string]any{"request": map[string]any{"operation": tc.tool, "arguments": tc.args}}))
+			if direct.Error != nil || gateway.Error != nil {
+				t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_%s_TRANSPORT: direct=%v gateway=%v", strings.ToUpper(tc.name), direct.Error, gateway.Error)
+			}
+			directEnvelope := direct.Result.(callResult).StructuredContent
+			outer := gateway.Result.(callResult).StructuredContent
+			var gatewayEnvelope envelope
+			if err := json.Unmarshal([]byte(outer.DelegatedEnvelope), &gatewayEnvelope); err != nil {
+				t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_%s_GATEWAY_DECODE: %v", strings.ToUpper(tc.name), err)
+			}
+			for label, env := range map[string]envelope{"direct": directEnvelope, "gateway": gatewayEnvelope} {
+				raw, _ := json.Marshal(env)
+				var projected map[string]any
+				_ = json.Unmarshal(raw, &projected)
+				errorCode := projected["error"].(map[string]any)["code"]
+				if env.EnvelopeSchemaID != tc.wantSchemaID || env.Phase != tc.wantPhase || env.State != tc.wantState || env.Reason != tc.wantReason || errorCode != tc.wantCode {
+					t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_%s_%s_EXACT: %s", strings.ToUpper(tc.name), strings.ToUpper(label), raw)
+				}
+				if err := mcpcontract.ValidateJSON(tc.wantSchemaID, raw); err != nil {
+					t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_%s_%s_SCHEMA: %v\n%s", strings.ToUpper(tc.name), strings.ToUpper(label), err, raw)
+				}
+				if tc.name == "v1" && strings.Contains(string(raw), "SOURCE_UNAVAILABLE") {
+					t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_V1_NEVER_SOURCE_UNAVAILABLE_%s: %s", strings.ToUpper(label), raw)
+				}
+				if tc.name == "v2" && !strings.Contains(string(raw), `"state":"SOURCE_UNAVAILABLE"`) {
+					t.Fatalf("ASSERT_OUTSIDE_WORKSPACE_V2_RETAINS_SOURCE_UNAVAILABLE_%s: %s", strings.ToUpper(label), raw)
+				}
+			}
+		})
+	}
+}
+
 func TestStructuralContextV2TraversalFailureReasonProjection(t *testing.T) {
 	executor := &structuralContextRecordingExecutor{failure: &operation.Failure{Code: "INVALID_SERVER_RESPONSE"}}
 	server := &Server{Registry: NewRegistryWithProfile(false, ToolProfileFull), Executors: map[ExecutorFamily]Executor{StructuralContextV2ExecutorFamily: executor}}

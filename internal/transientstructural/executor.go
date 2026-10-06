@@ -89,7 +89,11 @@ func execute(parent context.Context, runtime *sessionruntime.Manager, request Re
 	}
 	document := runtime.PrepareDocument(ctx, documentRequest)
 	if document.Failure != "" {
-		return Result{}, documentPreparationFailure(PhaseTraversal, document.Failure, Accounting{})
+		phase := PhaseTraversal
+		if document.Failure == sessionruntime.DocumentOutsideWorkspace {
+			phase = PhasePreflight
+		}
+		return Result{}, documentPreparationFailure(phase, document.Failure, Accounting{})
 	}
 	if err := ctx.Err(); err != nil {
 		return Result{}, fail(PhaseTraversal, terminalForContext(ctx), Accounting{})
@@ -512,36 +516,40 @@ func preparedTargetDiagnostic(prepared incomingops.PreparedTarget) *TargetDiagno
 }
 
 func targetResolutionState(ctx context.Context, code string, accounting Accounting, targetResourceFailure bool, runtime *sessionruntime.Manager, sessionID string, generation uint64) TerminalState {
+	// Context cancellation/deadline retains precedence. Metadata remains
+	// authoritative for stale or missing generations; typed resource evidence
+	// wins only after metadata succeeds or reports LifecycleConflict.
+	if ctx.Err() != nil {
+		return terminalForContext(ctx)
+	}
+	if _, failure := runtime.Metadata(sessionID, generation); failure != "" {
+		if targetResourceFailure && failure == session.LifecycleConflict {
+			return StateResourceLimit
+		}
+		return terminalForSessionFailure(failure)
+	}
+	if targetResourceFailure {
+		return StateResourceLimit
+	}
+	state := traversalState(ctx, accounting, runtime, sessionID, generation)
+	switch state {
+	case StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged:
+		return state
+	}
+
 	switch code {
-	case "DOCUMENT_SYMBOL_ABSENT", "ENUMERATION_TRUNCATED":
+	case "POSITION_SYMBOL_ABSENT", "DOCUMENT_SYMBOL_ABSENT", "SOURCE_TARGET_ABSENT", "ENUMERATION_TRUNCATED", "DOCUMENT_SYMBOL_UNPREPARABLE":
 		return StateTargetNotFound
-	case "DOCUMENT_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_PREPARE_MISMATCH":
+	case "POSITION_PREPARE_MISMATCH", "POSITION_PREPARE_AMBIGUOUS", "POSITION_SYMBOL_AMBIGUOUS", "DOCUMENT_SYMBOL_AMBIGUOUS", "SOURCE_TARGET_AMBIGUOUS", "DOCUMENT_SYMBOL_PREPARE_MISMATCH":
 		return StateAmbiguousTarget
 	case "DOCUMENT_SYMBOL_UNSUPPORTED":
 		return StateUnsupported
+	case "CANCELLED":
+		return StateCancelled
+	case "REQUEST_TIMEOUT":
+		return StateTimeout
 	default:
-		// Context cancellation/deadline retains precedence. Metadata remains
-		// authoritative for stale or missing generations; typed resource evidence
-		// wins only after metadata succeeds or reports LifecycleConflict.
-		if ctx.Err() != nil {
-			return terminalForContext(ctx)
-		}
-		if _, failure := runtime.Metadata(sessionID, generation); failure != "" {
-			if targetResourceFailure && failure == session.LifecycleConflict {
-				return StateResourceLimit
-			}
-			return terminalForSessionFailure(failure)
-		}
-		if targetResourceFailure {
-			return StateResourceLimit
-		}
-		state := traversalState(ctx, accounting, runtime, sessionID, generation)
-		switch state {
-		case StateResourceLimit, StateTimeout, StateCancelled, StateGenerationChanged:
-			return state
-		default:
-			return StateInvalidServerResponse
-		}
+		return StateInvalidServerResponse
 	}
 }
 
@@ -656,7 +664,7 @@ func rootOpaque(projection admittedProjection) string { return projection.target
 func legalTerminalPair(phase Phase, state TerminalState) bool {
 	switch phase {
 	case PhasePreflight:
-		return state == StateUnsupported || state == StateAmbiguousTarget || state == StateTargetNotFound || state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse
+		return state == StateUnsupported || state == StateAmbiguousTarget || state == StateTargetNotFound || state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse || state == StateSourceUnavailable
 	case PhaseTraversal:
 		return state == StatePartial || state == StateTruncated || state == StateResourceLimit || state == StateTimeout || state == StateCancelled || state == StateGenerationChanged || state == StateInvalidServerResponse
 	case PhaseAdmission:
@@ -671,6 +679,9 @@ func legalTerminalPair(phase Phase, state TerminalState) bool {
 }
 
 func documentPreparationFailure(phase Phase, preparationFailure session.Failure, accounting Accounting) *DomainFailure {
+	if phase == PhasePreflight && preparationFailure == sessionruntime.DocumentOutsideWorkspace {
+		return failWithReason(phase, StateSourceUnavailable, FailureReasonDocumentOutsideWorkspace, accounting)
+	}
 	state := terminalForSessionFailure(preparationFailure)
 	if state == StateInvalidServerResponse {
 		return failWithReason(phase, state, FailureReasonPrepareFailed, accounting)

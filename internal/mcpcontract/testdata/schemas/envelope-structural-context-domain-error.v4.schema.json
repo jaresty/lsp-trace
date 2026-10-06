@@ -117,6 +117,7 @@
       "enum": [
         "NO_REGEX_MATCH",
         "SOURCE_UNAVAILABLE",
+        "DOCUMENT_OUTSIDE_WORKSPACE",
         "PREPARE_FAILED",
         "TRAVERSAL_FAILED"
       ]
@@ -136,7 +137,8 @@
         "TIMEOUT",
         "CANCELLED",
         "GENERATION_CHANGED",
-        "INVALID_SERVER_RESPONSE"
+        "INVALID_SERVER_RESPONSE",
+        "SOURCE_UNAVAILABLE"
       ]
     },
     "error": {

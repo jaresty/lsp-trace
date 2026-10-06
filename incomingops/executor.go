@@ -243,7 +243,7 @@ func ResolvePreparedTarget(ctx context.Context, client *SessionClient, uri, symb
 			}
 			return PreparedTarget{Line: *line, Character: *character, Items: items, Action: "DIRECT_PREPARE"}, nil
 		}
-		if err != nil && !retryableSymbolPrepareMiss(err) {
+		if err != nil && !retryablePositionPrepareMiss(err) {
 			return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, classifiedPrepareFailure(err)
 		}
 		if err == nil && len(items) > 1 {
@@ -257,7 +257,7 @@ func ResolvePreparedTarget(ctx context.Context, client *SessionClient, uri, symb
 func resolveSymbolPrepared(ctx context.Context, client *SessionClient, uri, symbolName string) (PreparedTarget, *operation.Failure) {
 	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
 	if err != nil {
-		if strings.Contains(err.Error(), "json-rpc error -32601") {
+		if rpcErrorCode(err) == -32601 {
 			return PreparedTarget{Action: "FAIL_UNSUPPORTED"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
 		}
 		return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
@@ -305,7 +305,7 @@ func resolveSymbolPrepared(ctx context.Context, client *SessionClient, uri, symb
 func ResolveSourceTarget(ctx context.Context, client *SessionClient, uri, symbolName string, line, character *uint32) (lsp.DocumentSymbol, PreparedTarget, *operation.Failure) {
 	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
 	if err != nil {
-		if strings.Contains(err.Error(), "json-rpc error -32601") {
+		if rpcErrorCode(err) == -32601 {
 			return lsp.DocumentSymbol{}, PreparedTarget{Action: "FAIL_UNSUPPORTED", ProviderMethod: "textDocument/documentSymbol"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
 		}
 		return lsp.DocumentSymbol{}, PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS", ProviderMethod: "textDocument/documentSymbol"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
@@ -370,7 +370,7 @@ func comparePosition(a, b lsp.Position) int {
 func recoverPositionTarget(ctx context.Context, client *SessionClient, uri string, position lsp.Position) (PreparedTarget, *operation.Failure) {
 	symbols, err := client.DocumentSymbols(ctx, lsp.DocumentSymbolParams{TextDocument: lsp.TextDocumentIdentifier{URI: uri}})
 	if err != nil {
-		if strings.Contains(err.Error(), "json-rpc error -32601") {
+		if rpcErrorCode(err) == -32601 {
 			return PreparedTarget{Action: "FAIL_UNSUPPORTED"}, failure("DOCUMENT_SYMBOL_UNSUPPORTED", errors.New("document symbols unsupported"))
 		}
 		return PreparedTarget{Action: "FAIL_DOCUMENT_SYMBOLS"}, failure("DOCUMENT_SYMBOL_FAILED", errors.New("document symbol request failed"))
@@ -600,9 +600,21 @@ func rangeContainsPosition(r lsp.Range, position lsp.Position) bool {
 	return !positionLess(position, r.Start) && positionLess(position, r.End)
 }
 
+func retryablePositionPrepareMiss(err error) bool {
+	return retryableSymbolPrepareMiss(err)
+}
+
 func retryableSymbolPrepareMiss(err error) bool {
-	message, ok := strings.CutPrefix(err.Error(), "json-rpc error 0: ")
-	return ok && (message == "identifier not found" || message == "column is beyond end of line" || strings.HasSuffix(message, " is not a function"))
+	var rpcErr *rpcError
+	return errors.As(err, &rpcErr) && rpcErr.code == 0 && (rpcErr.message == "identifier not found" || rpcErr.message == "column is beyond end of line" || strings.HasSuffix(rpcErr.message, " is not a function"))
+}
+
+func rpcErrorCode(err error) int {
+	var rpcErr *rpcError
+	if errors.As(err, &rpcErr) {
+		return rpcErr.code
+	}
+	return 1
 }
 
 func compatiblePreparedPosition(uri string, position lsp.Position, item lsp.CallHierarchyItem) bool {
@@ -817,6 +829,15 @@ func decodeStrict(raw []byte, target any) error {
 	return decoder.Decode(target)
 }
 
+type rpcError struct {
+	code    int
+	message string
+}
+
+func (e *rpcError) Error() string {
+	return fmt.Sprintf("json-rpc error %d: %s", e.code, e.message)
+}
+
 func (c *SessionClient) call(parent context.Context, method string, params, target any) (bool, error) {
 	raw, err := json.Marshal(params)
 	if err != nil {
@@ -838,7 +859,7 @@ func (c *SessionClient) call(parent context.Context, method string, params, targ
 		}
 	}
 	if observed.ServerError != nil {
-		return false, fmt.Errorf("json-rpc error %d: %s", observed.ServerError.Code, observed.ServerError.Message)
+		return false, &rpcError{code: observed.ServerError.Code, message: observed.ServerError.Message}
 	}
 	if bytes.Equal(bytes.TrimSpace(observed.Result), []byte("null")) {
 		return true, nil
