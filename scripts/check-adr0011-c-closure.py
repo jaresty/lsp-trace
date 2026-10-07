@@ -13,14 +13,22 @@ EXPECTED = [f"C{i:02d}" for i in range(1, 19)] + [
 ]
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
+AMENDMENT_ID = "ADR0011-C02-SUPERSEDED-BY-C01-V1"
+AMENDMENT_PATH = "docs/qualification/adr0011-c02-supersession-amendment.json"
+AMENDMENT_SHA256 = "1e1c352248af3878ae7fa46d657c232322fd62a3c91adb055868a04f3c2ed704"
+HISTORICAL_C02_ROW_SHA256 = "beb0c363bd849ce3890d78a7b34d2b719b8e4a7c5f5d23908db4243ca4cbc7fc"
+PREDECESSOR_PATH = "docs/qualification/adr0011-remaining-c-consolidated-plan.proposed.md"
+PREDECESSOR_SHA256 = "b71e2e1947d2b33cc1fac5b37cd38176b80486b1da44a9367c11a63a30fd8b9e"
 REQUIRED_CROSS = {
     "transaction_lifetime", "charging_distinctions", "failure_cleanup",
     "precedence", "compatibility", "source_pins", "package_boundaries",
     "tracked_fixture_prerequisite",
 }
 PACKET_PATHS = {
+    "docs/qualification/adr0011-c02-supersession-amendment.json",
     "docs/qualification/adr0011-c-closure-matrix.json",
     "docs/qualification/adr0011-c-closure-matrix.review.md",
+    "docs/qualification/adr0011-c-closure-scope-v2.md",
     "scripts/check-adr0011-c-closure.py",
 }
 
@@ -108,8 +116,10 @@ def main() -> int:
     document = json.loads(matrix_path.read_text(encoding="utf-8"))
     failures: list[str] = []
 
-    if document.get("schema_version") != "lsp-trace.private.adr0011-c-closure-matrix.v1":
+    if document.get("schema_version") != "lsp-trace.private.adr0011-c-closure-matrix.v2":
         failures.append("MATRIX_SCHEMA")
+    if document.get("exit_scope") != "REVISED_C_SCOPE_V2":
+        failures.append("MATRIX_EXIT_SCOPE")
     for field in ("audited_commit", "audited_tree", "prerequisite_commit"):
         value = document.get(field)
         if not COMMIT.fullmatch(value or ""):
@@ -141,6 +151,39 @@ def main() -> int:
             failures.append("MATRIX_CONTRACT_HASH")
     except ValueError as exc:
         failures.append(f"MATRIX_CONTRACT:{exc}")
+    predecessor = document.get("predecessor_contract", {})
+    try:
+        predecessor_path = safe_file(root, predecessor.get("path", ""))
+        if predecessor.get("path") != PREDECESSOR_PATH or predecessor.get("sha256") != PREDECESSOR_SHA256:
+            failures.append("MATRIX_PREDECESSOR_IDENTITY")
+        if digest(predecessor_path) != PREDECESSOR_SHA256:
+            failures.append("MATRIX_PREDECESSOR_HASH")
+    except ValueError as exc:
+        failures.append(f"MATRIX_PREDECESSOR:{exc}")
+    amendment = document.get("scope_amendment", {})
+    try:
+        amendment_path = safe_file(root, amendment.get("path", ""))
+        if amendment != {
+            "id": AMENDMENT_ID,
+            "path": AMENDMENT_PATH,
+            "sha256": AMENDMENT_SHA256,
+            "active_rows": 23,
+            "historical_rows": 24,
+        }:
+            failures.append("MATRIX_AMENDMENT_IDENTITY")
+        if digest(amendment_path) != AMENDMENT_SHA256:
+            failures.append("MATRIX_AMENDMENT_HASH")
+        amendment_document = json.loads(amendment_path.read_text(encoding="utf-8"))
+        if amendment_document.get("amendment_id") != AMENDMENT_ID:
+            failures.append("AMENDMENT_CONTENT_ID")
+        if amendment_document.get("row") != "C02" or amendment_document.get("disposition") != "SUPERSEDED_BY_C01":
+            failures.append("AMENDMENT_CONTENT_DISPOSITION")
+        if amendment_document.get("historical_c02_row_sha256") != HISTORICAL_C02_ROW_SHA256:
+            failures.append("AMENDMENT_CONTENT_HISTORICAL_C02")
+        if amendment_document.get("authoritative_successor") != "C01":
+            failures.append("AMENDMENT_CONTENT_SUCCESSOR")
+    except (ValueError, json.JSONDecodeError) as exc:
+        failures.append(f"MATRIX_AMENDMENT:{exc}")
 
     rows = document.get("rows")
     if not isinstance(rows, list):
@@ -166,15 +209,33 @@ def main() -> int:
             continue
         row_id = row.get("id", "<missing>")
         status = row.get("status")
-        if status != "CLOSED":
+        superseded = row_id == "C02" and status == "SUPERSEDED_BY_C01"
+        if row_id == "C02":
+            expected_supersession = {
+                "successor": "C01",
+                "amendment_id": AMENDMENT_ID,
+                "amendment_sha256": AMENDMENT_SHA256,
+            }
+            if not superseded or row.get("supersession") != expected_supersession:
+                failures.append("C02:INVALID_SUPERSESSION")
+            historical_c02 = dict(row)
+            historical_c02.pop("supersession", None)
+            historical_c02["status"] = "UNKNOWN"
+            historical_c02_digest = hashlib.sha256(
+                json.dumps(historical_c02, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            if historical_c02_digest != HISTORICAL_C02_ROW_SHA256:
+                failures.append("C02:HISTORICAL_ROW_CHANGED")
+        elif status != "CLOSED":
             failures.append(f"{row_id}:STATUS_{status or 'MISSING'}")
-        for field in ("owner", "rule", "reached_stage_witness", "finite_boundary"):
-            if not isinstance(row.get(field), str) or not row[field].strip():
-                failures.append(f"{row_id}:MISSING_{field.upper()}")
+        if not superseded:
+            for field in ("owner", "rule", "reached_stage_witness", "finite_boundary"):
+                if not isinstance(row.get(field), str) or not row[field].strip():
+                    failures.append(f"{row_id}:MISSING_{field.upper()}")
         blockers = row.get("blockers")
         if status == "CLOSED" and blockers:
             failures.append(f"{row_id}:CLOSED_WITH_BLOCKERS")
-        if status != "CLOSED" and (not isinstance(blockers, list) or not blockers):
+        if status not in {"CLOSED", "SUPERSEDED_BY_C01"} and (not isinstance(blockers, list) or not blockers):
             failures.append(f"{row_id}:UNKNOWN_WITHOUT_BLOCKER")
 
         commits = row.get("commits")
@@ -243,8 +304,12 @@ def main() -> int:
         failures.append("CROSS_CUTTING_INCOMPLETE")
 
     closed = sum(isinstance(row, dict) and row.get("status") == "CLOSED" for row in rows)
+    superseded = sum(isinstance(row, dict) and row.get("status") == "SUPERSEDED_BY_C01" for row in rows)
     unknown = sum(isinstance(row, dict) and row.get("status") == "UNKNOWN" for row in rows)
-    print(f"ADR0011_C_CLOSURE rows={len(rows)} closed={closed} unknown={unknown} failures={len(failures)}")
+    print(
+        f"ADR0011_C_CLOSURE scope=REVISED_C_SCOPE_V2 active=23 rows={len(rows)} "
+        f"closed={closed} superseded={superseded} unknown={unknown} failures={len(failures)}"
+    )
     for failure in failures:
         print(f"FAIL {failure}")
     if failures:

@@ -1,6 +1,6 @@
-# ADR0011 Package P4 consolidated C01–C18 closure review
+# ADR0011 Package P4 revised C-scope closure review
 
-Audited revision: `746efcad9967b211e17238562165fdb872ebc787`
+Audited implementation revision: `746efcad9967b211e17238562165fdb872ebc787`
 
 Audited tree: `8d5c2f33b33193de7ccf9df84dba0d3106a1bf4d`
 
@@ -10,73 +10,83 @@ Machine matrix: `docs/qualification/adr0011-c-closure-matrix.json`
 
 Named checker: `scripts/check-adr0011-c-closure.py`
 
-## Outcome before independent exit review
+Revised contract: `docs/qualification/adr0011-c-closure-scope-v2.md`
 
-`C_EXIT_BLOCKED`
+Accepted amendment: `docs/qualification/adr0011-c02-supersession-amendment.json`
 
-The matrix contains exactly 24 required rows: C01–C18 and all six work counters. Five rows close and nineteen remain unknown. No unknown row is waived or promoted from adjacent evidence. Independent review corrected the initial misclassification of `documents_acquired`: its adjacent C13 resource-cap test does not establish an independently selected work-counter row.
+## Scope amendment
 
-| Status | Rows |
-|---|---|
-| CLOSED | C01, C03, C04, C16, C17 |
-| UNKNOWN | C02, C05–C15 except C16/C17, C18, all six work counters |
+`ADR0011-C02-SUPERSEDED-BY-C01-V1` retires C02 as an independent pre-decode requirement. C01 remains authoritative for generic complete-original-frame admission before body allocation. Existing post-decode capability-family validation remains required for admitted frames.
 
-## Exact blockers and minimum corrective increments
+The original C02 requirement and its evidence remain unchanged in the predecessor plan and retained matrix fields. Supersession is a formal scope decision, not implementation closure and not a reusable waiver.
+
+A streaming classifier was rejected because it would duplicate bounded JSON-RPC parsing and correlation solely to identify capability-family membership before normal decode. C01 already supplies the generic pre-allocation refusal. A second parser would add disagreement, lifecycle, and cleanup risk without changing admitted production behavior.
+
+## Revised inventory and outcome
+
+Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C18 active scope:
+
+- historical inventory: 24 rows;
+- active rows: 23;
+- superseded inventory row: C02 only;
+- currently CLOSED active rows: C01, C03, C04, C16, C17;
+- currently UNKNOWN active rows: C05–C15 except C16/C17, C18, and all six work counters.
+
+Current result remains:
+
+```text
+C_EXIT_BLOCKED
+```
+
+The scope amendment removes C02 from the active denominator but does not close any formerly unknown active row. Five of 23 active rows are closed; eighteen remain unknown.
+
+## Exact amendment binding
+
+The checker accepts `SUPERSEDED_BY_C01` only when all of the following match exactly:
+
+1. row ID `C02`;
+2. successor `C01`;
+3. amendment ID `ADR0011-C02-SUPERSEDED-BY-C01-V1`;
+4. tracked amendment path and SHA-256;
+5. byte-identical predecessor path and SHA-256;
+6. canonical SHA-256 of the complete predecessor C02 row after restoring its historical `UNKNOWN` status and removing only supersession metadata;
+7. revised contract path and SHA-256;
+8. revised active/historical row counts.
+
+No other row may use the superseded status. The checker retains the exact ordered 24-row historical inventory while evaluating closure over 23 active rows.
+
+## Remaining active blockers
 
 | Rows | Blocker | Minimum corrective increment |
 |---|---|---|
-| C02 | Required capability family and integrated 2,097,152/+1 boundary are absent. | Add tracked capability-family fixtures and one readiness/acquisition integration test covering initialize request/response, initialized, register/unregister, and selected pending/error/unmatched frames at cap/+1. |
-| C05 | Direct 64/65 ingress test passes, but required integrated terminal-response test depends on untracked `.pi/evidence`. | Replace the fixture dependency with tracked hermetic data and execute 64th terminal acceptance plus pre-capture 65th refusal. |
-| C06 | 16,387/16,388 owner boundary and readiness acquisition pass, but history-to-transaction attachment/release fixture is non-portable. | Make the attachment fixture tracked/hermetic and rerun exact borrower release and retirement checks. |
-| C07, C09, C11 | Implemented isolated boundaries lack tracked portable P2 packets binding source, command, output, and clean-checkout execution. | Add one tracked C07–C12 packet with exact commands/logs/hashes and integrated definition-path witnesses. |
-| C08 | Portable packet and STOP/RESTART transaction-clock continuity are absent. | Add controlled-clock STOP/RESTART/cancellation tests proving the attempt epoch is continuous and cannot reset per request. |
-| C10, C12 | Direct references-profile tests do not prove the integrated references route selects the 1,572,864 remarshal limit and 524,288 token limit. | Add sessionruntime/acquisition references integration tests for both limits at cap/+1. |
-| C13, C14 | Pure accounting passes; selected real-path tests are blocked by missing untracked `.pi/evidence`. | Replace the source fixture with tracked hermetic data and rerun pre-transfer/pre-materialization 256/257 and 4 MiB/+1 tests. |
-| C15 | The checked-in census explicitly withholds aggregate acceptance and remains structurally incomplete. | Complete the ownership census for aliases, copies, capacities, transfers, releases, failure paths, and obtain aggregate independent acceptance. |
-| C18 | State-machine tests and real success/preflight refusal pass, but real collision witnesses do not cover deadline through readback. | Add production-path pairwise/reached-stage collisions for every adjacent precedence edge, including object/event, retention, and readback, with losing effects suppressed. |
-| `bytes_scanned` | No selected owner, rule, witness, or test. | Add a transaction-owned work ledger field counting actual scan bytes including rescans and an isolated exact trace. |
-| `messages_processed` | Adjacent message count exists, but attempted/decoded/validated semantics and classes are undefined. | Define the increment stage/classes and add matched, unmatched, notification, request, malformed, retry, and rollback trace tests. |
-| `objects_materialized` | C16 resource accounting exists but is not an explicitly selected work-counter trace. | Bind the named work row to a transaction ledger, prove post-success increment and rollback/no-double-charge independently of the resource cap. |
-| `events_emitted` | C17 admission accounting exists but is not an explicit successful-emission work trace. | Add post-emission increment semantics, family identity, rollback, retry, and no-double-charge trace. |
-| `documents_acquired` | C13 resource accounting exists, but the initially cited test name selected zero tests and the corrected resource test still does not establish an independent work trace. | Define the named work-counter rule in the transaction ledger and add a real-path distinct/retry/rollback trace separate from the 256-document resource cap. |
-| `logical_buffer_bytes_reserved` | Live/cumulative byte accounting exists, but cumulative work identity across aliases/copies is not selected. | Define successful reservation-capacity work semantics and test reserve/transfer/release/alias histories without decrementing cumulative work. |
-| Cross-cutting source pins | Six selected integration tests still require untracked `.pi/evidence`; the tracked synthetic pin predates C17/C18. | Track/generate every required fixture from a clean checkout and publish current C17/C18-inclusive hashes. |
-| Cross-cutting package ownership | No package owns a complete six-counter transaction trace. | Add one private transaction-owned six-field ledger in runtime; preserve method-result admission, C18 precedence, and acquisition terminal-custody boundaries. |
+| C05 | Integrated terminal-response boundary depends on unavailable evidence. | Add a tracked hermetic 64th-terminal/65th-refusal fixture. |
+| C06 | History-to-transaction attachment/release fixture is non-portable. | Track the attachment fixture and rerun borrower release and retirement checks. |
+| C07, C09, C11 | Isolated boundaries lack tracked portable P2 packets. | Add source-, command-, output-, and hash-bound packets with integrated definition witnesses. |
+| C08 | STOP/RESTART transaction-clock continuity is absent. | Prove attempt epoch continuity across lifecycle transitions. |
+| C10, C12 | Integrated references route selection is unproved. | Add sessionruntime references integration at both boundaries. |
+| C13, C14 | Selected real-path fixtures are unavailable. | Replace them with tracked hermetic source fixtures. |
+| C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
+| C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
+| Six work counters | Independent transaction work semantics and exact traces remain incomplete. | Define and verify each named work counter without inferring closure from resource caps. |
+| Cross-cutting source pins | Current portable evidence is incomplete. | Track or generate every selected fixture from a clean checkout. |
+| Cross-cutting package ownership | No owner exposes the complete six-counter trace. | Add the private transaction-owned ledger only under separate authorization. |
 
-## Charging, cleanup, lifetime, compatibility, and boundaries
+## Checker guarantees
 
-- Private transaction lifetime, C13–C17 cleanup, and ordinary/default-off compatibility are implemented and have focused passing tests.
-- `privateB4ByteAccountV2` distinguishes outstanding `Live` bytes from monotonic `Cumulative` reservation facts; this does not by itself define the requested `logical_buffer_bytes_reserved` work row.
-- C16 reserves before materialization and rolls back failed callbacks; C17 reserves identities before append/emission and rolls back failed batches.
-- C18 now owns private reached-stage precedence and acquisition-owned terminal custody, but consolidated collision coverage is incomplete.
-- Retention/readback remain outside `internal/lspwire`; no D implementation, index, occurrence admission, path demonstration, public/API, or schema work was performed.
-- Exact-session LSP evidence was used only where a READY exact-workspace session returned server-reported CALLS; `APPLICABLE_SESSION_NOT_FOUND`, `TRUNCATED`, and completeness `UNKNOWN` were preserved elsewhere.
+The checker validates the exact ordered historical inventory, revised scope identity, accepted amendment bytes, predecessor bytes, audited Git history, tracked packet paths, contained regular files, evidence hashes, concrete named test selection, observed test names/counts, non-wildcard qualification, and cross-cutting fields. It fails closed for every active non-CLOSED row.
 
-## Checker execution
+Mutation controls must cover at least:
 
-Baseline:
-
-```text
-ADR0011_C_CLOSURE rows=24 closed=5 unknown=19 failures=33
-C_EXIT_BLOCKED
-checker_exit=1
-```
-
-Temporary-mutation controls all passed:
-
-```text
-unknown_rows: exit=1 marker=True result=PASS
-missing_witness: exit=1 marker=True result=PASS
-zero_selected_tests: exit=1 marker=True result=PASS
-wildcard_only: exit=1 marker=True result=PASS
-```
-
-The checker validates the exact ordered row inventory, binds the audited implementation commit/tree and prerequisite ancestry to packet history, requires the three packet paths to be tracked, requires every row commit to be in the audited history, verifies repository-contained regular evidence files and SHA-256 bindings, executes concrete named test selections, compares observed top-level test identities and counts with declarations, rejects wildcard-only `-run` patterns, checks cross-cutting fields, and requires all rows closed. It cannot grant semantic closure merely because the JSON is structurally valid.
-
-## Independent consolidated exit review
-
-The independent review returned `C_EXIT_BLOCKED`. It corrected `documents_acquired` from CLOSED to UNKNOWN, required executable test-selection and Git identity/range checks, and identified final declared-name binding plus tracked-packet requirements. Those artifact defects were corrected before packet commit. The substantive result remains five CLOSED and nineteen UNKNOWN rows.
+- C02 changed back to UNKNOWN;
+- any retained historical C02 owner, rule, witness, boundary, commit, test, artifact, or blocker changed;
+- C02 supersession on another row;
+- wrong successor, amendment ID, path, or hash;
+- modified predecessor bytes;
+- active UNKNOWN rows;
+- missing witnesses;
+- zero selected tests;
+- wildcard-only qualification.
 
 ## Claim ceiling
 
-This report prepares Package P4 and records the exact blocked state. It does not claim full C closure, D readiness, public acceptance, occurrence admission, private index construction, path demonstration, producer authentication, push, or release.
+This packet documents a revised C-only scope. It does not authorize or claim production behavior changes, D readiness, public/API/schema changes, occurrence admission, private indexing, path demonstration, push, release, or closure of any remaining active unknown row.
