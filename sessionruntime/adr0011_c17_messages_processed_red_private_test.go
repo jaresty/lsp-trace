@@ -3,6 +3,8 @@ package sessionruntime
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -103,6 +105,21 @@ func TestADR0011C17MessagesProcessedCausalBoundary(t *testing.T) {
 			t.Fatalf("ASSERT_C17_MESSAGES_PROCESSED_DECODE_FAILURE_ZERO: got=%d want=0", got)
 		}
 	})
+}
+
+func TestADR0011C17MessagesProcessedCheckedOverflowBoundary(t *testing.T) {
+	account := adr0011work.New("messages-overflow")
+	if err := account.ChargeMessagesProcessed("messages-overflow", math.MaxUint64); err != nil {
+		t.Fatalf("ASSERT_MESSAGES_PROCESSED_MAX_ACCEPTED: %v", err)
+	}
+	before := account.Snapshot()
+	if err := account.ChargeMessagesProcessed("messages-overflow", 1); !errors.Is(err, adr0011work.ErrOverflow) {
+		t.Fatalf("ASSERT_MESSAGES_PROCESSED_PLUS_ONE_OVERFLOW: %v", err)
+	}
+	after := account.Snapshot()
+	if after.MessagesProcessed != before.MessagesProcessed || !after.Terminal || !errors.Is(after.Failure, adr0011work.ErrOverflow) {
+		t.Fatalf("ASSERT_MESSAGES_PROCESSED_OVERFLOW_ZERO_EFFECT before=%+v after=%+v", before, after)
+	}
 }
 
 func TestADR0011C17MessagesProcessedDefaultOffPreservesPrivateResult(t *testing.T) {
