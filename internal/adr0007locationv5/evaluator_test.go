@@ -177,31 +177,32 @@ func TestDirectEvaluatorAdversarialJSONFraming(t *testing.T) {
 }
 
 func TestDirectEvaluatorAdversarialEnvelopeShape(t *testing.T) {
-	r, b, _ := loadCase(t, "01-exact-intersects")
-	var env map[string]any
-	if err := json.Unmarshal(b, &env); err != nil {
-		t.Fatal(err)
-	}
+	r, complete, _ := loadCase(t, "01-exact-intersects")
+	typedInvalidRequest := mustBinding(t, "11-typed-invalid-request")
+	typedInvalidSource := mustBinding(t, "12-typed-invalid-source")
+	typedDuplicate := mustBinding(t, "13-typed-duplicate-source")
+	typedResource := mustBinding(t, "14-typed-resource-limit")
 	tests := []struct {
 		name string
-		mut  func(map[string]any)
+		raw  []byte
 		want string
 	}{
-		{"envelope-forbidden-field", func(m map[string]any) { m["extra"] = 0 }, "BINDING_SCHEMA"},
-		{"envelope-missing-binding", func(m map[string]any) { delete(m, "binding") }, "BINDING_SCHEMA"},
-		{"binding-forbidden-field", func(m map[string]any) { m["binding"].(map[string]any)["extra"] = 0 }, "BINDING_SCHEMA"},
-		{"binding-missing-sources", func(m map[string]any) { delete(m["binding"].(map[string]any), "sources") }, "BINDING_SCHEMA"},
+		{"duplicate-top-envelope-key", bytes.Replace(complete, []byte(`"outcome":"COMPLETE"`), []byte(`"outcome":"COMPLETE","outcome":"COMPLETE"`), 1), "BINDING_SCHEMA"},
+		{"duplicate-binding-key", bytes.Replace(complete, []byte(`"admissionDigest"`), []byte(`"schema":"duplicate","admissionDigest"`), 1), "BINDING_SCHEMA"},
+		{"duplicate-source-tuple-key", bytes.Replace(complete, []byte(`"revision"`), []byte(`"path":"duplicate","revision"`), 1), "BINDING_SCHEMA"},
+		{"complete-forbidden-top-field", addTopField(t, complete, "extra", 0), "BINDING_SCHEMA"},
+		{"complete-forbidden-binding-field", addBindingField(t, complete, "extra", 0), "BINDING_SCHEMA"},
+		{"complete-forbidden-source-field", addFirstInputOrSourceField(t, complete, true, "extra", 0), "BINDING_INVALID_SOURCE"},
+		{"invalid-request-forbidden-field", addTopField(t, typedInvalidRequest, "extra", 0), "BINDING_SCHEMA"},
+		{"invalid-source-forbidden-field", addTopField(t, typedInvalidSource, "extra", 0), "BINDING_SCHEMA"},
+		{"duplicate-source-forbidden-field", addTopField(t, typedDuplicate, "extra", 0), "BINDING_SCHEMA"},
+		{"resource-limit-forbidden-field", addTopField(t, typedResource, "extra", 0), "BINDING_SCHEMA"},
+		{"invalid-source-forbidden-input-field", addFirstInputOrSourceField(t, typedInvalidSource, false, "extra", 0), "BINDING_INVALID_SOURCE"},
+		{"duplicate-source-forbidden-input-field", addFirstInputOrSourceField(t, typedDuplicate, false, "extra", 0), "BINDING_INVALID_SOURCE"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var m map[string]any
-			bb, _ := json.Marshal(env)
-			if err := json.Unmarshal(bb, &m); err != nil {
-				t.Fatal(err)
-			}
-			tt.mut(m)
-			mut, _ := json.Marshal(m)
-			x, err := Evaluate(r, mut, StaticControl{}, PublishedLimits())
+			x, err := Evaluate(r, tt.raw, StaticControl{}, PublishedLimits())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -210,6 +211,51 @@ func TestDirectEvaluatorAdversarialEnvelopeShape(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustBinding(t *testing.T, name string) []byte {
+	t.Helper()
+	_, b, _ := loadCase(t, name)
+	return b
+}
+
+func addTopField(t *testing.T, b []byte, key string, value any) []byte {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	m[key] = value
+	out, _ := json.Marshal(m)
+	return out
+}
+
+func addBindingField(t *testing.T, b []byte, key string, value any) []byte {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["binding"].(map[string]any)[key] = value
+	out, _ := json.Marshal(m)
+	return out
+}
+
+func addFirstInputOrSourceField(t *testing.T, b []byte, complete bool, key string, value any) []byte {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	var rows []any
+	if complete {
+		rows = m["binding"].(map[string]any)["sources"].([]any)
+	} else {
+		rows = m["input"].([]any)
+	}
+	rows[0].(map[string]any)[key] = value
+	out, _ := json.Marshal(m)
+	return out
 }
 
 func TestDirectEvaluatorInvalidTuplePrecedesSourceCount(t *testing.T) {
@@ -232,33 +278,62 @@ func TestDirectEvaluatorInvalidTuplePrecedesSourceCount(t *testing.T) {
 	}
 }
 
-func TestDirectEvaluatorLowWorkIntermediateCheckpoints(t *testing.T) {
+func TestDirectEvaluatorStageIsolatedWorkCharges(t *testing.T) {
 	r, b, _ := loadCase(t, "01-exact-intersects")
 	base := PublishedLimits()
 	tests := []struct {
-		name string
-		max  uint64
+		stage string
+		exact uint64
 	}{
-		{"P-request-size-accounting", 0},
-		{"R-request-parse-accounting", 2116},
-		{"M-member-validation-accounting", 2129},
-		{"S-source-tuple-accounting", 2136},
-		{"Q-source-bytes-accounting", 2147},
-		{"X-intersection-accounting", 2173},
-		{"C-canonical-output-accounting", 29949},
+		{"P", 50},
+		{"R", 2167},
+		{"M", 2180},
+		{"S", 2187},
+		{"Q", 2198},
+		{"X", 2224},
+		{"C", 30000},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.stage, func(t *testing.T) {
 			limits := base
-			limits.MaxWork = tt.max
+			limits.MaxWork = tt.exact - 1
 			x, err := Evaluate(r, b, StaticControl{}, limits)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "WORK" {
-				t.Fatalf("ASSERT low-work-%s FAIL got=%s/%s", tt.name, x.Outcome, x.Detail)
+				t.Fatalf("ASSERT stage-%s-one-less FAIL got=%s/%s", tt.stage, x.Outcome, x.Detail)
+			}
+			limits.MaxWork = tt.exact
+			x, err = Evaluate(r, b, StaticControl{}, limits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "WORK" {
+				t.Fatalf("ASSERT stage-%s-exact-next-charge FAIL got=%s/%s", tt.stage, x.Outcome, x.Detail)
 			}
 		})
+	}
+}
+
+func TestDirectEvaluatorStageIsolatedOutputByteLimit(t *testing.T) {
+	r, b, _ := loadCase(t, "01-exact-intersects")
+	limits := PublishedLimits()
+	limits.MaxOutputBytes = 913
+	x, err := Evaluate(r, b, StaticControl{}, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Outcome != "RESOURCE_LIMIT" || x.Detail != "OUTPUT_BYTES" {
+		t.Fatalf("ASSERT stage-B-one-less FAIL got=%s/%s", x.Outcome, x.Detail)
+	}
+	limits.MaxOutputBytes = 914
+	x, err = Evaluate(r, b, StaticControl{}, limits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Outcome != "COMPLETE" || x.Detail != "NONE" || x.Counters.OutputBytes != 914 {
+		t.Fatalf("ASSERT stage-B-exact FAIL got=%s/%s bytes=%d", x.Outcome, x.Detail, x.Counters.OutputBytes)
 	}
 }
 
@@ -305,6 +380,30 @@ func TestDirectEvaluatorCancellationAndDeadlineCheckpoints(t *testing.T) {
 				t.Fatalf("ASSERT control-checkpoint FAIL got=%s/%s want=%s/%s polls=%d", x.Outcome, x.Detail, tt.out, tt.detail, control.polls)
 			}
 		})
+	}
+}
+
+func TestDirectEvaluatorCancellationPolledDuringOutputByteLoop(t *testing.T) {
+	r, b, _ := loadCase(t, "01-exact-intersects")
+	baseline, err := Evaluate(r, b, StaticControl{}, PublishedLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	control := &checkpointControl{at: int(baseline.Counters.OutputBytes / 2)}
+	x, err := Evaluate(r, b, control, PublishedLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Outcome != "CANCELLED" || x.Detail != "CANCEL_SIGNAL" {
+		t.Fatalf("ASSERT output-byte-loop-cancel FAIL got=%s/%s polls=%d", x.Outcome, x.Detail, control.polls)
+	}
+	deadline := &checkpointControl{at: int(baseline.Counters.OutputBytes / 2), deadline: true}
+	x, err = Evaluate(r, b, deadline, PublishedLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x.Outcome != "TIMEOUT" || x.Detail != "DEADLINE" {
+		t.Fatalf("ASSERT output-byte-loop-deadline FAIL got=%s/%s polls=%d", x.Outcome, x.Detail, deadline.polls)
 	}
 }
 

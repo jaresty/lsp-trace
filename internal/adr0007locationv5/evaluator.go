@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"sort"
 	"strings"
@@ -453,6 +454,11 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 	counts.SourceBytes = sourceBytes
 	r := Result{ResultSchema, id, "COMPLETE", rows, ranking, counts, "NONE"}
 	B := canonicalMeasurementBytes(r)
+	for i := uint64(0); i < B; i++ {
+		if o, d, x := poll(c); x {
+			return failure(id, o, d), nil
+		}
+	}
 	if !wk.add(31, B) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
@@ -649,43 +655,77 @@ func parseEnvelope(raw []byte, w *work, l Limits) (envelope, string, string) {
 	if len(raw) == 0 {
 		return envelope{}, "SOURCE_ADMISSION_UNAVAILABLE", "BINDING_UNAVAILABLE"
 	}
-	var top map[string]json.RawMessage
-	if json.Unmarshal(raw, &top) != nil {
+	top, ok := parseEnvelopeObject(raw)
+	if !ok {
 		return envelope{}, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 	}
-	var schema, out string
-	if json.Unmarshal(top["schema"], &schema) != nil || schema != EnvelopeSchema || json.Unmarshal(top["outcome"], &out) != nil {
+	schema, _ := top["schema"].(string)
+	out, _ := top["outcome"].(string)
+	if schema != EnvelopeSchema || out == "" {
 		return envelope{}, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 	}
 	e := envelope{Outcome: out}
-	var arr []json.RawMessage
+	var arr []any
 	if out == "COMPLETE" {
-		if len(top) != 3 {
+		if !exactKeys(top, "schema", "outcome", "binding") {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 		}
-		var b map[string]json.RawMessage
-		if json.Unmarshal(top["binding"], &b) != nil || len(b) != 3 {
+		b, ok := top["binding"].(map[string]any)
+		bs, _ := b["schema"].(string)
+		e.AdmissionDigest, _ = b["admissionDigest"].(string)
+		if !ok || !exactKeys(b, "schema", "admissionDigest", "sources") || bs != src.Schema {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 		}
-		var bs string
-		if json.Unmarshal(b["schema"], &bs) != nil || bs != src.Schema || json.Unmarshal(b["admissionDigest"], &e.AdmissionDigest) != nil || json.Unmarshal(b["sources"], &arr) != nil {
+		arr, ok = b["sources"].([]any)
+		if !ok {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 		}
 	} else {
-		if json.Unmarshal(top["detail"], &e.Detail) != nil || json.Unmarshal(top["input"], &arr) != nil {
+		if out == "DUPLICATE_SOURCE" {
+			if !exactKeys(top, "schema", "outcome", "detail", "duplicatePath", "input") {
+				return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
+			}
+			e.DuplicatePath, _ = top["duplicatePath"].(string)
+		} else if out == "INVALID_REQUEST" || out == "INVALID_SOURCE" || out == "RESOURCE_LIMIT" {
+			if !exactKeys(top, "schema", "outcome", "detail", "input") {
+				return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
+			}
+		} else {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
+		}
+		e.Detail, _ = top["detail"].(string)
+		var ok bool
+		arr, ok = top["input"].([]any)
+		if e.Detail == "" || !ok {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_SCHEMA"
 		}
 	}
 	for _, rr := range arr {
-		var m map[string]json.RawMessage
-		if json.Unmarshal(rr, &m) != nil || len(m) != 5 {
+		m, ok := rr.(map[string]any)
+		if !ok || !exactKeys(m, "path", "revision", "fileDigest", "objectDigest", "bytes") {
 			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
 		}
-		var s sourceWire
-		for k, p := range map[string]*string{"path": &s.Path, "revision": &s.Revision, "fileDigest": &s.FileDigest, "objectDigest": &s.ObjectDigest, "bytes": &s.Bytes} {
-			if json.Unmarshal(m[k], p) != nil {
-				return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
-			}
+		s := sourceWire{}
+		var okFields bool
+		s.Path, okFields = m["path"].(string)
+		if !okFields {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
+		}
+		s.Revision, okFields = m["revision"].(string)
+		if !okFields {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
+		}
+		s.FileDigest, okFields = m["fileDigest"].(string)
+		if !okFields {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
+		}
+		s.ObjectDigest, okFields = m["objectDigest"].(string)
+		if !okFields {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
+		}
+		s.Bytes, okFields = m["bytes"].(string)
+		if !okFields {
+			return e, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE"
 		}
 		bb, er := base64.StdEncoding.Strict().DecodeString(s.Bytes)
 		if er != nil || base64.StdEncoding.EncodeToString(bb) != s.Bytes || len(bb) == 0 || !utf8.Valid(bb) || !src.CanonicalPath(s.Path) || s.Revision == "" || !digest(s.FileDigest) || !digest(s.ObjectDigest) || src.Digest(bb) != s.FileDigest || src.Digest(bb) != s.ObjectDigest {
@@ -745,6 +785,32 @@ func parseEnvelope(raw []byte, w *work, l Limits) (envelope, string, string) {
 	}
 	return e, "", ""
 }
+func parseEnvelopeObject(raw []byte) (map[string]any, bool) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	v, err := parseValue(dec, nil)
+	if err != nil {
+		return nil, false
+	}
+	if _, err = dec.Token(); err != io.EOF {
+		return nil, false
+	}
+	m, ok := v.(map[string]any)
+	return m, ok
+}
+
+func exactKeys(m map[string]any, keys ...string) bool {
+	if len(m) != len(keys) {
+		return false
+	}
+	for _, k := range keys {
+		if _, ok := m[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func mapFailure(o, d string) string {
 	if o == "DUPLICATE_SOURCE" {
 		return "BINDING_DUPLICATE_SOURCE"
