@@ -12,6 +12,14 @@ FORBIDDEN_CONTENT=(b'EXPECTED_RESULT',b'OUTCOME_ORACLE',b'V5_EVALUATOR',b'FREEZE
 CASE_KEYS=('schema','caseId','causalPerturbation','specCitations')
 COND_KEYS=('schema','cancel','deadlineExpired','limitsProfile','boundarySetup')
 ROOT_KEYS=('schema','id','relation','selector','admissionDigest','policyDigest','limitsDigest','topK','members')
+CASE_SHAPES={
+ '05-union-repeat':('UTF-16-valid repeated-path range union merge/dedup',['DESIGN.md §4 lines 73-87']),
+ '16-member-eligible':('RANGE_UNION member contained by selector is ELIGIBLE',['DESIGN.md §4 lines 73-91; §5 lines 97-104']),
+ '17-member-ineligible':('RANGE_UNION member adjacent to selector is INELIGIBLE',['DESIGN.md §4 lines 73-91; §5 lines 97-104']),
+}
+RANGE_UNION_05={'kind':'RANGE_UNION','union':[{'path':'src/a','ranges':[{'start':{'line':0,'character':0},'end':{'line':0,'character':3}}]},{'path':'src/a','ranges':[{'start':{'line':0,'character':0},'end':{'line':0,'character':3}},{'start':{'line':0,'character':1},'end':{'line':0,'character':3}}]}]}
+RANGE_UNION_MEMBER={'kind':'RANGE_UNION','union':[{'path':'src/a','ranges':[{'start':{'line':0,'character':0},'end':{'line':1,'character':0}}]}]}
+MEMBER_RANGES={'16-member-eligible':[{'start':{'line':0,'character':1},'end':{'line':0,'character':3}}], '17-member-ineligible':[{'start':{'line':1,'character':0},'end':{'line':1,'character':1}}]}
 
 def load(p): return json.loads(p.read_bytes())
 def compact(v): return json.dumps(v,separators=(',',':'),ensure_ascii=False).encode()+b'\n'
@@ -60,6 +68,7 @@ def validate(write=False):
   if co: errors.append(f'{d.name}: {co}')
   if case is not None and (tuple(case)!=CASE_KEYS or case.get('caseId')!=d.name or not isinstance(case.get('causalPerturbation'),str) or not case.get('causalPerturbation') or not isinstance(case.get('specCitations'),list) or not case['specCitations']): errors.append(f'{d.name}: CASE.json schema')
   if case is not None and regex.search(r'(?<![A-Za-z0-9-])(W-1|B-1|W|B)(?![A-Za-z0-9-])',case.get('causalPerturbation','')): errors.append(f'{d.name}: unproven W/B boundary label')
+  if case is not None and d.name in CASE_SHAPES and (case.get('causalPerturbation'),case.get('specCitations'))!=CASE_SHAPES[d.name]: errors.append(f'{d.name}: exact single-cause metadata')
   if cond is not None and (not set(cond)<=set(COND_KEYS) or tuple(cond)[:4]!=COND_KEYS[:4] or cond.get('schema')!='lsp-trace.adr0007.location-input-condition.private.v5' or not isinstance(cond.get('cancel'),bool) or not isinstance(cond.get('deadlineExpired'),bool) or cond.get('limitsProfile')!='PUBLISHED_V5' or ('boundarySetup' in cond and not isinstance(cond['boundarySetup'],dict))): errors.append(f'{d.name}: CONDITION.json schema')
   if built.returncode==0:
    for key,path in (('case',d/'CASE.json'),('condition',d/'CONDITION.json')):
@@ -73,6 +82,12 @@ def validate(write=False):
   else:
    rv,re=canonical(req,order=ROOT_KEYS)
    if re: errors.append(f'{d.name}: {re}')
+   if d.name=='05-union-repeat' and (not isinstance(rv,dict) or rv.get('selector')!=RANGE_UNION_05): errors.append(f'{d.name}: exact UTF-16-valid repeated-path RANGE_UNION merge/dedup shape')
+   if d.name in MEMBER_RANGES:
+    selector=rv.get('selector') if isinstance(rv,dict) else None
+    members=rv.get('members',[]) if isinstance(rv,dict) else []
+    ranges=members[0].get('ranges') if len(members)==1 and isinstance(members[0],dict) else None
+    if selector!=RANGE_UNION_MEMBER or ranges!=MEMBER_RANGES[d.name]: errors.append(f'{d.name}: exact shared RANGE_UNION containment/adjacency shape')
    if d.name=='23-frozen-paths-plus-one':
     frozen=rv.get('selector',{}).get('frozenPaths',[]) if isinstance(rv,dict) else []
     setup=cond.get('boundarySetup',{}) if isinstance(cond,dict) else {}

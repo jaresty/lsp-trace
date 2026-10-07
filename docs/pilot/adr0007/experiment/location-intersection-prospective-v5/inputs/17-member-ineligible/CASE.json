@@ -1,1 +1,1 @@
-{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"17-member-ineligible","causalPerturbation":"INELIGIBLE member inputs","specCitations":["DESIGN.md §5 lines 97-104"]}
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"17-member-ineligible","causalPerturbation":"RANGE_UNION member adjacent to selector is INELIGIBLE","specCitations":["DESIGN.md §4 lines 73-91; §5 lines 97-104"]}

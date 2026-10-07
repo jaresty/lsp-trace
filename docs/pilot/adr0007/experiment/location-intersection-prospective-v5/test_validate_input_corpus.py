@@ -33,5 +33,17 @@ class ValidatorTest(unittest.TestCase):
  def test_rejects_prohibited_content(self): p=v.INPUTS/'01-exact-intersects'/'CASE.json'; x=json.loads(p.read_bytes()); x['causalPerturbation']='V5_EVALUATOR'; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
  def test_rejects_noncanonical_base64(self): p=v.INPUTS/'01-exact-intersects'/'BINDING.json'; x=json.loads(p.read_bytes()); x['binding']['sources'][0]['bytes']='YQ'; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
  def test_rejects_typed_branch_mismatch(self): p=v.INPUTS/'11-typed-invalid-request'/'BINDING.json'; x=json.loads(p.read_bytes()); x['input']=[json.loads((v.INPUTS/'12-typed-invalid-source'/'BINDING.json').read_bytes())['input'][0]]; x['input'][0]['fileDigest']=x['input'][0]['objectDigest']; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case05_mid_surrogate_endpoint(self):
+  p=v.INPUTS/'05-union-repeat'/'REQUEST.raw.json'; x=json.loads(p.read_bytes()); x['selector']['union'][0]['ranges'][0]['end']['character']=2; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case05_nonrepeated_path_shape(self):
+  p=v.INPUTS/'05-union-repeat'/'REQUEST.raw.json'; x=json.loads(p.read_bytes()); x['selector']['union'][1]['path']='src/b'; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case05_extra_cause(self):
+  p=v.INPUTS/'05-union-repeat'/'CASE.json'; x=json.loads(p.read_bytes()); x['specCitations'].append('ALGORITHM.md'); p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case16_exact_file_selector(self):
+  p=v.INPUTS/'16-member-eligible'/'REQUEST.raw.json'; x=json.loads(p.read_bytes()); x['selector']={'kind':'EXACT_FILE','path':'src/a'}; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case16_member_outside_containment(self):
+  p=v.INPUTS/'16-member-eligible'/'REQUEST.raw.json'; x=json.loads(p.read_bytes()); x['members'][0]['ranges'][0]={'start':{'line':1,'character':0},'end':{'line':1,'character':1}}; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
+ def test_rejects_case17_member_inside_selector(self):
+  p=v.INPUTS/'17-member-ineligible'/'REQUEST.raw.json'; x=json.loads(p.read_bytes()); x['members'][0]['ranges'][0]={'start':{'line':0,'character':1},'end':{'line':0,'character':3}}; p.write_text(json.dumps(x,separators=(',',':'))+'\n'); self.reject()
  def test_rejects_wrong_malformed_class(self): (v.INPUTS/'08-malformed-json'/'REQUEST.raw.json').write_bytes(b'{'); self.reject()
 if __name__=='__main__': unittest.main()
