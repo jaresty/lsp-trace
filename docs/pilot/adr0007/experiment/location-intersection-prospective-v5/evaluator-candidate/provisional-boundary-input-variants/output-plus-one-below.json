@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-boundary-input-variant.private.v5","producer":"internal/adr0007locationv5","status":"PRODUCER_SPECIFIC_UNACCEPTED","boundary":"output-plus-one-below","maxWork":67349,"maxOutputBytes":2016,"observedW":67349,"observedB":2017}
