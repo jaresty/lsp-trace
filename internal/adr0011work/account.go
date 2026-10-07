@@ -43,13 +43,15 @@ type privateWorkSnapshot struct {
 }
 
 type privateWorkAccount struct {
-	mu       sync.Mutex
-	settled  *sync.Cond
-	identity occurrenceIdentity
-	work     privateWorkDelta
-	reserved uint64
-	terminal bool
-	failure  error
+	mu              sync.Mutex
+	settled         *sync.Cond
+	identity        occurrenceIdentity
+	work            privateWorkDelta
+	objectsReserved uint64
+	eventsReserved  uint64
+	eventCallbacks  uint64
+	terminal        bool
+	failure         error
 }
 
 func newPrivateWorkAccount(identity occurrenceIdentity) *privateWorkAccount {
@@ -71,7 +73,8 @@ func (a *privateWorkAccount) charge(identity occurrenceIdentity, delta privateWo
 	if overflows(a.work.bytesScanned, delta.bytesScanned) ||
 		overflows(a.work.messagesProcessed, delta.messagesProcessed) ||
 		overflows(a.work.objectsMaterialized, delta.objectsMaterialized) ||
-		overflows(a.work.eventsEmitted, delta.eventsEmitted) ||
+		overflows(a.work.eventsEmitted, a.eventsReserved) ||
+		overflows(a.work.eventsEmitted+a.eventsReserved, delta.eventsEmitted) ||
 		overflows(a.work.documentsAcquired, delta.documentsAcquired) ||
 		overflows(a.work.logicalBufferBytesReserved, delta.logicalBufferBytesReserved) {
 		a.terminal = true
@@ -181,21 +184,21 @@ func (a *Account) WithObjectMaterialization(identity string, materialize func() 
 		p.mu.Unlock()
 		return errPrivateWorkIdentity
 	}
-	if overflows(p.work.objectsMaterialized, p.reserved) ||
-		overflows(p.work.objectsMaterialized+p.reserved, 1) {
+	if overflows(p.work.objectsMaterialized, p.objectsReserved) ||
+		overflows(p.work.objectsMaterialized+p.objectsReserved, 1) {
 		p.terminal = true
 		p.failure = errPrivateWorkOverflow
 		p.mu.Unlock()
 		return errPrivateWorkOverflow
 	}
-	p.reserved++
+	p.objectsReserved++
 	p.mu.Unlock()
 
 	defer func() {
 		p.mu.Lock()
-		p.reserved--
+		p.objectsReserved--
 		if recovered := recover(); recovered != nil {
-			if p.reserved == 0 {
+			if p.objectsReserved == 0 && p.eventCallbacks == 0 {
 				p.settled.Broadcast()
 			}
 			p.mu.Unlock()
@@ -204,13 +207,67 @@ func (a *Account) WithObjectMaterialization(identity string, materialize func() 
 		if err == nil {
 			p.work.objectsMaterialized++
 		}
-		if p.reserved == 0 {
+		if p.objectsReserved == 0 && p.eventCallbacks == 0 {
 			p.settled.Broadcast()
 		}
 		p.mu.Unlock()
 	}()
 
 	return materialize()
+}
+
+// WithEventsEmitted reserves amount events before emit runs and commits them
+// only after emit returns successfully.
+func (a *Account) WithEventsEmitted(identity string, amount uint64, emit func() error) (err error) {
+	if a == nil || a.private == nil {
+		return errPrivateWorkIdentity
+	}
+	if emit == nil {
+		return errPrivateWorkCallback
+	}
+
+	p := a.private
+	p.mu.Lock()
+	if p.terminal {
+		p.mu.Unlock()
+		return errPrivateWorkTerminal
+	}
+	if occurrenceIdentity(identity) != p.identity {
+		p.mu.Unlock()
+		return errPrivateWorkIdentity
+	}
+	if overflows(p.work.eventsEmitted, p.eventsReserved) ||
+		overflows(p.work.eventsEmitted+p.eventsReserved, amount) {
+		p.terminal = true
+		p.failure = errPrivateWorkOverflow
+		p.mu.Unlock()
+		return errPrivateWorkOverflow
+	}
+	p.eventsReserved += amount
+	p.eventCallbacks++
+	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		p.eventsReserved -= amount
+		p.eventCallbacks--
+		if recovered := recover(); recovered != nil {
+			if p.objectsReserved == 0 && p.eventCallbacks == 0 {
+				p.settled.Broadcast()
+			}
+			p.mu.Unlock()
+			panic(recovered)
+		}
+		if err == nil && p.failure == nil {
+			p.work.eventsEmitted += amount
+		}
+		if p.objectsReserved == 0 && p.eventCallbacks == 0 {
+			p.settled.Broadcast()
+		}
+		p.mu.Unlock()
+	}()
+
+	return emit()
 }
 
 func (a *Account) ChargeEventsEmitted(identity string, amount uint64) error {
@@ -244,7 +301,7 @@ func (a *Account) Seal() Snapshot {
 	if !p.terminal {
 		p.terminal = true
 	}
-	for p.reserved != 0 {
+	for p.objectsReserved != 0 || p.eventCallbacks != 0 {
 		p.settled.Wait()
 	}
 	return exportSnapshot(p.snapshotLocked(), p.terminal, p.failure)
