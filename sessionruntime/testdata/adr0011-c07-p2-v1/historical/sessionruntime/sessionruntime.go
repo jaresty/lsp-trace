@@ -1,0 +1,2976 @@
+// Package sessionruntime provides transport-neutral orchestration over the
+// session algebra, resolved runtime identity, managed processes, and LSP wire.
+// It neither registers nor advertises a command surface.
+package sessionruntime
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+	"unicode/utf8"
+
+	"lsp-trace/internal/adr0011c18"
+	"lsp-trace/internal/adr0011cobserve"
+	"lsp-trace/internal/lspwire"
+	"lsp-trace/internal/manageddiagnostic"
+	"lsp-trace/internal/managedprocess"
+	"lsp-trace/internal/runtimeprofile"
+	"lsp-trace/internal/seedbinding"
+	"lsp-trace/internal/session"
+	"lsp-trace/internal/source"
+)
+
+type Limits struct {
+	MaxSessions, MaxRequests, MaxChildren, MaxCancels, MaxTombstones, MaxObservations int
+	// MaxOperations bounds retained lifecycle operation records. Zero defaults to MaxObservations.
+	MaxOperations int
+}
+
+type OperationState string
+
+const (
+	OperationPending  OperationState = "PENDING"
+	OperationComplete OperationState = "COMPLETE"
+	OperationFailed   OperationState = "FAILED"
+)
+
+type OperationSnapshot struct {
+	ID                       string
+	SessionID                string
+	CallerID                 string
+	Generation               uint64
+	Restart                  bool
+	State                    OperationState
+	Failure                  session.Failure
+	privateB4CallerLeaseJoin bool
+}
+
+type ReadinessState string
+
+const (
+	ReadinessPending ReadinessState = "PENDING"
+	ReadinessReady   ReadinessState = "READY"
+	ReadinessFailed  ReadinessState = "FAILED"
+)
+
+func capabilitySupported(provider json.RawMessage) bool {
+	return string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+}
+
+type SessionMetadata struct {
+	PositionEncoding       string
+	CallHierarchySupport   bool
+	DocumentSymbolSupport  bool
+	WorkspaceSymbolSupport bool
+	DefinitionSupport      bool
+	ReferencesSupport      bool
+	ProviderName           string
+	ProviderVersion        string
+	ServerCommand          string
+}
+
+type ReadinessSnapshot struct {
+	ID                  string
+	AttemptID           manageddiagnostic.StartupAttemptID
+	DiagnosticOperation DiagnosticOperationHandle `json:"-"`
+	SessionID           string
+	Generation          uint64
+	State               ReadinessState
+	Failure             session.Failure
+	Metadata            SessionMetadata
+	Duration            time.Duration
+	RequestMessages     int
+	RequestBytes        int64
+	ResponseMessages    int
+	ResponseBytes       int64
+	ThermalPhase        string
+}
+
+type readinessOperation struct {
+	snapshot   ReadinessSnapshot
+	started    time.Time
+	done       chan struct{}
+	diagnostic *manageddiagnostic.EventCollector
+}
+
+type Child interface {
+	Teardown(context.Context) managedprocess.TeardownObservation
+	Close() managedprocess.ResourceObservation
+}
+
+type reapReconciler interface {
+	ReconcileReap(context.Context) managedprocess.TeardownObservation
+}
+
+// wireChild resources must be interruptible by Close/Teardown, without acquiring
+// Manager.mu. Starter implementations own that primitive contract.
+type wireChild interface {
+	Child
+	Stdin() io.WriteCloser
+	Stdout() io.ReadCloser
+}
+
+type Starter interface {
+	Start(context.Context, managedprocess.Spec) (Child, managedprocess.StartObservation)
+}
+
+// ManagedStarter adapts the existing managed-process foundation to the narrow
+// runtime seam. Production callers construct Manager with the sealed gate.
+type ManagedStarter struct{ Manager *managedprocess.Manager }
+
+func (s ManagedStarter) Start(ctx context.Context, spec managedprocess.Spec) (Child, managedprocess.StartObservation) {
+	if s.Manager == nil {
+		return nil, managedprocess.StartObservation{Kind: managedprocess.StartUnavailable, Reason: "containment unavailable"}
+	}
+	return s.Manager.Start(ctx, spec)
+}
+
+type Config struct {
+	Limits           Limits
+	Wire             lspwire.Limits
+	Starter          Starter
+	ReadinessTimeout time.Duration
+	// Now is an optional monotonic clock seam for deterministic runtime observations.
+	Now func() time.Time
+	// Diagnostics is an optional internal-only exact-generation store.
+	Diagnostics           *manageddiagnostic.Store
+	SeedRevisionAuthority seedbinding.RevisionAuthority
+	// DocumentFinalHook is an optional deterministic test hook invoked after
+	// source preparation and before the final READY/generation check.
+	DocumentFinalHook func()
+	// GitWorktreeList is an internal test seam; production runs bounded git worktree list --porcelain.
+	GitWorktreeList func(context.Context, string) ([]byte, error)
+	// Unexported seams keep deterministic fixtures inside this package; callers
+	// cannot provide bytes that appear directly in a production attempt ID.
+	startupAttemptEntropy   func(uint64) []byte
+	startupAttemptRandom    io.Reader
+	transientIdentityRandom io.Reader
+	readinessHistoryRandom  io.Reader
+	// Package-private, default-off owner-path probe; never configured by hosts.
+	methodCandidateTestHook func(methodCandidateObservation)
+	ownedMethodPairTestHook func(OwnedMethodPair)
+	// Private C test probes; nil in production, never affect admission.
+	cWireObserver lspwire.Observer
+	cDecodeEntry  func()
+	cRetainEntry  func()
+}
+type StartRequest struct {
+	Profile           runtimeprofile.Profile
+	SeedBinding       *seedbinding.Manifest
+	ProviderIdentity  seedbinding.ProviderIdentity
+	Process           managedprocess.Spec
+	BootstrapAlias    string
+	LanguageID        string
+	RelationProviders []string
+	Deadline          time.Time
+}
+type DeriveWorkspaceRequest struct {
+	SessionID    string
+	Generation   uint64
+	WorkspaceURI string
+}
+type DeriveWorkspaceResult struct {
+	SessionID    string          `json:"session_id"`
+	Generation   uint64          `json:"generation"`
+	State        session.State   `json:"state"`
+	WorkspaceURI string          `json:"workspace_uri"`
+	Failure      session.Failure `json:"-"`
+}
+
+type StartResult struct {
+	AttemptID            manageddiagnostic.StartupAttemptID
+	PublicDetail         string
+	CustodyProvenance    seedbinding.CustodyMode
+	SessionID            string
+	Generation           uint64
+	DiagnosticGeneration DiagnosticGenerationHandle `json:"-"`
+	State                session.State
+	Failure              session.Failure
+	Start                managedprocess.StartObservation
+	transientFailure     transientIdentityStartFailure
+}
+
+type transientIdentityStartFailure struct {
+	Identity session.Failure
+	Cleanup  session.Failure
+}
+type Census struct{ Sessions, Generations, Requests, Children, Cancels, Tombstones, Observations, Operations, Workers int }
+type Observation struct {
+	Sequence, Generation uint64
+	SessionID, Kind      string
+	State                session.State
+	Failure              session.Failure
+}
+type RoutingMetadata struct {
+	Alias             string   `json:"alias"`
+	WorkspaceRoot     string   `json:"workspace_root"`
+	LanguageID        string   `json:"language_id"`
+	ServerProfile     string   `json:"server_profile"`
+	RelationProviders []string `json:"relation_providers"`
+	Generation        uint64   `json:"generation"`
+	Readiness         string   `json:"readiness"`
+}
+
+type Record struct {
+	SessionID  string
+	Profile    runtimeprofile.Profile `json:"-"`
+	Routing    RoutingMetadata        `json:"routing"`
+	Generation uint64
+	State      session.State
+	Started    time.Time
+}
+type Request struct {
+	Key      lspwire.RequestKey
+	Deadline time.Time
+	Terminal session.Failure
+}
+
+// RoundTripRequest describes one transport-neutral JSON-RPC transaction against
+// an exact session generation.
+type RoundTripRequest struct {
+	SessionID   string
+	Generation  uint64
+	Method      string
+	Params      json.RawMessage
+	Deadline    time.Time
+	MaxMessages int
+	MaxBytes    int64
+	// Private default-off in-memory D/R query/result observation, not a receipt.
+	CaptureOwnedMethodPair bool `json:"-"`
+	// EnablePrivateC16ObjectAccounting is an experimental, default-off capability
+	// marker valid only for the marked private B4 transaction path. It is not a
+	// protocol, CLI, MCP, schema, or general Manager feature.
+	EnablePrivateC16ObjectAccounting bool `json:"-"`
+	// EnablePrivateC17EventAccounting is an experimental, default-off capability
+	// marker valid only for the marked private B4 transaction path. It is not a
+	// protocol, CLI, MCP, schema, or general Manager feature.
+	EnablePrivateC17EventAccounting bool `json:"-"`
+	// Private allocation opt-in, not authentication or an occurrence receipt.
+	ADR0011PrivateLimitAllocationV1      bool `json:"-"`
+	ADR0011PrivateOwnedMethodPairLeaseV1 bool `json:"-"`
+	ADR0011PrivateNotificationLeaseV1    bool `json:"-"`
+	ADR0011PrivateServerErrorLeaseV1     bool `json:"-"`
+	ADR0011PrivateResponseLeaseV1        bool `json:"-"`
+	// Private P2 successor policy for references; no ownership or publication authority.
+	ADR0011PrivateP2 bool `json:"-"`
+	// Optional private prepared-document guard. It is not analyzed-source proof.
+	ExpectedOwnedDocument *OwnedDocumentBinding `json:"-"`
+	// Private opt-in for bounded exact definition response frame bytes; zero disables.
+	CaptureDefinitionResponseFrameMaxBytes int64 `json:"-"`
+	// Separate private opt-in for bounded references response frame bytes.
+	CaptureReferencesResponseFrameMaxBytes int64 `json:"-"`
+	// Private D/R request-frame opt-in; zero disables. This does not publish bytes.
+	CaptureMethodRequestFrameMaxBytes int64 `json:"-"`
+	// Private per-run documentSymbol frame caps; zero disables each capture.
+	CaptureDocumentSymbolRequestFrameMaxBytes  int64 `json:"-"`
+	CaptureDocumentSymbolResponseFrameMaxBytes int64 `json:"-"`
+	// Diagnostic join values must be opaque safe identities, never labels or paths.
+	DiagnosticCallerID string
+	DiagnosticTargetID string
+	DiagnosticSequence uint64 // scoped to the acquisition owner, not globally allocated
+	DiagnosticObserver func(manageddiagnostic.Record)
+}
+
+// RoundTripResult is the immutable terminal observation of one transaction.
+type DocumentRequest struct {
+	SessionID, URI, LanguageID string
+	Generation                 uint64
+	// CaptureSupply returns an owned observation of this call's successful
+	// notification write. Omitted mode retains its historical behavior.
+	CaptureSupply bool `json:",omitempty"`
+	// PreparedNoFollow is an opt-in, host-private filesystem supply mode.
+	// It never accepts retained seed source or falls back to ordinary preparation.
+	PreparedNoFollow bool `json:",omitempty"`
+}
+
+// MaxDocumentSupplyBytes bounds opt-in notification evidence. It does not bound
+// legacy document synchronization, which preserves its existing behavior.
+const MaxDocumentSupplyBytes = 1 << 20
+
+const DocumentSupplyUnavailable session.Failure = "DOCUMENT_SUPPLY_UNAVAILABLE"
+
+// DocumentSupply is historical supply evidence, not proof of server consumption,
+// analyzed-source identity, or a currently active generation. Public values can
+// be fabricated; offline consistency checks cannot authenticate their origin.
+// Returned values are caller-owned copies. When capture is requested, Manager
+// retains an independent exact copy in the corresponding open-document record.
+type DocumentSupply struct {
+	Classification  string
+	SessionID       string
+	Generation      uint64
+	URI             string
+	DocumentVersion int
+	Method          string
+	Content         []byte
+	Params          json.RawMessage
+}
+
+type DocumentResult struct {
+	URI, LanguageID     string
+	Version             int
+	Failure             session.Failure
+	DiagnosticOperation DiagnosticOperationHandle `json:"-"`
+	// Supply is nil for omitted capture, unchanged/cached documents, and errors.
+	// A cached digest is never promoted to evidence of a new notification.
+	Supply *DocumentSupply `json:",omitempty"`
+}
+
+type openDocument struct {
+	languageID string
+	version    int
+	digest     [32]byte
+	supply     *DocumentSupply
+}
+
+const LanguageIDUnavailable session.Failure = "LANGUAGE_ID_UNAVAILABLE"
+const DocumentURIUnavailable session.Failure = "DOCUMENT_URI_UNAVAILABLE"
+const DocumentOutsideWorkspace session.Failure = "DOCUMENT_OUTSIDE_WORKSPACE"
+const DocumentSourceUnavailable session.Failure = "DOCUMENT_SOURCE_UNAVAILABLE"
+
+// PrepareDocument resolves one effective language identity, synchronizes the
+// workspace file, and retains the exact value used by the document generation.
+// Context cancellation interrupts owned notification I/O and retires that exact
+// generation before returning. Source filesystem operations remain synchronous:
+// context is checked before and after reads, not enforced inside kernel reads.
+// Supply and version are returned only after a confirmed complete write (or the
+// historical unchanged-document cache hit, which returns no new Supply).
+func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
+	return m.prepareDocument(ctx, req, false)
+}
+
+// RefreshDocumentSupply deliberately emits a new full-text notification for an
+// already prepared document and returns evidence from that exact successful
+// write. Callers must complete their own privacy admission before invoking it.
+func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest) DocumentResult {
+	if !req.CaptureSupply {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	return m.prepareDocument(ctx, req, true)
+}
+
+func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
+	if failure := contextFailure(ctx); failure != "" {
+		return DocumentResult{Failure: failure}
+	}
+	u, err := url.Parse(req.URI)
+	if err != nil || u.Scheme != "file" || u.Host != "" || u.Path == "" {
+		return DocumentResult{Failure: DocumentURIUnavailable}
+	}
+	path := filepath.Clean(filepath.FromSlash(u.Path))
+	m.mu.Lock()
+	r := m.sessions[req.SessionID]
+	if r == nil {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.SessionNotFound}
+	}
+	if req.Generation != r.record.Generation {
+		m.mu.Unlock()
+		return DocumentResult{Failure: session.StaleGeneration}
+	}
+	workspace := filepath.Clean(r.record.Profile.Workspace().String())
+	registeredWorkspace := r.record.Profile.Workspace().String()
+	configured := r.languageID
+	retainedSource, retained := r.seedSources[req.URI]
+	retainedSource = append([]byte(nil), retainedSource...)
+	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
+	m.mu.Unlock()
+	rel, err := filepath.Rel(workspace, path)
+	if err != nil || rel == ".." || filepath.IsAbs(rel) || len(rel) >= 3 && rel[:3] == ".."+string(filepath.Separator) {
+		return DocumentResult{Failure: DocumentOutsideWorkspace}
+	}
+	languageID := req.LanguageID
+	if languageID == "" {
+		languageID = configured
+	}
+	if languageID == "" {
+		languageID = source.LanguageID(path)
+	}
+	if languageID == "" {
+		return DocumentResult{Failure: LanguageIDUnavailable}
+	}
+	var text []byte
+	if req.PreparedNoFollow {
+		if !req.CaptureSupply || retained || registeredWorkspace != workspace || !filepath.IsAbs(workspace) ||
+			req.URI != (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() ||
+			!filepath.IsAbs(path) || filepath.ToSlash(u.Path) != filepath.ToSlash(path) ||
+			u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "" || u.Opaque != "" || u.User != nil {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		text, err = readPreparedNoFollow(workspace, path)
+		if err != nil || !utf8.Valid(text) {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+	} else if retained {
+		text = retainedSource
+	} else if req.CaptureSupply {
+		// Bind scope to the host-owned workspace, not an arbitrary URI path.
+		// Exact canonical file URI spelling rejects query/fragment/alias forms.
+		if req.URI != (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String() {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		root, openErr := os.OpenRoot(workspace)
+		if openErr != nil {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+		text, err = source.ReadRegularInputBounded(root, filepath.ToSlash(rel), MaxDocumentSupplyBytes)
+		closeErr := root.Close()
+		if err != nil || closeErr != nil || !utf8.Valid(text) {
+			return DocumentResult{Failure: DocumentSupplyUnavailable}
+		}
+	} else {
+		text, err = os.ReadFile(path)
+		if err != nil {
+			return DocumentResult{Failure: DocumentSourceUnavailable}
+		}
+	}
+	if failure := contextFailure(ctx); failure != "" {
+		return DocumentResult{Failure: failure}
+	}
+	digest := sha256.Sum256(text)
+	diagnosticHandle, collector := m.newDiagnosticOperation(diagnosticGeneration, identity)
+	m.describeDiagnosticOperation(diagnosticHandle, "textDocument/didOpen", req.URI, SessionMetadata{})
+	finishDocument := func(result DocumentResult, terminal uint16) DocumentResult {
+		result.DiagnosticOperation = diagnosticHandle
+		m.completeDiagnosticOperation(diagnosticHandle, collector, terminal)
+		return result
+	}
+
+	if m.documentFinalHook != nil {
+		m.documentFinalHook()
+	}
+	m.mu.Lock()
+	r = m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
+	}
+	if m.closed || r.record.State != session.Ready || r.protocolOwned {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
+	}
+	child, ok := r.process.(wireChild)
+	if !ok {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.SessionPoisoned}, diagnosticEventTerminalFailure)
+	}
+	previous, opened := r.documents[req.URI]
+	if opened && previous.languageID != languageID {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.LifecycleConflict}, diagnosticEventTerminalFailure)
+	}
+	cacheCanSatisfy := !req.CaptureSupply || previous.supply != nil
+	if opened && previous.digest == digest && !refresh && cacheCanSatisfy {
+		result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: previous.version}
+		if req.CaptureSupply && previous.supply != nil {
+			copy := *previous.supply
+			copy.Content = append([]byte(nil), previous.supply.Content...)
+			copy.Params = append(json.RawMessage(nil), previous.supply.Params...)
+			result.Supply = &copy
+		}
+		m.mu.Unlock()
+		collector.Record(diagnosticEventCacheHit, int64(previous.version), true)
+		return finishDocument(result, diagnosticEventTerminalResponse)
+	}
+	if m.workers >= m.limits.MaxChildren {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.ResourceExhausted}, diagnosticEventTerminalFailure)
+	}
+	r.protocolOwned = true
+	m.workers++
+	m.mu.Unlock()
+	version := 1
+	method := "textDocument/didOpen"
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "languageId": languageID, "version": version, "text": string(text)}})
+	if opened {
+		version = previous.version + 1
+		method = "textDocument/didChange"
+		params, _ = json.Marshal(map[string]any{"textDocument": map[string]any{"uri": req.URI, "version": version}, "contentChanges": []map[string]string{{"text": string(text)}}})
+	}
+	owner := &ownedTransport{child: child}
+	collector.Record(diagnosticEventWriteAttempt, int64(len(params)), false)
+	writeErr := owner.run(ctx, func() error {
+		return lspwire.NewWriter(checkedWriter{child.Stdin()}, m.wire).Write(lspwire.Message{JSONRPC: lspwire.Version, Method: method, Params: params})
+	})
+	failure := contextFailure(ctx)
+	if writeErr == nil {
+		collector.Record(diagnosticEventWriteComplete, int64(len(params)), true)
+	}
+	if writeErr != nil || failure != "" {
+		owner.retire()
+		if failure == "" {
+			failure = session.SessionPoisoned
+		}
+	}
+	m.mu.Lock()
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+	// The lease excludes lifecycle replacement; keep the exact-generation guard
+	// here as well so no late completion can mutate a replacement record.
+	r = m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: session.StaleGeneration}, diagnosticEventTerminalFailure)
+	}
+	r.protocolOwned = false
+	if failure != "" {
+		r.record.State = session.Poisoned
+		r.retired = owner
+		m.observe(req.SessionID, req.Generation, "document-failed", r.record.State, failure)
+		if m.diagnostics != nil {
+			diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: false, Method: method})
+			diagnostic.Terminal = manageddiagnostic.TerminalProtocolError
+			diagnostic.Write = manageddiagnostic.IOFacts{State: manageddiagnostic.IOFailed, Messages: 1}
+			m.diagnostics.Record(diagnostic)
+		}
+		m.mu.Unlock()
+		return finishDocument(DocumentResult{Failure: failure}, diagnosticEventTerminalFailure)
+	}
+	var retainedSupply *DocumentSupply
+	if req.CaptureSupply {
+		retainedSupply = &DocumentSupply{
+			Classification: "LSP_SUPPLIED", SessionID: req.SessionID,
+			Generation: req.Generation, URI: req.URI, DocumentVersion: version,
+			Method: method, Content: append([]byte(nil), text...),
+			Params: append(json.RawMessage(nil), params...),
+		}
+	}
+	r.documents[req.URI] = openDocument{languageID: languageID, version: version, digest: digest, supply: retainedSupply}
+	m.observe(req.SessionID, req.Generation, "document", r.record.State, "")
+	if m.diagnostics != nil {
+		diagnostic := manageddiagnostic.RecordDocumentSupply(manageddiagnostic.DocumentSupplyObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: m.sequence, Completed: true, Method: method})
+		diagnostic.Write = manageddiagnostic.IOFacts{State: manageddiagnostic.IOComplete, Messages: 1}
+		m.diagnostics.Record(diagnostic)
+	}
+	result := DocumentResult{URI: req.URI, LanguageID: languageID, Version: version}
+	if retainedSupply != nil {
+		copy := *retainedSupply
+		copy.Content = append([]byte(nil), retainedSupply.Content...)
+		copy.Params = append(json.RawMessage(nil), retainedSupply.Params...)
+		result.Supply = &copy
+	}
+	m.mu.Unlock()
+	return finishDocument(result, diagnosticEventTerminalResponse)
+}
+
+func (m *Manager) SeedBindingRequested(sessionID string, generation uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[sessionID]
+	return r != nil && r.record.Generation == generation && r.seedBinding != nil
+}
+
+func (m *Manager) SeedCustodyProvenance(sessionID string, generation uint64) (seedbinding.CustodyMode, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[sessionID]
+	if r == nil || r.record.Generation != generation || r.custodyProvenance == "" {
+		return "", false
+	}
+	return r.custodyProvenance, true
+}
+
+// AdmitSeedBinding supplies the retained preflight bytes and validates their
+// declaration identity on the same initialized generation before target resolution.
+// Request limits are supplied by the acquisition owner and count against the same
+// deterministic request/time budget as subsequent acquisition requests.
+func (m *Manager) AdmitSeedBinding(ctx context.Context, sessionID string, generation uint64, deadline time.Time, maxMessages int, maxBytes int64) seedbinding.ValidationResult {
+	m.mu.Lock()
+	r := m.sessions[sessionID]
+	if r == nil {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: string(session.SessionNotFound)}
+	}
+	if r.record.Generation != generation {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: string(session.StaleGeneration)}
+	}
+	if r.seedBinding == nil || r.seedAdmittedGeneration == generation {
+		m.mu.Unlock()
+		return seedbinding.ValidationResult{Status: seedbinding.Match}
+	}
+	manifest := *r.seedBinding
+	encoding := r.metadata.PositionEncoding
+	expectedProvider := r.providerIdentity
+	observedProvider := expectedProvider
+	observedProvider.Name, observedProvider.Version = r.metadata.ProviderName, r.metadata.ProviderVersion
+	m.mu.Unlock()
+	if err := seedbinding.VerifyProviderIdentity(expectedProvider, observedProvider); err != nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Mismatch, PrivateDetail: "selected provider identity mismatch before semantic request"}
+	}
+	if encoding == "" || encoding != manifest.Locator.Encoding {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "negotiated position encoding unavailable"}
+	}
+	document := m.PrepareDocument(ctx, DocumentRequest{SessionID: sessionID, Generation: generation, URI: manifest.Locator.URI, LanguageID: manifest.Validator.Language, CaptureSupply: true})
+	if document.Failure != "" || document.Supply == nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "retained document supply unavailable"}
+	}
+	params, _ := json.Marshal(map[string]any{"textDocument": map[string]string{"uri": manifest.Locator.URI}})
+	validation := seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "documentSymbol unavailable"}
+	response := m.roundTrip(ctx, RoundTripRequest{SessionID: sessionID, Generation: generation, Method: "textDocument/documentSymbol", Params: params, Deadline: deadline, MaxMessages: maxMessages, MaxBytes: maxBytes, DiagnosticTargetID: manifest.ID}, func(raw json.RawMessage, rpcError *lspwire.RPCError) bool {
+		if rpcError != nil {
+			return false
+		}
+		validation = seedbinding.ValidateDocumentSymbols(raw, manifest, document.Supply.Content, encoding)
+		return validation.Status == seedbinding.Match
+	})
+	if response.Failure != "" || response.ServerError != nil {
+		return seedbinding.ValidationResult{Status: seedbinding.Unavailable, PrivateDetail: "documentSymbol unavailable"}
+	}
+	if validation.Status == seedbinding.Match {
+		m.mu.Lock()
+		if current := m.sessions[sessionID]; current != nil && current.record.Generation == generation && current.seedBinding != nil {
+			current.seedAdmittedGeneration = generation
+		} else {
+			validation = seedbinding.ValidationResult{Status: seedbinding.Invalid, PrivateDetail: "generation changed during semantic admission"}
+		}
+		m.mu.Unlock()
+	}
+	return validation
+}
+
+type RoundTripResult struct {
+	Key                            lspwire.RequestKey
+	DiagnosticOperation            DiagnosticOperationHandle `json:"-"`
+	Result                         json.RawMessage
+	ServerError                    *lspwire.RPCError
+	Failure                        session.Failure
+	Messages                       int
+	Bytes                          int64
+	RequestMessages                int
+	RequestBytes                   int64
+	Duration                       time.Duration
+	ThermalPhase                   string
+	Notifications                  []lspwire.Message
+	Responses                      []lspwire.Message
+	started                        time.Time
+	diagnostic                     manageddiagnostic.RequestObservation
+	diagnosticSink                 func(manageddiagnostic.Record)
+	eventCollector                 *manageddiagnostic.EventCollector
+	requestWrite                   *RequestWriteObservation
+	methodRequestFrame             []byte
+	privateB4RequestFrame          *privateB4RequestFrameOwner
+	privateB4ResponseFrame         *privateB4ResponseFrameOwner
+	privateB4Result                *privateB4ResultOwner
+	responseRead                   *ResponseReadObservation
+	ownedMethodPair                *OwnedMethodPair
+	privateB4OwnedMethodPair       *privateB4OwnedMethodPairOwner
+	privateB4RetainedNotifications *privateB4RetainedNotificationOwner
+	privateB4ServerError           *privateB4ServerErrorOwner
+	privateB4RetainedResponses     *privateB4RetainedResponseOwner
+	definitionResponseFrame        []byte
+	referencesResponseFrame        []byte
+	documentSymbolRequestFrame     []byte
+	documentSymbolResponseFrame    []byte
+}
+
+// RoundTrip executes one complete protocol transaction while exclusively
+// owning the exact generation's stdin/stdout stream. Concurrent transactions
+// and lifecycle operations are rejected rather than queued.
+func (m *Manager) RoundTrip(parent context.Context, req RoundTripRequest) RoundTripResult {
+	if req.EnablePrivateC16ObjectAccounting || req.EnablePrivateC17EventAccounting {
+		return RoundTripResult{Failure: session.ToolNotImplemented}
+	}
+	if req.ADR0011PrivateP2 && (req.Method == "textDocument/definition" || req.Method == "textDocument/references") {
+		private := &privateB4Reservation{method: req.Method, nonCustodial: true}
+		result := m.roundTripWithPrivate(parent, req, nil, private)
+		m.releasePrivateP2HistoryBorrower(private)
+		return result
+	}
+	return m.roundTrip(parent, req, nil)
+}
+
+func (m *Manager) releasePrivateP2HistoryBorrower(private *privateB4Reservation) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if private.historyBorrowed && private.history != nil {
+		private.history.releaseBorrowerLocked()
+		private.historyBorrowed = false
+	}
+}
+
+// roundTrip is the single transaction path. classify is package-private so only
+// manager-owned workflows can append semantic disposition to the same collector.
+func (m *Manager) roundTrip(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool) RoundTripResult {
+	return m.roundTripWithPrivate(parent, req, classify, nil)
+}
+
+var errPrivateB4Transport = errors.New("private B4 transport")
+
+func (m *Manager) roundTripWithPrivate(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, private *privateB4Reservation) RoundTripResult {
+	return m.roundTripWithPrivateTransaction(parent, req, classify, &privateB4Transaction{legacy: private})
+}
+
+func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req RoundTripRequest, classify func(json.RawMessage, *lspwire.RPCError) bool, transaction *privateB4Transaction) RoundTripResult {
+	var private *privateB4Reservation
+	if transaction != nil {
+		private = transaction.legacy
+	}
+	c18Receipt := adr0011c18.From(parent)
+	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDeadline) {
+		return RoundTripResult{Failure: session.ToolNotImplemented}
+	}
+	requestStarted := m.now()
+	if req.ExpectedOwnedDocument != nil {
+		// Use pre-lock copies for both the source guard and owned write; caller
+		// mutation while a response is pending cannot change either identity.
+		req.Params = append(json.RawMessage(nil), req.Params...)
+		expected := *req.ExpectedOwnedDocument
+		req.ExpectedOwnedDocument = &expected
+	}
+	if failure := contextFailure(parent); failure != "" {
+		return RoundTripResult{Failure: failure}
+	}
+	m.mu.Lock()
+	r := m.sessions[req.SessionID]
+	if r == nil {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.SessionNotFound}
+	}
+	if req.Generation != r.record.Generation {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.StaleGeneration}
+	}
+	if r.record.State != session.Ready || r.protocolOwned {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.LifecycleConflict}
+	}
+	if private != nil && req.ADR0011PrivateP2 {
+		callerDeadline, _ := parent.Deadline()
+		effective, _ := privateP2EffectiveDeadline(requestStarted, r.attemptStarted, req.Deadline, callerDeadline)
+		if !privateP2MayStartBlocking(m.now(), effective) {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.RequestTimeout}
+		}
+		req.Deadline = effective
+	}
+	if req.ExpectedOwnedDocument != nil && !matchesOwnedDocument(req, r.documents) {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: DocumentSupplyUnavailable}
+	}
+	child, ok := r.process.(wireChild)
+	if !ok {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.SessionPoisoned}
+	}
+	if len(r.requests) >= m.limits.MaxRequests || m.workers >= m.limits.MaxChildren {
+		m.mu.Unlock()
+		return RoundTripResult{Failure: session.ResourceExhausted}
+	}
+	var privateReader *lspwire.SuccessorIngressReader
+	if private != nil {
+		receipt, err := r.readinessHistory.freezeReceiptLocked()
+		if err != nil {
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		private.history, private.historyMetadata = receipt.history, &receipt.metadata
+		privateReader, err = lspwire.NewSuccessorIngressReader(privateB4TransportReader{Reader: child.Stdout()}, privateB4SuccessorOptions(private))
+		if err != nil {
+			r.readinessHistory.releaseReceiptOwnerLocked()
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		defer privateReader.Close()
+		if !r.readinessHistory.acquireBorrowerLocked() {
+			r.readinessHistory.releaseReceiptOwnerLocked()
+			m.mu.Unlock()
+			return RoundTripResult{Failure: session.ResourceExhausted}
+		}
+		private.historyBorrowed = true
+		if !private.nonCustodial {
+			var acquisitionProfile *privateB4EventAccountC17
+			if transaction != nil && transaction.c17 != nil {
+				acquisitionProfile = transaction.c17.profile
+			}
+			if failure := m.admitPrivateB4SourcesC17Locked(req, private, acquisitionProfile); failure != "" {
+				private.history.releaseBorrowerLocked()
+				private.historyBorrowed = false
+				m.mu.Unlock()
+				return RoundTripResult{Failure: failure}
+			}
+			// Definition custody retains its existing admission and installation path.
+			m.installPrivateB4TransactionLocked(req, r, transaction)
+		} else {
+			private.session = r
+		}
+	}
+	key := r.pending.Begin(req.Generation)
+	if private != nil {
+		private.selection.Key = key
+	}
+	r.requests[key] = &Request{Key: key, Deadline: req.Deadline}
+	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
+	r.protocolOwned = true
+	m.workers++
+	m.observe(req.SessionID, req.Generation, "request", r.record.State, "")
+	m.mu.Unlock()
+
+	var handle DiagnosticOperationHandle
+	var collector *manageddiagnostic.EventCollector
+	if private != nil && !private.nonCustodial {
+		handle, collector = m.newPrivateB4DiagnosticOperation(diagnosticGeneration, identity, private.explicitBytes)
+	} else {
+		handle, collector = m.newDiagnosticOperation(diagnosticGeneration, identity)
+	}
+	documentURI := ""
+	var documentParams struct {
+		TextDocument struct {
+			URI string `json:"uri"`
+		} `json:"textDocument"`
+	}
+	if json.Unmarshal(req.Params, &documentParams) == nil {
+		documentURI = documentParams.TextDocument.URI
+	}
+	m.describeDiagnosticOperation(handle, req.Method, documentURI, SessionMetadata{})
+	started := m.now()
+	result := RoundTripResult{Key: key, DiagnosticOperation: handle, ThermalPhase: "WARM", started: started, diagnosticSink: req.DiagnosticObserver, eventCollector: collector}
+	var privateRetainedNotifications []lspwire.Message
+	var privateRetainedResponses []lspwire.Message
+	maxMessages := req.MaxMessages
+	if maxMessages <= 0 {
+		maxMessages = 1
+	}
+	maxBytes := req.MaxBytes
+	if maxBytes <= 0 {
+		maxBytes = m.wire.MaxBodyBytes
+		if maxBytes <= 0 {
+			maxBytes = lspwire.DefaultLimits().MaxBodyBytes
+		}
+	}
+	requestedDeadline := time.Duration(0)
+	if !req.Deadline.IsZero() {
+		requestedDeadline = req.Deadline.Sub(started)
+		if requestedDeadline < 0 {
+			requestedDeadline = 0
+		}
+	}
+	effectiveDeadline := requestedDeadline
+	if parentDeadline, ok := parent.Deadline(); ok {
+		parentRemaining := parentDeadline.Sub(started)
+		if parentRemaining < 0 {
+			parentRemaining = 0
+		}
+		if req.Deadline.IsZero() || parentRemaining < effectiveDeadline {
+			effectiveDeadline = parentRemaining
+		}
+	}
+	result.diagnostic = manageddiagnostic.RequestObservation{SessionID: req.SessionID, Generation: req.Generation, Sequence: req.DiagnosticSequence, Method: req.Method, ProtocolID: key.ID, TargetID: req.DiagnosticTargetID, CallerID: req.DiagnosticCallerID, RequestedDeadline: requestedDeadline, EffectiveDeadline: effectiveDeadline, RequestedMaxBytes: req.MaxBytes, EffectiveMaxBytes: maxBytes, RequestedMaxMessages: req.MaxMessages, EffectiveMaxMessages: maxMessages, Clock: func() int64 { return m.now().UnixNano() }}
+	if result.diagnostic.Sequence == 0 {
+		result.diagnostic.Sequence = key.ID
+	}
+	ctx := parent
+	cancel := func() {}
+	if !req.Deadline.IsZero() {
+		ctx, cancel = context.WithDeadline(parent, req.Deadline)
+	}
+	defer cancel()
+
+	requestFrameCap := int64(0)
+	if (req.Method == "textDocument/definition" || req.Method == "textDocument/references") &&
+		req.CaptureMethodRequestFrameMaxBytes > 0 && req.CaptureMethodRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes {
+		requestFrameCap = req.CaptureMethodRequestFrameMaxBytes
+	}
+	documentSymbolCapture := req.Method == "textDocument/documentSymbol" &&
+		eligibleOwnedMethodRequest(req) && req.ExpectedOwnedDocument != nil &&
+		req.CaptureDocumentSymbolRequestFrameMaxBytes > 0 && req.CaptureDocumentSymbolRequestFrameMaxBytes <= maxMethodFrameCorrespondenceBytes &&
+		req.CaptureDocumentSymbolResponseFrameMaxBytes > 0 && req.CaptureDocumentSymbolResponseFrameMaxBytes <= maxMethodFrameCorrespondenceBytes
+	if documentSymbolCapture {
+		requestFrameCap = req.CaptureDocumentSymbolRequestFrameMaxBytes
+	}
+	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointHeaderFrame) {
+		return m.finishRoundTrip(req.SessionID, &ownedTransport{child: child}, result, session.SessionPoisoned, true)
+	}
+	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
+	writer := lspwire.NewWriter(writeCapture, m.wire)
+	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
+	requestParams := req.Params
+	if eligibleOwnedMethodRequest(req) {
+		// The owned writer and retained pair must use the same pre-write copy,
+		// never a caller-owned slice that can be changed during the read.
+		requestParams = append(json.RawMessage(nil), req.Params...)
+	}
+	requestMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: id, Method: req.Method, Params: requestParams}
+	markedWrite := req.ADR0011PrivateLimitAllocationV1 && req.CaptureOwnedMethodPair &&
+		(req.Method == "textDocument/documentSymbol" || req.Method == "textDocument/references")
+	custodialPrivateB4 := private != nil && !private.nonCustodial
+	var requestBody []byte
+	var marshalErr error
+	var outboundTransport privateB4ByteLeaseV2
+	owner := &ownedTransport{child: child}
+	if custodialPrivateB4 {
+		var failure session.Failure
+		requestBody, outboundTransport, failure, marshalErr = encodePrivateB4Request(requestMessage, private.explicitBytes, m.wire, m.b4OutboundHook)
+		if failure != "" || marshalErr != nil {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+		defer outboundTransport.release()
+	} else {
+		requestBody, marshalErr = json.Marshal(requestMessage)
+	}
+	result.RequestMessages = 1
+	result.RequestBytes = int64(len(requestBody))
+	// This guard is independent of pair eligibility: even an oversized params
+	// token cannot escape the pre-WRITE bound by failing pair validation.
+	var frameBytes int64
+	if markedWrite {
+		if marshalErr != nil || len(requestBody) > 4194304 {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+		frameBytes = canonicalRequestFrameBytes(len(requestBody))
+		if frameBytes > 4194304 {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+		}
+	}
+	collector.Record(diagnosticEventWriteAttempt, result.RequestBytes, false)
+	writeRequest := func() error { return writer.Write(requestMessage) }
+	if custodialPrivateB4 {
+		writeRequest = func() error { return writer.WriteEncodedBodyPrivate(requestBody) }
+	}
+	if err := owner.run(ctx, writeRequest); err != nil {
+		failure := contextFailure(ctx)
+		if failure == "" {
+			failure = session.SessionPoisoned
+		}
+		return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+	}
+	if markedWrite && writeCapture.bytes != frameBytes {
+		return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+	}
+	collector.Record(diagnosticEventWriteComplete, result.RequestBytes, true)
+	if private != nil && !private.nonCustodial && m.b4AfterWriteHook != nil {
+		m.b4AfterWriteHook(private.explicitBytes)
+	}
+	result.requestWrite = &RequestWriteObservation{
+		SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+		FrameBytes: writeCapture.bytes, FrameSHA256: writeCapture.sha256(),
+	}
+
+	type readResult struct {
+		message    lspwire.Message
+		frame      lspwire.ReadFrameObservation
+		raw        []byte
+		bodyBytes  int64
+		successor  lspwire.SuccessorReadObservation
+		frameOwner *privateB4ResponseFrameOwner
+		retained   bool
+		err        error
+	}
+	captureCap := int64(0)
+	switch req.Method {
+	case "textDocument/definition":
+		captureCap = req.CaptureDefinitionResponseFrameMaxBytes
+	case "textDocument/references":
+		captureCap = req.CaptureReferencesResponseFrameMaxBytes
+	case "textDocument/documentSymbol":
+		if documentSymbolCapture {
+			captureCap = req.CaptureDocumentSymbolResponseFrameMaxBytes
+		}
+	}
+	reads := make(chan readResult, 1)
+	decodeEntry, retainEntry := m.cDecodeEntry, m.cRetainEntry
+	if private != nil {
+		if probe := adr0011cobserve.From(parent); probe != nil {
+			if decodeEntry == nil {
+				decodeEntry = func() { adr0011cobserve.Notify(probe, adr0011cobserve.DecodeEntry) }
+			}
+			if retainEntry == nil {
+				retainEntry = func() { adr0011cobserve.Notify(probe, adr0011cobserve.RetainEntry) }
+			}
+		}
+		private.decodeEntry = decodeEntry
+		private.retainEntry = retainEntry
+	}
+	var reader *lspwire.Reader
+	if m.cWireObserver == nil && decodeEntry == nil && retainEntry == nil {
+		reader = lspwire.NewReader(child.Stdout(), m.wire)
+	} else {
+		reader = lspwire.NewReaderObservedAtDecode(child.Stdout(), m.wire, m.cWireObserver, decodeEntry, retainEntry)
+	}
+	if private != nil {
+		// Checkpoint C, first increment: per complete original-wire frame,
+		// independent of the existing transaction/cumulative byte budget.
+		reader.LimitOriginalFrameBytes(2 << 20)
+		reader.LimitCumulativeOriginalFrameBytes(8 << 20)
+	}
+	for result.Messages < maxMessages {
+		if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointCumulativeWire) {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+		}
+		go func() {
+			if privateReader != nil {
+				msg, err := privateReader.ReadFrame()
+				if m.cWireObserver != nil {
+					m.cWireObserver(lspwire.Event{Stage: lspwire.EventDecode, Kind: msg.Kind(), Closed: err != nil})
+				}
+				frameOwner := private.responseFrameOwner
+				raw := private.capture.ResponseFrame
+				if frameOwner != nil {
+					raw, _ = frameOwner.managerBytes()
+				}
+				observation := privateReader.LastReadObservation()
+				reads <- readResult{message: msg, frame: lspwire.ReadFrameObservation{FrameBytes: int64(len(raw)), FrameSHA256: privateB4Hash(raw)}, raw: raw, bodyBytes: int64(observation.MessageBytes), successor: observation, frameOwner: frameOwner, retained: err == nil && raw != nil, err: err}
+				return
+			}
+			if captureCap > 0 {
+				msg, frame, raw, retained, err := reader.ReadWithFrameIfWithin(captureCap)
+				reads <- readResult{message: msg, frame: frame, raw: raw, retained: retained, err: err}
+				return
+			}
+			msg, frame, err := reader.ReadWithFrame()
+			reads <- readResult{message: msg, frame: frame, err: err}
+		}()
+		select {
+		case <-ctx.Done():
+			// Preserve cooperative $/cancelRequest behavior, but never let that
+			// notification become a second unbounded write after cancellation.
+			cancelCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+			var state lspwire.CancelState
+			_ = owner.run(cancelCtx, func() error {
+				var err error
+				state, err = r.pending.Cancel(writer, key)
+				return err
+			})
+			stopCancel()
+			owner.retire()
+			<-reads // Close/teardown interrupted the outstanding read; join it.
+			if state == lspwire.CancelWritten {
+				m.mu.Lock()
+				r.cancels++
+				m.observe(req.SessionID, req.Generation, "cancel", r.record.State, session.RequestCancelled)
+				m.mu.Unlock()
+			}
+			failure := session.RequestCancelled
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) || (private != nil && req.ADR0011PrivateP2 && !m.now().Before(req.Deadline)) {
+				failure = session.RequestTimeout
+			}
+			return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+		case read := <-reads:
+			if read.err != nil {
+				failure := session.SessionPoisoned
+				if privateReader != nil && !errors.Is(read.err, io.EOF) && !errors.Is(read.err, errPrivateB4Transport) &&
+					!errors.Is(read.err, lspwire.ErrMalformedJSON) && !errors.Is(read.err, lspwire.ErrWrongVersion) && !errors.Is(read.err, lspwire.ErrInvalidMessage) && !errors.Is(read.err, lspwire.ErrInvalidContentLength) {
+					failure = session.ResourceExhausted
+				} else if errors.Is(read.err, lspwire.ErrOriginalFrameTooLarge) || errors.Is(read.err, lspwire.ErrCumulativeOriginalFramesTooLarge) {
+					failure = session.ResourceExhausted
+				} else if errors.Is(read.err, io.EOF) {
+					failure = session.SessionCrashed
+				}
+				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+			}
+			bodyBytes := read.bodyBytes
+			if privateReader == nil {
+				body, _ := json.Marshal(read.message)
+				bodyBytes = int64(len(body))
+			}
+			collector.Record(diagnosticEventReadComplete, bodyBytes, true)
+			result.Bytes += bodyBytes
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointMessageCount) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			result.Messages++
+			if result.Bytes > maxBytes {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+			}
+			releaseUnselectedFrame := func() {
+				if read.frameOwner == nil {
+					return
+				}
+				if private != nil && private.responseFrameOwner == read.frameOwner {
+					private.capture.ResponseFrame = nil
+					private.responseFrameOwner = nil
+				}
+				read.frameOwner.releaseManager()
+			}
+			if custodialPrivateB4 && read.message.Kind() == lspwire.KindRequest {
+				var capabilityProfile *privateB4EventAccountC17
+				if transaction != nil && transaction.c17 != nil {
+					capabilityProfile = transaction.c17.profile
+				}
+				failure, poison := writePrivateB4CapabilityResponseC17(capabilityProfile, read.message.Method, read.message.Params, func() (session.Failure, bool) {
+					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
+				})
+				releaseUnselectedFrame()
+				if failure != "" {
+					return m.finishRoundTrip(req.SessionID, owner, result, failure, poison)
+				}
+				continue
+			}
+			if read.message.Kind() == lspwire.KindNotification || read.message.Kind() == lspwire.KindRequest {
+				if req.ADR0011PrivateNotificationLeaseV1 && private != nil && !private.nonCustodial && read.message.Kind() == lspwire.KindNotification {
+					privateRetainedNotifications = append(privateRetainedNotifications, read.message)
+				} else {
+					result.Notifications = append(result.Notifications, read.message)
+				}
+				releaseUnselectedFrame()
+				continue
+			}
+			responseID, err := strconv.ParseUint(string(read.message.ID), 10, 64)
+			if err != nil || responseID != key.ID {
+				collector.Record(diagnosticEventUnmatched, int64(responseID), false)
+				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
+					privateRetainedResponses = append(privateRetainedResponses, read.message)
+				} else {
+					result.Responses = append(result.Responses, read.message)
+				}
+				releaseUnselectedFrame()
+				continue
+			}
+			disposition := r.pending.Accept(lspwire.ResponseKey{Generation: req.Generation, ID: responseID})
+			if disposition != lspwire.ResponseAccepted {
+				collector.Record(diagnosticEventLate, int64(responseID), false)
+				if req.ADR0011PrivateResponseLeaseV1 && private != nil && !private.nonCustodial {
+					privateRetainedResponses = append(privateRetainedResponses, read.message)
+				} else {
+					result.Responses = append(result.Responses, read.message)
+				}
+				releaseUnselectedFrame()
+				continue
+			}
+			collector.Record(diagnosticEventMatched, int64(responseID), true)
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDecodedMessage) {
+				releaseUnselectedFrame()
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			var decodedMessageOwner lspwire.SuccessorAllocationLease
+			if custodialPrivateB4 && req.Method == "textDocument/definition" && read.message.Kind() == lspwire.KindSuccessResponse {
+				capacity := lspwire.SuccessorMessageRetainedCapacity(read.message)
+				if m.b4DecodedHooks.reserve != nil {
+					m.b4DecodedHooks.reserve(private.explicitBytes, capacity)
+				}
+				owned, lease, err := lspwire.CloneSuccessorMessageOwned(read.message, privateB4SuccessorAllocationOwner{account: private.explicitBytes})
+				if err != nil {
+					if m.b4DecodedHooks.refused != nil {
+						m.b4DecodedHooks.refused(private.explicitBytes, capacity)
+					}
+					return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+				}
+				read.message, decodedMessageOwner = owned, lease
+				defer decodedMessageOwner.Release()
+				if m.b4DecodedHooks.owned != nil {
+					m.b4DecodedHooks.owned(private.explicitBytes, capacity)
+				}
+			}
+			result.responseRead = &ResponseReadObservation{
+				SessionID: req.SessionID, Generation: req.Generation, Key: key,
+				FrameBytes: read.frame.FrameBytes, FrameSHA256: read.frame.FrameSHA256,
+			}
+			if private != nil && !private.nonCustodial && read.frameOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+				result.privateB4ResponseFrame = read.frameOwner
+			}
+			if captureCap > 0 && read.retained && read.message.Kind() == lspwire.KindSuccessResponse {
+				switch req.Method {
+				case "textDocument/definition":
+					if privateReader != nil {
+						result.definitionResponseFrame = read.raw
+					} else {
+						result.definitionResponseFrame = append([]byte(nil), read.raw...)
+					}
+				case "textDocument/references":
+					result.referencesResponseFrame = append([]byte(nil), read.raw...)
+				case "textDocument/documentSymbol":
+					if raw, retained := writeCapture.retainedFrame(); retained {
+						result.documentSymbolRequestFrame = raw
+						result.documentSymbolResponseFrame = append([]byte(nil), read.raw...)
+					}
+				}
+			}
+			if req.ADR0011PrivateServerErrorLeaseV1 && private != nil && !private.nonCustodial && read.message.Error != nil {
+				var serverErrorFailure session.Failure
+				result.privateB4ServerError, serverErrorFailure = newPrivateB4ServerErrorOwner(private.explicitBytes, read.message.Error)
+				private.serverError = result.privateB4ServerError
+				if serverErrorFailure != "" {
+					result.Failure = serverErrorFailure
+					break
+				}
+				result.ServerError = nil
+			} else {
+				result.ServerError = read.message.Error
+			}
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointRawResult) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+				result.Result = private.capture.Result
+			} else {
+				result.Result = append(json.RawMessage(nil), read.message.Result...)
+				if private != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+					result.Result = append(json.RawMessage(nil), private.capture.Result...)
+				}
+			}
+			collector.Record(diagnosticEventResponseDecoded, int64(len(result.Result)), read.message.Error == nil)
+			if classify != nil {
+				if classify(result.Result, read.message.Error) {
+					collector.Record(diagnosticEventSemanticMatched, int64(responseID), true)
+				} else {
+					collector.Record(diagnosticEventSemanticUnmatched, int64(responseID), false)
+				}
+			}
+			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
+				result.Result = nil
+			}
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointSourceBuffer) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			if len(privateRetainedResponses) != 0 {
+				var responseFailure session.Failure
+				result.privateB4RetainedResponses, responseFailure = newPrivateB4RetainedResponseOwner(private.explicitBytes, privateRetainedResponses)
+				private.retainedResponses = result.privateB4RetainedResponses
+				if responseFailure != "" {
+					result.Failure = responseFailure
+					break
+				}
+			}
+			if len(privateRetainedNotifications) != 0 {
+				var notificationFailure session.Failure
+				result.privateB4RetainedNotifications, notificationFailure = newPrivateB4RetainedNotificationOwner(private.explicitBytes, privateRetainedNotifications)
+				private.retainedNotifications = result.privateB4RetainedNotifications
+				if notificationFailure != "" {
+					result.Failure = notificationFailure
+					break
+				}
+			}
+			if read.message.Kind() == lspwire.KindSuccessResponse && result.requestWrite != nil {
+				if req.Method != "textDocument/documentSymbol" {
+					if raw, retained := writeCapture.retainedFrame(); retained {
+						result.methodRequestFrame = raw
+					}
+				}
+				if req.ADR0011PrivateOwnedMethodPairLeaseV1 && private != nil && !private.nonCustodial {
+					pairResult := result
+					pairResult.Result = read.message.Result
+					required := uint64(len(requestParams)) + uint64(len(read.message.Result))
+					if m.b4OwnedPairHooks.beforeReserve != nil {
+						m.b4OwnedPairHooks.beforeReserve(private.explicitBytes, required)
+					}
+					var pairFailure session.Failure
+					result.privateB4OwnedMethodPair, pairFailure = buildPrivateOwnedMethodPairOwner(private.explicitBytes, req, pairResult, requestParams, read.message.Result)
+					private.ownedMethodPair = result.privateB4OwnedMethodPair
+					if pairFailure != "" {
+						if m.b4OwnedPairHooks.refused != nil {
+							m.b4OwnedPairHooks.refused(private.explicitBytes, required)
+						}
+						result.Failure = pairFailure
+						break
+					}
+					if m.b4OwnedPairHooks.afterOwned != nil {
+						m.b4OwnedPairHooks.afterOwned(private.explicitBytes, required)
+					}
+				} else {
+					result.ownedMethodPair = buildOwnedMethodPair(req, result, requestParams, read.message.Result)
+				}
+				if result.ownedMethodPair != nil && m.ownedMethodPairTestHook != nil {
+					emitOwnedMethodPairTestHook(m.ownedMethodPairTestHook, *result.ownedMethodPair)
+				}
+			}
+			if m.methodCandidateTestHook != nil && VerifyMethodFrameCorrespondence(req, result) == nil {
+				requestFrame, requestOK := result.CompletedMethodRequestFrame()
+				responseFrame, responseOK := result.CompletedMethodResponseFrame()
+				writeObservation, writeOK := result.CompletedRequestWrite()
+				readObservation, readOK := result.CompletedResponseRead()
+				if requestOK && responseOK && writeOK && readOK {
+					emitMethodCandidateTestHook(m.methodCandidateTestHook, methodCandidateObservation{
+						SessionID: req.SessionID, Generation: req.Generation, Key: key, Method: req.Method,
+						RequestWrite: writeObservation, ResponseRead: readObservation,
+						RequestFrame: requestFrame, ResponseFrame: responseFrame,
+					})
+				}
+			}
+			if decodedMessageOwner != nil {
+				decodedMessageOwner.Release()
+				if m.b4DecodedHooks.released != nil {
+					m.b4DecodedHooks.released(private.explicitBytes)
+				}
+			}
+			return m.finishRoundTrip(req.SessionID, owner, result, "", false)
+		}
+	}
+	return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+}
+
+// canonicalRequestFrameBytes counts the writer's canonical header and body.
+// len(body) is bounded by the in-memory JSON marshaler's int range.
+func canonicalRequestFrameBytes(bodyLen int) int64 {
+	digits := 1
+	for n := bodyLen; n >= 10; n /= 10 {
+		digits++
+	}
+	return int64(bodyLen) + int64(len("Content-Length: ")+digits+len("\r\n\r\n"))
+}
+
+func (m *Manager) finishRoundTrip(id string, owner *ownedTransport, result RoundTripResult, failure session.Failure, poison bool) RoundTripResult {
+	if poison {
+		owner.retire()
+	}
+	m.mu.Lock()
+	if r := m.sessions[id]; r != nil && r.record.Generation == result.Key.Generation {
+		delete(r.requests, result.Key)
+		r.protocolOwned = false
+		if poison {
+			r.record.State = session.Poisoned
+			r.retired = owner
+		}
+		m.observe(id, result.Key.Generation, "response", r.record.State, failure)
+	}
+	result.Failure = failure
+	result.Duration = m.now().Sub(result.started)
+	terminalCode := diagnosticEventTerminalResponse
+	if failure == session.RequestTimeout {
+		terminalCode = diagnosticEventTerminalDeadline
+	} else if failure != "" {
+		terminalCode = diagnosticEventTerminalFailure
+	}
+	m.completeDiagnosticOperationLocked(result.DiagnosticOperation, result.eventCollector, terminalCode)
+	retainedDiagnostic := false
+	if result.DiagnosticOperation.private.qualified {
+		retainedDiagnostic = m.privateDiagnosticHistory.resolve(result.DiagnosticOperation.private, result.DiagnosticOperation.sequence) != nil
+	} else {
+		_, retainedDiagnostic = m.diagnosticOperations[result.DiagnosticOperation]
+	}
+	if !retainedDiagnostic {
+		result.DiagnosticOperation = DiagnosticOperationHandle{}
+	}
+	terminal := manageddiagnostic.TerminalResponseReceived
+	readState, writeState := manageddiagnostic.IOComplete, manageddiagnostic.IOComplete
+	if failure != "" {
+		terminal, readState = manageddiagnostic.TerminalProtocolError, manageddiagnostic.IOFailed
+		switch failure {
+		case session.RequestTimeout:
+			terminal = manageddiagnostic.TerminalDeadlineExceeded
+		case session.RequestCancelled:
+			terminal = manageddiagnostic.TerminalCancelled
+		case session.SessionCrashed:
+			terminal = manageddiagnostic.TerminalTransportClosed
+		}
+	}
+	diagnostic := manageddiagnostic.RecordRequest(result.diagnostic, func() manageddiagnostic.RequestOutcome {
+		return manageddiagnostic.RequestOutcome{Terminal: terminal, ReadState: readState, WriteState: writeState, RequestBytes: result.RequestBytes, ResponseBytes: result.Bytes, ResponseMessages: result.Messages}
+	})
+	if result.ServerError != nil {
+		diagnostic.NumericRPCCode = manageddiagnostic.Fact[int]{Status: manageddiagnostic.Observed, Value: result.ServerError.Code}
+		diagnostic.Terminal = manageddiagnostic.TerminalProtocolError
+	}
+	if result.Duration < 0 {
+		result.Duration = 0
+	}
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+	m.mu.Unlock()
+	if m.diagnostics != nil {
+		m.diagnostics.Record(diagnostic)
+	}
+	if result.diagnosticSink != nil {
+		result.diagnosticSink(diagnostic.Clone())
+	}
+	return result
+}
+
+type reapReconciliation struct {
+	generation uint64
+	child      Child
+	resources  managedprocess.ResourceObservation
+	running    bool
+	done       chan struct{}
+	failure    session.Failure
+}
+
+type runtimeSession struct {
+	record                 Record
+	transientIdentity      string
+	attemptID              manageddiagnostic.StartupAttemptID
+	attemptStarted         time.Time
+	process                Child
+	retired                *ownedTransport // joined exact-child retirement, never a replacement lookup
+	reap                   *reapReconciliation
+	spec                   managedprocess.Spec
+	pending                *lspwire.Pending
+	requests               map[lspwire.RequestKey]*Request
+	cancels                int
+	protocolOwned          bool
+	lifecycleOwned         bool
+	metadata               SessionMetadata
+	languageID             string
+	documents              map[string]openDocument
+	seedSources            map[string][]byte
+	seedBinding            *seedbinding.Manifest
+	custodyProvenance      seedbinding.CustodyMode
+	providerIdentity       seedbinding.ProviderIdentity
+	seedAdmittedGeneration uint64
+	identity               managedprocess.Identity
+	diagnosticGeneration   DiagnosticGenerationHandle
+	readinessHistory       *privateReadinessHistory
+}
+
+type privateB4DecodedTestHooks struct {
+	reserve, owned, refused func(*privateB4ByteAccountV2, uint64)
+	released                func(*privateB4ByteAccountV2)
+}
+
+type Manager struct {
+	mu                       sync.Mutex
+	limits                   Limits
+	wire                     lspwire.Limits
+	starter                  Starter
+	algebra                  *session.Manager
+	sessions                 map[string]*runtimeSession
+	operations               map[string]OperationSnapshot
+	operationIDs             []string
+	readiness                map[string]*readinessOperation
+	readinessIDs             map[string]string
+	observations             []Observation
+	sequence                 uint64
+	readinessSeq             uint64
+	readinessTimeout         time.Duration
+	now                      func() time.Time
+	workers                  int
+	workerDone               chan struct{}
+	closed                   bool
+	diagnostics              *manageddiagnostic.Store
+	seedRevisionAuthority    seedbinding.RevisionAuthority
+	documentFinalHook        func()
+	gitWorktreeList          func(context.Context, string) ([]byte, error)
+	startupAttemptNonce      [16]byte
+	startupAttemptEntropy    func(uint64) []byte
+	startupAttemptSeq        uint64
+	transientIdentityRandom  io.Reader
+	readinessHistoryRandom   io.Reader
+	transientIdentities      map[string]struct{}
+	diagnosticSequence       uint64
+	diagnosticEvictions      uint64
+	diagnosticOmissions      uint64
+	diagnosticByteEvictions  uint64
+	diagnosticOperations     map[DiagnosticOperationHandle]diagnosticOperation
+	diagnosticOrder          []DiagnosticOperationHandle
+	methodCandidateTestHook  func(methodCandidateObservation)
+	ownedMethodPairTestHook  func(OwnedMethodPair)
+	b4OutboundHook           func(*privateB4ByteAccountV2)
+	b4AfterWriteHook         func(*privateB4ByteAccountV2)
+	b4ParamsHook             func(*privateB4ByteAccountV2)
+	b4DecodedHooks           privateB4DecodedTestHooks
+	b4OwnedPairHooks         privateB4OwnedMethodPairHooks
+	privateB4SourceIngress   *privateB4SourceIngressOwner
+	managerDiagnosticOwner   *managerDiagnosticOwner
+	privateDiagnosticHistory *privateDiagnosticHistory
+	cWireObserver            lspwire.Observer
+	cDecodeEntry             func()
+	cRetainEntry             func()
+	privateB4Leases          [privateB4MaxSlots]privateB4Slot
+	privateB4Bytes           int64
+}
+
+func New(c Config) (*Manager, error) {
+	l := c.Limits
+	if l.MaxSessions <= 0 || l.MaxRequests <= 0 || l.MaxChildren <= 0 || l.MaxCancels <= 0 || l.MaxTombstones <= 0 || l.MaxObservations <= 0 {
+		return nil, errors.New("sessionruntime: all limits must be positive")
+	}
+	if c.Starter == nil {
+		return nil, errors.New("sessionruntime: starter is required")
+	}
+	a, err := session.NewManager(session.ManagerConfig{MaxSessions: l.MaxSessions})
+	if err != nil {
+		return nil, err
+	}
+	if l.MaxOperations <= 0 {
+		l.MaxOperations = l.MaxObservations
+	}
+	readinessTimeout := c.ReadinessTimeout
+	if readinessTimeout <= 0 {
+		readinessTimeout = time.Second
+	}
+	now := c.Now
+	if now == nil {
+		now = time.Now
+	}
+	random := c.startupAttemptRandom
+	if random == nil {
+		random = rand.Reader
+	}
+	transientRandom := c.transientIdentityRandom
+	if transientRandom == nil {
+		transientRandom = rand.Reader
+	}
+	historyRandom := c.readinessHistoryRandom
+	if historyRandom == nil {
+		historyRandom = rand.Reader
+	}
+	var managerNonce [16]byte
+	if _, err := io.ReadFull(random, managerNonce[:]); err != nil {
+		return nil, errors.New("sessionruntime: startup attempt identity unavailable")
+	}
+	gitList := c.GitWorktreeList
+	if gitList == nil {
+		gitList = boundedGitWorktreeList
+	}
+	sourceIngress, failure := newPrivateB4SourceIngressOwner()
+	if failure != "" {
+		return nil, errors.New("sessionruntime: private B4 source ingress unavailable")
+	}
+	diagnosticOwner, failure := newManagerDiagnosticOwner()
+	if failure != "" {
+		return nil, errors.New("sessionruntime: manager diagnostic owner unavailable")
+	}
+	return &Manager{limits: l, wire: c.Wire, starter: c.Starter, algebra: a, sessions: make(map[string]*runtimeSession), operations: make(map[string]OperationSnapshot), readiness: make(map[string]*readinessOperation), readinessIDs: make(map[string]string), readinessTimeout: readinessTimeout, now: now, workerDone: make(chan struct{}, 1), diagnostics: c.Diagnostics, seedRevisionAuthority: c.SeedRevisionAuthority, documentFinalHook: c.DocumentFinalHook, gitWorktreeList: gitList, startupAttemptNonce: managerNonce, startupAttemptEntropy: c.startupAttemptEntropy, transientIdentityRandom: transientRandom, readinessHistoryRandom: historyRandom, transientIdentities: make(map[string]struct{}), diagnosticOperations: make(map[DiagnosticOperationHandle]diagnosticOperation), methodCandidateTestHook: c.methodCandidateTestHook, ownedMethodPairTestHook: c.ownedMethodPairTestHook, privateB4SourceIngress: sourceIngress, managerDiagnosticOwner: diagnosticOwner, privateDiagnosticHistory: new(privateDiagnosticHistory), cWireObserver: c.cWireObserver, cDecodeEntry: c.cDecodeEntry, cRetainEntry: c.cRetainEntry}, nil
+}
+
+const (
+	maxGitWorktreeBytes   = 1 << 20
+	maxGitWorktreeRecords = 1024
+	maxGitWorktreeTime    = 5 * time.Second
+)
+
+func boundedGitWorktreeList(ctx context.Context, parent string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", parent, "worktree", "list", "--porcelain")
+	var out bytes.Buffer
+	cmd.Stdout = &limitedWriter{w: &out, remaining: maxGitWorktreeBytes}
+	cmd.Stderr = &limitedWriter{w: io.Discard, remaining: 64 << 10}
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
+type limitedWriter struct {
+	w         io.Writer
+	remaining int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if len(p) > w.remaining {
+		return 0, fmt.Errorf("bounded command output exceeded")
+	}
+	n, err := w.w.Write(p)
+	w.remaining -= n
+	return n, err
+}
+
+func parseWorktreeList(raw []byte) ([]string, error) {
+	if len(raw) == 0 || len(raw) > maxGitWorktreeBytes || raw[len(raw)-1] != '\n' {
+		return nil, fmt.Errorf("malformed or truncated git worktree output")
+	}
+	blocks := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n\n")
+	if len(blocks) > maxGitWorktreeRecords {
+		return nil, fmt.Errorf("git worktree record limit exceeded")
+	}
+	paths := make([]string, 0, len(blocks))
+	seen := map[string]bool{}
+	for _, block := range blocks {
+		lines := strings.Split(block, "\n")
+		if len(lines) < 2 || !strings.HasPrefix(lines[0], "worktree ") {
+			return nil, fmt.Errorf("malformed git worktree record")
+		}
+		p := strings.TrimPrefix(lines[0], "worktree ")
+		if p == "" || !filepath.IsAbs(p) || filepath.Clean(p) != p || seen[p] {
+			return nil, fmt.Errorf("ambiguous git worktree identity")
+		}
+		seen[p] = true
+		paths = append(paths, p)
+	}
+	return paths, nil
+}
+
+type workspaceURIError struct {
+	reason       string
+	canonicalURI string
+}
+
+func (e *workspaceURIError) Error() string { return e.reason }
+
+func canonicalLocalWorkspaceURI(raw string) (string, string, error) {
+	u, err := url.ParseRequestURI(raw)
+	if err != nil || u.Scheme != "file" || u.Host != "" || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return "", "", &workspaceURIError{reason: "workspace_uri must be a local file URI"}
+	}
+	p := filepath.Clean(u.Path)
+	if !filepath.IsAbs(p) {
+		return "", "", &workspaceURIError{reason: "workspace_uri is not absolute"}
+	}
+	resolved, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", "", &workspaceURIError{reason: "workspace identity is unavailable"}
+	}
+	resolved = filepath.Clean(resolved)
+	canonical := (&url.URL{Scheme: "file", Path: resolved}).String()
+	if raw != canonical || resolved != p {
+		return "", "", &workspaceURIError{reason: "workspace_uri is not canonical", canonicalURI: canonical}
+	}
+	return resolved, canonical, nil
+}
+
+// DeriveWorkspace synchronously derives a READY sibling session from private parent authority.
+func (m *Manager) DeriveWorkspace(ctx context.Context, req DeriveWorkspaceRequest) DeriveWorkspaceResult {
+	m.mu.Lock()
+	parent := m.sessions[req.SessionID]
+	if parent == nil {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.SessionNotFound}
+	}
+	if parent.record.Generation != req.Generation {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.StaleGeneration}
+	}
+	if parent.record.State != session.Ready || parent.protocolOwned {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.Failure("SESSION_NOT_READY")}
+	}
+	parentWorkspace := parent.record.Profile.Workspace().String()
+	if parent.spec.Dir != parentWorkspace {
+		m.mu.Unlock()
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
+	}
+	template := StartRequest{Profile: parent.record.Profile, Process: managedprocess.Spec{Path: parent.spec.Path, Args: append([]string(nil), parent.spec.Args...), Dir: parent.spec.Dir, Env: append([]string(nil), parent.spec.Env...)}, LanguageID: parent.languageID, RelationProviders: append([]string(nil), parent.record.Routing.RelationProviders...), ProviderIdentity: parent.providerIdentity}
+	m.mu.Unlock()
+
+	target, canonicalURI, err := canonicalLocalWorkspaceURI(req.WorkspaceURI)
+	if err != nil {
+		result := DeriveWorkspaceResult{Failure: session.Failure("INVALID_WORKSPACE_URI")}
+		var uriErr *workspaceURIError
+		if errors.As(err, &uriErr) {
+			result.WorkspaceURI = uriErr.canonicalURI
+		}
+		return result
+	}
+	gitCtx, cancelGit := context.WithTimeout(ctx, maxGitWorktreeTime)
+	defer cancelGit()
+	raw, err := m.gitWorktreeList(gitCtx, parentWorkspace)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_QUERY_FAILED")}
+	}
+	paths, err := parseWorktreeList(raw)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_INVALID")}
+	}
+	parentSeen, targetCount := false, 0
+	for _, p := range paths {
+		parentSeen = parentSeen || p == parentWorkspace
+		if p == target {
+			targetCount++
+		}
+	}
+	if target == parentWorkspace {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+	}
+	if targetCount == 0 {
+		targetRaw, targetErr := m.gitWorktreeList(gitCtx, target)
+		if targetErr != nil {
+			return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+		}
+		targetPaths, targetErr := parseWorktreeList(targetRaw)
+		if targetErr != nil {
+			return DeriveWorkspaceResult{Failure: session.Failure("GIT_WORKTREE_INVALID")}
+		}
+		parentSeen, targetCount = false, 0
+		for _, p := range targetPaths {
+			parentSeen = parentSeen || p == parentWorkspace
+			if p == target {
+				targetCount++
+			}
+		}
+	}
+	if targetCount != 1 {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKTREE_NOT_REGISTERED")}
+	}
+	if !parentSeen {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
+	}
+	m.mu.Lock()
+	current := m.sessions[req.SessionID]
+	ready := current == parent && current.record.Generation == req.Generation && current.record.State == session.Ready && !current.protocolOwned
+	m.mu.Unlock()
+	if !ready {
+		return DeriveWorkspaceResult{Failure: session.LifecycleConflict}
+	}
+	profile, err := template.Profile.WithWorkspace(target)
+	if err != nil {
+		return DeriveWorkspaceResult{Failure: session.Failure("WORKSPACE_IDENTITY_MISMATCH")}
+	}
+	template.Profile, template.Process.Dir = profile, target
+	started := m.Start(ctx, template)
+	if started.Failure != "" {
+		return DeriveWorkspaceResult{Failure: started.Failure}
+	}
+	pending := m.BeginReadiness(ctx, started.SessionID, started.Generation, time.Time{})
+	readyResult, found := m.WaitReadiness(ctx, pending.ID)
+	if !found || readyResult.State != ReadinessReady || readyResult.Failure != "" {
+		cleanupCtx, cancelCleanup := context.WithTimeout(context.Background(), maxGitWorktreeTime)
+		cleanup := m.Stop(cleanupCtx, started.SessionID, "derive-readiness-cleanup")
+		cleaned := cleanup.Failure == "" && cleanup.IntentID != "" && m.waitLifecycleTerminal(cleanupCtx, cleanup.IntentID)
+		cancelCleanup()
+		if !cleaned {
+			return DeriveWorkspaceResult{Failure: session.SessionReapIncomplete}
+		}
+		return DeriveWorkspaceResult{Failure: session.InitializationFailure}
+	}
+	return DeriveWorkspaceResult{SessionID: started.SessionID, Generation: started.Generation, State: session.Ready, WorkspaceURI: canonicalURI}
+}
+
+func (m *Manager) waitLifecycleTerminal(ctx context.Context, id string) bool {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		operation, ok := m.Operation(id)
+		if !ok {
+			return false
+		}
+		if operation.State != OperationPending {
+			return operation.State == OperationComplete
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}
+
+// WorkspaceRoot returns the validated root for one exact live session generation.
+func (m *Manager) WorkspaceRoot(sessionID string, generation uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.sessions[sessionID]
+	if !ok || r.record.Generation != generation {
+		return "", false
+	}
+	return r.record.Routing.WorkspaceRoot, true
+}
+
+// SessionLanguageID returns the configured non-empty language identity for one
+// exact live session generation.
+func (m *Manager) SessionLanguageID(sessionID string, generation uint64) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.sessions[sessionID]
+	if !ok || r.record.Generation != generation || r.languageID == "" {
+		return "", false
+	}
+	return r.languageID, true
+}
+
+func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResult) {
+	seedSources := map[string][]byte{}
+	if req.SeedBinding != nil {
+		outcome := seedbinding.ValidateMechanical(ctx, req.Profile.Workspace().String(), *req.SeedBinding, m.seedRevisionAuthority)
+		if outcome.Status != seedbinding.Match {
+			detail := outcome.Terminal
+			if outcome.Provenance == seedbinding.CallerAssertedLocal {
+				detail = string(seedbinding.CallerAssertedLocal) + ": " + outcome.Terminal
+			}
+			return StartResult{Failure: session.Failure(outcome.Terminal), PublicDetail: detail, CustodyProvenance: outcome.Provenance}
+		}
+		result.CustodyProvenance = outcome.Provenance
+		result.PublicDetail = outcome.PrivateDetail
+		seedSources[req.SeedBinding.Locator.URI] = append([]byte(nil), outcome.Source...)
+		defer func(provenance seedbinding.CustodyMode) {
+			result.CustodyProvenance = provenance
+		}(outcome.Provenance)
+	}
+	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
+	defer func() {
+		result.AttemptID = attemptID
+		if result.SessionID != "" && result.Generation != 0 {
+			m.mu.Lock()
+			if current := m.sessions[result.SessionID]; current != nil && current.record.Generation == result.Generation && current.attemptID == attemptID {
+				result.DiagnosticGeneration = current.diagnosticGeneration
+			}
+			m.mu.Unlock()
+		}
+		if !m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, result) {
+			panic("sessionruntime: startup attempt retention invariant violated")
+		}
+	}()
+	if !req.Deadline.IsZero() && !time.Now().Before(req.Deadline) {
+		return StartResult{Failure: session.RequestTimeout}
+	}
+	if err := ctx.Err(); err != nil {
+		return StartResult{Failure: session.RequestCancelled}
+	}
+	id := req.Profile.SessionKey().String()
+	m.mu.Lock()
+	if current := m.sessions[id]; current != nil {
+		result := StartResult{SessionID: id, Generation: current.record.Generation, State: current.record.State}
+		m.mu.Unlock()
+		return result
+	}
+	if len(m.sessions) >= m.limits.MaxSessions {
+		m.mu.Unlock()
+		return StartResult{SessionID: id, Failure: session.ResourceExhausted}
+	}
+	m.mu.Unlock()
+
+	// Identity is observed from the exact immutable request spec before process
+	// creation; only fixed-size digests and scalar status/count values survive.
+	identity := managedprocess.ObserveIdentity(req.Process, req.Profile.ProfileName(), req.Profile.Workspace().String())
+	// Start is deliberately before admission. The production managedprocess gate
+	// returns UNAVAILABLE before command construction, pipes, or process creation.
+	child, observed := m.starter.Start(ctx, req.Process)
+	if observed.Kind == managedprocess.StartUnavailable {
+		return StartResult{SessionID: id, Failure: session.ProcessContainmentUnavailable, Start: observed}
+	}
+	if observed.Kind != managedprocess.StartStarted || child == nil {
+		return StartResult{SessionID: id, Failure: session.SpawnFailure, Start: observed}
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sessions[id] != nil || len(m.sessions) >= m.limits.MaxSessions {
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		return StartResult{SessionID: id, Failure: session.LifecycleConflict, Start: observed}
+	}
+	m.algebra.RegisterLifecycle(id, 1, session.Initializing, false)
+	if admission := m.algebra.Admit(id, 0); admission.Kind != session.AdmissionFree {
+		_ = child.Teardown(context.Background())
+		_ = child.Close()
+		return StartResult{SessionID: id, Failure: session.ResourceExhausted, Start: observed}
+	}
+	record := Record{SessionID: id, Profile: req.Profile, Routing: RoutingMetadata{
+		Alias: req.BootstrapAlias, WorkspaceRoot: req.Profile.Workspace().String(), LanguageID: req.LanguageID,
+		ServerProfile: req.Profile.ProfileName(), RelationProviders: append([]string(nil), req.RelationProviders...),
+	}, Generation: 1, State: session.Initializing, Started: time.Now()}
+	var retainedBinding *seedbinding.Manifest
+	if req.SeedBinding != nil {
+		copy := *req.SeedBinding
+		retainedBinding = &copy
+	}
+	r := &runtimeSession{record: record, attemptID: attemptID, attemptStarted: m.now(), process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
+	history, historyErr := m.issuePrivateReadinessHistoryLocked(id, 1)
+	if historyErr != nil {
+		return m.failTransientIdentityStartLocked(id, r, session.ResourceExhausted, observed)
+	}
+	r.readinessHistory = history
+	transientIdentity, identityFailure := m.newTransientIdentityLocked()
+	if identityFailure != "" {
+		return m.failTransientIdentityStartLocked(id, r, identityFailure, observed)
+	}
+	// Token installation is the final identity boundary before this session becomes
+	// observable through the runtime map, diagnostics, or startup observation.
+	r.transientIdentity = transientIdentity
+	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, id, 1)
+	m.sessions[id] = r
+	m.observe(id, 1, "startup", session.Initializing, "")
+	return StartResult{SessionID: id, Generation: 1, State: session.Initializing, Start: observed}
+}
+
+const transientIdentityAttempts = 8
+
+func (m *Manager) failTransientIdentityStartLocked(id string, r *runtimeSession, identityFailure session.Failure, observed managedprocess.StartObservation) StartResult {
+	result := StartResult{SessionID: id, Failure: identityFailure, Start: observed, transientFailure: transientIdentityStartFailure{Identity: identityFailure}}
+	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: 1, Operation: session.LifecycleStop, CallerID: "sessionruntime-transient-identity", ChildRisk: true})
+	teardown := r.process.Teardown(context.Background())
+	resources := r.process.Close()
+	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	cleanup := session.LifecycleResult{Failure: session.LifecycleConflict}
+	if intent.Failure == "" && intent.IntentID != "" {
+		cleanup = m.algebra.CompleteLifecycleObserved(id, intent.IntentID, session.LifecycleCompletion{
+			ShutdownComplete: true, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed,
+			TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death,
+			StderrDrainComplete: true, Reaped: death, InitializationPending: true,
+		})
+	} else if intent.Failure != "" {
+		cleanup.Failure = intent.Failure
+	}
+	if cleanup.Failure == "" && death && resources.Kind == managedprocess.ResourcesClosed && m.algebra.ReleaseStopped(id, 1) {
+		return result
+	}
+	result.transientFailure.Cleanup = cleanup.Failure
+	if result.transientFailure.Cleanup == "" {
+		result.transientFailure.Cleanup = session.SessionReapIncomplete
+	}
+	r.record.State = session.Poisoned
+	m.sessions[id] = r
+	m.observe(id, 1, "startup-failed", session.Poisoned, result.transientFailure.Cleanup)
+	result.Generation, result.State = 1, session.Poisoned
+	return result
+}
+
+func (m *Manager) newTransientIdentityLocked() (string, session.Failure) {
+	for attempt := 0; attempt < transientIdentityAttempts; attempt++ {
+		var raw [16]byte
+		if _, err := io.ReadFull(m.transientIdentityRandom, raw[:]); err != nil {
+			return "", session.Failure("TRANSIENT_IDENTITY_UNAVAILABLE")
+		}
+		token := "ts_" + hex.EncodeToString(raw[:])
+		if _, exists := m.transientIdentities[token]; exists {
+			continue
+		}
+		m.transientIdentities[token] = struct{}{}
+		return token, ""
+	}
+	return "", session.ResourceExhausted
+}
+
+// TransientSessionIdentity returns the process-local canonical identity only
+// for an exact live internal session ID and generation. It is identity, not authority.
+func (m *Manager) TransientSessionIdentity(id string, generation uint64) (string, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return "", session.SessionNotFound
+	}
+	if r.record.Generation != generation {
+		return "", session.StaleGeneration
+	}
+	if r.transientIdentity == "" || r.record.State == session.Poisoned {
+		return "", session.SessionPoisoned
+	}
+	return r.transientIdentity, ""
+}
+
+func (m *Manager) BeginReadiness(ctx context.Context, id string, generation uint64, deadline time.Time) ReadinessSnapshot {
+	m.mu.Lock()
+	r := m.sessions[id]
+	if r == nil {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.SessionNotFound}
+	}
+	if generation != r.record.Generation {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.StaleGeneration}
+	}
+	if existing := m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)]; existing != "" {
+		snapshot := m.readiness[existing].snapshot
+		m.mu.Unlock()
+		return snapshot
+	}
+	if r.protocolOwned {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.LifecycleConflict}
+	}
+	protocol, ok := r.process.(wireChild)
+	if !ok {
+		m.mu.Unlock()
+		return ReadinessSnapshot{SessionID: id, Generation: generation, State: ReadinessFailed, Failure: session.InitializationFailure}
+	}
+	workspace := r.record.Profile.Workspace().String()
+	m.readinessSeq++
+	opID := "readiness-" + strconv.FormatUint(m.readinessSeq, 10)
+	op := &readinessOperation{snapshot: ReadinessSnapshot{ID: opID, AttemptID: r.attemptID, SessionID: id, Generation: generation, State: ReadinessPending, ThermalPhase: "COLD"}, started: m.now(), done: make(chan struct{})}
+	m.readiness[opID] = op
+	m.readinessIDs[id+":"+strconv.FormatUint(generation, 10)] = opID
+	r.protocolOwned = true
+	m.workers++
+	diagnosticGeneration, identity := r.diagnosticGeneration, r.identity
+	m.mu.Unlock()
+	handle, collector := m.newDiagnosticOperation(diagnosticGeneration, identity)
+	m.mu.Lock()
+	op.snapshot.DiagnosticOperation = handle
+	op.diagnostic = collector
+	snapshot := op.snapshot
+	m.mu.Unlock()
+	go m.runReadiness(ctx, deadline, protocol, opID, generation, workspace)
+	return snapshot
+}
+
+func (m *Manager) runReadiness(parent context.Context, deadline time.Time, child wireChild, opID string, generation uint64, workspace string) {
+	ctx := parent
+	cancel := func() {}
+	if deadline.IsZero() {
+		ctx, cancel = context.WithTimeout(parent, m.readinessTimeout)
+	} else {
+		ctx, cancel = context.WithDeadline(parent, deadline)
+	}
+	defer cancel()
+
+	key := lspwire.NewPending(1).Begin(generation)
+	id := strconv.FormatUint(key.ID, 10)
+	writeCapture := newFramedWriteCaptureBounded(child.Stdin(), int64(privateHistoryMaxBytes))
+	writer := lspwire.NewWriter(writeCapture, m.wire)
+	workspaceURI := (&url.URL{Scheme: "file", Path: workspace}).String()
+	initializeParams := struct {
+		ProcessID        any    `json:"processId"`
+		RootURI          string `json:"rootUri"`
+		WorkspaceFolders []struct {
+			URI  string `json:"uri"`
+			Name string `json:"name"`
+		} `json:"workspaceFolders"`
+		Capabilities struct {
+			Workspace struct {
+				Symbol struct {
+					DynamicRegistration bool `json:"dynamicRegistration"`
+				} `json:"symbol"`
+			} `json:"workspace"`
+			TextDocument struct {
+				CallHierarchy struct {
+					DynamicRegistration bool `json:"dynamicRegistration"`
+				} `json:"callHierarchy"`
+				DocumentSymbol struct {
+					HierarchicalDocumentSymbolSupport bool `json:"hierarchicalDocumentSymbolSupport"`
+				} `json:"documentSymbol"`
+			} `json:"textDocument"`
+		} `json:"capabilities"`
+	}{ProcessID: nil, RootURI: workspaceURI, WorkspaceFolders: []struct {
+		URI  string `json:"uri"`
+		Name string `json:"name"`
+	}{{URI: workspaceURI, Name: "workspace"}}}
+	initializeParams.Capabilities.TextDocument.DocumentSymbol.HierarchicalDocumentSymbolSupport = true
+	initializeParams.Capabilities.Workspace.Symbol.DynamicRegistration = false
+	params, _ := json.Marshal(initializeParams)
+	initializeMessage := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "initialize", Params: params}
+	initializeBody, _ := json.Marshal(initializeMessage)
+	m.recordReadinessEvent(opID, diagnosticEventWriteAttempt, int64(len(initializeBody)), false)
+	m.recordReadinessRequest(opID, int64(len(initializeBody)))
+	if err := writer.Write(initializeMessage); err != nil {
+		m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, manageddiagnostic.TerminalProtocolError, "initialize-write-failed")
+		return
+	}
+	m.recordReadinessEvent(opID, diagnosticEventWriteComplete, int64(len(initializeBody)), true)
+	initializeFrame, initializeCaptured := writeCapture.retainedFrame()
+	if !initializeCaptured || m.appendReadinessHistoryFrame(opID, privateHistoryOutbound, initializeFrame) != nil {
+		m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, manageddiagnostic.TerminalProtocolError, "initialize-history-refused")
+		return
+	}
+	type readinessResult struct {
+		metadata SessionMetadata
+		frame    []byte
+		err      error
+	}
+	response := make(chan readinessResult, 1)
+	go func() {
+		reader := lspwire.NewReader(child.Stdout(), m.wire)
+		for messages := 0; messages < m.limits.MaxObservations; messages++ {
+			message, _, exactFrame, err := reader.ReadWithExactFrame(int64(privateHistoryMaxBytes))
+			if err != nil {
+				response <- readinessResult{err: err}
+				return
+			}
+			body, _ := json.Marshal(message)
+			m.recordReadinessResponse(opID, int64(len(body)))
+			m.recordReadinessEvent(opID, diagnosticEventReadComplete, int64(len(body)), true)
+			if message.Kind() == lspwire.KindNotification {
+				continue
+			}
+			if message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || message.Error != nil || len(message.Result) == 0 {
+				response <- readinessResult{err: errors.New("sessionruntime: invalid readiness response")}
+				return
+			}
+			metadata := SessionMetadata{}
+			var initialized struct {
+				ServerInfo struct {
+					Name    string `json:"name"`
+					Version string `json:"version"`
+				} `json:"serverInfo"`
+				Capabilities struct {
+					PositionEncoding        string          `json:"positionEncoding"`
+					CallHierarchyProvider   json.RawMessage `json:"callHierarchyProvider"`
+					DocumentSymbolProvider  json.RawMessage `json:"documentSymbolProvider"`
+					WorkspaceSymbolProvider json.RawMessage `json:"workspaceSymbolProvider"`
+					DefinitionProvider      json.RawMessage `json:"definitionProvider"`
+					ReferencesProvider      json.RawMessage `json:"referencesProvider"`
+				} `json:"capabilities"`
+			}
+			if err := json.Unmarshal(message.Result, &initialized); err != nil {
+				response <- readinessResult{err: errors.New("sessionruntime: malformed initialize result")}
+				return
+			}
+			metadata.PositionEncoding = initialized.Capabilities.PositionEncoding
+			metadata.ProviderName, metadata.ProviderVersion = initialized.ServerInfo.Name, initialized.ServerInfo.Version
+			if metadata.PositionEncoding == "" {
+				metadata.PositionEncoding = "utf-16"
+			}
+			provider := initialized.Capabilities.CallHierarchyProvider
+			metadata.CallHierarchySupport = string(provider) == "true" || (len(provider) > 0 && string(provider) != "false" && string(provider) != "null")
+			documentSymbols := initialized.Capabilities.DocumentSymbolProvider
+			metadata.DocumentSymbolSupport = string(documentSymbols) == "true" || (len(documentSymbols) > 0 && string(documentSymbols) != "false" && string(documentSymbols) != "null")
+			workspaceSymbols := initialized.Capabilities.WorkspaceSymbolProvider
+			metadata.WorkspaceSymbolSupport = capabilitySupported(workspaceSymbols)
+			metadata.DefinitionSupport = capabilitySupported(initialized.Capabilities.DefinitionProvider)
+			metadata.ReferencesSupport = capabilitySupported(initialized.Capabilities.ReferencesProvider)
+			if m.appendReadinessHistoryFrame(opID, privateHistoryInbound, exactFrame) != nil {
+				response <- readinessResult{err: errors.New("sessionruntime: readiness history refused")}
+				return
+			}
+			response <- readinessResult{metadata: metadata, frame: exactFrame}
+			return
+		}
+		response <- readinessResult{err: errors.New("sessionruntime: readiness response limit exceeded")}
+	}()
+	select {
+	case observed := <-response:
+		if observed.err != nil {
+			terminal, reason := manageddiagnostic.TerminalProtocolError, "initialize-response-invalid"
+			if errors.Is(observed.err, io.EOF) {
+				terminal, reason = manageddiagnostic.TerminalTransportClosed, "transport-closed"
+			}
+			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, reason)
+			return
+		}
+		initializedMessage := lspwire.Message{JSONRPC: lspwire.Version, Method: "initialized", Params: json.RawMessage(`{}`)}
+		initializedBody, _ := json.Marshal(initializedMessage)
+		m.recordReadinessRequest(opID, int64(len(initializedBody)))
+		initializedCapture := newFramedWriteCaptureBounded(child.Stdin(), int64(privateHistoryMaxBytes))
+		initializedWriter := lspwire.NewWriter(initializedCapture, m.wire)
+		if err := initializedWriter.Write(initializedMessage); err != nil {
+			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Observed, Value: manageddiagnostic.SubstepInitializedNotification}, manageddiagnostic.TerminalProtocolError, "initialized-notification-write-failed")
+			return
+		}
+		initializedFrame, initializedCaptured := initializedCapture.retainedFrame()
+		if !initializedCaptured || m.appendReadinessHistoryFrame(opID, privateHistoryOutbound, initializedFrame) != nil {
+			m.abortReadinessDiagnostic(child, opID, session.InitializationFailure, manageddiagnostic.PhaseInitializeWrite, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Observed, Value: manageddiagnostic.SubstepInitializedNotification}, manageddiagnostic.TerminalProtocolError, "initialized-history-refused")
+			return
+		}
+		m.recordReadinessEvent(opID, diagnosticEventInitialized, int64(len(initializedBody)), true)
+		m.recordSuccessfulReadiness(opID, int64(len(initializeBody)), int64(len(initializedBody)), observed.metadata)
+		m.describeReadinessDiagnostic(opID, observed.metadata)
+		m.terminalReadinessEvent(opID, diagnosticEventTerminalResponse)
+		m.finishReadiness(opID, ReadinessReady, "", observed.metadata)
+	case <-ctx.Done():
+		// Retire the readiness-owned transport before closing its diagnostics, then
+		// join the reader so every shutdown read observation precedes the terminal.
+		preExit := readinessChildExited(child)
+		teardown := child.Teardown(context.Background())
+		resources := child.Close()
+		late := <-response
+		if late.err != nil {
+			m.recordReadinessEvent(opID, diagnosticEventLate, 0, false)
+		} else {
+			m.recordReadinessEvent(opID, diagnosticEventLate, 0, true)
+		}
+		failure := session.RequestCancelled
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			failure = session.InitializationTimeout
+		}
+		terminal := manageddiagnostic.TerminalCancelled
+		if failure == session.InitializationTimeout {
+			terminal = manageddiagnostic.TerminalDeadlineExceeded
+		}
+		m.finishAbortedReadinessDiagnostic(opID, failure, manageddiagnostic.PhaseInitializeResponse, manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Unavailable}, terminal, "initialize-wait-ended", preExit, child, teardown, resources)
+	}
+}
+
+func (m *Manager) describeReadinessDiagnostic(id string, metadata SessionMetadata) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var handle DiagnosticOperationHandle
+	if op != nil {
+		handle = op.snapshot.DiagnosticOperation
+	}
+	m.mu.Unlock()
+	m.describeDiagnosticOperation(handle, "initialize", "", metadata)
+}
+
+func readinessChildExited(child Child) bool {
+	if observable, ok := child.(interface {
+		Observe() managedprocess.SurvivorObservation
+	}); ok {
+		return observable.Observe().Kind == managedprocess.SurvivorDead
+	}
+	return false
+}
+
+func (m *Manager) abortReadinessDiagnostic(child Child, id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string) {
+	preExit := readinessChildExited(child)
+	teardown := child.Teardown(context.Background())
+	resources := child.Close()
+	m.finishAbortedReadinessDiagnostic(id, failure, phase, substep, terminal, reason, preExit, child, teardown, resources)
+}
+
+func (m *Manager) finishAbortedReadinessDiagnostic(id string, failure session.Failure, phase manageddiagnostic.Phase, substep manageddiagnostic.Fact[manageddiagnostic.Substep], terminal manageddiagnostic.Terminal, reason string, preExit bool, child Child, teardown managedprocess.TeardownObservation, resources managedprocess.ResourceObservation) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var sid string
+	var generation uint64
+	if op != nil {
+		sid, generation = op.snapshot.SessionID, op.snapshot.Generation
+	}
+	m.sequence++
+	sequence := m.sequence
+	m.mu.Unlock()
+	m.terminalReadinessEvent(id, diagnosticEventTerminalFailure)
+	m.retainReadinessRetirement(id, child, teardown, resources)
+	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
+	if m.diagnostics != nil && sid != "" {
+		exit := manageddiagnostic.ProcessExit{Status: manageddiagnostic.Unavailable}
+		if preExit {
+			terminal = manageddiagnostic.TerminalProcessExited
+			exit = manageddiagnostic.ProcessExit{Status: manageddiagnostic.Observed, ExitCode: manageddiagnostic.Fact[int]{Status: manageddiagnostic.Observed, Value: teardown.Death.ExitCode}, ObservedBeforeCleanup: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: true}, CleanupInduced: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: false}}
+		}
+		r := manageddiagnostic.Record{SessionID: sid, Generation: generation, Sequence: sequence, Phase: phase, Substep: substep, Terminal: terminal, Reason: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: reason}, Request: manageddiagnostic.RequestFacts{Method: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: "initialize"}, TargetID: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Unavailable}, CallerID: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Unavailable}, OwnerSequence: manageddiagnostic.Fact[uint64]{Status: manageddiagnostic.Observed, Value: sequence}, ProtocolID: manageddiagnostic.Fact[uint64]{Status: manageddiagnostic.Observed, Value: 1}}, Read: manageddiagnostic.IOFacts{State: manageddiagnostic.IOFailed}, Write: manageddiagnostic.IOFacts{State: manageddiagnostic.IOAttempted}, CallHierarchy: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Unavailable}, DocumentSupplyCompleted: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Unavailable}, ProcessExit: exit, Stderr: manageddiagnostic.Stderr{Status: manageddiagnostic.Withheld, ObservedByteCount: manageddiagnostic.Fact[int64]{Status: manageddiagnostic.Observed, Value: int64(len(teardown.Death.Stderr.Bytes))}, Truncated: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: teardown.Death.Stderr.Truncated}}}
+		m.diagnostics.Record(r)
+	}
+}
+
+func (m *Manager) abortReadiness(child Child, id string, failure session.Failure) {
+	teardown := child.Teardown(context.Background())
+	resources := child.Close()
+	m.retainReadinessRetirement(id, child, teardown, resources)
+	m.finishReadiness(id, ReadinessFailed, failure, SessionMetadata{})
+}
+
+func (m *Manager) retainReadinessRetirement(id string, child Child, teardown managedprocess.TeardownObservation, resources managedprocess.ResourceObservation) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op := m.readiness[id]
+	if op == nil {
+		return
+	}
+	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
+		r.retired = &ownedTransport{child: child, teardown: teardown, resources: resources}
+	}
+}
+
+func (m *Manager) recordReadinessEvent(id string, code uint16, count int64, flag bool) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var collector *manageddiagnostic.EventCollector
+	if op != nil {
+		collector = op.diagnostic
+	}
+	m.mu.Unlock()
+	collector.Record(code, count, flag)
+}
+
+func (m *Manager) terminalReadinessEvent(id string, code uint16) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	var collector *manageddiagnostic.EventCollector
+	if op != nil {
+		collector = op.diagnostic
+	}
+	m.mu.Unlock()
+	if op != nil {
+		m.completeDiagnosticOperation(op.snapshot.DiagnosticOperation, collector, code)
+	}
+}
+
+func (m *Manager) recordReadinessRequest(id string, bytes int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op := m.readiness[id]; op != nil && op.snapshot.State == ReadinessPending {
+		op.snapshot.RequestMessages++
+		op.snapshot.RequestBytes += bytes
+	}
+}
+
+func (m *Manager) recordReadinessResponse(id string, bytes int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if op := m.readiness[id]; op != nil && op.snapshot.State == ReadinessPending {
+		op.snapshot.ResponseMessages++
+		op.snapshot.ResponseBytes += bytes
+	}
+}
+
+func (m *Manager) recordSuccessfulReadiness(id string, initializeBytes, initializedBytes int64, metadata SessionMetadata) {
+	m.mu.Lock()
+	op := m.readiness[id]
+	if op == nil {
+		m.mu.Unlock()
+		return
+	}
+	s := op.snapshot
+	m.mu.Unlock()
+	if m.diagnostics == nil {
+		return
+	}
+	r := manageddiagnostic.Record{SessionID: s.SessionID, Generation: s.Generation, Sequence: 1, Phase: manageddiagnostic.PhaseReadinessComplete, Substep: manageddiagnostic.Fact[manageddiagnostic.Substep]{Status: manageddiagnostic.Observed, Value: manageddiagnostic.SubstepInitializedNotification}, Terminal: manageddiagnostic.TerminalResponseReceived, Reason: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: "readiness-complete"}, Request: manageddiagnostic.RequestFacts{Method: manageddiagnostic.Fact[string]{Status: manageddiagnostic.Observed, Value: "initialize"}, OwnerSequence: manageddiagnostic.Fact[uint64]{Status: manageddiagnostic.Observed, Value: 1}}, Read: manageddiagnostic.IOFacts{State: manageddiagnostic.IOComplete, Messages: s.ResponseMessages, Bytes: s.ResponseBytes}, Write: manageddiagnostic.IOFacts{State: manageddiagnostic.IOComplete, Messages: 2, Bytes: initializeBytes + initializedBytes}, CallHierarchy: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Observed, Value: metadata.CallHierarchySupport}, DocumentSupplyCompleted: manageddiagnostic.Fact[bool]{Status: manageddiagnostic.Unavailable}, ProcessExit: manageddiagnostic.ProcessExit{Status: manageddiagnostic.Unavailable}, Stderr: manageddiagnostic.Stderr{Status: manageddiagnostic.Withheld}}
+	m.diagnostics.Record(r)
+}
+
+func (m *Manager) finishReadiness(id string, state ReadinessState, failure session.Failure, metadata SessionMetadata) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op := m.readiness[id]
+	if op == nil || op.snapshot.State != ReadinessPending {
+		return
+	}
+	op.snapshot.State, op.snapshot.Failure, op.snapshot.Metadata = state, failure, metadata
+	op.snapshot.Duration = m.now().Sub(op.started)
+	if op.snapshot.Duration < 0 {
+		op.snapshot.Duration = 0
+	}
+	if r := m.sessions[op.snapshot.SessionID]; r != nil && r.record.Generation == op.snapshot.Generation {
+		r.metadata = metadata
+		r.protocolOwned = false
+		if state == ReadinessReady {
+			result := m.algebra.ObserveInitialization(op.snapshot.SessionID, op.snapshot.Generation, true)
+			r.record.State = result.State
+			m.observe(op.snapshot.SessionID, op.snapshot.Generation, "readiness", result.State, result.Failure)
+		} else {
+			result := m.algebra.ObserveInitialization(op.snapshot.SessionID, op.snapshot.Generation, false)
+			r.record.State = result.State
+			m.observe(op.snapshot.SessionID, op.snapshot.Generation, "readiness", result.State, failure)
+		}
+	}
+	close(op.done)
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+}
+
+// GetStartupAttempt returns only the exact retained startup-attempt observation.
+func (m *Manager) GetStartupAttempt(id manageddiagnostic.StartupAttemptID) manageddiagnostic.StartupAttemptQuery {
+	if m.diagnostics == nil {
+		return manageddiagnostic.StartupAttemptQuery{Status: manageddiagnostic.AttemptUnavailable}
+	}
+	return m.diagnostics.StartupAttempt(id)
+}
+
+// Diagnostics returns only records retained for the exact identity and generation.
+func (m *Manager) Diagnostics(sessionID string, generation uint64) manageddiagnostic.QueryResult {
+	if m.diagnostics == nil {
+		return manageddiagnostic.QueryResult{Status: manageddiagnostic.QueryUnavailable}
+	}
+	return m.diagnostics.Query(sessionID, generation)
+}
+
+// RecordCapabilityCheck is a typed internal hook for operation owners outside runtime.
+func (m *Manager) RecordCapabilityCheck(observation manageddiagnostic.CapabilityObservation) bool {
+	if m.diagnostics == nil {
+		return false
+	}
+	return m.diagnostics.Record(manageddiagnostic.RecordCapabilityCheck(observation))
+}
+
+func (m *Manager) Readiness(id string) (ReadinessSnapshot, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	op, ok := m.readiness[id]
+	if !ok {
+		return ReadinessSnapshot{}, false
+	}
+	return op.snapshot, true
+}
+
+func (m *Manager) WaitReadiness(ctx context.Context, id string) (ReadinessSnapshot, bool) {
+	m.mu.Lock()
+	op, ok := m.readiness[id]
+	if !ok {
+		m.mu.Unlock()
+		return ReadinessSnapshot{}, false
+	}
+	done := op.done
+	snapshot := op.snapshot
+	m.mu.Unlock()
+	if snapshot.State != ReadinessPending {
+		return snapshot, true
+	}
+	select {
+	case <-done:
+		return m.Readiness(id)
+	case <-ctx.Done():
+		return snapshot, true
+	}
+}
+
+func (m *Manager) ObserveInitialization(id string, generation uint64, complete bool) session.LifecycleResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	result := m.algebra.ObserveInitialization(id, generation, complete)
+	r.record.State = result.State
+	kind := "initialization"
+	if !complete {
+		kind = "poison"
+	}
+	m.observe(id, generation, kind, result.State, result.Failure)
+	return result
+}
+
+func (m *Manager) BeginRequest(id string, generation uint64, deadline time.Time) (lspwire.RequestKey, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return lspwire.RequestKey{}, session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return lspwire.RequestKey{}, session.StaleGeneration
+	}
+	if len(r.requests) >= m.limits.MaxRequests {
+		return lspwire.RequestKey{}, session.ResourceExhausted
+	}
+	key := r.pending.Begin(generation)
+	r.requests[key] = &Request{Key: key, Deadline: deadline}
+	m.observe(id, generation, "request", r.record.State, "")
+	return key, ""
+}
+
+func (m *Manager) CancelRequest(id string, key lspwire.RequestKey) (lspwire.CancelState, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil || key.Generation != r.record.Generation {
+		return lspwire.CancelNotPending, nil
+	}
+	if r.protocolOwned {
+		return lspwire.CancelNotPending, errors.New("sessionruntime: protocol stream exclusively owned; cancel the operation context")
+	}
+	child, ok := r.process.(wireChild)
+	if !ok {
+		return lspwire.CancelNotPending, errors.New("sessionruntime: active child has no LSP wire")
+	}
+	state, err := r.pending.Cancel(lspwire.NewWriter(child.Stdin(), m.wire), key)
+	if state == lspwire.CancelWritten {
+		r.cancels++
+		m.observe(id, key.Generation, "cancel", r.record.State, session.RequestCancelled)
+	}
+	return state, err
+}
+
+func (m *Manager) CompleteResponse(id string, key lspwire.ResponseKey) lspwire.ResponseDisposition {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return lspwire.ResponseUnknown
+	}
+	d := r.pending.Accept(key)
+	if d == lspwire.ResponseAccepted {
+		delete(r.requests, key)
+		m.observe(id, key.Generation, "response", r.record.State, "")
+	}
+	return d
+}
+
+func (m *Manager) Expire(now time.Time) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for id, r := range m.sessions {
+		for key, request := range r.requests {
+			if request.Terminal == "" && !request.Deadline.IsZero() && !now.Before(request.Deadline) {
+				request.Terminal = session.RequestTimeout
+				delete(r.requests, key)
+				n++
+				m.observe(id, key.Generation, "deadline", r.record.State, session.RequestTimeout)
+			}
+		}
+	}
+	return n
+}
+
+func (m *Manager) ObserveCrash(id string, generation uint64) session.Failure {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return session.StaleGeneration
+	}
+	r.record.State = session.Crashed
+	m.observe(id, generation, "crash", session.Crashed, session.SessionCrashed)
+	return ""
+}
+
+func (m *Manager) Poison(id string, generation uint64) session.LifecycleResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	result := m.algebra.ObservePoison(id, generation)
+	r.record.State = result.State
+	m.observe(id, generation, "poison", result.State, result.Failure)
+	return result
+}
+
+func (m *Manager) Stop(ctx context.Context, id, caller string) session.LifecycleResult {
+	return m.terminate(ctx, id, caller, false)
+}
+
+func (m *Manager) Restart(ctx context.Context, id, caller string) session.LifecycleResult {
+	return m.terminate(ctx, id, caller, true)
+}
+
+const reapReconciliationTimeout = 250 * time.Millisecond
+
+func (m *Manager) reconcileFailedReap(ctx context.Context, id string) session.Failure {
+	m.mu.Lock()
+	r := m.sessions[id]
+	if r == nil || r.reap == nil {
+		m.mu.Unlock()
+		return ""
+	}
+	state := r.reap
+	if state.generation != r.record.Generation || state.child != r.process {
+		m.mu.Unlock()
+		return session.SessionReapIncomplete
+	}
+	if state.running {
+		done := state.done
+		m.mu.Unlock()
+		select {
+		case <-done:
+			return state.failure
+		case <-ctx.Done():
+			return session.SessionReapIncomplete
+		}
+	}
+	reconciler, ok := state.child.(reapReconciler)
+	if !ok {
+		m.mu.Unlock()
+		return session.SessionReapIncomplete
+	}
+	state.running = true
+	state.done = make(chan struct{})
+	m.mu.Unlock()
+
+	joinCtx, cancel := context.WithTimeout(ctx, reapReconciliationTimeout)
+	observation := reconciler.ReconcileReap(joinCtx)
+	cancel()
+	complete := observation.Death.Reap.Kind == managedprocess.ReapComplete &&
+		(observation.Death.Kind == managedprocess.DeathExited || observation.Death.Kind == managedprocess.DeathSignaled)
+	if observation.Census.Bounded {
+		complete = complete && observation.Census.Err == nil && !observation.Census.Truncated && observation.Census.Members == 0
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	current := m.sessions[id]
+	state.running = false
+	state.failure = session.SessionReapIncomplete
+	if current == r && current.reap == state && current.record.Generation == state.generation && current.process == state.child && complete && m.algebra.ReconcileReap(id, state.generation) {
+		current.retired = &ownedTransport{child: state.child, resources: state.resources, teardown: observation}
+		current.reap = nil
+		state.failure = ""
+		m.observe(id, state.generation, "reap-reconciled", current.record.State, "")
+	}
+	close(state.done)
+	return state.failure
+}
+
+func (m *Manager) terminate(ctx context.Context, id, caller string, restart bool) session.LifecycleResult {
+	if failure := m.reconcileFailedReap(ctx, id); failure != "" {
+		return session.LifecycleResult{Failure: failure}
+	}
+	m.mu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			m.mu.Unlock()
+		}
+	}()
+	r := m.sessions[id]
+	if r == nil {
+		for i := len(m.operationIDs) - 1; i >= 0; i-- {
+			existing := m.operations[m.operationIDs[i]]
+			if existing.SessionID == id && existing.CallerID == caller && existing.Restart == restart && existing.State == OperationComplete {
+				return session.LifecycleResult{Generation: existing.Generation, IntentID: existing.ID, Replayed: true, Outcome: session.OutcomeComplete, OperationStatus: session.StatusSucceeded}
+			}
+		}
+		return session.LifecycleResult{Failure: session.SessionNotFound}
+	}
+	if m.closed || (r.protocolOwned && !r.lifecycleOwned) {
+		return session.LifecycleResult{State: r.record.State, Generation: r.record.Generation, Failure: session.LifecycleConflict}
+	}
+	if readinessID := m.readinessIDs[id+":"+strconv.FormatUint(r.record.Generation, 10)]; readinessID != "" {
+		if readiness := m.readiness[readinessID]; readiness != nil && readiness.snapshot.State == ReadinessPending {
+			return session.LifecycleResult{State: r.record.State, Generation: r.record.Generation, Failure: session.LifecycleConflict}
+		}
+	}
+	op := session.LifecycleStop
+	kind := "teardown"
+	if restart {
+		op, kind = session.LifecycleRestart, "restart"
+	}
+	for i := len(m.operationIDs) - 1; i >= 0; i-- {
+		existing := m.operations[m.operationIDs[i]]
+		if existing.SessionID != id || existing.Generation != r.record.Generation || existing.Restart != restart {
+			continue
+		}
+		if existing.CallerID == caller {
+			if existing.State == OperationPending && existing.privateB4CallerLeaseJoin {
+				intentID := existing.ID
+				locked = false
+				m.mu.Unlock()
+				if !m.waitLifecycleTerminal(ctx, intentID) {
+					failure := session.RequestCancelled
+					outcome, status := session.OutcomeCancelled, session.StatusCancelled
+					if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+						failure, outcome, status = session.RequestTimeout, session.OutcomeTimedOut, session.StatusTimedOut
+					}
+					return session.LifecycleResult{Generation: existing.Generation, IntentID: intentID, Replayed: true, Failure: failure, Outcome: outcome, OperationStatus: status}
+				}
+				completed, ok := m.Operation(intentID)
+				if !ok {
+					return session.LifecycleResult{Generation: existing.Generation, IntentID: intentID, Replayed: true, Failure: session.LifecycleConflict}
+				}
+				return session.LifecycleResult{Generation: completed.Generation, IntentID: intentID, Replayed: true, Outcome: session.OutcomeComplete, OperationStatus: session.StatusSucceeded}
+			}
+			result := session.LifecycleResult{State: r.record.State, Generation: existing.Generation, IntentID: existing.ID, Replayed: true}
+			switch existing.State {
+			case OperationComplete:
+				result.Outcome, result.OperationStatus = session.OutcomeComplete, session.StatusSucceeded
+			case OperationFailed:
+				result.Failure = existing.Failure
+				switch existing.Failure {
+				case session.RequestCancelled:
+					result.Outcome, result.OperationStatus = session.OutcomeCancelled, session.StatusCancelled
+				case session.RequestTimeout:
+					result.Outcome, result.OperationStatus = session.OutcomeTimedOut, session.StatusTimedOut
+				default:
+					result.Outcome, result.OperationStatus = session.OutcomeDomainError, session.StatusFailed
+				}
+			}
+			return result
+		}
+		if existing.State == OperationPending {
+			// Joining an accepted operation consumes no new runtime capacity. Let the
+			// algebra bound and record the distinct caller against that exact intent.
+			return m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
+		}
+	}
+	// Runtime capacity is reserved before the session algebra can install or join
+	// an intent. Holding m.mu makes the cross-layer admission indivisible to other
+	// runtime callers. Non-new algebra results release the provisional worker slot.
+	if m.workers >= m.limits.MaxChildren || !m.canReserveOperation() {
+		return session.LifecycleResult{Failure: session.ResourceExhausted}
+	}
+	m.workers++
+	intent := m.algebra.Lifecycle(session.LifecycleRequest{SessionID: id, Generation: r.record.Generation, Operation: op, CallerID: caller, ChildRisk: true, HasWork: len(r.requests) > 0})
+	if intent.Failure != "" || intent.Noop || intent.Joined || intent.Replayed {
+		m.workers--
+		return intent
+	}
+	if !m.reserveOperation(intent.IntentID) {
+		// canReserveOperation and reserveOperation run under the same lock, so this
+		// is defensive only: no concurrent runtime mutation can consume capacity.
+		m.workers--
+		return session.LifecycleResult{Failure: session.ResourceExhausted}
+	}
+	snapshot := OperationSnapshot{ID: intent.IntentID, SessionID: id, CallerID: caller, Generation: r.record.Generation, Restart: restart, State: OperationPending, privateB4CallerLeaseJoin: m.hasPrivateB4CallerLeaseJoinLocked(r)}
+	m.operations[snapshot.ID] = snapshot
+	m.operationIDs = append(m.operationIDs, snapshot.ID)
+	r.protocolOwned, r.lifecycleOwned = true, true
+	m.observe(id, snapshot.Generation, kind, intent.State, "")
+	go m.runLifecycle(snapshot, r.process, r.pending, r.spec, r.retired)
+	return intent
+}
+
+func (m *Manager) canReserveOperation() bool {
+	if len(m.operations) < m.limits.MaxOperations {
+		return true
+	}
+	for _, id := range m.operationIDs {
+		if m.operations[id].State != OperationPending {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) reserveOperation(id string) bool {
+	if _, exists := m.operations[id]; exists {
+		return true
+	}
+	for len(m.operations) >= m.limits.MaxOperations {
+		removed := false
+		for i, candidate := range m.operationIDs {
+			if m.operations[candidate].State != OperationPending {
+				delete(m.operations, candidate)
+				m.operationIDs = append(m.operationIDs[:i], m.operationIDs[i+1:]...)
+				removed = true
+				break
+			}
+		}
+		if !removed {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending *lspwire.Pending, spec managedprocess.Spec, retired *ownedTransport) {
+	shutdown := shutdownObservation{acknowledged: true, exitNotified: true}
+	var teardown managedprocess.TeardownObservation
+	var resources managedprocess.ResourceObservation
+	if retired != nil {
+		// There is no live protocol stream left to shut down. Reuse confirmed
+		// forced-retirement observations; this is not a shutdown acknowledgment.
+		teardown, resources = retired.teardown, retired.resources
+	} else {
+		if protocol, ok := child.(wireChild); ok {
+			shutdown = m.gracefulShutdown(protocol, pending, operation.Generation)
+		}
+		teardown = child.Teardown(context.Background())
+		resources = child.Close()
+	}
+	death := teardown.Death.Reap.Kind == managedprocess.ReapComplete
+	cleanExit := teardown.Death.Kind == managedprocess.DeathExited && death
+	shutdownComplete := shutdown.acknowledged && (shutdown.exitNotified || cleanExit)
+	observed := session.LifecycleCompletion{ShutdownComplete: shutdownComplete, UnsafeIOAbsent: resources.Kind == managedprocess.ResourcesClosed, TerminateSucceeded: death, DeathObserved: death, NoContainedSurvivors: death, StderrDrainComplete: true, Reaped: death, InitializationPending: true}
+
+	m.mu.Lock()
+	completed := m.algebra.CompleteLifecycleObserved(operation.SessionID, operation.ID, observed)
+	r := m.sessions[operation.SessionID]
+	m.observe(operation.SessionID, operation.Generation, "teardown", completed.State, completed.Failure)
+	if completed.Failure != "" || !death || resources.Kind != managedprocess.ResourcesClosed {
+		operation.State, operation.Failure = OperationFailed, completed.Failure
+		if operation.Failure == "" {
+			operation.Failure = session.SessionReapIncomplete
+		}
+		if r != nil {
+			r.record.State = session.Poisoned
+			r.protocolOwned, r.lifecycleOwned = false, false
+			if operation.Failure == session.SessionReapIncomplete && resources.Kind == managedprocess.ResourcesClosed {
+				if _, ok := child.(reapReconciler); ok {
+					r.reap = &reapReconciliation{generation: operation.Generation, child: child, resources: resources}
+				}
+			}
+		}
+		m.finishOperation(operation)
+		m.mu.Unlock()
+		return
+	}
+	if !operation.Restart {
+		if !m.algebra.ReleaseStopped(operation.SessionID, operation.Generation) {
+			operation.State, operation.Failure = OperationFailed, session.LifecycleConflict
+			if r != nil {
+				r.record.State = session.Poisoned
+				r.protocolOwned, r.lifecycleOwned = false, false
+			}
+			m.finishOperation(operation)
+			m.mu.Unlock()
+			return
+		}
+		// Only a completed STOP retires this exact session generation's
+		// manager-held private leases. Release and remove under the same lock.
+		join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
+		m.mu.Unlock()
+		join.wait()
+		m.mu.Lock()
+		delete(m.sessions, operation.SessionID)
+		operation.State = OperationComplete
+		m.finishOperation(operation)
+		m.mu.Unlock()
+		return
+	}
+	// A completed RESTART has finished the old child's teardown. Retire only
+	// that generation's private leases under the same lock before any successor
+	// startup can use the session or reserve new private capacity.
+	join := m.retirePrivateB4StoppedLocked(operation.SessionID, operation.Generation, r)
+	m.mu.Unlock()
+	join.wait()
+
+	attemptID, attemptSequence, attemptStarted := m.beginStartupAttempt()
+	identity := managedprocess.ObserveIdentity(spec, r.record.Profile.ProfileName(), r.record.Profile.Workspace().String())
+	next, start := m.starter.Start(context.Background(), spec)
+	m.mu.Lock()
+	if start.Kind != managedprocess.StartStarted || next == nil || r == nil {
+		operation.State, operation.Failure = OperationFailed, session.SpawnFailure
+		m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Failure: session.SpawnFailure, Start: start})
+		if r != nil {
+			r.record.State = session.Poisoned
+		}
+		m.observe(operation.SessionID, completed.Generation, "poison", session.Poisoned, session.SpawnFailure)
+		m.finishOperation(operation)
+		m.mu.Unlock()
+		return
+	}
+	nextHistory, historyErr := m.issuePrivateReadinessHistoryLocked(operation.SessionID, completed.Generation)
+	if historyErr != nil {
+		operation.State, operation.Failure = OperationFailed, session.ResourceExhausted
+		m.mu.Unlock()
+		_ = next.Teardown(context.Background())
+		_ = next.Close()
+		m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Failure: session.ResourceExhausted, Start: start})
+		m.mu.Lock()
+		m.finishOperation(operation)
+		m.mu.Unlock()
+		return
+	}
+	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
+	r.readinessHistory = nextHistory
+	r.attemptID = attemptID
+	r.attemptStarted = m.now()
+	r.identity = identity
+	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, operation.SessionID, completed.Generation)
+	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
+	r.retired = nil
+	r.pending, r.requests, r.documents, r.cancels, r.protocolOwned, r.lifecycleOwned = lspwire.NewPending(m.limits.MaxTombstones), make(map[lspwire.RequestKey]*Request), make(map[string]openDocument), 0, false, false
+	r.seedAdmittedGeneration = 0
+	m.observe(operation.SessionID, completed.Generation, "startup", session.Starting, "")
+	m.observe(operation.SessionID, completed.Generation, "initialization", session.Initializing, "")
+	m.mu.Unlock()
+	if _, ok := next.(wireChild); ok {
+		readiness := m.BeginReadiness(context.Background(), operation.SessionID, completed.Generation, time.Time{})
+		observed, _ := m.WaitReadiness(context.Background(), readiness.ID)
+		if observed.State != ReadinessReady {
+			operation.State, operation.Failure = OperationFailed, observed.Failure
+		} else {
+			operation.State = OperationComplete
+		}
+	} else {
+		operation.State = OperationComplete
+	}
+	m.mu.Lock()
+	m.finishOperation(operation)
+	m.mu.Unlock()
+}
+
+type shutdownObservation struct {
+	acknowledged bool
+	exitNotified bool
+}
+
+func (m *Manager) gracefulShutdown(child wireChild, pending *lspwire.Pending, generation uint64) shutdownObservation {
+	key := pending.Begin(generation)
+	id := strconv.FormatUint(key.ID, 10)
+	writer := lspwire.NewWriter(child.Stdin(), m.wire)
+	if err := writer.Write(lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(id), Method: "shutdown"}); err != nil {
+		return shutdownObservation{}
+	}
+	response := make(chan error, 1)
+	go func() {
+		message, err := lspwire.NewReader(child.Stdout(), m.wire).Read()
+		if err == nil && (message.Kind() != lspwire.KindSuccessResponse || string(message.ID) != id || pending.Accept(key) != lspwire.ResponseAccepted) {
+			err = errors.New("sessionruntime: invalid shutdown response")
+		}
+		response <- err
+	}()
+	timer := time.NewTimer(250 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case err := <-response:
+		if err != nil {
+			return shutdownObservation{}
+		}
+	case <-timer.C:
+		return shutdownObservation{}
+	}
+	return shutdownObservation{acknowledged: true, exitNotified: writer.Write(lspwire.Message{JSONRPC: lspwire.Version, Method: "exit"}) == nil}
+}
+
+func (m *Manager) finishOperation(operation OperationSnapshot) {
+	m.operations[operation.ID] = operation
+	m.workers--
+	select {
+	case m.workerDone <- struct{}{}:
+	default:
+	}
+}
+
+func (m *Manager) Operation(id string) (OperationSnapshot, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	snapshot, ok := m.operations[id]
+	return snapshot, ok
+}
+
+func (m *Manager) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
+	m.closed = true
+	for m.workers > 0 {
+		m.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.workerDone:
+		}
+		m.mu.Lock()
+	}
+	for h, op := range m.diagnosticOperations {
+		op.backing.release()
+		delete(m.diagnosticOperations, h)
+	}
+	m.diagnosticOrder = nil
+	if m.privateDiagnosticHistory != nil && !m.privateDiagnosticHistory.backingReleased {
+		for m.privateDiagnosticHistory.count != 0 {
+			slot := m.privateDiagnosticHistory.order[m.privateDiagnosticHistory.head]
+			s := &m.privateDiagnosticHistory.slots[slot]
+			ref := privateDiagnosticHistoryRef{generation: s.generation, slot: slot, qualified: true}
+			if !s.closed && s.collector != nil {
+				s.collector.Terminal(diagnosticEventTerminalResponse)
+				if backing, ok := s.collector.DetachEventBacking(); ok {
+					backing.ReleaseEventBacking()
+				}
+			}
+			if s.account != nil {
+				s.account.requestTerminalRelease()
+			}
+			m.privateDiagnosticHistory.releaseSlot(ref)
+		}
+		m.privateDiagnosticHistory.backingReleased = true
+	}
+	if m.managerDiagnosticOwner != nil {
+		m.managerDiagnosticOwner.releaseTableBacking()
+	}
+	if m.privateB4SourceIngress != nil {
+		m.privateB4SourceIngress.releaseTableBacking()
+	}
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *Manager) Census() Census {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c := Census{Sessions: len(m.sessions), Generations: len(m.sessions), Children: len(m.sessions), Observations: len(m.observations), Operations: len(m.operations), Workers: m.workers}
+	for _, r := range m.sessions {
+		c.Requests += len(r.requests)
+		c.Cancels += r.cancels
+		c.Tombstones += r.pending.TombstoneCount()
+	}
+	return c
+}
+func (m *Manager) Metadata(id string, generation uint64) (SessionMetadata, session.Failure) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[id]
+	if r == nil {
+		return SessionMetadata{}, session.SessionNotFound
+	}
+	if generation != r.record.Generation {
+		return SessionMetadata{}, session.StaleGeneration
+	}
+	if r.record.State != session.Ready || r.protocolOwned {
+		return SessionMetadata{}, session.LifecycleConflict
+	}
+	metadata := r.metadata
+	metadata.ServerCommand = r.spec.Path
+	return metadata, ""
+}
+
+func (m *Manager) Records() []Record {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]Record, 0, len(m.sessions))
+	for _, r := range m.sessions {
+		record := r.record
+		record.Routing.RelationProviders = append([]string(nil), record.Routing.RelationProviders...)
+		record.Routing.Generation = record.Generation
+		record.Routing.Readiness = string(record.State)
+		out = append(out, record)
+	}
+	return out
+}
+func (m *Manager) Observations() []Observation {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]Observation(nil), m.observations...)
+}
+func (m *Manager) observe(id string, generation uint64, kind string, state session.State, failure session.Failure) {
+	m.sequence++
+	m.observations = append(m.observations, Observation{Sequence: m.sequence, SessionID: id, Generation: generation, Kind: kind, State: state, Failure: failure})
+	if over := len(m.observations) - m.limits.MaxObservations; over > 0 {
+		copy(m.observations, m.observations[over:])
+		m.observations = m.observations[:m.limits.MaxObservations]
+	}
+}

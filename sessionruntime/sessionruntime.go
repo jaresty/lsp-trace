@@ -1850,7 +1850,7 @@ func (m *Manager) Start(ctx context.Context, req StartRequest) (result StartResu
 		copy := *req.SeedBinding
 		retainedBinding = &copy
 	}
-	r := &runtimeSession{record: record, attemptID: attemptID, attemptStarted: m.now(), process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
+	r := &runtimeSession{record: record, attemptID: attemptID, attemptStarted: attemptStarted, process: child, spec: req.Process, pending: lspwire.NewPending(m.limits.MaxTombstones), requests: make(map[lspwire.RequestKey]*Request), languageID: req.LanguageID, documents: make(map[string]openDocument), seedSources: seedSources, seedBinding: retainedBinding, custodyProvenance: result.CustodyProvenance, providerIdentity: req.ProviderIdentity, identity: identity}
 	history, historyErr := m.issuePrivateReadinessHistoryLocked(id, 1)
 	if historyErr != nil {
 		return m.failTransientIdentityStartLocked(id, r, session.ResourceExhausted, observed)
@@ -2799,7 +2799,7 @@ func (m *Manager) runLifecycle(operation OperationSnapshot, child Child, pending
 	r.process, r.record.Generation, r.record.State = next, completed.Generation, session.Initializing
 	r.readinessHistory = nextHistory
 	r.attemptID = attemptID
-	r.attemptStarted = m.now()
+	r.attemptStarted = attemptStarted
 	r.identity = identity
 	r.diagnosticGeneration = m.newDiagnosticGeneration(attemptID, operation.SessionID, completed.Generation)
 	m.finishStartupAttempt(attemptID, attemptSequence, attemptStarted, StartResult{SessionID: operation.SessionID, Generation: completed.Generation, State: session.Initializing, Start: start})
