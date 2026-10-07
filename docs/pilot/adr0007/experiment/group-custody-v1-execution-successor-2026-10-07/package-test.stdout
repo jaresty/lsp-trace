@@ -1,0 +1,244 @@
+=== RUN   TestFreezeGeneratorVerifierTwiceByteIdentical
+--- PASS: TestFreezeGeneratorVerifierTwiceByteIdentical (0.34s)
+=== RUN   TestFreezeExact24CausalAccounting
+--- PASS: TestFreezeExact24CausalAccounting (0.47s)
+=== RUN   TestFreezeMetadataAndSources
+--- PASS: TestFreezeMetadataAndSources (0.47s)
+=== RUN   TestFreezePublishedSchemasClosedDraft
+--- PASS: TestFreezePublishedSchemasClosedDraft (0.00s)
+=== RUN   TestFreezeStrictAdversarial
+=== RUN   TestFreezeStrictAdversarial/trailing
+=== RUN   TestFreezeStrictAdversarial/invalid_utf8
+=== RUN   TestFreezeStrictAdversarial/duplicate
+=== RUN   TestFreezeStrictAdversarial/unknown
+=== RUN   TestFreezeStrictAdversarial/syntax
+=== RUN   TestFreezeStrictAdversarial/padding
+=== RUN   TestFreezeStrictAdversarial/decoded_plus_one
+--- PASS: TestFreezeStrictAdversarial (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/trailing (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/invalid_utf8 (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/duplicate (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/unknown (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/syntax (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/padding (0.00s)
+    --- PASS: TestFreezeStrictAdversarial/decoded_plus_one (0.00s)
+=== RUN   TestFreezeMutationAndReadOnly
+--- PASS: TestFreezeMutationAndReadOnly (1.00s)
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Candidate
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerAttempt
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/SearchAccount
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/SourceObject
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Result
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/LedgerEntry
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewRequest
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/SearchMember
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/RelationRef
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ProducerRaw
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/DeliveryConflict
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerConflict
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/CommunityRef
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerRaw
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/SourceRef
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Counters
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/GroupRequest
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/AccountSelection
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/MemberEvidence
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Account
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/PercentageBreakdown
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Limits
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ProducerAttempt
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerAttemptKey
+=== RUN   TestEverySchemaRuntimeParityAndAdversarialMatrix/Review
+--- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix (0.04s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Candidate (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerAttempt (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/SearchAccount (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/SourceObject (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Result (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/LedgerEntry (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewRequest (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/SearchMember (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/RelationRef (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ProducerRaw (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/DeliveryConflict (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerConflict (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/CommunityRef (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerRaw (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/SourceRef (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Counters (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/GroupRequest (0.01s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/AccountSelection (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/MemberEvidence (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Account (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/PercentageBreakdown (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Limits (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ProducerAttempt (0.01s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/ReviewerAttemptKey (0.00s)
+    --- PASS: TestEverySchemaRuntimeParityAndAdversarialMatrix/Review (0.00s)
+=== RUN   TestSchemaFieldParity
+--- PASS: TestSchemaFieldParity (0.01s)
+=== RUN   TestSchemaArtifactValidationInventory
+    freeze_test.go:406: SCHEMA_ARTIFACT_COUNTS map[Account:7 DeliveryConflict:1 GroupRequest:24 ProducerAttempt:17 ProducerRaw:24 Result:14 Review:14 ReviewRequest:14 ReviewerAttempt:14 ReviewerConflict:1 ReviewerRaw:14]
+--- PASS: TestSchemaArtifactValidationInventory (0.64s)
+=== RUN   TestAttemptBase64AndConditionalProjection
+=== RUN   TestAttemptBase64AndConditionalProjection/plus_two
+=== RUN   TestAttemptBase64AndConditionalProjection/wrong_reason
+=== RUN   TestAttemptBase64AndConditionalProjection/wrong_states
+=== RUN   TestAttemptBase64AndConditionalProjection/with_result
+--- PASS: TestAttemptBase64AndConditionalProjection (0.05s)
+    --- PASS: TestAttemptBase64AndConditionalProjection/plus_two (0.00s)
+    --- PASS: TestAttemptBase64AndConditionalProjection/wrong_reason (0.01s)
+    --- PASS: TestAttemptBase64AndConditionalProjection/wrong_states (0.00s)
+    --- PASS: TestAttemptBase64AndConditionalProjection/with_result (0.00s)
+=== RUN   TestSchemaIdentityUTF8ByteBoundaries
+=== RUN   TestSchemaIdentityUTF8ByteBoundaries/ascii_256
+=== RUN   TestSchemaIdentityUTF8ByteBoundaries/multibyte_256
+=== RUN   TestSchemaIdentityUTF8ByteBoundaries/ascii_257
+=== RUN   TestSchemaIdentityUTF8ByteBoundaries/multibyte_over_256
+--- PASS: TestSchemaIdentityUTF8ByteBoundaries (0.00s)
+    --- PASS: TestSchemaIdentityUTF8ByteBoundaries/ascii_256 (0.00s)
+    --- PASS: TestSchemaIdentityUTF8ByteBoundaries/multibyte_256 (0.00s)
+    --- PASS: TestSchemaIdentityUTF8ByteBoundaries/ascii_257 (0.00s)
+    --- PASS: TestSchemaIdentityUTF8ByteBoundaries/multibyte_over_256 (0.00s)
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/request/duplicate
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/request/trailing
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/request/invalid_utf8
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/request/unknown
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/producer/trailing
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/producer/invalid_utf8
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/producer/unknown
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/producer/duplicate
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/reviewer/duplicate
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/reviewer/trailing
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/reviewer/invalid_utf8
+=== RUN   TestAllRuntimeParsersRejectMalformedFrames/reviewer/unknown
+--- PASS: TestAllRuntimeParsersRejectMalformedFrames (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/request/duplicate (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/request/trailing (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/request/invalid_utf8 (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/request/unknown (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/producer/trailing (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/producer/invalid_utf8 (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/producer/unknown (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/producer/duplicate (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/reviewer/duplicate (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/reviewer/trailing (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/reviewer/invalid_utf8 (0.00s)
+    --- PASS: TestAllRuntimeParsersRejectMalformedFrames/reviewer/unknown (0.00s)
+=== RUN   TestFreezeNoForbiddenDependency
+--- PASS: TestFreezeNoForbiddenDependency (0.00s)
+=== RUN   TestExactEnumClosure
+--- PASS: TestExactEnumClosure (0.00s)
+=== RUN   TestExactCommittedSearchImport
+=== RUN   TestExactCommittedSearchImport/review
+=== RUN   TestExactCommittedSearchImport/key_missing
+=== RUN   TestExactCommittedSearchImport/count
+=== RUN   TestExactCommittedSearchImport/member_outcome
+=== RUN   TestExactCommittedSearchImport/schema
+=== RUN   TestExactCommittedSearchImport/seal
+=== RUN   TestExactCommittedSearchImport/digest_syntax
+=== RUN   TestExactCommittedSearchImport/states
+=== RUN   TestExactCommittedSearchImport/identity
+=== RUN   TestExactCommittedSearchImport/freeze
+=== RUN   TestExactCommittedSearchImport/manifest
+=== RUN   TestExactCommittedSearchImport/audit
+=== RUN   TestExactCommittedSearchImport/terminal
+--- PASS: TestExactCommittedSearchImport (0.00s)
+    --- PASS: TestExactCommittedSearchImport/review (0.00s)
+    --- PASS: TestExactCommittedSearchImport/key_missing (0.00s)
+    --- PASS: TestExactCommittedSearchImport/count (0.00s)
+    --- PASS: TestExactCommittedSearchImport/member_outcome (0.00s)
+    --- PASS: TestExactCommittedSearchImport/schema (0.00s)
+    --- PASS: TestExactCommittedSearchImport/seal (0.00s)
+    --- PASS: TestExactCommittedSearchImport/digest_syntax (0.00s)
+    --- PASS: TestExactCommittedSearchImport/states (0.00s)
+    --- PASS: TestExactCommittedSearchImport/identity (0.00s)
+    --- PASS: TestExactCommittedSearchImport/freeze (0.00s)
+    --- PASS: TestExactCommittedSearchImport/manifest (0.00s)
+    --- PASS: TestExactCommittedSearchImport/audit (0.00s)
+    --- PASS: TestExactCommittedSearchImport/terminal (0.00s)
+=== RUN   TestExactCommittedDigestConstants
+--- PASS: TestExactCommittedDigestConstants (0.00s)
+=== RUN   TestEvidenceDigestAndStructuralBindings
+--- PASS: TestEvidenceDigestAndStructuralBindings (0.00s)
+=== RUN   TestSourceObjectCollisionIdentity
+--- PASS: TestSourceObjectCollisionIdentity (0.00s)
+=== RUN   TestFiveOutcomeConservationDuplicateInvalid
+--- PASS: TestFiveOutcomeConservationDuplicateInvalid (0.00s)
+=== RUN   TestDuplicateOrdinalKeepsFirstCanonical
+--- PASS: TestDuplicateOrdinalKeepsFirstCanonical (0.00s)
+=== RUN   TestAllCheckpointsAndPrecedence
+=== RUN   TestAllCheckpointsAndPrecedence/BEFORE_IMPORT
+=== RUN   TestAllCheckpointsAndPrecedence/BEFORE_MEMBER
+=== RUN   TestAllCheckpointsAndPrecedence/BEFORE_RELATION
+=== RUN   TestAllCheckpointsAndPrecedence/BEFORE_CANDIDATE
+=== RUN   TestAllCheckpointsAndPrecedence/BEFORE_COMMIT
+--- PASS: TestAllCheckpointsAndPrecedence (0.00s)
+    --- PASS: TestAllCheckpointsAndPrecedence/BEFORE_IMPORT (0.00s)
+    --- PASS: TestAllCheckpointsAndPrecedence/BEFORE_MEMBER (0.00s)
+    --- PASS: TestAllCheckpointsAndPrecedence/BEFORE_RELATION (0.00s)
+    --- PASS: TestAllCheckpointsAndPrecedence/BEFORE_CANDIDATE (0.00s)
+    --- PASS: TestAllCheckpointsAndPrecedence/BEFORE_COMMIT (0.00s)
+=== RUN   TestWorkBoundaryPlusOne
+--- PASS: TestWorkBoundaryPlusOne (0.00s)
+=== RUN   TestCommittedLimitBoundaries
+=== RUN   TestCommittedLimitBoundaries/relations
+=== RUN   TestCommittedLimitBoundaries/evidence_refs
+=== RUN   TestCommittedLimitBoundaries/source_ranges_bytes
+=== RUN   TestCommittedLimitBoundaries/source_objects
+--- PASS: TestCommittedLimitBoundaries (0.00s)
+    --- PASS: TestCommittedLimitBoundaries/relations (0.00s)
+    --- PASS: TestCommittedLimitBoundaries/evidence_refs (0.00s)
+    --- PASS: TestCommittedLimitBoundaries/source_ranges_bytes (0.00s)
+    --- PASS: TestCommittedLimitBoundaries/source_objects (0.00s)
+=== RUN   TestRequestParserAdversarial
+=== RUN   TestRequestParserAdversarial/unknown
+=== RUN   TestRequestParserAdversarial/noncanonical
+=== RUN   TestRequestParserAdversarial/utf8
+=== RUN   TestRequestParserAdversarial/partial
+=== RUN   TestRequestParserAdversarial/trailing
+=== RUN   TestRequestParserAdversarial/duplicate
+--- PASS: TestRequestParserAdversarial (0.00s)
+    --- PASS: TestRequestParserAdversarial/unknown (0.00s)
+    --- PASS: TestRequestParserAdversarial/noncanonical (0.00s)
+    --- PASS: TestRequestParserAdversarial/utf8 (0.00s)
+    --- PASS: TestRequestParserAdversarial/partial (0.00s)
+    --- PASS: TestRequestParserAdversarial/trailing (0.00s)
+    --- PASS: TestRequestParserAdversarial/duplicate (0.00s)
+=== RUN   TestCandidateLimitBoundaries
+--- PASS: TestCandidateLimitBoundaries (0.00s)
+=== RUN   TestProducerEvidenceDigestBinding
+--- PASS: TestProducerEvidenceDigestBinding (0.00s)
+=== RUN   TestIdentityAndReviewReasonBoundaries
+--- PASS: TestIdentityAndReviewReasonBoundaries (0.00s)
+=== RUN   TestProducerResponseBoundary
+--- PASS: TestProducerResponseBoundary (0.00s)
+=== RUN   TestWriterTerminalReplayConflictSecondAttempt
+--- PASS: TestWriterTerminalReplayConflictSecondAttempt (0.00s)
+=== RUN   TestProducerAttemptExactCustody
+--- PASS: TestProducerAttemptExactCustody (0.00s)
+=== RUN   TestValidateResultRejectsRedigestedForgery
+--- PASS: TestValidateResultRejectsRedigestedForgery (0.00s)
+=== RUN   TestReviewRejectsFabricatedAllTrueRequest
+--- PASS: TestReviewRejectsFabricatedAllTrueRequest (0.00s)
+=== RUN   TestReviewerWriterDeepCopyIsolation
+--- PASS: TestReviewerWriterDeepCopyIsolation (0.01s)
+=== RUN   TestReviewerAttemptExactCustody
+=== RUN   TestReviewerAttemptExactCustody/generation
+=== RUN   TestReviewerAttemptExactCustody/assignment
+=== RUN   TestReviewerAttemptExactCustody/request
+=== RUN   TestReviewerAttemptExactCustody/empty_attempt
+--- PASS: TestReviewerAttemptExactCustody (0.02s)
+    --- PASS: TestReviewerAttemptExactCustody/generation (0.00s)
+    --- PASS: TestReviewerAttemptExactCustody/assignment (0.00s)
+    --- PASS: TestReviewerAttemptExactCustody/request (0.00s)
+    --- PASS: TestReviewerAttemptExactCustody/empty_attempt (0.00s)
+=== RUN   TestMakeAccountComputedPercentagesAndMutation
+--- PASS: TestMakeAccountComputedPercentagesAndMutation (0.01s)
+=== RUN   TestDeterminismAndNoOverlap
+--- PASS: TestDeterminismAndNoOverlap (0.00s)
+PASS
+ok  	lsp-trace/internal/groupqualificationv1	3.412s
+?   	lsp-trace/internal/groupqualificationv1/cmd/freeze	[no test files]
