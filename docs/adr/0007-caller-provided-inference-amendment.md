@@ -78,3 +78,9 @@ That milestone has one bounded demonstration in the [host-assisted caller infere
 Stop for unavailable required evidence, unapproved disclosure, semantic ambiguity that cannot be represented, or a need for a new public/API surface or materially broader architecture. Routine documentation and example preparation should not produce repeated approval loops. Do not resume local-model tuning or broad qualification campaigns to close this milestone.
 
 This amendment selected and documented the delivery direction; the linked example separately demonstrates the first conversational milestone. Neither document uploads restricted historical source, edits runtime code, enables an isolated pilot, authorizes shipment, or commits, merges, or pushes changes.
+
+## Describe semantic qualification threshold amendment
+
+A stakeholder amendment made after observing the prospective custody results distinguishes evidence safety from exact replay phrasing. Describe qualifies bounded semantic usefulness when all custody and mechanical checks pass, every reviewer confirms disposition support, source support, citation validity, limitation validity, ceiling preservation, and evidence binding, and at least 90% of cases pass replay agreement in both lanes. Replay-only failures within the remaining 10% are retained as explicit nondeterminism limitations; they do not become accepted feature identity or authority.
+
+This threshold is recorded transparently as a post-run policy decision rather than a predeclared property of earlier runs. It cannot excuse malformed output, unsupported claims, invalid citations, weakened limitations, changed ceilings, broken lineage, missing attempts, retry, repair, or substitution. Search and Group remain separately gated, and Describe qualification under this threshold does not authorize public enablement or change `authority=0`, `accepted=false`, `completeness=UNKNOWN`, or `featureIdentity=UNRESOLVED`.

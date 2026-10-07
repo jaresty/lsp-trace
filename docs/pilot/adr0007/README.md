@@ -52,4 +52,8 @@ The prerequisite architecture direction is a separate backend-neutral, network-d
 
 The four-packet `TARGET` Describe diagnostic completed under network denial with all packets returning `COMPLETE / SUPPORTED`. This result is accepted as an approved local operational pilot. It does not create hosted/service or public authorization, or authorize CLI/MCP/core integration, shipment, census behavior, or feature-identity claims. The fail-closed runtime preflight is `experiment/preflight-final-four-packet.sh`; immutable v2 outputs and hashes are under `experiment/final-four-packet-v2/`.
 
+## Describe qualification threshold
+
+The amended bounded-usefulness gate requires 100% custody, mechanical validity, disposition support, source support, citation validity, limitation validity, ceiling preservation, and evidence binding, plus replay agreement in both lanes for at least 90% of cases. Replay-only failures are retained as limitations and cannot conceal evidence, lineage, or authority failures. The amendment was adopted after observing the custody runs and is labeled accordingly rather than represented as predeclared.
+
 Every document is intentionally draft. Later approval requires named accountable identities, recorded decisions, and immutable digests; a path, commit, review, or process boundary alone is insufficient.
