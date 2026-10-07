@@ -1,8 +1,8 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `0e523c1562a43c565baf195c11bbdc4e06ee7084`
+Audited implementation revision: `7063a74fc42be6b24abfc50bdbaedf9778b5e1e4`
 
-Audited tree: `d452b0a0260f23724706cafd84495a93cedf2429`
+Audited tree: `7d0932fc119b7796da7e5b6b9a1396af1b6fbc4d`
 
 Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
@@ -29,8 +29,8 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C13, C14, C16, C17;
-- currently UNKNOWN active rows: C08–C12, C15, C18, and all six work counters.
+- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C13, C14, C16, C17;
+- currently UNKNOWN active rows: C09–C12, C15, C18, and all six work counters.
 
 Current result remains:
 
@@ -38,7 +38,7 @@ Current result remains:
 C_EXIT_BLOCKED
 ```
 
-The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. Ten of 23 active rows are closed; thirteen remain unknown.
+The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. Eleven of 23 active rows are closed; twelve remain unknown.
 
 ## Exact amendment binding
 
@@ -60,7 +60,6 @@ No other row may use the superseded status. The checker retains the exact ordere
 | Rows | Blocker | Minimum corrective increment |
 |---|---|---|
 | C09, C11 | Isolated boundaries lack tracked portable P2 packets. | Add source-, command-, output-, and hash-bound packets with integrated definition witnesses. |
-| C08 | STOP/RESTART transaction-clock continuity is absent. | Prove attempt epoch continuity across lifecycle transitions. |
 | C10, C12 | Integrated references route selection is unproved. | Add sessionruntime references integration at both boundaries. |
 | C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
 | C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
