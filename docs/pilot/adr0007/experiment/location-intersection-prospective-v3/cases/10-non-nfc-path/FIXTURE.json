@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location.fixture.v3","caseId":"10","ordinal":10,"name":"non-nfc-path","artifacts":["CONDITION.json","REQUEST.json","SOURCE_ADMISSION.json","EXPECTED_RESULT.json","EXPECTED_ATTEMPTS.json","EXPECTED_RAW.json","EXPECTED_CONFLICTS.json","EXPECTED_REVIEW.json","EXPECTED_ACCOUNT.json"]}
