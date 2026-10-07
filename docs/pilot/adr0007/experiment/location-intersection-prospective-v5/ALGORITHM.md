@@ -7,40 +7,51 @@ evaluate(raw, binding, cancel, deadline):
   poll()                                      // cancel, then deadline
   if len(raw)>maxRequestBytes: fail INVALID_REQUEST/REQUEST_FIELD
   J=len(raw); inc(J,J)
-  lex=parse_strict(raw)                       // duplicate/unknown/trailing rules
-  if lex.error: fail INVALID_REQUEST/lex.detail
-  requestId = lex.id if lex.id_is_string else ""
+  scan=reference_scan(raw)                    // collect candidates; class, byte, traversal tie-break
+  if scan.candidates: fail INVALID_REQUEST/select_one(scan.candidates)
+  requestId = scan.id if scan.id_is_string else ""
   poll()
-  validate request.schema.json; on error fail INVALID_REQUEST/{SCHEMA_ID|REQUEST_FIELD|UNKNOWN_FIELD}
+  walk request.schema.json in field/index order; collect SCHEMA_ID/REQUEST_FIELD candidates
+  if candidates: fail INVALID_REQUEST/select_one(candidates)
   if len(members)>maxMembers: fail RESOURCE_LIMIT/MEMBERS
   if topK>maxTopK: fail RESOURCE_LIMIT/TOP_K
+  for member ordinal i:                       // identity checkpoint before envelope
+    poll(); inc(M,1)
+    if id=="" or NFC(id)!=id: fail INVALID_REQUEST/REQUEST_FIELD
 
-  poll(); map_admission(binding); poll()       // table in DESIGN
-  for admitted source in input order: inc(P,1); validate path
-  inc(C, choose2(len(binding.sources)))        // admitted-source canonical sort population
-  validate admission digest
+  poll(); require and validate closed envelope branch
+  for envelope source/input in array order:
+    validate canonical padded base64; decode; require reencode equality
+    inc(S,decodedLength)
+    inc(P,1); validate source path
+  require complete-source path order strictly ascending
+  rerun imported admission and map exact typed outcome/detail
+  inc(C, choose2(len(complete binding sources)))
+  recompute source and admission digests; compare envelope and request
+  poll()
   if policyDigest!=POLICY.digest: fail POLICY_MISMATCH/POLICY_DIGEST
   if limitsDigest!=POLICY.limitsDigest: fail POLICY_MISMATCH/LIMITS_DIGEST
 
   validate selector shape
-  if selector has path: inc(P,1); validate
-  for each union path in request order: inc(P,1); validate
-  for each frozen path in request order: inc(P,1); validate
-  enforce selector path/frozen/range limits at table checkpoints
-  for each selector range in request order: inc(R,1); validate against source
-  inc(C, choose2(unionEntryCount))
-  for each union entry: inc(C, choose2(rangeCount(entry)))
-  if prefix: inc(C,choose2(frozenPathCount)); compare exact frozen expansion
+  if EXACT: inc(P,1); validate path; require bound; selectorPaths=1; generatedRanges=1
+  if RANGE:
+    for union entry raw order: inc(P,1); validate path; require bound
+    check raw union count as selectorPaths
+    for each raw range: inc(R,1); validate; check raw per-path then raw total counts
+    inc(C,choose2(raw union count)); inc(C,choose2(raw ranges per entry)); then sort/dedup
+  if PREFIX:
+    inc(P,1); validate prefix
+    for frozen raw order: inc(P,1); validate
+    check raw frozen count; expand binding matches; check expanded selectorPaths
+    check generated one range/path and generated total; inc(C,choose2(raw frozen count))
+    compare exact frozen expansion; zero matches fail EMPTY_SELECTION
   build canonical selector ranges
 
-  needed = selector paths
-  for member ordinal i:
-    if id first-owner and available and bound path exists: add path to needed
-  S=sum byte lengths of unique needed paths
-  inc(S,S); if S>maxTotalSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
+  needed = selector paths union existing paths of first-owner available members
+  sourceBytes=sum unique needed decoded lengths; if sourceBytes>maxTotalSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
 
   for member ordinal i:
-    poll(); inc(M,1)
+    poll()                                      // M was charged at identity checkpoint
     if id seen: row DUPLICATE_MEMBER; continue
     mark seen
     if !available: row UNAVAILABLE_LOCATION; continue
@@ -109,7 +120,7 @@ Fresh source `A` bytes are `a😀b\r\nxy\n` (11 UTF-8 bytes): lines have UTF-16 
 
 ## Exact success with digit-width accounting
 
-Let a synthetic valid request have raw length `J=200`, path attempts `P=3`, ranges `R=2`, members `M=1`, needed bytes `S=11`, pair predicates `Q=1`, witnesses `X=1`; sortable populations are admitted sources 1, union entries 1, one range 1, witnesses 1, eligible rows 1, so `C=0`. Suppose the canonical measurement image has `B=999` bytes. Then:
+Let a synthetic valid request have raw length `J=200`, path attempts `P=3`, ranges `R=2`, identity-checked members `M=1`, decoded envelope bytes `S=11`, pair predicates `Q=1`, witnesses `X=1`; sortable populations are admitted sources 1, union entries 1, one range 1, witnesses 1, eligible rows 1, so `C=0`. Suppose the canonical measurement image has `B=999` bytes. Then:
 
 `W=50+3·200+7·3+11·2+13·1+1·11+19·1+23·1+29·0+31·999=31728`.
 
@@ -122,3 +133,15 @@ The image contains `work:0` and `outputBytes:0`; the final result contains `work
 - 10,000 members pass; 10,001 fails `MEMBERS`. 1,000 frozen paths pass; 1,001 fails `FROZEN_PATHS`. 10,000 unique witnesses pass; 10,001 fails `WITNESSES` before X materialization.
 - In `a😀b`, positions 0,1,3,4 are valid; 2 is mid-surrogate. CR in CRLF is not addressable. `(2,0)` is EOF; line 3 is invalid.
 - Malformed JSON without a safely decoded string id returns requestId `""`; a decoded id `"r7"` followed by an unknown field returns requestId `"r7"`.
+
+## Worked invalid-envelope, selector, diagnostic, and identity examples
+
+1. Complete envelope bytes `YQ==` decode to `a` and re-encode identically; decoded length and S charge are 1. `YQ`, `YQ=`, `YQ===`, `YQ==\n`, `YQ-_`, and `YR==` are noncanonical/invalid and map `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` (`YR==` has nonzero pad bits and re-encodes as `YQ==`).
+2. Complete sources `[b,a]` are valid individually but not strictly sorted: `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA` before digest comparison.
+3. A typed `DUPLICATE_SOURCE/DUPLICATE_PATH` with input paths `[a,a]` reruns to the same result and maps `BINDING_DUPLICATE_SOURCE`; input `[a,b]` does not reproduce it and maps `BINDING_INVALID_REQUEST`.
+4. EXACT_FILE `missing.go` with a valid complete binding lacking that path gives `INVALID_SELECTOR/PATH`; the same envelope with missing bytes fails earlier as `BINDING_INVALID_SOURCE`.
+5. PATH_PREFIX `src` with no matching bound path gives `INVALID_SELECTOR/EMPTY_SELECTION`. One match plus empty frozen list is schema-invalid `INVALID_REQUEST/REQUEST_FIELD`; one match plus the wrong frozen path gives `FROZEN_EXPANSION`.
+6. RANGE_UNION with 11 paths each containing 10,000 identical raw ranges passes each per-path limit but totals 110,000 and fails `TOTAL_RANGES`; dedup to 11 never rescues it. PREFIX with 1,001 frozen entries fails `FROZEN_PATHS` before expansion; with 1,000 frozen entries but 1,001 binding matches it next fails `SELECTOR_PATHS`.
+7. Input containing both an early unknown field and a later duplicate field returns `DUPLICATE_FIELD` because class priority precedes byte offset. Two duplicate keys return the one whose second occurrence starts at the earliest byte. Two member schema errors at the same structural class use lower member ordinal then field order.
+8. Member 0 id `e\u0301` is valid Unicode but not NFC (`é` is NFC): after one M charge it returns `INVALID_REQUEST/REQUEST_FIELD` before an absent binding can return `BINDING_UNAVAILABLE`. A later duplicate is never considered.
+9. Result pair `COMPLETE/NONE` validates; `COMPLETE/WORK`, `CANCELLED/DEADLINE`, and `RESOURCE_LIMIT/BINDING_DIGEST` fail `result.schema.json`. Every policy detail appears in exactly one allowed outcome branch.
