@@ -17,7 +17,7 @@ import (
 )
 
 const scannerRecordRole = "REFERENCES_SCANNER_OBSERVATION_V1"
-const scannerSourcePin = "sha256:2eaad298bc11a317c5ac0a7ff38f536f4dd616304264f3f62a24cf8ca9941730"
+const scannerSourcePin = "sha256:da7e8e90fbfc176c92bb9e7a7bc4469461cb14b5cbaffa911f05fb005349120e"
 const scannerSourceLimit = 1 << 20
 
 var errScannerRecord = errors.New("private references scanner observation not verified")

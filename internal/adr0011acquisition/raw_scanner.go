@@ -255,6 +255,28 @@ func (c *rawCursor) value(depth int) bool {
 		return c.number()
 	}
 }
+
+type rawScannerWorkContext struct {
+	occurrenceIdentity string
+	chargeBytesScanned func(string, uint64) error
+}
+
+func scanRawTopLevelWithWork(b []byte, work rawScannerWorkContext) (rawScannerObservation, error) {
+	observed := scanRawTopLevel(b)
+	if len(b) > rawResultPayloadLimit {
+		return observed, errRawScanner
+	}
+	if work.chargeBytesScanned != nil {
+		if err := work.chargeBytesScanned(work.occurrenceIdentity, uint64(observed.workUnits)); err != nil {
+			return observed, err
+		}
+	}
+	if observed.form == "MALFORMED" {
+		return observed, errRawScanner
+	}
+	return observed, nil
+}
+
 func scanRawTopLevel(b []byte) rawScannerObservation {
 	out := rawScannerObservation{form: "MALFORMED"}
 	if len(b) == 0 {
