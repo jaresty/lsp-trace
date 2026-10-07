@@ -1,8 +1,8 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `691af197f6fe3ead4a2fb5acecc385b1f5f3e6d7`
+Audited implementation revision: `3aae83ffae0ffd78d11eeab04c65ffa39e728cfe`
 
-Audited tree: `18188be72d76dc14b6397475a158f81280250d9e`
+Audited tree: `39b4592e7cebd46e5cfdb8fb9c790bd2fe1d9e6a`
 
 Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
@@ -29,8 +29,8 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C09, C13, C14, C16, C17;
-- currently UNKNOWN active rows: C10–C12, C15, C18, and all six work counters.
+- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C09, C10, C13, C14, C16, C17;
+- currently UNKNOWN active rows: C11, C12, C15, C18, and all six work counters.
 
 Current result remains:
 
@@ -38,7 +38,7 @@ Current result remains:
 C_EXIT_BLOCKED
 ```
 
-The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. Twelve of 23 active rows are closed; eleven remain unknown.
+The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. Thirteen of 23 active rows are closed; ten remain unknown.
 
 ## Exact amendment binding
 
@@ -60,7 +60,7 @@ No other row may use the superseded status. The checker retains the exact ordere
 | Rows | Blocker | Minimum corrective increment |
 |---|---|---|
 | C11 | The isolated exact-token boundary lacks a tracked portable P2 packet. | Add a source-, command-, output-, and hash-bound packet with an integrated definition witness. |
-| C10, C12 | Integrated references route selection is unproved. | Add sessionruntime references integration at both boundaries. |
+| C12 | Integrated references exact-token route selection is unproved. | Add a sessionruntime references integration witness at the exact-token boundary. |
 | C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
 | C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
 | Six work counters | Independent transaction work semantics and exact traces remain incomplete. | Define and verify each named work counter without inferring closure from resource caps. |
