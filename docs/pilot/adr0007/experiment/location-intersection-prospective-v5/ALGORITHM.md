@@ -26,13 +26,13 @@ evaluate(raw, binding, cancel, deadline):
     validate canonical padded base64; decode; require reencode equality; otherwise fail BINDING_INVALID_SOURCE
     inc(P,1); validate path/revision/digest syntax and decoded bytes; otherwise fail BINDING_INVALID_SOURCE
   if len(decoded sources)>maxSources: fail RESOURCE_LIMIT/SOURCES
-  for decoded source in input order:
-    inc(S,decodedLength)
-    if decodedLength>maxSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
   cumulativeDecodedLength=0
   for decoded source in input order:
-    cumulativeDecodedLength=checked_add(cumulativeDecodedLength,decodedLength)
-    if cumulativeDecodedLength>maxTotalSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
+    if decodedLength>maxSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
+    prospectiveCumulative=checked_add(cumulativeDecodedLength,decodedLength)
+    if checked_add overflowed or prospectiveCumulative>maxTotalSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
+    inc(S,decodedLength)
+    cumulativeDecodedLength=prospectiveCumulative
   require complete-source path order strictly ascending; otherwise fail BINDING_INVALID_SOURCE
   rerun imported admission and map exact typed outcome/detail
   inc(C, choose2(len(complete binding sources)))
@@ -148,7 +148,7 @@ The image contains `work:0` and `outputBytes:0`; the final result contains `work
 ## Worked invalid-envelope, selector, diagnostic, and identity examples
 
 1. Complete envelope bytes `YQ==` decode to `a` and re-encode identically; decoded length and S charge are 1. `YQ`, `YQ=`, `YQ===`, `YQ==\n`, `YQ-_`, and `YR==` pass or fail projection solely as strings, then map `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` during base64 validation (`YR==` has nonzero pad bits and re-encodes as `YQ==`).
-2. Missing top-level `binding`, extra top-level `foo`, non-object `binding`, non-array `sources`, or failure branch without `input` fails projection as `BINDING_SCHEMA`. A source tuple with numeric path, empty revision, `fileDigest:"bad"`, omitted bytes, or numeric bytes passes projection (the tuple object has only allowed keys) and then maps `BINDING_INVALID_SOURCE`. Complete sources `[b,a]` with valid tuples map `BINDING_INVALID_SOURCE` at deferred source-order validation. If the same valid decoded tuples are also over `maxSources`, any one decoded source is over `maxSourceBytes`, or their input-order cumulative decoded length is over `maxTotalSourceBytes`, the corresponding earlier check returns `RESOURCE_LIMIT/SOURCES` or `RESOURCE_LIMIT/SOURCE_BYTES`; the later unsorted-source defect does not win.
+2. Missing top-level `binding`, extra top-level `foo`, non-object `binding`, non-array `sources`, or failure branch without `input` fails projection as `BINDING_SCHEMA`. A source tuple with numeric path, empty revision, `fileDigest:"bad"`, omitted bytes, or numeric bytes passes projection (the tuple object has only allowed keys) and then maps `BINDING_INVALID_SOURCE`. Complete sources `[b,a]` with valid tuples map `BINDING_INVALID_SOURCE` at deferred source-order validation. If the same valid decoded tuples are also over `maxSources`, any one decoded source is over `maxSourceBytes`, or their input-order cumulative decoded length is over `maxTotalSourceBytes`, the corresponding earlier check returns `RESOURCE_LIMIT/SOURCES` or `RESOURCE_LIMIT/SOURCE_BYTES`; the later unsorted-source defect does not win. If a source would both make the cumulative total overflow or exceed `maxTotalSourceBytes` and make `inc(S,decodedLength)` fail `WORK`, the cumulative check is reached first and returns `RESOURCE_LIMIT/SOURCE_BYTES`; that offending source contributes no S charge. A `WORK` failure from `inc(S,decodedLength)` is possible only after both source-byte checks pass for that source, and prior admitted sources may already have caused `WORK` at their own `inc` checkpoint; failure results still expose zero counters.
 3. A typed `DUPLICATE_SOURCE/DUPLICATE_PATH` with input paths `[a,a]` reruns to the same result and maps `BINDING_DUPLICATE_SOURCE`; input `[a,b]` does not reproduce it and maps `BINDING_INVALID_REQUEST`.
 4. EXACT_FILE `missing.go` with a valid complete binding lacking that path gives `INVALID_SELECTOR/PATH`; the same envelope with missing bytes fails earlier as `BINDING_INVALID_SOURCE`.
 5. PATH_PREFIX `src` with no matching bound path and required nonempty frozen list gives `INVALID_SELECTOR/FROZEN_EXPANSION` because every listed path is extra. Empty frozen list, empty union/ranges, wrong kind fields, missing required fields, or extras are schema-invalid `INVALID_REQUEST/REQUEST_FIELD`; none reaches selector semantics.
