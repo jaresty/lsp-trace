@@ -51,12 +51,20 @@ type privateWorkAccount struct {
 	eventsReserved     uint64
 	eventCallbacks     uint64
 	eventCommitBlocked bool
+	documentsReserved  uint64
+	documentCallbacks  uint64
+	documentPending    map[string]uint64
+	documentCommitted  map[string]bool
 	terminal           bool
 	failure            error
 }
 
 func newPrivateWorkAccount(identity occurrenceIdentity) *privateWorkAccount {
-	a := &privateWorkAccount{identity: identity}
+	a := &privateWorkAccount{
+		identity:          identity,
+		documentPending:   make(map[string]uint64),
+		documentCommitted: make(map[string]bool),
+	}
 	a.settled = sync.NewCond(&a.mu)
 	return a
 }
@@ -76,7 +84,8 @@ func (a *privateWorkAccount) charge(identity occurrenceIdentity, delta privateWo
 		overflows(a.work.objectsMaterialized, delta.objectsMaterialized) ||
 		overflows(a.work.eventsEmitted, a.eventsReserved) ||
 		overflows(a.work.eventsEmitted+a.eventsReserved, delta.eventsEmitted) ||
-		overflows(a.work.documentsAcquired, delta.documentsAcquired) ||
+		overflows(a.work.documentsAcquired, a.documentsReserved) ||
+		overflows(a.work.documentsAcquired+a.documentsReserved, delta.documentsAcquired) ||
 		overflows(a.work.logicalBufferBytesReserved, delta.logicalBufferBytesReserved) {
 		a.terminal = true
 		a.failure = errPrivateWorkOverflow
@@ -278,6 +287,70 @@ func (a *Account) ChargeEventsEmitted(identity string, amount uint64) error {
 	return a.charge(identity, privateWorkDelta{eventsEmitted: amount})
 }
 
+// WithDocumentAcquisition admits every callback but accounts only the first
+// successful acquisition of each exact document identity.
+func (a *Account) WithDocumentAcquisition(identity, documentIdentity string, acquire func() (bool, error)) (err error) {
+	if a == nil || a.private == nil {
+		return errPrivateWorkIdentity
+	}
+	if acquire == nil {
+		return errPrivateWorkCallback
+	}
+
+	p := a.private
+	p.mu.Lock()
+	if p.terminal {
+		p.mu.Unlock()
+		return errPrivateWorkTerminal
+	}
+	if occurrenceIdentity(identity) != p.identity {
+		p.mu.Unlock()
+		return errPrivateWorkIdentity
+	}
+	if !p.documentCommitted[documentIdentity] && p.documentPending[documentIdentity] == 0 {
+		if overflows(p.work.documentsAcquired, p.documentsReserved) ||
+			overflows(p.work.documentsAcquired+p.documentsReserved, 1) {
+			p.terminal = true
+			p.failure = errPrivateWorkOverflow
+			p.mu.Unlock()
+			return errPrivateWorkOverflow
+		}
+		p.documentsReserved++
+	}
+	p.documentPending[documentIdentity]++
+	p.documentCallbacks++
+	p.mu.Unlock()
+
+	var acquired bool
+	defer func() {
+		p.mu.Lock()
+		p.documentPending[documentIdentity]--
+		p.documentCallbacks--
+		recovered := recover()
+		if recovered == nil && err == nil && acquired && !p.documentCommitted[documentIdentity] {
+			p.documentCommitted[documentIdentity] = true
+			p.documentsReserved--
+			p.work.documentsAcquired++
+		}
+		if p.documentPending[documentIdentity] == 0 {
+			delete(p.documentPending, documentIdentity)
+			if !p.documentCommitted[documentIdentity] {
+				p.documentsReserved--
+			}
+		}
+		if p.objectsReserved == 0 && p.eventCallbacks == 0 && p.documentCallbacks == 0 {
+			p.settled.Broadcast()
+		}
+		p.mu.Unlock()
+		if recovered != nil {
+			panic(recovered)
+		}
+	}()
+
+	acquired, err = acquire()
+	return err
+}
+
 func (a *Account) ChargeDocumentsAcquired(identity string, amount uint64) error {
 	return a.charge(identity, privateWorkDelta{documentsAcquired: amount})
 }
@@ -305,7 +378,7 @@ func (a *Account) Seal() Snapshot {
 	if !p.terminal {
 		p.terminal = true
 	}
-	for p.objectsReserved != 0 || p.eventCallbacks != 0 {
+	for p.objectsReserved != 0 || p.eventCallbacks != 0 || p.documentCallbacks != 0 {
 		p.settled.Wait()
 	}
 	return exportSnapshot(p.snapshotLocked(), p.terminal, p.failure)
