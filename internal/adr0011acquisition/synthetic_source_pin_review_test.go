@@ -19,8 +19,8 @@ func TestReviewedSyntheticSourcePin(t *testing.T) {
 	}
 }
 
-const reviewedSyntheticSourceDigest = "sha256:ef367fe53147e145adc5173122dad8455209dbdf049927b131ddec83b8c611c0"
-const reviewedSyntheticManifestHash = "83e9c0e3de15f52272ec37ebdd81b595afe93a525e566188557d9cbb406cf8b5"
+const reviewedSyntheticSourceDigest = "sha256:c2437937f99e1497c247d20c4c428d8bfc08cf842bfcf6bd4f9c63038cb3b242"
+const reviewedSyntheticManifestHash = "65493e108d04b60f2304fa298da019a0fece435b6eea02740581141f1b661118"
 
 // Only tests select this independently reviewed local source-byte expectation.
 // It is not a binary identity, production pin or public issuer.
@@ -29,7 +29,7 @@ func reviewedSyntheticSourcePin() (string, error) {
 	if !ok {
 		return "", errSyntheticSourcePin
 	}
-	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.83e9c0e3de15f522.manifest.json")
+	manifestPath := filepath.Join(filepath.Dir(file), "..", "..", "docs", "qualification", "adr0011-synthetic-source-pin.65493e108d04b60f.manifest.json")
 	b, err := os.ReadFile(manifestPath)
 	if err != nil || len(b) > 1<<20 || len(b) == 0 {
 		return "", errSyntheticSourcePin

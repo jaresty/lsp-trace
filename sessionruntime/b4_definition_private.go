@@ -15,6 +15,7 @@ import (
 	"unsafe"
 
 	"lsp-trace/internal/adr0011c18"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
@@ -118,9 +119,10 @@ type privateB4ReservationC17 struct {
 }
 
 type privateB4Transaction struct {
-	legacy *privateB4Reservation
-	c16    *privateB4ReservationC16
-	c17    *privateB4ReservationC17
+	legacy      *privateB4Reservation
+	c16         *privateB4ReservationC16
+	c17         *privateB4ReservationC17
+	workAccount *adr0011work.Account
 }
 
 type privateB4Reservation struct {
@@ -153,6 +155,7 @@ type privateB4Reservation struct {
 	retainedNotifications *privateB4RetainedNotificationOwner
 	serverError           *privateB4ServerErrorOwner
 	retainedResponses     *privateB4RetainedResponseOwner
+	workAccount           *adr0011work.Account
 }
 
 func (r *privateB4Reservation) reservePrivateB4ExplicitBytes(capacities []uint64) session.Failure {
@@ -326,6 +329,7 @@ type privateB4Slot struct {
 	reservation *privateB4Reservation
 	c16         *privateB4ReservationC16
 	c17         *privateB4ReservationC17
+	workAccount *adr0011work.Account
 }
 
 const (
@@ -424,6 +428,10 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		req.CaptureMethodRequestFrameMaxBytes <= 0 || req.CaptureMethodRequestFrameMaxBytes > maxMethodFrameCorrespondenceBytes {
 		return RoundTripResult{Failure: session.ToolNotImplemented}, B4DefinitionLease{}
 	}
+	workAccount, hasWorkAccount := adr0011work.AccountFromContext(parent)
+	if hasWorkAccount && workAccount.Snapshot().Identity != owner.Transaction {
+		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
+	}
 	account, accountFailure := newPrivateB4ByteAccountV2()
 	if accountFailure != "" {
 		return RoundTripResult{Failure: accountFailure}, B4DefinitionLease{}
@@ -431,8 +439,9 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	reservation := &privateB4Reservation{
 		selection:     B4DefinitionSelectionKey{Transaction: owner.Transaction, CompletedOwnerKey: owner.CompletedOwnerKey},
 		explicitBytes: account,
+		workAccount:   workAccount,
 	}
-	transaction := &privateB4Transaction{legacy: reservation}
+	transaction := &privateB4Transaction{legacy: reservation, workAccount: workAccount}
 	if req.EnablePrivateC16ObjectAccounting {
 		profile, failure := newPrivateB4AccountC16WithBytes(account)
 		if failure != "" {
@@ -465,6 +474,9 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 				_ = transaction.c16.profile.requestTerminalReleaseC16(context.Background())
 			} else {
 				account.requestTerminalRelease()
+			}
+			if workAccount != nil {
+				workAccount.Seal()
 			}
 		}
 	}()
@@ -774,7 +786,7 @@ func (m *Manager) installPrivateB4Locked(_ RoundTripRequest, _ *runtimeSession, 
 
 func (m *Manager) installPrivateB4TransactionLocked(_ RoundTripRequest, _ *runtimeSession, transaction *privateB4Transaction) {
 	reservation := transaction.legacy
-	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16, c17: transaction.c17}
+	m.privateB4Leases[reservation.slot] = privateB4Slot{occupied: true, token: reservation.token, reservation: reservation, c16: transaction.c16, c17: transaction.c17, workAccount: transaction.workAccount}
 	m.privateB4Bytes += reservation.maxCharge
 }
 
@@ -834,6 +846,9 @@ func (m *Manager) releasePrivateB4Locked(reservation *privateB4Reservation) {
 		}
 		reservation.releasePrivateB4ExplicitBytes()
 		reservation.explicitBytes.requestTerminalRelease()
+		if reservation.workAccount != nil {
+			reservation.workAccount.Seal()
+		}
 		*slot = privateB4Slot{}
 		m.privateB4Bytes -= reservation.maxCharge
 	}
@@ -983,17 +998,26 @@ type PrivateB4DefinitionBorrow struct {
 	Capture PrivateB4DefinitionCapture
 	Result  []byte
 
-	c16 *privateB4ReservationC16
-	c17 *privateB4EventAccountC17
+	c16          *privateB4ReservationC16
+	c17          *privateB4EventAccountC17
+	workAccount  *adr0011work.Account
+	workIdentity string
 }
 
 // WithObjectAdmission admits one parser-owned C16 materialization. Copies of
 // an enabled borrow share the same versioned profile.
 func (b PrivateB4DefinitionBorrow) WithObjectAdmission(materialize func() error) error {
+	admit := materialize
+	if b.c16 != nil && b.c16.profile != nil {
+		admit = func() error { return b.c16.profile.WithObjectAdmission(materialize) }
+	}
+	if b.workAccount != nil {
+		return b.workAccount.WithObjectMaterialization(b.workIdentity, admit)
+	}
 	if b.c16 == nil || b.c16.profile == nil {
 		return ErrPrivateB4C16NotEnabled
 	}
-	return b.c16.profile.WithObjectAdmission(materialize)
+	return admit()
 }
 
 // WithTargetAppendAdmission atomically admits one original target ordinal's
@@ -1015,7 +1039,7 @@ func (m *Manager) PreparePrivateB4DefinitionBorrowed(lease B4DefinitionLease, se
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	result, ok := reservation.resultOwner.managerBytes()
-	if !ok || !prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result}) {
+	if !ok || !prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result, workAccount: reservation.workAccount, workIdentity: reservation.selection.Transaction}) {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	return capture, PrivateB4Selected
@@ -1042,7 +1066,7 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowed(lease B4DefinitionLease, sel
 	if slot.c17 != nil {
 		c17 = slot.c17.profile
 	}
-	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17, workAccount: slot.workAccount, workIdentity: reservation.selection.Transaction}
 	if c16 == nil {
 		defer m.mu.Unlock()
 		if !prepare(borrow) {
@@ -1125,7 +1149,7 @@ func (m *Manager) CommitPrivateB4DefinitionBorrowedC17(lease B4DefinitionLease, 
 		m.mu.Unlock()
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable, err
 	}
-	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17}
+	borrow := PrivateB4DefinitionBorrow{Capture: capture, Result: result, c16: c16, c17: c17, workAccount: slot.workAccount, workIdentity: reservation.selection.Transaction}
 	m.mu.Unlock()
 
 	prepared := false

@@ -14,9 +14,9 @@ import (
 	"lsp-trace/internal/session"
 )
 
-func c17MessagesProcessedContext(t *testing.T, identity string) (context.Context, *adr0011work.Account) {
+func c17MessagesProcessedContext(t *testing.T, transaction string) (context.Context, *adr0011work.Account) {
 	t.Helper()
-	account := adr0011work.New(identity)
+	account := adr0011work.New(transaction)
 	if account == nil {
 		t.Fatal("BLOCKED_NOT_RED: private work account unavailable")
 	}
@@ -55,9 +55,9 @@ func TestADR0011C17MessagesProcessedCausalBoundary(t *testing.T) {
 	})
 
 	t.Run("server request and matched response each count once", func(t *testing.T) {
-		ctx, account := c17MessagesProcessedContext(t, "messages-server-request")
 		request := lspwire.Message{JSONRPC: lspwire.Version, ID: json.RawMessage(`"server-request"`), Method: "workspace/unknown", Params: json.RawMessage(`{"x":1}`)}
 		f := newFullP1FixtureWithResponses(t, []lspwire.Message{request})
+		ctx, account := c17MessagesProcessedContext(t, f.owner.Transaction)
 		f.req.MaxMessages = 2
 		result, _ := f.m.RoundTripPrivateB4(ctx, f.req, f.owner)
 		if result.Failure != "" || result.Messages != 2 {
@@ -76,8 +76,8 @@ func TestADR0011C17MessagesProcessedCausalBoundary(t *testing.T) {
 	})
 
 	t.Run("decoded message rejected later remains counted", func(t *testing.T) {
-		ctx, account := c17MessagesProcessedContext(t, "messages-later-rejection")
 		f := newC16ActivationFixture(t)
+		ctx, account := c17MessagesProcessedContext(t, f.owner.Transaction)
 		f.req.CaptureDefinitionResponseFrameMaxBytes = 1
 		result, lease := f.m.RoundTripPrivateB4(ctx, f.req, f.owner)
 		if result.Failure != "" || result.Key.ID == 0 || result.Messages != 1 || lease != (B4DefinitionLease{}) {
@@ -130,7 +130,7 @@ func TestADR0011C17MessagesProcessedDefaultOffPreservesPrivateResult(t *testing.
 	}
 
 	accounted := newC16ActivationFixture(t)
-	ctx, account := c17MessagesProcessedContext(t, "messages-default-off-parity")
+	ctx, account := c17MessagesProcessedContext(t, accounted.owner.Transaction)
 	accountedResult, accountedLease := accounted.m.RoundTripPrivateB4(ctx, accounted.req, accounted.owner)
 	if !reflect.DeepEqual(c18MaterialResult(plainResult), c18MaterialResult(accountedResult)) ||
 		(plainLease == (B4DefinitionLease{})) != (accountedLease == (B4DefinitionLease{})) {

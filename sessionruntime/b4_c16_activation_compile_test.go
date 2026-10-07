@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	frozenPrivateB4ReservationSizeC16Guard      = uintptr(41664)
+	frozenPrivateB4ReservationSizeC16Guard      = uintptr(41672)
 	frozenPrivateB4ReservationAlignC16Guard     = uintptr(8)
 	frozenPrivateB4ReservationTokenC16Guard     = uintptr(0)
 	frozenPrivateB4ReservationSelectionC16Guard = uintptr(32)
