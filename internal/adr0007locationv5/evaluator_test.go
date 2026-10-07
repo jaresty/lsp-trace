@@ -83,6 +83,37 @@ func TestApproved26DeterministicAndImmutable(t *testing.T) {
 		})
 	}
 }
+func TestCanonicalMeasurements(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantBytes uint64
+		wantWork  uint64
+	}{
+		{"01-exact-intersects", 914, 30864},
+		{"04-adjacent-half-open", 420, 15808},
+		{"18-member-unavailable", 430, 15803},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, b, c := loadCase(t, tt.name)
+			x, e := Evaluate(r, b, StaticControl{Cancel: c.Cancel, Deadline: c.Deadline}, PublishedLimits())
+			if e != nil {
+				t.Fatal(e)
+			}
+			if x.Counters.OutputBytes != tt.wantBytes || x.Counters.Work != tt.wantWork {
+				t.Fatalf("ASSERT canonical-measurements FAIL got B=%d/W=%d want B=%d/W=%d", x.Counters.OutputBytes, x.Counters.Work, tt.wantBytes, tt.wantWork)
+			}
+			measurement := x
+			measurement.Counters.Work = 0
+			measurement.Counters.OutputBytes = 0
+			image, _ := Canonical(measurement)
+			if uint64(len(image)) != x.Counters.OutputBytes {
+				t.Fatalf("ASSERT canonical-measurement-image FAIL len=%d counter=%d", len(image), x.Counters.OutputBytes)
+			}
+		})
+	}
+}
+
 func TestCancellationPrecedence(t *testing.T) {
 	r, b, _ := loadCase(t, "01-exact-intersects")
 	x, _ := Evaluate(r, b, StaticControl{Cancel: true, Deadline: true}, PublishedLimits())

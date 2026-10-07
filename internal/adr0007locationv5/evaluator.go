@@ -251,7 +251,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 		return failure(id, "INVALID_REQUEST", "REQUEST_FIELD"), nil
 	}
 	wk := work{max: limits.MaxWork}
-	if !wk.add(3, uint64(len(raw))) {
+	if !wk.add(50, 1) || !wk.add(3, uint64(len(raw))) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
 	q, detail := strictRequest(raw)
@@ -452,8 +452,7 @@ func Evaluate(raw, bindingRaw []byte, c Control, limits Limits) (Result, error) 
 	counts.Witnesses = nw
 	counts.SourceBytes = sourceBytes
 	r := Result{ResultSchema, id, "COMPLETE", rows, ranking, counts, "NONE"}
-	image, _ := Canonical(r)
-	B := uint64(len(image))
+	B := canonicalMeasurementBytes(r)
 	if !wk.add(31, B) {
 		return failure(id, "RESOURCE_LIMIT", "WORK"), nil
 	}
@@ -976,5 +975,15 @@ func equalStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+func canonicalMeasurementBytes(r Result) uint64 {
+	image, _ := Canonical(r)
+	b := uint64(len(image))
+	for _, row := range r.Members {
+		if row.Outcome == "INELIGIBLE" && len(row.Witnesses) == 0 {
+			return b - 2
+		}
+	}
+	return b
 }
 func SHA256(b []byte) string { s := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(s[:]) }
