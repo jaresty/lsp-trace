@@ -1,0 +1,208 @@
+{
+  "schema": "lsp-trace.candidate-group-capture-disposition/v1",
+  "fixture_uri": "file:///Users/schwa/dev/lsp-trace/internal/censuscontinuation/testdata/candidategroupfixture/fixture.go",
+  "fixture_sha256": "bcf2b8151fa43fc1d1be42ca3945db51657ecfdfba15178a94a8a2b5c9d1e0d2",
+  "fixture_byte_length": 288,
+  "workspace_uri": "file:///Users/schwa/dev/lsp-trace",
+  "session_id": "sk1:949e027243da188035cc5c6532c4cb10df4210f2bdde80acc58b7b7b9af5f283",
+  "generation": 1,
+  "position_encoding": "utf-16",
+  "capture_attempts": {
+    "historical": 1,
+    "successor": 3,
+    "total": 4,
+    "entered_traversal": 2
+  },
+  "historical_request": {
+    "request_id": "sc_9b2700d348d3f398da52acc8ddcb20bf",
+    "outcome": "DOMAIN_ERROR",
+    "operation_status": "FAILED",
+    "error_code": "INVALID_SERVER_RESPONSE",
+    "reason": "TRAVERSAL_FAILED",
+    "phase": "TRAVERSAL",
+    "state": "INVALID_SERVER_RESPONSE"
+  },
+  "successor_request": {
+    "gateway_request_id": "offline-6",
+    "delegated_request_id": "offline-5",
+    "operation": "lsp_trace_v3_slice",
+    "output_version": "lsp-trace.graph-v5-source-snapshot.v1",
+    "root": {
+      "line": 2,
+      "character": 5,
+      "down_depth": 6,
+      "up_depth": 0,
+      "topmost_siblings": true
+    },
+    "outcome": "DOMAIN_ERROR",
+    "operation_status": "FAILED",
+    "error_code": "INPUT_INVALID",
+    "reason": "production_v5 conflicts with output_version \"lsp-trace.graph-v5-source-snapshot.v1\""
+  },
+  "corrected_successor_request": {
+    "gateway_request_id": "offline-4",
+    "delegated_request_id": "offline-3",
+    "operation": "lsp_trace_v3_slice",
+    "output_version": "lsp-trace.graph-v5-source-snapshot.v1",
+    "production_v5": "OMITTED",
+    "group_by": "OMITTED",
+    "root": {
+      "id": "candidate-group-entry",
+      "line": 2,
+      "character": 5,
+      "down_depth": 6,
+      "up_depth": 0,
+      "topmost_siblings": true
+    },
+    "outcome": "DOMAIN_ERROR",
+    "operation_status": "FAILED",
+    "error_code": "INPUT_INVALID",
+    "reason": "primary ID must be root",
+    "entered_traversal": false,
+    "produced_calls_or_source_evidence": false
+  },
+  "final_successor_request": {
+    "gateway_request_id": "offline-3",
+    "delegated_request_id": "offline-2",
+    "delegated_digest": "sha256:32ac667616d2a0796ab69cbf79e37fa9875ef15edfe9b04016a3d31c3316086d",
+    "operation": "lsp_trace_v3_slice",
+    "output_version": "lsp-trace.graph-v5-source-snapshot.v1",
+    "production_v5": "OMITTED",
+    "group_by": "OMITTED",
+    "root": {
+      "id": "root",
+      "line": 2,
+      "character": 5,
+      "down_depth": 6,
+      "up_depth": 0,
+      "topmost_siblings": true
+    },
+    "outcome": "DOMAIN_ERROR",
+    "operation_status": "FAILED",
+    "error_code": "OUTPUT_VALIDATION_FAILED",
+    "reason": "coordinator invariant: acquisition completeness mismatch",
+    "entered_traversal": true,
+    "produced_calls_or_source_evidence": false,
+    "retry_issued": false
+  },
+  "frozen_bounds": {
+    "max_communities": 4,
+    "max_members_per_community": 4,
+    "max_distinct_members": 7,
+    "max_call_occurrences": 11,
+    "max_source_bytes_per_member": 2048,
+    "max_total_unique_source_bytes": 14336,
+    "max_ranges": 32,
+    "max_objects": 7,
+    "max_work_units": 512,
+    "max_pagerank_work": 1024,
+    "max_response_bytes": 65536,
+    "max_artifact_bytes": 131072,
+    "max_citations": 16,
+    "max_description_utf8_bytes": 4096,
+    "max_descriptions": 1,
+    "max_host_attempts": 1
+  },
+  "source_topology": {
+    "source_authored_call_expressions": 11,
+    "server_observed_calls": 0,
+    "status": "SOURCE_AUTHORED_ONLY_UNTIL_SERVER_VERIFIED"
+  },
+  "program_c_runs": 0,
+  "seed": 23,
+  "eligible_community": null,
+  "hydration": null,
+  "interpretation": null,
+  "artifact_id": null,
+  "publication": null,
+  "semantic_acceptance": false,
+  "corrected_evidence_successor": {
+    "structural_capture": "SUCCEEDED",
+    "managed_source_manifest": "SUCCEEDED",
+    "program_c": {
+      "seed": 23,
+      "partition_sha256": "sha256:9576d551405c3a8410673db997afbf224beb21682f2cff91802a7ec4bcf15576",
+      "boundary_pagerank_work": 1472
+    },
+    "semantic_review": {
+      "status": "PASS",
+      "statement": "Publish calls Encode and Write; Encode calls Write; Write calls Publish.",
+      "scope": "quoted statement only; no feature claim"
+    },
+    "mechanical_candidate": {
+      "status": "REJECTED_RESOURCE_LIMIT",
+      "actual_pagerank_work": 1472,
+      "max_pagerank_work": 1024,
+      "artifact_id": null,
+      "publication": null,
+      "retrieval": null
+    },
+    "authority": 0,
+    "accepted": false,
+    "completeness": "UNKNOWN"
+  },
+  "superseded_successor_execution": {
+    "artifact_id": "sha256:badef119d0f1c5ee4371309847475f0ef577edcc0f30df2350d42a25a9b0c366",
+    "artifact_digest": "sha256:dbd4292459bb6499ee0099791a0133c2ab4ae0571c5721211acfcb611f8d895e",
+    "artifact_byte_length": 37265,
+    "status": "SUPERSEDED_BY_CORRECTION",
+    "accepted": false,
+    "reason": "rekeyed original managed graph_subject_id values and declaration-range claim citations"
+  },
+  "approved_successor_execution": {
+    "profile_id": "candidate-group-private-v2",
+    "profile_digest": "sha256:94e015fa7eef8ce9f0683b530ea2de3d13ed350dd78b947d51001da31fa4c416",
+    "max_pagerank_work": 1664,
+    "artifact_id": "sha256:c38ca11da73c48e901de6e9d03a6deb441ac4379af4589b29a7a6292b89a4b6f",
+    "artifact_digest": "sha256:89d57f2c5328f2f6d40df7e519bf6d835ede7dc0f8106bf87726f066b7021cd7",
+    "artifact_byte_length": 39381,
+    "publication": {
+      "scope": "PRIVATE_TEST_STORE_ONLY",
+      "mechanism": "continuationhost.Store.PutCandidateGroupWithReceipt",
+      "selector": "continuations/candidate-groups/artifacts/c38ca11da73c48e901de6e9d03a6deb441ac4379af4589b29a7a6292b89a4b6f",
+      "receipt_digest": "sha256:89d57f2c5328f2f6d40df7e519bf6d835ede7dc0f8106bf87726f066b7021cd7",
+      "receipt_byte_length": 39381,
+      "writes": 1,
+      "community_index_writes": 0
+    },
+    "retrieval": {
+      "method": "continuationhost.Store.GetCandidateGroup",
+      "exact_bytes": true,
+      "strict_parse_readback": true,
+      "idempotent_identical_put": true
+    },
+    "semantic_review": {
+      "statement": "Publish calls Encode and Write; Encode calls Write; Write calls Publish.",
+      "scope": "quoted statement only; four exact retained CALLS occurrences",
+      "citations": [
+        {"caller":"Publish","callee":"Write","relation_id":"sha256:a4b5cef48d4e40e72e370d4e9eb4fb7c881a5e470c2aac8b5a417f161889cc61","occurrence_id":"sha256:26a18bc6c0d60e4da7f67dfd19dc7af5216ae64883c268a81b27f98fd4bc4afd","range":{"start":{"line":23,"character":1},"end":{"line":23,"character":6}}},
+        {"caller":"Encode","callee":"Write","relation_id":"sha256:653fa9c0a57c8c182c92635daffe375b5ba365ffb0c75de413efc5aebf91d13e","occurrence_id":"sha256:3906fef1fbf7e1e945a2c1b69463b27ae2af7ae70385e04c44fad3dc94cec523","range":{"start":{"line":27,"character":1},"end":{"line":27,"character":6}}},
+        {"caller":"Write","callee":"Publish","relation_id":"sha256:89469e362264b5eea68989eb81315d29fbf53020cb5a1298b4e6853855abd790","occurrence_id":"sha256:e763a98678af242d5d2005df70a1c06db7a25fd16b7a2597e271a3fe28c65b6c","range":{"start":{"line":31,"character":1},"end":{"line":31,"character":8}}},
+        {"caller":"Publish","callee":"Encode","relation_id":"sha256:60d97453308970a734ab732da41992e71759120c7d34c5d5df894a8a30441f69","occurrence_id":"sha256:edc8ec19d687011f852713f3430f19f1610361bfffd2a740d9ea709435868102","range":{"start":{"line":22,"character":1},"end":{"line":22,"character":7}}}
+      ]
+    },
+    "authority": 0,
+    "accepted": false,
+    "completeness": "UNKNOWN",
+    "representative_role": "NAVIGATION_ONLY",
+    "mechanical_status": "VALIDATED_PUBLISHED_RETRIEVED_PRIVATE_TEST_STORE",
+    "claim_boundaries": "No feature, ownership, runtime, architecture, product, service, organization, or business-boundary claim."
+  },
+  "implementation_disposition": "Historical v1 failed attempts are retained. The frozen v1 seed-23 candidate is mechanically rejected because Boundary.PageRank.Work 1472 exceeds MaxPageRankWork 1024, so that historical v1 run has no artifact, publication, or retrieval. Separately, the corrected private v2/1664 successor is validated and exercised only in the private test Store; the prior badef119 artifact is superseded and not accepted.",
+  "limitations": [
+    "The historical managed structural capture returned no graph or source projection.",
+    "The first authorized successor managed source-bearing capture was rejected before traversal because its request arguments conflicted.",
+    "The corrected source-bearing mode omitted production_v5 and Leiden grouping as required, but semantic preflight rejected its primary root ID because it was not exactly root.",
+    "The corrected successor request did not enter traversal and produced no CALLS or retained source evidence.",
+    "The final request changed only the primary root ID to root, preserved the frozen source-bearing request and fixture digest, entered traversal, and failed output validation with coordinator invariant: acquisition completeness mismatch.",
+    "The final traversal failure produced no successful CALLS/source snapshot or eligible source-complete multi-member seed23 community; no retry was issued.",
+    "For the historical v1 rejected capture attempts, no managed server-reported CALLS relation IDs or call sites were successfully retained; the later corrected v2 successor separately binds retained CALLS evidence.",
+    "For the historical v1 rejected capture attempts, Program C seed 23 was not run; the later corrected successor execution is recorded separately.",
+    "For the historical v1 rejected run, no retained member source identities, partition, community, hydration, host interpretation, artifact, or publication result exists.",
+    "At the time of those historical v1 rejected capture attempts, the then-existing untracked candidate-group and store code had not been corrected; this statement does not describe the later corrected successor implementation.",
+    "The successful successor evidence does not erase or reinterpret any historical failed capture attempt.",
+    "Structural-context graph_subject_id and Program C node identity are distinct and require validated correspondence; equality is not claimed.",
+    "The semantic PASS applies only to the quoted statement and is not a valid candidate artifact or feature claim.",
+    "The frozen candidate produced no artifact because PageRank work 1472 exceeds the unchanged maximum 1024; consequently no publication or retrieval occurred."
+  ]
+}

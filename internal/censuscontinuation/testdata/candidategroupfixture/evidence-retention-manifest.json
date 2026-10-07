@@ -1,0 +1,157 @@
+{
+  "fixture": {
+    "byte_length": 288,
+    "sha256": "sha256:bcf2b8151fa43fc1d1be42ca3945db51657ecfdfba15178a94a8a2b5c9d1e0d2"
+  },
+  "limitations": [
+    "The managed result is bounded structural evidence and does not establish source completeness, runtime execution, producer authentication, permission, or production authority.",
+    "Custody is caller-asserted local and unauthenticated.",
+    "The V1 source snapshot contains zero retained source receipts and zero source bindings; no source-backed member hydration is established.",
+    "CALLS are server-reported relationships for this READY session and bounded request; completeness outside the captured neighborhood is unknown.",
+    "Program C is structural-only; community identity is not semantic feature acceptance.",
+    "Historical limitations remain retained rather than overwritten by successor evidence.",
+    "A successor managed V6 member-source manifest is retained, with structural-context graph_subject_id kept distinct from Program C graph_member_id and joined only by validated correspondence metadata.",
+    "The quoted statement passed semantic review, but the frozen candidate is mechanically rejected because PageRank work 1472 exceeds the unchanged maximum 1024.",
+    "The historical v1 rejected run retained no candidate artifact, publication, or retrieval; the corrected v2 successor is separately retained for private test-Store verification only and conveys no authority, acceptance, completeness, or feature claim."
+  ],
+  "program_c": {
+    "communities": [
+      {
+        "community_id": "sha256:a07c2f03a12799231696f924a94c175e9e286f8f822385b4cdc3eb8056edb1ec",
+        "members": [
+          "Encode",
+          "Publish",
+          "Write"
+        ]
+      },
+      {
+        "community_id": "sha256:f2aad99a94d829b5eced0c465d531cd384a8d214a038e238851d77d1fab036f2",
+        "members": [
+          "Validate",
+          "Collect",
+          "Normalize",
+          "Entry"
+        ]
+      }
+    ],
+    "community_count": 2,
+    "hub_top_k": 7,
+    "output": {
+      "byte_length": 9942,
+      "path": "program-c-seed23.json",
+      "sha256": "sha256:1e21089dc3f60194cb88022d6073c2b6708cb1bf1849fa5f4f6c2aede1b3f77e"
+    },
+    "pagerank_top_k": 7,
+    "partition_sha256": "sha256:9576d551405c3a8410673db997afbf224beb21682f2cff91802a7ec4bcf15576",
+    "schema_version": "lsp-trace.community-presentation.v1",
+    "seed": 23
+  },
+  "purpose": "Exact private testdata retention of the successful bounded managed source-snapshot response and its canonical Program C seed-23 partition; this evidence is separate from the mechanically rejected candidate artifact.",
+  "candidate_disposition": {
+    "semantic_review": {
+      "status": "PASS",
+      "statement": "Publish calls Encode and Write; Encode calls Write; Write calls Publish.",
+      "scope": "quoted statement only"
+    },
+    "mechanical_status": "REJECTED_RESOURCE_LIMIT",
+    "boundary_pagerank_work": 1472,
+    "max_pagerank_work": 1024,
+    "artifact_id": null,
+    "publication": null,
+    "retrieval": null,
+    "authority": 0,
+    "accepted": false,
+    "completeness": "UNKNOWN",
+    "feature_claim": null
+  },
+  "superseded_successor_execution": {
+    "artifact_id": "sha256:badef119d0f1c5ee4371309847475f0ef577edcc0f30df2350d42a25a9b0c366",
+    "artifact_digest": "sha256:dbd4292459bb6499ee0099791a0133c2ab4ae0571c5721211acfcb611f8d895e",
+    "artifact_byte_length": 37265,
+    "status": "SUPERSEDED_BY_CORRECTION",
+    "accepted": false
+  },
+  "approved_successor_execution": {
+    "profile_id": "candidate-group-private-v2",
+    "profile_digest": "sha256:94e015fa7eef8ce9f0683b530ea2de3d13ed350dd78b947d51001da31fa4c416",
+    "max_pagerank_work": 1664,
+    "artifact_id": "sha256:c38ca11da73c48e901de6e9d03a6deb441ac4379af4589b29a7a6292b89a4b6f",
+    "artifact_digest": "sha256:89d57f2c5328f2f6d40df7e519bf6d835ede7dc0f8106bf87726f066b7021cd7",
+    "artifact_byte_length": 39381,
+    "private_selector": "continuations/candidate-groups/artifacts/c38ca11da73c48e901de6e9d03a6deb441ac4379af4589b29a7a6292b89a4b6f",
+    "publication_scope": "PRIVATE_TEST_STORE_ONLY",
+    "publication_receipt_verified": true,
+    "exact_id_retrieval_verified": true,
+    "strict_readback_verified": true,
+    "idempotent_identical_put_verified": true,
+    "citation_coverage": "four exact retained CALLS relation/occurrence identities and call-site ranges",
+    "authority": 0,
+    "accepted": false,
+    "completeness": "UNKNOWN",
+    "representative_role": "NAVIGATION_ONLY",
+    "semantic_boundary": "Quoted statement only; no feature, ownership, runtime, architecture, or production authority claim."
+  },
+  "request": {
+    "acquisition_limits": "OMITTED_USE_EXISTING_DEFAULTS",
+    "delegated_request_id": "offline-3",
+    "gateway_request_id": "offline-4",
+    "generation": 1,
+    "group_by": "OMITTED",
+    "operation": "lsp_trace_v3_slice",
+    "output_version": "lsp-trace.graph-v5-source-snapshot.v1",
+    "production_v5": "OMITTED",
+    "required_targets": [],
+    "root": {
+      "character": 5,
+      "down_depth": 6,
+      "id": "root",
+      "language_id": "go",
+      "line": 2,
+      "up_depth": 0,
+      "uri": "file:///Users/schwa/dev/lsp-trace/internal/censuscontinuation/testdata/candidategroupfixture/fixture.go"
+    },
+    "runtime_executable_sha256": "sha256:c34ab87cc894448e707e85ccf743a9263002423c0828140225d99cf42046498a",
+    "session_id": "sk1:949e027243da188035cc5c6532c4cb10df4210f2bdde80acc58b7b7b9af5f283",
+    "topmost_siblings": true
+  },
+  "response": {
+    "artifact_schema_id": "https://jaresty.github.io/lsp-trace/schemas/lsp-trace.graph-v5-source-snapshot.v1.schema.json",
+    "declared_graph_v5_digest": "sha256:2d1eb4f7dd795abbda9c94800f664626c217552b1df85b1e5c7004ba55cabf69",
+    "delegated_digest": "sha256:5d21c5b63d6bc9d90926288b6aa39007eff6b122dc142b763c28cb88e9bc3bb7",
+    "delegated_envelope": {
+      "byte_length": 245465,
+      "path": "managed-slice-delegated-envelope.json",
+      "sha256": "sha256:5d21c5b63d6bc9d90926288b6aa39007eff6b122dc142b763c28cb88e9bc3bb7"
+    },
+    "embedded_graph_v5_envelope": {
+      "byte_length": 183395,
+      "path": "managed-graph-v5-envelope.json",
+      "sha256": "sha256:2d1eb4f7dd795abbda9c94800f664626c217552b1df85b1e5c7004ba55cabf69"
+    },
+    "embedded_native_graph_v5": {
+      "byte_length": 35272,
+      "path": "managed-native-graph-v5.json",
+      "sha256": "sha256:45f914489572d16b8457eabcf38d14b79776a2acd7b69e8649f5e9a43b0acbbf"
+    },
+    "gateway": {
+      "byte_length": 246047,
+      "path": "managed-slice-gateway-response.json",
+      "sha256": "sha256:fc6339462b8e815430cb5388e68ae55b89ea79aa85cf7a1c1a39ee2aa02f2965"
+    },
+    "operation_status": "SUCCEEDED",
+    "outcome": "COMPLETE",
+    "source_snapshot": {
+      "byte_length": 244960,
+      "path": "managed-source-snapshot.json",
+      "sha256": "sha256:449ae868f4a240fbcf624edc08a3df5550ea123d92e7c2872a9077d28d467511"
+    }
+  },
+  "schema": "lsp-trace.candidate-group-retained-evidence/v1",
+  "structural_counts": {
+    "calls": 11,
+    "edges_total": 11,
+    "nodes": 7,
+    "source_bindings": 0,
+    "source_receipts": 0
+  }
+}
