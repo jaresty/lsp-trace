@@ -81,6 +81,26 @@ func TestHalfOpenAdjacency(t *testing.T) {
 		t.Fatalf("ASSERT half-open FAIL want=%s got=%s", want, Canonical(r))
 	}
 }
+func TestCorrectedCaseSemantics(t *testing.T) {
+	t.Run("case05-repeated-union-reached", func(t *testing.T) {
+		r := evalCase(t, "05-union-repeat", PublishedLimits())
+		if r.Outcome != "COMPLETE" || len(r.Members) != 1 || r.Members[0].Outcome != "ELIGIBLE" || len(r.Members[0].Witnesses) != 2 || r.Counters.Witnesses != 2 || r.Counters.Eligible != 1 {
+			t.Fatalf("ASSERT case05 repeated-union-reached FAIL got=%s", Canonical(r))
+		}
+	})
+	t.Run("case16-eligible", func(t *testing.T) {
+		r := evalCase(t, "16-member-eligible", PublishedLimits())
+		if r.Outcome != "COMPLETE" || len(r.Members) != 1 || r.Members[0].Outcome != "ELIGIBLE" || len(r.Members[0].Witnesses) != 1 || r.Counters.Eligible != 1 {
+			t.Fatalf("ASSERT case16 eligible FAIL got=%s", Canonical(r))
+		}
+	})
+	t.Run("case17-ineligible", func(t *testing.T) {
+		r := evalCase(t, "17-member-ineligible", PublishedLimits())
+		if r.Outcome != "COMPLETE" || len(r.Members) != 1 || r.Members[0].Outcome != "INELIGIBLE" || len(r.Members[0].Witnesses) != 0 || r.Counters.Ineligible != 1 {
+			t.Fatalf("ASSERT case17 ineligible FAIL got=%s", Canonical(r))
+		}
+	})
+}
 func TestMutationWitnesses(t *testing.T) {
 	t.Run("policy-digest", func(t *testing.T) {
 		d := filepath.Join(corpusRoot(t), "inputs", "01-exact-intersects")
