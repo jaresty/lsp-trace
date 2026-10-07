@@ -2,9 +2,12 @@ package censuscontinuation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
+
+	"lsp-trace/internal/targetpacket"
 )
 
 type cancelAfterCheckpointStore struct {
@@ -25,7 +28,14 @@ func (s *cancelAfterCheckpointStore) Put(ctx context.Context, raw []byte) (strin
 }
 
 func TestEveryStageFailureAndCancellationRecoveryMatrix(t *testing.T) {
-	fixture := newFixture(t)
+	fixture := newRecoveryFixture(t)
+	preparedTargets := 0
+	for _, batch := range fixture.input.Projection.Batches {
+		preparedTargets += len(batch.Targets)
+	}
+	if got := preparedTargets; got != 2 || len(fixture.input.Projection.Batches) != 2 {
+		t.Fatalf("ASSERT_RECOVERY_FIXTURE_TARGET_COUNT: targets=%d batches=%d want_targets=2 want_batches=2", got, len(fixture.input.Projection.Batches))
+	}
 	handoff, err := BuildHandoff(fixture.input)
 	if err != nil {
 		t.Fatal(err)
@@ -87,6 +97,41 @@ func assertStageRecovery(t *testing.T, store Store, fixture fixture, handoff Com
 	if resumed.Status != StatusComplete || resumed.Err != nil {
 		t.Fatalf("ASSERT_STAGE_RESUMABLE_%s: %+v", stage, resumed)
 	}
+	packetCount, requestCount := recoveryArtifactCounts(t, store, resumed.CheckpointID)
+	if packetCount != 2 || requestCount != 2 {
+		t.Fatalf("ASSERT_STAGE_RECOVERY_FIXTURE_COUNTS_%s: targets=2 packets=%d requests=%d", stage, packetCount, requestCount)
+	}
+}
+
+func recoveryArtifactCounts(t *testing.T, store Store, checkpointID string) (int, int) {
+	t.Helper()
+	chain, err := VerifyChain(context.Background(), store, checkpointID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifacts := chain[len(chain)-1].Artifacts()
+	var packetCount, requestCount int
+	for _, artifact := range artifacts {
+		raw, err := store.Get(context.Background(), artifact.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch artifact.Kind {
+		case "packets":
+			var packets targetpacket.Result
+			if err := json.Unmarshal(raw, &packets); err != nil {
+				t.Fatal(err)
+			}
+			packetCount = len(packets.Packets)
+		case "requests":
+			var requests []json.RawMessage
+			if err := json.Unmarshal(raw, &requests); err != nil {
+				t.Fatal(err)
+			}
+			requestCount = len(requests)
+		}
+	}
+	return packetCount, requestCount
 }
 
 func TestCancellationAfterProgramCCommitPersistsRecovery(t *testing.T) {

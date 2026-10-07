@@ -117,10 +117,20 @@ func fixtureSeedResults(b censusacquisition.BatchRequest, sourceURI string) []gr
 
 func newFixture(t *testing.T) fixture {
 	t.Helper()
+	return newFixtureWithTargetCount(t, 64, 0)
+}
+
+func newRecoveryFixture(t *testing.T) fixture {
+	t.Helper()
+	return newFixtureWithTargetCount(t, 2, 1)
+}
+
+func newFixtureWithTargetCount(t *testing.T, targetCount, maxBatchTargets int) fixture {
+	t.Helper()
 	workspace := t.TempDir()
 	var source strings.Builder
 	source.WriteString("package fixture\n\n")
-	for i := 0; i < 64; i++ {
+	for i := 0; i < targetCount; i++ {
 		fmt.Fprintf(&source, "func T%d() {}\n", i)
 	}
 	if err := os.WriteFile(filepath.Join(workspace, "a.go"), []byte(source.String()), 0o600); err != nil {
@@ -128,7 +138,7 @@ func newFixture(t *testing.T) fixture {
 	}
 	session := censusacquisition.SessionIdentity{SessionID: "session", Generation: 7}
 	d := censusacquisition.Discovery{Session: session, Workspace: workspace, Complete: true, Accounting: census.Accounting{FileDenominator: 1, Files: []census.FileEntry{{Ordinal: 0, Disposition: census.FileSelected}}}, FileLedger: captureset.Ledger{Denominator: 1, Entries: []captureset.LedgerEntry{{Ordinal: 0, Identity: "file", Disposition: "processed"}}}}
-	for i := 0; i < 64; i++ {
+	for i := 0; i < targetCount; i++ {
 		name := fmt.Sprintf("T%d", i)
 		seed, err := seedformat.EncodeCanonical(seedformat.File{SchemaVersion: seedformat.Version, CoordinateConvention: seedformat.CoordinateConvention, Seeds: []seedformat.Seed{{Type: seedformat.PositionType, Position: &seedformat.Position{Label: fmt.Sprintf("census-%06d", i), Path: "a.go", Line: uint64(i + 3), Column: 6}}}}, workspace)
 		if err != nil {
@@ -139,8 +149,12 @@ func newFixture(t *testing.T) fixture {
 		d.Accounting.Symbols = append(d.Accounting.Symbols, census.SymbolEntry{Ordinal: i, Disposition: census.SymbolSelected})
 		d.SymbolLedger.Entries = append(d.SymbolLedger.Entries, captureset.LedgerEntry{Ordinal: i, Identity: target.SymbolIdentity, Disposition: "prepared"})
 	}
-	d.Accounting.SymbolDenominator, d.SymbolLedger.Denominator = 64, 64
-	projection, err := (censusacquisition.Core{Discoverer: discoverFunc(func(context.Context, censusacquisition.SessionIdentity) (censusacquisition.Discovery, error) {
+	d.Accounting.SymbolDenominator, d.SymbolLedger.Denominator = targetCount, targetCount
+	var planning *censusacquisition.PlanningConfig
+	if maxBatchTargets > 0 {
+		planning = &censusacquisition.PlanningConfig{DownDepth: census.DefaultDownDepth, UpDepth: census.DefaultUpDepth, MaxBatchTargets: maxBatchTargets}
+	}
+	projection, err := (censusacquisition.Core{Planning: planning, Discoverer: discoverFunc(func(context.Context, censusacquisition.SessionIdentity) (censusacquisition.Discovery, error) {
 		return d, nil
 	}), Acquirer: acquireFunc(func(_ context.Context, b censusacquisition.BatchRequest) (censusacquisition.AcquiredV5, error) {
 		sourceURI := (&url.URL{Scheme: "file", Path: filepath.ToSlash(filepath.Join(workspace, "a.go"))}).String()
