@@ -15,3 +15,18 @@ The original regeneration divergence remains retained. It affected only four omi
 No model, producer, or reviewer semantic dispatch occurred during the repair. This verdict qualifies only bounded Group v1 custody for the exact frozen deterministic campaign. It does not establish feature identity, completeness, stakeholder acceptance, production authority, public enablement, release, push, or further execution authority.
 
 Ceilings remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`.
+
+## Exact zero-effect repair clarification
+
+The repair is qualifying only under the conjunction recorded by `INFRASTRUCTURE_REPAIR_01.json` and the independent audit:
+
+1. it occurred before semantic dispatch and before any observable semantic output;
+2. it changed infrastructure only—no fixture semantics, generator, producer, reviewer, model, prompt, policy, or semantic record;
+3. the original regeneration failure remains preserved and visible;
+4. an independent adjudicator classified the repair as zero semantic effect;
+5. the failed attempt remains accounted rather than erased or relabeled;
+6. the repaired verification used the same assignment and exact freeze;
+7. deterministic verification was replayed, with two disposable regenerations equal to each other and the frozen tree; and
+8. regeneration served only deterministic custody verification, never semantic recovery.
+
+The exact repair was the seeding of the four already-frozen immutable design inputs omitted by the original disposable regeneration harness: `DESIGN.md`, `LIMITS.json`, `POLICY.json`, and `SEARCH_BINDING.json`. It did not generate, retry, repair, normalize, replace, or substitute semantic output. The accounting therefore remains infrastructure repair `1`; semantic retry / repair / substitution `0 / 0 / 0`.

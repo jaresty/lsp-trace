@@ -41,3 +41,9 @@ Read-only join of the four `sample-1/*/{REQUEST,PACKET,RESPONSE_V2}.json` files 
 ## Qualification boundary before any broader campaign
 
 This four-case review is a falsification set, not a representative quality rate. First freeze reviewer labels and source witnesses for a separately authorized bounded sample, including resolved, unresolved, multiple alternatives, missing source, false causal use, and contradictory limitations; establish independent adjudication and explicit disagreement handling. Separately predeclare numeric quality thresholds, denominators, privacy/retention, resource and attempt limits, stop/replay policy, artifact/runtime identities, and the authority that can approve a wider run. Until then, an unsupported claim or an unevaluable member prevents automatic full-catalog resume. A mechanically passing worker or a future passing rubric never accepts a feature inventory without separate semantic and stakeholder correction/acceptance.
+
+## Additive qualification disposition
+
+The authorized successor identity is main `40440412`, source `8ae7f308`. A post-run amendment sets the bounded usefulness threshold at **22 of 24 cases**, with **96 of 96 producer/reviewer attempts accounted**. This disposition is additive: it does not rewrite this proposal's four-case observations, the original blocked semantic replay result, either non-passing case, or any rejected, superseded, failed, or unevaluated predecessor.
+
+Passing the amended bounded threshold does not accept a description, corpus, group, or feature inventory. It does not weaken claim-level source support, topology, citation, limitation, evidence-binding, custody, or attempt-accounting requirements. No rerun is authorized. All outputs remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`.

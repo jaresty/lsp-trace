@@ -344,3 +344,15 @@ Before pilot execution:
 4. Verify that every immutable prerequisite is frozen and referenced by digest before enabling inference or indexing.
 
 Until those prerequisite steps occur, there is no pilot execution authorization and no Yzma integration. This acceptance never grants shipment authorization, operation registration or renumbering, a public CLI or MCP surface, or integration into core binaries.
+
+## 2026-10-07 qualification consolidation
+
+The bounded successor records preserve three distinct results:
+
+- Describe at main `40440412`, source `8ae7f308`: the amended semantic threshold is **22 of 24 cases and 96 attempts**. This post-run threshold does not erase the two non-passing cases, missing or failed attempts, replay disagreement, or prior blocked/rejected records.
+- Search v11 at main `4bc75e97`, source `9c44d561`, frozen as `sha256:b1207bdd52463dcc81fd0c47eccae0452630cf0e96d2c4d72991d99a4c4fe301`: bounded deterministic custody only.
+- Group v1 at main `7f96fae9`, frozen as `group-freeze-f66b64da93d0ec4797d821fb788ec7afabeaca96c68375d9689bc88ad0ce6771`: bounded deterministic custody only, with infrastructure repair `1` and semantic retry / repair / substitution `0 / 0 / 0`.
+
+A zero-effect infrastructure repair may support custody qualification only when every condition holds: it occurs before semantic dispatch and before any observable semantic output; it is infrastructure-only; the original failure is preserved; an independent adjudicator determines zero semantic effect; the failed attempt remains accounted; the assignment and freeze remain identical; deterministic verification is replayed; and regeneration is not used as semantic recovery. Such a repair cannot regenerate, normalize, replace, retry, or substitute semantic output.
+
+All generated and qualification products remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. Search and Group custody do not establish semantic usefulness, navigation usefulness, baseline superiority, feature identity, stakeholder acceptance, production authority, or public enablement. Frozen predecessor manifests remain immutable; later documentation records successor status additively outside each frozen root.

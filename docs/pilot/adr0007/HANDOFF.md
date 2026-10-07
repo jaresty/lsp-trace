@@ -42,3 +42,17 @@ The local narrow Describe pilot is enabled only in scope, not publicly or in pro
 ## Resume prompt
 
 Continue ADR 0007 from `docs/pilot/adr0007/HANDOFF.md`. This is a local-only four-packet TARGET Describe pilot. First inspect the handoff and `git status`; then verify the enablement record, run the final four packets through the pinned NDJSON adapter under network denial, capture immutable output hashes, and write the final pilot report. Do not broaden scope or claim production/public authorization.
+
+## 2026-10-07 successor handoff
+
+Do not repeat the historical resume prompt above without new authorization. The consolidated bounded state is:
+
+- Describe main `40440412` / source `8ae7f308`: amended threshold `22/24`, with `96/96` attempts accounted; no rerun authorized.
+- Search main `4bc75e97` / source `9c44d561`: `SEARCH_CUSTODY_GO` for freeze `sha256:b1207bdd52463dcc81fd0c47eccae0452630cf0e96d2c4d72991d99a4c4fe301` only.
+- Group main `7f96fae9`: `GROUP_CUSTODY_GO` and already-integrated `INTEGRATION_GO` for freeze `group-freeze-f66b64da93d0ec4797d821fb788ec7afabeaca96c68375d9689bc88ad0ce6771` only. Infrastructure repair is `1`; semantic retry / repair / substitution is `0 / 0 / 0`.
+
+The Search and Group predecessor files are members of their frozen manifests and must not be edited. Preserve all blocked, rejected, superseded, `NOT_USEFUL`, and unevaluated history. Follow the additive [decision records](decisions/) for candidate-group reconciliation, representative scope, archive security classification, and integration scope.
+
+A Group zero-effect repair is admissible only before semantic dispatch and observable semantic output, only for infrastructure, with the original failure preserved, independent zero-effect adjudication, failed-attempt accounting, the same assignment and freeze, and deterministic verification replay. Regeneration verifies custody only and is never semantic recovery.
+
+Ceilings remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. No code migration, semantic/navigation rerun, ADR 0011 work, production/public enablement, or push is authorized.

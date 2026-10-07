@@ -57,3 +57,21 @@ The four-packet `TARGET` Describe diagnostic completed under network denial with
 The amended bounded-usefulness gate requires 100% custody, mechanical validity, disposition support, source support, citation validity, limitation validity, ceiling preservation, and evidence binding, plus replay agreement in both lanes for at least 90% of cases. Replay-only failures are retained as limitations and cannot conceal evidence, lineage, or authority failures. The amendment was adopted after observing the custody runs and is labeled accordingly rather than represented as predeclared.
 
 Every document is intentionally draft. Later approval requires named accountable identities, recorded decisions, and immutable digests; a path, commit, review, or process boundary alone is insufficient.
+
+## Bounded qualification status and decisions
+
+The current additive status records are:
+
+- Describe: main `40440412`, source `8ae7f308`, amended threshold `22/24` cases with `96/96` attempts accounted.
+- Search v11: main `4bc75e97`, source `9c44d561`, freeze `sha256:b1207bdd52463dcc81fd0c47eccae0452630cf0e96d2c4d72991d99a4c4fe301`.
+- Group v1: main `7f96fae9`, freeze `group-freeze-f66b64da93d0ec4797d821fb788ec7afabeaca96c68375d9689bc88ad0ce6771`, infrastructure repair `1`, semantic retry / repair / substitution `0 / 0 / 0`.
+
+The Search and Group `PREDECESSORS.json` files are freeze-bound. They remain unchanged; blocked and rejected predecessor status is not rewritten to reflect successor results. Current decisions are recorded outside those frozen roots:
+
+1. [Candidate-group reconciliation](decisions/2026-10-07-candidate-group-reconciliation.md)
+2. [Group representative scope](decisions/2026-10-07-group-representative-scope.md)
+3. [Archive security classification](decisions/2026-10-07-archive-security-classification.md)
+4. [Group integration record](decisions/2026-10-07-group-integration-record.md)
+5. [Search and Group successor status](decisions/2026-10-07-search-group-successor-status.md)
+
+These records preserve `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. They grant no semantic rerun, code migration, public enablement, production use, or ADR 0011 change.
