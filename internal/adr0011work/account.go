@@ -43,20 +43,23 @@ type privateWorkSnapshot struct {
 }
 
 type privateWorkAccount struct {
-	mu                 sync.Mutex
-	settled            *sync.Cond
-	identity           occurrenceIdentity
-	work               privateWorkDelta
-	objectsReserved    uint64
-	eventsReserved     uint64
-	eventCallbacks     uint64
-	eventCommitBlocked bool
-	documentsReserved  uint64
-	documentCallbacks  uint64
-	documentPending    map[string]uint64
-	documentCommitted  map[string]bool
-	terminal           bool
-	failure            error
+	mu                   sync.Mutex
+	settled              *sync.Cond
+	identity             occurrenceIdentity
+	work                 privateWorkDelta
+	objectsReserved      uint64
+	eventsReserved       uint64
+	eventCallbacks       uint64
+	eventCommitBlocked   bool
+	documentsReserved    uint64
+	documentCallbacks    uint64
+	documentPending      map[string]uint64
+	logicalBytesReserved uint64
+	logicalByteCallbacks uint64
+	logicalCommitBlocked bool
+	documentCommitted    map[string]bool
+	terminal             bool
+	failure              error
 }
 
 func newPrivateWorkAccount(identity occurrenceIdentity) *privateWorkAccount {
@@ -86,11 +89,15 @@ func (a *privateWorkAccount) charge(identity occurrenceIdentity, delta privateWo
 		overflows(a.work.eventsEmitted+a.eventsReserved, delta.eventsEmitted) ||
 		overflows(a.work.documentsAcquired, a.documentsReserved) ||
 		overflows(a.work.documentsAcquired+a.documentsReserved, delta.documentsAcquired) ||
-		overflows(a.work.logicalBufferBytesReserved, delta.logicalBufferBytesReserved) {
+		overflows(a.work.logicalBufferBytesReserved, a.logicalBytesReserved) ||
+		overflows(a.work.logicalBufferBytesReserved+a.logicalBytesReserved, delta.logicalBufferBytesReserved) {
 		a.terminal = true
 		a.failure = errPrivateWorkOverflow
 		if delta.eventsEmitted != 0 && a.eventsReserved != 0 {
 			a.eventCommitBlocked = true
+		}
+		if delta.logicalBufferBytesReserved != 0 && a.logicalBytesReserved != 0 {
+			a.logicalCommitBlocked = true
 		}
 		return a.failure
 	}
@@ -355,6 +362,57 @@ func (a *Account) ChargeDocumentsAcquired(identity string, amount uint64) error 
 	return a.charge(identity, privateWorkDelta{documentsAcquired: amount})
 }
 
+// WithLogicalBufferReservation reserves amount bytes before reserve runs and
+// commits them only after reserve returns successfully.
+func (a *Account) WithLogicalBufferReservation(identity string, amount uint64, reserve func() error) (err error) {
+	if a == nil || a.private == nil {
+		return errPrivateWorkIdentity
+	}
+	if reserve == nil {
+		return errPrivateWorkCallback
+	}
+
+	p := a.private
+	p.mu.Lock()
+	if p.terminal {
+		p.mu.Unlock()
+		return errPrivateWorkTerminal
+	}
+	if occurrenceIdentity(identity) != p.identity {
+		p.mu.Unlock()
+		return errPrivateWorkIdentity
+	}
+	if overflows(p.work.logicalBufferBytesReserved, p.logicalBytesReserved) ||
+		overflows(p.work.logicalBufferBytesReserved+p.logicalBytesReserved, amount) {
+		p.terminal = true
+		p.failure = errPrivateWorkOverflow
+		p.mu.Unlock()
+		return errPrivateWorkOverflow
+	}
+	p.logicalBytesReserved += amount
+	p.logicalByteCallbacks++
+	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		p.logicalBytesReserved -= amount
+		p.logicalByteCallbacks--
+		recovered := recover()
+		if recovered == nil && err == nil && !p.logicalCommitBlocked {
+			p.work.logicalBufferBytesReserved += amount
+		}
+		if p.objectsReserved == 0 && p.eventCallbacks == 0 && p.documentCallbacks == 0 && p.logicalByteCallbacks == 0 {
+			p.settled.Broadcast()
+		}
+		p.mu.Unlock()
+		if recovered != nil {
+			panic(recovered)
+		}
+	}()
+
+	return reserve()
+}
+
 func (a *Account) ChargeLogicalBufferBytesReserved(identity string, amount uint64) error {
 	return a.charge(identity, privateWorkDelta{logicalBufferBytesReserved: amount})
 }
@@ -378,7 +436,7 @@ func (a *Account) Seal() Snapshot {
 	if !p.terminal {
 		p.terminal = true
 	}
-	for p.objectsReserved != 0 || p.eventCallbacks != 0 || p.documentCallbacks != 0 {
+	for p.objectsReserved != 0 || p.eventCallbacks != 0 || p.documentCallbacks != 0 || p.logicalByteCallbacks != 0 {
 		p.settled.Wait()
 	}
 	return exportSnapshot(p.snapshotLocked(), p.terminal, p.failure)
