@@ -1,8 +1,8 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `48ecbb33c613cfc44f649923132514725a4f4094`
+Audited implementation revision: `d53e12e5190ac7b82459990305d162ecd66a64a8`
 
-Audited tree: `638d1b45405d24f001344c7f462a240e67ba59e7`
+Audited tree: `26f968cfdb5172b014c219416e871a012344ff18`
 
 Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
@@ -29,8 +29,8 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C16, C17;
-- currently UNKNOWN active rows: C15, C18, and all six work counters.
+- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C16, C17, and messages_processed;
+- currently UNKNOWN active rows: C15, C18, and five work counters.
 
 Current result remains:
 
@@ -38,7 +38,7 @@ Current result remains:
 C_EXIT_BLOCKED
 ```
 
-The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. C11 closes with portable integrated evidence that the private definition path accepts exact original result tokens through 524,288 bytes and refuses 524,289 before token copy, accepted response observation, or downstream result publication. C12 closes with independent portable evidence that the noncustodial private references path returns exact result bytes through 524,288, correlates accepted observation to session and generation, and refuses 524,289 before token copy or publication. Fifteen of 23 active rows are closed; eight remain unknown. C07–C12 subsequently migrated from mutable live-source comparison to matrix-pinned versioned selectors and immutable historical source-authority packets. That migration preserves prior execution evidence and claim ceilings; it is not requalification or recertification.
+The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. C11 closes with portable integrated evidence that the private definition path accepts exact original result tokens through 524,288 bytes and refuses 524,289 before token copy, accepted response observation, or downstream result publication. C12 closes with independent portable evidence that the noncustodial private references path returns exact result bytes through 524,288, correlates accepted observation to session and generation, and refuses 524,289 before token copy or publication. The `messages_processed` row closes with a distinct transaction work account: every successfully decoded complete message counts once at semantic begin, later refusal does not refund it, malformed decode counts zero, and checked overflow freezes without mutation. Sixteen of 23 active rows are closed; seven remain unknown. C07–C12 subsequently migrated from mutable live-source comparison to matrix-pinned versioned selectors and immutable historical source-authority packets. That migration preserves prior execution evidence and claim ceilings; it is not requalification or recertification.
 
 ## Exact amendment binding
 
@@ -61,9 +61,9 @@ No other row may use the superseded status. The checker retains the exact ordere
 |---|---|---|
 | C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
 | C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
-| Six work counters | Independent transaction work semantics and exact traces remain incomplete. | Define and verify each named work counter without inferring closure from resource caps. |
+| Five work counters | Independent transaction work semantics and exact traces remain incomplete. | Verify each remaining named work counter without inferring closure from resource caps. |
 | Cross-cutting source pins | Current portable evidence is incomplete. | Track or generate every selected fixture from a clean checkout. |
-| Cross-cutting package ownership | No owner exposes the complete six-counter trace. | Add the private transaction-owned ledger only under separate authorization. |
+| Cross-cutting package ownership | The private transaction-owned ledger exists, but five producer rows are not yet wired and independently verified. | Wire each remaining producer at its selected semantic boundary and preserve exact transaction identity. |
 
 ## Checker guarantees
 
