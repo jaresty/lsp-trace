@@ -24,8 +24,15 @@ evaluate(raw, binding, cancel, deadline):
   for envelope source/input tuple in array order:
     require all five tuple keys and string values; otherwise fail BINDING_INVALID_SOURCE
     validate canonical padded base64; decode; require reencode equality; otherwise fail BINDING_INVALID_SOURCE
-    inc(S,decodedLength)
     inc(P,1); validate path/revision/digest syntax and decoded bytes; otherwise fail BINDING_INVALID_SOURCE
+  if len(decoded sources)>maxSources: fail RESOURCE_LIMIT/SOURCES
+  for decoded source in input order:
+    inc(S,decodedLength)
+    if decodedLength>maxSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
+  cumulativeDecodedLength=0
+  for decoded source in input order:
+    cumulativeDecodedLength=checked_add(cumulativeDecodedLength,decodedLength)
+    if cumulativeDecodedLength>maxTotalSourceBytes: fail RESOURCE_LIMIT/SOURCE_BYTES
   require complete-source path order strictly ascending; otherwise fail BINDING_INVALID_SOURCE
   rerun imported admission and map exact typed outcome/detail
   inc(C, choose2(len(complete binding sources)))
@@ -89,7 +96,9 @@ evaluate(raw, binding, cancel, deadline):
   poll(); return canonical complete result
 ```
 
-`choose2(n)=n(n−1)/2` using checked unsigned arithmetic. A path/range attempt increments before validation, so an offending item is counted diagnostically. Any earlier failure prevents later populations. Cancellation at any poll beats deadline and all provisional failures/results. There is no backend call.
+`choose2(n)=n(n−1)/2` using checked unsigned arithmetic. For RANGE_UNION specifically, let `U` be the supplied raw union-entry sequence and let `ranges(e)` be the supplied raw range sequence of entry `e`. Before any sorting, repeated-path merging, or exact-range deduplication, charge exactly `choose2(len(U)) + Σ(e in U) choose2(len(ranges(e)))`; no normalized RANGE_UNION population contributes any C charge. Worked repeated-path example: raw entries `[(a,2 ranges),(a,1 range),(b,3 ranges)]` charge `choose2(3)+choose2(2)+choose2(1)+choose2(3)=3+1+0+3=7`, even if later repeated-path merging and exact-range deduplication reduce the normalized entries or ranges.
+
+A path/range attempt increments before validation, so an offending item is counted diagnostically. Any earlier failure prevents later populations. Cancellation at any poll beats deadline and all provisional failures/results. There is no backend call.
 
 ## Decision examples 01–24
 
@@ -139,7 +148,7 @@ The image contains `work:0` and `outputBytes:0`; the final result contains `work
 ## Worked invalid-envelope, selector, diagnostic, and identity examples
 
 1. Complete envelope bytes `YQ==` decode to `a` and re-encode identically; decoded length and S charge are 1. `YQ`, `YQ=`, `YQ===`, `YQ==\n`, `YQ-_`, and `YR==` pass or fail projection solely as strings, then map `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` during base64 validation (`YR==` has nonzero pad bits and re-encodes as `YQ==`).
-2. Missing top-level `binding`, extra top-level `foo`, non-object `binding`, non-array `sources`, or failure branch without `input` fails projection as `BINDING_SCHEMA`. A source tuple with numeric path, empty revision, `fileDigest:"bad"`, omitted bytes, or numeric bytes passes projection (the tuple object has only allowed keys) and then maps `BINDING_INVALID_SOURCE`. Complete sources `[b,a]` with valid tuples map `BINDING_INVALID_SOURCE` at deferred source-order validation.
+2. Missing top-level `binding`, extra top-level `foo`, non-object `binding`, non-array `sources`, or failure branch without `input` fails projection as `BINDING_SCHEMA`. A source tuple with numeric path, empty revision, `fileDigest:"bad"`, omitted bytes, or numeric bytes passes projection (the tuple object has only allowed keys) and then maps `BINDING_INVALID_SOURCE`. Complete sources `[b,a]` with valid tuples map `BINDING_INVALID_SOURCE` at deferred source-order validation. If the same valid decoded tuples are also over `maxSources`, any one decoded source is over `maxSourceBytes`, or their input-order cumulative decoded length is over `maxTotalSourceBytes`, the corresponding earlier check returns `RESOURCE_LIMIT/SOURCES` or `RESOURCE_LIMIT/SOURCE_BYTES`; the later unsorted-source defect does not win.
 3. A typed `DUPLICATE_SOURCE/DUPLICATE_PATH` with input paths `[a,a]` reruns to the same result and maps `BINDING_DUPLICATE_SOURCE`; input `[a,b]` does not reproduce it and maps `BINDING_INVALID_REQUEST`.
 4. EXACT_FILE `missing.go` with a valid complete binding lacking that path gives `INVALID_SELECTOR/PATH`; the same envelope with missing bytes fails earlier as `BINDING_INVALID_SOURCE`.
 5. PATH_PREFIX `src` with no matching bound path and required nonempty frozen list gives `INVALID_SELECTOR/FROZEN_EXPANSION` because every listed path is extra. Empty frozen list, empty union/ranges, wrong kind fields, missing required fields, or extras are schema-invalid `INVALID_REQUEST/REQUEST_FIELD`; none reaches selector semantics.
