@@ -3,6 +3,9 @@ import base64, hashlib, json, shutil
 from pathlib import Path
 ROOT=Path(__file__).parent
 OUT=ROOT/'inputs'
+PUBLISHED_LIMITS=json.loads((ROOT/'LIMITS.json').read_bytes())
+def exact_limit(name): return PUBLISHED_LIMITS[name]
+def one_below_limit(name): return exact_limit(name)-1
 REQ_SCHEMA='lsp-trace.adr0007.location-intersection.request.private.v5'
 ENV_SCHEMA='lsp-trace.adr0007.source-admission-envelope.private.v5'
 ADM_SCHEMA='lsp-trace.adr0007.source-admission.private.v2'
@@ -51,19 +54,27 @@ CASES=[
 ('20-member-duplicate','DUPLICATE_MEMBER inputs',request('c20',members=[member('same'),member('same',available=False)]),'DESIGN.md §5 lines 95-106'),
 ('21-member-filtered','FILTERED_BY_POLICY member inputs',request('c21',members=[member(policyAllowed=False)]),'DESIGN.md §5 lines 97-106'),
 ('22-ranking-topk','ranking and topK setup',request('c22',members=[member('low',score=7),member('tie-a',score=9),member('tie-b',score=9)],topK=2),'DESIGN.md §6 lines 112-118'),
-('23-limits-witness-boundaries','selector/source, witness, work/output exact-boundary setup',request('c23',selector={'kind':'RANGE_UNION','union':[{'path':'src/a','ranges':[rng(0,0,0,2),rng(0,1,0,3)]}]},members=[member(r=[rng(0,0,0,2),rng(0,1,0,3)])]),'DESIGN.md §§6,8,9; ALGORITHM.md lines 134-147'),
+('23-selector-path-source-limit-precedence','selector path limit precedes source limit',request('c23',selector={'kind':'PATH_PREFIX','path':'src','frozenPaths':[f'src/{i:04d}' for i in range(1001)]}),'DESIGN.md §§7-8; ALGORITHM.md lines 134-147'),
 ('24-cancel-deadline','simultaneous cancellation and deadline condition',request('c24'),'DESIGN.md §7 lines 120-126'),
+('25-witness-plus-one','witness count 10001 exceeds maxWitnesses 10000',request('c25',members=[member(f'm{i:05d}') for i in range(10001)]),'DESIGN.md §§6,8; ALGORITHM.md lines 134-147'),
+('26-max-work-exact','maxWork exact boundary 50000000',request('c26'),'DESIGN.md §8; ALGORITHM.md lines 134-147'),
+('27-max-work-minus-one','maxWork one below required work 49999999',request('c27'),'DESIGN.md §8; ALGORITHM.md lines 134-147'),
+('28-max-output-bytes-exact','maxOutputBytes exact boundary 8388608',request('c28'),'DESIGN.md §8; ALGORITHM.md lines 134-147'),
+('29-max-output-bytes-minus-one','maxOutputBytes one below required output 8388607',request('c29'),'DESIGN.md §8; ALGORITHM.md lines 134-147'),
+('30-deadline-only','deadline expired without cancellation',request('c30'),'DESIGN.md §7 lines 120-126'),
 ]
 
 def special_binding(n):
  if n=='09-binding-absent': return None
  if n=='10-binding-malformed': return {'schema':ENV_SCHEMA,'outcome':'COMPLETE'}
  inp=[source('src/a')]
- if n=='11-typed-invalid-request': return {'schema':ENV_SCHEMA,'outcome':'INVALID_REQUEST','detail':'LIMITS_OR_SOURCES','input':inp}
- if n=='12-typed-invalid-source': return {'schema':ENV_SCHEMA,'outcome':'INVALID_SOURCE','detail':'FILE_DIGEST','input':inp}
+ if n=='11-typed-invalid-request': return {'schema':ENV_SCHEMA,'outcome':'INVALID_REQUEST','detail':'LIMITS_OR_SOURCES','input':[]}
+ if n=='12-typed-invalid-source':
+  inp[0]['fileDigest']=Z
+  return {'schema':ENV_SCHEMA,'outcome':'INVALID_SOURCE','detail':'FILE_DIGEST','input':inp}
  if n=='13-typed-duplicate-source':
   x=source('src/a'); return {'schema':ENV_SCHEMA,'outcome':'DUPLICATE_SOURCE','detail':'DUPLICATE_PATH','duplicatePath':'src/a','input':[x,x]}
- if n=='14-typed-resource-limit': return {'schema':ENV_SCHEMA,'outcome':'RESOURCE_LIMIT','detail':'SOURCES','input':inp}
+ if n=='14-typed-resource-limit': return {'schema':ENV_SCHEMA,'outcome':'RESOURCE_LIMIT','detail':'SOURCES','input':[source(f'src/{i:04d}') for i in range(1001)]}
  if n=='15-binding-digest-mismatch':
   b=binding(); b['binding']['admissionDigest']=Z; return b
  return binding()
@@ -73,8 +84,16 @@ def main():
  OUT.mkdir()
  for idx,(name,pert,req,cite) in enumerate(CASES,1):
   d=OUT/name; d.mkdir()
-  cond={'schema':'lsp-trace.adr0007.location-input-condition.private.v5','cancel':name=='24-cancel-deadline','deadlineExpired':name=='24-cancel-deadline','limitsProfile':'PUBLISHED_V5'}
-  if name=='23-limits-witness-boundaries': cond['boundarySetup']={'maxWork':'EXACT_OR_MINUS_ONE','maxOutputBytes':'EXACT_OR_PLUS_ONE','selectorSourceLimits':'INCLUSIVE_OR_PLUS_ONE'}
+  cond={'schema':'lsp-trace.adr0007.location-input-condition.private.v5','cancel':name=='24-cancel-deadline','deadlineExpired':name in {'24-cancel-deadline','30-deadline-only'},'limitsProfile':'PUBLISHED_V5'}
+  boundaries={
+   '23-selector-path-source-limit-precedence':{'maxSelectorPaths':exact_limit('maxSelectorPaths'),'actualSelectorPaths':exact_limit('maxSelectorPaths')+1,'maxSources':exact_limit('maxSources'),'actualSources':1,'expectedPrecedence':'SELECTOR_PATHS'},
+   '25-witness-plus-one':{'maxWitnesses':exact_limit('maxWitnesses'),'actualWitnesses':exact_limit('maxWitnesses')+1},
+   '26-max-work-exact':{'maxWork':exact_limit('maxWork'),'requiredWork':exact_limit('maxWork')},
+   '27-max-work-minus-one':{'maxWork':one_below_limit('maxWork'),'requiredWork':exact_limit('maxWork')},
+   '28-max-output-bytes-exact':{'maxOutputBytes':exact_limit('maxOutputBytes'),'requiredOutputBytes':exact_limit('maxOutputBytes')},
+   '29-max-output-bytes-minus-one':{'maxOutputBytes':one_below_limit('maxOutputBytes'),'requiredOutputBytes':exact_limit('maxOutputBytes')},
+  }
+  if name in boundaries: cond['boundarySetup']=boundaries[name]
   (d/'CONDITION.json').write_bytes(compact(cond))
   raw=b'{"schema":' if name=='08-malformed-json' else compact(req)
   (d/'REQUEST.raw.json').write_bytes(raw)

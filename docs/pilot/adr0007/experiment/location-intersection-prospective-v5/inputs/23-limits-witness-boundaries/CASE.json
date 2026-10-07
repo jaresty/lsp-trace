@@ -1,1 +1,0 @@
-{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"23-limits-witness-boundaries","causalPerturbation":"selector/source, witness, work/output exact-boundary setup","specCitations":["DESIGN.md §§6,8,9; ALGORITHM.md lines 134-147"]}

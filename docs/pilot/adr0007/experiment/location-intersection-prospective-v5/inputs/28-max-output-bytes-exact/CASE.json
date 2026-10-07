@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"28-max-output-bytes-exact","causalPerturbation":"maxOutputBytes exact boundary 8388608","specCitations":["DESIGN.md §8; ALGORITHM.md lines 134-147"]}

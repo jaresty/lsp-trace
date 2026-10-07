@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"23-selector-path-source-limit-precedence","causalPerturbation":"selector path limit precedes source limit","specCitations":["DESIGN.md §§7-8; ALGORITHM.md lines 134-147"]}

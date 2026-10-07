@@ -1,1 +1,1 @@
-{"schema":"lsp-trace.adr0007.source-admission-envelope.private.v5","outcome":"INVALID_REQUEST","detail":"LIMITS_OR_SOURCES","input":[{"path":"src/a","revision":"rev-v5","fileDigest":"sha256:a0bf9128df23e89ede49c09a4d61193dbc5e32b6791e7ab336381d617e01cb34","objectDigest":"sha256:a0bf9128df23e89ede49c09a4d61193dbc5e32b6791e7ab336381d617e01cb34","bytes":"YfCfmIBiDQp4eQo="}]}
+{"schema":"lsp-trace.adr0007.source-admission-envelope.private.v5","outcome":"INVALID_REQUEST","detail":"LIMITS_OR_SOURCES","input":[]}

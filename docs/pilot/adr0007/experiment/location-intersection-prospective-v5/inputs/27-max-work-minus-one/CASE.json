@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"27-max-work-minus-one","causalPerturbation":"maxWork one below required work 49999999","specCitations":["DESIGN.md §8; ALGORITHM.md lines 134-147"]}
