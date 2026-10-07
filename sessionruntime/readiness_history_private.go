@@ -125,7 +125,7 @@ func putHistoryField(w io.Writer, value []byte) {
 }
 
 func (h *privateReadinessHistory) freezeReceiptLocked() (privateHistoryReceipt, error) {
-	if h == nil || h.entries == 0 || h.entries > privateHistoryMaxEntries || h.acquired > privateHistoryMaxBytes || h.outstanding > privateHistoryMaxBytes {
+	if h == nil || h.retired || h.entries == 0 || h.entries > privateHistoryMaxEntries || h.acquired > privateHistoryMaxBytes || h.outstanding > privateHistoryMaxBytes {
 		return privateHistoryReceipt{}, errors.New("readiness history unavailable")
 	}
 	h.receiptOwners++
@@ -135,9 +135,18 @@ func (h *privateReadinessHistory) freezeReceiptLocked() (privateHistoryReceipt, 
 	}}, nil
 }
 
+func (h *privateReadinessHistory) settleBackingIfUnownedLocked() {
+	if h == nil || !h.retired || h.receiptOwners != 0 || h.borrowers != 0 {
+		return
+	}
+	h.chunks = [privateHistoryChunks]*privateHistoryChunk{}
+	h.outstanding = 0
+}
+
 func (h *privateReadinessHistory) releaseReceiptOwnerLocked() {
 	if h != nil && h.receiptOwners > 0 {
 		h.receiptOwners--
+		h.settleBackingIfUnownedLocked()
 	}
 }
 
@@ -153,12 +162,14 @@ func (h *privateReadinessHistory) acquireBorrowerLocked() bool {
 func (h *privateReadinessHistory) releaseBorrowerLocked() {
 	if h != nil && h.borrowers > 0 {
 		h.borrowers--
+		h.settleBackingIfUnownedLocked()
 	}
 }
 
 func (h *privateReadinessHistory) retireLocked() {
 	if h != nil {
 		h.retired = true
+		h.settleBackingIfUnownedLocked()
 	}
 }
 
