@@ -1206,7 +1206,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				if m.b4DecodedHooks.reserve != nil {
 					m.b4DecodedHooks.reserve(private.explicitBytes, capacity)
 				}
-				owned, lease, err := lspwire.CloneSuccessorMessageOwned(read.message, privateB4SuccessorAllocationOwner{account: private.explicitBytes})
+				owned, lease, err := lspwire.CloneSuccessorMessageOwned(read.message, privateB4SuccessorAllocationOwner{
+					account: private.explicitBytes, workAccount: private.workAccount, identity: private.selection.Transaction,
+				})
 				if err != nil {
 					if m.b4DecodedHooks.refused != nil {
 						m.b4DecodedHooks.refused(private.explicitBytes, capacity)

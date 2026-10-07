@@ -239,13 +239,35 @@ func (r *privateB4Reservation) releasePrivateB4SourceStorage() {
 
 type privateB4ResponseCapture struct{ reservation *privateB4Reservation }
 
-type privateB4SuccessorAllocationOwner struct{ account *privateB4ByteAccountV2 }
+type privateB4SuccessorAllocationOwner struct {
+	account     *privateB4ByteAccountV2
+	workAccount *adr0011work.Account
+	identity    string
+}
 type privateB4SuccessorAllocationLease struct{ lease privateB4ByteLeaseV2 }
 
 func (o privateB4SuccessorAllocationOwner) ReserveSuccessorAllocation(role lspwire.SuccessorAllocationRole, capacity uint64) (lspwire.SuccessorAllocationLease, error) {
-	lease, failure := o.account.reserve(capacity)
-	if failure != "" {
-		return nil, fmt.Errorf("%s: role=%d capacity=%d", failure, role, capacity)
+	reserve := func() (privateB4ByteLeaseV2, error) {
+		lease, failure := o.account.reserve(capacity)
+		if failure != "" {
+			return privateB4ByteLeaseV2{}, fmt.Errorf("%s: role=%d capacity=%d", failure, role, capacity)
+		}
+		return lease, nil
+	}
+	if o.workAccount == nil {
+		lease, err := reserve()
+		if err != nil {
+			return nil, err
+		}
+		return &privateB4SuccessorAllocationLease{lease: lease}, nil
+	}
+	var lease privateB4ByteLeaseV2
+	if err := o.workAccount.WithLogicalBufferReservation(o.identity, capacity, func() error {
+		var err error
+		lease, err = reserve()
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("successor allocation refused: role=%d capacity=%d: %w", role, capacity, err)
 	}
 	return &privateB4SuccessorAllocationLease{lease: lease}, nil
 }
@@ -318,7 +340,9 @@ func privateB4SuccessorOptions(reservation *privateB4Reservation) lspwire.Succes
 		},
 	}
 	if reservation.explicitBytes != nil && !reservation.nonCustodial {
-		options.AllocationOwner = privateB4SuccessorAllocationOwner{account: reservation.explicitBytes}
+		options.AllocationOwner = privateB4SuccessorAllocationOwner{
+			account: reservation.explicitBytes, workAccount: reservation.workAccount, identity: reservation.selection.Transaction,
+		}
 	}
 	return options
 }
