@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"10-binding-malformed","causalPerturbation":"binding projection malformed","specCitations":["DESIGN.md §3 lines 33-41"]}

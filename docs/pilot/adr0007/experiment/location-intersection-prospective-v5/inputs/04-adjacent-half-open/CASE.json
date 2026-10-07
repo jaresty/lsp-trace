@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"04-adjacent-half-open","causalPerturbation":"adjacent half-open ranges","specCitations":["DESIGN.md §4 lines 89-91"]}
