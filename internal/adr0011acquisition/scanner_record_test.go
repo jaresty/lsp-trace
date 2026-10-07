@@ -2,13 +2,16 @@ package adr0011acquisition
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/publication"
 )
 
@@ -49,8 +52,16 @@ func TestPrivateScannerRecordSynthetic(t *testing.T) {
 				t.Fatal(e)
 			}
 			state, e := publishScannerRecord(root, response, raw, x.Payload, x, nil, nil)
-			if e != nil || state.stage != "VERIFIED" || !replayScannerRecord(root, state, response, raw, x.Payload, x, nil, nil) {
+			if e != nil || state.stage != "VERIFIED" || replayScannerRecord(root, state, response, raw, x.Payload, x, nil, nil) != nil {
 				t.Fatalf("ASSERT_SCANNER_VERIFIED: %+v %v", state, e)
+			}
+			account := adr0011work.New("scanner-replay-overflow")
+			if e := account.ChargeBytesScanned("scanner-replay-overflow", math.MaxUint64); e != nil {
+				t.Fatal(e)
+			}
+			ctx := adr0011work.WithAccount(context.Background(), account)
+			if e := replayScannerRecord(root, state, response, raw, x.Payload, x, nil, nil, ctx); !errors.Is(e, adr0011work.ErrOverflow) {
+				t.Fatalf("ASSERT_SCANNER_REPLAY_OVERFLOW_CAUSE: %v", e)
 			}
 			b, e := publication.ReadVerifiedBoundFile(root, state.selector, sourceRecordLimit)
 			if e != nil {
@@ -73,7 +84,7 @@ func TestPrivateScannerRecordSynthetic(t *testing.T) {
 			oversizedSource := func() ([]byte, error) { return make([]byte, scannerSourceLimit+1), nil }
 			for name, reader := range map[string]func() ([]byte, error){"altered-pin": badSource, "missing-pin": missingSource, "oversized-pin": oversizedSource} {
 				t.Run(name, func(t *testing.T) {
-					if replayScannerRecord(root, state, response, raw, x.Payload, x, nil, reader) {
+					if replayScannerRecord(root, state, response, raw, x.Payload, x, nil, reader) == nil {
 						t.Fatal("ASSERT_SCANNER_PIN_REPLAY")
 					}
 					got, e := publishScannerRecord(root, response, raw, x.Payload, x, nil, reader)
@@ -101,7 +112,7 @@ func TestPrivateScannerRecordSynthetic(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					r, a, p, y := response, raw, x.Payload, x
 					mutate(&r, &a, &p, &y)
-					if replayScannerRecord(root, state, r, a, p, y, nil, nil) {
+					if replayScannerRecord(root, state, r, a, p, y, nil, nil) == nil {
 						t.Fatal("ASSERT_SCANNER_SUBSTITUTION_REPLAY")
 					}
 					got, e := publishScannerRecord(root, r, a, p, y, nil, nil)
@@ -116,7 +127,7 @@ func TestPrivateScannerRecordSynthetic(t *testing.T) {
 				}
 				return publication.ReadVerifiedBoundFile(r, s, n)
 			}
-			if replayScannerRecord(root, state, response, raw, x.Payload, x, changed, nil) {
+			if replayScannerRecord(root, state, response, raw, x.Payload, x, changed, nil) == nil {
 				t.Fatal("ASSERT_SCANNER_RETAINED_RAW")
 			}
 			for name, altered := range map[string][]byte{
@@ -131,7 +142,7 @@ func TestPrivateScannerRecordSynthetic(t *testing.T) {
 					if _, e := publication.PublishBoundFile(root, forged.selector, altered, func([]byte) error { return nil }); e != nil {
 						t.Fatal(e)
 					}
-					if replayScannerRecord(root, forged, response, raw, x.Payload, x, nil, nil) {
+					if replayScannerRecord(root, forged, response, raw, x.Payload, x, nil, nil) == nil {
 						t.Fatal("ASSERT_SCANNER_FORGED")
 					}
 				})

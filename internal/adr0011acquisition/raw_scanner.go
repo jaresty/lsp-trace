@@ -1,10 +1,12 @@
 package adr0011acquisition
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
 
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/publication"
 )
 
@@ -20,8 +22,12 @@ type rawScannerObservation struct {
 
 var errRawScanner = errors.New("private raw scanner input not verified")
 
-func observeRawScanner(root *publication.Root, raw privateBodyPublication, read func(*publication.Root, string, int64) ([]byte, error)) (rawScannerObservation, error) {
+func observeRawScanner(root *publication.Root, raw privateBodyPublication, read func(*publication.Root, string, int64) ([]byte, error), contexts ...context.Context) (rawScannerObservation, error) {
 	var absent rawScannerObservation
+	var ctx context.Context
+	if len(contexts) != 0 {
+		ctx = contexts[0]
+	}
 	if root == nil || raw.stage != "VERIFIED" || raw.byteCount < 1 || raw.byteCount > rawResultPayloadLimit || raw.digest == "" || raw.selector != "adr0011-references-raw-payload-v1-"+strings.TrimPrefix(raw.digest, "sha256:")+".bin" {
 		return absent, errRawScanner
 	}
@@ -32,13 +38,14 @@ func observeRawScanner(root *publication.Root, raw privateBodyPublication, read 
 	if err != nil || len(data) != raw.byteCount || privateDigest(data) != raw.digest {
 		return absent, errRawScanner
 	}
-	observed := scanRawTopLevel(data)
-	observed.selector, observed.digest, observed.byteLength = raw.selector, raw.digest, len(data)
-	// MALFORMED remains an in-memory diagnostic, not a success observation.
-	if observed.form == "MALFORMED" {
-		return observed, errRawScanner
+	work := rawScannerWorkContext{}
+	if account, ok := adr0011work.AccountFromContext(ctx); ok {
+		work.occurrenceIdentity = account.Snapshot().Identity
+		work.chargeBytesScanned = account.ChargeBytesScanned
 	}
-	return observed, nil
+	observed, scanErr := scanRawTopLevelWithWork(data, work)
+	observed.selector, observed.digest, observed.byteLength = raw.selector, raw.digest, len(data)
+	return observed, scanErr
 }
 
 type rawCursor struct {
