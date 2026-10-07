@@ -1,0 +1,1 @@
+{"$id":"https://jaresty.github.io/lsp-trace/schemas/adr0007-location-v2-key.schema.json","$schema":"https://json-schema.org/draft/2020-12/schema","additionalProperties":false,"properties":{"caseId":{"type":"string"},"ordinal":{"minimum":0,"type":"integer"},"role":{"enum":["producer","reviewer"],"type":"string"}},"required":["caseId","role","ordinal"],"type":"object"}

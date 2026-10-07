@@ -144,11 +144,29 @@ func rejectDuplicateKeys(raw []byte) error {
 	return nil
 }
 func Commit(l Ledger, k AttemptKey, raw []byte) (Ledger, error) {
+	if l.Raw == nil {
+		l.Raw = []RawRecord{}
+	}
+	if l.Attempts == nil {
+		l.Attempts = []Attempt{}
+	}
+	if l.Conflicts == nil {
+		l.Conflicts = []Conflict{}
+	}
+	if l.Reviews == nil {
+		l.Reviews = []Review{}
+	}
 	if k.CaseID == "" || (k.Role != "producer" && k.Role != "reviewer") || k.Ordinal < 1 {
 		return l, errors.New("invalid key")
 	}
-	var doc any
-	if err := StrictDecode(raw, &doc); err != nil {
+	if !utf8.Valid(raw) || len(raw) == 0 || raw[len(raw)-1] != '\n' {
+		return l, errors.New("raw must be UTF-8 canonical line JSON")
+	}
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return l, err
+	}
+	var doc json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
 		return l, err
 	}
 	sum := sha256.Sum256(raw)
@@ -190,12 +208,16 @@ func recount(l *Ledger) {
 }
 func cloneLedger(l Ledger) Ledger {
 	o := l
-	o.Raw = append([]RawRecord(nil), l.Raw...)
+	o.Raw = make([]RawRecord, len(l.Raw))
+	copy(o.Raw, l.Raw)
 	for i := range o.Raw {
 		o.Raw[i].Raw = append([]byte(nil), o.Raw[i].Raw...)
 	}
-	o.Attempts = append([]Attempt(nil), l.Attempts...)
-	o.Conflicts = append([]Conflict(nil), l.Conflicts...)
-	o.Reviews = append([]Review(nil), l.Reviews...)
+	o.Attempts = make([]Attempt, len(l.Attempts))
+	copy(o.Attempts, l.Attempts)
+	o.Conflicts = make([]Conflict, len(l.Conflicts))
+	copy(o.Conflicts, l.Conflicts)
+	o.Reviews = make([]Review, len(l.Reviews))
+	copy(o.Reviews, l.Reviews)
 	return o
 }

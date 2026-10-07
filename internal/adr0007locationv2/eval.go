@@ -251,7 +251,7 @@ func expand(s Selector, src map[string]sourceRef, l Limits) ([]PathRanges, uint6
 	}
 	switch s.Kind {
 	case ExactFile:
-		if !addp(s.Path) {
+		if len(s.Union) > 0 || len(s.FrozenPaths) > 0 || !addp(s.Path) {
 			return nil, 0, 0, InvalidSelector, "exact path"
 		}
 		out = []PathRanges{{Path: s.Path, Ranges: []Range{{Position{0, 0}, Position{math.MaxUint32, math.MaxUint32}}}}}
