@@ -193,6 +193,26 @@ type EdgeObservation struct {
 	RelationID string        `json:"relation_id"`
 	CallSites  []graph.Range `json:"call_sites"`
 }
+
+type OmissionReason string
+
+const (
+	OmissionNoMatch              OmissionReason = "NO_MATCH"
+	OmissionAmbiguousMatch       OmissionReason = "AMBIGUOUS_MATCH"
+	OmissionNodeAdmissionBlocked OmissionReason = "NODE_ADMISSION_BLOCKED"
+	OmissionInvalidDeclaration   OmissionReason = "INVALID_DECLARATION"
+	OmissionRequestFailed        OmissionReason = "REQUEST_FAILED"
+	OmissionPreparationFailed    OmissionReason = "PREPARATION_FAILED"
+	OmissionRequestBudgetBlocked OmissionReason = "REQUEST_BUDGET_BLOCKED"
+)
+
+type Omission struct {
+	Reason      OmissionReason `json:"reason"`
+	NodeID      string         `json:"node_id,omitempty"`
+	Declaration string         `json:"declaration,omitempty"`
+	RequestID   string         `json:"request_id,omitempty"`
+}
+
 type Result struct {
 	Policy              string            `json:"policy"`
 	PathProjection      string            `json:"path_projection"`
@@ -202,6 +222,7 @@ type Result struct {
 	Requests            []RequestRecord   `json:"requests"`
 	Supplies            []Supply          `json:"supplies"`
 	EdgeObservations    []EdgeObservation `json:"edge_observations"`
+	Omissions           []Omission        `json:"omissions,omitempty"`
 	Usage               Usage             `json:"usage"`
 	AcquisitionComplete bool              `json:"acquisition_complete"`
 }

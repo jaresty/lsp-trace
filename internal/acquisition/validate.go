@@ -254,14 +254,60 @@ func ValidateResult(r Result) error {
 		}
 	}
 	if r.Request.TopmostSiblings {
-		if u.Nodes >= r.Request.Limits.MaxNodes {
-			complete = false
-		}
 		for _, rec := range r.Requests {
 			if (rec.Method == "textDocument/documentSymbol" || rec.Method == "textDocument/prepareCallHierarchy") && rec.Outcome != "SUCCESS" {
 				complete = false
 			}
 		}
+	}
+	omitted := map[string]bool{}
+	for _, omission := range r.Omissions {
+		key := string(omission.Reason) + "\x00" + omission.NodeID + "\x00" + omission.Declaration + "\x00" + omission.RequestID
+		if omission.RequestID == "" || omitted[key] {
+			return errors.New("invalid acquisition omission")
+		}
+		if omission.Reason == OmissionInvalidDeclaration {
+			if omission.NodeID != "" || omission.Declaration == "" {
+				return errors.New("invalid declaration omission identity")
+			}
+		} else if omission.NodeID == "" || omission.Declaration != "" {
+			return errors.New("invalid node omission identity")
+		}
+		record, ok := records[omission.RequestID]
+		if !ok {
+			return errors.New("omission references unknown request")
+		}
+		switch omission.Reason {
+		case OmissionNoMatch, OmissionAmbiguousMatch, OmissionNodeAdmissionBlocked:
+			if record.Method != "textDocument/prepareCallHierarchy" || record.Outcome != "SUCCESS" {
+				return errors.New("omission does not reference successful preparation")
+			}
+		case OmissionInvalidDeclaration:
+			if (record.Method != "textDocument/documentSymbol" && record.Method != "textDocument/prepareCallHierarchy") || record.Outcome != "SUCCESS" {
+				return errors.New("invalid declaration omission/request mismatch")
+			}
+		case OmissionPreparationFailed:
+			if record.Method != "textDocument/prepareCallHierarchy" || record.Outcome == "SUCCESS" || record.Outcome == "BUDGET_BLOCKED" {
+				return errors.New("preparation omission/request mismatch")
+			}
+		case OmissionRequestFailed:
+			if record.Outcome == "SUCCESS" || record.Outcome == "BUDGET_BLOCKED" {
+				return errors.New("request omission/request mismatch")
+			}
+		case OmissionRequestBudgetBlocked:
+			if record.Outcome != "BUDGET_BLOCKED" {
+				return errors.New("budget omission/request mismatch")
+			}
+		default:
+			return errors.New("invalid acquisition omission reason")
+		}
+		if omission.Reason == OmissionNoMatch || omission.Reason == OmissionAmbiguousMatch || omission.Reason == OmissionNodeAdmissionBlocked {
+			if _, admitted := nodes[omission.NodeID]; admitted {
+				return errors.New("omitted candidate node was admitted")
+			}
+		}
+		omitted[key] = true
+		complete = false
 	}
 	if complete != r.AcquisitionComplete {
 		return errors.New("acquisition completeness mismatch")

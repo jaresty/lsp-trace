@@ -581,6 +581,11 @@ func (c *runner) expandTopmostSiblings() {
 			return c.client.DocumentSymbols(ctx, params)
 		})
 		if record.Outcome != "SUCCESS" {
+			reason := OmissionRequestFailed
+			if record.Outcome == "BUDGET_BLOCKED" {
+				reason = OmissionRequestBudgetBlocked
+			}
+			c.result.Omissions = append(c.result.Omissions, Omission{Reason: reason, NodeID: t.Resolution.Identity.ID, RequestID: record.ID})
 			c.result.AcquisitionComplete = false
 			continue
 		}
@@ -614,8 +619,17 @@ func (c *runner) expandTopmostSiblings() {
 			if uri == t.Resolution.Prepared.URI && sibling.SelectionRange == t.Resolution.Prepared.SelectionRange {
 				continue
 			}
+			declared := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: sibling.SelectionRange})
+			if graph.ValidateItem(declared.Item) != nil {
+				c.result.Omissions = append(c.result.Omissions, Omission{Reason: OmissionInvalidDeclaration, Declaration: sibling.Name, RequestID: record.ID})
+				c.result.AcquisitionComplete = false
+				continue
+			}
 			position := sibling.SelectionRange.Start
 			matches := []lsp.CallHierarchyItem{}
+			lastRequestID := ""
+			lastPrepareFailed := false
+			requestFailed := false
 			for probe := uint32(0); probe < MaxPrepareProbes; probe++ {
 				if probe > 0 {
 					if position.Character == ^uint32(0) {
@@ -630,13 +644,23 @@ func (c *runner) expandTopmostSiblings() {
 				prepared, prepRecord := c.invoke(t.Requested.ID, "textDocument/prepareCallHierarchy", t.Resolution.Identity.ID, prepare, func(ctx context.Context) (any, error) {
 					return c.client.PrepareCallHierarchy(ctx, prepare)
 				})
+				lastRequestID = prepRecord.ID
 				if prepRecord.Outcome != "SUCCESS" {
+					c.result.AcquisitionComplete = false
 					if sibling.Flat && prepRecord.CaptureComplete && strings.Contains(prepRecord.Reason, "json-rpc error 0: identifier not found") {
-						c.result.AcquisitionComplete = false
+						lastPrepareFailed = true
 						continue
 					}
+					reason := OmissionPreparationFailed
+					if prepRecord.Outcome == "BUDGET_BLOCKED" {
+						reason = OmissionRequestBudgetBlocked
+					}
+					declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: sibling.SelectionRange})
+					c.result.Omissions = append(c.result.Omissions, Omission{Reason: reason, NodeID: declaration.ID, RequestID: prepRecord.ID})
+					requestFailed = true
 					break
 				}
+				lastPrepareFailed = false
 				for _, item := range prepared.([]lsp.CallHierarchyItem) {
 					candidate := node(item)
 					exact := canonicalURI(item.URI) && item.URI == uri && graph.ValidateItem(candidate.Item) == nil
@@ -653,7 +677,18 @@ func (c *runner) expandTopmostSiblings() {
 					break
 				}
 			}
-			if len(matches) != 1 || !c.admit(matches[0]) {
+			if requestFailed {
+				continue
+			}
+			if len(matches) != 1 {
+				reason := OmissionNoMatch
+				if lastPrepareFailed {
+					reason = OmissionPreparationFailed
+				} else if len(matches) > 1 {
+					reason = OmissionAmbiguousMatch
+				}
+				declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: sibling.SelectionRange})
+				c.result.Omissions = append(c.result.Omissions, Omission{Reason: reason, NodeID: declaration.ID, RequestID: lastRequestID})
 				c.result.AcquisitionComplete = false
 				continue
 			}
@@ -663,10 +698,16 @@ func (c *runner) expandTopmostSiblings() {
 			}
 			declaration := node(lsp.CallHierarchyItem{Name: sibling.Name, Kind: sibling.Kind, URI: uri, Range: sibling.Range, SelectionRange: selectionRange})
 			if graph.ValidateItem(declaration.Item) != nil {
+				c.result.Omissions = append(c.result.Omissions, Omission{Reason: OmissionInvalidDeclaration, Declaration: sibling.Name, RequestID: lastRequestID})
 				c.result.AcquisitionComplete = false
 				continue
 			}
 			candidate := node(matches[0])
+			if !c.admit(matches[0]) {
+				c.result.Omissions = append(c.result.Omissions, Omission{Reason: OmissionNodeAdmissionBlocked, NodeID: candidate.ID, RequestID: lastRequestID})
+				c.result.AcquisitionComplete = false
+				continue
+			}
 			c.result.Graph.SiblingCandidates = append(c.result.Graph.SiblingCandidates, graph.SiblingCandidate{SeedURI: uri, SeedLabel: t.Requested.ID, Origin: *t.Resolution.Identity, Declaration: &declaration, Candidate: candidate, Direction: "SIBLING", Kind: "TOPMOST_SIBLING", LSPEvidence: []string{"textDocument/documentSymbol", "textDocument/prepareCallHierarchy"}})
 		}
 	}

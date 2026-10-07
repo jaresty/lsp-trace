@@ -118,6 +118,163 @@ func TestTopmostSiblingExpansionDistinctSeedsSharesGlobalRequestBudget(t *testin
 	if !blocked {
 		t.Fatalf("ASSERT_TOPMOST_MULTISEED_PARTIAL_SECOND_SEED: requests=%#v", one.Requests)
 	}
+	if len(one.Omissions) != 2 || one.Omissions[0].Reason != OmissionRequestBudgetBlocked || one.Omissions[1].Reason != OmissionRequestBudgetBlocked || one.Omissions[0].RequestID == one.Omissions[1].RequestID {
+		t.Fatalf("ASSERT_TOPMOST_REQUEST_BUDGET_TYPED_OMISSION: %#v", one.Omissions)
+	}
+}
+
+func TestTopmostSiblingExactNodeCapacityIsComplete(t *testing.T) {
+	f := fixture()
+	seed, peer := item("seed", 0), item("peer", 2)
+	f.add(seed)
+	f.add(peer)
+	f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+		{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange},
+		{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+	}}}
+	r := request(seed)
+	r.TopmostSiblings = true
+	r.Limits.MaxNodes = 2
+
+	got, err := Acquire(context.Background(), f, r)
+	if err != nil || !got.AcquisitionComplete || got.Usage.Nodes != r.Limits.MaxNodes || len(got.Graph.SiblingCandidates) != 1 {
+		t.Fatalf("ASSERT_TOPMOST_EXACT_NODE_CAPACITY_COMPLETE: err=%v complete=%t usage=%#v siblings=%d", err, got.AcquisitionComplete, got.Usage, len(got.Graph.SiblingCandidates))
+	}
+	if err := ValidateResult(got); err != nil {
+		t.Fatalf("ASSERT_TOPMOST_EXACT_NODE_CAPACITY_VALID: %v", err)
+	}
+	got.AcquisitionComplete = false
+	if err := ValidateResult(got); err == nil {
+		t.Fatal("ASSERT_TOPMOST_EXACT_NODE_CAPACITY_FALSE_INCOMPLETE_REJECTED")
+	}
+}
+
+func TestTopmostSiblingRejectedAdmissionHasTypedOmission(t *testing.T) {
+	f := fixture()
+	seed, peer := item("seed", 0), item("peer", 2)
+	f.add(seed)
+	f.add(peer)
+	f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+		{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange},
+		{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+	}}}
+	r := request(seed)
+	r.TopmostSiblings = true
+	r.Limits.MaxNodes = 1
+
+	got := run(t, f, r)
+	if got.AcquisitionComplete || got.Usage.Nodes != r.Limits.MaxNodes || len(got.Omissions) != 1 || got.Omissions[0].Reason != OmissionNodeAdmissionBlocked || got.Omissions[0].NodeID != node(peer).ID {
+		t.Fatalf("ASSERT_TOPMOST_REJECTED_ADMISSION_TYPED_OMISSION: complete=%t usage=%#v omissions=%#v", got.AcquisitionComplete, got.Usage, got.Omissions)
+	}
+	if err := ValidateResult(got); err != nil {
+		t.Fatalf("ASSERT_TOPMOST_REJECTED_ADMISSION_VALID: %v", err)
+	}
+	for _, mutation := range []string{"missing", "reason", "node"} {
+		t.Run(mutation, func(t *testing.T) {
+			copy := got
+			copy.Omissions = append([]Omission(nil), got.Omissions...)
+			switch mutation {
+			case "missing":
+				copy.Omissions = nil
+			case "reason":
+				copy.Omissions[0].Reason = "OTHER"
+			case "node":
+				copy.Omissions[0].NodeID = "substituted"
+			}
+			if err := ValidateResult(copy); err == nil {
+				t.Fatalf("ASSERT_TOPMOST_REJECTED_ADMISSION_OMISSION_SUBSTITUTION_REJECTED_%s", mutation)
+			}
+		})
+	}
+}
+
+func TestTopmostSiblingFailedPrepareMarksAcquisitionIncomplete(t *testing.T) {
+	f := fixture()
+	seed, peer := item("seed", 0), item("peer", 2)
+	f.add(seed)
+	f.add(peer)
+	f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+		{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange},
+		{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange},
+	}}}
+	peerPrepare := prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: peer.SelectionRange.Start})
+	f.errors[peerPrepare] = errors.New("sibling preparation failed")
+	r := request(seed)
+	r.TopmostSiblings = true
+
+	got, err := Acquire(context.Background(), f, r)
+	if err != nil || got.AcquisitionComplete || len(got.Graph.SiblingCandidates) != 0 {
+		t.Fatalf("ASSERT_TOPMOST_FAILED_SIBLING_PREPARE_INCOMPLETE: err=%v complete=%t siblings=%d", err, got.AcquisitionComplete, len(got.Graph.SiblingCandidates))
+	}
+	found := false
+	for _, rec := range got.Requests {
+		found = found || (rec.Method == "textDocument/prepareCallHierarchy" && rec.Outcome != "SUCCESS" && rec.Reason == "sibling preparation failed")
+	}
+	if !found {
+		t.Fatalf("ASSERT_TOPMOST_FAILED_SIBLING_PREPARE_TYPED_RECORD: requests=%#v", got.Requests)
+	}
+	if len(got.Omissions) != 1 || got.Omissions[0].Reason != OmissionReason("PREPARATION_FAILED") {
+		t.Fatalf("ASSERT_TOPMOST_FAILED_SIBLING_PREPARE_TYPED_OMISSION: %#v", got.Omissions)
+	}
+	if err := ValidateResult(got); err != nil {
+		t.Fatalf("ASSERT_TOPMOST_FAILED_SIBLING_PREPARE_VALID: %v", err)
+	}
+}
+
+func TestTopmostSiblingMatchAndDeclarationOmissionsAreTypedAndReplayBound(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason OmissionReason
+		setup  func(*fakeClient, lsp.CallHierarchyItem)
+	}{
+		{name: "no_match", reason: OmissionNoMatch, setup: func(f *fakeClient, peer lsp.CallHierarchyItem) {
+			delete(f.items, prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: peer.SelectionRange.Start}))
+		}},
+		{name: "ambiguous_match", reason: OmissionAmbiguousMatch, setup: func(f *fakeClient, peer lsp.CallHierarchyItem) {
+			key := prepareKey(lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: peer.SelectionRange.Start})
+			f.items[key] = []lsp.CallHierarchyItem{peer, peer}
+		}},
+		{name: "invalid_declaration", reason: OmissionInvalidDeclaration, setup: func(_ *fakeClient, _ lsp.CallHierarchyItem) {}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := fixture()
+			seed, peer := item("seed", 0), item("peer", 2)
+			f.add(seed)
+			f.add(peer)
+			declaration := lsp.DocumentSymbol{Name: peer.Name, Kind: peer.Kind, Range: peer.Range, SelectionRange: peer.SelectionRange}
+			if tc.reason == OmissionInvalidDeclaration {
+				declaration.Range.End = lsp.Position{Line: 1}
+			}
+			f.symbols[seed.URI] = []lsp.DocumentSymbol{{Name: "document", Kind: 2, Range: lsp.Range{End: lsp.Position{Line: 20}}, Children: []lsp.DocumentSymbol{
+				{Name: seed.Name, Kind: seed.Kind, Range: seed.Range, SelectionRange: seed.SelectionRange}, declaration,
+			}}}
+			tc.setup(f, peer)
+			r := request(seed)
+			r.TopmostSiblings = true
+			got := run(t, f, r)
+			if got.AcquisitionComplete || len(got.Omissions) != 1 || got.Omissions[0].Reason != tc.reason || got.Omissions[0].RequestID == "" {
+				t.Fatalf("ASSERT_TOPMOST_%s_TYPED_OMISSION: complete=%t omissions=%#v", tc.name, got.AcquisitionComplete, got.Omissions)
+			}
+			if err := ValidateResult(got); err != nil {
+				t.Fatalf("ASSERT_TOPMOST_%s_REPLAY_VALID: %v", tc.name, err)
+			}
+			for _, mutation := range []string{"missing", "reason", "request"} {
+				mutated := got
+				mutated.Omissions = append([]Omission(nil), got.Omissions...)
+				switch mutation {
+				case "missing":
+					mutated.Omissions = nil
+				case "reason":
+					mutated.Omissions[0].Reason = OmissionNodeAdmissionBlocked
+				case "request":
+					mutated.Omissions[0].RequestID = "request-unknown"
+				}
+				if err := ValidateResult(mutated); err == nil {
+					t.Fatalf("ASSERT_TOPMOST_%s_REPLAY_MUTATION_REJECTED_%s", tc.name, mutation)
+				}
+			}
+		})
+	}
 }
 
 func TestPartialAcquisitionFreezesHistoricalGraphDiagnosticAndTypedAccounting(t *testing.T) {
@@ -211,6 +368,66 @@ func TestFlatTopmostSiblingCorrespondenceUsesPreparedServerIdentity(t *testing.T
 				t.Fatalf("ASSERT_FLAT_SIBLING_FAILS_CLOSED_%s: err=%v siblings=%#v complete=%t", tc.name, err, got.Graph.SiblingCandidates, got.AcquisitionComplete)
 			}
 		})
+	}
+}
+
+func TestFlatTopmostSiblingIdentifierMissExhaustionHasFailureOmission(t *testing.T) {
+	seed, peer := item("seed", 0), item("peer", 2)
+	setup := func() (*fakeClient, Request) {
+		f := fixture()
+		f.add(seed)
+		f.add(peer)
+		f.symbols[seed.URI] = []lsp.DocumentSymbol{
+			{Name: "example." + seed.Name, Kind: 6, Range: seed.Range, SelectionRange: seed.Range, Flat: true},
+			{Name: "example." + peer.Name, Kind: 6, Range: peer.Range, SelectionRange: peer.Range, Flat: true},
+		}
+		for probe := uint32(0); probe < MaxPrepareProbes; probe++ {
+			position := peer.Range.Start
+			position.Character += probe
+			params := lsp.PrepareCallHierarchyParams{TextDocument: lsp.TextDocumentIdentifier{URI: peer.URI}, Position: position}
+			f.errors[prepareKey(params)] = errors.New("json-rpc error 0: identifier not found")
+		}
+		r := request(seed)
+		r.TopmostSiblings = true
+		return f, r
+	}
+
+	f, r := setup()
+	got, err := Acquire(context.Background(), f, r)
+	if err != nil || got.AcquisitionComplete || len(got.Graph.SiblingCandidates) != 0 || len(got.Omissions) != 1 {
+		t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_TYPED_OMISSION: err=%v complete=%t siblings=%d omissions=%#v", err, got.AcquisitionComplete, len(got.Graph.SiblingCandidates), got.Omissions)
+	}
+	omission := got.Omissions[0]
+	if omission.Reason != OmissionPreparationFailed || omission.NodeID == "" || omission.RequestID == "" {
+		t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_FAILURE_IDENTITY: %#v", omission)
+	}
+	failedRequest := false
+	for _, record := range got.Requests {
+		failedRequest = failedRequest || (record.ID == omission.RequestID && record.Method == "textDocument/prepareCallHierarchy" && record.Outcome == "FAILED")
+	}
+	if !failedRequest {
+		t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_FAILED_REQUEST: omission=%#v requests=%#v", omission, got.Requests)
+	}
+	if err := ValidateResult(got); err != nil {
+		t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_VALID: %v", err)
+	}
+	f2, _ := setup()
+	replayed, err := Acquire(context.Background(), f2, r)
+	if err != nil || !reflect.DeepEqual(got, replayed) {
+		t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_DETERMINISTIC: err=%v equal=%t", err, reflect.DeepEqual(got, replayed))
+	}
+	for _, mutation := range []string{"reason", "request"} {
+		mutated := got
+		mutated.Omissions = append([]Omission(nil), got.Omissions...)
+		switch mutation {
+		case "reason":
+			mutated.Omissions[0].Reason = OmissionNoMatch
+		case "request":
+			mutated.Omissions[0].RequestID = "request-unknown"
+		}
+		if err := ValidateResult(mutated); err == nil {
+			t.Fatalf("ASSERT_FLAT_SIBLING_IDENTIFIER_MISS_EXHAUSTION_MUTATION_REJECTED_%s", mutation)
+		}
 	}
 }
 

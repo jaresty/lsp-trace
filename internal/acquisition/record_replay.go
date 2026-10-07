@@ -110,6 +110,9 @@ func validateRecordReplay(r Result) error {
 	if !sameJSON(r.EdgeObservations, c.result.EdgeObservations) {
 		return errors.New("observations differ from admitted response replay")
 	}
+	if !sameJSON(r.Omissions, c.result.Omissions) {
+		return errors.New("omissions differ from deterministic acquisition replay")
+	}
 	if !sameJSON(r.Graph, c.result.Graph) {
 		return errors.New("native graph differs from deterministic acquisition replay")
 	}
