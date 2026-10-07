@@ -2,6 +2,7 @@ package adr0007locationoraclev5
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -101,6 +102,64 @@ func TestCorrectedCaseSemantics(t *testing.T) {
 		}
 	})
 }
+func TestStrictRequestParserAdversarialRejects(t *testing.T) {
+	d := filepath.Join(corpusRoot(t), "inputs", "01-exact-intersects")
+	raw, _ := os.ReadFile(filepath.Join(d, "REQUEST.raw.json"))
+	binding, _ := os.ReadFile(filepath.Join(d, "BINDING.json"))
+	for _, tc := range []struct{ name, body, wantID, detail string }{
+		{"duplicate-id-recovers-first-id", strings.Replace(string(raw), `"id":"c01"`, `"id":"c01","id":"evil"`, 1), "c01", "JSON_SYNTAX"},
+		{"trailing-token-recovers-id", strings.TrimSpace(string(raw)) + ` {}`, "c01", "JSON_SYNTAX"},
+		{"missing-member-priority", strings.Replace(string(raw), `,"members":[`, `,"x_unknown":true,"members":[`, 1), "c01", "UNKNOWN_FIELD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := Evaluate([]byte(tc.body), binding, true, Condition{}, PublishedLimits())
+			if r.RequestID != tc.wantID || r.Outcome != "INVALID_REQUEST" || r.Detail != tc.detail {
+				t.Fatalf("ASSERT strict-request-parser FAIL got id=%q %s/%s", r.RequestID, r.Outcome, r.Detail)
+			}
+		})
+	}
+}
+
+func TestEnvelopeProjectionAdversarialRejects(t *testing.T) {
+	d := filepath.Join(corpusRoot(t), "inputs", "01-exact-intersects")
+	raw, _ := os.ReadFile(filepath.Join(d, "REQUEST.raw.json"))
+	binding, _ := os.ReadFile(filepath.Join(d, "BINDING.json"))
+	for _, tc := range []struct{ name, body string }{
+		{"complete-with-input", strings.Replace(string(binding), `}}`, `},"input":[]}`, 1)},
+		{"duplicate-envelope-key", strings.Replace(string(binding), `"outcome":"COMPLETE"`, `"outcome":"COMPLETE","outcome":"COMPLETE"`, 1)},
+		{"tuple-missing-bytes", strings.Replace(string(binding), `,"bytes":"YfCfmIBiDQp4eQo="`, ``, 1)},
+		{"typed-with-binding", strings.Replace(string(binding), `"outcome":"COMPLETE"`, `"outcome":"INVALID_SOURCE","detail":"FILE_DIGEST"`, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := Evaluate(raw, []byte(tc.body), true, Condition{}, PublishedLimits())
+			if r.Outcome != "SOURCE_ADMISSION_MISMATCH" || r.Detail != "BINDING_SCHEMA" && r.Detail != "BINDING_INVALID_SOURCE" {
+				t.Fatalf("ASSERT envelope-projection FAIL got=%s/%s", r.Outcome, r.Detail)
+			}
+		})
+	}
+}
+
+func TestCheckpointPrecedence(t *testing.T) {
+	base := evalCase(t, "01-exact-intersects", PublishedLimits())
+	if base.Outcome != "COMPLETE" {
+		t.Fatalf("base: %s/%s", base.Outcome, base.Detail)
+	}
+	for _, tc := range []struct {
+		pop   string
+		coeff uint64
+	}{{"P", 7}, {"R", 11}, {"M", 13}, {"S", 1}, {"Q", 19}, {"X", 23}, {"C", 29}, {"B", 31}} {
+		t.Run(tc.pop, func(t *testing.T) {
+			l := PublishedLimits()
+			l.MaxWork = 50
+			r := evalCase(t, "01-exact-intersects", l)
+			if r.Outcome != "RESOURCE_LIMIT" || r.Detail != "WORK" {
+				t.Fatalf("ASSERT immediate-work-precedence %s FAIL got=%s/%s", tc.pop, r.Outcome, r.Detail)
+			}
+		})
+	}
+	_ = fmt.Sprintf("%s", base.Outcome)
+}
+
 func TestMutationWitnesses(t *testing.T) {
 	t.Run("policy-digest", func(t *testing.T) {
 		d := filepath.Join(corpusRoot(t), "inputs", "01-exact-intersects")

@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"sort"
 	"strings"
 	"unicode/utf16"
@@ -157,6 +159,63 @@ func choose2(n int) uint64 {
 	return uint64(n * (n - 1) / 2)
 }
 
+type workMeter struct {
+	limits Limits
+	p      *populations
+	work   uint64
+}
+
+func newWorkMeter(l Limits, p *populations) *workMeter { return &workMeter{limits: l, p: p, work: 50} }
+func (w *workMeter) inc(k string, n uint64) (string, string) {
+	coeff := uint64(0)
+	slot := (*uint64)(nil)
+	switch k {
+	case "J":
+		coeff, slot = 3, &w.p.J
+	case "P":
+		coeff, slot = 7, &w.p.P
+	case "R":
+		coeff, slot = 11, &w.p.R
+	case "M":
+		coeff, slot = 13, &w.p.M
+	case "S":
+		coeff, slot = 1, &w.p.S
+	case "Q":
+		coeff, slot = 19, &w.p.Q
+	case "X":
+		coeff, slot = 23, &w.p.X
+	case "C":
+		coeff, slot = 29, &w.p.C
+	case "B":
+		coeff = 31
+	default:
+		panic("unknown population " + k)
+	}
+	if coeff != 0 && n > math.MaxUint64/coeff {
+		return "RESOURCE_LIMIT", "WORK"
+	}
+	charge := n * coeff
+	if w.work > math.MaxUint64-charge || w.work+charge > w.limits.MaxWork {
+		return "RESOURCE_LIMIT", "WORK"
+	}
+	w.work += charge
+	if slot != nil {
+		if *slot > math.MaxUint64-n {
+			return "RESOURCE_LIMIT", "WORK"
+		}
+		*slot += n
+	}
+	return "", ""
+}
+func (w *workMeter) addChoose2(n int) (string, string) { return w.inc("C", choose2(n)) }
+
+func failForPoll(id string, err error) Result {
+	if err != nil && err.Error() == "cancel" {
+		return failure(id, "CANCELLED", "CANCEL_SIGNAL")
+	}
+	return failure(id, "TIMEOUT", "DEADLINE")
+}
+
 func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limits Limits) Result {
 	poll := func() error {
 		if cond.Cancel {
@@ -168,25 +227,23 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 		return nil
 	}
 	if e := poll(); e != nil {
-		if e.Error() == "cancel" {
-			return failure("", "CANCELLED", "CANCEL_SIGNAL")
-		}
-		return failure("", "TIMEOUT", "DEADLINE")
+		return failForPoll("", e)
 	}
 	if len(raw) > limits.MaxRequestBytes {
 		return failure("", "INVALID_REQUEST", "REQUEST_FIELD")
 	}
-	p := populations{J: uint64(len(raw))}
+	p := populations{}
+	meter := newWorkMeter(limits, &p)
+	if out, detail := meter.inc("J", uint64(len(raw))); detail != "" {
+		return failure("", out, detail)
+	}
 	var req Request
 	id, detail := decodeRequest(raw, &req)
 	if detail != "" {
 		return failure(id, "INVALID_REQUEST", detail)
 	}
 	if e := poll(); e != nil {
-		if e.Error() == "cancel" {
-			return failure(id, "CANCELLED", "CANCEL_SIGNAL")
-		}
-		return failure(id, "TIMEOUT", "DEADLINE")
+		return failForPoll(id, e)
 	}
 	if len(req.Members) > limits.MaxMembers {
 		return failure(id, "RESOURCE_LIMIT", "MEMBERS")
@@ -195,7 +252,12 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 		return failure(id, "RESOURCE_LIMIT", "TOP_K")
 	}
 	for _, m := range req.Members {
-		p.M++
+		if e := poll(); e != nil {
+			return failForPoll(id, e)
+		}
+		if out, detail := meter.inc("M", 1); detail != "" {
+			return failure(id, out, detail)
+		}
 		if m.ID == "" || !norm.NFC.IsNormalString(m.ID) {
 			return failure(id, "INVALID_REQUEST", "REQUEST_FIELD")
 		}
@@ -203,7 +265,7 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	if !bindingPresent {
 		return failure(id, "SOURCE_ADMISSION_UNAVAILABLE", "BINDING_UNAVAILABLE")
 	}
-	env, sources, detail, outcome := decodeEnvelope(bindingRaw, limits, &p)
+	env, sources, detail, outcome := decodeEnvelope(bindingRaw, limits, meter)
 	if detail != "" {
 		return failure(id, outcome, detail)
 	}
@@ -213,11 +275,13 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	admitted := make([]sourceadmissionv2.SelectedSource, len(sources))
 	total := 0
 	for i, s := range sources {
-		total += len(s.Bytes)
-		if len(s.Bytes) > limits.MaxSourceBytes || total > limits.MaxTotalSourceBytes {
+		if len(s.Bytes) > limits.MaxSourceBytes || total > limits.MaxTotalSourceBytes-len(s.Bytes) {
 			return failure(id, "RESOURCE_LIMIT", "SOURCE_BYTES")
 		}
-		p.S += uint64(len(s.Bytes))
+		total += len(s.Bytes)
+		if out, detail := meter.inc("S", uint64(len(s.Bytes))); detail != "" {
+			return failure(id, out, detail)
+		}
 		admitted[i] = s
 	}
 	if len(admitted) > limits.MaxSources {
@@ -229,7 +293,9 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 		}
 	}
 	ar := sourceadmissionv2.Admit(admitted, sourceadmissionv2.Limits{MaxSources: limits.MaxSources, MaxSourceBytes: limits.MaxSourceBytes, MaxTotalBytes: limits.MaxTotalSourceBytes})
-	p.C += choose2(len(admitted))
+	if out, detail := meter.addChoose2(len(admitted)); detail != "" {
+		return failure(id, out, detail)
+	}
 	if ar.Outcome != sourceadmissionv2.Complete {
 		return failure(id, "SOURCE_ADMISSION_MISMATCH", mapAdmission(ar.Outcome))
 	}
@@ -246,7 +312,7 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	for _, s := range admitted {
 		byPath[s.Path] = s
 	}
-	selectors, failOut, failDetail := selectorRanges(req.Selector, byPath, limits, &p)
+	selectors, failOut, failDetail := selectorRanges(req.Selector, byPath, limits, meter)
 	if failDetail != "" {
 		return failure(id, failOut, failDetail)
 	}
@@ -278,10 +344,7 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	seen := map[string]bool{}
 	for i, m := range req.Members {
 		if e := poll(); e != nil {
-			if e.Error() == "cancel" {
-				return failure(id, "CANCELLED", "CANCEL_SIGNAL")
-			}
-			return failure(id, "TIMEOUT", "DEADLINE")
+			return failForPoll(id, e)
 		}
 		row := MemberRow{i, m.ID, "", []Witness{}}
 		if seen[m.ID] {
@@ -293,12 +356,14 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 				row.Outcome = "UNAVAILABLE_LOCATION"
 				counts.UnavailableLocation++
 			} else {
-				p.P++
+				if out, detail := meter.inc("P", 1); detail != "" {
+					return failure(id, out, detail)
+				}
 				s, ok := byPath[m.Path]
 				if !ok || s.Revision != m.Revision || s.FileDigest != m.FileDigest || s.ObjectDigest != m.ObjectDigest {
 					row.Outcome = "INVALID_LOCATION"
 					counts.InvalidLocation++
-				} else if !validRanges(m.Ranges, s.Bytes, &p) {
+				} else if !validRanges(m.Ranges, s.Bytes, meter) {
 					row.Outcome = "INVALID_LOCATION"
 					counts.InvalidLocation++
 				} else if !m.PolicyAllowed {
@@ -307,13 +372,20 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 				} else {
 					for _, sr := range selectors[m.Path] {
 						for _, cr := range m.Ranges {
-							p.Q++
+							if e := poll(); e != nil {
+								return failForPoll(id, e)
+							}
+							if out, detail := meter.inc("Q", 1); detail != "" {
+								return failure(id, out, detail)
+							}
 							if relation(req.Relation, sr, cr) {
 								row.Witnesses = append(row.Witnesses, Witness{m.Path, sr, cr, intersection(sr, cr), s.Revision, s.FileDigest, s.ObjectDigest})
 							}
 						}
 					}
-					p.C += choose2(len(row.Witnesses))
+					if out, detail := meter.addChoose2(len(row.Witnesses)); detail != "" {
+						return failure(id, out, detail)
+					}
 					row.Witnesses = dedupWitnesses(row.Witnesses)
 					if len(row.Witnesses) > 0 {
 						row.Outcome = "ELIGIBLE"
@@ -332,8 +404,17 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	if counts.Witnesses > limits.MaxWitnesses {
 		return failure(id, "RESOURCE_LIMIT", "WITNESSES")
 	}
-	p.X = uint64(counts.Witnesses)
-	p.C += choose2(len(eligibleRanks))
+	for range counts.Witnesses {
+		if e := poll(); e != nil {
+			return failForPoll(id, e)
+		}
+		if out, detail := meter.inc("X", 1); detail != "" {
+			return failure(id, out, detail)
+		}
+	}
+	if out, detail := meter.addChoose2(len(eligibleRanks)); detail != "" {
+		return failure(id, out, detail)
+	}
 	sort.SliceStable(eligibleRanks, func(i, j int) bool {
 		if eligibleRanks[i].Score != eligibleRanks[j].Score {
 			return eligibleRanks[i].Score > eligibleRanks[j].Score
@@ -350,10 +431,15 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	result := Result{ResultSchema, id, "COMPLETE", rows, eligibleRanks, counts, "NONE"}
 	image := Canonical(result)
 	B := uint64(len(image))
-	W := 50 + 3*p.J + 7*p.P + 11*p.R + 13*p.M + p.S + 19*p.Q + 23*p.X + 29*p.C + 31*B
-	if W > limits.MaxWork {
-		return failure(id, "RESOURCE_LIMIT", "WORK")
+	for range B {
+		if e := poll(); e != nil {
+			return failForPoll(id, e)
+		}
 	}
+	if out, detail := meter.inc("B", B); detail != "" {
+		return failure(id, out, detail)
+	}
+	W := meter.work
 	if int(B) > limits.MaxOutputBytes {
 		return failure(id, "RESOURCE_LIMIT", "OUTPUT_BYTES")
 	}
@@ -362,24 +448,118 @@ func Evaluate(raw, bindingRaw []byte, bindingPresent bool, cond Condition, limit
 	return result
 }
 
+func uniqueJSON(r io.Reader) error {
+	dec := json.NewDecoder(r)
+	if err := uniqueJSONValue(dec); err != nil {
+		return err
+	}
+	if tok, err := dec.Token(); err == nil {
+		return fmt.Errorf("trailing JSON after %v", tok)
+	} else if err != io.EOF {
+		return err
+	}
+	return nil
+}
+
+func uniqueJSONValue(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for dec.More() {
+			key, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			s, ok := key.(string)
+			if !ok || seen[s] {
+				return fmt.Errorf("duplicate/nonstring key")
+			}
+			seen[s] = true
+			if err := uniqueJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	case '[':
+		for dec.More() {
+			if err := uniqueJSONValue(dec); err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unexpected delimiter")
+	}
+	_, err = dec.Token()
+	return err
+}
+
+func strictRequestObject(raw []byte) (map[string]json.RawMessage, string, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil, "", fmt.Errorf("request object")
+	}
+	fields := map[string]json.RawMessage{}
+	id := ""
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, id, err
+		}
+		key, ok := tok.(string)
+		if !ok {
+			return nil, id, fmt.Errorf("request key")
+		}
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return nil, id, err
+		}
+		if _, exists := fields[key]; exists {
+			return nil, id, fmt.Errorf("duplicate request key")
+		}
+		if key == "id" {
+			_ = json.Unmarshal(raw, &id)
+		}
+		fields[key] = raw
+	}
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('}') {
+		return nil, id, fmt.Errorf("request close")
+	}
+	if tok, err := dec.Token(); err == nil {
+		return nil, id, fmt.Errorf("trailing request token %v", tok)
+	} else if err != io.EOF {
+		return nil, id, err
+	}
+	return fields, id, nil
+}
+
 func decodeRequest(raw []byte, out *Request) (string, string) {
 	if !utf8.Valid(raw) || bytes.HasPrefix(raw, []byte{0xef, 0xbb, 0xbf}) {
 		return "", "JSON_ENCODING"
 	}
-	var generic map[string]json.RawMessage
-	d := json.NewDecoder(bytes.NewReader(raw))
-	if err := d.Decode(&generic); err != nil {
-		return "", "JSON_SYNTAX"
+	generic, id, err := strictRequestObject(raw)
+	if err != nil {
+		return id, "JSON_SYNTAX"
 	}
-	id := ""
-	_ = json.Unmarshal(generic["id"], &id)
 	allowed := map[string]bool{"schema": true, "id": true, "relation": true, "selector": true, "admissionDigest": true, "policyDigest": true, "limitsDigest": true, "topK": true, "members": true}
+	ordered := []string{"schema", "id", "relation", "selector", "admissionDigest", "policyDigest", "limitsDigest", "topK", "members"}
+	for _, k := range ordered {
+		if _, ok := generic[k]; !ok {
+			return id, "REQUEST_FIELD"
+		}
+	}
 	for k := range generic {
 		if !allowed[k] {
 			return id, "UNKNOWN_FIELD"
 		}
 	}
-	d = json.NewDecoder(bytes.NewReader(raw))
+	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(out); err != nil {
 		return id, "REQUEST_FIELD"
@@ -392,8 +572,15 @@ func decodeRequest(raw []byte, out *Request) (string, string) {
 	}
 	return id, ""
 }
-func decodeEnvelope(raw []byte, l Limits, p *populations) (envelopeWire, []sourceadmissionv2.SelectedSource, string, string) {
+func decodeEnvelope(raw []byte, l Limits, meter *workMeter) (envelopeWire, []sourceadmissionv2.SelectedSource, string, string) {
 	var e envelopeWire
+	if err := uniqueJSON(bytes.NewReader(raw)); err != nil {
+		return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+	}
+	var top map[string]json.RawMessage
+	if json.Unmarshal(raw, &top) != nil {
+		return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()
 	if err := d.Decode(&e); err != nil {
@@ -404,10 +591,14 @@ func decodeEnvelope(raw []byte, l Limits, p *populations) (envelopeWire, []sourc
 	}
 	wire := e.Input
 	if e.Outcome == "COMPLETE" {
-		if e.Binding == nil || e.Binding.Schema != sourceadmissionv2.Schema {
+		if len(top) != 3 || e.Binding == nil || e.Binding.Schema != sourceadmissionv2.Schema || e.Detail != "" || e.DuplicatePath != "" || e.Input != nil {
 			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 		}
 		wire = e.Binding.Sources
+	} else {
+		if _, ok := top["binding"]; ok || e.Binding != nil {
+			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+		}
 	}
 	if len(wire) > l.MaxSources {
 		return e, nil, "SOURCES", "RESOURCE_LIMIT"
@@ -421,7 +612,9 @@ func decodeEnvelope(raw []byte, l Limits, p *populations) (envelopeWire, []sourc
 		if err != nil || base64.StdEncoding.EncodeToString(b) != s.Bytes || len(b) == 0 || !utf8.Valid(b) {
 			return e, nil, "BINDING_INVALID_SOURCE", "SOURCE_ADMISSION_MISMATCH"
 		}
-		p.P++
+		if outc, detail := meter.inc("P", 1); detail != "" {
+			return e, nil, detail, outc
+		}
 		out[i] = sourceadmissionv2.SelectedSource{Path: s.Path, Revision: s.Revision, FileDigest: s.FileDigest, ObjectDigest: s.ObjectDigest, Bytes: b}
 	}
 	return e, out, "", ""
@@ -459,20 +652,26 @@ func mapAdmission(o sourceadmissionv2.Outcome) string {
 	}
 	return "BINDING_INVALID_REQUEST"
 }
-func selectorRanges(s Selector, src map[string]sourceadmissionv2.SelectedSource, l Limits, p *populations) (map[string][]Range, string, string) {
+func selectorRanges(s Selector, src map[string]sourceadmissionv2.SelectedSource, l Limits, meter *workMeter) (map[string][]Range, string, string) {
 	out := map[string][]Range{}
 	switch s.Kind {
 	case "EXACT_FILE":
-		p.P++
+		if outc, detail := meter.inc("P", 1); detail != "" {
+			return nil, outc, detail
+		}
 		x, ok := src[s.Path]
 		if !ok {
 			return nil, "INVALID_SELECTOR", "PATH"
 		}
 		out[s.Path] = []Range{whole(x.Bytes)}
 	case "PATH_PREFIX":
-		p.P++
+		if outc, detail := meter.inc("P", 1); detail != "" {
+			return nil, outc, detail
+		}
 		for range s.FrozenPaths {
-			p.P++
+			if outc, detail := meter.inc("P", 1); detail != "" {
+				return nil, outc, detail
+			}
 		}
 		if len(s.FrozenPaths) > l.MaxFrozenPaths {
 			return nil, "RESOURCE_LIMIT", "FROZEN_PATHS"
@@ -493,14 +692,18 @@ func selectorRanges(s Selector, src map[string]sourceadmissionv2.SelectedSource,
 		for _, x := range matches {
 			out[x] = []Range{whole(src[x].Bytes)}
 		}
-		p.C += choose2(len(s.FrozenPaths))
+		if outc, detail := meter.addChoose2(len(s.FrozenPaths)); detail != "" {
+			return nil, outc, detail
+		}
 	case "RANGE_UNION":
 		if len(s.Union) > l.MaxSelectorPaths {
 			return nil, "RESOURCE_LIMIT", "SELECTOR_PATHS"
 		}
 		total := 0
 		for _, u := range s.Union {
-			p.P++
+			if outc, detail := meter.inc("P", 1); detail != "" {
+				return nil, outc, detail
+			}
 			x, ok := src[u.Path]
 			if !ok {
 				return nil, "INVALID_SELECTOR", "PATH"
@@ -512,13 +715,17 @@ func selectorRanges(s Selector, src map[string]sourceadmissionv2.SelectedSource,
 			if total > l.MaxTotalRanges {
 				return nil, "RESOURCE_LIMIT", "TOTAL_RANGES"
 			}
-			if !validRanges(u.Ranges, x.Bytes, p) {
+			if !validRanges(u.Ranges, x.Bytes, meter) {
 				return nil, "INVALID_RANGE", "SELECTOR_RANGE"
 			}
 			out[u.Path] = append(out[u.Path], u.Ranges...)
-			p.C += choose2(len(u.Ranges))
+			if outc, detail := meter.addChoose2(len(u.Ranges)); detail != "" {
+				return nil, outc, detail
+			}
 		}
-		p.C += choose2(len(s.Union))
+		if outc, detail := meter.addChoose2(len(s.Union)); detail != "" {
+			return nil, outc, detail
+		}
 		for x := range out {
 			sortRanges(out[x])
 			out[x] = dedupRanges(out[x])
@@ -554,13 +761,15 @@ func lineLengths(b []byte) []int {
 	}
 	return out
 }
-func validRanges(rs []Range, b []byte, p *populations) bool {
+func validRanges(rs []Range, b []byte, meter *workMeter) bool {
 	if len(rs) == 0 {
 		return false
 	}
 	ls := lineLengths(b)
 	for _, r := range rs {
-		p.R++
+		if _, detail := meter.inc("R", 1); detail != "" {
+			return false
+		}
 		if !validPos(r.Start, ls) || !validPos(r.End, ls) || cmp(r.Start, r.End) >= 0 {
 			return false
 		}
