@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,58 +31,46 @@ func b4LeaseInvalid(t *testing.T, category, detail string) {
 	t.Fatalf(`{"kind":"INVALID_RED_ATTEMPT","category":%q,"detail":%q}`, category, detail)
 }
 
+func b4LeaseRead(t *testing.T, path string) []byte {
+	t.Helper()
+	root, err := b4ID1FixtureRoot()
+	if err != nil {
+		b4LeaseInvalid(t, "FIXTURE_INVALID", "fixture root")
+	}
+	b, err := b4ID1ReadFile(root, path)
+	if err != nil {
+		b4LeaseInvalid(t, "FIXTURE_INVALID", "fixture read "+path)
+	}
+	return b
+}
+
 func b4LeaseGet(t *testing.T, f b4ID1Fixture, path string) []byte {
 	t.Helper()
 	pin, ok := f.pins[path]
 	if !ok {
 		b4LeaseInvalid(t, "FIXTURE_INVALID", "unlisted asset "+path)
 	}
-	name := filepath.Join(b4ID1Root, path)
-	b4LeaseNoSymlink(t, name)
-	b, err := os.ReadFile(name)
-	if err != nil || len(b) != pin.Length || b4ID1Hash(b) != pin.SHA {
+	b := b4LeaseRead(t, path)
+	if len(b) != pin.Length || b4ID1Hash(b) != pin.SHA {
 		b4LeaseInvalid(t, "FIXTURE_INVALID", "asset read/digest "+path)
 	}
 	return b
 }
-func b4LeaseNoSymlink(t *testing.T, name string) {
-	t.Helper()
-	clean := filepath.Clean(name)
-	if !filepath.IsAbs(clean) {
-		abs, err := filepath.Abs(clean)
-		if err != nil {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "absolute path")
-		}
-		clean = abs
-	}
-	volume := filepath.VolumeName(clean)
-	cur := volume + string(filepath.Separator)
-	for _, part := range strings.Split(strings.TrimPrefix(strings.TrimPrefix(clean, volume), string(filepath.Separator)), string(filepath.Separator)) {
-		if part == "" {
-			continue
-		}
-		cur = filepath.Join(cur, part)
-		info, err := os.Lstat(cur)
-		if err != nil || info.Mode()&os.ModeSymlink != 0 {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "missing or symlink component "+cur)
-		}
-	}
-}
+
 func b4LeaseFixture(t *testing.T) b4ID1Fixture {
 	t.Helper()
 	for _, p := range []struct{ path, sha string }{
-		{"../.pi/evidence/adr0011-narrow-private-positive-red-test-spec-v1/SPEC.md", "8fa536964c6542b151b7a5e5bd10170ea63ee46374250087a7923c2cc8d2ebae"},
-		{"../.pi/evidence/adr0011-narrow-private-positive-red-design-v1/DESIGN.md", "9eb8dfa992d4db3f4ea9b1a8eef64c18f7fec7c8e3103904d0a3dfd85cbb96dc"},
+		{"SPEC.md", "8fa536964c6542b151b7a5e5bd10170ea63ee46374250087a7923c2cc8d2ebae"},
+		{"DESIGN.md", "9eb8dfa992d4db3f4ea9b1a8eef64c18f7fec7c8e3103904d0a3dfd85cbb96dc"},
+		{"DERIVATION.md", "6180b736af5ec7e70e366425e8e658ec48ba64e3aae40ccdb19ac6487888d069"},
+		{"oracle.json", "d82cf78ae7a8c024d22a5eac3b31e1a3c8e5a8f6dfc9c26630f97f5296432b59"},
 	} {
-		b4LeaseNoSymlink(t, p.path)
-		b, err := os.ReadFile(p.path)
-		if err != nil || b4ID1Hash(b) != p.sha {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "accepted spec/design pin "+p.path)
+		if b4ID1Hash(b4LeaseRead(t, p.path)) != p.sha {
+			b4LeaseInvalid(t, "FIXTURE_INVALID", "accepted provenance pin "+p.path)
 		}
 	}
-	b4LeaseNoSymlink(t, filepath.Join(b4ID1Root, "manifest.json"))
-	raw, readErr := os.ReadFile(filepath.Join(b4ID1Root, "manifest.json"))
-	if readErr != nil || b4ID1Hash(raw) != b4ID1Manifest {
+	raw := b4LeaseRead(t, "manifest.json")
+	if b4ID1Hash(raw) != b4ID1Manifest {
 		b4LeaseInvalid(t, "FIXTURE_INVALID", "manifest SHA-256")
 	}
 	var manifest struct {
@@ -106,14 +93,14 @@ func b4LeaseFixture(t *testing.T) b4ID1Fixture {
 		b4LeaseInvalid(t, "FIXTURE_INVALID", "manifest structure or declared status")
 	}
 	predecessorPins := map[string]string{
-		"/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-composed-b4-manager-id1-derivation-v1/DERIVATION.md":                 "6180b736af5ec7e70e366425e8e658ec48ba64e3aae40ccdb19ac6487888d069",
-		"/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-b4b-held-originals-v1/CORE/source.bytes":                  "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
-		"/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-bridge-independent-oracle-v1/oracle.json":                 "d82cf78ae7a8c024d22a5eac3b31e1a3c8e5a8f6dfc9c26630f97f5296432b59",
-		"/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-response-held-originals-v1-corrected/targets/target-a.go": "2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c",
-		"/Users/schwa/dev/lsp-trace/.pi/evidence/adr0011-definition-response-held-originals-v1-corrected/targets/target-b.go": "318cb48346e30c507f390c86e5dceaaac490a02f8df0deff7f205db558266176",
-		"/Users/schwa/dev/lsp-trace/docs/qualification/originals/adr0011-generic-envelope-v4.schema.json":                     "df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
-		"/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-definition-exact-v5.json":                        "da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
-		"/Users/schwa/dev/lsp-trace/docs/qualification/originals/generic-lsp-exact-transport-v4.json":                         "f3e25fab98cc4b8b96b76978cf56220ccc81f4ef41455ab0401041ea281d0bc8",
+		"DERIVATION.md":  "6180b736af5ec7e70e366425e8e658ec48ba64e3aae40ccdb19ac6487888d069",
+		"A/source.bytes": "33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+		"oracle.json":    "d82cf78ae7a8c024d22a5eac3b31e1a3c8e5a8f6dfc9c26630f97f5296432b59",
+		"A/target-a.go":  "2b61fbe6058fe0c78aeb9ba3a52a92efc4ccb9fc3e9280275b44c85f9bb15a3c",
+		"A/target-b.go":  "318cb48346e30c507f390c86e5dceaaac490a02f8df0deff7f205db558266176",
+		"repository:docs/qualification/originals/adr0011-generic-envelope-v4.schema.json": "df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+		"repository:docs/qualification/originals/generic-lsp-definition-exact-v5.json":    "da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+		"repository:docs/qualification/originals/generic-lsp-exact-transport-v4.json":     "f3e25fab98cc4b8b96b76978cf56220ccc81f4ef41455ab0401041ea281d0bc8",
 	}
 	seenPredecessors := map[string]bool{}
 	for _, p := range manifest.Predecessors {
@@ -121,31 +108,17 @@ func b4LeaseFixture(t *testing.T) b4ID1Fixture {
 			b4LeaseInvalid(t, "FIXTURE_INVALID", "predecessor identity")
 		}
 		seenPredecessors[p.Path] = true
-		if !filepath.IsAbs(p.Path) || len(p.SHA) != 64 {
+		if filepath.IsAbs(p.Path) || filepath.Clean(p.Path) != p.Path || strings.Contains(p.Path, `\`) || len(p.SHA) != 64 {
 			b4LeaseInvalid(t, "FIXTURE_INVALID", "predecessor path/digest")
-		}
-		b4LeaseNoSymlink(t, p.Path)
-		data, err := os.ReadFile(p.Path)
-		if err != nil || b4ID1Hash(data) != p.SHA {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "predecessor digest "+p.Path)
 		}
 	}
 	f := b4ID1Fixture{pins: make(map[string]b4ID1Pin, 57)}
 	for _, pin := range manifest.Assets {
-		if pin.Path == "" || filepath.IsAbs(pin.Path) || filepath.Clean(pin.Path) != pin.Path || strings.HasPrefix(pin.Path, "..") || strings.Contains(pin.Path, "\\") {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "unconfined asset path")
-		}
 		if _, exists := f.pins[pin.Path]; exists {
 			b4LeaseInvalid(t, "FIXTURE_INVALID", "duplicate asset")
 		}
-		name := filepath.Join(b4ID1Root, pin.Path)
-		b4LeaseNoSymlink(t, name)
-		info, err := os.Lstat(name)
-		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
-			b4LeaseInvalid(t, "FIXTURE_INVALID", "nonregular or missing asset "+pin.Path)
-		}
-		b, err := os.ReadFile(name)
-		if err != nil || len(b) != pin.Length || b4ID1Hash(b) != pin.SHA {
+		b := b4LeaseRead(t, pin.Path)
+		if len(b) != pin.Length || b4ID1Hash(b) != pin.SHA {
 			b4LeaseInvalid(t, "FIXTURE_INVALID", "asset digest "+pin.Path)
 		}
 		f.pins[pin.Path] = pin

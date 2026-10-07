@@ -1,0 +1,50 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+    "transaction": "b4-manager-b-definition-id1"
+  },
+  "original": {
+    "length": 178,
+    "private_ref": "held:B/request.frame",
+    "sha256": "sha256:a985bd69c4392c1cdc8970813c1d3743abd645a7568aef3c4370e5730517b849"
+  },
+  "payload": {
+    "actual_key": "b4-owner-b-id1",
+    "completed": true,
+    "completed_frame_ordinal": 5,
+    "frame": {
+      "length": 178,
+      "private_ref": "held:B/request.frame",
+      "sha256": "sha256:a985bd69c4392c1cdc8970813c1d3743abd645a7568aef3c4370e5730517b849"
+    },
+    "params": {
+      "length": 86,
+      "private_ref": "held:B/request.params",
+      "sha256": "sha256:adc9520f602074f012824ccd016ff7627d247879297da5c74e517f925327172d"
+    }
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:7853d622f8af08b7deedad0e0a1a568cf2ca717a39f3d055b10c6659b8a73d6f",
+      "role": "QUERY",
+      "selector": "sha256:d84ee8ad409925e01653350426e75216bdc893f2915917cf2f1a75e150ad0d74"
+    },
+    {
+      "digest": "sha256:a21c8bd1ac9e0953372ff56ce43dd346ee72c762e56f70304d945bcc93bb18fe",
+      "role": "QUERY_APPLICABILITY",
+      "selector": "sha256:a11a0d789e5420cde0804d525b6d57163e3d13b6ee1798df20828df77b4e5f14"
+    },
+    {
+      "digest": "sha256:eaa43b7148e6ddca9dcd74eb28a7f05f4a18beb48e7c8becf0198a06dea23f41",
+      "role": "CAPABILITY_EVENTS",
+      "selector": "sha256:87762e1c2570f901b8cbdaadaac3485a1497439e0d9eb88d8b91da3a9b936bf8"
+    },
+    {
+      "digest": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+      "role": "POLICY",
+      "selector": "private-context:definition-policy-v5"
+    }
+  ],
+  "role": "REQUEST_WRITE"
+}

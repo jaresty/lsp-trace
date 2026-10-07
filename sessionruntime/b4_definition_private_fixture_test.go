@@ -6,9 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,8 +21,8 @@ import (
 	"lsp-trace/internal/session"
 )
 
-const b4ID1Root = "../.pi/evidence/adr0011-composed-b4-manager-id1-held-v1"
-const b4ID1Manifest = "e2d1880bd3fc09ca6c2e1f6f186d4d387d745cc10e72522597101d1d661ceb4b"
+const b4ID1FixtureDir = "adr0011-manager-id1-v1"
+const b4ID1Manifest = "69653d8dff7133cc1829a8e183181b2149795117a0674a308985eb3d78d73a25"
 
 type b4ID1Pin struct {
 	Path   string `json:"path"`
@@ -29,11 +32,61 @@ type b4ID1Pin struct {
 type b4ID1Fixture struct{ pins map[string]b4ID1Pin }
 
 func b4ID1Hash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
-func b4ID1Read(t *testing.T, p string) []byte {
+
+func b4ID1FixtureRoot() (string, error) {
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("fixture source location unavailable")
+	}
+	return filepath.Join(filepath.Dir(file), "testdata", b4ID1FixtureDir), nil
+}
+
+func b4ID1ReadFile(root, rel string) ([]byte, error) {
+	if root == "" || !filepath.IsAbs(root) {
+		return nil, fmt.Errorf("fixture root must be absolute")
+	}
+	if rel == "" || rel == "." || filepath.IsAbs(rel) || filepath.Clean(rel) != rel || strings.Contains(rel, `\`) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return nil, fmt.Errorf("unconfined fixture path %q", rel)
+	}
+	name := filepath.Join(root, rel)
+	within, err := filepath.Rel(root, name)
+	if err != nil || within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) || filepath.IsAbs(within) {
+		return nil, fmt.Errorf("fixture path escapes root %q", rel)
+	}
+	current := filepath.Clean(root)
+	parts := []string{current}
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		parts = append(parts, current)
+	}
+	for _, part := range parts {
+		info, err := os.Lstat(part)
+		if err != nil {
+			return nil, fmt.Errorf("fixture component %q: %w", part, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("fixture symlink component %q", part)
+		}
+	}
+	info, err := os.Stat(name)
+	if err != nil {
+		return nil, fmt.Errorf("fixture stat %q: %w", rel, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("fixture is not regular %q", rel)
+	}
+	return os.ReadFile(name)
+}
+
+func b4ID1Read(t *testing.T, rel string) []byte {
 	t.Helper()
-	b, e := os.ReadFile(p)
-	if e != nil {
-		t.Fatalf("fixture precondition read %s: %v", p, e)
+	root, err := b4ID1FixtureRoot()
+	if err != nil {
+		t.Fatalf("fixture precondition root: %v", err)
+	}
+	b, err := b4ID1ReadFile(root, rel)
+	if err != nil {
+		t.Fatalf("fixture precondition read %s: %v", rel, err)
 	}
 	return b
 }
@@ -43,26 +96,49 @@ func b4ID1JSON(t *testing.T, b []byte, v any) {
 		t.Fatalf("fixture precondition JSON: %v", e)
 	}
 }
-func b4ID1FixtureLoad(t *testing.T) b4ID1Fixture {
-	t.Helper()
-	b := b4ID1Read(t, filepath.Join(b4ID1Root, "manifest.json"))
-	if b4ID1Hash(b) != b4ID1Manifest {
-		t.Fatal("fixture precondition manifest pin")
+func b4ID1FixtureLoadAt(root, manifestSHA string) (b4ID1Fixture, error) {
+	b, err := b4ID1ReadFile(root, "manifest.json")
+	if err != nil {
+		return b4ID1Fixture{}, err
+	}
+	if b4ID1Hash(b) != manifestSHA {
+		return b4ID1Fixture{}, fmt.Errorf("fixture manifest pin")
 	}
 	var m struct {
 		Assets []b4ID1Pin `json:"assets"`
 	}
-	b4ID1JSON(t, b, &m)
+	if err := json.Unmarshal(b, &m); err != nil {
+		return b4ID1Fixture{}, fmt.Errorf("fixture manifest JSON: %w", err)
+	}
 	if len(m.Assets) != 57 {
-		t.Fatal("fixture precondition asset count")
+		return b4ID1Fixture{}, fmt.Errorf("fixture asset count")
 	}
 	f := b4ID1Fixture{pins: map[string]b4ID1Pin{}}
 	for _, p := range m.Assets {
 		if _, ok := f.pins[p.Path]; ok {
-			t.Fatal("fixture precondition duplicate pin")
+			return b4ID1Fixture{}, fmt.Errorf("fixture duplicate pin %q", p.Path)
+		}
+		asset, err := b4ID1ReadFile(root, p.Path)
+		if err != nil {
+			return b4ID1Fixture{}, err
+		}
+		if len(asset) != p.Length || b4ID1Hash(asset) != p.SHA {
+			return b4ID1Fixture{}, fmt.Errorf("fixture changed %q", p.Path)
 		}
 		f.pins[p.Path] = p
-		f.get(t, p.Path)
+	}
+	return f, nil
+}
+
+func b4ID1FixtureLoad(t *testing.T) b4ID1Fixture {
+	t.Helper()
+	root, err := b4ID1FixtureRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := b4ID1FixtureLoadAt(root, b4ID1Manifest)
+	if err != nil {
+		t.Fatalf("fixture precondition: %v", err)
 	}
 	return f
 }
@@ -72,7 +148,7 @@ func (f b4ID1Fixture) get(t *testing.T, path string) []byte {
 	if !ok {
 		t.Fatalf("fixture precondition missing pin %s", path)
 	}
-	b := b4ID1Read(t, filepath.Join(b4ID1Root, path))
+	b := b4ID1Read(t, path)
 	if len(b) != p.Length || b4ID1Hash(b) != p.SHA {
 		t.Fatalf("fixture precondition changed %s", path)
 	}

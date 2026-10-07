@@ -1,0 +1,17 @@
+{
+  "CAPABILITY_EVENTS": "sha256:87762e1c2570f901b8cbdaadaac3485a1497439e0d9eb88d8b91da3a9b936bf8",
+  "QUERY": "sha256:d84ee8ad409925e01653350426e75216bdc893f2915917cf2f1a75e150ad0d74",
+  "QUERY_APPLICABILITY": "sha256:a11a0d789e5420cde0804d525b6d57163e3d13b6ee1798df20828df77b4e5f14",
+  "SOURCE": "sha256:d710bbda129ad0593949ae41f66eb6ed30b0f14dd411893bf5c93e9e4fa7890a",
+  "a4_runtime_validation": "PENDING_INDEPENDENT_REVIEW",
+  "manager_observed_capability_frames": false,
+  "synthetic_frame_ordinals": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "transaction": "sha256:7e8f9c08ec8b8913f939b213c051bef4c22bc71951ed5022c9971f5c879607e7"
+}

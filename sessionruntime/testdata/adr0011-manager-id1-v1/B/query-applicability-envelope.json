@@ -1,0 +1,48 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+    "transaction": "b4-manager-b-definition-id1"
+  },
+  "original": {
+    "length": 552,
+    "private_ref": "held:B/query-applicability.original",
+    "sha256": "sha256:a21c8bd1ac9e0953372ff56ce43dd346ee72c762e56f70304d945bcc93bb18fe"
+  },
+  "payload": {
+    "document_kind": "ORDINARY",
+    "generation": 1,
+    "language_id_bytes": {
+      "length": 2,
+      "private_ref": "held:B/language.bytes",
+      "sha256": "sha256:4cd0e21a9a0795a14ec9aa5f0e7d1abff0492565770e43eafdf1e3e8afed1f33"
+    },
+    "language_id_present": true,
+    "notebook_source_selector": null,
+    "notebook_type_bytes": null,
+    "notebook_uri_bytes": null,
+    "query_selector": "sha256:d84ee8ad409925e01653350426e75216bdc893f2915917cf2f1a75e150ad0d74",
+    "query_source_selector": "sha256:d710bbda129ad0593949ae41f66eb6ed30b0f14dd411893bf5c93e9e4fa7890a",
+    "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+    "transaction": "b4-manager-b-definition-id1",
+    "uri_bytes": {
+      "length": 23,
+      "private_ref": "held:B/uri.bytes",
+      "sha256": "sha256:7a9c6900dc088b1ebda22b3b1d99482e3c31af42b732c971c52d755ee96d23f5"
+    },
+    "workspace": "file:///w"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:7853d622f8af08b7deedad0e0a1a568cf2ca717a39f3d055b10c6659b8a73d6f",
+      "role": "QUERY",
+      "selector": "sha256:d84ee8ad409925e01653350426e75216bdc893f2915917cf2f1a75e150ad0d74"
+    },
+    {
+      "digest": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+      "role": "SOURCE",
+      "selector": "sha256:d710bbda129ad0593949ae41f66eb6ed30b0f14dd411893bf5c93e9e4fa7890a"
+    }
+  ],
+  "role": "QUERY_APPLICABILITY"
+}

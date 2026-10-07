@@ -355,28 +355,33 @@ func TestResumeFromEveryCommittedStage(t *testing.T) {
 		t.Fatal(err)
 	}
 	stageCounts := map[Stage]int{}
+	firstCheckpoint := map[Stage]Checkpoint{}
 	for _, checkpoint := range chain {
-		stageCounts[checkpoint.Stage()]++
-		if stageCounts[checkpoint.Stage()] > 1 {
-			continue
-		}
-		raw, err := checkpoint.Bytes()
-		if err != nil {
-			t.Fatal(err)
-		}
-		workspace := ""
-		if stageIndex(checkpoint.Stage()) < stageIndex(StageSnapshotsCaptured) {
-			workspace = f.workspace
-		}
-		resumed := Resume(context.Background(), ResumeRequest{Selector: digestOf(raw), Workspace: workspace, Store: store, Worker: &countingWorker{}, FreshCapture: testFreshCapture(t, f)})
-		if resumed.Status != StatusComplete || resumed.Err != nil {
-			t.Fatalf("ASSERT_RESUME_STAGE_%s: %+v", checkpoint.Stage(), resumed)
+		stage := checkpoint.Stage()
+		stageCounts[stage]++
+		if stageCounts[stage] == 1 {
+			firstCheckpoint[stage] = checkpoint
 		}
 	}
 	for _, stage := range stageOrder {
 		if stageCounts[stage] == 0 {
 			t.Fatalf("ASSERT_RESUME_STAGE_COUNTER_%s", stage)
 		}
+		checkpoint := firstCheckpoint[stage]
+		t.Run(string(stage), func(t *testing.T) {
+			raw, err := checkpoint.Bytes()
+			if err != nil {
+				t.Fatal(err)
+			}
+			workspace := ""
+			if stageIndex(stage) < stageIndex(StageSnapshotsCaptured) {
+				workspace = f.workspace
+			}
+			resumed := Resume(context.Background(), ResumeRequest{Selector: digestOf(raw), Workspace: workspace, Store: store, Worker: &countingWorker{}, FreshCapture: testFreshCapture(t, f)})
+			if resumed.Status != StatusComplete || resumed.Err != nil {
+				t.Fatalf("ASSERT_RESUME_STAGE_%s: %+v", stage, resumed)
+			}
+		})
 	}
 }
 

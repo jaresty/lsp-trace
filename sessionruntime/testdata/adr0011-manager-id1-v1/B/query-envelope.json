@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "generation": 1,
+    "session": "sk1:4c9c6b713fe794d9bceb0926dec94939517eca5cbec20feffbe1a5f150c1ee30",
+    "transaction": "b4-manager-b-definition-id1"
+  },
+  "original": {
+    "length": 490,
+    "private_ref": "held:B/query.original",
+    "sha256": "sha256:7853d622f8af08b7deedad0e0a1a568cf2ca717a39f3d055b10c6659b8a73d6f"
+  },
+  "payload": {
+    "character": 5,
+    "encoding": "utf-16",
+    "line": 1,
+    "method": "textDocument/definition",
+    "source": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+    "uri": "file:///w/definition.go",
+    "version": "buffer:v1"
+  },
+  "predecessors": [
+    {
+      "digest": "sha256:da62f5a161532fcb7c79dd93b0dca940a460c6e0c5fab83e8987de21c91b4dd3",
+      "role": "POLICY",
+      "selector": "private-context:definition-policy-v5"
+    },
+    {
+      "digest": "sha256:df4908187030e3d3110bd3745290eb25d8a3934ffb2a85c5d47d8d22dc28f6f3",
+      "role": "SCHEMA",
+      "selector": "private-context:envelope-v4"
+    },
+    {
+      "digest": "sha256:33fe4fbf4871969c874b738e0912e1199bee4781213bf50ed99bb62a19777374",
+      "role": "SOURCE",
+      "selector": "sha256:d710bbda129ad0593949ae41f66eb6ed30b0f14dd411893bf5c93e9e4fa7890a"
+    }
+  ],
+  "role": "QUERY"
+}
