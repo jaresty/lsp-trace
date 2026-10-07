@@ -1,104 +1,124 @@
 # ADR0007 Location Intersection — prospective v5 normative design
 
-`MUST`, `MUST NOT`, `SHOULD`, and `MAY` are normative. `ALGORITHM.md`, `POLICY.json`, and `LIMITS.json` are co-normative; disagreement is a specification defect and execution MUST stop.
+This root is a prospective private contract. `MUST`/`MUST NOT` are normative. Co-normative files are those listed in `SPEC_MANIFEST.json`. Any disagreement is a specification defect and evaluation MUST stop.
 
-## 1. Identities and digests
+## 1. Closed identities and canonical JSON
 
-Assumption: v5 must not collide with predecessors. Therefore the exact IDs are:
+Exact IDs are request `lsp-trace.adr0007.location-intersection.request.private.v5`, result `lsp-trace.adr0007.location-intersection.result.private.v5`, policy `lsp-trace.adr0007.location-policy.private.v5`, limits `lsp-trace.adr0007.location-limits.private.v5`, source binding `lsp-trace.adr0007.source-admission.private.v2`, and profile `lsp-trace.adr0007.strict-json-c14n.v1`. The five `*.schema.json` files are closed Draft 2020-12 schemas (`additionalProperties:false`; no nullable field).
 
-- request schema: `lsp-trace.adr0007.location-intersection.request.private.v5`;
-- result schema: `lsp-trace.adr0007.location-intersection.result.private.v5`;
-- policy schema/ID: `lsp-trace.adr0007.location-policy.private.v5` / `lsp-trace.adr0007.location-policy.v5`;
-- limits schema/ID: `lsp-trace.adr0007.location-limits.private.v5` / `lsp-trace.adr0007.location-limits.v5`;
-- canonical profile: `lsp-trace.adr0007.strict-json-c14n.v1`.
+Strict input is one UTF-8 JSON object followed by EOF or one LF. BOM, invalid UTF-8, duplicate keys, unknown keys, comments, non-integer numbers, exponent notation, leading zero, negative zero, values outside `[0,2^63-1]`, unpaired surrogate escape, trailing data, and whitespace other than the optional final LF are invalid. Duplicate-key detection occurs before object construction. Schema validation cannot relax lexical rejection.
 
-`policyDigest` is `sha256:` plus lowercase hex SHA-256 of the canonical `POLICY.json` object after replacing its `digest` value with exactly `sha256:` followed by 64 ASCII zeroes. The published `digest` MUST equal that value. `limitsDigest` is SHA-256 of the canonical bytes of `LIMITS.json` exactly as published. A request binds both digests. This zeroed-field rule avoids self-reference.
+Canonical output is compact UTF-8 JSON plus one LF. Object fields follow schema `required` order; arrays preserve semantic order. Integers are shortest decimal. Strings escape quote, backslash, and controls (short escapes for `\b\f\n\r\t`, otherwise lowercase `\u00xx`); `/`, U+2028, and U+2029 remain UTF-8. Unknown fields never serialize. Request field order is `schema,id,relation,selector,admissionDigest,policyDigest,limitsDigest,topK,members`; result order is `schema,requestId,outcome,members,ranked,counters,detail`. Nested orders are their schema `required` arrays.
 
-## 2. Strict JSON and canonical bytes
+Every request field is required and non-null. `requestId` is the decoded top-level `id` only if strict lexical parse produced one object and `id` was a string; otherwise it is `""`. Later schema failure does not erase a decoded string ID.
 
-Input MUST be one UTF-8 JSON object followed by either EOF or one LF. BOM, invalid UTF-8, duplicate keys, unknown keys, comments, NaN/infinity, exponent notation, negative zero, fractional numbers, trailing non-whitespace, trailing whitespace other than the single optional LF, and unpaired surrogate escapes are invalid. Numbers are base-10 unsigned integers with no leading zero except `0`, bounded to `[0, 2^63-1]`. Strings decode JSON escapes, MUST be Unicode scalar sequences, and are NFC-normalized only where a field explicitly says so; noncanonical normalizable values are rejected, not rewritten.
+## 2. Digest envelope
 
-Canonical serialization has no insignificant whitespace, emits object fields in the schema-declared order, preserves array order unless a rule explicitly sorts it, uses decimal integers, `true`/`false`/`null`, and emits strings as UTF-8 with only `"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, or lowercase `\u00xx` for U+0000–U+001F. Other scalars are emitted directly, including `/`; U+2028/U+2029 are not escaped. Canonical documents end with exactly one LF. Field order is normative arrays in this document, not lexical key order.
+`limitsDigest = sha256(canonical LIMITS.json bytes)`. Policy embeds that digest. Policy self-digest is SHA-256 over canonical `POLICY.json` after replacing only `digest` with `sha256:` plus 64 zeroes. The published digest MUST match. Manifest entries hash exact published bytes. For the manifest’s own entry only, `sha256` and `bytes` describe the canonical measurement image in which that entry’s `sha256` is 64 zeroes and `bytes` is 0; this is the sole self-reference exception.
 
-Request order: `schema,id,relation,selector,admissionDigest,policyDigest,limitsDigest,topK,members`. Selector order: `kind,path,frozenPaths,union`; absent forbidden fields are omitted. Union entry: `path,ranges`. Position: `line,character`; range: `start,end`. Member: `id,path,revision,fileDigest,objectDigest,ranges,available,policyAllowed,score`. Result: `schema,requestId,outcome,members,ranked,counters,detail`. Member row: `ordinal,memberId,outcome,witnesses`. Witness: `path,selectorRange,candidateRange,intersection,revision,fileDigest,objectDigest`. Ranked: `ordinal,memberId,score`. Counters: `input,eligible,ineligible,unavailableLocation,invalidLocation,duplicateMember,filteredByPolicy,ranked,witnesses,work,sourceBytes,outputBytes`.
+## 3. Source admission import and mapping
 
-## 3. Request, selector, and paths
+The immutable imported contract is pinned in the manifest by repository commit, path, byte count, SHA-256, and Git blob. Its behavior is vendored normatively here: input is nonempty; limits all positive; paths are nonempty valid UTF-8 NFC clean relative slash paths with no backslash, colon, repeated slash, leading slash, `.`/`..` or dot segments; revision and bytes are nonempty; bytes are valid UTF-8; path is unique; per-source and cumulative byte maxima are inclusive; file/object digest, if supplied, equals SHA-256 bytes and both output digests are that value; sources sort by path bytes; admission digest is SHA-256 of source schema bytes followed, for every sorted source and each path/revision/fileDigest/objectDigest, by NUL then UTF-8 value.
 
-A selector is exactly one form:
+| Imported state | v5 terminal outcome/detail | precedence |
+|---|---|---:|
+| binding absent | `SOURCE_ADMISSION_UNAVAILABLE/BINDING_UNAVAILABLE` | 3 |
+| schema differs | `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA` | 3 |
+| `INVALID_REQUEST` | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_REQUEST` | 3 |
+| `INVALID_SOURCE` | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` | 3 |
+| `DUPLICATE_SOURCE` | `SOURCE_ADMISSION_MISMATCH/BINDING_DUPLICATE_SOURCE` | 3 |
+| `RESOURCE_LIMIT`, detail `sources` | `RESOURCE_LIMIT/SOURCES` | 7 |
+| `RESOURCE_LIMIT`, detail `bytes` | `RESOURCE_LIMIT/SOURCE_BYTES` | 7 |
+| binding/request digest differs | `SOURCE_ADMISSION_MISMATCH/BINDING_DIGEST` | 3 |
+| complete | continue | — |
 
-- `EXACT_FILE`: `path` present; `frozenPaths` and `union` absent.
-- `PATH_PREFIX`: `path` and `frozenPaths` present; `union` absent.
-- `RANGE_UNION`: `union` present; `path` and `frozenPaths` absent.
+Imported validation occurs before policy/selector/member evaluation. Cancellation/deadline polls outrank every mapping.
 
-An empty `union`, empty `frozenPaths`, repeated frozen path, repeated union path, or empty ranges is invalid selector. Paths MUST satisfy the imported canonical-path predicate. Prefix matching is segment-aware: prefix `p` selects exactly `p` and strings beginning `p + "/"`; `src` does not select `src2/a`. `PATH_PREFIX.frozenPaths` is the exact expansion: it MUST be strictly increasing by UTF-8 bytes, every path MUST match the prefix, and it MUST equal the strictly sorted set of admitted binding paths matching the prefix. Missing or extra paths cause `INVALID_SELECTOR/FROZEN_EXPANSION`.
+## 4. Selector and text decision tables
 
-`EXACT_FILE` expands to the whole-file range of its bound source. `PATH_PREFIX` expands each frozen path to that source's whole-file range in frozen order. `RANGE_UNION` retains request union order for validation, then canonicalizes entries by path UTF-8 ascending and ranges by `(start.line,start.character,end.line,end.character)` ascending; exact duplicate ranges are removed.
+| kind | required | forbidden | expansion |
+|---|---|---|---|
+| `EXACT_FILE` | `path` | `frozenPaths,union` | bound source whole-file range |
+| `PATH_PREFIX` | `path,frozenPaths` | `union` | exactly the strictly byte-sorted admitted paths equal to prefix or starting `prefix/` |
+| `RANGE_UNION` | nonempty `union` | `path,frozenPaths` | entries sorted path then range tuple; exact duplicate ranges removed |
 
-## 4. Source admission and member binding
+Empty expansion/union/ranges → `INVALID_SELECTOR/EMPTY_SELECTION`; noncanonical path → `INVALID_SELECTOR/PATH`; wrong presence → `INVALID_SELECTOR/SELECTOR_SHAPE`; prefix missing, extra, duplicate, unsorted, or non-segment member → `INVALID_SELECTOR/FROZEN_EXPANSION`. `src` matches `src` and `src/a`, never `src2/a`. Repeated union path is `SELECTOR_SHAPE` (it is not merged).
 
-The source binding imports `sourceadmissionv2` exactly: schema `lsp-trace.adr0007.source-admission.private.v2`; nonempty valid UTF-8 bytes; canonical NFC relative slash path; nonempty revision; unique path; per-source and total byte limits; file/object digest equal SHA-256 of bytes (filled by admission if absent); sources sorted by path; admission digest SHA-256 over schema then, for each sorted source and each of path/revision/fileDigest/objectDigest, one NUL byte followed by UTF-8 value bytes.
+LF splits lines. CR immediately before LF is terminator and unaddressable; bare CR is one UTF-16 unit. Final LF creates an empty final line. Character is UTF-16 code units in line content. Line must exist; character may equal line length; out-of-file or mid-surrogate → `INVALID_RANGE/POSITION`. Range is half-open and requires start < end; empty/reversed selector/member range → `SELECTOR_RANGE`/`MEMBER_RANGE`. Whole file is `(0,0)` to final-line end. Touching ranges do not intersect.
 
-An absent binding produces `SOURCE_ADMISSION_UNAVAILABLE/BINDING_UNAVAILABLE`. Wrong binding schema or request admission digest produces `SOURCE_ADMISSION_MISMATCH/BINDING_DIGEST`. A member source is bound only when its path exists and its revision, fileDigest, and objectDigest exactly equal the admitted source. `available=false` is classified unavailable without backend access. `available=true` with absent/mismatched source binding is invalid location.
+For same-path selector `s` and candidate `c`: `INTERSECTS ⇔ max(start)<min(end)`; `CONTAINED_BY ⇔ s.start≤c.start ∧ c.end≤s.end`; `CONTAINS ⇔ c.start≤s.start ∧ s.end≤c.end`. Eligibility is existential over all same-path pairs.
 
-Member identity is the NFC `id` string alone. Empty or non-NFC IDs are invalid request. The first ordinal for an ID is the identity owner; every later ordinal is `DUPLICATE_MEMBER`, irrespective of availability, policy, binding, ranges, or score. The first owner is then classified in this order: `available=false` → `UNAVAILABLE_LOCATION`; source/binding/range invalid → `INVALID_LOCATION`; `policyAllowed=false` → `FILTERED_BY_POLICY`; relation true → `ELIGIBLE`; otherwise `INELIGIBLE`. Thus unavailable precedes invalid, invalid precedes policy, and duplicates precede all three for subsequent occurrences.
+## 5. Member/source decision table
 
-## 5. Text and range model
+Identity is nonempty NFC `id`; malformed identity is `INVALID_REQUEST/REQUEST_FIELD`. First ordinal owns an identity; later occurrences are `DUPLICATE_MEMBER` without source, range, policy, or score inspection.
 
-Source bytes MUST be valid UTF-8. Logical lines are split on LF. A CR immediately before LF belongs to the line terminator and is not addressable; a bare CR is an ordinary U+000D scalar occupying one UTF-16 code unit. The final LF creates a following empty line. Without final LF, the final line ends at EOF. Position character counts UTF-16 code units in line content only. A position may equal line length. It MUST NOT exceed it or bisect a surrogate pair. Line equal to line count is invalid; the only EOF is the end position of the last logical line.
+| first-owner condition, first match wins | row outcome |
+|---|---|
+| `available=false` | `UNAVAILABLE_LOCATION` |
+| path absent or revision/fileDigest/objectDigest differs from admitted source | `INVALID_LOCATION` |
+| any member range invalid | `INVALID_LOCATION` |
+| `policyAllowed=false` | `FILTERED_BY_POLICY` |
+| some relation-true pair | `ELIGIBLE` |
+| otherwise | `INELIGIBLE` |
 
-A range is half-open `[start,end)` in lexicographic `(line,character)` order. `start < end` is required; empty or reversed ranges are invalid. Every endpoint must be valid. Whole-file range is `(0,0)` to the EOF position. An empty file is forbidden by source admission, but a one-LF file has whole range `(0,0)..(1,0)`. Touching ranges do not intersect. Out-of-file and mid-surrogate endpoints are invalid.
+Unavailable suppresses invalid/policy; invalid suppresses policy; duplicate suppresses all. Needed source population is selector-expanded paths union paths of first-owner `available=true` members that exist in binding. `sourceBytes` is sum of their unique admitted byte lengths, computed before pair evaluation. No backend exists: all bytes are immutable in the supplied binding. `BACKEND_FAILURE` is not a v5 outcome.
 
-## 6. Relations
+## 6. Witnesses, rows, counters, ranking
 
-For selector range `s` and candidate/member range `c` on the same path:
+A witness exists for every relation-true pair of an eligible first owner. Its intersection is `[max starts,min ends)`. Sort by path bytes, selector tuple, candidate tuple, revision bytes, fileDigest, objectDigest; deduplicate exact seven-field equality. Global cap applies after concatenating member ordinal order and before materialization. Non-true pairs emit none.
 
-- `INTERSECTS(s,c) ⇔ max(s.start,c.start) < min(s.end,c.end)`;
-- `CONTAINED_BY(s,c) ⇔ s.start ≤ c.start ∧ c.end ≤ s.end` (candidate is contained by selector);
-- `CONTAINS(s,c) ⇔ c.start ≤ s.start ∧ s.end ≤ c.end` (candidate contains selector).
-
-A member is eligible iff there exists at least one selector range and at least one candidate range on the same path satisfying the requested relation. Quantification is existential over pairs; no all-ranges condition exists.
-
-## 7. Witnesses
-
-Only eligible first-owner rows receive witnesses. One witness is generated for every relation-true pair. `intersection` is always `[max starts,min ends)`; for containment it remains the geometric overlap, not the larger range. Witnesses sort by path UTF-8, selector range tuple, candidate range tuple, revision UTF-8, fileDigest, objectDigest. Exact seven-field duplicates are removed after sorting. The global `maxWitnesses` cap applies to the concatenation in member ordinal order. The evaluator MUST precharge the complete prospective unique count; if it exceeds the cap, return terminal `RESOURCE_LIMIT/WITNESSES` with no rows. Non-intersecting and otherwise relation-false pairs produce no witness.
-
-## 8. Rows, counters, and ranking
-
-`COMPLETE` returns exactly one row for every input member in ordinal order. Every failure returns zero member and ranked rows and all counters zero. For complete results:
-
-`input = members.length`; each row contributes to exactly one of six counters; therefore
+Complete returns one member row per input ordinal. Failure returns no rows and all twelve counters zero. Complete satisfies:
 
 `input = eligible + ineligible + unavailableLocation + invalidLocation + duplicateMember + filteredByPolicy`.
 
-`witnesses` is the sum of emitted witness counts. Eligible rows form the ranked eligible set. Sort descending score, then ascending ordinal, then member ID by UTF-8 bytes. `ranked = min(topK, eligible)` and ranked rows are the first `ranked`; `topK=0` returns no ranked rows but does not change eligibility or witnesses.
+`witnesses` is emitted count. Ranked population is all eligible rows, sorted score descending, ordinal ascending, memberId UTF-8 ascending. `ranked=min(topK,eligible)`; `topK=0` emits none without changing witnesses.
 
-`sourceBytes` is the sum of byte lengths of unique admitted source paths actually needed after selector expansion plus paths referenced by first-owner available members, deduplicated by path. It is computed after binding/selector validation and before pair evaluation; unavailable rows and duplicates add no path. If a referenced available member path is absent, no bytes are added for that path.
+Measurement image `I` is the complete canonical result with both `counters.outputBytes=0` and `counters.work=0`. `B=|I|` including LF. Report `outputBytes=B`. Work uses B, never final serialized width. Thus both counters are acyclic.
 
-`outputBytes` is the byte length of the complete canonical result (including final LF) with only `counters.outputBytes` replaced by integer `0`; the reported value is that measurement. `maxOutputBytes` is tested against that value, preventing self-reference.
+## 7. Total terminalization
 
-## 9. Outcome precedence and detail enum
+Poll before parse; after lexical parse; before/after admission; before each member, pair, witness, named sort population, measurement serialization, and return. At each poll cancellation precedes expired deadline. No partial state survives.
 
-At each polling point, cancellation is checked before deadline; if both are true, `CANCELLED/CANCEL_SIGNAL` wins. Otherwise terminal precedence is:
+Terminal precedence: (1) `CANCELLED/CANCEL_SIGNAL`; (2) `TIMEOUT/DEADLINE`; (3) lexical/schema `INVALID_REQUEST` details; (4) source-unavailable/mismatch mapping; (5) policy then limits digest `POLICY_MISMATCH`; (6) selector/range errors; (7) static/dynamic `RESOURCE_LIMIT`; (8) `COMPLETE/NONE`. Within a class, first request order wins; selector canonical populations use canonical order.
 
-1. `CANCELLED/CANCEL_SIGNAL` or `TIMEOUT/DEADLINE` at a poll;
-2. strict parse/schema failure: `INVALID_REQUEST/{JSON_SYNTAX,JSON_ENCODING,UNKNOWN_FIELD,DUPLICATE_FIELD,TRAILING_DATA,SCHEMA_ID,REQUEST_FIELD}`;
-3. source binding unavailable/mismatch as above;
-4. policy/limits digest mismatch: `POLICY_MISMATCH/{POLICY_DIGEST,LIMITS_DIGEST}`;
-5. selector then range errors: `INVALID_SELECTOR/{SELECTOR_SHAPE,PATH,FROZEN_EXPANSION,EMPTY_SELECTION}` or `INVALID_RANGE/{SELECTOR_RANGE,MEMBER_RANGE,POSITION}`;
-6. static/dynamic limit: `RESOURCE_LIMIT/{MEMBERS,SELECTOR_PATHS,RANGES,FROZEN_PATHS,SOURCES,SOURCE_BYTES,WITNESSES,TOP_K,WORK,OUTPUT_BYTES}`;
-7. backend failure: `BACKEND_FAILURE/{SOURCE_READ,BACKEND_INTERNAL}`;
-8. `COMPLETE/NONE`.
+Every terminal result is canonical result schema, fallback requestId rule, terminal outcome/detail, empty members/ranked, and zero counters. Failure serialization and polling are exempt from work/output limits; it MUST fit `maxRequestBytes + 4096`, a construction guaranteed by fixed fields plus bounded requestId. If construction unexpectedly cannot fit or serialize, evaluator returns the same minimal shape with `requestId=""`; if that cannot serialize, the implementation is nonconforming and returns no v5 result. This rule prevents recursive failure. A complete measurement with `B>maxOutputBytes` terminalizes once as `RESOURCE_LIMIT/OUTPUT_BYTES`; the failure result is exempt.
 
-The detail field is exactly one enum token above; no free text. The first error in request order wins within a class, except canonicalized selector validation uses canonical path/range order. Backend failure never becomes a member outcome and never yields partial results.
+## 8. Exhaustive limits
 
-## 10. Limits, work, cancellation, and atomic failure
+All maxima are inclusive; plus one fails before the exceeding operation.
 
-All maxima are inclusive: value equal to maximum is accepted; maximum plus one is refused. Checkpoints: member/topK before binding; source limits during imported admission; selector path/frozen/range counts before expansion; sourceBytes after needed-path population; witness count after dedup count and before materialization; work before every charged operation; output bytes after canonical zeroed measurement and before return.
+| limit/population | checkpoint/order | detail | work charged before check? |
+|---|---|---|---|
+| request bytes | before parse | `INVALID_REQUEST/REQUEST_FIELD` | no |
+| members | after schema | `MEMBERS` | request bytes only |
+| topK | after members | `TOP_K` | request bytes only |
+| imported sources | admission | `SOURCES` | request bytes only |
+| source bytes/file,total | admission | `SOURCE_BYTES` | admitted prior bytes only |
+| selector distinct paths | after selector shape | `SELECTOR_PATHS` | P/R already validated through offender |
+| ranges per path | after path count | `RANGES_PER_PATH` | through offender |
+| total ranges | after per-path | `TOTAL_RANGES` | through offender |
+| frozen paths | before expansion compare | `FROZEN_PATHS` | P through offender |
+| needed source bytes | after needed population | `SOURCE_BYTES` | S through offender |
+| unique witnesses | after prospective dedup | `WITNESSES` | Q/C, no X |
+| work | before every charged unit | `WORK` | refusal reports zero |
+| measurement bytes B | after I | `OUTPUT_BYTES` | all success work calculated |
 
-Checked work uses unsigned 64-bit arithmetic and coefficients in `LIMITS.json`:
+## 9. Work populations
 
-`W = 50 + 3J + 7P + 11R + 13M + 1S + 19Q + 23X + 29C + 31B`.
+`W=50+3J+7P+11R+13M+1S+19Q+23X+29C+31B`, checked unsigned 64-bit, then required `W≤maxWork`. Coefficients are positive schema constants.
 
-`J` is strict JSON nodes validated (each object, array, key, and scalar); `P` canonical-path validations; `R` range validations; `M` member classifications including duplicates; `S` admitted source bytes read for the unique `sourceBytes` population; `Q` selector/candidate pair predicates evaluated; `X` unique witnesses materialized; `C` actual comparator calls across every required sort; `B` bytes in the zeroed-output canonical serialization. Each operation MUST precharge its coefficient before execution. If checked addition/multiplication overflows, or the postcharge would exceed maxWork, refuse before the operation with `RESOURCE_LIMIT/WORK`; equality is allowed. A refusal result has zero counters, including work.
+- `J`: exact raw request byte length including optional LF; renamed semantic is request-byte population.
+- `P`: one per attempted canonical-path validation: selector path, each union path, each frozen path, each admitted source path, and each first-owner available member path.
+- `R`: one per attempted endpoint-pair range validation, selector then first-owner available member order.
+- `M`: one per input member whose classification begins, including duplicate.
+- `S`: one per byte in the unique needed source population.
+- `Q`: one per same-path selector/candidate pair whose relation predicate is evaluated.
+- `X`: unique witnesses actually materialized.
+- `C`: `Σ n(n−1)/2` over these named sortable populations, regardless of implementation: admitted sources; prefix frozen paths; normalized union entries; ranges within each union entry; prospective witnesses within each member; eligible ranking rows. Populations of 0/1 contribute 0. Dedup occurs after the associated population charge.
+- `B`: measurement-image bytes.
 
-Poll points are: before parsing; after parsing; before and after source admission/binding; before each source read; before each member; before each pair; before each witness materialization; before each sort comparison; before and after serialization; before return. A poll terminal result discards all provisional rows/counters. A backend error is recorded provisionally, then an immediate poll occurs; cancellation, then deadline, overrides it. No partial result is ever returned.
+Every prospective increment is checked for overflow and precharged conceptually before its operation. If adding the next unit would overflow or exceed maxWork, terminalize `WORK`; equality passes. On non-work failures, pseudocode-defined increments may be computed diagnostically but failure counters remain zero.
+
+## 10. Authority ceiling
+
+Only the immutable syntax and evaluation rules inside this prospective root are claimed. No claim is made about current runtime behavior, dispatch, compatibility, implementation readiness, qualification, or acceptance. `SPEC_REVIEW_PENDING.md` controls the stop boundary.
