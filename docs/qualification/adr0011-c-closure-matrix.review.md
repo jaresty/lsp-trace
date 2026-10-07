@@ -1,8 +1,8 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `9f89d580bf042b8d88309eaa4df2f463d58fb474`
+Audited implementation revision: `0d2f19fe38cf7e431a60208d5582d5a7cd6cc9d6`
 
-Audited tree: `1429ecacd162760809d4a529f5ad9ce87c267348`
+Audited tree: `8820747197c23c9e17d1d1e0145f3001f1efcd6c`
 
 Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
@@ -29,8 +29,8 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows: C01, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C16, C17, bytes_scanned, messages_processed, objects_materialized, events_emitted, and documents_acquired;
-- currently UNKNOWN active rows: C15, C18, and logical_buffer_bytes_reserved.
+- currently CLOSED active rows (21): C01, C03, C04, C05, C06, C07, C08, C09, C10, C11, C12, C13, C14, C16, C17, bytes_scanned, messages_processed, objects_materialized, events_emitted, documents_acquired, and logical_buffer_bytes_reserved;
+- currently UNKNOWN active rows (2): C15 and C18.
 
 Current result remains:
 
@@ -38,7 +38,7 @@ Current result remains:
 C_EXIT_BLOCKED
 ```
 
-The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. C11 closes with portable integrated evidence that the private definition path accepts exact original result tokens through 524,288 bytes and refuses 524,289 before token copy, accepted response observation, or downstream result publication. C12 closes with independent portable evidence that the noncustodial private references path returns exact result bytes through 524,288, correlates accepted observation to session and generation, and refuses 524,289 before token copy or publication. The `messages_processed` row closes with a distinct transaction work account: every successfully decoded complete message counts once at semantic begin, later refusal does not refund it, malformed decode counts zero, and checked overflow freezes without mutation. The `bytes_scanned` row closes at implementation commit `e5e9c6f6b4fe9cafb3daf643a947c7b90c99555b` and tree `2bbda7c27868d00dfc4f1a8a39a28dcca80a1579`: every actual raw-scanner traversal is charged, including publication and replay paths; malformed work persists, oversize input charges zero, occurrence identity is enforced, typed overflow propagates through owner, proposal, scanner publication, and replay paths, the account seals terminally, and the ordinary path remains default-off. The production caller denominator is exactly 67 traversals of the 199-byte retained payload, so `67 * 199 = 13333`. Twenty of 23 active rows are closed; three remain unknown. The named checker is therefore expected to report exactly four closure failures: one status failure each for C15 and C18, plus one status and one missing-rule failure for `logical_buffer_bytes_reserved`. The result remains `C_EXIT_BLOCKED`. C07–C12 subsequently migrated from mutable live-source comparison to matrix-pinned versioned selectors and immutable historical source-authority packets. That migration preserves prior execution evidence and claim ceilings; it is not requalification or recertification.
+The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. C06 closes after causally verified synchronous settlement of retired, unowned backing. C07 closes with a versioned tracked hermetic packet proving the real private pre-block request boundary at -1ns, equality, and +1ns. C08 closes after binding the generation-scoped 60-second epoch to startup preflight and proving STOP retirement, successful RESTART succession, stale-generation refusal, and failed-RESTART non-admission. C09 closes with portable integrated evidence that the definition-selected private Manager path accepts exact decoded-remarshal sizes through 1,048,576 bytes and refuses 1,048,577 before accepted observation or downstream definition publication. C10 closes with independent portable evidence that the real private references route selects the 1,572,864-byte profile, continues at the boundary, and refuses +1 before accepted notification or result publication. C11 closes with portable integrated evidence that the private definition path accepts exact original result tokens through 524,288 bytes and refuses 524,289 before token copy, accepted response observation, or downstream result publication. C12 closes with independent portable evidence that the noncustodial private references path returns exact result bytes through 524,288, correlates accepted observation to session and generation, and refuses 524,289 before token copy or publication. The `messages_processed` row closes with a distinct transaction work account: every successfully decoded complete message counts once at semantic begin, later refusal does not refund it, malformed decode counts zero, and checked overflow freezes without mutation. The `bytes_scanned` row closes at implementation commit `e5e9c6f6b4fe9cafb3daf643a947c7b90c99555b` and tree `2bbda7c27868d00dfc4f1a8a39a28dcca80a1579`: every actual raw-scanner traversal is charged, including publication and replay paths; malformed work persists, oversize input charges zero, occurrence identity is enforced, typed overflow propagates through owner, proposal, scanner publication, and replay paths, the account seals terminally, and the ordinary path remains default-off. The production caller denominator is exactly 67 traversals of the 199-byte retained payload, so `67 * 199 = 13333`. Twenty-one of 23 active rows are closed; two remain unknown. The named checker is therefore expected to report exactly two closure failures: one status failure each for C15 and C18. The result remains `C_EXIT_BLOCKED`. C07–C12 subsequently migrated from mutable live-source comparison to matrix-pinned versioned selectors and immutable historical source-authority packets. That migration preserves prior execution evidence and claim ceilings; it is not requalification or recertification.
 
 ## bytes_scanned closure binding
 
@@ -117,7 +117,29 @@ The closure is bound to these immutable revisions and reviewed evidence:
 - source-pin review: `docs/qualification/adr0011-synthetic-source-pin.6f5b75c7019e862d.review.md`, SHA-256 `935a2120d95fc034f66a969866244bd59dd7a6b83d75208e5b1b39787014369d`, verdict `REPIN_VERIFY_GO`, integration receipt `20261007212118-4708`;
 - final independent semantic review: verdict `GREEN_REVIEW_GO`, as supplied by the user for this closure, verifying exact URI identity, cache/fresh same-key success, first-success counting, callback execution, zero-count refusals, context-only custody, concurrency, seal, privacy/default-off/caller preservation, and C13/C14 non-authority.
 
-These results close only `documents_acquired`. They do not recertify C13 or C14, change C15 or C18, or close `logical_buffer_bytes_reserved`.
+These results close only `documents_acquired`. They do not recertify C13 or C14 or change C15 or C18.
+
+## logical_buffer_bytes_reserved closure binding
+
+The selected denominator is cumulative exact capacity for every successful successor allocation reservation across seven pinned roles: prefetch, header, body, consume scratch, result token, original frame, and decoded message. It is not a live-byte gauge. Outstanding reservation ownership remains separate and private in the C15 ledger; releasing a lease reduces C15 live ownership but never refunds committed work. Successful retries and replay reserve and count anew, and a malformed message preserves the exact successful role reservations reached before failure.
+
+The work account and exact occurrence identity are installed at both production successor-allocation-owner construction sites. Work overflow and identity mismatch refuse before C15 reservation or allocation. A later independent C15 refusal rolls back the pending work reservation, preserving the separation between this cumulative work counter and C15's 33,554,432-byte live-owned resource cap. Exact equality at `uint64` maximum succeeds; +1 refuses without counter mutation and terminally freezes the work account. Default-off outputs, leases, C15 accounting, and all prior work counters remain exact.
+
+The real owner exposes no test-only seam between work admission and C15 reservation. The direct account layer proves Seal settlement, but the production-owner causal Seal injection remains explicitly `BLOCKED_NOT_RED`; it is unavailable and is not claimed by this closure.
+
+The closure is bound to these immutable revisions and reviewed evidence:
+
+- foundation: commit `0fb4e41a02db54eba57dc488a268e8415f13b45d`, tree `091814b704a56c2b4cfee0d2af9ef75d3e8547c2`;
+- integration: commit `0d2f19fe38cf7e431a60208d5582d5a7cd6cc9d6`, tree `8820747197c23c9e17d1d1e0145f3001f1efcd6c`;
+- reservation, settlement, overflow, identity, coexistence, and exact snapshot tests: `internal/adr0011work/logical_buffer_bytes_reserved_red_test.go`, SHA-256 `595fb3b19755da88873f9c8f9a9b2314f301398cab7981e1053698aa487be36c`;
+- seven-role production denominator and exact capacity-formula test: `internal/lspwire/successor_allocation_denominator_private_test.go`, SHA-256 `c8aa3833c4305647bfcfd7b2442f8cbd7bdf4f46b06028300911da5ea2af6cda`;
+- integrated exact reached sums, malformed/replay behavior, no-refund release, C15 distinction, pre-C15 mismatch/overflow, both construction sites, and default-off tests: `sessionruntime/adr0011_c17_logical_buffer_successor_red_private_test.go`, SHA-256 `6fb22900ba9274c93efbf61fddf32fd6c1260660f6b9f55220b6d581c0f53842`;
+- canonical source manifest: `docs/qualification/adr0011-synthetic-source-pin.17e4a67fbebd0227.manifest.json`, SHA-256 `17e4a67fbebd0227488515f90562d05b2981ccf77a3978ac5a0a860d3efce80f`, selecting 119 files and 950,476 bytes with aggregate digest `sha256:0f605406e07d2f70e6765f9820a2c5677c6087744a60e6b318ce4631bd73d098`;
+- source-pin review: `docs/qualification/adr0011-synthetic-source-pin.17e4a67fbebd0227.review.md`, SHA-256 `3ad5264ec574a0635d57ad2aba64bd85d76e4fe93bb008901986ec1c374d2341`, verdict `REPIN_VERIFY_GO`, integration receipt `20261007223225-1205`;
+- foundation review: verdict `FOUNDATION_GREEN_GO`, integration receipt `20261007214645-3123`;
+- final independent semantic review: verdict `GREEN_REVIEW_GO`, integration receipt `20261007223225-3565`, independently verifying the seven-role denominator, exact custody and capacity, cumulative no-refund behavior, retry/malformed reached successes, C15 rollback and independent authority, pre-C15 work refusal, both construction sites, default-off parity, and prior-counter preservation while leaving the production-owner Seal injection explicitly unavailable.
+
+These results close only `logical_buffer_bytes_reserved`. They do not recertify or close C15 or C18, and they do not infer resource-cap closure from work-counter evidence. No repair evidence pin is added because the reviewed canonical successor pin is sufficient.
 
 ## Exact amendment binding
 
@@ -140,13 +162,10 @@ No other row may use the superseded status. The checker retains the exact ordere
 |---|---|---|
 | C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
 | C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
-| logical_buffer_bytes_reserved | Independent transaction work semantics and exact traces remain incomplete. | Verify `logical_buffer_bytes_reserved` without inferring closure from resource caps. |
-| Cross-cutting source pins | Current portable evidence is incomplete. | Track or generate every selected fixture from a clean checkout. |
-| Cross-cutting package ownership | The private transaction-owned ledger exists, but one producer row is not yet wired and independently verified. | Wire the remaining producer at its selected semantic boundary and preserve exact transaction identity. |
 
 ## Checker guarantees
 
-The checker validates the exact ordered historical inventory, revised scope identity, accepted amendment bytes, predecessor bytes, audited Git history, tracked packet paths, contained regular files, evidence hashes, concrete named test selection, observed test names/counts, non-wildcard qualification, and cross-cutting fields. It fails closed for every active non-CLOSED row. At this closure state, its expected closure result is exactly four failures—one status failure each for C15 and C18, plus status and missing rule for `logical_buffer_bytes_reserved`—and `C_EXIT_BLOCKED`. Any additional integrity failure is a separate packet blocker.
+The checker validates the exact ordered historical inventory, revised scope identity, accepted amendment bytes, predecessor bytes, audited Git history, tracked packet paths, contained regular files, evidence hashes, concrete named test selection, observed test names/counts, non-wildcard qualification, and cross-cutting fields. It fails closed for every active non-CLOSED row. At this closure state, its expected closure result is exactly two failures—one status failure each for C15 and C18—and `C_EXIT_BLOCKED`. Any additional integrity failure is a separate packet blocker.
 
 Mutation controls must cover at least:
 
@@ -162,4 +181,4 @@ Mutation controls must cover at least:
 
 ## Claim ceiling
 
-This packet documents a revised C-only scope. It does not authorize or claim D readiness, public/API/schema changes, occurrence admission, private indexing, path demonstration, push, release, or closure of any remaining active unknown row. The `objects_materialized`, `events_emitted`, and `documents_acquired` work accounts remain private and default-off and introduce no public schema.
+This packet documents a revised C-only scope. It does not authorize or claim D readiness, public/API/schema changes, occurrence admission, private indexing, path demonstration, push, release, or closure of either remaining active unknown row. All six work accounts remain private and default-off and introduce no public schema. The `logical_buffer_bytes_reserved` closure does not close C15 and does not claim the unavailable production-owner Seal injection.
