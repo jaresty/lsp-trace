@@ -19,12 +19,14 @@ evaluate(raw, binding, cancel, deadline):
     poll(); inc(M,1)
     if id=="" or NFC(id)!=id: fail INVALID_REQUEST/REQUEST_FIELD
 
-  poll(); require and validate closed envelope branch
-  for envelope source/input in array order:
-    validate canonical padded base64; decode; require reencode equality
+  poll(); project envelope using only the five structural checks in DESIGN
+  if projection fails: fail SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA
+  for envelope source/input tuple in array order:
+    require all five tuple keys and string values; otherwise fail BINDING_INVALID_SOURCE
+    validate canonical padded base64; decode; require reencode equality; otherwise fail BINDING_INVALID_SOURCE
     inc(S,decodedLength)
-    inc(P,1); validate source path
-  require complete-source path order strictly ascending
+    inc(P,1); validate path/revision/digest syntax and decoded bytes; otherwise fail BINDING_INVALID_SOURCE
+  require complete-source path order strictly ascending; otherwise fail BINDING_INVALID_SOURCE
   rerun imported admission and map exact typed outcome/detail
   inc(C, choose2(len(complete binding sources)))
   recompute source and admission digests; compare envelope and request
@@ -32,19 +34,19 @@ evaluate(raw, binding, cancel, deadline):
   if policyDigest!=POLICY.digest: fail POLICY_MISMATCH/POLICY_DIGEST
   if limitsDigest!=POLICY.limitsDigest: fail POLICY_MISMATCH/LIMITS_DIGEST
 
-  validate selector shape
+  // request schema already established selector shape; no semantic shape diagnostic exists
   if EXACT: inc(P,1); validate path; require bound; selectorPaths=1; generatedRanges=1
   if RANGE:
     for union entry raw order: inc(P,1); validate path; require bound
     check raw union count as selectorPaths
-    for each raw range: inc(R,1); validate; check raw per-path then raw total counts
-    inc(C,choose2(raw union count)); inc(C,choose2(raw ranges per entry)); then sort/dedup
+    for each raw range: inc(R,1); validate; check raw per-entry then raw total counts
+    inc(C,choose2(raw union count)); inc(C,choose2(raw ranges per entry)); then sort, merge repeated paths, and dedup exact ranges
   if PREFIX:
     inc(P,1); validate prefix
     for frozen raw order: inc(P,1); validate
     check raw frozen count; expand binding matches; check expanded selectorPaths
     check generated one range/path and generated total; inc(C,choose2(raw frozen count))
-    compare exact frozen expansion; zero matches fail EMPTY_SELECTION
+    compare exact frozen expansion; zero matches with nonempty frozen list fail FROZEN_EXPANSION
   build canonical selector ranges
 
   needed = selector paths union existing paths of first-owner available members
@@ -104,7 +106,7 @@ Fresh source `A` bytes are `a😀b\r\nxy\n` (11 UTF-8 bytes): lines have UTF-16 
 9. Prefix `src` matches `src` and `src/a`, not `src2/a`.
 10. Frozen expansion missing one admitted matching path → `INVALID_SELECTOR/FROZEN_EXPANSION`.
 11. Frozen expansion with extra nonmatching path → same failure.
-12. Repeated union path → `INVALID_SELECTOR/SELECTOR_SHAPE`.
+12. Repeated union path is schema-valid: raw entries count for limits, then ranges merge under that path and exact duplicates dedup.
 13. Duplicate true pair after exact range dedup → one witness.
 14. First owner unavailable with malformed range → unavailable; range not inspected.
 15. Later same ID unavailable → duplicate; duplicate takes precedence.
@@ -136,11 +138,11 @@ The image contains `work:0` and `outputBytes:0`; the final result contains `work
 
 ## Worked invalid-envelope, selector, diagnostic, and identity examples
 
-1. Complete envelope bytes `YQ==` decode to `a` and re-encode identically; decoded length and S charge are 1. `YQ`, `YQ=`, `YQ===`, `YQ==\n`, `YQ-_`, and `YR==` are noncanonical/invalid and map `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` (`YR==` has nonzero pad bits and re-encodes as `YQ==`).
-2. Complete sources `[b,a]` are valid individually but not strictly sorted: `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA` before digest comparison.
+1. Complete envelope bytes `YQ==` decode to `a` and re-encode identically; decoded length and S charge are 1. `YQ`, `YQ=`, `YQ===`, `YQ==\n`, `YQ-_`, and `YR==` pass or fail projection solely as strings, then map `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` during base64 validation (`YR==` has nonzero pad bits and re-encodes as `YQ==`).
+2. Missing top-level `binding`, extra top-level `foo`, non-object `binding`, non-array `sources`, or failure branch without `input` fails projection as `BINDING_SCHEMA`. A source tuple with numeric path, empty revision, `fileDigest:"bad"`, omitted bytes, or numeric bytes passes projection (the tuple object has only allowed keys) and then maps `BINDING_INVALID_SOURCE`. Complete sources `[b,a]` with valid tuples map `BINDING_INVALID_SOURCE` at deferred source-order validation.
 3. A typed `DUPLICATE_SOURCE/DUPLICATE_PATH` with input paths `[a,a]` reruns to the same result and maps `BINDING_DUPLICATE_SOURCE`; input `[a,b]` does not reproduce it and maps `BINDING_INVALID_REQUEST`.
 4. EXACT_FILE `missing.go` with a valid complete binding lacking that path gives `INVALID_SELECTOR/PATH`; the same envelope with missing bytes fails earlier as `BINDING_INVALID_SOURCE`.
-5. PATH_PREFIX `src` with no matching bound path gives `INVALID_SELECTOR/EMPTY_SELECTION`. One match plus empty frozen list is schema-invalid `INVALID_REQUEST/REQUEST_FIELD`; one match plus the wrong frozen path gives `FROZEN_EXPANSION`.
+5. PATH_PREFIX `src` with no matching bound path and required nonempty frozen list gives `INVALID_SELECTOR/FROZEN_EXPANSION` because every listed path is extra. Empty frozen list, empty union/ranges, wrong kind fields, missing required fields, or extras are schema-invalid `INVALID_REQUEST/REQUEST_FIELD`; none reaches selector semantics.
 6. RANGE_UNION with 11 paths each containing 10,000 identical raw ranges passes each per-path limit but totals 110,000 and fails `TOTAL_RANGES`; dedup to 11 never rescues it. PREFIX with 1,001 frozen entries fails `FROZEN_PATHS` before expansion; with 1,000 frozen entries but 1,001 binding matches it next fails `SELECTOR_PATHS`.
 7. Input containing both an early unknown field and a later duplicate field returns `DUPLICATE_FIELD` because class priority precedes byte offset. Two duplicate keys return the one whose second occurrence starts at the earliest byte. Two member schema errors at the same structural class use lower member ordinal then field order.
 8. Member 0 id `e\u0301` is valid Unicode but not NFC (`é` is NFC): after one M charge it returns `INVALID_REQUEST/REQUEST_FIELD` before an absent binding can return `BINDING_UNAVAILABLE`. A later duplicate is never considered.

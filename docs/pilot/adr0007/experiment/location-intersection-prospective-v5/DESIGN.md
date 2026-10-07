@@ -28,13 +28,23 @@ For every complete source, `bytes` is strict RFC 4648 standard alphabet base64 w
 
 The immutable imported contract is pinned in the manifest. After envelope validation, v5 MUST rerun the imported algorithm over decoded sources, recompute each source digest and admission digest, and require exact equality with the complete envelope. Its rules remain: positive limits; canonical NFC paths; nonempty revision and valid UTF-8 bytes; unique path; inclusive source limits; file/object digest equals SHA-256 bytes; sorted sources; admission digest is SHA-256 of imported schema followed, for each sorted source and each path/revision/fileDigest/objectDigest, by NUL then UTF-8 value.
 
-Envelope checks occur in this exact order after request diagnostics and member-identity validation: presence; envelope JSON plus schema discriminator/branch required/unknown fields (temporarily excluding the bytes pattern); base64 lexical form; decode/re-encode; full envelope schema; source order; decoded source count/length limits; rerun imported admission; compare rerun outcome/detail; compare binding fields/digests; compare request admission digest.
+Envelope checks occur in this exact order after request diagnostics and member-identity validation: presence; preliminary projection; source tuple/base64 validation; decoded source count/length limits; source order; rerun imported admission; compare rerun outcome/detail; compare binding fields/digests; compare request admission digest.
+
+The preliminary projection is mechanical and checks only these keywords:
+
+1. top level is an object; `schema` is the exact envelope-schema string; `outcome` is one recognized branch string;
+2. top-level keys are exactly the keys allowed by that branch and every branch-required top-level key is present;
+3. COMPLETE requires `binding` object with exactly `schema,admissionDigest,sources`; binding `schema` is the exact imported-schema string, `admissionDigest` is a string, and `sources` is an array;
+4. every failure branch requires `detail` string at its branch enum and `input` array; DUPLICATE_SOURCE additionally requires string `duplicatePath`;
+5. each `sources`/`input` element is an object with no key outside `path,revision,fileDigest,objectDigest,bytes`.
+
+Projection does **not** require tuple keys and does not inspect tuple value types, emptiness, path/revision validity, digest syntax/value, bytes type/content, decoded bytes, tuple order, or tuple count. Any failure of items 1–5 is `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA`. After projection, a missing tuple key, wrong tuple value type, malformed/empty path or revision, malformed file/object digest, non-string/malformed base64, empty or invalid-UTF-8 decoded bytes, or digest mismatch is `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE`. Admission-digest mismatch after a valid rerun remains `BINDING_DIGEST`.
 
 | envelope/imported state | v5 outcome/detail |
 |---|---|
 | absent | `SOURCE_ADMISSION_UNAVAILABLE/BINDING_UNAVAILABLE` |
-| wrong envelope schema, malformed branch, unsorted sources | `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA` |
-| malformed/noncanonical base64, empty/invalid UTF-8 decoded bytes, bad source field/digest | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` |
+| wrong envelope schema or malformed branch/container projection | `SOURCE_ADMISSION_MISMATCH/BINDING_SCHEMA` |
+| malformed/noncanonical base64, empty/invalid UTF-8 decoded bytes, bad/missing source field, bad path/revision/digest, or unsorted sources | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` |
 | typed/rerun `INVALID_REQUEST` | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_REQUEST` |
 | typed/rerun `INVALID_SOURCE` | `SOURCE_ADMISSION_MISMATCH/BINDING_INVALID_SOURCE` |
 | typed/rerun `DUPLICATE_SOURCE` | `SOURCE_ADMISSION_MISMATCH/BINDING_DUPLICATE_SOURCE` |
@@ -57,15 +67,16 @@ Missing decoded bytes in a complete binding is caught as `SOURCE_ADMISSION_MISMA
 | RANGE_UNION every path bound with bytes | validate supplied ranges; continue |
 | RANGE_UNION any path unbound | `INVALID_SELECTOR/PATH` at earliest union index |
 | PATH_PREFIX binding has matches and frozenPaths exactly match | generate one whole-file range per match; continue |
-| PATH_PREFIX zero bound matches and frozenPaths empty is schema-invalid | `INVALID_SELECTOR/EMPTY_SELECTION` |
+| PATH_PREFIX zero bound matches with required nonempty frozenPaths | `INVALID_SELECTOR/FROZEN_EXPANSION` because every frozen path is extra |
 | PATH_PREFIX matches but frozen list missing/extra/duplicate/unsorted/non-segment | `INVALID_SELECTOR/FROZEN_EXPANSION` |
-| any kind wrong field presence, repeated union path, empty union/ranges | `INVALID_SELECTOR/SELECTOR_SHAPE` except zero selection above |
+| wrong kind fields, missing required field, extra field, empty union/ranges/frozenPaths | schema-invalid → `INVALID_REQUEST/REQUEST_FIELD` |
+| RANGE_UNION repeated path entry | schema-valid; count raw entries for limits, then merge by path and normalize ranges |
 
-`src` matches `src` and `src/a`, never `src2/a`. The kind-specific populations and checks are:
+There is no reachable `SELECTOR_SHAPE` or `EMPTY_SELECTION`; neither token is in policy or result schema. `src` matches `src` and `src/a`, never `src2/a`. The kind-specific populations and checks are:
 
 | order | EXACT_FILE | RANGE_UNION | PATH_PREFIX |
 |---:|---|---|---|
-| 1 shape | raw path=1 | raw union paths=`len(union)`; repeated path fails | raw prefix=1; raw frozen=`len(frozenPaths)` |
+| 1 schema authority | shape already valid | raw union paths=`len(union)`; repeats allowed | raw prefix=1; raw frozen=`len(frozenPaths)` |
 | 2 path charges | validate exact path | validate union paths in raw index order | validate prefix then frozen paths in raw index order |
 | 3 frozen limit | 0 | 0 | check raw frozen against `maxFrozenPaths` |
 | 4 selector-path limit | population 1 | raw union path count (before any dedup) | expanded matched binding-path count |
