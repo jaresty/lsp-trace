@@ -102,6 +102,15 @@ func c12Canonical(raw []byte, out any) error {
 }
 
 func TestC12PortableReferencesResultTokenPacket(t *testing.T) {
+	requirePacketAuthority(t, packetAuthorityConfig{
+		Row: "C12", SelectorPath: "testdata/adr0011-c12-p2-selector-v2.json",
+		SelectorSchema:  "lsp-trace.private.adr0011-c12-references-result-token-selector.v2",
+		CurrentManifest: "adr0011-c12-p2-v2/manifest.json", CurrentManifestSchema: "lsp-trace.private.adr0011-c12-references-result-token-packet.v2",
+		HistoricalManifest: "adr0011-c12-p2-v1/manifest.json", HistoricalManifestHash: "sha256:5c6c9b7887afe7d007b4253317724a9ebebe2bcd2699a78f784ac06dc571de10",
+		ClaimCeiling:   []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C09_C10_C11_AUTHORITY_OR_RECERTIFICATION", "NO_C16_C18_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"},
+		ActiveVerifier: "sessionruntime/adr0011_c12_packet_private_test.go",
+	})
+	return
 	const dir = "testdata/adr0011-c12-p2-v1"
 	info, err := os.Lstat(dir)
 	if err != nil {

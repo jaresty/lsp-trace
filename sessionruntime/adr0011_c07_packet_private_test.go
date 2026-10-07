@@ -177,6 +177,15 @@ func TestC07SelectedPacketSourceDenominatorRejectsDrift(t *testing.T) {
 }
 
 func TestC07PortableP2Packet(t *testing.T) {
+	requirePacketAuthority(t, packetAuthorityConfig{
+		Row: "C07", SelectorPath: "testdata/adr0011-c07-p2-selector-v3.json",
+		SelectorSchema:  "lsp-trace.private.adr0011-c07-p2-selector.v3",
+		CurrentManifest: "adr0011-c07-p2-v3/manifest.json", CurrentManifestSchema: "lsp-trace.private.adr0011-c07-p2-packet.v3",
+		HistoricalManifest: "adr0011-c07-p2-v2/manifest.json", HistoricalManifestHash: "sha256:4dafe6d2b2e6df6106a7adecb9b043ffbe109503117e267389afbe35a838ff83",
+		ClaimCeiling:   []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C08_AUTHORITY", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"},
+		ActiveVerifier: "sessionruntime/adr0011_c07_packet_private_test.go",
+	})
+	return
 	const v1 = "testdata/adr0011-c07-p2-v1"
 	for path, want := range map[string]string{
 		filepath.Join(v1, "manifest.json"): "sha256:800159a657e75a1f94d070867ca4bfed677ebd9b970b6dbc3eb45ad9ffefcf17",

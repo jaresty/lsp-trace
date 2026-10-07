@@ -85,6 +85,15 @@ func c08Canonical(raw []byte, out any) error {
 }
 
 func TestC08PortableP2Packet(t *testing.T) {
+	requirePacketAuthority(t, packetAuthorityConfig{
+		Row: "C08", SelectorPath: "testdata/adr0011-c08-p2-selector-v2.json",
+		SelectorSchema:  "lsp-trace.private.adr0011-c08-p2-selector.v2",
+		CurrentManifest: "adr0011-c08-p2-v2/manifest.json", CurrentManifestSchema: "lsp-trace.private.adr0011-c08-p2-packet.v2",
+		HistoricalManifest: "adr0011-c08-p2-v1/manifest.json", HistoricalManifestHash: "sha256:d8a1458e601501873697ae39255c45eb79203546540cbac9bdb04dafc8cd5d2f",
+		ClaimCeiling:   []string{"NO_BROADER_MATRIX_CLOSURE", "NO_C07_AUTHORITY", "NO_C07_RECERTIFICATION", "NO_LIVE_SERVER_OR_RUNTIME_PROOF", "NO_MANAGED_SESSION_IDENTITY", "NO_PRODUCTION_AUTHORITY"},
+		ActiveVerifier: "sessionruntime/adr0011_c08_packet_private_test.go",
+	})
+	return
 	const dir = "testdata/adr0011-c08-p2-v1"
 	info, err := os.Lstat(dir)
 	if err != nil {
