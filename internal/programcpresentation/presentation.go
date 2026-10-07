@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -40,6 +42,17 @@ func (l Location) MarshalJSON() ([]byte, error) {
 	return json.Marshal(x(l))
 }
 
+type MachineTarget struct {
+	URI              string `json:"uri"`
+	Line             int    `json:"line"`
+	Character        int    `json:"character"`
+	PositionEncoding string `json:"position_encoding"`
+	CoordinateBase   int    `json:"coordinate_base"`
+	RangeRole        string `json:"range_role"`
+	NodeID           string `json:"node_id"`
+	NodeKind         int    `json:"node_kind"`
+}
+
 type Node struct {
 	NodeID          string   `json:"node_id"`
 	Name            string   `json:"name"`
@@ -55,6 +68,10 @@ func (n Node) MarshalJSON() ([]byte, error) {
 		Location        Location `json:"location"`
 	}
 	return json.Marshal(x(n))
+}
+
+type MachineTargetHandoff struct {
+	Targets []MachineTarget `json:"targets"`
 }
 
 type Community struct {
@@ -103,6 +120,7 @@ type Artifact struct {
 	CrossingWitnesses           []programc.CrossingWitness   `json:"crossing_witnesses"`
 	Bridges                     []string                     `json:"bridges"`
 	ArticulationPoints          []string                     `json:"articulation_points"`
+	machineNodes                map[string]graph.Node
 }
 
 func (a Artifact) MarshalJSON() ([]byte, error) {
@@ -140,6 +158,10 @@ type native struct {
 
 func loc(uri string, r graph.Range) Location {
 	return Location{uri, int(r.Start.Line) + 1, int(r.Start.Character) + 1, int(r.End.Line) + 1, int(r.End.Character) + 1}
+}
+
+func machineTarget(n graph.Node) MachineTarget {
+	return MachineTarget{URI: n.URI, Line: int(n.SelectionRange.Start.Line), Character: int(n.SelectionRange.Start.Character), PositionEncoding: "utf-16", CoordinateBase: 0, RangeRole: "SELECTION_RANGE", NodeID: n.ID, NodeKind: n.Kind}
 }
 func Build(o programc.Outcome, b programc.BoundaryArtifact) (Artifact, error) {
 	canonicalOutcome, failure := programc.Compute(o.Source.InputBytes(), o.Seed)
@@ -230,7 +252,7 @@ func Build(o programc.Outcome, b programc.BoundaryArtifact) (Artifact, error) {
 		fn, tn := nodes[from], nodes[to]
 		calls = append(calls, Call{e.Identity, Node{from, fn.Name, fn.Detail, loc(fn.URI, fn.Range)}, Node{to, tn.Name, tn.Detail, loc(tn.URI, tn.Range)}, loc(fn.URI, e.CallSite)})
 	}
-	a := Artifact{Version, Authority, b.Outcome, o.Source.Completeness, o.Seed, o.ProfileID, o.ProfileDigest, o.Algorithm, o.LogicalDigest, b.ClaimCeiling, Disclaimer, Stability, b.Policy, b.Request, b.Accounting, b.PageRank, cs, calls, append([]programc.BoundaryNodeScore(nil), b.HighCentralityCrossingNodes...), append([]programc.BoundaryNodeScore(nil), b.HubCrossingNodes...), append([]programc.CrossingWitness(nil), b.CrossingWitnesses...), append([]string(nil), b.Bridges...), append([]string(nil), b.ArticulationPoints...)}
+	a := Artifact{Version, Authority, b.Outcome, o.Source.Completeness, o.Seed, o.ProfileID, o.ProfileDigest, o.Algorithm, o.LogicalDigest, b.ClaimCeiling, Disclaimer, Stability, b.Policy, b.Request, b.Accounting, b.PageRank, cs, calls, append([]programc.BoundaryNodeScore(nil), b.HighCentralityCrossingNodes...), append([]programc.BoundaryNodeScore(nil), b.HubCrossingNodes...), append([]programc.CrossingWitness(nil), b.CrossingWitnesses...), append([]string(nil), b.Bridges...), append([]string(nil), b.ArticulationPoints...), nodes}
 	if err := Validate(a); err != nil {
 		return Artifact{}, err
 	}
@@ -346,6 +368,59 @@ func Validate(a Artifact) error {
 			return fmt.Errorf("invalid crossing witness join")
 		}
 		seenWitness[w.OccurrenceID] = true
+	}
+	return nil
+}
+
+func validateMachineTarget(t MachineTarget, n graph.Node) error {
+	parsed, err := url.Parse(t.URI)
+	if err != nil || parsed.Scheme != "file" || parsed.Host != "" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path == "" || path.Clean(parsed.Path) != parsed.Path || parsed.String() != t.URI {
+		return fmt.Errorf("invalid canonical machine target uri")
+	}
+	if !reflect.DeepEqual(t, machineTarget(n)) {
+		return fmt.Errorf("machine target identity mismatch")
+	}
+	return nil
+}
+
+func PrivateMachineTargetHandoff(a Artifact) (MachineTargetHandoff, error) {
+	if err := Validate(a); err != nil {
+		return MachineTargetHandoff{}, err
+	}
+	ids := make([]string, 0, len(a.machineNodes))
+	for id := range a.machineNodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	h := MachineTargetHandoff{Targets: make([]MachineTarget, 0, len(ids))}
+	for _, id := range ids {
+		h.Targets = append(h.Targets, machineTarget(a.machineNodes[id]))
+	}
+	return h, nil
+}
+
+func ValidatePrivateMachineTargetHandoff(a Artifact, h MachineTargetHandoff) error {
+	if err := Validate(a); err != nil {
+		return err
+	}
+	if len(h.Targets) != len(a.machineNodes) {
+		return fmt.Errorf("machine target handoff count mismatch")
+	}
+	seen := map[string]bool{}
+	previousNodeID := ""
+	for _, target := range h.Targets {
+		n, ok := a.machineNodes[target.NodeID]
+		if !ok || seen[target.NodeID] {
+			return fmt.Errorf("foreign or duplicate machine target")
+		}
+		if previousNodeID != "" && target.NodeID <= previousNodeID {
+			return fmt.Errorf("noncanonical machine target order")
+		}
+		if err := validateMachineTarget(target, n); err != nil {
+			return err
+		}
+		seen[target.NodeID] = true
+		previousNodeID = target.NodeID
 	}
 	return nil
 }
