@@ -759,15 +759,40 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 				_ = admission.rollback()
 			}
 		}()
-		if err := admission.seal(); err != nil {
+	}
+
+	var transferFailure session.Failure
+	transfer := func() error {
+		if profile != nil {
+			if err := admission.seal(); err != nil {
+				return err
+			}
+		}
+		descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
+		if failure != "" {
+			transferFailure = failure
+			return errPrivateB4EventAdmission
+		}
+		reservation.sourceDescriptor = descriptor
+		return nil
+	}
+	if profile != nil && reservation.workAccount != nil {
+		n := uint64(len(admitted))
+		if n > (math.MaxUint64-2)/2 {
 			return session.ResourceExhausted
 		}
+		if err := reservation.workAccount.WithEventsEmitted(reservation.selection.Transaction, 2+2*n, transfer); err != nil {
+			if transferFailure != "" {
+				return transferFailure
+			}
+			return session.ResourceExhausted
+		}
+	} else if err := transfer(); err != nil {
+		if transferFailure != "" {
+			return transferFailure
+		}
+		return session.ResourceExhausted
 	}
-	descriptor, failure := m.privateB4SourceIngress.transferStates(seenLease, reservation.explicitBytes)
-	if failure != "" {
-		return failure
-	}
-	reservation.sourceDescriptor = descriptor
 	for source := range seenLease {
 		source.state.Store(privateB4SourceTransferred)
 	}
@@ -1026,7 +1051,12 @@ func (b PrivateB4DefinitionBorrow) WithTargetAppendAdmission(originalOrdinal uin
 	if b.c17 == nil {
 		return ErrPrivateB4C17NotEnabled
 	}
-	return b.c17.withTargetAppendAdmission(originalOrdinal, appendCanonical)
+	return b.c17.withTargetAppendAdmission(originalOrdinal, func() error {
+		if b.workAccount != nil {
+			return b.workAccount.WithEventsEmitted(b.workIdentity, 2, appendCanonical)
+		}
+		return appendCanonical()
+	})
 }
 
 // PreparePrivateB4DefinitionBorrowed presents the manager-owned lexical result

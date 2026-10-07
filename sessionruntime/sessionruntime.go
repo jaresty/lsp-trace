@@ -1105,11 +1105,7 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				read.frameOwner.releaseManager()
 			}
 			if custodialPrivateB4 && read.message.Kind() == lspwire.KindRequest {
-				var capabilityProfile *privateB4EventAccountC17
-				if transaction != nil && transaction.c17 != nil {
-					capabilityProfile = transaction.c17.profile
-				}
-				failure, poison := writePrivateB4CapabilityResponseC17(capabilityProfile, read.message.Method, read.message.Params, func() (session.Failure, bool) {
+				failure, poison := writePrivateB4CapabilityResponseC17(transaction, read.message.Method, read.message.Params, func() (session.Failure, bool) {
 					return writePrivateB4UnsupportedResponse(ctx, owner, writer, private.explicitBytes, read.raw, read.successor)
 				})
 				releaseUnselectedFrame()

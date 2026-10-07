@@ -43,15 +43,16 @@ type privateWorkSnapshot struct {
 }
 
 type privateWorkAccount struct {
-	mu              sync.Mutex
-	settled         *sync.Cond
-	identity        occurrenceIdentity
-	work            privateWorkDelta
-	objectsReserved uint64
-	eventsReserved  uint64
-	eventCallbacks  uint64
-	terminal        bool
-	failure         error
+	mu                 sync.Mutex
+	settled            *sync.Cond
+	identity           occurrenceIdentity
+	work               privateWorkDelta
+	objectsReserved    uint64
+	eventsReserved     uint64
+	eventCallbacks     uint64
+	eventCommitBlocked bool
+	terminal           bool
+	failure            error
 }
 
 func newPrivateWorkAccount(identity occurrenceIdentity) *privateWorkAccount {
@@ -79,6 +80,9 @@ func (a *privateWorkAccount) charge(identity occurrenceIdentity, delta privateWo
 		overflows(a.work.logicalBufferBytesReserved, delta.logicalBufferBytesReserved) {
 		a.terminal = true
 		a.failure = errPrivateWorkOverflow
+		if delta.eventsEmitted != 0 && a.eventsReserved != 0 {
+			a.eventCommitBlocked = true
+		}
 		return a.failure
 	}
 
@@ -258,7 +262,7 @@ func (a *Account) WithEventsEmitted(identity string, amount uint64, emit func() 
 			p.mu.Unlock()
 			panic(recovered)
 		}
-		if err == nil && p.failure == nil {
+		if err == nil && !p.eventCommitBlocked {
 			p.work.eventsEmitted += amount
 		}
 		if p.objectsReserved == 0 && p.eventCallbacks == 0 {

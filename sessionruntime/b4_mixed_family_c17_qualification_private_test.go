@@ -3,11 +3,14 @@ package sessionruntime
 import (
 	"context"
 	"errors"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"lsp-trace/internal/adr0011c18"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/managedprocess"
 	"lsp-trace/internal/session"
 )
@@ -76,7 +79,7 @@ func TestPrivateB4C17MixedEachFamilyFinalSuccessAndRefusal(t *testing.T) {
 				fillPrivateB4C17Capability(t, profile, tc.fill)
 				before := profile.eventSnapshot()
 				var responderCalls atomic.Int32
-				got, poison := writePrivateB4CapabilityResponseC17(profile, "client/registerCapability", []byte(`{"registrations":[{"id":"final","method":"m"}]}`), func() (session.Failure, bool) {
+				got, poison := writePrivateB4CapabilityResponseC17(c17CapabilityTransaction(profile), "client/registerCapability", []byte(`{"registrations":[{"id":"final","method":"m"}]}`), func() (session.Failure, bool) {
 					responderCalls.Add(1)
 					return "", false
 				})
@@ -391,6 +394,162 @@ func TestPrivateB4C17MixedStopRestartJoinAllFamilies(t *testing.T) {
 				t.Fatalf("ASSERT_C17_MIXED_%s_JOIN_SETTLED snapshot=%+v", operation, snapshot)
 			}
 		})
+	}
+}
+
+func TestPrivateB4C17MixedRealPathsOneTransactionExactSumAndLegacySnapshots(t *testing.T) {
+	const identity = "mixed-real-paths-one-transaction"
+	manager, req, lease, reservation, profile, _ := privateB4C17AcquisitionWorkFixture(t, []byte("package mixedrealpaths\n"), identity)
+	account := adr0011work.New(identity)
+	reservation.workAccount = account
+	transaction := &privateB4Transaction{legacy: reservation, c17: &privateB4ReservationC17{legacy: reservation, profile: profile}, workAccount: account}
+	borrow := PrivateB4DefinitionBorrow{c17: profile, workAccount: account, workIdentity: identity}
+
+	c15 := mustPrivateB4ByteAccountV2(t)
+	c16, failure := newPrivateB4AccountC16()
+	if failure != "" {
+		t.Fatal(failure)
+	}
+	beforeC15, beforeC16 := c15.snapshot(), c16.objectSnapshot()
+	if got := account.Snapshot(); got.EventsEmitted != 0 || got.Terminal {
+		t.Fatalf("ASSERT_C17_MIXED_NEW_TRANSACTION_ZERO snapshot=%+v", got)
+	}
+	if failure := privateB4C17AdmitAcquisitionWork(t, manager, req, reservation, profile); failure != "" {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_ACQUISITION failure=%s", failure)
+	}
+	if lease.state.state.Load() != privateB4SourceTransferred {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_ACQUISITION_TRANSFER state=%d", lease.state.state.Load())
+	}
+	if failure, poison := writeC17CapabilityEvents(transaction, "client/registerCapability", capabilityParams("registrations", 3), func() (session.Failure, bool) { return "", false }); failure != "" || poison {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_CAPABILITY failure=%s poison=%t", failure, poison)
+	}
+	if err := borrow.WithTargetAppendAdmission(71, func() error { return nil }); err != nil {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_TARGET err=%v", err)
+	}
+	if got := account.Snapshot(); got.EventsEmitted != 2+2*1+3+2*1 || got.Terminal {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_EXACT_2_PLUS_2A_PLUS_C_PLUS_2T snapshot=%+v", got)
+	}
+	if got := profile.eventSnapshot(); got.Admitted != 9 || got.InFlight != 0 || got.ActiveCallbacks != 0 {
+		t.Fatalf("ASSERT_C17_MIXED_REAL_C17_EXACT snapshot=%+v", got)
+	}
+	if afterC15, afterC16 := c15.snapshot(), c16.objectSnapshot(); afterC15 != beforeC15 || afterC16 != beforeC16 {
+		t.Fatalf("ASSERT_C17_MIXED_C15_C16_UNCHANGED c15=%+v/%+v c16=%+v/%+v", beforeC15, afterC15, beforeC16, afterC16)
+	}
+}
+
+func TestPrivateB4C17MixedRealPathConcurrentReservationsRollbackIsolationAndSeal(t *testing.T) {
+	const identity = "mixed-real-concurrent"
+	manager, req, _, reservation, profile, _ := privateB4C17AcquisitionWorkFixture(t, []byte("package mixedconcurrent\n"), identity)
+	account := adr0011work.New(identity)
+	reservation.workAccount = account
+	transaction := &privateB4Transaction{legacy: reservation, c17: &privateB4ReservationC17{legacy: reservation, profile: profile}, workAccount: account}
+	borrow := PrivateB4DefinitionBorrow{c17: profile, workAccount: account, workIdentity: identity}
+
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	capDone := make(chan session.Failure, 1)
+	targetDone := make(chan error, 1)
+	go func() {
+		failure, _ := writeC17CapabilityEvents(transaction, "client/registerCapability", capabilityParams("registrations", 2), func() (session.Failure, bool) {
+			entered <- struct{}{}
+			<-release
+			return "", false
+		})
+		capDone <- failure
+	}()
+	go func() {
+		targetDone <- borrow.WithTargetAppendAdmission(88, func() error {
+			entered <- struct{}{}
+			<-release
+			return errors.New("target rollback")
+		})
+	}()
+	<-entered
+	<-entered
+	if failure := privateB4C17AdmitAcquisitionWork(t, manager, req, reservation, profile); failure != "" {
+		t.Fatalf("ASSERT_C17_MIXED_CONCURRENT_REAL_ACQUISITION failure=%s", failure)
+	}
+	if got := profile.eventSnapshot(); got.Admitted != 4 || got.InFlight != 4 || got.ActiveCallbacks != 2 {
+		t.Fatalf("ASSERT_C17_MIXED_CONCURRENT_EXACT_RESERVATIONS snapshot=%+v", got)
+	}
+
+	sealedWork := make(chan adr0011work.Snapshot, 1)
+	sealedC17 := make(chan session.Failure, 1)
+	go func() { sealedWork <- account.Seal() }()
+	go func() { sealedC17 <- profile.requestTerminalReleaseC17(context.Background()) }()
+	select {
+	case got := <-sealedWork:
+		t.Fatalf("ASSERT_C17_MIXED_WORK_SEALED_EARLY snapshot=%+v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	select {
+	case failure := <-sealedC17:
+		t.Fatalf("ASSERT_C17_MIXED_C17_RELEASED_EARLY failure=%s", failure)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	if failure := <-capDone; failure != "" {
+		t.Fatalf("ASSERT_C17_MIXED_CAPABILITY_SETTLE failure=%s", failure)
+	}
+	if err := <-targetDone; err == nil || err.Error() != "target rollback" {
+		t.Fatalf("ASSERT_C17_MIXED_TARGET_ROLLBACK err=%v", err)
+	}
+	if got := <-sealedWork; got.EventsEmitted != 6 || !got.Terminal {
+		t.Fatalf("ASSERT_C17_MIXED_ONE_FAMILY_ROLLBACK_ISOLATED snapshot=%+v", got)
+	}
+	if failure := <-sealedC17; failure != "" {
+		t.Fatalf("ASSERT_C17_MIXED_C17_FINAL_RELEASE failure=%s", failure)
+	}
+	if got := profile.eventSnapshot(); got.Admitted != 6 || got.InFlight != 0 || got.ActiveCallbacks != 0 || !got.BackingReleased {
+		t.Fatalf("ASSERT_C17_MIXED_SETTLED_BEFORE_RELEASE snapshot=%+v", got)
+	}
+}
+
+func TestPrivateB4C17MixedC17CapAndWorkOverflowAreDistinct(t *testing.T) {
+	t.Run("C17 cap refusal leaves work open", func(t *testing.T) {
+		transaction, profile, account := c17CapabilityEventsTransaction(t, "mixed-cap-refusal", true)
+		fillPrivateB4C17Capability(t, profile, privateB4EventLimit)
+		called := false
+		failure, poison := writeC17CapabilityEvents(transaction, "client/registerCapability", capabilityParams("registrations", 1), func() (session.Failure, bool) { called = true; return "", false })
+		if failure != session.ResourceExhausted || poison || called {
+			t.Fatalf("ASSERT_C17_MIXED_CAP_REFUSAL failure=%s poison=%t called=%t", failure, poison, called)
+		}
+		if got := account.Snapshot(); got.EventsEmitted != 0 || got.Terminal || got.Failure != nil {
+			t.Fatalf("ASSERT_C17_MIXED_CAP_REFUSAL_WORK_OPEN snapshot=%+v", got)
+		}
+	})
+	t.Run("work overflow leaves C17 unchanged", func(t *testing.T) {
+		transaction, profile, account := c17CapabilityEventsTransaction(t, "mixed-work-overflow", true)
+		if err := account.ChargeEventsEmitted("mixed-work-overflow", math.MaxUint64); err != nil {
+			t.Fatal(err)
+		}
+		before := profile.eventSnapshot()
+		called := false
+		failure, poison := writeC17CapabilityEvents(transaction, "client/registerCapability", capabilityParams("registrations", 1), func() (session.Failure, bool) { called = true; return "", false })
+		if failure != session.ResourceExhausted || poison || called {
+			t.Fatalf("ASSERT_C17_MIXED_WORK_OVERFLOW failure=%s poison=%t called=%t", failure, poison, called)
+		}
+		if got := account.Snapshot(); got.EventsEmitted != math.MaxUint64 || !got.Terminal || !errors.Is(got.Failure, adr0011work.ErrOverflow) || profile.eventSnapshot() != before {
+			t.Fatalf("ASSERT_C17_MIXED_WORK_OVERFLOW_DISTINCT work=%+v c17_before=%+v c17_after=%+v", got, before, profile.eventSnapshot())
+		}
+	})
+}
+
+func TestPrivateB4C17MixedC18ObservationsDoNotAlterEventsEmitted(t *testing.T) {
+	const identity = "mixed-c18-observation"
+	account := adr0011work.New(identity)
+	ctx := adr0011work.WithAccount(context.Background(), account)
+	var points []adr0011c18.Point
+	ctx = adr0011c18.WithObserver(ctx, func(point adr0011c18.Point) { points = append(points, point) })
+	ctx = adr0011c18.WithEventObserver(ctx, func(event adr0011c18.Event) { points = append(points, event.Point) })
+	ctx, receipt := adr0011c18.BeginAcquisition(ctx, identity)
+	_, same := adr0011c18.BeginRuntime(ctx)
+	before := account.Snapshot()
+	if receipt == nil || same != receipt || !same.ReachRuntime(adr0011c18.PointPreflight) || !same.ReachRuntime(adr0011c18.PointDeadline) {
+		t.Fatal("ASSERT_C17_MIXED_C18_FIXTURE")
+	}
+	if after := account.Snapshot(); after != before || after.EventsEmitted != 0 || len(points) == 0 {
+		t.Fatalf("ASSERT_C17_MIXED_C18_OBSERVATION_ZERO_EVENTS before=%+v after=%+v points=%v", before, after, points)
 	}
 }
 
