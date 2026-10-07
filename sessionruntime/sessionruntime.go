@@ -350,7 +350,7 @@ const DocumentSourceUnavailable session.Failure = "DOCUMENT_SOURCE_UNAVAILABLE"
 // Supply and version are returned only after a confirmed complete write (or the
 // historical unchanged-document cache hit, which returns no new Supply).
 func (m *Manager) PrepareDocument(ctx context.Context, req DocumentRequest) DocumentResult {
-	return m.prepareDocument(ctx, req, false)
+	return m.prepareDocumentAccounted(ctx, req, false)
 }
 
 // RefreshDocumentSupply deliberately emits a new full-text notification for an
@@ -360,7 +360,57 @@ func (m *Manager) RefreshDocumentSupply(ctx context.Context, req DocumentRequest
 	if !req.CaptureSupply {
 		return DocumentResult{Failure: DocumentSupplyUnavailable}
 	}
-	return m.prepareDocument(ctx, req, true)
+	return m.prepareDocumentAccounted(ctx, req, true)
+}
+
+func (m *Manager) prepareDocumentAccounted(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
+	account, ok := adr0011work.AccountFromContext(ctx)
+	if !ok {
+		return m.prepareDocument(ctx, req, refresh)
+	}
+
+	var result DocumentResult
+	identity := account.Snapshot().Identity
+	err := account.WithDocumentAcquisition(identity, req.URI, func() (bool, error) {
+		result = m.prepareDocument(ctx, req, refresh)
+		return m.validDocumentAcquisition(req, result), nil
+	})
+	if err != nil {
+		return DocumentResult{Failure: DocumentSupplyUnavailable}
+	}
+	return result
+}
+
+func (m *Manager) validDocumentAcquisition(req DocumentRequest, result DocumentResult) bool {
+	if result.Failure != "" || result.URI != req.URI || result.Supply == nil {
+		return false
+	}
+	supply := result.Supply
+	if supply.Classification != "LSP_SUPPLIED" || supply.SessionID != req.SessionID ||
+		supply.Generation != req.Generation || supply.URI != req.URI ||
+		supply.DocumentVersion != result.Version ||
+		(supply.Method != "textDocument/didOpen" && supply.Method != "textDocument/didChange") {
+		return false
+	}
+
+	digest := sha256.Sum256(supply.Content)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r := m.sessions[req.SessionID]
+	if r == nil || r.record.Generation != req.Generation {
+		return false
+	}
+	retained, ok := r.documents[req.URI]
+	return ok && retained.supply != nil && retained.languageID == result.LanguageID &&
+		retained.version == result.Version && retained.digest == digest &&
+		retained.supply.Classification == supply.Classification &&
+		retained.supply.SessionID == supply.SessionID &&
+		retained.supply.Generation == supply.Generation &&
+		retained.supply.URI == supply.URI &&
+		retained.supply.DocumentVersion == supply.DocumentVersion &&
+		retained.supply.Method == supply.Method &&
+		bytes.Equal(retained.supply.Content, supply.Content) &&
+		bytes.Equal(retained.supply.Params, supply.Params)
 }
 
 func (m *Manager) prepareDocument(ctx context.Context, req DocumentRequest, refresh bool) DocumentResult {
