@@ -1,0 +1,1 @@
+{"QueryBytes":1024,"Depth":1,"Frontier":24,"Evaluations":24,"WorkPrecharge":10,"WorkMax":240,"ResultCount":5,"ResponseBytes":65536,"CancellationCheckpoints":["BEFORE_ADAPT","BEFORE_MEMBER","BEFORE_COMMIT"],"DeadlineSemantics":"deadline is expired when now \u003e= deadline; cancellation precedes deadline at every checkpoint"}

@@ -1,0 +1,1 @@
+{"checks":{"custody_procedural":true,"evidence_bound":true,"ledger_balanced":true,"limits_bound":true,"no_feature_identity":true,"pair_bound":true,"raw_bound":true,"request_bound":true,"result_bound":true,"semantic_complete":true},"reasons":{}}

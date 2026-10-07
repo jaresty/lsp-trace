@@ -1,0 +1,167 @@
+=== RUN   TestGenerateRepositoryFreeze
+    freeze_test.go:17: set SEARCH_V11_FREEZE_ROOT for explicit design-freeze generation
+--- SKIP: TestGenerateRepositoryFreeze (0.00s)
+=== RUN   TestFreezeGeneratorVerifierTwice
+--- PASS: TestFreezeGeneratorVerifierTwice (0.00s)
+=== RUN   TestCoreHasNoPiDependency
+--- PASS: TestCoreHasNoPiDependency (0.00s)
+=== RUN   TestNonPiAdapterFixture
+--- PASS: TestNonPiAdapterFixture (0.00s)
+=== RUN   TestArtifactGeneratorVerifierTwiceStable
+--- PASS: TestArtifactGeneratorVerifierTwiceStable (0.85s)
+=== RUN   TestAttemptRawBytesCustodyCondition
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_plus_one_committed
+=== RUN   TestAttemptRawBytesCustodyCondition/reviewer_normal_boundary
+=== RUN   TestAttemptRawBytesCustodyCondition/reviewer_plus_one_terminal_invalid
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_raw_size_plus_two
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_plus_one_with_result
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_normal_boundary
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_raw_size_plus_one
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_plus_one_wrong_reason
+=== RUN   TestAttemptRawBytesCustodyCondition/producer_plus_one_wrong_state
+--- PASS: TestAttemptRawBytesCustodyCondition (0.05s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_plus_one_committed (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/reviewer_normal_boundary (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/reviewer_plus_one_terminal_invalid (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_raw_size_plus_two (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_plus_one_with_result (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_normal_boundary (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_raw_size_plus_one (0.00s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_plus_one_wrong_reason (0.01s)
+    --- PASS: TestAttemptRawBytesCustodyCondition/producer_plus_one_wrong_state (0.01s)
+=== RUN   TestArtifactMutationGuards
+=== RUN   TestArtifactMutationGuards/schema_substitution
+=== RUN   TestArtifactMutationGuards/producer_bad_padding
+=== RUN   TestArtifactMutationGuards/reviewer_invalid_base64
+=== RUN   TestArtifactMutationGuards/fixture_drop
+=== RUN   TestArtifactMutationGuards/review_request
+=== RUN   TestArtifactMutationGuards/account_selection
+=== RUN   TestArtifactMutationGuards/expected_ledger
+=== RUN   TestArtifactMutationGuards/custody_multibyte_identity_over_256
+=== RUN   TestArtifactMutationGuards/policy_substitution
+=== RUN   TestArtifactMutationGuards/reviewer_decoded_plus_one
+=== RUN   TestArtifactMutationGuards/custody_ascii_identity_257
+=== RUN   TestArtifactMutationGuards/extra_file
+=== RUN   TestArtifactMutationGuards/stale_freeze
+=== RUN   TestArtifactMutationGuards/review_raw
+=== RUN   TestArtifactMutationGuards/producer_invalid_base64
+=== RUN   TestArtifactMutationGuards/producer_decoded_plus_one
+=== RUN   TestArtifactMutationGuards/reviewer_bad_padding
+=== RUN   TestArtifactMutationGuards/fixture_substitute
+--- PASS: TestArtifactMutationGuards (8.47s)
+    --- PASS: TestArtifactMutationGuards/schema_substitution (0.44s)
+    --- PASS: TestArtifactMutationGuards/producer_bad_padding (0.49s)
+    --- PASS: TestArtifactMutationGuards/reviewer_invalid_base64 (0.51s)
+    --- PASS: TestArtifactMutationGuards/fixture_drop (0.45s)
+    --- PASS: TestArtifactMutationGuards/review_request (0.47s)
+    --- PASS: TestArtifactMutationGuards/account_selection (0.49s)
+    --- PASS: TestArtifactMutationGuards/expected_ledger (0.48s)
+    --- PASS: TestArtifactMutationGuards/custody_multibyte_identity_over_256 (0.48s)
+    --- PASS: TestArtifactMutationGuards/policy_substitution (0.44s)
+    --- PASS: TestArtifactMutationGuards/reviewer_decoded_plus_one (0.49s)
+    --- PASS: TestArtifactMutationGuards/custody_ascii_identity_257 (0.48s)
+    --- PASS: TestArtifactMutationGuards/extra_file (0.44s)
+    --- PASS: TestArtifactMutationGuards/stale_freeze (0.45s)
+    --- PASS: TestArtifactMutationGuards/review_raw (0.48s)
+    --- PASS: TestArtifactMutationGuards/producer_invalid_base64 (0.48s)
+    --- PASS: TestArtifactMutationGuards/producer_decoded_plus_one (0.48s)
+    --- PASS: TestArtifactMutationGuards/reviewer_bad_padding (0.48s)
+    --- PASS: TestArtifactMutationGuards/fixture_substitute (0.44s)
+=== RUN   TestDescribeSourceMutationRejected
+--- PASS: TestDescribeSourceMutationRejected (0.00s)
+=== RUN   TestFrozenWorkBoundaryAndOperationCausality
+--- PASS: TestFrozenWorkBoundaryAndOperationCausality (0.52s)
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_wrong_state
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_with_result
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_plus_two
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_wrong_reason
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/invalid_base64
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/bad_base64_padding
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/decoded_plus_one
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/encoded_length_plus_1
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/bad_base64_padding
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/decoded_plus_one
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/encoded_length_plus_1
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/invalid_base64
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/ascii_identity_257_bytes
+=== RUN   TestPublishedSchemasClosedAndRejectMalformed/multibyte_identity_over_bytes
+--- PASS: TestPublishedSchemasClosedAndRejectMalformed (0.89s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_wrong_state (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_with_result (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_plus_two (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/conditional_wrong_reason (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/invalid_base64 (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/bad_base64_padding (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/decoded_plus_one (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ProducerAttempt/encoded_length_plus_1 (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/bad_base64_padding (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/decoded_plus_one (0.05s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/encoded_length_plus_1 (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ReviewerAttempt/invalid_base64 (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/ascii_identity_257_bytes (0.00s)
+    --- PASS: TestPublishedSchemasClosedAndRejectMalformed/multibyte_identity_over_bytes (0.00s)
+=== RUN   TestPredecessorsBlocked
+--- PASS: TestPredecessorsBlocked (0.00s)
+=== RUN   TestExactEnumSets
+--- PASS: TestExactEnumSets (0.00s)
+=== RUN   TestPrepareExactBinding
+--- PASS: TestPrepareExactBinding (0.00s)
+=== RUN   TestLimitsAndPrecedence
+--- PASS: TestLimitsAndPrecedence (0.00s)
+=== RUN   TestHostSemanticShape
+--- PASS: TestHostSemanticShape (0.00s)
+=== RUN   TestResponseByteBoundary
+--- PASS: TestResponseByteBoundary (0.01s)
+=== RUN   TestStrictIngestAdversarial
+--- PASS: TestStrictIngestAdversarial (0.00s)
+=== RUN   TestAdapterLedgerTopKAndPartial
+--- PASS: TestAdapterLedgerTopKAndPartial (0.00s)
+=== RUN   TestDeliveryReplayConflict
+--- PASS: TestDeliveryReplayConflict (0.00s)
+=== RUN   TestSingleWriterOneAttempt
+--- PASS: TestSingleWriterOneAttempt (0.00s)
+=== RUN   TestParentCustodyEvidenceRoleAndDigest
+=== RUN   TestParentCustodyEvidenceRoleAndDigest/digest
+=== RUN   TestParentCustodyEvidenceRoleAndDigest/identity_ceiling
+=== RUN   TestParentCustodyEvidenceRoleAndDigest/role_overlap
+=== RUN   TestParentCustodyEvidenceRoleAndDigest/worker_overlap
+--- PASS: TestParentCustodyEvidenceRoleAndDigest (0.00s)
+    --- PASS: TestParentCustodyEvidenceRoleAndDigest/digest (0.00s)
+    --- PASS: TestParentCustodyEvidenceRoleAndDigest/identity_ceiling (0.00s)
+    --- PASS: TestParentCustodyEvidenceRoleAndDigest/role_overlap (0.00s)
+    --- PASS: TestParentCustodyEvidenceRoleAndDigest/worker_overlap (0.00s)
+=== RUN   TestReviewRequestExactIdentityBindings
+--- PASS: TestReviewRequestExactIdentityBindings (0.00s)
+=== RUN   TestReviewerRawStrictAdversarial
+=== RUN   TestReviewerRawStrictAdversarial/trailing
+=== RUN   TestReviewerRawStrictAdversarial/duplicate
+=== RUN   TestReviewerRawStrictAdversarial/nested_duplicate
+=== RUN   TestReviewerRawStrictAdversarial/unknown
+=== RUN   TestReviewerRawStrictAdversarial/noncanonical
+=== RUN   TestReviewerRawStrictAdversarial/utf8
+=== RUN   TestReviewerRawStrictAdversarial/partial
+--- PASS: TestReviewerRawStrictAdversarial (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/trailing (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/duplicate (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/nested_duplicate (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/unknown (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/noncanonical (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/utf8 (0.00s)
+    --- PASS: TestReviewerRawStrictAdversarial/partial (0.00s)
+=== RUN   TestReviewFalseAcceptImpossible
+--- PASS: TestReviewFalseAcceptImpossible (0.00s)
+=== RUN   TestReviewAttemptConflictAndSecondAttempt
+--- PASS: TestReviewAttemptConflictAndSecondAttempt (0.00s)
+=== RUN   TestMakeAccountExactOutcomesAndBindings
+=== RUN   TestMakeAccountExactOutcomesAndBindings/missing
+=== RUN   TestMakeAccountExactOutcomesAndBindings/unknown
+=== RUN   TestMakeAccountExactOutcomesAndBindings/mismatch
+--- PASS: TestMakeAccountExactOutcomesAndBindings (0.00s)
+    --- PASS: TestMakeAccountExactOutcomesAndBindings/missing (0.00s)
+    --- PASS: TestMakeAccountExactOutcomesAndBindings/unknown (0.00s)
+    --- PASS: TestMakeAccountExactOutcomesAndBindings/mismatch (0.00s)
+=== RUN   TestCanonicalRequestDeterministic
+--- PASS: TestCanonicalRequestDeterministic (0.00s)
+PASS
+ok  	lsp-trace/internal/searchqualificationv11	12.065s
