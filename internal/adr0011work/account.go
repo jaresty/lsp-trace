@@ -11,12 +11,14 @@ var (
 	errPrivateWorkTerminal = errors.New("private work account terminal")
 	errPrivateWorkOverflow = errors.New("private work account overflow")
 	errPrivateWorkIdentity = errors.New("private work account identity mismatch")
+	errPrivateWorkCallback = errors.New("private work account callback required")
 
 	// These errors are exported only through Go's repository-internal package
 	// boundary so other private owners can preserve typed refusal semantics.
 	ErrTerminal         = errPrivateWorkTerminal
 	ErrOverflow         = errPrivateWorkOverflow
 	ErrIdentityMismatch = errPrivateWorkIdentity
+	ErrCallbackRequired = errPrivateWorkCallback
 )
 
 type occurrenceIdentity string
@@ -42,14 +44,18 @@ type privateWorkSnapshot struct {
 
 type privateWorkAccount struct {
 	mu       sync.Mutex
+	settled  *sync.Cond
 	identity occurrenceIdentity
 	work     privateWorkDelta
+	reserved uint64
 	terminal bool
 	failure  error
 }
 
 func newPrivateWorkAccount(identity occurrenceIdentity) *privateWorkAccount {
-	return &privateWorkAccount{identity: identity}
+	a := &privateWorkAccount{identity: identity}
+	a.settled = sync.NewCond(&a.mu)
+	return a
 }
 
 func (a *privateWorkAccount) charge(identity occurrenceIdentity, delta privateWorkDelta) error {
@@ -155,6 +161,58 @@ func (a *Account) ChargeObjectsMaterialized(identity string, amount uint64) erro
 	return a.charge(identity, privateWorkDelta{objectsMaterialized: amount})
 }
 
+// WithObjectMaterialization reserves one object before materialize runs and
+// commits it only after materialize successfully constructs the object.
+func (a *Account) WithObjectMaterialization(identity string, materialize func() error) (err error) {
+	if a == nil || a.private == nil {
+		return errPrivateWorkIdentity
+	}
+	if materialize == nil {
+		return errPrivateWorkCallback
+	}
+
+	p := a.private
+	p.mu.Lock()
+	if p.terminal {
+		p.mu.Unlock()
+		return errPrivateWorkTerminal
+	}
+	if occurrenceIdentity(identity) != p.identity {
+		p.mu.Unlock()
+		return errPrivateWorkIdentity
+	}
+	if overflows(p.work.objectsMaterialized, p.reserved) ||
+		overflows(p.work.objectsMaterialized+p.reserved, 1) {
+		p.terminal = true
+		p.failure = errPrivateWorkOverflow
+		p.mu.Unlock()
+		return errPrivateWorkOverflow
+	}
+	p.reserved++
+	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		p.reserved--
+		if recovered := recover(); recovered != nil {
+			if p.reserved == 0 {
+				p.settled.Broadcast()
+			}
+			p.mu.Unlock()
+			panic(recovered)
+		}
+		if err == nil {
+			p.work.objectsMaterialized++
+		}
+		if p.reserved == 0 {
+			p.settled.Broadcast()
+		}
+		p.mu.Unlock()
+	}()
+
+	return materialize()
+}
+
 func (a *Account) ChargeEventsEmitted(identity string, amount uint64) error {
 	return a.charge(identity, privateWorkDelta{eventsEmitted: amount})
 }
@@ -180,12 +238,16 @@ func (a *Account) Seal() Snapshot {
 	if a == nil || a.private == nil {
 		return Snapshot{}
 	}
-	a.private.mu.Lock()
-	defer a.private.mu.Unlock()
-	if !a.private.terminal {
-		a.private.terminal = true
+	p := a.private
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.terminal {
+		p.terminal = true
 	}
-	return exportSnapshot(a.private.snapshotLocked(), a.private.terminal, a.private.failure)
+	for p.reserved != 0 {
+		p.settled.Wait()
+	}
+	return exportSnapshot(p.snapshotLocked(), p.terminal, p.failure)
 }
 
 func exportSnapshot(s privateWorkSnapshot, terminal bool, failure error) Snapshot {
