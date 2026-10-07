@@ -15,3 +15,6 @@ __pycache__/
 /.pi/lsp-trace-bootstrap.json
 /.pi/lsp-trace-publication/
 /.pi/mcp.json
+
+# Never retain copied credentials from ADR 0007 isolated Pi runtime homes.
+docs/pilot/adr0007/experiment/actual-pi-custody-phase0-v*/runtime/home/.pi/agent/auth.json
