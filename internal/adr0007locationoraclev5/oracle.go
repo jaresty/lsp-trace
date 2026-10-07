@@ -590,22 +590,30 @@ func decodeEnvelope(raw []byte, l Limits, meter *workMeter) (envelopeWire, []sou
 		return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 	}
 	wire := e.Input
+	var rawWire []json.RawMessage
 	if e.Outcome == "COMPLETE" {
 		if len(top) != 3 || e.Binding == nil || e.Binding.Schema != sourceadmissionv2.Schema || e.Detail != "" || e.DuplicatePath != "" || e.Input != nil {
 			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 		}
+		var binding struct {
+			Sources []json.RawMessage `json:"sources"`
+		}
+		if json.Unmarshal(top["binding"], &binding) != nil {
+			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+		}
+		rawWire = binding.Sources
 		wire = e.Binding.Sources
 	} else {
 		if _, ok := top["binding"]; ok || e.Binding != nil {
 			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 		}
-	}
-	if len(wire) > l.MaxSources {
-		return e, nil, "SOURCES", "RESOURCE_LIMIT"
+		if raw, ok := top["input"]; ok && json.Unmarshal(raw, &rawWire) != nil {
+			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+		}
 	}
 	out := make([]sourceadmissionv2.SelectedSource, len(wire))
 	for i, s := range wire {
-		if s.Path == "" || s.Revision == "" || s.FileDigest == "" || s.ObjectDigest == "" || s.Bytes == "" {
+		if i >= len(rawWire) || !validSourceWire(rawWire[i], s) {
 			return e, nil, "BINDING_INVALID_SOURCE", "SOURCE_ADMISSION_MISMATCH"
 		}
 		b, err := base64.StdEncoding.Strict().DecodeString(s.Bytes)
@@ -617,7 +625,28 @@ func decodeEnvelope(raw []byte, l Limits, meter *workMeter) (envelopeWire, []sou
 		}
 		out[i] = sourceadmissionv2.SelectedSource{Path: s.Path, Revision: s.Revision, FileDigest: s.FileDigest, ObjectDigest: s.ObjectDigest, Bytes: b}
 	}
+	if len(wire) > l.MaxSources {
+		return e, nil, "SOURCES", "RESOURCE_LIMIT"
+	}
 	return e, out, "", ""
+}
+
+func validSourceWire(raw json.RawMessage, s sourceWire) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || len(fields) != 5 {
+		return false
+	}
+	for _, key := range []string{"path", "revision", "fileDigest", "objectDigest", "bytes"} {
+		rawValue, ok := fields[key]
+		if !ok {
+			return false
+		}
+		var value string
+		if json.Unmarshal(rawValue, &value) != nil || value == "" {
+			return false
+		}
+	}
+	return s.Path != "" && s.Revision != "" && s.FileDigest != "" && s.ObjectDigest != "" && s.Bytes != ""
 }
 func mapTypedOutcome(o, d string) string {
 	if o == "RESOURCE_LIMIT" {

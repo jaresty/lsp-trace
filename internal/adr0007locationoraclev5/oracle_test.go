@@ -2,7 +2,6 @@ package adr0007locationoraclev5
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -128,6 +127,7 @@ func TestEnvelopeProjectionAdversarialRejects(t *testing.T) {
 		{"complete-with-input", strings.Replace(string(binding), `}}`, `},"input":[]}`, 1)},
 		{"duplicate-envelope-key", strings.Replace(string(binding), `"outcome":"COMPLETE"`, `"outcome":"COMPLETE","outcome":"COMPLETE"`, 1)},
 		{"tuple-missing-bytes", strings.Replace(string(binding), `,"bytes":"YfCfmIBiDQp4eQo="`, ``, 1)},
+		{"tuple-wrong-path-type", strings.Replace(string(binding), `"path":"src/a"`, `"path":7`, 1)},
 		{"typed-with-binding", strings.Replace(string(binding), `"outcome":"COMPLETE"`, `"outcome":"INVALID_SOURCE","detail":"FILE_DIGEST"`, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -137,27 +137,41 @@ func TestEnvelopeProjectionAdversarialRejects(t *testing.T) {
 			}
 		})
 	}
+	t.Run("invalid-tuple-before-max-sources-zero", func(t *testing.T) {
+		l := PublishedLimits()
+		l.MaxSources = 0
+		body := strings.Replace(string(binding), `"path":"src/a"`, `"path":""`, 1)
+		r := Evaluate(raw, []byte(body), true, Condition{}, l)
+		if r.Outcome != "SOURCE_ADMISSION_MISMATCH" || r.Detail != "BINDING_INVALID_SOURCE" {
+			t.Fatalf("ASSERT invalid-tuple-before-max-sources-zero FAIL got=%s/%s", r.Outcome, r.Detail)
+		}
+	})
 }
 
 func TestCheckpointPrecedence(t *testing.T) {
-	base := evalCase(t, "01-exact-intersects", PublishedLimits())
-	if base.Outcome != "COMPLETE" {
-		t.Fatalf("base: %s/%s", base.Outcome, base.Detail)
-	}
 	for _, tc := range []struct {
-		pop   string
-		coeff uint64
-	}{{"P", 7}, {"R", 11}, {"M", 13}, {"S", 1}, {"Q", 19}, {"X", 23}, {"C", 29}, {"B", 31}} {
-		t.Run(tc.pop, func(t *testing.T) {
+		stage   string
+		caseID  string
+		maxWork uint64
+	}{
+		{"M", "01-exact-intersects", 2444},
+		{"P", "01-exact-intersects", 2451},
+		{"S", "01-exact-intersects", 2452},
+		{"R", "01-exact-intersects", 2487},
+		{"Q", "01-exact-intersects", 2506},
+		{"X", "01-exact-intersects", 2529},
+		{"C", "05-union-repeat", 3417},
+		{"B", "01-exact-intersects", 2530},
+	} {
+		t.Run(tc.stage, func(t *testing.T) {
 			l := PublishedLimits()
-			l.MaxWork = 50
-			r := evalCase(t, "01-exact-intersects", l)
+			l.MaxWork = tc.maxWork
+			r := evalCase(t, tc.caseID, l)
 			if r.Outcome != "RESOURCE_LIMIT" || r.Detail != "WORK" {
-				t.Fatalf("ASSERT immediate-work-precedence %s FAIL got=%s/%s", tc.pop, r.Outcome, r.Detail)
+				t.Fatalf("ASSERT checkpoint-%s-work FAIL got=%s/%s", tc.stage, r.Outcome, r.Detail)
 			}
 		})
 	}
-	_ = fmt.Sprintf("%s", base.Outcome)
 }
 
 func TestMutationWitnesses(t *testing.T) {
