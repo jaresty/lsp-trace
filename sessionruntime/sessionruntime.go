@@ -25,6 +25,7 @@ import (
 
 	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011cobserve"
+	"lsp-trace/internal/adr0011work"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
 	"lsp-trace/internal/managedprocess"
@@ -1073,6 +1074,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 					failure = session.SessionCrashed
 				}
 				return m.finishRoundTrip(req.SessionID, owner, result, failure, true)
+			}
+			if account, ok := adr0011work.AccountFromContext(parent); ok {
+				if err := account.ChargeMessagesProcessed(account.Snapshot().Identity, 1); err != nil {
+					return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
+				}
 			}
 			bodyBytes := read.bodyBytes
 			if privateReader == nil {
