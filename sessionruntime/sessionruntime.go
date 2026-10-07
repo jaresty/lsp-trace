@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011cobserve"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/manageddiagnostic"
@@ -721,6 +722,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if transaction != nil {
 		private = transaction.legacy
 	}
+	c18Receipt := adr0011c18.From(parent)
+	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDeadline) {
+		return RoundTripResult{Failure: session.ToolNotImplemented}
+	}
 	requestStarted := m.now()
 	if req.ExpectedOwnedDocument != nil {
 		// Use pre-lock copies for both the source guard and owned write; caller
@@ -889,6 +894,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 	if documentSymbolCapture {
 		requestFrameCap = req.CaptureDocumentSymbolRequestFrameMaxBytes
 	}
+	if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointHeaderFrame) {
+		return m.finishRoundTrip(req.SessionID, &ownedTransport{child: child}, result, session.SessionPoisoned, true)
+	}
 	writeCapture := newFramedWriteCaptureBounded(checkedWriter{child.Stdin()}, requestFrameCap)
 	writer := lspwire.NewWriter(writeCapture, m.wire)
 	id := json.RawMessage(strconv.FormatUint(key.ID, 10))
@@ -1002,6 +1010,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 		reader.LimitCumulativeOriginalFrameBytes(8 << 20)
 	}
 	for result.Messages < maxMessages {
+		if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointCumulativeWire) {
+			return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+		}
 		go func() {
 			if privateReader != nil {
 				msg, err := privateReader.ReadFrame()
@@ -1069,8 +1080,11 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				bodyBytes = int64(len(body))
 			}
 			collector.Record(diagnosticEventReadComplete, bodyBytes, true)
-			result.Messages++
 			result.Bytes += bodyBytes
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointMessageCount) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
+			result.Messages++
 			if result.Bytes > maxBytes {
 				return m.finishRoundTrip(req.SessionID, owner, result, session.ResourceExhausted, true)
 			}
@@ -1130,6 +1144,10 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 				continue
 			}
 			collector.Record(diagnosticEventMatched, int64(responseID), true)
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointDecodedMessage) {
+				releaseUnselectedFrame()
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
 			var decodedMessageOwner lspwire.SuccessorAllocationLease
 			if custodialPrivateB4 && req.Method == "textDocument/definition" && read.message.Kind() == lspwire.KindSuccessResponse {
 				capacity := lspwire.SuccessorMessageRetainedCapacity(read.message)
@@ -1185,6 +1203,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			} else {
 				result.ServerError = read.message.Error
 			}
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointRawResult) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
+			}
 			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
 				result.Result = private.capture.Result
 			} else {
@@ -1203,6 +1224,9 @@ func (m *Manager) roundTripWithPrivateTransaction(parent context.Context, req Ro
 			}
 			if private != nil && !private.nonCustodial && private.resultOwner != nil && read.message.Kind() == lspwire.KindSuccessResponse {
 				result.Result = nil
+			}
+			if c18Receipt != nil && !c18Receipt.ReachRuntime(adr0011c18.PointSourceBuffer) {
+				return m.finishRoundTrip(req.SessionID, owner, result, session.SessionPoisoned, true)
 			}
 			if len(privateRetainedResponses) != 0 {
 				var responseFailure session.Failure

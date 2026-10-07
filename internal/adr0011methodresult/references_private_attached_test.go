@@ -2,11 +2,14 @@ package adr0011methodresult
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011requestkey"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/publication"
@@ -113,5 +116,89 @@ func TestRunPrivateAttachedReferencesFailClosed(t *testing.T) {
 				t.Fatalf("false success: seen=%d err=%v eval=%+v bytes=%q", seen, err, eval, final)
 			}
 		})
+	}
+}
+
+type c18MethodResultObservation struct {
+	coarse []adr0011c18.Point
+	events []adr0011c18.Event
+}
+
+func c18RunAttachedReferences(t *testing.T, ctx context.Context, raw json.RawMessage) (c18MethodResultObservation, *ReferenceEvaluation, []byte, error) {
+	t.Helper()
+	key := lspwire.RequestKey{Generation: 7, ID: 31}
+	root, _ := journalRoot(t)
+	var observed c18MethodResultObservation
+	ctx = adr0011c18.WithObserver(ctx, func(point adr0011c18.Point) { observed.coarse = append(observed.coarse, point) })
+	ctx = adr0011c18.WithEventObserver(ctx, func(event adr0011c18.Event) { observed.events = append(observed.events, event) })
+	ctx, receipt := adr0011c18.BeginRuntime(ctx)
+	for _, point := range []adr0011c18.Point{
+		adr0011c18.PointPreflight, adr0011c18.PointDeadline, adr0011c18.PointHeaderFrame,
+		adr0011c18.PointCumulativeWire, adr0011c18.PointMessageCount, adr0011c18.PointDecodedMessage,
+		adr0011c18.PointRawResult, adr0011c18.PointSourceBuffer,
+	} {
+		if receipt == nil || !receipt.ReachRuntime(point) {
+			t.Fatalf("C18_TEST_SETUP: direct method-result runtime activation refused %v", point)
+		}
+	}
+	if !receipt.SealRuntime() {
+		t.Fatal("C18_TEST_SETUP: direct method-result runtime seal refused")
+	}
+	observed = c18MethodResultObservation{}
+	eval, final, err := RunPrivateAttachedReferencesContext(ctx, root, key, raw, privateIdentity(key, raw))
+	return observed, eval, final, err
+}
+
+func TestADR0011C18AttachedReferencesOrdersObjectEventRetentionReadback(t *testing.T) {
+	raw := json.RawMessage("[" + attachedLocation + "]")
+	observed, eval, final, err := c18RunAttachedReferences(t, context.Background(), raw)
+	if err != nil || eval == nil || len(final) == 0 {
+		t.Fatalf("BLOCKED_NOT_RED: real method-result path failed: err=%v eval=%+v bytes=%d", err, eval, len(final))
+	}
+	coarse := []adr0011c18.Point{adr0011c18.PointMethodResultEntered, adr0011c18.PointMethodResultReturned}
+	if !reflect.DeepEqual(observed.coarse, coarse) {
+		t.Fatalf("BLOCKED_NOT_RED: inert observer order changed: %v", observed.coarse)
+	}
+	want := []adr0011c18.Event{
+		{Point: adr0011c18.PointObjectEvent},
+		{Point: adr0011c18.PointRetention},
+		{Point: adr0011c18.PointReadback},
+	}
+	if !reflect.DeepEqual(observed.events, want) {
+		t.Fatalf("C18_METHODRESULT_SUFFIX_ORDER: omission, duplication, or order mismatch\nwant=%v\n got=%v", want, observed.events)
+	}
+}
+
+func TestADR0011C18AttachedReferencesReadbackFailureIsFailClosed(t *testing.T) {
+	key := lspwire.RequestKey{Generation: 7, ID: 31}
+	raw := json.RawMessage("[" + attachedLocation + "]")
+	root, dir := journalRoot(t)
+	seenReceipt := 0
+	trace := func(event publication.BoundFileTraceEvent) {
+		if event.Stage != "RECEIPT" {
+			return
+		}
+		seenReceipt++
+		if seenReceipt == 2 {
+			entries, _ := os.ReadDir(dir)
+			if len(entries) > 0 {
+				_ = os.Remove(filepath.Join(dir, entries[len(entries)-1].Name()))
+			}
+		}
+	}
+	eval, final, err := runPrivateAttachedReferences(root, key, raw, privateIdentity(key, raw), trace)
+	if seenReceipt < 2 || err == nil || eval != nil || final != nil {
+		t.Fatalf("C18_METHODRESULT_READBACK_FAIL_CLOSED: seen=%d err=%v eval=%+v bytes=%q", seenReceipt, err, eval, final)
+	}
+}
+
+func TestADR0011C18AttachedReferencesObserverDefaultOffPreservesBytes(t *testing.T) {
+	key := lspwire.RequestKey{Generation: 7, ID: 31}
+	raw := json.RawMessage("[" + attachedLocation + "]")
+	plainRoot, _ := journalRoot(t)
+	plainEval, plainFinal, plainErr := RunPrivateAttachedReferences(plainRoot, key, raw, privateIdentity(key, raw))
+	observed, observedEval, observedFinal, observedErr := c18RunAttachedReferences(t, context.Background(), raw)
+	if plainErr != nil || observedErr != nil || !reflect.DeepEqual(plainEval, observedEval) || !bytes.Equal(plainFinal, observedFinal) {
+		t.Fatalf("C18_METHODRESULT_DEFAULT_OFF: observer changed evaluation/bytes/error: plain=%v observed=%v coarse=%v events=%v", plainErr, observedErr, observed.coarse, observed.events)
 	}
 }

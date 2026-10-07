@@ -2,8 +2,10 @@ package adr0011methodresult
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 
+	"lsp-trace/internal/adr0011c18"
 	transport "lsp-trace/internal/adr0011methodtransport"
 
 	"lsp-trace/internal/adr0011requestkey"
@@ -23,8 +25,40 @@ func RunPrivateAttachedReferences(root *publication.Root, key lspwire.RequestKey
 	return runPrivateAttachedReferences(root, key, raw, identity, nil)
 }
 
+// RunPrivateAttachedReferencesContext observes only the coarse method-result
+// boundary and otherwise uses the same implementation as the legacy entry point.
+func RunPrivateAttachedReferencesContext(ctx context.Context, root *publication.Root, key lspwire.RequestKey, raw json.RawMessage, identity PrivateTransitionIdentity) (*ReferenceEvaluation, []byte, error) {
+	adr0011c18.Notify(ctx, adr0011c18.PointMethodResultEntered)
+	defer adr0011c18.Notify(ctx, adr0011c18.PointMethodResultReturned)
+	_, receipt := adr0011c18.BeginSuffix(ctx)
+	return runPrivateAttachedReferencesC18(root, key, raw, identity, nil, receipt)
+}
+
+type c18ReferenceTransitionStore struct {
+	referenceTransitionStore
+	receipt   *adr0011c18.Receipt
+	retention bool
+}
+
+// Store gates the first durable write. The sink's immediate equality Read is
+// part of this atomic retention operation; PointReadback separately gates the
+// later independent final read and every replay read that follows it.
+func (s *c18ReferenceTransitionStore) Store(owner referenceTransitionOwner, data []byte) error {
+	if !s.retention {
+		if !s.receipt.ReachSuffix(adr0011c18.PointRetention) {
+			return errReferenceTransition
+		}
+		s.retention = true
+	}
+	return s.referenceTransitionStore.Store(owner, data)
+}
+
 // trace is package-private fault injection; production always supplies nil.
 func runPrivateAttachedReferences(root *publication.Root, key lspwire.RequestKey, raw json.RawMessage, identity PrivateTransitionIdentity, trace publication.BoundFileTrace) (*ReferenceEvaluation, []byte, error) {
+	return runPrivateAttachedReferencesC18(root, key, raw, identity, trace, nil)
+}
+
+func runPrivateAttachedReferencesC18(root *publication.Root, key lspwire.RequestKey, raw json.RawMessage, identity PrivateTransitionIdentity, trace publication.BoundFileTrace, receipt *adr0011c18.Receipt) (*ReferenceEvaluation, []byte, error) {
 	owner := referenceTransitionOwner{
 		Transaction: identity.Transaction, RequestKey: identity.RequestKey,
 		Invocation: identity.Invocation, ResponseRead: identity.ResponseRead,
@@ -38,13 +72,23 @@ func runPrivateAttachedReferences(root *publication.Root, key lspwire.RequestKey
 		return nil, nil, err
 	}
 	store.trace = trace
-	sink, err := newReferenceTransitionSink(owner, store)
+	var transitionStore referenceTransitionStore = store
+	if receipt != nil {
+		transitionStore = &c18ReferenceTransitionStore{referenceTransitionStore: store, receipt: receipt}
+	}
+	sink, err := newReferenceTransitionSink(owner, transitionStore)
 	if err != nil {
 		return nil, nil, err
+	}
+	if receipt != nil && !receipt.ReachSuffix(adr0011c18.PointObjectEvent) {
+		return nil, nil, errReferenceTransition
 	}
 	evaluation, _, err := evaluateCompleteReferencesAttached(key, raw, owner, sink)
 	if err != nil {
 		return nil, nil, err
+	}
+	if receipt != nil && !receipt.ReachSuffix(adr0011c18.PointReadback) {
+		return nil, nil, errReferenceTransition
 	}
 	final, err := store.Read(owner)
 	if err != nil {

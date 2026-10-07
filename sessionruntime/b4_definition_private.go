@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"unsafe"
 
+	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/lspwire"
 	"lsp-trace/internal/session"
 )
@@ -411,6 +412,11 @@ func (m *Manager) ReleasePrivateB4DefinitionSource(lease B4DefinitionSourceLease
 // is made under Manager.mu before Pending.Begin and before the actual WRITE.
 // Ordinary RoundTrip and other methods never enter this path.
 func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripRequest, owner B4DefinitionOwner) (RoundTripResult, B4DefinitionLease) {
+	adr0011c18.Notify(parent, adr0011c18.PointRuntimeEntered)
+	parent, receipt := adr0011c18.BeginRuntime(parent)
+	if !receipt.ReachRuntime(adr0011c18.PointPreflight) {
+		return RoundTripResult{Failure: session.ToolNotImplemented}, B4DefinitionLease{}
+	}
 	if req.Method != "textDocument/definition" || req.SessionID == "" || req.Generation == 0 ||
 		owner.Transaction == "" || owner.CompletedOwnerKey == "" || req.MaxMessages <= 0 ||
 		req.MaxBytes <= 0 || req.MaxBytes > 4<<20 || len(req.Params) == 0 || len(req.Params) > maxMethodFrameCorrespondenceBytes ||
@@ -493,6 +499,11 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 	req.ADR0011PrivateServerErrorLeaseV1 = true
 	req.ADR0011PrivateResponseLeaseV1 = true
 	result := m.roundTripWithPrivateTransaction(parent, req, nil, transaction)
+	if result.Failure == "" && !receipt.SealRuntime() {
+		result.Failure = session.SessionPoisoned
+	}
+	adr0011c18.Notify(parent, adr0011c18.PointRuntimeHandoff)
+	adr0011c18.Notify(parent, adr0011c18.PointRuntimeReturned)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.privateB4ReservationLocked(reservation.token) != reservation {

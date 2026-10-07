@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"lsp-trace/internal/adr0011c18"
 	"lsp-trace/internal/adr0011methodresult"
 	"lsp-trace/internal/adr0011querytarget"
 	"lsp-trace/internal/publication"
@@ -113,7 +114,36 @@ func (o *Owner) acquirePrivateFinal(ctx context.Context, q Query) (*PrivateFinal
 }
 
 // acquireManaged owns exactly one documentSymbol/references managed pair.
-func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (*managedResult, error) {
+func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (managed *managedResult, err error) {
+	adr0011c18.Notify(ctx, adr0011c18.PointAcquisitionEntered)
+	runtimeParent := ctx
+	transaction := q.OccurrenceID
+	if transaction == "" {
+		transaction = "disabled"
+	}
+	ctx, custody := adr0011c18.BeginAcquisition(ctx, transaction)
+	if custody == nil {
+		adr0011c18.Notify(ctx, adr0011c18.PointAcquisitionReturned)
+		return nil, ErrAcquisition
+	}
+	defer func() {
+		panicValue := recover()
+		outcome := adr0011c18.OutcomeError
+		if panicValue != nil {
+			outcome = adr0011c18.OutcomePanic
+		} else if err == nil && managed != nil {
+			outcome = adr0011c18.OutcomeSuccess
+		}
+		sealed := custody.SealTerminal(transaction, outcome)
+		adr0011c18.Notify(ctx, adr0011c18.PointAcquisitionReturned)
+		if panicValue != nil {
+			panic(panicValue)
+		}
+		if !sealed {
+			managed = nil
+			err = errors.Join(err, ErrAcquisition)
+		}
+	}()
 	if o == nil || !o.testEnabled || o.manager == nil || o.root == nil {
 		return nil, ErrDisabled
 	}
@@ -182,16 +212,27 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (*mana
 		} else {
 			return ownedFrames{}, ErrAcquisition
 		}
+		requestCtx := runtimeParent
+		var runtimeReceipt *adr0011c18.Receipt
+		if method == "textDocument/references" {
+			requestCtx, runtimeReceipt = adr0011c18.BeginRuntime(ctx)
+			if runtimeReceipt == nil || !runtimeReceipt.ReachRuntime(adr0011c18.PointPreflight) {
+				return ownedFrames{}, ErrAcquisition
+			}
+		}
 		if o.beforeMethodRequestTestHook != nil {
 			o.beforeMethodRequestTestHook()
 		}
-		result := o.manager.RoundTrip(ctx, req)
+		result := o.manager.RoundTrip(requestCtx, req)
 		pair, ok := result.CompletedOwnedMethodPair()
 		if !ok {
 			return ownedFrames{}, ErrAcquisition
 		}
 		frames, ok := verifiedOwnedFrames(result, pair, method, params, binding, q.SessionID, q.Generation, frameCap)
 		if !ok {
+			return ownedFrames{}, ErrAcquisition
+		}
+		if runtimeReceipt != nil && !runtimeReceipt.SealRuntime() {
 			return ownedFrames{}, ErrAcquisition
 		}
 		frames.invocation = invocation
@@ -363,7 +404,8 @@ func (o *Owner) acquireManaged(ctx context.Context, q Query, finish bool) (*mana
 	}
 	transitionIdentity := adr0011methodresult.PrivateTransitionIdentity{Transaction: responseExpected.TransactionID, RequestKey: responseExpected.RequestKey,
 		Invocation: responseExpected.InvocationID, ResponseRead: responseRecord.selector, RawSelector: rawRecord.selector, RawDigest: raw.digest}
-	evaluation, journal, evalErr := adr0011methodresult.RunPrivateAttachedReferences(o.root, refsFrames.pair.Key, retainedRaw, transitionIdentity)
+	adr0011c18.Notify(ctx, adr0011c18.PointMethodResultHandoff)
+	evaluation, journal, evalErr := adr0011methodresult.RunPrivateAttachedReferencesContext(ctx, o.root, refsFrames.pair.Key, retainedRaw, transitionIdentity)
 	if evalErr != nil || evaluation == nil || len(journal) == 0 {
 		return nil, ErrAcquisition
 	}
