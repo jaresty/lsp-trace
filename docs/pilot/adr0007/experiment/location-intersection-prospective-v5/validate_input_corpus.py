@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Validate only prospective ADR0007 v5 inputs; never evaluate location outcomes."""
-import argparse, base64, hashlib, json, subprocess, sys, tempfile
+import argparse, base64, hashlib, json, re as regex, subprocess, sys, tempfile
 from pathlib import Path
 ARTIFACT_ROOT=Path(__file__).resolve().parent
 REPO_ROOT=Path(__file__).resolve().parents[5]
 HELPER=ARTIFACT_ROOT/'cmd/inputcheck/main.go'
-ROOT=ARTIFACT_ROOT; INPUTS=ROOT/'inputs'; CENSUS=ROOT/'INPUT_CORPUS.json'; SCHEMAS=ROOT/'INPUT_SCHEMAS.json'
-EXPECTED_COUNT=30
+ROOT=ARTIFACT_ROOT; INPUTS=ROOT/'inputs'; CENSUS=ROOT/'INPUT_CORPUS.json'; SCHEMAS=ROOT/'INPUT_SCHEMAS.json'; DEFERRED=ROOT/'DEFERRED_BOUNDARIES.json'
+EXPECTED_COUNT=26
 FORBIDDEN_NAMES={'EXPECTED_RESULT.json','RESULT.json','OUTCOME.json','ORACLE.json','FREEZE.json','EVALUATOR.json'}
 FORBIDDEN_CONTENT=(b'EXPECTED_RESULT',b'OUTCOME_ORACLE',b'V5_EVALUATOR',b'FREEZE.json')
 CASE_KEYS=('schema','caseId','causalPerturbation','specCitations')
@@ -35,6 +35,10 @@ def validate(write=False):
  elif set(schemas)!={'schema','existing','closed'} or schemas.get('existing')!={'request':'request.schema.json','binding':'source-binding.schema.json'} or set(schemas.get('closed',{}))!={'condition','case','corpus'}: errors.append('INPUT_SCHEMAS.json closed/reference shape')
  dirs=sorted(p for p in INPUTS.iterdir() if p.is_dir()) if INPUTS.exists() else []
  if len(dirs)!=EXPECTED_COUNT: errors.append(f'case-count: {len(dirs)} != {EXPECTED_COUNT}')
+ deferred,de=canonical(DEFERRED)
+ expected_deferred={'schema':'lsp-trace.adr0007.location-deferred-boundaries.private.v5','variants':[{'symbol':s,'status':'DEFERRED'} for s in ('W','W-1','B','B-1')]}
+ if de: errors.append(de)
+ elif deferred!=expected_deferred: errors.append('DEFERRED_BOUNDARIES.json must contain exactly value-free W/W-1/B/B-1 variants')
  binary=Path(tempfile.gettempdir())/'lsp-trace-location-inputcheck'
  built=run(['go','build','-o',str(binary),str(HELPER)])
  if built.returncode: errors.append('Go input checker build: '+built.stderr.strip())
@@ -55,6 +59,7 @@ def validate(write=False):
   if ce: errors.append(f'{d.name}: {ce}')
   if co: errors.append(f'{d.name}: {co}')
   if case is not None and (tuple(case)!=CASE_KEYS or case.get('caseId')!=d.name or not isinstance(case.get('causalPerturbation'),str) or not case.get('causalPerturbation') or not isinstance(case.get('specCitations'),list) or not case['specCitations']): errors.append(f'{d.name}: CASE.json schema')
+  if case is not None and regex.search(r'(?<![A-Za-z0-9-])(W-1|B-1|W|B)(?![A-Za-z0-9-])',case.get('causalPerturbation','')): errors.append(f'{d.name}: unproven W/B boundary label')
   if cond is not None and (not set(cond)<=set(COND_KEYS) or tuple(cond)[:4]!=COND_KEYS[:4] or cond.get('schema')!='lsp-trace.adr0007.location-input-condition.private.v5' or not isinstance(cond.get('cancel'),bool) or not isinstance(cond.get('deadlineExpired'),bool) or cond.get('limitsProfile')!='PUBLISHED_V5' or ('boundarySetup' in cond and not isinstance(cond['boundarySetup'],dict))): errors.append(f'{d.name}: CONDITION.json schema')
   if built.returncode==0:
    for key,path in (('case',d/'CASE.json'),('condition',d/'CONDITION.json')):
@@ -68,6 +73,15 @@ def validate(write=False):
   else:
    rv,re=canonical(req,order=ROOT_KEYS)
    if re: errors.append(f'{d.name}: {re}')
+   if d.name=='23-frozen-paths-plus-one':
+    frozen=rv.get('selector',{}).get('frozenPaths',[]) if isinstance(rv,dict) else []
+    setup=cond.get('boundarySetup',{}) if isinstance(cond,dict) else {}
+    if len(frozen)!=1001 or len(set(frozen))!=1001 or setup!={'maxFrozenPaths':1000,'rawFrozenPaths':1001,'expandedSources':1,'expectedPrecedence':'FROZEN_PATHS'}: errors.append(f'{d.name}: concrete raw=1001 expanded=1 frozen-path boundary')
+   if d.name=='25-witness-plus-one':
+    members=rv.get('members',[]) if isinstance(rv,dict) else []
+    ids=[m.get('id') for m in members if isinstance(m,dict)]
+    setup=cond.get('boundarySetup',{}) if isinstance(cond,dict) else {}
+    if len(ids)!=10001 or len(set(ids))!=10001 or setup!={'maxWitnesses':10000,'uniqueWitnesses':10001}: errors.append(f'{d.name}: unique witnesses must equal 10001')
    if built.returncode==0:
     r=subprocess.run([str(binary),'schema',str(ARTIFACT_ROOT/'request.schema.json'),str(req)],text=True,capture_output=True)
     if d.name=='07-schema-unknown-field':
@@ -99,7 +113,7 @@ def validate(write=False):
    if (d/'BINDING.ABSENT').read_bytes()!=b'ABSENT\n': errors.append(f'{d.name}: BINDING.ABSENT must equal ABSENT\\n')
   files=sorted((digest(p) for p in d.iterdir() if p.is_file()),key=lambda x:x['path'])
   records.append({'caseId':d.name,'files':files})
- corpus={'schema':'lsp-trace.adr0007.location-input-corpus.private.v5','caseCount':len(dirs),'scopeChange':{'from':24,'to':30,'reason':'separate causal boundary pairs without multi-cause ambiguity'},'cases':records}
+ corpus={'schema':'lsp-trace.adr0007.location-input-corpus.private.v5','caseCount':len(dirs),'scopeChange':{'from':30,'to':26,'reason':'remove unproven oracle-derived W/W-1/B/B-1 cases and defer their values'},'cases':records}
  encoded=compact(corpus)
  if write:
   tmp=CENSUS.with_suffix('.json.tmp'); tmp.write_bytes(encoded); tmp.replace(CENSUS)

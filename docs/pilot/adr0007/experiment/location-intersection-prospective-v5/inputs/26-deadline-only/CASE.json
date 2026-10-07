@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"26-deadline-only","causalPerturbation":"deadline expired without cancellation","specCitations":["DESIGN.md §7 lines 120-126"]}
