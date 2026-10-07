@@ -1,10 +1,10 @@
 # ADR0011 Package P4 revised C-scope closure review
 
-Audited implementation revision: `746efcad9967b211e17238562165fdb872ebc787`
+Audited implementation revision: `47b2996882a2abb3c598877c47268a939d986326`
 
-Audited tree: `8d5c2f33b33193de7ccf9df84dba0d3106a1bf4d`
+Audited tree: `549c5ee07bd68976ea00ee5c07fd0757ef6c3f8b`
 
-Hermetic prerequisite: `9e1d9e48da1272991657f715581786b6581136c0` (included in audited history)
+Hermetic prerequisites: `c8dc1ac804cda716d5aef8e5d3ad7a46fed42430` and `42fe29db5cfc07f53617d273985c5a3e8bc9c6b3` (included in audited history)
 
 Machine matrix: `docs/qualification/adr0011-c-closure-matrix.json`
 
@@ -29,8 +29,8 @@ Future C exit is assessed against `REVISED_C_SCOPE_V2`, not the original C01–C
 - historical inventory: 24 rows;
 - active rows: 23;
 - superseded inventory row: C02 only;
-- currently CLOSED active rows: C01, C03, C04, C16, C17;
-- currently UNKNOWN active rows: C05–C15 except C16/C17, C18, and all six work counters.
+- currently CLOSED active rows: C01, C03, C04, C05, C13, C14, C16, C17;
+- currently UNKNOWN active rows: C06–C12, C15, C18, and all six work counters.
 
 Current result remains:
 
@@ -38,7 +38,7 @@ Current result remains:
 C_EXIT_BLOCKED
 ```
 
-The scope amendment removes C02 from the active denominator but does not close any formerly unknown active row. Five of 23 active rows are closed; eighteen remain unknown.
+The scope amendment removes C02 from the active denominator. Subsequent hermetic evidence requalification closes C05, C13, and C14 without production changes. Eight of 23 active rows are closed; fifteen remain unknown.
 
 ## Exact amendment binding
 
@@ -59,12 +59,10 @@ No other row may use the superseded status. The checker retains the exact ordere
 
 | Rows | Blocker | Minimum corrective increment |
 |---|---|---|
-| C05 | Integrated terminal-response boundary depends on unavailable evidence. | Add a tracked hermetic 64th-terminal/65th-refusal fixture. |
-| C06 | History-to-transaction attachment/release fixture is non-portable. | Track the attachment fixture and rerun borrower release and retirement checks. |
+| C06 | Boundary, exact-three-frame readiness, receipt attachment, and borrower-count tests pass, but final borrower release and retirement retain chunks/outstanding backing. | Implement and causally test eventual backing settlement after the final owner/borrower releases, including restart retirement. |
 | C07, C09, C11 | Isolated boundaries lack tracked portable P2 packets. | Add source-, command-, output-, and hash-bound packets with integrated definition witnesses. |
 | C08 | STOP/RESTART transaction-clock continuity is absent. | Prove attempt epoch continuity across lifecycle transitions. |
 | C10, C12 | Integrated references route selection is unproved. | Add sessionruntime references integration at both boundaries. |
-| C13, C14 | Selected real-path fixtures are unavailable. | Replace them with tracked hermetic source fixtures. |
 | C15 | The allocation census withholds aggregate acceptance. | Complete ownership, alias, copy, transfer, release, and failure-path accounting. |
 | C18 | Real adjacent collision witnesses are incomplete. | Add production-path collisions through retention/readback. |
 | Six work counters | Independent transaction work semantics and exact traces remain incomplete. | Define and verify each named work counter without inferring closure from resource caps. |
