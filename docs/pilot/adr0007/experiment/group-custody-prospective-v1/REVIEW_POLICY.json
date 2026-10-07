@@ -1,0 +1,1 @@
+{"acceptIffAllChecksTrue":true,"checks":["request_bound","raw_bound","result_bound","search_bound","evidence_bound","partition_balanced","candidate_nonsemantic","authority_ceiling","custody_procedural"],"schemaVersion":"lsp-trace.adr0007.group.private.v1.review-policy"}

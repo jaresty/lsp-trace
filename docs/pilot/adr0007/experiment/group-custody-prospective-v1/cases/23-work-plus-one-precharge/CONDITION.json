@@ -1,0 +1,1 @@
+{"SchemaVersion":"lsp-trace.adr0007.group.private.v1.case-condition","CaseID":"23-work-plus-one-precharge","Kind":"work-plus-one","Control":{"Cancelled":false,"DeadlineExpired":false,"BackendFailed":false,"WorkLimit":50,"TriggerCheckpoint":"","TriggerOccurrence":0,"TriggerCancelled":false,"TriggerDeadlineExpired":false,"TriggerBackendFailed":false,"TriggerWorkLimit":0}}

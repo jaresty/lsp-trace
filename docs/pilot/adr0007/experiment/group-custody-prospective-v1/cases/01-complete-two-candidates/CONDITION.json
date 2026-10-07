@@ -1,0 +1,1 @@
+{"SchemaVersion":"lsp-trace.adr0007.group.private.v1.case-condition","CaseID":"01-complete-two-candidates","Kind":"two","Control":{"Cancelled":false,"DeadlineExpired":false,"BackendFailed":false,"WorkLimit":0,"TriggerCheckpoint":"","TriggerOccurrence":0,"TriggerCancelled":false,"TriggerDeadlineExpired":false,"TriggerBackendFailed":false,"TriggerWorkLimit":0}}

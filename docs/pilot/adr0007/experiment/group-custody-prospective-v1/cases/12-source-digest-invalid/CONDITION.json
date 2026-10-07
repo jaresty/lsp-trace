@@ -1,0 +1,1 @@
+{"SchemaVersion":"lsp-trace.adr0007.group.private.v1.case-condition","CaseID":"12-source-digest-invalid","Kind":"source-digest","Control":{"Cancelled":false,"DeadlineExpired":false,"BackendFailed":false,"WorkLimit":0,"TriggerCheckpoint":"","TriggerOccurrence":0,"TriggerCancelled":false,"TriggerDeadlineExpired":false,"TriggerBackendFailed":false,"TriggerWorkLimit":0}}

@@ -1,0 +1,1 @@
+{"SchemaVersion":"lsp-trace.adr0007.group.private.v1.case-condition","CaseID":"22-exact-work-boundary","Kind":"work-boundary","Control":{"Cancelled":false,"DeadlineExpired":false,"BackendFailed":false,"WorkLimit":51,"TriggerCheckpoint":"","TriggerOccurrence":0,"TriggerCancelled":false,"TriggerDeadlineExpired":false,"TriggerBackendFailed":false,"TriggerWorkLimit":0}}
