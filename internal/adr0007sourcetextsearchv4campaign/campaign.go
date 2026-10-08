@@ -19,19 +19,22 @@ import (
 )
 
 const (
-	ExpectedHEAD   = "34ed9915313b652be1fd816b51a6e5ec91799728"
-	CampaignID     = "source-text-search-v4-qualification-34ed9915"
-	DesignRoot     = "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf"
-	DesignManifest = "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9"
-	DesignCensus   = "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e"
-	DesignEnvelope = "sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952"
-	DesignGoAgent  = "46120794"
+	ExpectedHEAD         = "02ca93249f9f77164785617442f622006e3185c2"
+	CampaignID           = "source-text-search-v4-zero-effect-successor-02ca9324"
+	BlockedCampaignID    = "source-text-search-v4-qualification-34ed9915"
+	DesignRoot           = "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf"
+	DesignManifest       = "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9"
+	DesignCensus         = "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e"
+	DesignEnvelope       = "sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952"
+	DesignGoAgent        = "agentbfc329cd"
+	AuthorizationVerdict = "ZERO_EFFECT_SUCCESSOR_AUTHORIZATION"
 )
 
 var ProtectedRoots = []string{
 	"docs/pilot/adr0007/source-text-search-v4",
 	"docs/pilot/adr0007/source-text-search-v4-successor-freeze",
 	"docs/pilot/adr0007/source-text-search-v4-successor2-freeze",
+	"docs/pilot/adr0007/experiment/" + BlockedCampaignID,
 }
 
 type Options struct {
@@ -63,6 +66,21 @@ type FileRec struct {
 	SHA256  string `json:"sha256"`
 	Mode    string `json:"mode"`
 	GitBlob string `json:"git_blob,omitempty"`
+}
+type BinaryRec struct {
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Bytes      int64  `json:"bytes"`
+	SHA256     string `json:"sha256"`
+	Mode       string `json:"mode"`
+	Regular    bool   `json:"regular"`
+	Executable bool   `json:"executable"`
+}
+type BinaryIdentity struct {
+	Schema          string      `json:"schema"`
+	Root            string      `json:"root"`
+	Entries         []BinaryRec `json:"entries"`
+	DirectorySHA256 string      `json:"directory_sha256"`
 }
 type Commitment struct {
 	Ordinal       int    `json:"ordinal"`
@@ -142,6 +160,81 @@ func shaFile(path string) (string, int64, error) {
 		return "", 0, err
 	}
 	return sha(b), int64(len(b)), nil
+}
+func verifyExecutable(path string) (BinaryRec, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return BinaryRec{}, err
+	}
+	if !info.Mode().IsRegular() {
+		return BinaryRec{}, fmt.Errorf("binary is not a regular file: %s", path)
+	}
+	if info.Mode()&0111 == 0 {
+		return BinaryRec{}, fmt.Errorf("binary is not executable: %s", path)
+	}
+	s, n, err := shaFile(path)
+	if err != nil {
+		return BinaryRec{}, err
+	}
+	return BinaryRec{Path: filepath.ToSlash(path), Bytes: n, SHA256: s, Mode: info.Mode().String(), Regular: true, Executable: true}, nil
+}
+func binaryIdentity(entries map[string]string) (BinaryIdentity, error) {
+	var out BinaryIdentity
+	out.Schema = "lsp-trace.adr0007.source-text-search.binary-directory-identity.private.v1"
+	for name, path := range entries {
+		rec, err := verifyExecutable(path)
+		if err != nil {
+			return out, fmt.Errorf("%s binary: %w", name, err)
+		}
+		rec.Name = name
+		out.Entries = append(out.Entries, rec)
+	}
+	sort.Slice(out.Entries, func(i, j int) bool { return out.Entries[i].Name < out.Entries[j].Name })
+	if len(out.Entries) > 0 {
+		out.Root = filepath.ToSlash(filepath.Dir(out.Entries[0].Path))
+		for _, e := range out.Entries[1:] {
+			if filepath.ToSlash(filepath.Dir(e.Path)) != out.Root {
+				return out, errors.New("binary paths do not share one directory")
+			}
+		}
+	}
+	h := sha256.New()
+	for _, e := range out.Entries {
+		fmt.Fprintf(h, "%s\x00%s\x00%d\x00%s\x00%s\n", e.Name, e.Path, e.Bytes, e.SHA256, e.Mode)
+	}
+	out.DirectorySHA256 = "sha256:" + hex.EncodeToString(h.Sum(nil))
+	return out, nil
+}
+func readBinaryIdentity(path string) (BinaryIdentity, error) {
+	var id BinaryIdentity
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return id, err
+	}
+	if err := json.Unmarshal(b, &id); err != nil {
+		return id, err
+	}
+	return id, nil
+}
+func requirePredispatchBinary(o Options, lane string, bin string) error {
+	want, err := readBinaryIdentity(filepath.Join(campaignRoot(o), "BINARY_DIRECTORY_IDENTITY.json"))
+	if err != nil {
+		return err
+	}
+	got, err := binaryIdentity(map[string]string{lane: bin})
+	if err != nil {
+		return err
+	}
+	for _, w := range want.Entries {
+		if w.Name == lane {
+			g := got.Entries[0]
+			if w.Path != g.Path || w.Bytes != g.Bytes || w.SHA256 != g.SHA256 || !g.Regular || !g.Executable {
+				return fmt.Errorf("%s binary identity mismatch against PREDISPATCH", lane)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("%s binary missing from PREDISPATCH identity", lane)
 }
 
 func git(o Options, args ...string) (string, error) {
@@ -319,7 +412,7 @@ func Prepare(o Options) error {
 			return err
 		}
 	}
-	def := map[string]any{"schema": "lsp-trace.adr0007.source-text-search.campaign-definition.private.v1", "campaign_id": CampaignID, "head": ExpectedHEAD, "successor2_root": DesignRoot, "manifest": DesignManifest, "census": DesignCensus, "envelope": DesignEnvelope, "design_go_agent": DesignGoAgent, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED", "historical_expected_results": "frozen provenance only; never qualification oracle"}
+	def := map[string]any{"schema": "lsp-trace.adr0007.source-text-search.campaign-definition.private.v1", "campaign_id": CampaignID, "head": ExpectedHEAD, "successor2_root": DesignRoot, "manifest": DesignManifest, "census": DesignCensus, "envelope": DesignEnvelope, "design_go_agent": DesignGoAgent, "authorization_verdict": AuthorizationVerdict, "authorization_agent": DesignGoAgent, "failure_custody_verdict": "SOURCE_TEXT_SEARCH_CAMPAIGN_ZERO_EFFECT_SUCCESSOR_GO", "blocked_predecessor_campaign_id": BlockedCampaignID, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED", "historical_expected_results": "frozen provenance only; never qualification oracle"}
 	if err := writeJSONNew(filepath.Join(cr, "CAMPAIGN_DEFINITION.json"), def); err != nil {
 		return err
 	}
@@ -370,21 +463,34 @@ func Predispatch(o Options) error {
 			_ = block(cr, err)
 			return err
 		}
-		if _, _, err := shaFile(p); err != nil {
-			_ = block(cr, err)
-			return err
+	}
+	bins, err := binaryIdentity(map[string]string{"production": o.ProductionBin, "oracle": o.OracleBin, "validator": o.ValidatorBin})
+	if err != nil {
+		_ = block(cr, err)
+		return err
+	}
+	ps, osx, vs := "", "", ""
+	for _, rec := range bins.Entries {
+		switch rec.Name {
+		case "production":
+			ps = rec.SHA256
+		case "oracle":
+			osx = rec.SHA256
+		case "validator":
+			vs = rec.SHA256
 		}
 	}
-	ps, _, _ := shaFile(o.ProductionBin)
-	osx, _, _ := shaFile(o.OracleBin)
-	vs, _, _ := shaFile(o.ValidatorBin)
 	if ps == osx {
 		err := errors.New("production and oracle binary digests equal")
 		_ = block(cr, err)
 		return err
 	}
+	if err := writeJSONNew(filepath.Join(cr, "BINARY_DIRECTORY_IDENTITY.json"), bins); err != nil {
+		_ = block(cr, err)
+		return err
+	}
 	toolingHead, _ := git(o, "rev-parse", "HEAD")
-	rec := map[string]any{"schema": "predispatch", "protected_base_head": ExpectedHEAD, "tooling_head": toolingHead, "protected_snapshot": snap, "case_commitments": cs, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
+	rec := map[string]any{"schema": "predispatch", "protected_base_head": ExpectedHEAD, "tooling_head": toolingHead, "protected_snapshot": snap, "case_commitments": cs, "binary_directory_identity_path": filepath.Join(cr, "BINARY_DIRECTORY_IDENTITY.json"), "binary_directory_sha256": bins.DirectorySHA256, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
 	if err := writeJSONNew(filepath.Join(cr, "PREDISPATCH.json"), rec); err != nil {
 		_ = block(cr, err)
 		return err
@@ -407,6 +513,9 @@ func runOne(o Options, c Commitment, lane, bin string) error {
 	receipt := filepath.Join(dir, "receipt.json")
 	if _, err := os.Stat(receipt); err == nil {
 		return fmt.Errorf("attempt already exists %s %s", c.CaseID, lane)
+	}
+	if err := requirePredispatchBinary(o, lane, bin); err != nil {
+		return err
 	}
 	if err := appendEvent(cr, "DISPATCH", c.CaseID, lane, "", "", 0); err != nil {
 		return err

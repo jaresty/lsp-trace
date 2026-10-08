@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.source-text-search.campaign-event.private.v1","seq":1,"prev_event_sha256":"sha256:0000000000000000000000000000000000000000000000000000000000000000","event_sha256":"sha256:be63702fac6edc1371e800ad05085722e8f62485262bdd2026802a6726d7884c","time":"2026-10-08T08:48:18.773581Z","type":"PREPARED","detail":"prepared"}

@@ -53,8 +53,11 @@ func TestCaseIDValidationRejectsMissing(t *testing.T) {
 }
 
 func TestConstantsPreserveCeilings(t *testing.T) {
-	if ExpectedHEAD != "34ed9915313b652be1fd816b51a6e5ec91799728" {
+	if ExpectedHEAD != "02ca93249f9f77164785617442f622006e3185c2" {
 		t.Fatal("head drift")
+	}
+	if CampaignID != "source-text-search-v4-zero-effect-successor-02ca9324" || BlockedCampaignID != "source-text-search-v4-qualification-34ed9915" {
+		t.Fatal("campaign identity drift")
 	}
 	if DesignRoot == "" || DesignManifest == "" || DesignCensus == "" || DesignEnvelope == "" {
 		t.Fatal("missing design identity")
