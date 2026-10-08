@@ -148,6 +148,10 @@ type Result struct {
 }
 type populations struct{ J, P, R, M, S, Q, X, C uint64 }
 
+type workStageObserver func(stage, event string, before, charge, after, limit uint64)
+
+var observeWorkStage workStageObserver
+
 func failure(id, outcome, detail string) Result {
 	return Result{ResultSchema, id, outcome, []MemberRow{}, []Ranked{}, Counters{}, detail}
 }
@@ -192,18 +196,37 @@ func (w *workMeter) inc(k string, n uint64) (string, string) {
 		panic("unknown population " + k)
 	}
 	if coeff != 0 && n > math.MaxUint64/coeff {
+		if observeWorkStage != nil {
+			observeWorkStage(k, "fail", w.work, math.MaxUint64, w.work, w.limits.MaxWork)
+		}
 		return "RESOURCE_LIMIT", "WORK"
 	}
 	charge := n * coeff
+	before := w.work
+	if observeWorkStage != nil {
+		observeWorkStage(k, "before", before, charge, before, w.limits.MaxWork)
+	}
 	if w.work > math.MaxUint64-charge || w.work+charge > w.limits.MaxWork {
+		if observeWorkStage != nil {
+			observeWorkStage(k, "fail", before, charge, before, w.limits.MaxWork)
+		}
 		return "RESOURCE_LIMIT", "WORK"
+	}
+	if observeWorkStage != nil {
+		observeWorkStage(k, "increment", before, charge, before+charge, w.limits.MaxWork)
 	}
 	w.work += charge
 	if slot != nil {
 		if *slot > math.MaxUint64-n {
+			if observeWorkStage != nil {
+				observeWorkStage(k, "fail", before, charge, w.work, w.limits.MaxWork)
+			}
 			return "RESOURCE_LIMIT", "WORK"
 		}
 		*slot += n
+	}
+	if observeWorkStage != nil {
+		observeWorkStage(k, "after", before, charge, w.work, w.limits.MaxWork)
 	}
 	return "", ""
 }
@@ -607,8 +630,39 @@ func decodeEnvelope(raw []byte, l Limits, meter *workMeter) (envelopeWire, []sou
 		if _, ok := top["binding"]; ok || e.Binding != nil {
 			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
 		}
-		if raw, ok := top["input"]; ok && json.Unmarshal(raw, &rawWire) != nil {
+		expected := map[string]bool{"schema": true, "outcome": true}
+		switch e.Outcome {
+		case "INVALID_REQUEST":
+			expected["detail"] = true
+			if e.Detail == "" || e.DuplicatePath != "" || e.Input != nil {
+				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+			}
+		case "INVALID_SOURCE", "RESOURCE_LIMIT":
+			expected["detail"], expected["input"] = true, true
+			if e.Detail == "" || e.DuplicatePath != "" {
+				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+			}
+		case "DUPLICATE_SOURCE":
+			expected["detail"], expected["duplicatePath"], expected["input"] = true, true, true
+			if e.Detail == "" || e.DuplicatePath == "" {
+				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+			}
+		default:
 			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+		}
+		if len(top) != len(expected) {
+			return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+		}
+		for k := range top {
+			if !expected[k] {
+				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+			}
+		}
+		if expected["input"] {
+			raw, ok := top["input"]
+			if !ok || json.Unmarshal(raw, &rawWire) != nil || e.Input == nil {
+				return e, nil, "BINDING_SCHEMA", "SOURCE_ADMISSION_MISMATCH"
+			}
 		}
 	}
 	out := make([]sourceadmissionv2.SelectedSource, len(wire))

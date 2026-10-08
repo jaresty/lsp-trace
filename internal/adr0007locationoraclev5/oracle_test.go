@@ -148,29 +148,142 @@ func TestEnvelopeProjectionAdversarialRejects(t *testing.T) {
 	})
 }
 
-func TestCheckpointPrecedence(t *testing.T) {
+func TestEnvelopeNonCompleteExactTopLevelFieldSets(t *testing.T) {
+	d := filepath.Join(corpusRoot(t), "inputs", "01-exact-intersects")
+	raw, _ := os.ReadFile(filepath.Join(d, "REQUEST.raw.json"))
+	const source = `{"path":"src/a","revision":"rev-v5","fileDigest":"sha256:a0bf9128df23e89ede49c09a4d61193dbc5e32b6791e7ab336381d617e01cb34","objectDigest":"sha256:a0bf9128df23e89ede49c09a4d61193dbc5e32b6791e7ab336381d617e01cb34","bytes":"YfCfmIBiDQp4eQo="}`
 	for _, tc := range []struct {
-		stage   string
-		caseID  string
-		maxWork uint64
+		name, valid, wantOutcome, wantDetail, missing, forbidden string
 	}{
-		{"M", "01-exact-intersects", 2444},
-		{"P", "01-exact-intersects", 2451},
-		{"S", "01-exact-intersects", 2452},
-		{"R", "01-exact-intersects", 2487},
-		{"Q", "01-exact-intersects", 2506},
-		{"X", "01-exact-intersects", 2529},
-		{"C", "05-union-repeat", 3417},
-		{"B", "01-exact-intersects", 2530},
+		{"invalid-request", `{"schema":"` + EnvelopeSchema + `","outcome":"INVALID_REQUEST","detail":"REQUEST_FIELD"}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_REQUEST", `"detail":"REQUEST_FIELD"`, `,"input":[]`},
+		{"invalid-source", `{"schema":"` + EnvelopeSchema + `","outcome":"INVALID_SOURCE","detail":"FILE_DIGEST","input":[` + source + `]}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_INVALID_SOURCE", `,"input":[` + source + `]`, `,"duplicatePath":"src/a"`},
+		{"duplicate-source", `{"schema":"` + EnvelopeSchema + `","outcome":"DUPLICATE_SOURCE","detail":"DUPLICATE_PATH","duplicatePath":"src/a","input":[` + source + `]}`, "SOURCE_ADMISSION_MISMATCH", "BINDING_DUPLICATE_SOURCE", `,"duplicatePath":"src/a"`, `,"binding":{}`},
+		{"resource-limit", `{"schema":"` + EnvelopeSchema + `","outcome":"RESOURCE_LIMIT","detail":"SOURCES","input":[` + source + `]}`, "RESOURCE_LIMIT", "SOURCES", `,"input":[` + source + `]`, `,"duplicatePath":"src/a"`},
 	} {
-		t.Run(tc.stage, func(t *testing.T) {
-			l := PublishedLimits()
-			l.MaxWork = tc.maxWork
-			r := evalCase(t, tc.caseID, l)
-			if r.Outcome != "RESOURCE_LIMIT" || r.Detail != "WORK" {
-				t.Fatalf("ASSERT checkpoint-%s-work FAIL got=%s/%s", tc.stage, r.Outcome, r.Detail)
+		t.Run(tc.name+"-valid-field-set", func(t *testing.T) {
+			r := Evaluate(raw, []byte(tc.valid), true, Condition{}, PublishedLimits())
+			if r.Outcome != tc.wantOutcome || r.Detail != tc.wantDetail {
+				t.Fatalf("ASSERT envelope-%s-valid-field-set FAIL got=%s/%s", tc.name, r.Outcome, r.Detail)
 			}
 		})
+		t.Run(tc.name+"-missing-required", func(t *testing.T) {
+			body := strings.Replace(tc.valid, tc.missing, ``, 1)
+			r := Evaluate(raw, []byte(body), true, Condition{}, PublishedLimits())
+			if r.Outcome != "SOURCE_ADMISSION_MISMATCH" || r.Detail != "BINDING_SCHEMA" {
+				t.Fatalf("ASSERT envelope-%s-missing-required FAIL got=%s/%s body=%s", tc.name, r.Outcome, r.Detail, body)
+			}
+		})
+		t.Run(tc.name+"-forbidden-known-key", func(t *testing.T) {
+			body := strings.TrimSuffix(tc.valid, "}") + tc.forbidden + `}`
+			r := Evaluate(raw, []byte(body), true, Condition{}, PublishedLimits())
+			if r.Outcome != "SOURCE_ADMISSION_MISMATCH" || r.Detail != "BINDING_SCHEMA" {
+				t.Fatalf("ASSERT envelope-%s-forbidden-known-key FAIL got=%s/%s body=%s", tc.name, r.Outcome, r.Detail, body)
+			}
+		})
+		t.Run(tc.name+"-additional-key", func(t *testing.T) {
+			body := strings.TrimSuffix(tc.valid, "}") + `,"extra":true}`
+			r := Evaluate(raw, []byte(body), true, Condition{}, PublishedLimits())
+			if r.Outcome != "SOURCE_ADMISSION_MISMATCH" || r.Detail != "BINDING_SCHEMA" {
+				t.Fatalf("ASSERT envelope-%s-additional-key FAIL got=%s/%s body=%s", tc.name, r.Outcome, r.Detail, body)
+			}
+		})
+	}
+}
+
+type workEvent struct {
+	Stage, Event                 string
+	Before, Charge, After, Limit uint64
+}
+
+func captureWorkEvents(fn func() Result) (Result, []workEvent) {
+	var events []workEvent
+	old := observeWorkStage
+	observeWorkStage = func(stage, event string, before, charge, after, limit uint64) {
+		if stage == "P" || stage == "R" || stage == "M" || stage == "S" || stage == "Q" || stage == "X" || stage == "C" || stage == "B" {
+			events = append(events, workEvent{stage, event, before, charge, after, limit})
+		}
+	}
+	defer func() { observeWorkStage = old }()
+	return fn(), events
+}
+
+func firstAfter(events []workEvent, stage string) (workEvent, bool) {
+	for _, e := range events {
+		if e.Stage == stage && e.Event == "after" && e.Charge > 0 {
+			return e, true
+		}
+	}
+	return workEvent{}, false
+}
+
+func TestCheckpointStageIsolatedProof(t *testing.T) {
+	for _, tc := range []struct{ stage, caseID string }{
+		{"M", "01-exact-intersects"}, {"P", "01-exact-intersects"}, {"S", "01-exact-intersects"}, {"R", "01-exact-intersects"},
+		{"Q", "01-exact-intersects"}, {"X", "01-exact-intersects"}, {"C", "05-union-repeat"}, {"B", "01-exact-intersects"},
+	} {
+		t.Run(tc.stage, func(t *testing.T) {
+			base, baseEvents := captureWorkEvents(func() Result { return evalCase(t, tc.caseID, PublishedLimits()) })
+			if base.Outcome != "COMPLETE" {
+				t.Fatalf("ASSERT stage-base-%s FAIL got=%s/%s", tc.stage, base.Outcome, base.Detail)
+			}
+			target, ok := firstAfter(baseEvents, tc.stage)
+			if !ok {
+				t.Fatalf("ASSERT stage-after-%s-observed FAIL", tc.stage)
+			}
+
+			l := PublishedLimits()
+			l.MaxWork = target.After - 1
+			minus, minusEvents := captureWorkEvents(func() Result { return evalCase(t, tc.caseID, l) })
+			if minus.Outcome != "RESOURCE_LIMIT" || minus.Detail != "WORK" {
+				t.Fatalf("ASSERT stage-%s-after-minus-one FAIL got=%s/%s", tc.stage, minus.Outcome, minus.Detail)
+			}
+			var failed *workEvent
+			for i := range minusEvents {
+				if minusEvents[i].Event == "fail" {
+					failed = &minusEvents[i]
+					break
+				}
+			}
+			if failed == nil || failed.Stage != tc.stage || failed.Before != target.Before || failed.Charge != target.Charge || failed.Limit != target.After-1 {
+				t.Fatalf("ASSERT stage-%s-exact-charge FAIL target=%+v failed=%+v", tc.stage, target, failed)
+			}
+
+			l.MaxWork = target.After
+			cross, crossEvents := captureWorkEvents(func() Result { return evalCase(t, tc.caseID, l) })
+			idx := -1
+			for i, e := range crossEvents {
+				if e.Stage == tc.stage && e.Event == "after" && e.Before == target.Before && e.Charge == target.Charge && e.After == target.After {
+					idx = i
+					break
+				}
+			}
+			if idx < 0 {
+				t.Fatalf("ASSERT stage-%s-crosses-charge FAIL got=%s/%s events=%+v", tc.stage, cross.Outcome, cross.Detail, crossEvents)
+			}
+			if cross.Outcome != "COMPLETE" && idx == len(crossEvents)-1 {
+				t.Fatalf("ASSERT stage-%s-next-checkpoint FAIL got=%s/%s", tc.stage, cross.Outcome, cross.Detail)
+			}
+		})
+	}
+}
+
+func TestWorkStageCoefficientSensitivity(t *testing.T) {
+	_, events := captureWorkEvents(func() Result { return evalCase(t, "05-union-repeat", PublishedLimits()) })
+	coeff := map[string]uint64{"P": 7, "R": 11, "M": 13, "S": 1, "Q": 19, "X": 23, "C": 29, "B": 31}
+	seen := map[string]bool{}
+	for _, e := range events {
+		if e.Event != "before" || e.Charge == 0 {
+			continue
+		}
+		if e.Charge%coeff[e.Stage] != 0 {
+			t.Fatalf("ASSERT coefficient-%s-placement FAIL event=%+v", e.Stage, e)
+		}
+		seen[e.Stage] = true
+	}
+	for stage := range coeff {
+		if !seen[stage] {
+			t.Fatalf("ASSERT coefficient-%s-observed FAIL", stage)
+		}
 	}
 }
 
