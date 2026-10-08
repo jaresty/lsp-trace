@@ -612,34 +612,38 @@ func Simulate(execRoot, frozenRoot, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	for _, artifact := range []string{"attempts", "EVENT_LEDGER.json", "EXECUTION_MANIFEST.json", "CORRECTION_MANIFEST.json", "PREDISPATCH_AUDIT_BLOCKED.json"} {
+	for _, artifact := range []string{"attempts", "boundaries", "EVENT_LEDGER.json", "EXECUTION_MANIFEST.json", "SIMULATION_EVENT_LEDGER.json", "SIMULATION_EXECUTION_MANIFEST.json", ".simulation-working"} {
 		if _, err := os.Stat(filepath.Join(execRoot, artifact)); err == nil {
 			return fmt.Errorf("simulate create-new fail closed: %s exists", artifact)
 		} else if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
+	work := filepath.Join(execRoot, ".simulation-working")
+	if err := os.Mkdir(work, 0755); err != nil {
 		return err
 	}
-	if err := AppendLedger(execRoot, "plan", map[string]any{"rootIdentity": RootIdentity, "phase": "Plan", "cases": len(cases), "predecessorSeal": PredecessorRootIdentity}); err != nil {
+	if err := AppendLedger(work, "plan", map[string]any{"rootIdentity": RootIdentity, "phase": "Plan", "cases": len(cases), "predecessorSeal": PredecessorRootIdentity}); err != nil {
 		return err
 	}
-	if err := AppendLedger(execRoot, "simulate", map[string]any{"rootIdentity": RootIdentity, "phase": "Simulate", "producerPlanned": 26, "reviewerPlanned": 26, "boundaryPlanned": 4, "realSemanticAttempts": 0}); err != nil {
+	if err := AppendLedger(work, "simulate", map[string]any{"rootIdentity": RootIdentity, "phase": "Simulate", "producerPlanned": 26, "reviewerPlanned": 26, "boundaryPlanned": 4, "realSemanticAttempts": 0}); err != nil {
 		return err
 	}
 	var l Ledger
-	if err := readStrict(filepath.Join(execRoot, "EVENT_LEDGER.json"), &l); err != nil {
+	if err := readStrict(filepath.Join(work, "EVENT_LEDGER.json"), &l); err != nil {
 		return err
 	}
 	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SIMULATION_ONLY", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 0, ReviewerAttempts: 0, ByteEquality: 0, DerivationBindings: 0, BoundaryReplays: 0, LeafRecount: 0, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "SIMULATE_ONLY"}
-	if err := writeJSONNew(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
+	if err := AppendLedger(work, "simulation_manifest", m); err != nil {
 		return err
 	}
-	if err := writeJSONNew(filepath.Join(execRoot, "CORRECTION_MANIFEST.json"), map[string]any{"schema": "lsp-trace.adr0007.location-v5-execution.correction-manifest.v3", "rootIdentity": RootIdentity, "blockedAudit": "PREDISPATCH_AUDIT_BLOCKED.json", "corrections": []string{"removed deletion/overwrite from simulation", "child modes private-token only", "head/tooling/dispatch-bound gate", "complete derivation recomputation", "independent verifier custody/count checks"}, "semanticOutputs": 0, "predecessorImmutable": true}); err != nil {
+	if err := os.Rename(filepath.Join(work, "EVENT_LEDGER.json"), filepath.Join(execRoot, "SIMULATION_EVENT_LEDGER.json")); err != nil {
 		return err
 	}
-	return AppendLedger(execRoot, "simulation_manifest", m)
+	if err := os.Remove(work); err != nil {
+		return err
+	}
+	return writeJSONNew(filepath.Join(execRoot, "SIMULATION_EXECUTION_MANIFEST.json"), m)
 }
 
 func writeBlockedAudit(execRoot, repoRoot string) error {
