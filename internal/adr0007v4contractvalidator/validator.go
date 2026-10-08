@@ -298,7 +298,198 @@ func ValidateBundle(b Bundle) error {
 	if t.Replay.TerminalPreimageSHA256 != sha(pre) || t.Custody.TerminalResultSHA256 != t.Replay.TerminalPreimageSHA256 {
 		return verr("INVARIANT_FAILED", "/custody/terminal_result_sha256", "preimage digest mismatch")
 	}
+	derivedBytes, err := Derive(b)
+	if err != nil {
+		return err
+	}
+	if derivedBytes != b.TerminalBytes {
+		return verr("INVARIANT_FAILED", "/terminal_bytes", "terminal does not equal derived canonical terminal")
+	}
 	return nil
+}
+
+func Derive(b Bundle) (string, error) {
+	var seed Terminal
+	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
+	dec.UseNumber()
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&seed); err != nil {
+		return "", verr("INVALID_INPUT", "/terminal_bytes", err.Error())
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return "", verr("INVALID_INPUT", "/terminal_bytes", "trailing data")
+	}
+	var raw map[string]any
+	rdec := json.NewDecoder(strings.NewReader(b.RawAttemptBytes))
+	rdec.UseNumber()
+	if err := rdec.Decode(&raw); err != nil {
+		return deriveRawFailure(b, err.Error())
+	}
+	if rdec.Decode(&struct{}{}) != io.EOF {
+		return deriveRawFailure(b, "trailing data")
+	}
+	query, ok := raw["query"].(string)
+	if !ok || query == "" {
+		return deriveRawFailure(b, "query")
+	}
+	seed.Request.Query = query
+	seed.Attempt.MalformedRaw = false
+	seed.Replay.CanonicalAttemptSHA256 = sha(b.RawAttemptBytes)
+	admissionDigest := digestOrEmpty(b.AdmittedBindingBytes)
+	seed.Admission.AdmissionDigest = admissionDigest
+	seed.Replay.AdmittedBindingSHA256 = admissionDigest
+	seed.Replay.ToolingIdentitySHA256 = sha(b.ToolingManifestBytes)
+	seed.Replay.PredecessorLockSHA256 = sha(b.PredecessorManifestBytes)
+	freeze := sha(b.PayloadFreezeBytes)
+	seed.Replay.FreezeBindingSHA256 = freeze
+	seed.Payload.FreezeBindingSHA256 = freeze
+	seed.Payload.PayloadDigest = freeze
+	seed.Custody.AttemptID = seed.Attempt.AttemptID
+
+	sources := make([]Source, len(seed.Sources))
+	copy(sources, seed.Sources)
+	sort.Slice(sources, func(i, j int) bool { return sources[i].Ordinal < sources[j].Ordinal })
+	for i := range sources {
+		data, ok := b.AdmittedSourceBytes[sources[i].SourceID]
+		if !ok {
+			return "", verr("ASSOCIATION_FAILED", "/sources/"+sources[i].SourceID, "missing source bytes")
+		}
+		sources[i].ByteLength = uint64(len([]byte(data)))
+		sources[i].ContentSHA256 = sha(data)
+	}
+	seed.Sources = sources
+	seed.Admission.AdmittedSourceIDs = make([]string, 0, len(sources))
+	for _, s := range sources {
+		seed.Admission.AdmittedSourceIDs = append(seed.Admission.AdmittedSourceIDs, s.SourceID)
+	}
+	qbytes := []byte(query)
+	matches := make([]Match, 0)
+	positions := make([]Position, 0)
+	matchOrdinal := uint64(0)
+	for _, s := range sources {
+		data := []byte(b.AdmittedSourceBytes[s.SourceID])
+		for off := 0; off+len(qbytes) <= len(data); off++ {
+			if bytes.Equal(data[off:off+len(qbytes)], qbytes) {
+				id := existingMatchID(seed.Matches, s.SourceID, uint64(off), uint64(off+len(qbytes)), matchOrdinal)
+				if id == "" {
+					id = deriveMatchID(s.SourceID, matchOrdinal, uint64(off), uint64(off+len(qbytes)), query)
+				}
+				m := Match{MatchID: id, SourceID: s.SourceID, PathBytes: s.PathBytes, StartByte: uint64(off), EndByte: uint64(off + len(qbytes)), Ordinal: matchOrdinal, Literal: query}
+				matches = append(matches, m)
+				p := positionFor(data, m.StartByte, m.EndByte)
+				p.MatchID = id
+				positions = append(positions, *p)
+				matchOrdinal++
+			}
+		}
+	}
+	seed.Matches = matches
+	seed.Positions = positions
+	if seed.Terminal == "COMPLETE" {
+		seed.Failure = nil
+		seed.RangeUnionCandidate = deriveCandidate(seed)
+	} else {
+		seed.Matches = []Match{}
+		seed.Positions = []Position{}
+		seed.RangeUnionCandidate = nil
+	}
+	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
+	pre := normalizedTerminalPreimage(seed)
+	seed.Replay.TerminalPreimageSHA256 = sha(pre)
+	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
+	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
+	pre = normalizedTerminalPreimage(seed)
+	seed.Replay.TerminalPreimageSHA256 = sha(pre)
+	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
+	return CanonicalJSON(seed)
+}
+
+func deriveRawFailure(b Bundle, reason string) (string, error) {
+	var seed Terminal
+	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
+	dec.UseNumber()
+	_ = dec.Decode(&seed)
+	seed.Terminal = "FAILED"
+	seed.Attempt.MalformedRaw = true
+	seed.Attempt.AttemptID = "attempt-raw-sha256-" + strings.TrimPrefix(sha(b.RawAttemptBytes), "sha256:")
+	seed.Request.Query = "invalid"
+	seed.Admission = Admission{Completed: false, AdmissionDigest: zeroSHA, AdmittedSourceIDs: []string{}}
+	seed.Sources, seed.Matches, seed.Positions = []Source{}, []Match{}, []Position{}
+	seed.RangeUnionCandidate = nil
+	seed.Failure = &Failure{Code: "INVALID_INPUT", Stage: "raw", Detail: map[string]any{"reason": reason}}
+	seed.Custody.AttemptID = seed.Attempt.AttemptID
+	seed.Replay.CanonicalAttemptSHA256 = sha(b.RawAttemptBytes)
+	seed.Replay.AdmittedBindingSHA256 = zeroSHA
+	seed.Replay.ToolingIdentitySHA256 = sha(b.ToolingManifestBytes)
+	seed.Replay.PredecessorLockSHA256 = sha(b.PredecessorManifestBytes)
+	freeze := sha(b.PayloadFreezeBytes)
+	seed.Replay.FreezeBindingSHA256 = freeze
+	seed.Payload.FreezeBindingSHA256 = freeze
+	seed.Payload.PayloadDigest = freeze
+	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
+	pre := normalizedTerminalPreimage(seed)
+	seed.Replay.TerminalPreimageSHA256 = sha(pre)
+	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
+	return CanonicalJSON(seed)
+}
+
+func deriveCandidate(t Terminal) *Candidate {
+	c := &Candidate{Operation: CandidateOperation, ExecutedLocation: false, CandidateOnly: true, AdmissionDigest: t.Admission.AdmissionDigest}
+	h := sha256.New()
+	for i, m := range t.Matches {
+		c.MemberMatchIDs = append(c.MemberMatchIDs, m.MatchID)
+		p := t.Positions[i]
+		c.QualifiedLocationPins = append(c.QualifiedLocationPins, LocationPin{SourceID: m.SourceID, StartByte: m.StartByte, EndByte: m.EndByte, StartLine: p.StartLine, StartCharacterUTF16: p.StartCharacterUTF16, EndLine: p.EndLine, EndCharacterUTF16: p.EndCharacterUTF16})
+		fmt.Fprintf(h, "%s:%s:%d:%d:%d\n", m.MatchID, m.SourceID, m.PathBytes, m.StartByte, m.EndByte)
+	}
+	c.CandidateDigest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+	return c
+}
+
+func deriveAccounting(t Terminal, term string) Accounting {
+	a := t.Accounting
+	a.SchemaVersion = AccountingSchemaVersion
+	a.JFiles = uint64(len(t.Sources))
+	a.QQueryBytes = uint64(len([]byte(t.Request.Query)))
+	a.PPathBytes, a.SSourceBytes, a.TScannedTuples, a.MMatches, a.RRanges, a.UUTF16Units = 0, 0, 0, 0, 0, 0
+	for _, s := range t.Sources {
+		a.PPathBytes += s.PathBytes
+		a.SSourceBytes += s.ByteLength
+	}
+	a.TScannedTuples = uint64(len(t.Sources))
+	a.MMatches = uint64(len(t.Matches))
+	a.RRanges = uint64(len(t.Positions))
+	for _, m := range t.Matches {
+		a.UUTF16Units += uint64(len(utf16.Encode([]rune(m.Literal))))
+	}
+	a.FailureCounters = map[string]uint64{}
+	for _, k := range failureNames {
+		a.FailureCounters[k] = 0
+	}
+	if t.Terminal == "FAILED" && t.Failure != nil {
+		a.FailureCounters[t.Failure.Code] = 1
+	}
+	if b, ok := fixedPointB(t); ok {
+		a.BOutputBytes = b
+	} else {
+		a.BOutputBytes = uint64(len([]byte(term)))
+	}
+	if w, ok := weightedW(a); ok {
+		a.WWork = w
+	}
+	return a
+}
+
+func existingMatchID(ms []Match, sourceID string, start, end, ord uint64) string {
+	for _, m := range ms {
+		if m.SourceID == sourceID && m.StartByte == start && m.EndByte == end && m.Ordinal == ord {
+			return m.MatchID
+		}
+	}
+	return ""
+}
+func deriveMatchID(sourceID string, ordinal, start, end uint64, literal string) string {
+	return sha(fmt.Sprintf("match\x00%s\x00%d\x00%d\x00%d\x00%s", sourceID, ordinal, start, end, literal))
 }
 
 func validateSchemaValue(schemaBytes []byte, value any) error {

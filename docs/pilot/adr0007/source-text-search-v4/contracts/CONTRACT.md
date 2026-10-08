@@ -4,7 +4,9 @@ This is a prospective, implementation-independent v4 wire contract. It does not 
 
 ## Validator input bundle
 
-The standalone validator consumes explicit bytes: raw attempt, terminal, admitted sources, admitted binding, tooling manifest, predecessor manifest, payload/freeze binding, and schema. It recomputes every pin from those bytes; trust-only terminal fields are insufficient.
+The standalone validator consumes explicit named bundle roles: `raw_attempt_bytes`, `terminal_bytes`, `admitted_source_bytes`, `admitted_binding_bytes`, `tooling_manifest_bytes`, `predecessor_manifest_bytes`, `payload_freeze_binding_bytes`, and `schema_bytes`. Each role is a repository-artifact byte string, not a digest-text substitute and not arbitrary alternate bytes. Raw attempt identity is the SHA256 of `raw_attempt_bytes`; source content identity is the SHA256 of each admitted source byte string; admission, tooling, predecessor, and freeze pins are SHA256 over the exact role bytes supplied in the bundle. Swapped roles, digest-text hashing in place of role bytes, and source bytes inconsistent with the terminal metadata are rejected.
+
+`Derive(bundle)` is the independent contract authority. It parses the raw attempt, admits the named source bytes, recomputes request/source/control/search semantics, source metadata, match ranges, UTF-16 positions, candidate pins, accounting, custody/replay/payload digests, and fixed-point terminal hashes, and returns exactly one canonical terminal byte sequence. `Validate(bundle)` first enforces schema and local invariants, then exact-compares `terminal_bytes` to `Derive(bundle)`; no alternative canonical output is valid.
 
 ## Schema execution
 

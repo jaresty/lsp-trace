@@ -41,6 +41,38 @@ func TestConformanceFixtures(t *testing.T) {
 	}
 }
 
+func TestDeriveIsCanonicalTerminalAuthority(t *testing.T) {
+	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "complete.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	derived, err := Derive(bun)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if derived != bun.TerminalBytes {
+		t.Fatalf("derived terminal mismatch")
+	}
+	var term Terminal
+	if err := json.Unmarshal([]byte(bun.TerminalBytes), &term); err != nil {
+		t.Fatal(err)
+	}
+	term.Request.Query = "other"
+	mut, err := CanonicalJSON(term)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bun.TerminalBytes = mut
+	if err := ValidateBundle(bun); err == nil {
+		t.Fatal("terminal not derived from raw attempt accepted")
+	} else {
+		var ve *VError
+		if !errors.As(err, &ve) || ve.Code != "ASSOCIATION_FAILED" || ve.Path != "/matches/literal" {
+			t.Fatalf("got %v", err)
+		}
+	}
+}
+
 func TestSchemaWalkerDetectsMutation(t *testing.T) {
 	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "complete.json"))
 	if err != nil {
