@@ -10,8 +10,8 @@ import (
 
 func TestConformanceFixtures(t *testing.T) {
 	pos, _ := filepath.Glob(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "*.json"))
-	if len(pos) != 7 {
-		t.Fatalf("positive fixture count = %d, want 7", len(pos))
+	if len(pos) != 8 {
+		t.Fatalf("positive fixture count = %d, want 8", len(pos))
 	}
 	for _, p := range pos {
 		if err := ValidateBundleFile(p); err != nil {
@@ -19,8 +19,8 @@ func TestConformanceFixtures(t *testing.T) {
 		}
 	}
 	neg, _ := filepath.Glob(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "negative", "*.json"))
-	if len(neg) != 22 {
-		t.Fatalf("negative fixture count = %d, want 22", len(neg))
+	if len(neg) != 46 {
+		t.Fatalf("negative fixture count = %d, want 46", len(neg))
 	}
 	for _, p := range neg {
 		bun, err := loadBundleForTest(p)

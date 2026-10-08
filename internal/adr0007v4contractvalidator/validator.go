@@ -10,6 +10,7 @@ import (
 	"io"
 	"math"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf16"
@@ -224,6 +225,15 @@ func ValidateBundle(b Bundle) error {
 	if !utf8.ValidString(b.TerminalBytes) {
 		return verr("INVALID_INPUT", "/terminal_bytes", "invalid utf8")
 	}
+	var rawTerminal any
+	rdec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
+	rdec.UseNumber()
+	if err := rdec.Decode(&rawTerminal); err != nil {
+		return verr("INVALID_INPUT", "/terminal_bytes", err.Error())
+	}
+	if err := validateSchemaValue(b.SchemaBytes, rawTerminal); err != nil {
+		return err
+	}
 	var t Terminal
 	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
 	dec.UseNumber()
@@ -265,7 +275,7 @@ func ValidateBundle(b Bundle) error {
 	if t.Replay.AdmittedBindingSHA256 != digestOrEmpty(b.AdmittedBindingBytes) {
 		return verr("INVARIANT_FAILED", "/replay/admitted_binding_sha256", "admission digest mismatch")
 	}
-	if t.Replay.ToolingIdentitySHA256 != sha(b.ToolingManifestBytes) || t.Replay.PredecessorLockSHA256 != sha(b.PredecessorManifestBytes) || t.Replay.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) {
+	if t.Replay.ToolingIdentitySHA256 != sha(b.ToolingManifestBytes) || t.Replay.PredecessorLockSHA256 != sha(b.PredecessorManifestBytes) || t.Replay.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.PayloadDigest != sha(b.PayloadFreezeBytes) {
 		return verr("INVARIANT_FAILED", "/replay", "manifest pin mismatch")
 	}
 	if err := validateFailure(t); err != nil {
@@ -285,6 +295,201 @@ func ValidateBundle(b Bundle) error {
 		return verr("INVARIANT_FAILED", "/custody/terminal_result_sha256", "preimage digest mismatch")
 	}
 	return nil
+}
+
+func validateSchemaValue(schemaBytes []byte, value any) error {
+	var schema any
+	dec := json.NewDecoder(bytes.NewReader(schemaBytes))
+	dec.UseNumber()
+	if err := dec.Decode(&schema); err != nil {
+		return verr("INVALID_INPUT", "/schema_bytes", err.Error())
+	}
+	return evalSchema(schema, value, "")
+}
+
+func evalSchema(schema any, value any, path string) error {
+	m, ok := schema.(map[string]any)
+	if !ok {
+		return nil
+	}
+	if c, ok := m["const"]; ok && !jsonEqual(c, value) {
+		return verr("INVALID_INPUT", pathOrRoot(path), "const mismatch")
+	}
+	if e, ok := m["enum"].([]any); ok {
+		found := false
+		for _, x := range e {
+			if jsonEqual(x, value) {
+				found = true
+			}
+		}
+		if !found {
+			return verr("INVALID_INPUT", pathOrRoot(path), "enum mismatch")
+		}
+	}
+	if typ, ok := m["type"]; ok && !typeOK(typ, value) {
+		return verr("INVALID_INPUT", pathOrRoot(path), "type mismatch")
+	}
+	if one, ok := m["oneOf"].([]any); ok {
+		n := 0
+		for _, sub := range one {
+			if err := evalSchema(sub, value, path); err == nil {
+				n++
+			}
+		}
+		if n != 1 {
+			return verr("INVALID_INPUT", pathOrRoot(path), "oneOf mismatch")
+		}
+	}
+	if ifs, ok := m["if"]; ok {
+		if evalSchema(ifs, value, path) == nil {
+			if th, ok := m["then"]; ok {
+				if err := evalSchema(th, value, path); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if props, ok := m["properties"].(map[string]any); ok {
+		obj, ok := value.(map[string]any)
+		if !ok {
+			return verr("INVALID_INPUT", pathOrRoot(path), "object required")
+		}
+		if req, ok := m["required"].([]any); ok {
+			for _, r := range req {
+				k := r.(string)
+				if _, exists := obj[k]; !exists {
+					return verr("INVALID_INPUT", pathJoin(path, k), "required missing")
+				}
+			}
+		}
+		if add, ok := m["additionalProperties"].(bool); ok && !add {
+			for k := range obj {
+				if _, known := props[k]; !known {
+					return verr("INVALID_INPUT", pathJoin(path, k), "additional property")
+				}
+			}
+		}
+		for k, sub := range props {
+			if v, exists := obj[k]; exists {
+				if err := evalSchema(sub, v, pathJoin(path, k)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if items, ok := m["items"]; ok {
+		arr, ok := value.([]any)
+		if !ok {
+			return verr("INVALID_INPUT", pathOrRoot(path), "array required")
+		}
+		for i, v := range arr {
+			if err := evalSchema(items, v, fmt.Sprintf("%s/%d", pathOrRoot(path), i)); err != nil {
+				return err
+			}
+		}
+	}
+	if min, ok := num(m["minItems"]); ok {
+		if arr, ok := value.([]any); ok && uint64(len(arr)) < min {
+			return verr("INVALID_INPUT", pathOrRoot(path), "minItems")
+		}
+	}
+	if max, ok := num(m["maxItems"]); ok {
+		if arr, ok := value.([]any); ok && uint64(len(arr)) > max {
+			return verr("INVALID_INPUT", pathOrRoot(path), "maxItems")
+		}
+	}
+	if min, ok := num(m["minimum"]); ok {
+		if n, ok := asU(value); ok && n < min {
+			return verr("INVALID_INPUT", pathOrRoot(path), "minimum")
+		}
+	}
+	if max, ok := num(m["maximum"]); ok {
+		if n, ok := asU(value); ok && n > max {
+			return verr("INVALID_INPUT", pathOrRoot(path), "maximum")
+		}
+	}
+	if ml, ok := num(m["minLength"]); ok {
+		if st, ok := value.(string); ok && uint64(len(st)) < ml {
+			return verr("INVALID_INPUT", pathOrRoot(path), "minLength")
+		}
+	}
+	if pat, ok := m["pattern"].(string); ok {
+		if st, ok := value.(string); ok {
+			matched, _ := regexp.MatchString(pat, st)
+			if !matched {
+				return verr("INVALID_INPUT", pathOrRoot(path), "pattern")
+			}
+		}
+	}
+	return nil
+}
+func pathOrRoot(p string) string {
+	if p == "" {
+		return "/"
+	}
+	return p
+}
+func pathJoin(p, k string) string {
+	if p == "" {
+		return "/" + k
+	}
+	return p + "/" + k
+}
+func jsonEqual(a, b any) bool {
+	ab, _ := json.Marshal(a)
+	bb, _ := json.Marshal(b)
+	return bytes.Equal(ab, bb)
+}
+func num(v any) (uint64, bool) {
+	switch x := v.(type) {
+	case json.Number:
+		u, err := parseU64(x.String())
+		return u, err == nil
+	case float64:
+		return uint64(x), true
+	}
+	return 0, false
+}
+func asU(v any) (uint64, bool) {
+	if n, ok := v.(json.Number); ok {
+		u, err := parseU64(n.String())
+		return u, err == nil
+	}
+	return 0, false
+}
+func typeOK(t any, v any) bool {
+	if arr, ok := t.([]any); ok {
+		for _, x := range arr {
+			if typeOK(x, v) {
+				return true
+			}
+		}
+		return false
+	}
+	s, ok := t.(string)
+	if !ok {
+		return true
+	}
+	switch s {
+	case "object":
+		_, ok := v.(map[string]any)
+		return ok
+	case "array":
+		_, ok := v.([]any)
+		return ok
+	case "string":
+		_, ok := v.(string)
+		return ok
+	case "boolean":
+		_, ok := v.(bool)
+		return ok
+	case "null":
+		return v == nil
+	case "integer":
+		_, ok := v.(json.Number)
+		return ok
+	}
+	return true
 }
 
 func validateFailure(t Terminal) error {
@@ -324,6 +529,13 @@ func validateFailure(t Terminal) error {
 			return verr("INVARIANT_FAILED", "/failure/detail/"+k, "missing")
 		}
 	}
+	early := map[string]bool{"INVALID_INPUT": true, "CANCELLED": true, "DEADLINE_EXCEEDED": true, "ASSOCIATION_FAILED": true}
+	if early[t.Failure.Code] && t.Admission.Completed {
+		return verr("INVARIANT_FAILED", "/admission", "early failure must not have admission")
+	}
+	if !early[t.Failure.Code] && !t.Admission.Completed {
+		return verr("INVARIANT_FAILED", "/admission", "late failure requires admission")
+	}
 	if len(t.Matches) != 0 || t.RangeUnionCandidate != nil {
 		return verr("INVARIANT_FAILED", "/matches", "failed terminal must not retain matches")
 	}
@@ -332,6 +544,16 @@ func validateFailure(t Terminal) error {
 
 func validateSourcesMatches(t Terminal, b Bundle) error {
 	src := map[string]Source{}
+	if t.Admission.Completed {
+		if len(t.Admission.AdmittedSourceIDs) != len(t.Sources) {
+			return verr("ADMISSION_FAILED", "/admission/admitted_source_ids", "membership count")
+		}
+		for i, s := range t.Sources {
+			if t.Admission.AdmittedSourceIDs[i] != s.SourceID {
+				return verr("ADMISSION_FAILED", "/admission/admitted_source_ids", "membership order")
+			}
+		}
+	}
 	for _, s := range t.Sources {
 		data, ok := b.AdmittedSourceBytes[s.SourceID]
 		if !ok {
@@ -366,7 +588,15 @@ func validateSourcesMatches(t Terminal, b Bundle) error {
 		}
 		prevPath, prevStart, prevEnd, prevOrd = m.PathBytes, m.StartByte, m.EndByte, m.Ordinal
 	}
+	if len(t.Positions) != len(t.Matches) {
+		return verr("ASSOCIATION_FAILED", "/positions", "position count")
+	}
+	posSeen := map[string]bool{}
 	for _, p := range t.Positions {
+		if posSeen[p.MatchID] {
+			return verr("ASSOCIATION_FAILED", "/positions/"+p.MatchID, "duplicate position")
+		}
+		posSeen[p.MatchID] = true
 		var mm *Match
 		for i := range t.Matches {
 			if t.Matches[i].MatchID == p.MatchID {
@@ -403,7 +633,8 @@ func validateCandidate(t Terminal) error {
 				return verr("INVARIANT_FAILED", "/range_union_candidate/member_match_ids", "not ordered matches")
 			}
 			pin := c.QualifiedLocationPins[i]
-			if pin.SourceID != m.SourceID || pin.StartByte != m.StartByte || pin.EndByte != m.EndByte {
+			pos := t.Positions[i]
+			if pin.SourceID != m.SourceID || pin.StartByte != m.StartByte || pin.EndByte != m.EndByte || pin.StartLine != pos.StartLine || pin.StartCharacterUTF16 != pos.StartCharacterUTF16 || pin.EndLine != pos.EndLine || pin.EndCharacterUTF16 != pos.EndCharacterUTF16 {
 				return verr("INVARIANT_FAILED", "/range_union_candidate/qualified_location_pins", "pin mismatch")
 			}
 			fmt.Fprintf(h, "%s:%s:%d:%d:%d\n", m.MatchID, m.SourceID, m.PathBytes, m.StartByte, m.EndByte)
@@ -426,8 +657,10 @@ func validateAccounting(t Terminal, term string) error {
 	if uint64(len([]byte(term))) != a.BOutputBytes {
 		return verr("INVARIANT_FAILED", "/accounting/B_output_bytes", "encoded length mismatch")
 	}
-	if _, ok := fixedPointB(t); !ok {
+	if got, ok := fixedPointB(t); !ok {
 		return verr("INVARIANT_FAILED", "/accounting/B_output_bytes", "fixed point not reached")
+	} else if got != a.BOutputBytes {
+		return verr("INVARIANT_FAILED", "/accounting/B_output_bytes", "fixed point mismatch")
 	}
 	return nil
 }
