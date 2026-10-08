@@ -2,6 +2,7 @@ package locationexecutionv5
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,5 +73,77 @@ func TestStrictJSONRejectsUnknownDuplicateTrailing(t *testing.T) {
 	}
 	if _, err := canonicalRaw([]byte(`{"a":1,"a":2}`)); err == nil {
 		t.Fatal("expected duplicate key rejection")
+	}
+}
+
+func TestGateRejectsAssignmentArrayMutationAndRequiresOneDispatch(t *testing.T) {
+	execRoot := t.TempDir()
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+	writeMinimalAuthorization(t, execRoot)
+	writeAssignments(t, execRoot, func(a *AssignmentFile) {})
+	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkBlockedAudit(execRoot, repoRoot); err != nil {
+		t.Fatalf("valid blocked audit rejected: %v", err)
+	}
+	var g PredispatchGate
+	if err := readStrict(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), &g); err != nil {
+		t.Fatal(err)
+	}
+	g.OneDispatch = "monolithic-runReal"
+	if err := writeJSON(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkBlockedAudit(execRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "gate mismatch") {
+		t.Fatalf("expected oneDispatch gate rejection, got %v", err)
+	}
+	writeAssignments(t, execRoot, func(a *AssignmentFile) {
+		a.Cases[0].Producer.MayRead = append(a.Cases[0].Producer.MayRead, "oracle-candidate")
+	})
+	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkBlockedAudit(execRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "producer assignment arrays") {
+		t.Fatalf("expected assignment array rejection, got %v", err)
+	}
+}
+
+func TestPhaseSpecificProducersBlockedWithoutGate(t *testing.T) {
+	execRoot := t.TempDir()
+	writeMinimalAuthorization(t, execRoot)
+	writeAssignments(t, execRoot, func(a *AssignmentFile) {})
+	err := RunPhase(execRoot, t.TempDir(), filepath.Clean(filepath.Join("..", "..")), "Producers")
+	if err == nil || !strings.Contains(err.Error(), "real execution requires independent committed gate") {
+		t.Fatalf("expected predispatch gate block, got %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(execRoot, "attempts")); !os.IsNotExist(statErr) {
+		t.Fatalf("blocked Producers created attempts: %v", statErr)
+	}
+}
+
+func writeMinimalAuthorization(t *testing.T, root string) {
+	t.Helper()
+	a := Authorization{Schema: AuthorizationSchema, Status: "SUCCESSOR_PRE_DISPATCH_DECLARED", SuccessorIdentity: RootIdentity, ExecutionRoot: "docs/pilot/adr0007/experiment/" + RootIdentity, PredecessorSealSHA256: PredecessorRootIdentity, PredecessorSealImmutable: true, AuthorizedFreezeRootIdentity: FreezeRootIdentity, AttemptID: "attempt-successor-01", ProducerAssignments: 26, ReviewerAssignments: 26, PhaseAPI: []string{"Plan", "Simulate", "Producers", "Reviewers", "Boundaries", "Reconcile", "Verify"}, DefaultMode: "SIMULATE_ONLY", RequiresIndependentCommittedGate: true, GateFile: "PREDISPATCH_GO.json", NoRealSemanticAttemptsBeforeGate: true, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", ExternalInference: "DISABLED"}
+	if err := writeJSON(filepath.Join(root, "AUTHORIZATION.json"), a); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeAssignments(t *testing.T, root string, mutate func(*AssignmentFile)) {
+	t.Helper()
+	a := AssignmentFile{Schema: AssignmentSchema, AttemptID: "attempt-successor-01", SuccessorIdentity: RootIdentity}
+	for i := 1; i <= 26; i++ {
+		caseID := fmt.Sprintf("case-%02d", i)
+		if i == 1 {
+			caseID = "01-exact-intersects"
+		}
+		a.Cases = append(a.Cases, AssignmentCase{CaseID: caseID, Ordinal: i,
+			Producer: AssignmentRole{AssignmentID: fmt.Sprintf("successor-producer-%02d-%s-attempt-successor-01", i, caseID), AttemptID: "attempt-successor-01", Role: "producer", MayRead: []string{"frozen inputs only", "condition file", "binding file when present"}, Forbidden: []string{"oracle-candidate", "derivations", "reviewer output", "external inference", "semantic retry", "semantic repair", "predecessor attempts"}, MustWrite: []string{"RESULT.json", "PRODUCER_ATTEMPT.json"}},
+			Reviewer: AssignmentRole{AssignmentID: fmt.Sprintf("successor-reviewer-%02d-%s-attempt-successor-01", i, caseID), AttemptID: "attempt-successor-01", Role: "reviewer", MayRead: []string{"producer committed result", "frozen oracle result", "frozen oracle derivation"}, Forbidden: []string{"external inference", "semantic retry", "semantic repair", "producer code changes", "predecessor attempts"}, MustWrite: []string{"REVIEW.json"}}})
+	}
+	mutate(&a)
+	if err := writeJSON(filepath.Join(root, "ASSIGNMENTS.json"), a); err != nil {
+		t.Fatal(err)
 	}
 }

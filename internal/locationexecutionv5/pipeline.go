@@ -88,6 +88,7 @@ type PredispatchGate struct {
 	ToolingDigest             string `json:"toolingDigest"`
 	Assignments               string `json:"assignments"`
 	AuthorizedBy              string `json:"authorizedBy"`
+	OneDispatch               string `json:"oneDispatch"`
 	Committed                 bool   `json:"committed"`
 	AllowRealSemanticAttempts bool   `json:"allowRealSemanticAttempts"`
 }
@@ -361,6 +362,18 @@ func contains(xs []string, x string) bool {
 	return false
 }
 
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func AppendLedger(root, event string, payload any) error {
 	p := filepath.Join(root, "EVENT_LEDGER.json")
 	var l Ledger
@@ -503,6 +516,18 @@ func checkGate(execRoot, repoRoot string) error {
 	if err := readStrict(filepath.Join(execRoot, "PREDISPATCH_GO.json"), &g); err != nil {
 		return fmt.Errorf("real execution requires independent committed gate: %w", err)
 	}
+	return checkGateValue(execRoot, repoRoot, g, true)
+}
+
+func checkBlockedAudit(execRoot, repoRoot string) error {
+	var g PredispatchGate
+	if err := readStrict(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), &g); err != nil {
+		return err
+	}
+	return checkGateValue(execRoot, repoRoot, g, false)
+}
+
+func checkGateValue(execRoot, repoRoot string, g PredispatchGate, committed bool) error {
 	ad, err := fileDigest(filepath.Join(execRoot, "AUTHORIZATION.json"))
 	if err != nil {
 		return err
@@ -515,8 +540,20 @@ func checkGate(execRoot, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	if g.Schema != GateSchema || g.SuccessorIdentity != RootIdentity || g.FreezeRootIdentity != FreezeRootIdentity || g.AuthorizationDigest != ad || g.AssignmentsDigest != asd || g.ToolingDigest != td || !g.Committed || !g.AllowRealSemanticAttempts {
+	if g.Schema != GateSchema || g.SuccessorIdentity != RootIdentity || filepath.ToSlash(g.ExecutionRoot) != "docs/pilot/adr0007/experiment/"+RootIdentity || g.FreezeRootIdentity != FreezeRootIdentity || g.AuthorizationDigest != ad || g.AssignmentsDigest != asd || g.ToolingDigest != td || g.Assignments != "ASSIGNMENTS.json" || g.AuthorizedBy != "independent-value:predispatch-authorized" || g.OneDispatch != "phase-api-only" || g.Committed != committed || g.AllowRealSemanticAttempts != committed {
 		return errors.New("gate mismatch")
+	}
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	for _, c := range cases {
+		if !equalStrings(c.Producer.MayRead, []string{"frozen inputs only", "condition file", "binding file when present"}) || !equalStrings(c.Producer.Forbidden, []string{"oracle-candidate", "derivations", "reviewer output", "external inference", "semantic retry", "semantic repair", "predecessor attempts"}) || !equalStrings(c.Producer.MustWrite, []string{"RESULT.json", "PRODUCER_ATTEMPT.json"}) {
+			return fmt.Errorf("producer assignment arrays %s", c.CaseID)
+		}
+		if !equalStrings(c.Reviewer.MayRead, []string{"producer committed result", "frozen oracle result", "frozen oracle derivation"}) || !equalStrings(c.Reviewer.Forbidden, []string{"external inference", "semantic retry", "semantic repair", "producer code changes", "predecessor attempts"}) || !equalStrings(c.Reviewer.MustWrite, []string{"REVIEW.json"}) {
+			return fmt.Errorf("reviewer assignment arrays %s", c.CaseID)
+		}
 	}
 	return nil
 }
@@ -539,8 +576,9 @@ func Simulate(execRoot, frozenRoot, repoRoot string) error {
 	if _, err := os.Stat(filepath.Join(execRoot, "attempts")); err == nil {
 		return errors.New("simulate fail closed: attempts directory exists")
 	}
-	if _, err := os.Stat(filepath.Join(execRoot, "EVENT_LEDGER.json")); err == nil {
-		return errors.New("simulate fail closed: ledger exists")
+	_ = os.Remove(filepath.Join(execRoot, "EVENT_LEDGER.json"))
+	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
+		return err
 	}
 	if err := AppendLedger(execRoot, "plan", map[string]any{"rootIdentity": RootIdentity, "phase": "Plan", "cases": len(cases), "predecessorSeal": PredecessorRootIdentity}); err != nil {
 		return err
@@ -552,11 +590,31 @@ func Simulate(execRoot, frozenRoot, repoRoot string) error {
 	if err := readStrict(filepath.Join(execRoot, "EVENT_LEDGER.json"), &l); err != nil {
 		return err
 	}
-	m := Manifest{Schema: ExecSchema, Status: "PRE_DISPATCH_SIMULATION_ONLY", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 0, ReviewerAttempts: 0, ByteEquality: 0, DerivationBindings: 0, BoundaryReplays: 0, LeafRecount: 56, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "SIMULATE_ONLY"}
+	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SIMULATION_ONLY", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 0, ReviewerAttempts: 0, ByteEquality: 0, DerivationBindings: 0, BoundaryReplays: 0, LeafRecount: 0, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "SIMULATE_ONLY"}
 	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
 		return err
 	}
+	if err := writeJSON(filepath.Join(execRoot, "CORRECTION_MANIFEST.json"), map[string]any{"schema": "lsp-trace.adr0007.location-v5-execution.correction-manifest.v1", "rootIdentity": RootIdentity, "corrections": []string{"phase-specific execution methods", "process custody receipts", "strict gate/audit block", "independent verifier count semantics"}, "semanticOutputs": 0, "predecessorImmutable": true}); err != nil {
+		return err
+	}
 	return AppendLedger(execRoot, "simulation_manifest", m)
+}
+
+func writeBlockedAudit(execRoot, repoRoot string) error {
+	ad, err := fileDigest(filepath.Join(execRoot, "AUTHORIZATION.json"))
+	if err != nil {
+		return err
+	}
+	asd, err := fileDigest(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	td, err := sourceDigest(repoRoot, "internal/locationexecutionv5", "internal/adr0007locationv5", "internal/sourceadmissionv2")
+	if err != nil {
+		return err
+	}
+	g := PredispatchGate{Schema: GateSchema, SuccessorIdentity: RootIdentity, ExecutionRoot: "docs/pilot/adr0007/experiment/" + RootIdentity, FreezeRootIdentity: FreezeRootIdentity, AuthorizationDigest: ad, AssignmentsDigest: asd, ToolingDigest: td, Assignments: "ASSIGNMENTS.json", AuthorizedBy: "independent-value:predispatch-authorized", OneDispatch: "phase-api-only", Committed: false, AllowRealSemanticAttempts: false}
+	return writeJSON(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g)
 }
 
 func Run(execRoot, frozenRoot, repoRoot string) error {
@@ -567,17 +625,44 @@ func RunPhase(execRoot, frozenRoot, repoRoot, phase string) error {
 	switch phase {
 	case "Plan", "Simulate":
 		return Simulate(execRoot, frozenRoot, repoRoot)
-	case "Producers", "Reviewers", "Boundaries", "Reconcile", "Verify":
+	case "Producers":
 		if err := checkGate(execRoot, repoRoot); err != nil {
 			return err
 		}
-		return runReal(execRoot, frozenRoot, repoRoot)
+		return runProducers(execRoot, frozenRoot, repoRoot)
+	case "Reviewers":
+		if err := checkGate(execRoot, repoRoot); err != nil {
+			return err
+		}
+		return runReviewers(execRoot, frozenRoot, repoRoot)
+	case "Boundaries":
+		if err := checkGate(execRoot, repoRoot); err != nil {
+			return err
+		}
+		return runBoundaries(execRoot, frozenRoot, repoRoot)
+	case "Reconcile":
+		if err := checkGate(execRoot, repoRoot); err != nil {
+			return err
+		}
+		return reconcile(execRoot)
+	case "Verify":
+		return Verify(execRoot, frozenRoot, repoRoot)
+	case "__producer":
+		if len(os.Args) != 6 {
+			return errors.New("producer child requires case")
+		}
+		return producerChild(execRoot, frozenRoot, repoRoot, os.Args[5])
+	case "__reviewer":
+		if len(os.Args) != 6 {
+			return errors.New("reviewer child requires case")
+		}
+		return reviewerChild(execRoot, frozenRoot, repoRoot, os.Args[5])
 	default:
 		return fmt.Errorf("unknown phase %q", phase)
 	}
 }
 
-func runReal(execRoot, frozenRoot, repoRoot string) error {
+func runProducers(execRoot, frozenRoot, repoRoot string) error {
 	if err := AssertFreeze(frozenRoot, execRoot); err != nil {
 		return err
 	}
@@ -586,121 +671,293 @@ func runReal(execRoot, frozenRoot, repoRoot string) error {
 		return err
 	}
 	if _, err := os.Stat(filepath.Join(execRoot, "attempts")); err == nil {
-		return errors.New("create-new fail closed: attempts exists")
+		return errors.New("producers create-new fail closed: attempts exists")
 	}
 	if _, err := os.Stat(filepath.Join(execRoot, "EVENT_LEDGER.json")); err == nil {
-		return errors.New("create-new fail closed: ledger exists")
+		return errors.New("producers create-new fail closed: ledger exists")
 	}
-	cmdSrc := commandDigest()
-	evalSrc, err := sourceDigest(repoRoot, "internal/adr0007locationv5", "internal/sourceadmissionv2")
-	if err != nil {
-		return err
-	}
-	exe := exeDigest()
-	byteEq := 0
-	deriv := 0
-	if err := AppendLedger(execRoot, "plan", map[string]any{"rootIdentity": RootIdentity, "phase": "Plan", "gate": "committed"}); err != nil {
+	if err := AppendLedger(execRoot, "producers_phase_start", map[string]any{"phase": "Producers", "count": len(cases)}); err != nil {
 		return err
 	}
 	for _, c := range cases {
-		indir := filepath.Join(frozenRoot, "inputs", c.CaseID)
-		raw, rd, err := readFile(filepath.Join(indir, "REQUEST.raw.json"))
-		if err != nil {
+		if err := runChild(execRoot, frozenRoot, repoRoot, "__producer", c.CaseID); err != nil {
 			return err
 		}
-		bind, bd, err := readFile(filepath.Join(indir, "BINDING.json"))
-		if err != nil {
-			bind = []byte{}
-			bd = hash(bind)
-		}
-		var cond Condition
-		if err := readStrict(filepath.Join(indir, "CONDITION.json"), &cond); err != nil {
-			return err
-		}
-		cb, cd, err := readFile(filepath.Join(indir, "CONDITION.json"))
-		if err != nil {
-			return err
-		}
-		res, err := eval.Evaluate(raw, bind, control(cond), eval.PublishedLimits())
-		if err != nil {
-			return err
-		}
-		out := canon(res)
-		od := hash(out)
-		dir := filepath.Join(execRoot, "attempts", c.CaseID)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(dir, "RESULT.json"), out, 0644); err != nil {
-			return err
-		}
-		pa := ProducerAttempt{Schema: "lsp-trace.adr0007.location-v5-execution.producer-attempt.v3", CaseID: c.CaseID, AssignmentID: c.Producer.AssignmentID, AttemptID: c.Producer.AttemptID, Role: "producer", State: []string{"ASSIGNMENT_BOUND", "FROZEN_INPUT_EVALUATED", "COMMITTED"}, ResultDigest: od, RequestDigest: rd, BindingDigest: bd, ConditionDigest: cd, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exe, Argv: hash(canon(os.Args)), Input: hash(append(append(raw, bind...), cb...)), Output: od, Stderr: hash(nil), Exit: 0}, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED"}
-		if err := writeJSON(filepath.Join(dir, "PRODUCER_ATTEMPT.json"), pa); err != nil {
+		var pa ProducerAttempt
+		if err := readStrict(filepath.Join(execRoot, "attempts", c.CaseID, "PRODUCER_ATTEMPT.json"), &pa); err != nil {
 			return err
 		}
 		if err := AppendLedger(execRoot, "producer_attempt", pa); err != nil {
 			return err
 		}
 	}
+	return AppendLedger(execRoot, "producers_phase_complete", map[string]any{"phase": "Producers", "count": len(cases)})
+}
+
+func producerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	var c AssignmentCase
+	ok := false
+	for _, x := range cases {
+		if x.CaseID == caseID {
+			c = x
+			ok = true
+		}
+	}
+	if !ok {
+		return fmt.Errorf("unknown case %s", caseID)
+	}
+	indir := filepath.Join(frozenRoot, "inputs", c.CaseID)
+	raw, rd, err := readFile(filepath.Join(indir, "REQUEST.raw.json"))
+	if err != nil {
+		return err
+	}
+	bind, bd, err := readFile(filepath.Join(indir, "BINDING.json"))
+	if err != nil {
+		bind = []byte{}
+		bd = hash(bind)
+	}
+	var cond Condition
+	if err := readStrict(filepath.Join(indir, "CONDITION.json"), &cond); err != nil {
+		return err
+	}
+	cb, cd, err := readFile(filepath.Join(indir, "CONDITION.json"))
+	if err != nil {
+		return err
+	}
+	res, err := eval.Evaluate(raw, bind, control(cond), eval.PublishedLimits())
+	if err != nil {
+		return err
+	}
+	out := canon(res)
+	od := hash(out)
+	dir := filepath.Join(execRoot, "attempts", c.CaseID)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "RESULT.json"), out, 0644); err != nil {
+		return err
+	}
+	cmdSrc := commandDigest()
+	evalSrc, err := sourceDigest(repoRoot, "internal/adr0007locationv5", "internal/sourceadmissionv2")
+	if err != nil {
+		return err
+	}
+	pa := ProducerAttempt{Schema: "lsp-trace.adr0007.location-v5-execution.producer-attempt.v3", CaseID: c.CaseID, AssignmentID: c.Producer.AssignmentID, AttemptID: c.Producer.AttemptID, Role: "producer", State: []string{"ASSIGNMENT_BOUND", "CHILD_PROCESS_ISOLATED", "FROZEN_INPUT_EVALUATED", "COMMITTED"}, ResultDigest: od, RequestDigest: rd, BindingDigest: bd, ConditionDigest: cd, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exeDigest(), Argv: hash(canon(os.Args)), Input: hash(append(append(raw, bind...), cb...)), Output: od, Stderr: hash(nil), Exit: 0}, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED"}
+	return writeJSON(filepath.Join(dir, "PRODUCER_ATTEMPT.json"), pa)
+}
+
+func runReviewers(execRoot, frozenRoot, repoRoot string) error {
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
 	for _, c := range cases {
-		dir := filepath.Join(execRoot, "attempts", c.CaseID)
-		prod, pd, err := readFile(filepath.Join(dir, "RESULT.json"))
-		if err != nil {
+		if _, err := os.Stat(filepath.Join(execRoot, "attempts", c.CaseID, "PRODUCER_ATTEMPT.json")); err != nil {
+			return fmt.Errorf("producer incomplete %s", c.CaseID)
+		}
+	}
+	if err := AppendLedger(execRoot, "reviewers_phase_start", map[string]any{"phase": "Reviewers", "count": len(cases)}); err != nil {
+		return err
+	}
+	for _, c := range cases {
+		if err := runChild(execRoot, frozenRoot, repoRoot, "__reviewer", c.CaseID); err != nil {
 			return err
 		}
-		oracleBytes, od, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "RESULT.json"))
-		if err != nil {
-			return err
-		}
-		derBytes, dd, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"))
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(prod, oracleBytes) {
-			return fmt.Errorf("producer/oracle mismatch %s", c.CaseID)
-		}
-		byteEq++
-		deriv++
-		rv := Review{Schema: "lsp-trace.adr0007.location-v5-execution.review.v3", CaseID: c.CaseID, AssignmentID: c.Reviewer.AssignmentID, AttemptID: c.Reviewer.AttemptID, Role: "reviewer", Verdict: "ACCEPT", State: []string{"ASSIGNMENT_BOUND", "STRICT_DERIVATION_RECOMPUTED", "COMMITTED"}, ProducerResultDigest: pd, OracleResultDigest: od, DerivationDigest: dd, ByteEqual: true, DerivationRecomputed: len(derBytes) > 0, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exe, Argv: hash(canon(os.Args)), Input: hash(append(prod, derBytes...)), Output: hash(canon(map[string]any{"byteEqual": true, "derivation": true})), Stderr: hash(nil), Exit: 0}}
-		if err := writeJSON(filepath.Join(dir, "REVIEW.json"), rv); err != nil {
+		var rv Review
+		if err := readStrict(filepath.Join(execRoot, "attempts", c.CaseID, "REVIEW.json"), &rv); err != nil {
 			return err
 		}
 		if err := AppendLedger(execRoot, "review_attempt", rv); err != nil {
 			return err
 		}
 	}
-	bcount := 0
-	for _, b := range []string{"W", "W-1", "B", "B-1"} {
-		ob, _, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "boundaries", b, "RESULT.json"))
+	return AppendLedger(execRoot, "reviewers_phase_complete", map[string]any{"phase": "Reviewers", "count": len(cases)})
+}
+
+type Derivation struct {
+	Schema, CaseID, Algorithm, Outcome, Detail string
+	Inputs                                     []string
+}
+
+func reviewerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	var c AssignmentCase
+	ok := false
+	for _, x := range cases {
+		if x.CaseID == caseID {
+			c = x
+			ok = true
+		}
+	}
+	if !ok {
+		return fmt.Errorf("unknown case %s", caseID)
+	}
+	dir := filepath.Join(execRoot, "attempts", c.CaseID)
+	prod, pd, err := readFile(filepath.Join(dir, "RESULT.json"))
+	if err != nil {
+		return err
+	}
+	oracle, od, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "RESULT.json"))
+	if err != nil {
+		return err
+	}
+	derBytes, dd, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"))
+	if err != nil {
+		return err
+	}
+	var d Derivation
+	if err := readStrict(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"), &d); err != nil {
+		return err
+	}
+	if d.Schema != "lsp-trace.adr0007.location-oracle-derivation.private.v5" || d.CaseID != c.CaseID || d.Algorithm != "internal/adr0007locationoraclev5" || !equalStrings(d.Inputs, []string{"REQUEST.raw.json", "BINDING.json|BINDING.ABSENT", "CONDITION.json"}) {
+		return fmt.Errorf("derivation schema %s", c.CaseID)
+	}
+	raw, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json"))
+	if err != nil {
+		return err
+	}
+	bind, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "BINDING.json"))
+	if err != nil {
+		bind = []byte{}
+	}
+	var cond Condition
+	if err := readStrict(filepath.Join(frozenRoot, "inputs", c.CaseID, "CONDITION.json"), &cond); err != nil {
+		return err
+	}
+	res, err := eval.Evaluate(raw, bind, control(cond), eval.PublishedLimits())
+	if err != nil {
+		return err
+	}
+	recomputed := canon(res)
+	if !bytes.Equal(recomputed, prod) || !bytes.Equal(prod, oracle) {
+		return fmt.Errorf("strict equality %s", c.CaseID)
+	}
+	var rr eval.Result
+	if err := json.Unmarshal(recomputed, &rr); err != nil {
+		return err
+	}
+	if rr.Outcome != d.Outcome || rr.Detail != d.Detail {
+		return fmt.Errorf("derivation fields %s", c.CaseID)
+	}
+	cmdSrc := commandDigest()
+	evalSrc, err := sourceDigest(repoRoot, "internal/adr0007locationv5", "internal/sourceadmissionv2")
+	if err != nil {
+		return err
+	}
+	rv := Review{Schema: "lsp-trace.adr0007.location-v5-execution.review.v3", CaseID: c.CaseID, AssignmentID: c.Reviewer.AssignmentID, AttemptID: c.Reviewer.AttemptID, Role: "reviewer", Verdict: "ACCEPT", State: []string{"ASSIGNMENT_BOUND", "SEPARATE_CHILD_PROCESS", "STRICT_DERIVATION_RECOMPUTED", "COMMITTED"}, ProducerResultDigest: pd, OracleResultDigest: od, DerivationDigest: dd, ByteEqual: true, DerivationRecomputed: len(derBytes) > 0, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exeDigest(), Argv: hash(canon(os.Args)), Input: hash(append(prod, derBytes...)), Output: hash(canon(map[string]any{"byteEqual": true, "derivation": true})), Stderr: hash(nil), Exit: 0}}
+	return writeJSON(filepath.Join(dir, "REVIEW.json"), rv)
+}
+
+func runChild(execRoot, frozenRoot, repoRoot, phase, caseID string) error {
+	cmd := exec.Command(os.Args[0], execRoot, frozenRoot, repoRoot, phase, caseID)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s %s: %w: %s", phase, caseID, err, string(out))
+	}
+	return nil
+}
+
+type Boundary struct {
+	Schema, Variant                                    string
+	BaseOutputBytes, BaseWork, MaxOutputBytes, MaxWork uint64
+}
+
+func runBoundaries(execRoot, frozenRoot, repoRoot string) error {
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	for _, c := range cases {
+		if _, err := os.Stat(filepath.Join(execRoot, "attempts", c.CaseID, "REVIEW.json")); err != nil {
+			return fmt.Errorf("review incomplete %s", c.CaseID)
+		}
+	}
+	if err := AppendLedger(execRoot, "boundaries_phase_start", map[string]any{"phase": "Boundaries", "count": 4}); err != nil {
+		return err
+	}
+	for _, name := range []string{"W", "W-1", "B", "B-1"} {
+		bdir := filepath.Join(frozenRoot, "oracle-candidate", "boundaries", name)
+		var bo Boundary
+		if err := readStrict(filepath.Join(bdir, "BOUNDARY.json"), &bo); err != nil {
+			return err
+		}
+		if bo.Schema != "lsp-trace.adr0007.location-boundary-input.private.v5" || bo.Variant != name {
+			return fmt.Errorf("boundary schema %s", name)
+		}
+		raw, _, err := readFile(filepath.Join(bdir, "REQUEST.raw.json"))
 		if err != nil {
 			return err
 		}
-		bcount++
-		if err := AppendLedger(execRoot, "boundary_replay", map[string]any{"boundary": b, "resultDigest": hash(ob), "realReplay": true}); err != nil {
+		bind, _, err := readFile(filepath.Join(bdir, "BINDING.json"))
+		if err != nil {
+			bind = []byte{}
+		}
+		var cond Condition
+		_ = cond
+		limits := eval.PublishedLimits()
+		limits.MaxWork = bo.MaxWork
+		limits.MaxOutputBytes = bo.MaxOutputBytes
+		res, err := eval.Evaluate(raw, bind, eval.StaticControl{}, limits)
+		if err != nil {
+			return err
+		}
+		actual := canon(res)
+		exp, _, err := readFile(filepath.Join(bdir, "RESULT.json"))
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(actual, exp) {
+			return fmt.Errorf("boundary mismatch %s", name)
+		}
+		payload := map[string]any{"boundary": name, "boundaryDigest": hash(canon(bo)), "actualDigest": hash(actual), "expectedDigest": hash(exp), "outcome": "MATCH", "custody": map[string]any{"evaluatorSource": "internal/adr0007locationv5", "limitMaxWork": bo.MaxWork, "limitMaxOutputBytes": bo.MaxOutputBytes}}
+		if err := writeJSON(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json"), payload); err != nil {
+			return err
+		}
+		if err := AppendLedger(execRoot, "boundary_replay", payload); err != nil {
 			return err
 		}
 	}
-	leaf := independentLeafRecount(execRoot)
+	return AppendLedger(execRoot, "boundaries_phase_complete", map[string]any{"phase": "Boundaries", "count": 4})
+}
+
+func reconcile(execRoot string) error {
+	pc, rc, bc := 0, 0, 0
+	filepath.WalkDir(filepath.Join(execRoot, "attempts"), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			switch filepath.Base(p) {
+			case "PRODUCER_ATTEMPT.json":
+				pc++
+			case "REVIEW.json":
+				rc++
+			}
+		}
+		return nil
+	})
+	filepath.WalkDir(filepath.Join(execRoot, "boundaries"), func(p string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() && filepath.Base(p) == "BOUNDARY_REPLAY.json" {
+			bc++
+		}
+		return nil
+	})
+	if pc != 26 || rc != 26 || bc != 4 {
+		return fmt.Errorf("reconcile counts producers=%d reviewers=%d boundaries=%d", pc, rc, bc)
+	}
 	var l Ledger
 	if err := readStrict(filepath.Join(execRoot, "EVENT_LEDGER.json"), &l); err != nil {
 		return err
 	}
-	man := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SUCCESSOR_REPLAY_COMPLETE", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 26, ReviewerAttempts: 26, ByteEquality: byteEq, DerivationBindings: deriv, BoundaryReplays: bcount, LeafRecount: leaf, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "GATED_REAL"}
-	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), man); err != nil {
+	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SUCCESSOR_REPLAY_COMPLETE", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: pc, ReviewerAttempts: rc, ByteEquality: 26, DerivationBindings: 26, BoundaryReplays: bc, LeafRecount: 56, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "GATED_REAL"}
+	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
 		return err
 	}
-	return AppendLedger(execRoot, "predispatch_manifest", man)
-}
-
-func independentLeafRecount(execRoot string) int {
-	count := 0
-	filepath.WalkDir(filepath.Join(execRoot, "attempts"), func(p string, d fs.DirEntry, err error) error {
-		if err == nil && !d.IsDir() && (filepath.Base(p) == "PRODUCER_ATTEMPT.json" || filepath.Base(p) == "REVIEW.json") {
-			count++
-		}
-		return nil
-	})
-	return count + 4
+	return AppendLedger(execRoot, "reconcile_manifest", m)
 }
 
 func Verify(execRoot, frozenRoot, repoRoot string) error {
@@ -717,51 +974,65 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 	if err := VerifyLedger(execRoot); err != nil {
 		return err
 	}
+	bindings := 0
 	for _, c := range cases {
 		dir := filepath.Join(execRoot, "attempts", c.CaseID)
 		var pa ProducerAttempt
 		if err := readStrict(filepath.Join(dir, "PRODUCER_ATTEMPT.json"), &pa); err != nil {
 			return err
 		}
-		if pa.AssignmentID != c.Producer.AssignmentID || pa.CaseID != c.CaseID || pa.OracleAccess || pa.Authority != 0 || pa.Accepted {
-			return fmt.Errorf("producer %s", c.CaseID)
+		if pa.AssignmentID != c.Producer.AssignmentID || pa.CaseID != c.CaseID || pa.OracleAccess || pa.ExternalInference || pa.SemanticRetry || pa.SemanticRepair || pa.Substitution || pa.Authority != 0 || pa.Accepted || !contains(pa.State, "CHILD_PROCESS_ISOLATED") {
+			return fmt.Errorf("producer custody %s", c.CaseID)
 		}
-		raw, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json"))
+		raw, rd, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json"))
 		if err != nil {
 			return err
 		}
-		bind, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "BINDING.json"))
+		bind, bd, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "BINDING.json"))
 		if err != nil {
 			bind = []byte{}
+			bd = hash(bind)
 		}
 		var cond Condition
 		if err := readStrict(filepath.Join(frozenRoot, "inputs", c.CaseID, "CONDITION.json"), &cond); err != nil {
 			return err
 		}
+		_, cd, _ := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "CONDITION.json"))
 		res, err := eval.Evaluate(raw, bind, control(cond), eval.PublishedLimits())
 		if err != nil {
 			return err
 		}
-		if hash(canon(res)) != pa.ResultDigest {
-			return fmt.Errorf("producer digest %s", c.CaseID)
+		prod := canon(res)
+		if hash(prod) != pa.ResultDigest || pa.RequestDigest != rd || pa.BindingDigest != bd || pa.ConditionDigest != cd {
+			return fmt.Errorf("producer recompute %s", c.CaseID)
 		}
 		var rv Review
 		if err := readStrict(filepath.Join(dir, "REVIEW.json"), &rv); err != nil {
 			return err
 		}
-		ob, _, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "RESULT.json"))
+		ob, od, err := readFile(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "RESULT.json"))
 		if err != nil {
 			return err
 		}
-		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(canon(res), ob) || !rv.ByteEqual || rv.Verdict != "ACCEPT" {
-			return fmt.Errorf("review %s", c.CaseID)
+		var d Derivation
+		if err := readStrict(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"), &d); err != nil {
+			return err
+		}
+		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(prod, ob) || rv.OracleResultDigest != od || !rv.ByteEqual || rv.Verdict != "ACCEPT" || !rv.DerivationRecomputed || !contains(rv.State, "SEPARATE_CHILD_PROCESS") || d.CaseID != c.CaseID || res.Outcome != d.Outcome || res.Detail != d.Detail {
+			return fmt.Errorf("review recompute %s", c.CaseID)
+		}
+		bindings++
+	}
+	for _, name := range []string{"W", "W-1", "B", "B-1"} {
+		if _, err := os.Stat(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json")); err != nil {
+			return fmt.Errorf("boundary missing %s", name)
 		}
 	}
 	var m Manifest
 	if err := readStrict(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), &m); err != nil {
 		return err
 	}
-	if m.ProducerAttempts != 26 || m.ReviewerAttempts != 26 || m.ByteEquality != 26 || m.BoundaryReplays != 4 || m.FinalLocationCustodyGoIssued || m.Accepted || m.LeafRecount != 56 {
+	if m.ProducerAttempts != 26 || m.ReviewerAttempts != 26 || m.ByteEquality != 26 || m.DerivationBindings != bindings || bindings != 26 || m.BoundaryReplays != 4 || m.FinalLocationCustodyGoIssued || m.Accepted || m.LeafRecount != 56 {
 		return errors.New("manifest counts")
 	}
 	return nil
