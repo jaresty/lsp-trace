@@ -1,31 +1,81 @@
-# ADR0007 source text search private v4 contracts
+# ADR0007 source text search private v4 strict contract
 
-This directory defines implementation-independent strict wire contracts for the private v4 source-text-search terminal envelope. It is not production code, not an oracle, not generated oracle output, and not a freeze/go decision.
+This directory is a prospective, implementation-independent v4 wire contract. It does not edit production, oracle, corpus attempts, generated oracle output, evaluator/oracle commands, freeze state, or GO state. v1-v3 are predecessor-locked inputs only.
 
-## Canonical terminal envelope
+## Validator input bundle
 
-Every terminal record is one JSON object with `schema_version = lsp-trace.adr0007.source-text-search.terminal.private.v4` and these top-level members only: `schema_version`, `terminal`, `request`, `attempt`, `control`, `sources`, `admission`, `matches`, `positions`, `range_union_candidate`, `policy`, `limits`, `accounting`, `failure`, `custody`, `replay`, `tooling`, `predecessor`, and `payload`.
+The standalone validator consumes an explicit bundle, not trust-only terminal fields:
 
-The JSON Schema is Draft 2020-12 and uses `additionalProperties: false` recursively. Unsigned counters use the bounded uint64 maximum `18446744073709551615`.
+- `raw_attempt_bytes`
+- `terminal_bytes`
+- `admitted_source_bytes`
+- `admitted_binding_bytes`
+- `tooling_manifest_bytes`
+- `predecessor_manifest_bytes`
+- `payload_freeze_binding_bytes`
+- `schema_bytes`
 
-## Constants and vocabulary
+The validator recomputes all pins from those bytes. Attempt digest is the SHA256 of exact raw attempt bytes. Admitted binding digest is the canonical admitted record plus LF, or `sha256:` plus sixty-four zeroes before admission. Tooling, predecessor, payload/freeze-binding, and schema bytes are supplied explicitly and recomputed.
 
-Private v4 uses schema private.v4 with authority and adjudication constants: `authority0`, `accepted=false`, `UNKNOWN`, and `UNRESOLVED`. Accounting names are exactly `J/Q/P/S/T/M/R/U/B/W` plus eight failure counters: `fail_parse`, `fail_admission`, `fail_resource`, `fail_cancelled`, `fail_deadline`, `fail_overflow`, `fail_internal`, and `fail_policy`.
+## Exact accounting and custody vocabulary
 
-Failure codes are `PARSE`, `ADMISSION`, `RESOURCE`, `CANCELLED`, `DEADLINE`, `OVERFLOW`, `INTERNAL`, and `POLICY`; each code has a typed code-specific detail object enforced by the standalone validator.
+Accounting keys are exactly:
 
-## Terminal rules
+`schema_version`, `J_files`, `Q_query_bytes`, `P_path_bytes`, `S_source_bytes`, `T_scanned_tuples`, `M_matches`, `R_ranges`, `U_utf16_units`, `B_output_bytes`, `W_work`, `failure_counters`.
 
-Malformed raw input attempt identity is `attempt-raw-sha256-` plus the full lowercase SHA256 of the exact raw bytes.
+Failure counters are exactly:
 
-Every `FAILED` terminal has `matches: []` and `range_union_candidate: null`. Admission is present only when admission completed before the later failure; otherwise `admission.completed=false` and `admitted_source_ids=[]`. `COMPLETE` has `failure: null` and a non-null candidate.
+`INVALID_INPUT`, `CANCELLED`, `DEADLINE_EXCEEDED`, `ASSOCIATION_FAILED`, `ADMISSION_FAILED`, `RESOURCE_EXHAUSTED`, `OVERFLOW`, `INVARIANT_FAILED`.
 
-The standalone validator enforces cross-field rules that JSON Schema cannot fully express: byte range `start <= end`, deterministic match ordering, source association, candidate members exactly equal matches, candidate digest, fixed point replay/custody recomputation, `W = J+Q+P+S+T+M+R+U+B`, exactly one failure counter for failed terminals and zero for complete terminals, manifest pins, malformed identity, and custody/replay normalization.
+Custody keys are exactly:
 
-## Canonical JSON profile
+`schema_version`, `attempt_id`, `terminal_result_sha256`, `terminal_sequence0`, `terminal_count1`.
 
-Canonical JSON is exact UTF-8, sorted object keys, no insignificant whitespace, and exactly one trailing LF. Raw inputs with duplicate keys, unknown fields, trailing data, invalid UTF-8, or non-canonical terminal encodings are rejected.
+Replay keys are exactly:
 
-## Payload/freeze boundary
+`schema_version`, `canonical_attempt_sha256`, `admitted_binding_sha256`, `terminal_preimage_sha256`, `tooling_identity_sha256`, `freeze_binding_sha256`, `predecessor_lock_sha256`.
 
-The v4 contract boundary is nonrecursive. `payload.members` names frozen payload leaves only; the terminal envelope stores the payload digest and member names but does not recursively validate or interpret payload contents. Freeze, production admission, oracle generation, and implementation-specific search behavior remain out of scope.
+## Exact arithmetic and fixed point
+
+All counters are checked uint64 with maximum `18446744073709551615`; decoding uses `json.Number`/`UseNumber`, never float64. Values above 2^53 remain exact integers.
+
+`W_work` is exactly:
+
+```text
+50 + 3*J_files + 5*Q_query_bytes + 7*P_path_bytes + S_source_bytes + 11*T_scanned_tuples + 13*M_matches + 17*R_ranges + 19*U_utf16_units + 31*B_output_bytes
+```
+
+`B_output_bytes` is a fixed point over canonical terminal bytes with `custody.terminal_result_sha256` and the terminal preimage digest normalized to `sha256:` plus sixty-four zeroes. The validator iterates `B_output_bytes`/`W_work` monotonically for at most 64 rounds, requires final encoded length to equal `B_output_bytes`, and independently recomputes the terminal preimage digest. Custody digest equals replay terminal preimage digest.
+
+Malformed raw input attempt id is `attempt-raw-sha256-` plus the full lowercase SHA256 of exact raw bytes.
+
+## Terminal and failure rules
+
+`COMPLETE` has `failure: null` and a non-null `range_union_candidate`. `FAILED` has `matches: []` and `range_union_candidate: null`. The validator enforces exactly one failure counter for failed terminals and zero failure counters for complete terminals.
+
+Failure codes have closed stage/detail requirements:
+
+- `INVALID_INPUT`: stage `raw`, detail `{reason}`
+- `CANCELLED`: stage `control`, detail `{control}`
+- `DEADLINE_EXCEEDED`: stage `control`, detail `{deadline}`
+- `ASSOCIATION_FAILED`: stage `association`, detail `{source_id}`
+- `ADMISSION_FAILED`: stage `admission`, detail `{source_id}`
+- `RESOURCE_EXHAUSTED`: stage `scan`, detail `{limit}`
+- `OVERFLOW`: stage `accounting`, detail `{counter}`
+- `INVARIANT_FAILED`: stage `invariant`, detail `{invariant}`
+
+## Candidate and match rules
+
+The complete candidate is the full operation `RANGE_UNION` with `executedLocation=false`, `candidate_only=true`, exact qualified Location pins, admission digest, complete ordered match members, and recomputed candidate digest.
+
+Matches require `start_byte < end_byte`, complete source tuples, deterministic LSP order by path byte, start, end, and ordinal, source-bound checks against supplied admitted source metadata/bytes, literal exact matching, and UTF-8/LSP UTF-16 position recomputation.
+
+## Canonical JSON and schema execution
+
+Canonical JSON is sorted keys, UTF-8, no insignificant whitespace, and one trailing LF. Duplicate, unknown, trailing, invalid UTF-8, noncanonical, and invalid uint64 raw forms are rejected.
+
+The JSON Schema is supplied as bytes in the bundle and is executed by a stdlib schema walker tied to those bytes. It verifies Draft 2020-12 identity, required terminal members, and strict v4 sub-contract anchors. Tests include a schema mutation/drift rejection. This is not a claim of general-purpose JSON Schema library conformance.
+
+## Nonrecursive payload/freeze boundary
+
+The payload/freeze boundary is nonrecursive. The validator pins supplied payload/freeze-binding bytes and checks terminal fields against that pin; it does not recursively interpret production payload contents or oracle output.

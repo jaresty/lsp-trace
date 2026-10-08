@@ -8,539 +8,537 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
-const SchemaVersion = "lsp-trace.adr0007.source-text-search.terminal.private.v4"
-const CanonicalProfile = "UTF8_SORTED_KEYS_ONE_LF"
-const MaxUint64String = "18446744073709551615"
+const TerminalSchemaVersion = "lsp-trace.adr0007.source-text-search.terminal.private.v4"
+const AccountingSchemaVersion = "lsp-trace.adr0007.source-text-search.accounting.private.v4"
+const CustodySchemaVersion = "lsp-trace.adr0007.source-text-search.custody.private.v4"
+const ReplaySchemaVersion = "lsp-trace.adr0007.source-text-search.replay.private.v4"
+const CandidateOperation = "RANGE_UNION"
+const zeroSHA = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+const MaxIterations = 64
+
+type Bundle struct {
+	SchemaBytes              json.RawMessage   `json:"schema_bytes"`
+	RawAttemptBytes          string            `json:"raw_attempt_bytes"`
+	TerminalBytes            string            `json:"terminal_bytes"`
+	AdmittedSourceBytes      map[string]string `json:"admitted_source_bytes"`
+	AdmittedBindingBytes     string            `json:"admitted_binding_bytes"`
+	ToolingManifestBytes     string            `json:"tooling_manifest_bytes"`
+	PredecessorManifestBytes string            `json:"predecessor_manifest_bytes"`
+	PayloadFreezeBytes       string            `json:"payload_freeze_binding_bytes"`
+	WantErrorCode            string            `json:"want_error_code,omitempty"`
+	WantErrorPath            string            `json:"want_error_path,omitempty"`
+}
+
+type VError struct{ Code, Path, Msg string }
+
+func (e *VError) Error() string         { return e.Code + " " + e.Path + ": " + e.Msg }
+func verr(code, path, msg string) error { return &VError{code, path, msg} }
 
 type Terminal struct {
-	SchemaVersion       string      `json:"schema_version"`
-	Terminal            string      `json:"terminal"`
-	Request             Request     `json:"request"`
-	Attempt             Attempt     `json:"attempt"`
-	Control             Control     `json:"control"`
-	Sources             []Source    `json:"sources"`
-	Admission           Admission   `json:"admission"`
-	Matches             []Match     `json:"matches"`
-	Positions           []Position  `json:"positions"`
-	RangeUnionCandidate *Candidate  `json:"range_union_candidate"`
-	Policy              Policy      `json:"policy"`
-	Limits              Limits      `json:"limits"`
-	Accounting          Accounting  `json:"accounting"`
-	Failure             *Failure    `json:"failure"`
-	Custody             Custody     `json:"custody"`
-	Replay              Replay      `json:"replay"`
-	Tooling             Tooling     `json:"tooling"`
-	Predecessor         Predecessor `json:"predecessor"`
-	Payload             Payload     `json:"payload"`
-}
-
-type Request struct {
-	RequestID       string `json:"request_id"`
-	RawSHA256       string `json:"raw_sha256"`
-	QueryUTF8       string `json:"query_utf8"`
-	SourceSetDigest string `json:"source_set_digest"`
+	SchemaVersion       string     `json:"schema_version"`
+	Terminal            string     `json:"terminal"`
+	Attempt             Attempt    `json:"attempt"`
+	Request             Request    `json:"request"`
+	Admission           Admission  `json:"admission"`
+	Sources             []Source   `json:"sources"`
+	Matches             []Match    `json:"matches"`
+	Positions           []Position `json:"positions"`
+	RangeUnionCandidate *Candidate `json:"range_union_candidate"`
+	Accounting          Accounting `json:"accounting"`
+	Failure             *Failure   `json:"failure"`
+	Custody             Custody    `json:"custody"`
+	Replay              Replay     `json:"replay"`
+	Payload             Payload    `json:"payload"`
 }
 type Attempt struct {
-	AttemptID      string `json:"attempt_id"`
-	AttemptOrdinal uint64 `json:"attempt_ordinal"`
-	MalformedRaw   bool   `json:"malformed_raw"`
+	AttemptID    string `json:"attempt_id"`
+	MalformedRaw bool   `json:"malformed_raw"`
 }
-type Control struct {
-	CancelRequested   bool   `json:"cancel_requested"`
-	DeadlineUnixNanos uint64 `json:"deadline_unix_nanos"`
-	ControlDigest     string `json:"control_digest"`
-}
-type Source struct {
-	SourceID         string `json:"source_id"`
-	LogicalURI       string `json:"logical_uri"`
-	Revision         string `json:"revision"`
-	ContentSHA256    string `json:"content_sha256"`
-	ByteLength       uint64 `json:"byte_length"`
-	AdmissionOrdinal uint64 `json:"admission_ordinal"`
+type Request struct {
+	Query string `json:"query"`
 }
 type Admission struct {
 	Completed         bool     `json:"completed"`
-	AdmittedSourceIDs []string `json:"admitted_source_ids"`
 	AdmissionDigest   string   `json:"admission_digest"`
+	AdmittedSourceIDs []string `json:"admitted_source_ids"`
+}
+type Source struct {
+	SourceID      string `json:"source_id"`
+	LogicalURI    string `json:"logical_uri"`
+	PathBytes     uint64 `json:"path_bytes"`
+	ByteLength    uint64 `json:"byte_length"`
+	ContentSHA256 string `json:"content_sha256"`
+	Ordinal       uint64 `json:"ordinal"`
 }
 type Match struct {
-	MatchID       string `json:"match_id"`
-	SourceID      string `json:"source_id"`
-	StartByte     uint64 `json:"start_byte"`
-	EndByte       uint64 `json:"end_byte"`
-	LiteralSHA256 string `json:"literal_sha256"`
+	MatchID   string `json:"match_id"`
+	SourceID  string `json:"source_id"`
+	PathBytes uint64 `json:"path_bytes"`
+	StartByte uint64 `json:"start_byte"`
+	EndByte   uint64 `json:"end_byte"`
+	Ordinal   uint64 `json:"ordinal"`
+	Literal   string `json:"literal"`
 }
 type Position struct {
-	MatchID            string `json:"match_id"`
-	StartLine          uint64 `json:"start_line"`
-	StartCharacterUTF8 uint64 `json:"start_character_utf8"`
-	EndLine            uint64 `json:"end_line"`
-	EndCharacterUTF8   uint64 `json:"end_character_utf8"`
+	MatchID             string `json:"match_id"`
+	StartLine           uint64 `json:"start_line"`
+	StartCharacterUTF16 uint64 `json:"start_character_utf16"`
+	EndLine             uint64 `json:"end_line"`
+	EndCharacterUTF16   uint64 `json:"end_character_utf16"`
 }
 type Candidate struct {
-	CandidateID    string   `json:"candidate_id"`
-	MemberMatchIDs []string `json:"member_match_ids"`
-	RangeDigest    string   `json:"range_digest"`
+	Operation             string        `json:"operation"`
+	ExecutedLocation      bool          `json:"executedLocation"`
+	CandidateOnly         bool          `json:"candidate_only"`
+	AdmissionDigest       string        `json:"admission_digest"`
+	MemberMatchIDs        []string      `json:"member_match_ids"`
+	QualifiedLocationPins []LocationPin `json:"qualified_location_pins"`
+	CandidateDigest       string        `json:"candidate_digest"`
 }
-type Policy struct {
-	LiteralMode   string `json:"literal_mode"`
-	Normalization string `json:"normalization"`
-	Authority     string `json:"authority"`
-	Accepted      bool   `json:"accepted"`
-}
-type Limits struct {
-	MaxSources          uint64 `json:"max_sources"`
-	MaxSourceBytes      uint64 `json:"max_source_bytes"`
-	MaxTotalSourceBytes uint64 `json:"max_total_source_bytes"`
-	MaxMatches          uint64 `json:"max_matches"`
-	MaxWork             uint64 `json:"max_work"`
-	MaxOutputBytes      uint64 `json:"max_output_bytes"`
+type LocationPin struct {
+	SourceID            string `json:"source_id"`
+	StartByte           uint64 `json:"start_byte"`
+	EndByte             uint64 `json:"end_byte"`
+	StartLine           uint64 `json:"start_line"`
+	StartCharacterUTF16 uint64 `json:"start_character_utf16"`
+	EndLine             uint64 `json:"end_line"`
+	EndCharacterUTF16   uint64 `json:"end_character_utf16"`
 }
 type Accounting struct {
-	J             uint64 `json:"J"`
-	Q             uint64 `json:"Q"`
-	P             uint64 `json:"P"`
-	S             uint64 `json:"S"`
-	T             uint64 `json:"T"`
-	M             uint64 `json:"M"`
-	R             uint64 `json:"R"`
-	U             uint64 `json:"U"`
-	B             uint64 `json:"B"`
-	W             uint64 `json:"W"`
-	FailParse     uint64 `json:"fail_parse"`
-	FailAdmission uint64 `json:"fail_admission"`
-	FailResource  uint64 `json:"fail_resource"`
-	FailCancelled uint64 `json:"fail_cancelled"`
-	FailDeadline  uint64 `json:"fail_deadline"`
-	FailOverflow  uint64 `json:"fail_overflow"`
-	FailInternal  uint64 `json:"fail_internal"`
-	FailPolicy    uint64 `json:"fail_policy"`
+	SchemaVersion                                                                                                      string `json:"schema_version"`
+	JFiles, QQueryBytes, PPathBytes, SSourceBytes, TScannedTuples, MMatches, RRanges, UUTF16Units, BOutputBytes, WWork uint64
+	FailureCounters                                                                                                    map[string]uint64 `json:"failure_counters"`
 }
 type Failure struct {
 	Code   string         `json:"code"`
+	Stage  string         `json:"stage"`
 	Detail map[string]any `json:"detail"`
 }
 type Custody struct {
-	Producer      string `json:"producer"`
-	Authority     string `json:"authority"`
-	Accepted      bool   `json:"accepted"`
-	State         string `json:"state"`
-	Resolution    string `json:"resolution"`
-	CustodyDigest string `json:"custody_digest"`
+	SchemaVersion        string `json:"schema_version"`
+	AttemptID            string `json:"attempt_id"`
+	TerminalResultSHA256 string `json:"terminal_result_sha256"`
+	TerminalSequence0    uint64 `json:"terminal_sequence0"`
+	TerminalCount1       uint64 `json:"terminal_count1"`
 }
 type Replay struct {
-	CanonicalJSONProfile string `json:"canonical_json_profile"`
-	RawInputSHA256       string `json:"raw_input_sha256"`
-	TerminalSHA256       string `json:"terminal_sha256"`
-	ReplayDigest         string `json:"replay_digest"`
-}
-type Tooling struct {
-	Validator      string `json:"validator"`
-	ContractCommit string `json:"contract_commit"`
-	ManifestSHA256 string `json:"manifest_sha256"`
-}
-type Predecessor struct {
-	WireVersionsPreserved []string `json:"wire_versions_preserved"`
+	SchemaVersion          string `json:"schema_version"`
+	CanonicalAttemptSHA256 string `json:"canonical_attempt_sha256"`
+	AdmittedBindingSHA256  string `json:"admitted_binding_sha256"`
+	TerminalPreimageSHA256 string `json:"terminal_preimage_sha256"`
+	ToolingIdentitySHA256  string `json:"tooling_identity_sha256"`
+	FreezeBindingSHA256    string `json:"freeze_binding_sha256"`
+	PredecessorLockSHA256  string `json:"predecessor_lock_sha256"`
 }
 type Payload struct {
-	PayloadDigest string   `json:"payload_digest"`
-	Frozen        bool     `json:"frozen"`
-	Members       []string `json:"members"`
+	PayloadDigest       string `json:"payload_digest"`
+	FreezeBindingSHA256 string `json:"freeze_binding_sha256"`
 }
 
-func (r *Request) UnmarshalJSON(b []byte) error {
-	type x struct {
-		RequestID       string `json:"request_id"`
-		RawSHA256       string `json:"raw_sha256"`
-		QueryUTF8       string `json:"query_utf8"`
-		SourceSetDigest string `json:"source_set_digest"`
+var failureNames = []string{"INVALID_INPUT", "CANCELLED", "DEADLINE_EXCEEDED", "ASSOCIATION_FAILED", "ADMISSION_FAILED", "RESOURCE_EXHAUSTED", "OVERFLOW", "INVARIANT_FAILED"}
+
+func (a Accounting) MarshalJSON() ([]byte, error) {
+	type raw struct {
+		SchemaVersion   string            `json:"schema_version"`
+		JFiles          uint64            `json:"J_files"`
+		QQueryBytes     uint64            `json:"Q_query_bytes"`
+		PPathBytes      uint64            `json:"P_path_bytes"`
+		SSourceBytes    uint64            `json:"S_source_bytes"`
+		TScannedTuples  uint64            `json:"T_scanned_tuples"`
+		MMatches        uint64            `json:"M_matches"`
+		RRanges         uint64            `json:"R_ranges"`
+		UUTF16Units     uint64            `json:"U_utf16_units"`
+		BOutputBytes    uint64            `json:"B_output_bytes"`
+		WWork           uint64            `json:"W_work"`
+		FailureCounters map[string]uint64 `json:"failure_counters"`
 	}
-	var v x
-	if err := strictObj(b, []string{"request_id", "raw_sha256", "query_utf8", "source_set_digest"}, &v); err != nil {
-		return err
-	}
-	*r = Request(v)
-	return nil
-}
-func (s *Source) UnmarshalJSON(b []byte) error {
-	type x struct {
-		SourceID         string `json:"source_id"`
-		LogicalURI       string `json:"logical_uri"`
-		Revision         string `json:"revision"`
-		ContentSHA256    string `json:"content_sha256"`
-		ByteLength       uint64 `json:"byte_length"`
-		AdmissionOrdinal uint64 `json:"admission_ordinal"`
-	}
-	var v x
-	if err := strictObj(b, []string{"source_id", "logical_uri", "revision", "content_sha256", "byte_length", "admission_ordinal"}, &v); err != nil {
-		return err
-	}
-	*s = Source(v)
-	return nil
-}
-func (m *Match) UnmarshalJSON(b []byte) error {
-	type x struct {
-		MatchID       string `json:"match_id"`
-		SourceID      string `json:"source_id"`
-		StartByte     uint64 `json:"start_byte"`
-		EndByte       uint64 `json:"end_byte"`
-		LiteralSHA256 string `json:"literal_sha256"`
-	}
-	var v x
-	if err := strictObj(b, []string{"match_id", "source_id", "start_byte", "end_byte", "literal_sha256"}, &v); err != nil {
-		return err
-	}
-	*m = Match(v)
-	return nil
-}
-func (p *Position) UnmarshalJSON(b []byte) error {
-	type x struct {
-		MatchID            string `json:"match_id"`
-		StartLine          uint64 `json:"start_line"`
-		StartCharacterUTF8 uint64 `json:"start_character_utf8"`
-		EndLine            uint64 `json:"end_line"`
-		EndCharacterUTF8   uint64 `json:"end_character_utf8"`
-	}
-	var v x
-	if err := strictObj(b, []string{"match_id", "start_line", "start_character_utf8", "end_line", "end_character_utf8"}, &v); err != nil {
-		return err
-	}
-	*p = Position(v)
-	return nil
-}
-func (p *Policy) UnmarshalJSON(b []byte) error {
-	type x struct {
-		LiteralMode   string `json:"literal_mode"`
-		Normalization string `json:"normalization"`
-		Authority     string `json:"authority"`
-		Accepted      bool   `json:"accepted"`
-	}
-	var v x
-	if err := strictObj(b, []string{"literal_mode", "normalization", "authority", "accepted"}, &v); err != nil {
-		return err
-	}
-	*p = Policy(v)
-	return nil
-}
-func (l *Limits) UnmarshalJSON(b []byte) error {
-	type x struct {
-		MaxSources          uint64 `json:"max_sources"`
-		MaxSourceBytes      uint64 `json:"max_source_bytes"`
-		MaxTotalSourceBytes uint64 `json:"max_total_source_bytes"`
-		MaxMatches          uint64 `json:"max_matches"`
-		MaxWork             uint64 `json:"max_work"`
-		MaxOutputBytes      uint64 `json:"max_output_bytes"`
-	}
-	var v x
-	if err := strictObj(b, []string{"max_sources", "max_source_bytes", "max_total_source_bytes", "max_matches", "max_work", "max_output_bytes"}, &v); err != nil {
-		return err
-	}
-	*l = Limits(v)
-	return nil
+	return json.Marshal(raw{a.SchemaVersion, a.JFiles, a.QQueryBytes, a.PPathBytes, a.SSourceBytes, a.TScannedTuples, a.MMatches, a.RRanges, a.UUTF16Units, a.BOutputBytes, a.WWork, a.FailureCounters})
 }
 func (a *Accounting) UnmarshalJSON(b []byte) error {
-	type x Accounting
-	var v x
-	if err := strictObj(b, []string{"J", "Q", "P", "S", "T", "M", "R", "U", "B", "W", "fail_parse", "fail_admission", "fail_resource", "fail_cancelled", "fail_deadline", "fail_overflow", "fail_internal", "fail_policy"}, &v); err != nil {
+	type raw struct {
+		SchemaVersion   string            `json:"schema_version"`
+		JFiles          json.Number       `json:"J_files"`
+		QQueryBytes     json.Number       `json:"Q_query_bytes"`
+		PPathBytes      json.Number       `json:"P_path_bytes"`
+		SSourceBytes    json.Number       `json:"S_source_bytes"`
+		TScannedTuples  json.Number       `json:"T_scanned_tuples"`
+		MMatches        json.Number       `json:"M_matches"`
+		RRanges         json.Number       `json:"R_ranges"`
+		UUTF16Units     json.Number       `json:"U_utf16_units"`
+		BOutputBytes    json.Number       `json:"B_output_bytes"`
+		WWork           json.Number       `json:"W_work"`
+		FailureCounters map[string]uint64 `json:"failure_counters"`
+	}
+	var r raw
+	if err := decodeExact(b, &r, []string{"schema_version", "J_files", "Q_query_bytes", "P_path_bytes", "S_source_bytes", "T_scanned_tuples", "M_matches", "R_ranges", "U_utf16_units", "B_output_bytes", "W_work", "failure_counters"}); err != nil {
 		return err
 	}
-	*a = Accounting(v)
-	return nil
-}
-func (c *Custody) UnmarshalJSON(b []byte) error {
-	type x struct {
-		Producer      string `json:"producer"`
-		Authority     string `json:"authority"`
-		Accepted      bool   `json:"accepted"`
-		State         string `json:"state"`
-		Resolution    string `json:"resolution"`
-		CustodyDigest string `json:"custody_digest"`
+	vals := []*uint64{&a.JFiles, &a.QQueryBytes, &a.PPathBytes, &a.SSourceBytes, &a.TScannedTuples, &a.MMatches, &a.RRanges, &a.UUTF16Units, &a.BOutputBytes, &a.WWork}
+	nums := []json.Number{r.JFiles, r.QQueryBytes, r.PPathBytes, r.SSourceBytes, r.TScannedTuples, r.MMatches, r.RRanges, r.UUTF16Units, r.BOutputBytes, r.WWork}
+	for i, n := range nums {
+		u, err := parseU64(n.String())
+		if err != nil {
+			return err
+		}
+		*vals[i] = u
 	}
-	var v x
-	if err := strictObj(b, []string{"producer", "authority", "accepted", "state", "resolution", "custody_digest"}, &v); err != nil {
-		return err
-	}
-	*c = Custody(v)
-	return nil
-}
-func (r *Replay) UnmarshalJSON(b []byte) error {
-	type x struct {
-		CanonicalJSONProfile string `json:"canonical_json_profile"`
-		RawInputSHA256       string `json:"raw_input_sha256"`
-		TerminalSHA256       string `json:"terminal_sha256"`
-		ReplayDigest         string `json:"replay_digest"`
-	}
-	var v x
-	if err := strictObj(b, []string{"canonical_json_profile", "raw_input_sha256", "terminal_sha256", "replay_digest"}, &v); err != nil {
-		return err
-	}
-	*r = Replay(v)
-	return nil
-}
-func (t *Tooling) UnmarshalJSON(b []byte) error {
-	type x struct {
-		Validator      string `json:"validator"`
-		ContractCommit string `json:"contract_commit"`
-		ManifestSHA256 string `json:"manifest_sha256"`
-	}
-	var v x
-	if err := strictObj(b, []string{"validator", "contract_commit", "manifest_sha256"}, &v); err != nil {
-		return err
-	}
-	*t = Tooling(v)
-	return nil
-}
-func (p *Payload) UnmarshalJSON(b []byte) error {
-	type x struct {
-		PayloadDigest string   `json:"payload_digest"`
-		Frozen        bool     `json:"frozen"`
-		Members       []string `json:"members"`
-	}
-	var v x
-	if err := strictObj(b, []string{"payload_digest", "frozen", "members"}, &v); err != nil {
-		return err
-	}
-	*p = Payload(v)
+	a.SchemaVersion = r.SchemaVersion
+	a.FailureCounters = r.FailureCounters
 	return nil
 }
 
-func strictObj(b []byte, allowed []string, dst any) error {
-	var raw map[string]json.RawMessage
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&raw); err != nil {
-		return err
-	}
-	if dec.More() {
-		return errors.New("trailing data")
-	}
-	allow := map[string]bool{}
-	for _, k := range allowed {
-		allow[k] = true
-		if _, ok := raw[k]; !ok {
-			return fmt.Errorf("missing %s", k)
-		}
-	}
-	for k := range raw {
-		if !allow[k] {
-			return fmt.Errorf("unknown %s", k)
-		}
-	}
-	dec = json.NewDecoder(bytes.NewReader(b))
-	dec.DisallowUnknownFields()
-	return dec.Decode(dst)
-}
-
-func ValidateFile(path string) error {
+func ValidateBundleFile(path string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	return ValidateBytes(b)
+	return ValidateBundleBytes(b)
 }
-func ValidateBytes(b []byte) error {
-	if !utf8.Valid(b) {
-		return errors.New("invalid utf8")
-	}
-	if !bytes.HasSuffix(b, []byte("\n")) {
-		return errors.New("canonical json must end with one LF")
-	}
-	if bytes.HasSuffix(bytes.TrimSuffix(b, []byte("\n")), []byte("\n")) {
-		return errors.New("canonical json must have exactly one final LF")
-	}
+func ValidateBundleBytes(b []byte) error {
+	var bun Bundle
 	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
 	dec.DisallowUnknownFields()
-	var t Terminal
-	if err := dec.Decode(&t); err != nil {
+	if err := dec.Decode(&bun); err != nil {
 		return err
 	}
+	if err := ValidateBundle(bun); err != nil {
+		return err
+	}
+	return nil
+}
+func ValidateFile(path string) error { return ValidateBundleFile(path) }
+
+func ValidateBundle(b Bundle) error {
+	if err := walkSchema(b.SchemaBytes); err != nil {
+		return err
+	}
+	if !utf8.ValidString(b.TerminalBytes) {
+		return verr("INVALID_INPUT", "/terminal_bytes", "invalid utf8")
+	}
+	var t Terminal
+	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
+	dec.UseNumber()
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&t); err != nil {
+		return verr("INVALID_INPUT", "/terminal_bytes", err.Error())
+	}
 	if dec.Decode(&struct{}{}) != io.EOF {
-		return errors.New("trailing data")
+		return verr("INVALID_INPUT", "/terminal_bytes", "trailing data")
 	}
 	canon, err := CanonicalJSON(t)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(canon, b) {
-		return errors.New("non-canonical json")
+	if canon != b.TerminalBytes {
+		return verr("INVALID_INPUT", "/terminal_bytes", "non-canonical")
 	}
-	return validate(t)
+	if t.SchemaVersion != TerminalSchemaVersion {
+		return verr("INVARIANT_FAILED", "/schema_version", "bad schema")
+	}
+	if t.Accounting.SchemaVersion != AccountingSchemaVersion {
+		return verr("INVARIANT_FAILED", "/accounting/schema_version", "bad accounting schema")
+	}
+	if t.Custody.SchemaVersion != CustodySchemaVersion {
+		return verr("INVARIANT_FAILED", "/custody/schema_version", "bad custody schema")
+	}
+	if t.Replay.SchemaVersion != ReplaySchemaVersion {
+		return verr("INVARIANT_FAILED", "/replay/schema_version", "bad replay schema")
+	}
+	if got := sha(b.RawAttemptBytes); t.Replay.CanonicalAttemptSHA256 != got {
+		return verr("INVARIANT_FAILED", "/replay/canonical_attempt_sha256", "raw attempt digest mismatch")
+	}
+	if t.Attempt.MalformedRaw && t.Attempt.AttemptID != "attempt-raw-sha256-"+strings.TrimPrefix(t.Replay.CanonicalAttemptSHA256, "sha256:") {
+		return verr("INVARIANT_FAILED", "/attempt/attempt_id", "malformed raw digest identity")
+	}
+	if t.Custody.AttemptID != t.Attempt.AttemptID || t.Custody.TerminalSequence0 != 0 || t.Custody.TerminalCount1 != 1 {
+		return verr("INVARIANT_FAILED", "/custody", "bad custody constants")
+	}
+	if t.Replay.AdmittedBindingSHA256 != digestOrEmpty(b.AdmittedBindingBytes) {
+		return verr("INVARIANT_FAILED", "/replay/admitted_binding_sha256", "admission digest mismatch")
+	}
+	if t.Replay.ToolingIdentitySHA256 != sha(b.ToolingManifestBytes) || t.Replay.PredecessorLockSHA256 != sha(b.PredecessorManifestBytes) || t.Replay.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) {
+		return verr("INVARIANT_FAILED", "/replay", "manifest pin mismatch")
+	}
+	if err := validateFailure(t); err != nil {
+		return err
+	}
+	if err := validateSourcesMatches(t, b); err != nil {
+		return err
+	}
+	if err := validateCandidate(t); err != nil {
+		return err
+	}
+	if err := validateAccounting(t, b.TerminalBytes); err != nil {
+		return err
+	}
+	pre := normalizedTerminalPreimage(t)
+	if t.Replay.TerminalPreimageSHA256 != sha(pre) || t.Custody.TerminalResultSHA256 != t.Replay.TerminalPreimageSHA256 {
+		return verr("INVARIANT_FAILED", "/custody/terminal_result_sha256", "preimage digest mismatch")
+	}
+	return nil
 }
 
-func validate(t Terminal) error {
-	if t.SchemaVersion != SchemaVersion {
-		return errors.New("bad schema_version")
+func validateFailure(t Terminal) error {
+	sum := uint64(0)
+	for _, k := range failureNames {
+		v, ok := t.Accounting.FailureCounters[k]
+		if !ok {
+			return verr("INVARIANT_FAILED", "/accounting/failure_counters/"+k, "missing")
+		}
+		sum += v
 	}
-	if t.Policy.LiteralMode != "EXACT_NONEMPTY_CASE_SENSITIVE_UTF8" || t.Policy.Normalization != "NONE" || t.Policy.Authority != "authority0" || t.Policy.Accepted {
-		return errors.New("bad policy constants")
+	if len(t.Accounting.FailureCounters) != len(failureNames) {
+		return verr("INVARIANT_FAILED", "/accounting/failure_counters", "extra counter")
 	}
-	if t.Custody.Authority != "authority0" || t.Custody.Accepted || t.Custody.State != "UNKNOWN" || t.Custody.Resolution != "UNRESOLVED" {
-		return errors.New("bad custody constants")
+	if t.Terminal == "COMPLETE" {
+		if t.Failure != nil || sum != 0 {
+			return verr("INVARIANT_FAILED", "/failure", "complete failure state")
+		}
+		return nil
 	}
-	if t.Replay.CanonicalJSONProfile != CanonicalProfile {
-		return errors.New("bad replay profile")
+	if t.Terminal != "FAILED" {
+		return verr("INVARIANT_FAILED", "/terminal", "bad terminal")
 	}
-	if t.Tooling.Validator != "adr0007-source-text-search-v4-contract-validate" {
-		return errors.New("bad tooling validator")
+	if t.Failure == nil || sum != 1 || t.Accounting.FailureCounters[t.Failure.Code] != 1 {
+		return verr("INVARIANT_FAILED", "/failure", "failed counter/code mismatch")
 	}
-	if strings.Join(t.Predecessor.WireVersionsPreserved, ",") != "v1,v2,v3" {
-		return errors.New("predecessor pins must preserve v1,v2,v3")
+	stage := map[string]string{"INVALID_INPUT": "raw", "CANCELLED": "control", "DEADLINE_EXCEEDED": "control", "ASSOCIATION_FAILED": "association", "ADMISSION_FAILED": "admission", "RESOURCE_EXHAUSTED": "scan", "OVERFLOW": "accounting", "INVARIANT_FAILED": "invariant"}[t.Failure.Code]
+	if stage == "" || t.Failure.Stage != stage {
+		return verr("INVARIANT_FAILED", "/failure/stage", "bad stage")
 	}
-	if t.Attempt.MalformedRaw {
-		want := "attempt-raw-sha256-" + strings.TrimPrefix(t.Request.RawSHA256, "sha256:")
-		if t.Attempt.AttemptID != want {
-			return errors.New("malformed raw attempt identity mismatch")
+	req := map[string][]string{"INVALID_INPUT": {"reason"}, "CANCELLED": {"control"}, "DEADLINE_EXCEEDED": {"deadline"}, "ASSOCIATION_FAILED": {"source_id"}, "ADMISSION_FAILED": {"source_id"}, "RESOURCE_EXHAUSTED": {"limit"}, "OVERFLOW": {"counter"}, "INVARIANT_FAILED": {"invariant"}}[t.Failure.Code]
+	if len(t.Failure.Detail) != len(req) {
+		return verr("INVARIANT_FAILED", "/failure/detail", "detail shape")
+	}
+	for _, k := range req {
+		if _, ok := t.Failure.Detail[k]; !ok {
+			return verr("INVARIANT_FAILED", "/failure/detail/"+k, "missing")
 		}
 	}
-	sources := map[string]Source{}
-	var prevOrd uint64
-	for i, s := range t.Sources {
-		if _, ok := sources[s.SourceID]; ok {
-			return errors.New("duplicate source_id")
-		}
-		if i > 0 && s.AdmissionOrdinal <= prevOrd {
-			return errors.New("source admission ordering")
-		}
-		prevOrd = s.AdmissionOrdinal
-		sources[s.SourceID] = s
+	if len(t.Matches) != 0 || t.RangeUnionCandidate != nil {
+		return verr("INVARIANT_FAILED", "/matches", "failed terminal must not retain matches")
 	}
-	seenMatches := map[string]bool{}
-	prevSource := ""
-	var prevStart, prevEnd uint64
+	return nil
+}
+
+func validateSourcesMatches(t Terminal, b Bundle) error {
+	src := map[string]Source{}
+	for _, s := range t.Sources {
+		data, ok := b.AdmittedSourceBytes[s.SourceID]
+		if !ok {
+			return verr("ASSOCIATION_FAILED", "/sources/"+s.SourceID, "missing source bytes")
+		}
+		if uint64(len([]byte(data))) != s.ByteLength || sha(data) != s.ContentSHA256 {
+			return verr("ASSOCIATION_FAILED", "/sources/"+s.SourceID, "source metadata mismatch")
+		}
+		src[s.SourceID] = s
+	}
+	prevPath, prevStart, prevEnd, prevOrd := uint64(0), uint64(0), uint64(0), uint64(0)
 	for i, m := range t.Matches {
-		if m.StartByte > m.EndByte {
-			return errors.New("match start>end")
+		s, ok := src[m.SourceID]
+		if !ok {
+			return verr("ASSOCIATION_FAILED", "/matches", "unknown source")
 		}
-		if _, ok := sources[m.SourceID]; !ok {
-			return errors.New("match source unknown")
+		if m.StartByte >= m.EndByte {
+			return verr("INVARIANT_FAILED", "/matches/start_byte", "start must be < end")
 		}
-		if seenMatches[m.MatchID] {
-			return errors.New("duplicate match_id")
+		data := []byte(b.AdmittedSourceBytes[m.SourceID])
+		if m.EndByte > uint64(len(data)) {
+			return verr("ASSOCIATION_FAILED", "/matches/end_byte", "out of source")
 		}
-		seenMatches[m.MatchID] = true
-		if i > 0 && (m.SourceID < prevSource || (m.SourceID == prevSource && (m.StartByte < prevStart || (m.StartByte == prevStart && m.EndByte < prevEnd)))) {
-			return errors.New("match ordering")
+		if string(data[m.StartByte:m.EndByte]) != m.Literal || m.Literal != t.Request.Query {
+			return verr("ASSOCIATION_FAILED", "/matches/literal", "literal mismatch")
 		}
-		prevSource, prevStart, prevEnd = m.SourceID, m.StartByte, m.EndByte
+		if m.PathBytes != s.PathBytes {
+			return verr("ASSOCIATION_FAILED", "/matches/path_bytes", "path mismatch")
+		}
+		if i > 0 && (m.PathBytes < prevPath || (m.PathBytes == prevPath && (m.StartByte < prevStart || (m.StartByte == prevStart && (m.EndByte < prevEnd || (m.EndByte == prevEnd && m.Ordinal <= prevOrd)))))) {
+			return verr("INVARIANT_FAILED", "/matches", "deterministic order")
+		}
+		prevPath, prevStart, prevEnd, prevOrd = m.PathBytes, m.StartByte, m.EndByte, m.Ordinal
 	}
 	for _, p := range t.Positions {
-		if !seenMatches[p.MatchID] {
-			return errors.New("position without match")
+		var mm *Match
+		for i := range t.Matches {
+			if t.Matches[i].MatchID == p.MatchID {
+				mm = &t.Matches[i]
+			}
 		}
-		if p.StartLine > p.EndLine || (p.StartLine == p.EndLine && p.StartCharacterUTF8 > p.EndCharacterUTF8) {
-			return errors.New("position ordering")
+		if mm == nil {
+			return verr("ASSOCIATION_FAILED", "/positions", "no match")
 		}
-	}
-	if t.Accounting.W != t.Accounting.J+t.Accounting.Q+t.Accounting.P+t.Accounting.S+t.Accounting.T+t.Accounting.M+t.Accounting.R+t.Accounting.U+t.Accounting.B {
-		return errors.New("W formula mismatch")
-	}
-	fails := failureCounters(t.Accounting)
-	switch t.Terminal {
-	case "COMPLETE":
-		if t.Failure != nil {
-			return errors.New("complete failure nonnull")
-		}
-		if t.RangeUnionCandidate == nil {
-			return errors.New("complete candidate null")
-		}
-		if fails != 0 {
-			return errors.New("complete failure counters nonzero")
-		}
-		if err := validateCandidate(*t.RangeUnionCandidate, t.Matches); err != nil {
-			return err
-		}
-	case "FAILED":
-		if t.Failure == nil {
-			return errors.New("failed failure null")
-		}
-		if len(t.Matches) != 0 {
-			return errors.New("failed matches nonempty")
-		}
-		if t.RangeUnionCandidate != nil {
-			return errors.New("failed candidate nonnull")
-		}
-		if fails != 1 {
-			return errors.New("failed failure counter not exactly one")
-		}
-		if !counterMatches(t.Failure.Code, t.Accounting) {
-			return errors.New("failure counter/code mismatch")
-		}
-		if err := validateFailureDetail(*t.Failure); err != nil {
-			return err
-		}
-	default:
-		return errors.New("bad terminal")
-	}
-	if digestStable("custody", t.Custody.CustodyDigest) == "" || digestStable("replay", t.Replay.ReplayDigest) == "" {
-		return errors.New("digest internal")
-	}
-	return nil
-}
-func validateCandidate(c Candidate, ms []Match) error {
-	if len(c.MemberMatchIDs) != len(ms) {
-		return errors.New("candidate member count")
-	}
-	h := sha256.New()
-	for i, m := range ms {
-		if c.MemberMatchIDs[i] != m.MatchID {
-			return errors.New("candidate members != matches")
-		}
-		fmt.Fprintf(h, "%s:%s:%d:%d\n", m.MatchID, m.SourceID, m.StartByte, m.EndByte)
-	}
-	if c.RangeDigest != "sha256:"+hex.EncodeToString(h.Sum(nil)) {
-		return errors.New("candidate digest mismatch")
-	}
-	return nil
-}
-func validateFailureDetail(f Failure) error {
-	req := map[string][]string{"PARSE": {"raw_sha256", "reason"}, "ADMISSION": {"source_id", "reason"}, "RESOURCE": {"resource", "limit"}, "CANCELLED": {"control_digest"}, "DEADLINE": {"deadline_unix_nanos"}, "OVERFLOW": {"counter", "limit"}, "INTERNAL": {"reason"}, "POLICY": {"policy_key", "reason"}}
-	keys, ok := req[f.Code]
-	if !ok {
-		return errors.New("bad failure code")
-	}
-	if len(f.Detail) != len(keys) {
-		return errors.New("failure detail key count")
-	}
-	for _, k := range keys {
-		if _, ok := f.Detail[k]; !ok {
-			return fmt.Errorf("failure detail missing %s", k)
+		got := positionFor([]byte(b.AdmittedSourceBytes[mm.SourceID]), mm.StartByte, mm.EndByte)
+		got.MatchID = p.MatchID
+		if *got != p {
+			return verr("ASSOCIATION_FAILED", "/positions/"+p.MatchID, "utf16 position mismatch")
 		}
 	}
 	return nil
-}
-func failureCounters(a Accounting) uint64 {
-	return a.FailParse + a.FailAdmission + a.FailResource + a.FailCancelled + a.FailDeadline + a.FailOverflow + a.FailInternal + a.FailPolicy
-}
-func counterMatches(code string, a Accounting) bool {
-	return map[string]uint64{"PARSE": a.FailParse, "ADMISSION": a.FailAdmission, "RESOURCE": a.FailResource, "CANCELLED": a.FailCancelled, "DEADLINE": a.FailDeadline, "OVERFLOW": a.FailOverflow, "INTERNAL": a.FailInternal, "POLICY": a.FailPolicy}[code] == 1
-}
-func digestStable(domain, current string) string {
-	if !strings.HasPrefix(current, "sha256:") {
-		return ""
-	}
-	h := sha256.Sum256([]byte(domain))
-	return "sha256:" + hex.EncodeToString(h[:])
 }
 
-func CanonicalJSON(v any) ([]byte, error) {
-	var x any
+func validateCandidate(t Terminal) error {
+	if t.Terminal == "COMPLETE" {
+		c := t.RangeUnionCandidate
+		if c == nil {
+			return verr("INVARIANT_FAILED", "/range_union_candidate", "required")
+		}
+		if c.Operation != CandidateOperation || c.ExecutedLocation || !c.CandidateOnly || c.AdmissionDigest != t.Admission.AdmissionDigest {
+			return verr("INVARIANT_FAILED", "/range_union_candidate", "bad candidate constants")
+		}
+		if len(c.MemberMatchIDs) != len(t.Matches) || len(c.QualifiedLocationPins) != len(t.Matches) {
+			return verr("INVARIANT_FAILED", "/range_union_candidate/member_match_ids", "member count")
+		}
+		h := sha256.New()
+		for i, m := range t.Matches {
+			if c.MemberMatchIDs[i] != m.MatchID {
+				return verr("INVARIANT_FAILED", "/range_union_candidate/member_match_ids", "not ordered matches")
+			}
+			pin := c.QualifiedLocationPins[i]
+			if pin.SourceID != m.SourceID || pin.StartByte != m.StartByte || pin.EndByte != m.EndByte {
+				return verr("INVARIANT_FAILED", "/range_union_candidate/qualified_location_pins", "pin mismatch")
+			}
+			fmt.Fprintf(h, "%s:%s:%d:%d:%d\n", m.MatchID, m.SourceID, m.PathBytes, m.StartByte, m.EndByte)
+		}
+		if c.CandidateDigest != "sha256:"+hex.EncodeToString(h.Sum(nil)) {
+			return verr("INVARIANT_FAILED", "/range_union_candidate/candidate_digest", "bad digest")
+		}
+	}
+	return nil
+}
+func validateAccounting(t Terminal, term string) error {
+	a := t.Accounting
+	w, ok := weightedW(a)
+	if !ok {
+		return verr("OVERFLOW", "/accounting/W_work", "overflow")
+	}
+	if a.WWork != w {
+		return verr("INVARIANT_FAILED", "/accounting/W_work", "bad weighted formula")
+	}
+	if uint64(len([]byte(term))) != a.BOutputBytes {
+		return verr("INVARIANT_FAILED", "/accounting/B_output_bytes", "encoded length mismatch")
+	}
+	if _, ok := fixedPointB(t); !ok {
+		return verr("INVARIANT_FAILED", "/accounting/B_output_bytes", "fixed point not reached")
+	}
+	return nil
+}
+func weightedW(a Accounting) (uint64, bool) {
+	vals := []struct{ v, m uint64 }{{a.JFiles, 3}, {a.QQueryBytes, 5}, {a.PPathBytes, 7}, {a.SSourceBytes, 1}, {a.TScannedTuples, 11}, {a.MMatches, 13}, {a.RRanges, 17}, {a.UUTF16Units, 19}, {a.BOutputBytes, 31}}
+	total := uint64(50)
+	for _, x := range vals {
+		if x.v != 0 && x.v > math.MaxUint64/x.m {
+			return 0, false
+		}
+		p := x.v * x.m
+		if total > math.MaxUint64-p {
+			return 0, false
+		}
+		total += p
+	}
+	return total, true
+}
+func fixedPointB(t Terminal) (uint64, bool) {
+	x := t
+	x.Custody.TerminalResultSHA256 = zeroSHA
+	last := uint64(0)
+	for i := 0; i < MaxIterations; i++ {
+		b, _ := CanonicalJSON(x)
+		n := uint64(len([]byte(b)))
+		if n < last {
+			return 0, false
+		}
+		x.Accounting.BOutputBytes = n
+		w, ok := weightedW(x.Accounting)
+		if !ok {
+			return 0, false
+		}
+		x.Accounting.WWork = w
+		if n == last {
+			return n, true
+		}
+		last = n
+	}
+	return 0, false
+}
+func normalizedTerminalPreimage(t Terminal) string {
+	x := t
+	x.Custody.TerminalResultSHA256 = zeroSHA
+	x.Replay.TerminalPreimageSHA256 = zeroSHA
+	s, _ := CanonicalJSON(x)
+	return s
+}
+
+func positionFor(data []byte, start, end uint64) *Position {
+	sl, sc := lineChar(data, start)
+	el, ec := lineChar(data, end)
+	return &Position{StartLine: sl, StartCharacterUTF16: sc, EndLine: el, EndCharacterUTF16: ec}
+}
+func lineChar(data []byte, off uint64) (uint64, uint64) {
+	line, ch := uint64(0), uint64(0)
+	for i := uint64(0); i < off; {
+		r, n := utf8.DecodeRune(data[i:])
+		if r == '\n' {
+			line++
+			ch = 0
+		} else {
+			ch += uint64(len(utf16.Encode([]rune{r})))
+		}
+		i += uint64(n)
+	}
+	return line, ch
+}
+func digestOrEmpty(s string) string {
+	if s == "" {
+		return zeroSHA
+	}
+	if !strings.HasSuffix(s, "\n") {
+		return ""
+	}
+	return sha(s)
+}
+func sha(s string) string { h := sha256.Sum256([]byte(s)); return "sha256:" + hex.EncodeToString(h[:]) }
+func parseU64(s string) (uint64, error) {
+	if strings.ContainsAny(s, ".-+eE") {
+		return 0, errors.New("not uint64")
+	}
+	var n uint64
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, errors.New("not uint64")
+		}
+		d := uint64(c - '0')
+		if n > (math.MaxUint64-d)/10 {
+			return 0, errors.New("uint64 overflow")
+		}
+		n = n*10 + d
+	}
+	return n, nil
+}
+
+func CanonicalJSON(v any) (string, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if err := json.Unmarshal(b, &x); err != nil {
-		return nil, err
+	var x any
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(&x); err != nil {
+		return "", err
 	}
 	var buf bytes.Buffer
 	writeCanon(&buf, x)
 	buf.WriteByte('\n')
-	return buf.Bytes(), nil
+	return buf.String(), nil
 }
 func writeCanon(buf *bytes.Buffer, v any) {
 	switch x := v.(type) {
@@ -555,6 +553,8 @@ func writeCanon(buf *bytes.Buffer, v any) {
 	case string:
 		b, _ := json.Marshal(x)
 		buf.Write(b)
+	case json.Number:
+		buf.WriteString(x.String())
 	case float64:
 		buf.WriteString(fmt.Sprintf("%.0f", x))
 	case []any:
@@ -584,4 +584,57 @@ func writeCanon(buf *bytes.Buffer, v any) {
 		}
 		buf.WriteByte('}')
 	}
+}
+func decodeExact(b []byte, dst any, required []string) error {
+	var raw map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	allow := map[string]bool{}
+	for _, k := range required {
+		allow[k] = true
+		if _, ok := raw[k]; !ok {
+			return fmt.Errorf("missing %s", k)
+		}
+	}
+	for k := range raw {
+		if !allow[k] {
+			return fmt.Errorf("unknown %s", k)
+		}
+	}
+	dec = json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	dec.DisallowUnknownFields()
+	return dec.Decode(dst)
+}
+func walkSchema(b []byte) error {
+	var s map[string]any
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	if err := dec.Decode(&s); err != nil {
+		return verr("INVALID_INPUT", "/schema_bytes", err.Error())
+	}
+	if s["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+		return verr("INVARIANT_FAILED", "/schema_bytes/$schema", "not draft2020-12")
+	}
+	if s["$id"] != TerminalSchemaVersion {
+		return verr("INVARIANT_FAILED", "/schema_bytes/$id", "wrong id")
+	}
+	req, ok := s["required"].([]any)
+	if !ok || len(req) < 10 {
+		return verr("INVARIANT_FAILED", "/schema_bytes/required", "schema drift")
+	}
+	props, ok := s["properties"].(map[string]any)
+	if !ok {
+		return verr("INVARIANT_FAILED", "/schema_bytes/properties", "schema drift")
+	}
+	for _, k := range []string{"accounting", "custody", "replay", "range_union_candidate"} {
+		if _, ok := props[k]; !ok {
+			return verr("INVARIANT_FAILED", "/schema_bytes/properties/"+k, "missing")
+		}
+	}
+	return nil
 }
