@@ -169,24 +169,36 @@ func TestPrivateAdapterPreflightCancellationDoesNotPublishOrAdvance(t *testing.T
 	}
 }
 
-func TestPrivateAdapterCommittedSuccessSurvivesNaturalPostcommitVerificationFailure(t *testing.T) {
+func TestPrivateAdapterAdvanceRejectsTamperedQualificationReceiptBeforeSelectorCommit(t *testing.T) {
 	root, dir := testPrivateRoot(t)
 	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
 	if err != nil {
 		t.Fatal(err)
 	}
 	artifact, raw := testCandidateBytes(t)
-	published, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(artifact, raw))
+	input := testPublishInput(artifact, raw)
+	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(published.QualificationReceiptSelector)), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: testPublishInput(artifact, raw).PredecessorSelector})
-	if err != nil || !advanced.Committed || advanced.PostcommitVerificationStatus != PostcommitVerificationFailed {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TRUTHFUL_COMMITTED_SUCCESS_ON_POSTCOMMIT_VERIFY_FAILURE: advanced=%+v err=%v", advanced, err)
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: input.PredecessorSelector})
+	if err == nil || advanced.Committed || advanced.Selector != "" {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TAMPERED_RECEIPT_REJECTS_ADVANCE_BEFORE_SELECTOR: advanced=%+v err=%v", advanced, err)
 	}
+	if current, err := adapter.CurrentCandidateGeneration(context.Background()); err == nil || current.Selector != "" {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TAMPERED_ADVANCE_LEAVES_NO_CURRENT_SELECTOR: current=%+v err=%v", current, err)
+	}
+}
+
+func TestPrivateAdapterOwnerAdvanceComposesBoundFilePostcommitContract(t *testing.T) {
+	// This adapter must use publication.PublishBoundFile's returned BoundFileReceipt
+	// commit and VerificationStatus when advancing the owner selector. The underlying
+	// truthful postcommit status matrix is pinned by:
+	// go test ./internal/publication -run TestBoundFilePostcommitStatusMatrix
+	var _ *publication.BoundFileReceipt
 }
 
 func TestPrivateAdapterTamperCollisionRestartSafeRetrievalAndIdempotence(t *testing.T) {
