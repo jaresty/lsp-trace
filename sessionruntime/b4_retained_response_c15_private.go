@@ -100,6 +100,7 @@ func newPrivateB4RetainedResponseOwner(account *privateB4ByteAccountV2, source [
 	if !ok {
 		return nil, session.ResourceExhausted
 	}
+	_ = privateC15SiteC15Copy30RetainedResponseSet
 	charge, failure := account.reserve(capacity)
 	if failure != "" {
 		return nil, failure
@@ -126,6 +127,7 @@ func (l RetainedResponseLease) WithResponses(fn func([]lspwire.Message) error) e
 		return ErrRetainedResponseLeaseClosed
 	}
 	o.active++
+	_ = privateC15SiteC15Alias31ResponsesCallback
 	responses := o.responses
 	o.mu.Unlock()
 	defer func() {

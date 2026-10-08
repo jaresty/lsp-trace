@@ -408,6 +408,7 @@ func (m *Manager) describeDiagnosticOperation(h DiagnosticOperationHandle, metho
 		var source privateB4ByteLeaseV2
 		if bytes != 0 {
 			var failure session.Failure
+			_ = privateC15SiteC15Copy26DiagnosticMetadataStrings
 			source, failure = s.account.reserve(bytes)
 			if failure != "" {
 				if !s.described {

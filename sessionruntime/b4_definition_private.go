@@ -177,9 +177,11 @@ func (r *privateB4Reservation) reservePrivateB4ExplicitBytes(capacities []uint64
 
 func (r *privateB4Reservation) reservePrivateB4RequestFrame(capacity uint64) session.Failure {
 	var leases [3]privateB4ByteLeaseV2
+	_ = privateC15SiteC15Owner09RequestFrameCaptureCharge
 	if _, failure := r.explicitBytes.reserveMany([]uint64{capacity, capacity, capacity}, leases[:]); failure != "" {
 		return failure
 	}
+	_ = privateC15SiteC15Owner10RequestFrameRetainedCharge
 	r.requestFrameCapture, r.requestFrameRetained, r.requestFrameCaller = leases[0], leases[1], leases[2]
 	return ""
 }
@@ -314,6 +316,7 @@ func (c privateB4ResponseCapture) ObserveOriginalResult(result []byte) {
 }
 
 func (c privateB4ResponseCapture) ObserveOriginalResultOwned(result []byte, lease lspwire.SuccessorAllocationLease) {
+	_ = privateC15SiteC15Owner22ResultTokenReplacement
 	if previous := c.reservation.resultOwner; previous != nil {
 		c.reservation.capture.Result = nil
 		previous.releaseManager()
@@ -363,11 +366,12 @@ const (
 )
 
 type privateB4SourceLease struct {
-	manager *Manager
-	session *runtimeSession
-	source  B4DefinitionTargetSource
-	state   atomic.Uint32
-	ingress privateB4SourceIngressLease
+	manager        *Manager
+	session        *runtimeSession
+	source         B4DefinitionTargetSource
+	state          atomic.Uint32
+	ingress        privateB4SourceIngressLease
+	contentIngress privateB4SourceIngressLease
 }
 
 // PreparePrivateB4DefinitionSource issues a capability only from the exact
@@ -402,12 +406,22 @@ func (m *Manager) PreparePrivateB4DefinitionSource(ref B4DefinitionSourceReferen
 			return B4DefinitionSourceLease{}, PrivateB4Unavailable
 		}
 	}
+	beforeCumulative := m.privateB4SourceIngress.cumulative
+	_ = privateC15SiteC15Owner05PerSourceIngressState
 	ingress, failure := m.privateB4SourceIngress.reserve(privateB4SourceIngressStateBytes, nil)
 	if failure != "" {
 		return B4DefinitionSourceLease{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Copy03PreparedSourceContent
+	contentIngress, failure := m.privateB4SourceIngress.reserve(uint64(len(document.supply.Content)), nil)
+	if failure != "" {
+		ingress.release()
+		m.privateB4SourceIngress.cumulative = beforeCumulative
+		return B4DefinitionSourceLease{}, PrivateB4Unavailable
+	}
 	var identity [32]byte
 	if _, err := io.ReadFull(rand.Reader, identity[:]); err != nil || identity == ([32]byte{}) {
+		contentIngress.release()
 		ingress.release()
 		return B4DefinitionSourceLease{}, PrivateB4Unavailable
 	}
@@ -415,8 +429,9 @@ func (m *Manager) PreparePrivateB4DefinitionSource(ref B4DefinitionSourceReferen
 	state := &privateB4SourceLease{manager: m, session: r, source: B4DefinitionTargetSource{
 		URI: ref.URI, AcquisitionID: "sha256:" + fmtDigest(identity), SHA256: privateB4Hash(content),
 		SessionID: ref.SessionID, Generation: ref.Generation, DocumentVersion: ref.DocumentVersion, Bytes: content,
-	}, ingress: ingress}
+	}, ingress: ingress, contentIngress: contentIngress}
 	state.ingress.entry().state = state
+	state.contentIngress.entry().state = state
 	return B4DefinitionSourceLease{state: state}, PrivateB4Selected
 }
 
@@ -427,10 +442,12 @@ func (m *Manager) ReleasePrivateB4DefinitionSource(lease B4DefinitionSourceLease
 		return PrivateB4Unavailable
 	}
 	entry := lease.state.ingress.entry()
-	if entry == nil || entry.state != lease.state {
+	contentEntry := lease.state.contentIngress.entry()
+	if entry == nil || entry.state != lease.state || contentEntry == nil || contentEntry.state != lease.state {
 		lease.state.state.Store(privateB4SourceHeld)
 		return PrivateB4Unavailable
 	}
+	lease.state.contentIngress.release()
 	lease.state.ingress.release()
 	lease.state.source.Bytes = nil
 	return PrivateB4Selected
@@ -522,6 +539,7 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		reservation.reservePrivateB4ExplicitBytes([]uint64{uint64(len(owner.TargetSources)) * handleSize, uint64(len(req.Params))}) != "" {
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
+	_ = privateC15SiteC15Copy06SourceLeaseHandleSlice
 	reservation.sourceLeases = make([]B4DefinitionSourceLease, len(owner.TargetSources))
 	copy(reservation.sourceLeases, owner.TargetSources)
 	if failure := reservation.reservePrivateB4RequestFrame(uint64(req.CaptureMethodRequestFrameMaxBytes)); failure != "" {
@@ -596,6 +614,7 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		m.releasePrivateB4Locked(reservation)
 		return result, B4DefinitionLease{}
 	}
+	_ = privateC15SiteC15Copy37PersistentCaptureParams
 	capture := PrivateB4DefinitionCapture{
 		SessionID: req.SessionID, Key: result.Key, Transaction: owner.Transaction,
 		CompletedOwnerKey: owner.CompletedOwnerKey, Method: req.Method,
@@ -612,6 +631,7 @@ func (m *Manager) RoundTripPrivateB4(parent context.Context, req RoundTripReques
 		return RoundTripResult{Failure: session.ResourceExhausted}, B4DefinitionLease{}
 	}
 	reservation.releasePrivateB4RequestFrameTemporary()
+	_ = privateC15SiteC15Owner11CallerRequestFrame
 	callerCharge := reservation.requestFrameCaller.transfer()
 	if !callerCharge.lease.active {
 		m.releasePrivateB4Locked(reservation)
@@ -763,6 +783,7 @@ func (m *Manager) admitPrivateB4SourcesC17Locked(req RoundTripRequest, reservati
 	owned := make([]B4DefinitionTargetSource, len(admitted))
 	for i, source := range admitted {
 		owned[i] = source.source
+		_ = privateC15SiteC15Copy07TransactionSourceBytes
 		owned[i].Bytes = append([]byte(nil), source.source.Bytes...)
 	}
 	reservation.maxCharge = charge
@@ -1020,22 +1041,28 @@ func (m *Manager) privateB4CaptureLocked(lease B4DefinitionLease, selection B4De
 		return nil, PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
 	capture := reservation.capture
-	var capacities [3 + privateB4MaxSourceDocuments]uint64
+	var capacities [4 + privateB4MaxSourceDocuments]uint64
 	capacities[0] = uint64(len(capture.RequestFrame))
 	capacities[1] = uint64(len(capture.RequestParams))
 	capacities[2] = uint64(len(capture.ResponseFrame))
+	capacities[3] = uint64(len(capture.TargetSources)) * privateB4C15TargetSourceDescriptorBytes
 	for i := range capture.TargetSources {
-		capacities[3+i] = uint64(len(capture.TargetSources[i].Bytes))
+		capacities[4+i] = uint64(len(capture.TargetSources[i].Bytes))
 	}
-	if failure := reservation.reservePrivateB4ExplicitBytes(capacities[:3+len(capture.TargetSources)]); failure != "" {
+	if failure := reservation.reservePrivateB4ExplicitBytes(capacities[:4+len(capture.TargetSources)]); failure != "" {
 		return nil, PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Copy39FinalCaptureRequestFrame
 	capture.RequestFrame = append([]byte(nil), capture.RequestFrame...)
+	_ = privateC15SiteC15Copy40FinalCaptureRequestParams
 	capture.RequestParams = append([]byte(nil), capture.RequestParams...)
+	_ = privateC15SiteC15Copy41FinalCaptureResponseFrame
 	capture.ResponseFrame = append([]byte(nil), capture.ResponseFrame...)
 	capture.Result = nil
+	_ = privateC15SiteC15Copy42aFinalCaptureTargetSlice
 	capture.TargetSources = append([]B4DefinitionTargetSource(nil), capture.TargetSources...)
 	for i := range capture.TargetSources {
+		_ = privateC15SiteC15Copy42bFinalCaptureSourceBytes
 		capture.TargetSources[i].Bytes = append([]byte(nil), capture.TargetSources[i].Bytes...)
 	}
 	return reservation, capture, PrivateB4Selected
@@ -1092,7 +1119,9 @@ func (m *Manager) PreparePrivateB4DefinitionBorrowed(lease B4DefinitionLease, se
 	if status != PrivateB4Selected || reservation.resultOwner == nil || prepare == nil {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}
+	_ = privateC15SiteC15Alias43BorrowedLexicalResult
 	result, ok := reservation.resultOwner.managerBytes()
+	_ = privateC15SiteC15Alias44BorrowedCaptureValues
 	if !ok || !prepare(PrivateB4DefinitionBorrow{Capture: capture, Result: result, workAccount: reservation.workAccount, workIdentity: reservation.selection.Transaction}) {
 		return PrivateB4DefinitionCapture{}, PrivateB4Unavailable
 	}

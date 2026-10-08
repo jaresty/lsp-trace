@@ -1,6 +1,7 @@
 package sessionruntime
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"unsafe"
@@ -39,6 +40,59 @@ func TestPrivateB4SourceIngressLayoutEqualityAndPlusOne(t *testing.T) {
 	}
 	if got := owner.snapshot(); got.Live != privateB4SourceIngressTableBytes || got.Cumulative != privateB4SourceIngressTotalBytes {
 		t.Fatalf("ASSERT_C15_SOURCE_INGRESS_RELEASE snapshot=%+v", got)
+	}
+}
+
+func TestPrivateB4C15Copy03PrepareSourceContentReservationBoundaryAndRelease(t *testing.T) {
+	content := []byte("c15.copy.03 arbitrary retained source content")
+	for _, tc := range []struct {
+		name      string
+		remaining uint64
+		want      PrivateB4Status
+	}{
+		{name: "exact", remaining: privateB4SourceIngressStateBytes + uint64(len(content)), want: PrivateB4Selected},
+		{name: "plus_one_refusal", remaining: privateB4SourceIngressStateBytes + uint64(len(content)) - 1, want: PrivateB4Unavailable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, req, existing := privateB4PreparedSource(t, content)
+			if status := m.ReleasePrivateB4DefinitionSource(existing); status != PrivateB4Selected {
+				t.Fatalf("BLOCKED_NOT_RED c15.copy.03 release fixture source: %s", status)
+			}
+			owner := m.privateB4SourceIngress
+			if owner == nil {
+				t.Fatal("BLOCKED_NOT_RED c15.copy.03 source ingress owner absent")
+			}
+			before := owner.snapshot()
+			filler, failure := owner.reserve(privateB4SourceIngressTotalBytes-before.Live-tc.remaining, nil)
+			if failure != "" {
+				t.Fatalf("BLOCKED_NOT_RED c15.copy.03 filler: %s", failure)
+			}
+			beforeCall := owner.snapshot()
+			lease, status := m.PreparePrivateB4DefinitionSource(B4DefinitionSourceReference{
+				SessionID: req.SessionID, Generation: req.Generation, URI: req.URI, DocumentVersion: 1,
+			})
+			if status != tc.want {
+				t.Fatalf("ASSERT_C15_COPY_03_BOUNDARY_%s status=%s want=%s before=%+v after=%+v", tc.name, status, tc.want, beforeCall, owner.snapshot())
+			}
+			if tc.want == PrivateB4Selected {
+				wantDelta := privateB4SourceIngressStateBytes + uint64(len(content))
+				if got := owner.snapshot().Live - beforeCall.Live; got != wantDelta {
+					t.Fatalf("ASSERT_C15_COPY_03_EXACT_CONTENT_RESERVATION got=%d want=%d", got, wantDelta)
+				}
+				if lease.state == nil || !bytes.Equal(lease.state.source.Bytes, content) || &lease.state.source.Bytes[0] == &content[0] {
+					t.Fatal("ASSERT_C15_COPY_03_OWNED_NONESCAPING_COPY")
+				}
+				if release := m.ReleasePrivateB4DefinitionSource(lease); release != PrivateB4Selected {
+					t.Fatalf("ASSERT_C15_COPY_03_RELEASE status=%s", release)
+				}
+			} else if lease.state != nil || owner.snapshot() != beforeCall {
+				t.Fatalf("ASSERT_C15_COPY_03_REFUSAL_PRECOPY lease=%v before=%+v after=%+v", lease.state != nil, beforeCall, owner.snapshot())
+			}
+			filler.release()
+			if got := owner.snapshot(); got.Live != before.Live {
+				t.Fatalf("ASSERT_C15_COPY_03_CUSTODY_NONESCAPE before=%+v after=%+v", before, got)
+			}
+		})
 	}
 }
 
@@ -108,7 +162,15 @@ func TestPrivateB4SourceIngressTransferStatesAtomicAndSlotNeutral(t *testing.T) 
 	if failure != "" {
 		t.Fatal(failure)
 	}
+	first.contentIngress, failure = owner.reserve(7, first)
+	if failure != "" {
+		t.Fatal(failure)
+	}
 	second.ingress, failure = owner.reserve(privateB4SourceIngressStateBytes, second)
+	if failure != "" {
+		t.Fatal(failure)
+	}
+	second.contentIngress, failure = owner.reserve(11, second)
 	if failure != "" {
 		t.Fatal(failure)
 	}
@@ -119,15 +181,15 @@ func TestPrivateB4SourceIngressTransferStatesAtomicAndSlotNeutral(t *testing.T) 
 	if failure != "" {
 		t.Fatal(failure)
 	}
-	if _, failure = owner.transferStates(states, account); failure != session.ResourceExhausted || owner.snapshot() != beforeIngress || account.snapshot() != (privateB4ByteLedgerSnapshot{Live: beforeAccount.Live + 1, Cumulative: beforeAccount.Cumulative}) || !first.ingress.active || !second.ingress.active {
+	if _, failure = owner.transferStates(states, account); failure != session.ResourceExhausted || owner.snapshot() != beforeIngress || account.snapshot() != (privateB4ByteLedgerSnapshot{Live: beforeAccount.Live + 1, Cumulative: beforeAccount.Cumulative}) || !first.ingress.active || !first.contentIngress.active || !second.ingress.active || !second.contentIngress.active {
 		t.Fatalf("ASSERT_C15_SOURCE_STATE_TRANSFER_ROLLBACK failure=%q ingress=%+v account=%+v", failure, owner.snapshot(), account.snapshot())
 	}
 	blocker.release()
 	descriptor, failure := owner.transferStates(states, account)
-	if failure != "" || !descriptor.lease.active || first.ingress.active || second.ingress.active {
+	if failure != "" || !descriptor.lease.active || first.ingress.active || first.contentIngress.active || second.ingress.active || second.contentIngress.active {
 		t.Fatalf("ASSERT_C15_SOURCE_STATE_TRANSFER failure=%q descriptor=%+v", failure, descriptor)
 	}
-	if got := account.snapshot(); got.Live != beforeAccount.Live+2*privateB4SourceIngressStateBytes || got.Cumulative != beforeAccount.Cumulative {
+	if got := account.snapshot(); got.Live != beforeAccount.Live+2*privateB4SourceIngressStateBytes+18 || got.Cumulative != beforeAccount.Cumulative {
 		t.Fatalf("ASSERT_C15_SOURCE_STATE_TRANSFER_SLOT_NEUTRAL snapshot=%+v", got)
 	}
 	descriptor.release()

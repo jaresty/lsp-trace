@@ -101,6 +101,12 @@ func TestPrivateB4SourceReleaseRequiresBoundIngressState(t *testing.T) {
 		t.Fatalf("ASSERT_C15_SOURCE_RELEASE_BINDING status=%s state=%d snapshot=%+v", status, lease.state.state.Load(), m.privateB4SourceIngress.snapshot())
 	}
 	entry.state = lease.state
+	contentEntry := lease.state.contentIngress.entry()
+	contentEntry.state = &privateB4SourceLease{manager: m}
+	if status := m.ReleasePrivateB4DefinitionSource(lease); status != PrivateB4Unavailable || lease.state.state.Load() != privateB4SourceHeld || !bytes.Equal(lease.state.source.Bytes, bytesBefore) || m.privateB4SourceIngress.snapshot() != before {
+		t.Fatalf("ASSERT_C15_SOURCE_CONTENT_RELEASE_BINDING status=%s state=%d snapshot=%+v", status, lease.state.state.Load(), m.privateB4SourceIngress.snapshot())
+	}
+	contentEntry.state = lease.state
 	if status := m.ReleasePrivateB4DefinitionSource(lease); status != PrivateB4Selected {
 		t.Fatalf("ASSERT_C15_SOURCE_RELEASE_BINDING_RETRY status=%s", status)
 	}

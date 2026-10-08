@@ -19,6 +19,7 @@ func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTranspor
 	if observation.RequestIDStart >= observation.RequestIDEnd || bodyStart > uint64(len(frame)) || idStart < bodyStart || idEnd < idStart || idEnd > uint64(len(frame)) {
 		return session.SessionPoisoned, true
 	}
+	_ = privateC15SiteC15Alias45aServerRequestIdToken
 	id := frame[idStart:idEnd]
 	bodyCapacity := uint64(len(privateB4UnsupportedResponsePrefix)) + uint64(len(id)) + uint64(len(privateB4UnsupportedResponseSuffix))
 	if bodyCapacity > uint64(^uint(0)>>1) {
@@ -30,12 +31,14 @@ func writePrivateB4UnsupportedResponse(ctx context.Context, owner *ownedTranspor
 	}
 	headerCapacity := uint64(frameCapacity) - bodyCapacity
 	var leases [2]privateB4ByteLeaseV2
+	_ = privateC15SiteC15Copy45cUnsupportedResponseHeader
 	if _, failure := account.reserveMany([]uint64{bodyCapacity, headerCapacity}, leases[:]); failure != "" {
 		return failure, false
 	}
 	defer leases[1].release()
 	defer leases[0].release()
 
+	_ = privateC15SiteC15Copy45bUnsupportedResponseBody
 	body := make([]byte, int(bodyCapacity))
 	n := copy(body, privateB4UnsupportedResponsePrefix)
 	n += copy(body[n:], id)

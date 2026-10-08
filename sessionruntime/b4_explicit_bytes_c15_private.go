@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	privateB4MaxOwnedBytes = uint64(32 << 20)
-	privateB4ByteSlots     = 1024
+	// C15 logical capacities are explicit representation bytes, not host ABI sizes:
+	// five string descriptors, generation, document version, and the Bytes descriptor.
+	privateB4C15TargetSourceDescriptorBytes = uint64(4*16 + 8 + 8 + 24)
+	privateB4MaxOwnedBytes                  = uint64(32 << 20)
+	privateB4ByteSlots                      = 1024
 )
 
 type privateB4ByteLedgerSnapshot struct {
@@ -70,6 +73,7 @@ func newPrivateB4ByteLedgerV2() (*privateB4ByteLedgerV2, session.Failure) {
 	if !privateB4ByteLedgerV2RepresentationSupported() || privateB4ByteLedgerV2TableBytes > privateB4MaxOwnedBytes {
 		return nil, session.ResourceExhausted
 	}
+	_ = privateC15SiteC15Owner01V2TransactionTable
 	ledger := &privateB4ByteLedgerV2{}
 	ledger.general.live = privateB4ByteLedgerV2TableBytes
 	ledger.general.cumulative = privateB4ByteLedgerV2TableBytes
@@ -401,9 +405,10 @@ type privateB4SourceIngressLease struct {
 func newPrivateB4SourceIngressOwner() (*privateB4SourceIngressOwner, session.Failure) {
 	if !privateB4ByteLedgerV2RepresentationSupported() || unsafe.Sizeof(privateB4SourceIngressEntry{}) != 32 || unsafe.Alignof(privateB4SourceIngressEntry{}) != 8 ||
 		unsafe.Sizeof(privateB4SourceIngressLease{}) != 24 || unsafe.Alignof(privateB4SourceIngressLease{}) != 8 ||
-		unsafe.Sizeof(privateB4SourceLease{}) != 152 || unsafe.Alignof(privateB4SourceLease{}) != 8 || privateB4SourceIngressTotalBytes > privateB4MaxOwnedBytes {
+		unsafe.Sizeof(privateB4SourceLease{}) != 176 || unsafe.Alignof(privateB4SourceLease{}) != 8 || privateB4SourceIngressTotalBytes > privateB4MaxOwnedBytes {
 		return nil, session.ResourceExhausted
 	}
+	_ = privateC15SiteC15Owner04ManagerSourceIngressTable
 	return &privateB4SourceIngressOwner{entries: make([]privateB4SourceIngressEntry, privateB4SourceIngressSlots), live: privateB4SourceIngressTableBytes, cumulative: privateB4SourceIngressTableBytes}, ""
 }
 
@@ -414,6 +419,7 @@ func (o *privateB4SourceIngressOwner) releaseTableBacking() {
 	for i := range o.entries {
 		entry := &o.entries[i]
 		if entry.active && entry.state != nil && entry.state.state.CompareAndSwap(privateB4SourceHeld, privateB4SourceReleased) {
+			entry.state.contentIngress.release()
 			entry.state.source.Bytes = nil
 		}
 		*entry = privateB4SourceIngressEntry{}
@@ -431,7 +437,7 @@ func (o *privateB4SourceIngressOwner) snapshot() privateB4ByteLedgerSnapshot {
 }
 
 func (o *privateB4SourceIngressOwner) reserve(capacity uint64, state *privateB4SourceLease) (privateB4SourceIngressLease, session.Failure) {
-	if o == nil || capacity > privateB4MaxOwnedBytes || o.live > privateB4MaxOwnedBytes-capacity || o.cumulative > math.MaxUint64-capacity || o.nextGen == math.MaxUint64 {
+	if o == nil || capacity > privateB4SourceIngressTotalBytes || o.live > privateB4SourceIngressTotalBytes-capacity || o.cumulative > math.MaxUint64-capacity || o.nextGen == math.MaxUint64 {
 		return privateB4SourceIngressLease{}, session.ResourceExhausted
 	}
 	for scanned := 0; scanned < len(o.entries); scanned++ {
@@ -480,24 +486,30 @@ func (h *privateB4SourceIngressLease) release() {
 func (o *privateB4SourceIngressOwner) transferStates(states map[*privateB4SourceLease]struct{}, dst *privateB4ByteAccountV2) (privateB4DescriptorLeaseV2, session.Failure) {
 	var total uint64
 	for state := range states {
-		if state == nil || state.ingress.owner != o || state.ingress.entry() == nil || state.ingress.entry().state != state {
+		if state == nil || state.ingress.owner != o || state.contentIngress.owner != o ||
+			state.ingress.entry() == nil || state.ingress.entry().state != state ||
+			state.contentIngress.entry() == nil || state.contentIngress.entry().state != state {
 			return privateB4DescriptorLeaseV2{}, session.ResourceExhausted
 		}
-		capacity := state.ingress.entry().capacity
-		if total > privateB4MaxOwnedBytes-capacity {
-			return privateB4DescriptorLeaseV2{}, session.ResourceExhausted
+		for _, capacity := range [...]uint64{state.ingress.entry().capacity, state.contentIngress.entry().capacity} {
+			if total > privateB4MaxOwnedBytes-capacity {
+				return privateB4DescriptorLeaseV2{}, session.ResourceExhausted
+			}
+			total += capacity
 		}
-		total += capacity
 	}
+	_ = privateC15SiteC15Owner08SourceDescriptorTransfer
 	descriptor, failure := dst.reserveDescriptor(total)
 	if failure != "" {
 		return privateB4DescriptorLeaseV2{}, failure
 	}
 	for state := range states {
-		entry := state.ingress.entry()
-		o.live -= entry.capacity
-		*entry = privateB4SourceIngressEntry{}
-		state.ingress.active = false
+		for _, lease := range []*privateB4SourceIngressLease{&state.ingress, &state.contentIngress} {
+			entry := lease.entry()
+			o.live -= entry.capacity
+			*entry = privateB4SourceIngressEntry{}
+			lease.active = false
+		}
 	}
 	return descriptor, ""
 }
@@ -549,6 +561,7 @@ func newPrivateB4ByteLedger() *privateB4ByteLedger { return &privateB4ByteLedger
 // before allocation. The caller owns the returned temporary lease for exactly
 // as long as the copied params remain live.
 func copyPrivateB4Params(account *privateB4ByteAccountV2, params json.RawMessage) (json.RawMessage, privateB4ByteLeaseV2, session.Failure) {
+	_ = privateC15SiteC15Copy02ParamsIngress
 	lease, failure := account.reserve(uint64(len(params)))
 	if failure != "" {
 		return nil, privateB4ByteLeaseV2{}, failure

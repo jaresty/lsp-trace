@@ -67,7 +67,9 @@ func newPrivateB4OwnedMethodPairOwner(account *privateB4ByteAccountV2, source Ow
 		return nil, failure
 	}
 	pair := source
+	_ = privateC15SiteC15Copy34OwnedPairParams
 	pair.Params = append([]byte(nil), source.Params...)
+	_ = privateC15SiteC15Copy35OwnedPairResult
 	pair.Result = append([]byte(nil), source.Result...)
 	if source.Source != nil {
 		copied := *source.Source
@@ -90,6 +92,7 @@ func (l OwnedMethodPairLease) WithPair(fn func(OwnedMethodPairView) error) error
 	}
 	o.active++
 	p := &o.pair
+	_ = privateC15SiteC15Alias36OwnedPairCallback
 	view := OwnedMethodPairView{SessionID: p.SessionID, Generation: p.Generation, Key: p.Key, Method: p.Method, Params: p.Params, Result: p.Result, Write: p.Write, Read: p.Read, Source: p.Source}
 	o.mu.Unlock()
 	defer func() {

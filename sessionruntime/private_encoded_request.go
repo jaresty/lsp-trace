@@ -36,12 +36,14 @@ func (s *privateB4EncoderSink) Write(p []byte) (int, error) {
 	if s.beforeReserve != nil {
 		s.beforeReserve(s.account)
 	}
+	_ = privateC15SiteC15Owner13OutboundCanonicalFrame
 	lease, failure := s.account.reservePrivateB4OutboundTransport(bodyLen)
 	if failure != "" {
 		s.failure = failure
 		return 0, errPrivateB4EncoderShape
 	}
 	s.lease = lease
+	_ = privateC15SiteC15Copy12EncodedRequestBody
 	s.body = make([]byte, bodyLen)
 	copy(s.body, p[:bodyLen])
 	return len(p), nil

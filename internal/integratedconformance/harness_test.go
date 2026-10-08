@@ -257,6 +257,30 @@ func (r historicalRegistryAdapter) Resolve(name string) (mcp.Tool, bool) {
 	return tool, ok
 }
 
+func ownsC15CurrentPath(path string) bool {
+	if strings.HasPrefix(path, "sessionruntime/testdata/c15-census-v1/") {
+		return true
+	}
+	for _, owned := range []string{
+		"internal/lspwire/successor_ingress.go", "internal/lspwire/c15_site_bindings.go",
+		"sessionruntime/b4_definition_private.go", "sessionruntime/b4_explicit_bytes_c15_integration_private_test.go",
+		"sessionruntime/b4_explicit_bytes_c15_private.go", "sessionruntime/b4_owned_method_pair_lease.go",
+		"sessionruntime/b4_result_lease_test.go", "sessionruntime/b4_retained_notification_c15_private.go",
+		"sessionruntime/b4_retained_response_c15_private.go", "sessionruntime/b4_server_error_lease_c15_private.go",
+		"sessionruntime/b4_server_request_c15_private.go", "sessionruntime/b4_source_acquisition_private_test.go",
+		"sessionruntime/b4_source_ingress_c15_private_test.go", "sessionruntime/diagnostic_backing_c15_private.go",
+		"sessionruntime/diagnostic_runtime.go", "sessionruntime/private_encoded_request.go",
+		"sessionruntime/b4_c15_candidate_discovery_private_test.go", "sessionruntime/b4_c15_mapping_refresh_private_test.go",
+		"sessionruntime/b4_c15_ownership_registry_private.go", "sessionruntime/b4_c15_ownership_registry_red_private_test.go",
+		"sessionruntime/b4_c15_site_bindings_private.go",
+	} {
+		if path == owned {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDisabledIntegratedConformance(t *testing.T) {
 	fake := buildFake(t)
 
@@ -710,7 +734,7 @@ func TestDisabledIntegratedConformance(t *testing.T) {
 			if excludesADR0007OwnershipPath(path) {
 				continue
 			}
-			owned := ownsADR0007ProductionPath(path) || ownsFR20FR21Path(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/adr0011_c17_documents_acquired_red_private_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
+			owned := ownsADR0007ProductionPath(path) || ownsFR20FR21Path(path) || ownsC15CurrentPath(path) || path == "sessionruntime/sessionruntime.go" || path == "sessionruntime/sessionruntime_test.go" || path == "sessionruntime/transient_identity_test.go" || path == "sessionruntime/document_supply_behavior_test.go" || path == "sessionruntime/adr0011_c17_documents_acquired_red_private_test.go" || path == "sessionruntime/roundtrip_test.go" || path == "sessionruntime/local_darwin_integration_test.go" ||
 				path == "internal/session/manager.go" || path == "internal/session/manager_test.go" || path == "internal/adr0011acquisition/synthetic_source_pin_review_test.go" || strings.HasPrefix(path, "internal/runtimeprofile/") || path == "sessionruntime/derive_workspace_test.go" ||
 				path == "cmd/fake-lsp/main.go" || path == "cmd/fake-lsp/main_test.go" || path == "lifecycleops/executor.go" || path == "lifecycleops/executor_test.go" || path == "lifecycleops/lifecycleops.go" || path == "lifecycleops/lifecycleops_test.go" ||
 				path == "README.md" || path == "GRAPH-V5-MANAGED-REPAIR.md" || path == "docs/PROVIDERS.md" || path == "docs/RELEASING.md" || path == "docs/cli-migration-diagnostics.md" || path == "scripts/check-docs.sh" || path == "docs/adr/0003-always-local-stage2.md" || path == "docs/adr/0003-persistent-mcp-language-server-sessions.md" || path == "docs/adr/0006-transient-live-structural-analysis.md" || path == "docs/adr/0007-optional-local-semantic-feature-index.md" || path == "docs/adr/0008-dehydrated-structural-evidence-and-deterministic-source-projection.md" || path == "docs/qualification/adr0007-adr0008-source-projection-plan.md" || path == "docs/qualification/adr0008-cross-mode-fixture-plan.md" || path == "qualification/adr0008-source-projection-matrix.v1.json" || strings.HasPrefix(path, "internal/sourceprojection/") || strings.HasPrefix(path, "internal/sourceprojectionv2/") || strings.HasPrefix(path, "internal/sourceprojectionv3/") || strings.HasPrefix(path, "internal/sourceposition/") || strings.HasPrefix(path, "internal/regexlocator/") ||
