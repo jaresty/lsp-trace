@@ -51,7 +51,15 @@ func TestCompareAndReplaceBoundFileRejectsTraversalAndRootSubstitution(t *testin
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, []byte("x"), func([]byte) error { return nil }); err == nil || receipt != nil {
-		t.Fatalf("ASSERT_BOUND_CAS_REJECTS_ROOT_PATH_SUBSTITUTION: receipt=%+v err=%v", receipt, err)
+	receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, []byte("x"), func([]byte) error { return nil })
+	if err != nil || receipt == nil || !receipt.Committed {
+		t.Fatalf("ASSERT_BOUND_CAS_USES_PINNED_ROOT_AFTER_PATH_SUBSTITUTION: receipt=%+v err=%v", receipt, err)
+	}
+	if _, err := os.Stat(dir + "/current.json"); !os.IsNotExist(err) {
+		t.Fatalf("ASSERT_BOUND_CAS_DOES_NOT_WRITE_SUBSTITUTED_PATH: err=%v", err)
+	}
+	got, err := root.ReadSelector("current.json", 10)
+	if err != nil || string(got) != "x" {
+		t.Fatalf("ASSERT_BOUND_CAS_WRITES_PINNED_ROOT: got=%q err=%v", got, err)
 	}
 }

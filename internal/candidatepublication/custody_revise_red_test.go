@@ -1,7 +1,6 @@
 package candidatepublication
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -33,7 +32,11 @@ func TestPrivateAdapterOwnerAdvanceIsRepeatableAndPredecessorCAS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: advancedA.Selector})
+	currentA, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
 	if err != nil || !advancedB.Committed {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SECOND_ADVANCE_FROM_CURRENT_PREDECESSOR_COMMITS: advanced=%+v err=%v", advancedB, err)
 	}
@@ -190,7 +193,7 @@ func TestPrivateAdapterAdvanceRequiresCallerHeldExactPredecessorToken(t *testing
 	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector}); err == nil {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REJECTS_SELECTOR_ONLY_PREDECESSOR_TOKEN")
 	}
-	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.ManifestDigest, PredecessorByteLength: currentA.ManifestByteLength})
+	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
 	if err != nil || !advancedB.Committed {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ACCEPTS_EXACT_CALLER_HELD_PREDECESSOR_TOKEN: advanced=%+v err=%v current=%+v", advancedB, err, currentA)
 	}
@@ -215,11 +218,6 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 	if err != nil {
 		t.Fatal(err)
 	}
-	mutated := append([]byte(nil), raw...)
-	mutated = bytes.Replace(mutated, []byte(`"candidate-group-private-v2"`), []byte(`"candidate-group-private-v2-alt"`), 1)
-	if bytes.Equal(mutated, raw) {
-		mutated = append(mutated, '\n')
-	}
 	leftInput := testPublishInput(artifact, raw)
 	leftInput.PredecessorSelector = pred.Selector
 	left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput)
@@ -227,11 +225,9 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 		t.Fatal(err)
 	}
 	rightInput := leftInput
-	rightInput.CandidateBytes = mutated
-	rightInput.GroupingPolicyID = artifact.ResourceProfileID
-	rightInput.GroupingPolicyDigest = artifact.ResourceProfileDigest
+	rightInput.QualificationID = leftInput.QualificationID + "/alternate"
 	right, err := adapter.PublishCandidateGeneration(context.Background(), rightInput)
-	if err == nil && right.Generation == left.Generation {
+	if err == nil && right.ManifestDigest == left.ManifestDigest {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_DISTINCT_SUCCESSOR_FIXTURE: left=%+v right=%+v", left, right)
 	}
 	if err != nil {
@@ -239,8 +235,8 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 		right = left
 	}
 	requests := []AdvanceRequest{
-		{Generation: left.Generation, VerificationSelector: left.VerificationSelector, PredecessorSelector: pred.Selector, PredecessorDigest: pred.ManifestDigest, PredecessorByteLength: pred.ManifestByteLength},
-		{Generation: right.Generation, VerificationSelector: right.VerificationSelector, PredecessorSelector: pred.Selector, PredecessorDigest: pred.ManifestDigest, PredecessorByteLength: pred.ManifestByteLength},
+		{Generation: left.Generation, VerificationSelector: left.VerificationSelector, ManifestSelector: left.ManifestSelector, ManifestDigest: left.ManifestDigest, ManifestByteLength: left.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
+		{Generation: right.Generation, VerificationSelector: right.VerificationSelector, ManifestSelector: right.ManifestSelector, ManifestDigest: right.ManifestDigest, ManifestByteLength: right.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
 	}
 	success := 0
 	for _, req := range requests {
@@ -268,7 +264,7 @@ func TestPrivateAdapterCurrentSelectorBindsVerifiedManifestIdentity(t *testing.T
 	if published.ManifestSelector == "" || published.ManifestVerificationSelector == "" || published.ManifestDigest == "" || published.ManifestByteLength == 0 {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PUBLISH_EXPOSES_VERIFIED_MANIFEST_IDENTITY: %+v", published)
 	}
-	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorAbsent: true})
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, ManifestSelector: published.ManifestSelector, ManifestDigest: published.ManifestDigest, ManifestByteLength: published.ManifestByteLength, PredecessorAbsent: true})
 	if err != nil {
 		t.Fatal(err)
 	}

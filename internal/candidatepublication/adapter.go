@@ -21,7 +21,8 @@ const (
 	FeatureIdentityUnresolved = "UNRESOLVED"
 
 	qualificationReceiptSchema = "lsp-trace.private-candidate-publication-receipt.v1"
-	qualificationNamespace     = "candidate-publication/qualification-receipts"
+	manifestSchema             = "lsp-trace.private-candidate-publication-manifest.v1"
+	manifestNamespace          = "candidate-publication/manifests"
 	currentSelector            = "candidate-publication/current.selector.json"
 
 	PostcommitVerificationFailed = "COMMITTED_VERIFICATION_FAILED"
@@ -65,15 +66,25 @@ type PublishedGeneration struct {
 	QualificationReceiptVerificationSelector string
 	QualificationReceiptDigest               string
 	QualificationReceiptByteLength           uint64
+	ManifestSelector                         string
+	ManifestVerificationSelector             string
+	ManifestDigest                           string
+	ManifestByteLength                       uint64
 	PublicationMechanism                     string
 	Committed                                bool
 	PostcommitVerificationStatus             string
 }
 
 type AdvanceRequest struct {
-	Generation           string
-	VerificationSelector string
-	PredecessorSelector  string
+	Generation            string
+	VerificationSelector  string
+	ManifestSelector      string
+	ManifestDigest        string
+	ManifestByteLength    uint64
+	PredecessorAbsent     bool
+	PredecessorSelector   string
+	PredecessorDigest     string
+	PredecessorByteLength uint64
 }
 
 type CurrentGeneration struct {
@@ -86,6 +97,12 @@ type CurrentGeneration struct {
 	QualificationReceiptVerificationSelector string `json:"qualification_receipt_verification_selector"`
 	QualificationReceiptDigest               string `json:"qualification_receipt_digest"`
 	QualificationReceiptByteLength           uint64 `json:"qualification_receipt_byte_length"`
+	ManifestSelector                         string `json:"manifest_selector"`
+	ManifestVerificationSelector             string `json:"manifest_verification_selector"`
+	ManifestDigest                           string `json:"manifest_digest"`
+	ManifestByteLength                       uint64 `json:"manifest_byte_length"`
+	SelectorDigest                           string `json:"-"`
+	SelectorByteLength                       uint64 `json:"-"`
 }
 
 type CandidateGeneration struct {
@@ -116,13 +133,18 @@ type Receipt struct {
 	FeatureIdentityStatus string         `json:"feature_identity_status"`
 }
 
-type qualificationIndex struct {
-	SchemaVersion                string `json:"schema_version"`
-	Generation                   string `json:"generation"`
-	QualificationReceiptSelector string `json:"qualification_receipt_selector"`
-	VerificationSelector         string `json:"verification_selector"`
-	Digest                       string `json:"digest"`
-	ByteLength                   uint64 `json:"byte_length"`
+type Manifest struct {
+	SchemaVersion                            string `json:"schema_version"`
+	CandidateGeneration                      string `json:"candidate_generation"`
+	CandidateVerificationSelector            string `json:"candidate_verification_selector"`
+	CandidateSelector                        string `json:"candidate_selector"`
+	CandidateDigest                          string `json:"candidate_digest"`
+	CandidateByteLength                      uint64 `json:"candidate_byte_length"`
+	QualificationReceiptGeneration           string `json:"qualification_receipt_generation"`
+	QualificationReceiptSelector             string `json:"qualification_receipt_selector"`
+	QualificationReceiptVerificationSelector string `json:"qualification_receipt_verification_selector"`
+	QualificationReceiptDigest               string `json:"qualification_receipt_digest"`
+	QualificationReceiptByteLength           uint64 `json:"qualification_receipt_byte_length"`
 }
 
 func NewRepositoryPrivateAdapter(root *publication.Root, opts Options) (*Adapter, error) {
@@ -161,7 +183,7 @@ func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishReq
 	if err := ctx.Err(); err != nil {
 		return PublishedGeneration{}, err
 	}
-	published := a.publisher.PublishVerifiedGeneration(a.root, append([]byte(nil), req.CandidateBytes...), censuscontinuation.CandidateGroupSchema)
+	published := a.publisher.PublishVerifiedGenerationContext(ctx, a.root, append([]byte(nil), req.CandidateBytes...), censuscontinuation.CandidateGroupSchema)
 	if published.Failure != nil {
 		return PublishedGeneration{}, published.Failure
 	}
@@ -179,7 +201,7 @@ func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishReq
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
-	qualified := a.publisher.PublishVerifiedGeneration(a.root, rawReceipt, qualificationReceiptSchema)
+	qualified := a.publisher.PublishVerifiedGenerationContext(ctx, a.root, rawReceipt, qualificationReceiptSchema)
 	if qualified.Failure != nil {
 		return out, qualified.Failure
 	}
@@ -188,12 +210,26 @@ func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishReq
 	out.QualificationReceiptVerificationSelector = qualified.Receipt.VerificationSelector
 	out.QualificationReceiptDigest = qualified.Receipt.Digest
 	out.QualificationReceiptByteLength = qualified.Receipt.ByteLength
+	manifest := Manifest{SchemaVersion: manifestSchema, CandidateGeneration: generation, CandidateVerificationSelector: out.VerificationSelector, CandidateSelector: out.ArtifactSelector, CandidateDigest: Digest(req.CandidateBytes), CandidateByteLength: uint64(len(req.CandidateBytes)), QualificationReceiptGeneration: qGen, QualificationReceiptSelector: out.QualificationReceiptSelector, QualificationReceiptVerificationSelector: out.QualificationReceiptVerificationSelector, QualificationReceiptDigest: out.QualificationReceiptDigest, QualificationReceiptByteLength: out.QualificationReceiptByteLength}
+	rawManifest, err := json.Marshal(manifest)
+	if err != nil {
+		return out, err
+	}
+	rawManifest = append(rawManifest, '\n')
 	if err := ctx.Err(); err != nil {
 		return out, err
 	}
-	idx := qualificationIndex{SchemaVersion: "lsp-trace.private-candidate-publication-index.v1", Generation: generation, QualificationReceiptSelector: out.QualificationReceiptSelector, VerificationSelector: out.QualificationReceiptVerificationSelector, Digest: out.QualificationReceiptDigest, ByteLength: out.QualificationReceiptByteLength}
-	if err := a.writeQualificationIndex(idx); err != nil {
-		return out, err
+	manifestPub := a.publisher.PublishVerifiedGenerationContext(ctx, a.root, rawManifest, manifestSchema)
+	if manifestPub.Failure != nil {
+		return out, manifestPub.Failure
+	}
+	out.ManifestSelector = manifestPub.Receipt.Generation + "/artifact.json"
+	out.ManifestVerificationSelector = manifestPub.Receipt.VerificationSelector
+	out.ManifestDigest = manifestPub.Receipt.Digest
+	out.ManifestByteLength = manifestPub.Receipt.ByteLength
+	alias := a.publisher.Publish(publication.Request{Root: a.root, Selector: manifestSelectorForGeneration(generation), Bytes: rawManifest, ArtifactSchemaID: manifestSchema})
+	if alias.Failure != nil && alias.Failure.Code != publication.CodeTargetExists {
+		return out, alias.Failure
 	}
 	return out, nil
 }
@@ -205,37 +241,34 @@ func (a *Adapter) AdvanceCandidateGeneration(ctx context.Context, req AdvanceReq
 	if a == nil || a.root == nil || req.Generation == "" || req.VerificationSelector == "" {
 		return PublishedGeneration{}, errors.New("candidatepublication: invalid advance request")
 	}
-	candidate, receipt, idx, err := a.verifyGenerationAndReceipt(req.Generation, req.VerificationSelector)
+	candidate, receipt, manifest, manifestID, err := a.verifyGenerationAndReceipt(req.Generation, req.VerificationSelector, req.ManifestSelector, req.ManifestDigest, req.ManifestByteLength)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return PublishedGeneration{}, err
 	}
-	current := CurrentGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, CandidateDigest: Digest(candidate), CandidateByteLength: uint64(len(candidate)), QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength}
+	current := CurrentGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, CandidateDigest: Digest(candidate), CandidateByteLength: uint64(len(candidate)), QualificationReceiptSelector: manifest.QualificationReceiptSelector, QualificationReceiptVerificationSelector: manifest.QualificationReceiptVerificationSelector, QualificationReceiptDigest: manifest.QualificationReceiptDigest, QualificationReceiptByteLength: manifest.QualificationReceiptByteLength, ManifestSelector: manifestID.Selector, ManifestVerificationSelector: manifestID.VerificationSelector, ManifestDigest: manifestID.Digest, ManifestByteLength: manifestID.ByteLength}
 	selectorBytes, err := json.Marshal(current)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
 	selectorBytes = append(selectorBytes, '\n')
-	pred := publication.BoundFilePredecessor{Absent: true}
-	if existing, err := a.CurrentCandidateGeneration(context.Background()); err == nil {
-		raw, readErr := a.root.ReadSelector(currentSelector, 4096)
-		if readErr != nil {
-			return PublishedGeneration{}, readErr
-		}
-		if req.PredecessorSelector != existing.Selector {
-			return PublishedGeneration{}, errors.New("candidatepublication: stale predecessor selector")
-		}
-		pred = publication.BoundFilePredecessor{Selector: currentSelector, Digest: publication.DigestForTest(raw), ByteLength: uint64(len(raw))}
-	} else if req.PredecessorSelector != receipt.PredecessorSelector {
-		return PublishedGeneration{}, errors.New("candidatepublication: initial predecessor mismatch")
-	}
-	boundReceipt, err := publication.CompareAndReplaceBoundFile(ctx, a.root, currentSelector, pred, selectorBytes, func([]byte) error { return nil })
+	pred, err := req.boundFilePredecessor(receipt.PredecessorSelector)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
-	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: boundReceipt.Committed, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
+	boundReceipt, err := publication.CompareAndReplaceBoundFile(ctx, a.root, currentSelector, pred, selectorBytes, func(final []byte) error {
+		var c CurrentGeneration
+		if err := decodeStrict(final, &c); err != nil {
+			return err
+		}
+		return a.validateCurrent(c)
+	})
+	if err != nil {
+		return PublishedGeneration{}, err
+	}
+	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: manifest.QualificationReceiptSelector, QualificationReceiptVerificationSelector: manifest.QualificationReceiptVerificationSelector, QualificationReceiptDigest: manifest.QualificationReceiptDigest, QualificationReceiptByteLength: manifest.QualificationReceiptByteLength, ManifestSelector: manifestID.Selector, ManifestVerificationSelector: manifestID.VerificationSelector, ManifestDigest: manifestID.Digest, ManifestByteLength: manifestID.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: boundReceipt.Committed, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
 }
 
 func (a *Adapter) CurrentCandidateGeneration(ctx context.Context) (CurrentGeneration, error) {
@@ -256,6 +289,8 @@ func (a *Adapter) CurrentCandidateGeneration(ctx context.Context) (CurrentGenera
 	if err := a.validateCurrent(current); err != nil {
 		return CurrentGeneration{}, err
 	}
+	current.SelectorDigest = publication.DigestForTest(raw)
+	current.SelectorByteLength = uint64(len(raw))
 	return current, nil
 }
 
@@ -263,27 +298,32 @@ func (a *Adapter) GetCandidateGeneration(ctx context.Context, generation string)
 	if err := ctx.Err(); err != nil {
 		return CandidateGeneration{}, err
 	}
-	candidate, receipt, idx, err := a.verifyGenerationAndReceipt(generation, generation+".selector.json")
+	candidate, receipt, manifest, manifestID, err := a.verifyGenerationAndReceipt(generation, generation+".selector.json", "", "", 0)
 	if err != nil {
 		return CandidateGeneration{}, err
 	}
-	return CandidateGeneration{CandidateBytes: candidate, Receipt: receipt, Published: PublishedGeneration{Generation: generation, VerificationSelector: generation + ".selector.json", ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism}}, nil
+	return CandidateGeneration{CandidateBytes: candidate, Receipt: receipt, Published: PublishedGeneration{Generation: generation, VerificationSelector: generation + ".selector.json", ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", QualificationReceiptSelector: manifest.QualificationReceiptSelector, QualificationReceiptVerificationSelector: manifest.QualificationReceiptVerificationSelector, QualificationReceiptDigest: manifest.QualificationReceiptDigest, QualificationReceiptByteLength: manifest.QualificationReceiptByteLength, ManifestSelector: manifestID.Selector, ManifestVerificationSelector: manifestID.VerificationSelector, ManifestDigest: manifestID.Digest, ManifestByteLength: manifestID.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism}}, nil
 }
 
-func (a *Adapter) verifyGenerationAndReceipt(generation, verificationSelector string) ([]byte, Receipt, qualificationIndex, error) {
+type manifestIdentity struct {
+	Selector, VerificationSelector, Digest string
+	ByteLength                             uint64
+}
+
+func (a *Adapter) verifyGenerationAndReceipt(generation, verificationSelector, manifestSelector, manifestDigest string, manifestByteLength uint64) ([]byte, Receipt, Manifest, manifestIdentity, error) {
 	candidate, err := a.verifyCandidateGeneration(generation, verificationSelector)
 	if err != nil {
-		return nil, Receipt{}, qualificationIndex{}, err
+		return nil, Receipt{}, Manifest{}, manifestIdentity{}, err
 	}
-	idx, err := a.readQualificationIndex(generation)
+	manifest, id, err := a.readManifestForGeneration(generation, manifestSelector, manifestDigest, manifestByteLength)
 	if err != nil {
-		return nil, Receipt{}, qualificationIndex{}, err
+		return nil, Receipt{}, Manifest{}, manifestIdentity{}, err
 	}
-	receipt, err := a.verifyQualificationBinding(candidate, generation, idx)
+	receipt, err := a.verifyQualificationBinding(candidate, generation, manifest)
 	if err != nil {
-		return nil, Receipt{}, qualificationIndex{}, err
+		return nil, Receipt{}, Manifest{}, manifestIdentity{}, err
 	}
-	return candidate, receipt, idx, nil
+	return candidate, receipt, manifest, id, nil
 }
 
 func (a *Adapter) verifyCandidateGeneration(generation, verificationSelector string) ([]byte, error) {
@@ -312,20 +352,20 @@ func (a *Adapter) verifyCandidateGeneration(generation, verificationSelector str
 	return candidate, nil
 }
 
-func (a *Adapter) verifyQualificationBinding(candidate []byte, generation string, idx qualificationIndex) (Receipt, error) {
-	receiptBytes, err := a.root.ReadSelector(idx.QualificationReceiptSelector, 1<<20)
+func (a *Adapter) verifyQualificationBinding(candidate []byte, generation string, manifest Manifest) (Receipt, error) {
+	receiptBytes, err := a.root.ReadSelector(manifest.QualificationReceiptSelector, 1<<20)
 	if err != nil {
 		return Receipt{}, err
 	}
-	if Digest(receiptBytes) != idx.Digest || uint64(len(receiptBytes)) != idx.ByteLength {
+	if Digest(receiptBytes) != manifest.QualificationReceiptDigest || uint64(len(receiptBytes)) != manifest.QualificationReceiptByteLength {
 		return Receipt{}, errors.New("candidatepublication: qualification receipt digest mismatch")
 	}
-	qSelectorBytes, err := a.root.ReadSelector(idx.VerificationSelector, 4096)
+	qSelectorBytes, err := a.root.ReadSelector(manifest.QualificationReceiptVerificationSelector, 4096)
 	if err != nil {
 		return Receipt{}, err
 	}
 	qSelector, err := verification.DecodeSelector(qSelectorBytes)
-	if err != nil || idx.QualificationReceiptSelector != qSelector.Generation+"/artifact.json" {
+	if err != nil || manifest.QualificationReceiptGeneration != qSelector.Generation || manifest.QualificationReceiptSelector != qSelector.Generation+"/artifact.json" {
 		return Receipt{}, errors.New("candidatepublication: qualification selector mismatch")
 	}
 	qByteReceipt, err := a.root.ReadSelector(qSelector.Generation+"/receipt.json", 1<<20)
@@ -342,53 +382,86 @@ func (a *Adapter) verifyQualificationBinding(candidate []byte, generation string
 	return receipt, nil
 }
 
-func (a *Adapter) writeQualificationIndex(idx qualificationIndex) error {
-	raw, err := json.Marshal(idx)
+func (a *Adapter) readManifestForGeneration(generation, selector, digest string, byteLength uint64) (Manifest, manifestIdentity, error) {
+	if selector == "" {
+		selector = manifestSelectorForGeneration(generation)
+	}
+	raw, err := a.root.ReadSelector(selector, 1<<20)
 	if err != nil {
-		return err
+		return Manifest{}, manifestIdentity{}, err
 	}
-	raw = append(raw, '\n')
-	result := a.publisher.Publish(publication.Request{Root: a.root, Selector: qualificationIndexSelector(idx.Generation), Bytes: raw, ArtifactSchemaID: "lsp-trace.private-candidate-publication-index.v1"})
-	if result.Failure != nil && result.Failure.Code != publication.CodeTargetExists {
-		return result.Failure
+	id := manifestIdentity{Selector: selector, VerificationSelector: strings.TrimSuffix(selector, "/artifact.json") + ".selector.json", Digest: Digest(raw), ByteLength: uint64(len(raw))}
+	if digest != "" && (digest != id.Digest || byteLength != id.ByteLength) {
+		return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest identity mismatch")
 	}
-	return nil
-}
-func (a *Adapter) readQualificationIndex(generation string) (qualificationIndex, error) {
-	raw, err := a.root.ReadSelector(qualificationIndexSelector(generation), 4096)
+	var manifest Manifest
+	if err := decodeStrict(raw, &manifest); err != nil {
+		return Manifest{}, manifestIdentity{}, err
+	}
+	if err := verifyManifest(manifest, generation); err != nil {
+		return Manifest{}, manifestIdentity{}, err
+	}
+	if selector == manifestSelectorForGeneration(generation) {
+		g := "g-" + strings.TrimPrefix(id.Digest, "sha256:")
+		id.VerificationSelector = g + ".selector.json"
+		return manifest, id, nil
+	}
+	selectorBytes, err := a.root.ReadSelector(id.VerificationSelector, 4096)
 	if err != nil {
-		return qualificationIndex{}, err
+		return Manifest{}, manifestIdentity{}, err
 	}
-	var idx qualificationIndex
-	if err := decodeStrict(raw, &idx); err != nil {
-		return qualificationIndex{}, err
+	decoded, err := verification.DecodeSelector(selectorBytes)
+	if err != nil || decoded.Generation+"/artifact.json" != selector {
+		return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest selector mismatch")
 	}
-	if idx.SchemaVersion == "" || idx.Generation != generation || idx.VerificationSelector == "" || idx.QualificationReceiptSelector == "" || idx.Digest == "" || idx.ByteLength == 0 {
-		return qualificationIndex{}, errors.New("candidatepublication: invalid qualification index")
+	byteReceipt, err := a.root.ReadSelector(decoded.Generation+"/receipt.json", 1<<20)
+	if err != nil || verification.VerifyReceipt(raw, byteReceipt) != nil {
+		return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest byte custody receipt failed")
 	}
-	return idx, nil
+	id.VerificationSelector = decoded.Generation + ".selector.json"
+	return manifest, id, nil
 }
-func qualificationIndexSelector(generation string) string {
-	return qualificationNamespace + "/" + strings.TrimPrefix(generation, "g-") + ".index.json"
+
+func manifestSelectorForGeneration(generation string) string {
+	return manifestNamespace + "/" + strings.TrimPrefix(generation, "g-") + ".manifest.json"
 }
 
 func (a *Adapter) validateCurrent(current CurrentGeneration) error {
-	if current.Selector != currentSelector || !isGeneration(current.Generation) || current.VerificationSelector != current.Generation+".selector.json" || current.CandidateDigest == "" || current.CandidateByteLength == 0 || current.QualificationReceiptSelector == "" || current.QualificationReceiptVerificationSelector == "" || current.QualificationReceiptDigest == "" || current.QualificationReceiptByteLength == 0 {
+	if current.Selector != currentSelector || !isGeneration(current.Generation) || current.VerificationSelector != current.Generation+".selector.json" || current.CandidateDigest == "" || current.CandidateByteLength == 0 || current.QualificationReceiptSelector == "" || current.QualificationReceiptVerificationSelector == "" || current.QualificationReceiptDigest == "" || current.QualificationReceiptByteLength == 0 || current.ManifestSelector == "" || current.ManifestVerificationSelector == "" || current.ManifestDigest == "" || current.ManifestByteLength == 0 {
 		return errors.New("candidatepublication: invalid current selector")
 	}
-	candidate, err := a.verifyCandidateGeneration(current.Generation, current.VerificationSelector)
+	candidate, receipt, manifest, id, err := a.verifyGenerationAndReceipt(current.Generation, current.VerificationSelector, current.ManifestSelector, current.ManifestDigest, current.ManifestByteLength)
 	if err != nil {
 		return err
 	}
-	if Digest(candidate) != current.CandidateDigest || uint64(len(candidate)) != current.CandidateByteLength {
+	if Digest(candidate) != current.CandidateDigest || uint64(len(candidate)) != current.CandidateByteLength || receipt.CandidateDigest.Hex != current.CandidateDigest {
 		return errors.New("candidatepublication: current candidate binding mismatch")
 	}
-	receipt, err := a.verifyQualificationBinding(candidate, current.Generation, qualificationIndex{Generation: current.Generation, QualificationReceiptSelector: current.QualificationReceiptSelector, VerificationSelector: current.QualificationReceiptVerificationSelector, Digest: current.QualificationReceiptDigest, ByteLength: current.QualificationReceiptByteLength})
-	if err != nil {
-		return err
+	if manifest.QualificationReceiptSelector != current.QualificationReceiptSelector || manifest.QualificationReceiptVerificationSelector != current.QualificationReceiptVerificationSelector || manifest.QualificationReceiptDigest != current.QualificationReceiptDigest || manifest.QualificationReceiptByteLength != current.QualificationReceiptByteLength || id.VerificationSelector != current.ManifestVerificationSelector {
+		return errors.New("candidatepublication: current manifest binding mismatch")
 	}
-	if receipt.CandidateDigest.Hex != current.CandidateDigest {
-		return errors.New("candidatepublication: current selector binding mismatch")
+	return nil
+}
+
+func (req AdvanceRequest) boundFilePredecessor(initialSelector string) (publication.BoundFilePredecessor, error) {
+	if req.PredecessorAbsent {
+		if req.PredecessorSelector != "" || req.PredecessorDigest != "" || req.PredecessorByteLength != 0 {
+			return publication.BoundFilePredecessor{}, errors.New("candidatepublication: contradictory predecessor token")
+		}
+		return publication.BoundFilePredecessor{Absent: true}, nil
+	}
+	if req.PredecessorDigest == "" && req.PredecessorByteLength == 0 && initialSelector != "" && (req.PredecessorSelector == "" || req.PredecessorSelector == initialSelector) {
+		return publication.BoundFilePredecessor{Absent: true}, nil
+	}
+	if req.PredecessorSelector != currentSelector || req.PredecessorDigest == "" || req.PredecessorByteLength == 0 {
+		return publication.BoundFilePredecessor{}, errors.New("candidatepublication: exact predecessor token required")
+	}
+	return publication.BoundFilePredecessor{Selector: currentSelector, Digest: req.PredecessorDigest, ByteLength: req.PredecessorByteLength}, nil
+}
+
+func verifyManifest(manifest Manifest, generation string) error {
+	if manifest.SchemaVersion != manifestSchema || manifest.CandidateGeneration != generation || manifest.CandidateVerificationSelector != generation+".selector.json" || manifest.CandidateSelector != generation+"/artifact.json" || manifest.CandidateDigest == "" || manifest.CandidateByteLength == 0 || !isGeneration(manifest.QualificationReceiptGeneration) || manifest.QualificationReceiptSelector != manifest.QualificationReceiptGeneration+"/artifact.json" || manifest.QualificationReceiptVerificationSelector != manifest.QualificationReceiptGeneration+".selector.json" || manifest.QualificationReceiptDigest == "" || manifest.QualificationReceiptByteLength == 0 {
+		return errors.New("candidatepublication: invalid manifest")
 	}
 	return nil
 }

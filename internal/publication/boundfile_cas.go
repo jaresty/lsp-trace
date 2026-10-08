@@ -7,10 +7,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"runtime"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 var ErrStalePredecessor = errors.New("bound file stale predecessor")
@@ -71,43 +71,75 @@ func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 	if err := ctx.Err(); err != nil {
 		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: false}, err
 	}
-	base := root.Path()
-	if info, err := os.Lstat(base); err != nil || !os.SameFile(root.info, info) {
-		return nil, errors.New("root identity changed")
-	}
-	finalPath := filepath.Join(base, filepath.FromSlash(selector))
-	tempPath := filepath.Join(base, filepath.FromSlash(temp))
-	if err := os.Rename(tempPath, finalPath); err != nil {
+	if err := renameBoundFileSibling(root, temp, selector); err != nil {
 		return nil, err
 	}
+	verifyErr := error(nil)
 	if got, err := root.ReadSelector(selector, int64(len(raw))+1); err != nil || !bytes.Equal(got, raw) {
-		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true}, errors.New("bound file CAS final verification failed")
+		verifyErr = errors.New("bound file CAS final verification failed")
+	} else if err := verify(got); err != nil {
+		verifyErr = err
 	}
 	receipt.FinalSelector = selector
+	if verifyErr != nil {
+		receipt.VerificationStatus = "COMMITTED_VERIFICATION_FAILED"
+		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true}, nil
+	}
 	return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true}, nil
 }
 
 func (r *Root) casLock(ctx context.Context, selector string) (func(), error) {
-	lock := selector + ".lock"
-	base := r.Path()
-	lockPath := filepath.Join(base, filepath.FromSlash(lock))
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0o700); err != nil {
+	parentFD, _, err := boundParentFD(r, selector)
+	if err != nil {
+		return nil, err
+	}
+	lockFD, err := unix.Openat(parentFD, ".lsp-trace-candidate-publication.lock", unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		_ = closeBoundRootFD(parentFD)
 		return nil, err
 	}
 	for {
 		if err := ctx.Err(); err != nil {
+			_ = unix.Close(lockFD)
+			_ = closeBoundRootFD(parentFD)
 			return nil, err
 		}
-		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_ = f.Close()
-			return func() { _ = os.Remove(lockPath) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
+		if err := unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB); err == nil {
+			return func() { _ = unix.Flock(lockFD, unix.LOCK_UN); _ = unix.Close(lockFD); _ = closeBoundRootFD(parentFD) }, nil
+		} else if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
+			_ = unix.Close(lockFD)
+			_ = closeBoundRootFD(parentFD)
 			return nil, err
 		}
 		time.Sleep(time.Millisecond)
 	}
+}
+
+func renameBoundFileSibling(root *Root, tempSelector, finalSelector string) error {
+	tempFD, tempName, err := boundParentFD(root, tempSelector)
+	if err != nil {
+		return err
+	}
+	defer closeBoundRootFD(tempFD)
+	finalFD, finalName, err := boundParentFD(root, finalSelector)
+	if err != nil {
+		return err
+	}
+	defer closeBoundRootFD(finalFD)
+	if tempFD != finalFD {
+		// Descriptor numbers differ even for the same directory; require stable same parent by fstat.
+		var a, b unix.Stat_t
+		if unix.Fstat(tempFD, &a) != nil || unix.Fstat(finalFD, &b) != nil || a.Dev != b.Dev || a.Ino != b.Ino {
+			return errors.New("bound file CAS rename requires same pinned parent")
+		}
+	}
+	if err := unix.Renameat(tempFD, tempName, finalFD, finalName); err != nil {
+		return err
+	}
+	if err := syncBoundDirectory(finalFD); err != nil {
+		return errors.Join(errors.New("bound file CAS committed directory sync failed"), err)
+	}
+	return nil
 }
 
 func maxLen(a, b uint64) uint64 {
