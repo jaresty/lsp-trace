@@ -1094,8 +1094,16 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 			return err
 		}
 		prod := canon(res)
-		if hash(prod) != pa.ResultDigest || pa.RequestDigest != rd || pa.BindingDigest != bd || pa.ConditionDigest != cd {
-			return fmt.Errorf("producer recompute %s", c.CaseID)
+		persisted, persistedDigest, err := readFile(filepath.Join(dir, "RESULT.json"))
+		if err != nil {
+			return err
+		}
+		var persistedResult eval.Result
+		if err := readStrict(filepath.Join(dir, "RESULT.json"), &persistedResult); err != nil {
+			return err
+		}
+		if !bytes.Equal(canon(persistedResult), persisted) || !bytes.Equal(persisted, prod) || persistedDigest != pa.ResultDigest || hash(prod) != pa.ResultDigest || pa.RequestDigest != rd || pa.BindingDigest != bd || pa.ConditionDigest != cd {
+			return fmt.Errorf("producer persisted-result recompute %s", c.CaseID)
 		}
 		var rv Review
 		if err := readStrict(filepath.Join(dir, "REVIEW.json"), &rv); err != nil {
