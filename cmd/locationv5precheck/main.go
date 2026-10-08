@@ -38,7 +38,7 @@ type authFile struct {
 	BaseCommit                        string `json:"baseCommit"`
 	Completeness                      string `json:"completeness"`
 	ExecutionRoot                     string `json:"executionRoot"`
-	ExternalInference                 bool   `json:"externalInference"`
+	ExternalInference                 string `json:"externalInference"`
 	FeatureIdentity                   string `json:"featureIdentity"`
 	FreezeRoot                        string `json:"freezeRoot"`
 	FrozenFilesImmutable              int    `json:"frozenFilesImmutable"`
@@ -231,7 +231,7 @@ func main() {
 	}
 	var a authFile
 	must(strict(filepath.Join(execRoot, "AUTHORIZATION.json"), &a))
-	if a.AuthorizedFreezeRootIdentity != f.RootIdentity || a.AuthorityCeiling != 0 || a.Accepted || a.Completeness != "UNKNOWN" || a.FeatureIdentity != "UNRESOLVED" {
+	if !validAuthorization(a, f.RootIdentity) {
 		fail("authorization ceilings")
 	}
 	var as assignmentFile
@@ -275,6 +275,14 @@ func main() {
 	must(os.WriteFile(filepath.Join(execRoot, "PRECHECK.json"), b, 0644))
 	fmt.Print(string(b))
 }
+func validAuthorization(a authFile, rootIdentity string) bool {
+	return a.AuthorizedFreezeRootIdentity == rootIdentity &&
+		a.AuthorityCeiling == 0 && a.HeadAuthorityCeiling == 0 && !a.Accepted &&
+		a.Completeness == "UNKNOWN" && a.FeatureIdentity == "UNRESOLVED" &&
+		a.ExternalInference == "DISABLED" && a.NoPublicProductionReleasePush &&
+		a.PhaseCommitRequiredBeforeAttempts
+}
+
 func contains(xs []string, sub string) bool {
 	for _, x := range xs {
 		if strings.Contains(x, sub) {

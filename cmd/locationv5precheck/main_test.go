@@ -39,10 +39,22 @@ func strictBytes(t *testing.T, name, raw string, dst any) error {
 }
 
 func TestAuthorizationAndAssignmentsStrictCompleteSchemas(t *testing.T) {
-	auth := `{"accepted":false,"attemptID":"attempt-01","authorityCeiling":0,"authorizedFreezeRootIdentity":"r","baseCommit":"c","completeness":"UNKNOWN","executionRoot":"e","externalInference":false,"featureIdentity":"UNRESOLVED","freezeRoot":"f","frozenFilesImmutable":230,"headAuthorityCeiling":0,"noPublicProductionReleasePush":true,"phaseCommitRequiredBeforeAttempts":true,"producerAssignments":26,"reviewerAssignments":26,"schema":"s","status":"AUTHORIZED"}`
+	auth := `{"accepted":false,"attemptID":"attempt-01","authorityCeiling":0,"authorizedFreezeRootIdentity":"r","baseCommit":"c","completeness":"UNKNOWN","executionRoot":"e","externalInference":"DISABLED","featureIdentity":"UNRESOLVED","freezeRoot":"f","frozenFilesImmutable":230,"headAuthorityCeiling":0,"noPublicProductionReleasePush":true,"phaseCommitRequiredBeforeAttempts":true,"producerAssignments":26,"reviewerAssignments":26,"schema":"s","status":"AUTHORIZED"}`
 	assign := `{"attemptID":"attempt-01","cases":[{"caseID":"01","producer":{"assignmentID":"p","attemptID":"attempt-01","forbidden":["oracle"],"mayRead":["input"],"role":"producer"},"reviewer":{"assignmentID":"r","attemptID":"attempt-01","forbidden":[],"mayRead":["producer"],"role":"reviewer"}}],"schema":"s"}`
-	if err := strictBytes(t, "AUTHORIZATION.json", auth, &authFile{}); err != nil {
+	var decoded authFile
+	if err := strictBytes(t, "AUTHORIZATION.json", auth, &decoded); err != nil {
 		t.Fatalf("complete authorization rejected: %v", err)
+	}
+	if !validAuthorization(decoded, "r") {
+		t.Fatalf("valid authorization vocabulary rejected")
+	}
+	wrongValue := strings.Replace(auth, `"externalInference":"DISABLED"`, `"externalInference":"ENABLED"`, 1)
+	var wrong authFile
+	if err := strictBytes(t, "AUTHORIZATION.json", wrongValue, &wrong); err != nil {
+		t.Fatalf("wrong vocabulary should decode before semantic validation: %v", err)
+	}
+	if validAuthorization(wrong, "r") {
+		t.Fatalf("enabled external inference accepted")
 	}
 	if err := strictBytes(t, "ASSIGNMENTS.json", assign, &assignmentFile{}); err != nil {
 		t.Fatalf("complete assignments rejected: %v", err)
@@ -52,6 +64,7 @@ func TestAuthorizationAndAssignmentsStrictCompleteSchemas(t *testing.T) {
 		dst any
 	}{
 		{strings.Replace(auth, `"baseCommit":`, `"unknown":1,"baseCommit":`, 1), &authFile{}},
+		{strings.Replace(auth, `"externalInference":"DISABLED"`, `"externalInference":false`, 1), &authFile{}},
 		{strings.Replace(auth, `"schema":"s"`, `"schema":"s","schema":"duplicate"`, 1), &authFile{}},
 		{auth + `[]`, &authFile{}},
 		{strings.Replace(assign, `"caseID":`, `"unknownCase":1,"caseID":`, 1), &assignmentFile{}},

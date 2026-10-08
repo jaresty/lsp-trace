@@ -1,0 +1,12 @@
+{
+  "schema":"lsp-trace.adr0007.location-v5.zero-effect-repair-adjudication.v1",
+  "verdict":"ZERO_EFFECT_REPAIR_ALLOWED",
+  "failedHead":"03b172fc",
+  "failure":"immutable authorization externalInference string DISABLED rejected by local bool field",
+  "allowedScope":["authFile ExternalInference string type","explicit DISABLED value validation","wrong-type and wrong-value tests"],
+  "frozenMutation":false,
+  "producerAttemptsObserved":0,
+  "reviewerAttemptsObserved":0,
+  "semanticOutputsObserved":0,
+  "stopAfterSuccessfulPrecheck":true
+}
