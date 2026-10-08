@@ -31,9 +31,10 @@ const (
 type Options struct{ MaxBytes int64 }
 
 type Adapter struct {
-	root      *publication.Root
-	publisher *publication.Publisher
-	maxBytes  int64
+	root          *publication.Root
+	publisher     *publication.Publisher
+	maxBytes      int64
+	manifestAlias map[string]string
 }
 
 type PublishRequest struct {
@@ -154,7 +155,7 @@ func NewRepositoryPrivateAdapter(root *publication.Root, opts Options) (*Adapter
 	if err := root.ValidatePrivate(); err != nil {
 		return nil, err
 	}
-	return &Adapter{root: root, publisher: publication.NewPublisher(), maxBytes: opts.MaxBytes}, nil
+	return &Adapter{root: root, publisher: publication.NewPublisher(), maxBytes: opts.MaxBytes, manifestAlias: make(map[string]string)}, nil
 }
 
 func DigestBytes(raw []byte) []byte { sum := sha256.Sum256(raw); return sum[:] }
@@ -227,9 +228,21 @@ func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishReq
 	out.ManifestVerificationSelector = manifestPub.Receipt.VerificationSelector
 	out.ManifestDigest = manifestPub.Receipt.Digest
 	out.ManifestByteLength = manifestPub.Receipt.ByteLength
-	alias := a.publisher.Publish(publication.Request{Root: a.root, Selector: manifestSelectorForGeneration(generation), Bytes: rawManifest, ArtifactSchemaID: manifestSchema})
-	if alias.Failure != nil && alias.Failure.Code != publication.CodeTargetExists {
+	aliasSelector := manifestSelectorForGeneration(generation)
+	alias := a.publisher.Publish(publication.Request{Root: a.root, Selector: aliasSelector, Bytes: rawManifest, ArtifactSchemaID: manifestSchema})
+	if alias.Failure != nil {
+		if alias.Failure.Code == publication.CodeTargetExists {
+			if a.existingManifestAliasExactly(aliasSelector, rawManifest, manifest) == nil || receipt.PredecessorSelector != out.VerificationSelector {
+				if a.manifestAlias[aliasSelector] == "" {
+					a.manifestAlias[aliasSelector] = Digest(rawManifest)
+				}
+				return out, nil
+			}
+		}
 		return out, alias.Failure
+	}
+	if a.manifestAlias[aliasSelector] == "" {
+		a.manifestAlias[aliasSelector] = Digest(rawManifest)
 	}
 	return out, nil
 }
@@ -383,10 +396,20 @@ func (a *Adapter) verifyQualificationBinding(candidate []byte, generation string
 }
 
 func (a *Adapter) readManifestForGeneration(generation, selector, digest string, byteLength uint64) (Manifest, manifestIdentity, error) {
+	defaultAlias := false
 	if selector == "" {
 		selector = manifestSelectorForGeneration(generation)
 	}
-	raw, err := a.root.ReadSelector(selector, 1<<20)
+	if selector == manifestSelectorForGeneration(generation) {
+		defaultAlias = true
+	}
+	var raw []byte
+	var err error
+	if defaultAlias {
+		raw, err = publication.ReadVerifiedBoundFile(a.root, selector, 1<<20)
+	} else {
+		raw, err = a.root.ReadSelector(selector, 1<<20)
+	}
 	if err != nil {
 		return Manifest{}, manifestIdentity{}, err
 	}
@@ -401,25 +424,91 @@ func (a *Adapter) readManifestForGeneration(generation, selector, digest string,
 	if err := verifyManifest(manifest, generation); err != nil {
 		return Manifest{}, manifestIdentity{}, err
 	}
-	if selector == manifestSelectorForGeneration(generation) {
-		g := "g-" + strings.TrimPrefix(id.Digest, "sha256:")
-		id.VerificationSelector = g + ".selector.json"
+	if defaultAlias {
+		if expected := a.manifestAlias[selector]; expected != "" && expected != id.Digest {
+			return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest alias changed after publication")
+		}
+		manifestGeneration := "g-" + strings.TrimPrefix(id.Digest, "sha256:")
+		if err := a.verifyManifestGenerationBytes(manifestGeneration, raw); err != nil {
+			return Manifest{}, manifestIdentity{}, err
+		}
+		id.VerificationSelector = manifestGeneration + ".selector.json"
 		return manifest, id, nil
 	}
-	selectorBytes, err := a.root.ReadSelector(id.VerificationSelector, 4096)
-	if err != nil {
+	if err := a.verifyManifestGenerationBytes(manifestGenerationFromArtifactSelector(selector), raw); err != nil {
 		return Manifest{}, manifestIdentity{}, err
 	}
-	decoded, err := verification.DecodeSelector(selectorBytes)
-	if err != nil || decoded.Generation+"/artifact.json" != selector {
-		return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest selector mismatch")
-	}
-	byteReceipt, err := a.root.ReadSelector(decoded.Generation+"/receipt.json", 1<<20)
-	if err != nil || verification.VerifyReceipt(raw, byteReceipt) != nil {
-		return Manifest{}, manifestIdentity{}, errors.New("candidatepublication: manifest byte custody receipt failed")
-	}
-	id.VerificationSelector = decoded.Generation + ".selector.json"
 	return manifest, id, nil
+}
+
+func (a *Adapter) existingManifestAliasExactly(selector string, expected []byte, expectedManifest Manifest) error {
+	raw, err := publication.ReadVerifiedBoundFile(a.root, selector, int64(len(expected))+1)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(raw, expected) || Digest(raw) != Digest(expected) || len(raw) != len(expected) {
+		return errors.New("candidatepublication: immutable manifest alias collision")
+	}
+	var got Manifest
+	if err := decodeStrict(raw, &got); err != nil {
+		return err
+	}
+	if !manifestCanonicalEqual(got, expectedManifest) {
+		return errors.New("candidatepublication: immutable manifest alias payload collision")
+	}
+	return nil
+}
+
+func (a *Adapter) existingManifestAliasSameLineage(selector string, predecessorSelector string) error {
+	raw, err := publication.ReadVerifiedBoundFile(a.root, selector, 1<<20)
+	if err != nil {
+		return err
+	}
+	var existing Manifest
+	if err := decodeStrict(raw, &existing); err != nil {
+		return err
+	}
+	candidate, err := a.verifyCandidateGeneration(existing.CandidateGeneration, existing.CandidateVerificationSelector)
+	if err != nil {
+		return err
+	}
+	receipt, err := a.verifyQualificationBinding(candidate, existing.CandidateGeneration, existing)
+	if err != nil {
+		return err
+	}
+	if receipt.PredecessorSelector == predecessorSelector {
+		return nil
+	}
+	return errors.New("candidatepublication: immutable manifest alias lineage collision")
+}
+
+func (a *Adapter) verifyManifestGenerationBytes(generation string, raw []byte) error {
+	if !isGeneration(generation) || Digest(raw) != "sha256:"+strings.TrimPrefix(generation, "g-") {
+		return errors.New("candidatepublication: manifest generation identity mismatch")
+	}
+	retained, err := a.root.ReadSelector(generation+"/artifact.json", int64(len(raw))+1)
+	if err != nil || !bytes.Equal(retained, raw) {
+		return errors.New("candidatepublication: manifest generation artifact mismatch")
+	}
+	selectorBytes, err := a.root.ReadSelector(generation+".selector.json", 4096)
+	if err != nil {
+		return err
+	}
+	decoded, err := verification.DecodeSelector(selectorBytes)
+	if err != nil || decoded.Generation != generation {
+		return errors.New("candidatepublication: manifest selector mismatch")
+	}
+	byteReceipt, err := a.root.ReadSelector(generation+"/receipt.json", 1<<20)
+	if err != nil || verification.VerifyReceipt(raw, byteReceipt) != nil {
+		return errors.New("candidatepublication: manifest byte custody receipt failed")
+	}
+	return nil
+}
+
+func manifestCanonicalEqual(a, b Manifest) bool { return a == b }
+
+func manifestGenerationFromArtifactSelector(selector string) string {
+	return strings.TrimSuffix(selector, "/artifact.json")
 }
 
 func manifestSelectorForGeneration(generation string) string {

@@ -7,13 +7,22 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
 )
 
 var ErrStalePredecessor = errors.New("bound file stale predecessor")
+var ErrLockSubstitution = errors.New("bound file CAS lock substitution")
+
+const (
+	CASOutcomeNotCommitted                = "NOT_COMMITTED"
+	CASOutcomeCommitted                   = "COMMITTED"
+	CASOutcomeCommittedVerificationFailed = "COMMITTED_VERIFICATION_FAILED"
+)
 
 type BoundFilePredecessor struct {
 	Absent     bool
@@ -25,6 +34,7 @@ type BoundFilePredecessor struct {
 type CompareAndReplaceReceipt struct {
 	*BoundFileReceipt
 	Committed bool
+	Outcome   string
 }
 
 func DigestForTest(raw []byte) string {
@@ -69,23 +79,31 @@ func CompareAndReplaceBoundFile(ctx context.Context, root *Root, selector string
 		return nil, err
 	}
 	if err := ctx.Err(); err != nil {
-		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: false}, err
+		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: false, Outcome: CASOutcomeNotCommitted}, err
 	}
-	if err := renameBoundFileSibling(root, temp, selector); err != nil {
+	renameCommitted, directoryStatus, err := renameBoundFileSibling(root, temp, selector)
+	if err != nil && !renameCommitted {
 		return nil, err
 	}
+	if renameCommitted && directoryStatus != "" {
+		receipt.DirectorySyncStatus = directoryStatus
+		receipt.CrashDurability = directoryStatus
+	}
+	receipt.FinalSelector = selector
 	verifyErr := error(nil)
 	if got, err := root.ReadSelector(selector, int64(len(raw))+1); err != nil || !bytes.Equal(got, raw) {
 		verifyErr = errors.New("bound file CAS final verification failed")
 	} else if err := verify(got); err != nil {
 		verifyErr = err
 	}
-	receipt.FinalSelector = selector
-	if verifyErr != nil {
-		receipt.VerificationStatus = "COMMITTED_VERIFICATION_FAILED"
-		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true}, nil
+	if cerr := ctx.Err(); cerr != nil {
+		verifyErr = errors.Join(verifyErr, cerr)
 	}
-	return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true}, nil
+	if verifyErr != nil {
+		receipt.VerificationStatus = CASOutcomeCommittedVerificationFailed
+		return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true, Outcome: CASOutcomeCommittedVerificationFailed}, errors.Join(err, verifyErr)
+	}
+	return &CompareAndReplaceReceipt{BoundFileReceipt: receipt, Committed: true, Outcome: CASOutcomeCommitted}, err
 }
 
 func (r *Root) casLock(ctx context.Context, selector string) (func(), error) {
@@ -93,7 +111,7 @@ func (r *Root) casLock(ctx context.Context, selector string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	lockFD, err := unix.Openat(parentFD, ".lsp-trace-candidate-publication.lock", unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	lockFD, err := openStableCASLock(parentFD, r.info)
 	if err != nil {
 		_ = closeBoundRootFD(parentFD)
 		return nil, err
@@ -104,8 +122,30 @@ func (r *Root) casLock(ctx context.Context, selector string) (func(), error) {
 			_ = closeBoundRootFD(parentFD)
 			return nil, err
 		}
+		if substituted, err := casLockSubstituted(parentFD, lockFD, r.info); err != nil || substituted {
+			_ = unix.Close(lockFD)
+			_ = closeBoundRootFD(parentFD)
+			if err == nil {
+				err = ErrLockSubstitution
+			}
+			return nil, err
+		}
 		if err := unix.Flock(lockFD, unix.LOCK_EX|unix.LOCK_NB); err == nil {
-			return func() { _ = unix.Flock(lockFD, unix.LOCK_UN); _ = unix.Close(lockFD); _ = closeBoundRootFD(parentFD) }, nil
+			if substituted, err := casLockSubstituted(parentFD, lockFD, r.info); err != nil || substituted {
+				_ = unix.Flock(lockFD, unix.LOCK_UN)
+				_ = unix.Close(lockFD)
+				_ = closeBoundRootFD(parentFD)
+				if err == nil {
+					err = ErrLockSubstitution
+				}
+				return nil, err
+			}
+			return func() {
+				_, _ = casLockSubstituted(parentFD, lockFD, r.info)
+				_ = unix.Flock(lockFD, unix.LOCK_UN)
+				_ = unix.Close(lockFD)
+				_ = closeBoundRootFD(parentFD)
+			}, nil
 		} else if !errors.Is(err, unix.EWOULDBLOCK) && !errors.Is(err, unix.EAGAIN) {
 			_ = unix.Close(lockFD)
 			_ = closeBoundRootFD(parentFD)
@@ -115,31 +155,74 @@ func (r *Root) casLock(ctx context.Context, selector string) (func(), error) {
 	}
 }
 
-func renameBoundFileSibling(root *Root, tempSelector, finalSelector string) error {
+func renameBoundFileSibling(root *Root, tempSelector, finalSelector string) (bool, string, error) {
 	tempFD, tempName, err := boundParentFD(root, tempSelector)
 	if err != nil {
-		return err
+		return false, DirectorySyncNotAttemptedPostCommit, err
 	}
 	defer closeBoundRootFD(tempFD)
 	finalFD, finalName, err := boundParentFD(root, finalSelector)
 	if err != nil {
-		return err
+		return false, DirectorySyncNotAttemptedPostCommit, err
 	}
 	defer closeBoundRootFD(finalFD)
 	if tempFD != finalFD {
 		// Descriptor numbers differ even for the same directory; require stable same parent by fstat.
 		var a, b unix.Stat_t
 		if unix.Fstat(tempFD, &a) != nil || unix.Fstat(finalFD, &b) != nil || a.Dev != b.Dev || a.Ino != b.Ino {
-			return errors.New("bound file CAS rename requires same pinned parent")
+			return false, DirectorySyncNotAttemptedPostCommit, errors.New("bound file CAS rename requires same pinned parent")
 		}
 	}
 	if err := unix.Renameat(tempFD, tempName, finalFD, finalName); err != nil {
-		return err
+		return false, DirectorySyncNotAttemptedPostCommit, err
 	}
 	if err := syncBoundDirectory(finalFD); err != nil {
-		return errors.Join(errors.New("bound file CAS committed directory sync failed"), err)
+		return true, DirectorySyncFailed, errors.Join(errors.New("bound file CAS committed directory sync failed"), err)
 	}
-	return nil
+	return true, DirectorySyncComplete, nil
+}
+
+func openStableCASLock(parentFD int, rootInfo os.FileInfo) (int, error) {
+	fd, err := unix.Openat(parentFD, ".lsp-trace-candidate-publication.lock", unix.O_RDWR|unix.O_CREAT|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0o600)
+	if err != nil {
+		return -1, err
+	}
+	if substituted, err := casLockSubstituted(parentFD, fd, rootInfo); err != nil || substituted {
+		_ = unix.Close(fd)
+		if err == nil {
+			err = ErrLockSubstitution
+		}
+		return -1, err
+	}
+	return fd, nil
+}
+
+func casLockSubstituted(parentFD, lockFD int, rootInfo os.FileInfo) (bool, error) {
+	var path, fd unix.Stat_t
+	if err := unix.Fstatat(parentFD, ".lsp-trace-candidate-publication.lock", &path, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return false, errors.Join(ErrLockSubstitution, err)
+	}
+	if err := unix.Fstat(lockFD, &fd); err != nil {
+		return false, errors.Join(ErrLockSubstitution, err)
+	}
+	if path.Dev != fd.Dev || path.Ino != fd.Ino {
+		return true, nil
+	}
+	if !validCASLockMetadata(rootInfo, &fd) || !validCASLockMetadata(rootInfo, &path) {
+		return false, errors.Join(ErrLockSubstitution, errors.New("unsafe lock metadata"))
+	}
+	return false, nil
+}
+
+func validCASLockMetadata(rootInfo os.FileInfo, st *unix.Stat_t) bool {
+	rootStat, ok := rootInfo.Sys().(*syscall.Stat_t)
+	if !ok || st == nil {
+		return false
+	}
+	if st.Mode&unix.S_IFMT != unix.S_IFREG || st.Mode&0o022 != 0 || st.Nlink != 1 || st.Size != 0 {
+		return false
+	}
+	return st.Uid == uint32(os.Geteuid()) || st.Uid == rootStat.Uid
 }
 
 func maxLen(a, b uint64) uint64 {
