@@ -1,0 +1,2 @@
+docs/pilot/adr0007/experiment/location-intersection-v5-qualification-2026-10-07/AUTHORIZATION.json: json: cannot unmarshal string into Go struct field authFile.externalInference of type bool
+exit status 1
