@@ -352,13 +352,78 @@ type DeriveInput struct {
 }
 
 type rawAttempt struct {
-	AttemptID        string           `json:"attempt_id"`
-	SchemaVersion    string           `json:"schema_version"`
-	Request          rawRequest       `json:"request"`
-	ExecutionControl rawControl       `json:"execution_control"`
-	SourceInputs     []rawSourceInput `json:"source_inputs"`
-	TestControl      map[string]any   `json:"test_control,omitempty"`
+	AttemptID        string                  `json:"attempt_id"`
+	SchemaVersion    string                  `json:"schema_version"`
+	Request          rawRequest              `json:"request"`
+	ExecutionControl rawControl              `json:"execution_control"`
+	SourceInputs     []rawSourceInput        `json:"source_inputs"`
+	TestControl      *ArithmeticProbeControl `json:"test_control,omitempty"`
 }
+type ArithmeticProbeControl struct {
+	SchemaVersion string       `json:"schema_version"`
+	Counter       ProbeCounter `json:"counter"`
+	Initial       uint64       `json:"initial"`
+	Increment     uint64       `json:"increment"`
+}
+type ProbeCounter string
+
+const (
+	ProbeCounterBOutputBytes   ProbeCounter = "B_output_bytes"
+	ProbeCounterWWork          ProbeCounter = "W_work"
+	ProbeCounterTScannedTuples ProbeCounter = "T_scanned_tuples"
+)
+
+func (c *ArithmeticProbeControl) UnmarshalJSON(b []byte) error {
+	var raw map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	if _, legacy := raw["initial_B_output_bytes"]; legacy {
+		if len(raw) != 2 {
+			return errors.New("test_control legacy shape")
+		}
+		var schema string
+		if err := json.Unmarshal(raw["schema_version"], &schema); err != nil {
+			return err
+		}
+		var n json.Number
+		if err := json.Unmarshal(raw["initial_B_output_bytes"], &n); err != nil {
+			return err
+		}
+		u, err := parseU64(n.String())
+		if err != nil {
+			return err
+		}
+		*c = ArithmeticProbeControl{SchemaVersion: schema, Counter: ProbeCounterBOutputBytes, Initial: u, Increment: 1}
+		return c.validate()
+	}
+	if len(raw) != 4 {
+		return errors.New("test_control shape")
+	}
+	type alias ArithmeticProbeControl
+	var a alias
+	if err := json.Unmarshal(b, &a); err != nil {
+		return err
+	}
+	*c = ArithmeticProbeControl(a)
+	return c.validate()
+}
+
+func (c ArithmeticProbeControl) validate() error {
+	if c.SchemaVersion != "lsp-trace.adr0007.source-text-search.test-control.private.v4" {
+		return errors.New("test_control schema_version")
+	}
+	switch c.Counter {
+	case ProbeCounterBOutputBytes, ProbeCounterWWork, ProbeCounterTScannedTuples:
+		return nil
+	default:
+		return errors.New("test_control counter")
+	}
+}
+
 type rawRequest struct {
 	SchemaVersion string         `json:"schema_version"`
 	Query         string         `json:"query"`
@@ -461,6 +526,9 @@ func deriveInputFromBundle(b Bundle) DeriveInput {
 }
 
 func Derive(in DeriveInput) (string, error) {
+	if err := validateNamedArtifactRoles(Bundle{ToolingManifestBytes: in.ToolingManifestBytes, PredecessorManifestBytes: in.PredecessorManifestBytes, PayloadFreezeBytes: in.PayloadFreezeBytes}); err != nil {
+		return "", err
+	}
 	attempt, err := parseRawAttempt(in.RawAttemptBytes)
 	if err != nil {
 		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": err.Error()}, false, nil, "invalid")
@@ -483,7 +551,7 @@ func Derive(in DeriveInput) (string, error) {
 		return deriveFailure(in, "ASSOCIATION_FAILED", map[string]any{"source_id": assocErr.Error()}, false, nil, attempt.Request.Query)
 	}
 	admitted, binding, admDetail, admOK, resource := admitSources(selected, attempt.Request.Limits)
-	if err := crosscheckAdmittedSourceBytes(admitted, in.AdmittedSourceBytes); err != nil {
+	if err := copyExactAdmittedSourceBytes(admitted, in.AdmittedSourceBytes); err != nil {
 		return deriveFailure(in, "ASSOCIATION_FAILED", map[string]any{"source_id": err.Error()}, false, nil, attempt.Request.Query)
 	}
 	if !admOK {
@@ -543,7 +611,7 @@ func Derive(in DeriveInput) (string, error) {
 			}
 		}
 	}
-	sortMatchesPositions(t.Matches, t.Positions)
+	sortMatchesPositions(t.Matches, t.Positions, t.Sources)
 	t.RangeUnionCandidate = deriveCandidateWithPin(t, attempt.Request.LocationPin)
 	if code, detail := rt.pollControl(); code != "" {
 		return deriveFailureWithBase(in, t, code, detail, false)
@@ -558,9 +626,9 @@ func Derive(in DeriveInput) (string, error) {
 	if t.Accounting.WWork > attempt.Request.Limits.MaxWork || t.Accounting.BOutputBytes > attempt.Request.Limits.MaxOutputBytes {
 		return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "post_scan"}, true)
 	}
-	if overflow, counter := overflowRequested(attempt); overflow {
-		if _, ok := checkedAdd(counter, 1); !ok {
-			return deriveFailureWithBase(in, t, "OVERFLOW", map[string]any{"counter": "test_control.initial_counter"}, true)
+	if overflow, counter, initial, increment := overflowRequested(attempt); overflow {
+		if _, ok := checkedAdd(initial, increment); !ok {
+			return deriveFailureWithBase(in, t, "OVERFLOW", map[string]any{"counter": string(counter)}, true)
 		}
 	}
 	return CanonicalJSON(t)
@@ -821,14 +889,21 @@ func checkedAdd(a, b uint64) (uint64, bool) {
 	}
 	return a + b, true
 }
-func sortMatchesPositions(ms []Match, ps []Position) {
+func sortMatchesPositions(ms []Match, ps []Position, sources []Source) {
 	pos := map[string]Position{}
+	pathByID := map[string]string{}
+	ordByID := map[string]uint64{}
+	for _, s := range sources {
+		posixPath := strings.TrimPrefix(s.LogicalURI, "file:///")
+		pathByID[s.SourceID] = posixPath
+		ordByID[s.SourceID] = s.Ordinal
+	}
 	for _, p := range ps {
 		pos[p.MatchID] = p
 	}
 	sort.Slice(ms, func(i, j int) bool {
-		if ms[i].PathBytes != ms[j].PathBytes {
-			return ms[i].PathBytes < ms[j].PathBytes
+		if cmp := bytes.Compare([]byte(pathByID[ms[i].SourceID]), []byte(pathByID[ms[j].SourceID])); cmp != 0 {
+			return cmp < 0
 		}
 		if ms[i].StartByte != ms[j].StartByte {
 			return ms[i].StartByte < ms[j].StartByte
@@ -836,31 +911,32 @@ func sortMatchesPositions(ms []Match, ps []Position) {
 		if ms[i].EndByte != ms[j].EndByte {
 			return ms[i].EndByte < ms[j].EndByte
 		}
+		if ordByID[ms[i].SourceID] != ordByID[ms[j].SourceID] {
+			return ordByID[ms[i].SourceID] < ordByID[ms[j].SourceID]
+		}
 		return ms[i].Ordinal < ms[j].Ordinal
 	})
 	for i, m := range ms {
 		ps[i] = pos[m.MatchID]
 	}
 }
-func crosscheckAdmittedSourceBytes(in []admittedSource, exact map[string]string) error {
+func copyExactAdmittedSourceBytes(in []admittedSource, exact map[string]string) error {
 	if exact == nil {
 		return nil
 	}
-	want := map[string]string{}
-	for i, s := range in {
-		want[deriveSourceID(s.ref.Path, s.ref.Revision, uint64(i))] = string(s.data)
-	}
-	if len(want) != len(exact) {
+	if len(in) != len(exact) {
 		return errors.New("admitted_source_bytes_count")
 	}
-	for id, b := range want {
+	for i := range in {
+		id := deriveSourceID(in[i].ref.Path, in[i].ref.Revision, uint64(i))
 		got, ok := exact[id]
 		if !ok {
 			return fmt.Errorf("missing:%s", id)
 		}
-		if got != b {
+		if got != string(in[i].data) {
 			return fmt.Errorf("mismatch:%s", id)
 		}
+		in[i].data = append([]byte(nil), []byte(got)...)
 	}
 	return nil
 }
@@ -871,6 +947,7 @@ func baseTerminal(in DeriveInput, attemptID, query string) Terminal {
 }
 func deriveFailure(in DeriveInput, code string, detail map[string]any, includeAdmission bool, sources []Source, query string) (string, error) {
 	t := baseTerminal(in, "attempt-raw-sha256-"+strings.TrimPrefix(sha(in.RawAttemptBytes), "sha256:"), query)
+	t.Sources = append([]Source{}, sources...)
 	return deriveFailureWithBase(in, t, code, detail, includeAdmission)
 }
 func deriveFailureWithBase(in DeriveInput, t Terminal, code string, detail map[string]any, includeAdmission bool) (string, error) {
@@ -895,22 +972,11 @@ func deriveFailureWithBase(in DeriveInput, t Terminal, code string, detail map[s
 	finalizeTerminal(&t)
 	return CanonicalJSON(t)
 }
-func overflowRequested(a rawAttempt) (bool, uint64) {
+func overflowRequested(a rawAttempt) (bool, ProbeCounter, uint64, uint64) {
 	if a.TestControl == nil {
-		return false, 0
+		return false, "", 0, 0
 	}
-	v, ok := a.TestControl["initial_counter"].(json.Number)
-	if !ok {
-		v, ok = a.TestControl["initial_B_output_bytes"].(json.Number)
-	}
-	if !ok {
-		return false, 0
-	}
-	u, err := parseU64(v.String())
-	if err != nil {
-		return false, 0
-	}
-	return true, u
+	return true, a.TestControl.Counter, a.TestControl.Initial, a.TestControl.Increment
 }
 func finalizeTerminal(t *Terminal) {
 	t.Accounting = deriveAccounting(*t, "")
@@ -924,12 +990,32 @@ func finalizeTerminal(t *Terminal) {
 }
 func deriveCandidateWithPin(t Terminal, lp rawLocationPin) *Candidate {
 	c := deriveCandidate(t)
-	h := sha256.New()
-	fmt.Fprintf(h, "%s\n%s\n%s\n%s\n%s\n", lp.DesignCommit, lp.DesignRootSHA256, lp.ExecutionCommit, lp.SealCommit, lp.FinalSealSHA256)
-	fmt.Fprintf(h, "%s\n%s\n%d\n", lp.SourceAdmissionPin.Path, lp.SourceAdmissionPin.SHA256, lp.SourceAdmissionPin.Bytes)
-	fmt.Fprintf(h, "%s\n", c.CandidateDigest)
-	c.CandidateDigest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+	c.CandidateDigest = candidateDigest(c, lp)
 	return c
+}
+
+func candidateDigest(c *Candidate, lp rawLocationPin) string {
+	zero := *c
+	zero.CandidateDigest = zeroSHA
+	preimage := map[string]any{
+		"schema_version":          lp.SchemaVersion,
+		"operation":               lp.Operation,
+		"executedLocation":        lp.ExecutedLocation,
+		"candidate_only":          zero.CandidateOnly,
+		"complete_location_pins":  append([]string(nil), lp.CompleteLocationPins...),
+		"design_commit":           lp.DesignCommit,
+		"design_root_sha256":      lp.DesignRootSHA256,
+		"execution_commit":        lp.ExecutionCommit,
+		"seal_commit":             lp.SealCommit,
+		"final_seal_sha256":       lp.FinalSealSHA256,
+		"source_admission_pin":    lp.SourceAdmissionPin,
+		"admission_digest":        zero.AdmissionDigest,
+		"member_match_ids":        append([]string(nil), zero.MemberMatchIDs...),
+		"qualified_location_pins": append([]LocationPin(nil), zero.QualifiedLocationPins...),
+		"candidate":               zero,
+	}
+	s, _ := CanonicalJSON(preimage)
+	return sha(s)
 }
 
 func deriveCandidate(t Terminal) *Candidate {
@@ -1272,7 +1358,7 @@ func validateSourcesMatches(t Terminal, b Bundle) error {
 		}
 		src[s.SourceID] = s
 	}
-	prevPath, prevStart, prevEnd, prevOrd := uint64(0), uint64(0), uint64(0), uint64(0)
+	prevPathRank, prevStart, prevEnd, prevOrd := "", uint64(0), uint64(0), uint64(0)
 	for i, m := range t.Matches {
 		s, ok := src[m.SourceID]
 		if !ok {
@@ -1291,10 +1377,11 @@ func validateSourcesMatches(t Terminal, b Bundle) error {
 		if m.PathBytes != s.PathBytes {
 			return verr("ASSOCIATION_FAILED", "/matches/path_bytes", "path mismatch")
 		}
-		if i > 0 && (m.PathBytes < prevPath || (m.PathBytes == prevPath && (m.StartByte < prevStart || (m.StartByte == prevStart && (m.EndByte < prevEnd || (m.EndByte == prevEnd && m.Ordinal <= prevOrd)))))) {
+		pathRank := sourcePathRank(s)
+		if i > 0 && (bytes.Compare([]byte(pathRank), []byte(prevPathRank)) < 0 || (pathRank == prevPathRank && (m.StartByte < prevStart || (m.StartByte == prevStart && (m.EndByte < prevEnd || (m.EndByte == prevEnd && m.Ordinal <= prevOrd)))))) {
 			return verr("INVARIANT_FAILED", "/matches", "deterministic order")
 		}
-		prevPath, prevStart, prevEnd, prevOrd = m.PathBytes, m.StartByte, m.EndByte, m.Ordinal
+		prevPathRank, prevStart, prevEnd, prevOrd = pathRank, m.StartByte, m.EndByte, m.Ordinal
 	}
 	if len(t.Positions) != len(t.Matches) {
 		return verr("ASSOCIATION_FAILED", "/positions", "position count")
@@ -1322,6 +1409,8 @@ func validateSourcesMatches(t Terminal, b Bundle) error {
 	}
 	return nil
 }
+
+func sourcePathRank(s Source) string { return strings.TrimPrefix(s.LogicalURI, "file:///") }
 
 func validateCandidate(t Terminal) error {
 	if t.Terminal == "COMPLETE" {

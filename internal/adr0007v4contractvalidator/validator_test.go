@@ -297,6 +297,66 @@ func TestReflectionTerminalLeafMutationsReject(t *testing.T) {
 	t.Logf("terminal leaf mutations=%d", len(paths))
 }
 
+func TestExactSourceMapIsOperativeAndCopied(t *testing.T) {
+	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "case-13-utf8_nfc_path.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := map[string]string{}
+	for k, v := range bun.AdmittedSourceBytes {
+		bad[k] = v + "x"
+	}
+	badTerminal, err := Derive(DeriveInput{RawAttemptBytes: bun.RawAttemptBytes, AdmittedSourceBytes: bad, AdmittedBindingBytes: bun.AdmittedBindingBytes, PayloadFreezeBytes: bun.PayloadFreezeBytes, ToolingManifestBytes: bun.ToolingManifestBytes, PredecessorManifestBytes: bun.PredecessorManifestBytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var badTerm Terminal
+	if err := json.Unmarshal([]byte(badTerminal), &badTerm); err != nil || badTerm.Terminal != "FAILED" || badTerm.Failure == nil || badTerm.Failure.Code != "ASSOCIATION_FAILED" {
+		t.Fatalf("mutated admitted source map accepted: err=%v terminal=%s failure=%+v", err, badTerm.Terminal, badTerm.Failure)
+	}
+	good := map[string]string{}
+	for k, v := range bun.AdmittedSourceBytes {
+		good[k] = v
+	}
+	got, err := Derive(DeriveInput{RawAttemptBytes: bun.RawAttemptBytes, AdmittedSourceBytes: good, AdmittedBindingBytes: bun.AdmittedBindingBytes, PayloadFreezeBytes: bun.PayloadFreezeBytes, ToolingManifestBytes: bun.ToolingManifestBytes, PredecessorManifestBytes: bun.PredecessorManifestBytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k := range good {
+		good[k] = "changed after derive"
+	}
+	var term Terminal
+	if err := json.Unmarshal([]byte(got), &term); err != nil || term.Terminal != "COMPLETE" {
+		t.Fatalf("derive did not use copied source map data: %v %s", err, term.Terminal)
+	}
+}
+
+func TestDeriveRejectsNamedArtifactRoleSwaps(t *testing.T) {
+	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "case-13-utf8_nfc_path.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := deriveInputFromBundle(bun)
+	in.PayloadFreezeBytes, in.ToolingManifestBytes = in.ToolingManifestBytes, in.PayloadFreezeBytes
+	if _, err := Derive(in); err == nil {
+		t.Fatal("swapped named artifacts accepted")
+	}
+}
+
+func TestArithmeticProbeEnums(t *testing.T) {
+	for _, c := range []ProbeCounter{ProbeCounterBOutputBytes, ProbeCounterWWork, ProbeCounterTScannedTuples} {
+		raw := []byte(`{"schema_version":"lsp-trace.adr0007.source-text-search.test-control.private.v4","counter":"` + string(c) + `","initial":1,"increment":2}`)
+		var p ArithmeticProbeControl
+		if err := json.Unmarshal(raw, &p); err != nil {
+			t.Fatalf("%s rejected: %v", c, err)
+		}
+	}
+	var p ArithmeticProbeControl
+	if err := json.Unmarshal([]byte(`{"schema_version":"lsp-trace.adr0007.source-text-search.test-control.private.v4","counter":"bad","initial":1,"increment":2}`), &p); err == nil {
+		t.Fatal("invalid counter accepted")
+	}
+}
+
 func TestDeriveDoesNotReferenceCandidateTerminalBytes(t *testing.T) {
 	body, err := os.ReadFile("validator.go")
 	if err != nil {
