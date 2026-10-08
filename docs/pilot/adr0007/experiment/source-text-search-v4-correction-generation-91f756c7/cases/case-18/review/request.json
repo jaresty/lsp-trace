@@ -1,0 +1,8 @@
+{
+  "case_id": "case-18-duplicate_path_diff_revision",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-18/production/derived.contract.json",
+  "production_derived_sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+  "production_dispatch_used": false
+}

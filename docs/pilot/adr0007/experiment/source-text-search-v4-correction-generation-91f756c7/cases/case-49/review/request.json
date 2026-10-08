@@ -1,0 +1,8 @@
+{
+  "case_id": "case-49-overflow_helper_case",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-49/production/derived.contract.json",
+  "production_derived_sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+  "production_dispatch_used": false
+}

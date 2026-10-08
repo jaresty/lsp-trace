@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:7fa49cbebcaf1e3ad291d9e782797973a0a8c09788483c1a3dda69c1c44a8f20",
+  "case_id": "case-10-control_midscan_cancel",
+  "derived_sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

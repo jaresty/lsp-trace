@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:7b176830b7a8b8cb4b58ed3ddc451ee26719b9375d71f7324b359e1b640e3f08",
+  "case_id": "case-22-object_digest_mutation",
+  "derived_sha256": "sha256:1a2445cea4142d19fc095479c7057ba366e8fa15fabfd7bfa07644133969b5ae",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

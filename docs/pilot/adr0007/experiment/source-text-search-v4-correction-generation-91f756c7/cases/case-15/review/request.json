@@ -1,0 +1,8 @@
+{
+  "case_id": "case-15-path_absolute",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:2a31babd94a48b70eb397bee88a97c77de07581cdc9444947434527132fd3303",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-15/production/derived.contract.json",
+  "production_derived_sha256": "sha256:2a31babd94a48b70eb397bee88a97c77de07581cdc9444947434527132fd3303",
+  "production_dispatch_used": false
+}

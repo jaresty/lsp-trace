@@ -1,0 +1,8 @@
+{
+  "case_id": "case-33-non_bmp_utf16",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-33/production/derived.contract.json",
+  "production_derived_sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+  "production_dispatch_used": false
+}

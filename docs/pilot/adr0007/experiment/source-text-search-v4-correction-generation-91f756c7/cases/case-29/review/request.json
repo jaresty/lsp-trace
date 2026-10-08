@@ -1,0 +1,8 @@
+{
+  "case_id": "case-29-lf_positions",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-29/production/derived.contract.json",
+  "production_derived_sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+  "production_dispatch_used": false
+}

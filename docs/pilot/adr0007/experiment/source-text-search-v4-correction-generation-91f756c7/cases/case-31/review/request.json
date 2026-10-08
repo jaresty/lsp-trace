@@ -1,0 +1,8 @@
+{
+  "case_id": "case-31-bare_cr_positions",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-31/production/derived.contract.json",
+  "production_derived_sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+  "production_dispatch_used": false
+}

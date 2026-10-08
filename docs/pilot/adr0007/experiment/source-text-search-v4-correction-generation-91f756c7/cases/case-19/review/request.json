@@ -1,0 +1,8 @@
+{
+  "case_id": "case-19-ordinal_missing",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-19/production/derived.contract.json",
+  "production_derived_sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+  "production_dispatch_used": false
+}

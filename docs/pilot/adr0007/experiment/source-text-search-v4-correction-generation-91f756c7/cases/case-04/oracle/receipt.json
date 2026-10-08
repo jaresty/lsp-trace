@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "sha256:1b0f335217d555e885557eb8267ce8ceacba3107079de6d9e7acf456581464ef",
+  "case_id": "case-04-raw_trailing_data",
+  "end": "2026-10-08T12:53:40.329202Z",
+  "exit_status": 0,
+  "lane": "oracle",
+  "schema": "raw-result-receipt",
+  "start": "2026-10-08T12:53:40.314081Z",
+  "stderr_bytes": 0,
+  "stderr_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 2217,
+  "stdout_sha256": "sha256:e16d919731a71e38ab34493fd14505a573b8ccdb3d1162c4d4ba386ee000dda3"
+}

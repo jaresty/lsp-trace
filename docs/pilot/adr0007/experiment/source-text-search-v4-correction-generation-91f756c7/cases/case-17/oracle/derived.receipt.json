@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:de87adc991a13408e88d249763114255de753a2203a60a4d6a7cae6f3c71792a",
+  "case_id": "case-17-duplicate_path_same_revision",
+  "derived_sha256": "sha256:30e8e768921135fb1388077766f2b7ac6dc42cfdef6cde35c0f36af17fb69e7f",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

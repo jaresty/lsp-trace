@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:8944afa144c5f93ab06403587a4cad9461ccf6d46bd5bf2a3b03daaabd1b25f2",
+  "case_id": "case-34-crossline_literal",
+  "derived_sha256": "sha256:b615e2b45933ab93d53f942eb1ea2a177e280e50f6d72a8770683779f02f04e2",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

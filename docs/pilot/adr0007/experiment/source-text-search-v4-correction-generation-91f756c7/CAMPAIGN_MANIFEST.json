@@ -1,0 +1,2846 @@
+{
+  "accounting": {
+    "accepted": false,
+    "authority": 0,
+    "completeness": "UNKNOWN",
+    "featureIdentity": "UNRESOLVED",
+    "judgments": 50,
+    "oracle_attempts": 50,
+    "preserved_production_references": 50,
+    "production_attempts": 0
+  },
+  "files": [
+    {
+      "path": "AUTHORIZED_BINDINGS.json",
+      "bytes": 1535,
+      "sha256": "sha256:6f0047d5fd0c907319464dc187520aa86d5ccba24a8650188b326a5a015758d7",
+      "mode": ""
+    },
+    {
+      "path": "BINARY_DIRECTORY_IDENTITY.json",
+      "bytes": 1535,
+      "sha256": "sha256:32f1c0659c975145616933667997b8d1aa87a7b20dd0e8c85f1b66dd9e9c3839",
+      "mode": ""
+    },
+    {
+      "path": "CAMPAIGN_DEFINITION.json",
+      "bytes": 1535,
+      "sha256": "sha256:6f0047d5fd0c907319464dc187520aa86d5ccba24a8650188b326a5a015758d7",
+      "mode": ""
+    },
+    {
+      "path": "CASE_COMMITMENTS.json",
+      "bytes": 25664,
+      "sha256": "sha256:91196ea7682a7b789cd03a9eab178609975ea2a4e21dcf76f10bdc0efc7b7fe2",
+      "mode": ""
+    },
+    {
+      "path": "EVENTS.ndjson",
+      "bytes": 119491,
+      "sha256": "sha256:8910391ef8cd4c6ca04587fe461c104bec28764043515d1adfcdd791b8e959ba",
+      "mode": ""
+    },
+    {
+      "path": "FINAL_AUDIT.json",
+      "bytes": 354,
+      "sha256": "sha256:aa626deeaaf28c7b2b01e4551e14f3ae4c1443899b290c68cb8d05929a6d8b93",
+      "mode": ""
+    },
+    {
+      "path": "PREDISPATCH.json",
+      "bytes": 295064,
+      "sha256": "sha256:8141ca6eb70775542349e38b81824ea92f92d88167b755222457c927976d4f5d",
+      "mode": ""
+    },
+    {
+      "path": "PREPARE_FREEZE.json",
+      "bytes": 110,
+      "sha256": "sha256:7e90a9d24e72a5b9369e5f0daa8d0c073e90a64bd8ea0e0fa77ee167672f0c70",
+      "mode": ""
+    },
+    {
+      "path": "PRESERVED_PRODUCTION_DIGEST_MANIFEST.json",
+      "bytes": 43600,
+      "sha256": "sha256:662a1a2ed0371348bec5246f60eda52bfac31ccbc2a6df7d2fe528945b23be79",
+      "mode": ""
+    },
+    {
+      "path": "REVIEW_SUMMARY.json",
+      "bytes": 57,
+      "sha256": "sha256:daed5c08bf1f14ddb747513f243222b9c22c884a6f51777721b9f78096462219",
+      "mode": ""
+    },
+    {
+      "path": "TOOLING_MANIFEST.json",
+      "bytes": 137,
+      "sha256": "sha256:07e380257cb3c2633cbbd8cbf1e00252e7eaf08bab8303f90c3f583fdb0df582",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/derived.contract.json",
+      "bytes": 2207,
+      "sha256": "sha256:2c10e26a7ba75a140b1a0c25c964d9082a7762b4d5026526aa125c318f39b1af",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/derived.receipt.json",
+      "bytes": 295,
+      "sha256": "sha256:e218b5e752562cce2be5da3a2bd909e52944158f8f4987219f94e64635944306",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/raw.stdout",
+      "bytes": 2207,
+      "sha256": "sha256:2c10e26a7ba75a140b1a0c25c964d9082a7762b4d5026526aa125c318f39b1af",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/receipt.json",
+      "bytes": 529,
+      "sha256": "sha256:c714bdfac4e97cb803e13be87b87d0e02ca7591bca251aaf988df2e060460271",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/oracle/validator.bundle.json",
+      "bytes": 40491,
+      "sha256": "sha256:61c4b83388f43a1f27966367ed4631f53f9ba9b3662f9d297bba8d98c7434eb6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/review/judgment.json",
+      "bytes": 209,
+      "sha256": "sha256:d4cc41c36b73d2228213901d81386d051398f8711925ae0a62d92bbc5d88abe4",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-01/review/request.json",
+      "bytes": 490,
+      "sha256": "sha256:d49fc58f6eac74c5383290e5024ef60d47140c7f5cea8fb08654ad5a9a543b74",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/derived.contract.json",
+      "bytes": 2241,
+      "sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:86a23f37737dc27f2efde9981e8bd7ea9470f2ab054ac9a85a84193c2a7ebf3d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/raw.stdout",
+      "bytes": 2241,
+      "sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:910491f2aa8e1d7c53164ba2ec0b28612323b273b35f1757fe9d2234caa0b752",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/oracle/validator.bundle.json",
+      "bytes": 43847,
+      "sha256": "sha256:fd4b1c721608d10650d0775a680c3fb1b18ac5f1bcb1af3f195ef58e298a3721",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:de0fa06ab17cfc562016b3dff09ebf40e8365a712aeef3e3a1787ed88088d2ff",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-02/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:8bf10af7c996e72726fa985052c3721ffa48a81d61c2c91adb261f3feb5ceb26",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/derived.contract.json",
+      "bytes": 2230,
+      "sha256": "sha256:fb338c04fed66ff2f23c7f65519187f83e0de6a6abb091045c3df55ef28bb100",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/derived.receipt.json",
+      "bytes": 296,
+      "sha256": "sha256:8f2c8299f2831be1e2c5e4a9690f2ff3ad7b2081cd01a18fe1afe08c81087b90",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/raw.stdout",
+      "bytes": 2230,
+      "sha256": "sha256:fb338c04fed66ff2f23c7f65519187f83e0de6a6abb091045c3df55ef28bb100",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/receipt.json",
+      "bytes": 530,
+      "sha256": "sha256:d911b5b47ebbbd3cd94f6c6d7fc54bfc52b183b8e8f3872bf3a1adcb2189e328",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/oracle/validator.bundle.json",
+      "bytes": 43843,
+      "sha256": "sha256:0f9b2fbbaa311b86f93856262160bbe97422527874bdaa4eccdb729601a63a48",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/review/judgment.json",
+      "bytes": 210,
+      "sha256": "sha256:4f01c3618f3039e7b51848352493bfd5d12e66c11ab6374aab046323bf4c576c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-03/review/request.json",
+      "bytes": 491,
+      "sha256": "sha256:bed6d64a0cd9c93ebdfa17e8c225044bf255e0b4badd27d2c9c1d4a139d7338a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/derived.contract.json",
+      "bytes": 2217,
+      "sha256": "sha256:e16d919731a71e38ab34493fd14505a573b8ccdb3d1162c4d4ba386ee000dda3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:705210e3d4ecc20b61bebace336bdbf48e84421ca969005c4755031489cdd286",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/raw.stdout",
+      "bytes": 2217,
+      "sha256": "sha256:e16d919731a71e38ab34493fd14505a573b8ccdb3d1162c4d4ba386ee000dda3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:a13444d98576728b6a96151e2bf10277e434d51aceac634f3b8fe32dbbb87423",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/oracle/validator.bundle.json",
+      "bytes": 43798,
+      "sha256": "sha256:c6b10b16d319cea27b15cf5f69dd7f787268540ee763b7adb06fff29d46d4723",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:e64f8fcdb848219e3829a77d05f1348fa6b256e299d17a64db302e471e6cf321",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-04/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:61bbb4c87cdeca9e8a7d8e0936d7929ee9d4860a82609526d8900233bdc6fa2f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/derived.contract.json",
+      "bytes": 2211,
+      "sha256": "sha256:f651f991c54331c5c20f2bc084745d3ea20cbda2a1fe273499817425bb31192c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/derived.receipt.json",
+      "bytes": 288,
+      "sha256": "sha256:ee5be8b429c82f495cd27cfbbcb96b327d9723817dc9c69fb54f41586cce5daf",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/raw.stdout",
+      "bytes": 2211,
+      "sha256": "sha256:f651f991c54331c5c20f2bc084745d3ea20cbda2a1fe273499817425bb31192c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/receipt.json",
+      "bytes": 521,
+      "sha256": "sha256:ed89eb99e8a6aa70ea9b6718173acb465a42d85bab75a5aeaa749b614b5be3d7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/oracle/validator.bundle.json",
+      "bytes": 43778,
+      "sha256": "sha256:94c3f9e13147899fdfc2db77808bcd87066eb213013efbf8752a1bcd91df6d47",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/review/judgment.json",
+      "bytes": 202,
+      "sha256": "sha256:48b80f555efb8867ce0472828cb0e69ecfd2426d73e98ef4f93a0fc6827f673d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-05/review/request.json",
+      "bytes": 483,
+      "sha256": "sha256:842833ff61229c5fe586eaa71e968eb7b27fe249506136dcec7aefb872ba1f7f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/derived.contract.json",
+      "bytes": 2210,
+      "sha256": "sha256:99db8d72d692b3caba9955d2f7a3d664aae1c4cb2e850948fc7277cf1ef7941d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/derived.receipt.json",
+      "bytes": 293,
+      "sha256": "sha256:cf968f87d67f3241b5cedbb7dfc7d82801230f19ffa35246f225c4c4d78e6194",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/raw.stdout",
+      "bytes": 2210,
+      "sha256": "sha256:99db8d72d692b3caba9955d2f7a3d664aae1c4cb2e850948fc7277cf1ef7941d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/receipt.json",
+      "bytes": 527,
+      "sha256": "sha256:f3fe540850e2f5a4bb41b7730ea4e9af44623680591fb085c445a017f35d788a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/oracle/validator.bundle.json",
+      "bytes": 43010,
+      "sha256": "sha256:60c2c8ca23c914a17390ab4d886f7c14c1e74bb28ed3821b47776de3f8b84814",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/review/judgment.json",
+      "bytes": 207,
+      "sha256": "sha256:ea122f3d2d7b3f345ef0396fc1fe1015afcfa3dd706baf0bdecf65844e05a3a7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-06/review/request.json",
+      "bytes": 488,
+      "sha256": "sha256:09ad11ba40c0a8057fba98b88377755f607570d104f829dab4d07c50b7940905",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:7c385f500d7f3a42c0e4d54d89236258d390b8beb056882d4eab4dc22e187bef",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:9f3c499589b79437e2c786d260f1f37d7c62bbe07bf73c0adc5ab4c863e7cb66",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:7c385f500d7f3a42c0e4d54d89236258d390b8beb056882d4eab4dc22e187bef",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:fe2ea257c8517454df932183446d5b4deb2980aa0398dc033b64a6154b89bff4",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/oracle/validator.bundle.json",
+      "bytes": 44034,
+      "sha256": "sha256:6265a87aab5d4f6a92b5ceca7acc6ac4652eec3ddc02bd44d85b1a008731ee15",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:5d4099419a8c42745b77078027637eed8d62e12322f12f34ef90016cd860728b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-07/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:4badbe19939e663c2e2a62fa53658d1af45323b83303c9e08bcb4112b0d0b17f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:58560d1812944966a63701baa9d98a76f459ca0f0c13993a952a3ded1aab2a8b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/derived.receipt.json",
+      "bytes": 290,
+      "sha256": "sha256:22c746f9d30c88f1d89860faecc53fca71498dee65d0f800fc20e7979c595908",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:58560d1812944966a63701baa9d98a76f459ca0f0c13993a952a3ded1aab2a8b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:2f35aa943e940c18c18d491e6087d8fad4be089b0c6a8dabad1fb8f25b702bfa",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/oracle/validator.bundle.json",
+      "bytes": 43892,
+      "sha256": "sha256:2030b501bc364185909afbd3eae2087196d4cb787c27460379ca4c04be63db00",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/review/judgment.json",
+      "bytes": 204,
+      "sha256": "sha256:81675d38d12f48cc748f872c23ee25976f41b25cde684ac830b164d538846ca3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-08/review/request.json",
+      "bytes": 485,
+      "sha256": "sha256:747e5915f81a73352dda94afd080c583b6a5a27af2f7839c720fcd2de852520f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/derived.receipt.json",
+      "bytes": 313,
+      "sha256": "sha256:1fa1d2cd3eac7360b03482b6454fef0183c0b9fc83fd5ba1975605818ab3d4fe",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/receipt.json",
+      "bytes": 546,
+      "sha256": "sha256:735e90c49c569f16a60e2b72fe179ff2f0b7a3b36218d329949075b194adc516",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/oracle/validator.bundle.json",
+      "bytes": 43936,
+      "sha256": "sha256:7473759eb2b95ab476e897d8727a8b09b79d36d6ece3a67112f53144777ddcf6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/review/judgment.json",
+      "bytes": 227,
+      "sha256": "sha256:5eee93d2e9b1ac9d10518ef1386359b07da6963e96a85fd61b583dbcd295d5a5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-09/review/request.json",
+      "bytes": 508,
+      "sha256": "sha256:1ea181bb9c8683982bc22208ed03a7dc20bd3c1162597b826c7ade87ce7de24c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/derived.contract.json",
+      "bytes": 2447,
+      "sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/derived.receipt.json",
+      "bytes": 299,
+      "sha256": "sha256:13001e2b63442ad9cb181b3250aa4228c9bbffc4f625127454e24b5b77058717",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/raw.stdout",
+      "bytes": 2447,
+      "sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/receipt.json",
+      "bytes": 533,
+      "sha256": "sha256:1bd23c984d7847cc8a633a6f3c3146bbce86e7d64b6e44a53bcd53fef2762539",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/oracle/validator.bundle.json",
+      "bytes": 44734,
+      "sha256": "sha256:fb16faf9a69e237f72ed7defe48d9a6f377a7da32ea528f58edf764bceb5fe3e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/review/judgment.json",
+      "bytes": 213,
+      "sha256": "sha256:11ae14c8fb6d34d1971e7db377b607494ae7fbafbcfb17654e21ca13e5295dcf",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-10/review/request.json",
+      "bytes": 494,
+      "sha256": "sha256:b4b19731fe36cc3c3c9dc414e6e98bf7cd22546c240abcb934a5d96b405a6153",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/derived.contract.json",
+      "bytes": 2464,
+      "sha256": "sha256:b9186061c165c38962d557288bd0af6db48899046bbbbee547e1a6b4453c1237",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/derived.receipt.json",
+      "bytes": 303,
+      "sha256": "sha256:18d33b0bc9e51083532e17674c4e01fb29834b1726b4e4fc050c34ce52965285",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/raw.stdout",
+      "bytes": 2464,
+      "sha256": "sha256:b9186061c165c38962d557288bd0af6db48899046bbbbee547e1a6b4453c1237",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/receipt.json",
+      "bytes": 536,
+      "sha256": "sha256:849e048f554f23943f0c4f8079aeabdeff3fb638f6ea3e4c8a17eb8833313c27",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/oracle/validator.bundle.json",
+      "bytes": 44755,
+      "sha256": "sha256:d3cb537d3f6ff8fd4de1b229d19aaa669835da66826b238b7793b39636da36a6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/review/judgment.json",
+      "bytes": 217,
+      "sha256": "sha256:2412c175345a797c144986f990fe9618d600b68fcd26cfda1913c9b17563fe06",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-11/review/request.json",
+      "bytes": 498,
+      "sha256": "sha256:8dc268a4c9531f01c37f4f0726b8bdcc3106860c124f908d76ef9626285a3596",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:69579ac2f83294bbe7f6ea050cb699a62175764cb88bab41c2c2af84da2bd690",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/derived.receipt.json",
+      "bytes": 292,
+      "sha256": "sha256:ce7c8ca10227e5377f3928c1baba0cf1cc24f3312526dca4e3502582af6169b9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:69579ac2f83294bbe7f6ea050cb699a62175764cb88bab41c2c2af84da2bd690",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/receipt.json",
+      "bytes": 526,
+      "sha256": "sha256:b83d5634740c3e4a3e2c439281695a199f678152c098838d60497434b753bef5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/oracle/validator.bundle.json",
+      "bytes": 43765,
+      "sha256": "sha256:91ad0b8dcdb171eb9d94f15876ad783f8f854fec531e17612ae678e4f7ece838",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/review/judgment.json",
+      "bytes": 206,
+      "sha256": "sha256:27f818590e1d22fa52cea64ece557210ae36195ad1cebf9107a5e7c864fd3558",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-12/review/request.json",
+      "bytes": 487,
+      "sha256": "sha256:09e1a5ebc33be9a2587c8d2782f69fb07a7380412c9cf78832fbdfb261674eee",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/derived.contract.json",
+      "bytes": 4048,
+      "sha256": "sha256:181217e64a3355d1c22f5e68b57fba7295eb9ba5eaeac2ddce441fe0627bd0d6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/derived.receipt.json",
+      "bytes": 290,
+      "sha256": "sha256:c94bf5723fcbccc30278e9a601c0a0ef938d458e4e192b8a8d2fef8882773b6a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/raw.stdout",
+      "bytes": 4048,
+      "sha256": "sha256:181217e64a3355d1c22f5e68b57fba7295eb9ba5eaeac2ddce441fe0627bd0d6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/receipt.json",
+      "bytes": 523,
+      "sha256": "sha256:069c07cf8420e4ae919feb1e814a9274af73403eb7ad732d4562ab8312b07ac7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/oracle/validator.bundle.json",
+      "bytes": 46325,
+      "sha256": "sha256:00e59bed98c49af6c7f880bd494781d3ac1f3ca8e765adf9a49b0ea34cdaf522",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/review/judgment.json",
+      "bytes": 204,
+      "sha256": "sha256:f1e52900a6f782040b5ff4378a7b6f109d3ecd903c6ed32c11aa239f9c163c2c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-13/review/request.json",
+      "bytes": 485,
+      "sha256": "sha256:91d01d4fa3c2148013457479fd21f3f4f6509764b59f3235203116c2086a1704",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/derived.contract.json",
+      "bytes": 2223,
+      "sha256": "sha256:6b5bb305f27734274e2b6dfcf9013c2ea7f70028dbc23766808d1860c7fff17d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:d1062dd396e98975aa00c8f3a69059f0b2201a5345e5df5d51313f018d6416d1",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/raw.stdout",
+      "bytes": 2223,
+      "sha256": "sha256:6b5bb305f27734274e2b6dfcf9013c2ea7f70028dbc23766808d1860c7fff17d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/receipt.json",
+      "bytes": 525,
+      "sha256": "sha256:70617aa90897af297f167db4b8e2c607c064487bfdf093e49f1b260f91764834",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/oracle/validator.bundle.json",
+      "bytes": 43811,
+      "sha256": "sha256:52881eb57abbf1221bf0b7bcc1a3854d073641c6feb6f69739bc35cac337e477",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:54974a76cab1f8f5a66fbd5a3b0223de2150e1503137b38e883cb4fdb90c9f3d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-14/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:89e8788ff787d142c231fd1b70b4a7e6869a24f936183ae225fda35609e10cca",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/derived.contract.json",
+      "bytes": 2221,
+      "sha256": "sha256:2a31babd94a48b70eb397bee88a97c77de07581cdc9444947434527132fd3303",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/derived.receipt.json",
+      "bytes": 290,
+      "sha256": "sha256:1ae41fe382b2a2275f24cc54631024ea287c326ee651ae0df97ce1c55b8ffa8d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/raw.stdout",
+      "bytes": 2221,
+      "sha256": "sha256:2a31babd94a48b70eb397bee88a97c77de07581cdc9444947434527132fd3303",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:2aded8872db93b8f3e82fcd5ede48c7ef6ad32fbda6969361475524620677155",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/oracle/validator.bundle.json",
+      "bytes": 43798,
+      "sha256": "sha256:d8e2592b1dcb3b99bced97a5d11bd5145e9ef6925b6e78e1e17a63c8a2433380",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/review/judgment.json",
+      "bytes": 204,
+      "sha256": "sha256:ad2b3894eca65ad9ede29caa331d2ff87917167559c4a8c450f0cf9abf5408f8",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-15/review/request.json",
+      "bytes": 485,
+      "sha256": "sha256:11234e6fbbdd83d09ec12a38059063b8e605d08f385937a832209e224cb6c52b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/derived.contract.json",
+      "bytes": 2223,
+      "sha256": "sha256:5449ea2df3d0c2a4cd49fb2b0fb9171aaceec263638a89b5247d76c929da4302",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:adb45cda71dcd65eabecfcbe6d0d806e27f278bba9331538a3d3c472d4c78f6c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/raw.stdout",
+      "bytes": 2223,
+      "sha256": "sha256:5449ea2df3d0c2a4cd49fb2b0fb9171aaceec263638a89b5247d76c929da4302",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/receipt.json",
+      "bytes": 523,
+      "sha256": "sha256:0d00a01f36bc3b545c35c6f193926c43b6a1268a0f276b0af9be180cdc88d350",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/oracle/validator.bundle.json",
+      "bytes": 43805,
+      "sha256": "sha256:83c17c4836c4255e0fd708b0133f6c0f03ea6b54d911245d74ec1ecf5acc7cc6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:c2b601f3001e04bace8cea0102d25450b893903b13812f4d7cf16ff5b3ca19e0",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-16/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:66baff5843f182310159bbc713b22d25db989ced33d359d0c8d3dad9163422f7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:30e8e768921135fb1388077766f2b7ac6dc42cfdef6cde35c0f36af17fb69e7f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/derived.receipt.json",
+      "bytes": 305,
+      "sha256": "sha256:8b3bc5921ca1cf4ce23302164a4c53aa770b3b67726f470210bd3fa7e0262dca",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:30e8e768921135fb1388077766f2b7ac6dc42cfdef6cde35c0f36af17fb69e7f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/receipt.json",
+      "bytes": 539,
+      "sha256": "sha256:0fb2d7b8d91bcf2b637518559d4a30b7e35d382547f4bc36ef1d267b3f84fa18",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/oracle/validator.bundle.json",
+      "bytes": 44580,
+      "sha256": "sha256:1f1bdedb325feeabae3a8bc046cd7db83c7e7c67b0572627543645762c2f3974",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/review/judgment.json",
+      "bytes": 219,
+      "sha256": "sha256:e9f43e26cf4d0cd70bc77384e676b99bc44f45dae401877b1213d0e2090eed7b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-17/review/request.json",
+      "bytes": 500,
+      "sha256": "sha256:b91fa75aaefb94d6fbdbbe649b708096bec232ffec9bd261c76b0fd706fb14e5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/derived.receipt.json",
+      "bytes": 305,
+      "sha256": "sha256:781c59a249825e9bb4c34455fa2195ed2e287edbaca05382198dbbfeb1d4c1b8",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/receipt.json",
+      "bytes": 539,
+      "sha256": "sha256:4ed16b64fcd8c6c2ef860480e82fa9831b8d07addc9b2ad0162c4f8aa4cf1e41",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/oracle/validator.bundle.json",
+      "bytes": 44580,
+      "sha256": "sha256:08920f7ffea45e33b9db15452b29f0f533ce6914240fcd76bebf7103ee934aad",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/review/judgment.json",
+      "bytes": 219,
+      "sha256": "sha256:bbdfafdd136aca55cf618f805f2464ee0f4c9bc445f42fbfb0f8e33b4f8f1701",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-18/review/request.json",
+      "bytes": 500,
+      "sha256": "sha256:c747a8f6a579f9b557da65c368c0fde5cad2f06c4b441cd795c1319dcdf600d1",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/derived.contract.json",
+      "bytes": 2229,
+      "sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/derived.receipt.json",
+      "bytes": 292,
+      "sha256": "sha256:135bbce4dbd1b200abb9847407a03a35ed465a5cde3045ae9158d202f8a637d3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/raw.stdout",
+      "bytes": 2229,
+      "sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/receipt.json",
+      "bytes": 526,
+      "sha256": "sha256:ff25a1d4d7361a0a6362182b09f700163f61b7807a367475afd732413137743f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/oracle/validator.bundle.json",
+      "bytes": 43806,
+      "sha256": "sha256:39a00bd97b5c822ccdfe82225337fb4f0bf36c5f634769744017c17ca2e73e24",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/review/judgment.json",
+      "bytes": 206,
+      "sha256": "sha256:ee02fd8a2ff6b767b41fb9e785fce69376ba99e9c74a18589f375b096375dcd1",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-19/review/request.json",
+      "bytes": 487,
+      "sha256": "sha256:ca37a8034e019d329063a62134e4bfeb96a8b7dc308e51ef90cdbd401d0c0594",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/derived.contract.json",
+      "bytes": 2238,
+      "sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/derived.receipt.json",
+      "bytes": 290,
+      "sha256": "sha256:40d5a6c4a4f91a919013e3ed28c8b653baf5dfc305594ecac37470cd0028a6a2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/raw.stdout",
+      "bytes": 2238,
+      "sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:bec9ff448e0ae0fd3c907d6d290452bb8b481d5335eec1399332558ad45971a1",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/oracle/validator.bundle.json",
+      "bytes": 44269,
+      "sha256": "sha256:52a8acdc306b282145a66df573bd0e7e990e4823ebed0bc83a25ddb9d372f50c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/review/judgment.json",
+      "bytes": 204,
+      "sha256": "sha256:db43698df1bb8973793e11ac579f32dda1cfd8457898bea76beab0d284f761a3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-20/review/request.json",
+      "bytes": 485,
+      "sha256": "sha256:80e0f6c6fa59f1aa7f9fa8eb4a3de76023a17932335a1a43fc0c2d61071c8806",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/derived.receipt.json",
+      "bytes": 297,
+      "sha256": "sha256:8e7673696828412d4ade0cbad247fbfc6ba48fb19dd7ecab533f96f2c508600c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/receipt.json",
+      "bytes": 530,
+      "sha256": "sha256:b63d21516aa40309bc04dca07b43977dd8e4cf7fbd454582308c82769fa542e5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/oracle/validator.bundle.json",
+      "bytes": 43802,
+      "sha256": "sha256:b4e9ecf15dcb76eee2699afbbf5b12d4a7eabe9f41dd9b351e863873e1c27343",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/review/judgment.json",
+      "bytes": 211,
+      "sha256": "sha256:2d6ae35682bbe4b46380444b7afad58d89c4cdfb171a02714172d180b57b7560",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-21/review/request.json",
+      "bytes": 492,
+      "sha256": "sha256:dd3291bb5d1171f3fabc25ee6c1889102b3ddc7d0e8b29d6df4669d7413a8b19",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/derived.contract.json",
+      "bytes": 2220,
+      "sha256": "sha256:1a2445cea4142d19fc095479c7057ba366e8fa15fabfd7bfa07644133969b5ae",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/derived.receipt.json",
+      "bytes": 299,
+      "sha256": "sha256:0ed48d28d284dce3702b4516786245bdb0d3bb2663aeaa82682b49c44a43d00f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/raw.stdout",
+      "bytes": 2220,
+      "sha256": "sha256:1a2445cea4142d19fc095479c7057ba366e8fa15fabfd7bfa07644133969b5ae",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/receipt.json",
+      "bytes": 533,
+      "sha256": "sha256:925e9e5f7c5ed1dfc240ab85917ef620f43c3b4bcba6c7ab6718f4242855c9e5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/oracle/validator.bundle.json",
+      "bytes": 43804,
+      "sha256": "sha256:8090499b8a2b394626a393005b661b9329adf9f35ef0f3547c0d8bd8b4c459a2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/review/judgment.json",
+      "bytes": 213,
+      "sha256": "sha256:613704f9bbd7d18e2883c562c6cdf984002af9538406799e3d36f0bdbb15e98d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-22/review/request.json",
+      "bytes": 494,
+      "sha256": "sha256:ecde1e04d4423265e47de19f45fcfcd31660258da40b34fc7a3296fc3397c074",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/derived.contract.json",
+      "bytes": 4062,
+      "sha256": "sha256:b1be603fc14af9bc479fecc39587c1548a3dac3776b8ad1c792ac274eb261fd5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/derived.receipt.json",
+      "bytes": 299,
+      "sha256": "sha256:12a63785165167c4febae42947d37cad9ecdcb20554d120d004b3f63c9d80032",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/raw.stdout",
+      "bytes": 4062,
+      "sha256": "sha256:b1be603fc14af9bc479fecc39587c1548a3dac3776b8ad1c792ac274eb261fd5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/receipt.json",
+      "bytes": 533,
+      "sha256": "sha256:d11091b53da1c3ce6e0827527e5d04ea69ac378a9ea279a8201a885a50f916be",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/oracle/validator.bundle.json",
+      "bytes": 46336,
+      "sha256": "sha256:6b5d6a427712d969fa5520211fd1a11b522e900b978046536c51daea9ddf1132",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/review/judgment.json",
+      "bytes": 213,
+      "sha256": "sha256:75f30ce0859524b8109066ac13c232b8a0a3e31fdb1407f37cb9354b0d2ccd0b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-23/review/request.json",
+      "bytes": 494,
+      "sha256": "sha256:7031cc580a591f5366fca6d4b2ddd66bbcdf919c45b857ffbbc67e33d701527b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/derived.contract.json",
+      "bytes": 4060,
+      "sha256": "sha256:b023d7c35635a5ea571548efdc469ba4d13f966bbff45575e3d0d04469e2322c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/derived.receipt.json",
+      "bytes": 298,
+      "sha256": "sha256:69f4e88fc0ed530fa9ad0727384edd1f91e17da9d7cbb73a82a7ed5017fc4e25",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/raw.stdout",
+      "bytes": 4060,
+      "sha256": "sha256:b023d7c35635a5ea571548efdc469ba4d13f966bbff45575e3d0d04469e2322c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/receipt.json",
+      "bytes": 532,
+      "sha256": "sha256:8dcb37010143f3a404a545b8f42d04148231ba8d580a357b1c7c1de719e9c9a8",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/oracle/validator.bundle.json",
+      "bytes": 46333,
+      "sha256": "sha256:b56c82562d93643571060755d8d0ec1c2669f926ae57c66db184818935197d5d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/review/judgment.json",
+      "bytes": 212,
+      "sha256": "sha256:1347978b7ddfa69cda64df645ae0a062076727ca81e0a3c446ba7affda805b4c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-24/review/request.json",
+      "bytes": 493,
+      "sha256": "sha256:8385224c688050ce0c89298e0433e9f65ee2cce12ee23e960f2f3e7ec180ee85",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/derived.contract.json",
+      "bytes": 4696,
+      "sha256": "sha256:8d7e8dce9d2c76929dd5675f5f133f975def09daf7f0c7e97bb05682eb13e738",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/derived.receipt.json",
+      "bytes": 292,
+      "sha256": "sha256:e6fdde96d7b487a43d1e258ce26c0711a58a2538966ec9070cae6ee7ba1f3d95",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/raw.stdout",
+      "bytes": 4696,
+      "sha256": "sha256:8d7e8dce9d2c76929dd5675f5f133f975def09daf7f0c7e97bb05682eb13e738",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/receipt.json",
+      "bytes": 525,
+      "sha256": "sha256:7ea01962ec3d30aed2870a14f4ba7c7f50fc4f35646ff5791a2b4aa0d7db3795",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/oracle/validator.bundle.json",
+      "bytes": 46941,
+      "sha256": "sha256:b8189a15d820e6150405a7876b766201aaab87351b034d7879e87703f7a7b2ee",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/review/judgment.json",
+      "bytes": 206,
+      "sha256": "sha256:08f08ff33992742b7d8fb2bfb03de112b58e51a706e8f309583959201f0ca18e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-25/review/request.json",
+      "bytes": 487,
+      "sha256": "sha256:10534dd59d89e94262fded973f36a82d7d3274d0613864c2a59ae8ae2773263d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/derived.contract.json",
+      "bytes": 3353,
+      "sha256": "sha256:5d29b4da73138bbb7dad8c330acba71d9e759796c89323fe71f6a3e79922e2d7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/derived.receipt.json",
+      "bytes": 293,
+      "sha256": "sha256:be0bba34997edf4144fa5684ebd6b560c753378f69143811e0b1db7f72e7af25",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/raw.stdout",
+      "bytes": 3353,
+      "sha256": "sha256:5d29b4da73138bbb7dad8c330acba71d9e759796c89323fe71f6a3e79922e2d7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/receipt.json",
+      "bytes": 527,
+      "sha256": "sha256:2dc076df49cb5b37783ee83d0f13058eb6a29530de734481fc27a89cfb2bcfcc",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/oracle/validator.bundle.json",
+      "bytes": 45543,
+      "sha256": "sha256:a6eb04bb5e162b2e9e50b703b269349426a881c2d287089e1ddca4c6a6db66cb",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/review/judgment.json",
+      "bytes": 207,
+      "sha256": "sha256:9beb95af75852a5c0eb5ea3b3b33dbf0462348ccb546a6fc657f4a40486be364",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-26/review/request.json",
+      "bytes": 488,
+      "sha256": "sha256:8608733c8d27386489f1a39a2f043c37efa756e4caa843ef74434a12a9c90195",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/derived.contract.json",
+      "bytes": 4062,
+      "sha256": "sha256:7661b0e8948fba117d2c9e1c49b35690b326e577de42bc4044ac6e6721e8575f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/derived.receipt.json",
+      "bytes": 299,
+      "sha256": "sha256:ab8da0763bf0c3bd2c7b01189b161241df49d122381e50e9914f20b4c589fbf9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/raw.stdout",
+      "bytes": 4062,
+      "sha256": "sha256:7661b0e8948fba117d2c9e1c49b35690b326e577de42bc4044ac6e6721e8575f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/receipt.json",
+      "bytes": 533,
+      "sha256": "sha256:ad6438ad31562fdab4b6c7e7993ab74c4f90607baffba1906c53d11257c01211",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/oracle/validator.bundle.json",
+      "bytes": 46336,
+      "sha256": "sha256:b013727c731d6771bb0e82e7221246afd7e8b5a313a5500e0484d72a10560493",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/review/judgment.json",
+      "bytes": 213,
+      "sha256": "sha256:e5b1feedcfba4db15144ed0f2dc32b0621307745f7dd7951a94845360d2cd521",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-27/review/request.json",
+      "bytes": 494,
+      "sha256": "sha256:c5646f03563f6fe5ab0d067e03484eee401560afdfedc1b199329f379015752f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/derived.contract.json",
+      "bytes": 3362,
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:9eee9a3a768ba7967a0ec9bc5b84e2f3d3df660fb30a7babbe7d10064c4b0cc6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/raw.stdout",
+      "bytes": 3362,
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:a33d6a4dfd9107728e566a2b9b358daa826b82cda0a9ccb0da4319e551487ca4",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/oracle/validator.bundle.json",
+      "bytes": 45546,
+      "sha256": "sha256:bf7d5f6f29906e782bb08622e72007bd6e8c061238168ea4894df35da2f76b5a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:71f839390774aa2bb41644ed8bc1611ab37550dac626ec0b864bd2d260090f2f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-28/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:47d12afa9951e018a6bae8fd46dfd5d07ce1defe2c0478ab0ad6566a4d6c7bf7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/derived.contract.json",
+      "bytes": 4042,
+      "sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/derived.receipt.json",
+      "bytes": 289,
+      "sha256": "sha256:9c43e169438322c0718e76441cb9d39f723ed161ea45f75dab10eceb3661fb7a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/raw.stdout",
+      "bytes": 4042,
+      "sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/receipt.json",
+      "bytes": 523,
+      "sha256": "sha256:67d269b91840ce4a84a95ed6b56c37de0adb63e2a77257b8957b5131a09dc4ed",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/oracle/validator.bundle.json",
+      "bytes": 46306,
+      "sha256": "sha256:0b13e01bd6a8de886879f53f180a11a4e398d24097b77e9a4cdd2abc9397fca5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/review/judgment.json",
+      "bytes": 203,
+      "sha256": "sha256:3a151582d4c6085447b94152f6bbaeb2ae354113c662c6ab61ee57cec6861373",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-29/review/request.json",
+      "bytes": 484,
+      "sha256": "sha256:86e49679fb66995a46a2be51b3cf79754cf33733d74a35b8837f1a4c92052326",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/derived.contract.json",
+      "bytes": 3354,
+      "sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:39e5f34fef897d1f5a786b329cf97393dbf78c982d22e96862da4e62b499bc53",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/raw.stdout",
+      "bytes": 3354,
+      "sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:90ac1acb9c8c00fc5db5d0f85b16ad1d4d31dc8f9c6f06eaa034e95614d2e6fa",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/oracle/validator.bundle.json",
+      "bytes": 45530,
+      "sha256": "sha256:a324aec79a890dbdb63abb77c482b50b8cd8e9a1dcc06a3b11f74fd7d506c65d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:5aa0b7cd478cd5529b5a736b1277fe15fc1b2dc6fdb0961eb3615b967b0c7c4b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-30/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:9d8e4d7129590820e1db67885f70fbe9310724f4949b089afeea4443adf302a7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/derived.contract.json",
+      "bytes": 3358,
+      "sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:8da06e68d2daf0683c9bcfda8c58f28049394f25b4fbe720147c61bbbc4b68c6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/raw.stdout",
+      "bytes": 3358,
+      "sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:6d1c6e13a3107c46e91b991aac858f8e70ef7b4dda8f00ff88438820b62e9183",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/oracle/validator.bundle.json",
+      "bytes": 45533,
+      "sha256": "sha256:27f94a3cfa2866d5bb6f21346e8a9f4576b6e57d07ba312f97e3f989e5f75d6a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:105f27d993049dbebd66500c8be83f992b3fa6ddcf3ebd902c552f2967c00ae0",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-31/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:fa072b405345773a9c3f4b73e04e3e8817b22146ccd314ee494e57b6e3fdfee5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/derived.contract.json",
+      "bytes": 3354,
+      "sha256": "sha256:0a684436be91dc931977cef92c7f761390d2f68291d6f4265f4f982411b43b70",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:dcf9e7ad796dfd36b504a12217072f8842e9b8b1aa82575f1f3082491f87a73d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/raw.stdout",
+      "bytes": 3354,
+      "sha256": "sha256:0a684436be91dc931977cef92c7f761390d2f68291d6f4265f4f982411b43b70",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/receipt.json",
+      "bytes": 525,
+      "sha256": "sha256:fd1342d0e8a47f4b5bf26c544c51d30924c46bd6f77e7c29ee6713f2f42c72a5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/oracle/validator.bundle.json",
+      "bytes": 45530,
+      "sha256": "sha256:b49fa74aa61dfbbbe8da400cc52878274f0d7ca8b393e3f4ebe8c6149c80656a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:4feedab3f43748392004c01f89d5ac0c932664874573063bc1c90c4156305be9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-32/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:2810774ec98cd62b58d09e18ec4bdb316eb57b05af073257843a83d3b5bbfd4f",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/derived.contract.json",
+      "bytes": 3346,
+      "sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/derived.receipt.json",
+      "bytes": 290,
+      "sha256": "sha256:0f24ef147c640771111bff7eebc1964cc8cc1289ffb02a2bdafd94ab12e6f3dd",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/raw.stdout",
+      "bytes": 3346,
+      "sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:8a3bf2aada90d47ddf6f84ea90793b224c319df575825081c5b9e887ecca4062",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/oracle/validator.bundle.json",
+      "bytes": 45513,
+      "sha256": "sha256:789fa166085daa4cc5d1dff43ff23247759e44796b1f8996f4c2a51d463d7cd6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/review/judgment.json",
+      "bytes": 204,
+      "sha256": "sha256:41e26421b07b770579a626fcbb078c98e7bf4494b5a05b4b1a401871272cdbe1",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-33/review/request.json",
+      "bytes": 485,
+      "sha256": "sha256:6d01713ba5a2ffa2bc75e777253358954932fb2323b12558a8145b91b6aae454",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/derived.contract.json",
+      "bytes": 3356,
+      "sha256": "sha256:b615e2b45933ab93d53f942eb1ea2a177e280e50f6d72a8770683779f02f04e2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:3b99e7420689e3f95ad5dc9c4fed13ba9a35ed2faf15bedd8f13a940e4dc4a6b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/raw.stdout",
+      "bytes": 3356,
+      "sha256": "sha256:b615e2b45933ab93d53f942eb1ea2a177e280e50f6d72a8770683779f02f04e2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:e1a2dd42520471d2ab52c4c5c22e6733997be1639a5511e5e35a55b86b0f7b29",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/oracle/validator.bundle.json",
+      "bytes": 45521,
+      "sha256": "sha256:be9faffe79550ed904a49a98df42ceb62831b4bf93e0b8d83f56da91799a777e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:1186e860c9998d82dacd00bd20786fe140be28b51c999b234423be3ca1007691",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-34/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:f31d51a93f0c859c91b0a3487aaa0f6667322b58128c9378a9b98c7872627c20",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/derived.contract.json",
+      "bytes": 4048,
+      "sha256": "sha256:f9252283de35c899e0f5f9703513ec38aa9dd1880f215366ca0d3fba1b64049d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/derived.receipt.json",
+      "bytes": 292,
+      "sha256": "sha256:c18250fde5dea2ce8088eba5322e832df509c96b9436932faf5cb4c408278edf",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/raw.stdout",
+      "bytes": 4048,
+      "sha256": "sha256:f9252283de35c899e0f5f9703513ec38aa9dd1880f215366ca0d3fba1b64049d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/receipt.json",
+      "bytes": 526,
+      "sha256": "sha256:f2054b79c7af0697aa3e5329d46325f1156b94f550e67958e5f83386dd91242b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/oracle/validator.bundle.json",
+      "bytes": 46315,
+      "sha256": "sha256:e626ce2b6e9ca9d89dce3d3558421cf165213c647d003efc8d6131e778f3c3e9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/review/judgment.json",
+      "bytes": 206,
+      "sha256": "sha256:7b51b05b2bfd042454dc8ee07f62cd2202fc33ba7b864edbfaa08d0804832ce2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-35/review/request.json",
+      "bytes": 487,
+      "sha256": "sha256:8b30629d3365e0ee6a9c786159281c6bfc8c6be6f0fc6b286c1cfd5455d53ac5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/derived.contract.json",
+      "bytes": 2217,
+      "sha256": "sha256:85cd0d825776a31cf7051e7eebea7de550cc2f7d19ec594af8a7575779344546",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/derived.receipt.json",
+      "bytes": 295,
+      "sha256": "sha256:14af1cb471be4d8f81942467470e6fa042283cf32faa8557214f4fc2aed18517",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/raw.stdout",
+      "bytes": 2217,
+      "sha256": "sha256:85cd0d825776a31cf7051e7eebea7de550cc2f7d19ec594af8a7575779344546",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/receipt.json",
+      "bytes": 529,
+      "sha256": "sha256:674d27870f5c26c7f587bfb7cf6954e255b9ebf8bf93eadd7fa394e9d24e4360",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/oracle/validator.bundle.json",
+      "bytes": 44551,
+      "sha256": "sha256:a1c54de06fa64c024b963a2b551f3f4630adaeba462b55d6ff6ca07e75410773",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/review/judgment.json",
+      "bytes": 209,
+      "sha256": "sha256:ec8ede791fd912bb43adfdfc6ec894d3de2f9f5341b057029c2df3a5731d2002",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-36/review/request.json",
+      "bytes": 490,
+      "sha256": "sha256:fbe0d7bd81f776dd2e88bfa0b1357b9737326061732338c50b43c5c8b6fd437a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/derived.contract.json",
+      "bytes": 4050,
+      "sha256": "sha256:cde1c10db70d70a99b9319635fb12063f79030c748d6d4f66168d9d8addc419e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/derived.receipt.json",
+      "bytes": 293,
+      "sha256": "sha256:90a2628eb470d8ba6db5671e60aeb78d57ec879d70eb6878d7c969bc7a4c81a5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/raw.stdout",
+      "bytes": 4050,
+      "sha256": "sha256:cde1c10db70d70a99b9319635fb12063f79030c748d6d4f66168d9d8addc419e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/receipt.json",
+      "bytes": 527,
+      "sha256": "sha256:711906e1002c3b4d1fd9029163aaea188feba1d97788d8de79a9b4fde6edfb7c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/oracle/validator.bundle.json",
+      "bytes": 46318,
+      "sha256": "sha256:df37b6c85e7adaa3adfb3b0fb050de2e5958514a0782e5ae3c476768d6296558",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/review/judgment.json",
+      "bytes": 207,
+      "sha256": "sha256:b3637dbe44b8ceefebe1b260e9c7487fc952288de4238ad64ee6e9614181023e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-37/review/request.json",
+      "bytes": 488,
+      "sha256": "sha256:352485eab4d6ff1bcf5e8ff5b31d64673a1447a52f97dae81512dea529c852f5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/derived.contract.json",
+      "bytes": 2224,
+      "sha256": "sha256:0344207af9a62497cde59165fed884c6138ac2c93af31902c02cd9d88f774450",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/derived.receipt.json",
+      "bytes": 296,
+      "sha256": "sha256:66810c6c80c15c856beef0f7b4cc37efe14aeac8baece64b583bba5fdd9cce74",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/raw.stdout",
+      "bytes": 2224,
+      "sha256": "sha256:0344207af9a62497cde59165fed884c6138ac2c93af31902c02cd9d88f774450",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/receipt.json",
+      "bytes": 530,
+      "sha256": "sha256:b1e043c921cad6771672e936f69cf3b8873129c8627bb9ed6109e40d7ebbc098",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/oracle/validator.bundle.json",
+      "bytes": 43800,
+      "sha256": "sha256:8dee4038d4b0932d11ffb5eccc7f1f1ab9e77bc5fa2db60d454a143a9634b468",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/review/judgment.json",
+      "bytes": 210,
+      "sha256": "sha256:d711caac5c57456e5274727331bd20fd4bff3dcf505f8b13bd0dea981947dd3b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-38/review/request.json",
+      "bytes": 491,
+      "sha256": "sha256:68cb45b6fcc0c3981aa833a0fd1859f492e43919a85c927282ecbe3be6fe7e96",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/derived.contract.json",
+      "bytes": 4048,
+      "sha256": "sha256:baf52e737678ab61f93d70472c6a5b184b6a09828aae4ce17dea9ea9f52c084d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/derived.receipt.json",
+      "bytes": 292,
+      "sha256": "sha256:910ad49ac8fd8d17ad5249fca4847711f56ba75dba6f801c936738886d94aa6a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/raw.stdout",
+      "bytes": 4048,
+      "sha256": "sha256:baf52e737678ab61f93d70472c6a5b184b6a09828aae4ce17dea9ea9f52c084d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/receipt.json",
+      "bytes": 526,
+      "sha256": "sha256:fced42865c589fb293b252262ff4af392bf7b28d51df0c25ceec6a2af6209125",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/oracle/validator.bundle.json",
+      "bytes": 46315,
+      "sha256": "sha256:2de4ea9afdc74c8e2194069c480d3b9b1a0d308c624d16b1e9b5f6452b9c39a2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/review/judgment.json",
+      "bytes": 206,
+      "sha256": "sha256:4799e9080d867de1e596e94f4246c652f5b120080105f84dc7a8459c3bd04bdd",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-39/review/request.json",
+      "bytes": 487,
+      "sha256": "sha256:c59c9ff7b436e97d4922355fbacfb92f99de8f38edcffbf33e514808dd9812e9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/derived.contract.json",
+      "bytes": 2223,
+      "sha256": "sha256:1169eedb6c2a1d4d0d98fce6321fca9403de9a9faa1edd7621f66474c2f5ec2a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/derived.receipt.json",
+      "bytes": 295,
+      "sha256": "sha256:c82b8a0855c83b3c9ce7034b61722f828683eb69e4ec525440045d325484043e",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/raw.stdout",
+      "bytes": 2223,
+      "sha256": "sha256:1169eedb6c2a1d4d0d98fce6321fca9403de9a9faa1edd7621f66474c2f5ec2a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:f7c1f6a59ef2fcfd0fdae2a4106cd1e6c6093a8a7022d4ad74530c61d0f7fbc9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/oracle/validator.bundle.json",
+      "bytes": 43798,
+      "sha256": "sha256:ed817d5676774958a6f8f737cb05293b7b09a419a061f95800eed7c8bfba2516",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/review/judgment.json",
+      "bytes": 209,
+      "sha256": "sha256:5b7198dc17254b04c1c2270dc34bc781ee054961a2db6b7fe2911c8b9b7bedf7",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-40/review/request.json",
+      "bytes": 490,
+      "sha256": "sha256:c2caf0cc0005da0dcd825bb08c21407a3bc18bf5752d5f530856c02c2eb68765",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/derived.contract.json",
+      "bytes": 4046,
+      "sha256": "sha256:b5585763d456cf3c88c0199ee06b9f7503166605bc908cf0d598f3dfa8b088b0",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:c22cf4a51c539d478cb8b3f3a59390eeabb01ae05550f7e3f4e50142231c4fde",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/raw.stdout",
+      "bytes": 4046,
+      "sha256": "sha256:b5585763d456cf3c88c0199ee06b9f7503166605bc908cf0d598f3dfa8b088b0",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/receipt.json",
+      "bytes": 524,
+      "sha256": "sha256:0899f82687dc1cb16a15353126369bf999ae2c6ff89e0d318745dacb4fe720c3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/oracle/validator.bundle.json",
+      "bytes": 46312,
+      "sha256": "sha256:39227cc354c1658189407223f28cfb06d9631215c1e646bb5c77227289639546",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:fcc6570814ffcc9d4f3af32451bf621dfae31793818b796f58b2effd5173658a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-41/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:ef21da691df2024a424d0a0594d537ac07ce48ba6a13a8ec2fb7728298f784a4",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/derived.contract.json",
+      "bytes": 2448,
+      "sha256": "sha256:42ef71edd1d7ec88a26aaf39bf188601f21f315bddd9bb2b927115e9c09d01db",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:e555106bda26654eea8701c221cec1f63766f08e2f14b0abb6ce0fd71486f2c3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/raw.stdout",
+      "bytes": 2448,
+      "sha256": "sha256:42ef71edd1d7ec88a26aaf39bf188601f21f315bddd9bb2b927115e9c09d01db",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:8d7961ca8c13682e30346e17c0c0d161a26f4a5878ab130b741ce3cc812f6c67",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/oracle/validator.bundle.json",
+      "bytes": 44606,
+      "sha256": "sha256:541fb826cc503dc2837e4bf1dfd08fc25b10de2c9944ded5705531ed529b16e9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:8aafd3ba8592b175cd88cfe465ab0346b89ea1e7f17068d66cac471340a98269",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-42/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:99f82eabd55488686b6ec404e26db173710afcb645405dae76ade647d77eabf4",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/derived.contract.json",
+      "bytes": 4052,
+      "sha256": "sha256:d33f195ea534b58f5c7818b95c0726f81c36ff5e5364352aeeb05c571601c80b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:c2045834d3a887d1abd78bda835c54fe24fc6086267c870c847280a2d04c0469",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/raw.stdout",
+      "bytes": 4052,
+      "sha256": "sha256:d33f195ea534b58f5c7818b95c0726f81c36ff5e5364352aeeb05c571601c80b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/receipt.json",
+      "bytes": 528,
+      "sha256": "sha256:c2ab499deffcc13dc42e0527da35358983d70ef3c296958379e57c6d2dcf48b6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/oracle/validator.bundle.json",
+      "bytes": 46321,
+      "sha256": "sha256:7168c31aeb80dcf2bf18721b5be0894de7768748f1434ec1dc5c99cbbe05c0fe",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:c0cbb6d0eb74e31095be611a65138a356b2fa1a8a61cb685341280b7504d9094",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-43/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:3af4dc7a8472361f50063e9db6226efedfe6efe0455d1dc79a8ef2ee7088786d",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/derived.contract.json",
+      "bytes": 2452,
+      "sha256": "sha256:218c9d8d77c48426c6ecefe5cb7f969aae1663b63eeb7d09bc00a089e04d932b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/derived.receipt.json",
+      "bytes": 297,
+      "sha256": "sha256:d10118d6479ecc62866f0e587f36293c046ff1dfc29566db8a21f030f16ddcd5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/raw.stdout",
+      "bytes": 2452,
+      "sha256": "sha256:218c9d8d77c48426c6ecefe5cb7f969aae1663b63eeb7d09bc00a089e04d932b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/receipt.json",
+      "bytes": 531,
+      "sha256": "sha256:7f7f502d81db3f8d325b4084eee990d25b611f090facd5f7b0900bb4914b5cf6",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/oracle/validator.bundle.json",
+      "bytes": 44618,
+      "sha256": "sha256:4cc860714cfa5bc4df6b65672d20c36f86edf4fe282f1f8fb6ebf0ce96bfc815",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/review/judgment.json",
+      "bytes": 211,
+      "sha256": "sha256:60d103d8aabe602fe7b9215482030c2df5d66ad5c7a84fbb07d3ff53bbb380a3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-44/review/request.json",
+      "bytes": 492,
+      "sha256": "sha256:7d7f88463a1f20835f9aa8b81fcd4d90a0f9c773470c608c198f79733cbe85ce",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/derived.contract.json",
+      "bytes": 4046,
+      "sha256": "sha256:e2d34763e9717f0d12f333487980e6f1aa3b6a7709d9e3ad7eebd8d64d2bf195",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/derived.receipt.json",
+      "bytes": 291,
+      "sha256": "sha256:35ffaa1b07553f1d059e4401600c5359282d03d6a988e2868ed5ae7dbbcda6c2",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/raw.stdout",
+      "bytes": 4046,
+      "sha256": "sha256:e2d34763e9717f0d12f333487980e6f1aa3b6a7709d9e3ad7eebd8d64d2bf195",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/receipt.json",
+      "bytes": 525,
+      "sha256": "sha256:9038a6235319a084c62d1d173ebf3f3443f7a554e6c0b2c04f9c07bf94d6ef09",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/oracle/validator.bundle.json",
+      "bytes": 46312,
+      "sha256": "sha256:b9a064e4a91cc99eb98db4d24ec78485d00eda5047fb7f21e5f079eba28db383",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/review/judgment.json",
+      "bytes": 205,
+      "sha256": "sha256:5c1d562ce1c21b8471ae7aafb47476f970fcb140315440434ae454b23f629158",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-45/review/request.json",
+      "bytes": 486,
+      "sha256": "sha256:d3e1fb6c721484588b400103b0198e9bf025f9db0e8d099a094f1f8370bfc250",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/derived.contract.json",
+      "bytes": 2445,
+      "sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/derived.receipt.json",
+      "bytes": 294,
+      "sha256": "sha256:7c34b2957a2b030ab28bd29a72f0fe13798ebd3031f2f0b1a8dcced7aafed327",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/raw.stdout",
+      "bytes": 2445,
+      "sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/receipt.json",
+      "bytes": 527,
+      "sha256": "sha256:2f9267aa974ef6cecf83763730e57d9d79f90e3a4b6e98ce3ca26ac759fe4d51",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/oracle/validator.bundle.json",
+      "bytes": 44603,
+      "sha256": "sha256:f990f80ab774bff6ea2d99f5a09dbc15ad30c40e0b666f008573b67f76821fee",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/review/judgment.json",
+      "bytes": 208,
+      "sha256": "sha256:860928e067a23a4c47293e956023541a66b1aca78c8ad86e4006278e44ab0da8",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-46/review/request.json",
+      "bytes": 489,
+      "sha256": "sha256:1410fdbb2ac7d822b27e0f6da158c59b50a36710b1c78f3571c50c408ca6ca2a",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/derived.contract.json",
+      "bytes": 4050,
+      "sha256": "sha256:d05ae9170624bee183c94477f51acb8d715a29e333e26feef29a15d3b9244fde",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/derived.receipt.json",
+      "bytes": 293,
+      "sha256": "sha256:82c65f66b8491eb378b0ecb533e68ad8dc46b4ce287997ea95d22a3890315e35",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/raw.stdout",
+      "bytes": 4050,
+      "sha256": "sha256:d05ae9170624bee183c94477f51acb8d715a29e333e26feef29a15d3b9244fde",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/receipt.json",
+      "bytes": 527,
+      "sha256": "sha256:afe4201da19cbbb157d429e36056ea443f2a71608dd6dfb9c03168e18f8ab178",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/oracle/validator.bundle.json",
+      "bytes": 46318,
+      "sha256": "sha256:78c0ee5c5948f543aba1b3dc4eac5881fa2f8b31ce244aeb74c74db7adc3dd8c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/review/judgment.json",
+      "bytes": 207,
+      "sha256": "sha256:54976d48bca04a7ceeed57667ae629f00fc36b46931328dad965c57095da75b8",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-47/review/request.json",
+      "bytes": 488,
+      "sha256": "sha256:66332112065b0c2b48f54f117f459b568a242ec2672d576df97917223f839b1b",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/derived.contract.json",
+      "bytes": 2449,
+      "sha256": "sha256:4c3bb19475448fb63366a325bc86d0ad7da130996ce20a8e6b3980e0c65c1664",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/derived.receipt.json",
+      "bytes": 296,
+      "sha256": "sha256:c5507e147b3499de38d487b7163b8e86fcf828d3dd727ebc5e6ab545de11b176",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/raw.stdout",
+      "bytes": 2449,
+      "sha256": "sha256:4c3bb19475448fb63366a325bc86d0ad7da130996ce20a8e6b3980e0c65c1664",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/receipt.json",
+      "bytes": 529,
+      "sha256": "sha256:322110fece9474c727ed391c278ccc63857e8a45997e47051c860d1ae7ede378",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/oracle/validator.bundle.json",
+      "bytes": 44609,
+      "sha256": "sha256:ca6ba06ac939335b8adf1f0194604e38530c095aac181954e419951d0e09fd0c",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/review/judgment.json",
+      "bytes": 210,
+      "sha256": "sha256:6769984753be16324e8447c0b32c3479fddd6dd054eece3d444d5d110070a291",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-48/review/request.json",
+      "bytes": 491,
+      "sha256": "sha256:8583e0992b798b92a5f14e450a1dae4762aec9dfbb255c2ace827f7c2d6d2a64",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/derived.contract.json",
+      "bytes": 2454,
+      "sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/derived.receipt.json",
+      "bytes": 297,
+      "sha256": "sha256:494b34dd6b2a8b78b0e0f2b314cc212f61d1023d5b49ed58bc938426a8d0d168",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/raw.stdout",
+      "bytes": 2454,
+      "sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/receipt.json",
+      "bytes": 531,
+      "sha256": "sha256:1e3dd9798965f80d5d1596b56324fff92c8a9c4d37c81964372ad781ecdf5348",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/oracle/validator.bundle.json",
+      "bytes": 44797,
+      "sha256": "sha256:97415a6f3294ef48302024a38ec07185b7df25dcc37c313d882c87744b7f9d32",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/review/judgment.json",
+      "bytes": 211,
+      "sha256": "sha256:72bba24f2b6efe61d4b28144ad7fb0bb1bc40ec0e27bfb5ad9fd815ed7c5b279",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-49/review/request.json",
+      "bytes": 492,
+      "sha256": "sha256:8ceac08e9e4ab7b45e51b26967a73518c2016c60a8210785dc7806bb371030a5",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/derived.contract.json",
+      "bytes": 4074,
+      "sha256": "sha256:491e96271e36ccee99d4ff29b96340741c4b7f7ec3281a676e7611ca72e78411",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/derived.receipt.json",
+      "bytes": 305,
+      "sha256": "sha256:70d8080e36b358a5987895e020612f5566d703887c46a77fb6c509ac69c439be",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/raw.stderr",
+      "bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/raw.stdout",
+      "bytes": 4074,
+      "sha256": "sha256:491e96271e36ccee99d4ff29b96340741c4b7f7ec3281a676e7611ca72e78411",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/receipt.json",
+      "bytes": 539,
+      "sha256": "sha256:c7f0c6b054776a67409efae393e8d3ae1230b59831fd55153af98762fcbb6ece",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/oracle/validator.bundle.json",
+      "bytes": 46354,
+      "sha256": "sha256:77b8276c9e1459dc6e4320ca33a10b2952f062d47e1354b8a63cc008083348d9",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/review/judgment.json",
+      "bytes": 219,
+      "sha256": "sha256:a28f5283ad10b2a60a78472846b71909d2324a9fab2cf0411d7831bfdbc3a299",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/review/raw.json",
+      "bytes": 25,
+      "sha256": "sha256:4601c341375e1ed80b9fe51c11fb7404f16afdfbf4dfbc88686eb8788bce5fe3",
+      "mode": ""
+    },
+    {
+      "path": "cases/case-50/review/request.json",
+      "bytes": 500,
+      "sha256": "sha256:45b30f1aa80b265a427c4ed1dc451683152b156a3922e31fc7d1b96530c91fba",
+      "mode": ""
+    },
+    {
+      "path": "schemas/attempt-commitment.v1.schema.json",
+      "bytes": 149,
+      "sha256": "sha256:45de0d6fcc135eaf9ef2b20f7def3c1790c97d7d90b2cc8698ed38f24300c8f0",
+      "mode": ""
+    },
+    {
+      "path": "schemas/campaign-accounting.v1.schema.json",
+      "bytes": 150,
+      "sha256": "sha256:4aa938a8417775d1603ec54cda25c815fbf2860534aa2ac175538177a5c28824",
+      "mode": ""
+    },
+    {
+      "path": "schemas/campaign-definition.v1.schema.json",
+      "bytes": 150,
+      "sha256": "sha256:4ab3ef448f78a454663c7f8941d8206dc7d08cdf4e34841c5406224b9a17060f",
+      "mode": ""
+    },
+    {
+      "path": "schemas/campaign-seal.v1.schema.json",
+      "bytes": 144,
+      "sha256": "sha256:8d8a621fc2b0f3b1b6c4b0c0c57dca19822dd3c80ccd32737339f72d94b720a5",
+      "mode": ""
+    },
+    {
+      "path": "schemas/comparison.v1.schema.json",
+      "bytes": 141,
+      "sha256": "sha256:4d8e7a629718b867f5203c629e468135316ee658240144bd4be49176fce60295",
+      "mode": ""
+    },
+    {
+      "path": "schemas/custody-review.v1.schema.json",
+      "bytes": 145,
+      "sha256": "sha256:794fcd35660fca928759818d9428aa801e2a7b8176c3450b44153aba140b037a",
+      "mode": ""
+    },
+    {
+      "path": "schemas/derived-terminal-receipt.v1.schema.json",
+      "bytes": 155,
+      "sha256": "sha256:b1c33ec103c21bd6aff11f1b5bbc3af1f63bcf8eb92770f92d05e6863f047ed6",
+      "mode": ""
+    },
+    {
+      "path": "schemas/execution-event.v1.schema.json",
+      "bytes": 146,
+      "sha256": "sha256:40f1cbc1d3109b10682da03ce36db3efe3cb9769213e0b46014ba4ecf0e9c9ec",
+      "mode": ""
+    },
+    {
+      "path": "schemas/predispatch-receipt.v1.schema.json",
+      "bytes": 150,
+      "sha256": "sha256:d1a15f74e1be327a129f7cf4e74dea7a9c4331fafe77d3c86ec63c6d08dae01b",
+      "mode": ""
+    },
+    {
+      "path": "schemas/raw-result-receipt.v1.schema.json",
+      "bytes": 149,
+      "sha256": "sha256:68244d67c20c6509a6d5753d8f279420d61ffcfeae60e5ba4c1f7e06d3e2c353",
+      "mode": ""
+    },
+    {
+      "path": "schemas/review-judgment.v1.schema.json",
+      "bytes": 146,
+      "sha256": "sha256:fd31c2b03fdd4b66df913d8f461c514e8fbc2d8f5be74039b3903521a15c5ec3",
+      "mode": ""
+    }
+  ]
+}
