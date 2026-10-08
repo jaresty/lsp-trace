@@ -158,8 +158,16 @@ func verifyHEAD(o Options) error {
 	if err != nil {
 		return err
 	}
-	if h != ExpectedHEAD {
-		return fmt.Errorf("HEAD mismatch %s", h)
+	if h == ExpectedHEAD {
+		return fmt.Errorf("tooling HEAD was not advanced beyond protected base %s", ExpectedHEAD)
+	}
+	if _, err := git(o, "merge-base", "--is-ancestor", ExpectedHEAD, "HEAD"); err != nil {
+		return fmt.Errorf("protected base %s is not an ancestor of tooling HEAD %s: %w", ExpectedHEAD, h, err)
+	}
+	args := []string{"diff", "--quiet", ExpectedHEAD, "--"}
+	args = append(args, ProtectedRoots...)
+	if _, err := git(o, args...); err != nil {
+		return fmt.Errorf("protected roots differ from base %s at tooling HEAD %s: %w", ExpectedHEAD, h, err)
 	}
 	st, err := git(o, "status", "--porcelain")
 	if err != nil {
@@ -375,7 +383,8 @@ func Predispatch(o Options) error {
 		_ = block(cr, err)
 		return err
 	}
-	rec := map[string]any{"schema": "predispatch", "head": ExpectedHEAD, "protected_snapshot": snap, "case_commitments": cs, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
+	toolingHead, _ := git(o, "rev-parse", "HEAD")
+	rec := map[string]any{"schema": "predispatch", "protected_base_head": ExpectedHEAD, "tooling_head": toolingHead, "protected_snapshot": snap, "case_commitments": cs, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
 	if err := writeJSONNew(filepath.Join(cr, "PREDISPATCH.json"), rec); err != nil {
 		_ = block(cr, err)
 		return err
