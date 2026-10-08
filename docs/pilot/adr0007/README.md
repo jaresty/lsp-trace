@@ -73,5 +73,6 @@ The Search and Group `PREDECESSORS.json` files are freeze-bound. They remain unc
 3. [Archive security classification](decisions/2026-10-07-archive-security-classification.md)
 4. [Group integration record](decisions/2026-10-07-group-integration-record.md)
 5. [Search and Group successor status](decisions/2026-10-07-search-group-successor-status.md)
+6. [Host-LLM bridge contract design](decisions/2026-10-08-host-llm-bridge-contract.md)
 
-These records preserve `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. They grant no semantic rerun, code migration, public enablement, production use, or ADR 0011 change.
+These records preserve `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. They grant no semantic rerun, code migration, public enablement, production use, execution, public host-LLM bridge surface, or ADR 0011 change.
