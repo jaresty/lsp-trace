@@ -88,3 +88,21 @@ This threshold is recorded transparently as a post-run policy decision rather th
 The consolidated Describe identity is main `40440412`, source `8ae7f308`. Its bounded threshold is **22/24 cases with all 96 attempts accounted**. The two non-passing cases and all blocked, rejected, superseded, or unevaluated predecessor records remain immutable; the threshold does not impute success or authorize another run.
 
 A conditional zero-effect repair applies only to deterministic custody infrastructure, never semantic recovery. It must be pre-semantic with no observable semantic output, infrastructure-only, preserve the original failure, receive independent zero-effect adjudication, account for the failed attempt, retain the same assignment and freeze, and pass deterministic verification replay. Regeneration may verify deterministic custody after the repair; it may not regenerate, repair, retry, normalize, replace, or substitute semantic output.
+
+## Proposed bounded source-text search extension
+
+ADR 0007 should add a private, default-off Source Text Search stage for exact literal search over immutable source-admission bytes. Its purpose is to turn source occurrences into attributable ranges that the separately qualified Location contract can intersect with bounded Group candidates:
+
+```text
+admitted source bytes
+→ exact literal UTF-8 matches
+→ immutable match ranges
+→ Location RANGE_UNION
+→ overlapping Group candidates
+```
+
+The first version is limited to a nonempty, case-sensitive literal query. It returns every match, including overlaps, in deterministic path and byte-offset order. Each result binds the exact path, revision, source digest, byte offsets, and half-open UTF-16 LSP range. It must fail closed for unavailable or mismatched admission, invalid UTF-8, digest disagreement, impossible range conversion, cancellation, deadline, and exceeded query, source-byte, file, match, work, or output limits. Request, result, policy, limits, accounting, custody, and replay records are canonical and versioned.
+
+Regex, case folding, stemming, fuzzy or semantic search, language-aware tokenization, comment/string filtering, backend source fetching, and implicit workspace expansion are outside the first version. Source Text Search locates exact text occurrences; it does not establish CALLS, feature identity, feature membership, completeness, acceptance, or semantic relevance. Its safe claim is: “these bounded structural candidates overlap these exact source occurrences.”
+
+This extension remains separately gated. Design and private implementation may proceed to an immutable `SOURCE_TEXT_SEARCH_DESIGN_GO` freeze, but qualification execution, production dispatch, CLI/MCP exposure, public schemas, release, and push require separate authorization. Existing ceilings remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`.
