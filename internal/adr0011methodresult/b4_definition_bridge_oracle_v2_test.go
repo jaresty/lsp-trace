@@ -38,12 +38,12 @@ type bridgeRange struct {
 }
 
 type bridgeOracleTarget struct {
-	Ordinal          int          `json:"ordinal"`
-	Kind             string       `json:"kind"`
-	URI              string       `json:"uri"`
-	SelectionRange   bridgeRange  `json:"selection_range"`
-	TargetRange      *bridgeRange `json:"target_range"`
-	TargetSourceSHA  string       `json:"target_source_sha256"`
+	Ordinal         int          `json:"ordinal"`
+	Kind            string       `json:"kind"`
+	URI             string       `json:"uri"`
+	SelectionRange  bridgeRange  `json:"selection_range"`
+	TargetRange     *bridgeRange `json:"target_range"`
+	TargetSourceSHA string       `json:"target_source_sha256"`
 }
 
 type bridgeOracleRow struct {
@@ -98,7 +98,9 @@ func bridgeFrame(t *testing.T, frame []byte) map[string]json.RawMessage {
 
 func bridgeManifestAssets(t *testing.T, path, digest string) map[string]bridgeAsset {
 	t.Helper()
-	var manifest struct{ Assets []bridgeAsset `json:"assets"` }
+	var manifest struct {
+		Assets []bridgeAsset `json:"assets"`
+	}
 	bridgeJSON(t, bridgePinnedBytes(t, path, digest), &manifest)
 	if len(manifest.Assets) == 0 {
 		bridgeFixtureFatal(t, "empty asset manifest %s", path)
@@ -139,7 +141,9 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 	responseRoot := filepath.Join(evidence, "adr0011-definition-response-held-originals-v1-corrected")
 	write := row.Scenario + "/WRITE" + strconv.FormatUint(row.WriteOrdinal, 10)
 
-	var rawManifest struct{ Scenarios []bridgePin `json:"scenarios"` }
+	var rawManifest struct {
+		Scenarios []bridgePin `json:"scenarios"`
+	}
 	bridgeJSON(t, bridgePinnedBytes(t, filepath.Join(rawRoot, "manifest.json"), "2fb4c68376f5268b0f1722033565c70595545aa3df08e9f3431ecbd9762f99fe"), &rawManifest)
 	var scenarioDigest string
 	for _, s := range rawManifest.Scenarios {
@@ -183,13 +187,13 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 	}
 	var ctx struct {
 		Session, Workspace, URI, Method string
-		PositionEncoding string `json:"position_encoding"`
-		Generation uint64
-		Language struct{ ID string }
-		Writes []struct {
-			Ordinal uint64
+		PositionEncoding                string `json:"position_encoding"`
+		Generation                      uint64
+		Language                        struct{ ID string }
+		Writes                          []struct {
+			Ordinal     uint64
 			Transaction string
-			OwnerKey string `json:"owner_key"`
+			OwnerKey    string `json:"owner_key"`
 		}
 	}
 	bridgeJSON(t, bridgeAssetBytes(t, scenarioRoot, "context.json", assets), &ctx)
@@ -204,10 +208,10 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 	}
 	var bindings struct {
 		Bindings []struct {
-			Scenario string `json:"scenario"`
+			Scenario     string `json:"scenario"`
 			WriteOrdinal uint64 `json:"write_ordinal"`
-			Originals struct {
-				Query bridgePin `json:"query"`
+			Originals    struct {
+				Query              bridgePin `json:"query"`
 				QueryApplicability bridgePin `json:"query_applicability"`
 			} `json:"originals"`
 		} `json:"bindings"`
@@ -232,9 +236,9 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 	}
 	message := bridgeFrame(t, request)
 	var response struct {
-		JSONRPC string `json:"jsonrpc"`
-		ID json.RawMessage `json:"id"`
-		Result json.RawMessage `json:"result"`
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Result  json.RawMessage `json:"result"`
 	}
 	responsePath := write + "/response.json"
 	responseFrame := bridgeAssetBytes(t, responseRoot, responsePath, responseAssets)
@@ -276,7 +280,7 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 		}
 		for i, raw := range members {
 			var wire struct {
-				URI, TargetURI string
+				URI, TargetURI                           string
 				Range, TargetRange, TargetSelectionRange bridgeRange
 			}
 			bridgeJSON(t, raw, &wire)
@@ -310,7 +314,7 @@ func bridgeFixture(t *testing.T, evidence string, row bridgeOracleRow, responseA
 	}, Frames: frames, HeldClientSelector: selector}
 	for _, role := range []struct {
 		name, code string
-		original []byte
+		original   []byte
 	}{
 		{"source-envelope.json", "SOURCE", source},
 		{"query-envelope.json", "QUERY", query},
@@ -385,14 +389,18 @@ func TestB4DefinitionBridgeIndependentOracleV2(t *testing.T) {
 			}
 			bridgeAssertNoPositiveExclusion(t, name, got)
 			for i, want := range row.Targets {
-				if i >= len(got.Candidates) { break }
+				if i >= len(got.Candidates) {
+					break
+				}
 				c := got.Candidates[i]
 				if c.Ordinal != want.Ordinal || c.TargetURI != want.URI || string(c.TargetKind) != want.Kind ||
 					c.TargetSelectionRange != (Range{Start: want.SelectionRange.Start, End: want.SelectionRange.End}) {
 					t.Errorf("semantic assertion ordered target[%d]: got ordinal=%d URI=%q kind=%q selection=%+v want %+v", i, c.Ordinal, c.TargetURI, c.TargetKind, c.TargetSelectionRange, want)
 				}
 				if want.TargetRange == nil {
-					if c.TargetRange != nil { t.Errorf("semantic assertion targetRange[%d]: got %+v want nil", i, c.TargetRange) }
+					if c.TargetRange != nil {
+						t.Errorf("semantic assertion targetRange[%d]: got %+v want nil", i, c.TargetRange)
+					}
 				} else if c.TargetRange == nil || *c.TargetRange != (Range{Start: want.TargetRange.Start, End: want.TargetRange.End}) {
 					t.Errorf("semantic assertion targetRange[%d]: got %+v want %+v", i, c.TargetRange, want.TargetRange)
 				}
@@ -414,11 +422,17 @@ func TestB4DefinitionBridgeIndependentOracleV2(t *testing.T) {
 			}
 			if row.Scenario == "CORE" && row.WriteOrdinal == 6 {
 				for _, variant := range []struct {
-					name string
+					name  string
 					alter func(*DefinitionBridgeInput)
 				}{
-					{"SOURCE", func(v *DefinitionBridgeInput) { v.Replay.Write.Source = append([]byte(nil), v.Replay.Write.Source...); v.Replay.Write.Source[0] ^= 1 }},
-					{"QUERY", func(v *DefinitionBridgeInput) { v.Replay.Write.QueryOriginal = append([]byte(nil), v.Replay.Write.QueryOriginal...); v.Replay.Write.QueryOriginal[0] ^= 1 }},
+					{"SOURCE", func(v *DefinitionBridgeInput) {
+						v.Replay.Write.Source = append([]byte(nil), v.Replay.Write.Source...)
+						v.Replay.Write.Source[0] ^= 1
+					}},
+					{"QUERY", func(v *DefinitionBridgeInput) {
+						v.Replay.Write.QueryOriginal = append([]byte(nil), v.Replay.Write.QueryOriginal...)
+						v.Replay.Write.QueryOriginal[0] ^= 1
+					}},
 					{"transaction", func(v *DefinitionBridgeInput) { v.Replay.Write.Transaction += "-substituted" }},
 					{"references", func(v *DefinitionBridgeInput) { v.Replay.Write.Method = "textDocument/references" }},
 					{"typed-response-ID", func(v *DefinitionBridgeInput) {

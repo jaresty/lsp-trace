@@ -16,7 +16,7 @@ jobs:
       - name: Install pinned Pi MCP adapter runtime
         run: npm install --prefix "$HOME/.pi/agent/npm" --no-save pi-mcp-adapter@2.32.1 @earendil-works/pi-coding-agent@0.84.1 @earendil-works/pi-ai@0.84.1 typebox@1.3.3
       - name: Check formatting
-        run: test -z "$(gofmt -l .)"
+        run: ./scripts/check-go-format.sh
       - name: Check Python syntax
         env:
           PYTHONDONTWRITEBYTECODE: "1"
@@ -31,7 +31,7 @@ jobs:
           python3 scripts/test-program-c-gate-ii-v4.py
           python3 scripts/check-program-c-gate-ii-v4.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v4.tsv --receipt qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json
       - name: Check shell syntax
-        run: sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh
+        run: sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh scripts/check-go-format.sh
       - name: Check CI contract
         run: ./scripts/check-ci.sh
       - name: Check release contract and retained evidence

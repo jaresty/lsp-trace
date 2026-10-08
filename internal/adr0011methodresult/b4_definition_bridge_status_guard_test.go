@@ -36,8 +36,8 @@ func TestB4DefinitionBridgeNegativeStatusGuards(t *testing.T) {
 		bridgeAssertNoPositiveExclusion(t, "original", got)
 	})
 	cases := []struct {
-		name string
-		want DefinitionBridgeStatus
+		name  string
+		want  DefinitionBridgeStatus
 		alter func(*DefinitionBridgeInput)
 	}{
 		{"SOURCE", DefinitionBridgeCorrespondenceInvalid, func(v *DefinitionBridgeInput) {

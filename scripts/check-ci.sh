@@ -16,7 +16,7 @@ require() {
   fi
 }
 
-require CI-FORMAT 'gofmt -l .'
+require CI-FORMAT './scripts/check-go-format.sh'
 require CI-TEST 'go test ./...'
 require CI-TEST-UNIX-ONLY "if: runner.os != 'Windows'"
 require CI-WINDOWS-BUILD 'windows-latest'
@@ -27,7 +27,7 @@ require CI-PROGRAM-C-PROFILES 'python3 scripts/test-program-c-profiles.py'
 require CI-PROGRAM-C-GATE-II-V3-TESTS 'python3 scripts/test-program-c-gate-ii.py'
 require CI-PROGRAM-C-GATE-II-V4-TESTS 'python3 scripts/test-program-c-gate-ii-v4.py'
 require CI-PROGRAM-C-GATE-II-V4-CHECK 'python3 scripts/check-program-c-gate-ii-v4.py --root . --outcomes qualification/program-c/gate-ii-current-outcomes.v4.tsv --receipt qualification/program-c/gate-ii-current-outcomes.v4.4403719.receipt.json'
-require CI-SHELL 'sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh'
+require CI-SHELL 'sh -n scripts/qualify.sh scripts/release-check.sh scripts/check-ci.sh scripts/check-go-format.sh'
 require CI-RELEASE './scripts/release-check.sh'
 require CI-BUN 'oven-sh/setup-bun@v2'
 require CI-ADAPTER 'pi-mcp-adapter@2.32.1'
