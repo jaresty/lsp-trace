@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:3da038a430315df8c83846d6e151f4ad1a6e24417ec281a8867c8bb5752b7abe",
+  "case_id": "case-25-overlap_literal",
+  "derived_sha256": "sha256:8d7e8dce9d2c76929dd5675f5f133f975def09daf7f0c7e97bb05682eb13e738",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

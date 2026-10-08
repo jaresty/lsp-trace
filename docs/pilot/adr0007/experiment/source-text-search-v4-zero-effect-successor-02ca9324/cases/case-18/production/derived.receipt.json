@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:bf6626659848dc283eea2f06d0546925f1d47d9cdbd7d7d866fdcc4c4393bf57",
+  "case_id": "case-18-duplicate_path_diff_revision",
+  "derived_sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

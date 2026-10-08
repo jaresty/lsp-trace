@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:a93aa4766a945cf908e98e3560d3a71fcf692396448460b4f4d8f233c0de73c4",
+  "case_id": "case-04-raw_trailing_data",
+  "derived_sha256": "sha256:e16d919731a71e38ab34493fd14505a573b8ccdb3d1162c4d4ba386ee000dda3",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

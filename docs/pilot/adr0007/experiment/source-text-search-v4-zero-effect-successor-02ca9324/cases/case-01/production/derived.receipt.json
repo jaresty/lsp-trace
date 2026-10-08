@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:a2e2d2c6548b5c5cfd79ecc95759cca46e514a42df945aac4b0bf1592054f58e",
+  "case_id": "case-01-raw_malformed_json",
+  "derived_sha256": "sha256:2c10e26a7ba75a140b1a0c25c964d9082a7762b4d5026526aa125c318f39b1af",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

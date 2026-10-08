@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:44606b4eb2d2746245304c79fc7bae9eeac83025e21cb2ceb3d51002e9cfaf29",
+  "case_id": "case-21-file_digest_mutation",
+  "derived_sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:11c4e379fe0114cac6a3a4fcb086337c37e022b7a2d559821ebfaec10471cb2a",
+  "case_id": "case-16-path_traversal",
+  "derived_sha256": "sha256:5449ea2df3d0c2a4cd49fb2b0fb9171aaceec263638a89b5247d76c929da4302",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

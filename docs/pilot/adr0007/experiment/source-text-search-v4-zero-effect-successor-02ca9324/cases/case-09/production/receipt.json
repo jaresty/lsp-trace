@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "sha256:03195e8bc6bdc7542a3e8a831e067ac04f76d31b6296c2ac70694e11c2fc7980",
+  "case_id": "case-09-control_simultaneous_deadline_cancel",
+  "end": "2026-10-08T08:48:42.664801Z",
+  "exit_status": 0,
+  "lane": "production",
+  "schema": "raw-result-receipt",
+  "start": "2026-10-08T08:48:42.650689Z",
+  "stderr_bytes": 0,
+  "stderr_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 2220,
+  "stdout_sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f"
+}

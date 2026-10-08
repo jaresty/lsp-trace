@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:22841d7677b5c75a8cfbe44b2183b452492da358bef6a4d244cec67ac4b7cf09",
+  "case_id": "case-33-non_bmp_utf16",
+  "derived_sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}
