@@ -319,9 +319,118 @@ func TestSourceRecordExactTypedDedupeAndConflict(t *testing.T) {
 	}
 }
 
-func TestSemanticWorkCountsEveryTraversedV5SourceRecord(t *testing.T) {
-	w := WorkAccounting{Inputs: 2, NodeRecords: 3, EdgeRecords: 4, Occurrences: 5, SupplyRecords: 6, SourceReceiptRecords: 7, CaptureRecords: 8, BindingRecords: 9, NativeReceiptRecords: 10}
-	if got, want := semanticWork(w), 54; got != want {
-		t.Fatalf("ASSERT_V5_SOURCE_SEMANTIC_WORK got=%d want=%d", got, want)
+func TestSemanticWorkChargeObserverDiscriminatesEveryStageBoundary(t *testing.T) {
+	w := stageBoundaryWork()
+	want := []workChargeObservation{
+		{Stage: "P", Before: 0, Increment: 1, After: 1},
+		{Stage: "R", Before: 1, Increment: 1, After: 2},
+		{Stage: "M", Before: 2, Increment: 1, After: 3},
+		{Stage: "S", Before: 3, Increment: 1, After: 4},
+		{Stage: "Q", Before: 4, Increment: 1, After: 5},
+		{Stage: "X", Before: 5, Increment: 1, After: 6},
+		{Stage: "C", Before: 6, Increment: 1, After: 7},
+		{Stage: "B", Before: 7, Increment: 1, After: 8},
 	}
+	for i, checkpoint := range want {
+		t.Run(checkpoint.Stage+"-minus-one-fails-at-stage", func(t *testing.T) {
+			trace, err := observeSemanticWork(w, checkpoint.After-1)
+			if err == nil {
+				t.Fatal("ASSERT_STAGE_MAX_WORK_MINUS_ONE_FAILS")
+			}
+			if got, wantLen := len(trace), i+1; got != wantLen {
+				t.Fatalf("ASSERT_STAGE_FAIL_TRACE_PREFIX_LENGTH got=%d want=%d trace=%v", got, wantLen, trace)
+			}
+			got := trace[len(trace)-1]
+			wantFail := checkpoint
+			wantFail.Fail = true
+			if got != wantFail {
+				t.Fatalf("ASSERT_STAGE_FAIL_EXACT_TRACE got=%+v want=%+v", got, wantFail)
+			}
+		})
+		t.Run(checkpoint.Stage+"-exact-crosses-to-next-checkpoint", func(t *testing.T) {
+			trace, err := observeSemanticWork(w, checkpoint.After)
+			if got, wantPrefix := trace[:i+1], want[:i+1]; !equalWorkTrace(got, wantPrefix) {
+				t.Fatalf("ASSERT_STAGE_SUCCESS_PREFIX got=%+v want=%+v", got, wantPrefix)
+			}
+			if trace[i].Fail {
+				t.Fatalf("ASSERT_STAGE_EXACT_CHECKPOINT_IS_NOT_FAILURE got=%+v", trace[i])
+			}
+			if i+1 < len(want) {
+				if err == nil {
+					t.Fatal("ASSERT_STAGE_EXACT_REACHES_NEXT_FAILURE")
+				}
+				nextFail := want[i+1]
+				nextFail.Fail = true
+				if got := trace[i+1]; got != nextFail {
+					t.Fatalf("ASSERT_STAGE_SUCCESS_REACHES_NEXT_CHECKPOINT got=%+v want=%+v", got, nextFail)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("ASSERT_STAGE_SUCCESS_COMPLETES err=%v trace=%v", err, trace)
+				}
+				if got, wantLen := len(trace), len(want); got != wantLen {
+					t.Fatalf("ASSERT_STAGE_SUCCESS_COMPLETES got=%d want=%d trace=%v", got, wantLen, trace)
+				}
+			}
+		})
+	}
+}
+
+func TestSemanticWorkChargeTraceIsMutationSensitive(t *testing.T) {
+	w := stageBoundaryWork()
+	want, err := observeSemanticWork(w, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	coefficientMutation := []workChargeObservation{
+		{Stage: "P", Before: 0, Increment: 1, After: 1},
+		{Stage: "R", Before: 1, Increment: 2, After: 3},
+		{Stage: "M", Before: 3, Increment: 1, After: 4},
+		{Stage: "S", Before: 4, Increment: 1, After: 5},
+		{Stage: "Q", Before: 5, Increment: 1, After: 6},
+		{Stage: "X", Before: 6, Increment: 1, After: 7},
+		{Stage: "C", Before: 7, Increment: 1, After: 8},
+		{Stage: "B", Before: 8, Increment: 1, After: 9},
+	}
+	placementMutation := []workChargeObservation{
+		{Stage: "P", Before: 0, Increment: 1, After: 1},
+		{Stage: "R", Before: 1, Increment: 1, After: 2},
+		{Stage: "M", Before: 2, Increment: 1, After: 3},
+		{Stage: "S", Before: 3, Increment: 1, After: 4},
+		{Stage: "Q", Before: 4, Increment: 1, After: 5},
+		{Stage: "C", Before: 5, Increment: 1, After: 6},
+		{Stage: "X", Before: 6, Increment: 1, After: 7},
+		{Stage: "B", Before: 7, Increment: 1, After: 8},
+	}
+	if equalWorkTrace(want, coefficientMutation) {
+		t.Fatal("ASSERT_COEFFICIENT_MUTATION_DETECTED")
+	}
+	if equalWorkTrace(want, placementMutation) {
+		t.Fatal("ASSERT_PLACEMENT_MUTATION_DETECTED")
+	}
+	if got := semanticWork(WorkAccounting{Inputs: 2, NodeRecords: 3, EdgeRecords: 4, Occurrences: 5, SupplyRecords: 6, SourceReceiptRecords: 7, CaptureRecords: 8, BindingRecords: 9, NativeReceiptRecords: 10}); got != 54 {
+		t.Fatalf("ASSERT_V5_SOURCE_SEMANTIC_WORK got=%d want=54", got)
+	}
+}
+
+func stageBoundaryWork() WorkAccounting {
+	return WorkAccounting{Inputs: 1, NodeRecords: 1, EdgeRecords: 1, Occurrences: 1, SupplyRecords: 1, SourceReceiptRecords: 1, CaptureRecords: 1, NativeReceiptRecords: 1}
+}
+
+func observeSemanticWork(w WorkAccounting, maxWork int) ([]workChargeObservation, error) {
+	var trace []workChargeObservation
+	_, err := chargeSemanticWork(w, maxWork, func(o workChargeObservation) { trace = append(trace, o) })
+	return trace, err
+}
+
+func equalWorkTrace(a, b []workChargeObservation) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

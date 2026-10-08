@@ -80,6 +80,14 @@ type WorkAccounting struct {
 	Inputs, NodeRecords, EdgeRecords, Occurrences, SupplyRecords, SourceReceiptRecords, CaptureRecords, BindingRecords, NativeReceiptRecords, MergedNodes, SemanticWork int
 }
 
+type workChargeObservation struct {
+	Stage                    string
+	Before, Increment, After int
+	Fail                     bool
+}
+
+type workChargeObserver func(workChargeObservation)
+
 type Artifact struct {
 	Version, PolicyVersion, PolicySHA256, CompositeID, OutputSHA256, ClaimCeiling string
 	Constituents                                                                  []Constituent
@@ -406,14 +414,45 @@ func enforceResourceCaps(inputBytes int, work WorkAccounting) error {
 	if work.Occurrences > maxOccurrences {
 		return errors.New("occurrence cap exceeded")
 	}
-	if semanticWork(work) > MaxWorkUnits {
-		return errors.New("semantic work unit cap exceeded")
+	if _, err := chargeSemanticWork(work, MaxWorkUnits, nil); err != nil {
+		return err
 	}
 	return nil
 }
 
 func semanticWork(w WorkAccounting) int {
-	return w.Inputs + w.NodeRecords + w.EdgeRecords + w.Occurrences + w.SupplyRecords + w.SourceReceiptRecords + w.CaptureRecords + w.BindingRecords + w.NativeReceiptRecords
+	total, _ := chargeSemanticWork(w, -1, nil)
+	return total
+}
+
+func chargeSemanticWork(w WorkAccounting, maxWork int, observer workChargeObserver) (int, error) {
+	total := 0
+	charges := []struct {
+		stage     string
+		increment int
+	}{
+		{stage: "P", increment: w.Inputs},
+		{stage: "R", increment: w.NodeRecords},
+		{stage: "M", increment: w.EdgeRecords},
+		{stage: "S", increment: w.Occurrences},
+		{stage: "Q", increment: w.SupplyRecords},
+		{stage: "X", increment: w.SourceReceiptRecords},
+		{stage: "C", increment: w.CaptureRecords},
+		{stage: "B", increment: w.BindingRecords + w.NativeReceiptRecords},
+	}
+	for _, charge := range charges {
+		before := total
+		after := before + charge.increment
+		fail := maxWork >= 0 && after > maxWork
+		if observer != nil {
+			observer(workChargeObservation{Stage: charge.stage, Before: before, Increment: charge.increment, After: after, Fail: fail})
+		}
+		if fail {
+			return after, errors.New("semantic work unit cap exceeded")
+		}
+		total = after
+	}
+	return total, nil
 }
 
 func language(n native) string {
