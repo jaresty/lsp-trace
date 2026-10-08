@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 func TestRealProcessCensusContinuationStopAfterDescribeRequests(t *testing.T) {
+	requireDarwinCensusProcessE2E(t)
 	mcp := buildMCPBinary(t)
 	fake := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	workspace := t.TempDir()
@@ -183,6 +185,13 @@ func TestRealProcessCensusContinuationStopAfterDescribeRequests(t *testing.T) {
 	}
 }
 
+func requireDarwinCensusProcessE2E(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "darwin" {
+		t.Skip("real-process census E2E requires qualified Darwin process containment")
+	}
+}
+
 func logProcessE2ERoot(t *testing.T, label, root string) {
 	t.Helper()
 	info, err := os.Stat(root)
@@ -208,6 +217,7 @@ func logProcessE2ERoot(t *testing.T, label, root string) {
 }
 
 func TestRealProcessCensusAcquisitionTimeoutAfterDiscovery(t *testing.T) {
+	requireDarwinCensusProcessE2E(t)
 	mcp := buildMCPBinary(t)
 	fake := buildBinary(t, "fake-lsp", "./cmd/fake-lsp")
 	workspace := t.TempDir()

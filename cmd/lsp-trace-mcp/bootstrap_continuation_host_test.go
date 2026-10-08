@@ -215,7 +215,10 @@ func TestProductionContinuationHostConstructionAttribution(t *testing.T) {
 }
 
 func TestCurrentPrivateBootstrapConstructsContinuationHost(t *testing.T) {
-	const path = "/Users/schwa/dev/lsp-trace/.lsp-trace-mcp-bootstrap.json"
+	path := os.Getenv("LSP_TRACE_PRIVATE_BOOTSTRAP_TEST_CONFIG")
+	if path == "" {
+		t.Skip("set LSP_TRACE_PRIVATE_BOOTSTRAP_TEST_CONFIG to run the developer-private bootstrap smoke test")
+	}
 	config, err := loadBootstrapConfig(path)
 	if err != nil {
 		t.Fatal(err)
