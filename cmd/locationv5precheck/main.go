@@ -31,12 +31,24 @@ type assignmentFile struct {
 	} `json:"cases"`
 }
 type authFile struct {
-	Schema, Status, AttemptID, AuthorizedFreezeRootIdentity, FreezeRoot, ExecutionRoot, Completeness, FeatureIdentity string
-	AuthorityCeiling                                                                                                  int  `json:"authorityCeiling"`
-	Accepted                                                                                                          bool `json:"accepted"`
-	ProducerAssignments                                                                                               int  `json:"producerAssignments"`
-	ReviewerAssignments                                                                                               int  `json:"reviewerAssignments"`
-	FrozenFilesImmutable                                                                                              int  `json:"frozenFilesImmutable"`
+	Accepted                          bool   `json:"accepted"`
+	AttemptID                         string `json:"attemptID"`
+	AuthorityCeiling                  int    `json:"authorityCeiling"`
+	AuthorizedFreezeRootIdentity      string `json:"authorizedFreezeRootIdentity"`
+	BaseCommit                        string `json:"baseCommit"`
+	Completeness                      string `json:"completeness"`
+	ExecutionRoot                     string `json:"executionRoot"`
+	ExternalInference                 bool   `json:"externalInference"`
+	FeatureIdentity                   string `json:"featureIdentity"`
+	FreezeRoot                        string `json:"freezeRoot"`
+	FrozenFilesImmutable              int    `json:"frozenFilesImmutable"`
+	HeadAuthorityCeiling              int    `json:"headAuthorityCeiling"`
+	NoPublicProductionReleasePush     bool   `json:"noPublicProductionReleasePush"`
+	PhaseCommitRequiredBeforeAttempts bool   `json:"phaseCommitRequiredBeforeAttempts"`
+	ProducerAssignments               int    `json:"producerAssignments"`
+	ReviewerAssignments               int    `json:"reviewerAssignments"`
+	Schema                            string `json:"schema"`
+	Status                            string `json:"status"`
 }
 type freezeFile struct {
 	Schema string `json:"schema"`
