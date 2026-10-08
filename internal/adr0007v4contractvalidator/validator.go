@@ -272,8 +272,12 @@ func ValidateBundle(b Bundle) error {
 	if t.Custody.AttemptID != t.Attempt.AttemptID || t.Custody.TerminalSequence0 != 0 || t.Custody.TerminalCount1 != 1 {
 		return verr("INVARIANT_FAILED", "/custody", "bad custody constants")
 	}
-	if t.Replay.AdmittedBindingSHA256 != digestOrEmpty(b.AdmittedBindingBytes) {
+	admissionDigest := digestOrEmpty(b.AdmittedBindingBytes)
+	if t.Replay.AdmittedBindingSHA256 != admissionDigest {
 		return verr("INVARIANT_FAILED", "/replay/admitted_binding_sha256", "admission digest mismatch")
+	}
+	if t.Admission.AdmissionDigest != admissionDigest {
+		return verr("INVARIANT_FAILED", "/admission/admission_digest", "admission digest mismatch")
 	}
 	if t.Replay.ToolingIdentitySHA256 != sha(b.ToolingManifestBytes) || t.Replay.PredecessorLockSHA256 != sha(b.PredecessorManifestBytes) || t.Replay.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.PayloadDigest != sha(b.PayloadFreezeBytes) {
 		return verr("INVARIANT_FAILED", "/replay", "manifest pin mismatch")
@@ -682,6 +686,7 @@ func weightedW(a Accounting) (uint64, bool) {
 func fixedPointB(t Terminal) (uint64, bool) {
 	x := t
 	x.Custody.TerminalResultSHA256 = zeroSHA
+	x.Replay.TerminalPreimageSHA256 = zeroSHA
 	last := uint64(0)
 	for i := 0; i < MaxIterations; i++ {
 		b, _ := CanonicalJSON(x)

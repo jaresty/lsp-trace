@@ -19,8 +19,8 @@ func TestConformanceFixtures(t *testing.T) {
 		}
 	}
 	neg, _ := filepath.Glob(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "negative", "*.json"))
-	if len(neg) != 46 {
-		t.Fatalf("negative fixture count = %d, want 46", len(neg))
+	if len(neg) != 48 {
+		t.Fatalf("negative fixture count = %d, want 48", len(neg))
 	}
 	for _, p := range neg {
 		bun, err := loadBundleForTest(p)
