@@ -1,0 +1,26 @@
+{
+  "audit_sha256": "sha256:6f974de568a8d2f23f552ed186daca005f0b7fcde1b2136842bd9c0df6a21b53",
+  "checks": {
+    "all_50_judgments_recomputed": true,
+    "custody_go_self_claim": false,
+    "event_chain": [
+      "BINDING_CORRECTION_AUTHORIZED",
+      "AUDIT",
+      "SEAL"
+    ],
+    "full_sha256_pattern": true,
+    "predecessor_ledger_recomputed": true,
+    "prefix_truncation_negative_checks": true,
+    "prior_generation_files_recomputed": true,
+    "public_release_self_claim": false,
+    "semantic_execution_rerun": false,
+    "semantic_review_rerun": false,
+    "substitution_negative_checks": true
+  },
+  "events_sha256": "sha256:5b61e63a3744e33802dbc3ce0e5b10eb98cb8646345fec67697711ab1f63a179",
+  "manifest_sha256": "sha256:54b2f5fdc2fa8036b023235af8d8bf5778fb4ba76deebddc22f883bf1f4e4f23",
+  "namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d",
+  "schema": "adr0007.final-binding-correction.verify-receipt.v1",
+  "seal_sha256": "sha256:7d635045021a338d0a78194d8b0c16202c4be8758cd0b9708087b1639f4cd04f",
+  "verified_at": "2026-10-08T13:20:00Z"
+}

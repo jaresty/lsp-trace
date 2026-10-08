@@ -1,0 +1,72 @@
+{
+  "authority": 0,
+  "custody": "PENDING_FINAL_EXTERNAL_REVIEW",
+  "files": [
+    {
+      "bytes": 874,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/ACCOUNTING.json",
+      "sha256": "sha256:da814d731f9972ed8edde66f0898ebff1fd75a7e7c691e7721c2c7d672f88a67"
+    },
+    {
+      "bytes": 37103,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/AUTHORIZED_BINDINGS.json",
+      "sha256": "sha256:c26fe4779eac3e36c50bcab1fcc2440c9c03e3b89a4f0f205053d919707c7dcb"
+    },
+    {
+      "bytes": 1502,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/EVENTS.ndjson",
+      "sha256": "sha256:fd42002b8bcb35d1fadcddc6dbcd790960618f1f64160692d8ab099c7c4f8630"
+    },
+    {
+      "bytes": 38189,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/FINAL_AUDIT.json",
+      "sha256": "sha256:6f974de568a8d2f23f552ed186daca005f0b7fcde1b2136842bd9c0df6a21b53"
+    },
+    {
+      "bytes": 3202,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/verify_final_binding_correction.py",
+      "sha256": "sha256:0d8666b89dd5d7e08efe4bf7e865a3d9e0849b0e8d07e3ef7f1851e92be57aeb"
+    }
+  ],
+  "head": "80b7107d970a39a5ad2dbc1213f7f95a1aef13a6",
+  "judgment_digest_count": 50,
+  "namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d",
+  "predecessor_bindings": {
+    "ledger_sha256_required": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d",
+    "terminal_event_sha256_required": "sha256:bea1b32bb92aecae7b142dae3e71d149e1bada5c003aa43871187f48790f2680"
+  },
+  "prior_independent_review": {
+    "ACCOUNTING.json": {
+      "bytes": 508,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/ACCOUNTING.json",
+      "sha256": "sha256:52812f3adb2728e6715115a877939cebb82220ff6b6855759e89bce3d8395f8f"
+    },
+    "CAMPAIGN_MANIFEST.json": {
+      "bytes": 48455,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/CAMPAIGN_MANIFEST.json",
+      "sha256": "sha256:d2b0e64d8b29ee5c8e302c090a6704e124c6c2d825b4253fec5aa2a9d26190c9"
+    },
+    "CAMPAIGN_SEAL.json": {
+      "bytes": 403,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/CAMPAIGN_SEAL.json",
+      "sha256": "sha256:83523f14795f5e7bf7ccd09d566b4cbe844047be2d0e4f476f5aee4c2b3a5838"
+    },
+    "EVENTS.ndjson": {
+      "bytes": 45178,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/EVENTS.ndjson",
+      "sha256": "sha256:10529e0b01985fe477e99d292abefe0077bf9039ee09c80ae082fa76299edabb"
+    },
+    "FINAL_AUDIT.json": {
+      "bytes": 33807,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/FINAL_AUDIT.json",
+      "sha256": "sha256:7ad1f77ad4cf61a9da96e98a04b509450b263671d15735683ba3d29eee95748a"
+    },
+    "VERIFY_RECEIPT.json": {
+      "bytes": 1310,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/VERIFY_RECEIPT.json",
+      "sha256": "sha256:6f4e6f7d647b00edb170a6b9285aecece0f625e85fd708a5880763201dbf3f34"
+    }
+  },
+  "public_release_authorized": false,
+  "schema": "adr0007.final-binding-correction.manifest.v1"
+}
