@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +15,11 @@ import (
 
 	"lsp-trace/internal/adr0007locationv5"
 )
+
+type conditionFile struct {
+	Cancel          bool `json:"cancel"`
+	DeadlineExpired bool `json:"deadlineExpired"`
+}
 
 type processCustody struct {
 	Executable    string            `json:"executable"`
@@ -38,16 +46,96 @@ func digest(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.Enc
 func read(path string) ([]byte, error) { return os.ReadFile(path) }
 
 func sourceDigest() map[string]string {
-	_, file, _, ok := runtime.Caller(0)
 	out := map[string]string{}
-	if ok {
+	if _, file, _, ok := runtime.Caller(0); ok {
 		if b, err := os.ReadFile(file); err == nil {
 			out[filepath.ToSlash(file)] = digest(b)
 		}
 	}
-	_, evalFile, _, ok := runtime.Caller(1)
-	_ = evalFile
+	if _, file, _, ok := runtime.Caller(1); ok {
+		if b, err := os.ReadFile(file); err == nil {
+			out[filepath.ToSlash(file)] = digest(b)
+		}
+	}
+	if _, file, _, ok := runtime.Caller(0); ok {
+		eval := filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "internal", "adr0007locationv5", "evaluator.go"))
+		if b, err := os.ReadFile(eval); err == nil {
+			out[filepath.ToSlash(eval)] = digest(b)
+		}
+	}
 	return out
+}
+
+func strictJSON(path string, raw []byte, v any) error {
+	if err := rejectDuplicateKeys(raw); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("%s: trailing json", path)
+	}
+	return nil
+}
+
+func rejectDuplicateKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var walk func() error
+	walk = func() error {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				seen := map[string]bool{}
+				for dec.More() {
+					ktok, err := dec.Token()
+					if err != nil {
+						return err
+					}
+					k, ok := ktok.(string)
+					if !ok {
+						return errors.New("object key not string")
+					}
+					if seen[k] {
+						return fmt.Errorf("duplicate field %q", k)
+					}
+					seen[k] = true
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			case '[':
+				for dec.More() {
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(); err != nil {
+		return err
+	}
+	if dec.More() {
+		return errors.New("trailing json")
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing json")
+	}
+	return nil
 }
 
 func main() {
@@ -58,7 +146,8 @@ func main() {
 		os.Exit(2)
 	}
 	caseID, assignmentID, inputDir, outPath := os.Args[1], os.Args[2], os.Args[3], os.Args[4]
-	if strings.Contains(inputDir, "evaluator-candidate") || strings.Contains(inputDir, "oracle-candidate") {
+	cleanInput := filepath.ToSlash(filepath.Clean(inputDir))
+	if strings.Contains(cleanInput, "evaluator-candidate") || strings.Contains(cleanInput, "oracle-candidate") {
 		stderr = []byte("producer input dir must not be evaluator-candidate or oracle-candidate\n")
 		os.Stderr.Write(stderr)
 		os.Exit(2)
@@ -77,18 +166,17 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	cond, err := read(filepath.Join(inputDir, "CONDITION.json"))
+	condRaw, err := read(filepath.Join(inputDir, "CONDITION.json"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	ctrl := adr0007locationv5.StaticControl{}
-	if strings.Contains(string(cond), "CANCEL") {
-		ctrl.Cancel = true
+	var cond conditionFile
+	if err := strictJSON("CONDITION.json", condRaw, &cond); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	if strings.Contains(string(cond), "DEADLINE") {
-		ctrl.Deadline = true
-	}
+	ctrl := adr0007locationv5.StaticControl{Cancel: cond.Cancel, Deadline: cond.DeadlineExpired}
 	res, err := adr0007locationv5.Evaluate(raw, bind, ctrl, adr0007locationv5.PublishedLimits())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -99,7 +187,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	custody := processCustody{Executable: os.Args[0], Argv: append([]string{}, os.Args...), SourceDigests: sourceDigest(), InputDigests: map[string]string{"REQUEST.raw.json": digest(raw), "CONDITION.json": digest(cond)}, ExitCode: 0, StdoutSHA256: digest(resBytes), StderrSHA256: digest(nil), StdoutBytes: len(resBytes), StderrBytes: 0}
+	custody := processCustody{Executable: os.Args[0], Argv: append([]string{}, os.Args...), SourceDigests: sourceDigest(), InputDigests: map[string]string{"REQUEST.raw.json": digest(raw), "CONDITION.json": digest(condRaw)}, ExitCode: 0, StdoutSHA256: digest(resBytes), StderrSHA256: digest(nil), StdoutBytes: len(resBytes), StderrBytes: 0}
 	if bind == nil {
 		custody.InputDigests["BINDING.ABSENT"] = "present"
 	} else {

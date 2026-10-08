@@ -1,0 +1,49 @@
+{
+  "assignmentsTouched": false,
+  "authorizationTouched": false,
+  "baseCommit": "34bacf6e",
+  "changedTooling": [
+    {
+      "bytes": 6096,
+      "path": "cmd/locationv5execute/main.go",
+      "sha256": "sha256:746f8f74e5d55ead00424e40c8b36aeffbc5fc346eaec3fb0a11cfb5347078d4"
+    },
+    {
+      "bytes": 1416,
+      "path": "cmd/locationv5execute/main_test.go",
+      "sha256": "sha256:7480b099f84e661928dda4003ba3fc6d0862dfa3102193fa521625f7cf590b84"
+    },
+    {
+      "bytes": 8118,
+      "path": "cmd/locationv5precheck/main.go",
+      "sha256": "sha256:dff922a871247d0ee0175549742d5881c7f4857e7c69f7496c763316abe6aaeb"
+    },
+    {
+      "bytes": 839,
+      "path": "cmd/locationv5precheck/main_test.go",
+      "sha256": "sha256:f3c77f2f33e0d6aac57c899c413495283518c85209042b5ae5de49edb5429d15"
+    },
+    {
+      "bytes": 6664,
+      "path": "cmd/locationv5audit/main.go",
+      "sha256": "sha256:e024aaf8d30c6d50f3508701c97fdd7ff7bc3eeb15731c65e77a98e185f72524"
+    },
+    {
+      "bytes": 1261,
+      "path": "cmd/locationv5audit/main_test.go",
+      "sha256": "sha256:b56dc29601ecffd15a5a01574a3f818146cad7026426abbc65aa89227ccc8eff"
+    }
+  ],
+  "frozenRootTouched": false,
+  "headBeforeToolingCommit": "34bacf6e58fbeb4fc1702fad34f8e023cc79486a",
+  "notes": [
+    "producer CONDITION parsed structurally with duplicate/unknown/trailing rejection",
+    "producer custody includes command and evaluator.go source digests plus strict input digests",
+    "orchestrator/reviewer/boundary audit command built but not dispatched",
+    "precheck uses authoritative frozen zero-image census and accounts preserved before-manifest physical-self-image mismatch"
+  ],
+  "preRepairManifest": "docs/pilot/adr0007/experiment/location-intersection-v5-qualification-2026-10-07/PRE_REPAIR_MANIFEST.json",
+  "schema": "lsp-trace.adr0007.location-v5.post-repair-tooling-manifest.v1",
+  "status": "TOOLING_REPAIRED_BEFORE_PRECHECK",
+  "zeroEffectRepairAllowed": true
+}

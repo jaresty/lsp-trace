@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -37,12 +39,20 @@ type authFile struct {
 	FrozenFilesImmutable                                                                                              int  `json:"frozenFilesImmutable"`
 }
 type freezeFile struct {
+	Schema       string `json:"schema"`
 	RootIdentity string `json:"rootIdentity"`
 	Files        []struct {
 		Path   string `json:"path"`
 		Bytes  uint64 `json:"bytes"`
 		SHA256 string `json:"sha256"`
 	} `json:"files"`
+}
+type beforeFile struct {
+	Schema                 string `json:"schema"`
+	AuthorizedRootIdentity string `json:"authorizedRootIdentity"`
+	FrozenRoot             string `json:"frozenRoot"`
+	FrozenFileCount        int    `json:"frozenFileCount"`
+	Files                  []rec  `json:"files"`
 }
 type rec struct {
 	Path   string `json:"path"`
@@ -56,13 +66,69 @@ func strict(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	dec := json.NewDecoder(strings.NewReader(string(b)))
+	if err := rejectDuplicateKeys(b); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	if dec.Decode(&struct{}{}) == nil {
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("%s: trailing json", path)
+	}
+	return nil
+}
+func rejectDuplicateKeys(raw []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	var walk func() error
+	walk = func() error {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				seen := map[string]bool{}
+				for dec.More() {
+					kt, err := dec.Token()
+					if err != nil {
+						return err
+					}
+					k, ok := kt.(string)
+					if !ok {
+						return errors.New("object key not string")
+					}
+					if seen[k] {
+						return fmt.Errorf("duplicate field %q", k)
+					}
+					seen[k] = true
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			case '[':
+				for dec.More() {
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(); err != nil {
+		return err
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("trailing json")
 	}
 	return nil
 }
@@ -89,6 +155,17 @@ func files(root string, zeroFreeze bool) ([]rec, error) {
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, err
+}
+func sameFiles(a []rec, b []rec) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func main() {
@@ -129,7 +206,7 @@ func main() {
 		if c.Producer.Role != "producer" || c.Reviewer.Role != "reviewer" {
 			fail("assignment role")
 		}
-		if contains(c.Producer.MayRead, "oracle") || contains(c.Producer.Forbidden, "external inference") == false {
+		if contains(c.Producer.MayRead, "oracle") || !contains(c.Producer.Forbidden, "external inference") {
 			fail("producer boundary")
 		}
 		if _, err := os.Stat(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json")); err != nil {
@@ -142,10 +219,17 @@ func main() {
 		fail("precheck requires zero producer/reviewer output")
 	}
 	phys, _ := files(frozenRoot, false)
-	out := map[string]any{"schema": "lsp-trace.adr0007.location-v5.precheck.v1", "status": "PRECHECK_PASS", "repoRoot": repo, "freezeRootIdentity": f.RootIdentity, "zeroImageFiles": len(zero), "physicalFiles": len(phys), "producerOutputs": 0, "reviewerOutputs": 0, "assignments": len(as.Cases), "authority": 0, "accepted": false, "completeness": "UNKNOWN"}
+	var before beforeFile
+	beforeStatus := "absent"
+	beforeMismatch := map[string]any{"present": false}
+	if err := strict(filepath.Join(execRoot, "FROZEN230_MANIFEST.before.json"), &before); err == nil {
+		beforeStatus = "present"
+		beforeMismatch = map[string]any{"present": true, "authorizedRootIdentityMatches": before.AuthorizedRootIdentity == f.RootIdentity, "physicalSelfImageMatches": sameFiles(before.Files, phys), "zeroImageMatches": sameFiles(before.Files, zero), "preservedHistoricalDefect": before.AuthorizedRootIdentity == f.RootIdentity && !sameFiles(before.Files, phys) && !sameFiles(before.Files, zero), "accounting": "precheck uses authoritative FREEZE.json zero-image census; before manifest physical-self-image mismatch is preserved, accounted historical defect"}
+	}
+	out := map[string]any{"schema": "lsp-trace.adr0007.location-v5.precheck.v1", "status": "PRECHECK_PASS", "repoRoot": repo, "freezeRootIdentity": f.RootIdentity, "zeroImageFiles": len(zero), "physicalFiles": len(phys), "producerOutputs": 0, "reviewerOutputs": 0, "assignments": len(as.Cases), "authority": 0, "accepted": false, "completeness": "UNKNOWN", "beforeManifestStatus": beforeStatus, "beforeManifestAccounting": beforeMismatch}
 	b, _ := json.MarshalIndent(out, "", "  ")
 	b = append(b, '\n')
-	must(os.WriteFile(filepath.Join(execRoot, "PRECHECK.json"), b, 0o644))
+	must(os.WriteFile(filepath.Join(execRoot, "PRECHECK.json"), b, 0644))
 	fmt.Print(string(b))
 }
 func contains(xs []string, sub string) bool {
