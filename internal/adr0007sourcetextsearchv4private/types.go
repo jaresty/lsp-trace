@@ -240,6 +240,7 @@ type AdmissionRecord struct {
 	AdmissionSchema string        `json:"admission_schema"`
 	AdmissionDigest string        `json:"admission_digest"`
 	OrderedSources  []SourceTuple `json:"ordered_sources"`
+	BindingBytes    string        `json:"-"`
 }
 type Pos struct{ Line, Character uint64 }
 

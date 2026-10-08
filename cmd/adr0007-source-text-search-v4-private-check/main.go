@@ -1,13 +1,17 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	admit "lsp-trace/docs/pilot/adr0007/source-text-search-v3/pinned/sourceadmissionv2"
 	v4 "lsp-trace/internal/adr0007sourcetextsearchv4private"
@@ -110,6 +114,13 @@ func main() {
 		if err := adr0007v4contractvalidator.ValidateBundleBytes(bb); err != nil {
 			fail(fmt.Sprintf("%s contract validation failed: %v", id, err))
 		}
+		derived, err := adr0007v4contractvalidator.Derive(adr0007v4contractvalidator.DeriveInput{RawAttemptBytes: bun.RawAttemptBytes, AdmittedSourceBytes: bun.AdmittedSourceBytes, AdmittedBindingBytes: bun.AdmittedBindingBytes, ToolingManifestBytes: bun.ToolingManifestBytes, PredecessorManifestBytes: bun.PredecessorManifestBytes, PayloadFreezeBytes: bun.PayloadFreezeBytes})
+		if err != nil {
+			fail(fmt.Sprintf("%s contract derive failed: %v", id, err))
+		}
+		if derived != string(out) {
+			fail(fmt.Sprintf("%s production terminal != contract derive", id))
+		}
 		contractOK++
 		if tr.Terminal == "COMPLETE" {
 			complete++
@@ -134,16 +145,20 @@ func buildBundle(attemptPath, terminal string, tr v4.TerminalResult) bundle {
 	if err != nil {
 		panic(err)
 	}
-	predBytes, err := os.ReadFile("docs/pilot/adr0007/source-text-search-v4/PAYLOAD_MANIFEST.json")
+	predBytes, err := os.ReadFile("docs/pilot/adr0007/source-text-search-v4/FREEZE_DESIGN.md")
+	if err != nil {
+		panic(err)
+	}
+	payloadBytes, err := os.ReadFile("docs/pilot/adr0007/source-text-search-v4/PAYLOAD_MANIFEST.json")
 	if err != nil {
 		panic(err)
 	}
 	tooling := string(toolingBytes)
 	pred := string(predBytes)
-	freeze := "UNFROZEN-PROSPECTIVE-V4-DESIGN-IDENTITY"
+	freeze := string(payloadBytes)
 	admitted := map[string]string{}
 	binding := ""
-	if tr.Admission.Completed {
+	if len(tr.Sources) > 0 && (tr.Admission.Completed || tr.Failure == nil || tr.Failure.Code != "ADMISSION_FAILED") {
 		a, perr := v4.StrictParseAttempt(raw)
 		if perr != "" {
 			panic(perr)
@@ -154,13 +169,24 @@ func buildBundle(attemptPath, terminal string, tr v4.TerminalResult) bundle {
 		}
 		adm := v4.AdmissionRecord{SchemaVersion: v4.AdmissionRecordSchema, AdmissionSchema: admit.Schema, OrderedSources: []v4.SourceTuple{}}
 		selected := []admit.SelectedSource{}
+		admittedByPath := map[string]string{}
 		for _, s := range tr.Sources {
 			in := inputs[s.Ordinal]
+			logicalPath, _ := url.PathUnescape(strings.TrimPrefix(s.LogicalURI, "file:///"))
+			if in.Path != logicalPath {
+				for _, candidate := range inputs {
+					if candidate.Path == logicalPath {
+						in = candidate
+						break
+					}
+				}
+			}
 			data, err := base64.StdEncoding.DecodeString(in.BytesBase64)
 			if err != nil {
 				panic(err)
 			}
 			admitted[s.SourceID] = string(data)
+			admittedByPath[in.Path] = string(data)
 			selected = append(selected, admit.SelectedSource{Path: in.Path, Revision: in.Revision, FileDigest: in.FileDigest, ObjectDigest: in.ObjectDigest, Bytes: data})
 			adm.OrderedSources = append(adm.OrderedSources, v4.SourceTuple{Ordinal: s.Ordinal, Path: in.Path, Revision: in.Revision, FileDigest: in.FileDigest, ObjectDigest: in.ObjectDigest, SourceByteLength: uint64(len(data))})
 		}
@@ -169,9 +195,69 @@ func buildBundle(attemptPath, terminal string, tr v4.TerminalResult) bundle {
 		if ar.Binding != nil {
 			adm.AdmissionDigest = ar.Binding.AdmissionDigest
 		}
-		binding = string(v4.Canon(adm))
+		binding = contractAdmissionBinding(adm.OrderedSources, admittedByPath)
+	}
+	if len(admitted) == 0 && tr.Failure != nil && tr.Failure.Code == "RESOURCE_EXHAUSTED" && fmt.Sprint(tr.Failure.Detail["limit"]) == "max_path_bytes" {
+		admitted, binding = rawAdmittedForContract(raw)
 	}
 	return bundle{SchemaBytes: schema, RawAttemptBytes: string(raw), TerminalBytes: terminal, AdmittedSourceBytes: admitted, AdmittedBindingBytes: binding, ToolingManifestBytes: tooling, PredecessorManifestBytes: pred, PayloadFreezeBytes: freeze}
+}
+
+type sourceAdmissionBinding struct {
+	Schema          string                  `json:"schema"`
+	AdmissionDigest string                  `json:"admissionDigest"`
+	Sources         []sourceAdmissionMember `json:"sources"`
+}
+type sourceAdmissionMember struct {
+	Path         string `json:"path"`
+	Revision     string `json:"revision"`
+	FileDigest   string `json:"fileDigest"`
+	ObjectDigest string `json:"objectDigest"`
+	BytesBase64  string `json:"bytes_base64"`
+}
+
+func rawAdmittedForContract(raw []byte) (map[string]string, string) {
+	a, perr := v4.StrictParseAttempt(raw)
+	if perr != "" {
+		return map[string]string{}, ""
+	}
+	inputs := map[uint64]v4.SourceInput{}
+	for _, in := range a.SourceInputs {
+		inputs[in.Ordinal] = in
+	}
+	admitted := map[string]string{}
+	admittedByPath := map[string]string{}
+	tuples := []v4.SourceTuple{}
+	for i, s := range a.Request.Sources {
+		in := inputs[s.Ordinal]
+		data, err := base64.StdEncoding.DecodeString(in.BytesBase64)
+		if err != nil {
+			return map[string]string{}, ""
+		}
+		ord := uint64(i)
+		id := v4.Digest([]byte(fmt.Sprintf("source\x00%s\x00%s\x00%d", in.Path, in.Revision, ord)))
+		admitted[id] = string(data)
+		admittedByPath[in.Path] = string(data)
+		tuples = append(tuples, v4.SourceTuple{Ordinal: ord, Path: in.Path, Revision: in.Revision, FileDigest: in.FileDigest, ObjectDigest: in.ObjectDigest, SourceByteLength: uint64(len(data))})
+	}
+	return admitted, contractAdmissionBinding(tuples, admittedByPath)
+}
+
+func contractAdmissionBinding(srcs []v4.SourceTuple, admittedByPath map[string]string) string {
+	h := sha256.New()
+	h.Write([]byte("lsp-trace.adr0007.source-admission.private.v2"))
+	for _, s := range srcs {
+		for _, v := range []string{s.Path, s.Revision, s.FileDigest, s.ObjectDigest} {
+			h.Write([]byte{0})
+			h.Write([]byte(v))
+		}
+	}
+	digest := "sha256:" + hex.EncodeToString(h.Sum(nil))
+	b := sourceAdmissionBinding{Schema: "lsp-trace.adr0007.source-admission.private.v2", AdmissionDigest: digest}
+	for _, s := range srcs {
+		b.Sources = append(b.Sources, sourceAdmissionMember{Path: s.Path, Revision: s.Revision, FileDigest: s.FileDigest, ObjectDigest: s.ObjectDigest, BytesBase64: base64.StdEncoding.EncodeToString([]byte(admittedByPath[s.Path]))})
+	}
+	return string(v4.Canon(b))
 }
 
 func readRows(root string) []Row {

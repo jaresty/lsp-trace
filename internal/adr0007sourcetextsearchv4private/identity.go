@@ -1,4 +1,4 @@
 package adr0007sourcetextsearchv4private
 
 const toolingDigest = "sha256:7e524efaec40550409eb2756f1b8e45a34dd7a6a94bcbb3a0886723fad2696cf"
-const predecessorLockDigest = "sha256:94d7171a7cb8d0cd62d77401119d002d5c7627cb595e8cb670e75821a103fa7e"
+const predecessorLockDigest = "sha256:63aead2715dcdaa49dcd48ad61e38d003ab2df59736a9f2494605eba69273015"
