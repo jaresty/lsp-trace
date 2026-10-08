@@ -18,6 +18,7 @@ func ownsADR0007ProductionPath(path string) bool {
 		"internal/v5sourcesnapshotv4/",
 		"internal/v5sourcesnapshotv5/",
 		"internal/v5sourcesnapshotv6/",
+		"cmd/adr0007-source-text-search-v4-private-",
 	} {
 		if strings.HasPrefix(path, prefix) {
 			return true

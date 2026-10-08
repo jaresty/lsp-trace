@@ -198,10 +198,20 @@ func TestRawArtifactAndTerminalMutationsReject(t *testing.T) {
 		},
 	}
 	for name, mutate := range mutators {
-		if err := ValidateBundle(mutate(bun)); err == nil {
+		if err := ValidateBundle(mutate(cloneBundleForMutation(bun))); err == nil {
 			t.Fatalf("%s accepted", name)
 		}
 	}
+}
+
+func cloneBundleForMutation(b Bundle) Bundle {
+	clone := b
+	clone.SchemaBytes = append([]byte(nil), b.SchemaBytes...)
+	clone.AdmittedSourceBytes = map[string]string{}
+	for k, v := range b.AdmittedSourceBytes {
+		clone.AdmittedSourceBytes[k] = v
+	}
+	return clone
 }
 
 func TestNoCaseNamesInDerivationSource(t *testing.T) {
