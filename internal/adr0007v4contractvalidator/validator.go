@@ -3,6 +3,7 @@ package adr0007v4contractvalidator
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -10,11 +11,14 @@ import (
 	"io"
 	"math"
 	"os"
+	"path"
 	"regexp"
 	"sort"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 const TerminalSchemaVersion = "lsp-trace.adr0007.source-text-search.terminal.private.v4"
@@ -272,12 +276,8 @@ func ValidateBundle(b Bundle) error {
 	if t.Custody.AttemptID != t.Attempt.AttemptID || t.Custody.TerminalSequence0 != 0 || t.Custody.TerminalCount1 != 1 {
 		return verr("INVARIANT_FAILED", "/custody", "bad custody constants")
 	}
-	admissionDigest := digestOrEmpty(b.AdmittedBindingBytes)
-	if t.Replay.AdmittedBindingSHA256 != admissionDigest {
-		return verr("INVARIANT_FAILED", "/replay/admitted_binding_sha256", "admission digest mismatch")
-	}
-	if t.Admission.AdmissionDigest != admissionDigest {
-		return verr("INVARIANT_FAILED", "/admission/admission_digest", "admission digest mismatch")
+	if t.Replay.AdmittedBindingSHA256 != sha(b.AdmittedBindingBytes) {
+		return verr("INVARIANT_FAILED", "/replay/admitted_binding_sha256", "admitted binding pin mismatch")
 	}
 	if t.Replay.ToolingIdentitySHA256 != sha(b.ToolingManifestBytes) || t.Replay.PredecessorLockSHA256 != sha(b.PredecessorManifestBytes) || t.Replay.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.FreezeBindingSHA256 != sha(b.PayloadFreezeBytes) || t.Payload.PayloadDigest != sha(b.PayloadFreezeBytes) {
 		return verr("INVARIANT_FAILED", "/replay", "manifest pin mismatch")
@@ -298,7 +298,7 @@ func ValidateBundle(b Bundle) error {
 	if t.Replay.TerminalPreimageSHA256 != sha(pre) || t.Custody.TerminalResultSHA256 != t.Replay.TerminalPreimageSHA256 {
 		return verr("INVARIANT_FAILED", "/custody/terminal_result_sha256", "preimage digest mismatch")
 	}
-	derivedBytes, err := Derive(b)
+	derivedBytes, err := Derive(deriveInputFromBundle(b))
 	if err != nil {
 		return err
 	}
@@ -308,131 +308,386 @@ func ValidateBundle(b Bundle) error {
 	return nil
 }
 
-func Derive(b Bundle) (string, error) {
-	var seed Terminal
-	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
-	dec.UseNumber()
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&seed); err != nil {
-		return "", verr("INVALID_INPUT", "/terminal_bytes", err.Error())
-	}
-	if dec.Decode(&struct{}{}) != io.EOF {
-		return "", verr("INVALID_INPUT", "/terminal_bytes", "trailing data")
-	}
-	var raw map[string]any
-	rdec := json.NewDecoder(strings.NewReader(b.RawAttemptBytes))
-	rdec.UseNumber()
-	if err := rdec.Decode(&raw); err != nil {
-		return deriveRawFailure(b, err.Error())
-	}
-	if rdec.Decode(&struct{}{}) != io.EOF {
-		return deriveRawFailure(b, "trailing data")
-	}
-	query, ok := raw["query"].(string)
-	if !ok || query == "" {
-		return deriveRawFailure(b, "query")
-	}
-	seed.Request.Query = query
-	seed.Attempt.MalformedRaw = false
-	seed.Replay.CanonicalAttemptSHA256 = sha(b.RawAttemptBytes)
-	admissionDigest := digestOrEmpty(b.AdmittedBindingBytes)
-	seed.Admission.AdmissionDigest = admissionDigest
-	seed.Replay.AdmittedBindingSHA256 = admissionDigest
-	seed.Replay.ToolingIdentitySHA256 = sha(b.ToolingManifestBytes)
-	seed.Replay.PredecessorLockSHA256 = sha(b.PredecessorManifestBytes)
-	freeze := sha(b.PayloadFreezeBytes)
-	seed.Replay.FreezeBindingSHA256 = freeze
-	seed.Payload.FreezeBindingSHA256 = freeze
-	seed.Payload.PayloadDigest = freeze
-	seed.Custody.AttemptID = seed.Attempt.AttemptID
+type DeriveInput struct {
+	RawAttemptBytes          string
+	AdmittedSourceBytes      map[string]string
+	AdmittedBindingBytes     string
+	ToolingManifestBytes     string
+	PredecessorManifestBytes string
+	PayloadFreezeBytes       string
+}
 
-	sources := make([]Source, len(seed.Sources))
-	copy(sources, seed.Sources)
-	sort.Slice(sources, func(i, j int) bool { return sources[i].Ordinal < sources[j].Ordinal })
-	for i := range sources {
-		data, ok := b.AdmittedSourceBytes[sources[i].SourceID]
-		if !ok {
-			return "", verr("ASSOCIATION_FAILED", "/sources/"+sources[i].SourceID, "missing source bytes")
+type rawAttempt struct {
+	AttemptID        string           `json:"attempt_id"`
+	SchemaVersion    string           `json:"schema_version"`
+	Request          rawRequest       `json:"request"`
+	ExecutionControl rawControl       `json:"execution_control"`
+	SourceInputs     []rawSourceInput `json:"source_inputs"`
+	TestControl      map[string]any   `json:"test_control,omitempty"`
+}
+type rawRequest struct {
+	SchemaVersion string         `json:"schema_version"`
+	Query         string         `json:"query"`
+	Policy        map[string]any `json:"policy"`
+	LocationPin   map[string]any `json:"location_pin"`
+	Limits        rawLimits      `json:"limits"`
+	Sources       []rawSourceRef `json:"sources"`
+}
+type rawLimits struct {
+	SchemaVersion  string `json:"schema_version"`
+	MaxFiles       uint64 `json:"max_files"`
+	MaxMatches     uint64 `json:"max_matches"`
+	MaxOutputBytes uint64 `json:"max_output_bytes"`
+	MaxPathBytes   uint64 `json:"max_path_bytes"`
+	MaxSourceBytes uint64 `json:"max_source_bytes"`
+	MaxTotalBytes  uint64 `json:"max_total_bytes"`
+	MaxWork        uint64 `json:"max_work"`
+}
+type rawSourceRef struct {
+	Path         string `json:"path"`
+	Revision     string `json:"revision"`
+	FileDigest   string `json:"file_digest"`
+	ObjectDigest string `json:"object_digest"`
+	Ordinal      uint64 `json:"ordinal"`
+}
+type rawSourceInput struct {
+	SchemaVersion string `json:"schema_version"`
+	Path          string `json:"path"`
+	Revision      string `json:"revision"`
+	FileDigest    string `json:"file_digest"`
+	ObjectDigest  string `json:"object_digest"`
+	Ordinal       uint64 `json:"ordinal"`
+	BytesBase64   string `json:"bytes_base64"`
+}
+type rawControl struct {
+	SchemaVersion string           `json:"schema_version"`
+	Observations  []rawObservation `json:"observations"`
+}
+type rawObservation struct {
+	PollIndex       uint64 `json:"poll_index"`
+	Cancelled       bool   `json:"cancelled,omitempty"`
+	DeadlineExpired bool   `json:"deadline_expired,omitempty"`
+}
+
+type admittedSource struct {
+	ref  rawSourceRef
+	data []byte
+}
+
+func deriveInputFromBundle(b Bundle) DeriveInput {
+	return DeriveInput{RawAttemptBytes: b.RawAttemptBytes, AdmittedSourceBytes: b.AdmittedSourceBytes, AdmittedBindingBytes: b.AdmittedBindingBytes, ToolingManifestBytes: b.ToolingManifestBytes, PredecessorManifestBytes: b.PredecessorManifestBytes, PayloadFreezeBytes: b.PayloadFreezeBytes}
+}
+
+func Derive(in DeriveInput) (string, error) {
+	attempt, err := parseRawAttempt(in.RawAttemptBytes)
+	if err != nil {
+		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": err.Error()}, false, nil, "invalid")
+	}
+	if attempt.Request.Query == "" || len(attempt.Request.Sources) == 0 || len(attempt.SourceInputs) == 0 {
+		query := attempt.Request.Query
+		if query == "" {
+			query = "invalid"
 		}
-		sources[i].ByteLength = uint64(len([]byte(data)))
-		sources[i].ContentSHA256 = sha(data)
+		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": "request"}, false, nil, query)
 	}
-	seed.Sources = sources
-	seed.Admission.AdmittedSourceIDs = make([]string, 0, len(sources))
-	for _, s := range sources {
-		seed.Admission.AdmittedSourceIDs = append(seed.Admission.AdmittedSourceIDs, s.SourceID)
+	if badControl(attempt.ExecutionControl.Observations) {
+		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": "execution_control"}, false, nil, attempt.Request.Query)
 	}
-	qbytes := []byte(query)
-	matches := make([]Match, 0)
-	positions := make([]Position, 0)
+	if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 0); controlFailure != "" {
+		return deriveFailure(in, controlFailure, detail, false, nil, attempt.Request.Query)
+	}
+	selected, assocErr := associateSources(attempt)
+	if assocErr != nil {
+		return deriveFailure(in, "ASSOCIATION_FAILED", map[string]any{"source_id": assocErr.Error()}, false, nil, attempt.Request.Query)
+	}
+	admitted, admDetail, admOK, resource := admitSources(selected, attempt.Request.Limits)
+	if !admOK {
+		code := "ADMISSION_FAILED"
+		detail := map[string]any{"source_id": admDetail}
+		if resource {
+			code = "RESOURCE_EXHAUSTED"
+			detail = map[string]any{"limit": admDetail}
+		}
+		return deriveFailure(in, code, detail, true, sourcesFromAdmitted(admitted), attempt.Request.Query)
+	}
+	t := baseTerminal(in, attempt.AttemptID, attempt.Request.Query)
+	t.Sources = sourcesFromAdmitted(admitted)
+	t.Admission = Admission{Completed: true, AdmissionDigest: admissionDigest(admitted), AdmittedSourceIDs: sourceIDs(t.Sources)}
+	t.Replay.AdmittedBindingSHA256 = sha(in.AdmittedBindingBytes)
+	if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 1); controlFailure != "" {
+		return deriveFailureWithBase(in, t, controlFailure, detail, false)
+	}
+	qbytes := []byte(attempt.Request.Query)
 	matchOrdinal := uint64(0)
-	for _, s := range sources {
-		data := []byte(b.AdmittedSourceBytes[s.SourceID])
+	for si, s := range admitted {
+		data := s.data
+		if uint64(len(data)) > attempt.Request.Limits.MaxSourceBytes || uint64(len(data)) > attempt.Request.Limits.MaxTotalBytes {
+			return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "source_bytes"}, true)
+		}
 		for off := 0; off+len(qbytes) <= len(data); off++ {
 			if bytes.Equal(data[off:off+len(qbytes)], qbytes) {
-				id := existingMatchID(seed.Matches, s.SourceID, uint64(off), uint64(off+len(qbytes)), matchOrdinal)
-				if id == "" {
-					id = deriveMatchID(s.SourceID, matchOrdinal, uint64(off), uint64(off+len(qbytes)), query)
+				if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 2); controlFailure != "" {
+					return deriveFailureWithBase(in, t, controlFailure, detail, false)
 				}
-				m := Match{MatchID: id, SourceID: s.SourceID, PathBytes: s.PathBytes, StartByte: uint64(off), EndByte: uint64(off + len(qbytes)), Ordinal: matchOrdinal, Literal: query}
-				matches = append(matches, m)
+				if matchOrdinal+1 > attempt.Request.Limits.MaxMatches {
+					return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "max_matches"}, true)
+				}
+				src := t.Sources[si]
+				id := deriveMatchID(src.SourceID, matchOrdinal, uint64(off), uint64(off+len(qbytes)), attempt.Request.Query)
+				m := Match{MatchID: id, SourceID: src.SourceID, PathBytes: src.PathBytes, StartByte: uint64(off), EndByte: uint64(off + len(qbytes)), Ordinal: matchOrdinal, Literal: attempt.Request.Query}
+				t.Matches = append(t.Matches, m)
 				p := positionFor(data, m.StartByte, m.EndByte)
 				p.MatchID = id
-				positions = append(positions, *p)
+				t.Positions = append(t.Positions, *p)
 				matchOrdinal++
 			}
 		}
 	}
-	seed.Matches = matches
-	seed.Positions = positions
-	if seed.Terminal == "COMPLETE" {
-		seed.Failure = nil
-		seed.RangeUnionCandidate = deriveCandidate(seed)
-	} else {
-		seed.Matches = []Match{}
-		seed.Positions = []Position{}
-		seed.RangeUnionCandidate = nil
+	t.RangeUnionCandidate = deriveCandidate(t)
+	finalizeTerminal(&t)
+	if t.Accounting.WWork > attempt.Request.Limits.MaxWork || t.Accounting.BOutputBytes > attempt.Request.Limits.MaxOutputBytes || overflowRequested(attempt) {
+		code := "RESOURCE_EXHAUSTED"
+		detail := map[string]any{"limit": "post_scan"}
+		if overflowRequested(attempt) {
+			code = "OVERFLOW"
+			detail = map[string]any{"counter": "B_output_bytes"}
+		}
+		return deriveFailureWithBase(in, t, code, detail, true)
 	}
-	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
-	pre := normalizedTerminalPreimage(seed)
-	seed.Replay.TerminalPreimageSHA256 = sha(pre)
-	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
-	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
-	pre = normalizedTerminalPreimage(seed)
-	seed.Replay.TerminalPreimageSHA256 = sha(pre)
-	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
-	return CanonicalJSON(seed)
+	return CanonicalJSON(t)
 }
 
-func deriveRawFailure(b Bundle, reason string) (string, error) {
-	var seed Terminal
-	dec := json.NewDecoder(strings.NewReader(b.TerminalBytes))
+func parseRawAttempt(raw string) (rawAttempt, error) {
+	if err := rejectDuplicateJSON([]byte(raw)); err != nil {
+		return rawAttempt{}, err
+	}
+	var r rawAttempt
+	dec := json.NewDecoder(strings.NewReader(raw))
 	dec.UseNumber()
-	_ = dec.Decode(&seed)
-	seed.Terminal = "FAILED"
-	seed.Attempt.MalformedRaw = true
-	seed.Attempt.AttemptID = "attempt-raw-sha256-" + strings.TrimPrefix(sha(b.RawAttemptBytes), "sha256:")
-	seed.Request.Query = "invalid"
-	seed.Admission = Admission{Completed: false, AdmissionDigest: zeroSHA, AdmittedSourceIDs: []string{}}
-	seed.Sources, seed.Matches, seed.Positions = []Source{}, []Match{}, []Position{}
-	seed.RangeUnionCandidate = nil
-	seed.Failure = &Failure{Code: "INVALID_INPUT", Stage: "raw", Detail: map[string]any{"reason": reason}}
-	seed.Custody.AttemptID = seed.Attempt.AttemptID
-	seed.Replay.CanonicalAttemptSHA256 = sha(b.RawAttemptBytes)
-	seed.Replay.AdmittedBindingSHA256 = zeroSHA
-	seed.Replay.ToolingIdentitySHA256 = sha(b.ToolingManifestBytes)
-	seed.Replay.PredecessorLockSHA256 = sha(b.PredecessorManifestBytes)
-	freeze := sha(b.PayloadFreezeBytes)
-	seed.Replay.FreezeBindingSHA256 = freeze
-	seed.Payload.FreezeBindingSHA256 = freeze
-	seed.Payload.PayloadDigest = freeze
-	seed.Accounting = deriveAccounting(seed, b.TerminalBytes)
-	pre := normalizedTerminalPreimage(seed)
-	seed.Replay.TerminalPreimageSHA256 = sha(pre)
-	seed.Custody.TerminalResultSHA256 = seed.Replay.TerminalPreimageSHA256
-	return CanonicalJSON(seed)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&r); err != nil {
+		return rawAttempt{}, err
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return rawAttempt{}, errors.New("trailing data")
+	}
+	return r, nil
 }
 
+func rejectDuplicateJSON(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var walk func() error
+	walk = func() error {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{':
+				seen := map[string]bool{}
+				for dec.More() {
+					kt, err := dec.Token()
+					if err != nil {
+						return err
+					}
+					k, ok := kt.(string)
+					if !ok {
+						return errors.New("object key")
+					}
+					if seen[k] {
+						return fmt.Errorf("duplicate field %s", k)
+					}
+					seen[k] = true
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			case '[':
+				for dec.More() {
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				_, err := dec.Token()
+				return err
+			}
+		}
+		return nil
+	}
+	if err := walk(); err != nil {
+		return err
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return errors.New("trailing data")
+	}
+	return nil
+}
+
+func badControl(obs []rawObservation) bool {
+	seen := map[uint64]bool{}
+	last := uint64(0)
+	for i, o := range obs {
+		if seen[o.PollIndex] {
+			return true
+		}
+		seen[o.PollIndex] = true
+		if i > 0 && o.PollIndex <= last {
+			return true
+		}
+		last = o.PollIndex
+	}
+	return false
+}
+func controlTerminal(obs []rawObservation, poll uint64) (string, map[string]any) {
+	for _, o := range obs {
+		if o.PollIndex == poll {
+			if o.DeadlineExpired {
+				return "DEADLINE_EXCEEDED", map[string]any{"deadline": fmt.Sprintf("poll:%d", poll)}
+			}
+			if o.Cancelled {
+				return "CANCELLED", map[string]any{"control": fmt.Sprintf("poll:%d", poll)}
+			}
+		}
+	}
+	return "", nil
+}
+
+func associateSources(a rawAttempt) ([]admittedSource, error) {
+	inputs := map[uint64]rawSourceInput{}
+	for _, in := range a.SourceInputs {
+		inputs[in.Ordinal] = in
+	}
+	out := make([]admittedSource, 0, len(a.Request.Sources))
+	for _, ref := range a.Request.Sources {
+		in, ok := inputs[ref.Ordinal]
+		if !ok {
+			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
+		}
+		if in.Path != ref.Path || in.Revision != ref.Revision || in.FileDigest != ref.FileDigest || in.ObjectDigest != ref.ObjectDigest {
+			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
+		}
+		data, err := base64.StdEncoding.DecodeString(in.BytesBase64)
+		if err != nil {
+			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
+		}
+		out = append(out, admittedSource{ref: ref, data: data})
+	}
+	if len(inputs) != len(a.Request.Sources) {
+		return nil, errors.New("extra_source_input")
+	}
+	return out, nil
+}
+
+func admitSources(in []admittedSource, l rawLimits) ([]admittedSource, string, bool, bool) {
+	if len(in) == 0 || l.MaxFiles < 1 || l.MaxSourceBytes < 1 || l.MaxTotalBytes < 1 {
+		return nil, "limits or sources", false, false
+	}
+	if uint64(len(in)) > l.MaxFiles {
+		return nil, "max_files", false, true
+	}
+	seen := map[string]bool{}
+	total := uint64(0)
+	out := append([]admittedSource(nil), in...)
+	for i, s := range out {
+		if !canonicalPath(s.ref.Path) || s.ref.Revision == "" || len(s.data) == 0 || !utf8.Valid(s.data) {
+			return nil, s.ref.Path, false, false
+		}
+		if uint64(len([]byte(s.ref.Path))) > l.MaxPathBytes {
+			return nil, "max_path_bytes", false, true
+		}
+		if uint64(len(s.data)) > l.MaxSourceBytes {
+			return nil, "max_source_bytes", false, true
+		}
+		if seen[s.ref.Path] {
+			return nil, s.ref.Path, false, false
+		}
+		seen[s.ref.Path] = true
+		total += uint64(len(s.data))
+		if total > l.MaxTotalBytes {
+			return nil, "max_total_bytes", false, true
+		}
+		d := shaBytes(s.data)
+		if s.ref.FileDigest != "" && s.ref.FileDigest != d {
+			return nil, s.ref.Path, false, false
+		}
+		if s.ref.ObjectDigest != "" && s.ref.ObjectDigest != d {
+			return nil, s.ref.Path, false, false
+		}
+		out[i].ref.FileDigest = d
+		out[i].ref.ObjectDigest = d
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ref.Path < out[j].ref.Path })
+	return out, "", true, false
+}
+func canonicalPath(p string) bool {
+	return p != "" && utf8.ValidString(p) && norm.NFC.IsNormalString(p) && !strings.Contains(p, "\\") && !strings.Contains(p, "//") && !strings.Contains(p, ":") && !strings.HasPrefix(p, "/") && p != "." && p != ".." && !strings.HasPrefix(p, "./") && !strings.HasPrefix(p, "../") && !strings.Contains(p, "/./") && !strings.Contains(p, "/../") && path.Clean(p) == p
+}
+func admissionDigest(in []admittedSource) string {
+	h := sha256.New()
+	h.Write([]byte("lsp-trace.adr0007.source-admission.private.v2"))
+	for _, s := range in {
+		for _, v := range []string{s.ref.Path, s.ref.Revision, s.ref.FileDigest, s.ref.ObjectDigest} {
+			h.Write([]byte{0})
+			h.Write([]byte(v))
+		}
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil))
+}
+func sourcesFromAdmitted(in []admittedSource) []Source {
+	out := make([]Source, 0, len(in))
+	for i, s := range in {
+		out = append(out, Source{SourceID: deriveSourceID(s.ref.Path, s.ref.Revision, uint64(i)), LogicalURI: "file:///" + s.ref.Path, PathBytes: uint64(len([]byte(s.ref.Path))), ByteLength: uint64(len(s.data)), ContentSHA256: shaBytes(s.data), Ordinal: uint64(i)})
+	}
+	return out
+}
+func deriveSourceID(path, rev string, ord uint64) string {
+	return sha(fmt.Sprintf("source\x00%s\x00%s\x00%d", path, rev, ord))
+}
+func baseTerminal(in DeriveInput, attemptID, query string) Terminal {
+	freeze := sha(in.PayloadFreezeBytes)
+	return Terminal{SchemaVersion: TerminalSchemaVersion, Terminal: "COMPLETE", Attempt: Attempt{AttemptID: attemptID, MalformedRaw: false}, Request: Request{Query: query}, Sources: []Source{}, Matches: []Match{}, Positions: []Position{}, Accounting: Accounting{SchemaVersion: AccountingSchemaVersion}, Custody: Custody{SchemaVersion: CustodySchemaVersion, AttemptID: attemptID, TerminalSequence0: 0, TerminalCount1: 1}, Replay: Replay{SchemaVersion: ReplaySchemaVersion, CanonicalAttemptSHA256: sha(in.RawAttemptBytes), ToolingIdentitySHA256: sha(in.ToolingManifestBytes), FreezeBindingSHA256: freeze, PredecessorLockSHA256: sha(in.PredecessorManifestBytes), AdmittedBindingSHA256: zeroSHA}, Payload: Payload{PayloadDigest: freeze, FreezeBindingSHA256: freeze}}
+}
+func deriveFailure(in DeriveInput, code string, detail map[string]any, includeAdmission bool, sources []Source, query string) (string, error) {
+	t := baseTerminal(in, "attempt-raw-sha256-"+strings.TrimPrefix(sha(in.RawAttemptBytes), "sha256:"), query)
+	return deriveFailureWithBase(in, t, code, detail, includeAdmission)
+}
+func deriveFailureWithBase(in DeriveInput, t Terminal, code string, detail map[string]any, includeAdmission bool) (string, error) {
+	t.Terminal = "FAILED"
+	t.Attempt.MalformedRaw = code == "INVALID_INPUT"
+	t.Matches = []Match{}
+	t.Positions = []Position{}
+	t.RangeUnionCandidate = nil
+	stage := map[string]string{"INVALID_INPUT": "raw", "CANCELLED": "control", "DEADLINE_EXCEEDED": "control", "ASSOCIATION_FAILED": "association", "ADMISSION_FAILED": "admission", "RESOURCE_EXHAUSTED": "scan", "OVERFLOW": "accounting", "INVARIANT_FAILED": "invariant"}[code]
+	t.Failure = &Failure{Code: code, Stage: stage, Detail: detail}
+	if includeAdmission {
+		t.Admission.Completed = true
+		if t.Admission.AdmissionDigest == "" || t.Admission.AdmissionDigest == zeroSHA {
+			t.Admission.AdmissionDigest = sha(in.AdmittedBindingBytes)
+			t.Replay.AdmittedBindingSHA256 = t.Admission.AdmissionDigest
+		}
+		t.Admission.AdmittedSourceIDs = sourceIDs(t.Sources)
+	} else {
+		t.Admission = Admission{Completed: false, AdmissionDigest: zeroSHA, AdmittedSourceIDs: sourceIDs(t.Sources)}
+		t.Replay.AdmittedBindingSHA256 = sha(in.AdmittedBindingBytes)
+	}
+	finalizeTerminal(&t)
+	return CanonicalJSON(t)
+}
+func overflowRequested(a rawAttempt) bool { return a.TestControl != nil }
+func finalizeTerminal(t *Terminal) {
+	t.Accounting = deriveAccounting(*t, "")
+	pre := normalizedTerminalPreimage(*t)
+	t.Replay.TerminalPreimageSHA256 = sha(pre)
+	t.Custody.TerminalResultSHA256 = t.Replay.TerminalPreimageSHA256
+	t.Accounting = deriveAccounting(*t, "")
+	pre = normalizedTerminalPreimage(*t)
+	t.Replay.TerminalPreimageSHA256 = sha(pre)
+	t.Custody.TerminalResultSHA256 = t.Replay.TerminalPreimageSHA256
+}
 func deriveCandidate(t Terminal) *Candidate {
 	c := &Candidate{Operation: CandidateOperation, ExecutedLocation: false, CandidateOnly: true, AdmissionDigest: t.Admission.AdmissionDigest}
 	h := sha256.New()
@@ -934,7 +1189,15 @@ func digestOrEmpty(s string) string {
 	}
 	return sha(s)
 }
-func sha(s string) string { h := sha256.Sum256([]byte(s)); return "sha256:" + hex.EncodeToString(h[:]) }
+func sourceIDs(sources []Source) []string {
+	ids := make([]string, 0, len(sources))
+	for _, s := range sources {
+		ids = append(ids, s.SourceID)
+	}
+	return ids
+}
+func shaBytes(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(h[:]) }
+func sha(s string) string      { h := sha256.Sum256([]byte(s)); return "sha256:" + hex.EncodeToString(h[:]) }
 func parseU64(s string) (uint64, error) {
 	if strings.ContainsAny(s, ".-+eE") {
 		return 0, errors.New("not uint64")
