@@ -1,0 +1,23 @@
+{
+  "accepted": false,
+  "assignments": 26,
+  "authority": 0,
+  "beforeManifestAccounting": {
+    "accounting": "precheck uses authoritative FREEZE.json zero-image census; before manifest physical-self-image mismatch is preserved, accounted historical defect",
+    "authorizedRootIdentityMatches": true,
+    "physicalSelfImageMatches": false,
+    "present": true,
+    "preservedHistoricalDefect": true,
+    "zeroImageMatches": false
+  },
+  "beforeManifestStatus": "present",
+  "completeness": "UNKNOWN",
+  "freezeRootIdentity": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d",
+  "physicalFiles": 230,
+  "producerOutputs": 0,
+  "repoRoot": ".",
+  "reviewerOutputs": 0,
+  "schema": "lsp-trace.adr0007.location-v5.precheck.v1",
+  "status": "PRECHECK_PASS",
+  "zeroImageFiles": 230
+}
