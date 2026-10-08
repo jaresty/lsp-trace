@@ -39,13 +39,44 @@ type authFile struct {
 	FrozenFilesImmutable                                                                                              int  `json:"frozenFilesImmutable"`
 }
 type freezeFile struct {
-	Schema       string `json:"schema"`
-	RootIdentity string `json:"rootIdentity"`
-	Files        []struct {
+	Schema string `json:"schema"`
+	Status string `json:"status"`
+	Design struct {
+		Accepted               bool     `json:"accepted"`
+		Authority              int      `json:"authority"`
+		Completeness           string   `json:"completeness"`
+		Dispatch               bool     `json:"dispatch"`
+		Execution              string   `json:"execution"`
+		FeatureIdentity        string   `json:"featureIdentity"`
+		ImmutablePredecessors  []string `json:"immutablePredecessors"`
+		QualificationExecution bool     `json:"qualificationExecution"`
+	} `json:"design"`
+	Custody struct {
+		EvaluatorSource        string `json:"evaluatorSource"`
+		Independence           string `json:"independence"`
+		InputBase              string `json:"inputBase"`
+		InputCorrectionA       string `json:"inputCorrectionA"`
+		InputCorrectionB       string `json:"inputCorrectionB"`
+		Integration            string `json:"integration"`
+		MergeBase              string `json:"mergeBase"`
+		OracleSource           string `json:"oracleSource"`
+		SkippedPatchEquivalent string `json:"skippedPatchEquivalent"`
+		Spec                   string `json:"spec"`
+	} `json:"custody"`
+	Counts struct {
+		BoundaryBundles   int `json:"boundaryBundles"`
+		EvaluatorResults  int `json:"evaluatorResults"`
+		Files             int `json:"files"`
+		InputCases        int `json:"inputCases"`
+		OracleDerivations int `json:"oracleDerivations"`
+		OracleResults     int `json:"oracleResults"`
+	} `json:"counts"`
+	Files []struct {
 		Path   string `json:"path"`
 		Bytes  uint64 `json:"bytes"`
 		SHA256 string `json:"sha256"`
 	} `json:"files"`
+	RootIdentity string `json:"rootIdentity"`
 }
 type beforeFile struct {
 	Schema                 string `json:"schema"`
