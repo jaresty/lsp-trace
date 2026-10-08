@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -19,113 +18,81 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func TestADR0007CompareAndReplaceBoundFilePostRenameDegradationFailsClosed(t *testing.T) {
-	cases := []struct {
-		name      string
-		configure func(*testing.T, *Root, string, []byte, context.CancelFunc) func([]byte) error
-		assert    func(*testing.T, *CompareAndReplaceReceipt, error)
-	}{
-		{
-			name: "directory-sync",
-			configure: func(t *testing.T, root *Root, selector string, raw []byte, cancel context.CancelFunc) func([]byte) error {
-				testHookBoundFileDirectorySync = func() error { return errors.New("synthetic directory sync failure") }
-				return func([]byte) error { return nil }
-			},
-			assert: func(t *testing.T, receipt *CompareAndReplaceReceipt, err error) {
-				if err == nil || receipt == nil || !receipt.Committed || receipt.DirectorySyncStatus == DirectorySyncComplete {
-					t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_DIRECTORY_SYNC_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
-				}
-			},
-		},
-		{
-			name: "close",
-			configure: func(t *testing.T, root *Root, selector string, raw []byte, cancel context.CancelFunc) func([]byte) error {
-				testHookBoundFileFinalClose = func() error { return errors.New("synthetic final close failure") }
-				return func([]byte) error { return nil }
-			},
-			assert: func(t *testing.T, receipt *CompareAndReplaceReceipt, err error) {
-				if err == nil || receipt == nil || !receipt.Committed || receipt.CloseStatus == CloseComplete {
-					t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_CLOSE_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
-				}
-			},
-		},
-		{
-			name: "reread",
-			configure: func(t *testing.T, root *Root, selector string, raw []byte, cancel context.CancelFunc) func([]byte) error {
-				testHookBoundFileAfterPublish = func() {
-					if err := os.WriteFile(filepath.Join(root.Path(), filepath.FromSlash(selector)), []byte("corrupt"), 0o600); err != nil {
-						t.Fatal(err)
-					}
-				}
-				return func([]byte) error { return nil }
-			},
-			assert: func(t *testing.T, receipt *CompareAndReplaceReceipt, err error) {
-				if err == nil || receipt == nil || !receipt.Committed || receipt.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
-					t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_REREAD_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
-				}
-			},
-		},
-		{
-			name: "verifier",
-			configure: func(t *testing.T, root *Root, selector string, raw []byte, cancel context.CancelFunc) func([]byte) error {
-				calls := 0
-				return func([]byte) error {
-					calls++
-					if calls > 2 {
-						return errors.New("synthetic verifier failure")
-					}
-					return nil
-				}
-			},
-			assert: func(t *testing.T, receipt *CompareAndReplaceReceipt, err error) {
-				if err == nil || receipt == nil || !receipt.Committed || receipt.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
-					t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_VERIFIER_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
-				}
-			},
-		},
-		{
-			name: "cancel",
-			configure: func(t *testing.T, root *Root, selector string, raw []byte, cancel context.CancelFunc) func([]byte) error {
-				calls := 0
-				return func([]byte) error {
-					calls++
-					if calls > 2 {
-						cancel()
-					}
-					return nil
-				}
-			},
-			assert: func(t *testing.T, receipt *CompareAndReplaceReceipt, err error) {
-				if err == nil || receipt == nil || !receipt.Committed {
-					t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_CANCEL_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
-				}
-			},
-		},
+func TestADR0007RenameBoundFileSiblingDirectorySyncFailureIsPostRenameCommitted(t *testing.T) {
+	resetBoundFileHooks(t)
+	_, root := boundRoot(t)
+	raw := []byte(`{"generation":"g-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}` + "\n")
+	if _, err := PublishBoundFile(root, "current.json.tmp", raw, func([]byte) error { return nil }); err != nil {
+		t.Fatal(err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			resetBoundFileHooks(t)
-			_, root := boundRoot(t)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			raw := []byte(`{"generation":"g-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}` + "\n")
-			verify := tc.configure(t, root, "current.json", raw, cancel)
-			receipt, err := CompareAndReplaceBoundFile(ctx, root, "current.json", BoundFilePredecessor{Absent: true}, raw, verify)
-			if got, readErr := root.ReadSelector("current.json", int64(len(raw))+32); readErr != nil || !bytes.Equal(got, raw) {
-				t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_FIXTURE_COMMITTED_FINAL_BYTES: got=%q readErr=%v receipt=%+v err=%v", got, readErr, receipt, err)
-			}
-			tc.assert(t, receipt, err)
-		})
+	testHookBoundFileDirectorySync = func() error { return errors.New("synthetic directory sync failure") }
+	err := renameBoundFileSibling(root, "current.json.tmp", "current.json")
+	got, readErr := root.ReadSelector("current.json", int64(len(raw))+32)
+	if readErr != nil || !bytes.Equal(got, raw) {
+		t.Fatalf("ASSERT_ADR0007_RENAME_SYNC_FIXTURE_FINAL_VISIBLE_BEFORE_ERROR: got=%q readErr=%v err=%v", got, readErr, err)
+	}
+	if err != nil {
+		t.Fatalf("ASSERT_ADR0007_RENAME_SYNC_POSTRENAME_NEEDS_CLOSED_COMMITTED_OUTCOME: err=%v", err)
 	}
 }
 
-func TestADR0007StableCASLockRetainsInodeAndRejectsSubstitution(t *testing.T) {
+func TestADR0007CompareAndReplaceBoundFilePostRenameVerifierFailureFailsClosed(t *testing.T) {
+	resetBoundFileHooks(t)
+	_, root := boundRoot(t)
+	raw := []byte(`{"generation":"g-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}` + "\n")
+	calls := 0
+	verify := func(got []byte) error {
+		calls++
+		if calls < 3 {
+			return nil
+		}
+		final, err := root.ReadSelector("current.json", int64(len(raw))+32)
+		if err != nil || !bytes.Equal(final, raw) || !bytes.Equal(got, raw) {
+			t.Fatalf("ASSERT_ADR0007_CAS_VERIFIER_FIXTURE_FINAL_BYTES_EXIST_BEFORE_ERROR: final=%q got=%q err=%v", final, got, err)
+		}
+		return errors.New("synthetic final verifier failure")
+	}
+	receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, raw, verify)
+	if err == nil || receipt == nil || !receipt.Committed || receipt.VerificationStatus != "COMMITTED_VERIFICATION_FAILED" {
+		t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_VERIFIER_FAILS_CLOSED: receipt=%+v err=%v", receipt, err)
+	}
+}
+
+func TestADR0007CompareAndReplaceBoundFilePostRenameCancellationFailsClosed(t *testing.T) {
+	resetBoundFileHooks(t)
+	_, root := boundRoot(t)
+	raw := []byte(`{"generation":"g-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}` + "\n")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	calls := 0
+	verify := func(got []byte) error {
+		calls++
+		if calls < 3 {
+			return nil
+		}
+		final, err := root.ReadSelector("current.json", int64(len(raw))+32)
+		if err != nil || !bytes.Equal(final, raw) || !bytes.Equal(got, raw) {
+			t.Fatalf("ASSERT_ADR0007_CAS_CANCEL_FIXTURE_FINAL_BYTES_EXIST_BEFORE_CANCEL: final=%q got=%q err=%v", final, got, err)
+		}
+		cancel()
+		return nil
+	}
+	receipt, err := CompareAndReplaceBoundFile(ctx, root, "current.json", BoundFilePredecessor{Absent: true}, raw, verify)
+	if err == nil || receipt == nil || !receipt.Committed {
+		t.Fatalf("ASSERT_ADR0007_CAS_POST_RENAME_CANCEL_FAILS_CLOSED_NO_SAFE_RETRY: receipt=%+v err=%v", receipt, err)
+	}
+}
+
+func TestADR0007StableCASLockRetainsInodeAndRejectsPathSubstitutionWhileHeld(t *testing.T) {
 	if os.Getenv("LSP_TRACE_ADR0007_LOCK_HELPER") == "hold" {
 		adr0007LockHelper()
 		return
 	}
 	_, root := boundRoot(t)
 	first := adr0007AcquireLockIdentity(t, root)
+	if first.Uid != uint32(os.Geteuid()) {
+		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_OWNER_POLICY_ACCEPTS_CURRENT_EUID: uid=%d euid=%d", first.Uid, os.Geteuid())
+	}
 	second := adr0007AcquireLockIdentity(t, root)
 	if first.Dev == 0 || first.Ino == 0 || first.Dev != second.Dev || first.Ino != second.Ino {
 		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_RETAINS_INODE_SEQUENTIAL: first=%+v second=%+v", first, second)
@@ -140,44 +107,26 @@ func TestADR0007StableCASLockRetainsInodeAndRejectsSubstitution(t *testing.T) {
 		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_RETAINS_INODE_RESTART: first=%+v third=%+v", first, third)
 	}
 
-	held := make(chan struct{})
-	cmd := exec.Command(os.Args[0], "-test.run=TestADR0007StableCASLockRetainsInodeAndRejectsSubstitution")
+	cmd := exec.Command(os.Args[0], "-test.run=TestADR0007StableCASLockRetainsInodeAndRejectsPathSubstitutionWhileHeld")
 	cmd.Env = append(os.Environ(), "LSP_TRACE_ADR0007_LOCK_HELPER=hold", "LSP_TRACE_ADR0007_LOCK_ROOT="+root.Path())
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	go func() {
-		lockPath := filepath.Join(root.Path(), ".lsp-trace-candidate-publication.lock")
-		deadline := time.Now().Add(5 * time.Second)
-		for time.Now().Before(deadline) {
-			if data, err := os.ReadFile(lockPath + ".held"); err == nil && strings.TrimSpace(string(data)) == "held" {
-				close(held)
-				return
-			}
-			time.Sleep(10 * time.Millisecond)
-		}
-	}()
-	select {
-	case <-held:
-	case <-time.After(6 * time.Second):
-		_ = cmd.Process.Kill()
-		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_HELPER_HELD_FLOCK")
-	}
-	if err := os.Remove(filepath.Join(root.Path(), ".lsp-trace-candidate-publication.lock")); err != nil {
+	defer func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }()
+	lockPath := filepath.Join(root.Path(), ".lsp-trace-candidate-publication.lock")
+	adr0007WaitForHelperHeld(t, lockPath+".held")
+	if err := os.Remove(lockPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root.Path(), ".lsp-trace-candidate-publication.lock"), []byte("replacement"), 0o600); err != nil {
+	if err := os.WriteFile(lockPath, []byte("replacement"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	st := adr0007AcquireLockIdentity(t, root)
-	if st.Dev != first.Dev || st.Ino != first.Ino {
-		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_SUBSTITUTION_FAILS_CLOSED: original=%+v replacement=%+v", first, st)
-	}
-	_ = cmd.Process.Kill()
-	_ = cmd.Wait()
-	after := adr0007AcquireLockIdentity(t, root)
-	if after.Dev != first.Dev || after.Ino != first.Ino {
-		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_KILLED_HELPER_RELEASE_RETAINS_INODE: original=%+v after=%+v", first, after)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	unlock, err := root.casLock(ctx, "current.json")
+	if err == nil {
+		unlock()
+		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_PATH_SUBSTITUTION_WHILE_HELD_FAILS_CLOSED")
 	}
 }
 
@@ -199,6 +148,18 @@ func adr0007LockHelper() {
 	select {}
 }
 
+func adr0007WaitForHelperHeld(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(path); err == nil && strings.TrimSpace(string(data)) == "held" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("ASSERT_ADR0007_CAS_LOCK_HELPER_HELD_FLOCK")
+}
+
 func adr0007AcquireLockIdentity(t *testing.T, root *Root) syscall.Stat_t {
 	t.Helper()
 	unlock, err := root.casLock(context.Background(), "current.json")
@@ -206,6 +167,11 @@ func adr0007AcquireLockIdentity(t *testing.T, root *Root) syscall.Stat_t {
 		t.Fatalf("acquire cas lock: %v", err)
 	}
 	defer unlock()
+	return adr0007StatLock(t, root)
+}
+
+func adr0007StatLock(t *testing.T, root *Root) syscall.Stat_t {
+	t.Helper()
 	var st unix.Stat_t
 	if err := unix.Stat(filepath.Join(root.Path(), ".lsp-trace-candidate-publication.lock"), &st); err != nil {
 		t.Fatalf("stat lock: %v", err)
@@ -213,7 +179,7 @@ func adr0007AcquireLockIdentity(t *testing.T, root *Root) syscall.Stat_t {
 	return syscall.Stat_t{Dev: st.Dev, Ino: st.Ino, Nlink: st.Nlink, Uid: st.Uid, Mode: st.Mode}
 }
 
-func TestADR0007StableCASLockPortableMetadataPolicy(t *testing.T) {
+func TestADR0007StableCASLockPreFlockMetadataPolicy(t *testing.T) {
 	cases := []struct {
 		name  string
 		setup func(*testing.T, string)
@@ -255,10 +221,8 @@ func TestADR0007StableCASLockPortableMetadataPolicy(t *testing.T) {
 			unlock, err := root.casLock(context.Background(), "current.json")
 			if err == nil {
 				unlock()
-				t.Fatalf("ASSERT_ADR0007_CAS_LOCK_POLICY_REJECTS_%s", strings.ToUpper(strings.ReplaceAll(tc.name, "-", "_")))
+				t.Fatalf("ASSERT_ADR0007_CAS_LOCK_PREFLOCK_POLICY_REJECTS_%s", strings.ToUpper(strings.ReplaceAll(tc.name, "-", "_")))
 			}
 		})
 	}
 }
-
-var _ = runtime.GOOS

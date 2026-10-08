@@ -34,6 +34,36 @@ func TestADR0007PublishCandidateGenerationExactAliasCollisionRequiresExactBytes(
 	}
 }
 
+func TestADR0007CandidateReceiptSeparatesFrozenDesignLineageFromPublicationPredecessorAndCeilings(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
+	input.SourceRevision = "git:frozen-design-443c4054"
+	input.PredecessorSelector = "candidate-publication/current.selector.json"
+	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptBytes, err := root.ReadSelector(published.QualificationReceiptSelector, 1<<20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var receipt Receipt
+	if err := DecodeReceiptStrict(receiptBytes, &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.SourceRevision != input.SourceRevision || receipt.PredecessorSelector != input.PredecessorSelector || receipt.SourceRevision == receipt.PredecessorSelector {
+		t.Fatalf("ASSERT_ADR0007_CANDIDATE_FROZEN_DESIGN_AND_PUBLICATION_PREDECESSOR_SEPARATE: receipt=%+v input=%+v", receipt, input)
+	}
+	if receipt.Authority != 0 || receipt.Accepted || receipt.Completeness != CompletenessUnknown || receipt.FeatureIdentityStatus != FeatureIdentityUnresolved || receipt.Representative.Inferred {
+		t.Fatalf("ASSERT_ADR0007_CANDIDATE_AUTHORITY_CEILINGS_PRESERVED: receipt=%+v", receipt)
+	}
+}
+
 func TestADR0007DefaultManifestAliasMustBeBackedByVerifiedSelectorReceipt(t *testing.T) {
 	root, dir := testPrivateRoot(t)
 	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
