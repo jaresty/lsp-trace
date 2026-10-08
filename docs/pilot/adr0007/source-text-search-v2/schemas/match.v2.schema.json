@@ -1,0 +1,53 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/match.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "byte_end": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "byte_start": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "character_end": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "character_start": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "line_end": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "line_start": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "literal": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "path": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.match.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "path",
+    "byte_start",
+    "byte_end",
+    "line_start",
+    "character_start",
+    "line_end",
+    "character_end",
+    "literal"
+  ],
+  "type": "object"
+}

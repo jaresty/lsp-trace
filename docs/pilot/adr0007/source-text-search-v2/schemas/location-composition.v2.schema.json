@@ -1,0 +1,43 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/location-composition.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "designCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "designRootSha256": {
+      "const": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d"
+    },
+    "executedLocation": {
+      "const": false
+    },
+    "executionCommit": {
+      "const": "f0f8b49aa368bea9b3e6d105eef5cb2614221067"
+    },
+    "finalSealSha256": {
+      "const": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6"
+    },
+    "operation": {
+      "const": "RANGE_UNION"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.location-composition.private.v2"
+    },
+    "sealCommit": {
+      "const": "16f40dcb03a234b00db80059a7eef400495e9d97"
+    }
+  },
+  "required": [
+    "schema_version",
+    "designCommit",
+    "designRootSha256",
+    "executionCommit",
+    "sealCommit",
+    "finalSealSha256",
+    "operation",
+    "executedLocation"
+  ],
+  "type": "object"
+}

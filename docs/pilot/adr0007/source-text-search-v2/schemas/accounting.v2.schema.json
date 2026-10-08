@@ -1,0 +1,71 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/accounting.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "B_output_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "J_files": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "M_matches": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "P_path_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "Q_query_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "R_ranges": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "S_source_bytes": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "T_scanned_tuples": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "U_utf16_units": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "W_work": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "failure_counters": {
+      "additionalProperties": {
+        "const": 0
+      },
+      "type": "object"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.accounting.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "J_files",
+    "Q_query_bytes",
+    "P_path_bytes",
+    "S_source_bytes",
+    "T_scanned_tuples",
+    "M_matches",
+    "R_ranges",
+    "U_utf16_units",
+    "B_output_bytes",
+    "W_work",
+    "failure_counters"
+  ],
+  "type": "object"
+}

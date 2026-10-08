@@ -1,0 +1,42 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/policy.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "allow_backend_semantics": {
+      "const": false
+    },
+    "allow_fuzzy": {
+      "const": false
+    },
+    "allow_model": {
+      "const": false
+    },
+    "allow_rank": {
+      "const": false
+    },
+    "allow_regex": {
+      "const": false
+    },
+    "allow_token": {
+      "const": false
+    },
+    "literal_mode": {
+      "const": "EXACT_NONEMPTY_CASE_SENSITIVE_UTF8"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.policy.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "literal_mode",
+    "allow_regex",
+    "allow_fuzzy",
+    "allow_token",
+    "allow_rank",
+    "allow_model",
+    "allow_backend_semantics"
+  ],
+  "type": "object"
+}
