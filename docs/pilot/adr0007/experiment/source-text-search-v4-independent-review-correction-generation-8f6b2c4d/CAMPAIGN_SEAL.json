@@ -1,0 +1,8 @@
+{
+  "audit_sha256": "sha256:7ad1f77ad4cf61a9da96e98a04b509450b263671d15735683ba3d29eee95748a",
+  "file_count": 169,
+  "ledger_sha256": "sha256:10529e0b01985fe477e99d292abefe0077bf9039ee09c80ae082fa76299edabb",
+  "manifest_sha256": "sha256:d2b0e64d8b29ee5c8e302c090a6704e124c6c2d825b4253fec5aa2a9d26190c9",
+  "schema": "adr0007.independent-review.seal.v1",
+  "sealed_at": "2026-10-08T12:59:58.956701Z"
+}

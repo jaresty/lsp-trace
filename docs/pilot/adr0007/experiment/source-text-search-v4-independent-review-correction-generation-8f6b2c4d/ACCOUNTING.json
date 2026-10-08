@@ -1,0 +1,15 @@
+{
+  "authority": 0,
+  "campaign_review_invocations": 0,
+  "created_namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d",
+  "custody": "REVISE",
+  "fail": 0,
+  "historical_expected_files_read": 0,
+  "independent_judgments": 50,
+  "oracle_dispatches_by_reviewer": 0,
+  "pass": 50,
+  "prior_review_files_read_or_copied": 0,
+  "production_dispatches_by_reviewer": 0,
+  "review_requests": 50,
+  "schema": "adr0007.independent-review.accounting.v1"
+}

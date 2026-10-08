@@ -1,0 +1,901 @@
+{
+  "accounting": {
+    "authority": 0,
+    "campaign_review_invocations": 0,
+    "created_namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d",
+    "custody": "REVISE",
+    "fail": 0,
+    "historical_expected_files_read": 0,
+    "independent_judgments": 50,
+    "oracle_dispatches_by_reviewer": 0,
+    "pass": 50,
+    "prior_review_files_read_or_copied": 0,
+    "production_dispatches_by_reviewer": 0,
+    "review_requests": 50,
+    "schema": "adr0007.independent-review.accounting.v1"
+  },
+  "files": [
+    {
+      "bytes": 508,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/ACCOUNTING.json",
+      "sha256": "sha256:52812f3adb2728e6715115a877939cebb82220ff6b6855759e89bce3d8395f8f"
+    },
+    {
+      "bytes": 45178,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/EVENTS.ndjson",
+      "sha256": "sha256:10529e0b01985fe477e99d292abefe0077bf9039ee09c80ae082fa76299edabb"
+    },
+    {
+      "bytes": 33807,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/FINAL_AUDIT.json",
+      "sha256": "sha256:7ad1f77ad4cf61a9da96e98a04b509450b263671d15735683ba3d29eee95748a"
+    },
+    {
+      "bytes": 1535,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/bindings/AUTHORIZED_BINDINGS.json",
+      "sha256": "sha256:6f0047d5fd0c907319464dc187520aa86d5ccba24a8650188b326a5a015758d7"
+    },
+    {
+      "bytes": 1535,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/bindings/BINARY_DIRECTORY_IDENTITY.json",
+      "sha256": "sha256:32f1c0659c975145616933667997b8d1aa87a7b20dd0e8c85f1b66dd9e9c3839"
+    },
+    {
+      "bytes": 1535,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/bindings/CAMPAIGN_DEFINITION.json",
+      "sha256": "sha256:6f0047d5fd0c907319464dc187520aa86d5ccba24a8650188b326a5a015758d7"
+    },
+    {
+      "bytes": 25664,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/bindings/CASE_COMMITMENTS.json",
+      "sha256": "sha256:91196ea7682a7b789cd03a9eab178609975ea2a4e21dcf76f10bdc0efc7b7fe2"
+    },
+    {
+      "bytes": 43600,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/bindings/PRESERVED_PRODUCTION_DIGEST_MANIFEST.json",
+      "sha256": "sha256:662a1a2ed0371348bec5246f60eda52bfac31ccbc2a6df7d2fe528945b23be79"
+    },
+    {
+      "bytes": 8808,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-01/evidence.json",
+      "sha256": "sha256:77cf2137fa224ebaf8426dfdd37fae9439598e3bdb3b511eff231272ad83d823"
+    },
+    {
+      "bytes": 11318,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-01/judgment.json",
+      "sha256": "sha256:38c8ee9f47f9b737307628d9941458971d473e2ba4509576b3b8e476e5e48756"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-01/request.json",
+      "sha256": "sha256:a38e3f8a8f66daa3fe4cf6e78c2ccccdfc4dbe6a045e174b996baaaca97f897a"
+    },
+    {
+      "bytes": 8836,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-02/evidence.json",
+      "sha256": "sha256:625301df8a6699681f5ec93ae53e6a5574f1cd9d05754245c8e538d21b086b83"
+    },
+    {
+      "bytes": 11345,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-02/judgment.json",
+      "sha256": "sha256:92eec4b2046faddb3fea820430a8e4f2dabd995045a34e9e471cd7bdbdebc27f"
+    },
+    {
+      "bytes": 4929,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-02/request.json",
+      "sha256": "sha256:a6303ff6ef5f1b6a8aac427350a7da8c96f0f5a66453e32d963265d7a7360ac7"
+    },
+    {
+      "bytes": 8841,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-03/evidence.json",
+      "sha256": "sha256:f153ed2ea19d21f4f734f18d0c7785a77a7eb554480c242998c32c377a86d93b"
+    },
+    {
+      "bytes": 11352,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-03/judgment.json",
+      "sha256": "sha256:68dff9e83b6c0c8e57760c69c2873f40ed1508f1b5f98d907e05cd363d175cee"
+    },
+    {
+      "bytes": 4935,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-03/request.json",
+      "sha256": "sha256:63cd6af47ea11a61683671174de07dcf80ccff81df2c56aa5f4de671daf6e1f0"
+    },
+    {
+      "bytes": 8812,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-04/evidence.json",
+      "sha256": "sha256:4d22087b16103f7ffc9a3626d4f5b7f50d94d20e8070a82be3eadc1f54da550a"
+    },
+    {
+      "bytes": 11321,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-04/judgment.json",
+      "sha256": "sha256:de6ed51f156a9af75cb525c4dc641fa332675b870665b240dc138a89eb1717d8"
+    },
+    {
+      "bytes": 4929,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-04/request.json",
+      "sha256": "sha256:931f05d9e08a16b083d6bd98b267ac5f7b97441a1cfc6ec6f73f444f1c4258f2"
+    },
+    {
+      "bytes": 8758,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-05/evidence.json",
+      "sha256": "sha256:1a8db6d75db0f8fd04df6074a1bbdf9f54c17f80b7aa4124c27e639390120ffa"
+    },
+    {
+      "bytes": 11261,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-05/judgment.json",
+      "sha256": "sha256:338391ebcefd0db432090500aba378d9cba0b317ebc2ee9b8b9597df95480112"
+    },
+    {
+      "bytes": 4911,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-05/request.json",
+      "sha256": "sha256:c15c6a6ca45addba6d1d2531c9496c47b820d3802cea063de5f0682ee7e02a61"
+    },
+    {
+      "bytes": 8797,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-06/evidence.json",
+      "sha256": "sha256:0b3cc3eb1c0c01459cb939172dc58deee9946aac86a92bf1abbe22b5c0587f16"
+    },
+    {
+      "bytes": 11305,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-06/judgment.json",
+      "sha256": "sha256:0b36cf5fada56212a0de383c820c59c5c2e6491514ee27807649c02de138c6dd"
+    },
+    {
+      "bytes": 4926,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-06/request.json",
+      "sha256": "sha256:eaaf083bd91bcb31c6632d9b53a136243d2031be500fef07ff8fbf6508965859"
+    },
+    {
+      "bytes": 8815,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-07/evidence.json",
+      "sha256": "sha256:2cce2736c32b811ab2e6cc9b76fae7ef043ed4663aa87e400f29bfc9ee4f25a2"
+    },
+    {
+      "bytes": 11324,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-07/judgment.json",
+      "sha256": "sha256:62156536b7629d59971dd3078d6882869d0acbb4dc95b3ac79e49e3f108e6dde"
+    },
+    {
+      "bytes": 4929,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-07/request.json",
+      "sha256": "sha256:00ed3ed7774441b5d84b275506bf95b9af7cad4a19617c89208947b5d73de8f0"
+    },
+    {
+      "bytes": 8783,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-08/evidence.json",
+      "sha256": "sha256:e12ca418d03b640d3089dce43529517e5d3a757c08f876260fa672385ea3d955"
+    },
+    {
+      "bytes": 11288,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-08/judgment.json",
+      "sha256": "sha256:c71acee5c2766ea871e781771a6ac03652221febee1f2e68cbe5cec95f397759"
+    },
+    {
+      "bytes": 4917,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-08/request.json",
+      "sha256": "sha256:f29e4ae33d2ab92fd721806928acd8f167a04cb3e4850de47a3a69ea773a1d21"
+    },
+    {
+      "bytes": 8966,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-09/evidence.json",
+      "sha256": "sha256:3fe0c6b9999ab66c287d9fc7f2e1c557c6e5bb6509b7b36d11be1deeb40dbe8e"
+    },
+    {
+      "bytes": 11502,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-09/judgment.json",
+      "sha256": "sha256:b4a3c7b382e064a1ce8cde2ecb3c21e50549f3ea755a9978c431662517396f08"
+    },
+    {
+      "bytes": 4986,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-09/request.json",
+      "sha256": "sha256:5f99126d3c4c4ef8186672872833b8e7e2a2a741be238d9b7024e9e976d557fd"
+    },
+    {
+      "bytes": 8801,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-10/evidence.json",
+      "sha256": "sha256:246526f177a6125ba322b40fa3a6a39fec5ecabb632db024c7be038b8f66a42b"
+    },
+    {
+      "bytes": 11316,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-10/judgment.json",
+      "sha256": "sha256:f62d9cf4a62cc146c8bea63e5a05b36a4b437dd14f5d68319837156b8baf57cb"
+    },
+    {
+      "bytes": 4945,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-10/request.json",
+      "sha256": "sha256:0af7a84387d1a64d2d20362bbdd95f0256ef7958be01efef65404c7dd14697d5"
+    },
+    {
+      "bytes": 8846,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-11/evidence.json",
+      "sha256": "sha256:6e91d7eb3b7b992ee2b00310e9a1621bfe7f8151b6b3c8c35f2d91b8b6de9804"
+    },
+    {
+      "bytes": 11373,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-11/judgment.json",
+      "sha256": "sha256:534ec34bbd309c6a3f550e70cf04b5b511fc8537da4efd05270eeff2fc1bf544"
+    },
+    {
+      "bytes": 4957,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-11/request.json",
+      "sha256": "sha256:0fa9395387bf33ae13484f252a66cf13f25d649d0a0e612419c3f47cf66c429d"
+    },
+    {
+      "bytes": 8799,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-12/evidence.json",
+      "sha256": "sha256:e3b11d792d5ba2bc8441a7ba411c68510cbdbcfa88440fbad5e1dd4b375ba085"
+    },
+    {
+      "bytes": 11316,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-12/judgment.json",
+      "sha256": "sha256:d4d3e023555cee096288799f81872d03f56d39b0e3a32dc82a58b95840116066"
+    },
+    {
+      "bytes": 4924,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-12/request.json",
+      "sha256": "sha256:89b55c3edd086ee3ecf6f8504bf289811c2df4001be30e6eafa8294fb3a53410"
+    },
+    {
+      "bytes": 8676,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-13/evidence.json",
+      "sha256": "sha256:b9b8f47f91ad5af3e35ac8d285b42be65862e60d85e79d6239ab2ba649685258"
+    },
+    {
+      "bytes": 11177,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-13/judgment.json",
+      "sha256": "sha256:802fbca2cc158dd40adf045ce3c18a8bce4878c2007c12b087e96bea5884513c"
+    },
+    {
+      "bytes": 4918,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-13/request.json",
+      "sha256": "sha256:3cdfb0cad0923ef3877b0716cc10b7066e9a95de6eb73e9377d1a67a7914facb"
+    },
+    {
+      "bytes": 8794,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-14/evidence.json",
+      "sha256": "sha256:45f98a4fcacab582cee05d229c442fd4f856a41d151695239aa23be9050ebc92"
+    },
+    {
+      "bytes": 11310,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-14/judgment.json",
+      "sha256": "sha256:fa5111680f514ad11b708d3c679ccaf4d1e463ac8f2ea3104306bba2f0fcb4dc"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-14/request.json",
+      "sha256": "sha256:874915c30ab0701420f637daaa362d98423dba98369d4b0162a6d11b89b276a9"
+    },
+    {
+      "bytes": 8784,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-15/evidence.json",
+      "sha256": "sha256:4c63208a0bd6f93b3e599b0259ace1df21074102df2f47456527d4cf998d6303"
+    },
+    {
+      "bytes": 11299,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-15/judgment.json",
+      "sha256": "sha256:a0ed83c6b611e114b48c87b85604c71891274e1c7c76a5b6bdf744dcfc8ea18e"
+    },
+    {
+      "bytes": 4918,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-15/request.json",
+      "sha256": "sha256:a0f4915f1036bd738dfd8a3e6e071683e643b48a434ffaac684b57ed4f9e5f64"
+    },
+    {
+      "bytes": 8794,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-16/evidence.json",
+      "sha256": "sha256:6d542e7d24807b9be8cad2fb951df78463efc94cbf63094592e55832e8f607ba"
+    },
+    {
+      "bytes": 11310,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-16/judgment.json",
+      "sha256": "sha256:92b009342626149cce2d1924661a16cffb4636b460d673120bba0bc381699171"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-16/request.json",
+      "sha256": "sha256:b462a94977f1e8d80e37d36e9344facc3aa8931cdd870462245c5a9eb5afb74f"
+    },
+    {
+      "bytes": 8903,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-17/evidence.json",
+      "sha256": "sha256:ddf1d3312fc2e2b67fd777b5eed41c8d9a63dcaaa1fb202c9b2599598bca2a8f"
+    },
+    {
+      "bytes": 11433,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-17/judgment.json",
+      "sha256": "sha256:6e048f2f261be81fbc574678532e72b359ce76f1387bdc8b1e6b6b16ec466fb2"
+    },
+    {
+      "bytes": 4963,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-17/request.json",
+      "sha256": "sha256:116a72811c4dfae051d3603717fb8d0f587a36a2d6c2af833f4af654a249e429"
+    },
+    {
+      "bytes": 8903,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-18/evidence.json",
+      "sha256": "sha256:be04708143f8e57398295df9cd7f3982b69f956fd398b966cb542b1a595df9ae"
+    },
+    {
+      "bytes": 11433,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-18/judgment.json",
+      "sha256": "sha256:4e3aa3602fee44da16c5ed90f457ff2c1322c42bf63f7a2d7e48fb61651bec90"
+    },
+    {
+      "bytes": 4963,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-18/request.json",
+      "sha256": "sha256:8ce9df332b15e60720fe8e6023714f77722e134223ce09d09434e25f3a2afa7c"
+    },
+    {
+      "bytes": 8807,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-19/evidence.json",
+      "sha256": "sha256:ad7506fc65d972ba6fa9717f9a9e6930870c98b18c8b5b8d79952efe8be7147f"
+    },
+    {
+      "bytes": 11328,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-19/judgment.json",
+      "sha256": "sha256:dc59b42985dc1c80f413c82073f93b3b96ff1b0ca5822b6fb048652f0dd75eab"
+    },
+    {
+      "bytes": 4924,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-19/request.json",
+      "sha256": "sha256:8842dde106d34220932d8c03619f9c2cd0284b0a52975f3b39e144dcdf4123ba"
+    },
+    {
+      "bytes": 8800,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-20/evidence.json",
+      "sha256": "sha256:6c23cdf64a116386be5cef51b162513a958fd5a729875e06cca044b665a849ec"
+    },
+    {
+      "bytes": 11319,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-20/judgment.json",
+      "sha256": "sha256:9158afbac898e9d1bb22ed74a00fbbbb1f5fec29a2f1c5846ce5c00ea6c8f942"
+    },
+    {
+      "bytes": 4918,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-20/request.json",
+      "sha256": "sha256:7b133d08c5d388d5056e54b8c8df47601e92b5c0b2d52db7a0f90d3f870a6293"
+    },
+    {
+      "bytes": 8839,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-21/evidence.json",
+      "sha256": "sha256:05043e93cd07d7d65ab67d7898e9fe131f113a2f47f93e2b4543094db38c1a87"
+    },
+    {
+      "bytes": 11361,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-21/judgment.json",
+      "sha256": "sha256:12dee3071abc11e22dba33c4022156eebf8e737147b2de6717adc4416c7ff57a"
+    },
+    {
+      "bytes": 4939,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-21/request.json",
+      "sha256": "sha256:f473c6cc4d0a4d24cb765f5e83a53d5a1a650521203c82c015d81bcc07128954"
+    },
+    {
+      "bytes": 8855,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-22/evidence.json",
+      "sha256": "sha256:19a9bf095e50326b4190dfb2433bf082c51b0eeee59a2833f972af14caa7615a"
+    },
+    {
+      "bytes": 11379,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-22/judgment.json",
+      "sha256": "sha256:587aa989794b95e87d119346ddfde5c489cbf301b9f0b3c445424412c0cd65dc"
+    },
+    {
+      "bytes": 4945,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-22/request.json",
+      "sha256": "sha256:bf32bab06f87601080e76eb07b71335362fea43c8a77a557333a0b80de8e8ff7"
+    },
+    {
+      "bytes": 8757,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-23/evidence.json",
+      "sha256": "sha256:14d82b5167fa4f0bd4d74a0bfea67a41f062325f94c3b4c00ef435aae57ca690"
+    },
+    {
+      "bytes": 11267,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-23/judgment.json",
+      "sha256": "sha256:796a3a929e521af1ad0f3c50471525b26f91817e80e85f6f764622af7725024e"
+    },
+    {
+      "bytes": 4945,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-23/request.json",
+      "sha256": "sha256:96ae7aa36a7c0d51220e28d01bccdb87659ed6f3acda8f9263ffed568524d6dd"
+    },
+    {
+      "bytes": 8748,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-24/evidence.json",
+      "sha256": "sha256:1d7a3901ed402402f18dc3666aef5a5a98bf0095178a8b8a67381b1f442edb0b"
+    },
+    {
+      "bytes": 11257,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-24/judgment.json",
+      "sha256": "sha256:74b52f9ba7817a07dd05919f2cdee74f74bbda253e771e785d0f8dbc5899685a"
+    },
+    {
+      "bytes": 4942,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-24/request.json",
+      "sha256": "sha256:03c80e9916fbd68611bc80e1a95aeb2bebf4c16ea1889e72409bfc6ff6748707"
+    },
+    {
+      "bytes": 8687,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-25/evidence.json",
+      "sha256": "sha256:f7bc8caa31dfd846eb51a56a0ea1f8f3bf836e896ccf5f110036de772ebd3c43"
+    },
+    {
+      "bytes": 11190,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-25/judgment.json",
+      "sha256": "sha256:bc9eb548560b402af2d1c755693ba646b4146a6a8c0162794754cba3e637e8c0"
+    },
+    {
+      "bytes": 4924,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-25/request.json",
+      "sha256": "sha256:d691eed079b57b175fb9ccf6912b7eb78d8f526c6fb3252dde0a54102dc91058"
+    },
+    {
+      "bytes": 8698,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-26/evidence.json",
+      "sha256": "sha256:8bb30e31efae692a7d595a30d066226b74a7b5048846ace47936ddf46fbd7658"
+    },
+    {
+      "bytes": 11202,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-26/judgment.json",
+      "sha256": "sha256:49c796fd452c4867e2dbb4fcf735c4af1f2d2e33af4e2b053f123ae0a228831d"
+    },
+    {
+      "bytes": 4927,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-26/request.json",
+      "sha256": "sha256:34306f0a83bc7233d317915c93054a7b3cb2fb4300f7f35f34ba7a7ed46d0242"
+    },
+    {
+      "bytes": 8757,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-27/evidence.json",
+      "sha256": "sha256:9a9f11b0fed93303347c5845b5bb5eb3d3933d927b9cd353aba7b0224610ad15"
+    },
+    {
+      "bytes": 11267,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-27/judgment.json",
+      "sha256": "sha256:636e287a86912a9deb0814ad7e206a38dece8d1852c82f6001b9fa61e8ba6c75"
+    },
+    {
+      "bytes": 4945,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-27/request.json",
+      "sha256": "sha256:dda46aeefd6aacd5a263fa2dff4e1afb19e2b6e7f49ab0d1a6eccd4a06dcc027"
+    },
+    {
+      "bytes": 8710,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-28/evidence.json",
+      "sha256": "sha256:ff3253c9a1ce0db4725cae985999f3334d5ee209b292a7dffdd3457e4965df12"
+    },
+    {
+      "bytes": 11215,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-28/judgment.json",
+      "sha256": "sha256:25e8391636abb33c3384aa9f788099ad0eb7128e6a116cd2606c0f7bf76efcc5"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-28/request.json",
+      "sha256": "sha256:283a5d390d5edfb398e7b085646e273dd8af95e02e10fa80fe31a4f96053634f"
+    },
+    {
+      "bytes": 8667,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-29/evidence.json",
+      "sha256": "sha256:6573ce44b9a4e8c775d12be4c391c13a83d0aa4c0282922dcbef2ff53fb92270"
+    },
+    {
+      "bytes": 11167,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-29/judgment.json",
+      "sha256": "sha256:329560295ff012b526ba9ff04566b028b93e51ca7d7f8e8bdada18d64f15f31c"
+    },
+    {
+      "bytes": 4915,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-29/request.json",
+      "sha256": "sha256:cf238559cf0698bf033dfbcc106727f69ac9589d654a224ae17e419206e23e23"
+    },
+    {
+      "bytes": 8683,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-30/evidence.json",
+      "sha256": "sha256:a366df6f96f1fe9b12d88f88d5f5b4c688d76383967916c57bcfe06cf3876c89"
+    },
+    {
+      "bytes": 11185,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-30/judgment.json",
+      "sha256": "sha256:e4c93f1139f5068079d8ae9b05288d3ffbe33bd8aa11ce67af4fcba6e6f23e5c"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-30/request.json",
+      "sha256": "sha256:9e285c770bda53ed5b0c8e2aa035e35bf2a0d64f55a57b08f74da929074ea970"
+    },
+    {
+      "bytes": 8710,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-31/evidence.json",
+      "sha256": "sha256:6da6390188a0ba1350af9c2a15b5e2e7d95bc82c08b53f8018e1b4789e4bb4b3"
+    },
+    {
+      "bytes": 11215,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-31/judgment.json",
+      "sha256": "sha256:bbb7890f55aee70f67ede1dac9bd683f2c54438cb720d331dae0c231d7681061"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-31/request.json",
+      "sha256": "sha256:45e4277dfe2c52a004be30edf7e0e3c33a542e2fbff13840722e6e02984dcfef"
+    },
+    {
+      "bytes": 8683,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-32/evidence.json",
+      "sha256": "sha256:d9e6663d869078481060d1261bd64a5d04e695c2c58f264e2857464898566617"
+    },
+    {
+      "bytes": 11185,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-32/judgment.json",
+      "sha256": "sha256:fd4766200a58451b2462eb30f752568f9266b571e833f833b75095aa8a16068c"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-32/request.json",
+      "sha256": "sha256:2aea69bc02521ae841ad2d84b8452ec977f5f7570f9997e156c49d9e530d8d15"
+    },
+    {
+      "bytes": 8680,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-33/evidence.json",
+      "sha256": "sha256:5b7a9ab84795087eceab48362d7a29600e23120d93158018e05f893763f76320"
+    },
+    {
+      "bytes": 11181,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-33/judgment.json",
+      "sha256": "sha256:d355034212214f7234b2cbebd3d82b79e1ce0253c2e673076755d811e5b33c4a"
+    },
+    {
+      "bytes": 4918,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-33/request.json",
+      "sha256": "sha256:287a37806097c9b6ca4ef381a6990bc9f2899c30117c9f7a2db35c11baad2439"
+    },
+    {
+      "bytes": 8709,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-34/evidence.json",
+      "sha256": "sha256:158dc0cfd8976834ed646219c85302833a481fdcc9a888346620c3b00a801fd5"
+    },
+    {
+      "bytes": 11214,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-34/judgment.json",
+      "sha256": "sha256:ee391a923e230900b2333676e770462d33abf403d26ede8706e0758f1e1315bf"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-34/request.json",
+      "sha256": "sha256:9ad96d638bc3c22872d6774beeffc83172759971572edeb8541f7bf42be5855d"
+    },
+    {
+      "bytes": 8694,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-35/evidence.json",
+      "sha256": "sha256:683c3a6d7e5e1772c8e79b93b2a34f02d9f88e03ed04c9dde03c0d7b454680ec"
+    },
+    {
+      "bytes": 11197,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-35/judgment.json",
+      "sha256": "sha256:038a6e6444fd0af2b8d13e074bdbcaf7797542597435bcb9978648baeea4a710"
+    },
+    {
+      "bytes": 4924,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-35/request.json",
+      "sha256": "sha256:2c91f19e217e64639a03babd9aa5fa4c80dcee613aac54a54342a2e70e12f76f"
+    },
+    {
+      "bytes": 8820,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-36/evidence.json",
+      "sha256": "sha256:5b4b02ed328d0727d3bc6a0b257a83b9387a1b61f2f643aeb5b0167ee66681e9"
+    },
+    {
+      "bytes": 11337,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-36/judgment.json",
+      "sha256": "sha256:e4245e4ad41af294e082d8a6bc3514b3013a955f16b0d3f9049532902de9ceed"
+    },
+    {
+      "bytes": 4933,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-36/request.json",
+      "sha256": "sha256:3b18600cd54e7f3f74f5a62ca1b437697dab4b90bc28c530110aaac33c16fd3c"
+    },
+    {
+      "bytes": 8703,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-37/evidence.json",
+      "sha256": "sha256:9986f2785789894e95ab7739109c7089a40fe7a4a25255dd06898fe74726925e"
+    },
+    {
+      "bytes": 11207,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-37/judgment.json",
+      "sha256": "sha256:f1822bfa73c9cc5b50055a6b548cbe9b3a5fe297535788392286c94bbc1f256d"
+    },
+    {
+      "bytes": 4927,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-37/request.json",
+      "sha256": "sha256:2950cee226f1238342eba8789d952b36b23060f99bf9de86d0859a479e733465"
+    },
+    {
+      "bytes": 8835,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-38/evidence.json",
+      "sha256": "sha256:dfcd97628c3561016101b081b38e69a6a14aae00aeba2be8dec6ea6cb63da45b"
+    },
+    {
+      "bytes": 11353,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-38/judgment.json",
+      "sha256": "sha256:a1fbebb12777f0edb689275dcf5382321955a09059c4c2b4f884719ece4cfd77"
+    },
+    {
+      "bytes": 4936,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-38/request.json",
+      "sha256": "sha256:199f5705df7ecbdf5dec5f21947ff911ee462e9a4269b86565149b4ca9df84a5"
+    },
+    {
+      "bytes": 8694,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-39/evidence.json",
+      "sha256": "sha256:86f1db053d9a1e2a9508648186cd6ffd683e1f12ece47a3fee7ea1f49ccfd2db"
+    },
+    {
+      "bytes": 11197,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-39/judgment.json",
+      "sha256": "sha256:b7d81756d400fa37b451de27ae9fed2e1c625192ad77a6ce6d54db2876ae9c38"
+    },
+    {
+      "bytes": 4924,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-39/request.json",
+      "sha256": "sha256:2351dabc721694af5029012ce21ca52fcd3db1fa8154d4a95b3f6ae8e728d9b0"
+    },
+    {
+      "bytes": 8826,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-40/evidence.json",
+      "sha256": "sha256:4337443f68e8b654060b7e98302386a272137b2aee450e316fed5ecbe3ed0b74"
+    },
+    {
+      "bytes": 11343,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-40/judgment.json",
+      "sha256": "sha256:d42cfd0651cd8f45378968a52528b6abcc36887156d7f2a1bff9e0e138c9a610"
+    },
+    {
+      "bytes": 4933,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-40/request.json",
+      "sha256": "sha256:b62b5532cf8b09c772608a55e27ac4e6bbacf63824add77eae73aecd92a8cee1"
+    },
+    {
+      "bytes": 8685,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-41/evidence.json",
+      "sha256": "sha256:fdcf6f6cda3a3365be7a19da691da73c659b62323e94e2f74eac17544caf97f8"
+    },
+    {
+      "bytes": 11187,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-41/judgment.json",
+      "sha256": "sha256:b9c58fd964e5756904efdbc8ccddca300a8a3299fdaba6833ecca381d4a70006"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-41/request.json",
+      "sha256": "sha256:bbc2705d909ef45d09ab5f3f60ee729e78d67f9ad877c7cd0938287aec234ee3"
+    },
+    {
+      "bytes": 8768,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-42/evidence.json",
+      "sha256": "sha256:ba3c93de4d3b1ef4505385c31b30c5eb9c218d46f78ae6ca8d33e1b63dbafc2d"
+    },
+    {
+      "bytes": 11284,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-42/judgment.json",
+      "sha256": "sha256:a700e67c8c768e1912d7c7a67c3946d4507d0c89cd2b23a61cb5eaf84432892f"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-42/request.json",
+      "sha256": "sha256:836a2b8ba1386c567e31e342c6d62e6a8d08ee5ebf37102ff75fae0defd252a0"
+    },
+    {
+      "bytes": 8712,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-43/evidence.json",
+      "sha256": "sha256:1af0e1390e9e3d7221783a09a9e51655a21484960e9969f251501276a4b8c7f5"
+    },
+    {
+      "bytes": 11217,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-43/judgment.json",
+      "sha256": "sha256:793ba25b95237f505e5315ef3a4b01a37b275e96e4f4af709a7d79cd1f1b43e8"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-43/request.json",
+      "sha256": "sha256:cd25ec0963ffe73559bda9bd125ff5215ad7e43dbd55c3473708b5ef772f973e"
+    },
+    {
+      "bytes": 8793,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-44/evidence.json",
+      "sha256": "sha256:428bd8b0ce73efe3cf849b009f330007a89975bd4329eb52aa96f3c2b0064a3d"
+    },
+    {
+      "bytes": 11312,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-44/judgment.json",
+      "sha256": "sha256:cb28785b5c44bac2623cb13e75d8dca644ca292c420c046cf4a20bad05787338"
+    },
+    {
+      "bytes": 4939,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-44/request.json",
+      "sha256": "sha256:301de2dd6bc583f4d9d21e2cd6bfc40c2ef413a37dd7ccae8cc069018704c44f"
+    },
+    {
+      "bytes": 8685,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-45/evidence.json",
+      "sha256": "sha256:74fcb0dcceed874c711483cf7dd10b64fc742e66ee982637b8d180b22104031f"
+    },
+    {
+      "bytes": 11187,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-45/judgment.json",
+      "sha256": "sha256:4e58f5501c841004627f47c532fd912ee465311d174d78ba997fabb04ef53776"
+    },
+    {
+      "bytes": 4921,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-45/request.json",
+      "sha256": "sha256:074d32b9e7cb70efb18f561cdaaa6d4646f4750f82ec6faeff7dc513c8987381"
+    },
+    {
+      "bytes": 8765,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-46/evidence.json",
+      "sha256": "sha256:5c5368a937cef366cafda668e1c778c659bf2a4476f699637330a2f0e647f1d4"
+    },
+    {
+      "bytes": 11281,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-46/judgment.json",
+      "sha256": "sha256:acdb28cba43738409fd62da9b9b3bab3ea292422462db0cf6660219f6563edf9"
+    },
+    {
+      "bytes": 4930,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-46/request.json",
+      "sha256": "sha256:1f6a1a0575524109f2dd87f822353bb1e191b07125987166e985e8f2d3a91a7c"
+    },
+    {
+      "bytes": 8703,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-47/evidence.json",
+      "sha256": "sha256:9a6c6daaea2b4e4d07de42884b80a895cfdfe16d29680f5cc19a5f9ce5cebf2d"
+    },
+    {
+      "bytes": 11207,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-47/judgment.json",
+      "sha256": "sha256:f6d6ae5867ed377a5695260c7c67d8bb5b114091e4d6f77049eeef2939a29568"
+    },
+    {
+      "bytes": 4927,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-47/request.json",
+      "sha256": "sha256:00b616693e282a92b15169823153590f38b2dbdb40dab00aee8a04140eb5d87b"
+    },
+    {
+      "bytes": 8783,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-48/evidence.json",
+      "sha256": "sha256:75a2c872297ca3b6a2d932d494fa2647eacb334c9b5ec0c400315c80315c9534"
+    },
+    {
+      "bytes": 11301,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-48/judgment.json",
+      "sha256": "sha256:7ab2b92a825d544115f45db51cbab7e88e4e69f4b30f460e97dd309c7dbb74ed"
+    },
+    {
+      "bytes": 4936,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-48/request.json",
+      "sha256": "sha256:58dbe7dd6fa7d8a50928c6de758b0df422ef24f04bbf67e8575501125f231bd9"
+    },
+    {
+      "bytes": 8795,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-49/evidence.json",
+      "sha256": "sha256:59128da6b642f9815a2d93d6432e968fa1f668f5ba6fa2699ca27705d220845d"
+    },
+    {
+      "bytes": 11310,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-49/judgment.json",
+      "sha256": "sha256:e2ddfcf74a5249d9b01569bac7ed7ef0965fba3ad74247dd5237fbaae5ef5de6"
+    },
+    {
+      "bytes": 4939,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-49/request.json",
+      "sha256": "sha256:b7c9c15c29775899ab1cdb21c1e1c23501b9a6ea9e714b5d4b4923983ee8e795"
+    },
+    {
+      "bytes": 8811,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-50/evidence.json",
+      "sha256": "sha256:e92052117ea592a77e467e8cf7ac63e826cfa9067baf7a8503944fb182c14aed"
+    },
+    {
+      "bytes": 11327,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-50/judgment.json",
+      "sha256": "sha256:50bd82793035ba48b2e02d227d18dc5f6364722a133f9654ef7181e1b0eee19f"
+    },
+    {
+      "bytes": 4963,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-50/request.json",
+      "sha256": "sha256:b79399790b2fb335010c1c69e8d09cabf6211f4443e7b89bc53eb74601886679"
+    },
+    {
+      "bytes": 149,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/attempt-commitment.v1.schema.json",
+      "sha256": "sha256:45de0d6fcc135eaf9ef2b20f7def3c1790c97d7d90b2cc8698ed38f24300c8f0"
+    },
+    {
+      "bytes": 150,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/campaign-accounting.v1.schema.json",
+      "sha256": "sha256:4aa938a8417775d1603ec54cda25c815fbf2860534aa2ac175538177a5c28824"
+    },
+    {
+      "bytes": 150,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/campaign-definition.v1.schema.json",
+      "sha256": "sha256:4ab3ef448f78a454663c7f8941d8206dc7d08cdf4e34841c5406224b9a17060f"
+    },
+    {
+      "bytes": 144,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/campaign-seal.v1.schema.json",
+      "sha256": "sha256:8d8a621fc2b0f3b1b6c4b0c0c57dca19822dd3c80ccd32737339f72d94b720a5"
+    },
+    {
+      "bytes": 141,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/comparison.v1.schema.json",
+      "sha256": "sha256:4d8e7a629718b867f5203c629e468135316ee658240144bd4be49176fce60295"
+    },
+    {
+      "bytes": 145,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/custody-review.v1.schema.json",
+      "sha256": "sha256:794fcd35660fca928759818d9428aa801e2a7b8176c3450b44153aba140b037a"
+    },
+    {
+      "bytes": 155,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/derived-terminal-receipt.v1.schema.json",
+      "sha256": "sha256:b1c33ec103c21bd6aff11f1b5bbc3af1f63bcf8eb92770f92d05e6863f047ed6"
+    },
+    {
+      "bytes": 146,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/execution-event.v1.schema.json",
+      "sha256": "sha256:40f1cbc1d3109b10682da03ce36db3efe3cb9769213e0b46014ba4ecf0e9c9ec"
+    },
+    {
+      "bytes": 150,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/predispatch-receipt.v1.schema.json",
+      "sha256": "sha256:d1a15f74e1be327a129f7cf4e74dea7a9c4331fafe77d3c86ec63c6d08dae01b"
+    },
+    {
+      "bytes": 149,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/raw-result-receipt.v1.schema.json",
+      "sha256": "sha256:68244d67c20c6509a6d5753d8f279420d61ffcfeae60e5ba4c1f7e06d3e2c353"
+    },
+    {
+      "bytes": 146,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/schemas/review-judgment.v1.schema.json",
+      "sha256": "sha256:fd31c2b03fdd4b66df913d8f461c514e8fbc2d8f5be74039b3903521a15c5ec3"
+    }
+  ],
+  "predecessor_bindings": {
+    "ledger_sha256_required": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d",
+    "prior_correction_exact_bytes": {
+      "audit": {
+        "bytes": 354,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/FINAL_AUDIT.json",
+        "sha256": "sha256:aa626deeaaf28c7b2b01e4551e14f3ae4c1443899b290c68cb8d05929a6d8b93"
+      },
+      "ledger": {
+        "bytes": 119491,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/EVENTS.ndjson",
+        "sha256": "sha256:8910391ef8cd4c6ca04587fe461c104bec28764043515d1adfcdd791b8e959ba"
+      },
+      "manifest": {
+        "bytes": 91865,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/CAMPAIGN_MANIFEST.json",
+        "sha256": "sha256:e7cd95232eac90d331b1974fa2454b9b480405a8df62d0a7489d1e47532ded3c"
+      },
+      "review_summary": {
+        "bytes": 57,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/REVIEW_SUMMARY.json",
+        "sha256": "sha256:daed5c08bf1f14ddb747513f243222b9c22c884a6f51777721b9f78096462219"
+      },
+      "seal": {
+        "bytes": 195,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/CAMPAIGN_SEAL.json",
+        "sha256": "sha256:58fb4d9c17470937b1528d2b0f0a152450334cc2b966650dc279eb1d1a58a767"
+      },
+      "verify_receipt": {
+        "bytes": 173,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/VERIFY_RECEIPT.json",
+        "sha256": "sha256:6191eb9d136c8b82bff6f974d0b4bb02cb21510636f2a6eb0194ddcdb2ab01a0"
+      }
+    },
+    "terminal_event_sha256_required": "sha256:bea1b32bb92aecae7b142dae3e71d149e1bada5c003aa43871187f48790f2680"
+  },
+  "schema": "adr0007.independent-review.manifest.v1"
+}

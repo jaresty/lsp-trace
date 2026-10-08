@@ -1,0 +1,28 @@
+{
+  "audit_sha256": "sha256:7ad1f77ad4cf61a9da96e98a04b509450b263671d15735683ba3d29eee95748a",
+  "checks": {
+    "all_judgments_pass": true,
+    "event_counts": {
+      "AUDIT": 1,
+      "INDEPENDENT_JUDGMENT": 50,
+      "REVIEW_CORRECTION_AUTHORIZED": 1,
+      "REVIEW_REQUEST": 50,
+      "SEAL": 1
+    },
+    "independent_judgments": true,
+    "manifest_file_digests_match": true,
+    "no_historical_expected_reads": true,
+    "no_prior_review_reads_or_copies": true,
+    "oracle_dispatches_zero": true,
+    "predecessor_ledger_binding": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d",
+    "predecessor_terminal_binding": "sha256:bea1b32bb92aecae7b142dae3e71d149e1bada5c003aa43871187f48790f2680",
+    "production_dispatches_zero": true,
+    "review_requests": true
+  },
+  "ledger_sha256": "sha256:10529e0b01985fe477e99d292abefe0077bf9039ee09c80ae082fa76299edabb",
+  "manifest_sha256": "sha256:d2b0e64d8b29ee5c8e302c090a6704e124c6c2d825b4253fec5aa2a9d26190c9",
+  "namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d",
+  "schema": "adr0007.independent-review.verify-receipt.v1",
+  "seal_sha256": "sha256:83523f14795f5e7bf7ccd09d566b4cbe844047be2d0e4f476f5aee4c2b3a5838",
+  "verified_at": "2026-10-08T12:59:58.957125Z"
+}

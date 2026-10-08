@@ -1,0 +1,34 @@
+{
+  "schema": "lsp-trace.adr0007.source-text-search.binary-directory-identity.private.v1",
+  "root": "/Users/schwa/dev/lsp-trace-adr0007-source-text-search-execution/.adr0007-sim/source-text-search-v4-correction-generation-91f756c7/bin",
+  "entries": [
+    {
+      "name": "oracle",
+      "path": "/Users/schwa/dev/lsp-trace-adr0007-source-text-search-execution/.adr0007-sim/source-text-search-v4-correction-generation-91f756c7/bin/oracle",
+      "bytes": 3571058,
+      "sha256": "sha256:1b0f335217d555e885557eb8267ce8ceacba3107079de6d9e7acf456581464ef",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    },
+    {
+      "name": "production",
+      "path": "/Users/schwa/dev/lsp-trace-adr0007-source-text-search-execution/.adr0007-sim/source-text-search-v4-correction-generation-91f756c7/bin/production",
+      "bytes": 3604034,
+      "sha256": "sha256:03195e8bc6bdc7542a3e8a831e067ac04f76d31b6296c2ac70694e11c2fc7980",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    },
+    {
+      "name": "validator",
+      "path": "/Users/schwa/dev/lsp-trace-adr0007-source-text-search-execution/.adr0007-sim/source-text-search-v4-correction-generation-91f756c7/bin/contract-validate",
+      "bytes": 3977394,
+      "sha256": "sha256:15e3f14f55bf08100b1bb718115fcdddbc2579fe98709237c1de436e85f845a3",
+      "mode": "-rwxr-xr-x",
+      "regular": true,
+      "executable": true
+    }
+  ],
+  "directory_sha256": "sha256:d017c920c3eb160e61858aa46ef270b4dbab359ea54d5ee86d2decbdf083c45c"
+}

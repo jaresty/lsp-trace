@@ -1,0 +1,402 @@
+[
+  {
+    "ordinal": 1,
+    "case_id": "case-01-raw_malformed_json",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-01-raw_malformed_json/attempt.json",
+    "attempt_sha256": "sha256:86cc54391c010498d9a5999ac5f89ecc44677452ac75191f9aefd346230a5725",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-01-raw_malformed_json.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:d92478bf370754f3c73f0c85f4880973acbdfac2d8d420a10bbd04dc47d0532a"
+  },
+  {
+    "ordinal": 2,
+    "case_id": "case-02-raw_unknown_field",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-02-raw_unknown_field/attempt.json",
+    "attempt_sha256": "sha256:04518acf8c29e0b64c9735694bcbfd10a71b6825367b9b250368f3c981c5d448",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-02-raw_unknown_field.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:cb0db56c69da3fea15c22c61bbe1623780dae6dca9014e362ab3875a93adc1a0"
+  },
+  {
+    "ordinal": 3,
+    "case_id": "case-03-raw_duplicate_field",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-03-raw_duplicate_field/attempt.json",
+    "attempt_sha256": "sha256:62ddccb15b1cc64810fb41430e56873f5a0393bf90c5edac175a1708f54007b8",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-03-raw_duplicate_field.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:036cde025111aefea9d0345e9081648fb65b815e5a4c6fcb28f9a17474427d3e"
+  },
+  {
+    "ordinal": 4,
+    "case_id": "case-04-raw_trailing_data",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-04-raw_trailing_data/attempt.json",
+    "attempt_sha256": "sha256:7c075f91cd75fda3c018d95f1f0a00f90f31bf424142366cb435fa073ddca30e",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-04-raw_trailing_data.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e97b7c5364a4875638cbddde1cf4ea779964e243e1362e234df779b5139156b0"
+  },
+  {
+    "ordinal": 5,
+    "case_id": "case-05-empty_query",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-05-empty_query/attempt.json",
+    "attempt_sha256": "sha256:bb95336f1f91e5be5d36bb3e5b3730cf5b3c77f2a799d0210a8a69365033be17",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-05-empty_query.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:251de432e4e86ba5bdbaf78d4df5a0872a3d21b41cd09445a19a763869b07abf"
+  },
+  {
+    "ordinal": 6,
+    "case_id": "case-06-empty_source_set",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-06-empty_source_set/attempt.json",
+    "attempt_sha256": "sha256:946ac08024fcb84405daf3c1b9c4cb7acde03e30f12af4fff8fbb70bef93ae36",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-06-empty_source_set.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:65ccbe1b704cb0fed735d2ad382376d312f90e3aa989f567ef465897f057b0ea"
+  },
+  {
+    "ordinal": 7,
+    "case_id": "case-07-control_duplicate",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-07-control_duplicate/attempt.json",
+    "attempt_sha256": "sha256:9d02c7f61c21b2117959734185491fdeab29832b3b326704f8bdb856cdd38d2f",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-07-control_duplicate.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:33ec428644ad60c5789f84d0abc426d221133cd3b8649aa243cd4b124f2ad70c"
+  },
+  {
+    "ordinal": 8,
+    "case_id": "case-08-control_order",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-08-control_order/attempt.json",
+    "attempt_sha256": "sha256:01560596566c75ce958a377cfe641a5a9377593a7c4e33ff7113633e390b3fcf",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-08-control_order.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e93186317f113de8b308ea8b9fda907e1127933bf2e95ecbc35c9157c40c013d"
+  },
+  {
+    "ordinal": 9,
+    "case_id": "case-09-control_simultaneous_deadline_cancel",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-09-control_simultaneous_deadline_cancel/attempt.json",
+    "attempt_sha256": "sha256:38413739d744fc19febe661dac834e63b497fcb669c7be5198d58103449e3c72",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-09-control_simultaneous_deadline_cancel.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:892299d1b8042e454140806976ccd65cff8a7775483824aed9a24945fefa9060"
+  },
+  {
+    "ordinal": 10,
+    "case_id": "case-10-control_midscan_cancel",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-10-control_midscan_cancel/attempt.json",
+    "attempt_sha256": "sha256:61375ff1bd548e8236e1bc684401420f598ea78b95dd4f5955bee3684fb5ba65",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-10-control_midscan_cancel.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:17472d8c231db89b78f1a01bcccda0b2c71cff7fc7f638676615ec61dc0e6f3a"
+  },
+  {
+    "ordinal": 11,
+    "case_id": "case-11-control_postmatch_deadline",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-11-control_postmatch_deadline/attempt.json",
+    "attempt_sha256": "sha256:0ae2008f8fcd284c1af9ff8d4b8be2b42bdd1a69bbb3e24980f48f575086c425",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-11-control_postmatch_deadline.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:147b0f93e37956658002668e5870d22042e58391650a528812694b97ad1e2708"
+  },
+  {
+    "ordinal": 12,
+    "case_id": "case-12-utf8_empty_file",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-12-utf8_empty_file/attempt.json",
+    "attempt_sha256": "sha256:44d9128837aa45466a18ad321aaf85f605d41a47d3fb0e2c8e1c1527349d8813",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-12-utf8_empty_file.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:c681010b57d4dd0e284eb5a3ce86ab4de1e7ec5ffae3dc85432e2f55eca67947"
+  },
+  {
+    "ordinal": 13,
+    "case_id": "case-13-utf8_nfc_path",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-13-utf8_nfc_path/attempt.json",
+    "attempt_sha256": "sha256:e61c2ff746e499ae299589f1f14dc6c1d19cb25378886c3c610c4574da5e29cc",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-13-utf8_nfc_path.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e51257a7aa329b51dd4290f78089727d03d6ab6f016cae4e21a2c543ab351a09"
+  },
+  {
+    "ordinal": 14,
+    "case_id": "case-14-path_backslash",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-14-path_backslash/attempt.json",
+    "attempt_sha256": "sha256:5781253df6be802ef3977b6fb1703d41a1a6118131a1138b666753100fd11ca1",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-14-path_backslash.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:3bb426cbe11406872d1be1caa6f2716845b894f606ba31e121c5f2f899524582"
+  },
+  {
+    "ordinal": 15,
+    "case_id": "case-15-path_absolute",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-15-path_absolute/attempt.json",
+    "attempt_sha256": "sha256:b0e0b26ef09922d7219725907b9e3eecf540a6f644c9854c7bf41ad1f2635436",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-15-path_absolute.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:3a03bd2e238877f2949fe23e60942cb9a6a3e103c96e68be27f9872ffb9d071c"
+  },
+  {
+    "ordinal": 16,
+    "case_id": "case-16-path_traversal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-16-path_traversal/attempt.json",
+    "attempt_sha256": "sha256:7cd64fb364049c284b183fbf3c69a667df9b638424cba80c5ad80d739291b40b",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-16-path_traversal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:68fef8018008074c89fd590e3b81aa163d77fdafd447534217ebffaebfa3c9bb"
+  },
+  {
+    "ordinal": 17,
+    "case_id": "case-17-duplicate_path_same_revision",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-17-duplicate_path_same_revision/attempt.json",
+    "attempt_sha256": "sha256:950566c77bf2e1fd41e23f107f6d8a695c75567b1fa1d61b3e9b23cb254d3e2c",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-17-duplicate_path_same_revision.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:b4ee7d791360dc9e3e68900ead7d7d9492ddd28a3e1521ad6700c3e1e9e19cd0"
+  },
+  {
+    "ordinal": 18,
+    "case_id": "case-18-duplicate_path_diff_revision",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-18-duplicate_path_diff_revision/attempt.json",
+    "attempt_sha256": "sha256:0d279f826ffce24dd1a5b8105c2ede02b8ebdfe7b39d238b042d230dfc17bea1",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-18-duplicate_path_diff_revision.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:48fd7fe3d072b7ce1dd7d197c836a9f21600f16afd156704faccb8406388d240"
+  },
+  {
+    "ordinal": 19,
+    "case_id": "case-19-ordinal_missing",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-19-ordinal_missing/attempt.json",
+    "attempt_sha256": "sha256:7ca3bf97158c2214a5eacc01eef874e24daffaf8ea760ff41d4dd6c82e241166",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-19-ordinal_missing.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:79498192821f6b1bd0c155f8e1a0bffda7a3138cff5275a4b5f487de7130012a"
+  },
+  {
+    "ordinal": 20,
+    "case_id": "case-20-ordinal_extra",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-20-ordinal_extra/attempt.json",
+    "attempt_sha256": "sha256:7a7f886f7db9690f86c52ce7f5fcef4ece81a5362e9015f6c7419600c11759d5",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-20-ordinal_extra.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:f963a296f92c7fe85715486d6fe07d1078727e97001c2acb1ee6ae3c3bd1c1f0"
+  },
+  {
+    "ordinal": 21,
+    "case_id": "case-21-file_digest_mutation",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-21-file_digest_mutation/attempt.json",
+    "attempt_sha256": "sha256:ccabeaab86e5ee164dc3a539626029b3c815a91b7dfefc677245fe074528528f",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-21-file_digest_mutation.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:b0735485777fb31375fcadb5f8fe79b3ca3d81511e84062513e475e176f71e45"
+  },
+  {
+    "ordinal": 22,
+    "case_id": "case-22-object_digest_mutation",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-22-object_digest_mutation/attempt.json",
+    "attempt_sha256": "sha256:c0acc3c5e71fa5a645bbdcbbe0ec11c123306bee6defc2ee583563ef0fc54eb1",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-22-object_digest_mutation.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:1c7d8eb5c32f5d2f63d8051fd26b19be07d2c5a859f874834b8291c8c78406e3"
+  },
+  {
+    "ordinal": 23,
+    "case_id": "case-23-admission_digest_order",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-23-admission_digest_order/attempt.json",
+    "attempt_sha256": "sha256:1951ab8d628afe5d5024461d36183163ef197c448f0b9b62c5b6db20f9d6a390",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-23-admission_digest_order.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:fed7619c41670bc536e9ff80e1de72be961aa50f3bdbc8983d85976939a491f5"
+  },
+  {
+    "ordinal": 24,
+    "case_id": "case-24-multi_path_byte_order",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-24-multi_path_byte_order/attempt.json",
+    "attempt_sha256": "sha256:dfe042da371a0b1939da060aadb6b03649a3f90cdab4a9197e0167ebc683fee6",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-24-multi_path_byte_order.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:30ef6ce4939eaae7edeae780c6f4f03aca0164d65f66727e4fd1ed772f7b90af"
+  },
+  {
+    "ordinal": 25,
+    "case_id": "case-25-overlap_literal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-25-overlap_literal/attempt.json",
+    "attempt_sha256": "sha256:2e3aed968d1e7aca3a8de70917f4e37d87138ca9a75469c9b5ddedfe66a4315b",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-25-overlap_literal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:d8fee0cb3e199ae2b720b06ba9a3000a588d35e1eee1e4e1567f34676df96b4a"
+  },
+  {
+    "ordinal": 26,
+    "case_id": "case-26-metachar_literal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-26-metachar_literal/attempt.json",
+    "attempt_sha256": "sha256:bbf700833216ac767a4adee8b87e00a8ae719924787c6938767826c58326e9b5",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-26-metachar_literal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:488d4900678cd1b1eb248f90cd1aa6fcdd7e103a33805c2fe90a3b66214ae528"
+  },
+  {
+    "ordinal": 27,
+    "case_id": "case-27-case_sensitive_literal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-27-case_sensitive_literal/attempt.json",
+    "attempt_sha256": "sha256:92c35b7b5c459d102def603d1a08a520701e32e898b87d695dc70a86371b3f7f",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-27-case_sensitive_literal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:864dc166239ace430c7cf9581cbef91b2b156dc46fc58673c693840cae113196"
+  },
+  {
+    "ordinal": 28,
+    "case_id": "case-28-combining_literal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-28-combining_literal/attempt.json",
+    "attempt_sha256": "sha256:385cfa06e51c8357a8be96df29caad842764423e89131e2fc0ced7c85acb55b0",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-28-combining_literal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:679c53a89bc308580dbc46a30784bff444f105bf1a6fbfd29c102bcb3e66d839"
+  },
+  {
+    "ordinal": 29,
+    "case_id": "case-29-lf_positions",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-29-lf_positions/attempt.json",
+    "attempt_sha256": "sha256:9a89c3e03affd5d9997db00ffb6fae44fe26a9708db046237662713c9ae3692d",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-29-lf_positions.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:542211bbbbea42367c85613f6ecf858274e608d2f6023c4ce50c75eb80c23cae"
+  },
+  {
+    "ordinal": 30,
+    "case_id": "case-30-crlf_positions",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-30-crlf_positions/attempt.json",
+    "attempt_sha256": "sha256:62cf1a4121d18ba69bd0e3b1af6a18d63c55aa703abade556c7e15bc07abf0d2",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-30-crlf_positions.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:d2abe9005f8beaf8583242270b72a7933a67c1ae4b1d46a432049b0ab31a09b0"
+  },
+  {
+    "ordinal": 31,
+    "case_id": "case-31-bare_cr_positions",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-31-bare_cr_positions/attempt.json",
+    "attempt_sha256": "sha256:ced99a2e42aaa53887ff49e2c76fb71853341bd6779c5b830a0268097906d3e1",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-31-bare_cr_positions.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:662e8c404dd86913fe4538786b94bdd71625aec819267b13c4262d9f683dca5b"
+  },
+  {
+    "ordinal": 32,
+    "case_id": "case-32-mixed_newlines",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-32-mixed_newlines/attempt.json",
+    "attempt_sha256": "sha256:409f8459e8b1eaa54429e6cfc25e9ba88bae405edc9de84be0545384865d2cd0",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-32-mixed_newlines.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:318f5879f6644a533e9b531f42e3fdb1ffbfad51c61a61945edf1a9161ba38eb"
+  },
+  {
+    "ordinal": 33,
+    "case_id": "case-33-non_bmp_utf16",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-33-non_bmp_utf16/attempt.json",
+    "attempt_sha256": "sha256:7a0d8f703d0bf69eaba7a226d7fd112004caf3f7318ed323e621566451681464",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-33-non_bmp_utf16.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:0d943a5e931b3a24746280d74728f2e579f210c44c603c1fea96044f481c19fe"
+  },
+  {
+    "ordinal": 34,
+    "case_id": "case-34-crossline_literal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-34-crossline_literal/attempt.json",
+    "attempt_sha256": "sha256:2e75df934d0c01dc4fa0d4a097fd7b0e3d986d6d519c12a890f154b1dcfa1f5f",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-34-crossline_literal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:0b1fd01bd4c20959807e170fca402543ae99f51d88311f59fa582baa3f7ff098"
+  },
+  {
+    "ordinal": 35,
+    "case_id": "case-35-max_files_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-35-max_files_equal/attempt.json",
+    "attempt_sha256": "sha256:9c981bf0216527c7750514cfd0dcfd68c05cf0171d40d9018c57cee1e67743b2",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-35-max_files_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:7f4e19fe2e7cbb0c5bd8b78325a80ad38d515d3e6d54bde53622d639e78b5d63"
+  },
+  {
+    "ordinal": 36,
+    "case_id": "case-36-max_files_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-36-max_files_plus_one/attempt.json",
+    "attempt_sha256": "sha256:5091a78234a5d207b8d0a98ec5771d9955852b4f9121813b1e0da3a30a963f69",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-36-max_files_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:1b7f9a505610d569c5f29a8cb38497ab600c3e63ebd723d023445f5a008702f9"
+  },
+  {
+    "ordinal": 37,
+    "case_id": "case-37-max_source_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-37-max_source_equal/attempt.json",
+    "attempt_sha256": "sha256:663c7630c8a632d3fb3638e3ddf84b4e68f893e6f47821c7bb463b07717a65bc",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-37-max_source_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:45ffd4a7ebbf83b5f56a698864acc32a237741e7708b396177b8a65578e9f82d"
+  },
+  {
+    "ordinal": 38,
+    "case_id": "case-38-max_source_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-38-max_source_plus_one/attempt.json",
+    "attempt_sha256": "sha256:2b53b8d2e8113ccac5f83d7fe058a052aa8a1e76f16433994b7b0c5203b2cfc7",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-38-max_source_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:ddf6516d7b4f77be6c7e2688476900e86c4db4f74f571eaed2cd29fc1d48a035"
+  },
+  {
+    "ordinal": 39,
+    "case_id": "case-39-max_total_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-39-max_total_equal/attempt.json",
+    "attempt_sha256": "sha256:d46b7d9b6c519f44606cf5d96db2ce071df1ec95c897672694f3584678a7b00d",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-39-max_total_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:eec6b8f4db41015eb6acda9f6220ca90dd4a1e87e04dc37d7ea99c1cdc933e9c"
+  },
+  {
+    "ordinal": 40,
+    "case_id": "case-40-max_total_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-40-max_total_plus_one/attempt.json",
+    "attempt_sha256": "sha256:9502263abbb8244e975a21f5cf0e10605e825ffdd7e9abc7161d2e1ec8362108",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-40-max_total_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:61393cb23e18f248a32cae4bd61ccebdd46e78f7a0fca1a352116778fded6d9d"
+  },
+  {
+    "ordinal": 41,
+    "case_id": "case-41-max_path_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-41-max_path_equal/attempt.json",
+    "attempt_sha256": "sha256:b72436ee5649c6fd427560afd0b106b1ab7fe4051bc587db6180a041c4c7f678",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-41-max_path_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:c79e1ff57702c56cde5b759eecd39ba4a5a32318eba9bfa7bf7291f5dde679c8"
+  },
+  {
+    "ordinal": 42,
+    "case_id": "case-42-max_path_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-42-max_path_plus_one/attempt.json",
+    "attempt_sha256": "sha256:f3f384a1b344c2b5ff9956f640c0f7892fecdffa17a3ed9c988fb08aeee32a99",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-42-max_path_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:3f7e546a7758d52901f13bd6e84495dd81203b97fc9103dd43358422327e2069"
+  },
+  {
+    "ordinal": 43,
+    "case_id": "case-43-max_matches_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-43-max_matches_equal/attempt.json",
+    "attempt_sha256": "sha256:04693e28f59cd369fa9057448342328d90a380fc9fd3b24aeb3fc5e85f9f6a97",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-43-max_matches_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e3a424c37aa21659e2d2f64974025a52fa3b7d5bc6ca6a4330bdb356ea68bb80"
+  },
+  {
+    "ordinal": 44,
+    "case_id": "case-44-max_matches_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-44-max_matches_plus_one/attempt.json",
+    "attempt_sha256": "sha256:c4d98bc76019e24410d59262a3faf74694f00890498eb7df97231ed529031f78",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-44-max_matches_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:4e5a811e980350d5b9c1ca7b4f496d734de4f15214e2b15cc03c5144fbdb9dc0"
+  },
+  {
+    "ordinal": 45,
+    "case_id": "case-45-max_work_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-45-max_work_equal/attempt.json",
+    "attempt_sha256": "sha256:a6ddb2123c2ac2246ddee10833fd48305f230604e7ee096ae2cc1b0cfa2e3f6d",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-45-max_work_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:73ee8595965466a992c424b7816250f017af41df3b3c14d7c42fccdae526fea9"
+  },
+  {
+    "ordinal": 46,
+    "case_id": "case-46-max_work_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-46-max_work_plus_one/attempt.json",
+    "attempt_sha256": "sha256:6ada7c4cad23f03d578e2ae1da412768137950db46a6108775a1e0e43e6ff237",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-46-max_work_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:5d96953d40fcdea9639ce4686508445c11be213a3f050b58bb3cb913ee1ddac2"
+  },
+  {
+    "ordinal": 47,
+    "case_id": "case-47-max_output_equal",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-47-max_output_equal/attempt.json",
+    "attempt_sha256": "sha256:05b8cdb31c99caf97a6aee3c601ef90d01590c89bcff9cee69e2b5e050fde08a",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-47-max_output_equal.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:11108cfff87e575bd204345978b21fd689e5da50d18e56c7c99a1e4a2e822271"
+  },
+  {
+    "ordinal": 48,
+    "case_id": "case-48-max_output_plus_one",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-48-max_output_plus_one/attempt.json",
+    "attempt_sha256": "sha256:49e111b58ea10c700a8eb0e01755673e932531b4adb65cfc736f07ff12addd60",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-48-max_output_plus_one.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:2364bbfa0feb84fe714c051bbe3e776e8f53773537e51413e975139dee64ce37"
+  },
+  {
+    "ordinal": 49,
+    "case_id": "case-49-overflow_helper_case",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-49-overflow_helper_case/attempt.json",
+    "attempt_sha256": "sha256:8abcf5cbfa87ff7960e3f6da4dff75c8c1e815297d0e73f052c2dd3220de5151",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-49-overflow_helper_case.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e3f2d774570e540a76a5791ff9c2415aaab32ffb6236044cb3551bd77e4f019f"
+  },
+  {
+    "ordinal": 50,
+    "case_id": "case-50-complete_location_pins_order",
+    "attempt_path": "docs/pilot/adr0007/source-text-search-v4/cases/case-50-complete_location_pins_order/attempt.json",
+    "attempt_sha256": "sha256:d93e5f77feeaa030ac373eed34d28c7125cf1edd4cf772ea3d88f26d7ab97c31",
+    "validator_bundle_path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-50-complete_location_pins_order.validator-bundle.json",
+    "validator_bundle_sha256": "sha256:e4e8b5edefdd449bbb94cb69bd5e3ed98faefc6055c771bcb17b8db25a778138"
+  }
+]
