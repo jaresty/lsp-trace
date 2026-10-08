@@ -1,0 +1,1 @@
+{"canonicalJSON":"sort_keys compact newline terminated","objects":["AUTHORIZATION","ASSIGNMENTS","EVENT_LEDGER","PRODUCER_ATTEMPT","REVIEW_ATTEMPT","RESULT","REVIEW","ACCOUNTING","EXECUTION_MANIFEST","FINAL_AUDIT_CANDIDATE"],"schema":"lsp-trace.adr0007.location-v5-execution.schema-index.v1","singleAttemptKey":["caseID","role","attemptID"],"strictNoUnknown":true}
