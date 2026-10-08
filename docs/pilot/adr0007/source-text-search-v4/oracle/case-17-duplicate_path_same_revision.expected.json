@@ -1,0 +1,23 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
+  "attempt_id": "attempt-case-17-duplicate_path_same_revision",
+  "outcome": "FAILED",
+  "failure": {
+    "code": "ADMISSION_FAILED",
+    "detail": "a.txt"
+  },
+  "replay": {
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "terminal_digest": "sha256:e58cff12a682b55d9af6452963605fc9a80663f4d3ab1a7e77a4b6cfa4db24c0"
+  },
+  "accounting": {
+    "files": 2,
+    "source_bytes": 48,
+    "total_bytes": 48,
+    "matches": 0,
+    "work": 48,
+    "output_bytes": 0
+  }
+}

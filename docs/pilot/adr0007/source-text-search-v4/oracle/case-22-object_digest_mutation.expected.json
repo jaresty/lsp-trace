@@ -1,0 +1,23 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
+  "attempt_id": "attempt-case-22-object_digest_mutation",
+  "outcome": "FAILED",
+  "failure": {
+    "code": "ADMISSION_FAILED",
+    "detail": "object digest"
+  },
+  "replay": {
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "terminal_digest": "sha256:847a96f387d3784564e73bde30bf8c2becc6a5a1bd8e4a6a3ccbebc7861d4e28"
+  },
+  "accounting": {
+    "files": 1,
+    "source_bytes": 24,
+    "total_bytes": 24,
+    "matches": 0,
+    "work": 24,
+    "output_bytes": 0
+  }
+}

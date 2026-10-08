@@ -1,0 +1,23 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
+  "attempt_id": "attempt-case-06-empty_source_set",
+  "outcome": "FAILED",
+  "failure": {
+    "code": "INVALID_INPUT",
+    "detail": "empty source set"
+  },
+  "replay": {
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "terminal_digest": "sha256:8af5f50ea3760ad5f6671a3ec6d96b8561003d6ad434e35f155d3b7064d7fae4"
+  },
+  "accounting": {
+    "files": 0,
+    "source_bytes": 0,
+    "total_bytes": 0,
+    "matches": 0,
+    "work": 0,
+    "output_bytes": 0
+  }
+}

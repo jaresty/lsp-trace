@@ -1,0 +1,79 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
+  "attempt_id": "attempt-case-28-combining_literal",
+  "outcome": "COMPLETE",
+  "replay": {
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "terminal_digest": "sha256:1c3a65f3939b7248c1300f4975d3061b68b6843b5ec4c6979721d0ad87a1a56d"
+  },
+  "accounting": {
+    "files": 1,
+    "source_bytes": 13,
+    "total_bytes": 13,
+    "matches": 1,
+    "work": 14,
+    "output_bytes": 2389
+  },
+  "admission": {
+    "schema": "lsp-trace.adr0007.source-admission.private.v2",
+    "admissionDigest": "sha256:5f8419b713f34cbaf209c7acb66e43c69524badfdddef9b98cd70fb35fb5c40e",
+    "sources": [
+      {
+        "path": "a.txt",
+        "revision": "rev1",
+        "fileDigest": "sha256:f9469d75e0274fad9b03d99d8c49be9a22c1bdf37bea1677fb393926617c5ab6",
+        "objectDigest": "sha256:f9469d75e0274fad9b03d99d8c49be9a22c1bdf37bea1677fb393926617c5ab6"
+      }
+    ]
+  },
+  "matches": [
+    {
+      "path": "a.txt",
+      "revision": "rev1",
+      "byte_start": 7,
+      "byte_end": 13,
+      "line": 0,
+      "utf16_column": 6,
+      "text": "needle"
+    }
+  ],
+  "location_candidates": [
+    {
+      "pin": "design_commit",
+      "value": "c943a484060462121c6f0929d4182b053ff95ab5"
+    },
+    {
+      "pin": "design_root_sha256",
+      "value": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d"
+    },
+    {
+      "pin": "execution_commit",
+      "value": "f0f8b49aa368bea9b3e6d105eef5cb2614221067"
+    },
+    {
+      "pin": "seal_commit",
+      "value": "16f40dcb03a234b00db80059a7eef400495e9d97"
+    },
+    {
+      "pin": "final_seal_sha256",
+      "value": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6"
+    },
+    {
+      "pin": "source_admission_pin",
+      "value": {
+        "bytes": 3519,
+        "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
+        "path": "internal/sourceadmissionv2/admission.go",
+        "repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496",
+        "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da",
+        "symbols": [
+          "Admit",
+          "CanonicalPath",
+          "Digest"
+        ]
+      }
+    }
+  ]
+}
