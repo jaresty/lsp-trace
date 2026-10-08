@@ -950,8 +950,27 @@ func checkChildToken(execRoot, repoRoot, phase, caseID string) error {
 }
 
 type Boundary struct {
-	Schema, Variant                                    string
-	BaseOutputBytes, BaseWork, MaxOutputBytes, MaxWork uint64
+	Schema          string `json:"schema"`
+	Variant         string `json:"variant"`
+	BaseOutputBytes uint64 `json:"baseOutputBytes"`
+	BaseWork        uint64 `json:"baseWork"`
+	MaxOutputBytes  uint64 `json:"maxOutputBytes"`
+	MaxWork         uint64 `json:"maxWork"`
+}
+
+type BoundaryCustody struct {
+	EvaluatorSource     string `json:"evaluatorSource"`
+	LimitMaxWork        uint64 `json:"limitMaxWork"`
+	LimitMaxOutputBytes uint64 `json:"limitMaxOutputBytes"`
+}
+
+type BoundaryReplay struct {
+	Boundary       string          `json:"boundary"`
+	BoundaryDigest string          `json:"boundaryDigest"`
+	ActualDigest   string          `json:"actualDigest"`
+	ExpectedDigest string          `json:"expectedDigest"`
+	Outcome        string          `json:"outcome"`
+	Custody        BoundaryCustody `json:"custody"`
 }
 
 func runBoundaries(execRoot, frozenRoot, repoRoot string) error {
@@ -1001,7 +1020,7 @@ func runBoundaries(execRoot, frozenRoot, repoRoot string) error {
 		if !bytes.Equal(actual, exp) {
 			return fmt.Errorf("boundary mismatch %s", name)
 		}
-		payload := map[string]any{"boundary": name, "boundaryDigest": hash(canon(bo)), "actualDigest": hash(actual), "expectedDigest": hash(exp), "outcome": "MATCH", "custody": map[string]any{"evaluatorSource": "internal/adr0007locationv5", "limitMaxWork": bo.MaxWork, "limitMaxOutputBytes": bo.MaxOutputBytes}}
+		payload := BoundaryReplay{Boundary: name, BoundaryDigest: hash(canon(bo)), ActualDigest: hash(actual), ExpectedDigest: hash(exp), Outcome: "MATCH", Custody: BoundaryCustody{EvaluatorSource: "internal/adr0007locationv5", LimitMaxWork: bo.MaxWork, LimitMaxOutputBytes: bo.MaxOutputBytes}}
 		if err := writeJSONNew(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json"), payload); err != nil {
 			return err
 		}
@@ -1126,9 +1145,65 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 		}
 		bindings++
 	}
+	var ledger Ledger
+	if err := readStrict(filepath.Join(execRoot, "EVENT_LEDGER.json"), &ledger); err != nil {
+		return err
+	}
 	for _, name := range []string{"W", "W-1", "B", "B-1"} {
-		if _, err := os.Stat(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json")); err != nil {
+		bdir := filepath.Join(frozenRoot, "oracle-candidate", "boundaries", name)
+		var bo Boundary
+		if err := readStrict(filepath.Join(bdir, "BOUNDARY.json"), &bo); err != nil {
+			return err
+		}
+		raw, _, err := readFile(filepath.Join(bdir, "REQUEST.raw.json"))
+		if err != nil {
+			return err
+		}
+		bind, _, err := readFile(filepath.Join(bdir, "BINDING.json"))
+		if err != nil {
+			bind = []byte{}
+		}
+		limits := eval.PublishedLimits()
+		limits.MaxWork, limits.MaxOutputBytes = bo.MaxWork, bo.MaxOutputBytes
+		res, err := eval.Evaluate(raw, bind, eval.StaticControl{}, limits)
+		if err != nil {
+			return err
+		}
+		actual := canon(res)
+		expected, _, err := readFile(filepath.Join(bdir, "RESULT.json"))
+		if err != nil {
+			return err
+		}
+		path := filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json")
+		persisted, _, err := readFile(path)
+		if err != nil {
 			return fmt.Errorf("boundary missing %s", name)
+		}
+		var replay BoundaryReplay
+		if err := readStrict(path, &replay); err != nil {
+			return err
+		}
+		want := BoundaryReplay{Boundary: name, BoundaryDigest: hash(canon(bo)), ActualDigest: hash(actual), ExpectedDigest: hash(expected), Outcome: "MATCH", Custody: BoundaryCustody{EvaluatorSource: "internal/adr0007locationv5", LimitMaxWork: bo.MaxWork, LimitMaxOutputBytes: bo.MaxOutputBytes}}
+		if !bytes.Equal(actual, expected) || !bytes.Equal(persisted, canon(replay)) || !bytes.Equal(canon(replay), canon(want)) {
+			return fmt.Errorf("boundary persisted replay recompute %s", name)
+		}
+		ledgerMatch := false
+		wantPayload, err := canonicalRaw(canon(want))
+		if err != nil {
+			return err
+		}
+		for _, entry := range ledger.Entries {
+			entryPayload, normalizeErr := canonicalRaw(entry.Payload)
+			if normalizeErr != nil {
+				return normalizeErr
+			}
+			if entry.Event == "boundary_replay" && bytes.Equal(entryPayload, wantPayload) && entry.PayloadHash == hash(canon(wantPayload)) {
+				ledgerMatch = true
+				break
+			}
+		}
+		if !ledgerMatch {
+			return fmt.Errorf("boundary ledger correspondence %s", name)
 		}
 	}
 	var m Manifest

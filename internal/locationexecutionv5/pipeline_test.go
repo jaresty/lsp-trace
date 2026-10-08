@@ -174,12 +174,7 @@ func TestVerifyRejectsPersistedResultMutationDespiteProducerAttemptDigest(t *tes
 	for _, c := range cases {
 		writeVerifiedAttemptFixture(t, execRoot, frozenRoot, repoRoot, c)
 	}
-	for _, name := range []string{"W", "W-1", "B", "B-1"} {
-		if err := writeJSON(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json"), map[string]any{"boundary": name}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := AppendLedger(execRoot, "fixture", map[string]any{"cases": len(cases)}); err != nil {
+	if err := runBoundaries(execRoot, frozenRoot, repoRoot); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SUCCESSOR_REPLAY_COMPLETE", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 26, ReviewerAttempts: 26, ByteEquality: 26, DerivationBindings: 26, BoundaryReplays: 4, LeafRecount: 56, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "GATED_REAL"}); err != nil {
@@ -187,6 +182,25 @@ func TestVerifyRejectsPersistedResultMutationDespiteProducerAttemptDigest(t *tes
 	}
 	if err := Verify(execRoot, frozenRoot, repoRoot); err != nil {
 		t.Fatalf("valid fixture rejected: %v", err)
+	}
+	boundaryPath := filepath.Join(execRoot, "boundaries", "W", "BOUNDARY_REPLAY.json")
+	boundaryOriginal, err := os.ReadFile(boundaryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var boundary BoundaryReplay
+	if err := readStrict(boundaryPath, &boundary); err != nil {
+		t.Fatal(err)
+	}
+	boundary.ActualDigest = hash([]byte("mutated persisted boundary"))
+	if err := os.WriteFile(boundaryPath, canon(boundary), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Verify(execRoot, frozenRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "boundary persisted replay recompute W") {
+		t.Fatalf("expected persisted boundary rejection, got %v", err)
+	}
+	if err := os.WriteFile(boundaryPath, boundaryOriginal, 0644); err != nil {
+		t.Fatal(err)
 	}
 	target := cases[0].CaseID
 	resultPath := filepath.Join(execRoot, "attempts", target, "RESULT.json")
