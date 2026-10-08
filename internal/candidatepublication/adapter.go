@@ -30,13 +30,14 @@ const (
 
 type Options struct{ MaxBytes int64 }
 
-type Adapter struct {
-	root      *publication.Root
-	publisher *publication.Publisher
-	maxBytes  int64
-}
+type compareAndReplaceBoundFileFunc func(context.Context, *publication.Root, string, publication.BoundFilePredecessor, []byte, func([]byte) error) (*publication.CompareAndReplaceReceipt, error)
 
-var compareAndReplaceBoundFile = publication.CompareAndReplaceBoundFile
+type Adapter struct {
+	root                       *publication.Root
+	publisher                  *publication.Publisher
+	maxBytes                   int64
+	compareAndReplaceBoundFile compareAndReplaceBoundFileFunc
+}
 
 type PublishRequest struct {
 	CandidateBytes        []byte
@@ -156,7 +157,7 @@ func NewRepositoryPrivateAdapter(root *publication.Root, opts Options) (*Adapter
 	if err := root.ValidatePrivate(); err != nil {
 		return nil, err
 	}
-	return &Adapter{root: root, publisher: publication.NewPublisher(), maxBytes: opts.MaxBytes}, nil
+	return &Adapter{root: root, publisher: publication.NewPublisher(), maxBytes: opts.MaxBytes, compareAndReplaceBoundFile: publication.CompareAndReplaceBoundFile}, nil
 }
 
 func DigestBytes(raw []byte) []byte { sum := sha256.Sum256(raw); return sum[:] }
@@ -244,7 +245,7 @@ func (a *Adapter) AdvanceCandidateGeneration(ctx context.Context, req AdvanceReq
 	if err := ctx.Err(); err != nil {
 		return PublishedGeneration{}, err
 	}
-	if a == nil || a.root == nil || req.Generation == "" || req.VerificationSelector == "" {
+	if a == nil || a.root == nil || a.compareAndReplaceBoundFile == nil || req.Generation == "" || req.VerificationSelector == "" {
 		return PublishedGeneration{}, errors.New("candidatepublication: invalid advance request")
 	}
 	candidate, receipt, manifest, manifestID, err := a.verifyGenerationAndReceipt(req.Generation, req.VerificationSelector, req.ManifestSelector, req.ManifestDigest, req.ManifestByteLength)
@@ -264,7 +265,7 @@ func (a *Adapter) AdvanceCandidateGeneration(ctx context.Context, req AdvanceReq
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
-	boundReceipt, err := compareAndReplaceBoundFile(ctx, a.root, currentSelector, pred, selectorBytes, func(final []byte) error {
+	boundReceipt, err := a.compareAndReplaceBoundFile(ctx, a.root, currentSelector, pred, selectorBytes, func(final []byte) error {
 		var c CurrentGeneration
 		if err := decodeStrict(final, &c); err != nil {
 			return err

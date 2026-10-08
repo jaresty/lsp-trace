@@ -3,12 +3,68 @@ package candidatepublication
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"lsp-trace/internal/censuscontinuation"
+	"lsp-trace/internal/programc"
+	"lsp-trace/internal/programctestfixture"
+	"lsp-trace/internal/publication"
 )
+
+const (
+	testCandidateMemberA   = "3cdff2e81db031666b6d6d4d13711ddc2749722ac804ef79b103463ebfdda93c"
+	testCandidateMemberB   = "4a4c524d563487befdff3720d59fb28740155453ebe6625b782f7612ef9e445f"
+	testCandidateSingleton = "020b42e6f4356621d0dbfd50da9ee760ede90980ce036960fd05dafa7113c80b"
+)
+
+func testBuiltCandidateBytes(t testing.TB, seed uint64, members []string, representative string, v2 bool) (censuscontinuation.CandidateGroupArtifact, []byte) {
+	t.Helper()
+	outcome, failure := programc.Compute(programctestfixture.ValidV5(t), seed)
+	if failure != nil {
+		t.Fatal(failure)
+	}
+	boundary, err := programc.ComputeBoundary(outcome, programc.BoundaryRequest{PageRankTopK: 2, HubTopK: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := censuscontinuation.FrozenCandidateGroupProfile()
+	if v2 {
+		profile = censuscontinuation.CandidateGroupPrivateV2Profile()
+	}
+	artifact, err := censuscontinuation.BuildCandidateGroup(censuscontinuation.CandidateGroupInput{Outcome: outcome, Boundary: boundary, CommunityMembers: members, RepresentativeID: representative, Bounds: profile.Bounds, ResourceProfile: profile, Interpretation: censuscontinuation.HostInterpretation{Status: censuscontinuation.InterpretationUnresolved, HostID: "caller-host", ModelID: "caller-model", ContextID: "caller-context", Attempts: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := artifact.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return artifact, raw
+}
+
+func testDistinctPublishInput(t testing.TB, predecessor string, variant string) PublishRequest {
+	t.Helper()
+	var artifact censuscontinuation.CandidateGroupArtifact
+	var raw []byte
+	switch variant {
+	case "pair":
+		artifact, raw = testBuiltCandidateBytes(t, 19, []string{testCandidateMemberA, testCandidateMemberB}, testCandidateMemberA, false)
+	case "singleton":
+		artifact, raw = testBuiltCandidateBytes(t, 19, []string{testCandidateSingleton}, testCandidateSingleton, false)
+	case "pair-v2":
+		artifact, raw = testBuiltCandidateBytes(t, 19, []string{testCandidateMemberA, testCandidateMemberB}, testCandidateMemberA, true)
+	default:
+		t.Fatalf("unknown candidate variant %q", variant)
+	}
+	req := testPublishInput(artifact, raw)
+	req.PredecessorSelector = predecessor
+	return req
+}
 
 func TestPrivateAdapterOwnerAdvanceIsRepeatableAndPredecessorCAS(t *testing.T) {
 	root, _ := testPrivateRoot(t)
@@ -16,8 +72,7 @@ func TestPrivateAdapterOwnerAdvanceIsRepeatableAndPredecessorCAS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, raw := testCandidateBytes(t)
-	initial := testPublishInput(artifact, raw)
+	initial := testDistinctPublishInput(t, "g-0000000000000000000000000000000000000000000000000000000000000000.selector.json", "pair")
 	first, err := adapter.PublishCandidateGeneration(context.Background(), initial)
 	if err != nil {
 		t.Fatal(err)
@@ -26,10 +81,21 @@ func TestPrivateAdapterOwnerAdvanceIsRepeatableAndPredecessorCAS(t *testing.T) {
 	if err != nil || !advancedA.Committed {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_FIRST_ADVANCE_COMMITS: advanced=%+v err=%v", advancedA, err)
 	}
-	secondInput := initial
-	secondInput.PredecessorSelector = advancedA.Selector
-	if second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_DIFFERENT_PREDECESSOR_ALIAS_COLLIDES: second=%+v", second)
+	currentA, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInput := testDistinctPublishInput(t, advancedA.Selector, "singleton")
+	second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector}); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REJECTS_SELECTOR_ONLY_PREDECESSOR_TOKEN")
+	}
+	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
+	if err != nil || !advancedB.Committed {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ACCEPTS_EXACT_CALLER_HELD_PREDECESSOR_TOKEN: advanced=%+v err=%v current=%+v", advancedB, err, currentA)
 	}
 	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: first.Generation, VerificationSelector: first.VerificationSelector, PredecessorSelector: initial.PredecessorSelector}); err == nil {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_STALE_PREDECESSOR_LOSES")
@@ -161,8 +227,7 @@ func TestPrivateAdapterAdvanceRequiresCallerHeldExactPredecessorToken(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, raw := testCandidateBytes(t)
-	initial := testPublishInput(artifact, raw)
+	initial := testDistinctPublishInput(t, "g-0000000000000000000000000000000000000000000000000000000000000000.selector.json", "pair")
 	first, err := adapter.PublishCandidateGeneration(context.Background(), initial)
 	if err != nil {
 		t.Fatal(err)
@@ -175,10 +240,17 @@ func TestPrivateAdapterAdvanceRequiresCallerHeldExactPredecessorToken(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondInput := initial
-	secondInput.PredecessorSelector = currentA.Selector
-	if second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_CURRENT_PREDECESSOR_ALIAS_COLLIDES: second=%+v", second)
+	secondInput := testDistinctPublishInput(t, currentA.Selector, "singleton")
+	second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector}); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REJECTS_SELECTOR_ONLY_PREDECESSOR_TOKEN")
+	}
+	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.SelectorDigest, PredecessorByteLength: currentA.SelectorByteLength})
+	if err != nil || !advancedB.Committed {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ACCEPTS_EXACT_CALLER_HELD_PREDECESSOR_TOKEN: advanced=%+v err=%v current=%+v", advancedB, err, currentA)
 	}
 }
 
@@ -188,8 +260,7 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, raw := testCandidateBytes(t)
-	initial := testPublishInput(artifact, raw)
+	initial := testDistinctPublishInput(t, "g-0000000000000000000000000000000000000000000000000000000000000000.selector.json", "pair")
 	first, err := adapter.PublishCandidateGeneration(context.Background(), initial)
 	if err != nil {
 		t.Fatal(err)
@@ -201,10 +272,42 @@ func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner
 	if err != nil {
 		t.Fatal(err)
 	}
-	leftInput := testPublishInput(artifact, raw)
-	leftInput.PredecessorSelector = pred.Selector
-	if left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_SAME_CANDIDATE_EXISTING_PREDECESSOR_ALIAS_COLLIDES: left=%+v", left)
+	leftInput := testDistinctPublishInput(t, pred.Selector, "singleton")
+	left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightInput := testDistinctPublishInput(t, pred.Selector, "pair-v2")
+	right, err := adapter.PublishCandidateGeneration(context.Background(), rightInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requests := []AdvanceRequest{
+		{Generation: left.Generation, VerificationSelector: left.VerificationSelector, ManifestSelector: left.ManifestSelector, ManifestDigest: left.ManifestDigest, ManifestByteLength: left.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
+		{Generation: right.Generation, VerificationSelector: right.VerificationSelector, ManifestSelector: right.ManifestSelector, ManifestDigest: right.ManifestDigest, ManifestByteLength: right.ManifestByteLength, PredecessorSelector: pred.Selector, PredecessorDigest: pred.SelectorDigest, PredecessorByteLength: pred.SelectorByteLength},
+	}
+	success := 0
+	var winner PublishedGeneration
+	for _, req := range requests {
+		advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), req)
+		if err == nil {
+			success++
+			winner = advanced
+			continue
+		}
+		if !errors.Is(err, publication.ErrStalePredecessor) {
+			t.Fatalf("ASSERT_PRIVATE_ADAPTER_EXISTING_PREDECESSOR_LOSER_IS_STALE: err=%v", err)
+		}
+	}
+	if success != 1 {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_EXISTING_PREDECESSOR_EXACTLY_ONE_SUCCESSOR_WINS: success=%d pred=%+v", success, pred)
+	}
+	current, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.Generation != winner.Generation {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_CURRENT_MATCHES_WINNER: current=%+v winner=%+v", current, winner)
 	}
 }
 

@@ -51,10 +51,9 @@ func TestADR0007AdvanceReturnsCommittedResultOnPostcommitCASError(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	original := compareAndReplaceBoundFile
-	defer func() { compareAndReplaceBoundFile = original }()
+	original := adapter.compareAndReplaceBoundFile
 	postcommitErr := errors.New("synthetic committed postrename verification failure")
-	compareAndReplaceBoundFile = func(ctx context.Context, root *publication.Root, selector string, predecessor publication.BoundFilePredecessor, raw []byte, verify func([]byte) error) (*publication.CompareAndReplaceReceipt, error) {
+	adapter.compareAndReplaceBoundFile = func(ctx context.Context, root *publication.Root, selector string, predecessor publication.BoundFilePredecessor, raw []byte, verify func([]byte) error) (*publication.CompareAndReplaceReceipt, error) {
 		receipt, err := original(ctx, root, selector, predecessor, raw, verify)
 		if err != nil {
 			return receipt, err
