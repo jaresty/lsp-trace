@@ -86,6 +86,18 @@ var adr0004HiddenLegacy = []string{
 	"lsp_trace_v3_incoming", "lsp_trace_v3_slice",
 }
 
+func TestAdvertisedToolInputSchemasHaveObjectRoots(t *testing.T) {
+	for _, profile := range []ToolProfile{ToolProfileFull, ToolProfileCompact, ToolProfileAdvanced} {
+		t.Run(string(profile), func(t *testing.T) {
+			for _, tool := range NewRegistryWithProfile(false, profile).Advertised() {
+				if got := tool.InputSchema["type"]; got != "object" {
+					t.Errorf("ASSERT_MCP_ADAPTER_OBJECT_INPUT_SCHEMA_ROOT tool=%s type=%v", tool.Name, got)
+				}
+			}
+		})
+	}
+}
+
 func TestADR0004RegressionGuardCanonicalExecuteKeepsHistorical33AndAppends34(t *testing.T) {
 	r := NewRegistry(false)
 	if len(adr0004OperationNumbers) != 41 {

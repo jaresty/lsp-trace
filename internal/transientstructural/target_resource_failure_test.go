@@ -160,6 +160,19 @@ func (w *targetWire) snapshot() (methods []string, notices, closeCount, teardown
 	return append([]string(nil), w.methods...), w.notices, w.closed, w.teardowns, w.responseAttempted, w.responseWritten
 }
 
+func waitTargetWireSnapshot(t *testing.T, wire *targetWire, ready func(notices, closes, teardowns int, responseAttempted, responseWritten bool) bool) (notices, closes, teardowns int, responseAttempted, responseWritten bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		_, notices, closes, teardowns, responseAttempted, responseWritten = wire.snapshot()
+		if ready(notices, closes, teardowns, responseAttempted, responseWritten) {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	return
+}
+
 func targetDocumentSymbols(uri string) json.RawMessage {
 	result, _ := json.Marshal([]any{map[string]any{
 		"name": "F", "kind": 12, "range": targetRange(1, 0, 12), "selectionRange": targetRange(1, 5, 6),
@@ -316,7 +329,9 @@ func TestTargetResourceFailureMessageBudget(t *testing.T) {
 	_, failure := Execute(ctx, manager, targetResourceRequest(started.Generation, uri, 1, 8192))
 	assertPoisonedResourceWireBeforeClassification(t, ctx, manager, started, child)
 	assertTargetFailure(t, failure, TargetActionFailDocument)
-	_, notices, _, _, responseAttempted, responseWritten := child.snapshot()
+	notices, _, _, responseAttempted, responseWritten := waitTargetWireSnapshot(t, child, func(notices, _, _ int, responseAttempted, _ bool) bool {
+		return notices == 1 && responseAttempted
+	})
 	if notices != 1 || !responseAttempted || responseWritten {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_MESSAGE_WIRE_SHAPE: notices=%d responseAttempted=%t responseWritten=%t", notices, responseAttempted, responseWritten)
 	}
@@ -481,7 +496,9 @@ func TestTargetResourceFailureGenericMalformedResponseDoesNotPoison(t *testing.T
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_GENERIC_MALFORMED_NONPOISONING: metadata=%s", metadataFailure)
 	}
 	child := starter.child(0)
-	_, _, closes, teardowns, _, responseWritten := child.snapshot()
+	_, closes, teardowns, _, responseWritten := waitTargetWireSnapshot(t, child, func(_ int, closes, teardowns int, _ bool, responseWritten bool) bool {
+		return responseWritten || closes != 0 || teardowns != 0
+	})
 	if closes != 0 || teardowns != 0 || !responseWritten {
 		t.Fatalf("ASSERT_TARGET_RESOURCE_FAILURE_GENERIC_MALFORMED_WIRE_CONTROL: close=%d teardown=%d written=%t", closes, teardowns, responseWritten)
 	}
