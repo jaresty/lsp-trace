@@ -1,0 +1,1 @@
+post-repair: verifier treats FREEZE.json as zero bytes per frozen manifest self-reference; no attempts/results produced before this repair.
