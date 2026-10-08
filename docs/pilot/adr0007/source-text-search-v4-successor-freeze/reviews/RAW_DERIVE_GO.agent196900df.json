@@ -1,0 +1,12 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor-review-evidence.private.v1",
+  "kind": "raw_derive_contract_review",
+  "exact_verdict": "RAW_DERIVE_GO",
+  "reviewer_agent": "agent196900df",
+  "contract_commit": "471346f1",
+  "scope": {
+    "subject": "contract derivation review evidence only",
+    "classification": "RAW_DERIVE_GO; not SOURCE_TEXT_SEARCH_V4_ORACLE_INDEPENDENCE_GO; not final freeze authorization",
+    "limitations": "Used only as additive contract-derivation provenance if referenced by successor verifier/envelope."
+  }
+}

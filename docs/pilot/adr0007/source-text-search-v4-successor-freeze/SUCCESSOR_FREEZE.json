@@ -1,0 +1,25 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor-freeze-envelope.private.v1",
+  "status": "SOURCE_TEXT_SEARCH_V4_SUCCESSOR_FREEZE_CANDIDATE",
+  "stage": "successor_freeze_candidate",
+  "successor_root_sha256": "sha256:3dca46f4845400371519f19a7caba600ea11f09151174fcace76f7cdd40ab403",
+  "successor_manifest": "docs/pilot/adr0007/source-text-search-v4-successor-freeze/SUCCESSOR_MANIFEST.json",
+  "successor_manifest_sha256": "sha256:12034f5410d4c47627b994cec4836b241f534a62fd30831455526f2b895678ab",
+  "successor_census": "docs/pilot/adr0007/source-text-search-v4-successor-freeze/SUCCESSOR_TOOLING_CENSUS.json",
+  "successor_census_sha256": "sha256:0125ed45b6916f73a2763ea43bbcdf8cfa8647e9b5a7967aea24d24aad63c96e",
+  "predecessor_freeze_root_sha256": "sha256:01df412bc5cce1e0adb824560fd7e5d2ff7f6c2621c2176062b4a170d763d367",
+  "predecessor_freeze_json_sha256": "sha256:197b814ab6796ed35c9f59bfc70e6105ba2048db4556ae4ab6105151fe45bf2e",
+  "oracle_independence_exact_verdict": "SOURCE_TEXT_SEARCH_V4_ORACLE_INDEPENDENCE_GO",
+  "oracle_independence_artifact": "docs/pilot/adr0007/source-text-search-v4-successor-freeze/reviews/SOURCE_TEXT_SEARCH_V4_ORACLE_INDEPENDENCE_GO.agent21eab7ae.json",
+  "oracle_independence_artifact_sha256": "sha256:4bed742af797d85f65239544b617f8a1a06b82a8742e667c52e2c1d13f2dbea0",
+  "raw_derive_exact_verdict": "RAW_DERIVE_GO",
+  "raw_derive_artifact": "docs/pilot/adr0007/source-text-search-v4-successor-freeze/reviews/RAW_DERIVE_GO.agent196900df.json",
+  "raw_derive_artifact_sha256": "sha256:3eb0ebafb8d43180d04e496432a96aac2d1150dfcd648887ac47e05641f8d783",
+  "authority": {
+    "authority_level": 0,
+    "accepted": false,
+    "design_go_self_issued": false,
+    "qualification_executed": false,
+    "final_revise_verdict_commit": "b9b4900e"
+  }
+}
