@@ -18,21 +18,18 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func TestADR0007RenameBoundFileSiblingDirectorySyncFailureIsPostRenameCommitted(t *testing.T) {
+func TestADR0007CompareAndReplaceBoundFileDirectorySyncFailureIsPostRenameCommitted(t *testing.T) {
 	resetBoundFileHooks(t)
 	_, root := boundRoot(t)
 	raw := []byte(`{"generation":"g-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}` + "\n")
-	if _, err := PublishBoundFile(root, "current.json.tmp", raw, func([]byte) error { return nil }); err != nil {
-		t.Fatal(err)
-	}
 	testHookBoundFileDirectorySync = func() error { return errors.New("synthetic directory sync failure") }
-	err := renameBoundFileSibling(root, "current.json.tmp", "current.json")
+	receipt, err := CompareAndReplaceBoundFile(context.Background(), root, "current.json", BoundFilePredecessor{Absent: true}, raw, func([]byte) error { return nil })
 	got, readErr := root.ReadSelector("current.json", int64(len(raw))+32)
 	if readErr != nil || !bytes.Equal(got, raw) {
-		t.Fatalf("ASSERT_ADR0007_RENAME_SYNC_FIXTURE_FINAL_VISIBLE_BEFORE_ERROR: got=%q readErr=%v err=%v", got, readErr, err)
+		t.Fatalf("ASSERT_ADR0007_CAS_DIRECTORY_SYNC_FIXTURE_FINAL_VISIBLE_BEFORE_ERROR: got=%q readErr=%v receipt=%+v err=%v", got, readErr, receipt, err)
 	}
-	if err != nil {
-		t.Fatalf("ASSERT_ADR0007_RENAME_SYNC_POSTRENAME_NEEDS_CLOSED_COMMITTED_OUTCOME: err=%v", err)
+	if receipt == nil || !receipt.Committed || receipt.DirectorySyncStatus != DirectorySyncFailed {
+		t.Fatalf("ASSERT_ADR0007_CAS_DIRECTORY_SYNC_POSTRENAME_EXPOSES_COMMITTED_FAMILY_RECEIPT: receipt=%+v err=%v", receipt, err)
 	}
 }
 
@@ -127,6 +124,13 @@ func TestADR0007StableCASLockRetainsInodeAndRejectsPathSubstitutionWhileHeld(t *
 	if err == nil {
 		unlock()
 		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_PATH_SUBSTITUTION_WHILE_HELD_FAILS_CLOSED")
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_PATH_SUBSTITUTION_TIMEOUT_IS_NOT_FAIL_CLOSED_CLASSIFICATION: err=%v", err)
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "substitut") && !strings.Contains(msg, "identity") && !strings.Contains(msg, "unsafe") {
+		t.Fatalf("ASSERT_ADR0007_CAS_LOCK_PATH_SUBSTITUTION_EXPLICIT_FAIL_CLOSED_CLASSIFICATION: err=%v", err)
 	}
 }
 

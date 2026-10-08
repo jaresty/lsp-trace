@@ -34,7 +34,7 @@ func TestADR0007PublishCandidateGenerationExactAliasCollisionRequiresExactBytes(
 	}
 }
 
-func TestADR0007CandidateReceiptSeparatesFrozenDesignLineageFromPublicationPredecessorAndCeilings(t *testing.T) {
+func TestADR0007CandidateReceiptSeparatesSourceLineageFromPublicationPredecessorAndCeilings(t *testing.T) {
 	root, _ := testPrivateRoot(t)
 	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
 	if err != nil {
@@ -57,7 +57,7 @@ func TestADR0007CandidateReceiptSeparatesFrozenDesignLineageFromPublicationPrede
 		t.Fatal(err)
 	}
 	if receipt.SourceRevision != input.SourceRevision || receipt.PredecessorSelector != input.PredecessorSelector || receipt.SourceRevision == receipt.PredecessorSelector {
-		t.Fatalf("ASSERT_ADR0007_CANDIDATE_FROZEN_DESIGN_AND_PUBLICATION_PREDECESSOR_SEPARATE: receipt=%+v input=%+v", receipt, input)
+		t.Fatalf("ASSERT_ADR0007_CANDIDATE_SOURCE_LINEAGE_AND_PUBLICATION_PREDECESSOR_SEPARATE: receipt=%+v input=%+v", receipt, input)
 	}
 	if receipt.Authority != 0 || receipt.Accepted || receipt.Completeness != CompletenessUnknown || receipt.FeatureIdentityStatus != FeatureIdentityUnresolved || receipt.Representative.Inferred {
 		t.Fatalf("ASSERT_ADR0007_CANDIDATE_AUTHORITY_CEILINGS_PRESERVED: receipt=%+v", receipt)
