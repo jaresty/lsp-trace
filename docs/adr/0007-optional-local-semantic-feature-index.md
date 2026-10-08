@@ -345,14 +345,26 @@ Before pilot execution:
 
 Until those prerequisite steps occur, there is no pilot execution authorization and no Yzma integration. This acceptance never grants shipment authorization, operation registration or renumbering, a public CLI or MCP surface, or integration into core binaries.
 
-## 2026-10-07 qualification consolidation
+## 2026-10-08 normative qualification consolidation
 
-The bounded successor records preserve three distinct results:
+The additive decision record [ADR0007 normative consolidation decision](../pilot/adr0007/decisions/2026-10-08-normative-consolidation.md) records the current qualified local chain:
 
-- Describe at main `40440412`, source `8ae7f308`: the amended semantic threshold is **22 of 24 cases and 96 attempts**. This post-run threshold does not erase the two non-passing cases, missing or failed attempts, replay disagreement, or prior blocked/rejected records.
-- Search v11 at main `4bc75e97`, source `9c44d561`, frozen as `sha256:b1207bdd52463dcc81fd0c47eccae0452630cf0e96d2c4d72991d99a4c4fe301`: bounded deterministic custody only.
-- Group v1 at main `7f96fae9`, frozen as `group-freeze-f66b64da93d0ec4797d821fb788ec7afabeaca96c68375d9689bc88ad0ce6771`: bounded deterministic custody only, with infrastructure repair `1` and semantic retry / repair / substitution `0 / 0 / 0`.
+```text
+Describe -> Search -> Group -> Location -> Source Text Search
+```
+
+The chain is normative for ADR0007 documentation status only. It does not mutate frozen historical records, campaign artifacts, schemas, code, ADR0011, Program C, or public surfaces. It authorizes no production use, release, push, public CLI/MCP/API exposure, semantic feature acceptance, or stakeholder feature identity.
+
+The bounded successor records preserve five distinct current results:
+
+- Describe successor at main `40440412`, source `8ae7f308`: the amended semantic threshold is **22 of 24 cases and 96 attempts**; `THRESHOLD_EVALUATION.json` is qualified `true` with policy `sha256:96fccb903445ddb6b55bf2090861e14e20e26f441348fa5726d1d97e62ac1e8d`. This post-run threshold does not erase `item-09` and `item-14`, missing or failed attempts, replay disagreement, or prior blocked/rejected records.
+- Search v11 at main `4bc75e97`, source `9c44d561`, frozen as `sha256:b1207bdd52463dcc81fd0c47eccae0452630cf0e96d2c4d72991d99a4c4fe301`: bounded deterministic custody only, sealed as `SEARCH_CUSTODY_GO`.
+- Group v1 at main `7f96fae9`, frozen as `group-freeze-f66b64da93d0ec4797d821fb788ec7afabeaca96c68375d9689bc88ad0ce6771`: bounded deterministic custody only, with infrastructure repair `1` and semantic retry / repair / substitution `0 / 0 / 0`. Group outputs are mechanical candidates, not features; representatives' usefulness remains unresolved.
+- Location Intersection v5 successor: freeze root `sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d`; successor head `f0f8b49aa368bea9b3e6d105eef5cb2614221067`; final seal recommendation `LOCATION_CUSTODY_GO`. Location relations are bounded to the frozen v5 cases, boundaries, source bindings, and exact successor custody artifacts.
+- Source Text Search v4 successor2 and correction-generation custody: design successor2 HEAD `34ed9915`, root `sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf`, correction envelope `sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952`, correction campaign `source-text-search-v4-correction-generation-91f756c7`, campaign seal manifest `sha256:e7cd95232eac90d331b1974fa2454b9b480405a8df62d0a7489d1e47532ded3c`, verification seal `sha256:58fb4d9c17470937b1528d2b0f0a152450334cc2b966650dc279eb1d1a58a767`, correction chain through `5e5e32fc`, and main merge `90ac78d7`. Source Text Search is exact literal mechanical search only; it does not establish fuzzy, regex, semantic, feature-level, production, or public search authority.
 
 A zero-effect infrastructure repair may support custody qualification only when every condition holds: it occurs before semantic dispatch and before any observable semantic output; it is infrastructure-only; the original failure is preserved; an independent adjudicator determines zero semantic effect; the failed attempt remains accounted; the assignment and freeze remain identical; deterministic verification is replayed; and regeneration is not used as semantic recovery. Such a repair cannot regenerate, normalize, replace, retry, or substitute semantic output.
 
-All generated and qualification products remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. Search and Group custody do not establish semantic usefulness, navigation usefulness, baseline superiority, feature identity, stakeholder acceptance, production authority, or public enablement. Frozen predecessor manifests remain immutable; later documentation records successor status additively outside each frozen root.
+Superseded, blocked, rejected, and `NOT_USEFUL` predecessors remain historical. Search `v1` through `v10`, Group's blocked `Group execution` / `public CLI/MCP` / `ADR0011` / `candidate-group` predecessors, candidate-group revision `448a1f4f`, Location v1-v4 and blocked v5 execution records, and Source Text Search blocked predecessors `source-text-search-v4-qualification-34ed9915`, `02ca9324`, and `91f756c7` are not rewritten or partially admitted by this consolidation.
+
+All generated and qualification products remain `authority=0`, `accepted=false`, `completeness=UNKNOWN`, and `featureIdentity=UNRESOLVED`. The consolidated chain does not establish semantic usefulness beyond each stated ceiling, navigation usefulness, baseline superiority, feature identity, stakeholder acceptance, production authority, public enablement, release authority, or push authority. Frozen predecessor manifests remain immutable; later documentation records successor status additively outside each frozen root.
