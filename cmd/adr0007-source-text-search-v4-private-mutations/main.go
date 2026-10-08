@@ -19,7 +19,7 @@ func main() {
 		{"accounting_coefficient", "internal/adr0007sourcetextsearchv4private/search.go", "{31, a.BOutputBytes}", "{29, a.BOutputBytes}", "case-29-lf_positions", "RUN"},
 		{"limit_ge", "internal/adr0007sourcetextsearchv4private/search.go", "acc.MMatches+1 > a.Request.Limits.MaxMatches", "acc.MMatches+1 >= a.Request.Limits.MaxMatches", "case-43-max_matches_equal", "RUN"},
 		{"admission_bypass", "internal/adr0007sourcetextsearchv4private/search.go", "if ar.Outcome != admit.Complete {", "if false && ar.Outcome != admit.Complete {", "case-21-file_digest_mutation", "RUN"},
-		{"range_member_reorder", "internal/adr0007sourcetextsearchv4private/search.go", "Members: matches}", "Members: nil}", "case-24-multi_path_byte_order", "RUN"},
+		{"range_member_reorder", "internal/adr0007sourcetextsearchv4private/search.go", "c.MemberMatchIDs = append(c.MemberMatchIDs, m.MatchID)", "c.MemberMatchIDs = append(c.MemberMatchIDs, \"mutated-\"+m.MatchID)", "case-24-multi_path_byte_order", "RUN"},
 		{"future_oracle_placeholder", "cmd/adr0007-source-text-search-v4-private-oracle/main.go", "placeholder", "mutated", "", "NOT_RUN_EXPECTED"},
 		{"future_verifier_placeholder", "cmd/adr0007-source-text-search-v4-private-verify/main.go", "placeholder", "mutated", "", "NOT_RUN_EXPECTED"},
 		{"freeze_envelope_dryrun", "docs/pilot/adr0007/source-text-search-v4/FREEZE_ENVELOPE.dryrun.json", "placeholder", "mutated", "", "NOT_RUN_EXPECTED"},

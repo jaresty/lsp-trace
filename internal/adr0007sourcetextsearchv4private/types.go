@@ -1,6 +1,11 @@
 package adr0007sourcetextsearchv4private
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"sort"
+)
 
 const (
 	AttemptSchema          = "lsp-trace.adr0007.source-text-search.attempt.private.v4"
@@ -10,14 +15,13 @@ const (
 	LocationPinSchema      = "lsp-trace.adr0007.source-text-search.location-pin.private.v4"
 	ExecutionControlSchema = "lsp-trace.adr0007.source-text-search.execution-control.private.v4"
 	SourceInputSchema      = "lsp-trace.adr0007.source-text-search.source-input.private.v4"
-	TerminalSchema         = "lsp-trace.adr0007.source-text-search.terminal-result.private.v4"
+	TerminalSchema         = "lsp-trace.adr0007.source-text-search.terminal.private.v4"
 	AccountingSchema       = "lsp-trace.adr0007.source-text-search.accounting.private.v4"
 	CustodySchema          = "lsp-trace.adr0007.source-text-search.custody.private.v4"
 	ReplaySchema           = "lsp-trace.adr0007.source-text-search.replay.private.v4"
 	AdmissionRecordSchema  = "lsp-trace.adr0007.source-text-search.admission-record.private.v4"
-	MatchSchema            = "lsp-trace.adr0007.source-text-search.match.private.v4"
-	RangeUnionSchema       = "lsp-trace.adr0007.source-text-search.range-union-candidate.private.v4"
 	FreezeBindingSchema    = "lsp-trace.adr0007.source-text-search.external-freeze-binding.private.v1"
+	zeroSHA                = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 type Attempt struct {
@@ -112,52 +116,76 @@ type TestControl struct {
 	SchemaVersion       string `json:"schema_version"`
 	InitialBOutputBytes uint64 `json:"initial_B_output_bytes"`
 }
-type SourceTuple struct {
-	Ordinal          uint64 `json:"ordinal"`
-	Path             string `json:"path"`
-	Revision         string `json:"revision"`
-	FileDigest       string `json:"file_digest"`
-	ObjectDigest     string `json:"object_digest"`
-	SourceByteLength uint64 `json:"source_byte_length"`
+
+type TerminalResult struct {
+	SchemaVersion       string          `json:"schema_version"`
+	Terminal            string          `json:"terminal"`
+	Attempt             TerminalAttempt `json:"attempt"`
+	Request             TerminalRequest `json:"request"`
+	Admission           Admission       `json:"admission"`
+	Sources             []Source        `json:"sources"`
+	Matches             []Match         `json:"matches"`
+	Positions           []Position      `json:"positions"`
+	RangeUnionCandidate *Candidate      `json:"range_union_candidate"`
+	Accounting          Accounting      `json:"accounting"`
+	Failure             *Failure        `json:"failure"`
+	Custody             Custody         `json:"custody"`
+	Replay              Replay          `json:"replay"`
+	Payload             Payload         `json:"payload"`
 }
-type AdmissionRecord struct {
-	SchemaVersion   string        `json:"schema_version"`
-	AdmissionSchema string        `json:"admission_schema"`
-	AdmissionDigest string        `json:"admission_digest"`
-	OrderedSources  []SourceTuple `json:"ordered_sources"`
+type TerminalAttempt struct {
+	AttemptID    string `json:"attempt_id"`
+	MalformedRaw bool   `json:"malformed_raw"`
 }
-type Pos struct {
-	Line      uint64 `json:"line"`
-	Character uint64 `json:"character"`
+type TerminalRequest struct {
+	Query string `json:"query"`
 }
-type ByteRange struct {
-	Start uint64 `json:"start"`
-	End   uint64 `json:"end"`
+type Admission struct {
+	Completed         bool     `json:"completed"`
+	AdmissionDigest   string   `json:"admission_digest"`
+	AdmittedSourceIDs []string `json:"admitted_source_ids"`
 }
-type LSPRange struct {
-	Start Pos `json:"start"`
-	End   Pos `json:"end"`
+type Source struct {
+	SourceID      string `json:"source_id"`
+	LogicalURI    string `json:"logical_uri"`
+	PathBytes     uint64 `json:"path_bytes"`
+	ByteLength    uint64 `json:"byte_length"`
+	ContentSHA256 string `json:"content_sha256"`
+	Ordinal       uint64 `json:"ordinal"`
 }
 type Match struct {
-	SchemaVersion string      `json:"schema_version"`
-	Source        SourceTuple `json:"source"`
-	ByteRange     ByteRange   `json:"byte_range"`
-	LSPUTF16Range LSPRange    `json:"lsp_utf16_range"`
-	Literal       string      `json:"literal"`
+	MatchID   string `json:"match_id"`
+	SourceID  string `json:"source_id"`
+	PathBytes uint64 `json:"path_bytes"`
+	StartByte uint64 `json:"start_byte"`
+	EndByte   uint64 `json:"end_byte"`
+	Ordinal   uint64 `json:"ordinal"`
+	Literal   string `json:"literal"`
 }
-type RangeUnionCandidate struct {
-	SchemaVersion    string  `json:"schema_version"`
-	Operation        string  `json:"operation"`
-	ExecutedLocation bool    `json:"executedLocation"`
-	CandidateOnly    bool    `json:"candidate_only"`
-	DesignCommit     string  `json:"design_commit"`
-	DesignRootSha256 string  `json:"design_root_sha256"`
-	ExecutionCommit  string  `json:"execution_commit"`
-	SealCommit       string  `json:"seal_commit"`
-	FinalSealSha256  string  `json:"final_seal_sha256"`
-	AdmissionDigest  string  `json:"admission_digest"`
-	Members          []Match `json:"members"`
-	CandidateDigest  string  `json:"candidate_digest"`
+type Position struct {
+	MatchID             string `json:"match_id"`
+	StartLine           uint64 `json:"start_line"`
+	StartCharacterUTF16 uint64 `json:"start_character_utf16"`
+	EndLine             uint64 `json:"end_line"`
+	EndCharacterUTF16   uint64 `json:"end_character_utf16"`
+}
+type Candidate struct {
+	Operation             string              `json:"operation"`
+	ExecutedLocation      bool                `json:"executedLocation"`
+	CandidateOnly         bool                `json:"candidate_only"`
+	AdmissionDigest       string              `json:"admission_digest"`
+	MemberMatchIDs        []string            `json:"member_match_ids"`
+	QualifiedLocationPins []QualifiedLocation `json:"qualified_location_pins"`
+	CandidateDigest       string              `json:"candidate_digest"`
+}
+type QualifiedLocation struct {
+	SourceID            string `json:"source_id"`
+	StartByte           uint64 `json:"start_byte"`
+	EndByte             uint64 `json:"end_byte"`
+	StartLine           uint64 `json:"start_line"`
+	StartCharacterUTF16 uint64 `json:"start_character_utf16"`
+	EndLine             uint64 `json:"end_line"`
+	EndCharacterUTF16   uint64 `json:"end_character_utf16"`
 }
 type Accounting struct {
 	SchemaVersion   string            `json:"schema_version"`
@@ -175,14 +203,15 @@ type Accounting struct {
 }
 type Failure struct {
 	Code   string         `json:"code"`
+	Stage  string         `json:"stage"`
 	Detail map[string]any `json:"detail"`
 }
 type Custody struct {
 	SchemaVersion        string `json:"schema_version"`
 	AttemptID            string `json:"attempt_id"`
 	TerminalResultSHA256 string `json:"terminal_result_sha256"`
-	TerminalSequence     uint64 `json:"terminal_sequence"`
-	TerminalCount        uint64 `json:"terminal_count"`
+	TerminalSequence0    uint64 `json:"terminal_sequence0"`
+	TerminalCount1       uint64 `json:"terminal_count1"`
 }
 type Replay struct {
 	SchemaVersion          string `json:"schema_version"`
@@ -193,22 +222,80 @@ type Replay struct {
 	FreezeBindingSHA256    string `json:"freeze_binding_sha256"`
 	PredecessorLockSHA256  string `json:"predecessor_lock_sha256"`
 }
-type TerminalResult struct {
-	SchemaVersion       string               `json:"schema_version"`
-	AttemptID           string               `json:"attempt_id"`
-	TerminalSequence    uint64               `json:"terminal_sequence"`
-	Outcome             string               `json:"outcome"`
-	Failure             *Failure             `json:"failure"`
-	Authority           uint64               `json:"authority"`
-	Accepted            bool                 `json:"accepted"`
-	Completeness        string               `json:"completeness"`
-	FeatureIdentity     string               `json:"featureIdentity"`
-	Admission           *AdmissionRecord     `json:"admission"`
-	Matches             []Match              `json:"matches"`
-	RangeUnionCandidate *RangeUnionCandidate `json:"range_union_candidate"`
-	Accounting          Accounting           `json:"accounting"`
-	Custody             Custody              `json:"custody"`
-	Replay              Replay               `json:"replay"`
+type Payload struct {
+	PayloadDigest       string `json:"payload_digest"`
+	FreezeBindingSHA256 string `json:"freeze_binding_sha256"`
 }
 
-func Canon(v any) []byte { b, _ := json.Marshal(v); return append(b, '\n') }
+type SourceTuple struct {
+	Ordinal          uint64 `json:"ordinal"`
+	Path             string `json:"path"`
+	Revision         string `json:"revision"`
+	FileDigest       string `json:"file_digest"`
+	ObjectDigest     string `json:"object_digest"`
+	SourceByteLength uint64 `json:"source_byte_length"`
+}
+type AdmissionRecord struct {
+	SchemaVersion   string        `json:"schema_version"`
+	AdmissionSchema string        `json:"admission_schema"`
+	AdmissionDigest string        `json:"admission_digest"`
+	OrderedSources  []SourceTuple `json:"ordered_sources"`
+}
+type Pos struct{ Line, Character uint64 }
+
+func Canon(v any) []byte {
+	b, _ := json.Marshal(v)
+	var x any
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	_ = dec.Decode(&x)
+	var buf bytes.Buffer
+	writeCanon(&buf, x)
+	buf.WriteByte('\n')
+	return buf.Bytes()
+}
+func writeCanon(buf *bytes.Buffer, v any) {
+	switch x := v.(type) {
+	case nil:
+		buf.WriteString("null")
+	case bool:
+		if x {
+			buf.WriteString("true")
+		} else {
+			buf.WriteString("false")
+		}
+	case string:
+		b, _ := json.Marshal(x)
+		buf.Write(b)
+	case json.Number:
+		buf.WriteString(x.String())
+	case float64:
+		buf.WriteString(fmt.Sprintf("%.0f", x))
+	case []any:
+		buf.WriteByte('[')
+		for i, e := range x {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			writeCanon(buf, e)
+		}
+		buf.WriteByte(']')
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		buf.WriteByte('{')
+		for i, k := range keys {
+			if i > 0 {
+				buf.WriteByte(',')
+			}
+			kb, _ := json.Marshal(k)
+			buf.Write(kb)
+			buf.WriteByte(':')
+			writeCanon(buf, x[k])
+		}
+		buf.WriteByte('}')
+	}
+}
