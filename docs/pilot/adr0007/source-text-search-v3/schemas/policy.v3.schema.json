@@ -1,0 +1,14 @@
+{
+  "$id": "https://example.invalid/lsp-trace/adr0007/source-text-search/v3/policy.v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.policy.private.v3"
+    }
+  },
+  "required": [
+    "schema_version"
+  ],
+  "type": "object"
+}
