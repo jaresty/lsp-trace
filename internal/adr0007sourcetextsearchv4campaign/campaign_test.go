@@ -22,9 +22,9 @@ func TestWriteNewRejectsOverwrite(t *testing.T) {
 	}
 }
 
-func TestAppendEventChains(t *testing.T) {
+func TestAppendEventChainsFromPredecessorTerminal(t *testing.T) {
 	d := t.TempDir()
-	if err := appendEvent(d, "A", "", "", "", "", 0); err != nil {
+	if err := appendEvent(d, "CORRECTION_AUTHORIZED", "", "", "", "", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := appendEvent(d, "B", "", "", "", "", 0); err != nil {
@@ -38,8 +38,8 @@ func TestAppendEventChains(t *testing.T) {
 	if got := len(lines); got != 2 {
 		t.Fatalf("events=%d", got)
 	}
-	if !strings.Contains(string(b), "prev_event_sha256") {
-		t.Fatal("missing chain")
+	if !strings.Contains(string(b), "prev_event_sha256") || !strings.Contains(string(lines[0]), PredecessorTerminalEventSHA) {
+		t.Fatal("missing predecessor-seeded chain")
 	}
 }
 
@@ -53,11 +53,14 @@ func TestCaseIDValidationRejectsMissing(t *testing.T) {
 }
 
 func TestConstantsPreserveCeilings(t *testing.T) {
-	if ExpectedHEAD != "02ca93249f9f77164785617442f622006e3185c2" {
+	if ExpectedHEAD != "91f756c72317f09ba8ffac7c0b8933d46494bf0c" {
 		t.Fatal("head drift")
 	}
-	if CampaignID != "source-text-search-v4-zero-effect-successor-02ca9324" || BlockedCampaignID != "source-text-search-v4-qualification-34ed9915" {
+	if CampaignID != "source-text-search-v4-correction-generation-91f756c7" || BlockedCampaignID != "source-text-search-v4-qualification-34ed9915" || ZeroEffectSuccessorCampaignID != "source-text-search-v4-zero-effect-successor-02ca9324" {
 		t.Fatal("campaign identity drift")
+	}
+	if AuthorizationVerdict != "SOURCE_TEXT_SEARCH_STAKEHOLDER_REPAIR_GO" || PredecessorTerminalEventSHA == "" || PredecessorLedgerSHA == "" {
+		t.Fatal("missing correction authorization")
 	}
 	if DesignRoot == "" || DesignManifest == "" || DesignCensus == "" || DesignEnvelope == "" {
 		t.Fatal("missing design identity")

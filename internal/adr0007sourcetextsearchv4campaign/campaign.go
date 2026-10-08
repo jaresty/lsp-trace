@@ -19,15 +19,19 @@ import (
 )
 
 const (
-	ExpectedHEAD         = "02ca93249f9f77164785617442f622006e3185c2"
-	CampaignID           = "source-text-search-v4-zero-effect-successor-02ca9324"
-	BlockedCampaignID    = "source-text-search-v4-qualification-34ed9915"
-	DesignRoot           = "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf"
-	DesignManifest       = "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9"
-	DesignCensus         = "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e"
-	DesignEnvelope       = "sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952"
-	DesignGoAgent        = "agentbfc329cd"
-	AuthorizationVerdict = "ZERO_EFFECT_SUCCESSOR_AUTHORIZATION"
+	ExpectedHEAD                  = "91f756c72317f09ba8ffac7c0b8933d46494bf0c"
+	CampaignID                    = "source-text-search-v4-correction-generation-91f756c7"
+	BlockedCampaignID             = "source-text-search-v4-qualification-34ed9915"
+	ZeroEffectSuccessorCampaignID = "source-text-search-v4-zero-effect-successor-02ca9324"
+	DesignRoot                    = "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf"
+	DesignManifest                = "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9"
+	DesignCensus                  = "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e"
+	DesignEnvelope                = "sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952"
+	DesignGoAgent                 = "agentb3dc4f98"
+	AuthorizationVerdict          = "SOURCE_TEXT_SEARCH_STAKEHOLDER_REPAIR_GO"
+	StakeholderCorrectionBinding  = "stakeholder correction authorized exact correction-generation model from verdict; no semantic code/policy/inputs change; production artifacts preserved by digest-reference"
+	PredecessorTerminalEventSHA   = "sha256:bea1b32"
+	PredecessorLedgerSHA          = "sha256:a4e654"
 )
 
 var ProtectedRoots = []string{
@@ -35,6 +39,7 @@ var ProtectedRoots = []string{
 	"docs/pilot/adr0007/source-text-search-v4-successor-freeze",
 	"docs/pilot/adr0007/source-text-search-v4-successor2-freeze",
 	"docs/pilot/adr0007/experiment/" + BlockedCampaignID,
+	"docs/pilot/adr0007/experiment/" + ZeroEffectSuccessorCampaignID,
 }
 
 type Options struct {
@@ -89,6 +94,17 @@ type Commitment struct {
 	AttemptSHA256 string `json:"attempt_sha256"`
 	BundlePath    string `json:"validator_bundle_path"`
 	BundleSHA256  string `json:"validator_bundle_sha256"`
+}
+
+type ProductionDigestRef struct {
+	Ordinal               int    `json:"ordinal"`
+	CaseID                string `json:"case_id"`
+	DerivedPath           string `json:"derived_contract_path"`
+	DerivedSHA256         string `json:"derived_contract_sha256"`
+	ReceiptPath           string `json:"receipt_path"`
+	ReceiptSHA256         string `json:"receipt_sha256"`
+	ValidatorBundlePath   string `json:"validator_bundle_path"`
+	ValidatorBundleSHA256 string `json:"validator_bundle_sha256"`
 }
 
 type Bundle struct {
@@ -162,21 +178,25 @@ func shaFile(path string) (string, int64, error) {
 	return sha(b), int64(len(b)), nil
 }
 func verifyExecutable(path string) (BinaryRec, error) {
-	info, err := os.Lstat(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return BinaryRec{}, err
+	}
+	info, err := os.Lstat(abs)
 	if err != nil {
 		return BinaryRec{}, err
 	}
 	if !info.Mode().IsRegular() {
-		return BinaryRec{}, fmt.Errorf("binary is not a regular file: %s", path)
+		return BinaryRec{}, fmt.Errorf("binary is not a regular file: %s", abs)
 	}
 	if info.Mode()&0111 == 0 {
-		return BinaryRec{}, fmt.Errorf("binary is not executable: %s", path)
+		return BinaryRec{}, fmt.Errorf("binary is not executable: %s", abs)
 	}
-	s, n, err := shaFile(path)
+	s, n, err := shaFile(abs)
 	if err != nil {
 		return BinaryRec{}, err
 	}
-	return BinaryRec{Path: filepath.ToSlash(path), Bytes: n, SHA256: s, Mode: info.Mode().String(), Regular: true, Executable: true}, nil
+	return BinaryRec{Path: filepath.ToSlash(abs), Bytes: n, SHA256: s, Mode: info.Mode().String(), Regular: true, Executable: true}, nil
 }
 func binaryIdentity(entries map[string]string) (BinaryIdentity, error) {
 	var out BinaryIdentity
@@ -356,7 +376,7 @@ func snapshot(o Options) ([]FileRec, error) {
 
 func appendEvent(root string, typ, caseID, lane, path, detail string, exit int) error {
 	ledger := filepath.Join(root, "EVENTS.ndjson")
-	prev := "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	prev := PredecessorTerminalEventSHA
 	seq := 1
 	if b, err := os.ReadFile(ledger); err == nil && len(b) > 0 {
 		lines := bytes.Split(bytes.TrimSpace(b), []byte("\n"))
@@ -394,6 +414,33 @@ func appendEvent(root string, typ, caseID, lane, path, detail string, exit int) 
 	return f.Close()
 }
 
+func productionDigestManifest(o Options, cs []Commitment) ([]ProductionDigestRef, error) {
+	out := make([]ProductionDigestRef, 0, len(cs))
+	for _, c := range cs {
+		base := filepath.Join("docs/pilot/adr0007/experiment", ZeroEffectSuccessorCampaignID, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "production")
+		derivedPath := filepath.Join(base, "derived.contract.json")
+		receiptPath := filepath.Join(base, "receipt.json")
+		bundlePath := filepath.Join(base, "validator.bundle.json")
+		ds, _, err := shaFile(filepath.Join(o.Root, derivedPath))
+		if err != nil {
+			return nil, err
+		}
+		rs, _, err := shaFile(filepath.Join(o.Root, receiptPath))
+		if err != nil {
+			return nil, err
+		}
+		bs, _, err := shaFile(filepath.Join(o.Root, bundlePath))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ProductionDigestRef{Ordinal: c.Ordinal, CaseID: c.CaseID, DerivedPath: filepath.ToSlash(derivedPath), DerivedSHA256: ds, ReceiptPath: filepath.ToSlash(receiptPath), ReceiptSHA256: rs, ValidatorBundlePath: filepath.ToSlash(bundlePath), ValidatorBundleSHA256: bs})
+	}
+	if len(out) != 50 {
+		return nil, fmt.Errorf("production digest manifest count %d", len(out))
+	}
+	return out, nil
+}
+
 func Prepare(o Options) error {
 	if err := mustRoot(o); err != nil {
 		return err
@@ -412,7 +459,11 @@ func Prepare(o Options) error {
 			return err
 		}
 	}
-	def := map[string]any{"schema": "lsp-trace.adr0007.source-text-search.campaign-definition.private.v1", "campaign_id": CampaignID, "head": ExpectedHEAD, "successor2_root": DesignRoot, "manifest": DesignManifest, "census": DesignCensus, "envelope": DesignEnvelope, "design_go_agent": DesignGoAgent, "authorization_verdict": AuthorizationVerdict, "authorization_agent": DesignGoAgent, "failure_custody_verdict": "SOURCE_TEXT_SEARCH_CAMPAIGN_ZERO_EFFECT_SUCCESSOR_GO", "blocked_predecessor_campaign_id": BlockedCampaignID, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED", "historical_expected_results": "frozen provenance only; never qualification oracle"}
+	prodRefs, err := productionDigestManifest(o, cs)
+	if err != nil {
+		return err
+	}
+	def := map[string]any{"schema": "lsp-trace.adr0007.source-text-search.campaign-definition.private.v1", "campaign_id": CampaignID, "head": ExpectedHEAD, "successor2_root": DesignRoot, "manifest": DesignManifest, "census": DesignCensus, "envelope": DesignEnvelope, "design_go_agent": DesignGoAgent, "authorization_verdict": AuthorizationVerdict, "authorization_agent": DesignGoAgent, "stakeholder_correction_binding": StakeholderCorrectionBinding, "predecessor_terminal_event_sha256": PredecessorTerminalEventSHA, "predecessor_ledger_sha256": PredecessorLedgerSHA, "failure_custody_verdict": "SOURCE_TEXT_SEARCH_CAMPAIGN_ZERO_EFFECT_SUCCESSOR_GO", "blocked_predecessor_campaign_id": BlockedCampaignID, "production_reference_campaign_id": ZeroEffectSuccessorCampaignID, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED", "historical_expected_results": "frozen provenance only; never qualification oracle", "production_dispatch_allowed": false}
 	if err := writeJSONNew(filepath.Join(cr, "CAMPAIGN_DEFINITION.json"), def); err != nil {
 		return err
 	}
@@ -422,13 +473,40 @@ func Prepare(o Options) error {
 	if err := writeJSONNew(filepath.Join(cr, "CASE_COMMITMENTS.json"), cs); err != nil {
 		return err
 	}
+	if err := writeJSONNew(filepath.Join(cr, "PRESERVED_PRODUCTION_DIGEST_MANIFEST.json"), map[string]any{"schema": "preserved-production-digest-manifest", "source_campaign_id": ZeroEffectSuccessorCampaignID, "count": len(prodRefs), "entries": prodRefs}); err != nil {
+		return err
+	}
 	if err := writeJSONNew(filepath.Join(cr, "TOOLING_MANIFEST.json"), map[string]any{"schema": "tooling-manifest", "created": now(), "note": "filled by predispatch binary identity checks"}); err != nil {
 		return err
 	}
 	if err := writeJSONNew(filepath.Join(cr, "PREPARE_FREEZE.json"), map[string]any{"sha256": DesignRoot, "case_count": len(cs)}); err != nil {
 		return err
 	}
-	return appendEvent(cr, "PREPARED", "", "", "", "prepared", 0)
+	return appendEvent(cr, "CORRECTION_AUTHORIZED", "", "", filepath.Join(cr, "AUTHORIZED_BINDINGS.json"), StakeholderCorrectionBinding, 0)
+}
+
+func verifyBinaryAfterCWDChange(path string, want BinaryRec) error {
+	tmp, err := os.MkdirTemp("", "adr0007-cwd-check-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmp)
+	old, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if err := os.Chdir(tmp); err != nil {
+		return err
+	}
+	defer os.Chdir(old)
+	got, err := verifyExecutable(path)
+	if err != nil {
+		return err
+	}
+	if got.Path != want.Path || got.SHA256 != want.SHA256 || got.Bytes != want.Bytes || !got.Executable || !got.Regular {
+		return fmt.Errorf("binary identity changed after cwd change: %s", path)
+	}
+	return nil
 }
 
 func Predispatch(o Options) error {
@@ -480,6 +558,21 @@ func Predispatch(o Options) error {
 			vs = rec.SHA256
 		}
 	}
+	for _, rec := range bins.Entries {
+		var p string
+		switch rec.Name {
+		case "production":
+			p = o.ProductionBin
+		case "oracle":
+			p = o.OracleBin
+		case "validator":
+			p = o.ValidatorBin
+		}
+		if err := verifyBinaryAfterCWDChange(p, rec); err != nil {
+			_ = block(cr, err)
+			return err
+		}
+	}
 	if ps == osx {
 		err := errors.New("production and oracle binary digests equal")
 		_ = block(cr, err)
@@ -490,7 +583,12 @@ func Predispatch(o Options) error {
 		return err
 	}
 	toolingHead, _ := git(o, "rev-parse", "HEAD")
-	rec := map[string]any{"schema": "predispatch", "protected_base_head": ExpectedHEAD, "tooling_head": toolingHead, "protected_snapshot": snap, "case_commitments": cs, "binary_directory_identity_path": filepath.Join(cr, "BINARY_DIRECTORY_IDENTITY.json"), "binary_directory_sha256": bins.DirectorySHA256, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
+	prodRefs, err := productionDigestManifest(o, cs)
+	if err != nil {
+		_ = block(cr, err)
+		return err
+	}
+	rec := map[string]any{"schema": "predispatch", "protected_base_head": ExpectedHEAD, "tooling_head": toolingHead, "protected_snapshot": snap, "case_commitments": cs, "preserved_production_digest_manifest": prodRefs, "preserved_production_digest_count": len(prodRefs), "correction_chain_production_dispatch_count": 0, "binary_directory_identity_path": filepath.Join(cr, "BINARY_DIRECTORY_IDENTITY.json"), "binary_directory_sha256": bins.DirectorySHA256, "production_bin_sha256": ps, "oracle_bin_sha256": osx, "validator_bin_sha256": vs}
 	if err := writeJSONNew(filepath.Join(cr, "PREDISPATCH.json"), rec); err != nil {
 		_ = block(cr, err)
 		return err
@@ -603,6 +701,9 @@ func Execute(o Options, lane string) error {
 	if lane != "production" && lane != "oracle" {
 		return errors.New("lane")
 	}
+	if lane == "production" {
+		return errors.New("production dispatch is forbidden for correction-generation campaign; use preserved production digest manifest")
+	}
 	if _, err := os.Stat(filepath.Join(campaignRoot(o), "PREDISPATCH.json")); err != nil {
 		return err
 	}
@@ -632,14 +733,22 @@ func Review(o Options) error {
 		return err
 	}
 	cr := campaignRoot(o)
+	prodRefs, err := productionDigestManifest(o, cs)
+	if err != nil {
+		return err
+	}
 	accepted := 0
 	rejected := 0
 	for _, c := range cs {
-		pd := filepath.Join(cr, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "production", "derived.contract.json")
+		pref := prodRefs[c.Ordinal-1]
+		pd := filepath.Join(o.Root, pref.DerivedPath)
 		od := filepath.Join(cr, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "oracle", "derived.contract.json")
 		pb, err := read(pd)
 		if err != nil {
 			return err
+		}
+		if sha(pb) != pref.DerivedSHA256 {
+			return fmt.Errorf("preserved production digest drift %s", c.CaseID)
 		}
 		ob, err := read(od)
 		if err != nil {
@@ -652,7 +761,7 @@ func Review(o Options) error {
 			rejected++
 		}
 		rdir := filepath.Join(cr, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "review")
-		req := map[string]any{"case_id": c.CaseID, "production_derived_sha256": sha(pb), "oracle_derived_sha256": sha(ob), "historical_expected_used": false}
+		req := map[string]any{"case_id": c.CaseID, "production_derived_sha256": sha(pb), "production_derived_path": pref.DerivedPath, "oracle_derived_sha256": sha(ob), "historical_expected_used": false, "production_dispatch_used": false}
 		if err := writeJSONNew(filepath.Join(rdir, "request.json"), req); err != nil {
 			return err
 		}
@@ -697,9 +806,7 @@ func AuditSealVerify(o Options, mode string) error {
 	ora := 0
 	jud := 0
 	for _, c := range cs {
-		if _, err := os.Stat(filepath.Join(cr, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "production", "receipt.json")); err == nil {
-			prod++
-		}
+		// Correction-generation uses preserved production digest references; production dispatch remains permanently zero.
 		if _, err := os.Stat(filepath.Join(cr, "cases", fmt.Sprintf("case-%02d", c.Ordinal), "oracle", "receipt.json")); err == nil {
 			ora++
 		}
@@ -707,13 +814,13 @@ func AuditSealVerify(o Options, mode string) error {
 			jud++
 		}
 	}
-	acct := map[string]any{"production_attempts": prod, "oracle_attempts": ora, "judgments": jud, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED"}
+	acct := map[string]any{"production_attempts": prod, "oracle_attempts": ora, "judgments": jud, "preserved_production_references": 50, "authority": 0, "accepted": false, "completeness": "UNKNOWN", "featureIdentity": "UNRESOLVED"}
 	if mode == "audit" {
 		return writeJSONNew(filepath.Join(cr, "FINAL_AUDIT.json"), map[string]any{"schema": "final-audit", "accounting": acct, "disposition": func() string {
-			if prod == 50 && ora == 50 && jud == 50 {
-				return "SOURCE_TEXT_SEARCH_QUALIFICATION_COMPLETE"
+			if prod == 0 && ora == 50 && jud == 50 {
+				return "SOURCE_TEXT_SEARCH_CORRECTION_GENERATION_COMPLETE"
 			}
-			return "SOURCE_TEXT_SEARCH_QUALIFICATION_BLOCKED"
+			return "SOURCE_TEXT_SEARCH_CORRECTION_GENERATION_BLOCKED"
 		}()})
 	}
 	if mode == "seal" {
