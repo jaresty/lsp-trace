@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:7d7d31d38dd749c74cf83c9d91376716db4d8b7a18f80de8fc69e860c760160a",
+  "case_id": "case-12-utf8_empty_file",
+  "derived_sha256": "sha256:69579ac2f83294bbe7f6ea050cb699a62175764cb88bab41c2c2af84da2bd690",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

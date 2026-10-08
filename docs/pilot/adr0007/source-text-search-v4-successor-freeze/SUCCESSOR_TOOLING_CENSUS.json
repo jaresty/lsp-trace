@@ -1,0 +1,19 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor-tooling-census.private.v1",
+  "tool": "cmd/adr0007-source-text-search-v4-successor-freeze",
+  "commands": [
+    "go run ./cmd/adr0007-source-text-search-v4-successor-freeze -mode write",
+    "go run ./cmd/adr0007-source-text-search-v4-successor-freeze -mode verify"
+  ],
+  "semantic_bindings": [
+    "old v4 docs/contracts/cases/oracle bytes",
+    "v4 production package",
+    "v4 oracle package",
+    "v4 contract validator package",
+    "pinned sourceadmissionv2 bytes"
+  ],
+  "mutations_authorized": [
+    "additive successor namespace files",
+    "additive successor verifier command"
+  ]
+}

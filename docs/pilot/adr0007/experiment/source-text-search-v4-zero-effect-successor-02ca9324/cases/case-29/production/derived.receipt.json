@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:fef0e3170fb48c3fdc1acf0a8f947004d336320acafe6fc49ae4f05bbf00262d",
+  "case_id": "case-29-lf_positions",
+  "derived_sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

@@ -1,0 +1,54 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/source-binding.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "admission_id": {
+      "pattern": "^admission-[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "admission_schema": {
+      "const": "lsp-trace.adr0007.source-admission.private.v2"
+    },
+    "file_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "gitBlobSha1": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "object_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "path": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string"
+    },
+    "repositoryCommit": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "revision": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.source-binding.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "path",
+    "repositoryCommit",
+    "revision",
+    "file_sha256",
+    "gitBlobSha1",
+    "object_id",
+    "admission_schema",
+    "admission_id"
+  ],
+  "type": "object"
+}

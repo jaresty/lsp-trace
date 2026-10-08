@@ -1,0 +1,8 @@
+{
+  "case_id": "case-41-max_path_equal",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:b5585763d456cf3c88c0199ee06b9f7503166605bc908cf0d598f3dfa8b088b0",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-41/production/derived.contract.json",
+  "production_derived_sha256": "sha256:b5585763d456cf3c88c0199ee06b9f7503166605bc908cf0d598f3dfa8b088b0",
+  "production_dispatch_used": false
+}

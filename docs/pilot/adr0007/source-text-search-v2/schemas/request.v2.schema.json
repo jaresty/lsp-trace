@@ -1,0 +1,59 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/source-text-search.request.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "cancel": {
+      "additionalProperties": false,
+      "properties": {
+        "poll_after": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "token": {
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "poll_after"
+      ],
+      "type": "object"
+    },
+    "deadline_unix_nano": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "limits": {
+      "$ref": "limits.v2.schema.json"
+    },
+    "policy": {
+      "$ref": "policy.v2.schema.json"
+    },
+    "query": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.request.private.v2"
+    },
+    "sources": {
+      "items": {
+        "$ref": "source-binding.v2.schema.json"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "query",
+    "sources",
+    "policy",
+    "limits",
+    "cancel",
+    "deadline_unix_nano"
+  ],
+  "type": "object"
+}

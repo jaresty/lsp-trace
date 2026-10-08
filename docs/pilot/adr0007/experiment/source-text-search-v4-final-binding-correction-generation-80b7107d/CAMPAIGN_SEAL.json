@@ -1,0 +1,13 @@
+{
+  "audit_sha256": "sha256:6f974de568a8d2f23f552ed186daca005f0b7fcde1b2136842bd9c0df6a21b53",
+  "authority": 0,
+  "custody": "PENDING_FINAL_EXTERNAL_REVIEW",
+  "file_count_preseal": 5,
+  "go": false,
+  "manifest_sha256": "sha256:54b2f5fdc2fa8036b023235af8d8bf5778fb4ba76deebddc22f883bf1f4e4f23",
+  "namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d",
+  "preseal_ledger_sha256": "sha256:29b4774afac59b05ec3f87aff4e27cdc2b5c1b27c72129843c3d5f5e4f02dde9",
+  "public": false,
+  "schema": "adr0007.final-binding-correction.seal.v1",
+  "sealed_at": "2026-10-08T13:20:00Z"
+}

@@ -1,0 +1,7 @@
+{
+  "assertions": [
+    "validated by evaluator semantics, not directory name"
+  ],
+  "case": "revision-absent-fail",
+  "expect": "FAIL"
+}

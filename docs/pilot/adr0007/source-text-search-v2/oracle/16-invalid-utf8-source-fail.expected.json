@@ -1,0 +1,7 @@
+{
+  "assertions": [
+    "validated by evaluator semantics, not directory name"
+  ],
+  "case": "invalid-utf8-source-fail",
+  "expect": "FAIL"
+}

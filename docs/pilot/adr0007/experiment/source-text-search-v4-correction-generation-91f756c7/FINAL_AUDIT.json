@@ -1,0 +1,14 @@
+{
+  "accounting": {
+    "accepted": false,
+    "authority": 0,
+    "completeness": "UNKNOWN",
+    "featureIdentity": "UNRESOLVED",
+    "judgments": 50,
+    "oracle_attempts": 50,
+    "preserved_production_references": 50,
+    "production_attempts": 0
+  },
+  "disposition": "SOURCE_TEXT_SEARCH_CORRECTION_GENERATION_COMPLETE",
+  "schema": "final-audit"
+}

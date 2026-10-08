@@ -1,0 +1,8 @@
+{
+  "case_id": "case-20-ordinal_extra",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-20/production/derived.contract.json",
+  "production_derived_sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+  "production_dispatch_used": false
+}

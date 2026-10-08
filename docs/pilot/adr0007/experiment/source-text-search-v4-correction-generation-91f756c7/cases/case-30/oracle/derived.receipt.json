@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:17fa838ab8660ca36190d066fb5246802d40fcb5c388a15b66fff58ddc6f9ce7",
+  "case_id": "case-30-crlf_positions",
+  "derived_sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

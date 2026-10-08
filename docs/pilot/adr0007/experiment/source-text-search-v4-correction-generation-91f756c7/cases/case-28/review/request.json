@@ -1,0 +1,8 @@
+{
+  "case_id": "case-28-combining_literal",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/derived.contract.json",
+  "production_derived_sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9",
+  "production_dispatch_used": false
+}

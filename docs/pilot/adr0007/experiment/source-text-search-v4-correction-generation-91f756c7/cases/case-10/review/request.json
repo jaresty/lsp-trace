@@ -1,0 +1,8 @@
+{
+  "case_id": "case-10-control_midscan_cancel",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-10/production/derived.contract.json",
+  "production_derived_sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+  "production_dispatch_used": false
+}

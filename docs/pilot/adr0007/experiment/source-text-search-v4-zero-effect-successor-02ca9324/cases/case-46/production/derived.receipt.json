@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:2ef73cf65480452cba6b4078fb185b6f8b9dadd2119fe44f9bfc21a87d79bb58",
+  "case_id": "case-46-max_work_plus_one",
+  "derived_sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:cd65cd1d38a5824afcf553932f0cc95911dc3c9be9447629bb7289f2d3dc4997",
+  "case_id": "case-50-complete_location_pins_order",
+  "derived_sha256": "sha256:491e96271e36ccee99d4ff29b96340741c4b7f7ec3281a676e7611ca72e78411",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

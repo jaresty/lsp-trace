@@ -1,0 +1,8 @@
+{
+  "case_id": "case-02-raw_unknown_field",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-02/production/derived.contract.json",
+  "production_derived_sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+  "production_dispatch_used": false
+}

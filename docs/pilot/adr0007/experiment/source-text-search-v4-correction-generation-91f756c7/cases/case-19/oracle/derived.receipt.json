@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:f0874fb88a13b9cc97c82ba398443ace0b3f49c6aae6267db024ab5132546966",
+  "case_id": "case-19-ordinal_missing",
+  "derived_sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

@@ -1,0 +1,9 @@
+{
+  "max_files": 10,
+  "max_matches": 100,
+  "max_output_bytes": 1000000,
+  "max_path_bytes": 4096,
+  "max_source_bytes": 100000,
+  "max_work": 1000000,
+  "schema_version": "lsp-trace.adr0007.source-text-search.limits.private.v2"
+}

@@ -1,0 +1,49 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/source-text-search.result.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "accepted": {
+      "const": false
+    },
+    "accounting": {
+      "$ref": "accounting.v2.schema.json"
+    },
+    "authority": {
+      "const": 0
+    },
+    "completeness": {
+      "const": "UNKNOWN"
+    },
+    "custody": {
+      "$ref": "custody.v2.schema.json"
+    },
+    "featureIdentity": {
+      "const": "UNRESOLVED"
+    },
+    "matches": {
+      "items": {
+        "$ref": "match.v2.schema.json"
+      },
+      "type": "array"
+    },
+    "replay": {
+      "$ref": "replay.v2.schema.json"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.result.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "accepted",
+    "authority",
+    "completeness",
+    "featureIdentity",
+    "matches",
+    "accounting",
+    "custody",
+    "replay"
+  ],
+  "type": "object"
+}

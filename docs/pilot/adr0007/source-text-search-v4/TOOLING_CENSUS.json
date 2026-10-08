@@ -1,0 +1,15 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.tooling-census.private.v4",
+  "stage": "candidate_unfrozen",
+  "excludes": ["docs/pilot/adr0007/source-text-search-v4/cases/**/expected.oracle.terminal.json", "docs/pilot/adr0007/source-text-search-v4/cases/**/production.terminal.json", "docs/pilot/adr0007/source-text-search-v4/cases/**/oracle.terminal.json", "docs/pilot/adr0007/source-text-search-v4/FREEZE.json"],
+  "members": [
+    "internal/adr0007sourcetextsearchv4private/types.go",
+    "internal/adr0007sourcetextsearchv4private/search.go",
+    "cmd/adr0007-source-text-search-v4-private-evaluate/main.go",
+    "cmd/adr0007-source-text-search-v4-private-oracle/main.go",
+    "cmd/adr0007-source-text-search-v4-private-oracle-freeze/main.go",
+    "cmd/adr0007-source-text-search-v4-private-check/main.go",
+    "cmd/adr0007-source-text-search-v4-private-corpusgen/main.go"
+  ],
+  "freeze_binding": {"schema_version":"lsp-trace.adr0007.source-text-search.external-freeze-binding.private.v1", "mode":"candidate_unfrozen", "normalization":"checker excludes final freeze root until parent-approved freeze"}
+}

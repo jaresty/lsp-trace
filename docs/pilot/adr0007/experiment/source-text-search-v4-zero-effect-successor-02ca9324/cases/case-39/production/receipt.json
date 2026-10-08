@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "sha256:03195e8bc6bdc7542a3e8a831e067ac04f76d31b6296c2ac70694e11c2fc7980",
+  "case_id": "case-39-max_total_equal",
+  "end": "2026-10-08T08:48:44.131802Z",
+  "exit_status": 0,
+  "lane": "production",
+  "schema": "raw-result-receipt",
+  "start": "2026-10-08T08:48:44.119756Z",
+  "stderr_bytes": 0,
+  "stderr_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 4048,
+  "stdout_sha256": "sha256:baf52e737678ab61f93d70472c6a5b184b6a09828aae4ce17dea9ea9f52c084d"
+}

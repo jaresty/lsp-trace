@@ -1,0 +1,11 @@
+{
+  "admission_id": "admission-0000000000000001",
+  "admission_schema": "lsp-trace.adr0007.source-admission.private.v2",
+  "file_sha256": "sha256:f9b8d87e305fcf0125d889e2e40ea64b446b4c09d9459358c7d64a4a2fefcabe",
+  "gitBlobSha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
+  "object_id": "obj-a",
+  "path": "a.txt",
+  "repositoryCommit": "af2ce89321afc94c937636f841bb98b8977b6496",
+  "revision": "revA",
+  "schema_version": "lsp-trace.adr0007.source-text-search.source-binding.private.v2"
+}

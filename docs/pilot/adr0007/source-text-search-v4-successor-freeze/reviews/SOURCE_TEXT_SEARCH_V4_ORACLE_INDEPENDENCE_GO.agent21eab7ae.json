@@ -1,0 +1,25 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor-review-evidence.private.v1",
+  "kind": "oracle_independence_review",
+  "exact_verdict": "SOURCE_TEXT_SEARCH_V4_ORACLE_INDEPENDENCE_GO",
+  "reviewer_agent": "agent21eab7ae-95cf-4fc",
+  "reviewed_commit": "0660860f",
+  "scope": {
+    "subject": "ADR0007 source-text-search v4 oracle independence review",
+    "classification": "additive provenance correction; not RAW_DERIVE_GO; not DESIGN_GO; not qualification authorization",
+    "bound_freeze_namespace": "docs/pilot/adr0007/source-text-search-v4/",
+    "successor_namespace": "docs/pilot/adr0007/source-text-search-v4-successor-freeze/"
+  },
+  "overlap_stats": {
+    "cases_total": 50,
+    "complete_cases": 21,
+    "failed_cases": 29,
+    "classification": "production_oracle_contract_triple_equality_with_independent_oracle_review",
+    "required_equality": "all50 production/oracle/contract-derived bytes equal; split 21 complete and 29 failed"
+  },
+  "limitations": [
+    "Authority level remains 0; this artifact records reviewer evidence and does not self-issue DESIGN_GO.",
+    "Qualification execution remains unauthorized by this successor freeze candidate.",
+    "The predecessor v4 freeze digest/root and old frozen files remain immutable and rejected as predecessor, not rewritten."
+  ]
+}

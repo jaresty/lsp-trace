@@ -1,0 +1,8 @@
+{
+  "case_id": "case-21-file_digest_mutation",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-21/production/derived.contract.json",
+  "production_derived_sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+  "production_dispatch_used": false
+}

@@ -1,0 +1,50 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/limits.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "max_files": {
+      "maximum": 100000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_matches": {
+      "maximum": 1000000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_output_bytes": {
+      "maximum": 16777216,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_path_bytes": {
+      "maximum": 4096,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "max_source_bytes": {
+      "maximum": 67108864,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "max_work": {
+      "maximum": 18446744073709551615,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.limits.private.v2"
+    }
+  },
+  "required": [
+    "schema_version",
+    "max_files",
+    "max_matches",
+    "max_work",
+    "max_output_bytes",
+    "max_source_bytes",
+    "max_path_bytes"
+  ],
+  "type": "object"
+}

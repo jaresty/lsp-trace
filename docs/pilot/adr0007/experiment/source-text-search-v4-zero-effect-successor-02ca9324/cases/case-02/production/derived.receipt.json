@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:a99aee87fdb8f5d942dcf96ad391939f7730b6feb22274a91243969ebeba0ac6",
+  "case_id": "case-02-raw_unknown_field",
+  "derived_sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

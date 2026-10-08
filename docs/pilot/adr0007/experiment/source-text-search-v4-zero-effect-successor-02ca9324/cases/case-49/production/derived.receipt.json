@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:ef46ff4a2c38b92ffed5c62b6d47a4dfa1c06e894b603ccb144ee4140b5fc29b",
+  "case_id": "case-49-overflow_helper_case",
+  "derived_sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

@@ -1,0 +1,507 @@
+{
+  "count": 50,
+  "entries": [
+    {
+      "ordinal": 1,
+      "case_id": "case-01-raw_malformed_json",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-01/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:2c10e26a7ba75a140b1a0c25c964d9082a7762b4d5026526aa125c318f39b1af",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-01/production/receipt.json",
+      "receipt_sha256": "sha256:40017a36087d6df74044d526ffe715397c28524e0b449ed033798520d6ae148e",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-01/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:61c4b83388f43a1f27966367ed4631f53f9ba9b3662f9d297bba8d98c7434eb6"
+    },
+    {
+      "ordinal": 2,
+      "case_id": "case-02-raw_unknown_field",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-02/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:7f86e26abdad76d84cc602c53ceb37876c9d33d210517695ec685e4fc96a545f",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-02/production/receipt.json",
+      "receipt_sha256": "sha256:af23f533553072fd2bb28d903f0265e5cf11742a37ad2c059b4241c25e91a792",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-02/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:fd4b1c721608d10650d0775a680c3fb1b18ac5f1bcb1af3f195ef58e298a3721"
+    },
+    {
+      "ordinal": 3,
+      "case_id": "case-03-raw_duplicate_field",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-03/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:fb338c04fed66ff2f23c7f65519187f83e0de6a6abb091045c3df55ef28bb100",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-03/production/receipt.json",
+      "receipt_sha256": "sha256:54c6f16d557207e1db22c9709ff855b144e68daa3d842e52f8b046915a9de8f5",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-03/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:0f9b2fbbaa311b86f93856262160bbe97422527874bdaa4eccdb729601a63a48"
+    },
+    {
+      "ordinal": 4,
+      "case_id": "case-04-raw_trailing_data",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-04/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:e16d919731a71e38ab34493fd14505a573b8ccdb3d1162c4d4ba386ee000dda3",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-04/production/receipt.json",
+      "receipt_sha256": "sha256:a512debf7614e0dfb9595d2da40e486340e9a7bd76395978762cc6b056a5fe56",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-04/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:c6b10b16d319cea27b15cf5f69dd7f787268540ee763b7adb06fff29d46d4723"
+    },
+    {
+      "ordinal": 5,
+      "case_id": "case-05-empty_query",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-05/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:f651f991c54331c5c20f2bc084745d3ea20cbda2a1fe273499817425bb31192c",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-05/production/receipt.json",
+      "receipt_sha256": "sha256:b666b0d22b7ac3326599506599d3d27d11eef136f7d32b60581b966599f7611c",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-05/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:94c3f9e13147899fdfc2db77808bcd87066eb213013efbf8752a1bcd91df6d47"
+    },
+    {
+      "ordinal": 6,
+      "case_id": "case-06-empty_source_set",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-06/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:99db8d72d692b3caba9955d2f7a3d664aae1c4cb2e850948fc7277cf1ef7941d",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-06/production/receipt.json",
+      "receipt_sha256": "sha256:86b12046a1468406a8de5d1a3afb4624483a02f2329beddfdbcb621fd91923eb",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-06/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:60c2c8ca23c914a17390ab4d886f7c14c1e74bb28ed3821b47776de3f8b84814"
+    },
+    {
+      "ordinal": 7,
+      "case_id": "case-07-control_duplicate",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-07/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:7c385f500d7f3a42c0e4d54d89236258d390b8beb056882d4eab4dc22e187bef",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-07/production/receipt.json",
+      "receipt_sha256": "sha256:c19527d960668d602a08c198c833883209daa0534ae69bd7988dec84c93578b3",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-07/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:6265a87aab5d4f6a92b5ceca7acc6ac4652eec3ddc02bd44d85b1a008731ee15"
+    },
+    {
+      "ordinal": 8,
+      "case_id": "case-08-control_order",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-08/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:58560d1812944966a63701baa9d98a76f459ca0f0c13993a952a3ded1aab2a8b",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-08/production/receipt.json",
+      "receipt_sha256": "sha256:af22b697f0be87d3cf2885c59a05af3dc0bb30e65b8e2d85e21197d27f6ef070",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-08/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:2030b501bc364185909afbd3eae2087196d4cb787c27460379ca4c04be63db00"
+    },
+    {
+      "ordinal": 9,
+      "case_id": "case-09-control_simultaneous_deadline_cancel",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-09/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-09/production/receipt.json",
+      "receipt_sha256": "sha256:eb7b00806e795d8ab3a6944358c138aa8d62db24d22d1b13c10faf07d9915412",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-09/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:7473759eb2b95ab476e897d8727a8b09b79d36d6ece3a67112f53144777ddcf6"
+    },
+    {
+      "ordinal": 10,
+      "case_id": "case-10-control_midscan_cancel",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-10/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:aa0285e3423225a94c8404411ad1d9c6e98b77d7faac8a5578c4287f1586b26c",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-10/production/receipt.json",
+      "receipt_sha256": "sha256:35960ba0912372ec5d15d010a86525405f7a533de10d04efa072848403eb81d9",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-10/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:fb16faf9a69e237f72ed7defe48d9a6f377a7da32ea528f58edf764bceb5fe3e"
+    },
+    {
+      "ordinal": 11,
+      "case_id": "case-11-control_postmatch_deadline",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-11/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:b9186061c165c38962d557288bd0af6db48899046bbbbee547e1a6b4453c1237",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-11/production/receipt.json",
+      "receipt_sha256": "sha256:d3e619de2b786bcf481089cc62ea99f4c26e66a7a845ec74e31181ac44d335ca",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-11/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:d3cb537d3f6ff8fd4de1b229d19aaa669835da66826b238b7793b39636da36a6"
+    },
+    {
+      "ordinal": 12,
+      "case_id": "case-12-utf8_empty_file",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-12/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:69579ac2f83294bbe7f6ea050cb699a62175764cb88bab41c2c2af84da2bd690",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-12/production/receipt.json",
+      "receipt_sha256": "sha256:9534e37648df0d75d8df4c3b07512de8062ae932f67c8ec85f73d6f0f7cd2812",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-12/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:91ad0b8dcdb171eb9d94f15876ad783f8f854fec531e17612ae678e4f7ece838"
+    },
+    {
+      "ordinal": 13,
+      "case_id": "case-13-utf8_nfc_path",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-13/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:181217e64a3355d1c22f5e68b57fba7295eb9ba5eaeac2ddce441fe0627bd0d6",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-13/production/receipt.json",
+      "receipt_sha256": "sha256:bb0bf6a78b4e7d81b0a9ae58817dba84eba40606ede838017fe560b922d639da",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-13/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:00e59bed98c49af6c7f880bd494781d3ac1f3ca8e765adf9a49b0ea34cdaf522"
+    },
+    {
+      "ordinal": 14,
+      "case_id": "case-14-path_backslash",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-14/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:6b5bb305f27734274e2b6dfcf9013c2ea7f70028dbc23766808d1860c7fff17d",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-14/production/receipt.json",
+      "receipt_sha256": "sha256:d3a7bb5af0113a670d884f1c7ca04888a19ada9526820383374db85d06d8efe5",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-14/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:52881eb57abbf1221bf0b7bcc1a3854d073641c6feb6f69739bc35cac337e477"
+    },
+    {
+      "ordinal": 15,
+      "case_id": "case-15-path_absolute",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-15/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:2a31babd94a48b70eb397bee88a97c77de07581cdc9444947434527132fd3303",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-15/production/receipt.json",
+      "receipt_sha256": "sha256:ac81d4706235d4c6db34ba040b18a9bd1e72a24c4f23edb649f3fdc6b1e22b09",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-15/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:d8e2592b1dcb3b99bced97a5d11bd5145e9ef6925b6e78e1e17a63c8a2433380"
+    },
+    {
+      "ordinal": 16,
+      "case_id": "case-16-path_traversal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-16/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:5449ea2df3d0c2a4cd49fb2b0fb9171aaceec263638a89b5247d76c929da4302",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-16/production/receipt.json",
+      "receipt_sha256": "sha256:2b7770f27527aa359a1bcdaf4ed977ec7d9fc63a1b9e72a6c7b41b32166c92a5",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-16/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:83c17c4836c4255e0fd708b0133f6c0f03ea6b54d911245d74ec1ecf5acc7cc6"
+    },
+    {
+      "ordinal": 17,
+      "case_id": "case-17-duplicate_path_same_revision",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-17/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:30e8e768921135fb1388077766f2b7ac6dc42cfdef6cde35c0f36af17fb69e7f",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-17/production/receipt.json",
+      "receipt_sha256": "sha256:e746e55a2b1fddb805e0c6ad5d9e21aa118df0b40f5d2c659dbebc8be2b83f1f",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-17/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:1f1bdedb325feeabae3a8bc046cd7db83c7e7c67b0572627543645762c2f3974"
+    },
+    {
+      "ordinal": 18,
+      "case_id": "case-18-duplicate_path_diff_revision",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-18/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:cb7e5242fb4104895e5ca82f2126380932cbdda4aea85425002542477ff57e4c",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-18/production/receipt.json",
+      "receipt_sha256": "sha256:08eb0fd4f59d0825e0d86b6346a428c3489128ecb2cc0d4e4a84a625231a8561",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-18/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:08920f7ffea45e33b9db15452b29f0f533ce6914240fcd76bebf7103ee934aad"
+    },
+    {
+      "ordinal": 19,
+      "case_id": "case-19-ordinal_missing",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-19/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:97443209c17ce0c4d161d2483bd93c7f214fda003c0f743e58bc2d4801e52b97",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-19/production/receipt.json",
+      "receipt_sha256": "sha256:f2b421254bf4393f8227d955d36c2556bfa3742252c689b22542fdbf35424215",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-19/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:39a00bd97b5c822ccdfe82225337fb4f0bf36c5f634769744017c17ca2e73e24"
+    },
+    {
+      "ordinal": 20,
+      "case_id": "case-20-ordinal_extra",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-20/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-20/production/receipt.json",
+      "receipt_sha256": "sha256:55f6d94370601d0b12b4add632dbcf0f620ef07ff32b6a4936f303dcaf665d76",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-20/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:52a8acdc306b282145a66df573bd0e7e990e4823ebed0bc83a25ddb9d372f50c"
+    },
+    {
+      "ordinal": 21,
+      "case_id": "case-21-file_digest_mutation",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-21/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:4d8db62fa6f94d4435ed3d85e900308ef1230b8da9ec9b4dbba4e9771f88714f",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-21/production/receipt.json",
+      "receipt_sha256": "sha256:727efd017aee0b8e3229f3cd1db024df478ad2257779aae1d1d5ffaa4f12edc2",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-21/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b4e9ecf15dcb76eee2699afbbf5b12d4a7eabe9f41dd9b351e863873e1c27343"
+    },
+    {
+      "ordinal": 22,
+      "case_id": "case-22-object_digest_mutation",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-22/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:1a2445cea4142d19fc095479c7057ba366e8fa15fabfd7bfa07644133969b5ae",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-22/production/receipt.json",
+      "receipt_sha256": "sha256:18c6b12edc81379885de78d81ea9b59cc5893b7c61e5af3f1fd6be6dd277cdd7",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-22/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:8090499b8a2b394626a393005b661b9329adf9f35ef0f3547c0d8bd8b4c459a2"
+    },
+    {
+      "ordinal": 23,
+      "case_id": "case-23-admission_digest_order",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-23/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:b1be603fc14af9bc479fecc39587c1548a3dac3776b8ad1c792ac274eb261fd5",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-23/production/receipt.json",
+      "receipt_sha256": "sha256:00dce2567e6d852e426c422d27bc71ebc268ef3fd9d7f784170b34f03a2915c1",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-23/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:6b5d6a427712d969fa5520211fd1a11b522e900b978046536c51daea9ddf1132"
+    },
+    {
+      "ordinal": 24,
+      "case_id": "case-24-multi_path_byte_order",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-24/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:b023d7c35635a5ea571548efdc469ba4d13f966bbff45575e3d0d04469e2322c",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-24/production/receipt.json",
+      "receipt_sha256": "sha256:89a390858bc4b082e4197257509cd10886a72d5cc5a8722b12daf0c960cc33ec",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-24/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b56c82562d93643571060755d8d0ec1c2669f926ae57c66db184818935197d5d"
+    },
+    {
+      "ordinal": 25,
+      "case_id": "case-25-overlap_literal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-25/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:8d7e8dce9d2c76929dd5675f5f133f975def09daf7f0c7e97bb05682eb13e738",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-25/production/receipt.json",
+      "receipt_sha256": "sha256:3974e358eec2c76ba93265bd6a3378da79bfe6a4142808b5126c451c6c089ab6",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-25/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b8189a15d820e6150405a7876b766201aaab87351b034d7879e87703f7a7b2ee"
+    },
+    {
+      "ordinal": 26,
+      "case_id": "case-26-metachar_literal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-26/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:5d29b4da73138bbb7dad8c330acba71d9e759796c89323fe71f6a3e79922e2d7",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-26/production/receipt.json",
+      "receipt_sha256": "sha256:989a2bb88fe6eaef362ddfb7df34aeb3d6d62979d5f9ae699441241c727d6c4b",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-26/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:a6eb04bb5e162b2e9e50b703b269349426a881c2d287089e1ddca4c6a6db66cb"
+    },
+    {
+      "ordinal": 27,
+      "case_id": "case-27-case_sensitive_literal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-27/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:7661b0e8948fba117d2c9e1c49b35690b326e577de42bc4044ac6e6721e8575f",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-27/production/receipt.json",
+      "receipt_sha256": "sha256:947f7aa8f8cac57be9640fa0543ab69fff2e2888f85b947c2cf4e6febc4060db",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-27/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b013727c731d6771bb0e82e7221246afd7e8b5a313a5500e0484d72a10560493"
+    },
+    {
+      "ordinal": 28,
+      "case_id": "case-28-combining_literal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/receipt.json",
+      "receipt_sha256": "sha256:dd88f94453b4e10411d6389772a4f7332612135023f41547fa7eb1c51e3abca5",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:bf7d5f6f29906e782bb08622e72007bd6e8c061238168ea4894df35da2f76b5a"
+    },
+    {
+      "ordinal": 29,
+      "case_id": "case-29-lf_positions",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-29/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:f5dcb3dfdc0ac7604ea9618dad05d11dd135a6c43581c2b3aee6bee0cd325cbc",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-29/production/receipt.json",
+      "receipt_sha256": "sha256:fe7d2be76ea301ce37975e94a6483ddd4159797ffd1defd033697dc0803a875c",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-29/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:0b13e01bd6a8de886879f53f180a11a4e398d24097b77e9a4cdd2abc9397fca5"
+    },
+    {
+      "ordinal": 30,
+      "case_id": "case-30-crlf_positions",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-30/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-30/production/receipt.json",
+      "receipt_sha256": "sha256:783baadcd2496f99875608b36d27723bfecdaa11261b4b0a5ec29c4a993ca599",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-30/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:a324aec79a890dbdb63abb77c482b50b8cd8e9a1dcc06a3b11f74fd7d506c65d"
+    },
+    {
+      "ordinal": 31,
+      "case_id": "case-31-bare_cr_positions",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-31/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-31/production/receipt.json",
+      "receipt_sha256": "sha256:d22e58c6501666cedf39cba421b00723c5e36bbff22cab9d8a4c9aed47f691af",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-31/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:27f94a3cfa2866d5bb6f21346e8a9f4576b6e57d07ba312f97e3f989e5f75d6a"
+    },
+    {
+      "ordinal": 32,
+      "case_id": "case-32-mixed_newlines",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-32/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:0a684436be91dc931977cef92c7f761390d2f68291d6f4265f4f982411b43b70",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-32/production/receipt.json",
+      "receipt_sha256": "sha256:93b7a35ba7cb17f144de3ed8f56f33538b9212eb604529e450d3841ca307eeea",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-32/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b49fa74aa61dfbbbe8da400cc52878274f0d7ca8b393e3f4ebe8c6149c80656a"
+    },
+    {
+      "ordinal": 33,
+      "case_id": "case-33-non_bmp_utf16",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-33/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:8dbceff38cfa118d394ca3611e1bf092d3a9c72a4ebdc6aee5e0c7e7739f1d43",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-33/production/receipt.json",
+      "receipt_sha256": "sha256:d7a803c953058856836a8ca2fc2c55bba7aa4e2849ec29fc978a055122a51d81",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-33/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:789fa166085daa4cc5d1dff43ff23247759e44796b1f8996f4c2a51d463d7cd6"
+    },
+    {
+      "ordinal": 34,
+      "case_id": "case-34-crossline_literal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-34/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:b615e2b45933ab93d53f942eb1ea2a177e280e50f6d72a8770683779f02f04e2",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-34/production/receipt.json",
+      "receipt_sha256": "sha256:fe85bf6ad0922402fe0ad4d63e894ff585e627ae1f5086f9b954b65839472d38",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-34/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:be9faffe79550ed904a49a98df42ceb62831b4bf93e0b8d83f56da91799a777e"
+    },
+    {
+      "ordinal": 35,
+      "case_id": "case-35-max_files_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-35/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:f9252283de35c899e0f5f9703513ec38aa9dd1880f215366ca0d3fba1b64049d",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-35/production/receipt.json",
+      "receipt_sha256": "sha256:d88febdf84d6716019274ccfaf8615abc828a4d525b9bd26a9f58f776818a41c",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-35/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:e626ce2b6e9ca9d89dce3d3558421cf165213c647d003efc8d6131e778f3c3e9"
+    },
+    {
+      "ordinal": 36,
+      "case_id": "case-36-max_files_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-36/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:85cd0d825776a31cf7051e7eebea7de550cc2f7d19ec594af8a7575779344546",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-36/production/receipt.json",
+      "receipt_sha256": "sha256:54eaff380aa0f5f501fe64744d7c87976b54de5b88618f8c4f6909c86c73cb23",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-36/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:a1c54de06fa64c024b963a2b551f3f4630adaeba462b55d6ff6ca07e75410773"
+    },
+    {
+      "ordinal": 37,
+      "case_id": "case-37-max_source_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-37/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:cde1c10db70d70a99b9319635fb12063f79030c748d6d4f66168d9d8addc419e",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-37/production/receipt.json",
+      "receipt_sha256": "sha256:2b106e217136e4f38dabba2fd7ad7337077de0bb5541a94fd3a9023e71a99250",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-37/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:df37b6c85e7adaa3adfb3b0fb050de2e5958514a0782e5ae3c476768d6296558"
+    },
+    {
+      "ordinal": 38,
+      "case_id": "case-38-max_source_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-38/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:0344207af9a62497cde59165fed884c6138ac2c93af31902c02cd9d88f774450",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-38/production/receipt.json",
+      "receipt_sha256": "sha256:97faa4ba117aab25b0eb5fc6abd2843e3086527637e5f6cb77dbfdb425eff878",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-38/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:8dee4038d4b0932d11ffb5eccc7f1f1ab9e77bc5fa2db60d454a143a9634b468"
+    },
+    {
+      "ordinal": 39,
+      "case_id": "case-39-max_total_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-39/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:baf52e737678ab61f93d70472c6a5b184b6a09828aae4ce17dea9ea9f52c084d",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-39/production/receipt.json",
+      "receipt_sha256": "sha256:b46f261b08cad617cadbe149a5dc20fa2e1a68188267e31148b3f5589f9f1949",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-39/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:2de4ea9afdc74c8e2194069c480d3b9b1a0d308c624d16b1e9b5f6452b9c39a2"
+    },
+    {
+      "ordinal": 40,
+      "case_id": "case-40-max_total_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-40/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:1169eedb6c2a1d4d0d98fce6321fca9403de9a9faa1edd7621f66474c2f5ec2a",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-40/production/receipt.json",
+      "receipt_sha256": "sha256:8b8cac75fb1664cefa831ff6783276c230b861c529633485dd548d2b9eda4969",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-40/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:ed817d5676774958a6f8f737cb05293b7b09a419a061f95800eed7c8bfba2516"
+    },
+    {
+      "ordinal": 41,
+      "case_id": "case-41-max_path_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-41/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:b5585763d456cf3c88c0199ee06b9f7503166605bc908cf0d598f3dfa8b088b0",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-41/production/receipt.json",
+      "receipt_sha256": "sha256:6f4685ced40d59e85efe0926078bfea23a8ef61d22b2d36baafc3cc5ca930f4c",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-41/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:39227cc354c1658189407223f28cfb06d9631215c1e646bb5c77227289639546"
+    },
+    {
+      "ordinal": 42,
+      "case_id": "case-42-max_path_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-42/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:42ef71edd1d7ec88a26aaf39bf188601f21f315bddd9bb2b927115e9c09d01db",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-42/production/receipt.json",
+      "receipt_sha256": "sha256:c299d2a94c3aab794c09b22af16383c84d6f5df0c5d1e36e3bd333f791536885",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-42/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:541fb826cc503dc2837e4bf1dfd08fc25b10de2c9944ded5705531ed529b16e9"
+    },
+    {
+      "ordinal": 43,
+      "case_id": "case-43-max_matches_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-43/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:d33f195ea534b58f5c7818b95c0726f81c36ff5e5364352aeeb05c571601c80b",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-43/production/receipt.json",
+      "receipt_sha256": "sha256:579ca0951b188b75ba5fbb5581c9df8fa2c5ee526794df6db1e2250a635c34d0",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-43/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:7168c31aeb80dcf2bf18721b5be0894de7768748f1434ec1dc5c99cbbe05c0fe"
+    },
+    {
+      "ordinal": 44,
+      "case_id": "case-44-max_matches_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-44/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:218c9d8d77c48426c6ecefe5cb7f969aae1663b63eeb7d09bc00a089e04d932b",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-44/production/receipt.json",
+      "receipt_sha256": "sha256:04bc3616fd186669ad980ce71aede9b08a7e326dd97eb6ecf8eca12613ae83a9",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-44/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:4cc860714cfa5bc4df6b65672d20c36f86edf4fe282f1f8fb6ebf0ce96bfc815"
+    },
+    {
+      "ordinal": 45,
+      "case_id": "case-45-max_work_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-45/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:e2d34763e9717f0d12f333487980e6f1aa3b6a7709d9e3ad7eebd8d64d2bf195",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-45/production/receipt.json",
+      "receipt_sha256": "sha256:5fcc456baac4e94b353f0f6008dbca663f9caacce15fe4302f90162ace3478f7",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-45/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:b9a064e4a91cc99eb98db4d24ec78485d00eda5047fb7f21e5f079eba28db383"
+    },
+    {
+      "ordinal": 46,
+      "case_id": "case-46-max_work_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-46/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-46/production/receipt.json",
+      "receipt_sha256": "sha256:8de5fec034083704737987b6ae2405344d501f067678c813af4d789b452ccc5f",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-46/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:f990f80ab774bff6ea2d99f5a09dbc15ad30c40e0b666f008573b67f76821fee"
+    },
+    {
+      "ordinal": 47,
+      "case_id": "case-47-max_output_equal",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-47/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:d05ae9170624bee183c94477f51acb8d715a29e333e26feef29a15d3b9244fde",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-47/production/receipt.json",
+      "receipt_sha256": "sha256:72cfab07da9795bd67808af7b27856587225a9d5ba4820fa6e4a8ec90789a340",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-47/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:78c0ee5c5948f543aba1b3dc4eac5881fa2f8b31ce244aeb74c74db7adc3dd8c"
+    },
+    {
+      "ordinal": 48,
+      "case_id": "case-48-max_output_plus_one",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-48/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:4c3bb19475448fb63366a325bc86d0ad7da130996ce20a8e6b3980e0c65c1664",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-48/production/receipt.json",
+      "receipt_sha256": "sha256:b8de1a6e6cdf2a603262006906efee04ad09a726aa67b2a783c681b89b4b7b59",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-48/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:ca6ba06ac939335b8adf1f0194604e38530c095aac181954e419951d0e09fd0c"
+    },
+    {
+      "ordinal": 49,
+      "case_id": "case-49-overflow_helper_case",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-49/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:698011c7679e03f959da51f3fae0a26141306a094ad44e9b94000b74ec884b07",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-49/production/receipt.json",
+      "receipt_sha256": "sha256:987066724be3acbc05a905ad903d75df3498dfd618fcdfef44649a8f1abd4a92",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-49/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:97415a6f3294ef48302024a38ec07185b7df25dcc37c313d882c87744b7f9d32"
+    },
+    {
+      "ordinal": 50,
+      "case_id": "case-50-complete_location_pins_order",
+      "derived_contract_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-50/production/derived.contract.json",
+      "derived_contract_sha256": "sha256:491e96271e36ccee99d4ff29b96340741c4b7f7ec3281a676e7611ca72e78411",
+      "receipt_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-50/production/receipt.json",
+      "receipt_sha256": "sha256:b2ef2b6533431f69059d10e7d84a432f825aeb815cc6175856d16d667a87b176",
+      "validator_bundle_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-50/production/validator.bundle.json",
+      "validator_bundle_sha256": "sha256:77b8276c9e1459dc6e4320ca33a10b2952f062d47e1354b8a63cc008083348d9"
+    }
+  ],
+  "schema": "preserved-production-digest-manifest",
+  "source_campaign_id": "source-text-search-v4-zero-effect-successor-02ca9324"
+}

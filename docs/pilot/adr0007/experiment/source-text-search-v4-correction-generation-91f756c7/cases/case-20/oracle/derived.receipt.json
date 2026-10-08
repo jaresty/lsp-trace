@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:181fd84ad5d2283cf7564789ec16d46306da681a4231fb423be83f6e42db9966",
+  "case_id": "case-20-ordinal_extra",
+  "derived_sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

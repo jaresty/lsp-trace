@@ -1,0 +1,8 @@
+{
+  "case_id": "case-30-crlf_positions",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-30/production/derived.contract.json",
+  "production_derived_sha256": "sha256:05604a39079f775b5ab57310a53ebc8176a751ce729c9979c6ad82e743e3eedf",
+  "production_dispatch_used": false
+}

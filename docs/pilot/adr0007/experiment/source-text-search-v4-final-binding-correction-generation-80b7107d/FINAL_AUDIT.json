@@ -1,0 +1,695 @@
+{
+  "accounting": {
+    "authority": 0,
+    "created_namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d",
+    "custody": "PENDING_FINAL_EXTERNAL_REVIEW",
+    "custody_go_self_claim": false,
+    "events_created": [
+      "BINDING_CORRECTION_AUTHORIZED",
+      "AUDIT",
+      "SEAL"
+    ],
+    "head": "80b7107d970a39a5ad2dbc1213f7f95a1aef13a6",
+    "historical_defective_predecessor_evidence": "prior abbreviated AUTHORIZED_BINDINGS is not authority",
+    "judgments_inherited": 50,
+    "judgments_recomputed_or_reexecuted": 0,
+    "oracle_dispatches": 0,
+    "production_dispatches": 0,
+    "public_release_authorized": false,
+    "schema": "adr0007.final-binding-correction.accounting.v1",
+    "semantic_execution_rerun": false,
+    "semantic_results_inheritance": "inherited_by_exact_digest_from_prior_independent_review_generation",
+    "semantic_review_rerun": false
+  },
+  "authoritative_bindings": {
+    "bytes": 37103,
+    "path": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d/AUTHORIZED_BINDINGS.json",
+    "sha256": "sha256:c26fe4779eac3e36c50bcab1fcc2440c9c03e3b89a4f0f205053d919707c7dcb"
+  },
+  "disposition": "BINDING_CORRECTION_READY_FOR_FINAL_EXTERNAL_REVIEW",
+  "limitations": [
+    "terminal event digest is bound as exact full sha256 from prior independent review artifacts; no standalone terminal event file with that digest is present in this worktree",
+    "custody remains pending final external review",
+    "historical defective predecessor abbreviated AUTHORIZED_BINDINGS is evidence only, not authority"
+  ],
+  "negative_checks": {
+    "actual_predecessor_ledger_recomputed": true,
+    "all_50_judgments_recomputed": true,
+    "full_sha256_pattern_all_bound_digests": true,
+    "prefix_truncation_rejected_by_verifier": true,
+    "prior_independent_review_artifacts_recomputed": true,
+    "substitution_rejected_by_verifier": true
+  },
+  "no_go_self_claim": true,
+  "predecessor_bindings": {
+    "ledger_file": {
+      "bytes": 81983,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/EVENTS.ndjson",
+      "sha256": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d"
+    },
+    "ledger_sha256": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d",
+    "terminal_event_materialization": "not located as a standalone file in this worktree; exact full digest is inherited from prior independent-review manifest/audit/verify and bound here without abbreviation",
+    "terminal_event_sha256": "sha256:bea1b32bb92aecae7b142dae3e71d149e1bada5c003aa43871187f48790f2680"
+  },
+  "prior_independent_review_generation": {
+    "all_50_judgment_digests": [
+      {
+        "case_id": "case-01-raw_malformed_json",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-01/judgment.json",
+        "sha256": "sha256:38c8ee9f47f9b737307628d9941458971d473e2ba4509576b3b8e476e5e48756",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-02-raw_unknown_field",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-02/judgment.json",
+        "sha256": "sha256:92eec4b2046faddb3fea820430a8e4f2dabd995045a34e9e471cd7bdbdebc27f",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-03-raw_duplicate_field",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-03/judgment.json",
+        "sha256": "sha256:68dff9e83b6c0c8e57760c69c2873f40ed1508f1b5f98d907e05cd363d175cee",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-04-raw_trailing_data",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-04/judgment.json",
+        "sha256": "sha256:de6ed51f156a9af75cb525c4dc641fa332675b870665b240dc138a89eb1717d8",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-05-empty_query",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-05/judgment.json",
+        "sha256": "sha256:338391ebcefd0db432090500aba378d9cba0b317ebc2ee9b8b9597df95480112",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-06-empty_source_set",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-06/judgment.json",
+        "sha256": "sha256:0b36cf5fada56212a0de383c820c59c5c2e6491514ee27807649c02de138c6dd",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-07-control_duplicate",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-07/judgment.json",
+        "sha256": "sha256:62156536b7629d59971dd3078d6882869d0acbb4dc95b3ac79e49e3f108e6dde",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-08-control_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-08/judgment.json",
+        "sha256": "sha256:c71acee5c2766ea871e781771a6ac03652221febee1f2e68cbe5cec95f397759",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-09-control_simultaneous_deadline_cancel",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-09/judgment.json",
+        "sha256": "sha256:b4a3c7b382e064a1ce8cde2ecb3c21e50549f3ea755a9978c431662517396f08",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-10-control_midscan_cancel",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-10/judgment.json",
+        "sha256": "sha256:f62d9cf4a62cc146c8bea63e5a05b36a4b437dd14f5d68319837156b8baf57cb",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-11-control_postmatch_deadline",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-11/judgment.json",
+        "sha256": "sha256:534ec34bbd309c6a3f550e70cf04b5b511fc8537da4efd05270eeff2fc1bf544",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-12-utf8_empty_file",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-12/judgment.json",
+        "sha256": "sha256:d4d3e023555cee096288799f81872d03f56d39b0e3a32dc82a58b95840116066",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-13-utf8_nfc_path",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-13/judgment.json",
+        "sha256": "sha256:802fbca2cc158dd40adf045ce3c18a8bce4878c2007c12b087e96bea5884513c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-14-path_backslash",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-14/judgment.json",
+        "sha256": "sha256:fa5111680f514ad11b708d3c679ccaf4d1e463ac8f2ea3104306bba2f0fcb4dc",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-15-path_absolute",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-15/judgment.json",
+        "sha256": "sha256:a0ed83c6b611e114b48c87b85604c71891274e1c7c76a5b6bdf744dcfc8ea18e",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-16-path_traversal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-16/judgment.json",
+        "sha256": "sha256:92b009342626149cce2d1924661a16cffb4636b460d673120bba0bc381699171",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-17-duplicate_path_same_revision",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-17/judgment.json",
+        "sha256": "sha256:6e048f2f261be81fbc574678532e72b359ce76f1387bdc8b1e6b6b16ec466fb2",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-18-duplicate_path_diff_revision",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-18/judgment.json",
+        "sha256": "sha256:4e3aa3602fee44da16c5ed90f457ff2c1322c42bf63f7a2d7e48fb61651bec90",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-19-ordinal_missing",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-19/judgment.json",
+        "sha256": "sha256:dc59b42985dc1c80f413c82073f93b3b96ff1b0ca5822b6fb048652f0dd75eab",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-20-ordinal_extra",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-20/judgment.json",
+        "sha256": "sha256:9158afbac898e9d1bb22ed74a00fbbbb1f5fec29a2f1c5846ce5c00ea6c8f942",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-21-file_digest_mutation",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-21/judgment.json",
+        "sha256": "sha256:12dee3071abc11e22dba33c4022156eebf8e737147b2de6717adc4416c7ff57a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-22-object_digest_mutation",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-22/judgment.json",
+        "sha256": "sha256:587aa989794b95e87d119346ddfde5c489cbf301b9f0b3c445424412c0cd65dc",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-23-admission_digest_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-23/judgment.json",
+        "sha256": "sha256:796a3a929e521af1ad0f3c50471525b26f91817e80e85f6f764622af7725024e",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-24-multi_path_byte_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-24/judgment.json",
+        "sha256": "sha256:74b52f9ba7817a07dd05919f2cdee74f74bbda253e771e785d0f8dbc5899685a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-25-overlap_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-25/judgment.json",
+        "sha256": "sha256:bc9eb548560b402af2d1c755693ba646b4146a6a8c0162794754cba3e637e8c0",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-26-metachar_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-26/judgment.json",
+        "sha256": "sha256:49c796fd452c4867e2dbb4fcf735c4af1f2d2e33af4e2b053f123ae0a228831d",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-27-case_sensitive_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-27/judgment.json",
+        "sha256": "sha256:636e287a86912a9deb0814ad7e206a38dece8d1852c82f6001b9fa61e8ba6c75",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-28-combining_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-28/judgment.json",
+        "sha256": "sha256:25e8391636abb33c3384aa9f788099ad0eb7128e6a116cd2606c0f7bf76efcc5",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-29-lf_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-29/judgment.json",
+        "sha256": "sha256:329560295ff012b526ba9ff04566b028b93e51ca7d7f8e8bdada18d64f15f31c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-30-crlf_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-30/judgment.json",
+        "sha256": "sha256:e4c93f1139f5068079d8ae9b05288d3ffbe33bd8aa11ce67af4fcba6e6f23e5c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-31-bare_cr_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-31/judgment.json",
+        "sha256": "sha256:bbb7890f55aee70f67ede1dac9bd683f2c54438cb720d331dae0c231d7681061",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-32-mixed_newlines",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-32/judgment.json",
+        "sha256": "sha256:fd4766200a58451b2462eb30f752568f9266b571e833f833b75095aa8a16068c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-33-non_bmp_utf16",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-33/judgment.json",
+        "sha256": "sha256:d355034212214f7234b2cbebd3d82b79e1ce0253c2e673076755d811e5b33c4a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-34-crossline_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-34/judgment.json",
+        "sha256": "sha256:ee391a923e230900b2333676e770462d33abf403d26ede8706e0758f1e1315bf",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-35-max_files_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-35/judgment.json",
+        "sha256": "sha256:038a6e6444fd0af2b8d13e074bdbcaf7797542597435bcb9978648baeea4a710",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-36-max_files_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-36/judgment.json",
+        "sha256": "sha256:e4245e4ad41af294e082d8a6bc3514b3013a955f16b0d3f9049532902de9ceed",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-37-max_source_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-37/judgment.json",
+        "sha256": "sha256:f1822bfa73c9cc5b50055a6b548cbe9b3a5fe297535788392286c94bbc1f256d",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-38-max_source_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-38/judgment.json",
+        "sha256": "sha256:a1fbebb12777f0edb689275dcf5382321955a09059c4c2b4f884719ece4cfd77",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-39-max_total_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-39/judgment.json",
+        "sha256": "sha256:b7d81756d400fa37b451de27ae9fed2e1c625192ad77a6ce6d54db2876ae9c38",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-40-max_total_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-40/judgment.json",
+        "sha256": "sha256:d42cfd0651cd8f45378968a52528b6abcc36887156d7f2a1bff9e0e138c9a610",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-41-max_path_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-41/judgment.json",
+        "sha256": "sha256:b9c58fd964e5756904efdbc8ccddca300a8a3299fdaba6833ecca381d4a70006",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-42-max_path_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-42/judgment.json",
+        "sha256": "sha256:a700e67c8c768e1912d7c7a67c3946d4507d0c89cd2b23a61cb5eaf84432892f",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-43-max_matches_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-43/judgment.json",
+        "sha256": "sha256:793ba25b95237f505e5315ef3a4b01a37b275e96e4f4af709a7d79cd1f1b43e8",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-44-max_matches_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-44/judgment.json",
+        "sha256": "sha256:cb28785b5c44bac2623cb13e75d8dca644ca292c420c046cf4a20bad05787338",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-45-max_work_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-45/judgment.json",
+        "sha256": "sha256:4e58f5501c841004627f47c532fd912ee465311d174d78ba997fabb04ef53776",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-46-max_work_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-46/judgment.json",
+        "sha256": "sha256:acdb28cba43738409fd62da9b9b3bab3ea292422462db0cf6660219f6563edf9",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-47-max_output_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-47/judgment.json",
+        "sha256": "sha256:f6d6ae5867ed377a5695260c7c67d8bb5b114091e4d6f77049eeef2939a29568",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-48-max_output_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-48/judgment.json",
+        "sha256": "sha256:7ab2b92a825d544115f45db51cbab7e88e4e69f4b30f460e97dd309c7dbb74ed",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-49-overflow_helper_case",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-49/judgment.json",
+        "sha256": "sha256:e2ddfcf74a5249d9b01569bac7ed7ef0965fba3ad74247dd5237fbaae5ef5de6",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-50-complete_location_pins_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-50/judgment.json",
+        "sha256": "sha256:50bd82793035ba48b2e02d227d18dc5f6364722a133f9654ef7181e1b0eee19f",
+        "verdict": "PASS"
+      }
+    ],
+    "files": {
+      "ACCOUNTING.json": {
+        "bytes": 508,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/ACCOUNTING.json",
+        "sha256": "sha256:52812f3adb2728e6715115a877939cebb82220ff6b6855759e89bce3d8395f8f"
+      },
+      "CAMPAIGN_MANIFEST.json": {
+        "bytes": 48455,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/CAMPAIGN_MANIFEST.json",
+        "sha256": "sha256:d2b0e64d8b29ee5c8e302c090a6704e124c6c2d825b4253fec5aa2a9d26190c9"
+      },
+      "CAMPAIGN_SEAL.json": {
+        "bytes": 403,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/CAMPAIGN_SEAL.json",
+        "sha256": "sha256:83523f14795f5e7bf7ccd09d566b4cbe844047be2d0e4f476f5aee4c2b3a5838"
+      },
+      "EVENTS.ndjson": {
+        "bytes": 45178,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/EVENTS.ndjson",
+        "sha256": "sha256:10529e0b01985fe477e99d292abefe0077bf9039ee09c80ae082fa76299edabb"
+      },
+      "FINAL_AUDIT.json": {
+        "bytes": 33807,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/FINAL_AUDIT.json",
+        "sha256": "sha256:7ad1f77ad4cf61a9da96e98a04b509450b263671d15735683ba3d29eee95748a"
+      },
+      "VERIFY_RECEIPT.json": {
+        "bytes": 1310,
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/VERIFY_RECEIPT.json",
+        "sha256": "sha256:6f4e6f7d647b00edb170a6b9285aecece0f625e85fd708a5880763201dbf3f34"
+      }
+    },
+    "judgment_records": [
+      {
+        "case_id": "case-01-raw_malformed_json",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-01/judgment.json",
+        "sha256": "sha256:38c8ee9f47f9b737307628d9941458971d473e2ba4509576b3b8e476e5e48756",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-02-raw_unknown_field",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-02/judgment.json",
+        "sha256": "sha256:92eec4b2046faddb3fea820430a8e4f2dabd995045a34e9e471cd7bdbdebc27f",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-03-raw_duplicate_field",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-03/judgment.json",
+        "sha256": "sha256:68dff9e83b6c0c8e57760c69c2873f40ed1508f1b5f98d907e05cd363d175cee",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-04-raw_trailing_data",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-04/judgment.json",
+        "sha256": "sha256:de6ed51f156a9af75cb525c4dc641fa332675b870665b240dc138a89eb1717d8",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-05-empty_query",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-05/judgment.json",
+        "sha256": "sha256:338391ebcefd0db432090500aba378d9cba0b317ebc2ee9b8b9597df95480112",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-06-empty_source_set",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-06/judgment.json",
+        "sha256": "sha256:0b36cf5fada56212a0de383c820c59c5c2e6491514ee27807649c02de138c6dd",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-07-control_duplicate",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-07/judgment.json",
+        "sha256": "sha256:62156536b7629d59971dd3078d6882869d0acbb4dc95b3ac79e49e3f108e6dde",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-08-control_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-08/judgment.json",
+        "sha256": "sha256:c71acee5c2766ea871e781771a6ac03652221febee1f2e68cbe5cec95f397759",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-09-control_simultaneous_deadline_cancel",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-09/judgment.json",
+        "sha256": "sha256:b4a3c7b382e064a1ce8cde2ecb3c21e50549f3ea755a9978c431662517396f08",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-10-control_midscan_cancel",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-10/judgment.json",
+        "sha256": "sha256:f62d9cf4a62cc146c8bea63e5a05b36a4b437dd14f5d68319837156b8baf57cb",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-11-control_postmatch_deadline",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-11/judgment.json",
+        "sha256": "sha256:534ec34bbd309c6a3f550e70cf04b5b511fc8537da4efd05270eeff2fc1bf544",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-12-utf8_empty_file",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-12/judgment.json",
+        "sha256": "sha256:d4d3e023555cee096288799f81872d03f56d39b0e3a32dc82a58b95840116066",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-13-utf8_nfc_path",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-13/judgment.json",
+        "sha256": "sha256:802fbca2cc158dd40adf045ce3c18a8bce4878c2007c12b087e96bea5884513c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-14-path_backslash",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-14/judgment.json",
+        "sha256": "sha256:fa5111680f514ad11b708d3c679ccaf4d1e463ac8f2ea3104306bba2f0fcb4dc",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-15-path_absolute",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-15/judgment.json",
+        "sha256": "sha256:a0ed83c6b611e114b48c87b85604c71891274e1c7c76a5b6bdf744dcfc8ea18e",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-16-path_traversal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-16/judgment.json",
+        "sha256": "sha256:92b009342626149cce2d1924661a16cffb4636b460d673120bba0bc381699171",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-17-duplicate_path_same_revision",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-17/judgment.json",
+        "sha256": "sha256:6e048f2f261be81fbc574678532e72b359ce76f1387bdc8b1e6b6b16ec466fb2",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-18-duplicate_path_diff_revision",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-18/judgment.json",
+        "sha256": "sha256:4e3aa3602fee44da16c5ed90f457ff2c1322c42bf63f7a2d7e48fb61651bec90",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-19-ordinal_missing",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-19/judgment.json",
+        "sha256": "sha256:dc59b42985dc1c80f413c82073f93b3b96ff1b0ca5822b6fb048652f0dd75eab",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-20-ordinal_extra",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-20/judgment.json",
+        "sha256": "sha256:9158afbac898e9d1bb22ed74a00fbbbb1f5fec29a2f1c5846ce5c00ea6c8f942",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-21-file_digest_mutation",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-21/judgment.json",
+        "sha256": "sha256:12dee3071abc11e22dba33c4022156eebf8e737147b2de6717adc4416c7ff57a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-22-object_digest_mutation",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-22/judgment.json",
+        "sha256": "sha256:587aa989794b95e87d119346ddfde5c489cbf301b9f0b3c445424412c0cd65dc",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-23-admission_digest_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-23/judgment.json",
+        "sha256": "sha256:796a3a929e521af1ad0f3c50471525b26f91817e80e85f6f764622af7725024e",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-24-multi_path_byte_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-24/judgment.json",
+        "sha256": "sha256:74b52f9ba7817a07dd05919f2cdee74f74bbda253e771e785d0f8dbc5899685a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-25-overlap_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-25/judgment.json",
+        "sha256": "sha256:bc9eb548560b402af2d1c755693ba646b4146a6a8c0162794754cba3e637e8c0",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-26-metachar_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-26/judgment.json",
+        "sha256": "sha256:49c796fd452c4867e2dbb4fcf735c4af1f2d2e33af4e2b053f123ae0a228831d",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-27-case_sensitive_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-27/judgment.json",
+        "sha256": "sha256:636e287a86912a9deb0814ad7e206a38dece8d1852c82f6001b9fa61e8ba6c75",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-28-combining_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-28/judgment.json",
+        "sha256": "sha256:25e8391636abb33c3384aa9f788099ad0eb7128e6a116cd2606c0f7bf76efcc5",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-29-lf_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-29/judgment.json",
+        "sha256": "sha256:329560295ff012b526ba9ff04566b028b93e51ca7d7f8e8bdada18d64f15f31c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-30-crlf_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-30/judgment.json",
+        "sha256": "sha256:e4c93f1139f5068079d8ae9b05288d3ffbe33bd8aa11ce67af4fcba6e6f23e5c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-31-bare_cr_positions",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-31/judgment.json",
+        "sha256": "sha256:bbb7890f55aee70f67ede1dac9bd683f2c54438cb720d331dae0c231d7681061",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-32-mixed_newlines",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-32/judgment.json",
+        "sha256": "sha256:fd4766200a58451b2462eb30f752568f9266b571e833f833b75095aa8a16068c",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-33-non_bmp_utf16",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-33/judgment.json",
+        "sha256": "sha256:d355034212214f7234b2cbebd3d82b79e1ce0253c2e673076755d811e5b33c4a",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-34-crossline_literal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-34/judgment.json",
+        "sha256": "sha256:ee391a923e230900b2333676e770462d33abf403d26ede8706e0758f1e1315bf",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-35-max_files_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-35/judgment.json",
+        "sha256": "sha256:038a6e6444fd0af2b8d13e074bdbcaf7797542597435bcb9978648baeea4a710",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-36-max_files_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-36/judgment.json",
+        "sha256": "sha256:e4245e4ad41af294e082d8a6bc3514b3013a955f16b0d3f9049532902de9ceed",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-37-max_source_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-37/judgment.json",
+        "sha256": "sha256:f1822bfa73c9cc5b50055a6b548cbe9b3a5fe297535788392286c94bbc1f256d",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-38-max_source_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-38/judgment.json",
+        "sha256": "sha256:a1fbebb12777f0edb689275dcf5382321955a09059c4c2b4f884719ece4cfd77",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-39-max_total_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-39/judgment.json",
+        "sha256": "sha256:b7d81756d400fa37b451de27ae9fed2e1c625192ad77a6ce6d54db2876ae9c38",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-40-max_total_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-40/judgment.json",
+        "sha256": "sha256:d42cfd0651cd8f45378968a52528b6abcc36887156d7f2a1bff9e0e138c9a610",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-41-max_path_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-41/judgment.json",
+        "sha256": "sha256:b9c58fd964e5756904efdbc8ccddca300a8a3299fdaba6833ecca381d4a70006",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-42-max_path_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-42/judgment.json",
+        "sha256": "sha256:a700e67c8c768e1912d7c7a67c3946d4507d0c89cd2b23a61cb5eaf84432892f",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-43-max_matches_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-43/judgment.json",
+        "sha256": "sha256:793ba25b95237f505e5315ef3a4b01a37b275e96e4f4af709a7d79cd1f1b43e8",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-44-max_matches_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-44/judgment.json",
+        "sha256": "sha256:cb28785b5c44bac2623cb13e75d8dca644ca292c420c046cf4a20bad05787338",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-45-max_work_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-45/judgment.json",
+        "sha256": "sha256:4e58f5501c841004627f47c532fd912ee465311d174d78ba997fabb04ef53776",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-46-max_work_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-46/judgment.json",
+        "sha256": "sha256:acdb28cba43738409fd62da9b9b3bab3ea292422462db0cf6660219f6563edf9",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-47-max_output_equal",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-47/judgment.json",
+        "sha256": "sha256:f6d6ae5867ed377a5695260c7c67d8bb5b114091e4d6f77049eeef2939a29568",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-48-max_output_plus_one",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-48/judgment.json",
+        "sha256": "sha256:7ab2b92a825d544115f45db51cbab7e88e4e69f4b30f460e97dd309c7dbb74ed",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-49-overflow_helper_case",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-49/judgment.json",
+        "sha256": "sha256:e2ddfcf74a5249d9b01569bac7ed7ef0965fba3ad74247dd5237fbaae5ef5de6",
+        "verdict": "PASS"
+      },
+      {
+        "case_id": "case-50-complete_location_pins_order",
+        "path": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d/cases/case-50/judgment.json",
+        "sha256": "sha256:50bd82793035ba48b2e02d227d18dc5f6364722a133f9654ef7181e1b0eee19f",
+        "verdict": "PASS"
+      }
+    ],
+    "namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-independent-review-correction-generation-8f6b2c4d"
+  },
+  "public_release_authorized": false,
+  "schema": "adr0007.final-binding-correction.audit.v1"
+}

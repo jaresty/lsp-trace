@@ -1,0 +1,8 @@
+{
+  "case_id": "case-09-control_simultaneous_deadline_cancel",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-09/production/derived.contract.json",
+  "production_derived_sha256": "sha256:7ed2bf3c4a6e140518a2b0f0001401034f31db3b7dac217428d05200cc81a68f",
+  "production_dispatch_used": false
+}

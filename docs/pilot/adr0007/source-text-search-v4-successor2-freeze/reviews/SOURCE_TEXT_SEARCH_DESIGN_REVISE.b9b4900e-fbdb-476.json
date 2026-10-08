@@ -1,0 +1,19 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor2-review-evidence.private.v1",
+  "kind": "final_revise_review",
+  "exact_verdict": "SOURCE_TEXT_SEARCH_DESIGN_REVISE",
+  "final_revise_reviewer_agent_id": "b9b4900e-fbdb-476",
+  "reviewed_git_commit": "43f0c6149bd608992126c2537d4bac65bf0ff6e9",
+  "result_identity": "not_available",
+  "task_identity": "not_available",
+  "scope": {
+    "subject": "ADR0007 source-text-search design final revise review",
+    "classification": "typed provenance correction only; reviewer agent is not a commit; reviewed_git_commit is the resolved git commit"
+  },
+  "authority": {
+    "authority_level": 0,
+    "accepted": false,
+    "design_go_self_issued": false,
+    "qualification_executed": false
+  }
+}

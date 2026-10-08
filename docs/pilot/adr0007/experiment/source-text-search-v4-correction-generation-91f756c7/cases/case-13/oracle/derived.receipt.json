@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:21acaa8e75402f6451883abd6a878927dba8e6dd5fd5b0eb4e4010045fa71704",
+  "case_id": "case-13-utf8_nfc_path",
+  "derived_sha256": "sha256:181217e64a3355d1c22f5e68b57fba7295eb9ba5eaeac2ddce441fe0627bd0d6",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

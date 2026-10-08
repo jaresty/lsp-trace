@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "sha256:1b0f335217d555e885557eb8267ce8ceacba3107079de6d9e7acf456581464ef",
+  "case_id": "case-20-ordinal_extra",
+  "end": "2026-10-08T12:53:41.107082Z",
+  "exit_status": 0,
+  "lane": "oracle",
+  "schema": "raw-result-receipt",
+  "start": "2026-10-08T12:53:41.093197Z",
+  "stderr_bytes": 0,
+  "stderr_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 2238,
+  "stdout_sha256": "sha256:12a8fad39f22c54dedce7bc473eec2814f90740d1b801e53a05161b2c29cb523"
+}

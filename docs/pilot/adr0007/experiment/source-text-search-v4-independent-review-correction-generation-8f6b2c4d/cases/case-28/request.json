@@ -1,0 +1,97 @@
+{
+  "allowed_inputs": {
+    "attempt": {
+      "bytes": 3031,
+      "path": "docs/pilot/adr0007/source-text-search-v4/cases/case-28-combining_literal/attempt.json",
+      "sha256": "sha256:385cfa06e51c8357a8be96df29caad842764423e89131e2fc0ced7c85acb55b0"
+    },
+    "commitment_validator_bundle": {
+      "bytes": 34254,
+      "path": "docs/pilot/adr0007/source-text-search-v4/oracle/case-28-combining_literal.validator-bundle.json",
+      "sha256": "sha256:679c53a89bc308580dbc46a30784bff444f105bf1a6fbfd29c102bcb3e66d839"
+    },
+    "oracle_derived_contract": {
+      "bytes": 3362,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/derived.contract.json",
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9"
+    },
+    "oracle_derived_receipt": {
+      "bytes": 294,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/derived.receipt.json",
+      "sha256": "sha256:9eee9a3a768ba7967a0ec9bc5b84e2f3d3df660fb30a7babbe7d10064c4b0cc6"
+    },
+    "oracle_raw_stderr": {
+      "bytes": 0,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/raw.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "oracle_raw_stdout": {
+      "bytes": 3362,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/raw.stdout",
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9"
+    },
+    "oracle_receipt": {
+      "bytes": 528,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/receipt.json",
+      "sha256": "sha256:a33d6a4dfd9107728e566a2b9b358daa826b82cda0a9ccb0da4319e551487ca4"
+    },
+    "oracle_validator_bundle": {
+      "bytes": 45546,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-correction-generation-91f756c7/cases/case-28/oracle/validator.bundle.json",
+      "sha256": "sha256:bf7d5f6f29906e782bb08622e72007bd6e8c061238168ea4894df35da2f76b5a"
+    },
+    "production_derived_contract": {
+      "bytes": 3362,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/derived.contract.json",
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9"
+    },
+    "production_derived_receipt": {
+      "bytes": 298,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/derived.receipt.json",
+      "sha256": "sha256:5a6d23b6c9a8fead4035420cbf4b06c29f6214fbdeb0c1fb1a0d80da211463a5"
+    },
+    "production_raw_stderr": {
+      "bytes": 0,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/raw.stderr",
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "production_raw_stdout": {
+      "bytes": 3362,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/raw.stdout",
+      "sha256": "sha256:6fc54d995d0f7bb14721666e92927647f38b377494636cd720bf07deb104ded9"
+    },
+    "production_receipt": {
+      "bytes": 531,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/receipt.json",
+      "sha256": "sha256:dd88f94453b4e10411d6389772a4f7332612135023f41547fa7eb1c51e3abca5"
+    },
+    "production_validator_bundle": {
+      "bytes": 45546,
+      "path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-28/production/validator.bundle.json",
+      "sha256": "sha256:bf7d5f6f29906e782bb08622e72007bd6e8c061238168ea4894df35da2f76b5a"
+    }
+  },
+  "case_id": "case-28-combining_literal",
+  "custody": "REVISE",
+  "forbidden_inputs": [
+    "historical expected files",
+    "campaign Review command",
+    "prior review raw/request/judgment files"
+  ],
+  "ordinal": 28,
+  "predecessor_bindings": {
+    "ledger": "sha256:a4e65491488f3a5907bab762261cff92c4d50336cd3fae961a9574184e16960d",
+    "terminal": "sha256:bea1b32bb92aecae7b142dae3e71d149e1bada5c003aa43871187f48790f2680"
+  },
+  "requested_checks": [
+    "recompute digests",
+    "exact production/oracle/raw/derived byte equality",
+    "terminal schema/outcome/accounting",
+    "binary separation",
+    "no retry/repair/substitution events",
+    "case binding",
+    "ceilings"
+  ],
+  "reviewer_assignment_identity": "pi-subagent-independent-mutating-custody-reviewer:/Users/schwa/dev/lsp-trace-adr0007-source-text-search-execution@cef7e0b44cf8c5895b2409cb7c36a4802c0796d6",
+  "schema": "adr0007.independent-review.request.v1"
+}

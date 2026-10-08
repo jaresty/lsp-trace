@@ -1,0 +1,32 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/custody.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "attempt_id": {
+      "pattern": "^attempt-[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "exactly_once": {
+      "const": true
+    },
+    "result_id": {
+      "pattern": "^result-[0-9a-f]{16}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.custody.private.v2"
+    },
+    "terminal": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "terminal",
+    "attempt_id",
+    "result_id",
+    "exactly_once"
+  ],
+  "type": "object"
+}

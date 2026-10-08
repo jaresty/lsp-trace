@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "sha256:1b0f335217d555e885557eb8267ce8ceacba3107079de6d9e7acf456581464ef",
+  "case_id": "case-47-max_output_equal",
+  "end": "2026-10-08T12:53:42.442905Z",
+  "exit_status": 0,
+  "lane": "oracle",
+  "schema": "raw-result-receipt",
+  "start": "2026-10-08T12:53:42.426937Z",
+  "stderr_bytes": 0,
+  "stderr_sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_bytes": 4050,
+  "stdout_sha256": "sha256:d05ae9170624bee183c94477f51acb8d715a29e333e26feef29a15d3b9244fde"
+}

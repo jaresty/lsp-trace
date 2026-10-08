@@ -1,0 +1,8 @@
+{
+  "case_id": "case-07-control_duplicate",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:7c385f500d7f3a42c0e4d54d89236258d390b8beb056882d4eab4dc22e187bef",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-07/production/derived.contract.json",
+  "production_derived_sha256": "sha256:7c385f500d7f3a42c0e4d54d89236258d390b8beb056882d4eab4dc22e187bef",
+  "production_dispatch_used": false
+}

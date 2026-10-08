@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:a77c218fcc95a01582320219a18242b86c2c8da486266fe326b8d3e8cfad5128",
+  "case_id": "case-23-admission_digest_order",
+  "derived_sha256": "sha256:b1be603fc14af9bc479fecc39587c1548a3dac3776b8ad1c792ac274eb261fd5",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

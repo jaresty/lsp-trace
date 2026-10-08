@@ -1,0 +1,17 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor2-review-evidence.private.v1",
+  "kind": "first_successor_revise_predecessor_binding",
+  "exact_verdict": "SOURCE_TEXT_SEARCH_DESIGN_REVISE",
+  "reviewer_agent_id": "agent82482ff4",
+  "reviewed_git_commit": "e659f01591dc42a64d4a8adc2508b98f8fafba09",
+  "scope": {
+    "subject": "first successor REVISE verdict bound as predecessor evidence",
+    "classification": "typed predecessor binding; reviewer agent is separate from reviewed git commit"
+  },
+  "authority": {
+    "authority_level": 0,
+    "accepted": false,
+    "design_go_self_issued": false,
+    "qualification_executed": false
+  }
+}

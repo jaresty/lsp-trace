@@ -1,0 +1,50 @@
+{
+  "$id": "lsp-trace.adr0007.source-text-search.input.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "limits": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "query": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "schema_version": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "source": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "query",
+    "source",
+    "limits"
+  ],
+  "type": "object"
+}

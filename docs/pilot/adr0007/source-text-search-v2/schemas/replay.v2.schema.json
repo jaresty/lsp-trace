@@ -1,0 +1,29 @@
+{
+  "$id": "https://jaresty.github.io/lsp-trace/private/adr0007/replay.v2.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "canonical_result_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.replay.private.v2"
+    },
+    "tooling_identity_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "canonical_request_sha256",
+    "canonical_result_sha256",
+    "tooling_identity_sha256"
+  ],
+  "type": "object"
+}

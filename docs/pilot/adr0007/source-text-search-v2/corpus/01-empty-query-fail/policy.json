@@ -1,0 +1,10 @@
+{
+  "allow_backend_semantics": false,
+  "allow_fuzzy": false,
+  "allow_model": false,
+  "allow_rank": false,
+  "allow_regex": false,
+  "allow_token": false,
+  "literal_mode": "EXACT_NONEMPTY_CASE_SENSITIVE_UTF8",
+  "schema_version": "lsp-trace.adr0007.source-text-search.policy.private.v2"
+}

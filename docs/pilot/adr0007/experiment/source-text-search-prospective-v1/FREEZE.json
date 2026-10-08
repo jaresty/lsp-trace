@@ -1,0 +1,91 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.freeze.v1",
+  "root_sha256": "sha256:01c83a3e63fb78846628b3b7e9aec957d5818af42dd1226ac50d3a0c6fc6d130",
+  "files": [
+    {
+      "path": "ALGORITHM.md",
+      "sha256": "sha256:2d50d77e5a0a17ad6c98eb25647fa669f4793737e9dddaa60df0d269286051a7",
+      "bytes": 717
+    },
+    {
+      "path": "DESIGN.md",
+      "sha256": "sha256:a9c1e9442e93c6dbd015c8e3553a84b816da127f2da26990734297f17c2918ca",
+      "bytes": 619
+    },
+    {
+      "path": "FREEZE.json",
+      "sha256": "sha256:f96972bac491639a6c3da595e28d5e7369416613852efc86993c28e785b3bb52",
+      "bytes": 2858
+    },
+    {
+      "path": "LIMITS.md",
+      "sha256": "sha256:709cdefa5f7e9f313d64ede270fe8dd8d8b1e78f8b0625ccf4473332c59e1d7a",
+      "bytes": 291
+    },
+    {
+      "path": "LOCATION_BINDING.md",
+      "sha256": "sha256:c8d4e0c1d4318ae88d9841e13c0acaee6113e41ed5a9c7e89dbc446584603de8",
+      "bytes": 342
+    },
+    {
+      "path": "POLICY.md",
+      "sha256": "sha256:5b8d894aaf5f3cd99eaa53d632dc4d3eebd69b7342d38161c77df0120ac3eef3",
+      "bytes": 295
+    },
+    {
+      "path": "PREDECESSORS.md",
+      "sha256": "sha256:b94bd042f661874a0de0666bc95a62c805f0647b5ae3fff9876a54cc190a503a",
+      "bytes": 181
+    },
+    {
+      "path": "REVIEW_ASSIGNMENT.md",
+      "sha256": "sha256:ed6688057294615ffc54e8de9a0ccd4839edbe8af3f8c0fc017917f282aa6a16",
+      "bytes": 240
+    },
+    {
+      "path": "SOURCE_ADMISSION_BINDING.md",
+      "sha256": "sha256:618f8fd1dc052366284970351ce74e8d1213c124f2e0586c3138b070b998d470",
+      "bytes": 277
+    },
+    {
+      "path": "SPEC_REVIEW_PENDING.md",
+      "sha256": "sha256:498b97d748cdfdb12946f66ce79c00695fa55d8ca400e661562082985248f4a9",
+      "bytes": 132
+    },
+    {
+      "path": "TEST_PLAN.md",
+      "sha256": "sha256:835054c0b9a1fe4f50a0f8261aaff6bfd9e1b8f474c0e8070ad3600311662467",
+      "bytes": 992
+    },
+    {
+      "path": "schemas/freeze-v1.schema.json",
+      "sha256": "sha256:b37b2cc642d07e805addcf6c5f326c9196e3e9e9dc5c6faa10263a7b1ca08d2d",
+      "bytes": 692
+    },
+    {
+      "path": "schemas/location-composition-v1.schema.json",
+      "sha256": "sha256:1859f6f48dfcd2a3964a4f1eced501c511ab4611ac946e791480557b9e75085f",
+      "bytes": 870
+    },
+    {
+      "path": "schemas/source-admission-binding-v1.schema.json",
+      "sha256": "sha256:f3e42625016d40bb08a05363d3d2f973868b07b5c8fb36b3cdcf452bd52539c6",
+      "bytes": 1160
+    },
+    {
+      "path": "schemas/source-text-search-failure-v1.schema.json",
+      "sha256": "sha256:068e6554ca76168b3ae25c3e0421d4547250638457de7be1435a338d9eaba060",
+      "bytes": 1483
+    },
+    {
+      "path": "schemas/source-text-search-input-v1.schema.json",
+      "sha256": "sha256:db47e49b804215aa3e26dae381bbaba7d6b4bac1151b63373eb05333cf778ab7",
+      "bytes": 831
+    },
+    {
+      "path": "schemas/source-text-search-result-v1.schema.json",
+      "sha256": "sha256:f9237a0c87086311aff8c5a0828e2c1e7f33635ef4739f100ba2bb4dcd6663e9",
+      "bytes": 1336
+    }
+  ]
+}

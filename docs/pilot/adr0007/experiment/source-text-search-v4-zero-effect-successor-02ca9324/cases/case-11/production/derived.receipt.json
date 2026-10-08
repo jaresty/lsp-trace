@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:e5003b5ef0881727f0d2ddfc37a1e73cdfa132f6e3fde4241438aa31540a8f65",
+  "case_id": "case-11-control_postmatch_deadline",
+  "derived_sha256": "sha256:b9186061c165c38962d557288bd0af6db48899046bbbbee547e1a6b4453c1237",
+  "lane": "production",
+  "schema": "derived-terminal-receipt"
+}

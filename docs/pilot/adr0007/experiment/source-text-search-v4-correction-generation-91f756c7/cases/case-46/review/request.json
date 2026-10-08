@@ -1,0 +1,8 @@
+{
+  "case_id": "case-46-max_work_plus_one",
+  "historical_expected_used": false,
+  "oracle_derived_sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+  "production_derived_path": "docs/pilot/adr0007/experiment/source-text-search-v4-zero-effect-successor-02ca9324/cases/case-46/production/derived.contract.json",
+  "production_derived_sha256": "sha256:d5d2ba3f5e8b22faaf252760272ef94996f187bad14fe45498ddc80abfac9533",
+  "production_dispatch_used": false
+}

@@ -1,0 +1,98 @@
+{
+  "attempt_id": "attempt-case-17-duplicate_path_same_revision",
+  "execution_control": {
+    "observations": [],
+    "schema_version": "lsp-trace.adr0007.source-text-search.execution-control.private.v4"
+  },
+  "request": {
+    "limits": {
+      "max_files": 8,
+      "max_matches": 8,
+      "max_output_bytes": 999999,
+      "max_path_bytes": 999999,
+      "max_source_bytes": 999999,
+      "max_total_bytes": 999999,
+      "max_work": 999999,
+      "schema_version": "lsp-trace.adr0007.source-text-search.limits.private.v4"
+    },
+    "location_pin": {
+      "complete_location_pins": [
+        "design_commit",
+        "design_root_sha256",
+        "execution_commit",
+        "seal_commit",
+        "final_seal_sha256",
+        "source_admission_pin"
+      ],
+      "design_commit": "c943a484060462121c6f0929d4182b053ff95ab5",
+      "design_root_sha256": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d",
+      "executedLocation": false,
+      "execution_commit": "f0f8b49aa368bea9b3e6d105eef5cb2614221067",
+      "final_seal_sha256": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6",
+      "operation": "RANGE_UNION",
+      "schema_version": "lsp-trace.adr0007.source-text-search.location-pin.private.v4",
+      "seal_commit": "16f40dcb03a234b00db80059a7eef400495e9d97",
+      "source_admission_pin": {
+        "bytes": 3519,
+        "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
+        "path": "internal/sourceadmissionv2/admission.go",
+        "repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496",
+        "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da",
+        "symbols": [
+          "Admit",
+          "CanonicalPath",
+          "Digest"
+        ]
+      }
+    },
+    "policy": {
+      "allow_backend_semantics": false,
+      "allow_fuzzy": false,
+      "allow_model": false,
+      "allow_rank": false,
+      "allow_regex": false,
+      "allow_token": false,
+      "literal_mode": "byte-literal",
+      "schema_version": "lsp-trace.adr0007.source-text-search.policy.private.v4"
+    },
+    "query": "needle",
+    "schema_version": "lsp-trace.adr0007.source-text-search.request.private.v4",
+    "sources": [
+      {
+        "file_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+        "object_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+        "ordinal": 1,
+        "path": "a.txt",
+        "revision": "rev1"
+      },
+      {
+        "file_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+        "object_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+        "ordinal": 2,
+        "path": "a.txt",
+        "revision": "rev2"
+      }
+    ]
+  },
+  "schema_version": "lsp-trace.adr0007.source-text-search.attempt.private.v4",
+  "source_inputs": [
+    {
+      "bytes_base64": "YWxwaGEgbmVlZGxlIGJldGEgbmVlZGxl",
+      "file_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+      "object_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+      "ordinal": 1,
+      "path": "a.txt",
+      "revision": "rev1",
+      "schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4"
+    },
+    {
+      "bytes_base64": "YWxwaGEgbmVlZGxlIGJldGEgbmVlZGxl",
+      "file_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+      "object_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
+      "ordinal": 2,
+      "path": "a.txt",
+      "revision": "rev2",
+      "schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4"
+    }
+  ]
+}

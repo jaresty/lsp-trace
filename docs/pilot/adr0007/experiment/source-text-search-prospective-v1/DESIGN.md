@@ -1,0 +1,3 @@
+# Source Text Search Prospective v1 Design Candidate
+
+Immutable private ADR0007 candidate. Normative scope is exactly nonempty case-sensitive UTF-8 literal search over admitted source text. The result reports overlapping matches with byte and UTF-16 half-open ranges, exact path/revision/file/object/admission binding, deterministic path-byte/offset ordering, explicit limits/work/output accounting, and strict fail-closed behavior. It makes authority0 acceptedfalse completenessUNKNOWN featureIdentityUNRESOLVED claims only. No regex, fuzzy matching, tokenization, ranking, inference, or feature identity is in scope.

@@ -1,0 +1,7 @@
+{
+  "bytes": 4767309,
+  "members": 331,
+  "pre_freeze_root_sha256": "sha256:01df412bc5cce1e0adb824560fd7e5d2ff7f6c2621c2176062b4a170d763d367",
+  "schema_version": "lsp-trace.adr0007.source-text-search.freeze-envelope.dryrun.v1",
+  "status": "DRYRUN_ONLY_NOT_FINAL_FREEZE"
+}

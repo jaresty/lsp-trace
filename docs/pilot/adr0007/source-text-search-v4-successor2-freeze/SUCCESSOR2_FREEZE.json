@@ -1,0 +1,32 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor2-freeze-envelope.private.v1",
+  "status": "SOURCE_TEXT_SEARCH_V4_SUCCESSOR2_FREEZE_CANDIDATE",
+  "stage": "successor2_freeze_candidate",
+  "successor2_root_sha256": "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf",
+  "successor2_manifest": "docs/pilot/adr0007/source-text-search-v4-successor2-freeze/SUCCESSOR2_MANIFEST.json",
+  "successor2_manifest_sha256": "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9",
+  "successor2_census": "docs/pilot/adr0007/source-text-search-v4-successor2-freeze/SUCCESSOR2_TOOLING_CENSUS.json",
+  "successor2_census_sha256": "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e",
+  "original_freeze_root_sha256": "sha256:01df412bc5cce1e0adb824560fd7e5d2ff7f6c2621c2176062b4a170d763d367",
+  "original_freeze_json_sha256": "sha256:197b814ab6796ed35c9f59bfc70e6105ba2048db4556ae4ab6105151fe45bf2e",
+  "first_successor_root_sha256": "sha256:3dca46f4845400371519f19a7caba600ea11f09151174fcace76f7cdd40ab403",
+  "first_successor_freeze_json_sha256": "sha256:6a64a5b6f8aa91d23fa6f58ae28c38e66d3c9aa21613e2b5e8bab1bf0974da65",
+  "final_revise_artifact": "docs/pilot/adr0007/source-text-search-v4-successor2-freeze/reviews/SOURCE_TEXT_SEARCH_DESIGN_REVISE.b9b4900e-fbdb-476.json",
+  "final_revise_artifact_sha256": "sha256:5b6373f256b20a2655d0c88e1fc30f4427e467ca26e75bd28ab8633e5baadceb",
+  "first_successor_revise_artifact": "docs/pilot/adr0007/source-text-search-v4-successor2-freeze/reviews/FIRST_SUCCESSOR_SOURCE_TEXT_SEARCH_DESIGN_REVISE.agent82482ff4.json",
+  "first_successor_revise_artifact_sha256": "sha256:0d65f4550db902f0ce21a25fddd60bd5654b7da54bad4dc83f6ce0dab29b5010",
+  "authority": {
+    "authority_level": 0,
+    "accepted": false,
+    "design_go_self_issued": false,
+    "qualification_executed": false,
+    "final_revise_exact_verdict": "SOURCE_TEXT_SEARCH_DESIGN_REVISE",
+    "final_revise_reviewer_agent_id": "b9b4900e-fbdb-476",
+    "final_revise_reviewed_git_commit": "43f0c6149bd608992126c2537d4bac65bf0ff6e9",
+    "final_revise_result_identity": "not_available",
+    "final_revise_task_identity": "not_available",
+    "first_successor_revise_exact_verdict": "SOURCE_TEXT_SEARCH_DESIGN_REVISE",
+    "first_successor_revise_reviewer_agent_id": "agent82482ff4",
+    "first_successor_revise_reviewed_git_commit": "e659f01591dc42a64d4a8adc2508b98f8fafba09"
+  }
+}

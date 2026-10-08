@@ -1,0 +1,7 @@
+{
+  "bundle_sha256": "sha256:b21ab5bc70b2004e07fd7014c64548c914f34840049f8a475d4df692a8f7b7d3",
+  "case_id": "case-31-bare_cr_positions",
+  "derived_sha256": "sha256:de2a022e54cb11ff062a331badff89c827f22bde9119f7a8aed6f4c735f62a52",
+  "lane": "oracle",
+  "schema": "derived-terminal-receipt"
+}

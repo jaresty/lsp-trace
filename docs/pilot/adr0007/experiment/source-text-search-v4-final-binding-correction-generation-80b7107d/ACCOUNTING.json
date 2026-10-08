@@ -1,0 +1,22 @@
+{
+  "authority": 0,
+  "created_namespace": "docs/pilot/adr0007/experiment/source-text-search-v4-final-binding-correction-generation-80b7107d",
+  "custody": "PENDING_FINAL_EXTERNAL_REVIEW",
+  "custody_go_self_claim": false,
+  "events_created": [
+    "BINDING_CORRECTION_AUTHORIZED",
+    "AUDIT",
+    "SEAL"
+  ],
+  "head": "80b7107d970a39a5ad2dbc1213f7f95a1aef13a6",
+  "historical_defective_predecessor_evidence": "prior abbreviated AUTHORIZED_BINDINGS is not authority",
+  "judgments_inherited": 50,
+  "judgments_recomputed_or_reexecuted": 0,
+  "oracle_dispatches": 0,
+  "production_dispatches": 0,
+  "public_release_authorized": false,
+  "schema": "adr0007.final-binding-correction.accounting.v1",
+  "semantic_execution_rerun": false,
+  "semantic_results_inheritance": "inherited_by_exact_digest_from_prior_independent_review_generation",
+  "semantic_review_rerun": false
+}

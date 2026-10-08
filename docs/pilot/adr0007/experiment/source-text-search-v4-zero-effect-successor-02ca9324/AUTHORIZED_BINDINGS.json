@@ -1,0 +1,19 @@
+{
+  "accepted": false,
+  "authority": 0,
+  "authorization_agent": "agentbfc329cd",
+  "authorization_verdict": "ZERO_EFFECT_SUCCESSOR_AUTHORIZATION",
+  "blocked_predecessor_campaign_id": "source-text-search-v4-qualification-34ed9915",
+  "campaign_id": "source-text-search-v4-zero-effect-successor-02ca9324",
+  "census": "sha256:644714a43aa95bea60a065b8038d6fc48f4dce944efdfd6913d604613025c98e",
+  "completeness": "UNKNOWN",
+  "design_go_agent": "agentbfc329cd",
+  "envelope": "sha256:46c4b3d140cb18e891b8e5471c2dc4d6a8ee0e7c84d60adebf96bc63089f4952",
+  "failure_custody_verdict": "SOURCE_TEXT_SEARCH_CAMPAIGN_ZERO_EFFECT_SUCCESSOR_GO",
+  "featureIdentity": "UNRESOLVED",
+  "head": "02ca93249f9f77164785617442f622006e3185c2",
+  "historical_expected_results": "frozen provenance only; never qualification oracle",
+  "manifest": "sha256:e47c41770e759884560ffd6f8f6d73227003e5941214688396dddd8e757adbf9",
+  "schema": "lsp-trace.adr0007.source-text-search.campaign-definition.private.v1",
+  "successor2_root": "sha256:f885c60275246dc660f07dffa53e3a929abd2105cf79c8b6a7597a8924decdbf"
+}
