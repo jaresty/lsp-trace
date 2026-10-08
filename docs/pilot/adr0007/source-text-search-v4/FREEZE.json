@@ -1,0 +1,86 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.freeze-envelope.private.v1",
+  "stage": "final_freeze",
+  "status": "SOURCE_TEXT_SEARCH_V4_FINAL_FREEZE",
+  "immutability": {
+    "schema_binding": "immutable_design_candidate",
+    "design_artifact": {
+      "path": "docs/pilot/adr0007/source-text-search-v4/FREEZE_DESIGN.md",
+      "sha256": "sha256:63aead2715dcdaa49dcd48ad61e38d003ab2df59736a9f2494605eba69273015"
+    },
+    "covered_member_bytes_mutated_by_final_freeze": false,
+    "nonrecursive_outer_envelope_rule": "docs/pilot/adr0007/source-text-search-v4/FREEZE.json is excluded from the 331-member pre-freeze root and does not change any covered member preimage"
+  },
+  "payload": {
+    "source_commit": "d7181fc2fda9d78b0b8f632bd20938c0687f9efe",
+    "pre_freeze_commit": "d7181fc2fda9d78b0b8f632bd20938c0687f9efe",
+    "pre_freeze_root_sha256": "sha256:01df412bc5cce1e0adb824560fd7e5d2ff7f6c2621c2176062b4a170d763d367",
+    "normative_member_count": 331,
+    "normative_bytes": 4767309,
+    "pre_freeze_manifest": {
+      "path": "docs/pilot/adr0007/source-text-search-v4/PRE_FREEZE_MANIFEST.json",
+      "sha256": "sha256:fa2fbf40b3853f350d7e443266a65dd34223deec772a3be882879577419255cd"
+    }
+  },
+  "verifier": {
+    "path": "cmd/adr0007-source-text-search-v4-private-prefreeze/main.go",
+    "command": "go run ./cmd/adr0007-source-text-search-v4-private-prefreeze -mode verify",
+    "sha256": "sha256:b19fd69672609ff4c7f24cb34f3e3b1b899afe83eddd8ec4cf54d9fb4e30be53",
+    "final_envelope_code_change_required": false
+  },
+  "readiness_verdict": {
+    "terminal": "SOURCE_TEXT_SEARCH_V4_PREFREEZE_READY",
+    "artifact": "docs/pilot/adr0007/source-text-search-v4/PRE_FREEZE_MANIFEST.json",
+    "task": "freeze only after pre-freeze readiness; do not self-issue DESIGN_GO or execute qualification",
+    "limits": {
+      "max_cases": 50,
+      "max_complete": 21,
+      "max_failed": 29,
+      "max_normative_members": 331,
+      "max_normative_bytes": 4767309
+    }
+  },
+  "oracle_independence": {
+    "verdict": "RAW_DERIVE_GO",
+    "artifact": "docs/pilot/adr0007/source-text-search-v4/reviews/RAW_DERIVE_GO.review19af02a9.md",
+    "artifact_sha256": "sha256:50f4d6ed837254a5eaa461f6151a912b3134a6e81657ec3e37a51004f3121817",
+    "scope": "contract RAW_DERIVE_GO"
+  },
+  "authority": {
+    "authority_level": 0,
+    "accepted": false,
+    "custody": "UNKNOWN",
+    "resolution": "UNRESOLVED"
+  },
+  "privacy_and_release": {
+    "privacy": "private",
+    "default_off": true,
+    "execution": "unauthorized",
+    "public": "unauthorized",
+    "cli": "unauthorized",
+    "mcp": "unauthorized",
+    "release": "unauthorized",
+    "push": "unauthorized"
+  },
+  "root_exclusions": {
+    "declared_nonrecursive_excluded_outer_envelope": "docs/pilot/adr0007/source-text-search-v4/FREEZE.json",
+    "pre_freeze_manifest_excluded_self": "docs/pilot/adr0007/source-text-search-v4/PRE_FREEZE_MANIFEST.json",
+    "dryrun_envelope_excluded": "docs/pilot/adr0007/source-text-search-v4/FREEZE_ENVELOPE.dryrun.json",
+    "review_assignment_paths_excluded_from_331_member_root": [],
+    "pending_marker_paths_excluded_from_331_member_root": []
+  },
+  "prohibitions": {
+    "covered_member_byte_mutation": "unauthorized",
+    "verifier_mutation": "unauthorized",
+    "implementation_mutation": "unauthorized",
+    "oracle_mutation": "unauthorized",
+    "contract_mutation": "unauthorized",
+    "case_mutation": "unauthorized",
+    "manifest_mutation": "unauthorized",
+    "go_file_mutation": "unauthorized",
+    "module_lock_mutation": "unauthorized",
+    "predecessor_mutation": "unauthorized",
+    "design_go_self_issuance": "unauthorized",
+    "qualification_execution": "unauthorized"
+  }
+}
