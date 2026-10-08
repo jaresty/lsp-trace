@@ -1,0 +1,660 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "lsp-trace.adr0007.source-text-search.terminal.private.v4",
+  "title": "ADR0007 source text search strict private v4 terminal envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "terminal",
+    "request",
+    "attempt",
+    "control",
+    "sources",
+    "admission",
+    "matches",
+    "positions",
+    "range_union_candidate",
+    "policy",
+    "limits",
+    "accounting",
+    "failure",
+    "custody",
+    "replay",
+    "tooling",
+    "predecessor",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "lsp-trace.adr0007.source-text-search.terminal.private.v4"
+    },
+    "terminal": {
+      "enum": [
+        "COMPLETE",
+        "FAILED"
+      ]
+    },
+    "request": {
+      "$ref": "#/$defs/request"
+    },
+    "attempt": {
+      "$ref": "#/$defs/attempt"
+    },
+    "control": {
+      "$ref": "#/$defs/control"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "minItems": 1
+    },
+    "admission": {
+      "$ref": "#/$defs/admission"
+    },
+    "matches": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/match"
+      }
+    },
+    "positions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/position"
+      }
+    },
+    "range_union_candidate": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/candidate"
+        }
+      ]
+    },
+    "policy": {
+      "$ref": "#/$defs/policy"
+    },
+    "limits": {
+      "$ref": "#/$defs/limits"
+    },
+    "accounting": {
+      "$ref": "#/$defs/accounting"
+    },
+    "failure": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/failure"
+        }
+      ]
+    },
+    "custody": {
+      "$ref": "#/$defs/custody"
+    },
+    "replay": {
+      "$ref": "#/$defs/replay"
+    },
+    "tooling": {
+      "$ref": "#/$defs/tooling"
+    },
+    "predecessor": {
+      "$ref": "#/$defs/predecessor"
+    },
+    "payload": {
+      "$ref": "#/$defs/payload"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "terminal": {
+            "const": "COMPLETE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "failure": {
+            "type": "null"
+          },
+          "range_union_candidate": {
+            "$ref": "#/$defs/candidate"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "terminal": {
+            "const": "FAILED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "matches": {
+            "maxItems": 0
+          },
+          "range_union_candidate": {
+            "type": "null"
+          },
+          "failure": {
+            "$ref": "#/$defs/failure"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uint64": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 18446744073709552000
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "raw_sha256",
+        "query_utf8",
+        "source_set_digest"
+      ],
+      "properties": {
+        "request_id": {
+          "$ref": "#/$defs/id"
+        },
+        "raw_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "query_utf8": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_set_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_id",
+        "attempt_ordinal",
+        "malformed_raw"
+      ],
+      "properties": {
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^(attempt-[A-Za-z0-9._:-]+|attempt-raw-sha256-[0-9a-f]{64})$"
+        },
+        "attempt_ordinal": {
+          "$ref": "#/$defs/uint64"
+        },
+        "malformed_raw": {
+          "type": "boolean"
+        }
+      }
+    },
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cancel_requested",
+        "deadline_unix_nanos",
+        "control_digest"
+      ],
+      "properties": {
+        "cancel_requested": {
+          "type": "boolean"
+        },
+        "deadline_unix_nanos": {
+          "$ref": "#/$defs/uint64"
+        },
+        "control_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "logical_uri",
+        "revision",
+        "content_sha256",
+        "byte_length",
+        "admission_ordinal"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "logical_uri": {
+          "type": "string",
+          "pattern": "^file:///.+"
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "content_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byte_length": {
+          "$ref": "#/$defs/uint64"
+        },
+        "admission_ordinal": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "completed",
+        "admitted_source_ids",
+        "admission_digest"
+      ],
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        },
+        "admitted_source_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "admission_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "match": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "match_id",
+        "source_id",
+        "start_byte",
+        "end_byte",
+        "literal_sha256"
+      ],
+      "properties": {
+        "match_id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "start_byte": {
+          "$ref": "#/$defs/uint64"
+        },
+        "end_byte": {
+          "$ref": "#/$defs/uint64"
+        },
+        "literal_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "match_id",
+        "start_line",
+        "start_character_utf8",
+        "end_line",
+        "end_character_utf8"
+      ],
+      "properties": {
+        "match_id": {
+          "$ref": "#/$defs/id"
+        },
+        "start_line": {
+          "$ref": "#/$defs/uint64"
+        },
+        "start_character_utf8": {
+          "$ref": "#/$defs/uint64"
+        },
+        "end_line": {
+          "$ref": "#/$defs/uint64"
+        },
+        "end_character_utf8": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_id",
+        "member_match_ids",
+        "range_digest"
+      ],
+      "properties": {
+        "candidate_id": {
+          "$ref": "#/$defs/id"
+        },
+        "member_match_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "range_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "literal_mode",
+        "normalization",
+        "authority",
+        "accepted"
+      ],
+      "properties": {
+        "literal_mode": {
+          "const": "EXACT_NONEMPTY_CASE_SENSITIVE_UTF8"
+        },
+        "normalization": {
+          "const": "NONE"
+        },
+        "authority": {
+          "const": "authority0"
+        },
+        "accepted": {
+          "const": false
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_sources",
+        "max_source_bytes",
+        "max_total_source_bytes",
+        "max_matches",
+        "max_work",
+        "max_output_bytes"
+      ],
+      "properties": {
+        "max_sources": {
+          "$ref": "#/$defs/uint64"
+        },
+        "max_source_bytes": {
+          "$ref": "#/$defs/uint64"
+        },
+        "max_total_source_bytes": {
+          "$ref": "#/$defs/uint64"
+        },
+        "max_matches": {
+          "$ref": "#/$defs/uint64"
+        },
+        "max_work": {
+          "$ref": "#/$defs/uint64"
+        },
+        "max_output_bytes": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "accounting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "J",
+        "Q",
+        "P",
+        "S",
+        "T",
+        "M",
+        "R",
+        "U",
+        "B",
+        "W",
+        "fail_parse",
+        "fail_admission",
+        "fail_resource",
+        "fail_cancelled",
+        "fail_deadline",
+        "fail_overflow",
+        "fail_internal",
+        "fail_policy"
+      ],
+      "properties": {
+        "J": {
+          "$ref": "#/$defs/uint64"
+        },
+        "Q": {
+          "$ref": "#/$defs/uint64"
+        },
+        "P": {
+          "$ref": "#/$defs/uint64"
+        },
+        "S": {
+          "$ref": "#/$defs/uint64"
+        },
+        "T": {
+          "$ref": "#/$defs/uint64"
+        },
+        "M": {
+          "$ref": "#/$defs/uint64"
+        },
+        "R": {
+          "$ref": "#/$defs/uint64"
+        },
+        "U": {
+          "$ref": "#/$defs/uint64"
+        },
+        "B": {
+          "$ref": "#/$defs/uint64"
+        },
+        "W": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_parse": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_admission": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_resource": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_cancelled": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_deadline": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_overflow": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_internal": {
+          "$ref": "#/$defs/uint64"
+        },
+        "fail_policy": {
+          "$ref": "#/$defs/uint64"
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "PARSE",
+            "ADMISSION",
+            "RESOURCE",
+            "CANCELLED",
+            "DEADLINE",
+            "OVERFLOW",
+            "INTERNAL",
+            "POLICY"
+          ]
+        },
+        "detail": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      }
+    },
+    "custody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "producer",
+        "authority",
+        "accepted",
+        "state",
+        "resolution",
+        "custody_digest"
+      ],
+      "properties": {
+        "producer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority": {
+          "const": "authority0"
+        },
+        "accepted": {
+          "const": false
+        },
+        "state": {
+          "const": "UNKNOWN"
+        },
+        "resolution": {
+          "const": "UNRESOLVED"
+        },
+        "custody_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_json_profile",
+        "raw_input_sha256",
+        "terminal_sha256",
+        "replay_digest"
+      ],
+      "properties": {
+        "canonical_json_profile": {
+          "const": "UTF8_SORTED_KEYS_ONE_LF"
+        },
+        "raw_input_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "terminal_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "replay_digest": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "tooling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "validator",
+        "contract_commit",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "validator": {
+          "const": "adr0007-source-text-search-v4-contract-validate"
+        },
+        "contract_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
+        },
+        "manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wire_versions_preserved"
+      ],
+      "properties": {
+        "wire_versions_preserved": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "v1",
+              "v2",
+              "v3"
+            ]
+          },
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payload_digest",
+        "frozen",
+        "members"
+      ],
+      "properties": {
+        "payload_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "frozen": {
+          "const": true
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}
