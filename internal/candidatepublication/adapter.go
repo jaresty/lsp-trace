@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/publication"
@@ -24,13 +26,12 @@ const (
 	qualificationReceiptSchema = "lsp-trace.private-candidate-publication-receipt.v1"
 	qualificationNamespace     = "candidate-publication/qualification-receipts"
 	currentSelector            = "candidate-publication/current.selector.json"
+	currentLockSelector        = "candidate-publication/current.selector.lock"
 
 	PostcommitVerificationFailed = "COMMITTED_VERIFICATION_FAILED"
 )
 
-type Options struct {
-	MaxBytes int64
-}
+type Options struct{ MaxBytes int64 }
 
 type Adapter struct {
 	root      *publication.Root
@@ -59,15 +60,18 @@ type Representative struct {
 }
 
 type PublishedGeneration struct {
-	Selector                     string
-	Generation                   string
-	VerificationSelector         string
-	ArtifactSelector             string
-	ByteCustodyReceiptSelector   string
-	QualificationReceiptSelector string
-	PublicationMechanism         string
-	Committed                    bool
-	PostcommitVerificationStatus string
+	Selector                                 string
+	Generation                               string
+	VerificationSelector                     string
+	ArtifactSelector                         string
+	ByteCustodyReceiptSelector               string
+	QualificationReceiptSelector             string
+	QualificationReceiptVerificationSelector string
+	QualificationReceiptDigest               string
+	QualificationReceiptByteLength           uint64
+	PublicationMechanism                     string
+	Committed                                bool
+	PostcommitVerificationStatus             string
 }
 
 type AdvanceRequest struct {
@@ -77,10 +81,15 @@ type AdvanceRequest struct {
 }
 
 type CurrentGeneration struct {
-	Selector                     string `json:"selector"`
-	Generation                   string `json:"generation"`
-	VerificationSelector         string `json:"verification_selector"`
-	QualificationReceiptSelector string `json:"qualification_receipt_selector"`
+	Selector                                 string `json:"selector"`
+	Generation                               string `json:"generation"`
+	VerificationSelector                     string `json:"verification_selector"`
+	CandidateDigest                          string `json:"candidate_digest"`
+	CandidateByteLength                      uint64 `json:"candidate_byte_length"`
+	QualificationReceiptSelector             string `json:"qualification_receipt_selector"`
+	QualificationReceiptVerificationSelector string `json:"qualification_receipt_verification_selector"`
+	QualificationReceiptDigest               string `json:"qualification_receipt_digest"`
+	QualificationReceiptByteLength           uint64 `json:"qualification_receipt_byte_length"`
 }
 
 type CandidateGeneration struct {
@@ -111,6 +120,15 @@ type Receipt struct {
 	FeatureIdentityStatus string         `json:"feature_identity_status"`
 }
 
+type qualificationIndex struct {
+	SchemaVersion                string `json:"schema_version"`
+	Generation                   string `json:"generation"`
+	QualificationReceiptSelector string `json:"qualification_receipt_selector"`
+	VerificationSelector         string `json:"verification_selector"`
+	Digest                       string `json:"digest"`
+	ByteLength                   uint64 `json:"byte_length"`
+}
+
 func NewRepositoryPrivateAdapter(root *publication.Root, opts Options) (*Adapter, error) {
 	if root == nil || opts.MaxBytes < 1 {
 		return nil, errors.New("candidatepublication: invalid adapter configuration")
@@ -121,12 +139,8 @@ func NewRepositoryPrivateAdapter(root *publication.Root, opts Options) (*Adapter
 	return &Adapter{root: root, publisher: publication.NewPublisher(), maxBytes: opts.MaxBytes}, nil
 }
 
-func DigestBytes(raw []byte) []byte {
-	sum := sha256.Sum256(raw)
-	return sum[:]
-}
-
-func Digest(raw []byte) string { return "sha256:" + hex.EncodeToString(DigestBytes(raw)) }
+func DigestBytes(raw []byte) []byte { sum := sha256.Sum256(raw); return sum[:] }
+func Digest(raw []byte) string      { return "sha256:" + hex.EncodeToString(DigestBytes(raw)) }
 
 func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishRequest) (PublishedGeneration, error) {
 	if err := ctx.Err(); err != nil {
@@ -156,28 +170,34 @@ func (a *Adapter) PublishCandidateGeneration(ctx context.Context, req PublishReq
 		return PublishedGeneration{}, published.Failure
 	}
 	generation := published.Receipt.Generation
-	out := PublishedGeneration{
-		Generation:                   generation,
-		VerificationSelector:         published.Receipt.VerificationSelector,
-		ArtifactSelector:             generation + "/artifact.json",
-		ByteCustodyReceiptSelector:   generation + "/receipt.json",
-		QualificationReceiptSelector: qualificationReceiptSelector(generation),
-		PublicationMechanism:         published.Receipt.PublicationMechanism,
-	}
+	out := PublishedGeneration{Generation: generation, VerificationSelector: published.Receipt.VerificationSelector, ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", PublicationMechanism: published.Receipt.PublicationMechanism}
 	receipt, err := qualificationReceipt(req, generation)
 	if err != nil {
-		return PublishedGeneration{}, err
+		return out, err
 	}
 	rawReceipt, err := json.Marshal(receipt)
 	if err != nil {
-		return PublishedGeneration{}, err
+		return out, err
 	}
 	rawReceipt = append(rawReceipt, '\n')
 	if err := ctx.Err(); err != nil {
-		return PublishedGeneration{}, err
+		return out, err
 	}
-	if err := a.publishImmutable(out.QualificationReceiptSelector, rawReceipt, qualificationReceiptSchema); err != nil {
-		return PublishedGeneration{}, err
+	qualified := a.publisher.PublishVerifiedGeneration(a.root, rawReceipt, qualificationReceiptSchema)
+	if qualified.Failure != nil {
+		return out, qualified.Failure
+	}
+	qGen := qualified.Receipt.Generation
+	out.QualificationReceiptSelector = qGen + "/artifact.json"
+	out.QualificationReceiptVerificationSelector = qualified.Receipt.VerificationSelector
+	out.QualificationReceiptDigest = qualified.Receipt.Digest
+	out.QualificationReceiptByteLength = qualified.Receipt.ByteLength
+	if err := ctx.Err(); err != nil {
+		return out, err
+	}
+	idx := qualificationIndex{SchemaVersion: "lsp-trace.private-candidate-publication-index.v1", Generation: generation, QualificationReceiptSelector: out.QualificationReceiptSelector, VerificationSelector: out.QualificationReceiptVerificationSelector, Digest: out.QualificationReceiptDigest, ByteLength: out.QualificationReceiptByteLength}
+	if err := a.writeQualificationIndex(idx); err != nil {
+		return out, err
 	}
 	return out, nil
 }
@@ -189,37 +209,24 @@ func (a *Adapter) AdvanceCandidateGeneration(ctx context.Context, req AdvanceReq
 	if a == nil || a.root == nil || req.Generation == "" || req.VerificationSelector == "" {
 		return PublishedGeneration{}, errors.New("candidatepublication: invalid advance request")
 	}
-	candidate, receipt, err := a.verifyGenerationAndReceipt(req.Generation, req.VerificationSelector)
+	candidate, receipt, idx, err := a.verifyGenerationAndReceipt(req.Generation, req.VerificationSelector)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
-	if receipt.PredecessorSelector != req.PredecessorSelector {
-		return PublishedGeneration{}, errors.New("candidatepublication: predecessor selector mismatch")
+	if err := ctx.Err(); err != nil {
+		return PublishedGeneration{}, err
 	}
-	selector := CurrentGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, QualificationReceiptSelector: qualificationReceiptSelector(req.Generation)}
-	selectorBytes, err := json.Marshal(selector)
+	current := CurrentGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, CandidateDigest: Digest(candidate), CandidateByteLength: uint64(len(candidate)), QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength}
+	selectorBytes, err := json.Marshal(current)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
 	selectorBytes = append(selectorBytes, '\n')
-	if err := ctx.Err(); err != nil {
-		return PublishedGeneration{}, err
-	}
-	boundReceipt, err := publication.PublishBoundFile(a.root, currentSelector, selectorBytes, func(got []byte) error {
-		var decoded CurrentGeneration
-		if err := decodeStrict(got, &decoded); err != nil {
-			return err
-		}
-		if decoded.Generation != req.Generation || decoded.VerificationSelector != req.VerificationSelector || decoded.QualificationReceiptSelector != qualificationReceiptSelector(req.Generation) {
-			return errors.New("candidatepublication: current selector verification mismatch")
-		}
-		return nil
-	})
+	boundReceipt, err := a.casCurrent(ctx, req.PredecessorSelector, receipt.PredecessorSelector, selectorBytes)
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
-	_ = candidate
-	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: qualificationReceiptSelector(req.Generation), PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: true, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
+	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: true, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
 }
 
 func (a *Adapter) CurrentCandidateGeneration(ctx context.Context) (CurrentGeneration, error) {
@@ -237,6 +244,9 @@ func (a *Adapter) CurrentCandidateGeneration(ctx context.Context) (CurrentGenera
 	if err := decodeStrict(raw, &current); err != nil {
 		return CurrentGeneration{}, err
 	}
+	if err := a.validateCurrent(current); err != nil {
+		return CurrentGeneration{}, err
+	}
 	return current, nil
 }
 
@@ -244,66 +254,204 @@ func (a *Adapter) GetCandidateGeneration(ctx context.Context, generation string)
 	if err := ctx.Err(); err != nil {
 		return CandidateGeneration{}, err
 	}
-	candidate, receipt, err := a.verifyGenerationAndReceipt(generation, generation+".selector.json")
+	candidate, receipt, idx, err := a.verifyGenerationAndReceipt(generation, generation+".selector.json")
 	if err != nil {
 		return CandidateGeneration{}, err
 	}
-	return CandidateGeneration{CandidateBytes: candidate, Receipt: receipt, Published: PublishedGeneration{Generation: generation, VerificationSelector: generation + ".selector.json", ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", QualificationReceiptSelector: qualificationReceiptSelector(generation), PublicationMechanism: publication.VerifiedGenerationMechanism}}, nil
+	return CandidateGeneration{CandidateBytes: candidate, Receipt: receipt, Published: PublishedGeneration{Generation: generation, VerificationSelector: generation + ".selector.json", ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism}}, nil
 }
 
-func (a *Adapter) publishImmutable(selector string, raw []byte, schema string) error {
-	result := a.publisher.Publish(publication.Request{Root: a.root, Selector: selector, Bytes: append([]byte(nil), raw...), ArtifactSchemaID: schema})
-	if result.Failure == nil {
-		if result.Receipt == nil || result.Receipt.Digest != Digest(raw) || result.Receipt.ByteLength != uint64(len(raw)) {
-			return errors.New("candidatepublication: receipt publication verification failed")
+func (a *Adapter) casCurrent(ctx context.Context, predecessor, initialPredecessor string, selectorBytes []byte) (*publication.BoundFileReceipt, error) {
+	unlock, err := a.lockCurrent(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	var existing CurrentGeneration
+	raw, readErr := a.root.ReadSelector(currentSelector, 4096)
+	if readErr == nil {
+		if err := decodeStrict(raw, &existing); err != nil {
+			return nil, err
+		}
+		if err := a.validateCurrent(existing); err != nil {
+			return nil, err
+		}
+		if predecessor != existing.Selector {
+			return nil, errors.New("candidatepublication: stale predecessor selector")
+		}
+	} else if predecessor != initialPredecessor {
+		return nil, errors.New("candidatepublication: initial predecessor mismatch")
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	tempSelector := currentSelector + "." + fmt.Sprintf("%d", time.Now().UnixNano()) + ".candidate"
+	receipt, err := publication.PublishBoundFile(a.root, tempSelector, selectorBytes, func(got []byte) error {
+		var decoded CurrentGeneration
+		if err := decodeStrict(got, &decoded); err != nil {
+			return err
 		}
 		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if result.Failure.Code != publication.CodeTargetExists {
-		return result.Failure
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	existing, err := a.root.ReadSelector(selector, int64(len(raw))+1)
-	if err != nil || !bytes.Equal(existing, raw) {
-		return errors.New("candidatepublication: immutable collision")
+	selectorPath := filepath.Join(a.root.Path(), filepath.FromSlash(currentSelector))
+	tempPath := filepath.Join(a.root.Path(), filepath.FromSlash(tempSelector))
+	if err := os.MkdirAll(filepath.Dir(selectorPath), 0o700); err != nil {
+		return nil, err
 	}
-	return nil
+	if err := os.Rename(tempPath, selectorPath); err != nil {
+		return nil, err
+	}
+	return receipt, nil
 }
 
-func (a *Adapter) verifyGenerationAndReceipt(generation, verificationSelector string) ([]byte, Receipt, error) {
+func (a *Adapter) lockCurrent(ctx context.Context) (func(), error) {
+	lockPath := filepath.Join(a.root.Path(), filepath.FromSlash(currentLockSelector))
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o700); err != nil {
+		return nil, err
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err == nil {
+			_ = f.Close()
+			return func() { _ = os.Remove(lockPath) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func (a *Adapter) verifyGenerationAndReceipt(generation, verificationSelector string) ([]byte, Receipt, qualificationIndex, error) {
+	candidate, err := a.verifyCandidateGeneration(generation, verificationSelector)
+	if err != nil {
+		return nil, Receipt{}, qualificationIndex{}, err
+	}
+	idx, err := a.readQualificationIndex(generation)
+	if err != nil {
+		return nil, Receipt{}, qualificationIndex{}, err
+	}
+	receipt, err := a.verifyQualificationBinding(candidate, generation, idx)
+	if err != nil {
+		return nil, Receipt{}, qualificationIndex{}, err
+	}
+	return candidate, receipt, idx, nil
+}
+
+func (a *Adapter) verifyCandidateGeneration(generation, verificationSelector string) ([]byte, error) {
 	if !isGeneration(generation) || verificationSelector != generation+".selector.json" {
-		return nil, Receipt{}, errors.New("candidatepublication: invalid generation selector")
+		return nil, errors.New("candidatepublication: invalid generation selector")
 	}
 	candidate, err := a.root.ReadSelector(generation+"/artifact.json", a.maxBytes)
 	if err != nil {
-		return nil, Receipt{}, err
+		return nil, err
 	}
 	if Digest(candidate) != "sha256:"+strings.TrimPrefix(generation, "g-") {
-		return nil, Receipt{}, errors.New("candidatepublication: generation artifact digest mismatch")
+		return nil, errors.New("candidatepublication: generation artifact digest mismatch")
 	}
 	byteReceipt, err := a.root.ReadSelector(generation+"/receipt.json", 1<<20)
 	if err != nil || verification.VerifyReceipt(candidate, byteReceipt) != nil {
-		return nil, Receipt{}, errors.New("candidatepublication: byte custody receipt verification failed")
+		return nil, errors.New("candidatepublication: byte custody receipt verification failed")
 	}
 	selectorBytes, err := a.root.ReadSelector(verificationSelector, 4096)
 	if err != nil {
-		return nil, Receipt{}, err
+		return nil, err
 	}
 	selector, err := verification.DecodeSelector(selectorBytes)
 	if err != nil || selector.Generation != generation {
-		return nil, Receipt{}, errors.New("candidatepublication: generation selector verification failed")
+		return nil, errors.New("candidatepublication: generation selector verification failed")
 	}
-	receiptBytes, err := a.root.ReadSelector(qualificationReceiptSelector(generation), 1<<20)
+	return candidate, nil
+}
+
+func (a *Adapter) verifyQualificationBinding(candidate []byte, generation string, idx qualificationIndex) (Receipt, error) {
+	receiptBytes, err := a.root.ReadSelector(idx.QualificationReceiptSelector, 1<<20)
 	if err != nil {
-		return nil, Receipt{}, err
+		return Receipt{}, err
+	}
+	if Digest(receiptBytes) != idx.Digest || uint64(len(receiptBytes)) != idx.ByteLength {
+		return Receipt{}, errors.New("candidatepublication: qualification receipt digest mismatch")
+	}
+	qSelectorBytes, err := a.root.ReadSelector(idx.VerificationSelector, 4096)
+	if err != nil {
+		return Receipt{}, err
+	}
+	qSelector, err := verification.DecodeSelector(qSelectorBytes)
+	if err != nil || idx.QualificationReceiptSelector != qSelector.Generation+"/artifact.json" {
+		return Receipt{}, errors.New("candidatepublication: qualification selector mismatch")
+	}
+	qByteReceipt, err := a.root.ReadSelector(qSelector.Generation+"/receipt.json", 1<<20)
+	if err != nil || verification.VerifyReceipt(receiptBytes, qByteReceipt) != nil {
+		return Receipt{}, errors.New("candidatepublication: qualification byte custody receipt failed")
 	}
 	var receipt Receipt
 	if err := DecodeReceiptStrict(receiptBytes, &receipt); err != nil {
-		return nil, Receipt{}, err
+		return Receipt{}, err
 	}
 	if err := verifyQualificationReceipt(candidate, generation, receipt); err != nil {
-		return nil, Receipt{}, err
+		return Receipt{}, err
 	}
-	return candidate, receipt, nil
+	return receipt, nil
+}
+
+func (a *Adapter) writeQualificationIndex(idx qualificationIndex) error {
+	raw, err := json.Marshal(idx)
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	path := filepath.Join(a.root.Path(), filepath.FromSlash(qualificationIndexSelector(idx.Generation)))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, raw, 0o600)
+}
+func (a *Adapter) readQualificationIndex(generation string) (qualificationIndex, error) {
+	raw, err := a.root.ReadSelector(qualificationIndexSelector(generation), 4096)
+	if err != nil {
+		return qualificationIndex{}, err
+	}
+	var idx qualificationIndex
+	if err := decodeStrict(raw, &idx); err != nil {
+		return qualificationIndex{}, err
+	}
+	if idx.SchemaVersion == "" || idx.Generation != generation || idx.VerificationSelector == "" || idx.QualificationReceiptSelector == "" || idx.Digest == "" || idx.ByteLength == 0 {
+		return qualificationIndex{}, errors.New("candidatepublication: invalid qualification index")
+	}
+	return idx, nil
+}
+func qualificationIndexSelector(generation string) string {
+	return qualificationNamespace + "/" + strings.TrimPrefix(generation, "g-") + ".index.json"
+}
+
+func (a *Adapter) validateCurrent(current CurrentGeneration) error {
+	if current.Selector != currentSelector || !isGeneration(current.Generation) || current.VerificationSelector != current.Generation+".selector.json" || current.CandidateDigest == "" || current.CandidateByteLength == 0 || current.QualificationReceiptSelector == "" || current.QualificationReceiptVerificationSelector == "" || current.QualificationReceiptDigest == "" || current.QualificationReceiptByteLength == 0 {
+		return errors.New("candidatepublication: invalid current selector")
+	}
+	candidate, err := a.verifyCandidateGeneration(current.Generation, current.VerificationSelector)
+	if err != nil {
+		return err
+	}
+	if Digest(candidate) != current.CandidateDigest || uint64(len(candidate)) != current.CandidateByteLength {
+		return errors.New("candidatepublication: current candidate binding mismatch")
+	}
+	receipt, err := a.verifyQualificationBinding(candidate, current.Generation, qualificationIndex{Generation: current.Generation, QualificationReceiptSelector: current.QualificationReceiptSelector, VerificationSelector: current.QualificationReceiptVerificationSelector, Digest: current.QualificationReceiptDigest, ByteLength: current.QualificationReceiptByteLength})
+	if err != nil {
+		return err
+	}
+	if receipt.CandidateDigest.Hex != current.CandidateDigest {
+		return errors.New("candidatepublication: current selector binding mismatch")
+	}
+	return nil
 }
 
 func qualificationReceipt(req PublishRequest, generation string) (Receipt, error) {
@@ -340,10 +488,6 @@ func validateRequestCeilings(req PublishRequest) error {
 	return nil
 }
 
-func qualificationReceiptSelector(generation string) string {
-	return qualificationNamespace + "/" + strings.TrimPrefix(generation, "g-") + ".json"
-}
-
 func isGeneration(g string) bool {
 	if len(g) != 66 || !strings.HasPrefix(g, "g-") {
 		return false
@@ -352,7 +496,6 @@ func isGeneration(g string) bool {
 	_, err := hex.DecodeString(h)
 	return err == nil && strings.ToLower(h) == h
 }
-
 func DecodeReceiptStrict(raw []byte, receipt *Receipt) error { return decodeStrict(raw, receipt) }
 
 func decodeStrict(raw []byte, out any) error {
@@ -363,9 +506,6 @@ func decodeStrict(raw []byte, out any) error {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(out); err != nil {
 		return err
-	}
-	if dec.More() {
-		return errors.New("candidatepublication: trailing json")
 	}
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
@@ -410,8 +550,6 @@ func rejectDuplicateKeys(raw []byte) error {
 			if len(stack) == 0 {
 				continue
 			}
-			// A string immediately followed by ':' is an object key. json.Decoder does
-			// not expose that state, so inspect the next non-space byte at InputOffset.
 			off := dec.InputOffset()
 			for off < int64(len(raw)) && (raw[off] == ' ' || raw[off] == '\n' || raw[off] == '\r' || raw[off] == '\t') {
 				off++
@@ -426,5 +564,3 @@ func rejectDuplicateKeys(raw []byte) error {
 		}
 	}
 }
-
-func _strconvKeep() { _ = strconv.IntSize }
