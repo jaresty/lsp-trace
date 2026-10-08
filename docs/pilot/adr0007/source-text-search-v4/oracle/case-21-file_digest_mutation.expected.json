@@ -1,23 +1,46 @@
 {
   "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
   "attempt_id": "attempt-case-21-file_digest_mutation",
+  "terminal_sequence": 0,
   "outcome": "FAILED",
   "failure": {
     "code": "ADMISSION_FAILED",
     "detail": "file digest"
   },
-  "replay": {
-    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
-    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
-    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
-    "terminal_digest": "sha256:a453d18cd236ba9660eb37689b302d3e5c7e9739ac97c0d0c1cd9d0e2678b10f"
-  },
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "featureIdentity": "UNRESOLVED",
+  "admission": null,
+  "matches": [],
+  "range_union_candidate": null,
   "accounting": {
     "files": 1,
     "source_bytes": 24,
     "total_bytes": 24,
+    "path_bytes": 0,
     "matches": 0,
     "work": 24,
-    "output_bytes": 0
+    "output_bytes": 1550,
+    "failures": 1,
+    "admission_failures": 1,
+    "association_failures": 0,
+    "invalid_input_failures": 0,
+    "resource_exhausted_failures": 0,
+    "cancelled_failures": 0,
+    "deadline_failures": 0,
+    "overflow_failures": 0
+  },
+  "custody": {
+    "terminal_count": 1,
+    "terminal_result_sha256": "sha256:e9e0a53be93e74d2afe140029c92fffc63cc7aa4189ffe3fe1acf89cdc14e984"
+  },
+  "replay": {
+    "attempt_sha256": "sha256:ccabeaab86e5ee164dc3a539626029b3c815a91b7dfefc677245fe074528528f",
+    "admission_sha256": "",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "terminal_preimage_sha256": "sha256:4a1d5c535057e3e0409f64987a6d33c35cf28fcda1f30bf0ded909693657c0d1"
   }
 }

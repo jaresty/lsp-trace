@@ -1,6 +1,9 @@
 package adr0007sourcetextsearchv4oracle
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestOverlapScan(t *testing.T) {
 	m := Manifest{ToolingDigest: "sha256:t", PredecessorLockDigest: "sha256:p"}
@@ -37,4 +40,26 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestTerminalRejectsPreviouslyOmittedNormativeFields(t *testing.T) {
+	m := Manifest{ToolingDigest: "sha256:t", PredecessorLockDigest: "sha256:p"}
+	a := Attempt{SchemaVersion: "x", AttemptID: "a", Request: Request{Query: "aa", Policy: Policy{LiteralMode: "byte-literal"}, Limits: Limits{MaxFiles: 1, MaxMatches: 9, MaxOutputBytes: 9999, MaxPathBytes: 99, MaxSourceBytes: 99, MaxTotalBytes: 99, MaxWork: 99}, Sources: []SourceRef{{Path: "a.txt", Revision: "r", Ordinal: 1}}}, SourceInputs: []SourceInput{{Path: "a.txt", Revision: "r", Ordinal: 1, BytesBase64: "YWFhYQ=="}}}
+	tr := EvaluateBytes(mustJSON(t, a), m)
+	finalizeTerminal(&tr)
+	b, err := Canonical(tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"attempt_id", "terminal_sequence", "authority", "accepted", "completeness", "featureIdentity", "failure", "admission", "matches", "range_union_candidate", "accounting", "custody", "replay"} {
+		var obj map[string]any
+		if err := json.Unmarshal(b, &obj); err != nil {
+			t.Fatal(err)
+		}
+		delete(obj, field)
+		mut, _ := Canonical(obj)
+		if err := ValidateTerminalBytes(mut); err == nil {
+			t.Fatalf("expected missing %s to fail", field)
+		}
+	}
 }

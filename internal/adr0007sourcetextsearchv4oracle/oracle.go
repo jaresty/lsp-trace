@@ -30,33 +30,54 @@ const (
 )
 
 type Terminal struct {
-	SchemaVersion      string              `json:"schema_version"`
-	AttemptID          string              `json:"attempt_id,omitempty"`
-	Outcome            string              `json:"outcome"`
-	Failure            *Failure            `json:"failure,omitempty"`
-	Replay             Replay              `json:"replay"`
-	Accounting         Accounting          `json:"accounting"`
-	Admission          *Binding            `json:"admission,omitempty"`
-	Matches            []Match             `json:"matches,omitempty"`
-	LocationCandidates []LocationCandidate `json:"location_candidates,omitempty"`
+	SchemaVersion       string               `json:"schema_version"`
+	AttemptID           string               `json:"attempt_id"`
+	TerminalSequence    int                  `json:"terminal_sequence"`
+	Outcome             string               `json:"outcome"`
+	Failure             *Failure             `json:"failure"`
+	Authority           int                  `json:"authority"`
+	Accepted            bool                 `json:"accepted"`
+	Completeness        string               `json:"completeness"`
+	FeatureIdentity     string               `json:"featureIdentity"`
+	Admission           *Binding             `json:"admission"`
+	Matches             []Match              `json:"matches"`
+	RangeUnionCandidate *RangeUnionCandidate `json:"range_union_candidate"`
+	Accounting          Accounting           `json:"accounting"`
+	Custody             Custody              `json:"custody"`
+	Replay              Replay               `json:"replay"`
 }
 type Failure struct {
 	Code   string `json:"code"`
 	Detail string `json:"detail"`
 }
 type Replay struct {
-	ToolingIdentitySHA256 string `json:"tooling_identity_sha256"`
-	PredecessorLockSHA256 string `json:"predecessor_lock_sha256"`
-	PayloadID             string `json:"payload_id"`
-	TerminalDigest        string `json:"terminal_digest,omitempty"`
+	AttemptSHA256          string `json:"attempt_sha256"`
+	AdmissionSHA256        string `json:"admission_sha256"`
+	PayloadID              string `json:"payload_id"`
+	PredecessorLockSHA256  string `json:"predecessor_lock_sha256"`
+	ToolingIdentitySHA256  string `json:"tooling_identity_sha256"`
+	TerminalPreimageSHA256 string `json:"terminal_preimage_sha256"`
 }
 type Accounting struct {
-	Files       int `json:"files"`
-	SourceBytes int `json:"source_bytes"`
-	TotalBytes  int `json:"total_bytes"`
-	Matches     int `json:"matches"`
-	Work        int `json:"work"`
-	OutputBytes int `json:"output_bytes"`
+	Files                     int `json:"files"`
+	SourceBytes               int `json:"source_bytes"`
+	TotalBytes                int `json:"total_bytes"`
+	PathBytes                 int `json:"path_bytes"`
+	Matches                   int `json:"matches"`
+	Work                      int `json:"work"`
+	OutputBytes               int `json:"output_bytes"`
+	Failures                  int `json:"failures"`
+	AdmissionFailures         int `json:"admission_failures"`
+	AssociationFailures       int `json:"association_failures"`
+	InvalidInputFailures      int `json:"invalid_input_failures"`
+	ResourceExhaustedFailures int `json:"resource_exhausted_failures"`
+	CancelledFailures         int `json:"cancelled_failures"`
+	DeadlineFailures          int `json:"deadline_failures"`
+	OverflowFailures          int `json:"overflow_failures"`
+}
+type Custody struct {
+	TerminalCount        int    `json:"terminal_count"`
+	TerminalResultSHA256 string `json:"terminal_result_sha256"`
 }
 type Match struct {
 	Path        string `json:"path"`
@@ -66,6 +87,11 @@ type Match struct {
 	Line        int    `json:"line"`
 	UTF16Column int    `json:"utf16_column"`
 	Text        string `json:"text"`
+}
+type RangeUnionCandidate struct {
+	Operation    string              `json:"operation"`
+	LocationPins []LocationCandidate `json:"location_pins"`
+	Members      []Match             `json:"members"`
 }
 type LocationCandidate struct {
 	Pin   string `json:"pin"`
@@ -129,8 +155,11 @@ type SourceInput struct {
 }
 
 type SelectedSource struct {
-	Path, Revision, FileDigest, ObjectDigest string
-	Bytes                                    []byte
+	Path         string
+	Revision     string
+	FileDigest   string
+	ObjectDigest string
+	Bytes        []byte
 }
 type Binding struct {
 	Schema          string               `json:"schema"`
@@ -187,18 +216,12 @@ func EvaluateFile(path string) ([]byte, error) {
 		return nil, err
 	}
 	tr := EvaluateBytes(raw, m)
-	b, err := Canonical(tr)
-	if err != nil {
-		return nil, err
-	}
-	var with Terminal
-	_ = json.Unmarshal(b, &with)
-	with.Replay.TerminalDigest = SHA(b)
-	return Canonical(with)
+	finalizeTerminal(&tr)
+	return Canonical(tr)
 }
 
 func EvaluateBytes(raw []byte, m Manifest) Terminal {
-	base := Terminal{SchemaVersion: TerminalSchema, Outcome: "FAILED", Replay: Replay{ToolingIdentitySHA256: m.ToolingDigest, PredecessorLockSHA256: m.PredecessorLockDigest, PayloadID: payloadID(m)}}
+	base := Terminal{SchemaVersion: TerminalSchema, AttemptID: "unparsed-" + strings.TrimPrefix(SHA(raw), "sha256:")[:16], TerminalSequence: 0, Outcome: "FAILED", Authority: 0, Accepted: false, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Matches: []Match{}, Custody: Custody{TerminalCount: 1}, Replay: Replay{AttemptSHA256: SHA(raw), AdmissionSHA256: "", ToolingIdentitySHA256: m.ToolingDigest, PredecessorLockSHA256: m.PredecessorLockDigest, PayloadID: payloadID(m)}}
 	if err := rejectDuplicateKeys(raw); err != nil {
 		return fail(base, "INVALID_INPUT", err.Error())
 	}
@@ -258,6 +281,9 @@ func EvaluateBytes(raw []byte, m Manifest) Terminal {
 		return fail(base, code, adm.Detail)
 	}
 	base.Admission = adm.Binding
+	if ab, err := Canonical(adm.Binding); err == nil {
+		base.Replay.AdmissionSHA256 = SHA(ab)
+	}
 	if term, stop := poll(a, base, "after_admission"); stop {
 		return term
 	}
@@ -289,7 +315,7 @@ func EvaluateBytes(raw []byte, m Manifest) Terminal {
 	base.Matches = matches
 	base.Accounting.Matches = len(matches)
 	base.Outcome = "COMPLETE"
-	base.LocationCandidates = locationCandidates(a.Request.LocationPin)
+	base.RangeUnionCandidate = &RangeUnionCandidate{Operation: "RANGE_UNION", LocationPins: locationCandidates(a.Request.LocationPin), Members: matches}
 	b, _ := Canonical(base)
 	base.Accounting.OutputBytes = len(b)
 	if a.Request.Limits.MaxOutputBytes > 0 && base.Accounting.OutputBytes > a.Request.Limits.MaxOutputBytes {
@@ -347,7 +373,46 @@ func poll(a Attempt, base Terminal, state string) (Terminal, bool) {
 func fail(t Terminal, code, detail string) Terminal {
 	t.Outcome = "FAILED"
 	t.Failure = &Failure{Code: code, Detail: detail}
+	t.Accounting.Failures = 1
+	switch code {
+	case "INVALID_INPUT":
+		t.Accounting.InvalidInputFailures = 1
+	case "ADMISSION_FAILED":
+		t.Accounting.AdmissionFailures = 1
+	case "ASSOCIATION_FAILED":
+		t.Accounting.AssociationFailures = 1
+	case "RESOURCE_EXHAUSTED":
+		t.Accounting.ResourceExhaustedFailures = 1
+	case "CANCELLED":
+		t.Accounting.CancelledFailures = 1
+	case "DEADLINE_EXCEEDED":
+		t.Accounting.DeadlineFailures = 1
+	case "OVERFLOW":
+		t.Accounting.OverflowFailures = 1
+	}
 	return t
+}
+
+func finalizeTerminal(t *Terminal) {
+	if t.Matches == nil {
+		t.Matches = []Match{}
+	}
+	if t.Outcome == "COMPLETE" {
+		t.Failure = nil
+	}
+	pre := *t
+	pre.Custody.TerminalResultSHA256 = ""
+	if b, err := Canonical(pre); err == nil {
+		t.Replay.TerminalPreimageSHA256 = SHA(b)
+	}
+	pre = *t
+	pre.Custody.TerminalResultSHA256 = ""
+	if b, err := Canonical(pre); err == nil {
+		t.Custody.TerminalResultSHA256 = SHA(b)
+	}
+	if b, err := Canonical(*t); err == nil {
+		t.Accounting.OutputBytes = len(b)
+	}
 }
 
 type admitResult struct {
@@ -541,6 +606,9 @@ func Freeze(root string) error {
 		if err != nil {
 			return err
 		}
+		if err := ValidateTerminalBytes(b); err != nil {
+			return fmt.Errorf("%s terminal invalid: %w", r.ID, err)
+		}
 		if err := os.WriteFile(ExpectedPath(r.ID), b, 0644); err != nil {
 			return err
 		}
@@ -575,6 +643,9 @@ func Check(root string) error {
 		b, err := EvaluateFile(filepath.Join(root, r.ID, "attempt.json"))
 		if err != nil {
 			return err
+		}
+		if err := ValidateTerminalBytes(b); err != nil {
+			return fmt.Errorf("%s terminal invalid: %w", r.ID, err)
 		}
 		exp, err := os.ReadFile(ExpectedPath(r.ID))
 		if err != nil {
@@ -616,6 +687,68 @@ func CheckProvenance() error {
 		if strings.HasPrefix(x, "internal/adr0007sourcetextsearchv4private/") || strings.HasPrefix(x, "cmd/adr0007-source-text-search-v4-private-evaluate/") || strings.Contains(x, "production terminal") {
 			return fmt.Errorf("forbidden provenance path %s", x)
 		}
+	}
+	return nil
+}
+
+func ValidateTerminalBytes(b []byte) error {
+	if err := rejectDuplicateKeys(b); err != nil {
+		return err
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(b, &top); err != nil {
+		return err
+	}
+	for _, k := range []string{"schema_version", "attempt_id", "terminal_sequence", "outcome", "failure", "authority", "accepted", "completeness", "featureIdentity", "admission", "matches", "range_union_candidate", "accounting", "custody", "replay"} {
+		if _, ok := top[k]; !ok {
+			return fmt.Errorf("missing %s", k)
+		}
+	}
+	var t Terminal
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&t); err != nil {
+		return err
+	}
+	if dec.Decode(&struct{}{}) != io.EOF {
+		return errors.New("trailing terminal data")
+	}
+	return ValidateTerminal(t)
+}
+
+func ValidateTerminal(t Terminal) error {
+	if t.SchemaVersion != TerminalSchema {
+		return errors.New("schema_version")
+	}
+	if t.AttemptID == "" {
+		return errors.New("attempt_id")
+	}
+	if t.TerminalSequence != 0 {
+		return errors.New("terminal_sequence")
+	}
+	if t.Outcome != "COMPLETE" && t.Outcome != "FAILED" {
+		return errors.New("outcome")
+	}
+	if t.Authority != 0 || t.Accepted || t.Completeness != "UNKNOWN" || t.FeatureIdentity != "UNRESOLVED" {
+		return errors.New("authority acceptance completeness feature identity")
+	}
+	if t.Outcome == "FAILED" && t.Failure == nil {
+		return errors.New("failed missing failure")
+	}
+	if t.Outcome == "COMPLETE" && t.Failure != nil {
+		return errors.New("complete non-null failure")
+	}
+	if t.Outcome == "COMPLETE" && (t.Admission == nil || t.RangeUnionCandidate == nil) {
+		return errors.New("complete missing admission or candidate")
+	}
+	if t.Outcome == "FAILED" && t.Accounting.Failures != 1 {
+		return errors.New("failed counter")
+	}
+	if t.Custody.TerminalCount != 1 || t.Custody.TerminalResultSHA256 == "" {
+		return errors.New("custody")
+	}
+	if t.Replay.AttemptSHA256 == "" || t.Replay.PayloadID == "" || t.Replay.PredecessorLockSHA256 == "" || t.Replay.ToolingIdentitySHA256 == "" || t.Replay.TerminalPreimageSHA256 == "" {
+		return errors.New("replay")
 	}
 	return nil
 }

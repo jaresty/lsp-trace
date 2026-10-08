@@ -1,21 +1,13 @@
 {
   "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
   "attempt_id": "attempt-case-37-max_source_equal",
+  "terminal_sequence": 0,
   "outcome": "COMPLETE",
-  "replay": {
-    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
-    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
-    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
-    "terminal_digest": "sha256:d2cd510b5164f6b9a16d50b18a1440b3e1b78e0539bd087dfe729a43b00299c1"
-  },
-  "accounting": {
-    "files": 1,
-    "source_bytes": 24,
-    "total_bytes": 24,
-    "matches": 2,
-    "work": 26,
-    "output_bytes": 2562
-  },
+  "failure": null,
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "featureIdentity": "UNRESOLVED",
   "admission": {
     "schema": "lsp-trace.adr0007.source-admission.private.v2",
     "admissionDigest": "sha256:14d6ae0dee86296fb6d38fc58cf7396a9ad1c1a70d113004c554585075943453",
@@ -48,41 +40,93 @@
       "text": "needle"
     }
   ],
-  "location_candidates": [
-    {
-      "pin": "design_commit",
-      "value": "c943a484060462121c6f0929d4182b053ff95ab5"
-    },
-    {
-      "pin": "design_root_sha256",
-      "value": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d"
-    },
-    {
-      "pin": "execution_commit",
-      "value": "f0f8b49aa368bea9b3e6d105eef5cb2614221067"
-    },
-    {
-      "pin": "seal_commit",
-      "value": "16f40dcb03a234b00db80059a7eef400495e9d97"
-    },
-    {
-      "pin": "final_seal_sha256",
-      "value": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6"
-    },
-    {
-      "pin": "source_admission_pin",
-      "value": {
-        "bytes": 3519,
-        "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
-        "path": "internal/sourceadmissionv2/admission.go",
-        "repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496",
-        "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da",
-        "symbols": [
-          "Admit",
-          "CanonicalPath",
-          "Digest"
-        ]
+  "range_union_candidate": {
+    "operation": "RANGE_UNION",
+    "location_pins": [
+      {
+        "pin": "design_commit",
+        "value": "c943a484060462121c6f0929d4182b053ff95ab5"
+      },
+      {
+        "pin": "design_root_sha256",
+        "value": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d"
+      },
+      {
+        "pin": "execution_commit",
+        "value": "f0f8b49aa368bea9b3e6d105eef5cb2614221067"
+      },
+      {
+        "pin": "seal_commit",
+        "value": "16f40dcb03a234b00db80059a7eef400495e9d97"
+      },
+      {
+        "pin": "final_seal_sha256",
+        "value": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6"
+      },
+      {
+        "pin": "source_admission_pin",
+        "value": {
+          "bytes": 3519,
+          "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
+          "path": "internal/sourceadmissionv2/admission.go",
+          "repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496",
+          "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da",
+          "symbols": [
+            "Admit",
+            "CanonicalPath",
+            "Digest"
+          ]
+        }
       }
-    }
-  ]
+    ],
+    "members": [
+      {
+        "path": "a.txt",
+        "revision": "rev1",
+        "byte_start": 6,
+        "byte_end": 12,
+        "line": 0,
+        "utf16_column": 6,
+        "text": "needle"
+      },
+      {
+        "path": "a.txt",
+        "revision": "rev1",
+        "byte_start": 18,
+        "byte_end": 24,
+        "line": 0,
+        "utf16_column": 18,
+        "text": "needle"
+      }
+    ]
+  },
+  "accounting": {
+    "files": 1,
+    "source_bytes": 24,
+    "total_bytes": 24,
+    "path_bytes": 0,
+    "matches": 2,
+    "work": 26,
+    "output_bytes": 3959,
+    "failures": 0,
+    "admission_failures": 0,
+    "association_failures": 0,
+    "invalid_input_failures": 0,
+    "resource_exhausted_failures": 0,
+    "cancelled_failures": 0,
+    "deadline_failures": 0,
+    "overflow_failures": 0
+  },
+  "custody": {
+    "terminal_count": 1,
+    "terminal_result_sha256": "sha256:5a89a7fedb2746e0502d756c7d557ef77f794a233c1201eab4b604ff4c69513c"
+  },
+  "replay": {
+    "attempt_sha256": "sha256:663c7630c8a632d3fb3638e3ddf84b4e68f893e6f47821c7bb463b07717a65bc",
+    "admission_sha256": "sha256:905fb4dbdbccf20c683bfda206d83e4cbc0e5b5283578d4a61b6d1ec8b79a25f",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "terminal_preimage_sha256": "sha256:fd52014d1f5669df34d8fb22bd3936c149cdceecf6697ad96b4d947d1affa6a5"
+  }
 }

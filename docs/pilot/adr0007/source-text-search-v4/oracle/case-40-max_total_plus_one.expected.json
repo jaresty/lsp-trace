@@ -1,23 +1,46 @@
 {
   "schema_version": "lsp-trace.adr0007.source-text-search.terminal-result.oracle.v4",
   "attempt_id": "attempt-case-40-max_total_plus_one",
+  "terminal_sequence": 0,
   "outcome": "FAILED",
   "failure": {
     "code": "RESOURCE_EXHAUSTED",
     "detail": "bytes"
   },
-  "replay": {
-    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
-    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
-    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
-    "terminal_digest": "sha256:11972778ca330438f1a9518b54b4f8573d45888f19b2a2dda62908ff63f57efa"
-  },
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "featureIdentity": "UNRESOLVED",
+  "admission": null,
+  "matches": [],
+  "range_union_candidate": null,
   "accounting": {
     "files": 1,
     "source_bytes": 24,
     "total_bytes": 24,
+    "path_bytes": 0,
     "matches": 0,
     "work": 24,
-    "output_bytes": 0
+    "output_bytes": 1544,
+    "failures": 1,
+    "admission_failures": 0,
+    "association_failures": 0,
+    "invalid_input_failures": 0,
+    "resource_exhausted_failures": 1,
+    "cancelled_failures": 0,
+    "deadline_failures": 0,
+    "overflow_failures": 0
+  },
+  "custody": {
+    "terminal_count": 1,
+    "terminal_result_sha256": "sha256:6dc2e5f873301401489a55b80d1ea5988c98fe2789d9da2a4ab746f4fcfe58c3"
+  },
+  "replay": {
+    "attempt_sha256": "sha256:9502263abbb8244e975a21f5cf0e10605e825ffdd7e9abc7161d2e1ec8362108",
+    "admission_sha256": "",
+    "payload_id": "sha256:1ab08c567c8ec2be5392bc8bcc13336a9cf8a872db240e9759648e53e66b9bff",
+    "predecessor_lock_sha256": "sha256:ff92a3823237b1382f84e573d7c2a958eedaa5bd11a418ebf8595fa59494b8bb",
+    "tooling_identity_sha256": "sha256:546aeb40840a4da0d4ae4bc044161b911db1bb7b3e1c29c1671e09bf955540f9",
+    "terminal_preimage_sha256": "sha256:e04575bc52a738c4bea43dc26fd3be8460a2cb82467070d3a2e1a4fbd951565d"
   }
 }
