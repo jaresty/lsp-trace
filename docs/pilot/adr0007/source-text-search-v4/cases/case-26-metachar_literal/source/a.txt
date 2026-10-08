@@ -1,1 +1,1 @@
-alpha needle beta needle
+literal .* chars

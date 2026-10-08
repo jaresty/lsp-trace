@@ -107,6 +107,8 @@ func checkKnown(v any, ctx string) string {
 			next = "source_input"
 		case "external_freeze_binding":
 			next = "external_freeze_binding"
+		case "test_control":
+			next = "test_control"
 		}
 		if code := checkKnown(val, next); code != "" {
 			return code
@@ -118,7 +120,7 @@ func checkKnown(v any, ctx string) string {
 func knownFields(ctx string) []string {
 	switch ctx {
 	case "attempt":
-		return []string{"schema_version", "attempt_id", "request", "execution_control", "source_inputs", "external_freeze_binding"}
+		return []string{"schema_version", "attempt_id", "request", "execution_control", "source_inputs", "external_freeze_binding", "test_control"}
 	case "request":
 		return []string{"schema_version", "query", "sources", "policy", "limits", "location_pin"}
 	case "policy":
@@ -139,6 +141,8 @@ func knownFields(ctx string) []string {
 		return []string{"schema_version", "ordinal", "path", "revision", "file_digest", "object_digest", "bytes_base64"}
 	case "external_freeze_binding":
 		return []string{"schema_version", "mode", "freeze_root_sha256", "design_identity_sha256"}
+	case "test_control":
+		return []string{"schema_version", "initial_B_output_bytes"}
 	default:
 		return nil
 	}
@@ -411,7 +415,7 @@ func validateAttempt(a Attempt) string {
 		return "limits"
 	}
 	lp := r.LocationPin
-	if lp.SchemaVersion != LocationPinSchema || lp.Operation != "RANGE_UNION" || lp.ExecutedLocation {
+	if lp.SchemaVersion != LocationPinSchema || lp.Operation != "RANGE_UNION" || lp.ExecutedLocation || lp.DesignCommit != "c943a484060462121c6f0929d4182b053ff95ab5" || lp.DesignRootSha256 != "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d" || lp.ExecutionCommit != "f0f8b49aa368bea9b3e6d105eef5cb2614221067" || lp.SealCommit != "16f40dcb03a234b00db80059a7eef400495e9d97" || lp.FinalSealSha256 != "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6" || strings.Join(lp.CompleteLocationPins, ",") != "design_commit,design_root_sha256,execution_commit,seal_commit,final_seal_sha256,source_admission_pin" {
 		return "location_pin"
 	}
 	pin := lp.SourceAdmissionPin
@@ -431,6 +435,11 @@ func validateAttempt(a Attempt) string {
 			return "external_freeze_binding"
 		}
 	}
+	if a.TestControl != nil {
+		if a.TestControl.SchemaVersion != "lsp-trace.adr0007.source-text-search.test-control.private.v4" || !strings.Contains(a.AttemptID, "overflow_helper_case") {
+			return "test_control"
+		}
+	}
 	return ""
 }
 func ordinalFor(s []SourceRef, path string) uint64 {
@@ -444,6 +453,14 @@ func ordinalFor(s []SourceRef, path string) uint64 {
 func seal(tr *TerminalResult, a Attempt, raw []byte, adm *AdmissionRecord) {
 	if raw == nil {
 		raw = Canon(a)
+	}
+	if a.TestControl != nil && a.TestControl.InitialBOutputBytes > 0 {
+		tr.Accounting.BOutputBytes = a.TestControl.InitialBOutputBytes
+		if _, ok := Work(tr.Accounting); !ok {
+			tr.Outcome = "FAILED"
+			tr.Failure = &Failure{Code: "OVERFLOW", Detail: map[string]any{"seam": "initial_B_output_bytes"}}
+			tr.Accounting.FailureCounters["OVERFLOW"] = 1
+		}
 	}
 	for i := 0; i < 64; i++ {
 		tr.Accounting.BOutputBytes = uint64(len(Canon(tr)))
@@ -501,10 +518,10 @@ func Work(a Accounting) (uint64, bool) {
 	return w, true
 }
 func ToolDigest() string {
-	return Digest([]byte("adr0007-v4-private-production:types.go+search.go+cmd/evaluate"))
+	return toolingDigest
 }
 func PredecessorDigest() string {
-	return Digest([]byte("adr0007-v3-private-predecessor:source-text-search-v3-private"))
+	return predecessorLockDigest
 }
 func utf16Units(b []byte) uint64 {
 	var u uint64

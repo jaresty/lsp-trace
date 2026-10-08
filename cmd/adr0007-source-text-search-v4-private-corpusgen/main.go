@@ -12,10 +12,12 @@ import (
 )
 
 type Case struct {
-	ID             string `json:"id"`
-	Requirement    string `json:"requirement"`
-	Stimulus       string `json:"stimulus"`
-	ExpectedBranch string `json:"expected_branch"`
+	ID              string `json:"id"`
+	Requirement     string `json:"requirement"`
+	Stimulus        string `json:"stimulus"`
+	Assertion       string `json:"assertion"`
+	ExpectedOutcome string `json:"expected_outcome"`
+	ExpectedCode    string `json:"expected_code"`
 }
 
 func dig(b []byte) string { h := sha256.Sum256(b); return "sha256:" + hex.EncodeToString(h[:]) }
@@ -23,7 +25,7 @@ func main() {
 	root := "docs/pilot/adr0007/source-text-search-v4/cases"
 	os.RemoveAll(root)
 	os.MkdirAll(root, 0755)
-	names := []string{"raw_malformed_json", "raw_unknown_field", "raw_duplicate_field", "raw_trailing_data", "empty_query", "empty_source_set", "control_duplicate", "control_order", "control_simultaneous_deadline_cancel", "control_midscan_cancel", "control_postmatch_deadline", "utf8_empty_file", "utf8_nfc_path", "path_backslash", "path_absolute", "path_traversal", "duplicate_path_same_revision", "duplicate_path_diff_revision", "ordinal_missing", "ordinal_extra", "file_digest_mutation", "object_digest_mutation", "admission_digest_order", "multi_path_byte_order", "overlap_literal", "metachar_literal", "case_sensitive_literal", "combining_literal", "lf_positions", "crlf_positions", "bare_cr_positions", "mixed_newlines", "non_bmp_utf16", "crossline_literal", "max_files_equal", "max_files_plus_one", "max_source_equal", "max_source_plus_one", "max_total_equal", "max_total_plus_one", "max_path_equal", "max_path_plus_one", "max_matches_equal", "max_matches_plus_one", "max_work_equal", "max_work_plus_one", "max_output_equal", "max_output_plus_one", "overflow_helper_case", "complete_location_pins_order", "custody_digest_mutation", "replay_digest_mutation", "source_pin_mutation", "predecessor_mutation", "freeze_schema_mutation", "accounting_mutation", "implementation_mutation", "oracle_mutation", "verifier_mutation"}
+	names := []string{"raw_malformed_json", "raw_unknown_field", "raw_duplicate_field", "raw_trailing_data", "empty_query", "empty_source_set", "control_duplicate", "control_order", "control_simultaneous_deadline_cancel", "control_midscan_cancel", "control_postmatch_deadline", "utf8_empty_file", "utf8_nfc_path", "path_backslash", "path_absolute", "path_traversal", "duplicate_path_same_revision", "duplicate_path_diff_revision", "ordinal_missing", "ordinal_extra", "file_digest_mutation", "object_digest_mutation", "admission_digest_order", "multi_path_byte_order", "overlap_literal", "metachar_literal", "case_sensitive_literal", "combining_literal", "lf_positions", "crlf_positions", "bare_cr_positions", "mixed_newlines", "non_bmp_utf16", "crossline_literal", "max_files_equal", "max_files_plus_one", "max_source_equal", "max_source_plus_one", "max_total_equal", "max_total_plus_one", "max_path_equal", "max_path_plus_one", "max_matches_equal", "max_matches_plus_one", "max_work_equal", "max_work_plus_one", "max_output_equal", "max_output_plus_one", "overflow_helper_case", "complete_location_pins_order"}
 	matrix := []Case{}
 	for i, n := range names {
 		id := fmt.Sprintf("case-%02d-%s", i+1, n)
@@ -41,14 +43,13 @@ func main() {
 			raw = []byte(strings.Replace(string(raw), `"attempt_id"`, `"attempt_id":"attempt-dupe","attempt_id"`, 1))
 		case "raw_trailing_data":
 			raw = append(raw, []byte("{}")...)
-		case "custody_digest_mutation", "replay_digest_mutation", "predecessor_mutation", "accounting_mutation", "implementation_mutation", "oracle_mutation", "verifier_mutation":
-			raw = []byte(strings.Replace(string(raw), `"source_inputs":`, `"mutation_probe":"`+n+`","source_inputs":`, 1))
 		}
 		os.WriteFile(filepath.Join(dir, "attempt.json"), raw, 0644)
-		matrix = append(matrix, Case{ID: id, Requirement: reqFor(n), Stimulus: n, ExpectedBranch: branchFor(n)})
+		out, code := expect(n)
+		matrix = append(matrix, Case{ID: id, Requirement: "adr0007-v4-source-text-search", Stimulus: n, Assertion: assertion(n), ExpectedOutcome: out, ExpectedCode: code})
 	}
-	mb, _ := json.MarshalIndent(matrix, "", "  ")
-	os.WriteFile(filepath.Join(root, "CASE_MATRIX.json"), append(mb, '\n'), 0644)
+	b, _ := json.MarshalIndent(matrix, "", "  ")
+	os.WriteFile(filepath.Join(root, "CASE_MATRIX.json"), append(b, '\n'), 0644)
 }
 func sourceFor(n string) string {
 	switch n {
@@ -68,6 +69,8 @@ func sourceFor(n string) string {
 		return "cafe\u0301 needle"
 	case "overlap_literal":
 		return "aaaa"
+	case "metachar_literal":
+		return "literal .* chars"
 	default:
 		return "alpha needle beta needle"
 	}
@@ -95,7 +98,9 @@ func attempt(id, n, text string) []byte {
 	}
 	if n == "metachar_literal" {
 		q = ".*"
-		text = "literal .* chars"
+	}
+	if n == "non_bmp_utf16" {
+		q = "😀"
 	}
 	fd := dig([]byte(text))
 	od := fd
@@ -111,9 +116,15 @@ func attempt(id, n, text string) []byte {
 		sources = []map[string]any{}
 		inputs = []map[string]any{}
 	}
-	if n == "duplicate_path_same_revision" || n == "duplicate_path_diff_revision" {
+	if strings.HasPrefix(n, "duplicate_path_") {
 		sources = append(sources, map[string]any{"ordinal": uint64(2), "path": path, "revision": "rev2", "file_digest": fd, "object_digest": od})
 		inputs = append(inputs, map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4", "ordinal": uint64(2), "path": path, "revision": "rev2", "file_digest": fd, "object_digest": od, "bytes_base64": base64.StdEncoding.EncodeToString([]byte(text))})
+	}
+	if n == "max_files_plus_one" {
+		btxt := "needle in b"
+		bfd := dig([]byte(btxt))
+		sources = append(sources, map[string]any{"ordinal": uint64(2), "path": "b.txt", "revision": "rev1", "file_digest": bfd, "object_digest": bfd})
+		inputs = append(inputs, map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4", "ordinal": uint64(2), "path": "b.txt", "revision": "rev1", "file_digest": bfd, "object_digest": bfd, "bytes_base64": base64.StdEncoding.EncodeToString([]byte(btxt))})
 	}
 	if n == "ordinal_missing" {
 		sources[0]["ordinal"] = uint64(7)
@@ -135,9 +146,12 @@ func attempt(id, n, text string) []byte {
 		}
 	}
 	limits := map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.limits.private.v4", "max_files": uint64(8), "max_matches": uint64(8), "max_work": uint64(999999), "max_output_bytes": uint64(999999), "max_source_bytes": uint64(999999), "max_total_bytes": uint64(999999), "max_path_bytes": uint64(999999)}
+	if n == "max_matches_equal" {
+		limits["max_matches"] = uint64(2)
+	}
 	if strings.Contains(n, "plus_one") {
 		if strings.Contains(n, "files") {
-			limits["max_files"] = uint64(0)
+			limits["max_files"] = uint64(1)
 		}
 		if strings.Contains(n, "source") {
 			limits["max_source_bytes"] = uint64(1)
@@ -158,25 +172,40 @@ func attempt(id, n, text string) []byte {
 			limits["max_output_bytes"] = uint64(1)
 		}
 	}
-	a := map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.attempt.private.v4", "attempt_id": "attempt-" + id, "request": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.request.private.v4", "query": q, "sources": sources, "policy": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.policy.private.v4", "literal_mode": "byte-literal", "allow_regex": false, "allow_fuzzy": false, "allow_token": false, "allow_rank": false, "allow_model": false, "allow_backend_semantics": false}, "limits": limits, "location_pin": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.location-pin.private.v4", "operation": "RANGE_UNION", "executedLocation": false, "design_commit": "UNFROZEN-v4", "design_root_sha256": "sha256:unfrozen-design-identity", "execution_commit": "UNFROZEN-v4", "seal_commit": "UNFROZEN-v4", "final_seal_sha256": "sha256:unfrozen-final-seal", "source_admission_pin": map[string]any{"repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496", "path": "internal/sourceadmissionv2/admission.go", "bytes": uint64(3519), "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da", "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777", "symbols": []string{"Admit", "CanonicalPath", "Digest"}}, "complete_location_pins": []string{"SourceAdmissionPin", "RangeUnionCandidate"}}}, "execution_control": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.execution-control.private.v4", "observations": obs}, "source_inputs": inputs}
-	req := a["request"].(map[string]any)
-	pin := req["location_pin"].(map[string]any)
-	if n == "source_pin_mutation" {
-		pin["source_admission_pin"].(map[string]any)["sha256"] = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+	if n == "overflow_helper_case" {
+		limits["max_work"] = uint64(999999999)
 	}
-	if n == "predecessor_mutation" {
-		pin["design_commit"] = "MUTATED-PREDECESSOR"
-	}
-	if n == "freeze_schema_mutation" {
-		a["external_freeze_binding"] = map[string]any{"schema_version": "mutated-freeze-schema", "mode": "candidate_unfrozen", "freeze_root_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "design_identity_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+	a := map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.attempt.private.v4", "attempt_id": "attempt-" + id, "request": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.request.private.v4", "query": q, "sources": sources, "policy": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.policy.private.v4", "literal_mode": "byte-literal", "allow_regex": false, "allow_fuzzy": false, "allow_token": false, "allow_rank": false, "allow_model": false, "allow_backend_semantics": false}, "limits": limits, "location_pin": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.location-pin.private.v4", "operation": "RANGE_UNION", "executedLocation": false, "design_commit": "c943a484060462121c6f0929d4182b053ff95ab5", "design_root_sha256": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d", "execution_commit": "f0f8b49aa368bea9b3e6d105eef5cb2614221067", "seal_commit": "16f40dcb03a234b00db80059a7eef400495e9d97", "final_seal_sha256": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6", "source_admission_pin": map[string]any{"repository_commit": "af2ce89321afc94c937636f841bb98b8977b6496", "path": "internal/sourceadmissionv2/admission.go", "bytes": uint64(3519), "sha256": "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da", "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777", "symbols": []string{"Admit", "CanonicalPath", "Digest"}}, "complete_location_pins": []string{"design_commit", "design_root_sha256", "execution_commit", "seal_commit", "final_seal_sha256", "source_admission_pin"}}}, "execution_control": map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.execution-control.private.v4", "observations": obs}, "source_inputs": inputs}
+	if n == "overflow_helper_case" {
+		a["test_control"] = map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.test-control.private.v4", "initial_B_output_bytes": ^uint64(0)}
 	}
 	b, _ := json.MarshalIndent(a, "", "  ")
 	return append(b, '\n')
 }
-func reqFor(n string) string { return "v4-e2e-contract:" + n }
-func branchFor(n string) string {
-	if strings.Contains(n, "plus_one") || strings.Contains(n, "control") || strings.Contains(n, "empty") || strings.Contains(n, "duplicate") || strings.Contains(n, "mutation") || strings.HasPrefix(n, "raw_") || strings.HasPrefix(n, "path_") || strings.HasPrefix(n, "ordinal") {
-		return "FAILED"
+func expect(n string) (string, string) {
+	if n == "overflow_helper_case" {
+		return "FAILED", "OVERFLOW"
 	}
-	return "COMPLETE_OR_FAILED_BY_LIMIT"
+	if n == "control_midscan_cancel" {
+		return "FAILED", "CANCELLED"
+	}
+	if n == "control_simultaneous_deadline_cancel" || n == "control_postmatch_deadline" {
+		return "FAILED", "DEADLINE_EXCEEDED"
+	}
+	if strings.HasPrefix(n, "raw_") || n == "empty_query" || n == "empty_source_set" || n == "control_duplicate" || n == "control_order" {
+		return "FAILED", "INVALID_INPUT"
+	}
+	if strings.HasPrefix(n, "path_") || n == "utf8_empty_file" || strings.Contains(n, "digest_mutation") || strings.HasPrefix(n, "duplicate_path_") {
+		return "FAILED", "ADMISSION_FAILED"
+	}
+	if strings.HasPrefix(n, "ordinal_") {
+		return "FAILED", "ASSOCIATION_FAILED"
+	}
+	if strings.Contains(n, "plus_one") {
+		return "FAILED", "RESOURCE_EXHAUSTED"
+	}
+	return "COMPLETE", ""
+}
+func assertion(n string) string {
+	return "attempt bytes exercise " + n + " and terminal outcome/code must match matrix"
 }

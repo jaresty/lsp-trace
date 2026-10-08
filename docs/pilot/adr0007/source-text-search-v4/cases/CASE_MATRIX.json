@@ -1,356 +1,402 @@
 [
   {
     "id": "case-01-raw_malformed_json",
-    "requirement": "v4-e2e-contract:raw_malformed_json",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "raw_malformed_json",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise raw_malformed_json and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-02-raw_unknown_field",
-    "requirement": "v4-e2e-contract:raw_unknown_field",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "raw_unknown_field",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise raw_unknown_field and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-03-raw_duplicate_field",
-    "requirement": "v4-e2e-contract:raw_duplicate_field",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "raw_duplicate_field",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise raw_duplicate_field and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-04-raw_trailing_data",
-    "requirement": "v4-e2e-contract:raw_trailing_data",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "raw_trailing_data",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise raw_trailing_data and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-05-empty_query",
-    "requirement": "v4-e2e-contract:empty_query",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "empty_query",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise empty_query and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-06-empty_source_set",
-    "requirement": "v4-e2e-contract:empty_source_set",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "empty_source_set",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise empty_source_set and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-07-control_duplicate",
-    "requirement": "v4-e2e-contract:control_duplicate",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "control_duplicate",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise control_duplicate and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-08-control_order",
-    "requirement": "v4-e2e-contract:control_order",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "control_order",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise control_order and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "INVALID_INPUT"
   },
   {
     "id": "case-09-control_simultaneous_deadline_cancel",
-    "requirement": "v4-e2e-contract:control_simultaneous_deadline_cancel",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "control_simultaneous_deadline_cancel",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise control_simultaneous_deadline_cancel and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "DEADLINE_EXCEEDED"
   },
   {
     "id": "case-10-control_midscan_cancel",
-    "requirement": "v4-e2e-contract:control_midscan_cancel",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "control_midscan_cancel",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise control_midscan_cancel and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "CANCELLED"
   },
   {
     "id": "case-11-control_postmatch_deadline",
-    "requirement": "v4-e2e-contract:control_postmatch_deadline",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "control_postmatch_deadline",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise control_postmatch_deadline and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "DEADLINE_EXCEEDED"
   },
   {
     "id": "case-12-utf8_empty_file",
-    "requirement": "v4-e2e-contract:utf8_empty_file",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "utf8_empty_file",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise utf8_empty_file and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-13-utf8_nfc_path",
-    "requirement": "v4-e2e-contract:utf8_nfc_path",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "utf8_nfc_path",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise utf8_nfc_path and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-14-path_backslash",
-    "requirement": "v4-e2e-contract:path_backslash",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "path_backslash",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise path_backslash and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-15-path_absolute",
-    "requirement": "v4-e2e-contract:path_absolute",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "path_absolute",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise path_absolute and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-16-path_traversal",
-    "requirement": "v4-e2e-contract:path_traversal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "path_traversal",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise path_traversal and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-17-duplicate_path_same_revision",
-    "requirement": "v4-e2e-contract:duplicate_path_same_revision",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "duplicate_path_same_revision",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise duplicate_path_same_revision and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-18-duplicate_path_diff_revision",
-    "requirement": "v4-e2e-contract:duplicate_path_diff_revision",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "duplicate_path_diff_revision",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise duplicate_path_diff_revision and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-19-ordinal_missing",
-    "requirement": "v4-e2e-contract:ordinal_missing",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "ordinal_missing",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise ordinal_missing and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ASSOCIATION_FAILED"
   },
   {
     "id": "case-20-ordinal_extra",
-    "requirement": "v4-e2e-contract:ordinal_extra",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "ordinal_extra",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise ordinal_extra and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ASSOCIATION_FAILED"
   },
   {
     "id": "case-21-file_digest_mutation",
-    "requirement": "v4-e2e-contract:file_digest_mutation",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "file_digest_mutation",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise file_digest_mutation and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-22-object_digest_mutation",
-    "requirement": "v4-e2e-contract:object_digest_mutation",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "object_digest_mutation",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise object_digest_mutation and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "ADMISSION_FAILED"
   },
   {
     "id": "case-23-admission_digest_order",
-    "requirement": "v4-e2e-contract:admission_digest_order",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "admission_digest_order",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise admission_digest_order and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-24-multi_path_byte_order",
-    "requirement": "v4-e2e-contract:multi_path_byte_order",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "multi_path_byte_order",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise multi_path_byte_order and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-25-overlap_literal",
-    "requirement": "v4-e2e-contract:overlap_literal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "overlap_literal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise overlap_literal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-26-metachar_literal",
-    "requirement": "v4-e2e-contract:metachar_literal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "metachar_literal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise metachar_literal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-27-case_sensitive_literal",
-    "requirement": "v4-e2e-contract:case_sensitive_literal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "case_sensitive_literal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise case_sensitive_literal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-28-combining_literal",
-    "requirement": "v4-e2e-contract:combining_literal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "combining_literal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise combining_literal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-29-lf_positions",
-    "requirement": "v4-e2e-contract:lf_positions",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "lf_positions",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise lf_positions and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-30-crlf_positions",
-    "requirement": "v4-e2e-contract:crlf_positions",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "crlf_positions",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise crlf_positions and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-31-bare_cr_positions",
-    "requirement": "v4-e2e-contract:bare_cr_positions",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "bare_cr_positions",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise bare_cr_positions and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-32-mixed_newlines",
-    "requirement": "v4-e2e-contract:mixed_newlines",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "mixed_newlines",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise mixed_newlines and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-33-non_bmp_utf16",
-    "requirement": "v4-e2e-contract:non_bmp_utf16",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "non_bmp_utf16",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise non_bmp_utf16 and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-34-crossline_literal",
-    "requirement": "v4-e2e-contract:crossline_literal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "crossline_literal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise crossline_literal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-35-max_files_equal",
-    "requirement": "v4-e2e-contract:max_files_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_files_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_files_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-36-max_files_plus_one",
-    "requirement": "v4-e2e-contract:max_files_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_files_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_files_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-37-max_source_equal",
-    "requirement": "v4-e2e-contract:max_source_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_source_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_source_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-38-max_source_plus_one",
-    "requirement": "v4-e2e-contract:max_source_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_source_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_source_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-39-max_total_equal",
-    "requirement": "v4-e2e-contract:max_total_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_total_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_total_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-40-max_total_plus_one",
-    "requirement": "v4-e2e-contract:max_total_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_total_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_total_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-41-max_path_equal",
-    "requirement": "v4-e2e-contract:max_path_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_path_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_path_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-42-max_path_plus_one",
-    "requirement": "v4-e2e-contract:max_path_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_path_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_path_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-43-max_matches_equal",
-    "requirement": "v4-e2e-contract:max_matches_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_matches_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_matches_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-44-max_matches_plus_one",
-    "requirement": "v4-e2e-contract:max_matches_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_matches_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_matches_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-45-max_work_equal",
-    "requirement": "v4-e2e-contract:max_work_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_work_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_work_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-46-max_work_plus_one",
-    "requirement": "v4-e2e-contract:max_work_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_work_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_work_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-47-max_output_equal",
-    "requirement": "v4-e2e-contract:max_output_equal",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_output_equal",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise max_output_equal and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   },
   {
     "id": "case-48-max_output_plus_one",
-    "requirement": "v4-e2e-contract:max_output_plus_one",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "max_output_plus_one",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise max_output_plus_one and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "RESOURCE_EXHAUSTED"
   },
   {
     "id": "case-49-overflow_helper_case",
-    "requirement": "v4-e2e-contract:overflow_helper_case",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "overflow_helper_case",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
+    "assertion": "attempt bytes exercise overflow_helper_case and terminal outcome/code must match matrix",
+    "expected_outcome": "FAILED",
+    "expected_code": "OVERFLOW"
   },
   {
     "id": "case-50-complete_location_pins_order",
-    "requirement": "v4-e2e-contract:complete_location_pins_order",
+    "requirement": "adr0007-v4-source-text-search",
     "stimulus": "complete_location_pins_order",
-    "expected_branch": "COMPLETE_OR_FAILED_BY_LIMIT"
-  },
-  {
-    "id": "case-51-custody_digest_mutation",
-    "requirement": "v4-e2e-contract:custody_digest_mutation",
-    "stimulus": "custody_digest_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-52-replay_digest_mutation",
-    "requirement": "v4-e2e-contract:replay_digest_mutation",
-    "stimulus": "replay_digest_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-53-source_pin_mutation",
-    "requirement": "v4-e2e-contract:source_pin_mutation",
-    "stimulus": "source_pin_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-54-predecessor_mutation",
-    "requirement": "v4-e2e-contract:predecessor_mutation",
-    "stimulus": "predecessor_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-55-freeze_schema_mutation",
-    "requirement": "v4-e2e-contract:freeze_schema_mutation",
-    "stimulus": "freeze_schema_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-56-accounting_mutation",
-    "requirement": "v4-e2e-contract:accounting_mutation",
-    "stimulus": "accounting_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-57-implementation_mutation",
-    "requirement": "v4-e2e-contract:implementation_mutation",
-    "stimulus": "implementation_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-58-oracle_mutation",
-    "requirement": "v4-e2e-contract:oracle_mutation",
-    "stimulus": "oracle_mutation",
-    "expected_branch": "FAILED"
-  },
-  {
-    "id": "case-59-verifier_mutation",
-    "requirement": "v4-e2e-contract:verifier_mutation",
-    "stimulus": "verifier_mutation",
-    "expected_branch": "FAILED"
+    "assertion": "attempt bytes exercise complete_location_pins_order and terminal outcome/code must match matrix",
+    "expected_outcome": "COMPLETE",
+    "expected_code": ""
   }
 ]

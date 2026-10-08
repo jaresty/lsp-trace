@@ -27,6 +27,7 @@ type Attempt struct {
 	ExecutionControl      ExecutionControl       `json:"execution_control"`
 	SourceInputs          []SourceInput          `json:"source_inputs"`
 	ExternalFreezeBinding *ExternalFreezeBinding `json:"external_freeze_binding,omitempty"`
+	TestControl           *TestControl           `json:"test_control,omitempty"`
 }
 type Request struct {
 	SchemaVersion string      `json:"schema_version"`
@@ -106,6 +107,10 @@ type ExternalFreezeBinding struct {
 	Mode                 string `json:"mode"`
 	FreezeRootSha256     string `json:"freeze_root_sha256"`
 	DesignIdentitySHA256 string `json:"design_identity_sha256"`
+}
+type TestControl struct {
+	SchemaVersion       string `json:"schema_version"`
+	InitialBOutputBytes uint64 `json:"initial_B_output_bytes"`
 }
 type SourceTuple struct {
 	Ordinal          uint64 `json:"ordinal"`

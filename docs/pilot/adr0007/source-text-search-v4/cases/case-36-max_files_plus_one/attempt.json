@@ -6,7 +6,7 @@
   },
   "request": {
     "limits": {
-      "max_files": 0,
+      "max_files": 1,
       "max_matches": 8,
       "max_output_bytes": 999999,
       "max_path_bytes": 999999,
@@ -17,17 +17,21 @@
     },
     "location_pin": {
       "complete_location_pins": [
-        "SourceAdmissionPin",
-        "RangeUnionCandidate"
+        "design_commit",
+        "design_root_sha256",
+        "execution_commit",
+        "seal_commit",
+        "final_seal_sha256",
+        "source_admission_pin"
       ],
-      "design_commit": "UNFROZEN-v4",
-      "design_root_sha256": "sha256:unfrozen-design-identity",
+      "design_commit": "c943a484060462121c6f0929d4182b053ff95ab5",
+      "design_root_sha256": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d",
       "executedLocation": false,
-      "execution_commit": "UNFROZEN-v4",
-      "final_seal_sha256": "sha256:unfrozen-final-seal",
+      "execution_commit": "f0f8b49aa368bea9b3e6d105eef5cb2614221067",
+      "final_seal_sha256": "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6",
       "operation": "RANGE_UNION",
       "schema_version": "lsp-trace.adr0007.source-text-search.location-pin.private.v4",
-      "seal_commit": "UNFROZEN-v4",
+      "seal_commit": "16f40dcb03a234b00db80059a7eef400495e9d97",
       "source_admission_pin": {
         "bytes": 3519,
         "git_blob_sha1": "4953fab89d911e2352fa6c2253497c07c8e9a777",
@@ -60,6 +64,13 @@
         "ordinal": 1,
         "path": "a.txt",
         "revision": "rev1"
+      },
+      {
+        "file_digest": "sha256:36d149fee42f3df487f74ff950f79665f31a27ab57079d6ac9e7a8c6ef0c97b3",
+        "object_digest": "sha256:36d149fee42f3df487f74ff950f79665f31a27ab57079d6ac9e7a8c6ef0c97b3",
+        "ordinal": 2,
+        "path": "b.txt",
+        "revision": "rev1"
       }
     ]
   },
@@ -71,6 +82,15 @@
       "object_digest": "sha256:b3ddfeb1bf114ca1955c9c1aa739bdc436a8ea3277324e281cf7bd9fb6976565",
       "ordinal": 1,
       "path": "a.txt",
+      "revision": "rev1",
+      "schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4"
+    },
+    {
+      "bytes_base64": "bmVlZGxlIGluIGI=",
+      "file_digest": "sha256:36d149fee42f3df487f74ff950f79665f31a27ab57079d6ac9e7a8c6ef0c97b3",
+      "object_digest": "sha256:36d149fee42f3df487f74ff950f79665f31a27ab57079d6ac9e7a8c6ef0c97b3",
+      "ordinal": 2,
+      "path": "b.txt",
       "revision": "rev1",
       "schema_version": "lsp-trace.adr0007.source-text-search.source-input.private.v4"
     }
