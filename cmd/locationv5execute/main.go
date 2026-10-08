@@ -21,6 +21,17 @@ type conditionFile struct {
 	DeadlineExpired bool `json:"deadlineExpired"`
 }
 
+type childToken struct {
+	Schema       string `json:"schema"`
+	Token        string `json:"token"`
+	Mode         string `json:"mode"`
+	Phase        string `json:"phase"`
+	CaseID       string `json:"caseId"`
+	AssignmentID string `json:"assignmentId"`
+	DispatchID   string `json:"dispatchId"`
+	Head         string `json:"head"`
+}
+
 type processCustody struct {
 	Executable    string            `json:"executable"`
 	Argv          []string          `json:"argv"`
@@ -78,6 +89,24 @@ func strictJSON(path string, raw []byte, v any) error {
 	var extra any
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("%s: trailing json", path)
+	}
+	return nil
+}
+
+func verifyChildToken(path, mode, phase, caseID, assignmentID string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("child token required: %w", err)
+	}
+	var tok childToken
+	if err := strictJSON(path, raw, &tok); err != nil {
+		return err
+	}
+	if tok.Schema != "lsp-trace.adr0007.location-v5.child-token.v1" || tok.Mode != mode || tok.Phase != phase || tok.CaseID != caseID || tok.AssignmentID != assignmentID || tok.DispatchID == "" || tok.Head == "" {
+		return errors.New("child token binding mismatch")
+	}
+	if tok.Token == "" || os.Getenv("LOCATIONV5_CHILD_TOKEN") != tok.Token {
+		return errors.New("child token authentication failed")
 	}
 	return nil
 }
@@ -140,12 +169,16 @@ func rejectDuplicateKeys(raw []byte) error {
 
 func main() {
 	stderr := []byte{}
-	if len(os.Args) != 5 {
-		stderr = []byte("usage: locationv5execute <case-id> <assignment-id> <input-dir> <out-json>\n")
+	if len(os.Args) != 6 {
+		stderr = []byte("usage: locationv5execute <case-id> <assignment-id> <input-dir> <out-json> <child-token-json>\n")
 		os.Stderr.Write(stderr)
 		os.Exit(2)
 	}
-	caseID, assignmentID, inputDir, outPath := os.Args[1], os.Args[2], os.Args[3], os.Args[4]
+	caseID, assignmentID, inputDir, outPath, tokenPath := os.Args[1], os.Args[2], os.Args[3], os.Args[4], os.Args[5]
+	if err := verifyChildToken(tokenPath, "__producer", "producer", caseID, assignmentID); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
 	cleanInput := filepath.ToSlash(filepath.Clean(inputDir))
 	if strings.Contains(cleanInput, "evaluator-candidate") || strings.Contains(cleanInput, "oracle-candidate") {
 		stderr = []byte("producer input dir must not be evaluator-candidate or oracle-candidate\n")

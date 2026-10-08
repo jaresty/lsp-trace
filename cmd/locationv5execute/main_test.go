@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -31,6 +33,25 @@ func TestStrictConditionParsesStructurally(t *testing.T) {
 	}
 	if !c.Cancel || c.DeadlineExpired {
 		t.Fatalf("bad structural parse: %+v", c)
+	}
+}
+
+func TestChildTokenRejectsDirectBypassAndMismatchedBinding(t *testing.T) {
+	t.Setenv("LOCATIONV5_CHILD_TOKEN", "secret")
+	if err := verifyChildToken(filepath.Join(t.TempDir(), "missing.json"), "__producer", "producer", "case", "assign"); err == nil {
+		t.Fatalf("missing token accepted")
+	}
+	d := t.TempDir()
+	p := filepath.Join(d, "token.json")
+	good := `{"schema":"lsp-trace.adr0007.location-v5.child-token.v1","token":"secret","mode":"__producer","phase":"producer","caseId":"case","assignmentId":"assign","dispatchId":"dispatch-1","head":"HEAD6ea8b1bc"}`
+	if err := os.WriteFile(p, []byte(good), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyChildToken(p, "__producer", "producer", "case", "assign"); err != nil {
+		t.Fatalf("good token rejected: %v", err)
+	}
+	if err := verifyChildToken(p, "__reviewer", "reviewer", "case", "assign"); err == nil {
+		t.Fatalf("mismatched child mode accepted")
 	}
 }
 

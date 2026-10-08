@@ -199,6 +199,16 @@ func files(root string, zeroFreeze bool) ([]rec, error) {
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, err
 }
+func writeNew(path string, b []byte) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return fmt.Errorf("create-new %s: %w", path, err)
+	}
+	defer f.Close()
+	_, err = f.Write(b)
+	return err
+}
+
 func sameFiles(a []rec, b []rec) bool {
 	if len(a) != len(b) {
 		return false
@@ -272,7 +282,7 @@ func main() {
 	out := map[string]any{"schema": "lsp-trace.adr0007.location-v5.precheck.v1", "status": "PRECHECK_PASS", "repoRoot": repo, "freezeRootIdentity": f.RootIdentity, "zeroImageFiles": len(zero), "physicalFiles": len(phys), "producerOutputs": 0, "reviewerOutputs": 0, "assignments": len(as.Cases), "authority": 0, "accepted": false, "completeness": "UNKNOWN", "beforeManifestStatus": beforeStatus, "beforeManifestAccounting": beforeMismatch}
 	b, _ := json.MarshalIndent(out, "", "  ")
 	b = append(b, '\n')
-	must(os.WriteFile(filepath.Join(execRoot, "PRECHECK.json"), b, 0644))
+	must(writeNew(filepath.Join(execRoot, "PRECHECK.json"), b))
 	fmt.Print(string(b))
 }
 func validAuthorization(a authFile, rootIdentity string) bool {
