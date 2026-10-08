@@ -1,0 +1,70 @@
+{
+  "$id": "lsp-trace.adr0007.source-text-search.source-admission-binding.v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "admission_id": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "file_sha256": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "object_id": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "path": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "revision": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    },
+    "seal": {
+      "type": [
+        "string",
+        "number",
+        "boolean",
+        "object",
+        "array"
+      ]
+    }
+  },
+  "required": [
+    "path",
+    "revision",
+    "file_sha256",
+    "object_id",
+    "admission_id",
+    "seal"
+  ],
+  "type": "object"
+}
