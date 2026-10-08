@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"14-typed-resource-limit","causalPerturbation":"typed RESOURCE_LIMIT binding","specCitations":["DESIGN.md §3 lines 51-57"]}

@@ -1,0 +1,23 @@
+{
+  "schema": "lsp-trace.adr0007.location-v5-execution.predispatch-blocked-audit.v1",
+  "status": "BLOCKED_TOOLING_REPAIR_AUTHORIZED",
+  "head": "7c3abf4447ea553e6f7963972349afe2362e3e01",
+  "zeroAttemptsReviewsOutput": true,
+  "findings": [
+    "legacy Python producer copied evaluator-candidate artifacts instead of executing adr0007locationv5.Evaluate",
+    "legacy review accepted aggregates and did not independently recompute all leaf artifacts",
+    "legacy ledger was not a hash chained single schema",
+    "legacy verifier trusted manifest counts and left a competing verification route"
+  ],
+  "toolingRepairManifest": {
+    "authoritativePipeline": "internal/locationexecutionv5",
+    "producer": "executes adr0007locationv5.Evaluate from frozen inputs and assignment-bound cases",
+    "reviewer": "verifies assignment-bound producer output against frozen oracle result and derivation artifacts",
+    "ledger": "single hash-chained EVENT_LEDGER.json with inline payload hashes",
+    "legacyPython": "assert-freeze/precheck only; semantic commands hard-fail",
+    "legacyVerifycmd": "replaced with authoritative verifier wrapper",
+    "frozenRootsMutated": false,
+    "authorizationMutated": false,
+    "assignmentsMutated": false
+  }
+}

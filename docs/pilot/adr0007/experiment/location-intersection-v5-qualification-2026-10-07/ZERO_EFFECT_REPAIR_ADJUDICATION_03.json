@@ -1,0 +1,13 @@
+{
+  "schema": "lsp-trace.adr0007.location-v5.zero-effect-repair-adjudication.v1",
+  "verdict": "ZERO_EFFECT_REPAIR_ALLOWED",
+  "failedHead": "623f92e6",
+  "failure": "complete valid AUTHORIZATION.json rejected by partial local typed schema at baseCommit",
+  "diagnosis": "CORRECTION_CHURN",
+  "allowedScope": ["complete typed authFile schema", "complete recursive authorization and assignment strictness tests"],
+  "frozenMutation": false,
+  "producerAttemptsObserved": 0,
+  "reviewerAttemptsObserved": 0,
+  "semanticOutputsObserved": 0,
+  "stopAfterSuccessfulPrecheck": true
+}

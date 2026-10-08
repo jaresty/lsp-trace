@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location.policy.v4","digest":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","relations":["INTERSECTS","CONTAINED_BY","CONTAINS"],"memberOutcomes":["ELIGIBLE","INELIGIBLE","UNAVAILABLE_LOCATION","INVALID_LOCATION","DUPLICATE_MEMBER","FILTERED_BY_POLICY"]}

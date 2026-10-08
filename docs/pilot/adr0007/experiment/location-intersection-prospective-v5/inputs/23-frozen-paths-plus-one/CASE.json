@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"23-frozen-paths-plus-one","causalPerturbation":"raw frozen path count 1001 expands to one source","specCitations":["DESIGN.md §§7-8; ALGORITHM.md lines 134-147"]}

@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"08-malformed-json","causalPerturbation":"malformed request bytes","specCitations":["DESIGN.md §1 lines 9-13"]}

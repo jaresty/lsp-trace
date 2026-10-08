@@ -1,0 +1,18 @@
+{
+  "schema": "lsp-trace.adr0007.location-v5.zero-effect-repair-adjudication.v1",
+  "verdict": "ZERO_EFFECT_REPAIR_ALLOWED",
+  "failedHead": "29606091",
+  "failure": "valid frozen FREEZE.json rejected because strict local freezeFile omitted status, design, custody, and counts",
+  "allowedScope": [
+    "cmd/locationv5precheck freezeFile typed schema",
+    "cmd/locationv5precheck recursive strictness tests"
+  ],
+  "frozenMutation": false,
+  "producerAttemptsObserved": 0,
+  "reviewerAttemptsObserved": 0,
+  "semanticOutputsObserved": 0,
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "featureIdentity": "UNRESOLVED"
+}

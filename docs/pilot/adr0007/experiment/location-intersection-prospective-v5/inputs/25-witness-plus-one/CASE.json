@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"25-witness-plus-one","causalPerturbation":"unique witness count 10001 exceeds maxWitnesses 10000","specCitations":["DESIGN.md §§6,8; ALGORITHM.md lines 134-147"]}

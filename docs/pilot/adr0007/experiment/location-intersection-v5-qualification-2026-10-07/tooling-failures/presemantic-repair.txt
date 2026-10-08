@@ -1,0 +1,2 @@
+post-repair: verifier treats FREEZE.json as zero bytes per frozen manifest self-reference; no attempts/results produced before this repair.
+post-repair-2: Python freeze verifier compares file identities by path to avoid traversal-order mismatch; no attempts/results produced before this repair.

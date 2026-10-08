@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"20-member-duplicate","causalPerturbation":"DUPLICATE_MEMBER inputs","specCitations":["DESIGN.md §5 lines 95-106"]}

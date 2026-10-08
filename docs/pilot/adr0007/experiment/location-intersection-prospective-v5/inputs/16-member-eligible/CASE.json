@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"16-member-eligible","causalPerturbation":"RANGE_UNION member contained by selector is ELIGIBLE","specCitations":["DESIGN.md §4 lines 73-91; §5 lines 97-104"]}

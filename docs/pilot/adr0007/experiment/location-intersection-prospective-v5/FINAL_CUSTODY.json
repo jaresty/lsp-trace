@@ -1,0 +1,29 @@
+{
+  "schema": "lsp-trace.adr0007.location-v5-final-custody.private.v1",
+  "status": "IMPLEMENTATION_AGREEMENT_GO",
+  "cases": 26,
+  "authority": 0,
+  "accepted": false,
+  "completeness": "UNKNOWN",
+  "featureIdentity": "UNRESOLVED",
+  "execution": "designGO",
+  "dispatch": false,
+  "qualificationExecution": false,
+  "boundaries": ["W", "W-1", "B", "B-1"],
+  "independence": "procedural-not-cryptographic",
+  "sources": {
+    "spec": "637680d2",
+    "inputBase": "base",
+    "inputCorrections": ["64afd44b", "1546da22"],
+    "evaluatorSource": "fccc0a03",
+    "oracleSource": "1cff6a76",
+    "integration": "a9c82f1f",
+    "mergeBase": "d78e54d3",
+    "skippedPatchEquivalent": "7354f53c"
+  },
+  "immutablePredecessors": ["v1", "v2", "v3", "v4"],
+  "limits": {
+    "locationQualificationCampaignAuthorized": false,
+    "executionAuthorizationCreated": false
+  }
+}

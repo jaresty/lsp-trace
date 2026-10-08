@@ -1,0 +1,1 @@
+{"schema":"lsp-trace.adr0007.location-input-case.private.v5","caseId":"24-cancel-deadline","causalPerturbation":"simultaneous cancellation and deadline condition","specCitations":["DESIGN.md §7 lines 120-126"]}

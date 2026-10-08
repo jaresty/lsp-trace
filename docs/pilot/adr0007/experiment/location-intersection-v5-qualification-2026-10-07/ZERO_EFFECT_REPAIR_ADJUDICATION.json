@@ -1,0 +1,25 @@
+{
+  "defects": [
+    "freeze census paths diverged between before/after/precheck/Go verifier when FREEZE.json physical bytes were measured instead of canonical zero image",
+    "producer harness could rely on copied evaluator/oracle outputs instead of invoking the frozen evaluator for each REQUEST.raw.json with binding and condition custody",
+    "reviewer accepted aggregate claims without deriving uniqueness, custody, strict schemas, canonical bytes, frozen oracle bytes, derivation bindings, equality, and authority ceilings from artifacts",
+    "boundary checks could replay copied bytes rather than invoke evaluator on W/W-1/B/B-1 bundles",
+    "execution artifacts lacked strict unknown/trailing/duplicate parsing and append-only hash-chained ledger coverage",
+    "independent verifier did not recount leaves/events/assignments and recompute aggregate claims with mutation coverage for enumerated defects"
+  ],
+  "forbiddenChanges": [
+    "authorization",
+    "assignments",
+    "freeze",
+    "policy",
+    "limits",
+    "expected outcomes",
+    "producer outputs",
+    "reviewer outputs before precheck"
+  ],
+  "head": "87fc4a8d0d96",
+  "independentVerdict": "repair infrastructure only; preserve frozen authorization, assignments, policy, limits, outcomes, commits, and failures; stop after successful precheck before producer dispatch",
+  "schema": "lsp-trace.adr0007.location-v5.zero-effect-repair-adjudication.v1",
+  "stopCondition": "after successful assert-freeze and precheck commit; no producer/reviewer dispatch",
+  "verdict": "ZERO_EFFECT_REPAIR_ALLOWED"
+}
