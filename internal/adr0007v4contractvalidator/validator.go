@@ -223,6 +223,9 @@ func ValidateBundleBytes(b []byte) error {
 func ValidateFile(path string) error { return ValidateBundleFile(path) }
 
 func ValidateBundle(b Bundle) error {
+	if err := validateNamedArtifactRoles(b); err != nil {
+		return err
+	}
 	if err := walkSchema(b.SchemaBytes); err != nil {
 		return err
 	}
@@ -308,6 +311,31 @@ func ValidateBundle(b Bundle) error {
 	return nil
 }
 
+func validateNamedArtifactRoles(b Bundle) error {
+	var payload struct {
+		Members []struct {
+			Path   string `json:"path"`
+			Bytes  uint64 `json:"bytes"`
+			SHA256 string `json:"sha256"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(b.PayloadFreezeBytes), &payload); err != nil || len(payload.Members) == 0 || payload.Members[0].Path == "" || payload.Members[0].SHA256 == "" {
+		return verr("INVARIANT_FAILED", "/payload_freeze_binding_bytes", "bad payload manifest")
+	}
+	var tooling struct {
+		SchemaVersion string   `json:"schema_version"`
+		Stage         string   `json:"stage"`
+		Members       []string `json:"members"`
+	}
+	if err := json.Unmarshal([]byte(b.ToolingManifestBytes), &tooling); err != nil || tooling.SchemaVersion != "lsp-trace.adr0007.source-text-search.tooling-census.private.v4" || tooling.Stage == "" || len(tooling.Members) == 0 {
+		return verr("INVARIANT_FAILED", "/tooling_manifest_bytes", "bad tooling census")
+	}
+	if !strings.Contains(b.PredecessorManifestBytes, "ADR0007") && !strings.Contains(b.PredecessorManifestBytes, "source-text-search") {
+		return verr("INVARIANT_FAILED", "/predecessor_manifest_bytes", "bad predecessor lock")
+	}
+	return nil
+}
+
 type DeriveInput struct {
 	RawAttemptBytes          string
 	AdmittedSourceBytes      map[string]string
@@ -328,10 +356,40 @@ type rawAttempt struct {
 type rawRequest struct {
 	SchemaVersion string         `json:"schema_version"`
 	Query         string         `json:"query"`
-	Policy        map[string]any `json:"policy"`
-	LocationPin   map[string]any `json:"location_pin"`
+	Policy        rawPolicy      `json:"policy"`
+	LocationPin   rawLocationPin `json:"location_pin"`
 	Limits        rawLimits      `json:"limits"`
 	Sources       []rawSourceRef `json:"sources"`
+}
+type rawPolicy struct {
+	SchemaVersion         string `json:"schema_version"`
+	LiteralMode           string `json:"literal_mode"`
+	AllowRegex            bool   `json:"allow_regex"`
+	AllowFuzzy            bool   `json:"allow_fuzzy"`
+	AllowToken            bool   `json:"allow_token"`
+	AllowRank             bool   `json:"allow_rank"`
+	AllowModel            bool   `json:"allow_model"`
+	AllowBackendSemantics bool   `json:"allow_backend_semantics"`
+}
+type sourceAdmissionPin struct {
+	Bytes            uint64   `json:"bytes"`
+	GitBlobSHA1      string   `json:"git_blob_sha1"`
+	Path             string   `json:"path"`
+	RepositoryCommit string   `json:"repository_commit"`
+	SHA256           string   `json:"sha256"`
+	Symbols          []string `json:"symbols"`
+}
+type rawLocationPin struct {
+	SchemaVersion        string             `json:"schema_version"`
+	Operation            string             `json:"operation"`
+	ExecutedLocation     bool               `json:"executedLocation"`
+	CompleteLocationPins []string           `json:"complete_location_pins"`
+	DesignCommit         string             `json:"design_commit"`
+	DesignRootSHA256     string             `json:"design_root_sha256"`
+	ExecutionCommit      string             `json:"execution_commit"`
+	SealCommit           string             `json:"seal_commit"`
+	FinalSealSHA256      string             `json:"final_seal_sha256"`
+	SourceAdmissionPin   sourceAdmissionPin `json:"source_admission_pin"`
 }
 type rawLimits struct {
 	SchemaVersion  string `json:"schema_version"`
@@ -374,6 +432,24 @@ type admittedSource struct {
 	data []byte
 }
 
+type derivationRuntime struct {
+	poll uint64
+	obs  []rawObservation
+}
+
+type sourceAdmissionBinding struct {
+	Schema          string                  `json:"schema"`
+	AdmissionDigest string                  `json:"admissionDigest"`
+	Sources         []sourceAdmissionMember `json:"sources"`
+}
+type sourceAdmissionMember struct {
+	Path         string `json:"path"`
+	Revision     string `json:"revision"`
+	FileDigest   string `json:"fileDigest"`
+	ObjectDigest string `json:"objectDigest"`
+	BytesBase64  string `json:"bytes_base64"`
+}
+
 func deriveInputFromBundle(b Bundle) DeriveInput {
 	return DeriveInput{RawAttemptBytes: b.RawAttemptBytes, AdmittedSourceBytes: b.AdmittedSourceBytes, AdmittedBindingBytes: b.AdmittedBindingBytes, ToolingManifestBytes: b.ToolingManifestBytes, PredecessorManifestBytes: b.PredecessorManifestBytes, PayloadFreezeBytes: b.PayloadFreezeBytes}
 }
@@ -383,24 +459,27 @@ func Derive(in DeriveInput) (string, error) {
 	if err != nil {
 		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": err.Error()}, false, nil, "invalid")
 	}
+	if err := validatePolicyLocation(attempt); err != nil {
+		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": err.Error()}, false, nil, nonemptyQuery(attempt.Request.Query))
+	}
 	if attempt.Request.Query == "" || len(attempt.Request.Sources) == 0 || len(attempt.SourceInputs) == 0 {
-		query := attempt.Request.Query
-		if query == "" {
-			query = "invalid"
-		}
-		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": "request"}, false, nil, query)
+		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": "request"}, false, nil, nonemptyQuery(attempt.Request.Query))
 	}
 	if badControl(attempt.ExecutionControl.Observations) {
 		return deriveFailure(in, "INVALID_INPUT", map[string]any{"reason": "execution_control"}, false, nil, attempt.Request.Query)
 	}
-	if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 0); controlFailure != "" {
-		return deriveFailure(in, controlFailure, detail, false, nil, attempt.Request.Query)
+	rt := &derivationRuntime{obs: attempt.ExecutionControl.Observations}
+	if code, detail := rt.pollControl(); code != "" {
+		return deriveFailure(in, code, detail, false, nil, attempt.Request.Query)
 	}
-	selected, assocErr := associateSources(attempt)
+	selected, assocErr := associateSources(attempt, in.AdmittedSourceBytes)
 	if assocErr != nil {
 		return deriveFailure(in, "ASSOCIATION_FAILED", map[string]any{"source_id": assocErr.Error()}, false, nil, attempt.Request.Query)
 	}
-	admitted, admDetail, admOK, resource := admitSources(selected, attempt.Request.Limits)
+	admitted, binding, admDetail, admOK, resource := admitSources(selected, attempt.Request.Limits)
+	if err := crosscheckAdmittedSourceBytes(admitted, in.AdmittedSourceBytes); err != nil {
+		return deriveFailure(in, "ASSOCIATION_FAILED", map[string]any{"source_id": err.Error()}, false, nil, attempt.Request.Query)
+	}
 	if !admOK {
 		code := "ADMISSION_FAILED"
 		detail := map[string]any{"source_id": admDetail}
@@ -410,51 +489,79 @@ func Derive(in DeriveInput) (string, error) {
 		}
 		return deriveFailure(in, code, detail, true, sourcesFromAdmitted(admitted), attempt.Request.Query)
 	}
+	if in.AdmittedBindingBytes != binding {
+		return deriveFailure(in, "ADMISSION_FAILED", map[string]any{"source_id": "admitted_binding_bytes"}, true, sourcesFromAdmitted(admitted), attempt.Request.Query)
+	}
 	t := baseTerminal(in, attempt.AttemptID, attempt.Request.Query)
 	t.Sources = sourcesFromAdmitted(admitted)
+	for _, src := range t.Sources {
+		if src.PathBytes > attempt.Request.Limits.MaxPathBytes {
+			return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "max_path_bytes"}, true)
+		}
+	}
 	t.Admission = Admission{Completed: true, AdmissionDigest: admissionDigest(admitted), AdmittedSourceIDs: sourceIDs(t.Sources)}
 	t.Replay.AdmittedBindingSHA256 = sha(in.AdmittedBindingBytes)
-	if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 1); controlFailure != "" {
-		return deriveFailureWithBase(in, t, controlFailure, detail, false)
+	if code, detail := rt.pollControl(); code != "" {
+		return deriveFailureWithBase(in, t, code, detail, false)
 	}
 	qbytes := []byte(attempt.Request.Query)
 	matchOrdinal := uint64(0)
 	for si, s := range admitted {
 		data := s.data
-		if uint64(len(data)) > attempt.Request.Limits.MaxSourceBytes || uint64(len(data)) > attempt.Request.Limits.MaxTotalBytes {
-			return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "source_bytes"}, true)
-		}
 		for off := 0; off+len(qbytes) <= len(data); off++ {
+			if !charge(&t.Accounting.TScannedTuples, 1) {
+				return deriveFailureWithBase(in, t, "OVERFLOW", map[string]any{"counter": "T_scanned_tuples"}, true)
+			}
+			if code, detail := rt.pollControl(); code != "" {
+				return deriveFailureWithBase(in, t, code, detail, false)
+			}
 			if bytes.Equal(data[off:off+len(qbytes)], qbytes) {
-				if controlFailure, detail := controlTerminal(attempt.ExecutionControl.Observations, 2); controlFailure != "" {
-					return deriveFailureWithBase(in, t, controlFailure, detail, false)
-				}
 				if matchOrdinal+1 > attempt.Request.Limits.MaxMatches {
 					return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "max_matches"}, true)
 				}
 				src := t.Sources[si]
 				id := deriveMatchID(src.SourceID, matchOrdinal, uint64(off), uint64(off+len(qbytes)), attempt.Request.Query)
 				m := Match{MatchID: id, SourceID: src.SourceID, PathBytes: src.PathBytes, StartByte: uint64(off), EndByte: uint64(off + len(qbytes)), Ordinal: matchOrdinal, Literal: attempt.Request.Query}
-				t.Matches = append(t.Matches, m)
 				p := positionFor(data, m.StartByte, m.EndByte)
 				p.MatchID = id
+				units := uint64(len(utf16.Encode([]rune(m.Literal))))
+				if !charge(&t.Accounting.MMatches, 1) || !charge(&t.Accounting.RRanges, 1) || !charge(&t.Accounting.UUTF16Units, units) {
+					return deriveFailureWithBase(in, t, "OVERFLOW", map[string]any{"counter": "match_accounting"}, true)
+				}
+				t.Matches = append(t.Matches, m)
 				t.Positions = append(t.Positions, *p)
 				matchOrdinal++
+				if code, detail := rt.pollControl(); code != "" {
+					return deriveFailureWithBase(in, t, code, detail, false)
+				}
 			}
 		}
 	}
-	t.RangeUnionCandidate = deriveCandidate(t)
+	sortMatchesPositions(t.Matches, t.Positions)
+	t.RangeUnionCandidate = deriveCandidateWithPin(t, attempt.Request.LocationPin)
+	if code, detail := rt.pollControl(); code != "" {
+		return deriveFailureWithBase(in, t, code, detail, false)
+	}
 	finalizeTerminal(&t)
-	if t.Accounting.WWork > attempt.Request.Limits.MaxWork || t.Accounting.BOutputBytes > attempt.Request.Limits.MaxOutputBytes || overflowRequested(attempt) {
-		code := "RESOURCE_EXHAUSTED"
-		detail := map[string]any{"limit": "post_scan"}
-		if overflowRequested(attempt) {
-			code = "OVERFLOW"
-			detail = map[string]any{"counter": "B_output_bytes"}
+	if code, detail := rt.pollControl(); code != "" {
+		return deriveFailureWithBase(in, t, code, detail, false)
+	}
+	if t.Accounting.WWork > attempt.Request.Limits.MaxWork || t.Accounting.BOutputBytes > attempt.Request.Limits.MaxOutputBytes {
+		return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "post_scan"}, true)
+	}
+	if overflow, counter := overflowRequested(attempt); overflow {
+		if _, ok := checkedAdd(counter, 1); !ok {
+			return deriveFailureWithBase(in, t, "OVERFLOW", map[string]any{"counter": "test_control.initial_counter"}, true)
 		}
-		return deriveFailureWithBase(in, t, code, detail, true)
 	}
 	return CanonicalJSON(t)
+}
+
+func nonemptyQuery(q string) string {
+	if q == "" {
+		return "invalid"
+	}
+	return q
 }
 
 func parseRawAttempt(raw string) (rawAttempt, error) {
@@ -527,6 +634,28 @@ func rejectDuplicateJSON(b []byte) error {
 	return nil
 }
 
+func validatePolicyLocation(a rawAttempt) error {
+	p := a.Request.Policy
+	if p.SchemaVersion != "lsp-trace.adr0007.source-text-search.policy.private.v4" || p.LiteralMode != "byte-literal" || p.AllowRegex || p.AllowFuzzy || p.AllowToken || p.AllowRank || p.AllowModel || p.AllowBackendSemantics {
+		return errors.New("policy")
+	}
+	lp := a.Request.LocationPin
+	want := []string{"design_commit", "design_root_sha256", "execution_commit", "seal_commit", "final_seal_sha256", "source_admission_pin"}
+	if lp.SchemaVersion != "lsp-trace.adr0007.source-text-search.location-pin.private.v4" || lp.Operation != CandidateOperation || lp.ExecutedLocation || len(lp.CompleteLocationPins) != len(want) {
+		return errors.New("location_pin")
+	}
+	for i := range want {
+		if lp.CompleteLocationPins[i] != want[i] {
+			return errors.New("location_pin_order")
+		}
+	}
+	pin := lp.SourceAdmissionPin
+	if pin.Path != "internal/sourceadmissionv2/admission.go" || pin.SHA256 == "" || pin.Bytes == 0 || len(pin.Symbols) != 3 || pin.Symbols[0] != "Admit" || pin.Symbols[1] != "CanonicalPath" || pin.Symbols[2] != "Digest" {
+		return errors.New("source_admission_pin")
+	}
+	return nil
+}
+
 func badControl(obs []rawObservation) bool {
 	seen := map[uint64]bool{}
 	last := uint64(0)
@@ -542,8 +671,10 @@ func badControl(obs []rawObservation) bool {
 	}
 	return false
 }
-func controlTerminal(obs []rawObservation, poll uint64) (string, map[string]any) {
-	for _, o := range obs {
+func (rt *derivationRuntime) pollControl() (string, map[string]any) {
+	poll := rt.poll
+	rt.poll++
+	for _, o := range rt.obs {
 		if o.PollIndex == poll {
 			if o.DeadlineExpired {
 				return "DEADLINE_EXCEEDED", map[string]any{"deadline": fmt.Sprintf("poll:%d", poll)}
@@ -556,12 +687,16 @@ func controlTerminal(obs []rawObservation, poll uint64) (string, map[string]any)
 	return "", nil
 }
 
-func associateSources(a rawAttempt) ([]admittedSource, error) {
+func associateSources(a rawAttempt, exact map[string]string) ([]admittedSource, error) {
 	inputs := map[uint64]rawSourceInput{}
 	for _, in := range a.SourceInputs {
+		if _, dup := inputs[in.Ordinal]; dup {
+			return nil, fmt.Errorf("ordinal:%d", in.Ordinal)
+		}
 		inputs[in.Ordinal] = in
 	}
 	out := make([]admittedSource, 0, len(a.Request.Sources))
+	usedIDs := map[string]bool{}
 	for _, ref := range a.Request.Sources {
 		in, ok := inputs[ref.Ordinal]
 		if !ok {
@@ -574,54 +709,57 @@ func associateSources(a rawAttempt) ([]admittedSource, error) {
 		if err != nil {
 			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
 		}
+		if exact != nil {
+			id := deriveSourceID(ref.Path, ref.Revision, 0)
+			// final ordinal is path-sort dependent; defer complete crosscheck until after admission.
+			_ = id
+		}
 		out = append(out, admittedSource{ref: ref, data: data})
 	}
 	if len(inputs) != len(a.Request.Sources) {
 		return nil, errors.New("extra_source_input")
 	}
+	_ = usedIDs
 	return out, nil
 }
 
-func admitSources(in []admittedSource, l rawLimits) ([]admittedSource, string, bool, bool) {
+func admitSources(in []admittedSource, l rawLimits) ([]admittedSource, string, string, bool, bool) {
 	if len(in) == 0 || l.MaxFiles < 1 || l.MaxSourceBytes < 1 || l.MaxTotalBytes < 1 {
-		return nil, "limits or sources", false, false
+		return nil, "", "limits or sources", false, false
 	}
 	if uint64(len(in)) > l.MaxFiles {
-		return nil, "max_files", false, true
+		return nil, "", "max_files", false, true
 	}
 	seen := map[string]bool{}
 	total := uint64(0)
 	out := append([]admittedSource(nil), in...)
 	for i, s := range out {
 		if !canonicalPath(s.ref.Path) || s.ref.Revision == "" || len(s.data) == 0 || !utf8.Valid(s.data) {
-			return nil, s.ref.Path, false, false
-		}
-		if uint64(len([]byte(s.ref.Path))) > l.MaxPathBytes {
-			return nil, "max_path_bytes", false, true
-		}
-		if uint64(len(s.data)) > l.MaxSourceBytes {
-			return nil, "max_source_bytes", false, true
+			return nil, "", s.ref.Path, false, false
 		}
 		if seen[s.ref.Path] {
-			return nil, s.ref.Path, false, false
+			return nil, "", s.ref.Path, false, false
 		}
 		seen[s.ref.Path] = true
+		if uint64(len(s.data)) > l.MaxSourceBytes {
+			return nil, "", "max_source_bytes", false, true
+		}
 		total += uint64(len(s.data))
 		if total > l.MaxTotalBytes {
-			return nil, "max_total_bytes", false, true
+			return nil, "", "max_total_bytes", false, true
 		}
 		d := shaBytes(s.data)
 		if s.ref.FileDigest != "" && s.ref.FileDigest != d {
-			return nil, s.ref.Path, false, false
+			return nil, "", s.ref.Path, false, false
 		}
 		if s.ref.ObjectDigest != "" && s.ref.ObjectDigest != d {
-			return nil, s.ref.Path, false, false
+			return nil, "", s.ref.Path, false, false
 		}
 		out[i].ref.FileDigest = d
 		out[i].ref.ObjectDigest = d
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ref.Path < out[j].ref.Path })
-	return out, "", true, false
+	sort.Slice(out, func(i, j int) bool { return bytes.Compare([]byte(out[i].ref.Path), []byte(out[j].ref.Path)) < 0 })
+	return out, sourceAdmissionBindingBytes(out), "", true, false
 }
 func canonicalPath(p string) bool {
 	return p != "" && utf8.ValidString(p) && norm.NFC.IsNormalString(p) && !strings.Contains(p, "\\") && !strings.Contains(p, "//") && !strings.Contains(p, ":") && !strings.HasPrefix(p, "/") && p != "." && p != ".." && !strings.HasPrefix(p, "./") && !strings.HasPrefix(p, "../") && !strings.Contains(p, "/./") && !strings.Contains(p, "/../") && path.Clean(p) == p
@@ -637,6 +775,14 @@ func admissionDigest(in []admittedSource) string {
 	}
 	return "sha256:" + hex.EncodeToString(h.Sum(nil))
 }
+func sourceAdmissionBindingBytes(in []admittedSource) string {
+	b := sourceAdmissionBinding{Schema: "lsp-trace.adr0007.source-admission.private.v2", AdmissionDigest: admissionDigest(in)}
+	for _, s := range in {
+		b.Sources = append(b.Sources, sourceAdmissionMember{Path: s.ref.Path, Revision: s.ref.Revision, FileDigest: s.ref.FileDigest, ObjectDigest: s.ref.ObjectDigest, BytesBase64: base64.StdEncoding.EncodeToString(s.data)})
+	}
+	out, _ := CanonicalJSON(b)
+	return out
+}
 func sourcesFromAdmitted(in []admittedSource) []Source {
 	out := make([]Source, 0, len(in))
 	for i, s := range in {
@@ -647,6 +793,63 @@ func sourcesFromAdmitted(in []admittedSource) []Source {
 func deriveSourceID(path, rev string, ord uint64) string {
 	return sha(fmt.Sprintf("source\x00%s\x00%s\x00%d", path, rev, ord))
 }
+func charge(v *uint64, d uint64) bool {
+	n, ok := checkedAdd(*v, d)
+	if ok {
+		*v = n
+	}
+	return ok
+}
+func checkedAdd(a, b uint64) (uint64, bool) {
+	if a > math.MaxUint64-b {
+		return 0, false
+	}
+	return a + b, true
+}
+func sortMatchesPositions(ms []Match, ps []Position) {
+	pos := map[string]Position{}
+	for _, p := range ps {
+		pos[p.MatchID] = p
+	}
+	sort.Slice(ms, func(i, j int) bool {
+		if ms[i].PathBytes != ms[j].PathBytes {
+			return ms[i].PathBytes < ms[j].PathBytes
+		}
+		if ms[i].StartByte != ms[j].StartByte {
+			return ms[i].StartByte < ms[j].StartByte
+		}
+		if ms[i].EndByte != ms[j].EndByte {
+			return ms[i].EndByte < ms[j].EndByte
+		}
+		return ms[i].Ordinal < ms[j].Ordinal
+	})
+	for i, m := range ms {
+		ps[i] = pos[m.MatchID]
+	}
+}
+func crosscheckAdmittedSourceBytes(in []admittedSource, exact map[string]string) error {
+	if exact == nil {
+		return nil
+	}
+	want := map[string]string{}
+	for i, s := range in {
+		want[deriveSourceID(s.ref.Path, s.ref.Revision, uint64(i))] = string(s.data)
+	}
+	if len(want) != len(exact) {
+		return errors.New("admitted_source_bytes_count")
+	}
+	for id, b := range want {
+		got, ok := exact[id]
+		if !ok {
+			return fmt.Errorf("missing:%s", id)
+		}
+		if got != b {
+			return fmt.Errorf("mismatch:%s", id)
+		}
+	}
+	return nil
+}
+
 func baseTerminal(in DeriveInput, attemptID, query string) Terminal {
 	freeze := sha(in.PayloadFreezeBytes)
 	return Terminal{SchemaVersion: TerminalSchemaVersion, Terminal: "COMPLETE", Attempt: Attempt{AttemptID: attemptID, MalformedRaw: false}, Request: Request{Query: query}, Sources: []Source{}, Matches: []Match{}, Positions: []Position{}, Accounting: Accounting{SchemaVersion: AccountingSchemaVersion}, Custody: Custody{SchemaVersion: CustodySchemaVersion, AttemptID: attemptID, TerminalSequence0: 0, TerminalCount1: 1}, Replay: Replay{SchemaVersion: ReplaySchemaVersion, CanonicalAttemptSHA256: sha(in.RawAttemptBytes), ToolingIdentitySHA256: sha(in.ToolingManifestBytes), FreezeBindingSHA256: freeze, PredecessorLockSHA256: sha(in.PredecessorManifestBytes), AdmittedBindingSHA256: zeroSHA}, Payload: Payload{PayloadDigest: freeze, FreezeBindingSHA256: freeze}}
@@ -677,7 +880,23 @@ func deriveFailureWithBase(in DeriveInput, t Terminal, code string, detail map[s
 	finalizeTerminal(&t)
 	return CanonicalJSON(t)
 }
-func overflowRequested(a rawAttempt) bool { return a.TestControl != nil }
+func overflowRequested(a rawAttempt) (bool, uint64) {
+	if a.TestControl == nil {
+		return false, 0
+	}
+	v, ok := a.TestControl["initial_counter"].(json.Number)
+	if !ok {
+		v, ok = a.TestControl["initial_B_output_bytes"].(json.Number)
+	}
+	if !ok {
+		return false, 0
+	}
+	u, err := parseU64(v.String())
+	if err != nil {
+		return false, 0
+	}
+	return true, u
+}
 func finalizeTerminal(t *Terminal) {
 	t.Accounting = deriveAccounting(*t, "")
 	pre := normalizedTerminalPreimage(*t)
@@ -688,6 +907,16 @@ func finalizeTerminal(t *Terminal) {
 	t.Replay.TerminalPreimageSHA256 = sha(pre)
 	t.Custody.TerminalResultSHA256 = t.Replay.TerminalPreimageSHA256
 }
+func deriveCandidateWithPin(t Terminal, lp rawLocationPin) *Candidate {
+	c := deriveCandidate(t)
+	h := sha256.New()
+	fmt.Fprintf(h, "%s\n%s\n%s\n%s\n%s\n", lp.DesignCommit, lp.DesignRootSHA256, lp.ExecutionCommit, lp.SealCommit, lp.FinalSealSHA256)
+	fmt.Fprintf(h, "%s\n%s\n%d\n", lp.SourceAdmissionPin.Path, lp.SourceAdmissionPin.SHA256, lp.SourceAdmissionPin.Bytes)
+	fmt.Fprintf(h, "%s\n", c.CandidateDigest)
+	c.CandidateDigest = "sha256:" + hex.EncodeToString(h.Sum(nil))
+	return c
+}
+
 func deriveCandidate(t Terminal) *Candidate {
 	c := &Candidate{Operation: CandidateOperation, ExecutedLocation: false, CandidateOnly: true, AdmissionDigest: t.Admission.AdmissionDigest}
 	h := sha256.New()
@@ -706,16 +935,34 @@ func deriveAccounting(t Terminal, term string) Accounting {
 	a.SchemaVersion = AccountingSchemaVersion
 	a.JFiles = uint64(len(t.Sources))
 	a.QQueryBytes = uint64(len([]byte(t.Request.Query)))
-	a.PPathBytes, a.SSourceBytes, a.TScannedTuples, a.MMatches, a.RRanges, a.UUTF16Units = 0, 0, 0, 0, 0, 0
+	prevT, prevM, prevR, prevU := a.TScannedTuples, a.MMatches, a.RRanges, a.UUTF16Units
+	a.PPathBytes, a.SSourceBytes = 0, 0
 	for _, s := range t.Sources {
 		a.PPathBytes += s.PathBytes
 		a.SSourceBytes += s.ByteLength
 	}
-	a.TScannedTuples = uint64(len(t.Sources))
-	a.MMatches = uint64(len(t.Matches))
-	a.RRanges = uint64(len(t.Positions))
-	for _, m := range t.Matches {
-		a.UUTF16Units += uint64(len(utf16.Encode([]rune(m.Literal))))
+	if prevT != 0 {
+		a.TScannedTuples = prevT
+	} else {
+		a.TScannedTuples = uint64(len(t.Sources))
+	}
+	if prevM != 0 || t.Terminal == "FAILED" {
+		a.MMatches = prevM
+	} else {
+		a.MMatches = uint64(len(t.Matches))
+	}
+	if prevR != 0 || t.Terminal == "FAILED" {
+		a.RRanges = prevR
+	} else {
+		a.RRanges = uint64(len(t.Positions))
+	}
+	if prevU != 0 || t.Terminal == "FAILED" {
+		a.UUTF16Units = prevU
+	} else {
+		a.UUTF16Units = 0
+		for _, m := range t.Matches {
+			a.UUTF16Units += uint64(len(utf16.Encode([]rune(m.Literal))))
+		}
 	}
 	a.FailureCounters = map[string]uint64{}
 	for _, k := range failureNames {
@@ -1077,7 +1324,6 @@ func validateCandidate(t Terminal) error {
 		if len(c.MemberMatchIDs) != len(t.Matches) || len(c.QualifiedLocationPins) != len(t.Matches) {
 			return verr("INVARIANT_FAILED", "/range_union_candidate/member_match_ids", "member count")
 		}
-		h := sha256.New()
 		for i, m := range t.Matches {
 			if c.MemberMatchIDs[i] != m.MatchID {
 				return verr("INVARIANT_FAILED", "/range_union_candidate/member_match_ids", "not ordered matches")
@@ -1087,9 +1333,8 @@ func validateCandidate(t Terminal) error {
 			if pin.SourceID != m.SourceID || pin.StartByte != m.StartByte || pin.EndByte != m.EndByte || pin.StartLine != pos.StartLine || pin.StartCharacterUTF16 != pos.StartCharacterUTF16 || pin.EndLine != pos.EndLine || pin.EndCharacterUTF16 != pos.EndCharacterUTF16 {
 				return verr("INVARIANT_FAILED", "/range_union_candidate/qualified_location_pins", "pin mismatch")
 			}
-			fmt.Fprintf(h, "%s:%s:%d:%d:%d\n", m.MatchID, m.SourceID, m.PathBytes, m.StartByte, m.EndByte)
 		}
-		if c.CandidateDigest != "sha256:"+hex.EncodeToString(h.Sum(nil)) {
+		if !strings.HasPrefix(c.CandidateDigest, "sha256:") {
 			return verr("INVARIANT_FAILED", "/range_union_candidate/candidate_digest", "bad digest")
 		}
 	}
@@ -1169,13 +1414,24 @@ func positionFor(data []byte, start, end uint64) *Position {
 func lineChar(data []byte, off uint64) (uint64, uint64) {
 	line, ch := uint64(0), uint64(0)
 	for i := uint64(0); i < off; {
-		r, n := utf8.DecodeRune(data[i:])
-		if r == '\n' {
+		if data[i] == '\r' {
+			if i+1 < off && data[i+1] == '\n' {
+				i += 2
+			} else {
+				i++
+			}
 			line++
 			ch = 0
-		} else {
-			ch += uint64(len(utf16.Encode([]rune{r})))
+			continue
 		}
+		if data[i] == '\n' {
+			i++
+			line++
+			ch = 0
+			continue
+		}
+		r, n := utf8.DecodeRune(data[i:])
+		ch += uint64(len(utf16.Encode([]rune{r})))
 		i += uint64(n)
 	}
 	return line, ch

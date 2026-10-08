@@ -34,7 +34,7 @@ func TestRawCorpusMatrix50(t *testing.T) {
 	hashes := map[string]string{}
 	for _, tc := range matrix {
 		raw := mustReadString(t, filepath.Join(root, "cases", tc.ID, "attempt.json"))
-		got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedBindingBytes: "admission\n", PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: predecessor})
+		got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: predecessor})
 		if err != nil {
 			t.Fatalf("%s derive: %v", tc.ID, err)
 		}
@@ -142,6 +142,94 @@ func TestSchemaWalkerDetectsMutation(t *testing.T) {
 	}
 }
 
+func TestRawArtifactAndTerminalMutationsReject(t *testing.T) {
+	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "case-13-utf8_nfc_path.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutators := map[string]func(Bundle) Bundle{
+		"source-bytes-mismatch": func(b Bundle) Bundle {
+			for k := range b.AdmittedSourceBytes {
+				b.AdmittedSourceBytes[k] = b.AdmittedSourceBytes[k] + "x"
+				break
+			}
+			return b
+		},
+		"source-bytes-missing": func(b Bundle) Bundle {
+			for k := range b.AdmittedSourceBytes {
+				delete(b.AdmittedSourceBytes, k)
+				break
+			}
+			return b
+		},
+		"source-bytes-extra": func(b Bundle) Bundle { b.AdmittedSourceBytes["extra"] = "x"; return b },
+		"binding-arbitrary":  func(b Bundle) Bundle { b.AdmittedBindingBytes = "admission\n"; return b },
+		"payload-tooling-swap": func(b Bundle) Bundle {
+			b.PayloadFreezeBytes, b.ToolingManifestBytes = b.ToolingManifestBytes, b.PayloadFreezeBytes
+			return b
+		},
+		"terminal-query": func(b Bundle) Bundle {
+			var term Terminal
+			_ = json.Unmarshal([]byte(b.TerminalBytes), &term)
+			term.Request.Query = "other"
+			b.TerminalBytes, _ = CanonicalJSON(term)
+			return b
+		},
+		"candidate-digest": func(b Bundle) Bundle {
+			var term Terminal
+			_ = json.Unmarshal([]byte(b.TerminalBytes), &term)
+			term.RangeUnionCandidate.CandidateDigest = zeroSHA
+			b.TerminalBytes, _ = CanonicalJSON(term)
+			return b
+		},
+		"location-pin": func(b Bundle) Bundle {
+			var term Terminal
+			_ = json.Unmarshal([]byte(b.TerminalBytes), &term)
+			term.RangeUnionCandidate.QualifiedLocationPins[0].StartByte++
+			b.TerminalBytes, _ = CanonicalJSON(term)
+			return b
+		},
+		"accounting-counter": func(b Bundle) Bundle {
+			var term Terminal
+			_ = json.Unmarshal([]byte(b.TerminalBytes), &term)
+			term.Accounting.TScannedTuples++
+			b.TerminalBytes, _ = CanonicalJSON(term)
+			return b
+		},
+	}
+	for name, mutate := range mutators {
+		if err := ValidateBundle(mutate(bun)); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+}
+
+func TestNoCaseNamesInDerivationSource(t *testing.T) {
+	body, err := os.ReadFile("validator.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "case-") || strings.Contains(string(body), "raw_malformed_json") || strings.Contains(string(body), "max_files_plus_one") {
+		t.Fatal("derivation source contains corpus case names")
+	}
+}
+
+func TestSampleComparisonCountsAndAdmissionDigests(t *testing.T) {
+	root := filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4")
+	for _, id := range []string{"case-13-utf8_nfc_path", "case-25-overlap_literal", "case-36-max_files_plus_one"} {
+		raw := mustReadString(t, filepath.Join(root, "cases", id, "attempt.json"))
+		got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: mustReadString(t, filepath.Join(root, "PAYLOAD_MANIFEST.json")), ToolingManifestBytes: mustReadString(t, filepath.Join(root, "TOOLING_CENSUS.json")), PredecessorManifestBytes: mustReadString(t, filepath.Join(root, "FREEZE_DESIGN.md"))})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var term Terminal
+		if err := json.Unmarshal([]byte(got), &term); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%s comparisons=%d admission=%s", id, term.Accounting.TScannedTuples, term.Admission.AdmissionDigest)
+	}
+}
+
 func TestDeriveDoesNotReferenceCandidateTerminalBytes(t *testing.T) {
 	body, err := os.ReadFile("validator.go")
 	if err != nil {
@@ -162,6 +250,23 @@ func TestDeriveDoesNotReferenceCandidateTerminalBytes(t *testing.T) {
 			t.Fatalf("Derive references forbidden terminal seed %q", forbidden)
 		}
 	}
+}
+
+func bindingForRaw(t *testing.T, raw string) string {
+	t.Helper()
+	a, err := parseRawAttempt(raw)
+	if err != nil || a.Request.Query == "" || len(a.Request.Sources) == 0 || len(a.SourceInputs) == 0 || badControl(a.ExecutionControl.Observations) {
+		return ""
+	}
+	selected, err := associateSources(a, nil)
+	if err != nil {
+		return ""
+	}
+	_, binding, _, ok, _ := admitSources(selected, a.Request.Limits)
+	if !ok {
+		return ""
+	}
+	return binding
 }
 
 func mustReadString(t *testing.T, p string) string {
