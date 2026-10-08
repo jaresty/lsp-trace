@@ -17,7 +17,9 @@ def frozen_files(): return [file_id(p,FROZEN) for p in sorted(x for x in FROZEN.
 def assert_freeze():
     f=read_json(FROZEN/'FREEZE.json')
     files=frozen_files()
-    if f.get('rootIdentity')!=AUTH or len(files)!=230 or f.get('files')!=files: raise SystemExit('FROZEN230_MISMATCH')
+    by_path={x['path']:x for x in files}
+    manifest_by_path={x['path']:x for x in f.get('files',[])}
+    if f.get('rootIdentity')!=AUTH or len(files)!=230 or len(manifest_by_path)!=230 or by_path!=manifest_by_path: raise SystemExit('FROZEN230_MISMATCH')
     return files
 
 def precheck():
