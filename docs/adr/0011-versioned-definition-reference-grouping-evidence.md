@@ -314,6 +314,14 @@ Transport envelopes and human projections do not alter the underlying canonical 
 
 No new family or interface is enabled until CUE schema/contract and Go implementation qualification agree on canonical contracts and outcomes. Separately, CUE **language/provider** qualification is a required held-out demonstration of the general no-CALLS grouping mode under a pinned `CUE_<PROVIDER>_EXACT_V1` acquisition profile, not an inference from CUE schema validation or a no-CALLS adversarial test. A missing exact provider, clean-revision custody, admitted definition occurrences, held-out CUE corpus, or independently accepted policy yields `INCOMPLETE`; do not substitute Go results or a generic CUE-language-server claim.
 
+### Independent oracle qualification
+
+Deterministic, immutable transformations may designate an independently implemented oracle as a required qualification path. Eligible boundaries include method-result normalization, occurrence admission, multiplicity and ordinal preservation, typed grouping-input composition, relation-kind selection, compatibility projection, canonical identity computation, serialization, and replay. For a frozen corpus, the production evaluator and oracle consume the same exact admitted inputs under separately identified implementations; qualification records complete denominators, terminal outcomes, boundary and plus-one cases, destructive mutations, independent review, and exact canonical output agreement. Oracle inputs, implementation identity, expected outputs, and regeneration procedure are frozen before execution. A failed or incomplete oracle campaign cannot be repaired, retried, or substituted within the same frozen semantic attempt.
+
+Oracle agreement is necessary where a qualification plan designates it, but it is never sufficient for runtime ownership, allocation, alias/copy/transfer/release lifecycle, real transaction or process identity, concurrency precedence, refusal-before-irreversible-effect, retention, readback, cache custody, or exact-once terminal disposition. Those claims require evidence from the actual production owner path, including checked pre-effect admission, transaction-scoped identities and accounting, deterministic barriers where concurrency is claimed, lifecycle and race tests, and independent review. An oracle may predict the required terminal result for such a case, but it cannot establish that the real owner performed the transition. Oracle agreement does not admit an occurrence, qualify a grouping policy, authorize Leiden, raise any claim ceiling, or replace the CUE and Go matrices below.
+
+Historical omitted-selector `CALLS_ONLY` bytes and semantics remain immutable. Oracle-qualified definition/reference behavior is additive and versioned; disagreement with historical fixtures fails closed rather than selecting a new default or normalizing predecessor artifacts.
+
 ### CUE matrix
 
 CUE qualification covers:
