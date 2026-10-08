@@ -1,0 +1,88 @@
+{
+  "authorizationAssignmentToolDigests": {
+    "ASSIGNMENTS.json": {
+      "bytes": 13489,
+      "path": "ASSIGNMENTS.json",
+      "sha256": "sha256:26671257ebdcc2aec9c232016f26294331df4967885894618b5acd3a7c2890fa"
+    },
+    "AUTHORIZATION.json": {
+      "bytes": 775,
+      "path": "AUTHORIZATION.json",
+      "sha256": "sha256:ed1b4c04c8fb87be55513b779f9b2390bc275679c8e9acf7e08004c407108b5c"
+    },
+    "EXECUTION_DESIGN.json": {
+      "bytes": 822,
+      "path": "EXECUTION_DESIGN.json",
+      "sha256": "sha256:b7bb63a875e9cb885b98297f5888b91146b81bfcee8cab47e2e6d52b71b8474a"
+    },
+    "EXECUTION_SCHEMA.json": {
+      "bytes": 365,
+      "path": "EXECUTION_SCHEMA.json",
+      "sha256": "sha256:68793bfa049d3d99b87347a7db092c82ff3c2a03f28f4983036ed0a0565b2a9f"
+    }
+  },
+  "frozenCensus": {
+    "fileCount": 230,
+    "rootIdentity": "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d",
+    "zeroImageFreezeEntry": [
+      {
+        "bytes": 0,
+        "path": "FREEZE.json",
+        "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "frozenRoot": "/Users/schwa/dev/lsp-trace-adr0007-location-execution/docs/pilot/adr0007/experiment/location-intersection-prospective-v5",
+  "head": "87fc4a8d0d96",
+  "inventory": {
+    "ASSIGNMENTS.json": {
+      "bytes": 13489,
+      "path": "ASSIGNMENTS.json",
+      "sha256": "sha256:26671257ebdcc2aec9c232016f26294331df4967885894618b5acd3a7c2890fa"
+    },
+    "AUTHORIZATION.json": {
+      "bytes": 775,
+      "path": "AUTHORIZATION.json",
+      "sha256": "sha256:ed1b4c04c8fb87be55513b779f9b2390bc275679c8e9acf7e08004c407108b5c"
+    },
+    "EXECUTION_DESIGN.json": {
+      "bytes": 822,
+      "path": "EXECUTION_DESIGN.json",
+      "sha256": "sha256:b7bb63a875e9cb885b98297f5888b91146b81bfcee8cab47e2e6d52b71b8474a"
+    },
+    "EXECUTION_SCHEMA.json": {
+      "bytes": 365,
+      "path": "EXECUTION_SCHEMA.json",
+      "sha256": "sha256:68793bfa049d3d99b87347a7db092c82ff3c2a03f28f4983036ed0a0565b2a9f"
+    },
+    "boundaryBundles": 4,
+    "evaluatorResults": 26,
+    "inputBindingAbsences": 1,
+    "inputBindings": 25,
+    "inputCases": 26,
+    "inputConditions": 26,
+    "inputRequests": 26,
+    "oracleDerivations": 26,
+    "oracleResults": 26,
+    "reviews": 0,
+    "semanticOutputs": 0
+  },
+  "kind": "PRE_REPAIR",
+  "physicalCensus": {
+    "fileCount": 230,
+    "freezeFile": {
+      "bytes": 43827,
+      "path": "FREEZE.json",
+      "sha256": "sha256:3761934c92e6b41c65d3dd2b7482c25faf649b193e5006748c260b897e9429ba"
+    },
+    "rootIdentityIncludingPhysicalFreeze": "sha256:f585a0e0e8116afc983c6745c4062a789ae3326130ec3bf7cb389a634f2d26e7"
+  },
+  "provingZero": {
+    "producerAttempts": 0,
+    "reviewFiles": 0,
+    "reviewerAttempts": 0,
+    "semanticOutputFiles": 0
+  },
+  "schema": "lsp-trace.adr0007.location-v5.repair-manifest.v1",
+  "zeroEffectRepairAllowed": true
+}
