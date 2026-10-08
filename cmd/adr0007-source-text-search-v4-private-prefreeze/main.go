@@ -8,10 +8,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -19,6 +21,18 @@ import (
 const base = "docs/pilot/adr0007/source-text-search-v4"
 const manifestPath = base + "/PRE_FREEZE_MANIFEST.json"
 const dryrunPath = base + "/FREEZE_ENVELOPE.dryrun.json"
+
+const expectedSchemaVersion = "lsp-trace.adr0007.source-text-search.pre-freeze-manifest.private.v1"
+const expectedStage = "pre_freeze"
+const expectedDryrunSchemaVersion = "lsp-trace.adr0007.source-text-search.freeze-envelope.dryrun.v1"
+const expectedDryrunStatus = "DRYRUN_ONLY_NOT_FINAL_FREEZE"
+
+// Commit semantics are intentionally pinned instead of self-referential: the
+// manifest and dry-run envelope are excluded from the outer root, while verifier
+// source is included and changes the root. A final commit cannot contain its own
+// commit hash as a verified JSON field without changing that commit hash again.
+const expectedPayloadSourceCommit = "fe90c3dc271bb3cd728aefd9592b4fb9d0ae913d"
+const expectedVerifierCommit = "fe90c3dc271bb3cd728aefd9592b4fb9d0ae913d"
 
 type Member struct {
 	Path   string `json:"path"`
@@ -30,7 +44,8 @@ type Member struct {
 type Manifest struct {
 	SchemaVersion        string   `json:"schema_version"`
 	Stage                string   `json:"stage"`
-	HeadCommit           string   `json:"head_commit"`
+	PayloadSourceCommit  string   `json:"payload_source_commit"`
+	VerifierCommit       string   `json:"verifier_commit"`
 	AllowedRoots         []string `json:"allowed_roots"`
 	AllowedExactFiles    []string `json:"allowed_exact_files"`
 	ExcludedSelf         string   `json:"excluded_self"`
@@ -40,6 +55,14 @@ type Manifest struct {
 	NormativeBytes       int64    `json:"normative_bytes"`
 	Members              []Member `json:"members"`
 	OuterRootSHA256      string   `json:"outer_root_sha256"`
+}
+
+type DryrunEnvelope struct {
+	Bytes               int64  `json:"bytes"`
+	Members             int    `json:"members"`
+	PreFreezeRootSHA256 string `json:"pre_freeze_root_sha256"`
+	SchemaVersion       string `json:"schema_version"`
+	Status              string `json:"status"`
 }
 
 var roots = []string{
@@ -91,8 +114,7 @@ func main() {
 }
 
 func buildManifest() (Manifest, error) {
-	head := git("rev-parse", "HEAD")
-	m := Manifest{SchemaVersion: "lsp-trace.adr0007.source-text-search.pre-freeze-manifest.private.v1", Stage: "pre_freeze", HeadCommit: head, AllowedRoots: append([]string{}, roots...), AllowedExactFiles: append([]string{}, exactFiles...), ExcludedSelf: manifestPath, FinalFreezeExcluded: base + "/FREEZE.json", TerminalsEmbedRoot: false}
+	m := Manifest{SchemaVersion: expectedSchemaVersion, Stage: expectedStage, PayloadSourceCommit: expectedPayloadSourceCommit, VerifierCommit: expectedVerifierCommit, AllowedRoots: append([]string{}, roots...), AllowedExactFiles: append([]string{}, exactFiles...), ExcludedSelf: manifestPath, FinalFreezeExcluded: base + "/FREEZE.json", TerminalsEmbedRoot: false}
 	paths, err := collectPaths()
 	if err != nil {
 		return m, err
@@ -219,14 +241,11 @@ func verify(m Manifest) error {
 		return err
 	}
 	var got Manifest
-	if err := json.Unmarshal(disk, &got); err != nil {
+	if err := strictUnmarshal(disk, &got); err != nil {
+		return fmt.Errorf("manifest decode: %w", err)
+	}
+	if err := compareManifest(got, m); err != nil {
 		return err
-	}
-	if got.OuterRootSHA256 != m.OuterRootSHA256 || got.NormativeMemberCount != m.NormativeMemberCount || got.NormativeBytes != m.NormativeBytes {
-		return fmt.Errorf("manifest mismatch: got %s/%d/%d want %s/%d/%d", got.OuterRootSHA256, got.NormativeMemberCount, got.NormativeBytes, m.OuterRootSHA256, m.NormativeMemberCount, m.NormativeBytes)
-	}
-	if !sameMembers(got.Members, m.Members) {
-		return fmt.Errorf("manifest member listing mismatch")
 	}
 	if err := ensureRole(m, "production_package", 1); err != nil {
 		return err
@@ -251,6 +270,34 @@ func verify(m Manifest) error {
 	}
 	if err := checkDryrun(m); err != nil {
 		return err
+	}
+	return nil
+}
+
+func compareManifest(got, want Manifest) error {
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"schema_version", got.SchemaVersion, expectedSchemaVersion},
+		{"stage", got.Stage, expectedStage},
+		{"payload_source_commit", got.PayloadSourceCommit, expectedPayloadSourceCommit},
+		{"verifier_commit", got.VerifierCommit, expectedVerifierCommit},
+		{"allowed_roots", got.AllowedRoots, roots},
+		{"allowed_exact_files", got.AllowedExactFiles, exactFiles},
+		{"excluded_self", got.ExcludedSelf, manifestPath},
+		{"final_freeze_excluded", got.FinalFreezeExcluded, base + "/FREEZE.json"},
+		{"terminals_embed_outer_root", got.TerminalsEmbedRoot, false},
+		{"normative_member_count", got.NormativeMemberCount, want.NormativeMemberCount},
+		{"normative_bytes", got.NormativeBytes, want.NormativeBytes},
+		{"members", got.Members, want.Members},
+		{"outer_root_sha256", got.OuterRootSHA256, want.OuterRootSHA256},
+	}
+	for _, c := range checks {
+		if !reflect.DeepEqual(c.got, c.want) {
+			return fmt.Errorf("manifest %s mismatch: got %v want %v", c.name, c.got, c.want)
+		}
 	}
 	return nil
 }
@@ -339,37 +386,99 @@ func checkDryrun(m Manifest) error {
 	if err != nil {
 		return err
 	}
-	var d struct {
-		SchemaVersion       string `json:"schema_version"`
-		PreFreezeRootSHA256 string `json:"pre_freeze_root_sha256"`
-		Status              string `json:"status"`
+	var got DryrunEnvelope
+	if err := strictUnmarshal(b, &got); err != nil {
+		return fmt.Errorf("dryrun decode: %w", err)
 	}
-	if err := json.Unmarshal(b, &d); err != nil {
-		return err
+	want := freezeDryrun(m)
+	checks := []struct {
+		name string
+		got  any
+		want any
+	}{
+		{"schema_version", got.SchemaVersion, expectedDryrunSchemaVersion},
+		{"pre_freeze_root_sha256", got.PreFreezeRootSHA256, want.PreFreezeRootSHA256},
+		{"members", got.Members, want.Members},
+		{"bytes", got.Bytes, want.Bytes},
+		{"status", got.Status, expectedDryrunStatus},
 	}
-	if d.PreFreezeRootSHA256 != m.OuterRootSHA256 {
-		return fmt.Errorf("dryrun root mismatch")
-	}
-	if d.Status != "DRYRUN_ONLY_NOT_FINAL_FREEZE" {
-		return fmt.Errorf("dryrun status mismatch")
+	for _, c := range checks {
+		if !reflect.DeepEqual(c.got, c.want) {
+			return fmt.Errorf("dryrun %s mismatch: got %v want %v", c.name, c.got, c.want)
+		}
 	}
 	return nil
 }
 
-func sameMembers(a, b []Member) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+func freezeDryrun(m Manifest) DryrunEnvelope {
+	return DryrunEnvelope{SchemaVersion: expectedDryrunSchemaVersion, PreFreezeRootSHA256: m.OuterRootSHA256, Members: m.NormativeMemberCount, Bytes: m.NormativeBytes, Status: expectedDryrunStatus}
 }
 
-func freezeDryrun(m Manifest) any {
-	return map[string]any{"schema_version": "lsp-trace.adr0007.source-text-search.freeze-envelope.dryrun.v1", "pre_freeze_root_sha256": m.OuterRootSHA256, "members": m.NormativeMemberCount, "bytes": m.NormativeBytes, "status": "DRYRUN_ONLY_NOT_FINAL_FREEZE"}
+func strictUnmarshal(b []byte, v any) error {
+	if err := rejectDuplicateKeys(b); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if err := dec.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("trailing data after JSON value")
+		}
+		return err
+	}
+	return nil
+}
+
+func rejectDuplicateKeys(b []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(b))
+	var stack []map[string]struct{}
+	var pendingKey []bool
+	for {
+		tok, err := dec.Token()
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		switch t := tok.(type) {
+		case json.Delim:
+			switch t {
+			case '{':
+				stack = append(stack, map[string]struct{}{})
+				pendingKey = append(pendingKey, true)
+			case '}':
+				stack = stack[:len(stack)-1]
+				pendingKey = pendingKey[:len(pendingKey)-1]
+				if len(pendingKey) > 0 && !pendingKey[len(pendingKey)-1] {
+					pendingKey[len(pendingKey)-1] = true
+				}
+			case '[':
+				if len(pendingKey) > 0 && !pendingKey[len(pendingKey)-1] {
+					pendingKey[len(pendingKey)-1] = true
+				}
+			case ']':
+			}
+		case string:
+			if len(stack) > 0 && pendingKey[len(pendingKey)-1] {
+				keys := stack[len(stack)-1]
+				if _, exists := keys[t]; exists {
+					return fmt.Errorf("duplicate JSON object key %q", t)
+				}
+				keys[t] = struct{}{}
+				pendingKey[len(pendingKey)-1] = false
+			} else if len(pendingKey) > 0 {
+				pendingKey[len(pendingKey)-1] = true
+			}
+		default:
+			if len(pendingKey) > 0 && !pendingKey[len(pendingKey)-1] {
+				pendingKey[len(pendingKey)-1] = true
+			}
+		}
+	}
 }
 
 func rootDigest(ms []Member) string {

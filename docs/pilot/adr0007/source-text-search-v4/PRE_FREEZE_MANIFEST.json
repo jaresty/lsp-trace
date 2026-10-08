@@ -1,7 +1,8 @@
 {
   "schema_version": "lsp-trace.adr0007.source-text-search.pre-freeze-manifest.private.v1",
   "stage": "pre_freeze",
-  "head_commit": "0660860f262ca4f5a76406b712abbec368210042",
+  "payload_source_commit": "fe90c3dc271bb3cd728aefd9592b4fb9d0ae913d",
+  "verifier_commit": "fe90c3dc271bb3cd728aefd9592b4fb9d0ae913d",
   "allowed_roots": [
     "docs/pilot/adr0007/source-text-search-v4/",
     "internal/adr0007sourcetextsearchv4private/",
@@ -26,7 +27,7 @@
   "final_freeze_excluded": "docs/pilot/adr0007/source-text-search-v4/FREEZE.json",
   "terminals_embed_outer_root": false,
   "normative_member_count": 331,
-  "normative_bytes": 4761191,
+  "normative_bytes": 4767309,
   "members": [
     {
       "path": "cmd/adr0007-source-text-search-v4-contract-validate/main.go",
@@ -61,8 +62,8 @@
     {
       "path": "cmd/adr0007-source-text-search-v4-private-mutations/main.go",
       "role": "v4_command",
-      "bytes": 3590,
-      "sha256": "sha256:d92acec49a4c28dc7b02db7d23471ad7d30ce154be4143d955b110eb24490ee2"
+      "bytes": 6171,
+      "sha256": "sha256:675d652c0cf8eeef6c5539d8c33afebc2fafb97567ef2ca55288ad4f8ec132a0"
     },
     {
       "path": "cmd/adr0007-source-text-search-v4-private-oracle-check/main.go",
@@ -85,8 +86,8 @@
     {
       "path": "cmd/adr0007-source-text-search-v4-private-prefreeze/main.go",
       "role": "v4_command",
-      "bytes": 11889,
-      "sha256": "sha256:c1ed2ba40c2b8e3b0f00df56a4d209cd6b89c0d18f30c9fdbe0f067574385fc4"
+      "bytes": 15426,
+      "sha256": "sha256:b19fd69672609ff4c7f24cb34f3e3b1b899afe83eddd8ec4cf54d9fb4e30be53"
     },
     {
       "path": "docs/pilot/adr0007/source-text-search-v3/pinned/sourceadmissionv2/PIN.json",
@@ -2015,5 +2016,5 @@
       "sha256": "sha256:e9a1750cd7ca24e71ca697790365c65508c32b8c0055d2470ce4e94c5d698d21"
     }
   ],
-  "outer_root_sha256": "sha256:3d1060d3b85f95351507fba3cc28a75751d18dc5d9ffc4e85963bd9967f294d0"
+  "outer_root_sha256": "sha256:01df412bc5cce1e0adb824560fd7e5d2ff7f6c2621c2176062b4a170d763d367"
 }
