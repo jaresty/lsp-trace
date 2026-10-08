@@ -25,11 +25,5 @@
   "limits": {
     "locationQualificationCampaignAuthorized": false,
     "executionAuthorizationCreated": false
-  },
-  "blockedAudit2Correction": {
-    "status": "BLOCKED_NOT_DISPATCHED",
-    "reason": "Predispatch audit2/correction requires authenticated gate consumption, create-new artifacts, independent verifier reconciliation, boundary replay verification, and zero real-root outputs before any dispatch authorization.",
-    "successorHead": "HEAD6ea8b1bc",
-    "realOutputs": "ZERO"
   }
 }

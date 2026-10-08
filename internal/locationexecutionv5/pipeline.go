@@ -86,18 +86,33 @@ type PredispatchGate struct {
 	AuthorizationDigest       string `json:"authorizationDigest"`
 	AssignmentsDigest         string `json:"assignmentsDigest"`
 	ToolingDigest             string `json:"toolingDigest"`
+	Head                      string `json:"head"`
+	DispatchID                string `json:"dispatchID"`
 	Assignments               string `json:"assignments"`
 	AuthorizedBy              string `json:"authorizedBy"`
+	AuthorizedByAudit         string `json:"authorizedByAudit"`
 	OneDispatch               string `json:"oneDispatch"`
+	Sequence                  int    `json:"sequence"`
+	ConsumedState             string `json:"consumedState"`
 	Committed                 bool   `json:"committed"`
 	AllowRealSemanticAttempts bool   `json:"allowRealSemanticAttempts"`
 }
 
+type BoundarySetup struct {
+	ExpandedSources    int    `json:"expandedSources,omitempty"`
+	ExpectedPrecedence string `json:"expectedPrecedence,omitempty"`
+	MaxFrozenPaths     int    `json:"maxFrozenPaths,omitempty"`
+	RawFrozenPaths     int    `json:"rawFrozenPaths,omitempty"`
+	MaxWitnesses       int    `json:"maxWitnesses,omitempty"`
+	UniqueWitnesses    int    `json:"uniqueWitnesses,omitempty"`
+}
+
 type Condition struct {
-	Schema          string `json:"schema"`
-	Cancel          bool   `json:"cancel"`
-	DeadlineExpired bool   `json:"deadlineExpired"`
-	LimitsProfile   string `json:"limitsProfile"`
+	Schema          string         `json:"schema"`
+	BoundarySetup   *BoundarySetup `json:"boundarySetup,omitempty"`
+	Cancel          bool           `json:"cancel"`
+	DeadlineExpired bool           `json:"deadlineExpired"`
+	LimitsProfile   string         `json:"limitsProfile"`
 }
 
 type Ledger struct {
@@ -316,6 +331,22 @@ func writeJSON(path string, v any) error {
 	return os.WriteFile(path, canon(v), 0644)
 }
 
+func writeJSONNew(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("create-new refused existing artifact %s", path)
+		}
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(canon(v))
+	return err
+}
+
 func readFile(path string) ([]byte, string, error) { b, e := os.ReadFile(path); return b, hash(b), e }
 
 func Cases(assignments string) ([]AssignmentCase, error) {
@@ -497,6 +528,14 @@ func exeDigest() string {
 	}
 	return "sha256:unavailable"
 }
+func headDigest(repoRoot string) string {
+	cmd := exec.Command("git", "-C", repoRoot, "rev-parse", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		return "sha256:unavailable"
+	}
+	return strings.TrimSpace(string(out))
+}
 func commandDigest() string {
 	if len(os.Args) > 0 {
 		if p, e := exec.LookPath(os.Args[0]); e == nil {
@@ -540,7 +579,7 @@ func checkGateValue(execRoot, repoRoot string, g PredispatchGate, committed bool
 	if err != nil {
 		return err
 	}
-	if g.Schema != GateSchema || g.SuccessorIdentity != RootIdentity || filepath.ToSlash(g.ExecutionRoot) != "docs/pilot/adr0007/experiment/"+RootIdentity || g.FreezeRootIdentity != FreezeRootIdentity || g.AuthorizationDigest != ad || g.AssignmentsDigest != asd || g.ToolingDigest != td || g.Assignments != "ASSIGNMENTS.json" || g.AuthorizedBy != "independent-value:predispatch-authorized" || g.OneDispatch != "phase-api-only" || g.Committed != committed || g.AllowRealSemanticAttempts != committed {
+	if g.Schema != GateSchema || g.SuccessorIdentity != RootIdentity || filepath.ToSlash(g.ExecutionRoot) != "docs/pilot/adr0007/experiment/"+RootIdentity || g.FreezeRootIdentity != FreezeRootIdentity || g.AuthorizationDigest != ad || g.AssignmentsDigest != asd || g.ToolingDigest != td || g.Head != headDigest(repoRoot) || g.DispatchID != RootIdentity+":"+g.Head+":"+g.ToolingDigest || g.Assignments != "ASSIGNMENTS.json" || g.AuthorizedBy != "independent-value:predispatch-authorized" || g.AuthorizedByAudit != "independent-audit:authorizedBy-not-producer" || g.OneDispatch != "phase-api-only" || g.Sequence != 1 || g.ConsumedState != "create-new" || g.Committed != committed || g.AllowRealSemanticAttempts != committed {
 		return errors.New("gate mismatch")
 	}
 	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
@@ -573,10 +612,13 @@ func Simulate(execRoot, frozenRoot, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(execRoot, "attempts")); err == nil {
-		return errors.New("simulate fail closed: attempts directory exists")
+	for _, artifact := range []string{"attempts", "EVENT_LEDGER.json", "EXECUTION_MANIFEST.json", "CORRECTION_MANIFEST.json", "PREDISPATCH_AUDIT_BLOCKED.json"} {
+		if _, err := os.Stat(filepath.Join(execRoot, artifact)); err == nil {
+			return fmt.Errorf("simulate create-new fail closed: %s exists", artifact)
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 	}
-	_ = os.Remove(filepath.Join(execRoot, "EVENT_LEDGER.json"))
 	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
 		return err
 	}
@@ -591,10 +633,10 @@ func Simulate(execRoot, frozenRoot, repoRoot string) error {
 		return err
 	}
 	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SIMULATION_ONLY", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: 0, ReviewerAttempts: 0, ByteEquality: 0, DerivationBindings: 0, BoundaryReplays: 0, LeafRecount: 0, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "SIMULATE_ONLY"}
-	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
+	if err := writeJSONNew(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(execRoot, "CORRECTION_MANIFEST.json"), map[string]any{"schema": "lsp-trace.adr0007.location-v5-execution.correction-manifest.v1", "rootIdentity": RootIdentity, "corrections": []string{"phase-specific execution methods", "process custody receipts", "strict gate/audit block", "independent verifier count semantics"}, "semanticOutputs": 0, "predecessorImmutable": true}); err != nil {
+	if err := writeJSONNew(filepath.Join(execRoot, "CORRECTION_MANIFEST.json"), map[string]any{"schema": "lsp-trace.adr0007.location-v5-execution.correction-manifest.v3", "rootIdentity": RootIdentity, "blockedAudit": "PREDISPATCH_AUDIT_BLOCKED.json", "corrections": []string{"removed deletion/overwrite from simulation", "child modes private-token only", "head/tooling/dispatch-bound gate", "complete derivation recomputation", "independent verifier custody/count checks"}, "semanticOutputs": 0, "predecessorImmutable": true}); err != nil {
 		return err
 	}
 	return AppendLedger(execRoot, "simulation_manifest", m)
@@ -613,8 +655,9 @@ func writeBlockedAudit(execRoot, repoRoot string) error {
 	if err != nil {
 		return err
 	}
-	g := PredispatchGate{Schema: GateSchema, SuccessorIdentity: RootIdentity, ExecutionRoot: "docs/pilot/adr0007/experiment/" + RootIdentity, FreezeRootIdentity: FreezeRootIdentity, AuthorizationDigest: ad, AssignmentsDigest: asd, ToolingDigest: td, Assignments: "ASSIGNMENTS.json", AuthorizedBy: "independent-value:predispatch-authorized", OneDispatch: "phase-api-only", Committed: false, AllowRealSemanticAttempts: false}
-	return writeJSON(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g)
+	head := headDigest(repoRoot)
+	g := PredispatchGate{Schema: GateSchema, SuccessorIdentity: RootIdentity, ExecutionRoot: "docs/pilot/adr0007/experiment/" + RootIdentity, FreezeRootIdentity: FreezeRootIdentity, AuthorizationDigest: ad, AssignmentsDigest: asd, ToolingDigest: td, Head: head, DispatchID: RootIdentity + ":" + head + ":" + td, Assignments: "ASSIGNMENTS.json", AuthorizedBy: "independent-value:predispatch-authorized", AuthorizedByAudit: "independent-audit:authorizedBy-not-producer", OneDispatch: "phase-api-only", Sequence: 1, ConsumedState: "create-new", Committed: false, AllowRealSemanticAttempts: false}
+	return writeJSONNew(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g)
 }
 
 func Run(execRoot, frozenRoot, repoRoot string) error {
@@ -651,10 +694,16 @@ func RunPhase(execRoot, frozenRoot, repoRoot, phase string) error {
 		if len(os.Args) != 6 {
 			return errors.New("producer child requires case")
 		}
+		if err := checkChildToken(execRoot, repoRoot, phase, os.Args[5]); err != nil {
+			return err
+		}
 		return producerChild(execRoot, frozenRoot, repoRoot, os.Args[5])
 	case "__reviewer":
 		if len(os.Args) != 6 {
 			return errors.New("reviewer child requires case")
+		}
+		if err := checkChildToken(execRoot, repoRoot, phase, os.Args[5]); err != nil {
+			return err
 		}
 		return reviewerChild(execRoot, frozenRoot, repoRoot, os.Args[5])
 	default:
@@ -738,6 +787,11 @@ func producerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
+	if _, err := os.Stat(filepath.Join(dir, "RESULT.json")); err == nil {
+		return fmt.Errorf("producer create-new refused existing RESULT.json for %s", c.CaseID)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(dir, "RESULT.json"), out, 0644); err != nil {
 		return err
 	}
@@ -747,7 +801,7 @@ func producerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
 		return err
 	}
 	pa := ProducerAttempt{Schema: "lsp-trace.adr0007.location-v5-execution.producer-attempt.v3", CaseID: c.CaseID, AssignmentID: c.Producer.AssignmentID, AttemptID: c.Producer.AttemptID, Role: "producer", State: []string{"ASSIGNMENT_BOUND", "CHILD_PROCESS_ISOLATED", "FROZEN_INPUT_EVALUATED", "COMMITTED"}, ResultDigest: od, RequestDigest: rd, BindingDigest: bd, ConditionDigest: cd, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exeDigest(), Argv: hash(canon(os.Args)), Input: hash(append(append(raw, bind...), cb...)), Output: od, Stderr: hash(nil), Exit: 0}, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED"}
-	return writeJSON(filepath.Join(dir, "PRODUCER_ATTEMPT.json"), pa)
+	return writeJSONNew(filepath.Join(dir, "PRODUCER_ATTEMPT.json"), pa)
 }
 
 func runReviewers(execRoot, frozenRoot, repoRoot string) error {
@@ -779,8 +833,16 @@ func runReviewers(execRoot, frozenRoot, repoRoot string) error {
 }
 
 type Derivation struct {
-	Schema, CaseID, Algorithm, Outcome, Detail string
-	Inputs                                     []string
+	Schema          string   `json:"schema"`
+	CaseID          string   `json:"caseId"`
+	Inputs          []string `json:"inputs"`
+	Algorithm       string   `json:"algorithm"`
+	RequestDigest   string   `json:"requestDigest,omitempty"`
+	BindingDigest   string   `json:"bindingDigest,omitempty"`
+	ConditionDigest string   `json:"conditionDigest,omitempty"`
+	ResultDigest    string   `json:"resultDigest,omitempty"`
+	Outcome         string   `json:"outcome"`
+	Detail          string   `json:"detail"`
 }
 
 func reviewerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
@@ -819,16 +881,21 @@ func reviewerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
 	if d.Schema != "lsp-trace.adr0007.location-oracle-derivation.private.v5" || d.CaseID != c.CaseID || d.Algorithm != "internal/adr0007locationoraclev5" || !equalStrings(d.Inputs, []string{"REQUEST.raw.json", "BINDING.json|BINDING.ABSENT", "CONDITION.json"}) {
 		return fmt.Errorf("derivation schema %s", c.CaseID)
 	}
-	raw, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json"))
+	raw, rd, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "REQUEST.raw.json"))
 	if err != nil {
 		return err
 	}
-	bind, _, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "BINDING.json"))
+	bind, bd, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "BINDING.json"))
 	if err != nil {
 		bind = []byte{}
+		bd = hash(bind)
 	}
 	var cond Condition
 	if err := readStrict(filepath.Join(frozenRoot, "inputs", c.CaseID, "CONDITION.json"), &cond); err != nil {
+		return err
+	}
+	_, cd, err := readFile(filepath.Join(frozenRoot, "inputs", c.CaseID, "CONDITION.json"))
+	if err != nil {
 		return err
 	}
 	res, err := eval.Evaluate(raw, bind, control(cond), eval.PublishedLimits())
@@ -843,23 +910,41 @@ func reviewerChild(execRoot, frozenRoot, repoRoot, caseID string) error {
 	if err := json.Unmarshal(recomputed, &rr); err != nil {
 		return err
 	}
-	if rr.Outcome != d.Outcome || rr.Detail != d.Detail {
-		return fmt.Errorf("derivation fields %s", c.CaseID)
+	recomputedDerivation := Derivation{Schema: d.Schema, CaseID: c.CaseID, Algorithm: d.Algorithm, RequestDigest: d.RequestDigest, BindingDigest: d.BindingDigest, ConditionDigest: d.ConditionDigest, ResultDigest: d.ResultDigest, Outcome: rr.Outcome, Detail: rr.Detail, Inputs: []string{"REQUEST.raw.json", "BINDING.json|BINDING.ABSENT", "CONDITION.json"}}
+	if d.RequestDigest != "" && d.RequestDigest != rd || d.BindingDigest != "" && d.BindingDigest != bd || d.ConditionDigest != "" && d.ConditionDigest != cd || d.ResultDigest != "" && d.ResultDigest != hash(recomputed) {
+		return fmt.Errorf("derivation digest recompute %s", c.CaseID)
+	}
+	if !bytes.Equal(canon(recomputedDerivation), canon(d)) {
+		return fmt.Errorf("derivation recompute %s", c.CaseID)
 	}
 	cmdSrc := commandDigest()
 	evalSrc, err := sourceDigest(repoRoot, "internal/adr0007locationv5", "internal/sourceadmissionv2")
 	if err != nil {
 		return err
 	}
-	rv := Review{Schema: "lsp-trace.adr0007.location-v5-execution.review.v3", CaseID: c.CaseID, AssignmentID: c.Reviewer.AssignmentID, AttemptID: c.Reviewer.AttemptID, Role: "reviewer", Verdict: "ACCEPT", State: []string{"ASSIGNMENT_BOUND", "SEPARATE_CHILD_PROCESS", "STRICT_DERIVATION_RECOMPUTED", "COMMITTED"}, ProducerResultDigest: pd, OracleResultDigest: od, DerivationDigest: dd, ByteEqual: true, DerivationRecomputed: len(derBytes) > 0, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exeDigest(), Argv: hash(canon(os.Args)), Input: hash(append(prod, derBytes...)), Output: hash(canon(map[string]any{"byteEqual": true, "derivation": true})), Stderr: hash(nil), Exit: 0}}
-	return writeJSON(filepath.Join(dir, "REVIEW.json"), rv)
+	rv := Review{Schema: "lsp-trace.adr0007.location-v5-execution.review.v3", CaseID: c.CaseID, AssignmentID: c.Reviewer.AssignmentID, AttemptID: c.Reviewer.AttemptID, Role: "reviewer", Verdict: "ACCEPT", State: []string{"ASSIGNMENT_BOUND", "SEPARATE_CHILD_PROCESS", "STRICT_DERIVATION_RECOMPUTED", "COMMITTED"}, ProducerResultDigest: pd, OracleResultDigest: od, DerivationDigest: dd, ByteEqual: true, DerivationRecomputed: true, Custody: Custody{CommandSource: cmdSrc, EvaluatorSource: evalSrc, Executable: exeDigest(), Argv: hash(canon(os.Args)), Input: hash(append(prod, derBytes...)), Output: hash(canon(map[string]any{"byteEqual": true, "derivationRecomputed": true})), Stderr: hash(nil), Exit: 0}}
+	return writeJSONNew(filepath.Join(dir, "REVIEW.json"), rv)
 }
 
 func runChild(execRoot, frozenRoot, repoRoot, phase, caseID string) error {
 	cmd := exec.Command(os.Args[0], execRoot, frozenRoot, repoRoot, phase, caseID)
+	cmd.Env = append(os.Environ(), "LOCATIONEXECUTIONV5_CHILD_TOKEN="+childToken(execRoot, repoRoot, phase, caseID))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s %s: %w: %s", phase, caseID, err, string(out))
+	}
+	return nil
+}
+
+func childToken(execRoot, repoRoot, phase, caseID string) string {
+	g := PredispatchGate{}
+	_ = readStrict(filepath.Join(execRoot, "PREDISPATCH_GO.json"), &g)
+	return hash(canon(map[string]any{"dispatchID": g.DispatchID, "head": headDigest(repoRoot), "phase": phase, "caseID": caseID, "assignmentRoot": filepath.Join(execRoot, "ASSIGNMENTS.json")}))
+}
+
+func checkChildToken(execRoot, repoRoot, phase, caseID string) error {
+	if os.Getenv("LOCATIONEXECUTIONV5_CHILD_TOKEN") != childToken(execRoot, repoRoot, phase, caseID) {
+		return errors.New("internal child mode unavailable without exact authenticated child token")
 	}
 	return nil
 }
@@ -917,7 +1002,7 @@ func runBoundaries(execRoot, frozenRoot, repoRoot string) error {
 			return fmt.Errorf("boundary mismatch %s", name)
 		}
 		payload := map[string]any{"boundary": name, "boundaryDigest": hash(canon(bo)), "actualDigest": hash(actual), "expectedDigest": hash(exp), "outcome": "MATCH", "custody": map[string]any{"evaluatorSource": "internal/adr0007locationv5", "limitMaxWork": bo.MaxWork, "limitMaxOutputBytes": bo.MaxOutputBytes}}
-		if err := writeJSON(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json"), payload); err != nil {
+		if err := writeJSONNew(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json"), payload); err != nil {
 			return err
 		}
 		if err := AppendLedger(execRoot, "boundary_replay", payload); err != nil {
@@ -928,6 +1013,9 @@ func runBoundaries(execRoot, frozenRoot, repoRoot string) error {
 }
 
 func reconcile(execRoot string) error {
+	if err := verifyPhaseArtifacts(execRoot, ""); err != nil {
+		return err
+	}
 	pc, rc, bc := 0, 0, 0
 	filepath.WalkDir(filepath.Join(execRoot, "attempts"), func(p string, d fs.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
@@ -953,8 +1041,8 @@ func reconcile(execRoot string) error {
 	if err := readStrict(filepath.Join(execRoot, "EVENT_LEDGER.json"), &l); err != nil {
 		return err
 	}
-	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SUCCESSOR_REPLAY_COMPLETE", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: pc, ReviewerAttempts: rc, ByteEquality: 26, DerivationBindings: 26, BoundaryReplays: bc, LeafRecount: 56, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "GATED_REAL"}
-	if err := writeJSON(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
+	m := Manifest{Schema: ExecSchema, Status: "PREDISPATCH_BLOCKED_SUCCESSOR_REPLAY_COMPLETE", RootIdentity: RootIdentity, Frozen230Unchanged: true, ProducerAttempts: pc, ReviewerAttempts: rc, ByteEquality: rc, DerivationBindings: rc, BoundaryReplays: bc, LeafRecount: pc + rc + bc, SequenceMax: len(l.Entries), LedgerHash: l.Entries[len(l.Entries)-1].EntryHash, Completeness: "UNKNOWN", FeatureIdentity: "UNRESOLVED", Mode: "GATED_REAL"}
+	if err := writeJSONNew(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), m); err != nil {
 		return err
 	}
 	return AppendLedger(execRoot, "reconcile_manifest", m)
@@ -972,6 +1060,9 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 		return err
 	}
 	if err := VerifyLedger(execRoot); err != nil {
+		return err
+	}
+	if err := verifyPhaseArtifacts(execRoot, frozenRoot); err != nil {
 		return err
 	}
 	bindings := 0
@@ -1018,7 +1109,11 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 		if err := readStrict(filepath.Join(frozenRoot, "oracle-candidate", "cases", c.CaseID, "DERIVATION.json"), &d); err != nil {
 			return err
 		}
-		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(prod, ob) || rv.OracleResultDigest != od || !rv.ByteEqual || rv.Verdict != "ACCEPT" || !rv.DerivationRecomputed || !contains(rv.State, "SEPARATE_CHILD_PROCESS") || d.CaseID != c.CaseID || res.Outcome != d.Outcome || res.Detail != d.Detail {
+		recomputedDerivation := Derivation{Schema: d.Schema, CaseID: c.CaseID, Algorithm: d.Algorithm, RequestDigest: d.RequestDigest, BindingDigest: d.BindingDigest, ConditionDigest: d.ConditionDigest, ResultDigest: d.ResultDigest, Outcome: res.Outcome, Detail: res.Detail, Inputs: []string{"REQUEST.raw.json", "BINDING.json|BINDING.ABSENT", "CONDITION.json"}}
+		if d.RequestDigest != "" && d.RequestDigest != rd || d.BindingDigest != "" && d.BindingDigest != bd || d.ConditionDigest != "" && d.ConditionDigest != cd || d.ResultDigest != "" && d.ResultDigest != hash(prod) {
+			return fmt.Errorf("derivation digest recompute %s", c.CaseID)
+		}
+		if rv.AssignmentID != c.Reviewer.AssignmentID || !bytes.Equal(prod, ob) || rv.ProducerResultDigest != pa.ResultDigest || rv.OracleResultDigest != od || !rv.ByteEqual || rv.Verdict != "ACCEPT" || !rv.DerivationRecomputed || !contains(rv.State, "SEPARATE_CHILD_PROCESS") || !bytes.Equal(canon(recomputedDerivation), canon(d)) {
 			return fmt.Errorf("review recompute %s", c.CaseID)
 		}
 		bindings++
@@ -1032,8 +1127,40 @@ func Verify(execRoot, frozenRoot, repoRoot string) error {
 	if err := readStrict(filepath.Join(execRoot, "EXECUTION_MANIFEST.json"), &m); err != nil {
 		return err
 	}
-	if m.ProducerAttempts != 26 || m.ReviewerAttempts != 26 || m.ByteEquality != 26 || m.DerivationBindings != bindings || bindings != 26 || m.BoundaryReplays != 4 || m.FinalLocationCustodyGoIssued || m.Accepted || m.LeafRecount != 56 {
+	if m.ProducerAttempts != 26 || m.ReviewerAttempts != 26 || m.ByteEquality != 26 || m.DerivationBindings != bindings || bindings != 26 || m.BoundaryReplays != 4 || m.FinalLocationCustodyGoIssued || m.Accepted || m.LeafRecount != m.ProducerAttempts+m.ReviewerAttempts+m.BoundaryReplays {
 		return errors.New("manifest counts")
+	}
+	return nil
+}
+
+func verifyPhaseArtifacts(execRoot, frozenRoot string) error {
+	cases, err := Cases(filepath.Join(execRoot, "ASSIGNMENTS.json"))
+	if err != nil {
+		return err
+	}
+	producer, reviewer := 0, 0
+	for _, c := range cases {
+		if _, err := os.Stat(filepath.Join(execRoot, "attempts", c.CaseID, "RESULT.json")); err != nil {
+			return fmt.Errorf("missing persisted producer result %s", c.CaseID)
+		}
+		if _, err := os.Stat(filepath.Join(execRoot, "attempts", c.CaseID, "PRODUCER_ATTEMPT.json")); err != nil {
+			return fmt.Errorf("missing producer attempt %s", c.CaseID)
+		}
+		producer++
+		if _, err := os.Stat(filepath.Join(execRoot, "attempts", c.CaseID, "REVIEW.json")); err != nil {
+			return fmt.Errorf("missing review %s", c.CaseID)
+		}
+		reviewer++
+	}
+	boundary := 0
+	for _, name := range []string{"W", "W-1", "B", "B-1"} {
+		if _, err := os.Stat(filepath.Join(execRoot, "boundaries", name, "BOUNDARY_REPLAY.json")); err != nil {
+			return fmt.Errorf("boundary missing %s", name)
+		}
+		boundary++
+	}
+	if producer != 26 || reviewer != 26 || boundary != 4 {
+		return fmt.Errorf("leaf counts producer=%d reviewer=%d boundary=%d", producer, reviewer, boundary)
 	}
 	return nil
 }

@@ -76,6 +76,36 @@ func TestStrictJSONRejectsUnknownDuplicateTrailing(t *testing.T) {
 	}
 }
 
+func TestConditionStrictlyAcceptsActualShapesAndRejectsNestedUnknown(t *testing.T) {
+	root := t.TempDir()
+	plain := filepath.Join(root, "plain.json")
+	if err := os.WriteFile(plain, []byte(`{"schema":"condition","cancel":false,"deadlineExpired":false,"limitsProfile":"published"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var plainCondition Condition
+	if err := readStrict(plain, &plainCondition); err != nil {
+		t.Fatalf("plain condition shape rejected: %v", err)
+	}
+	withBoundary := filepath.Join(root, "boundary.json")
+	if err := os.WriteFile(withBoundary, []byte(`{"schema":"condition","boundarySetup":{"expandedSources":230,"expectedPrecedence":"frozen","maxFrozenPaths":230,"rawFrozenPaths":231,"maxWitnesses":4,"uniqueWitnesses":4},"cancel":false,"deadlineExpired":false,"limitsProfile":"published"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var boundaryCondition Condition
+	if err := readStrict(withBoundary, &boundaryCondition); err != nil {
+		t.Fatalf("boundary condition shape rejected: %v", err)
+	}
+	if boundaryCondition.BoundarySetup == nil || boundaryCondition.BoundarySetup.RawFrozenPaths != 231 || boundaryCondition.BoundarySetup.UniqueWitnesses != 4 {
+		t.Fatalf("boundary setup not decoded: %+v", boundaryCondition.BoundarySetup)
+	}
+	nestedUnknown := filepath.Join(root, "nested-unknown.json")
+	if err := os.WriteFile(nestedUnknown, []byte(`{"schema":"condition","boundarySetup":{"expandedSources":230,"unexpected":true},"cancel":false,"deadlineExpired":false,"limitsProfile":"published"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := readStrict(nestedUnknown, &Condition{}); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("expected nested unknown rejection, got %v", err)
+	}
+}
+
 func TestGateRejectsAssignmentArrayMutationAndRequiresOneDispatch(t *testing.T) {
 	execRoot := t.TempDir()
 	repoRoot := filepath.Clean(filepath.Join("..", ".."))
@@ -92,19 +122,24 @@ func TestGateRejectsAssignmentArrayMutationAndRequiresOneDispatch(t *testing.T) 
 		t.Fatal(err)
 	}
 	g.OneDispatch = "monolithic-runReal"
-	if err := writeJSON(filepath.Join(execRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g); err != nil {
+	badGateRoot := t.TempDir()
+	writeMinimalAuthorization(t, badGateRoot)
+	writeAssignments(t, badGateRoot, func(a *AssignmentFile) {})
+	if err := writeJSON(filepath.Join(badGateRoot, "PREDISPATCH_AUDIT_BLOCKED.json"), g); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkBlockedAudit(execRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "gate mismatch") {
+	if err := checkBlockedAudit(badGateRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "gate mismatch") {
 		t.Fatalf("expected oneDispatch gate rejection, got %v", err)
 	}
-	writeAssignments(t, execRoot, func(a *AssignmentFile) {
+	badAssignmentRoot := t.TempDir()
+	writeMinimalAuthorization(t, badAssignmentRoot)
+	writeAssignments(t, badAssignmentRoot, func(a *AssignmentFile) {
 		a.Cases[0].Producer.MayRead = append(a.Cases[0].Producer.MayRead, "oracle-candidate")
 	})
-	if err := writeBlockedAudit(execRoot, repoRoot); err != nil {
+	if err := writeBlockedAudit(badAssignmentRoot, repoRoot); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkBlockedAudit(execRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "producer assignment arrays") {
+	if err := checkBlockedAudit(badAssignmentRoot, repoRoot); err == nil || !strings.Contains(err.Error(), "producer assignment arrays") {
 		t.Fatalf("expected assignment array rejection, got %v", err)
 	}
 }
