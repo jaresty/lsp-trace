@@ -9,10 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
-	"time"
 
 	"lsp-trace/internal/censuscontinuation"
 	"lsp-trace/internal/publication"
@@ -26,7 +23,6 @@ const (
 	qualificationReceiptSchema = "lsp-trace.private-candidate-publication-receipt.v1"
 	qualificationNamespace     = "candidate-publication/qualification-receipts"
 	currentSelector            = "candidate-publication/current.selector.json"
-	currentLockSelector        = "candidate-publication/current.selector.lock"
 
 	PostcommitVerificationFailed = "COMMITTED_VERIFICATION_FAILED"
 )
@@ -222,11 +218,24 @@ func (a *Adapter) AdvanceCandidateGeneration(ctx context.Context, req AdvanceReq
 		return PublishedGeneration{}, err
 	}
 	selectorBytes = append(selectorBytes, '\n')
-	boundReceipt, err := a.casCurrent(ctx, req.PredecessorSelector, receipt.PredecessorSelector, selectorBytes)
+	pred := publication.BoundFilePredecessor{Absent: true}
+	if existing, err := a.CurrentCandidateGeneration(context.Background()); err == nil {
+		raw, readErr := a.root.ReadSelector(currentSelector, 4096)
+		if readErr != nil {
+			return PublishedGeneration{}, readErr
+		}
+		if req.PredecessorSelector != existing.Selector {
+			return PublishedGeneration{}, errors.New("candidatepublication: stale predecessor selector")
+		}
+		pred = publication.BoundFilePredecessor{Selector: currentSelector, Digest: publication.DigestForTest(raw), ByteLength: uint64(len(raw))}
+	} else if req.PredecessorSelector != receipt.PredecessorSelector {
+		return PublishedGeneration{}, errors.New("candidatepublication: initial predecessor mismatch")
+	}
+	boundReceipt, err := publication.CompareAndReplaceBoundFile(ctx, a.root, currentSelector, pred, selectorBytes, func([]byte) error { return nil })
 	if err != nil {
 		return PublishedGeneration{}, err
 	}
-	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: true, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
+	return PublishedGeneration{Selector: currentSelector, Generation: req.Generation, VerificationSelector: req.VerificationSelector, ArtifactSelector: req.Generation + "/artifact.json", ByteCustodyReceiptSelector: req.Generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism, Committed: boundReceipt.Committed, PostcommitVerificationStatus: boundReceipt.VerificationStatus}, nil
 }
 
 func (a *Adapter) CurrentCandidateGeneration(ctx context.Context) (CurrentGeneration, error) {
@@ -259,76 +268,6 @@ func (a *Adapter) GetCandidateGeneration(ctx context.Context, generation string)
 		return CandidateGeneration{}, err
 	}
 	return CandidateGeneration{CandidateBytes: candidate, Receipt: receipt, Published: PublishedGeneration{Generation: generation, VerificationSelector: generation + ".selector.json", ArtifactSelector: generation + "/artifact.json", ByteCustodyReceiptSelector: generation + "/receipt.json", QualificationReceiptSelector: idx.QualificationReceiptSelector, QualificationReceiptVerificationSelector: idx.VerificationSelector, QualificationReceiptDigest: idx.Digest, QualificationReceiptByteLength: idx.ByteLength, PublicationMechanism: publication.VerifiedGenerationMechanism}}, nil
-}
-
-func (a *Adapter) casCurrent(ctx context.Context, predecessor, initialPredecessor string, selectorBytes []byte) (*publication.BoundFileReceipt, error) {
-	unlock, err := a.lockCurrent(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer unlock()
-	var existing CurrentGeneration
-	raw, readErr := a.root.ReadSelector(currentSelector, 4096)
-	if readErr == nil {
-		if err := decodeStrict(raw, &existing); err != nil {
-			return nil, err
-		}
-		if err := a.validateCurrent(existing); err != nil {
-			return nil, err
-		}
-		if predecessor != existing.Selector {
-			return nil, errors.New("candidatepublication: stale predecessor selector")
-		}
-	} else if predecessor != initialPredecessor {
-		return nil, errors.New("candidatepublication: initial predecessor mismatch")
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	tempSelector := currentSelector + "." + fmt.Sprintf("%d", time.Now().UnixNano()) + ".candidate"
-	receipt, err := publication.PublishBoundFile(a.root, tempSelector, selectorBytes, func(got []byte) error {
-		var decoded CurrentGeneration
-		if err := decodeStrict(got, &decoded); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	selectorPath := filepath.Join(a.root.Path(), filepath.FromSlash(currentSelector))
-	tempPath := filepath.Join(a.root.Path(), filepath.FromSlash(tempSelector))
-	if err := os.MkdirAll(filepath.Dir(selectorPath), 0o700); err != nil {
-		return nil, err
-	}
-	if err := os.Rename(tempPath, selectorPath); err != nil {
-		return nil, err
-	}
-	return receipt, nil
-}
-
-func (a *Adapter) lockCurrent(ctx context.Context) (func(), error) {
-	lockPath := filepath.Join(a.root.Path(), filepath.FromSlash(currentLockSelector))
-	if err := os.MkdirAll(filepath.Dir(lockPath), 0o700); err != nil {
-		return nil, err
-	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_ = f.Close()
-			return func() { _ = os.Remove(lockPath) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, err
-		}
-		time.Sleep(time.Millisecond)
-	}
 }
 
 func (a *Adapter) verifyGenerationAndReceipt(generation, verificationSelector string) ([]byte, Receipt, qualificationIndex, error) {
@@ -409,11 +348,11 @@ func (a *Adapter) writeQualificationIndex(idx qualificationIndex) error {
 		return err
 	}
 	raw = append(raw, '\n')
-	path := filepath.Join(a.root.Path(), filepath.FromSlash(qualificationIndexSelector(idx.Generation)))
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
+	result := a.publisher.Publish(publication.Request{Root: a.root, Selector: qualificationIndexSelector(idx.Generation), Bytes: raw, ArtifactSchemaID: "lsp-trace.private-candidate-publication-index.v1"})
+	if result.Failure != nil && result.Failure.Code != publication.CodeTargetExists {
+		return result.Failure
 	}
-	return os.WriteFile(path, raw, 0o600)
+	return nil
 }
 func (a *Adapter) readQualificationIndex(generation string) (qualificationIndex, error) {
 	raw, err := a.root.ReadSelector(qualificationIndexSelector(generation), 4096)

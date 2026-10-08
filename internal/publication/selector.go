@@ -251,9 +251,17 @@ func (f *Failure) Unwrap() error {
 	return f.cause
 }
 
+type PartialVerifiedGeneration struct {
+	Generation        string
+	ArtifactCommitted bool
+	ReceiptCommitted  bool
+	SelectorCommitted bool
+}
+
 type Result struct {
 	Receipt *Receipt
 	Failure *Failure
+	Partial *PartialVerifiedGeneration
 }
 
 func (r Result) Err() error {
