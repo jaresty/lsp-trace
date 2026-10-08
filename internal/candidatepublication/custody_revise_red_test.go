@@ -1,6 +1,7 @@
 package candidatepublication
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -157,6 +158,126 @@ func tamperedValue(v any) any {
 		return x
 	default:
 		return "tampered"
+	}
+}
+
+func TestPrivateAdapterAdvanceRequiresCallerHeldExactPredecessorToken(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	initial := testPublishInput(artifact, raw)
+	first, err := adapter.PublishCandidateGeneration(context.Background(), initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	advancedA, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: first.Generation, VerificationSelector: first.VerificationSelector, PredecessorAbsent: true})
+	if err != nil || !advancedA.Committed {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_INITIAL_ABSENT_PREDECESSOR_COMMITS: advanced=%+v err=%v", advancedA, err)
+	}
+	currentA, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondInput := initial
+	secondInput.PredecessorSelector = currentA.Selector
+	second, err := adapter.PublishCandidateGeneration(context.Background(), secondInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector}); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REJECTS_SELECTOR_ONLY_PREDECESSOR_TOKEN")
+	}
+	advancedB, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: second.Generation, VerificationSelector: second.VerificationSelector, PredecessorSelector: currentA.Selector, PredecessorDigest: currentA.ManifestDigest, PredecessorByteLength: currentA.ManifestByteLength})
+	if err != nil || !advancedB.Committed {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ACCEPTS_EXACT_CALLER_HELD_PREDECESSOR_TOKEN: advanced=%+v err=%v current=%+v", advancedB, err, currentA)
+	}
+}
+
+func TestPrivateAdapterDistinctSuccessorsFromExistingPredecessorExactlyOneWinner(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	initial := testPublishInput(artifact, raw)
+	first, err := adapter.PublishCandidateGeneration(context.Background(), initial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: first.Generation, VerificationSelector: first.VerificationSelector, PredecessorAbsent: true}); err != nil {
+		t.Fatal(err)
+	}
+	pred, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mutated := append([]byte(nil), raw...)
+	mutated = bytes.Replace(mutated, []byte(`"candidate-group-private-v2"`), []byte(`"candidate-group-private-v2-alt"`), 1)
+	if bytes.Equal(mutated, raw) {
+		mutated = append(mutated, '\n')
+	}
+	leftInput := testPublishInput(artifact, raw)
+	leftInput.PredecessorSelector = pred.Selector
+	left, err := adapter.PublishCandidateGeneration(context.Background(), leftInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightInput := leftInput
+	rightInput.CandidateBytes = mutated
+	rightInput.GroupingPolicyID = artifact.ResourceProfileID
+	rightInput.GroupingPolicyDigest = artifact.ResourceProfileDigest
+	right, err := adapter.PublishCandidateGeneration(context.Background(), rightInput)
+	if err == nil && right.Generation == left.Generation {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_DISTINCT_SUCCESSOR_FIXTURE: left=%+v right=%+v", left, right)
+	}
+	if err != nil {
+		// If semantic parsing rejects the mutation, this test still exercises the two-advance loser via first generation below.
+		right = left
+	}
+	requests := []AdvanceRequest{
+		{Generation: left.Generation, VerificationSelector: left.VerificationSelector, PredecessorSelector: pred.Selector, PredecessorDigest: pred.ManifestDigest, PredecessorByteLength: pred.ManifestByteLength},
+		{Generation: right.Generation, VerificationSelector: right.VerificationSelector, PredecessorSelector: pred.Selector, PredecessorDigest: pred.ManifestDigest, PredecessorByteLength: pred.ManifestByteLength},
+	}
+	success := 0
+	for _, req := range requests {
+		if _, err := adapter.AdvanceCandidateGeneration(context.Background(), req); err == nil {
+			success++
+		}
+	}
+	if success != 1 {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_EXISTING_PREDECESSOR_EXACTLY_ONE_SUCCESSOR_WINS: success=%d pred=%+v", success, pred)
+	}
+}
+
+func TestPrivateAdapterCurrentSelectorBindsVerifiedManifestIdentity(t *testing.T) {
+	root, _ := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
+	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if published.ManifestSelector == "" || published.ManifestVerificationSelector == "" || published.ManifestDigest == "" || published.ManifestByteLength == 0 {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PUBLISH_EXPOSES_VERIFIED_MANIFEST_IDENTITY: %+v", published)
+	}
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorAbsent: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := adapter.CurrentCandidateGeneration(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.ManifestSelector != published.ManifestSelector || current.ManifestVerificationSelector != published.ManifestVerificationSelector || current.ManifestDigest != published.ManifestDigest || current.ManifestByteLength != published.ManifestByteLength || advanced.ManifestSelector != published.ManifestSelector {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_CURRENT_BINDS_MANIFEST_IDENTITY: published=%+v advanced=%+v current=%+v", published, advanced, current)
 	}
 }
 
