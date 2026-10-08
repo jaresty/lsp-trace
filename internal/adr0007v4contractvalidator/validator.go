@@ -28,6 +28,9 @@ const ReplaySchemaVersion = "lsp-trace.adr0007.source-text-search.replay.private
 const CandidateOperation = "RANGE_UNION"
 const zeroSHA = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 const MaxIterations = 64
+const expectedPayloadManifestSHA = "sha256:94d7171a7cb8d0cd62d77401119d002d5c7627cb595e8cb670e75821a103fa7e"
+const expectedToolingCensusSHA = "sha256:7e524efaec40550409eb2756f1b8e45a34dd7a6a94bcbb3a0886723fad2696cf"
+const expectedPredecessorLockSHA = "sha256:63aead2715dcdaa49dcd48ad61e38d003ab2df59736a9f2494605eba69273015"
 
 type Bundle struct {
 	SchemaBytes              json.RawMessage   `json:"schema_bytes"`
@@ -312,6 +315,9 @@ func ValidateBundle(b Bundle) error {
 }
 
 func validateNamedArtifactRoles(b Bundle) error {
+	if sha(b.PayloadFreezeBytes) != expectedPayloadManifestSHA || sha(b.ToolingManifestBytes) != expectedToolingCensusSHA || sha(b.PredecessorManifestBytes) != expectedPredecessorLockSHA {
+		return verr("INVARIANT_FAILED", "/artifact_roles", "unexpected named artifact bytes")
+	}
 	var payload struct {
 		Members []struct {
 			Path   string `json:"path"`
@@ -546,6 +552,9 @@ func Derive(in DeriveInput) (string, error) {
 	if code, detail := rt.pollControl(); code != "" {
 		return deriveFailureWithBase(in, t, code, detail, false)
 	}
+	if err := rt.allConsumed(); err != nil {
+		return deriveFailureWithBase(in, t, "INVALID_INPUT", map[string]any{"reason": err.Error()}, true)
+	}
 	if t.Accounting.WWork > attempt.Request.Limits.MaxWork || t.Accounting.BOutputBytes > attempt.Request.Limits.MaxOutputBytes {
 		return deriveFailureWithBase(in, t, "RESOURCE_EXHAUSTED", map[string]any{"limit": "post_scan"}, true)
 	}
@@ -641,7 +650,7 @@ func validatePolicyLocation(a rawAttempt) error {
 	}
 	lp := a.Request.LocationPin
 	want := []string{"design_commit", "design_root_sha256", "execution_commit", "seal_commit", "final_seal_sha256", "source_admission_pin"}
-	if lp.SchemaVersion != "lsp-trace.adr0007.source-text-search.location-pin.private.v4" || lp.Operation != CandidateOperation || lp.ExecutedLocation || len(lp.CompleteLocationPins) != len(want) {
+	if lp.SchemaVersion != "lsp-trace.adr0007.source-text-search.location-pin.private.v4" || lp.Operation != CandidateOperation || lp.ExecutedLocation || len(lp.CompleteLocationPins) != len(want) || lp.DesignCommit != "c943a484060462121c6f0929d4182b053ff95ab5" || lp.DesignRootSHA256 != "sha256:1195a420cc2ae215ff1627dbf23b606caaa243aa9fc0ae234242acceddafb48d" || lp.ExecutionCommit != "f0f8b49aa368bea9b3e6d105eef5cb2614221067" || lp.SealCommit != "16f40dcb03a234b00db80059a7eef400495e9d97" || lp.FinalSealSHA256 != "sha256:f4981045d3489f5ef0633eb4ce6b4a17ab6de1ddc73c4b729f9dd524106b1fd6" {
 		return errors.New("location_pin")
 	}
 	for i := range want {
@@ -650,7 +659,7 @@ func validatePolicyLocation(a rawAttempt) error {
 		}
 	}
 	pin := lp.SourceAdmissionPin
-	if pin.Path != "internal/sourceadmissionv2/admission.go" || pin.SHA256 == "" || pin.Bytes == 0 || len(pin.Symbols) != 3 || pin.Symbols[0] != "Admit" || pin.Symbols[1] != "CanonicalPath" || pin.Symbols[2] != "Digest" {
+	if pin.RepositoryCommit != "af2ce89321afc94c937636f841bb98b8977b6496" || pin.Path != "internal/sourceadmissionv2/admission.go" || pin.Bytes != 3519 || pin.SHA256 != "sha256:da74770d5b36f63e6f1265ba78e2404e13f2d1f1451a4e7aa405f448e47fe7da" || pin.GitBlobSHA1 != "4953fab89d911e2352fa6c2253497c07c8e9a777" || len(pin.Symbols) != 3 || pin.Symbols[0] != "Admit" || pin.Symbols[1] != "CanonicalPath" || pin.Symbols[2] != "Digest" {
 		return errors.New("source_admission_pin")
 	}
 	return nil
@@ -670,6 +679,14 @@ func badControl(obs []rawObservation) bool {
 		last = o.PollIndex
 	}
 	return false
+}
+func (rt *derivationRuntime) allConsumed() error {
+	for _, o := range rt.obs {
+		if o.PollIndex >= rt.poll {
+			return fmt.Errorf("unconsumed_poll:%d", o.PollIndex)
+		}
+	}
+	return nil
 }
 func (rt *derivationRuntime) pollControl() (string, map[string]any) {
 	poll := rt.poll
@@ -696,7 +713,6 @@ func associateSources(a rawAttempt, exact map[string]string) ([]admittedSource, 
 		inputs[in.Ordinal] = in
 	}
 	out := make([]admittedSource, 0, len(a.Request.Sources))
-	usedIDs := map[string]bool{}
 	for _, ref := range a.Request.Sources {
 		in, ok := inputs[ref.Ordinal]
 		if !ok {
@@ -705,21 +721,20 @@ func associateSources(a rawAttempt, exact map[string]string) ([]admittedSource, 
 		if in.Path != ref.Path || in.Revision != ref.Revision || in.FileDigest != ref.FileDigest || in.ObjectDigest != ref.ObjectDigest {
 			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
 		}
-		data, err := base64.StdEncoding.DecodeString(in.BytesBase64)
+		rawData, err := base64.StdEncoding.DecodeString(in.BytesBase64)
 		if err != nil {
 			return nil, fmt.Errorf("ordinal:%d", ref.Ordinal)
 		}
+		data := rawData
 		if exact != nil {
-			id := deriveSourceID(ref.Path, ref.Revision, 0)
-			// final ordinal is path-sort dependent; defer complete crosscheck until after admission.
-			_ = id
+			// source IDs are path-sort ordinals; compute after a provisional admission below when possible.
+			data = rawData
 		}
 		out = append(out, admittedSource{ref: ref, data: data})
 	}
 	if len(inputs) != len(a.Request.Sources) {
 		return nil, errors.New("extra_source_input")
 	}
-	_ = usedIDs
 	return out, nil
 }
 
@@ -941,11 +956,7 @@ func deriveAccounting(t Terminal, term string) Accounting {
 		a.PPathBytes += s.PathBytes
 		a.SSourceBytes += s.ByteLength
 	}
-	if prevT != 0 {
-		a.TScannedTuples = prevT
-	} else {
-		a.TScannedTuples = uint64(len(t.Sources))
-	}
+	a.TScannedTuples = prevT
 	if prevM != 0 || t.Terminal == "FAILED" {
 		a.MMatches = prevM
 	} else {

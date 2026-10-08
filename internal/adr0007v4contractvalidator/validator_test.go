@@ -34,7 +34,7 @@ func TestRawCorpusMatrix50(t *testing.T) {
 	hashes := map[string]string{}
 	for _, tc := range matrix {
 		raw := mustReadString(t, filepath.Join(root, "cases", tc.ID, "attempt.json"))
-		got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: predecessor})
+		got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedSourceBytes: sourceMapForRaw(t, raw), AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: predecessor})
 		if err != nil {
 			t.Fatalf("%s derive: %v", tc.ID, err)
 		}
@@ -230,6 +230,73 @@ func TestSampleComparisonCountsAndAdmissionDigests(t *testing.T) {
 	}
 }
 
+func TestControlAndZeroComparisonEdges(t *testing.T) {
+	root := filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4")
+	payload := mustReadString(t, filepath.Join(root, "PAYLOAD_MANIFEST.json"))
+	tooling := mustReadString(t, filepath.Join(root, "TOOLING_CENSUS.json"))
+	pred := mustReadString(t, filepath.Join(root, "FREEZE_DESIGN.md"))
+	base := mustReadString(t, filepath.Join(root, "cases", "case-13-utf8_nfc_path", "attempt.json"))
+	var a rawAttempt
+	if err := json.Unmarshal([]byte(base), &a); err != nil {
+		t.Fatal(err)
+	}
+	a.ExecutionControl.Observations = []rawObservation{{PollIndex: 0, Cancelled: true}}
+	raw, _ := CanonicalJSON(a)
+	got, err := Derive(DeriveInput{RawAttemptBytes: raw, AdmittedSourceBytes: sourceMapForRaw(t, raw), AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: pred})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var term Terminal
+	_ = json.Unmarshal([]byte(got), &term)
+	if term.Failure == nil || term.Failure.Code != "CANCELLED" || term.Accounting.TScannedTuples != 0 {
+		t.Fatalf("cancel before compare got %#v T=%d", term.Failure, term.Accounting.TScannedTuples)
+	}
+	a.ExecutionControl.Observations = nil
+	a.Request.Query = "needle-that-is-longer-than-source"
+	raw, _ = CanonicalJSON(a)
+	got, err = Derive(DeriveInput{RawAttemptBytes: raw, AdmittedSourceBytes: sourceMapForRaw(t, raw), AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: pred})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal([]byte(got), &term)
+	if term.Accounting.TScannedTuples != 0 {
+		t.Fatalf("long query comparisons=%d", term.Accounting.TScannedTuples)
+	}
+	a.ExecutionControl.Observations = []rawObservation{{PollIndex: 999, Cancelled: true}}
+	raw, _ = CanonicalJSON(a)
+	got, err = Derive(DeriveInput{RawAttemptBytes: raw, AdmittedSourceBytes: sourceMapForRaw(t, raw), AdmittedBindingBytes: bindingForRaw(t, raw), PayloadFreezeBytes: payload, ToolingManifestBytes: tooling, PredecessorManifestBytes: pred})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal([]byte(got), &term)
+	if term.Failure == nil || term.Failure.Code != "INVALID_INPUT" {
+		t.Fatalf("unconsumed observation got %#v", term.Failure)
+	}
+}
+
+func TestReflectionTerminalLeafMutationsReject(t *testing.T) {
+	bun, err := loadBundleForTest(filepath.Join("..", "..", "docs", "pilot", "adr0007", "source-text-search-v4", "contracts", "fixtures", "positive", "case-13-utf8_nfc_path.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var term any
+	if err := json.Unmarshal([]byte(bun.TerminalBytes), &term); err != nil {
+		t.Fatal(err)
+	}
+	paths := leafPaths(term, nil)
+	for _, pth := range paths {
+		mutated := cloneJSON(term)
+		mutateLeaf(mutated, pth)
+		b, _ := CanonicalJSON(mutated)
+		mb := bun
+		mb.TerminalBytes = b
+		if err := ValidateBundle(mb); err == nil {
+			t.Fatalf("leaf mutation accepted at %v", pth)
+		}
+	}
+	t.Logf("terminal leaf mutations=%d", len(paths))
+}
+
 func TestDeriveDoesNotReferenceCandidateTerminalBytes(t *testing.T) {
 	body, err := os.ReadFile("validator.go")
 	if err != nil {
@@ -250,6 +317,27 @@ func TestDeriveDoesNotReferenceCandidateTerminalBytes(t *testing.T) {
 			t.Fatalf("Derive references forbidden terminal seed %q", forbidden)
 		}
 	}
+}
+
+func sourceMapForRaw(t *testing.T, raw string) map[string]string {
+	t.Helper()
+	a, err := parseRawAttempt(raw)
+	if err != nil || a.Request.Query == "" || len(a.Request.Sources) == 0 || len(a.SourceInputs) == 0 || badControl(a.ExecutionControl.Observations) {
+		return map[string]string{}
+	}
+	selected, err := associateSources(a, nil)
+	if err != nil {
+		return map[string]string{}
+	}
+	admitted, _, _, ok, _ := admitSources(selected, a.Request.Limits)
+	if !ok {
+		return map[string]string{}
+	}
+	m := map[string]string{}
+	for i, s := range admitted {
+		m[deriveSourceID(s.ref.Path, s.ref.Revision, uint64(i))] = string(s.data)
+	}
+	return m
 }
 
 func bindingForRaw(t *testing.T, raw string) string {
@@ -276,6 +364,63 @@ func mustReadString(t *testing.T, p string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+func leafPaths(v any, prefix []any) [][]any {
+	switch x := v.(type) {
+	case map[string]any:
+		var out [][]any
+		for k, vv := range x {
+			out = append(out, leafPaths(vv, append(append([]any{}, prefix...), k))...)
+		}
+		return out
+	case []any:
+		var out [][]any
+		for i, vv := range x {
+			out = append(out, leafPaths(vv, append(append([]any{}, prefix...), i))...)
+		}
+		return out
+	default:
+		return [][]any{prefix}
+	}
+}
+func cloneJSON(v any) any {
+	b, _ := json.Marshal(v)
+	var out any
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+func mutateLeaf(v any, p []any) {
+	cur := v
+	for _, e := range p[:len(p)-1] {
+		switch k := e.(type) {
+		case string:
+			cur = cur.(map[string]any)[k]
+		case int:
+			cur = cur.([]any)[k]
+		}
+	}
+	last := p[len(p)-1]
+	set := func(old any) any {
+		switch old.(type) {
+		case string:
+			return "__mutated__"
+		case bool:
+			return !old.(bool)
+		case nil:
+			return "not-null"
+		default:
+			return float64(999999)
+		}
+	}
+	switch k := last.(type) {
+	case string:
+		m := cur.(map[string]any)
+		m[k] = set(m[k])
+	case int:
+		a := cur.([]any)
+		a[k] = set(a[k])
+	}
 }
 
 func loadBundleForTest(p string) (Bundle, error) {
