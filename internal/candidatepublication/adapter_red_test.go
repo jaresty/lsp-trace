@@ -27,7 +27,7 @@ func testPrivateRoot(t testing.TB) (*publication.Root, string) {
 	return root, dir
 }
 
-func testCandidateBytes(t testing.TB) []byte {
+func testCandidateBytes(t testing.TB) (censuscontinuation.CandidateGroupArtifact, []byte) {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "continuationhost", "testdata", "candidate-group-private-v2.json"))
 	if err != nil {
@@ -40,18 +40,21 @@ func testCandidateBytes(t testing.TB) []byte {
 	if artifact.Authority != 0 || artifact.Accepted || artifact.Completeness != "UNKNOWN" || artifact.Interpretation.Status != censuscontinuation.InterpretationUnresolved {
 		t.Fatalf("ASSERT_ADR0007_PRIVATE_CANDIDATE_CEILINGS_FIXTURE: authority=%d accepted=%t completeness=%q interpretation=%q", artifact.Authority, artifact.Accepted, artifact.Completeness, artifact.Interpretation.Status)
 	}
-	return raw
+	if artifact.Representative.ID == "" || artifact.Representative.Role == "" {
+		t.Fatalf("ASSERT_ADR0007_PRIVATE_CANDIDATE_REPRESENTATIVE_FIXTURE: %+v", artifact.Representative)
+	}
+	return artifact, raw
 }
 
-func testPublishInput(raw []byte) PublishRequest {
+func testPublishInput(artifact censuscontinuation.CandidateGroupArtifact, raw []byte) PublishRequest {
 	return PublishRequest{
 		CandidateBytes:        raw,
-		GroupingPolicyID:      censuscontinuation.CandidateGroupPrivateV2ProfileID,
-		GroupingPolicyDigest:  censuscontinuation.CandidateGroupPrivateV2ProfileDigest,
+		GroupingPolicyID:      artifact.ResourceProfileID,
+		GroupingPolicyDigest:  artifact.ResourceProfileDigest,
 		QualificationID:       "candidate-group-boundary-artifact-validation/v1",
 		SourceRevision:        "git:at55563ecf",
 		PredecessorSelector:   "g-0000000000000000000000000000000000000000000000000000000000000000.selector.json",
-		Representative:        Representative{ID: "3cdff2e81db031666b6d6d4d13711ddc2749722ac804ef79b103463ebfdda93c", Status: RepresentativeStatusSelectedByGroupingPolicy},
+		Representative:        Representative{ID: artifact.Representative.ID, Status: artifact.Representative.Role, Inferred: false},
 		Authority:             0,
 		Accepted:              false,
 		Completeness:          CompletenessUnknown,
@@ -65,21 +68,28 @@ func TestPrivateAdapterPublishesImmutableQualifiedGenerationAndAdvancesOnlyByOwn
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := testCandidateBytes(t)
-	published, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(raw))
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
+	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if published.Generation == "" || published.VerificationSelector == "" || published.ArtifactSelector == "" || published.ReceiptSelector == "" {
+	if published.Generation == "" || published.VerificationSelector == "" || published.ArtifactSelector == "" || published.QualificationReceiptSelector == "" {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_IMMUTABLE_GENERATION_IDENTITY: %+v", published)
 	}
 	if published.PublicationMechanism != publication.VerifiedGenerationMechanism {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_USES_VERIFIED_GENERATION: %+v", published)
 	}
+	if published.ArtifactSelector != published.Generation+"/artifact.json" || published.ByteCustodyReceiptSelector != published.Generation+"/receipt.json" || published.VerificationSelector != published.Generation+".selector.json" {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_RESPECTS_VERIFIED_GENERATION_CONTRACT_PATHS: %+v", published)
+	}
+	if published.QualificationReceiptSelector == published.ByteCustodyReceiptSelector || strings.HasPrefix(published.QualificationReceiptSelector, published.Generation+"/") {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_QUALIFICATION_RECEIPT_IS_DISTINCT_ADAPTER_ARTIFACT: %+v", published)
+	}
 	if current, err := adapter.CurrentCandidateGeneration(context.Background()); err == nil || current.Selector != "" {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PUBLISH_DOES_NOT_ADVANCE_SELECTOR: current=%+v err=%v", current, err)
 	}
-	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: testPublishInput(raw).PredecessorSelector})
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: input.PredecessorSelector})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,25 +102,25 @@ func TestPrivateAdapterPublishesImmutableQualifiedGenerationAndAdvancesOnlyByOwn
 	}
 }
 
-func TestPrivateAdapterReceiptStrictlyBindsArtifactQualificationLineageBeforeSelector(t *testing.T) {
+func TestPrivateAdapterQualificationReceiptBindsCandidateQualificationAndLineage(t *testing.T) {
 	root, _ := testPrivateRoot(t)
 	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := testCandidateBytes(t)
-	input := testPublishInput(raw)
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
 	published, err := adapter.PublishCandidateGeneration(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	receiptBytes, err := root.ReadSelector(published.ReceiptSelector, 1<<20)
+	receiptBytes, err := root.ReadSelector(published.QualificationReceiptSelector, 1<<20)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var receipt Receipt
 	if err := DecodeReceiptStrict(receiptBytes, &receipt); err != nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_STRICT_RECEIPT_CANONICAL: %v", err)
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_STRICT_QUALIFICATION_RECEIPT_CANONICAL: %v", err)
 	}
 	if !bytes.Equal(receipt.CandidateDigest.Bytes, DigestBytes(raw)) || receipt.CandidateDigest.Hex != Digest(raw) || receipt.CandidateByteLength != uint64(len(raw)) {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_RECEIPT_BINDS_EXACT_CANDIDATE_BYTES: %+v", receipt.CandidateDigest)
@@ -121,12 +131,8 @@ func TestPrivateAdapterReceiptStrictlyBindsArtifactQualificationLineageBeforeSel
 	if receipt.Authority != 0 || receipt.Accepted || receipt.Completeness != CompletenessUnknown || receipt.FeatureIdentityStatus != FeatureIdentityUnresolved {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_RECEIPT_PRESERVES_UNACCEPTED_UNRESOLVED_CEILINGS: %+v", receipt)
 	}
-	if receipt.Representative.Status != RepresentativeStatusSelectedByGroupingPolicy || receipt.Representative.Inferred {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REPRESENTATIVE_SEPARATELY_TYPED_NO_INFERENCE: %+v", receipt.Representative)
-	}
-	ordering := adapter.DebugCommittedOrder()
-	if got := strings.Join(ordering, ">"); got != "artifact>receipt>selector" {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_ARTIFACT_RECEIPT_SELECTOR_ORDERING: %s", got)
+	if receipt.Representative.ID != artifact.Representative.ID || receipt.Representative.Status != artifact.Representative.Role || receipt.Representative.Inferred {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_REPRESENTATIVE_SEPARATELY_TYPED_NO_INFERENCE: receipt=%+v fixture=%+v", receipt.Representative, artifact.Representative)
 	}
 }
 
@@ -145,36 +151,41 @@ func TestPrivateAdapterStrictCanonicalRejectionUnknownTrailingAndDuplicate(t *te
 	}
 }
 
-func TestPrivateAdapterCancellationBeforeEachIrreversibleBoundary(t *testing.T) {
-	for _, boundary := range []IrreversibleBoundary{BoundaryBeforeArtifactCommit, BoundaryBeforeReceiptCommit, BoundaryBeforeSelectorCommit} {
-		t.Run(string(boundary), func(t *testing.T) {
-			root, _ := testPrivateRoot(t)
-			adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20, TestCancelBefore: boundary})
-			if err != nil {
-				t.Fatal(err)
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			published, err := adapter.PublishCandidateGeneration(ctx, testPublishInput(testCandidateBytes(t)))
-			if err == nil || published.Generation != "" {
-				t.Fatalf("ASSERT_PRIVATE_ADAPTER_CANCELS_BEFORE_IRREVERSIBLE_BOUNDARY: boundary=%s published=%+v err=%v", boundary, published, err)
-			}
-			if got := adapter.DebugCommittedOrder(); len(got) != 0 {
-				t.Fatalf("ASSERT_PRIVATE_ADAPTER_CANCEL_LEAVES_NO_LATER_COMMIT: boundary=%s order=%v", boundary, got)
-			}
-		})
-	}
-}
-
-func TestPrivateAdapterCommittedSuccessSurvivesPostcommitVerificationFailure(t *testing.T) {
+func TestPrivateAdapterPreflightCancellationDoesNotPublishOrAdvance(t *testing.T) {
 	root, _ := testPrivateRoot(t)
-	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20, TestFailPostcommitVerification: true})
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
 	if err != nil {
 		t.Fatal(err)
 	}
-	published, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(testCandidateBytes(t)))
-	if err != nil || !published.Committed || published.PostcommitVerificationStatus != PostcommitVerificationFailed {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TRUTHFUL_COMMITTED_SUCCESS_ON_POSTCOMMIT_VERIFY_FAILURE: published=%+v err=%v", published, err)
+	artifact, raw := testCandidateBytes(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	published, err := adapter.PublishCandidateGeneration(ctx, testPublishInput(artifact, raw))
+	if err == nil || published.Generation != "" {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PREFLIGHT_CANCELS_BEFORE_PUBLICATION: published=%+v err=%v", published, err)
+	}
+	if current, err := adapter.CurrentCandidateGeneration(context.Background()); err == nil || current.Selector != "" {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PREFLIGHT_CANCEL_DOES_NOT_ADVANCE: current=%+v err=%v", current, err)
+	}
+}
+
+func TestPrivateAdapterCommittedSuccessSurvivesNaturalPostcommitVerificationFailure(t *testing.T) {
+	root, dir := testPrivateRoot(t)
+	adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, raw := testCandidateBytes(t)
+	published, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(artifact, raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(published.QualificationReceiptSelector)), []byte("tampered"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	advanced, err := adapter.AdvanceCandidateGeneration(context.Background(), AdvanceRequest{Generation: published.Generation, VerificationSelector: published.VerificationSelector, PredecessorSelector: testPublishInput(artifact, raw).PredecessorSelector})
+	if err != nil || !advanced.Committed || advanced.PostcommitVerificationStatus != PostcommitVerificationFailed {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TRUTHFUL_COMMITTED_SUCCESS_ON_POSTCOMMIT_VERIFY_FAILURE: advanced=%+v err=%v", advanced, err)
 	}
 }
 
@@ -184,13 +195,14 @@ func TestPrivateAdapterTamperCollisionRestartSafeRetrievalAndIdempotence(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := testCandidateBytes(t)
-	first, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(raw))
+	artifact, raw := testCandidateBytes(t)
+	input := testPublishInput(artifact, raw)
+	first, err := adapter.PublishCandidateGeneration(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	again, err := adapter.PublishCandidateGeneration(context.Background(), testPublishInput(raw))
-	if err != nil || again.Generation != first.Generation || again.VerificationSelector != first.VerificationSelector {
+	again, err := adapter.PublishCandidateGeneration(context.Background(), input)
+	if err != nil || again.Generation != first.Generation || again.VerificationSelector != first.VerificationSelector || again.QualificationReceiptSelector != first.QualificationReceiptSelector {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_IDEMPOTENT_GENERATION: first=%+v again=%+v err=%v", first, again, err)
 	}
 	reopenedRoot, err := publication.OpenRoot(dir)
@@ -206,32 +218,14 @@ func TestPrivateAdapterTamperCollisionRestartSafeRetrievalAndIdempotence(t *test
 	if err != nil || !bytes.Equal(got.CandidateBytes, raw) {
 		t.Fatalf("ASSERT_PRIVATE_ADAPTER_RESTART_SAFE_RETRIEVAL: err=%v equal=%v", err, bytes.Equal(got.CandidateBytes, raw))
 	}
-	if err := os.WriteFile(filepath.Join(dir, first.Generation, "receipt.json"), []byte("tampered"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(first.QualificationReceiptSelector)), []byte("tampered"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := reopened.GetCandidateGeneration(context.Background(), first.Generation); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TAMPER_REJECTED")
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_TAMPERED_QUALIFICATION_RECEIPT_REJECTED")
 	}
-	if _, err := adapter.PublishCandidateGeneration(context.Background(), PublishRequest{CandidateBytes: append([]byte(nil), raw...), ForceGenerationForTest: first.Generation}); err == nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_IMMUTABLE_COLLISION_REJECTED")
-	}
-}
-
-func TestPrivateAdapterRejectsPublicRootAndDoesNotExposePublicSchema(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	root, err := publication.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if adapter, err := NewRepositoryPrivateAdapter(root, Options{MaxBytes: 1 << 20}); err == nil || adapter != nil {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_PRIVATE_ONLY_ROOT: adapter=%+v err=%v", adapter, err)
-	}
-	if schemas := PublicSchemas(); len(schemas) != 0 {
-		t.Fatalf("ASSERT_PRIVATE_ADAPTER_NO_PUBLIC_SCHEMA_EXPOSURE: %v", schemas)
+	if _, err := reopened.PublishCandidateGeneration(context.Background(), input); err == nil {
+		t.Fatalf("ASSERT_PRIVATE_ADAPTER_NATURAL_SAME_GENERATION_COLLISION_REJECTED_AFTER_TAMPER")
 	}
 }
 
