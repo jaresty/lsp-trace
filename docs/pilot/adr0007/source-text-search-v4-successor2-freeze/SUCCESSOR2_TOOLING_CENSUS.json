@@ -1,0 +1,28 @@
+{
+  "schema_version": "lsp-trace.adr0007.source-text-search.successor2-tooling-census.private.v1",
+  "tool": "cmd/adr0007-source-text-search-v4-successor2-freeze",
+  "commands": [
+    "go run ./cmd/adr0007-source-text-search-v4-successor2-freeze -mode write",
+    "go run ./cmd/adr0007-source-text-search-v4-successor2-freeze -mode verify"
+  ],
+  "semantic_bindings": [
+    "original v4 docs/contracts/cases/oracle bytes preserved",
+    "first successor namespace preserved byte-identically and bound as predecessor",
+    "typed final revise provenance separates agent IDs from 40hex git commits",
+    "v4 production package",
+    "v4 oracle package",
+    "v4 contract validator package",
+    "pinned sourceadmissionv2 bytes"
+  ],
+  "mutations_authorized": [
+    "additive successor2 namespace files",
+    "additive successor2 verifier command"
+  ],
+  "mutation_tests": [
+    "swap final_revise_reviewer_agent_id with reviewed_git_commit must fail",
+    "swap first_successor_revise_reviewer_agent_id with reviewed_git_commit must fail",
+    "truncate final_revise_reviewer_agent_id must fail",
+    "fake final_revise_reviewed_git_commit 40hex without git object must fail",
+    "fake first_successor_revise_reviewed_git_commit 40hex without git object must fail"
+  ]
+}
